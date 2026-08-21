@@ -50,10 +50,10 @@
   "labComposerPersonaTitle": "Personas",
   "labComposerPersonaEnabled": "Enable composer personas",
   "labComposerPersonaEnabledDesc": "When enabled, the chat composer shows the persona picker and sends the selected persona with new messages. Disabling it hides the picker and stops attaching personas.",
-  "labPlanWorktreeTitle": "Prompt-managed worktree",
-  "labPlanWorktreeDescription": "Experimental Direct-build protocol that asks the Agent to create, integrate, and safely clean up a Git worktree.",
-  "labPlanWorktreeEnabled": "Enable prompt-managed plan worktrees",
-  "labPlanWorktreeEnabledDesc": "When enabled, each Direct plan can opt out or use the Agent-managed worktree protocol. Graph builds continue in the current workspace. This experiment is disabled by default.",
+  "labPlanWorktreeTitle": "Agent-managed worktree",
+  "labPlanWorktreeDescription": "Direct plans run in an Agent-managed Git worktree by default.",
+  "labPlanWorktreeEnabled": "Use Agent-managed worktrees for Direct plans by default",
+  "labPlanWorktreeEnabledDesc": "You can temporarily build an individual Direct plan in the current workspace. Graph builds are unchanged.",
   "labExploreTitle": "Fast Context",
   "labExploreDescription": "A first-class Fast Context tool (fast_context) the main agent can call to retrieve bounded repository evidence. It runs a read-only child using grep, glob, and read, and never edits files. Disabled removes the tool from the main agent's tool list.",
   "labExploreEnabled": "Enable fast_context",
@@ -224,5 +224,9 @@
   "uninstallConfirmType": "Type UNINSTALL to confirm",
   "uninstallConfirmButton": "Confirm uninstall",
   "uninstallConfirmCancel": "Cancel",
-  "uninstallRunning": "Uninstalling… Kun will close in a moment."
+  "uninstallRunning": "Uninstalling… Kun will close in a moment.",
+  "labConversationVisualizationTitle": "Conversation visualization",
+  "labConversationVisualizationDescription": "Experimental structured visuals for flows, grouped explanations, and important constraints. The agent uses them only when spatial structure is clearer than prose.",
+  "labConversationVisualizationEnabled": "Allow agent visualizations",
+  "labConversationVisualizationEnabledDesc": "Adds show_visualization to future desktop agent requests. Turning it off removes the tool while preserving visualizations already stored in conversation history."
 }

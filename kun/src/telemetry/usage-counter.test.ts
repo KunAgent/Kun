@@ -130,6 +130,34 @@ describe('UsageCounter.total cross-thread aggregate', () => {
       costByCurrency: { EUR: 0.4 }
     })
   })
+
+  it('uses current request attribution without inheriting subscription or Priority', () => {
+    const counter = new UsageCounter()
+    counter.record('thread-a', snapshot({
+      promptTokens: 100,
+      totalTokens: 100,
+      turns: 1,
+      actualProviderId: 'codex-work',
+      actualModelId: 'gpt-5.6-sol',
+      billingKind: 'subscription',
+      serviceTier: 'priority'
+    }))
+    const standardApi = counter.record('thread-a', snapshot({
+      promptTokens: 50,
+      totalTokens: 50,
+      turns: 1,
+      actualProviderId: 'openai-api',
+      actualModelId: 'gpt-5.4-mini',
+      billingKind: 'api'
+    }))
+
+    expect(standardApi).toMatchObject({
+      actualProviderId: 'openai-api',
+      actualModelId: 'gpt-5.4-mini',
+      billingKind: 'api'
+    })
+    expect(standardApi.serviceTier).toBeUndefined()
+  })
 })
 
 describe('UsageCounter timing aggregation', () => {

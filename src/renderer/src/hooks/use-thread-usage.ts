@@ -24,6 +24,11 @@ export type ThreadUsageSummary = {
   totalTokens: number
   costUsd: number | null
   costCny: number | null
+  valueEstimateUsd: number | null
+  valueEstimateCny: number | null
+  valueEstimateCoverage?: 'complete' | 'partial' | 'unavailable'
+  valueEstimatePricedRequests?: number
+  valueEstimateUnpricedRequests?: number
   tokenEconomySavingsTokens: number
   turns: number
   avgTtftMs: number | null
@@ -70,13 +75,11 @@ export function formatCompactNumber(value: number): string {
   return new Intl.NumberFormat().format(value)
 }
 
-function isChineseLocale(locale?: string): boolean {
+export const USD_TO_CNY_REFERENCE_RATE = 7.2
+
+export function isChineseLocale(locale?: string): boolean {
   const normalized = (locale ?? '').trim().toLowerCase()
   return normalized === 'zh' || normalized.startsWith('zh-')
-}
-
-function fallbackLocale(): string {
-  return typeof navigator !== 'undefined' ? navigator.language : 'en'
 }
 
 function formatMoneyValue(value: number): string {
@@ -85,18 +88,63 @@ function formatMoneyValue(value: number): string {
   return safeValue.toFixed(safeValue >= 1 ? 2 : 4)
 }
 
-export function formatCost(costUsd: number | null | undefined, locale = fallbackLocale(), costCny?: number | null): string {
-  const hasUsd = typeof costUsd === 'number' && Number.isFinite(costUsd) && costUsd > 0
-  const hasCny = typeof costCny === 'number' && Number.isFinite(costCny) && costCny > 0
-  const usdValue = hasUsd ? costUsd : null
-  const cnyValue = hasCny ? costCny : null
+export function formatCost(
+  costUsd: number | null | undefined,
+  locale: string,
+  costCny?: number | null,
+  includeZero = false
+): string {
+  const hasUsd = typeof costUsd === 'number' && Number.isFinite(costUsd) &&
+    (includeZero ? costUsd >= 0 : costUsd > 0)
+  const hasCny = typeof costCny === 'number' && Number.isFinite(costCny) &&
+    (includeZero ? costCny >= 0 : costCny > 0)
   if (!hasUsd && !hasCny) return '-'
   if (isChineseLocale(locale)) {
-    const value = cnyValue ?? (usdValue ?? 0) * 7.2
-    return `￥${formatMoneyValue(value)}`
+    return `￥${formatMoneyValue(hasCny ? costCny as number : (costUsd as number) * USD_TO_CNY_REFERENCE_RATE)}`
   }
-  if (usdValue != null) return `$${formatMoneyValue(usdValue)}`
-  return `￥${formatMoneyValue(cnyValue ?? 0)}`
+  return `$${formatMoneyValue(hasUsd ? costUsd as number : (costCny as number) / USD_TO_CNY_REFERENCE_RATE)}`
+}
+
+export type MoneySummaryItem = {
+  kind: 'actual' | 'estimate'
+  value: string
+  coverage?: 'complete' | 'partial'
+}
+
+export function summarizeThreadMoney(input: {
+  costUsd: number | null
+  costCny: number | null
+  valueEstimateUsd: number | null
+  valueEstimateCny: number | null
+  valueEstimateCoverage?: 'complete' | 'partial' | 'unavailable'
+  locale: string
+}): MoneySummaryItem[] {
+  const actual = formatCost(input.costUsd, input.locale, input.costCny)
+  const inferredEstimateAvailable = (
+    (input.valueEstimateUsd ?? 0) > 0 || (input.valueEstimateCny ?? 0) > 0
+  )
+  const estimateCoverage = input.valueEstimateCoverage ?? (
+    inferredEstimateAvailable ? 'complete' : 'unavailable'
+  )
+  const estimate = estimateCoverage === 'unavailable'
+    ? '-'
+    : formatCost(
+        input.valueEstimateUsd,
+        input.locale,
+        input.valueEstimateCny,
+        true
+      )
+  const displayedEstimateCoverage: 'complete' | 'partial' = estimateCoverage === 'partial'
+    ? 'partial'
+    : 'complete'
+  return [
+    ...(actual === '-' ? [] : [{ kind: 'actual' as const, value: actual }]),
+    ...(estimate === '-' ? [] : [{
+      kind: 'estimate' as const,
+      value: estimate,
+      coverage: displayedEstimateCoverage
+    }])
+  ]
 }
 
 export function formatPercent(value: number | null): string {
@@ -199,6 +247,24 @@ export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSumm
   const rawCostCny = hasFiniteNumber(bucket, 'cost_cny') ? usageNumber(bucket.cost_cny) : null
   const costUsd = rawCostUsd != null && rawCostUsd > 0 ? rawCostUsd : null
   const costCny = rawCostCny != null && rawCostCny > 0 ? rawCostCny : null
+  const rawValueEstimateUsd = hasFiniteNumber(bucket, 'value_estimate_usd') ? usageNumber(bucket.value_estimate_usd) : null
+  const rawValueEstimateCny = hasFiniteNumber(bucket, 'value_estimate_cny') ? usageNumber(bucket.value_estimate_cny) : null
+  const valueEstimatePricedRequests = usageNumber(bucket.value_estimate_priced_requests)
+  const valueEstimateUnpricedRequests = usageNumber(bucket.value_estimate_unpriced_requests)
+  const explicitValueEstimateCoverage = referenceCoverage(bucket.value_estimate_coverage)
+  const valueEstimateCoverage = explicitValueEstimateCoverage ?? (
+    valueEstimatePricedRequests > 0
+      ? valueEstimateUnpricedRequests > 0 ? 'partial' : 'complete'
+      : (rawValueEstimateUsd ?? 0) > 0 || (rawValueEstimateCny ?? 0) > 0
+        ? 'complete'
+        : 'unavailable'
+  )
+  const valueEstimateUsd = rawValueEstimateUsd != null && (
+    rawValueEstimateUsd > 0 || valueEstimateCoverage !== 'unavailable'
+  ) ? rawValueEstimateUsd : null
+  const valueEstimateCny = rawValueEstimateCny != null && (
+    rawValueEstimateCny > 0 || valueEstimateCoverage !== 'unavailable'
+  ) ? rawValueEstimateCny : null
   const tokenEconomySavingsTokens = usageNumber(bucket.token_economy_savings_tokens)
   const turns = usageNumber(bucket.turns)
   const avgTtftMs = hasFiniteNumber(bucket, 'avg_ttft_ms') ? usageNumber(bucket.avg_ttft_ms) : null
@@ -210,6 +276,8 @@ export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSumm
     cachedTokens <= 0 &&
     (costUsd ?? 0) <= 0 &&
     (costCny ?? 0) <= 0 &&
+    (valueEstimateUsd ?? 0) <= 0 &&
+    (valueEstimateCny ?? 0) <= 0 &&
     tokenEconomySavingsTokens <= 0 &&
     turns <= 0
   ) return null
@@ -228,11 +296,24 @@ export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSumm
     totalTokens,
     costUsd,
     costCny,
+    valueEstimateUsd,
+    valueEstimateCny,
+    valueEstimateCoverage,
+    valueEstimatePricedRequests,
+    valueEstimateUnpricedRequests,
     tokenEconomySavingsTokens,
     turns,
     avgTtftMs,
     avgTokensPerSecond
   }
+}
+
+function referenceCoverage(
+  value: unknown
+): ThreadUsageSummary['valueEstimateCoverage'] | undefined {
+  return value === 'complete' || value === 'partial' || value === 'unavailable'
+    ? value
+    : undefined
 }
 
 export function useThreadUsageState(

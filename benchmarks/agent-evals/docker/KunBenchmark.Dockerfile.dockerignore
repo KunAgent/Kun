@@ -1,0 +1,10 @@
+.git
+.cache
+artifacts
+dist
+kun/dist
+node_modules
+kun/node_modules
+out
+resources/bundled-extensions
+*.log

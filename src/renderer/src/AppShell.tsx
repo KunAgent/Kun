@@ -71,6 +71,37 @@ export default function AppShell(): React.ReactElement {
   }, [boot])
 
   useEffect(() => {
+    let disposed = false
+    let timer: number | null = null
+    let tickGeneration = 0
+    let consecutiveFailures = 0
+    const scheduleNext = (): void => {
+      if (disposed) return
+      const baseDelay = document.visibilityState === 'visible' ? 2_500 : 15_000
+      const delay = Math.min(60_000, baseDelay * (2 ** Math.min(4, consecutiveFailures)))
+      timer = window.setTimeout(() => { void tick() }, delay)
+    }
+    const tick = async (): Promise<void> => {
+      const generation = ++tickGeneration
+      if (timer !== null) window.clearTimeout(timer)
+      timer = null
+      const ok = await useChatStore.getState().syncSidebarActivity()
+      consecutiveFailures = ok ? 0 : consecutiveFailures + 1
+      if (generation === tickGeneration) scheduleNext()
+    }
+    const reconcileNow = (): void => { void tick() }
+    void tick()
+    window.addEventListener('focus', reconcileNow)
+    document.addEventListener('visibilitychange', reconcileNow)
+    return () => {
+      disposed = true
+      if (timer !== null) window.clearTimeout(timer)
+      window.removeEventListener('focus', reconcileNow)
+      document.removeEventListener('visibilitychange', reconcileNow)
+    }
+  }, [])
+
+  useEffect(() => {
     let previousUnread = useChatStore.getState().unreadThreadIds
     const syncBadge = (unread: typeof previousUnread): void => {
       const normalized = persistUnreadCompletions(unread)

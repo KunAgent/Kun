@@ -6,7 +6,7 @@ import {
 } from 'electron'
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   applySettingsPatchToSnapshot
 } from './settings-store'
@@ -40,6 +40,9 @@ import {
 } from './claw-platform-install'
 import { registerRuntimeSseIpc } from './runtime-sse-ipc'
 import { registerTerminalPtyIpc } from './terminal/terminal-pty-ipc'
+import { JsonRemoteSshHostStore } from './remote-ssh/host-store'
+import { RemoteSshKnownHostStore } from './remote-ssh/known-host-store'
+import { registerRemoteSshIpc } from './remote-ssh/register-remote-ssh-ipc'
 import { registerCliInstallIpc } from './cli-install-service'
 import { resetUnreadableWindowsCredentials } from './credential-recovery'
 import { resolveSettingsDataDir } from './legacy-provider-settings-migration'
@@ -332,6 +335,7 @@ export function registerMainIpc(services: MainServices): void {
       startWeixinInstallQrcode,
       pollWeixinInstall,
       resolveKunConfigPath: resolveKunMcpJsonPath,
+      resolveSettingsConfigPath: () => serviceManager.discovery.settingsPath,
       onKunMcpConfigWritten: async () => {
         const settings = await mainState.store.load()
         queueRuntimeMcpConfigApply(settings)
@@ -496,6 +500,8 @@ export function registerMainIpc(services: MainServices): void {
       mainState.bindExtensionMainWindow = undefined
       nativeTheme.removeListener('updated', onNativeThemeUpdated)
       mainState.mainWindow?.webContents.removeListener('zoom-changed', onWorkbenchZoomChanged)
+      mainState.remoteSshController?.disposeAll()
+      mainState.remoteSshController = null
     })
 
     void loadGuiUpdaterModule().catch((error) => {
@@ -510,6 +516,14 @@ export function registerMainIpc(services: MainServices): void {
       getMainWindow: () => mainState.mainWindow,
       logError,
       getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load())
+    })
+    const remoteSshDataDir = join(app.getPath('userData'), 'remote-ssh')
+    mainState.remoteSshController = registerRemoteSshIpc({
+      ipcMain,
+      getMainWindow: () => mainState.mainWindow,
+      hosts: new JsonRemoteSshHostStore(join(remoteSshDataDir, 'hosts.json')),
+      knownHosts: new RemoteSshKnownHostStore(join(remoteSshDataDir, 'known-hosts.json')),
+      logError
     })
     traceStartup('ipc registration:done')
 }

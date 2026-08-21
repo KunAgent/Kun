@@ -8,8 +8,9 @@ import { GeneratedFilesPanel, MessageBubble } from './message-timeline-bubbles'
 import { PresentationFilesPanel } from './PresentationFilesPanel'
 import { presentationFileArtifactsForTurn } from './presentation-file-artifacts'
 import { ReviewPlanCard, ReviewSummaryCard, TurnChangeSummary, WorkMetaRow } from './message-timeline-cards'
-import { ProcessSectionRow, groupProcessSections, summarizeProcessWork, summarizeToolBlock } from './message-timeline-process'
+import { ProcessSectionRow, groupProcessSections, summarizeToolBlock } from './message-timeline-process'
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
+import { ConversationVisualizationCard } from './ConversationVisualizationCard'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
 import {
   AnimatedWorkLogo,
@@ -27,6 +28,8 @@ import { extractPlanMetadataFromBlock } from '../../plan/plan-tool'
 import { planDisplayNameFromRelativePath } from '../../plan/plan-path'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import { TimelineRuntimeError, liveTurnProgressClass } from './message-timeline-jump-preview'
+import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
+import { TurnUsageRow } from './TurnUsageRow'
 
 export type ConversationTurnProps = {
   turn: Turn
@@ -51,6 +54,8 @@ export type ConversationTurnProps = {
   compactCards?: boolean
   /** Main-thread actions must stay disabled for isolated side conversations. */
   allowMainThreadActions?: boolean
+  turnUsage?: TurnUsageSummary
+  turnUsageStale?: boolean
 }
 
 export function ConversationTurn({
@@ -74,13 +79,17 @@ export function ConversationTurn({
   filePreviewWorkspaceRoot,
   viewportRef,
   compactCards = false,
-  allowMainThreadActions = true
+  allowMainThreadActions = true,
+  turnUsage,
+  turnUsageStale = false
 }: ConversationTurnProps): ReactElement {
   const { t } = useTranslation('common')
   const forkThreadFromTurn = useChatStore((s) => s.forkThreadFromTurn)
   const rollbackWorkspaceToCheckpoint = useChatStore((s) => s.rollbackWorkspaceToCheckpoint)
   const sendMessage = useChatStore((s) => s.sendMessage)
+  const archiveActiveThreadToTurn = useChatStore((s) => s.archiveActiveThreadToTurn)
   const [forking, setForking] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [rollingBackCheckpointId, setRollingBackCheckpointId] = useState<string | null>(null)
   // Inline Review Plan card: surfaced under a turn that produced a
   // successful `create_plan` result so the user can open/build the plan
@@ -107,6 +116,7 @@ export function ConversationTurn({
     runtimeErrorsBeforeFinalContent,
     runtimeErrorsAfterFinalContent,
     componentPrototypeBlocks,
+    conversationVisualizationBlocks,
     generatedFileBlocks,
     turnFileChanges
   } = useMemo(
@@ -130,10 +140,6 @@ export function ConversationTurn({
     [turn.blocks, filePreviewWorkspaceRoot, isProcessing]
   )
   const workProcessBlocks = processBlocks
-  const workSummary = useMemo(
-    () => summarizeProcessWork(workProcessBlocks, t),
-    [t, workProcessBlocks]
-  )
   const workExpanded = workExpandedOverride ?? false
   const reviewBlocks = useMemo(
     () => turn.blocks.filter((block) => block.kind === 'review'),
@@ -216,6 +222,16 @@ export function ConversationTurn({
       setForking(false)
     }
   }
+  const archiveToTurn = async (): Promise<void> => {
+    if (!allowMainThreadActions || !forkTurnId || archiving || isProcessing) return
+    if (!window.confirm(t('archiveHistoryConfirm'))) return
+    setArchiving(true)
+    try {
+      await archiveActiveThreadToTurn(forkTurnId)
+    } finally {
+      setArchiving(false)
+    }
+  }
   const rollbackWorkspace = async (checkpointId: string): Promise<void> => {
     const targetCheckpointId = checkpointId.trim()
     if (!allowMainThreadActions || !targetCheckpointId || rollingBackCheckpointId) return
@@ -237,10 +253,7 @@ export function ConversationTurn({
         <div className="flex flex-col gap-1 pb-2">
           <WorkMetaRow
             processing={isProcessing}
-            stepCount={workProcessBlocks.length}
             durationMs={durationMs}
-            reasoningDurationMs={reasoningDurationMs}
-            summary={workSummary}
             expanded={isProcessing || workExpanded}
             collapsible={!isProcessing && workProcessBlocks.length > 0}
             onToggle={() => setWorkExpandedOverride((value) => !(value ?? false))}
@@ -281,6 +294,10 @@ export function ConversationTurn({
         />
       ))}
 
+      {conversationVisualizationBlocks.map((block) => (
+        <ConversationVisualizationCard key={block.id} block={block} />
+      ))}
+
       {assistantContentBlocks.map((block) => (
         <MessageBubble
           key={block.id}
@@ -308,6 +325,23 @@ export function ConversationTurn({
           }
         />
       ))}
+
+      {!isProcessing && assistantContentBlocks.length > 0 && turnUsage ? (
+        <TurnUsageRow usage={turnUsage} stale={turnUsageStale} />
+      ) : null}
+
+      {allowMainThreadActions && !isProcessing && forkTurnId ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            disabled={archiving}
+            onClick={() => void archiveToTurn()}
+            className="rounded-md px-2 py-1 text-[11px] text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-50"
+          >
+            {archiving ? t('archiveHistoryWorking') : t('archiveHistoryToHere')}
+          </button>
+        </div>
+      ) : null}
 
       {!isProcessing ? (
         <GeneratedFilesPanel blocks={generatedFileBlocks} placement="turn" />
@@ -452,5 +486,7 @@ export const MemoMessageTurn = memo(ConversationTurn, (prev, next) => (
   prev.filePreviewWorkspaceRoot === next.filePreviewWorkspaceRoot &&
   prev.compactCards === next.compactCards &&
   prev.allowMainThreadActions === next.allowMainThreadActions &&
+  prev.turnUsage === next.turnUsage &&
+  prev.turnUsageStale === next.turnUsageStale &&
   prev.viewportRef === next.viewportRef
 ))

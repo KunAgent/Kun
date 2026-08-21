@@ -46,6 +46,8 @@ export type CoreThreadSummaryJson = {
   model: string
   mode: string
   status: CoreThreadStatus
+  /** Rebuildable event-log high-water mark available on lean list responses. */
+  latestSeq?: number
   approvalPolicy?: string
   sandboxMode?: string
   approvalReviewer?: string
@@ -276,6 +278,7 @@ export type CoreRuntimeCapabilityManifestJson = {
   subagents: CoreRuntimeCapabilityStateJson & {
     useExistingAgents?: boolean
     maxParallel: number
+    proactiveRetry?: { enabled: boolean; maxAttempts: number }
     defaultToolPolicy?: 'readOnly' | 'inherit'
     defaultProfile?: string
     profiles?: Array<{ name: string; model?: string; toolPolicy: 'readOnly' | 'inherit' }>

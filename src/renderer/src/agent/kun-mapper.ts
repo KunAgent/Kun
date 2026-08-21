@@ -1,4 +1,5 @@
-export { buildQuery, goalFromCore, threadFromCore, todosFromCore } from './kun-mapper-core'
+export { goalFromCore, threadFromCore, todosFromCore } from './kun-mapper-core'
+export { buildQuery } from './kun-query'
 export { mergeChatBlocks } from './kun-mapper-tools'
 export {
   chatBlockFromItem,

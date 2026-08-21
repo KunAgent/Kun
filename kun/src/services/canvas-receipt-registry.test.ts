@@ -84,7 +84,7 @@ describe('CanvasReceiptRegistry', () => {
         ok: true,
         status: 'accepted',
         receiptKey: 'design-receipt-export',
-        exportRequest: { relativePath: '.deepseekgui-images/architecture.png' }
+        exportRequest: { relativePath: '.kun/images/architecture.png' }
       }
     })
     const wait = registry.awaitTurnReceipts('thread_1', 'turn_export', 45_000)
@@ -96,8 +96,8 @@ describe('CanvasReceiptRegistry', () => {
         status: 'applied',
         generatedFiles: [{
           name: 'architecture.png',
-          relativePath: '.deepseekgui-images/architecture.png',
-          absolutePath: '/workspace/.deepseekgui-images/architecture.png',
+          relativePath: '.kun/images/architecture.png',
+          absolutePath: '/workspace/.kun/images/architecture.png',
           mimeType: 'image/png',
           byteSize: 128
         }]
@@ -109,7 +109,7 @@ describe('CanvasReceiptRegistry', () => {
       ok: true,
       status: 'applied',
       generatedFiles: [{
-        relativePath: '.deepseekgui-images/architecture.png',
+        relativePath: '.kun/images/architecture.png',
         mimeType: 'image/png',
         byteSize: 128
       }]

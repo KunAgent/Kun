@@ -111,7 +111,7 @@ export type WorkspaceImageBytesSavePayload = {
   dataBase64: string
   /** MIME type of the bytes; supports PNG and SVG image exports. */
   mimeType?: string
-  /** Target directory under the workspace; defaults to `.deepseekgui-images`. */
+  /** Target directory under the workspace; defaults to `.kun/images`. */
   imageDirectory?: string
   /** Optional exact PNG/SVG basename for deterministic renderer-backed exports. */
   fileName?: string

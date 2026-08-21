@@ -72,6 +72,10 @@ jobs:
       DEEPSEEK_GUI_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
       DEEPSEEK_GUI_UPDATE_CHANNEL: frontier
       RELEASE_CHANNEL: frontier
+      # The renderer bundle can exceed Node's default ~2 GiB heap on the
+      # macOS ARM runner. Keep prerelease packaging consistent with PR and
+      # stable release builds.
+      NODE_OPTIONS: '--max-old-space-size=4096'
     steps:
       - name: Check out develop commit
         uses: actions/checkout@v4

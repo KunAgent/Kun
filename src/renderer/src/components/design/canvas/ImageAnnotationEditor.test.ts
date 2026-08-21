@@ -61,12 +61,16 @@ describe('ImageAnnotationEditor text annotations', () => {
         36
       )
     ).toEqual({
+      id: expect.stringMatching(/^annotation-/),
       kind: 'text',
       color: '#3b82f6',
+      opacity: 1,
       x: 100,
       y: 120,
       text: '改成蓝色',
-      fontSize: 36
+      fontFamily: 'sans',
+      fontSize: 36,
+      fontWeight: 500
     })
 
     expect(createImageAnnotationTextOp(null, '改成蓝色', '#3b82f6', 36)).toBeNull()
@@ -85,7 +89,17 @@ describe('ImageAnnotationEditor text annotations', () => {
 
     expect(
       imageAnnotationTextNotes([
-        { kind: 'arrow', color: '#ef4444', width: 4, from: { x: 0, y: 0 }, to: { x: 20, y: 20 } },
+        {
+          id: 'arrow-1',
+          kind: 'arrow',
+          color: '#ef4444',
+          opacity: 1,
+          width: 4,
+          dash: 'solid',
+          arrowhead: 'arrow',
+          from: { x: 0, y: 0 },
+          to: { x: 20, y: 20 }
+        },
         textOp
       ])
     ).toEqual(['标题放大'])

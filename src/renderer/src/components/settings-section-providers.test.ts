@@ -5,6 +5,7 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import {
   deleteSharedModelConnection,
+  geminiCliApiCatalogPatch,
   kunProviderSelectionPatch,
   modelProvidersSettingsPatch,
   nonEmptyModelId,
@@ -20,6 +21,44 @@ const textModelProfile: ModelProviderModelProfileV1 = {
   supportsToolCalling: true,
   messageParts: ['text']
 }
+
+describe('gemini CLI API catalog sync', () => {
+  it('merges synced ids with user-added newer releases and keeps wire casing', () => {
+    const patch = geminiCliApiCatalogPatch(
+      ['gemini-3.1-pro-preview', 'gemini-2.5-pro'],
+      ['gemini-3.7-pro-preview', 'GEMINI-3.1-pro-preview'],
+      { 'gemini-2.5-pro': textModelProfile }
+    )
+    expect(patch.models).toEqual([
+      'gemini-3.1-pro-preview',
+      'gemini-2.5-pro',
+      'gemini-3.7-pro-preview'
+    ])
+    expect(patch.modelProfiles['gemini-2.5-pro']).toBe(textModelProfile)
+    const added = patch.modelProfiles['gemini-3.7-pro-preview']
+    expect(added).toMatchObject({
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      supportsToolCalling: true,
+      messageParts: ['text', 'image_url']
+    })
+    expect(added?.reasoning).toMatchObject({ defaultEffort: 'medium' })
+  })
+
+  it('preserves an existing profile for an id that only differs in casing', () => {
+    const profile: ModelProviderModelProfileV1 = {
+      ...textModelProfile,
+      contextWindowTokens: 1_048_576
+    }
+    const patch = geminiCliApiCatalogPatch(
+      ['gemini-3.7-pro-preview'],
+      ['Gemini-3.7-Pro-Preview'],
+      { 'Gemini-3.7-Pro-Preview': profile }
+    )
+    expect(patch.models).toEqual(['gemini-3.7-pro-preview'])
+    expect(patch.modelProfiles['gemini-3.7-pro-preview']).toBe(profile)
+  })
+})
 
 describe('provider settings patch model sanitization', () => {
   it('omits empty agents.kun.model so settings:set cannot receive Too small', () => {

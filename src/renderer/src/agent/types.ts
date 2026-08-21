@@ -1,7 +1,7 @@
 import type {
   CoreAttachmentContentResponseJson, CoreAttachmentMetadataJson,
   CoreAttachmentTextFallbackJson, CoreMemoryDiagnosticsJson,
-  CoreMemoryRecordJson, CoreMcpOAuthDiagnosticJson, CoreRuntimeInfoJson,
+  CoreChildRuntimeMetadataJson, CoreMemoryRecordJson, CoreMcpOAuthDiagnosticJson, CoreRuntimeInfoJson,
   CoreRuntimeSkillJson, CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
@@ -111,6 +111,8 @@ export type RuntimeChildMetadata = {
   childTerminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'
   resumable?: boolean
   resumeCount?: number
+  failure?: CoreChildRuntimeMetadataJson['failure']
+  proactiveRetry?: CoreChildRuntimeMetadataJson['proactiveRetry']
   detached?: boolean
   prefixReused?: boolean
   inheritedHistoryItems?: number
@@ -216,6 +218,7 @@ export type NormalizedThread = {
   workspace?: string
   knowledgeBases?: KnowledgeBaseMount[]
   status?: string
+  latestSeq?: number
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer

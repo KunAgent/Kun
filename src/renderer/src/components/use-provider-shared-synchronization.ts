@@ -25,6 +25,7 @@ import {
   reconcilePendingSharedProviderCatalogs,
   reconcilePendingSharedProviderDeletions, reconcilePendingSharedProviderNames,
   sharedCapabilitiesFromProvider,
+  sharedConnectionBaseUrlOptional,
   sharedProvidersEligibleForSync, sharedSettingsFingerprint
 } from './settings-section-providers-shared-reconcile'
 import {
@@ -195,10 +196,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
       )
       for (const item of desiredProviders) {
         if (disposed || pendingSharedProviderDeletions.current.has(item.id)) continue
-        const baseUrlOptional =
-          item.kind === 'agent-sdk' ||
-          item.kind === 'antigravity-cli' ||
-          item.kind === 'cursor-sdk'
+        const baseUrlOptional = sharedConnectionBaseUrlOptional(item.kind)
         if (!baseUrlOptional && !item.baseUrl.trim()) continue
         const existing = snapshot.providers.find((entry) => entry.id === item.id)
         const selectedModel = item.models.includes(latestKun.model) ? latestKun.model : item.models[0]

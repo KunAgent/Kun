@@ -32,6 +32,7 @@ import {
   ComposerSendKey,
   ModelProviderSettingsPatchV1,
   ModelProviderSettingsV1,
+  ScheduleTaskStatus,
   UiFontScale
 } from './app-settings-types-provider'
 import {
@@ -490,6 +491,15 @@ export type ScheduleRuntimeStatus = {
   internalUrl: string
   runningTaskIds: string[]
   queuedTaskIds: string[]
+  boundThreadTasks: Array<{
+    taskId: string
+    threadId: string
+    enabled: boolean
+    status: ScheduleTaskStatus
+    nextRunAt: string
+    lastRunAt: string
+    updatedAt: string
+  }>
   powerSaveBlockerActive: boolean
 }
 

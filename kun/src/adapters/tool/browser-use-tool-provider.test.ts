@@ -101,6 +101,16 @@ describe('buildBrowserUseToolProviders', () => {
       }
     })
     expect(tool.requiresExplicitApproval).toEqual(expect.any(Function))
+    const branches = tool.inputSchema.oneOf as Array<{
+      properties: Record<string, { const?: string }>
+      required: string[]
+    }>
+    const open = branches.find((branch) => branch.properties.action?.const === 'open')
+    const snapshot = branches.find((branch) => branch.properties.action?.const === 'snapshot')
+    expect(Object.keys(open?.properties ?? {})).toEqual(['action', 'url', 'newTab'])
+    expect(open?.required).toEqual(['action', 'url'])
+    expect(Object.keys(snapshot?.properties ?? {})).toEqual(['action'])
+    expect(snapshot?.required).toEqual(['action'])
 
     const host = localToolHost(controller())
     expect((await host.listTools(context())).map((entry) => entry.name)).toEqual(['browser_use'])
@@ -185,11 +195,54 @@ describe('buildBrowserUseToolProviders', () => {
         allowedFields: ['action', 'url', 'newTab'],
         issueCodes: expect.arrayContaining(['invalid_field', 'unexpected_field']),
         issuePaths: ['url'],
+        unexpectedFields: ['unexpected'],
         guidance: expect.stringContaining('open')
       }
     })
     expect(JSON.stringify(result.item)).not.toContain('secret-value')
     expect(browserController.execute).not.toHaveBeenCalled()
+  })
+
+  it('normalizes null placeholders before approval hashing and execution', async () => {
+    const browserController = controller({ ok: true, code: 'opened', message: 'opened' })
+    const awaitApproval = vi.fn(async () => ({
+      decision: 'allow' as const,
+      reviewer: 'agent' as const
+    }))
+    const host = localToolHost(browserController)
+    const normalized = {
+      action: 'open' as const,
+      url: 'https://example.test/path',
+      newTab: true
+    }
+
+    const result = await host.execute({
+      callId: 'call-open-null-placeholders',
+      toolName: 'browser_use',
+      arguments: {
+        ...normalized,
+        ref: null,
+        expectedTarget: null,
+        text: null,
+        direction: null
+      }
+    }, context({
+      approvalPolicy: 'on-request',
+      approvalReviewer: 'agent',
+      sandboxMode: 'workspace-write',
+      awaitApproval
+    }))
+
+    expect(result.item).toMatchObject({ isError: false })
+    expect(awaitApproval).toHaveBeenCalledWith(expect.objectContaining({
+      action: expect.objectContaining({ arguments: normalized })
+    }))
+    expect(browserController.execute).toHaveBeenCalledWith(expect.objectContaining({
+      action: normalized,
+      kunApprovalGrant: expect.objectContaining({
+        argumentsHash: ToolOperationJournal.argsHash(normalized)
+      })
+    }))
   })
 
   it.each([

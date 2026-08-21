@@ -432,7 +432,9 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   updatedAt: true
 }).extend({
   /** First accepted Code/Design mode, derived from durable turn history. */
-  lockedTaskSurface: ThreadAgentSurface.optional()
+  lockedTaskSurface: ThreadAgentSurface.optional(),
+  /** Rebuildable event-log high-water mark used by lean activity observers. */
+  latestSeq: z.number().int().nonnegative().optional()
 })
 export type ThreadSummary = z.infer<typeof ThreadSummarySchema>
 

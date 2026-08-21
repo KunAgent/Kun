@@ -76,5 +76,9 @@
   "uninstallConfirmType": "확인을 위해 UNINSTALL 입력",
   "uninstallConfirmButton": "제거 확인",
   "uninstallConfirmCancel": "취소",
-  "uninstallRunning": "제거 중… 곧 Kun이 종료됩니다."
+  "uninstallRunning": "제거 중… 곧 Kun이 종료됩니다.",
+  "labConversationVisualizationTitle": "Conversation visualization",
+  "labConversationVisualizationDescription": "Experimental structured visuals for flows, grouped explanations, and important constraints. The agent uses them only when spatial structure is clearer than prose.",
+  "labConversationVisualizationEnabled": "Allow agent visualizations",
+  "labConversationVisualizationEnabledDesc": "Adds show_visualization to future desktop agent requests. Turning it off removes the tool while preserving visualizations already stored in conversation history."
 }

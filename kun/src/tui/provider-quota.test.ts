@@ -29,7 +29,14 @@ const snapshot: ProviderQuotaListResponse = {
           usedPercent: 64,
           resetsAt: '2026-08-03T01:30:00.000Z'
         }
-      ]
+      ],
+      localCost: {
+        kind: 'reference_api_estimate',
+        currency: 'USD',
+        today: { requests: 2, totalTokens: 1_500, amount: 0.025, coverage: 'complete' },
+        last30Days: { requests: 8, totalTokens: 12_000, amount: 0.15, coverage: 'partial' },
+        updatedAt: '2026-07-28T01:31:00.000Z'
+      }
     },
     {
       providerId: 'deepseek',
@@ -60,6 +67,10 @@ describe('provider quota TUI', () => {
 
     expect(plain).toContain('Codex subscription')
     expect(plain).toContain('18%')
+    expect(plain).toContain('Local API reference value')
+    expect(plain).toContain('$0.025')
+    expect(plain).toContain('partial')
+    expect(plain).toContain('API reference estimate')
     expect(plain).toContain('DeepSeek')
     expect(plain).toContain('40.76 CNY')
     expect(plain).toContain('Custom provider')

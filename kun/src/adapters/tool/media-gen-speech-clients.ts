@@ -6,6 +6,7 @@ import {
   audioExtension,
   audioMimeType,
   bufferFromHex,
+  createMediaFetch,
   requestJson,
   requestResponse,
   withTimeout
@@ -32,18 +33,22 @@ export function createSpeechGenClient(config: {
   protocol?: string
   baseUrl?: string
   apiKey?: string
+  proxyUrl?: string
 }): SpeechGenClient {
-  if (config.protocol === 'minimax-t2a') return new MiniMaxSpeechClient(config.baseUrl!, config.apiKey!)
-  if (config.protocol === 'mimo-tts') return new MimoSpeechClient(config.baseUrl!, config.apiKey!)
-  return new OpenAiCompatSpeechClient(config.baseUrl!, config.apiKey!)
+  // Media generation shares the provider-level model proxy with chat requests.
+  const fetchImpl = createMediaFetch(config.proxyUrl)
+  if (config.protocol === 'minimax-t2a') return new MiniMaxSpeechClient(config.baseUrl!, config.apiKey!, fetchImpl)
+  if (config.protocol === 'mimo-tts') return new MimoSpeechClient(config.baseUrl!, config.apiKey!, fetchImpl)
+  return new OpenAiCompatSpeechClient(config.baseUrl!, config.apiKey!, fetchImpl)
 }
 
 export function createMusicGenClient(config: {
   protocol?: string
   baseUrl?: string
   apiKey?: string
+  proxyUrl?: string
 }): MusicGenClient {
-  return new MiniMaxMusicClient(config.baseUrl!, config.apiKey!)
+  return new MiniMaxMusicClient(config.baseUrl!, config.apiKey!, createMediaFetch(config.proxyUrl))
 }
 
 
@@ -53,7 +58,8 @@ export class OpenAiCompatSpeechClient implements SpeechGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = apiUrl(baseUrl, '/v1/audio/speech')
   }
@@ -72,7 +78,7 @@ export class OpenAiCompatSpeechClient implements SpeechGenClient {
         response_format: request.format
       }),
       signal: withTimeout(request.signal, request.timeoutMs)
-    }, request)
+    }, request, this.fetchImpl)
     if (!response.ok) throw new ImageGenHttpError(response.status, await response.text())
     const mimeType = response.headers.get('content-type')?.split(';')[0] || audioMimeType(request.format)
     return {
@@ -89,7 +95,8 @@ export class MiniMaxSpeechClient implements SpeechGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = apiUrl(baseUrl, '/v1/t2a_v2')
   }
@@ -120,7 +127,7 @@ export class MiniMaxSpeechClient implements SpeechGenClient {
         }
       }),
       signal: withTimeout(request.signal, request.timeoutMs)
-    }, request)
+    }, request, this.fetchImpl)
     assertMiniMaxOk(payload.base_resp, 'MiniMax speech provider')
     const audio = payload.data?.audio
     if (!audio) throw new Error('MiniMax speech provider returned no audio data')
@@ -138,7 +145,8 @@ export class MimoSpeechClient implements SpeechGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = apiUrl(baseUrl, '/v1/chat/completions')
   }
@@ -164,7 +172,7 @@ export class MimoSpeechClient implements SpeechGenClient {
         }
       }),
       signal: withTimeout(request.signal, request.timeoutMs)
-    }, request)
+    }, request, this.fetchImpl)
     const audio = payload.choices?.[0]?.message?.audio?.data
     if (!audio) throw new Error('MiMo speech provider returned no audio data')
     return {
@@ -181,7 +189,8 @@ export class MiniMaxMusicClient implements MusicGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = apiUrl(baseUrl, '/v1/music_generation')
   }
@@ -208,7 +217,7 @@ export class MiniMaxMusicClient implements MusicGenClient {
         ...(request.referenceAudioUrl ? { audio_url: request.referenceAudioUrl } : {})
       }),
       signal: withTimeout(request.signal, request.timeoutMs)
-    }, request)
+    }, request, this.fetchImpl)
     assertMiniMaxOk(payload.base_resp, 'MiniMax music provider')
     const audio = payload.data?.audio
     if (!audio) throw new Error('MiniMax music provider returned no audio data')

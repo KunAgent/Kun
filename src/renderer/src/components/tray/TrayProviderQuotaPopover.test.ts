@@ -25,7 +25,14 @@ const result: ProviderQuotaListResult = {
         remaining: 77,
         usedPercent: 23,
         resetsAt: '2026-08-03T00:00:00.000Z'
-      }]
+      }],
+      localCost: {
+        kind: 'reference_api_estimate',
+        currency: 'USD',
+        today: { requests: 2, totalTokens: 1_500, amount: 0.025, coverage: 'complete' },
+        last30Days: { requests: 7, totalTokens: 9_000, amount: 0.12, coverage: 'partial' },
+        updatedAt: '2026-07-28T02:30:00.000Z'
+      }
     },
     {
       providerId: 'claude-subscription',
@@ -113,10 +120,17 @@ describe('TrayProviderQuotaPopover', () => {
     expect(renderer.root.findByType('main').props['data-context-ready']).toBe('true')
     expect(JSON.stringify(renderer.toJSON())).toContain('Weekly')
     expect(JSON.stringify(renderer.toJSON())).toContain('77 requests')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Local API reference value')
+    expect(JSON.stringify(renderer.toJSON())).toContain('$0.0250')
+    expect(renderer.root.findAllByProps({ 'data-provider-icon': 'codex' }).length).toBeGreaterThan(0)
 
     await act(async () => tabs[0].props.onClick())
     expect(renderer.root.findAllByProps({ role: 'tab' })[0].props['aria-selected']).toBe(true)
     expect(JSON.stringify(renderer.toJSON())).toContain('Claude subscription')
+    expect(renderer.root.findByProps({ 'aria-label': 'Codex: Available' })).toBeTruthy()
+    expect(renderer.root.findByProps({
+      'data-provider-local-cost': 'tray-overview'
+    }).props['aria-hidden']).toBe(true)
     await act(async () => renderer.unmount())
   })
 

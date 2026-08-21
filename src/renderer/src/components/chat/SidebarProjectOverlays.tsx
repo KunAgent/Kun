@@ -2,6 +2,7 @@ import { useEffect, type FormEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Archive,
+  ClipboardCopy,
   ExternalLink,
   FolderPlus,
   MoveRight,
@@ -322,6 +323,7 @@ export function ThreadContextMenu({
   onPin,
   onRename,
   onSummarize,
+  onCopyId,
   onArchive,
   onDelete,
   onRestore,
@@ -336,6 +338,7 @@ export function ThreadContextMenu({
   onPin: () => void
   onRename: () => void
   onSummarize: () => void
+  onCopyId: () => void
   onArchive: () => void
   onDelete: () => void
   onRestore: () => void
@@ -365,6 +368,13 @@ export function ThreadContextMenu({
       <MenuItem icon={<MoveRight className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadMove')} disabled={moveDisabled} title={moveDisabledTitle} onClick={() => run(onMove)} />
       <MenuItem icon={<PencilLine className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadRename')} disabled={busy} onClick={() => run(onRename)} />
       <MenuItem icon={<ScrollText className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('summarizeSession')} disabled={busy} onClick={() => run(onSummarize)} />
+      <MenuItem
+        icon={<ClipboardCopy className="h-3.5 w-3.5" strokeWidth={1.9} />}
+        label={t('sidebarThreadCopyId')}
+        title={state.thread.id}
+        disabled={!state.thread.id.trim()}
+        onClick={() => run(onCopyId)}
+      />
       <MenuItem
         icon={archived ? <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.9} /> : <Archive className="h-3.5 w-3.5" strokeWidth={1.9} />}
         label={archived ? t('sidebarThreadRestore') : t('sidebarThreadArchive')}

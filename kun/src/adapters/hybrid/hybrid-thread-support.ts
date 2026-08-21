@@ -4,6 +4,7 @@ import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
 import type { RuntimeEvent } from '../../contracts/events.js'
 import type { TurnItem } from '../../contracts/items.js'
 import { emptyUsageSnapshot, UsageSnapshotSchema, type UsageSnapshot } from '../../contracts/usage.js'
+import { diffUsage, hasUsage } from '../../domain/usage.js'
 import type { SessionLatestUsageSnapshot, SessionUsageRecord } from '../../ports/session-store.js'
 
 export type UsageRuntimeEvent = Extract<RuntimeEvent, { kind: 'usage' }>
@@ -82,105 +83,6 @@ function parseUsageSnapshot(raw: string): UsageSnapshot | null {
   } catch {
     return null
   }
-}
-
-function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): UsageSnapshot {
-  const promptTokens = diffNumber(current.promptTokens, previous.promptTokens)
-  const completionTokens = diffNumber(current.completionTokens, previous.completionTokens)
-  const reportedTotal = diffNumber(current.totalTokens, previous.totalTokens)
-  const totalTokens = reportedTotal || promptTokens + completionTokens
-  const cachedTokens = diffOptionalNumber(current.cachedTokens, previous.cachedTokens)
-  const cacheHitTokens = diffOptionalNumber(current.cacheHitTokens, previous.cacheHitTokens)
-  const cacheMissTokens = diffOptionalNumber(current.cacheMissTokens, previous.cacheMissTokens)
-  const cacheTotal = (cacheHitTokens ?? 0) + (cacheMissTokens ?? 0)
-  return {
-    promptTokens,
-    completionTokens,
-    totalTokens,
-    ...(cachedTokens !== undefined ? { cachedTokens } : {}),
-    ...(cacheHitTokens !== undefined ? { cacheHitTokens } : {}),
-    ...(cacheMissTokens !== undefined ? { cacheMissTokens } : {}),
-    cacheHitRate: cacheHitTokens !== undefined && cacheTotal > 0 ? cacheHitTokens / cacheTotal : null,
-    ...(current.cacheableTokenHitRate !== undefined
-      ? { cacheableTokenHitRate: current.cacheableTokenHitRate }
-      : {}),
-    ...(current.totalInputTokenHitRate !== undefined
-      ? { totalInputTokenHitRate: current.totalInputTokenHitRate }
-      : {}),
-    ...(current.cacheMissReasons ? { cacheMissReasons: [...current.cacheMissReasons] } : {}),
-    ...(current.cacheSuggestions ? { cacheSuggestions: [...current.cacheSuggestions] } : {}),
-    turns: diffNumber(current.turns, previous.turns),
-    ...(current.costUsd !== undefined || previous.costUsd !== undefined
-      ? { costUsd: diffNumber(current.costUsd ?? 0, previous.costUsd ?? 0) }
-      : {}),
-    ...(current.costCny !== undefined || previous.costCny !== undefined
-      ? { costCny: diffNumber(current.costCny ?? 0, previous.costCny ?? 0) }
-      : {}),
-    ...(current.cacheSavingsUsd !== undefined || previous.cacheSavingsUsd !== undefined
-      ? { cacheSavingsUsd: diffNumber(current.cacheSavingsUsd ?? 0, previous.cacheSavingsUsd ?? 0) }
-      : {}),
-    ...(current.cacheSavingsCny !== undefined || previous.cacheSavingsCny !== undefined
-      ? { cacheSavingsCny: diffNumber(current.cacheSavingsCny ?? 0, previous.cacheSavingsCny ?? 0) }
-      : {}),
-    ...(current.tokenEconomySavingsTokens !== undefined || previous.tokenEconomySavingsTokens !== undefined
-      ? {
-          tokenEconomySavingsTokens: diffNumber(
-            current.tokenEconomySavingsTokens ?? 0,
-            previous.tokenEconomySavingsTokens ?? 0
-          )
-        }
-      : {}),
-    ...(current.tokenEconomySavingsUsd !== undefined || previous.tokenEconomySavingsUsd !== undefined
-      ? {
-          tokenEconomySavingsUsd: diffNumber(
-            current.tokenEconomySavingsUsd ?? 0,
-            previous.tokenEconomySavingsUsd ?? 0
-          )
-        }
-      : {}),
-    ...(current.tokenEconomySavingsCny !== undefined || previous.tokenEconomySavingsCny !== undefined
-      ? {
-          tokenEconomySavingsCny: diffNumber(
-            current.tokenEconomySavingsCny ?? 0,
-            previous.tokenEconomySavingsCny ?? 0
-          )
-        }
-      : {}),
-    ...(current.hasError ? { hasError: true } : {}),
-    // Timing aggregates are cumulative snapshot values, not per-record
-    // counters: carry the latest snapshot's averages so thread usage
-    // keeps TTFT/TPS after the differential fold.
-    ...(current.avgTtftMs !== undefined ? { avgTtftMs: current.avgTtftMs } : {}),
-    ...(current.avgTokensPerSecond !== undefined
-      ? { avgTokensPerSecond: current.avgTokensPerSecond }
-      : {})
-  }
-}
-
-function diffNumber(current: number, previous: number): number {
-  return Math.max(0, current - previous)
-}
-
-function diffOptionalNumber(current?: number, previous?: number): number | undefined {
-  if (current === undefined && previous === undefined) return undefined
-  return Math.max(0, (current ?? 0) - (previous ?? 0))
-}
-
-function hasUsage(usage: UsageSnapshot): boolean {
-  return usage.promptTokens > 0
-    || usage.completionTokens > 0
-    || usage.totalTokens > 0
-    || (usage.cachedTokens ?? 0) > 0
-    || (usage.cacheHitTokens ?? 0) > 0
-    || (usage.cacheMissTokens ?? 0) > 0
-    || usage.turns > 0
-    || (usage.costUsd ?? 0) > 0
-    || (usage.costCny ?? 0) > 0
-    || (usage.cacheSavingsUsd ?? 0) > 0
-    || (usage.cacheSavingsCny ?? 0) > 0
-    || (usage.tokenEconomySavingsTokens ?? 0) > 0
-    || (usage.tokenEconomySavingsUsd ?? 0) > 0
-    || (usage.tokenEconomySavingsCny ?? 0) > 0
 }
 
 export function addColumnIfMissing(db: BetterSqliteDatabase, table: string, columnSql: string): void {

@@ -197,6 +197,29 @@ describe('DaemonRuntime', () => {
     await runtime.stop()
   })
 
+  it('does not depend on the scheduled-task master switch', async () => {
+    writeScript('independent.js', 'setInterval(() => {}, 1000)')
+    const daemon = makeDaemon({ scriptPath: 'independent.js' })
+    const settings = settingsWith([daemon])
+    settings.schedule = mergeScheduleSettings(settings.schedule, { enabled: false, keepAwake: false })
+    const { runtime } = createRuntime(settings)
+    runtime.sync(settings)
+    await waitFor(async () => (await runtime.status()).items[0]?.state === 'running')
+    await runtime.stop()
+  })
+
+  it('does not start daemons when only keep-awake is enabled', async () => {
+    writeScript('sleep.js', 'setInterval(() => {}, 1000)')
+    const daemon = makeDaemon({ scriptPath: 'sleep.js' })
+    const settings = settingsWith([daemon], false)
+    settings.schedule = mergeScheduleSettings(settings.schedule, { keepAwake: true })
+    const { runtime } = createRuntime(settings)
+    runtime.sync(settings)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect((await runtime.status()).items).toHaveLength(0)
+    await runtime.stop()
+  })
+
   it('restarts when the script path changes in settings', async () => {
     writeScript('a.js', 'setInterval(() => {}, 1000)')
     writeScript('b.js', 'setInterval(() => {}, 1000)')

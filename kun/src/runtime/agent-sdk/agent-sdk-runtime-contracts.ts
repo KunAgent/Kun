@@ -61,6 +61,8 @@ export interface SdkTurnContext {
   /** Enforce structured SVG mutation followed by a later successful validation. */
   requireSvgCompletion?: boolean
   model?: string
+  /** Non-sensitive subscription attribution inherited from the selected provider. */
+  billingKind?: 'subscription'
   /** Per-turn Claude adaptive-thinking effort selected by the shared client. */
   reasoningEffort?: string
   /** Prior SDK session id for multi-turn continuity. */

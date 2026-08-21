@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { describe, expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
 import {
@@ -95,6 +97,39 @@ describe('weixin bridge runtime', () => {
       })
     } finally {
       fetchMock.mockRestore()
+      configureWeixinBridgeRuntimeContextProvider(null)
+    }
+  })
+
+  it('requires authentication and returns a rejected contract before dispatch', async () => {
+    configureWeixinBridgeRuntimeContextProvider(async () => ({
+      webhookUrl: 'http://127.0.0.1:18787/claw/im',
+      webhookSecret: 'local-secret',
+      channelId: 'channel_weixin'
+    }))
+    const request = new EventEmitter() as IncomingMessage
+    request.headers = {}
+    request.push = () => false
+    const response = new EventEmitter() as ServerResponse
+    let status = 0
+    let body = ''
+    response.writeHead = vi.fn((nextStatus: number) => {
+      status = nextStatus
+      return response
+    }) as ServerResponse['writeHead']
+    response.end = vi.fn((chunk?: unknown) => {
+      body += chunk == null ? '' : String(chunk)
+      return response
+    }) as ServerResponse['end']
+
+    try {
+      await weixinBridgeRuntimeInternals.handleLocalSend(request, response)
+      expect(status).toBe(401)
+      expect(JSON.parse(body)).toEqual({
+        status: 'rejected',
+        error: { code: 'unauthorized', message: 'Unauthorized.' }
+      })
+    } finally {
       configureWeixinBridgeRuntimeContextProvider(null)
     }
   })

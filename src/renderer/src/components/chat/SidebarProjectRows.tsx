@@ -8,8 +8,10 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
+  CalendarClock,
   ChevronDown,
   ChevronRight,
+  CircleAlert,
   ClipboardList,
   FolderPlus,
   GitBranch,
@@ -25,6 +27,7 @@ import type { SddDraftHistoryItem } from '../../sdd/sdd-draft-history'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { SidebarIconButton, SidebarTreeRow } from '../sidebar/SidebarPrimitives'
 import type { SidebarThreadWorktreeRecord } from './sidebar-project-selectors'
+import type { ScheduledThreadActivity } from '../../store/chat-store-types'
 import type { SidebarDropPosition } from './sidebar-order'
 
 const DRAFT_HISTORY_PAGE_SIZE = 3
@@ -152,6 +155,8 @@ type ThreadRowProps = {
   locale: string
   showRunning: boolean
   showUnread: boolean
+  showFailed?: boolean
+  scheduledActivity?: ScheduledThreadActivity
   onSelect: () => void
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void
   onPreviewOpen: (
@@ -182,6 +187,8 @@ export function ThreadRow({
   locale,
   showRunning,
   showUnread,
+  showFailed = false,
+  scheduledActivity,
   onSelect,
   onContextMenu,
   onPreviewOpen,
@@ -208,12 +215,34 @@ export function ThreadRow({
     ? t('sidebarThreadWorktree', { branch: worktreeBranch })
     : ''
   const updatedLabel = formatRelativeTime(thread.updatedAt, locale)
+  const scheduledTime = scheduledActivity?.nextRunAt
+    ? (() => {
+        const date = new Date(scheduledActivity.nextRunAt)
+        return Number.isFinite(date.getTime())
+          ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+          : ''
+      })()
+    : ''
+  const scheduledLabel = scheduledActivity
+    ? scheduledActivity.taskCount > 1
+      ? t('sidebarThreadScheduledMultiple', {
+          count: scheduledActivity.taskCount,
+          time: scheduledTime || t('sidebarThreadScheduledTimePending')
+        })
+      : scheduledActivity.queued
+        ? t('sidebarThreadScheduledQueued')
+        : t('sidebarThreadScheduled', {
+            time: scheduledTime || t('sidebarThreadScheduledTimePending')
+          })
+    : ''
   const ariaLabel = [
     thread.title,
     updatedLabel,
     pinned ? t('sidebarThreadPinned') : '',
     showRunning ? t('sidebarThreadRunning') : '',
+    showFailed ? t('sidebarThreadFailed') : '',
     showUnreadDot ? t('sidebarThreadUnread') : '',
+    !showRunning && !showFailed && !showUnreadDot ? scheduledLabel : '',
     worktreeLabel
   ].filter(Boolean).join(' - ')
 
@@ -312,10 +341,14 @@ export function ThreadRow({
           <span className="shrink-0 text-right text-[12px] leading-4 text-ds-faint tabular-nums">
             {updatedLabel}
           </span>
-          <ThreadActivityDot
+          <ThreadActivityIndicator
             running={showRunning}
+            failed={showFailed}
             unread={showUnreadDot}
-            unreadLabel={t('sidebarThreadUnread')}
+            scheduled={!showRunning && !showFailed && !showUnreadDot ? scheduledActivity : undefined}
+            unreadLabel={t(showRunning ? 'sidebarThreadRunning' : 'sidebarThreadUnread')}
+            failedLabel={t('sidebarThreadFailed')}
+            scheduledLabel={scheduledLabel}
           />
         </span>
       </span>
@@ -323,22 +356,71 @@ export function ThreadRow({
   )
 }
 
-function ThreadActivityDot({
+export function ThreadRunningIndicator({
+  label,
+  className = ''
+}: {
+  label: string
+  className?: string
+}): ReactElement {
+  return (
+    <Loader2
+      className={`h-3.5 w-3.5 shrink-0 animate-spin text-accent motion-reduce:animate-none ${className}`}
+      strokeWidth={2}
+      role="img"
+      aria-label={label}
+    />
+  )
+}
+
+function ThreadActivityIndicator({
   running,
+  failed,
   unread,
-  unreadLabel
+  scheduled,
+  unreadLabel,
+  failedLabel,
+  scheduledLabel
 }: {
   running: boolean
+  failed: boolean
   unread: boolean
+  scheduled?: ScheduledThreadActivity
   unreadLabel: string
+  failedLabel: string
+  scheduledLabel: string
 }): ReactElement | null {
-  if (running) return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-accent" strokeWidth={2} />
+  if (running) return <ThreadRunningIndicator label={unreadLabel} />
+  if (failed) {
+    return (
+      <span className="inline-flex" title={failedLabel}>
+        <CircleAlert
+          className="h-3.5 w-3.5 shrink-0 text-red-500"
+          strokeWidth={2}
+          role="img"
+          aria-label={failedLabel}
+        />
+      </span>
+    )
+  }
   if (unread) {
     return (
       <span
         className="block h-2 w-2 shrink-0 rounded-full bg-accent shadow-[0_0_0_1px_rgba(79,124,255,0.2)]"
         title={unreadLabel}
       />
+    )
+  }
+  if (scheduled) {
+    return (
+      <span className="inline-flex" title={scheduledLabel}>
+        <CalendarClock
+          className="h-3.5 w-3.5 shrink-0 text-ds-faint"
+          strokeWidth={1.8}
+          role="img"
+          aria-label={scheduledLabel}
+        />
+      </span>
     )
   }
   return null

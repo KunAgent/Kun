@@ -1,10 +1,14 @@
-import type { AppRoute, ChatState } from './chat-store-types'
+import type {
+  AppRoute,
+  ChatState,
+  CompletionAttentionRegistry,
+  ThreadCompletionOutcome
+} from './chat-store-types'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 
-export const UNREAD_COMPLETIONS_STORAGE_KEY = 'kun.unreadCompletions.v1'
+export const UNREAD_COMPLETIONS_STORAGE_KEY = 'kun.unreadCompletions.v2'
+export const LEGACY_UNREAD_COMPLETIONS_STORAGE_KEY = 'kun.unreadCompletions.v1'
 export const MAX_UNREAD_COMPLETION_IDS = 1_000
-
-type UnreadCompletionRegistry = Record<string, boolean>
 
 type CompletionVisibilityState = Pick<
   ChatState,
@@ -20,41 +24,57 @@ function normalizedThreadId(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-export function normalizeUnreadCompletions(value: unknown): UnreadCompletionRegistry {
-  const candidates = Array.isArray(value)
-    ? value
-    : value && typeof value === 'object'
-      ? Array.isArray((value as { ids?: unknown }).ids)
-        ? (value as { ids: unknown[] }).ids
-        : Object.entries(value as Record<string, unknown>).flatMap(([id, unread]) =>
-            unread === true ? [id] : []
-          )
-      : []
-  const normalized: UnreadCompletionRegistry = {}
-  for (const candidate of candidates) {
+function normalizedOutcome(value: unknown): ThreadCompletionOutcome | null {
+  if (value === true || value === 'completed') return 'completed'
+  if (value === 'failed') return 'failed'
+  return null
+}
+
+function completionEntries(value: unknown): Array<[unknown, unknown]> {
+  if (Array.isArray(value)) return value.map((id) => [id, 'completed'])
+  if (!value || typeof value !== 'object') return []
+  const record = value as Record<string, unknown>
+  if (record.outcomes && typeof record.outcomes === 'object' && !Array.isArray(record.outcomes)) {
+    return Object.entries(record.outcomes as Record<string, unknown>)
+  }
+  if (Array.isArray(record.ids)) return record.ids.map((id) => [id, 'completed'])
+  return Object.entries(record)
+}
+
+export function normalizeUnreadCompletions(value: unknown): CompletionAttentionRegistry {
+  const normalized: CompletionAttentionRegistry = {}
+  for (const [candidate, rawOutcome] of completionEntries(value)) {
     const threadId = normalizedThreadId(candidate)
-    if (!threadId || normalized[threadId]) continue
-    normalized[threadId] = true
+    const outcome = normalizedOutcome(rawOutcome)
+    if (!threadId || !outcome) continue
+    if (normalized[threadId] === 'failed' && outcome === 'completed') continue
+    normalized[threadId] = outcome
     if (Object.keys(normalized).length >= MAX_UNREAD_COMPLETION_IDS) break
   }
   return normalized
 }
 
-export function readUnreadCompletions(): UnreadCompletionRegistry {
-  const raw = readBrowserStorageItem(UNREAD_COMPLETIONS_STORAGE_KEY)
-  if (!raw) return {}
-  try {
-    return normalizeUnreadCompletions(JSON.parse(raw))
-  } catch {
-    return {}
+export function readUnreadCompletions(): CompletionAttentionRegistry {
+  const candidates = [
+    readBrowserStorageItem(UNREAD_COMPLETIONS_STORAGE_KEY),
+    readBrowserStorageItem(LEGACY_UNREAD_COMPLETIONS_STORAGE_KEY)
+  ]
+  for (const raw of candidates) {
+    if (!raw) continue
+    try {
+      return normalizeUnreadCompletions(JSON.parse(raw))
+    } catch {
+      // A damaged v2 record must not prevent recovery from the legacy v1 list.
+    }
   }
+  return {}
 }
 
-export function persistUnreadCompletions(value: unknown): UnreadCompletionRegistry {
+export function persistUnreadCompletions(value: unknown): CompletionAttentionRegistry {
   const normalized = normalizeUnreadCompletions(value)
   writeBrowserStorageItem(
     UNREAD_COMPLETIONS_STORAGE_KEY,
-    JSON.stringify({ version: 1, ids: Object.keys(normalized) })
+    JSON.stringify({ version: 2, outcomes: normalized })
   )
   return normalized
 }
@@ -64,34 +84,37 @@ export function unreadCompletionCount(value: unknown): number {
 }
 
 export function markUnreadCompletion(
-  registry: UnreadCompletionRegistry,
-  threadId: string
-): UnreadCompletionRegistry {
+  registry: CompletionAttentionRegistry,
+  threadId: string,
+  outcome: ThreadCompletionOutcome = 'completed'
+): CompletionAttentionRegistry {
   const normalized = normalizedThreadId(threadId)
-  if (!normalized || registry[normalized] === true) return registry
-  return normalizeUnreadCompletions({ ...registry, [normalized]: true })
+  const current = completionAttentionForThread(registry, normalized)
+  if (!normalized || current === outcome || (current === 'failed' && outcome === 'completed')) return registry
+  return normalizeUnreadCompletions({ ...registry, [normalized]: outcome })
 }
 
 export function clearUnreadCompletion(
-  registry: UnreadCompletionRegistry,
+  registry: CompletionAttentionRegistry,
   threadId: string
-): UnreadCompletionRegistry {
+): CompletionAttentionRegistry {
   const normalized = normalizedThreadId(threadId)
-  if (!normalized || registry[normalized] !== true) return registry
+  if (!normalized || !completionAttentionForThread(registry, normalized)) return registry
   const next = { ...registry }
   delete next[normalized]
-  return next
+  return normalizeUnreadCompletions(next)
 }
 
 export function retainUnreadCompletions(
-  registry: UnreadCompletionRegistry,
+  registry: CompletionAttentionRegistry,
   validThreadIds: Iterable<string>
-): UnreadCompletionRegistry {
+): CompletionAttentionRegistry {
   const valid = new Set([...validThreadIds].map(normalizedThreadId).filter(Boolean))
-  const next: UnreadCompletionRegistry = {}
+  const next: CompletionAttentionRegistry = {}
   let changed = false
   for (const [threadId, unread] of Object.entries(registry)) {
-    if (unread === true && valid.has(threadId)) next[threadId] = true
+    const outcome = normalizedOutcome(unread)
+    if (outcome && valid.has(threadId)) next[threadId] = outcome
     else changed = true
   }
   return changed ? next : registry
@@ -125,10 +148,10 @@ export function completionIsCurrentlyVisible(
 }
 
 export function clearCurrentlyVisibleUnreadCompletions(
-  registry: UnreadCompletionRegistry,
+  registry: CompletionAttentionRegistry,
   state: CompletionVisibilityState,
   attention: DocumentAttention = currentDocumentAttention()
-): UnreadCompletionRegistry {
+): CompletionAttentionRegistry {
   if (!attention.visible || !attention.focused) return registry
   let next = registry
   if (state.activeThreadId && completionIsCurrentlyVisible(state, state.activeThreadId, attention)) {
@@ -139,4 +162,20 @@ export function clearCurrentlyVisibleUnreadCompletions(
     next = clearUnreadCompletion(next, activeSideId)
   }
   return next
+}
+
+export function completionAttentionForThread(
+  registry: CompletionAttentionRegistry,
+  threadId: string
+): ThreadCompletionOutcome | null {
+  return normalizedOutcome(registry[normalizedThreadId(threadId)])
+}
+
+export function completionOutcomeForTurnStatus(
+  status: string | null | undefined
+): ThreadCompletionOutcome | null {
+  const normalized = status?.trim().toLowerCase()
+  if (normalized === 'failed' || normalized === 'error') return 'failed'
+  if (normalized === 'completed' || normalized === 'success') return 'completed'
+  return null
 }

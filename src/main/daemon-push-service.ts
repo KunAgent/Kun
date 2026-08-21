@@ -1,12 +1,8 @@
 import type { AppSettingsV1, SessionDaemonV1 } from '../shared/app-settings'
+import type { WeixinOutboundSend } from './weixin-bridge-outbound-coordinator'
 import type { JsonSettingsStore } from './settings-store'
 
-export type WeixinBridgeSendFn = (options: {
-  accountId: string
-  to: string
-  text?: string
-  files?: readonly { path: string; fileName: string }[]
-}) => Promise<{ ok: true; messageId: string } | { ok: false; message: string }>
+export type WeixinBridgeSendFn = (options: WeixinOutboundSend) => Promise<{ ok: true; messageId: string } | { ok: false; message: string }>
 
 export type DaemonPushServiceDeps = {
   store: JsonSettingsStore

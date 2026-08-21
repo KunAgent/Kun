@@ -39,6 +39,7 @@ describe('normalizeCompatUsage', () => {
       totalTokens: 105,
       cacheHitTokens: 70,
       cacheMissTokens: 30,
+      cacheWriteTokens: 10,
       cacheHitRate: 0.7
     })
   })
@@ -54,5 +55,42 @@ describe('normalizeCompatUsage', () => {
       model: 'gpt-5',
       providerBaseUrl: 'https://api.openai.com/v1'
     })).toMatchObject({ cacheHitTokens: 30, cacheMissTokens: 20, cacheHitRate: 0.6 })
+  })
+
+  it('reads cache writes from Responses token details', () => {
+    expect(normalizeCompatUsage({
+      usage: {
+        input_tokens: 100,
+        output_tokens: 5,
+        total_tokens: 105,
+        input_tokens_details: { cached_tokens: 30, cache_write_tokens: 20 }
+      },
+      model: 'gpt-5.6-sol',
+      providerBaseUrl: 'https://chatgpt.com/backend-api/codex'
+    })).toMatchObject({
+      cacheHitTokens: 30,
+      cacheWriteTokens: 20,
+      billingKind: 'subscription'
+    })
+  })
+
+  it('uses configured subscription billing for a proxied Codex request', () => {
+    expect(normalizeCompatUsage({
+      usage: { input_tokens: 25_300, output_tokens: 700 },
+      model: 'gpt-5.6-luna',
+      providerBaseUrl: 'https://proxy.example/v1',
+      billingKind: 'subscription'
+    })).toMatchObject({
+      actualModelId: 'gpt-5.6-luna',
+      billingKind: 'subscription'
+    })
+  })
+
+  it('marks a non-subscription GPT request as API billing', () => {
+    expect(normalizeCompatUsage({
+      usage: { input_tokens: 25_300, output_tokens: 700 },
+      model: 'gpt-5.6-luna',
+      providerBaseUrl: 'https://gateway.example/v1'
+    }).billingKind).toBe('api')
   })
 })

@@ -128,6 +128,10 @@ describe('FloatingComposerUsageHistory', () => {
       }))
     })
     const trigger = renderer.root.findByProps({ 'aria-haspopup': 'dialog' })
+    expect(trigger.props.className).toContain('flex-nowrap')
+    expect(trigger.props.className).toContain('overflow-hidden')
+    expect(trigger.props.className).toContain('whitespace-nowrap')
+    expect(trigger.props.className).not.toContain('flex-wrap ')
     expect(trigger.props['aria-expanded']).toBe(false)
     expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
 

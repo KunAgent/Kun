@@ -1,0 +1,71 @@
+.ds-chat-main-stack {
+  --ds-composer-transition-height: 2.5rem;
+  --ds-composer-floating-status-height: 0px;
+}
+
+.ds-chat-stage:not([data-empty-task-layout='true'])
+  .ds-message-timeline-content {
+  padding-bottom: calc(
+    var(--ds-composer-transition-height) +
+    var(--ds-composer-floating-status-height)
+  );
+}
+
+.ds-chat-stage:not([data-empty-task-layout='true']) .ds-composer-dock {
+  z-index: 20;
+  isolation: isolate;
+}
+
+.ds-chat-stage:not([data-empty-task-layout='true']) .ds-composer-dock::before {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--ds-composer-transition-height);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--bg-canvas) 28%, transparent) 38%,
+    color-mix(in srgb, var(--bg-canvas) 72%, transparent) 76%,
+    var(--bg-canvas) 100%
+  );
+  content: '';
+  pointer-events: none;
+}
+
+.ds-chat-stage:not([data-empty-task-layout='true']) .ds-composer-dock > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ds-composer-status-glass {
+  border-color: color-mix(in srgb, var(--border-soft) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-1) 84%, transparent);
+  box-shadow:
+    0 12px 34px color-mix(in srgb, var(--text-primary) 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 58%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.06);
+  backdrop-filter: blur(18px) saturate(1.06);
+}
+
+.ds-composer-status-glass--warning {
+  border-color: color-mix(in srgb, #f59e0b 36%, var(--border-soft));
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--surface-1) 76%, var(--ds-warning-soft)) 90%,
+    transparent
+  );
+  box-shadow:
+    0 12px 34px color-mix(in srgb, #92400e 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 52%, transparent);
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .ds-chat-stage:not([data-empty-task-layout='true']) .ds-composer-dock::before {
+    -webkit-backdrop-filter: blur(12px) saturate(1.04);
+    backdrop-filter: blur(12px) saturate(1.04);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
+  }
+}

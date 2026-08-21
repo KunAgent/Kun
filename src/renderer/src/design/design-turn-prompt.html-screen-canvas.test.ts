@@ -429,17 +429,38 @@ describe("design turn prompt HTML, screen, and canvas guidance", () => {
       expect(createScreenAt).toBeGreaterThan(lanesAt)
   
       expect(prompt).toContain('EDIT AN EXISTING IMAGE')
-      expect(prompt).toContain('MUST NOT use `design_create_screen` / `add-screen`')
-      expect(prompt).toContain('把这张图改成…')
-      expect(prompt).toContain('do NOT create a screen / add-screen')
+      expect(prompt).toContain('Preserve the selected source shape and URL')
+      expect(prompt).toContain('same-size revision beside it')
+      expect(prompt).toContain('Do NOT call design_update_shapes for the generated URL')
   
       // Deterministic prior: the renderer pre-classifies the single selected filled
       // image and states it up front (with the exact id + path), hoisted ABOVE the
       // lane list, so a terse "task" brief can't drag it toward a new HTML screen.
       expect(prompt).toContain('IMPORTANT PRIOR')
-      expect(prompt).toContain('EXACTLY ONE filled image selected')
+      expect(prompt).toContain('EXACTLY ONE filled source image selected')
       expect(prompt).toContain('.deepseekgui-images/shot.png')
       expect(prompt.indexOf('IMPORTANT PRIOR')).toBeLessThan(lanesAt)
+    })
+    it('uses an annotation reference without changing the visible source anchor', () => {
+      const doc = createEmptyDocument()
+      const root = doc.objects[doc.rootId]
+      const image = createDefaultShape('image', 50, 60)
+      image.imageUrl = '.kun/images/source.png'
+      doc.objects[image.id] = { ...image, parentId: doc.rootId }
+      doc.objects[doc.rootId] = { ...root, children: [image.id] }
+      const prompt = buildDesignTurnPrompt({
+        target: 'canvas',
+        mode: 'text',
+        text: '按批注修改',
+        artifactRelativePath: '.kun-design/board/canvas.json',
+        workspaceRoot: '/workspace',
+        canvasSnapshot: snapshotCanvas(doc, new Set([image.id])),
+        imageEditReferencePath: '.deepseekgui-images/annotated.png'
+      })
+
+      expect(prompt).toContain('reference_image_paths: [".deepseekgui-images/annotated.png"]')
+      expect(prompt).toContain('imageUrl `.kun/images/source.png`')
+      expect(prompt).toContain('Preserve the selected source shape and URL')
     })
     it('does NOT emit the edit-image prior when the selection is ambiguous (multi-select or empty holder)', () => {
       const doc = createEmptyDocument()

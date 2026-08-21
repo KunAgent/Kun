@@ -59,7 +59,6 @@ check(
 for (const marker of [
   'BUNDLED_EXTENSION_DEFINITIONS',
   'BUNDLED_EXTENSION_CATALOG_FILE',
-  'kun-examples.presentation-studio',
   'kun-examples.social-media-sidebar',
   'bundledExtensionCatalog',
   'removeStaleBundledArchives'
@@ -70,11 +69,13 @@ for (const marker of [
   )
 }
 check(
-  bundledExtensionsPackSource.includes(
-    "RETIRED_BUNDLED_EXTENSION_NAMES = Object.freeze(['kun-video-editor'])"
-  ) &&
-    !bundledExtensionsPackSource.includes("id: 'kun-examples.kun-video-editor'"),
-  'Bundled Extension packer must remove stale video editor archives without packaging it as a default'
+  bundledExtensionsPackSource.includes("'kun-video-editor'") &&
+    bundledExtensionsPackSource.includes("'presentation-studio'") &&
+    bundledExtensionsPackSource.includes("'kun-examples.kun-video-editor'") &&
+    bundledExtensionsPackSource.includes("'kun-examples.presentation-studio'") &&
+    !bundledExtensionsPackSource.includes("id: 'kun-examples.kun-video-editor'") &&
+    !bundledExtensionsPackSource.includes("id: 'kun-examples.presentation-studio'"),
+  'Bundled Extension packer must remove stale retired archives without packaging them as defaults'
 )
 check(
   rootPackage.scripts?.['check:extension-release-gate']?.includes(

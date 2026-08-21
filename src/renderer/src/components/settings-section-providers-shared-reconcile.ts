@@ -7,7 +7,8 @@ import {
   DEFAULT_MODEL_PROVIDER_ID,
   MAX_MODEL_CONTEXT_WINDOW_TOKENS,
   MAX_MODEL_OUTPUT_TOKENS,
-  defaultModelRequestRetrySettings
+  defaultModelRequestRetrySettings,
+  resolveModelProviderPresetSource
 } from '@shared/app-settings'
 import {
   modelProviderRequiresApiKey
@@ -28,6 +29,17 @@ import {
   type SharedModelConnection,
   type SharedModelConnectionsSnapshot
 } from './settings-section-providers-shared-api'
+
+/** Kinds that authenticate through their own CLI/SDK login instead of a
+ * user-entered baseUrl. `gemini-cli-api` always targets Google's Code Assist
+ * endpoint from the runtime client, so its AppSettings baseUrl stays empty. */
+export function sharedConnectionBaseUrlOptional(kind: string | undefined): boolean {
+  return kind === 'agent-sdk' ||
+    kind === 'antigravity-cli' ||
+    kind === 'gemini-cli-api' ||
+    kind === 'gemini-code-assist' ||
+    kind === 'cursor-sdk'
+}
 
 export function reconcilePendingSharedProviderDeletions(
   snapshot: SharedModelConnectionsSnapshot,
@@ -274,16 +286,14 @@ async function connectSharedModelConnectionWithCatalog(
   pending: PendingSharedProviderCatalog,
   credential?: string
 ): Promise<SharedModelConnectionsSnapshot> {
-  const baseUrlOptional =
-    provider.kind === 'agent-sdk' ||
-    provider.kind === 'antigravity-cli' ||
-    provider.kind === 'cursor-sdk'
+  const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
   const resolvedCredential = (credential ?? provider.apiKey).trim()
   const selectedModel = pending.localModels[0]
   return await requestSharedModelConnections('/v1/model-connections/connect', 'POST', {
     expectedRevision: snapshot.revision,
     id: provider.id,
     name: provider.name.trim() || provider.id,
+    ...registryPresetFields(provider),
     kind: provider.kind ?? 'http',
     authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
     ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
@@ -397,14 +407,12 @@ export async function connectOrReplaceSharedModelConnectionCredential(
           { expectedRevision: snapshot.revision, credential }
         )
       }
-      const baseUrlOptional =
-        provider.kind === 'agent-sdk' ||
-        provider.kind === 'antigravity-cli' ||
-        provider.kind === 'cursor-sdk'
+      const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
       return await requestSharedModelConnections('/v1/model-connections/connect', 'POST', {
         expectedRevision: snapshot.revision,
         id: provider.id,
         name: provider.name.trim() || provider.id,
+        ...registryPresetFields(provider),
         kind: provider.kind ?? 'http',
         authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
         ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
@@ -422,6 +430,13 @@ export async function connectOrReplaceSharedModelConnectionCredential(
     }
   }
   return snapshot
+}
+
+export function registryPresetFields(
+  provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>
+): { presetSource?: string; presetMode?: 'api' | 'token-plan' } {
+  const source = resolveModelProviderPresetSource(provider)
+  return source ? { presetSource: source.preset.id, presetMode: source.mode } : {}
 }
 
 export function createSharedModelMutationQueue(): <T>(operation: () => Promise<T>) => Promise<T> {
@@ -511,6 +526,9 @@ export function projectSharedModelConnections(
   const projectedProviders = visibleConnections.map((connection): ModelProviderProfileV1 => {
     const existing = existingById.get(connection.id)
     const pendingCatalog = pendingCatalogs.get(connection.id)
+    const presetSource = connection.presetSource
+      ? { presetId: connection.presetSource, mode: connection.presetMode ?? 'api' as const }
+      : existing?.presetSource
     return {
       ...(existing ?? {
         id: connection.id,
@@ -524,6 +542,7 @@ export function projectSharedModelConnections(
       }),
       id: connection.id,
       name: pendingNames.get(connection.id)?.localName ?? connection.name,
+      ...(presetSource ? { presetSource } : {}),
       // Canonical connections expose only configured state. Secret material
       // stays in the protected Registry and the in-memory edit generation.
       apiKey: '',
@@ -550,10 +569,7 @@ export function projectSharedModelConnections(
       // committed without a credential ("configure later"), and providers
       // whose baseUrl is still empty, are never connected to the registry,
       // so a registry projection must not drop them from AppSettings.
-      const baseUrlOptional =
-        provider.kind === 'agent-sdk' ||
-        provider.kind === 'antigravity-cli' ||
-        provider.kind === 'cursor-sdk'
+      const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
       return (modelProviderRequiresApiKey(provider) && !provider.apiKey.trim()) ||
         (!baseUrlOptional && !provider.baseUrl.trim())
     })

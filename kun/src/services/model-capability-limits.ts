@@ -1,3 +1,4 @@
+import { resolveProviderCatalogSource } from '@kun/provider-catalog'
 import {
   MAX_MODEL_CONTEXT_WINDOW_TOKENS,
   MAX_MODEL_OUTPUT_TOKENS,
@@ -35,18 +36,49 @@ export function repairRegistryModelCapabilityLimits(
 ): RegistryDocument | null {
   let changed = false
   const profiles = Object.fromEntries(Object.entries(document.profiles).map(([providerId, profile]) => {
-    if (!profile.modelCapabilities) return [providerId, profile]
-    let profileChanged = false
+    const source = resolveProviderCatalogSource({
+      id: profile.id,
+      presetSource: profile.presetSource,
+      presetMode: profile.presetMode
+    })
+    const repairedIdentity = source && (
+      profile.presetSource !== source.presetSource ||
+      profile.presetMode !== source.presetMode ||
+      (profile.authType === 'api-key' && source.preset.authType === 'subscription')
+    )
+    const profileWithIdentity = repairedIdentity
+      ? {
+          ...profile,
+          presetSource: source!.presetSource,
+          presetMode: source!.presetMode,
+          ...(profile.authType === 'api-key' && source!.preset.authType === 'subscription'
+            ? { authType: 'subscription' as const }
+            : {})
+        }
+      : profile
+    if (!profileWithIdentity.modelCapabilities) {
+      if (!repairedIdentity) return [providerId, profile]
+      changed = true
+      return [providerId, profileWithIdentity]
+    }
+    let profileChanged = repairedIdentity
     const modelCapabilities = Object.fromEntries(
-      Object.entries(profile.modelCapabilities).map(([modelId, capability]) => {
+      Object.entries(profileWithIdentity.modelCapabilities).map(([modelId, capability]) => {
         const normalized = normalizeModelCapabilityMetadata(capability) ?? capability
-        if (normalized !== capability) profileChanged = true
-        return [modelId, normalized]
+        const safeReasoning = source?.presetSource === 'opencode-go' &&
+          normalized.reasoning?.requestProtocol === 'thinking-toggle-chat-completions'
+          ? { supportedEfforts: ['auto'] as const, defaultEffort: 'auto' as const, requestProtocol: 'none' as const }
+          : normalized.reasoning
+        const repaired = safeReasoning === normalized.reasoning
+          ? normalized
+          : { ...normalized, reasoning: safeReasoning }
+        if (repaired !== capability) profileChanged = true
+        return [modelId, repaired]
       })
     )
     if (!profileChanged) return [providerId, profile]
     changed = true
-    return [providerId, { ...profile, modelCapabilities }]
+    return [providerId, { ...profileWithIdentity, modelCapabilities }]
   }))
   return changed ? { ...document, profiles } : null
 }

@@ -23,6 +23,7 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
+import { ChildRunFailureSchema } from '../contracts/subagent-retry.js'
 import { MAX_TURN_ATTACHMENT_IDS } from '../contracts/attachments.js'
 import {
   ComposerContextAttachmentSchema,
@@ -269,6 +270,8 @@ export const ChildRunRecord = z.object({
   terminationReason: ChildRunTerminationReason.optional(),
   /** Durable eligibility for the generic delegate_task resume path. */
   resumable: z.boolean().optional(),
+  /** Safe structured classification for the latest failed attempt. */
+  failure: ChildRunFailureSchema.optional(),
   summary: z.string().optional(),
   /** True when summary is only a bounded preview of the child result. */
   summaryTruncated: z.boolean().optional(),
@@ -314,6 +317,9 @@ export const ChildRunRecord = z.object({
   childSeq: z.number().int().nonnegative().optional(),
   /** Number of follow-up turns appended to this same persistent child session. */
   resumeCount: z.number().int().nonnegative().optional(),
+  /** Number of model-initiated retries; manual user continuations do not increment it. */
+  proactiveRetryCount: z.number().int().nonnegative().optional(),
+  lastProactiveRetryAt: z.string().optional(),
   lastResumeAt: z.string().optional(),
   createdAt: z.string(),
   /** When the child left the queue and began running. */

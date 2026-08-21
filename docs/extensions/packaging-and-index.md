@@ -162,7 +162,7 @@ Kun 至少保留刚才的 previous selected version，直到用户显式删除�
 
 ## 产品内置的默认包
 
-Kun 桌面版默认随附 `kun-examples.presentation-studio` 和 `kun-examples.social-media-sidebar`。`kun-examples.kun-video-editor` 仅保留为仓库内的 Extension API v1.2 源码示例；它不进入默认 catalog，不随产品构建或 Release 打包，也不会被首次启动自动安装。
+Kun 桌面版默认仅随附 `kun-examples.social-media-sidebar`。`kun-examples.presentation-studio` 和 `kun-examples.kun-video-editor` 仅保留为仓库内的源码示例；它们不进入默认 catalog，不随产品构建或 Release 打包，也不会被首次启动自动安装。Catalog 将这两个 ID 标记为 retired，以移除此前由产品自动播种的版本，同时保留用户自行管理的安装。
 
 产品构建会运行标准 validate/pack CLI，把确定性的 `.kunx` 与 `bundled-extensions/catalog.json` 放在一起。Catalog 固定 ID、version、archive 文件名、SHA-256、engine range、API version 和精确 permissions。新 profile 首次启动时，`kun serve` 校验 catalog，并调用与本地侧载完全相同的 `ExtensionPackageManager.installArchive` 事务；不会把解压目录直接塞进 registry，也不会绕过 compatibility、integrity、migration、permission 或 activation 检查。
 

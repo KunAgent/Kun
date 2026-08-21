@@ -50,11 +50,13 @@ describe('runtime projection action normalization', () => {
       model: 'model_1',
       mode: 'agent',
       status: 'idle',
+      latestSeq: 42,
       createdAt: '2026-07-29T00:00:00.000Z',
       updatedAt: '2026-07-29T00:00:00.000Z'
     })
 
     expect(thread.agentSurface).toBe('design')
+    expect(thread.latestSeq).toBe(42)
     expect(thread.designProfile).toMatchObject({
       documentTarget: { documentId: 'doc_1', boardArtifactId: 'board_1' },
       lockedAtTurnId: 'turn_1'

@@ -403,7 +403,29 @@ describe('thread event sink binding', () => {
     sink.onTurnComplete()
     sink.onTurnComplete()
 
-    expect(getState().unreadThreadIds).toEqual({ 'thread-hidden': true })
+    expect(getState().unreadThreadIds).toEqual({ 'thread-hidden': 'completed' })
+    vi.unstubAllGlobals()
+  })
+
+  it('marks a hidden terminal runtime failure as failed attention', () => {
+    vi.stubGlobal('document', {
+      visibilityState: 'hidden',
+      hasFocus: () => false
+    })
+    vi.stubGlobal('window', { kunGui: {} })
+    const { getState, set, get } = makeSinkHarness({
+      route: 'chat',
+      activeThreadId: 'thread-failed',
+      sideConversations: {},
+      sidePanel: { open: false, activeSideId: null }
+    })
+
+    buildThreadEventSink(set, get, {
+      threadId: 'thread-failed',
+      getThreadDetail: vi.fn(async () => ({ blocks: [], latestSeq: 0 }))
+    }).onError(new Error('boom'), { terminal: true })
+
+    expect(getState().unreadThreadIds).toEqual({ 'thread-failed': 'failed' })
     vi.unstubAllGlobals()
   })
 

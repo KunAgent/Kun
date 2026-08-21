@@ -50,6 +50,8 @@ export type LocalTool = {
    * `create_plan`.
    */
   shouldAdvertise?: (context: ToolHostContext) => boolean
+  /** Canonicalize transport-compatible arguments before policy, approval hashing, and execution. */
+  normalizeArguments?: (args: Record<string, unknown>) => Record<string, unknown>
   /** Hide a legacy compatibility tool from model schemas without blocking a persisted/direct execution. */
   modelAdvertised?: boolean
   execute: (

@@ -1,40 +1,20 @@
+import { TurnUsageResponseSchema } from '../../contracts/usage.js'
 import type { UsageService } from '../../services/usage-service.js'
 import {
   buildDailyUsageResponse,
   buildModelUsageResponse,
   buildThreadUsageResponse,
+  buildTurnUsageResponse,
+  loadUsageHistory,
   parseDailyUsageQuery,
   parseModelUsageQuery,
-  UsageValidationError,
-  type ThreadUsageRecord
+  parseTurnUsageQuery,
+  UsageValidationError
 } from '../../services/usage-service.js'
-import {
-  emptyUsageSnapshot,
-  type UsageSnapshot
-} from '../../contracts/usage.js'
-import type { UsageEvent } from '../../contracts/events.js'
-import type { ThreadRecord, ThreadSummary } from '../../contracts/threads.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
-import { collectSessionEventsOfKind } from '../../adapters/session-event-query.js'
 
-type UsageThreadSource = {
-  id: string
-  thread?: ThreadRecord
-  summary?: ThreadSummary
-}
-
-const allUsageRecordLoads = new WeakMap<ServerRuntime, Promise<ThreadUsageRecord[]>>()
-// JSONL replay is a degraded, non-core path. Keep enough parallelism to avoid
-// serially walking a large history, but leave event-loop and disk headroom for
-// health, thread, and turn requests that determine product availability.
-const USAGE_FALLBACK_READ_CONCURRENCY = 4
-
-/**
- * Usage endpoint response shape. The `total` field mirrors the
- * per-thread cumulative usage snapshot; `perThread` exposes a list
- * of per-thread usage values for the GUI's connection status.
- */
+/** Runtime-cumulative response retained for backward compatibility. */
 export type UsageEndpointResponse = {
   total: ReturnType<UsageService['total']>
   perThread: Array<{ threadId: string; usage: ReturnType<UsageService['forThread']> }>
@@ -57,319 +37,51 @@ export async function usageJsonResponse(
 ): Promise<JsonResponse> {
   const query = queryRecord(request)
   const groupBy = stringParam(query, 'group_by') ?? 'runtime'
-  if (groupBy === 'thread') {
-    return jsonResponse(buildThreadUsageResponse(await usageRecords(runtime, {
-      threadId: stringParam(query, 'thread_id')
-    })))
-  }
-  if (groupBy === 'day') {
-    try {
-      return jsonResponse(
-        buildDailyUsageResponse(await usageRecords(runtime), parseDailyUsageQuery(query))
-      )
-    } catch (error) {
-      if (error instanceof UsageValidationError) {
-        return jsonResponse({ code: error.code, message: error.message }, 400)
-      }
-      throw error
+  try {
+    if (groupBy === 'thread') {
+      return jsonResponse(buildThreadUsageResponse(await loadUsageHistory(runtime, {
+        threadId: stringParam(query, 'thread_id')
+      })))
     }
-  }
-  if (groupBy === 'model') {
-    try {
+    if (groupBy === 'day') {
       return jsonResponse(
-        buildModelUsageResponse(await usageRecords(runtime), parseModelUsageQuery(query))
+        buildDailyUsageResponse(await loadUsageHistory(runtime), parseDailyUsageQuery(query))
       )
-    } catch (error) {
-      if (error instanceof UsageValidationError) {
-        return jsonResponse({ code: error.code, message: error.message }, 400)
-      }
-      throw error
     }
+    if (groupBy === 'model') {
+      return jsonResponse(
+        buildModelUsageResponse(await loadUsageHistory(runtime), parseModelUsageQuery(query))
+      )
+    }
+    if (groupBy === 'turn') {
+      const turnQuery = parseTurnUsageQuery(query)
+      const response = buildTurnUsageResponse(
+        await loadUsageHistory(runtime, { threadId: turnQuery.threadId }),
+        turnQuery
+      )
+      return jsonResponse(TurnUsageResponseSchema.parse(response))
+    }
+  } catch (error) {
+    if (error instanceof UsageValidationError) {
+      return jsonResponse({ code: error.code, message: error.message }, 400)
+    }
+    throw error
   }
   if (groupBy !== 'runtime') {
-    return jsonResponse({ code: 'validation_error', message: `unsupported usage grouping: ${groupBy}` }, 400)
+    return jsonResponse({
+      code: 'validation_error',
+      message: `unsupported usage grouping: ${groupBy}`
+    }, 400)
   }
   return jsonResponse(await buildUsageResponse(runtime))
 }
 
 function queryRecord(request: Request): Record<string, string> {
   const url = new URL(request.url)
-  const record: Record<string, string> = {}
-  for (const [key, value] of url.searchParams.entries()) {
-    record[key] = value
-  }
-  return record
+  return Object.fromEntries(url.searchParams.entries())
 }
 
 function stringParam(input: Record<string, unknown>, key: string): string | undefined {
   const value = input[key]
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-async function usageRecords(
-  runtime: ServerRuntime,
-  options: { threadId?: string } = {}
-): Promise<ThreadUsageRecord[]> {
-  if (options.threadId) return loadUsageRecords(runtime, options)
-  const active = allUsageRecordLoads.get(runtime)
-  if (active) return active
-  let load: Promise<ThreadUsageRecord[]>
-  load = loadUsageRecords(runtime, options).finally(() => {
-    if (allUsageRecordLoads.get(runtime) === load) allUsageRecordLoads.delete(runtime)
-  })
-  allUsageRecordLoads.set(runtime, load)
-  return load
-}
-
-async function loadUsageRecords(
-  runtime: ServerRuntime,
-  options: { threadId?: string } = {}
-): Promise<ThreadUsageRecord[]> {
-  const explicitThread = options.threadId
-    ? await runtime.threadService.get(options.threadId)
-    : null
-  if (options.threadId && !explicitThread) return []
-  const threadSummaries = options.threadId
-    ? []
-    : await runtime.threadService.list()
-
-  if (typeof runtime.sessionStore.loadUsageRecords === 'function') {
-    try {
-      const allowedThreadIds = new Set(
-        options.threadId
-          ? [options.threadId]
-          : threadSummaries.map((thread) => thread.id)
-      )
-      const indexedRaw = await runtime.sessionStore.loadUsageRecords({ threadId: options.threadId })
-      const indexed = indexedRaw.filter((record) => allowedThreadIds.has(record.threadId))
-      const records: ThreadUsageRecord[] = indexed.map((record) => ({
-        threadId: record.threadId,
-        ...(record.model ? { model: record.model } : {}),
-        completedAt: record.completedAt,
-        usage: record.usage
-      }))
-      const latest = typeof runtime.sessionStore.loadLatestUsageSnapshots === 'function' && allowedThreadIds.size > 0
-        ? await runtime.sessionStore.loadLatestUsageSnapshots({
-            threadIds: [...allowedThreadIds]
-          })
-        : []
-      const latestByThread = new Map(latest.map((record) => [record.threadId, record.usage]))
-      const liveThreadIds = options.threadId
-        ? [options.threadId]
-        : threadSummaries.map((thread) => thread.id)
-      const summariesById = new Map(threadSummaries.map((thread) => [thread.id, thread]))
-      for (const threadId of liveThreadIds) {
-        const liveRemainder = diffUsage(
-          runtime.usageService.forThread(threadId),
-          latestByThread.get(threadId) ?? emptyUsageSnapshot()
-        )
-        if (!hasUsage(liveRemainder)) continue
-        const summary = summariesById.get(threadId)
-        const thread = explicitThread?.id === threadId
-          ? explicitThread
-          : summary
-            ?? await runtime.threadService.get(threadId)
-        if (!thread) continue
-        records.push({
-          threadId,
-          model: usageRecordModel(thread, { turnId: latestTurnId(thread) }),
-          completedAt: thread.updatedAt || runtime.nowIso(),
-          usage: liveRemainder
-        })
-      }
-      return records
-    } catch {
-      // Fall back to JSONL replay when the optional usage index is unavailable.
-    }
-  }
-  const sources: UsageThreadSource[] = explicitThread
-    ? [{ id: explicitThread.id, thread: explicitThread }]
-    : threadSummaries.map((thread) => ({ id: thread.id, summary: thread }))
-  return loadUsageRecordsFromSources(runtime, sources)
-}
-
-async function loadUsageRecordsFromSources(
-  runtime: ServerRuntime,
-  sources: UsageThreadSource[]
-): Promise<ThreadUsageRecord[]> {
-  const recordsBySource: ThreadUsageRecord[][] = Array.from({ length: sources.length })
-  let nextIndex = 0
-  const workerCount = Math.min(USAGE_FALLBACK_READ_CONCURRENCY, sources.length)
-  await Promise.all(Array.from({ length: workerCount }, async () => {
-    while (nextIndex < sources.length) {
-      const index = nextIndex
-      nextIndex += 1
-      recordsBySource[index] = await loadUsageRecordsForSource(runtime, sources[index])
-    }
-  }))
-  return recordsBySource.flat()
-}
-
-async function loadUsageRecordsForSource(
-  runtime: ServerRuntime,
-  source: UsageThreadSource
-): Promise<ThreadUsageRecord[]> {
-  const thread = source.thread
-    ?? source.summary
-    ?? await runtime.threadService.get(source.id)
-  if (!thread) return []
-  const records: ThreadUsageRecord[] = []
-  let latestPersisted = emptyUsageSnapshot()
-  const usageEvents = (await collectSessionEventsOfKind(
-    runtime.sessionStore,
-    thread.id,
-    'usage'
-  )).sort((a, b) => a.seq - b.seq)
-
-  for (const event of usageEvents) {
-    const delta = diffUsage(event.usage, latestPersisted)
-    latestPersisted = event.usage
-    if (hasUsage(delta)) {
-      records.push({
-        threadId: thread.id,
-        model: usageRecordModel(thread, event),
-        completedAt: event.timestamp,
-        usage: delta
-      })
-    }
-  }
-
-  const liveRemainder = diffUsage(runtime.usageService.forThread(thread.id), latestPersisted)
-  if (hasUsage(liveRemainder)) {
-    records.push({
-      threadId: thread.id,
-      model: usageRecordModel(thread, { turnId: latestTurnId(thread) }),
-      completedAt: thread.updatedAt || runtime.nowIso(),
-      usage: liveRemainder
-    })
-  }
-  return records
-}
-
-function latestTurnId(thread: { id?: string; turns?: Array<{ id: string }> }): string | undefined {
-  return thread.turns?.at(-1)?.id
-}
-
-function usageRecordModel(
-  thread: {
-    model?: string
-    turns?: Array<{ id: string; model?: string }>
-  },
-  event?: Pick<UsageEvent, 'model' | 'turnId'>
-): string {
-  const eventModel = event?.model?.trim()
-  if (eventModel) return eventModel
-
-  const trimmedTurnId = event?.turnId?.trim() ?? ''
-  if (trimmedTurnId) {
-    const turnModel = thread.turns?.find((turn) => turn.id === trimmedTurnId)?.model?.trim()
-    if (turnModel) return turnModel
-  }
-  const latestTurnModel = [...(thread.turns ?? [])]
-    .reverse()
-    .find((turn) => turn.model?.trim())
-    ?.model?.trim()
-  return latestTurnModel || thread.model?.trim() || 'unknown'
-}
-
-function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): UsageSnapshot {
-  const promptTokens = diffNumber(current.promptTokens, previous.promptTokens)
-  const completionTokens = diffNumber(current.completionTokens, previous.completionTokens)
-  const reportedTotal = diffNumber(current.totalTokens, previous.totalTokens)
-  const totalTokens = reportedTotal || promptTokens + completionTokens
-  const cachedTokens = diffOptionalNumber(current.cachedTokens, previous.cachedTokens)
-  const cacheHitTokens = diffOptionalNumber(current.cacheHitTokens, previous.cacheHitTokens)
-  const cacheMissTokens = diffOptionalNumber(current.cacheMissTokens, previous.cacheMissTokens)
-  const cacheTotal = (cacheHitTokens ?? 0) + (cacheMissTokens ?? 0)
-  const cacheHitRate = cacheHitTokens !== undefined && cacheTotal > 0
-    ? cacheHitTokens / cacheTotal
-    : null
-  return {
-    promptTokens,
-    completionTokens,
-    totalTokens,
-    ...(cachedTokens !== undefined ? { cachedTokens } : {}),
-    ...(cacheHitTokens !== undefined ? { cacheHitTokens } : {}),
-    ...(cacheMissTokens !== undefined ? { cacheMissTokens } : {}),
-    cacheHitRate,
-    ...(current.cacheableTokenHitRate !== undefined
-      ? { cacheableTokenHitRate: current.cacheableTokenHitRate }
-      : {}),
-    ...(current.totalInputTokenHitRate !== undefined
-      ? { totalInputTokenHitRate: current.totalInputTokenHitRate }
-      : {}),
-    ...(current.cacheMissReasons ? { cacheMissReasons: [...current.cacheMissReasons] } : {}),
-    ...(current.cacheSuggestions ? { cacheSuggestions: [...current.cacheSuggestions] } : {}),
-    turns: diffNumber(current.turns, previous.turns),
-    ...(current.costUsd !== undefined || previous.costUsd !== undefined
-      ? { costUsd: diffNumber(current.costUsd ?? 0, previous.costUsd ?? 0) }
-      : {}),
-    ...(current.costCny !== undefined || previous.costCny !== undefined
-      ? { costCny: diffNumber(current.costCny ?? 0, previous.costCny ?? 0) }
-      : {}),
-    ...(current.cacheSavingsUsd !== undefined || previous.cacheSavingsUsd !== undefined
-      ? { cacheSavingsUsd: diffNumber(current.cacheSavingsUsd ?? 0, previous.cacheSavingsUsd ?? 0) }
-      : {}),
-    ...(current.cacheSavingsCny !== undefined || previous.cacheSavingsCny !== undefined
-      ? { cacheSavingsCny: diffNumber(current.cacheSavingsCny ?? 0, previous.cacheSavingsCny ?? 0) }
-      : {}),
-    ...(current.tokenEconomySavingsTokens !== undefined || previous.tokenEconomySavingsTokens !== undefined
-      ? {
-          tokenEconomySavingsTokens: diffNumber(
-            current.tokenEconomySavingsTokens ?? 0,
-            previous.tokenEconomySavingsTokens ?? 0
-          )
-        }
-      : {}),
-    ...(current.tokenEconomySavingsUsd !== undefined || previous.tokenEconomySavingsUsd !== undefined
-      ? {
-          tokenEconomySavingsUsd: diffNumber(
-            current.tokenEconomySavingsUsd ?? 0,
-            previous.tokenEconomySavingsUsd ?? 0
-          )
-        }
-      : {}),
-    ...(current.tokenEconomySavingsCny !== undefined || previous.tokenEconomySavingsCny !== undefined
-      ? {
-          tokenEconomySavingsCny: diffNumber(
-            current.tokenEconomySavingsCny ?? 0,
-            previous.tokenEconomySavingsCny ?? 0
-          )
-        }
-      : {}),
-    ...(current.hasError ? { hasError: true } : {}),
-    // Timing aggregates are cumulative snapshot values, not per-record
-    // counters: carry the latest snapshot's averages so thread usage
-    // keeps TTFT/TPS after the differential fold.
-    ...(current.avgTtftMs !== undefined ? { avgTtftMs: current.avgTtftMs } : {}),
-    ...(current.avgTokensPerSecond !== undefined
-      ? { avgTokensPerSecond: current.avgTokensPerSecond }
-      : {})
-  }
-}
-
-function diffNumber(current: number, previous: number): number {
-  return Math.max(0, current - previous)
-}
-
-function diffOptionalNumber(current?: number, previous?: number): number | undefined {
-  if (current === undefined && previous === undefined) return undefined
-  return Math.max(0, (current ?? 0) - (previous ?? 0))
-}
-
-function hasUsage(usage: UsageSnapshot): boolean {
-  return usage.promptTokens > 0
-    || usage.completionTokens > 0
-    || usage.totalTokens > 0
-    || (usage.cachedTokens ?? 0) > 0
-    || (usage.cacheHitTokens ?? 0) > 0
-    || (usage.cacheMissTokens ?? 0) > 0
-    || usage.turns > 0
-    || (usage.costUsd ?? 0) > 0
-    || (usage.costCny ?? 0) > 0
-    || (usage.cacheSavingsUsd ?? 0) > 0
-    || (usage.cacheSavingsCny ?? 0) > 0
-    || (usage.tokenEconomySavingsTokens ?? 0) > 0
-    || (usage.tokenEconomySavingsUsd ?? 0) > 0
-    || (usage.tokenEconomySavingsCny ?? 0) > 0
 }

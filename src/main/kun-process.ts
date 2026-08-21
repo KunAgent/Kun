@@ -104,9 +104,7 @@ import { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
 import { assertManagedKunDataDirIsCurrent } from './kun-data-dir-paths'
 import {
   ensureSharedRuntime,
-  inspectSharedRuntime,
   resolveSharedRuntime,
-  stopSharedRuntime,
   type SharedRuntimeConnection
 } from '../../kun/src/cli/shared-runtime.js'
 import {
@@ -115,12 +113,11 @@ import {
 } from '../../kun/src/cli/runtime-flavor.js'
 import {
   ensureServiceManager,
-  requestManagerJson,
   resolveServiceManager,
   type ServiceManagerConnection
 } from '../../kun/src/manager/manager-client.js'
-import { sameCanonicalPath } from '../../kun/src/manager/canonical-path.js'
 import { configureManagerAtomicJsonClient } from '../../kun/src/extensions/atomic-json.js'
+import { handoffExistingKunServiceManagerForDataDir } from './runtime/service-manager-build-handoff'
 
 import {
   appendTail,
@@ -130,7 +127,6 @@ import {
   normalizeCapturedChunk,
   processController
 } from './kun-process-state'
-import { waitForPidExit } from './kun-process-ports'
 
 export {
   parseListeningPidsFromNetstat,
@@ -143,6 +139,7 @@ export { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
 
 export type { KunUnexpectedExitInfo } from './runtime/kun-process-controller'
 export { resolveKunStartupTimeoutMs } from './runtime/kun-runtime-health-monitor'
+export { handoffExistingKunServiceManagerForDataDir } from './runtime/service-manager-build-handoff'
 
 let serviceManagerSettingsPath: string | undefined
 let mainManagerBinding: ServiceManagerConnection | undefined
@@ -161,59 +158,6 @@ export async function resolveKunManagerDataDirFromSettings(
       return defaultKunDataDir()
     }
     throw error
-  }
-}
-
-export async function handoffExistingKunServiceManagerForDataDir(
-  existing: ServiceManagerConnection,
-  dataDir: string,
-  settingsPath: string,
-  overrides: {
-    inspect?: typeof inspectSharedRuntime
-    stop?: typeof stopSharedRuntime
-    shutdown?: () => Promise<void>
-    waitForExit?: (pid: number, timeoutMs: number) => Promise<boolean>
-    /** Replace the Manager even when canonical paths already match. */
-    force?: boolean
-  } = {}
-): Promise<void> {
-  if (
-    !overrides.force &&
-    sameCanonicalPath(existing.discovery.dataDir, dataDir) &&
-    sameCanonicalPath(existing.discovery.settingsPath, settingsPath)
-  ) return
-  if (!sameCanonicalPath(existing.discovery.settingsPath, settingsPath)) {
-    throw new Error('Kun Service Manager owns a different canonical settings path')
-  }
-  const inspect = overrides.inspect ?? inspectSharedRuntime
-  const stop = overrides.stop ?? stopSharedRuntime
-  for (const runtimeFlavor of ['production', 'development'] as const) {
-    const inspected = await inspect(existing.discovery.dataDir, fetch, {
-      runtimeFlavor,
-      manager: existing
-    })
-    if (!inspected) continue
-    if (!inspected.connection || inspected.connection.activeTurnCount === undefined) {
-      throw new Error(`Kun ${runtimeFlavor} Runtime could not be verified for a safe data-directory handoff`)
-    }
-    if (inspected.connection.activeTurnCount > 0) {
-      throw new Error(`Kun ${runtimeFlavor} Runtime still has active turns; custom data-directory handoff was deferred`)
-    }
-  }
-  await Promise.all((['production', 'development'] as const).map((runtimeFlavor) =>
-    stop(existing.discovery.dataDir, fetch, {
-      runtimeFlavor,
-      manager: existing
-    })
-  ))
-  if (overrides.shutdown) await overrides.shutdown()
-  else await requestManagerJson(existing, '/v1/manager/shutdown', {
-      method: 'POST',
-      body: { instanceId: existing.discovery.instanceId },
-      timeoutMs: 10_000
-    })
-  if (!(await (overrides.waitForExit ?? waitForPidExit)(existing.discovery.pid, 15_000))) {
-    throw new Error('Kun Service Manager did not exit during custom data-directory handoff')
   }
 }
 

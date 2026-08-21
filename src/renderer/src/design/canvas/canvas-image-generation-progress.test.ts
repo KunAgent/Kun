@@ -125,16 +125,28 @@ colors:
     expect({ x: moved.x, y: moved.y }).not.toEqual({ x: initial.x, y: initial.y })
   })
 
-  it('removes the placeholder once the tool succeeds', () => {
+  it('keeps a successful placeholder until durable image materialization replaces it', () => {
     const first = reconcileImageGenerationProgress([toolBlock('tool_img_1', 'running')])
     useImageGenerationProgressStore.getState().replaceEntries(first.entries)
     const shapeId = first.entries['tool_img_1']!.shapeId
 
-    const second = reconcileImageGenerationProgress([toolBlock('tool_img_1', 'success')])
+    const success = toolBlock('tool_img_1', 'success', {
+      generatedFiles: [{ absolutePath: '/workspace/.kun/images/success.png' }]
+    })
+    const second = reconcileImageGenerationProgress([success])
+    useImageGenerationProgressStore.getState().replaceEntries(second.entries)
 
-    expect(second.entries['tool_img_1']).toBeUndefined()
-    expect(second.succeeded).toBe(true)
-    expect(useCanvasShapeStore.getState().document.objects[shapeId]).toBeUndefined()
+    expect(second.entries['tool_img_1']).toMatchObject({ shapeId, status: 'generating' })
+    expect(second.succeeded).toBe(false)
+    expect(useCanvasShapeStore.getState().document.objects[shapeId]).toBeTruthy()
+
+    useCanvasShapeStore.getState().updateShape(shapeId, {
+      type: 'image', imageUrl: '/workspace/.kun/images/success.png', aiImageHolder: false
+    })
+    const materialized = reconcileImageGenerationProgress([success])
+    expect(materialized.entries['tool_img_1']).toBeUndefined()
+    expect(materialized.succeeded).toBe(true)
+    expect(useCanvasShapeStore.getState().document.objects[shapeId]?.type).toBe('image')
   })
 
   it('turns the placeholder into an actionable failure on tool error', () => {

@@ -485,7 +485,9 @@ export type CancelToolCallResponse = z.infer<typeof CancelToolCallResponse>
 export const CompactRequest = z.object({
   reason: z.string().optional(),
   /** Optional explicit token budget. */
-  budgetTokens: z.number().int().positive().optional()
+  budgetTokens: z.number().int().positive().optional(),
+  /** Archive history through this completed turn, preserving the later tail verbatim. */
+  cutoffTurnId: z.string().trim().min(1).optional()
 })
 export type CompactRequest = z.infer<typeof CompactRequest>
 
@@ -496,7 +498,11 @@ export const CompactResponse = z.object({
   pinnedConstraints: z.array(z.string()),
   sourceDigest: z.string().min(1).optional(),
   digestMarker: z.string().min(1).optional(),
-  sourceItemIds: z.array(z.string().min(1)).optional()
+  sourceItemIds: z.array(z.string().min(1)).optional(),
+  archivePath: z.string().min(1).optional(),
+  archivedItems: z.number().int().nonnegative().optional(),
+  retainedItems: z.number().int().nonnegative().optional(),
+  contextEstimate: z.number().int().nonnegative().optional()
 })
 export type CompactResponse = z.infer<typeof CompactResponse>
 

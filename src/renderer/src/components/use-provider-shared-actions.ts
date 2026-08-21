@@ -168,8 +168,12 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
     }))
   }
 
-  const drainSharedProviderCatalog = (providerId: string, generation: number): void => {
-    void drainSharedProviderCatalogMutation(providerId, generation, async () => {
+  const drainSharedProviderCatalog = async (
+    providerId: string,
+    generation: number
+  ): Promise<void> => {
+    try {
+      await drainSharedProviderCatalogMutation(providerId, generation, async () => {
       const pending = pendingSharedProviderCatalogs.current.get(providerId)
       if (!pending || pending.generation !== generation) return
       const latestProvider = (sharedProjectionInput.current.provider.providers as ModelProviderProfileV1[])
@@ -207,17 +211,29 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
           rebasePendingSharedProviderCatalog(pending, current, connection)
         )
       }
-      if (mounted.current) {
-        setSharedConnections(snapshot)
-        setSharedConnectionsError('')
-      }
-    }).catch((error) => {
-      if (!pendingSharedProviderCatalogs.current.has(providerId)) return
-      if (mounted.current) {
+        if (mounted.current) {
+          setSharedConnections(snapshot)
+          setSharedConnectionsError('')
+        }
+      })
+    } catch (error) {
+      if (pendingSharedProviderCatalogs.current.has(providerId) && mounted.current) {
         if (error instanceof SharedModelConnectionConflictError) setSharedConnections(error.snapshot)
         setSharedConnectionsError(error instanceof Error ? error.message : String(error))
       }
-    })
+      throw error
+    }
+  }
+
+  const flushSharedProviderCatalog = async (providerId: string): Promise<void> => {
+    const pending = pendingSharedProviderCatalogs.current.get(providerId)
+    if (!pending || pending.committedRevision !== null) return
+    const timer = catalogMutationTimers.current.get(providerId)
+    if (timer) {
+      clearTimeout(timer.timer)
+      catalogMutationTimers.current.delete(providerId)
+    }
+    await drainSharedProviderCatalog(providerId, pending.generation)
   }
 
   const stageSharedProviderCatalog = (
@@ -253,7 +269,7 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
       const record = catalogMutationTimers.current.get(before.id)
       if (record?.owner !== mutationOwner.current) return
       catalogMutationTimers.current.delete(before.id)
-      drainSharedProviderCatalog(before.id, generation)
+      void drainSharedProviderCatalog(before.id, generation).catch(() => undefined)
     }, 150)
     catalogMutationTimers.current.set(before.id, { owner: mutationOwner.current, timer })
   }
@@ -333,7 +349,7 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
         const record = catalogMutationTimers.current.get(providerId)
         if (record?.owner !== mutationOwner.current) return
         catalogMutationTimers.current.delete(providerId)
-        drainCatalogRef.current(providerId, pending.generation)
+        void drainCatalogRef.current(providerId, pending.generation).catch(() => undefined)
       }, 0)
       catalogMutationTimers.current.set(providerId, { owner: mutationOwner.current, timer })
     }
@@ -356,7 +372,7 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
       catalogMutationTimers.current.delete(providerId)
       const pending = pendingSharedProviderCatalogs.current.get(providerId)
       if (pending?.committedRevision === null) {
-        drainCatalogRef.current(providerId, pending.generation)
+        void drainCatalogRef.current(providerId, pending.generation).catch(() => undefined)
       }
     }
     for (const [providerId, record] of credentialMutationTimers.current) {
@@ -367,5 +383,5 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
       if (pending) drainCredentialRef.current(providerId, pending.generation)
     }
   }, [])
-  return { selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, confirmAction, updateModelProviders, stageSharedProviderCatalog, stageSharedProviderCredential }
+  return { selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, confirmAction, updateModelProviders, stageSharedProviderCatalog, flushSharedProviderCatalog, stageSharedProviderCredential }
 }

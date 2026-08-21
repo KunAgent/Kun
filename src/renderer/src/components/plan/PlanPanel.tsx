@@ -415,13 +415,13 @@ export function PlanPanel({
       </div>
 
       {hasPlan ? (
-        <div className="ds-sidebar-surface-chrome shrink-0 border-t border-ds-border-muted p-3">
+        <div className="ds-sidebar-surface-chrome relative shrink-0 border-t border-ds-border-muted px-3 pb-2 pt-1.5">
           {error ? (
             <div className="mb-2 rounded-lg border border-red-300/70 bg-red-500/10 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-800/60 dark:text-red-300">
               {error}
             </div>
           ) : null}
-          <p className="mb-2 text-[12px] leading-5 text-ds-muted">{t('planRefineHint')}</p>
+          <p className="mb-2 px-1 text-[11px] leading-5 text-ds-muted">{t('planRefineHint')}</p>
           <PlanBuildActions
             disabled={!canUseAgent}
             graphEnabled={graphEnabled}

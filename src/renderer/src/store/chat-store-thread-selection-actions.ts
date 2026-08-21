@@ -477,7 +477,11 @@ export function createThreadSelectionActions(
           blocks: prependOlderHistoryBlocks(current.blocks, olderBlocks),
           threadHistoryCursor: detail.historyCursor ?? null,
           threadHasMoreHistory: detail.hasMoreHistory === true,
-          threadHistoryLoading: false
+          threadHistoryLoading: false,
+          turnDurationByUserId: {
+            ...current.turnDurationByUserId,
+            ...(detail.turnDurationByUserId ?? {})
+          }
         }
       })
       threadActionSharedState.expandedHistoryThreadIds.add(threadId)

@@ -5,7 +5,7 @@ import type { NormalizedThread } from '../agent/types'
 import type { GitBranchWorktreeRow, GitBranchWorktreesResult } from '@shared/git-branches'
 import { DEFAULT_GIT_BRANCH_PREFIX } from '@shared/app-settings'
 import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
-import { SettingsCard, SettingRow } from './settings-controls'
+import { SettingsCard, SettingRow, Toggle } from './settings-controls'
 
 type WorktreeDisplayRow = GitBranchWorktreeRow & {
   threadTitle: string
@@ -13,7 +13,7 @@ type WorktreeDisplayRow = GitBranchWorktreeRow & {
 }
 
 export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
-  const { t } = ctx
+  const { t, kun, updateKun } = ctx
   const compactHomePath = typeof ctx.compactHomePath === 'function'
     ? ctx.compactHomePath as (path: string) => string
     : (path: string) => path
@@ -98,6 +98,19 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
 
   return (
     <SettingsCard title={t('sectionWorktree')}>
+      <SettingRow
+        title={t('labPlanWorktreeEnabled')}
+        description={t('labPlanWorktreeEnabledDesc')}
+        control={(
+          <Toggle
+            checked={kun?.planExecution?.useWorktreeByDefault !== false}
+            ariaLabel={t('labPlanWorktreeEnabled')}
+            onChange={(useWorktreeByDefault) => updateKun({
+              planExecution: { useWorktreeByDefault }
+            })}
+          />
+        )}
+      />
       <SettingRow
         title={t('gitBranchPrefix')}
         description={t('gitBranchPrefixDesc')}

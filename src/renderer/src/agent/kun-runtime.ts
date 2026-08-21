@@ -96,6 +96,7 @@ import type {
   DesignTaskProfile,
   DesignTaskProfileInput
 } from './design-task-profile'
+import { buildTurnDurationByUserId } from './thread-timing'
 
 function normalizeApprovalPolicy(value: string | undefined): NormalizedThread['approvalPolicy'] {
   switch (value) {
@@ -462,6 +463,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         ? latestTurn.orchestration === 'graph' ? 'graph' : 'direct'
         : undefined,
       latestUserMessageId: resolvedLatestUserMessageId,
+      turnDurationByUserId: buildTurnDurationByUserId(turns),
       relation: thread.relation,
       ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
       ...(typeof thread.model === 'string' && thread.model.trim() ? { model: thread.model.trim() } : {}),

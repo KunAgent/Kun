@@ -54,6 +54,7 @@ describe('component designer profile', () => {
       enabled: true,
       useExistingAgents: true,
       maxParallel: 3,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
       defaultToolPolicy: 'inherit',
       profiles: {}
     })

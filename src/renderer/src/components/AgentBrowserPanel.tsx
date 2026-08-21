@@ -57,6 +57,7 @@ export function AgentBrowserPanel({
     threadId &&
     active &&
     state.sessionId &&
+    activeTab &&
     !pendingConsent
   )
 
@@ -299,21 +300,43 @@ export function AgentBrowserPanel({
 
       <div ref={hostRef} className="ds-sidebar-surface-body relative min-h-0 flex-1 overflow-hidden">
         {!state.sessionId ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-            {state.capabilityStatus === 'disabled'
-              ? <ShieldAlert className="h-12 w-12 text-ds-faint" />
-              : <ShieldCheck className="h-12 w-12 text-ds-faint" />}
-            <div className="mt-4 text-[13px] font-semibold text-ds-ink">
-              {state.capabilityStatus === 'disabled'
-                ? t('browserUseDisabledTitle')
-                : t('browserUseWaitingForAgent')}
-            </div>
-            <div className="mt-2 max-w-sm text-[11px] leading-5 text-ds-muted">
-              {state.capabilityStatus === 'disabled'
-                ? t('browserUseDisabledBody')
-                : t('browserUseWaitingBody')}
-            </div>
-          </div>
+          <BrowserEmptyState
+            icon={state.capabilityStatus === 'disabled' ? 'alert' : 'ready'}
+            title={state.capabilityStatus === 'disabled'
+              ? t('browserUseDisabledTitle')
+              : t('browserUseWaitingForAgent')}
+            body={state.capabilityStatus === 'disabled'
+              ? t('browserUseDisabledBody')
+              : t('browserUseWaitingBody')}
+          />
+        ) : !activeTab && state.lifecycle === 'loading' ? (
+          <BrowserEmptyState
+            icon="loading"
+            title={t('browserUseStartingTitle')}
+            body={t('browserUseStartingBody')}
+          />
+        ) : !activeTab && state.lifecycle === 'error' ? (
+          <BrowserEmptyState
+            icon="alert"
+            title={t('browserUseInitializationFailed')}
+            body={state.reason || t('browserUseUnavailable')}
+            action={threadId ? (
+              <button
+                type="button"
+                onClick={() => void run(() => window.kunGui.clearBrowserUse(threadId))}
+                className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md border border-red-500/30 px-3 text-[11px] font-semibold text-red-600 hover:bg-red-500/10 dark:text-red-300"
+              >
+                <Square className="h-3 w-3" />
+                {t('browserUseStop')}
+              </button>
+            ) : undefined}
+          />
+        ) : !activeTab ? (
+          <BrowserEmptyState
+            icon="ready"
+            title={t('browserUseWaitingForAgent')}
+            body={t('browserUseWaitingBody')}
+          />
         ) : null}
 
         {state.pendingOriginConsent ? (
@@ -389,6 +412,31 @@ export function AgentBrowserPanel({
         ) : null}
       </div>
     </aside>
+  )
+}
+
+function BrowserEmptyState({
+  icon,
+  title,
+  body,
+  action
+}: {
+  icon: 'alert' | 'loading' | 'ready'
+  title: string
+  body: string
+  action?: ReactElement
+}): ReactElement {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
+      {icon === 'loading'
+        ? <Loader2 className="h-10 w-10 animate-spin text-ds-accent motion-reduce:animate-none" />
+        : icon === 'alert'
+          ? <ShieldAlert className="h-12 w-12 text-red-500" />
+          : <ShieldCheck className="h-12 w-12 text-ds-faint" />}
+      <div className="mt-4 text-[13px] font-semibold text-ds-ink">{title}</div>
+      <div className="mt-2 max-w-sm text-[11px] leading-5 text-ds-muted">{body}</div>
+      {action}
+    </div>
   )
 }
 

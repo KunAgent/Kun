@@ -1,4 +1,6 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
+import { kunThreadSummarizePath } from '@shared/kun-endpoints'
+import { parseRuntimeErrorBody } from '@shared/runtime-error'
 import type { NormalizedThread } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
@@ -20,6 +22,20 @@ import type {
   SidebarActionDialogState,
   ThreadContextMenuState
 } from './SidebarProjectOverlays'
+
+/** Reads `{ id, summary }` from a successful summarize response. */
+export function readSummaryFromResponse(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { summary?: unknown }
+    return typeof parsed.summary === 'string' ? parsed.summary.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  await navigator.clipboard.writeText(text)
+}
 
 type Params = {
   t: (key: string, options?: Record<string, unknown>) => string
@@ -134,22 +150,54 @@ export function createSidebarProjectThreadActions({
   const handleSummarizeThread = async (thread: NormalizedThread): Promise<void> => {
     const threadId = thread.id.trim()
     if (!threadId || deletingThreadIds[threadId]) return
+    let summary = ''
     await withThreadBusy(threadId, async () => {
       try {
         const res = await rendererRuntimeClient.runtimeRequest(
-          `/v1/threads/${encodeURIComponent(threadId)}/summarize`,
+          kunThreadSummarizePath(threadId),
           'POST',
           '{}'
         )
         if (!res.ok) {
-          useChatStore.getState().setError(t('summarizeFailed'))
+          const runtimeError = parseRuntimeErrorBody(res.body, t('summarizeFailed'))
+          // A sidebar row cached from an earlier profile can outlive the thread
+          // in the runtime store. Refreshing drops the ghost row so the user
+          // stops retrying an id the runtime cannot resolve (#1200).
+          if (res.status === 404 || runtimeError.code === 'not_found') {
+            useChatStore.getState().setError(t('summarizeThreadMissing'))
+            await useChatStore.getState().refreshThreads()
+            return
+          }
+          useChatStore.getState().setError(`${t('summarizeFailed')}: ${runtimeError.message}`)
           return
         }
+        summary = readSummaryFromResponse(res.body)
         await useChatStore.getState().refreshThreads()
-      } catch {
-        useChatStore.getState().setError(t('summarizeFailed'))
+      } catch (error) {
+        const detail = error instanceof Error ? error.message.trim() : String(error ?? '').trim()
+        useChatStore.getState().setError(
+          detail ? `${t('summarizeFailed')}: ${detail}` : t('summarizeFailed')
+        )
       }
     })
+    if (!summary) return
+    openActionDialog({
+      title: t('summarizeSummaryTitle'),
+      description: thread.title,
+      detail: summary,
+      confirmLabel: t('sidebarThreadCopySummary'),
+      onConfirm: () => copyToClipboard(summary)
+    })
+  }
+
+  const handleCopyThreadId = async (thread: NormalizedThread): Promise<void> => {
+    const threadId = thread.id.trim()
+    if (!threadId) return
+    try {
+      await copyToClipboard(threadId)
+    } catch {
+      useChatStore.getState().setError(t('copyFailed'))
+    }
   }
 
   const handleRestoreThread = async (thread: NormalizedThread): Promise<void> => {
@@ -312,6 +360,7 @@ export function createSidebarProjectThreadActions({
     closeRenameThreadDialog,
     confirmThreadWorkspaceMove,
     handleArchiveThread,
+    handleCopyThreadId,
     handleDeleteThread,
     handlePinThread,
     handleRestoreThread,

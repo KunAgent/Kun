@@ -609,6 +609,9 @@ describe('browser Office renderers', () => {
       text: 'Summary\t<img src=x onerror=alert(1)>\nValue\t12',
       formulas: ['B2: =SUM(B1:B1)']
     }))
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ anchorRect: expect.anything() })
+    )
     expect(renderer!.root.findByProps({ 'data-office-sheet-cell': '0:1' }).children).toEqual([
       '<img src=x onerror=alert(1)>'
     ])

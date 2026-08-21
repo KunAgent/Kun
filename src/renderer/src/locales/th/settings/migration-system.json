@@ -76,5 +76,9 @@
   "uninstallConfirmType": "พิมพ์ UNINSTALL เพื่อยืนยัน",
   "uninstallConfirmButton": "ยืนยันการถอนการติดตั้ง",
   "uninstallConfirmCancel": "ยกเลิก",
-  "uninstallRunning": "กำลังถอนการติดตั้ง… Kun จะปิดในอีกไม่กี่วินาที"
+  "uninstallRunning": "กำลังถอนการติดตั้ง… Kun จะปิดในอีกไม่กี่วินาที",
+  "labConversationVisualizationTitle": "Conversation visualization",
+  "labConversationVisualizationDescription": "Experimental structured visuals for flows, grouped explanations, and important constraints. The agent uses them only when spatial structure is clearer than prose.",
+  "labConversationVisualizationEnabled": "Allow agent visualizations",
+  "labConversationVisualizationEnabledDesc": "Adds show_visualization to future desktop agent requests. Turning it off removes the tool while preserving visualizations already stored in conversation history."
 }

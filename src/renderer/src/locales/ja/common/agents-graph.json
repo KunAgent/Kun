@@ -276,6 +276,9 @@
   "summarizeSession": "要約する",
   "summarizing": "要約すると…",
   "summarizeFailed": "この会話を要約できませんでした",
+  "summarizeSummaryTitle": "セッションの要約",
+  "summarizeThreadMissing": "この会話はランタイムに保存されていません。一覧を更新しました。",
+  "sidebarThreadCopySummary": "要約をコピー",
   "name": "名前",
   "description": "説明",
   "color": "色",
@@ -288,5 +291,13 @@
   "writeEnableLineWrapping": "行折り返しを有効にする",
   "writeDisableLineWrapping": "行の折り返しを無効にする",
   "systemPrompt": "システムプロンプト",
-  "toolPolicy": "ツールへのアクセス"
+  "toolPolicy": "ツールへのアクセス",
+  "visualizationLabel": "Visualization",
+  "visualizationCollapse": "Collapse visualization",
+  "visualizationExpand": "Expand visualization",
+  "visualizationCopy": "Copy as text",
+  "visualizationCopied": "Copied",
+  "visualizationFlow": "Flow",
+  "visualizationCardGrid": "Grouped details",
+  "visualizationCallout": "Important note"
 }

@@ -3,7 +3,7 @@ import type { ChatBlock } from '../../agent/types'
 import type { ChatState } from '../../store/chat-store-types'
 import { isCodeSidebarThread } from '../../store/chat-store-runtime'
 import {
-  extractLatestTurnAutoOpenDevPreviewUrls,
+  extractLatestTurnAutoOpenDevPreviewSignal,
   extractLatestTurnDevPreviewUrls
 } from '../../lib/dev-preview-detection'
 import { resolveCodeCanvasWorkspaceRoot } from '../../design/canvas/code-canvas'
@@ -53,12 +53,11 @@ export function useWorkbenchDerivedState({
     () => extractLatestTurnDevPreviewUrls(devPreviewBlocks),
     [devPreviewBlocks]
   )
-  const autoOpenDevPreviewUrls = useMemo(
-    () => extractLatestTurnAutoOpenDevPreviewUrls(devPreviewBlocks),
+  const latestAutoOpenDevPreviewSignal = useMemo(
+    () => extractLatestTurnAutoOpenDevPreviewSignal(devPreviewBlocks),
     [devPreviewBlocks]
   )
   const latestDevPreviewUrl = detectedDevPreviewUrls[0] ?? null
-  const latestAutoOpenDevPreviewUrl = autoOpenDevPreviewUrls[0] ?? null
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? null,
     [activeClawChannelId, clawChannels]
@@ -109,7 +108,7 @@ export function useWorkbenchDerivedState({
     currentSideConversations,
     currentSideRunningCount,
     devPreviewBlocks,
-    latestAutoOpenDevPreviewUrl,
+    latestAutoOpenDevPreviewSignal,
     latestDevPreviewUrl,
     timelineBlocks,
     timelineLiveAssistant,

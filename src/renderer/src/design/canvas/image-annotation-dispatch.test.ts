@@ -22,6 +22,7 @@ const boardArtifact: DesignArtifact = {
 function fakeCanvasState() {
   const image = createDefaultShape('image', 10, 20)
   image.id = 'image_1'
+  image.imageUrl = '.kun/images/source.png'
   const document = createEmptyDocument()
   document.objects[image.id] = image
   return {
@@ -101,15 +102,17 @@ describe('image annotation dispatch', () => {
       dataBase64: 'abc',
       mimeType: 'image/png'
     })
-    expect(canvasState.updateShape).toHaveBeenCalledWith('image_1', {
-      imageUrl: '.deepseekgui-images/annotated.png'
-    })
+    expect(canvasState.updateShape).not.toHaveBeenCalled()
+    expect(canvasState.document.objects.image_1?.imageUrl).toBe('.kun/images/source.png')
     expect(options.selectCanvasShapes).toHaveBeenCalledWith(['image_1'])
     expect(designState.setActiveArtifact).toHaveBeenCalledWith('board')
     expect(options.closeImageAnnotation).toHaveBeenCalled()
     expect(options.sendDesignPrompt).toHaveBeenCalledWith(
       expect.stringContaining('.deepseekgui-images/annotated.png'),
-      { displayText: '按图片批注修改：make the accent red' }
+      {
+        displayText: '按图片批注修改：make the accent red',
+        imageEditReferencePath: '.deepseekgui-images/annotated.png'
+      }
     )
     expect(options.sendCodeCanvasPrompt).not.toHaveBeenCalled()
     expect(options.setAnnotationBusy).toHaveBeenNthCalledWith(1, true)
@@ -139,6 +142,9 @@ describe('image annotation dispatch', () => {
       expect.stringContaining('.deepseekgui-images/annotated.png'),
       { displayText: '按图片批注修改：make the accent red' }
     )
+    expect(canvasState.updateShape).toHaveBeenCalledWith('image_1', {
+      imageUrl: '.deepseekgui-images/annotated.png'
+    })
     expect(options.sendDesignPrompt).not.toHaveBeenCalled()
     expect(designState.setActiveArtifact).not.toHaveBeenCalled()
   })
@@ -172,6 +178,28 @@ describe('image annotation dispatch', () => {
 
     expect(status).toBe('sent-design')
     canvasState.documentKey = 'next-design-doc'
+    pendingSend()
+    expect(options.sendDesignPrompt).not.toHaveBeenCalled()
+  })
+
+  it('does not send the delayed repair prompt after the active thread changes', async () => {
+    const canvasState = fakeCanvasState()
+    const options = baseOptions()
+    let activeThreadId = 'thread-original'
+    let pendingSend!: () => void
+    const status = await applyImageAnnotationResult({
+      ...options,
+      initiatingThreadId: activeThreadId,
+      getActiveThreadId: () => activeThreadId,
+      getCanvasShapeState: () => canvasState,
+      setTimeout: vi.fn((callback: () => void) => {
+        pendingSend = callback
+        return 1
+      })
+    })
+
+    expect(status).toBe('sent-design')
+    activeThreadId = 'thread-next'
     pendingSend()
     expect(options.sendDesignPrompt).not.toHaveBeenCalled()
   })

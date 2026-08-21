@@ -5,6 +5,7 @@ import {
   TerminalSquare,
   Plus,
   RotateCw,
+  Server,
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -20,8 +21,10 @@ import {
   defaultTerminalColors,
   type TerminalColorSettingsV1
 } from '@shared/app-settings'
+import type { RemoteSshHost } from '@shared/remote-ssh'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
+import { terminalBackend } from './terminal-backend'
 import { terminalSessionIdForWorkspace, terminalWorkspaceSessionKey } from './terminal-session'
 import { TerminalTabContextMenu } from './TerminalTabContextMenu'
 import {
@@ -74,6 +77,8 @@ export function TerminalPanel({
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [terminalBackground, setTerminalBackground] = useState<string | null>(null)
+  const [remoteHosts, setRemoteHosts] = useState<RemoteSshHost[]>([])
+  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
   const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const workspaceTabStatesRef = useRef<Record<string, TerminalTabState>>({})
@@ -127,8 +132,15 @@ export function TerminalPanel({
   }, [resolvePanelTheme, terminalColors])
 
   const getTabTitle = useCallback((tab: TerminalTab): string => {
-    return tab.title?.trim() || t('terminalTabTitle', { index: tab.index })
+    if (tab.title?.trim()) return tab.title.trim()
+    return tab.target.kind === 'ssh'
+      ? `SSH · ${tab.target.hostName}`
+      : t('terminalTabTitle', { index: tab.index })
   }, [t])
+
+  useEffect(() => {
+    void window.kunGui.listRemoteSshHosts().then(setRemoteHosts).catch(() => setRemoteHosts([]))
+  }, [])
 
   useEffect(() => {
     if (activeTab) onTitleChange?.(getTabTitle(activeTab))
@@ -179,12 +191,13 @@ export function TerminalPanel({
   // On unmount we dispose only the xterm renderer; the underlying PTY stays
   // alive in the main process so toggling the panel preserves shell state
   // and replays recent output from the ring buffer on re-attach.
-  const sessionIdForTab = useCallback((tabId: string): string => {
-    return terminalSessionIdForWorkspace(workspaceRoot, tabId)
+  const sessionIdForTab = useCallback((tab: TerminalTab): string => {
+    return terminalSessionIdForWorkspace(workspaceRoot, tab.id, tab.target)
   }, [workspaceRoot])
 
-  const attachTerminal = useCallback(async (tabId: string) => {
-    const sessionId = sessionIdForTab(tabId)
+  const attachTerminal = useCallback(async (tab: TerminalTab) => {
+    const sessionId = sessionIdForTab(tab)
+    const backend = terminalBackend(tab.target)
     const attachToken = ++attachTokenRef.current
     const isCurrentAttach = (): boolean => aliveRef.current && attachTokenRef.current === attachToken
     const container = containerRef.current
@@ -227,18 +240,18 @@ export function TerminalPanel({
     })
 
     // Stream PTY output → xterm.
-    const offData = window.kunGui.onTerminalData((payload) => {
+    const offData = backend.onData((payload) => {
       if (payload.sessionId !== sessionId) return
       term.write(payload.data)
     })
-    const offExit = window.kunGui.onTerminalExit((payload) => {
+    const offExit = backend.onExit((payload) => {
       if (payload.sessionId !== sessionId) return
       setExited(true)
     })
 
     // xterm input → PTY.
     const disposable = term.onData((data) => {
-      void window.kunGui.writeToTerminal({
+      void backend.write({
         sessionId,
         data
       })
@@ -260,7 +273,7 @@ export function TerminalPanel({
     const resizeObserver = new ResizeObserver(triggerFit)
     resizeObserver.observe(container)
     const onDimensionChange = (dim: { cols: number; rows: number }): void => {
-      void window.kunGui.resizeTerminal({
+      void backend.resize({
         sessionId,
         cols: dim.cols,
         rows: dim.rows
@@ -271,22 +284,29 @@ export function TerminalPanel({
     // Create (or re-attach to) the PTY session. On re-attach the main process
     // replays the ring buffer before new output arrives.
     try {
-      const result = await window.kunGui.createTerminal({
+      let result = await backend.create({
         sessionId,
-        cwd: workspaceRoot || undefined,
+        cwd: tab.target.kind === 'local' ? (workspaceRoot || undefined) : undefined,
         cols,
         rows
       })
+      if (!result.ok && 'reason' in result && result.reason === 'hostKeyConfirmationRequired') {
+        const accepted = window.confirm(`Trust SSH host key?\n\n${result.fingerprint}`)
+        if (accepted) {
+          await window.kunGui.confirmRemoteSshHostKey(result)
+          result = await backend.create({ sessionId, cols, rows })
+        }
+      }
       if (!isCurrentAttach()) return
       if (!result.ok) {
-        setError(result.message)
+        setError('message' in result ? result.message : 'SSH host key was not trusted.')
         return
       }
       // After a successful (re)attach, reflect the latest fit so the PTY
       // matches the visible grid.
       const dims = fit.proposeDimensions()
       if (dims) {
-        void window.kunGui.resizeTerminal({
+        void backend.resize({
           sessionId,
           cols: dims.cols,
           rows: dims.rows
@@ -311,7 +331,7 @@ export function TerminalPanel({
 
   useEffect(() => {
     aliveRef.current = true
-    if (activeTab) void attachTerminal(activeTab.id)
+    if (activeTab) void attachTerminal(activeTab)
     return () => {
       aliveRef.current = false
       attachTokenRef.current += 1
@@ -355,21 +375,28 @@ export function TerminalPanel({
     })
   }, [renamingTabId])
 
-  const handleNewTab = useCallback(() => {
+  const createTab = useCallback((target: TerminalTab['target']) => {
     if (tabs.length >= MAX_RENDERER_TABS) return
     const nextIndex = tabs.length + 1
     const tab: TerminalTab = {
       id: `tab-${Date.now().toString(36)}-${nextIndex}`,
-      index: nextIndex
+      index: nextIndex,
+      target
     }
     setTabs((current) => [...current, tab])
     setActiveTabId(tab.id)
+    setNewTabMenuOpen(false)
   }, [tabs.length])
+
+  const handleNewTab = useCallback(() => {
+    createTab({ kind: 'local' })
+  }, [createTab])
 
   const handleCloseTab = useCallback((tabId: string) => {
     const closingIndex = tabs.findIndex((tab) => tab.id === tabId)
-    if (closingIndex === -1) return
-    void window.kunGui.disposeTerminal(sessionIdForTab(tabId))
+    const closingTab = tabs[closingIndex]
+    if (closingIndex === -1 || !closingTab) return
+    void terminalBackend(closingTab.target).dispose(sessionIdForTab(closingTab))
     setTabs((current) => {
       if (current.length <= 1) return current
       return current.filter((tab) => tab.id !== tabId)
@@ -437,7 +464,7 @@ export function TerminalPanel({
     const keptTab = tabs.find((tab) => tab.id === tabId)
     if (!keptTab) return
     for (const tab of tabs) {
-      if (tab.id !== tabId) void window.kunGui.disposeTerminal(sessionIdForTab(tab.id))
+      if (tab.id !== tabId) void terminalBackend(tab.target).dispose(sessionIdForTab(tab))
     }
     setTabs([keptTab])
     setActiveTabId(tabId)
@@ -447,7 +474,7 @@ export function TerminalPanel({
 
   const handleCloseAllTabs = useCallback(() => {
     for (const tab of tabs) {
-      void window.kunGui.disposeTerminal(sessionIdForTab(tab.id))
+      void terminalBackend(tab.target).dispose(sessionIdForTab(tab))
     }
     setContextMenu(null)
     cancelRenameTab()
@@ -461,7 +488,7 @@ export function TerminalPanel({
     if (!activeTab) return
     // Dispose the old shell then re-attach so a fresh one spawns.
     try {
-      await window.kunGui.disposeTerminal(sessionIdForTab(activeTab.id))
+      await terminalBackend(activeTab.target).dispose(sessionIdForTab(activeTab))
     } catch {
       /* ignore */
     }
@@ -469,7 +496,7 @@ export function TerminalPanel({
     setExited(false)
     disposeRenderer()
     aliveRef.current = true
-    void attachTerminal(activeTab.id)
+    void attachTerminal(activeTab)
   }, [activeTab, attachTerminal, disposeRenderer, sessionIdForTab])
 
   return (
@@ -531,7 +558,9 @@ export function TerminalPanel({
                     onContextMenu={(event) => openTabContextMenu(event, tab.id)}
                     className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left"
                   >
-                    <TerminalSquare className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+                    {tab.target.kind === 'ssh'
+                      ? <Server className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+                      : <TerminalSquare className="h-4 w-4 shrink-0" strokeWidth={1.8} />}
                     <span className="truncate">{getTabTitle(tab)}</span>
                   </button>
                 )}
@@ -552,16 +581,39 @@ export function TerminalPanel({
               </div>
             )
           })}
-          <button
-            type="button"
-            onClick={handleNewTab}
-            disabled={tabs.length >= MAX_RENDERER_TABS}
-            className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label={t('terminalNewTab')}
-            title={t('terminalNewTab')}
-          >
-            <Plus className="h-4 w-4" strokeWidth={1.8} />
-          </button>
+          <div className="relative mb-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setNewTabMenuOpen((open) => !open)}
+              disabled={tabs.length >= MAX_RENDERER_TABS}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label={t('terminalNewTab')}
+              aria-expanded={newTabMenuOpen}
+              title={t('terminalNewTab')}
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+            {newTabMenuOpen ? (
+              <div className="absolute bottom-9 left-0 z-50 min-w-56 rounded-xl border border-ds-border bg-ds-card p-1.5 text-[12px] shadow-xl">
+                <button type="button" onClick={handleNewTab} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-ds-ink hover:bg-ds-hover">
+                  <TerminalSquare className="h-4 w-4" />
+                  {t('terminalNewLocalTab', { defaultValue: 'Local terminal' })}
+                </button>
+                {remoteHosts.map((host) => (
+                  <button
+                    key={host.id}
+                    type="button"
+                    onClick={() => createTab({ kind: 'ssh', hostId: host.id, hostName: host.label })}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-ds-ink hover:bg-ds-hover"
+                  >
+                    <Server className="h-4 w-4" />
+                    <span className="min-w-0"><span className="block truncate">SSH · {host.label}</span><span className="block truncate text-[10px] text-ds-muted">{host.username}@{host.hostname}</span></span>
+                  </button>
+                ))}
+                {remoteHosts.length === 0 ? <p className="px-3 py-2 text-ds-muted">{t('terminalNoSshServers', { defaultValue: 'Add an SSH server in Terminal settings.' })}</p> : null}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 px-3">
           <button

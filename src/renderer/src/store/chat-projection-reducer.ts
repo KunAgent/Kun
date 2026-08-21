@@ -44,13 +44,9 @@ export type ChatProjectionReducerContext = {
 import { reduceLateChatProjection } from './chat-projection-reducer-late'
 import {
   flushLiveProjection,
-  isNewChildAttempt,
-  isStaleChildAttempt,
   isDetachedSubagentToolEvent,
   isUserInputInterruptError,
-  mergeToolProjectionMeta,
   mergeToolProjectionEvents,
-  monotonicToolStatus,
   runtimeEventStartedAt,
   toolBlockChildId,
   toolEventChildId,
@@ -296,22 +292,28 @@ export function reduceChatProjection(
       if (index >= 0) {
         const current = state.blocks[index]
         if (current.kind !== 'tool') return base
-        const newAttempt = isNewChildAttempt(current, event)
-        const staleAttempt = isStaleChildAttempt(current, event)
-        const nextStatus = newAttempt ? event.status : monotonicToolStatus(current.status, event.status)
-        // A stale queued/running lifecycle snapshot must never replace the
-        // terminal summary/detail of an already settled tool block.
-        const staleRunning = staleAttempt || (!newAttempt && nextStatus !== event.status)
+        const merged = mergeToolProjectionEvents({
+          itemId: current.id,
+          turnId: current.turnId,
+          createdAt: current.createdAt,
+          summary: current.summary,
+          status: current.status,
+          toolKind: current.toolKind,
+          detail: current.detail,
+          filePath: current.filePath,
+          meta: current.meta
+        }, event)
         const blocks = [...state.blocks]
         blocks[index] = {
           ...current,
-          turnId: staleAttempt ? current.turnId : (event.turnId ?? current.turnId),
-          summary: staleRunning ? current.summary : (event.summary || current.summary),
-          status: nextStatus,
-          toolKind: event.toolKind ?? current.toolKind,
-          detail: staleRunning ? current.detail : (event.detail ?? current.detail),
-          filePath: event.filePath ?? current.filePath,
-          meta: mergeToolProjectionMeta(current.meta, event.meta)
+          turnId: merged.turnId,
+          createdAt: merged.createdAt,
+          summary: merged.summary,
+          status: merged.status,
+          toolKind: merged.toolKind,
+          detail: merged.detail,
+          filePath: merged.filePath,
+          meta: merged.meta
         }
         return { ...base, blocks, error: context.clearRecoveringError(state.error) }
       }

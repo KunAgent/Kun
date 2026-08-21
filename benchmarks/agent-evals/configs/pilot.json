@@ -1,0 +1,23 @@
+{
+  "name": "pilot",
+  "attempts": 1,
+  "concurrency": 1,
+  "suites": {
+    "swebench": { "limit": 10, "sample_seed": 0 },
+    "deepswe": { "limit": 10, "sample_seed": 0 },
+    "terminal-bench": {
+      "tasks": [
+        "adaptive-rejection-sampler",
+        "bn-fit-modify",
+        "break-filter-js-from-html",
+        "build-cython-ext",
+        "build-pmars",
+        "build-pov-ray",
+        "caffe-cifar-10",
+        "cancel-async-tasks",
+        "chess-best-move",
+        "circuit-fibsqrt"
+      ]
+    }
+  }
+}

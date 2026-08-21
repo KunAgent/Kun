@@ -89,14 +89,14 @@ import {
   workbenchContributionRegistry,
   type ExtensionRightRailViewEntry
 } from '../extensions/contribution-registry'
-import { useGraphStore } from '../graph/graph-store'
-import { useGraphParentObserver } from '../graph/use-graph-parent-observer'
 import { graphNodeLiveness } from '../graph/graph-liveness'
 import { openGraphChildThread } from '../graph/graph-child-navigation'
 import { formatSubagentElapsed } from './subagents/SubagentLiveness'
 import { MAX_COMPOSER_CONTEXT_ATTACHMENTS } from '@kun/extension-api'
 import type { DevPreviewContextDraft } from './DevBrowserPanel'
 import { createDevPreviewComposerContextAttachment } from '../lib/dev-preview-composer-context'
+import { useWorkbenchFocusedCanvasController } from './workbench/useWorkbenchFocusedCanvasController'
+import { useWorkbenchGraphRuntimeState } from './workbench/useWorkbenchGraphRuntimeState'
 
 const extensionSurfaceLayoutStorage = {
   getItem: readBrowserStorageItem,
@@ -107,7 +107,7 @@ const extensionSurfaceLayoutStorage = {
 export function Workbench(): ReactElement {
   const { t, i18n } = useTranslation('common')
   const {
-    threads, threadSearch, showArchivedThreads, activeThreadId, activeThreadRelation,
+    threads, threadSearch, showArchivedThreads, activeThreadId, threadLoadingId, activeThreadRelation,
     activeThreadParentId, selectThread, createThread, createConversation, blocks,
     liveReasoning, liveAssistant, error, runtimeErrorDetail, runtimeStatus, busy,
     currentTurnOrchestration,
@@ -129,26 +129,10 @@ export function Workbench(): ReactElement {
     clearActiveThreadSelection, spawnSideConversation, openSideConversationDraft, selectSideConversation, setSidePanelOpen,
     sideConversations, sidePanel
   } = useWorkbenchChatStoreState()
-  useGraphParentObserver(activeThreadId)
-  const graphChildReturnTarget = useGraphStore((state) => state.childReturnTarget)
-  const graphRuns = useGraphStore((state) => state.runs)
-  const graphChildRuns = useGraphStore((state) => state.childRuns)
+  const {
+    graphChildReturnTarget, graphRuns, graphChildRuns, graphChildNow
+  } = useWorkbenchGraphRuntimeState(activeThreadId)
   const guiPlanSaveStatus = useGuiPlanStore((state) => state.saveStatus)
-  const [graphChildNow, setGraphChildNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!graphChildReturnTarget || activeThreadId !== graphChildReturnTarget.childThreadId) return
-    const id = globalThis.setInterval(() => setGraphChildNow(Date.now()), 1_000)
-    return () => globalThis.clearInterval(id)
-  }, [activeThreadId, graphChildReturnTarget])
-  useEffect(() => {
-    if (
-      !graphChildReturnTarget ||
-      !activeThreadId ||
-      activeThreadId === graphChildReturnTarget.parentThreadId ||
-      activeThreadId === graphChildReturnTarget.childThreadId
-    ) return
-    useGraphStore.getState().clearChildReturnTarget()
-  }, [activeThreadId, graphChildReturnTarget])
   useWorkbenchPptWhiteboardRouter({ activeThreadId, blocks, route, threads, workspaceRoot })
   const {
     activeComposerContextEvents,
@@ -170,6 +154,7 @@ export function Workbench(): ReactElement {
   const [useWorktreePool, setUseWorktreePool] = useState(false)
   const [worktreeBranch, setWorktreeBranch] = useState('')
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
+  const [connectPhoneInitialTarget, setConnectPhoneInitialTarget] = useState<'feishu' | 'lark' | 'weixin' | 'telegram'>('feishu')
   const taskActiveSkillWorkspace = threads.find(
     (thread) => thread.id === activeThreadId
   )?.workspace || workspaceRoot || ''
@@ -260,7 +245,7 @@ export function Workbench(): ReactElement {
   const {
     activeClawChannel, activeCodeCanvasWorkspace, activeSkillWorkspace, codeThreads,
     currentSideConversations, currentSideRunningCount, devPreviewBlocks,
-    latestAutoOpenDevPreviewUrl, latestDevPreviewUrl,
+    latestAutoOpenDevPreviewSignal, latestDevPreviewUrl,
     timelineBlocks, timelineLiveAssistant, timelineLiveReasoning
   } = useWorkbenchDerivedState({
     activeClawChannelId,
@@ -274,18 +259,21 @@ export function Workbench(): ReactElement {
     workspaceRoot
   })
   const {
-    activateRightPanelTab, beginLeftResize, beginRightResize, beginTerminalResize, closeRightPanelTab,
-    codeRightTabs, collapseRightPanel, expandRightPanel, filePreviewTarget,
+    activateRightPanelTab, beginLeftResize, beginRightResize, beginTerminalResize,
+    closeRightPanelTab, codeRightTabs, collapseRightPanel, expandRightPanel,
+    filePreviewTarget,
     leftSidebarCollapsed, leftSidebarWidth, openDevPreview, rightPanelMode, rightPanelVisible,
     openRightPanelTab, rightSidebarWidth, setFilePreviewTarget, setRightPanelMode,
     setRightSidebarWidth, shellRef, terminalHeight, terminalOpen, toggleLeftSidebar, toggleTerminal,
+    canvasFocusMode: layoutCanvasFocusMode,
+    exitCanvasFocusMode: exitLayoutCanvasFocus,
   } = useWorkbenchLayout({
     activeThreadId,
     designAssistantOpen,
     designImplementOpen,
-    latestAutoOpenDevPreviewUrl,
-    latestDevPreviewUrl,
+    latestAutoOpenDevPreviewSignal,
     route,
+    threadLoadingId,
     workspaceRoot: extensionWorkspaceRoot,
     writeAssistantOpen
   })
@@ -508,6 +496,7 @@ export function Workbench(): ReactElement {
     rollbackProvisionalThread,
     designTaskProfileSelection: taskSurface === 'design' ? designTaskProfile : undefined,
     lockedDesignProfile,
+    expectedThreadId: activeThreadId,
     imageGenerationAvailable: runtimeInfo?.capabilities.imageGen?.available === true,
     imageGenerationReason: runtimeInfo?.capabilities.imageGen?.reason,
     getAttachmentScope,
@@ -585,10 +574,22 @@ export function Workbench(): ReactElement {
     t, graphEnabled, graphChildReturnTarget, graphRuns, graphChildRuns, graphChildNow,
     activeThreadId, activeThreadParentId, selectThread, openRightPanelTab
   })
+  const { canvasFocusMode, exitCanvasFocusMode, startNewDesignCanvasConversation } =
+    useWorkbenchFocusedCanvasController(
+      { canvasFocusMode: layoutCanvasFocusMode, exitCanvasFocusMode: exitLayoutCanvasFocus },
+      {
+        designWorkspaceRoot, workspaceRoot, designActiveDocumentId,
+        lockedDesignDocumentId: lockedDesignProfile?.documentTarget.documentId
+      }
+    )
+
   const {
     chatComposerProps, conversationRuntimeBanner, imageAnnotationHost, planOverlay,
-    rightPanel, rightPanelSharedProps, writeRuntimeBanner
+    rightPanel, rightPanelSharedProps, writeRuntimeBanner, focusedCanvasWorkspace
   } = useWorkbenchShellRuntime({
+    canvasFocusMode,
+    exitCanvasFocusMode,
+    startNewDesignCanvasConversation,
     input, setInput, composerMode, setComposerMode, composerOrchestration, graphEnabled,
     taskSurface, taskSurfaceLocked, taskSurfaceTransitioning, designTaskProfile, designProfileLocked,
     threadHasDesignDocument, lockedDesignProfile, onTaskSurfaceChange, onDesignTaskProfileChange,
@@ -641,11 +642,12 @@ export function Workbench(): ReactElement {
     <WorkbenchContent context={{
     shellRef, extensionHostContextMenus, activeExtensionCenterView, route, setWorkspaceContextMenu,
     leftSidebarCollapsed, leftSidebarWidth, codeThreads, activeThreadId, sidebarView,
-    connectPhoneSidebarOpen, activeExtensionLeftSidebar, extensionWorkspaceRoot,
+    connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
     deleteThread, deleteDrawing, startNewChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone,
+    openConnectWeixin: () => { setConnectPhoneInitialTarget('weixin'); openClaw(); setConnectPhoneSidebarOpen(true) },
     openCodeMode, openWriteMode, openDesignMode, openScheduleView, openWorkflowView, openNodeGraphView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy, implementDesignInCode,
     handleDesignHtmlElementAsContext, selectCanvasShape, sendDesignPrompt,
@@ -670,6 +672,7 @@ export function Workbench(): ReactElement {
     openCodeRightTool, currentSideRunningCount, extensionRightRailItems, selectRightRailExtension,
     imageAnnotationHost, planOverlay, openManagedExtensionView, activeExtensionAuxiliaryPanel,
     workspaceContextMenu, activeGuiPlan,
+    focusedCanvasWorkspace,
     onOpenCommandPalette: openWorkbenchCommandPalette
   }} />
     <WorkbenchCommandPaletteRuntime

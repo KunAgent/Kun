@@ -62,14 +62,17 @@ export const DEFAULT_MODEL_REQUEST_RETRY_CONFIG = {
   // Retries are counted after the initial provider request.
   maxAttempts: 5,
   initialDelayMs: 3_000,
-  httpStatusCodes: [429, 503]
+  httpStatusCodes: [429, 500, 502, 503, 504]
 } as const
 
 export const ModelRequestRetryConfigSchema = z
   .object({
     maxAttempts: z.number().int().min(0).max(10).default(DEFAULT_MODEL_REQUEST_RETRY_CONFIG.maxAttempts).optional(),
     initialDelayMs: z.number().int().min(0).max(600_000).default(DEFAULT_MODEL_REQUEST_RETRY_CONFIG.initialDelayMs).optional(),
-    httpStatusCodes: z.array(z.number().int().min(400).max(599)).max(64).default([...DEFAULT_MODEL_REQUEST_RETRY_CONFIG.httpStatusCodes]).optional()
+    httpStatusCodes: z.array(z.number().int().min(400).max(599)).max(64).default([...DEFAULT_MODEL_REQUEST_RETRY_CONFIG.httpStatusCodes]).optional(),
+    // Desktop settings use this marker for one-time default migrations. The
+    // request policy deliberately ignores it after strict config validation.
+    defaultsVersion: z.number().int().min(0).max(1_000).optional()
   })
   .strict()
 export type ModelRequestRetryConfig = z.infer<typeof ModelRequestRetryConfigSchema>

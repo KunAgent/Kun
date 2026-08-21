@@ -1,5 +1,6 @@
 import { findDesignBoardArtifact } from '../design-board'
 import { useDesignWorkspaceStore } from '../design-workspace-store'
+import { useChatStore } from '../../store/chat-store'
 import { useCanvasSelectionStore } from './canvas-selection-store'
 import { CODE_CANVAS_DIR } from './code-canvas'
 import { useCanvasShapeStore } from './canvas-shape-store'
@@ -49,7 +50,12 @@ export type ApplyImageAnnotationOptions = {
   setAnnotationBusy: (busy: boolean) => void
   closeImageAnnotation: () => void
   sendCodeCanvasPrompt: (prompt: string, options: { displayText: string }) => void | Promise<void>
-  sendDesignPrompt: (prompt: string, options: { displayText: string }) => void
+  sendDesignPrompt: (prompt: string, options: {
+    displayText: string
+    imageEditReferencePath?: string
+  }) => void
+  initiatingThreadId?: string | null
+  getActiveThreadId?: () => string | null
   saveWorkspaceImageBytes?: SaveWorkspaceImageBytes
   getCanvasShapeState?: typeof useCanvasShapeStore.getState
   getDesignState?: typeof useDesignWorkspaceStore.getState
@@ -122,7 +128,9 @@ export async function applyImageAnnotationResult(
     const shape = shapeStore.document.objects[shapeId]
     if (!shape) return 'shape-missing'
 
-    shapeStore.updateShape(shapeId, { imageUrl: saved.workspaceRelativePath })
+    if (isCodeCanvasAnnotation) {
+      shapeStore.updateShape(shapeId, { imageUrl: saved.workspaceRelativePath })
+    }
     const selectCanvasShapes =
       options.selectCanvasShapes ?? ((ids: string[]) => useCanvasSelectionStore.getState().select(ids))
     selectCanvasShapes([shapeId])
@@ -145,12 +153,15 @@ export async function applyImageAnnotationResult(
     })
     const setTimer =
       options.setTimeout ?? ((callback: () => void, delayMs: number) => window.setTimeout(callback, delayMs))
+    const initiatingThreadId = options.initiatingThreadId?.trim() || null
+    const getActiveThreadId = options.getActiveThreadId ?? (() => useChatStore.getState().activeThreadId)
     const sendIfDocumentUnchanged = (send: () => void): void => {
       if (
         options.currentDocumentKey &&
         (options.getCanvasShapeState ?? useCanvasShapeStore.getState)().documentKey !==
           options.currentDocumentKey
       ) return
+      if (initiatingThreadId && getActiveThreadId() !== initiatingThreadId) return
       send()
     }
     if (isCodeCanvasAnnotation) {
@@ -162,7 +173,10 @@ export async function applyImageAnnotationResult(
       return 'sent-code'
     }
     setTimer(() => sendIfDocumentUnchanged(
-      () => options.sendDesignPrompt(prompt, { displayText })
+      () => options.sendDesignPrompt(prompt, {
+        displayText,
+        imageEditReferencePath: saved.workspaceRelativePath
+      })
     ), 60)
     return 'sent-design'
   } finally {

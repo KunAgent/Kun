@@ -18,7 +18,8 @@ import type {
 import {
   DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES,
   DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
-  DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS
+  DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
+  MODEL_REQUEST_RETRY_DEFAULTS_VERSION
 } from './app-settings-types'
 import {
   CODEX_RESPONSES_REASONING,
@@ -50,7 +51,8 @@ export function defaultPresetRetrySettings() {
   return {
     maxAttempts: DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
     initialDelayMs: DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
-    httpStatusCodes: [...DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES]
+    httpStatusCodes: [...DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES],
+    defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
   }
 }
 
@@ -171,9 +173,16 @@ export function resolveModelProviderPresetSource(
   }
   const direct = getModelProviderPreset(profile.id)
   if (direct) return { preset: direct, mode: 'api' }
-  if (!profile.id.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX)) return null
-  const preset = getModelProviderPreset(profile.id.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length))
-  return preset?.tokenPlan ? { preset, mode: 'token-plan' } : null
+  const numbered = /^(.*)-(?:[2-9]|[1-9][0-9]+)$/u.exec(profile.id)?.[1]
+  const candidateId = numbered ?? profile.id
+  const tokenPlan = candidateId.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX)
+  const presetId = tokenPlan
+    ? candidateId.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length)
+    : candidateId
+  const preset = getModelProviderPreset(presetId)
+  return preset && (!tokenPlan || preset.tokenPlan)
+    ? { preset, mode: tokenPlan ? 'token-plan' : 'api' }
+    : null
 }
 
 export function isMultiAccountProviderPreset(

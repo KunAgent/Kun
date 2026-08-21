@@ -2,6 +2,7 @@ import type { UsageSnapshot } from '../contracts/usage.js'
 import type { ToolCallProviderMetadata } from '../contracts/items.js'
 import type { ModelStreamChunk } from '../ports/model-client.js'
 import type { ToolCallLike } from '../ports/tool-host.js'
+import type { ModelFailureMetadata } from '../contracts/model-route-pool.js'
 import { repairDispatchToolArguments } from './tool-call-repair.js'
 
 export type ModelStreamStopReason = 'stop' | 'tool_calls' | 'length' | 'error'
@@ -45,7 +46,7 @@ export type ModelStreamIntent =
     }
   | { kind: 'generated_image'; imageBase64: string; mimeType: string }
   | { kind: 'usage'; usage: UsageSnapshot }
-  | { kind: 'model_error'; message: string; code?: string }
+  | { kind: 'model_error'; message: string; code?: string; failure?: ModelFailureMetadata }
 
 export type ModelStreamSnapshot = {
   text: string
@@ -120,7 +121,8 @@ export class ModelStreamCollector {
           intents: [{
             kind: 'model_error',
             message: chunk.message,
-            ...(chunk.code ? { code: chunk.code } : {})
+            ...(chunk.code ? { code: chunk.code } : {}),
+            ...(chunk.failure ? { failure: chunk.failure } : {})
           }]
         }
     }
@@ -160,6 +162,16 @@ export class ModelStreamCollector {
   private reduceCompletedToolCall(
     chunk: Extract<ModelStreamChunk, { kind: 'tool_call_complete' }>
   ): ModelStreamReduction {
+    if (!chunk.toolName.trim()) {
+      this.stopReason = 'error'
+      return {
+        intents: [{
+          kind: 'model_error',
+          message: 'model stream produced an incomplete tool call',
+          code: 'stream_tool_call_protocol'
+        }]
+      }
+    }
     if (this.toolCalls.length >= this.config.maxToolCallsPerStep) {
       if (this.config.toolCallOverflowBehavior === 'truncate') {
         this.truncatedToolCalls += 1

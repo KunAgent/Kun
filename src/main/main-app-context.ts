@@ -104,6 +104,7 @@ import {
 import {
   type TerminalPtyController
 } from './terminal/terminal-pty-ipc'
+import type { RemoteSshController } from './remote-ssh/register-remote-ssh-ipc'
 import {
   ensureWeixinBridgeRpcUrl
 } from './weixin-bridge-runtime'
@@ -362,6 +363,7 @@ export const mainState = {
   shutdownDesktopResourceLeases: null as (() => Promise<void>) | null,
   waitForRuntimeOperationsIdle: null as (() => Promise<void>) | null,
   terminalPtyController: null as TerminalPtyController | null,
+  remoteSshController: null as RemoteSshController | null,
   activeServiceManager: null as ServiceManagerConnection | null,
   runtimeDataRecoveryMigrationLock: null as CanonicalRuntimeMigrationLock | null,
   guiUpdaterModulePromise: null as Promise<GuiUpdaterModule> | null,

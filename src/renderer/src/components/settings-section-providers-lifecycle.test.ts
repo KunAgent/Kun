@@ -188,6 +188,7 @@ describe('provider mutation lifecycle across settings remounts', () => {
     vi.stubGlobal('window', {
       kunGui: {
         runtimeRequest: vi.fn(),
+        openSettingsConfigFile: vi.fn(async () => ({ ok: true })),
         confirmDialog: vi.fn(async () => true)
       },
       addEventListener: vi.fn(),
@@ -206,6 +207,59 @@ describe('provider mutation lifecycle across settings remounts', () => {
     resetSharedProviderMutationCoordinatorForTests()
     vi.unstubAllGlobals()
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+  })
+
+  it('opens the fixed settings file and surfaces a shell failure', async () => {
+    const { settings, provider } = providerFixture()
+    const openSettingsConfigFile = vi.fn(async () => ({ ok: false, message: 'editor unavailable' }))
+    Object.assign(window.kunGui, { openSettingsConfigFile })
+
+    const renderer = await mount(contextFor(settings, provider))
+    await flush()
+    expect(rendererText(renderer)).toContain('modelProviderConfigFileHint')
+    await act(async () => findButton(renderer, 'modelProviderOpenConfigFile').props.onClick())
+
+    expect(openSettingsConfigFile).toHaveBeenCalledOnce()
+    expect(rendererText(renderer)).toContain('editor unavailable')
+  })
+
+  it('keeps provider metadata and wrapping actions in separate header regions', async () => {
+    const { settings, provider } = providerFixture()
+    const renderer = await mount(contextFor(settings, provider))
+    await flush()
+
+    const metadata = renderer.root.findByProps({ 'data-testid': 'provider-workspace-meta' })
+    const actions = renderer.root.findByProps({ 'data-testid': 'provider-workspace-actions' })
+    expect(metadata.props.className).toContain('grid')
+    expect(actions.props.className).toContain('flex-wrap')
+    expect(actions.findAllByType('button')).toHaveLength(2)
+    for (const button of actions.findAllByType('button')) {
+      expect(button.props.className).toContain('whitespace-nowrap')
+    }
+    const tabs = renderer.root.findAllByProps({ role: 'tablist' })
+      .find((tablist) => tablist.props['aria-label'] === 'providers')
+    expect(tabs).toBeTruthy()
+  })
+
+  it('uses the shared provider mark in configured, detail, and add-provider surfaces', async () => {
+    const fixture = providerFixture('codex-2')
+    const provider: ModelProviderProfileV1 = {
+      ...fixture.provider,
+      name: 'ChatGPT subscription 2',
+      presetSource: { presetId: 'codex', mode: 'api' }
+    }
+    const renderer = await mount(contextFor(fixture.settings, provider))
+    await flush()
+
+    expect(renderer.root.findAllByProps({ 'data-provider-icon': 'codex' }).length)
+      .toBeGreaterThanOrEqual(2)
+
+    await act(async () => findButton(renderer, 'modelProviderAdd').props.onClick())
+
+    expect(renderer.root.findAllByProps({ 'data-provider-icon': 'codex' }).length)
+      .toBeGreaterThanOrEqual(3)
+    expect(renderer.root.findAllByProps({ 'data-provider-icon': 'kun' }).length)
+      .toBeGreaterThanOrEqual(1)
   })
 
   it('hides the delete action for the default API provider', async () => {

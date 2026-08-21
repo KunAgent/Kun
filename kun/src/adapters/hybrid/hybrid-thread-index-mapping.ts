@@ -92,6 +92,7 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
     ...(row.forked_from_message_count !== null ? { forkedFromMessageCount: row.forked_from_message_count } : {}),
     ...(row.forked_from_turn_count !== null ? { forkedFromTurnCount: row.forked_from_turn_count } : {}),
     ...(goal ? { goal } : {}), ...(todos ? { todos } : {}), ...(extension ?? {}),
+    latestSeq: Math.max(0, row.event_seq_high_water),
     createdAt: row.created_at, updatedAt: row.updated_at
   }
 }

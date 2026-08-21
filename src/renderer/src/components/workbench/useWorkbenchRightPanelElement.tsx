@@ -3,6 +3,8 @@ import type { SettingsRouteSection } from '../../store/chat-store'
 import { WorkbenchPlanPanel, type WorkbenchPlanPanelProps } from './WorkbenchPlanPanelHost'
 import { WorkbenchRightPanelHost } from './WorkbenchRightPanelHost'
 
+export type CodeCanvasPanelProps = ComponentProps<typeof WorkbenchRightPanelHost>['canvas']
+
 type RightPanelHostProps = ComponentProps<typeof WorkbenchRightPanelHost>
 type DesignImplementProps = RightPanelHostProps['design']['implement']
 type DesignAssistantProps = RightPanelHostProps['design']['assistant']

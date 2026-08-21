@@ -55,17 +55,6 @@ import {
 } from '@kun/extension-api'
 import { cloneDesignDocumentTarget, cloneDesignTaskProfile } from './design-task-profile'
 
-export function buildQuery(options: Record<string, string | number | boolean | undefined>): string {
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(options)) {
-    if (value == null) continue
-    if (typeof value === 'string' && !value.trim()) continue
-    params.set(key, String(value))
-  }
-  const query = params.toString()
-  return query ? `?${query}` : ''
-}
-
 export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread {
   return {
     id: thread.id,
@@ -86,6 +75,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     workspace: thread.workspace,
     knowledgeBases: thread.knowledgeBases?.map((mount) => ({ ...mount })),
     status: thread.status,
+    ...(typeof thread.latestSeq === 'number' ? { latestSeq: thread.latestSeq } : {}),
     approvalPolicy: normalizeApprovalPolicy(thread.approvalPolicy),
     sandboxMode: normalizeSandboxMode(thread.sandboxMode),
     approvalReviewer: normalizeApprovalReviewer(thread.approvalReviewer),

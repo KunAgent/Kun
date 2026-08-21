@@ -3,6 +3,7 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { ERRORS } from './runtime-error.js'
 import type { CanvasReceiptRegistry } from '../../services/canvas-receipt-registry.js'
+import { CANVAS_GENERATED_IMAGE_FILE_PATTERN } from '../../contracts/generated-image-path.js'
 
 const CanvasReceiptBody = z.object({
   turnId: z.string().min(1).max(200),
@@ -17,7 +18,7 @@ const CanvasReceiptBody = z.object({
   generatedFiles: z.array(z.object({
     name: z.string().min(1).max(240),
     relativePath: z.string()
-      .regex(/^\.deepseekgui-images\/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.(?:png|svg)$/i),
+      .regex(CANVAS_GENERATED_IMAGE_FILE_PATTERN),
     absolutePath: z.string().min(1).max(4000).optional(),
     mimeType: z.enum(['image/png', 'image/svg+xml']),
     byteSize: z.number().int().nonnegative().max(100 * 1024 * 1024)

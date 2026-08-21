@@ -33,13 +33,19 @@ check(
     ),
   'afterPack does not validate bundled .kunx catalog bytes before release artifacts are created'
 )
-for (const id of [
-  'kun-examples.presentation-studio',
-  'kun-examples.social-media-sidebar'
-]) {
+for (const id of ['kun-examples.social-media-sidebar']) {
   check(
     afterPack.REQUIRED_BUNDLED_EXTENSION_IDS.includes(id),
     `afterPack does not require bundled default extension: ${id}`
+  )
+}
+for (const id of [
+  'kun-examples.kun-video-editor',
+  'kun-examples.presentation-studio'
+]) {
+  check(
+    afterPack.REQUIRED_RETIRED_BUNDLED_EXTENSION_IDS.includes(id),
+    `afterPack does not require retired bundled extension marker: ${id}`
   )
 }
 for (const pattern of [

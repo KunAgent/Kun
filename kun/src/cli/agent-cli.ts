@@ -16,6 +16,10 @@ import {
 } from './serve.js'
 import type { ServeOptions } from './cli-options.js'
 import { runTuiCommand } from '../tui/index.js'
+import { hasFlag, positionals, stringFlag } from './agent-cli-args.js'
+import { resolveRunInvocation } from './agent-cli-run-options.js'
+
+export { MAX_RUN_PROMPT_BYTES } from './agent-cli-run-options.js'
 
 type WritableLike = {
   write(chunk: string): unknown
@@ -53,6 +57,13 @@ Common options:
   --account-id <id>          Bind an opaque core-managed provider account
   --approval-policy <p>      on-request | untrusted | never | auto | suggest
   --approval-reviewer <r>    user | agent
+  --prompt-file <path|->     Read the run prompt from a UTF-8 file or stdin
+  --reasoning-effort <e>     auto | off | low | medium | high | max
+  --service-tier <tier>      priority
+  --max-steps <n>            Maximum model steps for this run
+  --max-wall-time-ms <n>     Maximum wall time for this run
+  --max-tool-calls-per-step <n>
+                             Maximum tool calls in one model step
   --json                     Emit machine-readable JSON where supported
   --jsonl                    Stream one machine-readable event per line for kun run
 
@@ -60,32 +71,6 @@ Exec options:
   --list-tools               Print available tools
   --args <json>              JSON object passed to the selected tool
 `
-
-const VALUE_FLAGS = new Set([
-  'config',
-  'config-file',
-  'host',
-  'port',
-  'data-dir',
-  'dataDir',
-  'runtime-token',
-  'runtimeToken',
-  'api-key',
-  'apiKey',
-  'base-url',
-  'baseUrl',
-  'model',
-  'provider-id',
-  'account-id',
-  'approval-policy',
-  'sandbox-mode',
-  'approval-reviewer',
-  'workspace',
-  'prompt',
-  'p',
-  'args',
-  'title'
-])
 
 export type KunCliCommand = 'serve' | 'run' | 'chat' | 'tui' | 'exec' | 'runtime' | 'update' | 'version' | 'help'
 
@@ -144,14 +129,14 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
     io.stderr.write('kun run: --json and --jsonl are mutually exclusive\n')
     return ServeExitCode.usage
   }
-  const prompt = stringFlag(argv, ['prompt', 'p']) ?? positionals(argv).join(' ').trim()
-  if (!prompt) {
-    io.stderr.write('kun run: missing prompt\n')
-    return ServeExitCode.usage
+  const invocation = await resolveRunInvocation(argv, parsed.options, io.stdin)
+  if (!invocation.ok) {
+    return writeRunUsageError(invocation.message, io, invocation.exitCode)
   }
+  const prompt = invocation.prompt
   let runtime: ServerRuntime | undefined
   try {
-    runtime = await createRuntime(parsed.options, io)
+    runtime = await createRuntime(invocation.options, io)
     const thread = await runtime.threadService.create({
       title: stringFlag(argv, ['title']) ?? prompt.slice(0, 80),
       workspace: parsed.workspace,
@@ -169,6 +154,8 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
       request: {
         prompt,
         model: parsed.options.model,
+        ...(invocation.reasoningEffort ? { reasoningEffort: invocation.reasoningEffort } : {}),
+        ...(invocation.serviceTier ? { serviceTier: invocation.serviceTier } : {}),
         mode: 'agent',
         clientSurface: 'cli',
         disableUserInput: true
@@ -209,6 +196,15 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
   } finally {
     await shutdownRuntime(runtime, io, 'kun run')
   }
+}
+
+function writeRunUsageError(
+  message: string,
+  io: CliIo,
+  exitCode: number = ServeExitCode.usage
+): number {
+  io.stderr.write(`kun run: ${message}\n`)
+  return exitCode
 }
 
 function writeJsonLine(output: WritableLike, value: unknown): void {
@@ -455,50 +451,6 @@ function parseJsonObject(text: string): { ok: true; value: Record<string, unknow
   } catch (error) {
     return { ok: false, message: `invalid --args JSON: ${errorMessage(error)}` }
   }
-}
-
-function positionals(argv: readonly string[]): string[] {
-  const out: string[] = []
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index]
-    if (token === '--') {
-      out.push(...argv.slice(index + 1))
-      break
-    }
-    if (token.startsWith('--')) {
-      const flag = token.slice(2).split('=')[0] ?? ''
-      if (!token.includes('=') && VALUE_FLAGS.has(flag)) index += 1
-      continue
-    }
-    if (token.startsWith('-') && token.length > 1) {
-      const flag = token.slice(1)
-      if (VALUE_FLAGS.has(flag)) index += 1
-      continue
-    }
-    out.push(token)
-  }
-  return out
-}
-
-function stringFlag(argv: readonly string[], names: readonly string[]): string | undefined {
-  const nameSet = new Set(names)
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index]
-    if (token.startsWith('--')) {
-      const eq = token.indexOf('=')
-      const key = eq >= 0 ? token.slice(2, eq) : token.slice(2)
-      if (nameSet.has(key)) {
-        return eq >= 0 ? token.slice(eq + 1) : argv[index + 1]
-      }
-    } else if (token.startsWith('-') && nameSet.has(token.slice(1))) {
-      return argv[index + 1]
-    }
-  }
-  return undefined
-}
-
-function hasFlag(argv: readonly string[], name: string): boolean {
-  return argv.some((token) => token === `--${name}` || token === `--${name}=true`)
 }
 
 function formatToolOutput(output: unknown): string {

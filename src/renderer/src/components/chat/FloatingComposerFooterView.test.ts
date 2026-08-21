@@ -13,6 +13,13 @@ function translate(key: string, values: Record<string, unknown> = {}): string {
   const text = {
     sessionUsageFooterLabel: 'Session usage',
     sessionUsageFooterTokens: `${values.tokens} tokens`,
+    sessionUsageFooterActualCost: `Cost ${values.value}`,
+    sessionUsageFooterEstimate: `Estimate ≈${values.value}`,
+    sessionUsageActualCostTitle: 'Recorded API/Gateway cost.',
+    sessionUsageEstimateTitle: 'Reference estimate.',
+    sessionUsagePriceUnavailable: 'Price unavailable',
+    sessionUsagePriceUnavailableTitle: 'No trusted price.',
+    turnUsageEstimatePartial: 'Partial estimate',
     sessionUsageFooterCache: `${values.cache} cache`,
     sessionUsageFooterTurns: `${values.turns} turns`,
     sessionUsageFooterTtft: `TTFT ${values.ttft}`,
@@ -33,6 +40,8 @@ function usageSummary(overrides: Record<string, unknown> = {}): Record<string, u
     totalTokens: 11_900_000,
     costUsd: 1.25,
     costCny: null,
+    valueEstimateUsd: null,
+    valueEstimateCny: null,
     cacheHitRate: 0.41,
     lastTurnCacheHitRate: 0.95,
     cachedTokens: 410,
@@ -73,7 +82,8 @@ describe('FloatingComposerFooterView', () => {
   it('renders separately collapsible session metrics without a visible cost metric', () => {
     const html = renderFooter()
 
-    expect(html).toContain('Session usage')
+    expect(html).not.toContain('Session usage')
+    expect(html).toContain('title="11.9M tokens · $1.25 · 278 turns"')
     expect(html).toContain('ds-composer-usage-tokens')
     expect(html).toContain('ds-composer-usage-cache')
     expect(html).toContain('ds-composer-usage-turns')
@@ -85,6 +95,67 @@ describe('FloatingComposerFooterView', () => {
     expect(html).toContain('95% cache')
     expect(html).not.toContain('41% cache')
     expect(html).not.toContain('ds-composer-usage-cost')
+  })
+
+  it('shows a gpt-5.6-luna subscription estimate after throughput', () => {
+    const html = renderFooter({
+      i18n: { language: 'zh' },
+      t: (key: string, values: Record<string, unknown> = {}) => key === 'sessionUsageFooterEstimate'
+        ? `参考估值 ≈${values.value}`
+        : translate(key, values),
+      threadUsage: usageSummary({
+        totalTokens: 26_000,
+        costUsd: null,
+        costCny: null,
+        valueEstimateUsd: 0.03,
+        valueEstimateCny: 0.216
+      })
+    })
+
+    expect(html).toContain('参考估值 ≈￥0.2160')
+    expect(html).toContain('ds-composer-usage-money')
+    expect(html.indexOf('ds-composer-usage-tps')).toBeLessThan(html.indexOf('ds-composer-usage-money'))
+  })
+
+  it('shows an explained unavailable state after throughput when no trusted price exists', () => {
+    const html = renderFooter({
+      threadUsage: usageSummary({
+        costUsd: null,
+        costCny: null,
+        valueEstimateUsd: null,
+        valueEstimateCny: null
+      })
+    })
+
+    expect(html).toContain('Price unavailable')
+    expect(html).toContain('title="No trusted price."')
+    expect(html.indexOf('ds-composer-usage-tps')).toBeLessThan(html.indexOf('ds-composer-usage-money'))
+  })
+
+  it('keeps zero-price estimates visible and labels partial cumulative coverage', () => {
+    const zero = renderFooter({
+      threadUsage: usageSummary({
+        costUsd: null,
+        costCny: null,
+        valueEstimateUsd: 0,
+        valueEstimateCny: 0,
+        valueEstimateCoverage: 'complete'
+      })
+    })
+    expect(zero).toContain('Estimate ≈$0.0000')
+    expect(zero).not.toContain('Price unavailable')
+
+    const partial = renderFooter({
+      threadUsage: usageSummary({
+        costUsd: null,
+        costCny: null,
+        valueEstimateUsd: 0.03,
+        valueEstimateCny: 0.216,
+        valueEstimateCoverage: 'partial'
+      })
+    })
+    expect(partial).toContain('Partial estimate')
+    expect(partial).toContain('data-session-usage-estimate-partial')
   })
 
   it('falls back to cumulative cache telemetry when latest-request telemetry is unavailable', () => {

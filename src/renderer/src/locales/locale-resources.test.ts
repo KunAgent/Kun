@@ -6,6 +6,7 @@ import i18n, {
   withGraphSettingsFallback
 } from '../i18n'
 import enCommon from './en/common'
+import enPlanBuild from './en/common/plan-build.json'
 import enSettings from './en/settings'
 import hiCommon from './hi/common'
 import hiSettings from './hi/settings'
@@ -18,6 +19,7 @@ import ruSettings from './ru/settings'
 import thCommon from './th/common'
 import thSettings from './th/settings'
 import zhCommon from './zh/common'
+import zhPlanBuild from './zh/common/plan-build.json'
 import zhSettings from './zh/settings'
 
 type LocaleTree = Record<string, unknown>
@@ -56,6 +58,35 @@ const resources: Record<AppLocale, { common: LocaleTree; settings: LocaleTree }>
     settings: withGraphSettingsFallback(koSettings)
   }
 }
+
+const PLAN_BUILD_ACTION_KEYS = [
+  'planBuildMode',
+  'planBuildStart',
+  'planBuildDirect',
+  'planBuildGraph',
+  'planBuildGraphStart',
+  'planScheduleBuild',
+  'planScheduleBuildSet',
+  'planScheduleBuildModify',
+  'planScheduleBuildScheduled',
+  'planScheduleBuildTimeLabel',
+  'planScheduleBuildOnce',
+  'planScheduleBuildAutomaticHint',
+  'planScheduleBuildCancel',
+  'planScheduleBuildEnabled',
+  'planScheduleBuildNextRun',
+  'planScheduleBuildRemaining',
+  'planScheduleBuildRemainingPrefix',
+  'planScheduleBuildRemainingSuffix',
+  'planScheduleBuildCountdownDay',
+  'planScheduleBuildCountdownHour',
+  'planScheduleBuildCountdownMinute',
+  'planScheduleBuildDueSoon',
+  'planWorktreeUsePrompt',
+  'planWorktreePromptHint',
+  'planWorktreeGraphUnsupported',
+  'planWorktreeCurrentWorkspaceWarning'
+] as const
 
 function flattenStrings(
   tree: LocaleTree,
@@ -152,6 +183,38 @@ describe('active locale resources', () => {
     await i18n.changeLanguage(locale)
     expect(i18n.resolvedLanguage).toBe(locale)
     expect(i18n.t('settings:language')).toBe(resources[locale].settings.language)
+  })
+
+  it('keeps English and Chinese plan build resources structurally aligned', () => {
+    const source = flattenStrings(enPlanBuild)
+    const translated = flattenStrings(zhPlanBuild)
+
+    expect([...translated.keys()]).toEqual([...source.keys()])
+    for (const [key, sourceValue] of source) {
+      expect(interpolationTokens(translated.get(key) ?? ''), key)
+        .toEqual(interpolationTokens(sourceValue))
+    }
+  })
+
+  it.each(APP_LOCALES)('resolves every plan build action in %s without exposing a key', async (locale) => {
+    await i18n.changeLanguage(locale)
+
+    for (const key of PLAN_BUILD_ACTION_KEYS) {
+      expect(i18n.exists(key, { ns: 'common' }), key).toBe(true)
+      const value = i18n.t(key, { ns: 'common' })
+      expect(value.trim(), key).not.toBe('')
+      expect(value, key).not.toBe(key)
+    }
+  })
+
+  it.each([
+    ['en', 'Set schedule', 'Start Graph build'],
+    ['zh', '设置定时', '开始 Graph 构建']
+  ] as const)('uses the intended plan build actions in %s', async (locale, schedule, graph) => {
+    await i18n.changeLanguage(locale)
+
+    expect(i18n.t('planScheduleBuildSet', { ns: 'common' })).toBe(schedule)
+    expect(i18n.t('planBuildGraphStart', { ns: 'common' })).toBe(graph)
   })
 
   it.each(['en', 'zh'] as const)(

@@ -65,6 +65,18 @@ export type ProviderCatalogEntry = {
   credentialUrl: string
 }
 
+export type ProviderCatalogSource = {
+  preset: ProviderCatalogPreset
+  presetSource: string
+  presetMode: 'api' | 'token-plan'
+}
+
+export type ProviderCatalogSourceInput = {
+  id?: string
+  presetSource?: string
+  presetMode?: 'api' | 'token-plan'
+}
+
 const GEMINI_SUBSCRIPTION_MODELS = [
   'gemini-3.6-flash',
   'gemini-3.5-flash',
@@ -72,6 +84,8 @@ const GEMINI_SUBSCRIPTION_MODELS = [
 ] as const
 
 const GEMINI_CLI_SUBSCRIPTION_MODELS = [
+  'gemini-3.7-pro-preview',
+  'gemini-3.7-flash-preview',
   'gemini-3.1-pro-preview',
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite',
@@ -550,6 +564,48 @@ export function getProviderCatalogPreset(id: string): ProviderCatalogPreset | nu
 
 export function tokenPlanProviderId(presetId: string): string {
   return `${presetId}${TOKEN_PLAN_PROVIDER_ID_SUFFIX}`
+}
+
+/**
+ * Resolves catalog identity independently from the provider/account id. The
+ * numbered-account fallback is deliberately limited to known catalog IDs so a
+ * custom provider sharing an endpoint is never silently reclassified.
+ */
+export function resolveProviderCatalogSource(
+  input: ProviderCatalogSourceInput
+): ProviderCatalogSource | null {
+  const catalog: readonly ProviderCatalogPreset[] = PROVIDER_CATALOG
+  const requestedSource = input.presetSource?.trim().toLowerCase()
+  const explicitMode = input.presetMode
+  if (requestedSource) {
+    const explicit = catalog.find((preset) => preset.id === requestedSource)
+    if (explicit && (!explicitMode || explicitMode === 'api' || explicit.tokenPlan)) {
+      return {
+        preset: explicit,
+        presetSource: explicit.id,
+        presetMode: explicitMode ?? (requestedSource.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX) ? 'token-plan' : 'api')
+      }
+    }
+    if (requestedSource.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX)) {
+      const presetId = requestedSource.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length)
+      const tokenPlanPreset = catalog.find((preset) => preset.id === presetId && preset.tokenPlan)
+      if (tokenPlanPreset) {
+        return { preset: tokenPlanPreset, presetSource: tokenPlanPreset.id, presetMode: 'token-plan' }
+      }
+    }
+  }
+
+  const id = input.id?.trim().toLowerCase() ?? ''
+  const exact = catalog.find((preset) => preset.id === id)
+  if (exact) return { preset: exact, presetSource: exact.id, presetMode: 'api' }
+  const numbered = /^(.*)-(?:[2-9]|[1-9][0-9]+)$/u.exec(id)?.[1]
+  if (!numbered) return null
+  const baseId = numbered
+  const tokenPlan = baseId.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX)
+  const presetId = tokenPlan ? baseId.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length) : baseId
+  const preset = catalog.find((candidate) => candidate.id === presetId)
+  if (!preset || (tokenPlan && !preset.tokenPlan)) return null
+  return { preset, presetSource: preset.id, presetMode: tokenPlan ? 'token-plan' : 'api' }
 }
 
 export function providerCatalogEntries(): ProviderCatalogEntry[] {

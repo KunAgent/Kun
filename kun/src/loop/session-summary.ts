@@ -7,6 +7,32 @@ export const DEFAULT_SESSION_SUMMARY_TIMEOUT_MS = 20_000
 export const DEFAULT_SESSION_SUMMARY_MAX_TOKENS = 400
 export const DEFAULT_SESSION_SUMMARY_INPUT_MAX_BYTES = 96 * 1024
 
+/**
+ * Why a session summary produced no text. The on-demand route turns these into
+ * distinct HTTP errors: a silent `undefined` left the desktop with one generic
+ * "could not summarize" toast and no way to tell a slow model apart from a
+ * rejected request (#1200).
+ */
+export type SessionSummaryFailureReason =
+  | 'aborted'
+  | 'timeout'
+  | 'empty_transcript'
+  | 'model_error'
+  | 'empty_output'
+
+export type SessionSummaryOutcome =
+  | { ok: true; summary: string }
+  | {
+      ok: false
+      reason: SessionSummaryFailureReason
+      /** Provider-reported failure text, present for `model_error`. */
+      message?: string
+      /** Provider-reported failure code, when the adapter supplied one. */
+      code?: string
+      /** Elapsed budget for `timeout`. */
+      timeoutMs?: number
+    }
+
 const SESSION_SUMMARY_SYSTEM_PROMPT = [
   'You write a short, neutral summary of an entire chat conversation.',
   'Output rules:',
@@ -19,7 +45,8 @@ const SESSION_SUMMARY_SYSTEM_PROMPT = [
 /**
  * One-shot internal LLM call producing a ~1-paragraph whole-conversation
  * summary from the full transcript. Mirrors the compaction-summary one-shot
- * pattern. Returns undefined on any failure / empty output.
+ * pattern. Never throws: every failure is reported as a typed outcome so the
+ * caller can surface the real reason instead of a blanket failure.
  */
 export async function generateSessionSummary(input: {
   threadId: string
@@ -38,15 +65,21 @@ export async function generateSessionSummary(input: {
   maxTokens?: number
   inputMaxBytes?: number
   abortSignal?: AbortSignal
-}): Promise<string | undefined> {
-  if (input.abortSignal?.aborted) return undefined
+}): Promise<SessionSummaryOutcome> {
+  if (input.abortSignal?.aborted) return { ok: false, reason: 'aborted' }
   const transcript = buildSessionTranscript(input.items, input.inputMaxBytes ?? DEFAULT_SESSION_SUMMARY_INPUT_MAX_BYTES)
-  if (!transcript.trim()) return undefined
+  if (!transcript.trim()) return { ok: false, reason: 'empty_transcript' }
 
   const timeoutMs = Math.max(1, Math.floor(input.timeoutMs ?? DEFAULT_SESSION_SUMMARY_TIMEOUT_MS))
   const controller = new AbortController()
   const onAbort = (): void => controller.abort()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  // The caller's abort and the local budget both cancel the same stream, so
+  // the reason has to be captured where the cancel originates.
+  let timedOut = false
+  const timeout = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
   input.abortSignal?.addEventListener('abort', onAbort, { once: true })
 
   try {
@@ -81,14 +114,25 @@ export async function generateSessionSummary(input: {
     }
     let text = ''
     for await (const chunk of input.modelClient.stream(request)) {
-      if (input.abortSignal?.aborted || controller.signal.aborted) return undefined
+      if (input.abortSignal?.aborted || controller.signal.aborted) {
+        return timedOut ? { ok: false, reason: 'timeout', timeoutMs } : { ok: false, reason: 'aborted' }
+      }
       if (chunk.kind === 'assistant_text_delta') text += chunk.text
-      if (chunk.kind === 'error') return undefined
+      if (chunk.kind === 'error') {
+        return {
+          ok: false,
+          reason: 'model_error',
+          message: chunk.message,
+          ...(chunk.code ? { code: chunk.code } : {})
+        }
+      }
     }
     const summary = text.replace(/\s+/g, ' ').trim()
-    return summary || undefined
-  } catch {
-    return undefined
+    return summary ? { ok: true, summary } : { ok: false, reason: 'empty_output' }
+  } catch (error) {
+    if (timedOut) return { ok: false, reason: 'timeout', timeoutMs }
+    if (input.abortSignal?.aborted || controller.signal.aborted) return { ok: false, reason: 'aborted' }
+    return { ok: false, reason: 'model_error', message: errorText(error) }
   } finally {
     clearTimeout(timeout)
     input.abortSignal?.removeEventListener('abort', onAbort)
@@ -130,6 +174,15 @@ function transcriptLine(item: TurnItem): string {
     default:
       return ''
   }
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message.trim()
+    return message || error.name
+  }
+  const text = String(error).trim()
+  return text || 'unknown model failure'
 }
 
 function stringify(value: unknown): string {

@@ -36,6 +36,7 @@ describe('CodeCanvasPanel', () => {
 
     expect(codeCanvasPanelShellClass('h-full')).toContain('overflow-hidden')
     expect(codeCanvasPanelShellClass('h-full')).toContain('bg-[#f8fafc]')
+    expect(codeCanvasPanelShellClass('h-full', 'focused')).not.toContain('border-l')
     expect(codeCanvasPanelTitlebarClass()).toContain('rounded-full')
     expect(codeCanvasPanelTitlebarClass()).toContain('backdrop-blur-2xl')
     expect(html).toContain('data-code-canvas-titlebar="true"')

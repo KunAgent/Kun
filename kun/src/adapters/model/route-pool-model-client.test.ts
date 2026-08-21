@@ -40,6 +40,22 @@ async function drain(stream: AsyncIterable<ModelStreamChunk>): Promise<ModelStre
   return chunks
 }
 
+/** Minimal healthy target response: one content commit point plus completion. */
+function successfulChunks(): ModelStreamChunk[] {
+  return [
+    { kind: 'assistant_text_delta', text: 'ok' },
+    { kind: 'completed', stopReason: 'stop' }
+  ]
+}
+
+const emptyUsage = () => ({
+  promptTokens: 5,
+  completionTokens: 1,
+  totalTokens: 6,
+  cacheHitRate: null,
+  turns: 1
+})
+
 class FakeDirect implements ModelClient {
   provider = 'fake'
   model = 'default'
@@ -91,7 +107,7 @@ describe('RoutePoolModelClient', () => {
 
   it('uses provider identity to disambiguate a routed alias from a concrete model', async () => {
     const sameAliasPool = { ...pool(), modelId: 'kimi' }
-    const direct = new FakeDirect(() => [{ kind: 'completed', stopReason: 'stop' }])
+    const direct = new FakeDirect(() => successfulChunks())
     const client = new RoutePoolModelClient(direct, [sameAliasPool], capability)
 
     await drain(client.stream(request({ model: 'kimi', providerId: 'provider-a' })))
@@ -112,14 +128,14 @@ describe('RoutePoolModelClient', () => {
   })
 
   it('filters heterogeneous targets by request capability', async () => {
-    const direct = new FakeDirect(() => [{ kind: 'completed', stopReason: 'stop' }])
+    const direct = new FakeDirect(() => successfulChunks())
     const client = new RoutePoolModelClient(direct, [pool()], capability)
     await drain(client.stream(request({ attachments: [{ id: 'i', name: 'i.png', mimeType: 'image/png', dataBase64: 'AA==' }] })))
     expect(direct.seen).toEqual(['provider-b/kimi-vision'])
   })
 
   it('rotates and weights requests and supports health strategies', async () => {
-    const direct = new FakeDirect(() => [{ kind: 'completed', stopReason: 'stop' }])
+    const direct = new FakeDirect(() => successfulChunks())
     const health = new RoutePoolHealthStore()
     const round = pool('round-robin')
     const client = new RoutePoolModelClient(direct, [round], capability, health)
@@ -157,6 +173,45 @@ describe('RoutePoolModelClient', () => {
     await drain(client.stream(request()))
     const third = await drain(client.stream(request()))
     expect(third.at(-1)).toMatchObject({ kind: 'error', code: 'route_no_eligible_target' })
+  })
+
+  it('fails over when a target ends without any content and reports the surviving route', async () => {
+    const direct = new FakeDirect((input) => input.providerId === 'provider-a'
+      ? [{ kind: 'usage', usage: emptyUsage() }, { kind: 'completed', stopReason: 'stop' }]
+      : successfulChunks())
+    const client = new RoutePoolModelClient(direct, [pool()], capability)
+    const chunks = await drain(client.stream(request()))
+    expect(direct.seen).toEqual(['provider-a/kimi', 'provider-b/kimi-vision'])
+    expect(chunks.find((chunk) => chunk.kind === 'assistant_text_delta')?.route)
+      .toMatchObject({ targetId: 'b' })
+    expect(chunks.some((chunk) => chunk.kind === 'usage')).toBe(false)
+    expect(client.health.snapshot(pool().id).events[0]).toMatchObject({
+      result: 'failure',
+      message: 'route target provider-a/kimi completed without any content'
+    })
+  })
+
+  it('fails over on an entirely empty target stream', async () => {
+    const direct = new FakeDirect((input) => input.providerId === 'provider-a'
+      ? []
+      : successfulChunks())
+    const client = new RoutePoolModelClient(direct, [pool()], capability)
+    const chunks = await drain(client.stream(request()))
+    expect(direct.seen).toEqual(['provider-a/kimi', 'provider-b/kimi-vision'])
+    expect(chunks.at(-1)).toMatchObject({ kind: 'completed' })
+  })
+
+  it('returns aggregate exhaustion without fabricating completion when every target is empty', async () => {
+    const direct = new FakeDirect(() => [
+      { kind: 'usage', usage: emptyUsage() },
+      { kind: 'completed', stopReason: 'stop' }
+    ])
+    const client = new RoutePoolModelClient(direct, [pool()], capability)
+    const chunks = await drain(client.stream(request()))
+    expect(direct.seen).toEqual(['provider-a/kimi', 'provider-b/kimi-vision', 'provider-c/kimi-reasoning'])
+    expect(chunks.at(-1)).toMatchObject({ kind: 'error', code: 'route_targets_exhausted' })
+    expect(chunks.some((chunk) => chunk.kind === 'completed')).toBe(false)
+    expect(chunks.some((chunk) => chunk.kind === 'usage')).toBe(false)
   })
 
   it('restores bounded metrics but resets circuit state after restart', async () => {

@@ -350,7 +350,7 @@ describe('chat-store-side-actions', () => {
 
     sink.onTurnComplete()
     sink.onTurnComplete()
-    expect(state.unreadThreadIds).toEqual({ [id]: true })
+    expect(state.unreadThreadIds).toEqual({ [id]: 'completed' })
 
     actions.selectSideConversation(id)
     expect(state.unreadThreadIds).toEqual({})

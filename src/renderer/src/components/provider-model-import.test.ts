@@ -71,10 +71,11 @@ describe('provider model import merging', () => {
     ]))
   })
 
-  it('uses catalog modalities for media classification before id fallback', () => {
+  it('uses catalog modalities for endpoint classification before id fallback', () => {
     const entries = buildProviderModelImportEntries(provider(), [], catalog([
       { id: 'visual-maker', inputModalities: ['text'], outputModalities: ['image'] },
       { id: 'sound-reader', inputModalities: ['audio'], outputModalities: ['text'] },
+      { id: 'omni-chat', inputModalities: ['text', 'image', 'audio'], outputModalities: ['text'] },
       { id: 'voice-maker', inputModalities: ['text'], outputModalities: ['audio'] },
       { id: 'movie-maker', inputModalities: ['text'], outputModalities: ['video'] },
       { id: 'music-2.6', inputModalities: ['text'], outputModalities: ['audio'] }
@@ -82,10 +83,41 @@ describe('provider model import merging', () => {
     expect(entries.map(({ modelId, kind }) => [modelId, kind])).toEqual([
       ['visual-maker', 'image'],
       ['sound-reader', 'speech'],
+      ['omni-chat', 'chat'],
       ['voice-maker', 'tts'],
       ['movie-maker', 'video'],
       ['music-2.6', 'music']
     ])
+  })
+
+  it('reclassifies an existing speech entry as multimodal chat from explicit catalog metadata', () => {
+    const target = provider({
+      speech: {
+        protocol: 'openai-transcriptions',
+        baseUrl: 'https://api.example.com/v1',
+        models: ['omni-chat']
+      }
+    })
+    const entries = buildProviderModelImportEntries(target, ['omni-chat'], catalog([{
+      id: 'omni-chat',
+      inputModalities: ['text', 'image', 'audio'],
+      outputModalities: ['text'],
+      toolCalling: true
+    }]))
+
+    expect(entries[0]).toMatchObject({ kind: 'chat', alreadyExists: false })
+    const picked = providerModelImportResult(
+      entries,
+      defaultSelectedProviderModelImportKeys(entries)
+    )
+    const profiles = enrichProviderModelProfiles(target, picked.chat, picked.catalogModels)
+    expect(picked.chat).toEqual(['omni-chat'])
+    expect(picked.speech).toEqual([])
+    expect(profiles['omni-chat']).toMatchObject({
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      messageParts: ['text', 'image_url']
+    })
   })
 
   it('keeps enrichment-only catalog rows limited to provider-confirmed ids', () => {

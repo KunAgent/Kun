@@ -13,6 +13,10 @@ import type {
   ModelReasoningEffort,
   ScheduleRunResult,
   ScheduleRuntimeStatus,
+  ScheduleTaskCreateInput,
+  ScheduleTaskDeleteResult,
+  ScheduleTaskMutationResult,
+  ScheduleTaskUpdateInput,
   ScheduleTaskFromTextResult,
   WorkflowApprovalDecision,
   WorkflowCodeCheckResult,
@@ -96,6 +100,12 @@ import type {
   WorkspaceOfficeSemanticResult,
   WorkspaceOfficeSemanticTarget
 } from './office-document'
+import type {
+  WorkspaceSpreadsheetConvertPayload,
+  WorkspaceSpreadsheetConvertResult,
+  WorkspaceSpreadsheetSavePayload,
+  WorkspaceSpreadsheetSaveResult
+} from './workspace-spreadsheet'
 import type { ProjectDesignMdOfficialLintResult } from './project-design-md'
 import type {
   WriteInlineCompletionDebugEntry,
@@ -145,6 +155,7 @@ import type {
   MemoryMarkdownExportSavePayload,
   MemoryMarkdownExportSaveResult
 } from './memory-import-export'
+import type { RemoteSshApi } from './remote-ssh'
 import type {
   TerminalCreatePayload,
   TerminalCreateResult,
@@ -242,7 +253,7 @@ import {
   WorkspacePickResult
 } from './kun-gui-api-contracts'
 
-export type KunGuiApi = ExtensionIpcApi & {
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   platform: string
   /** Immutable mode selected before the BrowserWindow and renderer are created. */
   desktopTitleBarMode: DesktopTitleBarMode
@@ -292,6 +303,8 @@ export type KunGuiApi = ExtensionIpcApi & {
     respondRendererRequest: (response: DataMigrationRendererResponse) => Promise<void>
   }
   getSettings: () => Promise<AppSettingsV1>
+  /** Opens the fixed Manager-owned settings document in the system editor. */
+  openSettingsConfigFile: () => Promise<PathOpenResult>
   /** Reveal one protected provider credential after an explicit trusted-workbench action. */
   revealModelProviderCredential: (providerId: string) => Promise<ModelProviderCredentialRevealResult>
   resetUnreadableCredentials: () => Promise<CredentialRecoveryResetResult>
@@ -365,6 +378,12 @@ export type KunGuiApi = ExtensionIpcApi & {
   readWorkspaceOfficeSemantic: (
     options: WorkspaceOfficeSemanticTarget
   ) => Promise<WorkspaceOfficeSemanticResult>
+  saveWorkspaceSpreadsheet: (
+    payload: WorkspaceSpreadsheetSavePayload
+  ) => Promise<WorkspaceSpreadsheetSaveResult>
+  convertWorkspaceSpreadsheet: (
+    payload: WorkspaceSpreadsheetConvertPayload
+  ) => Promise<WorkspaceSpreadsheetConvertResult>
   resolveKunApproval: (request: KunProtectedApprovalRequest) => Promise<KunProtectedApprovalResult>
   restartRuntime: () => Promise<void>
   restartKunServe: () => Promise<{ accepted: boolean; error?: string }>
@@ -376,6 +395,9 @@ export type KunGuiApi = ExtensionIpcApi & {
   getClawStatus: () => Promise<ClawRuntimeStatus>
   runClawTask: (taskId: string) => Promise<ClawRunResult>
   getScheduleStatus: () => Promise<ScheduleRuntimeStatus>
+  createScheduleTask: (payload: ScheduleTaskCreateInput) => Promise<ScheduleTaskMutationResult>
+  updateScheduleTask: (payload: ScheduleTaskUpdateInput) => Promise<ScheduleTaskMutationResult>
+  deleteScheduleTask: (taskId: string) => Promise<ScheduleTaskDeleteResult>
   runScheduleTask: (taskId: string) => Promise<ScheduleRunResult>
   getDaemonStatus: () => Promise<DaemonRuntimeStatus>
   restartDaemon: (daemonId: string) => Promise<DaemonActionResult>

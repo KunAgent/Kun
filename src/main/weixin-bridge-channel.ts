@@ -214,6 +214,8 @@ export async function waitForWeixinLogin(params: JsonRecord): Promise<JsonRecord
   return { connected: false, message: '登录超时，请重试。' }
 }
 
+const contextTokenPersistenceTails = new Map<string, Promise<void>>()
+
 export function contextTokenKey(accountId: string, userId: string): string {
   return `${accountId}:${userId}`
 }
@@ -232,7 +234,8 @@ export async function restoreContextTokens(accountId: string): Promise<void> {
     const parsed = await readJsonFile(contextTokensPath(accountId))
     for (const [userId, token] of Object.entries(asRecord(parsed))) {
       if (typeof token === 'string' && token) {
-        contextTokenStore.set(contextTokenKey(accountId, userId), token)
+        const key = contextTokenKey(accountId, userId)
+        if (!contextTokenStore.has(key)) contextTokenStore.set(key, token)
       }
     }
   } catch {
@@ -242,7 +245,14 @@ export async function restoreContextTokens(accountId: string): Promise<void> {
 
 export async function setContextToken(accountId: string, userId: string, token: string): Promise<void> {
   contextTokenStore.set(contextTokenKey(accountId, userId), token)
-  await persistContextTokens(accountId)
+  const previous = contextTokenPersistenceTails.get(accountId) ?? Promise.resolve()
+  const pending = previous.then(() => persistContextTokens(accountId))
+  contextTokenPersistenceTails.set(accountId, pending)
+  try {
+    await pending
+  } finally {
+    if (contextTokenPersistenceTails.get(accountId) === pending) contextTokenPersistenceTails.delete(accountId)
+  }
 }
 
 export function getContextToken(accountId: string, userId: string): string | undefined {

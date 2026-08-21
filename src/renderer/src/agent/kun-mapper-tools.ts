@@ -29,6 +29,8 @@ import type {
 } from './types'
 import { normalizeKunRuntimeEvent, type KunEventNormalizerDeps } from './kun-event-normalizer'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
+import { dedupeTimelineTextBlocks } from './timeline-text-blocks'
+import { visualizationFromToolPayload } from './conversation-visualization'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
 import {
@@ -294,6 +296,12 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   if (generatedFiles) meta.generatedFiles = generatedFiles
   const componentPrototype = extractComponentPrototype(item)
   if (componentPrototype) meta.componentPrototype = componentPrototype
+  if (item.toolName === 'show_visualization' && !item.isError) {
+    const visualization = visualizationFromToolPayload(
+      item.kind === 'tool_result' ? item.output : item.arguments
+    )
+    if (visualization) meta.conversationVisualization = visualization
+  }
   const presentationStudioToolId = presentationStudioWriteToolId(item)
   if (presentationStudioToolId) {
     meta.canonicalToolId = presentationStudioToolId
@@ -382,5 +390,5 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
       meta: { ...(existing.meta ?? {}), ...(block.meta ?? {}) }
     }
   }
-  return merged
+  return dedupeTimelineTextBlocks(merged)
 }

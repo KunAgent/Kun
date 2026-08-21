@@ -183,6 +183,38 @@ function providerLines(entry: ProviderQuotaEntry, width: number, nowMs: number):
       Math.max(1, width - 3)
     ).map((line) => `   ${status.tone(line)}`))
   }
+  if (entry.localCost) {
+    lines.push(...localCostLines(entry.localCost, width))
+  }
+  return lines
+}
+
+function localCostLines(
+  localCost: NonNullable<ProviderQuotaEntry['localCost']>,
+  width: number
+): string[] {
+  const lines = [`   ${bold('Local API reference value')}`]
+  for (const [label, window] of [
+    ['Today', localCost.today],
+    ['Last 30 days', localCost.last30Days]
+  ] as const) {
+    const amount = window.amount === null || window.coverage === 'unavailable'
+      ? yellow('price unavailable')
+      : cyan(`$${formatAmount(window.amount)}`)
+    const coverage = window.coverage === 'partial' ? yellow('partial') : ''
+    lines.push(joinVisualSides(
+      `   ${label}`,
+      [amount, coverage].filter(Boolean).join(' · '),
+      width
+    ))
+    lines.push(`     ${dim(
+      `${formatAmount(window.requests)} requests · ${formatAmount(window.totalTokens)} tokens`
+    )}`)
+  }
+  lines.push(...wrapText(
+    'API reference estimate, not an actual subscription charge.',
+    Math.max(1, width - 3)
+  ).map((line) => `   ${dim(line)}`))
   return lines
 }
 

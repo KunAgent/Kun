@@ -30,6 +30,7 @@ const EMPTY_SUBAGENTS: KunSubagentsSettingsV1 = {
   enabled: true,
   useExistingAgents: true,
   maxParallel: 256,
+  proactiveRetry: { enabled: true, maxAttempts: 3 },
   profiles: []
 }
 const PRESET_COLORS = ['#3b82d8', '#1d9e75', '#e8943a', '#7f77dd', '#d4537e', '#d85a30']

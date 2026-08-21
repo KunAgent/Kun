@@ -36,6 +36,30 @@ describe('ToolStormBreaker', () => {
     ).toEqual({ suppress: false })
   })
 
+  it('suppresses repeated semantic Browser Use calls but allows material changes', () => {
+    const breaker = new ToolStormBreaker({ browserDuplicateThreshold: 2 })
+    const open = {
+      toolName: 'browser_use',
+      arguments: { action: 'open', url: 'https://example.com', ref: null }
+    }
+
+    expect(breaker.inspect({ ...open, callId: 'b1' })).toEqual({ suppress: false })
+    expect(breaker.inspect({
+      ...open,
+      callId: 'b2',
+      arguments: { url: 'https://example.com', action: 'open' }
+    })).toEqual({ suppress: false })
+    expect(breaker.inspect({ ...open, callId: 'b3' })).toMatchObject({
+      suppress: true,
+      reason: expect.stringContaining('duplicate browser guard')
+    })
+    expect(breaker.inspect({
+      ...open,
+      callId: 'b4',
+      arguments: { action: 'open', url: 'https://example.org' }
+    })).toEqual({ suppress: false })
+  })
+
   it('never suppresses ordinary tool calls, even with identical arguments', () => {
     const breaker = new ToolStormBreaker()
 

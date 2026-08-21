@@ -75,6 +75,7 @@ import {
   sameChildActivity,
   sameModelRoute
 } from './delegation-runtime-support.js'
+import { hasResumableChildSnapshot } from './delegation-proactive-retry.js'
 
 export class DelegationRuntimeRun extends DelegationRuntimeBase {
   async runChild(input: {
@@ -344,7 +345,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
           ...record,
           status: 'aborted',
           terminationReason: 'manual_stop',
-          resumable: input.fastContext !== true && (input.launcher === 'delegate_task' || input.launcher === 'fast_context'),
+          resumable: hasResumableChildSnapshot(record),
           error: 'child run aborted before detached execution started',
           updatedAt: this.now()
         })

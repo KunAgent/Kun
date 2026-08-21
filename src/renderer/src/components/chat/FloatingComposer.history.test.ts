@@ -102,7 +102,7 @@ const CODEX_PROVIDER_GROUP: ModelProviderModelGroup = {
   }
 }
 
-describe('FloatingComposer input history and shortcut hint', () => {
+describe('FloatingComposer input history and footer hints', () => {
   class MemoryStorage {
     private values = new Map<string, string>()
 
@@ -172,14 +172,66 @@ describe('FloatingComposer input history and shortcut hint', () => {
     }
   }
 
-  it('shows the Shift+Enter newline shortcut in the footer when ready', async () => {
+  it('omits the send shortcut from the footer while keeping newline guidance in the placeholder', async () => {
     const previousLanguage = i18n.language
     await i18n.changeLanguage('en')
     try {
       const html = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps()))
-      expect(html).toContain('Enter to send · Shift+Enter for newline')
+      expect(html).not.toContain('ds-composer-footer-hint')
+      expect(html).not.toContain('Enter to send · Shift+Enter for newline')
       expect(html).toContain('Ask the agent… (Shift+Enter for newline)')
       expect(html.indexOf('ds-chat-composer')).toBeLessThan(html.indexOf('ds-composer-footer'))
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+
+  it('keeps the send shortcut out of the footer as the draft changes', async () => {
+    const previousLanguage = i18n.language
+    await i18n.changeLanguage('en')
+    try {
+      const drafting = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
+        input: 'draft prompt'
+      })))
+      expect(drafting).not.toContain('ds-composer-footer-hint')
+      expect(drafting).not.toContain('Enter to send · Shift+Enter for newline')
+      expect(drafting).toContain('ds-composer-footer')
+
+      const whitespaceOnly = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
+        input: '   '
+      })))
+      expect(whitespaceOnly).not.toContain('Enter to send · Shift+Enter for newline')
+
+      const cleared = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps()))
+      expect(cleared).not.toContain('Enter to send · Shift+Enter for newline')
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+
+  it('omits the reversed send shortcut too', async () => {
+    const previousLanguage = i18n.language
+    await i18n.changeLanguage('en')
+    try {
+      const html = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
+        composerSendKey: 'shiftEnter' as const
+      })))
+      expect(html).not.toContain('ds-composer-footer-hint')
+      expect(html).not.toContain('Shift+Enter to send · Enter for newline')
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+
+  it('keeps high-priority footer hints while input is present', async () => {
+    const previousLanguage = i18n.language
+    await i18n.changeLanguage('en')
+    try {
+      const offline = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
+        input: 'draft prompt',
+        runtimeReady: false
+      })))
+      expect(offline).toContain('ds-composer-footer-hint')
     } finally {
       await i18n.changeLanguage(previousLanguage)
     }
@@ -215,15 +267,16 @@ describe('FloatingComposer input history and shortcut hint', () => {
     expect(lockedDesign).toContain('data-task-surface="design"')
   })
 
-  it('renders the persona picker when a legacy preset has no icon field', () => {
+  it('moves the persona picker out of the composer toolbar', () => {
     const html = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
       composerPersonaId: 'doubter',
       codeAgentPresets: [{ id: 'doubter' }],
       onComposerPersonaChange: () => undefined
     })))
 
-    expect(html).toContain('data-composer-persona="doubter"')
-    expect(html).toContain('lucide-search-check')
+    expect(html).not.toContain('data-composer-persona="doubter"')
+    expect(html).not.toContain('ds-composer-persona-control')
+    expect(html).toContain('ds-composer-menu-button')
   })
 
   it('restores previous sent text with ArrowUp when the caret is on the first line', async () => {

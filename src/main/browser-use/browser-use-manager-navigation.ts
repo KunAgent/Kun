@@ -21,6 +21,7 @@ import { BrowserUseManagerFoundation } from './browser-use-manager-foundation'
 import {
   BACKGROUND_VIEW_BOUNDS,
   BrowserUseOperationAbortedError,
+  browserUseErrorCode,
   INTERACTIVE_ROLES,
   DOCUMENT_INVALIDATION_EVENTS,
   attributesRecord,
@@ -38,6 +39,7 @@ import {
   roundRect,
   safeOrigin,
   sanitizePageTitle,
+  withBrowserUseDeadline,
   type AxNode,
   type BrowserSessionEntry,
   type BrowserTab,
@@ -109,6 +111,9 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
     }
     const previousActive = this.activeTab(entry)
     const previousLifecycle = entry.lifecycle
+    entry.lifecycle = 'loading'
+    entry.reason = undefined
+    this.publish(entry)
     let openedTab: BrowserTab | undefined
     try {
       await this.ensureProxy(entry, signal)
@@ -118,10 +123,29 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
       const tab = await this.ensureTab(entry, newTab, signal)
       openedTab = tab
       this.assertOperationActive(entry, signal, tab)
+      await withBrowserUseDeadline(
+        tab.view.webContents.loadURL(rawUrl),
+        signal,
+        this.timeouts.navigationMs,
+        'navigation_timeout',
+        'The authorized page did not finish loading in time.',
+        () => tab.view.webContents.stop()
+      )
+      this.assertOperationActive(entry, signal, tab)
+      if (tab.error) throw new Error(tab.error)
       entry.lifecycle = 'loading'
       this.publish(entry)
-      await tab.view.webContents.loadURL(rawUrl)
+      await this.warmStructuredObservation(entry, tab, signal)
       this.assertOperationActive(entry, signal, tab)
+      entry.lifecycle = 'ready'
+      entry.reason = undefined
+      this.audit(entry, {
+        category: 'execution',
+        action: 'open',
+        origin,
+        sanitizedPath: pathOnly(rawUrl),
+        outcome: 'success'
+      }, tab.id)
       return resultOk('opened', `Opened ${sanitizeBrowserUseUrl(rawUrl)}.`, entry)
     } catch (error) {
       if (
@@ -131,22 +155,31 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
       ) {
         return resultError('aborted', 'Browser Use navigation was cancelled.', entry)
       }
+      const code = browserUseErrorCode(error, 'navigation_failed')
       const restoredPreviousTab = newTab && previousActive && this.activeTab(entry) === previousActive
       entry.lifecycle = restoredPreviousTab ? previousLifecycle : 'error'
-      if (openedTab) openedTab.error = errorMessage(error).slice(0, 1024)
+      const reason = errorMessage(error).slice(0, 512) || 'The authorized page failed to load.'
+      entry.reason = restoredPreviousTab ? undefined : reason
+      if (openedTab) openedTab.error = reason
       this.audit(entry, {
         category: 'execution',
         action: 'open',
         origin,
         sanitizedPath: pathOnly(rawUrl),
         outcome: 'error',
-        errorCode: 'navigation_failed'
+        errorCode: code
       })
       this.publish(entry)
-      return resultError('navigation_failed', 'The authorized page failed to load.', entry)
+      const detail = reason
+      return resultError(
+        code,
+        detail
+          ? `The authorized page failed to load: ${detail}`
+          : 'The authorized page failed to load.',
+        entry
+      )
     }
   }
-
   protected async ensureProxy(
     entry: BrowserSessionEntry,
     signal: AbortSignal
@@ -209,7 +242,13 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
     let inserted = false
     const previousActiveId = entry.activeTabId
     try {
-      await view.webContents.session.setProxy(browserUseProxyConfiguration(entry.proxyUrl))
+      await withBrowserUseDeadline(
+        view.webContents.session.setProxy(browserUseProxyConfiguration(entry.proxyUrl)),
+        signal,
+        this.timeouts.proxyConfigurationMs,
+        'proxy_configuration_timeout',
+        'Browser Use policy proxy configuration timed out.'
+      )
       this.assertOperationActive(entry, signal)
       hardenRemoteSession(view.webContents.session)
       view.webContents.session.webRequest.onBeforeRequest(
@@ -227,7 +266,7 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
           }
         }
       )
-      await this.hardenTab(entry, tab, signal)
+      this.hardenTab(entry, tab, signal)
       this.assertOperationActive(entry, signal)
 
       const previous = this.activeTab(entry)
@@ -253,11 +292,11 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
     }
   }
 
-  protected async hardenTab(
+  protected hardenTab(
     entry: BrowserSessionEntry,
     tab: BrowserTab,
     signal: AbortSignal
-  ): Promise<void> {
+  ): void {
     const guest = tab.view.webContents
     const ownsTab = () => entry.tabs.get(tab.id) === tab && !entry.stopping
     guest.setAudioMuted(true)
@@ -316,13 +355,17 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
       if (!ownsTab()) return
       tab.loading = true
       tab.error = undefined
+      entry.reason = undefined
       if (!entry.stopping) entry.lifecycle = 'loading'
       this.publish(entry)
     })
     guest.on('did-stop-loading', () => {
       if (!ownsTab()) return
       tab.loading = false
-      if (!entry.stopping) entry.lifecycle = 'ready'
+      if (!entry.stopping) {
+        entry.lifecycle = tab.error ? 'error' : 'ready'
+        entry.reason = tab.error
+      }
       this.publish(entry)
     })
     guest.on('did-navigate', () => {
@@ -338,12 +381,14 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
       if (!ownsTab() || !isMainFrame || errorCode === -3) return
       tab.loading = false
       tab.error = errorDescription.slice(0, 1024)
+      entry.reason = tab.error
       entry.lifecycle = 'error'
       this.publish(entry)
     })
     guest.on('render-process-gone', () => {
       if (!ownsTab()) return
       tab.error = 'Browser page process exited.'
+      entry.reason = tab.error
       entry.lifecycle = 'error'
       this.cancelActiveOperations(entry)
       this.invalidateDocument(entry, 'render-process-gone')
@@ -362,10 +407,6 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
     try {
       guest.debugger.attach('1.3')
       this.assertOperationActive(entry, signal)
-      await guest.debugger.sendCommand('DOM.enable')
-      this.assertOperationActive(entry, signal)
-      await guest.debugger.sendCommand('Accessibility.enable')
-      this.assertOperationActive(entry, signal)
       guest.debugger.on('message', (_event, method) => {
         if (ownsTab() && DOCUMENT_INVALIDATION_EVENTS.has(method)) {
           this.invalidateDocument(entry, 'document-updated')
@@ -376,7 +417,30 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
       throw new Error('Structured browser observation is unavailable.', { cause: error })
     }
   }
-
+  protected async warmStructuredObservation(
+    entry: BrowserSessionEntry,
+    tab: BrowserTab,
+    signal: AbortSignal
+  ): Promise<void> {
+    try {
+      await withBrowserUseDeadline(
+        tab.view.webContents.debugger.sendCommand('DOM.enable'), signal,
+        this.timeouts.structuredObservationMs, 'structured_observation_timeout',
+        'Structured browser observation initialization timed out.'
+      )
+      this.assertOperationActive(entry, signal, tab)
+      await withBrowserUseDeadline(
+        tab.view.webContents.debugger.sendCommand('Accessibility.enable'), signal,
+        this.timeouts.structuredObservationMs, 'structured_observation_timeout',
+        'Structured browser observation initialization timed out.'
+      )
+      this.assertOperationActive(entry, signal, tab)
+    } catch (error) {
+      if (error instanceof BrowserUseOperationAbortedError) throw error
+      if (browserUseErrorCode(error, '') === 'structured_observation_timeout') throw error
+      throw new Error('Structured browser observation is unavailable.', { cause: error })
+    }
+  }
   protected async highlightedPreview(
     entry: BrowserSessionEntry,
     tab: BrowserTab,

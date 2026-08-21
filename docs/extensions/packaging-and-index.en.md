@@ -162,7 +162,7 @@ Kun retains at least the immediately previous selected version until explicit re
 
 ## Product-bundled default packages
 
-Kun desktop ships `kun-examples.presentation-studio` and `kun-examples.social-media-sidebar` by default. `kun-examples.kun-video-editor` remains a source-only Extension API v1.2 example: it is excluded from the default catalog, product builds, Release packaging, and first-launch seeding.
+Kun desktop ships only `kun-examples.social-media-sidebar` by default. `kun-examples.presentation-studio` and `kun-examples.kun-video-editor` remain source examples: they are excluded from the default catalog, product builds, Release packaging, and first-launch seeding. The catalog marks both IDs as retired so product-seeded installs are removed while user-managed installs remain untouched.
 
 The product build runs the normal validate/pack CLI and places the resulting deterministic `.kunx` beside `bundled-extensions/catalog.json`. The catalog pins ID, version, archive name, SHA-256, engine range, API version, and exact permissions. On a fresh profile, `kun serve` verifies that catalog and calls the same `ExtensionPackageManager.installArchive` transaction used for local side-loading. It does not copy an extracted tree into the registry or bypass compatibility, integrity, migration, permission, or activation checks.
 

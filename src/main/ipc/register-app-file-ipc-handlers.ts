@@ -80,6 +80,7 @@ import type {
   WorkspaceFileWatchMode,
   WorkspaceFileWatchPayload
 } from '../../shared/workspace-file'
+import { registerWorkspaceSpreadsheetIpcHandlers } from './register-workspace-spreadsheet-ipc-handlers'
 
 const extensionArtifactActionSchema = z.strictObject({
   artifactId: z.string().min(16).max(512).regex(/^[A-Za-z0-9_-]+$/),
@@ -142,9 +143,9 @@ async function readWorkspaceFileSignal(
     }
   }
 }
-
 export function registerAppFileIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const { getMainWindow, runtimeRequest, logError } = options
+  registerWorkspaceSpreadsheetIpcHandlers({ getMainWindow, logError, logInfo: options.logInfo })
   const workspaceFileWatchers = new Map<string, WorkspaceFileWatchRecord>()
   const workspaceFileWatchSenders = new Map<number, WorkspaceFileWatchSenderRecord>()
   const releaseWorkspaceFileWatchSender = (sender: WebContents): void => {

@@ -265,7 +265,7 @@ describe('app-ipc-schemas workspace and system', () => {
       workspaceRoot: '/tmp/workspace',
       dataBase64: 'aW1hZ2U=',
       mimeType: 'image/png',
-      imageDirectory: '.deepseekgui-images',
+      imageDirectory: '.kun/images',
       fileName: 'architecture-a1b2c3.png'
     })).toMatchObject({
       fileName: 'architecture-a1b2c3.png'

@@ -43,8 +43,14 @@ export type ModelUsageQuery = {
   timezone: string
 }
 
+export type TurnUsageQuery = {
+  groupBy: 'turn'
+  threadId: string
+}
+
 export type ThreadUsageRecord = {
   threadId: string
+  turnId?: string
   model?: string
   completedAt: string
   usage: UsageSnapshot
@@ -72,10 +78,16 @@ export type UsageCountersTarget = Pick<
   | 'output_tokens'
   | 'reasoning_tokens'
   | 'cached_tokens'
+  | 'cache_write_tokens'
   | 'cache_miss_tokens'
   | 'total_tokens'
   | 'cost_usd'
   | 'cost_cny'
+  | 'value_estimate_usd'
+  | 'value_estimate_cny'
+  | 'value_estimate_priced_requests'
+  | 'value_estimate_unpriced_requests'
+  | 'value_estimate_coverage'
   | 'cache_savings_usd'
   | 'cache_savings_cny'
   | 'token_economy_savings_tokens'
@@ -83,6 +95,17 @@ export type UsageCountersTarget = Pick<
   | 'token_economy_savings_cny'
   | 'turns'
 >
+
+export function parseTurnUsageQuery(input: Record<string, unknown>): TurnUsageQuery {
+  const groupBy = stringParam(input, 'group_by') ?? 'runtime'
+  if (groupBy !== 'turn') {
+    throw new UsageValidationError(`unsupported usage grouping: ${groupBy}`)
+  }
+  const threadId = stringParam(input, 'thread_id')
+  if (!threadId) throw new UsageValidationError('turn usage requires thread_id')
+  if (threadId.length > 512) throw new UsageValidationError('thread_id is too long')
+  return { groupBy: 'turn', threadId }
+}
 
 export function defaultTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'

@@ -7,6 +7,8 @@ import { applyImageAnnotationResult } from '../../../design/canvas/image-annotat
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 import { DesignImageAnnotationOverlay } from './DesignImageAnnotationOverlay'
 import type { ImageAnnotationResult } from './ImageAnnotationEditor'
+import type { SendDesignPromptOptions } from '../useDesignPromptController'
+import { useChatStore } from '../../../store/chat-store'
 
 export type WorkbenchImageAnnotationOverlayProps = {
   route: string
@@ -20,7 +22,7 @@ export type WorkbenchImageAnnotationOverlayProps = {
   sendCodeCanvasPrompt: (value: string, options?: { displayText?: string }) => Promise<void>
   sendDesignPrompt: (
     value: string,
-    options?: { displayText?: string }
+    options?: SendDesignPromptOptions
   ) => void
 }
 
@@ -46,6 +48,7 @@ export function WorkbenchImageAnnotationOverlay({
       result,
       shapeId: useImageAnnotationStore.getState().editingShapeId,
       currentDocumentKey: useCanvasShapeStore.getState().documentKey,
+      initiatingThreadId: useChatStore.getState().activeThreadId,
       route,
       activeCodeCanvasWorkspace,
       designWorkspaceRoot: useDesignWorkspaceStore.getState().workspaceRoot || fallbackWorkspaceRoot,

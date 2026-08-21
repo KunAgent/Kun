@@ -1,4 +1,5 @@
 import { ImageGenHttpError, describeNetworkError } from './image-gen-tool-provider.js'
+import { createProxyFetch } from '../model/proxy-fetch.js'
 
 const AUDIO_FORMATS = new Set(['mp3', 'wav', 'flac', 'pcm', 'pcm16'])
 const GROK_VIDEO_RESOLUTIONS = ['480P', '720P'] as const
@@ -10,12 +11,18 @@ export type MiniMaxBaseResponse = {
   status_msg?: string
 }
 
+/** Shared media fetch honoring the provider-level model proxy when set. */
+export function createMediaFetch(proxyUrl: string | undefined): typeof fetch {
+  return createProxyFetch(proxyUrl ?? '') ?? fetch
+}
+
 export async function requestJson<T>(
   url: string,
   init: RequestInit,
-  request: { timeoutMs: number; signal: AbortSignal }
+  request: { timeoutMs: number; signal: AbortSignal },
+  fetchImpl: typeof fetch = fetch
 ): Promise<T> {
-  const response = await requestResponse(url, init, request)
+  const response = await requestResponse(url, init, request, fetchImpl)
   const text = await response.text()
   if (!response.ok) throw new ImageGenHttpError(response.status, text)
   try {
@@ -28,10 +35,11 @@ export async function requestJson<T>(
 export async function requestResponse(
   url: string,
   init: RequestInit,
-  request: { timeoutMs: number; signal: AbortSignal }
+  request: { timeoutMs: number; signal: AbortSignal },
+  fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
   try {
-    return await fetch(url, init)
+    return await fetchImpl(url, init)
   } catch (error) {
     throw mediaFetchFailure(url, error, request)
   }

@@ -7,6 +7,7 @@ import {
   loadThreadUsage,
   primaryCacheHitRate,
   retainPendingThreadUsage,
+  summarizeThreadMoney,
   useThreadUsageState,
   type ThreadUsageState,
   type ThreadUsageSummary
@@ -31,6 +32,8 @@ function usageSummary(overrides: Partial<ThreadUsageSummary> = {}): ThreadUsageS
     totalTokens: 120,
     costUsd: null,
     costCny: null,
+    valueEstimateUsd: null,
+    valueEstimateCny: null,
     tokenEconomySavingsTokens: 0,
     turns: 1,
     avgTtftMs: null,
@@ -109,8 +112,44 @@ describe('thread usage formatting', () => {
     expect(formatCost(0.125, 'zh-CN', 0.88)).toBe('￥0.8800')
     expect(formatCost(0.125, 'en')).toBe('$0.1250')
     expect(formatCost(null, 'zh-CN', null)).toBe('-')
-    expect(formatCost(null, 'en', 0.88)).toBe('￥0.8800')
+    expect(formatCost(null, 'en', 0.88)).toBe('$0.1222')
+    expect(formatCost(null, 'ja', 0.88)).toBe('$0.1222')
+    expect(formatCost(0.125, 'zh-CN')).toBe('￥0.9000')
     expect(formatCost(0.00000001, 'en')).toBe('$<0.0001')
+  })
+
+  it('keeps actual API cost and subscription value estimates separate', () => {
+    expect(summarizeThreadMoney({
+      costUsd: 0.125, costCny: null, valueEstimateUsd: 0.5, valueEstimateCny: null, locale: 'en'
+    })).toEqual([
+      { kind: 'actual', value: '$0.1250' },
+      { kind: 'estimate', value: '$0.5000', coverage: 'complete' }
+    ])
+    expect(summarizeThreadMoney({
+      costUsd: 0.125, costCny: null, valueEstimateUsd: 0.5, valueEstimateCny: null, locale: 'zh'
+    })).toEqual([
+      { kind: 'actual', value: '￥0.9000' },
+      { kind: 'estimate', value: '￥3.60', coverage: 'complete' }
+    ])
+  })
+
+  it('preserves trusted zero and partial reference estimate semantics', () => {
+    expect(summarizeThreadMoney({
+      costUsd: null,
+      costCny: null,
+      valueEstimateUsd: 0,
+      valueEstimateCny: 0,
+      valueEstimateCoverage: 'complete',
+      locale: 'en'
+    })).toEqual([{ kind: 'estimate', value: '$0.0000', coverage: 'complete' }])
+    expect(summarizeThreadMoney({
+      costUsd: null,
+      costCny: null,
+      valueEstimateUsd: 0.25,
+      valueEstimateCny: 1.8,
+      valueEstimateCoverage: 'partial',
+      locale: 'zh'
+    })).toEqual([{ kind: 'estimate', value: '￥1.80', coverage: 'partial' }])
   })
 
   it('prefers the latest LLM cache result, including zero, then falls back to cumulative usage', () => {
@@ -224,6 +263,36 @@ describe('thread usage formatting', () => {
     expect(usage).toMatchObject({
       costUsd: null,
       costCny: 0.06909
+    })
+  })
+
+  it('loads aggregate estimate coverage without collapsing a known zero to null', async () => {
+    const runtimeRequest = vi.fn<RuntimeRequest>(async () => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        buckets: [{
+          thread_id: 'thr_zero_estimate',
+          input_tokens: 100,
+          output_tokens: 20,
+          total_tokens: 120,
+          value_estimate_usd: 0,
+          value_estimate_cny: 0,
+          value_estimate_coverage: 'complete',
+          value_estimate_priced_requests: 1,
+          value_estimate_unpriced_requests: 0,
+          turns: 1
+        }]
+      })
+    }))
+    setRuntimeRequest(runtimeRequest)
+
+    await expect(loadThreadUsage('thr_zero_estimate')).resolves.toMatchObject({
+      valueEstimateUsd: 0,
+      valueEstimateCny: 0,
+      valueEstimateCoverage: 'complete',
+      valueEstimatePricedRequests: 1,
+      valueEstimateUnpricedRequests: 0
     })
   })
 

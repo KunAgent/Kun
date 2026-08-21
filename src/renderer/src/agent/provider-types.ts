@@ -295,6 +295,12 @@ export interface AgentProvider {
   archiveThread?(threadId: string, archived: boolean): Promise<void>
   deleteThread(threadId: string): Promise<void>
   compactThread?(threadId: string, reason?: string): Promise<{ replacedTokens: number } | void>
+  archiveThreadHistory?(threadId: string, cutoffTurnId: string): Promise<{
+    replacedTokens: number
+    archivedItems: number
+    retainedItems: number
+    archivePath: string
+  }>
   getThreadGoal?(threadId: string): Promise<ThreadGoal | null>
   setThreadGoal?(
     threadId: string,

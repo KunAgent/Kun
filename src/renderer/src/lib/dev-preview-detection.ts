@@ -18,6 +18,11 @@ const NON_PREVIEW_CONTEXT_RE =
 
 type DevPreviewExtractionMode = 'card' | 'auto_open'
 
+export type DevPreviewAutoOpenSignal = {
+  turnId: string
+  url: string
+}
+
 function textFromBlock(block: ChatBlock): string {
   if (block.kind === 'tool') {
     let meta = ''
@@ -152,28 +157,34 @@ export function extractAutoOpenDevPreviewUrls(blocks: ChatBlock[]): string[] {
   return collectDetectedDevPreviewUrls(blocks, 'auto_open')
 }
 
-export function extractLatestTurnDevPreviewUrls(blocks: ChatBlock[]): string[] {
-  let latestUserIndex = -1
-  for (let i = blocks.length - 1; i >= 0; i -= 1) {
-    if (blocks[i]?.kind === 'user') {
-      latestUserIndex = i
-      break
-    }
+function latestUserBlockIndex(blocks: ChatBlock[]): number {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    if (blocks[index]?.kind === 'user') return index
   }
+  return -1
+}
+
+export function extractLatestTurnDevPreviewUrls(blocks: ChatBlock[]): string[] {
+  const latestUserIndex = latestUserBlockIndex(blocks)
   if (latestUserIndex === -1) return []
   return extractDetectedDevPreviewUrls(blocks.slice(latestUserIndex + 1))
 }
 
 export function extractLatestTurnAutoOpenDevPreviewUrls(blocks: ChatBlock[]): string[] {
-  let latestUserIndex = -1
-  for (let i = blocks.length - 1; i >= 0; i -= 1) {
-    if (blocks[i]?.kind === 'user') {
-      latestUserIndex = i
-      break
-    }
-  }
+  const latestUserIndex = latestUserBlockIndex(blocks)
   if (latestUserIndex === -1) return []
   return extractAutoOpenDevPreviewUrls(blocks.slice(latestUserIndex + 1))
+}
+
+export function extractLatestTurnAutoOpenDevPreviewSignal(
+  blocks: ChatBlock[]
+): DevPreviewAutoOpenSignal | null {
+  const latestUserIndex = latestUserBlockIndex(blocks)
+  if (latestUserIndex === -1) return null
+  const userBlock = blocks[latestUserIndex]
+  const url = extractAutoOpenDevPreviewUrls(blocks.slice(latestUserIndex + 1))[0]
+  if (!userBlock || !url) return null
+  return { turnId: userBlock.id, url }
 }
 
 export function formatDevPreviewUrlLabel(url: string): string {

@@ -30,7 +30,7 @@ function anchorRect(range: Range): WorkspaceOfficeSelection['anchorRect'] {
 }
 
 export function emptyWorkspaceOfficeSelection(
-  sourceKind: 'word' | 'presentation',
+  sourceKind: 'word' | 'presentation' | 'spreadsheet',
   sourceFormat: OfficeDocumentPreviewFormat
 ): WorkspaceOfficeSelection {
   return { sourceKind, sourceFormat, text: '', charCount: 0 }

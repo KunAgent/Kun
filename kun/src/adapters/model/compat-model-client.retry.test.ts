@@ -330,12 +330,22 @@ describe('CompatModelClient interrupted stream retry', () => {
     expect(chunks.some((chunk) => chunk.kind === 'error')).toBe(false)
   })
 
-  it('does not replay a terminated stream after final assistant text has started', async () => {
+  it('retries a terminated stream after final text and emits only the unseen suffix', async () => {
     let calls = 0
     const fetchImpl = (async () => {
       calls += 1
-      return interruptedSse(
-        'data: {"type":"response.output_text.delta","delta":"partial"}\n\n'
+      if (calls === 1) {
+        return interruptedSse(
+          'data: {"type":"response.output_text.delta","delta":"partial"}\n\n'
+        )
+      }
+      return new Response(
+        [
+          'data: {"type":"response.output_text.delta","delta":"partial"}\n\n',
+          'data: {"type":"response.output_text.delta","delta":" done"}\n\n',
+          'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
+        ].join(''),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
       )
     }) as unknown as typeof fetch
     const streamClient = new CompatModelClient({
@@ -349,15 +359,96 @@ describe('CompatModelClient interrupted stream retry', () => {
 
     const chunks = await drain(streamClient.stream({ ...request(), model: 'gpt-5.6-sol' }))
 
-    expect(calls).toBe(1)
-    expect(chunks).toContainEqual({ kind: 'assistant_text_delta', text: 'partial' })
-    const lastError = chunks.at(-1)
-    expect(lastError).toMatchObject({
-      kind: 'error',
-      code: 'stream_read_error',
-      failure: { category: 'network', failoverAllowed: true }
+    expect(calls).toBe(2)
+    expect(chunks.filter((chunk) => chunk.kind === 'assistant_text_delta')).toEqual([
+      { kind: 'assistant_text_delta', text: 'partial' },
+      { kind: 'assistant_text_delta', text: ' done' }
+    ])
+    expect(chunks).toContainEqual(expect.objectContaining({
+      kind: 'retrying',
+      attempt: 1,
+      maxAttempts: 3,
+      reason: 'stream_transport'
+    }))
+    expect(chunks.at(-1)).toEqual({ kind: 'completed', stopReason: 'stop' })
+    expect(chunks.some((chunk) => chunk.kind === 'error')).toBe(false)
+  })
+
+  it('uses another configured retry when a replay diverges from visible text', async () => {
+    let calls = 0
+    const fetchImpl = (async () => {
+      calls += 1
+      if (calls === 1) {
+        return interruptedSse(
+          'data: {"type":"response.output_text.delta","delta":"partial"}\n\n'
+        )
+      }
+      if (calls === 2) {
+        return interruptedSse(
+          'data: {"type":"response.output_text.delta","delta":"different"}\n\n'
+        )
+      }
+      return new Response(
+        [
+          'data: {"type":"response.output_text.delta","delta":"partial recovery"}\n\n',
+          'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
+        ].join(''),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+    }) as unknown as typeof fetch
+    const streamClient = new CompatModelClient({
+      baseUrl: 'https://provider.example/v1/responses',
+      apiKey: 'sk-test',
+      model: 'gpt-5.6-sol',
+      endpointFormat: 'responses',
+      retry: { maxAttempts: 2, initialDelayMs: 0, httpStatusCodes: [429, 503] },
+      fetchImpl
     })
-    expect(lastError?.kind === 'error' ? lastError.message : '').toContain('blocked')
+
+    const chunks = await drain(streamClient.stream({ ...request(), model: 'gpt-5.6-sol' }))
+
+    expect(calls).toBe(3)
+    expect(chunks.filter((chunk) => chunk.kind === 'retrying')).toHaveLength(2)
+    expect(chunks.filter((chunk) => chunk.kind === 'assistant_text_delta')).toEqual([
+      { kind: 'assistant_text_delta', text: 'partial' },
+      { kind: 'assistant_text_delta', text: ' recovery' }
+    ])
+    expect(chunks.at(-1)).toEqual({ kind: 'completed', stopReason: 'stop' })
+  })
+
+  it('defers a tool call until a retried stream completes and emits it once', async () => {
+    let calls = 0
+    const fetchImpl = (async () => {
+      calls += 1
+      const toolCall =
+        'data: {"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","call_id":"call_1","name":"edit","arguments":"{\\"path\\":\\"a.txt\\"}"}}\n\n'
+      if (calls === 1) return interruptedSse(toolCall)
+      return new Response(
+        toolCall +
+          'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+    }) as unknown as typeof fetch
+    const streamClient = new CompatModelClient({
+      baseUrl: 'https://provider.example/v1/responses',
+      apiKey: 'sk-test',
+      model: 'gpt-5.6-sol',
+      endpointFormat: 'responses',
+      retry: { maxAttempts: 3, initialDelayMs: 0, httpStatusCodes: [429, 503] },
+      fetchImpl
+    })
+
+    const chunks = await drain(streamClient.stream({ ...request(), model: 'gpt-5.6-sol' }))
+
+    expect(calls).toBe(2)
+    expect(chunks.filter((chunk) => chunk.kind === 'tool_call_complete')).toEqual([{
+      kind: 'tool_call_complete',
+      callId: 'call_1',
+      toolName: 'edit',
+      arguments: { path: 'a.txt' }
+    }])
+    expect(chunks.filter((chunk) => chunk.kind === 'retrying')).toHaveLength(1)
+    expect(chunks.at(-1)).toEqual({ kind: 'completed', stopReason: 'tool_calls' })
   })
 
   it('retries a reasoning-only terminated stream five times and then exhausts the budget', async () => {

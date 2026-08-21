@@ -91,8 +91,14 @@ export type SubmitDesignTurnOptions = SubmitDesignTurnDeps & {
   htmlElementContext?: DesignHtmlElementContext | null
   explicitScreenShapeId?: string | null
   explicitSvgArtifactId?: string | null
+  imageEditReferencePath?: string
   clearAutoRepairScope?: (scopeKey: string) => void
   designTaskProfileForTarget?: (target: DesignDocumentTarget) => DesignTaskProfileInput
+  /**
+   * When a locked task cannot rebuild an identity profile, omit both
+   * designProfile and designDocumentTarget so admission reuses the lock.
+   */
+  omitDesignProfileWhenUnavailable?: boolean
   /**
    * Board pinned by a locked task target. When present the board is resolved by
    * id and a missing board is reported instead of re-selecting the most
@@ -171,6 +177,7 @@ export async function submitDesignTurn(
     boardArtifactId: boardArtifact.id
   }
   const designProfile = options.designTaskProfileForTarget?.(designDocumentTarget)
+  const omitLockedProfile = Boolean(options.omitDesignProfileWhenUnavailable && !designProfile)
   const turnDesignContext = designProfile
     ? designContextFromTaskProfile(designProfile)
     : latestDesignState.designContext
@@ -278,7 +285,10 @@ export async function submitDesignTurn(
       ...(resolvedTarget.canvasSnapshot ? { canvasSnapshot: resolvedTarget.canvasSnapshot } : {}),
       ...(resolvedTarget.htmlFrameContext ? { frameContext: resolvedTarget.htmlFrameContext } : {}),
       ...(resolvedTarget.selectedFrame ? { selectedFrame: resolvedTarget.selectedFrame } : {}),
-      ...(resolvedTarget.target === 'canvas' ? { previousOpErrors: takeCanvasErrors(canvasErrorKey) } : {})
+      ...(resolvedTarget.target === 'canvas' ? { previousOpErrors: takeCanvasErrors(canvasErrorKey) } : {}),
+      ...(options.imageEditReferencePath
+        ? { imageEditReferencePath: options.imageEditReferencePath }
+        : {})
     })
   } catch (error) {
     return failAfterResolve(error instanceof Error ? error.message : String(error))
@@ -302,7 +312,7 @@ export async function submitDesignTurn(
         ...(options.serviceTier ? { serviceTier: options.serviceTier } : {}),
         ...(options.expectedThreadId ? { expectedThreadId: options.expectedThreadId } : {}),
         target: resolvedTarget.target,
-        ...(designProfile ? { designProfile, designDocumentTarget } : {}),
+        ...(!omitLockedProfile && designProfile ? { designProfile, designDocumentTarget } : {}),
         ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
         ...(options.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
         attachmentIds: options.attachmentIds ?? [],

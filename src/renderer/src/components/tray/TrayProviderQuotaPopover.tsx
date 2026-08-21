@@ -28,6 +28,8 @@ import type {
   ProviderQuotaStatus
 } from '@shared/provider-quota'
 import type { KunTrayProviderQuotaApi } from '@shared/tray-provider-quota'
+import { ProviderIcon } from '../provider-icon'
+import { ProviderLocalCostSummaryView } from '../provider-local-cost-summary'
 
 type Selection = 'overview' | string
 
@@ -167,7 +169,13 @@ export function TrayProviderQuotaPopover({
               title={entry.providerName}
               status={entry.status}
               onClick={() => setSelection(entry.providerId)}
-              icon={<span aria-hidden="true">{providerMonogram(entry.providerName)}</span>}
+              icon={(
+                <ProviderIcon
+                  presetId={entry.presetId}
+                  providerId={entry.providerId}
+                  size={15}
+                />
+              )}
             />
           ))}
         </div>
@@ -176,7 +184,13 @@ export function TrayProviderQuotaPopover({
       <header className="tray-quota-header">
         <div className="tray-quota-heading-icon">
           {selectedEntry
-            ? <span>{providerMonogram(selectedEntry.providerName)}</span>
+            ? (
+                <ProviderIcon
+                  presetId={selectedEntry.presetId}
+                  providerId={selectedEntry.providerId}
+                  size={18}
+                />
+              )
             : <Gauge aria-hidden="true" />}
         </div>
         <div className="tray-quota-heading-copy">
@@ -329,11 +343,16 @@ function QuotaOverview({
             type="button"
             className="tray-quota-provider-card"
             key={entry.providerId}
+            aria-label={`${entry.providerName}: ${t(STATUS_LABEL_KEYS[entry.status])}`}
             onClick={() => onSelect(entry.providerId)}
           >
             <div className="tray-quota-provider-card-title">
               <span className="tray-provider-card-monogram">
-                {providerMonogram(entry.providerName)}
+                <ProviderIcon
+                  presetId={entry.presetId}
+                  providerId={entry.providerId}
+                  size={16}
+                />
               </span>
               <span>
                 <strong>{entry.providerName}</strong>
@@ -358,6 +377,13 @@ function QuotaOverview({
                     : t(STATUS_LABEL_KEYS[entry.status]))}
               </p>
             )}
+            {entry.localCost ? (
+              <ProviderLocalCostSummaryView
+                summary={entry.localCost}
+                locale={locale}
+                variant="tray-overview"
+              />
+            ) : null}
           </button>
         )
       })}
@@ -378,26 +404,35 @@ function ProviderQuotaDetails({
   if (entry.status !== 'available') {
     const StatusIcon = STATUS_ICONS[entry.status]
     return (
-      <div className={`tray-quota-state tray-quota-state-${entry.status}`}>
-        <StatusIcon aria-hidden="true" />
-        <strong>{t(STATUS_LABEL_KEYS[entry.status])}</strong>
-        <p>
-          {entry.message ||
-            (entry.status === 'unsupported'
-              ? t('providerQuotaUnsupportedHint')
-              : entry.status === 'missing_credentials'
-                ? t('providerQuotaMissingCredentialsHint')
-                : t('providerQuotaLoadFailed'))}
-        </p>
-        {entry.dashboardUrl ? (
-          <button
-            type="button"
-            className="tray-quota-dashboard-button"
-            onClick={() => onOpenDashboard(entry.dashboardUrl!)}
-          >
-            <ExternalLink aria-hidden="true" />
-            {t('providerQuotaOpenDashboard', { provider: entry.providerName })}
-          </button>
+      <div className="tray-quota-details">
+        <div className={`tray-quota-state tray-quota-state-${entry.status} ${entry.localCost ? 'has-local-cost' : ''}`}>
+          <StatusIcon aria-hidden="true" />
+          <strong>{t(STATUS_LABEL_KEYS[entry.status])}</strong>
+          <p>
+            {entry.message ||
+              (entry.status === 'unsupported'
+                ? t('providerQuotaUnsupportedHint')
+                : entry.status === 'missing_credentials'
+                  ? t('providerQuotaMissingCredentialsHint')
+                  : t('providerQuotaLoadFailed'))}
+          </p>
+          {entry.dashboardUrl ? (
+            <button
+              type="button"
+              className="tray-quota-dashboard-button"
+              onClick={() => onOpenDashboard(entry.dashboardUrl!)}
+            >
+              <ExternalLink aria-hidden="true" />
+              {t('providerQuotaOpenDashboard', { provider: entry.providerName })}
+            </button>
+          ) : null}
+        </div>
+        {entry.localCost ? (
+          <ProviderLocalCostSummaryView
+            summary={entry.localCost}
+            locale={locale}
+            variant="tray"
+          />
         ) : null}
       </div>
     )
@@ -415,6 +450,13 @@ function ProviderQuotaDetails({
           <p>{t('providerQuotaNoMetrics')}</p>
         </div>
       )}
+      {entry.localCost ? (
+        <ProviderLocalCostSummaryView
+          summary={entry.localCost}
+          locale={locale}
+          variant="tray"
+        />
+      ) : null}
       <div className="tray-quota-source">
         <span>
           {entry.source || t('providerQuotaUnsupportedSource')}
@@ -527,13 +569,6 @@ function formatQuotaDate(value: string, locale?: string): string {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(date)
-}
-
-function providerMonogram(name: string): string {
-  const value = name.trim()
-  if (!value) return 'K'
-  const latin = value.match(/[A-Za-z0-9]/)?.[0]
-  return (latin || value[0]).toUpperCase()
 }
 
 function shortProviderName(name: string): string {

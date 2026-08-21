@@ -109,7 +109,12 @@ export const GEMINI_SUBSCRIPTION_MODEL_IDS = [
 // Concrete model ids accepted by the official Gemini CLI Code Assist API
 // path. Keep this catalog independent from Antigravity's `agy models` output:
 // the two transports can expose different releases to the same Google account.
+// The catalog is a bootstrap, not the source of truth: users can add newer
+// releases (e.g. a future `gemini-3.7-*`) via the model editor and the sync
+// flow preserves those ids instead of truncating them back to this list.
 export const GEMINI_CLI_SUBSCRIPTION_MODEL_IDS = [
+  'gemini-3.7-pro-preview',
+  'gemini-3.7-flash-preview',
   'gemini-3.1-pro-preview',
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite',

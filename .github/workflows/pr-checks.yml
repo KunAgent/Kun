@@ -133,6 +133,9 @@ jobs:
       # PR validation intentionally uses the afterPack ad-hoc signature only.
       # It never consumes Developer ID or notarization secrets.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # The renderer bundle can exceed Node's default ~2 GiB heap on the
+      # macOS ARM runner. Keep the PR build aligned with release packaging.
+      NODE_OPTIONS: '--max-old-space-size=4096'
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

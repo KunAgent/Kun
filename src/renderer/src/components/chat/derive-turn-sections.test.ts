@@ -79,6 +79,18 @@ describe('deriveTurnSections', () => {
     expect(result.processBlocks.map((block) => block.kind)).toEqual(['tool'])
   })
 
+  it('does not turn duplicate assistant item snapshots into a false work-process section', () => {
+    const result = sections([
+      { kind: 'assistant', id: 'item_answer', turnId: 'turn_1', text: 'partial answer' },
+      { kind: 'assistant', id: 'item_answer', turnId: 'turn_1', text: 'complete answer' }
+    ])
+
+    expect(result.processBlocks).toEqual([])
+    expect(result.assistantContentBlocks).toEqual([
+      { kind: 'assistant', id: 'item_answer', turnId: 'turn_1', text: 'complete answer' }
+    ])
+  })
+
   it('keeps intermediate assistant text in chronological work and surfaces only the final answer', () => {
     const result = sections([
       { kind: 'assistant', id: 'intro', text: 'I found the likely cause.' },

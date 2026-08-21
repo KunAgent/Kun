@@ -56,6 +56,7 @@ type Props = {
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
   onOpenThread?: (threadId: string) => void
+  onConnectWeixin?: () => void
 }
 
 export {
@@ -104,7 +105,8 @@ import {
 export function ScheduleTasksView({
   leftSidebarCollapsed,
   onToggleLeftSidebar,
-  onOpenThread
+  onOpenThread,
+  onConnectWeixin
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const [settings, setSettings] = useState<AppSettingsV1 | null>(null)
@@ -172,19 +174,26 @@ export function ScheduleTasksView({
   const queuedTaskIds = useMemo(() => new Set(status?.queuedTaskIds ?? []), [status])
   const visibleTasks = useMemo(() => filterScheduledTasks(tasks, filter), [filter, tasks])
 
-  const persistSchedule = async (patch: Parameters<typeof mergeScheduleSettings>[1]): Promise<void> => {
-    if (!settings) return
+  const persistSchedule = async (
+    patch: Parameters<typeof mergeScheduleSettings>[1]
+  ): Promise<ScheduleSettingsV1> => {
+    if (!settings) throw new Error('Settings are not loaded')
     const ticket = refreshCoordinator.beginMutation()
     const nextSchedule = mergeScheduleSettings(settings.schedule, patch)
     setSettings({ ...settings, schedule: nextSchedule })
     try {
       const saved = await rendererRuntimeClient.setSettings({ schedule: nextSchedule })
-      if (!refreshCoordinator.isCurrent(ticket)) return
+      const canonical = normalizeScheduleSettings(saved.schedule)
+      if (!refreshCoordinator.isCurrent(ticket)) return canonical
       setSettings(saved)
       if (typeof window.kunGui?.getScheduleStatus === 'function') {
         const nextStatus = await window.kunGui.getScheduleStatus()
         if (refreshCoordinator.isCurrent(ticket)) setStatus(nextStatus)
       }
+      return canonical
+    } catch (saveError) {
+      if (refreshCoordinator.isCurrent(ticket)) setSettings(settings)
+      throw saveError
     } finally {
       refreshCoordinator.endMutation()
     }
@@ -411,6 +420,7 @@ export function ScheduleTasksView({
                 defaultWorkspaceRoot={settings?.claw.im.workspaceRoot.trim() || ''}
                 onPatchSchedule={persistSchedule}
                 onOpenThread={onOpenThread}
+                onConnectWeixin={onConnectWeixin}
               />
             ) : (
               <div className="py-20 text-center text-[14px] text-ds-faint">{t('loading')}</div>

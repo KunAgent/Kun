@@ -6,6 +6,7 @@ import { buildWorkbenchRightPanelSharedProps } from './useWorkbenchRightPanelSha
 import { useWorkbenchRuntimeBanners } from './useWorkbenchRuntimeBanners'
 import { useWorkbenchPlanPanelRuntime } from './useWorkbenchPlanPanelRuntime'
 import { useWorkbenchRightPanelElement } from './useWorkbenchRightPanelElement'
+import { FocusedCanvasWorkspace } from './FocusedCanvasWorkspace'
 import { WorkbenchImageAnnotationHost } from './WorkbenchImageAnnotationHost'
 
 const FILE_TREE_SIDEBAR_WIDTH = 320
@@ -20,8 +21,12 @@ export function useWorkbenchShellRuntime(context: Context): {
   rightPanel: ReactElement | null
   rightPanelSharedProps: any
   writeRuntimeBanner: ReactElement | null
+  focusedCanvasWorkspace: ReactElement | null
 } {
   const {
+    canvasFocusMode,
+    exitCanvasFocusMode,
+    startNewDesignCanvasConversation,
     input, setInput, composerMode, setComposerMode, composerOrchestration, graphEnabled,
     taskSurface, taskSurfaceLocked, taskSurfaceTransitioning, designTaskProfile, designProfileLocked,
     threadHasDesignDocument, lockedDesignProfile, onTaskSurfaceChange,
@@ -179,7 +184,7 @@ export function useWorkbenchShellRuntime(context: Context): {
     />
   )
 
-  const rightPanel = useWorkbenchRightPanelElement({
+  const dockedRightPanel = useWorkbenchRightPanelElement({
     visible: rightPanelDockedVisible,
     width: rightSidebarWidth,
     route,
@@ -335,6 +340,90 @@ export function useWorkbenchShellRuntime(context: Context): {
     },
     workspaceRoot: extensionWorkspaceRoot
   })
+  // Do not merely hide the docked panel in focused mode: hidden tabs keep
+  // visited content mounted, which would otherwise create a second
+  // CanvasViewport for the same bound board.
+  const rightPanel = canvasFocusMode ? null : dockedRightPanel
+
+  // The focused presentation re-parents the canvas panel from the right rail
+  // onto a stage-covering host, so exactly one CanvasViewport owns the bound
+  // document at any time. The conversation overlay renders the SAME primary
+  // design conversation that the docked rail would show.
+  const focusedCanvasWorkspace = canvasFocusMode ? (
+    <FocusedCanvasWorkspace
+      canvas={{
+        workspaceRoot: activeCodeCanvasWorkspace,
+        activeThreadId,
+        designDocumentId: lockedDesignProfile?.documentTarget.documentId,
+        boardArtifactId: lockedDesignProfile?.documentTarget.boardArtifactId,
+        designTaskActive: threadHasDesignDocument,
+        onRequestImageRegenerate: (prompt) => void sendDesignPrompt(prompt),
+        busy,
+        onOpenAgentSettings: () => openSettings('design'),
+        onImplementDesign: implementDesignInCode,
+        onUseElementAsContext: handleDesignHtmlElementAsContext,
+        onScreenCreated: (shapeId, userPrompt, brief) => {
+          selectCanvasShape(shapeId)
+          return sendDesignPrompt(brief?.trim() || userPrompt || 'Design this screen', {
+            screenShapeId: shapeId
+          })
+        },
+        onSvgCreated: async (artifactId, shapeId, userPrompt, brief) => {
+          selectCanvasShape(shapeId)
+          return sendDesignPrompt(brief || userPrompt || 'Create this SVG motion design', {
+            svgArtifactId: artifactId
+          })
+        },
+        onRuntimeQualityFindings: handleDesignRuntimeQualityFindings,
+        onRequestQualityRepair: handleDesignQualityRepairRequest,
+        onCollapse: exitCanvasFocusMode
+      }}
+      conversation={{
+        input,
+        setInput,
+        mode: composerMode,
+        setMode: setComposerMode,
+        busy,
+        runtimeConnection,
+        activeThreadId,
+        blocks,
+        liveReasoning,
+        liveAssistant,
+        composerModel: designAssistantModel,
+        composerProviderId: resolvedDesignAssistantProviderId,
+        composerPickList: designAssistantPickList,
+        composerModelGroups,
+        composerReasoningEffort: designComposerReasoningEffort,
+        composerFastMode,
+        setComposerModel: setDesignAssistantModel,
+        setComposerReasoningEffort: setDesignComposerReasoningEffort,
+        setComposerFastMode,
+        queuedMessages,
+        removeQueuedMessage,
+        guideQueuedMessage,
+        attachments: composerAttachments,
+        attachmentUploadEnabled,
+        attachmentUploadBusy,
+        attachmentUploadError,
+        contextChips: designContextChips,
+        onPickAttachments: (files) => void handlePickAttachments(files),
+        onPasteClipboardImage: (options) => void handlePasteClipboardImage(options),
+        onRemoveAttachment: removeComposerAttachment,
+        onRemoveContextChip: removeDesignContextChip,
+        onSend: () => sendDesignPrompt(input),
+        onInterrupt: (options) => void interrupt(options),
+        onRetryConnection: () => void probeRuntime('user', { restart: true }),
+        onOpenSettings: (section) => openSettings((section ?? 'design') as never),
+        onConfigureProviders: () => openSettings('providers'),
+        designThreads,
+        designHistoryThreadIds: designHistoryThreadIds,
+        onSwitchThread: (id) => void switchDesignThread(id)
+      }}
+      onClearHistory={clearActiveDrawingHistory}
+      onNewConversation={() => void startNewDesignCanvasConversation()}
+      onExitFocus={exitCanvasFocusMode}
+    />
+  ) : null
 
 
   return {
@@ -344,6 +433,7 @@ export function useWorkbenchShellRuntime(context: Context): {
     planOverlay,
     rightPanel,
     rightPanelSharedProps,
-    writeRuntimeBanner
+    writeRuntimeBanner,
+    focusedCanvasWorkspace
   }
 }

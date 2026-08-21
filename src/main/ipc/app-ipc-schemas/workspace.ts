@@ -6,6 +6,12 @@ import {
 import { WRITE_EXPORT_FORMATS } from '../../../shared/write-export'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '../../../shared/write-infographic'
 import {
+  MAX_WORKSPACE_SPREADSHEET_CELL_TEXT_CHARS,
+  MAX_WORKSPACE_SPREADSHEET_FORMULA_CHARS,
+  MAX_WORKSPACE_SPREADSHEET_MUTATION_BYTES,
+  MAX_WORKSPACE_SPREADSHEET_MUTATIONS
+} from '../../../shared/workspace-spreadsheet'
+import {
   MAX_BODY_BYTES,
   MAX_BRANCH_LENGTH,
   MAX_CHANNEL_TEXT_LENGTH,
@@ -205,6 +211,126 @@ export const workspaceOfficePreviewTargetPayloadSchema = z
   .strict()
 
 export const workspaceOfficeSemanticTargetPayloadSchema = workspaceOfficePreviewTargetPayloadSchema
+
+const spreadsheetColorSchema = z.string().trim().max(64).regex(
+  /^(?:#[0-9a-f]{6}|[0-9a-f]{6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)|[a-z][a-z0-9]*)$/i
+)
+const spreadsheetBorderSchema = z.object({
+  style: z.enum(['none', 'thin', 'medium', 'thick', 'double', 'dashed', 'dotted']),
+  color: spreadsheetColorSchema.nullable().optional()
+}).strict()
+const spreadsheetStyleSchema = z.object({
+  fontFamily: z.string().trim().min(1).max(128).nullable().optional(),
+  fontSize: z.number().finite().min(1).max(409).nullable().optional(),
+  bold: z.boolean().nullable().optional(),
+  italic: z.boolean().nullable().optional(),
+  underline: z.enum(['none', 'single', 'double']).nullable().optional(),
+  strike: z.boolean().nullable().optional(),
+  fontColor: spreadsheetColorSchema.nullable().optional(),
+  fillColor: spreadsheetColorSchema.nullable().optional(),
+  horizontalAlignment: z.enum(['left', 'center', 'right', 'justify', 'fill', 'distributed']).nullable().optional(),
+  verticalAlignment: z.enum(['top', 'center', 'bottom']).nullable().optional(),
+  wrap: z.boolean().nullable().optional(),
+  numberFormat: z.string().max(256).nullable().optional(),
+  textRotation: z.number().int().min(0).max(255).nullable().optional(),
+  borders: z.object({
+    top: spreadsheetBorderSchema.nullable().optional(),
+    right: spreadsheetBorderSchema.nullable().optional(),
+    bottom: spreadsheetBorderSchema.nullable().optional(),
+    left: spreadsheetBorderSchema.nullable().optional()
+  }).strict().optional()
+}).strict().refine((value) => (
+  Object.keys(value).some((key) => key !== 'borders') ||
+  Boolean(value.borders && Object.keys(value.borders).length > 0)
+), { message: 'A spreadsheet style mutation cannot be empty.' })
+const spreadsheetSheetNameSchema = z.string().trim().min(1).max(31)
+  .refine((value) => !Array.from(value).some((character) => ':\\/?*[]'.includes(character)), {
+    message: 'Invalid XLSX worksheet name.'
+  })
+const spreadsheetAddressSchema = z.string().trim().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/)
+  .refine(isExcelCellAddress, { message: 'Cell address exceeds XLSX bounds.' })
+const spreadsheetRangeSchema = z.string().trim().regex(/^[A-Z]{1,3}[1-9]\d{0,6}:[A-Z]{1,3}[1-9]\d{0,6}$/)
+  .refine((value) => value.split(':').every(isExcelCellAddress), {
+    message: 'Cell range exceeds XLSX bounds.'
+  })
+const spreadsheetCellMutationSchema = z.object({
+  kind: z.literal('cell'),
+  sheetName: spreadsheetSheetNameSchema,
+  address: spreadsheetAddressSchema,
+  value: z.union([
+    z.string().max(MAX_WORKSPACE_SPREADSHEET_CELL_TEXT_CHARS),
+    z.number().finite(),
+    z.boolean(),
+    z.null()
+  ]).optional(),
+  formula: z.string().max(MAX_WORKSPACE_SPREADSHEET_FORMULA_CHARS).nullable().optional(),
+  style: spreadsheetStyleSchema.optional()
+}).strict().refine((value) => (
+  Object.prototype.hasOwnProperty.call(value, 'value') ||
+  Object.prototype.hasOwnProperty.call(value, 'formula') ||
+  value.style !== undefined
+), { message: 'A cell mutation must change content or style.' })
+const spreadsheetMergeMutationSchema = z.object({
+  kind: z.literal('merge'),
+  sheetName: spreadsheetSheetNameSchema,
+  range: spreadsheetRangeSchema,
+  merged: z.boolean()
+}).strict()
+const spreadsheetDimensionFields = {
+  sheetName: spreadsheetSheetNameSchema,
+  size: z.number().finite().min(0).max(4_096).nullable().optional(),
+  hidden: z.boolean().nullable().optional()
+}
+const spreadsheetRowMutationSchema = z.object({
+  kind: z.literal('row'),
+  ...spreadsheetDimensionFields,
+  index: z.number().int().min(1).max(1_048_576)
+}).strict().refine((value) => (
+  Object.prototype.hasOwnProperty.call(value, 'size') ||
+  Object.prototype.hasOwnProperty.call(value, 'hidden')
+), { message: 'A dimension mutation must change size or visibility.' })
+const spreadsheetColumnMutationSchema = z.object({
+  kind: z.literal('column'),
+  ...spreadsheetDimensionFields,
+  index: z.number().int().min(1).max(16_384)
+}).strict().refine((value) => (
+  Object.prototype.hasOwnProperty.call(value, 'size') ||
+  Object.prototype.hasOwnProperty.call(value, 'hidden')
+), { message: 'A dimension mutation must change size or visibility.' })
+const spreadsheetMutationSchema = z.discriminatedUnion('kind', [
+  spreadsheetCellMutationSchema,
+  spreadsheetMergeMutationSchema,
+  spreadsheetRowMutationSchema,
+  spreadsheetColumnMutationSchema
+])
+
+export const workspaceSpreadsheetSavePayloadSchema = z.object({
+  path: trimmedString(MAX_PATH_LENGTH),
+  workspaceRoot: workspaceRootSchema,
+  expectedSha256: z.string().trim().regex(/^[a-f0-9]{64}$/i),
+  mutations: z.array(spreadsheetMutationSchema).min(1).max(MAX_WORKSPACE_SPREADSHEET_MUTATIONS)
+}).strict().superRefine((value, context) => {
+  if (Buffer.byteLength(JSON.stringify(value.mutations), 'utf8') <= MAX_WORKSPACE_SPREADSHEET_MUTATION_BYTES) return
+  context.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['mutations'],
+    message: `Spreadsheet mutations exceed ${MAX_WORKSPACE_SPREADSHEET_MUTATION_BYTES} bytes.`
+  })
+})
+
+export const workspaceSpreadsheetConvertPayloadSchema = z.object({
+  path: trimmedString(MAX_PATH_LENGTH),
+  workspaceRoot: workspaceRootSchema,
+  expectedSha256: z.string().trim().regex(/^[a-f0-9]{64}$/i)
+}).strict()
+
+function isExcelCellAddress(value: string): boolean {
+  const match = /^([A-Z]+)([1-9]\d*)$/.exec(value)
+  if (!match || Number(match[2]) > 1_048_576) return false
+  let column = 0
+  for (const character of match[1]!) column = column * 26 + character.charCodeAt(0) - 64
+  return column >= 1 && column <= 16_384
+}
 
 export const workspaceFileRevealTargetPayloadSchema = workspaceFileTargetPayloadSchema.extend({
   workspaceRoot: trimmedString(MAX_PATH_LENGTH)

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import TestRenderer, { act } from 'react-test-renderer'
+import { describe, expect, it, vi } from 'vitest'
 import {
   CODE_PANEL_PREFERRED,
   captureResizePointer,
@@ -9,6 +11,7 @@ import {
   PANEL_RESIZE_HANDLE_WIDTH,
   RAIL_WIDTH,
   transientRightPanelModeForWorkspaceChange,
+  useWorkbenchLayout,
   WORKBENCH_RESIZE_CLASS,
   workbenchWidthConstraintsForRightPanel
 } from './workbench-layout'
@@ -144,3 +147,76 @@ describe('captureResizePointer', () => {
     expect(WORKBENCH_RESIZE_CLASS).toBe('ds-workbench-resizing')
   })
 })
+
+describe('focused whiteboard presentation', () => {
+  it('activates the canvas tab without widening the persisted right rail', async () => {
+    const listeners = new Map<string, Set<(event: Event) => void>>()
+    const windowStub = {
+      addEventListener: (type: string, listener: (event: Event) => void) => {
+        const set = listeners.get(type) ?? new Set()
+        set.add(listener)
+        listeners.set(type, set)
+      },
+      removeEventListener: (type: string, listener: (event: Event) => void) => {
+        listeners.get(type)?.delete(listener)
+      },
+      dispatchEvent: (event: Event) => {
+        for (const listener of listeners.get(event.type) ?? []) listener(event)
+        return true
+      },
+      innerWidth: 1600,
+      innerHeight: 900
+    }
+    vi.stubGlobal('window', windowStub)
+    const harness = renderWorkbenchLayoutHarness()
+    try {
+      harness.rerender()
+      act(() => {
+        windowStub.dispatchEvent(new Event('kun:code-canvas-focus-request'))
+      })
+      harness.rerender()
+      const focused = harness.lastRenderResult()?.canvasFocusMode
+      expect(focused).toBe(true)
+      // The focus presentation must NOT overwrite the persisted rail width.
+      expect(harness.rightSidebarWidth()).toBeLessThan(1200)
+    } finally {
+      harness.unmount()
+    }
+    vi.unstubAllGlobals()
+  })
+})
+
+type WorkbenchLayoutHarness = ReturnType<typeof useWorkbenchLayout>
+
+function renderWorkbenchLayoutHarness(): {
+  lastRenderResult: () => WorkbenchLayoutHarness | null
+  rightSidebarWidth: () => number
+  unmount: () => void
+  rerender: () => void
+} {
+  let result: WorkbenchLayoutHarness | null = null
+  const Probe = (): null => {
+    result = useWorkbenchLayout({
+      activeThreadId: 'thread-1',
+      designAssistantOpen: false,
+      designImplementOpen: false,
+      latestAutoOpenDevPreviewSignal: null,
+      route: 'chat',
+      threadLoadingId: null,
+      workspaceRoot: '/ws',
+      writeAssistantOpen: false
+    })
+    return null
+  }
+  const renderer = TestRenderer.create(createElement(Probe))
+  return {
+    lastRenderResult: () => result,
+    rightSidebarWidth: () => result?.rightSidebarWidth ?? -1,
+    unmount: () => act(() => {
+      renderer.unmount()
+    }),
+    rerender: () => act(() => {
+      renderer.update(createElement(Probe))
+    })
+  }
+}

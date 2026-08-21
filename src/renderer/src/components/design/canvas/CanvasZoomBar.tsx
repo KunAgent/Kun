@@ -20,7 +20,7 @@ import {
   zoomCanvasToEditableSelection
 } from '../../../design/canvas/canvas-focus'
 
-const isMac = navigator.platform.startsWith('Mac')
+const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
 const MOD = isMac ? '⌘' : 'Ctrl+'
 
 function CanvasZoomBarInner() {

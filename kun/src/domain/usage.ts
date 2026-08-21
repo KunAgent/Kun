@@ -76,6 +76,13 @@ export function addUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapsh
     totalInputTokenHitRate,
     cacheMissReasons,
     cacheSuggestions,
+    ...(delta.actualProviderId ? { actualProviderId: delta.actualProviderId } : into.actualProviderId ? { actualProviderId: into.actualProviderId } : {}),
+    ...(delta.actualModelId ? { actualModelId: delta.actualModelId } : into.actualModelId ? { actualModelId: into.actualModelId } : {}),
+    ...(delta.billingKind ? { billingKind: delta.billingKind } : into.billingKind ? { billingKind: into.billingKind } : {}),
+    ...(delta.serviceTier ? { serviceTier: delta.serviceTier } : into.serviceTier ? { serviceTier: into.serviceTier } : {}),
+    ...(delta.requestedModelId ? { requestedModelId: delta.requestedModelId } : into.requestedModelId ? { requestedModelId: into.requestedModelId } : {}),
+    ...(delta.routePoolId ? { routePoolId: delta.routePoolId } : into.routePoolId ? { routePoolId: into.routePoolId } : {}),
+    ...(delta.routeTargetId ? { routeTargetId: delta.routeTargetId } : into.routeTargetId ? { routeTargetId: into.routeTargetId } : {}),
     turns,
     costUsd,
     costCny,
@@ -88,8 +95,134 @@ export function addUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapsh
   }
 }
 
+/**
+ * Convert two cumulative usage snapshots into one durable per-request delta.
+ * Attribution and point-in-time timing fields come from the newer snapshot;
+ * monotonic counters are subtracted and clamped at zero.
+ */
+export function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): UsageSnapshot {
+  const promptTokens = diffNumber(current.promptTokens, previous.promptTokens)
+  const completionTokens = diffNumber(current.completionTokens, previous.completionTokens)
+  const reportedTotal = diffNumber(current.totalTokens, previous.totalTokens)
+  const totalTokens = reportedTotal || promptTokens + completionTokens
+  const reasoningTokens = diffOptionalNumber(current.reasoningTokens, previous.reasoningTokens)
+  const cachedTokens = diffOptionalNumber(current.cachedTokens, previous.cachedTokens)
+  const cacheHitTokens = diffOptionalNumber(current.cacheHitTokens, previous.cacheHitTokens)
+  const cacheMissTokens = diffOptionalNumber(current.cacheMissTokens, previous.cacheMissTokens)
+  const cacheWriteTokens = diffOptionalNumber(current.cacheWriteTokens, previous.cacheWriteTokens)
+  const cacheTotal = (cacheHitTokens ?? 0) + (cacheMissTokens ?? 0)
+  const costByCurrency = diffCurrencyCosts(current.costByCurrency, previous.costByCurrency)
+  return {
+    promptTokens,
+    completionTokens,
+    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+    totalTokens,
+    ...(cachedTokens !== undefined ? { cachedTokens } : {}),
+    ...(cacheHitTokens !== undefined ? { cacheHitTokens } : {}),
+    ...(cacheMissTokens !== undefined ? { cacheMissTokens } : {}),
+    ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+    cacheHitRate: cacheHitTokens !== undefined && cacheTotal > 0
+      ? cacheHitTokens / cacheTotal
+      : null,
+    ...(current.cacheableTokenHitRate !== undefined
+      ? { cacheableTokenHitRate: current.cacheableTokenHitRate }
+      : {}),
+    ...(current.totalInputTokenHitRate !== undefined
+      ? { totalInputTokenHitRate: current.totalInputTokenHitRate }
+      : {}),
+    ...(current.cacheMissReasons ? { cacheMissReasons: [...current.cacheMissReasons] } : {}),
+    ...(current.cacheSuggestions ? { cacheSuggestions: [...current.cacheSuggestions] } : {}),
+    ...(current.actualProviderId ? { actualProviderId: current.actualProviderId } : {}),
+    ...(current.actualModelId ? { actualModelId: current.actualModelId } : {}),
+    ...(current.billingKind ? { billingKind: current.billingKind } : {}),
+    ...(current.serviceTier ? { serviceTier: current.serviceTier } : {}),
+    ...(current.requestedModelId ? { requestedModelId: current.requestedModelId } : {}),
+    ...(current.routePoolId ? { routePoolId: current.routePoolId } : {}),
+    ...(current.routeTargetId ? { routeTargetId: current.routeTargetId } : {}),
+    turns: diffNumber(current.turns, previous.turns),
+    ...diffOptionalField('costUsd', current, previous),
+    ...diffOptionalField('costCny', current, previous),
+    ...(costByCurrency ? { costByCurrency } : {}),
+    ...diffOptionalField('cacheSavingsUsd', current, previous),
+    ...diffOptionalField('cacheSavingsCny', current, previous),
+    ...diffOptionalField('tokenEconomySavingsTokens', current, previous),
+    ...diffOptionalField('tokenEconomySavingsUsd', current, previous),
+    ...diffOptionalField('tokenEconomySavingsCny', current, previous),
+    ...(current.hasError ? { hasError: true } : {}),
+    ...(current.avgTtftMs !== undefined ? { avgTtftMs: current.avgTtftMs } : {}),
+    ...(current.avgTokensPerSecond !== undefined
+      ? { avgTokensPerSecond: current.avgTokensPerSecond }
+      : {})
+  }
+}
+
+export function hasUsage(usage: UsageSnapshot): boolean {
+  return usage.promptTokens > 0
+    || usage.completionTokens > 0
+    || (usage.reasoningTokens ?? 0) > 0
+    || usage.totalTokens > 0
+    || (usage.cachedTokens ?? 0) > 0
+    || (usage.cacheHitTokens ?? 0) > 0
+    || (usage.cacheMissTokens ?? 0) > 0
+    || (usage.cacheWriteTokens ?? 0) > 0
+    || usage.turns > 0
+    || (usage.costUsd ?? 0) > 0
+    || (usage.costCny ?? 0) > 0
+    || Object.values(usage.costByCurrency ?? {}).some((cost) => cost > 0)
+    || (usage.cacheSavingsUsd ?? 0) > 0
+    || (usage.cacheSavingsCny ?? 0) > 0
+    || (usage.tokenEconomySavingsTokens ?? 0) > 0
+    || (usage.tokenEconomySavingsUsd ?? 0) > 0
+    || (usage.tokenEconomySavingsCny ?? 0) > 0
+}
+
 function sumOptional(left: number | undefined, right: number | undefined): number | undefined {
   return left === undefined && right === undefined ? undefined : (left ?? 0) + (right ?? 0)
+}
+
+function diffNumber(current: number, previous: number): number {
+  return Math.max(0, current - previous)
+}
+
+function diffOptionalNumber(current?: number, previous?: number): number | undefined {
+  if (current === undefined && previous === undefined) return undefined
+  return Math.max(0, (current ?? 0) - (previous ?? 0))
+}
+
+type DifferentialNumericField =
+  | 'costUsd'
+  | 'costCny'
+  | 'cacheSavingsUsd'
+  | 'cacheSavingsCny'
+  | 'tokenEconomySavingsTokens'
+  | 'tokenEconomySavingsUsd'
+  | 'tokenEconomySavingsCny'
+
+function diffOptionalField(
+  key: DifferentialNumericField,
+  current: UsageSnapshot,
+  previous: UsageSnapshot
+): Partial<UsageSnapshot> {
+  const left = current[key]
+  const right = previous[key]
+  if (left !== undefined && right !== undefined && left === right) return {}
+  const difference = diffOptionalNumber(left, right)
+  return difference === undefined ? {} : { [key]: difference }
+}
+
+function diffCurrencyCosts(
+  current: Record<string, number> | undefined,
+  previous: Record<string, number> | undefined
+): Record<string, number> | undefined {
+  if (!current && !previous) return undefined
+  const currencies = new Set([...Object.keys(current ?? {}), ...Object.keys(previous ?? {})])
+  const differences = [...currencies].flatMap((currency) => {
+    const left = current?.[currency]
+    const right = previous?.[currency]
+    if (left !== undefined && right !== undefined && left === right) return []
+    return [[currency, Math.max(0, (left ?? 0) - (right ?? 0))] as const]
+  })
+  return differences.length > 0 ? Object.fromEntries(differences) : undefined
 }
 
 function mergeCurrencyCosts(

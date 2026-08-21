@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Maximize2, PanelRightClose, Shapes } from 'lucide-react'
+import { Loader2, Maximize2, Minimize2, PanelRightClose, Shapes } from 'lucide-react'
 import {
   useCanvasImageGenerationProgress,
   failedImageGenerationEntries,
@@ -67,13 +67,17 @@ type Props = Pick<
   onRequestImageRegenerate?: (prompt: string) => void
   /** Keeps a classified Design task on the full Design surface while its target hydrates. */
   designTaskActive?: boolean
+  /** `docked` is the ordinary right-rail shell; `focused` is the stage-covering presentation. */
+  presentation?: 'docked' | 'focused'
+  onExitFocus?: () => void
   onCollapse: () => void
   className?: string
 }
 
-export function codeCanvasPanelShellClass(className?: string): string {
+export function codeCanvasPanelShellClass(className?: string, presentation: 'docked' | 'focused' = 'docked'): string {
   return cx(
-    'ds-no-drag relative flex min-h-0 flex-col overflow-hidden border-l border-ds-border-muted bg-[#f8fafc] dark:bg-[#111318]',
+    'ds-no-drag relative flex min-h-0 flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#111318]',
+    presentation === 'docked' ? 'border-l border-ds-border-muted' : '',
     className
   )
 }
@@ -157,6 +161,8 @@ export function CodeCanvasPanel({
   boardArtifactId,
   onRequestImageRegenerate,
   designTaskActive = false,
+  presentation = 'docked',
+  onExitFocus,
   onCollapse,
   className,
   busy,
@@ -376,27 +382,39 @@ export function CodeCanvasPanel({
   }, [activeDesignSurface, activeThreadId, continuingHistorical, designDoc, workspaceRoot])
 
   if (designMode) {
+    const focusedPresentation = presentation === 'focused'
+    const onToggleFocus = focusedPresentation && onExitFocus ? onExitFocus : requestCodeCanvasPanelFocus
     return (
-      <aside className={codeCanvasPanelShellClass(className)}>
+      <aside className={codeCanvasPanelShellClass(className, presentation)}>
         <div className="pointer-events-none absolute left-3 right-3 top-3 z-50 flex min-w-0 items-start">
           <div className={codeCanvasPanelTitlebarClass()} data-code-canvas-titlebar="true">
+            {!focusedPresentation ? (
+              <button
+                type="button"
+                onClick={onCollapse}
+                className="ds-sidebar-toggle-button shrink-0"
+                aria-label={t('rightPanelCollapse')}
+                title={t('rightPanelCollapse')}
+              >
+                <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={onCollapse}
+              onClick={onToggleFocus}
               className="ds-sidebar-toggle-button shrink-0"
-              aria-label={t('rightPanelCollapse')}
-              title={t('rightPanelCollapse')}
+              aria-label={t(focusedPresentation ? 'designWhiteboardExitFocus' : 'designWhiteboardFocus', {
+                defaultValue: focusedPresentation ? 'Exit focused whiteboard' : 'Focus whiteboard'
+              })}
+              title={t(focusedPresentation ? 'designWhiteboardExitFocus' : 'designWhiteboardFocus', {
+                defaultValue: focusedPresentation ? 'Exit focused whiteboard' : 'Focus whiteboard'
+              })}
             >
-              <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
-            </button>
-            <button
-              type="button"
-              onClick={requestCodeCanvasPanelFocus}
-              className="ds-sidebar-toggle-button shrink-0"
-              aria-label={t('designWhiteboardFocus', { defaultValue: 'Focus whiteboard' })}
-              title={t('designWhiteboardFocus', { defaultValue: 'Focus whiteboard' })}
-            >
-              <Maximize2 className="h-4 w-4" strokeWidth={1.85} />
+              {focusedPresentation ? (
+                <Minimize2 className="h-4 w-4" strokeWidth={1.85} />
+              ) : (
+                <Maximize2 className="h-4 w-4" strokeWidth={1.85} />
+              )}
             </button>
             <div className="flex min-w-0 items-center gap-1.5 pl-1 pr-2">
               <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
@@ -499,7 +517,7 @@ export function CodeCanvasPanel({
   }
 
   return (
-    <aside className={codeCanvasPanelShellClass(className)}>
+    <aside className={codeCanvasPanelShellClass(className, presentation)}>
       <div className="pointer-events-none absolute left-3 right-3 top-3 z-50 flex min-w-0 items-start">
         <div className={codeCanvasPanelTitlebarClass()} data-code-canvas-titlebar="true">
           <button

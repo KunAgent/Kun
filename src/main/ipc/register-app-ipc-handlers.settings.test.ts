@@ -46,6 +46,30 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   beforeEach(resetAppIpcHandlerTestState)
   afterEach(cleanupAppIpcHandlerTestState)
 
+  it('initializes and opens only the fixed settings configuration file', async () => {
+    const loaded = settings()
+    const store = { load: vi.fn(async () => loaded), save: vi.fn(async () => undefined) }
+    registerAppIpcHandlers(registerOptions({
+      store: store as never,
+      resolveSettingsConfigPath: () => '/private/Kun/kun-settings.json'
+    }))
+
+    await expect(handlers.get('settings:open-config-file')?.({})).resolves.toEqual({ ok: true })
+    expect(store.save).toHaveBeenCalledWith(loaded)
+    expect(electronMock.openPath).toHaveBeenCalledWith('/private/Kun/kun-settings.json')
+  })
+
+  it('reports failures while opening the settings configuration file', async () => {
+    electronMock.openPath.mockResolvedValueOnce('No application can open this file')
+    const store = { load: vi.fn(async () => settings()), save: vi.fn(async () => undefined) }
+    registerAppIpcHandlers(registerOptions({ store: store as never }))
+
+    await expect(handlers.get('settings:open-config-file')?.({})).resolves.toEqual({
+      ok: false,
+      message: 'No application can open this file'
+    })
+  })
+
   it('rejects invalid settings patches at the handler boundary', async () => {
     const applySettingsPatch = vi.fn(async () => settings())
 
@@ -57,6 +81,23 @@ describe('registerAppIpcHandlers settings and approvals', () => {
       handler?.({}, { agents: { kun: { mysteryFlag: true } } })
     ).rejects.toThrow(/Invalid payload for settings:set/)
     expect(applySettingsPatch).not.toHaveBeenCalled()
+  })
+
+  it('passes the conversation visualization toggle through settings:set', async () => {
+    const applySettingsPatch = vi.fn(async () => settings())
+    const payload = {
+      agents: {
+        kun: {
+          lab: {
+            conversationVisualization: { enabled: true }
+          }
+        }
+      }
+    }
+    registerAppIpcHandlers(registerOptions({ applySettingsPatch }))
+
+    await expect(handlers.get('settings:set')?.({}, payload)).resolves.toEqual(settings())
+    expect(applySettingsPatch).toHaveBeenCalledWith(payload)
   })
 
   it('includes the Zod path when settings:set rejects an empty primary model', async () => {

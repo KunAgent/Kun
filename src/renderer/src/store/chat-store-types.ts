@@ -56,6 +56,10 @@ export type QueuedUserMessage = {
   errorCode?: string
   /** Localized summary of a terminal rejection for inline retry UI. */
   errorMessage?: string
+  /** Frozen runtime prompt reused for idempotent background admission retries. */
+  backgroundRuntimeText?: string
+  /** Frozen checkpoint request id reused with the same clientRequestId. */
+  backgroundCheckpointRequestId?: string
   displayText?: string
   mode?: string
   orchestration?: 'direct' | 'graph'
@@ -223,6 +227,14 @@ export type SettingsRouteSection =
   | 'storage'
   | 'dataMigration'
 export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'schedule' | 'workflow' | 'nodeGraph'
+export type ThreadCompletionOutcome = 'completed' | 'failed'
+export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
+export type ScheduledThreadActivity = {
+  state: 'scheduled' | 'running'
+  taskCount: number
+  nextRunAt: string
+  queued: boolean
+}
 export type PluginHostRoute = 'chat' | 'claw'
 
 /**
@@ -310,10 +322,10 @@ export type ChatState = {
   threadListStatus: 'idle' | 'loading' | 'ready' | 'refreshing' | 'error'
   threadListError: string | null
   /**
-   * Per-workspace pagination state for the sidebar thread list. Each workspace
-   * loads its most recent page first and appends older pages on "show more".
+   * Per-workspace pagination state, keyed by normalized workspace identity.
+   * Only a workspace-scoped Runtime response may populate this map.
    */
-  threadListCursorByWorkspace: Record<string, { nextCursor?: string; hasMore: boolean; total?: number }>
+  threadListCursorByWorkspace: Record<string, import('./chat-store-thread-pagination').WorkspaceThreadPageMeta>
   knowledgeBaseStatuses: Record<string, KnowledgeBaseIndexStatus[]>
   threadSearch: string
   showArchivedThreads: boolean
@@ -413,7 +425,9 @@ export type ChatState = {
   /** Source-neutral, host-fenced context awaiting one main-chat turn. Legacy field name is persisted for compatibility. */
   extensionComposerContexts: PendingComposerContextEvent[]
   watchTurnCompletion: Record<string, boolean>
-  unreadThreadIds: Record<string, boolean>
+  /** Completion attention keyed by thread. Legacy boolean true reads as completed. */
+  unreadThreadIds: CompletionAttentionRegistry
+  scheduledThreadActivities: Record<string, ScheduledThreadActivity>
   /**
    * Side conversations opened via `/btw`. The main thread selection
    * and subscription are never touched by these entries.
@@ -491,6 +505,8 @@ export type ChatState = {
   clearWorkspace: () => Promise<void>
   deleteWorkspace: (workspacePath: string) => Promise<void>
   refreshThreads: () => Promise<void>
+  /** Reconcile lightweight runtime and scheduler activity for sidebar rows. */
+  syncSidebarActivity: () => Promise<boolean>
   /** Append the next older page of threads for a workspace ("show more"). */
   loadMoreThreads: (workspacePath: string) => Promise<void>
   setThreadKnowledgeBases: (threadId: string, mounts: KnowledgeBaseMount[]) => Promise<boolean>
@@ -558,6 +574,7 @@ export type ChatState = {
   pinThread: (threadId: string, pinned: boolean) => Promise<void>
   archiveThread: (threadId: string, archived: boolean) => Promise<void>
   compactActiveThread: (reason?: string) => Promise<void>
+  archiveActiveThreadToTurn: (turnId: string) => Promise<void>
   forkActiveThread: () => Promise<void>
   forkThreadFromTurn: (turnId: string) => Promise<void>
   setActiveThreadGoal: (objective: string) => Promise<boolean>

@@ -26,6 +26,12 @@ vi.mock('../WorkspaceCodePreview', () => ({
     'data-code-preview-mock': 'true'
   })
 }))
+vi.mock('../WorkspaceUniverSpreadsheetEditor', () => ({
+  WorkspaceUniverSpreadsheetEditor: (props: object) => createElement('div', {
+    ...props,
+    'data-univer-spreadsheet-mock': 'true'
+  })
+}))
 
 const noop = (): void => undefined
 
@@ -236,5 +242,100 @@ describe('WriteWorkspaceDocumentPane focus mode', () => {
       content: 'export const answer = 42\n'
     })
     expect(renderer.root.findAllByProps({ 'data-office-preview-mock': 'true' })).toHaveLength(0)
+  })
+
+  it('routes XLSX to the editable Univer surface and keeps XLS conversion explicit', async () => {
+    const xlsxPreview: WorkspaceOfficePreviewSuccess = {
+      ok: true,
+      path: '/repo/book.xlsx',
+      name: 'book.xlsx',
+      sourceFormat: 'xlsx',
+      renderFormat: 'xlsx',
+      viewer: 'spreadsheet',
+      size: 3,
+      mtimeMs: 1,
+      sourceSha256: 'b'.repeat(64),
+      data: new Uint8Array([1, 2, 3])
+    }
+    const onSpreadsheetMutations = vi.fn()
+    await act(async () => {
+      renderer.update(createElement(WriteWorkspaceDocumentPane, {
+        ...paneProps(false, onFocusModeChange),
+        activeFilePath: xlsxPreview.path,
+        activeFileIsOffice: true,
+        activeFileIsText: false,
+        officePreview: xlsxPreview,
+        onSpreadsheetMutations
+      }))
+      await Promise.resolve()
+    })
+    expect(renderer.root.findByProps({ 'data-univer-spreadsheet-mock': 'true' }).props).toMatchObject({
+      result: xlsxPreview,
+      onMutationsChange: onSpreadsheetMutations
+    })
+    expect(renderer.root.findAllByProps({ 'data-office-preview-mock': 'true' })).toHaveLength(0)
+
+    const onResolveSpreadsheetConflict = vi.fn()
+    await act(async () => {
+      renderer.update(createElement(WriteWorkspaceDocumentPane, {
+        ...paneProps(false, onFocusModeChange),
+        activeFilePath: xlsxPreview.path,
+        activeFileIsOffice: true,
+        activeFileIsText: false,
+        officePreview: xlsxPreview,
+        officeRefreshError: 'Two targets conflict',
+        spreadsheetConflict: true,
+        spreadsheetConflictTargets: ['cell:Data:A1', 'cell:Data:B2'],
+        onSpreadsheetMutations,
+        onResolveSpreadsheetConflict
+      }))
+      await Promise.resolve()
+    })
+    const keepLocal = renderer.root.findByProps({ children: 'writeSpreadsheetKeepLocalChanges' })
+    const useExternal = renderer.root.findByProps({ children: 'writeSpreadsheetUseExternalChanges' })
+    await act(async () => keepLocal.props.onClick())
+    await act(async () => useExternal.props.onClick())
+    expect(onResolveSpreadsheetConflict.mock.calls).toEqual([['keep-local'], ['use-external']])
+
+    const onSaveShortcut = vi.fn()
+    await act(async () => {
+      renderer.update(createElement(WriteWorkspaceDocumentPane, {
+        ...paneProps(false, onFocusModeChange),
+        activeFilePath: xlsxPreview.path,
+        activeFileIsOffice: true,
+        activeFileIsText: false,
+        officePreview: xlsxPreview,
+        spreadsheetSaveError: 'OfficeCLI validation failed',
+        onSpreadsheetMutations,
+        onSaveShortcut
+      }))
+      await Promise.resolve()
+    })
+    const retry = renderer.root.findByProps({ children: 'writeSpreadsheetRetrySave' })
+    await act(async () => retry.props.onClick())
+    expect(onSaveShortcut).toHaveBeenCalledOnce()
+
+    const onConvertSpreadsheet = vi.fn()
+    const xlsPreview: WorkspaceOfficePreviewSuccess = {
+      ...xlsxPreview,
+      path: '/repo/book.xls',
+      name: 'book.xls',
+      sourceFormat: 'xls',
+      renderFormat: 'xls'
+    }
+    await act(async () => {
+      renderer.update(createElement(WriteWorkspaceDocumentPane, {
+        ...paneProps(false, onFocusModeChange),
+        activeFilePath: xlsPreview.path,
+        activeFileIsOffice: true,
+        activeFileIsText: false,
+        officePreview: xlsPreview,
+        onConvertSpreadsheet
+      }))
+    })
+    const convert = renderer.root.findByProps({ children: 'writeSpreadsheetConvertToXlsx' })
+    await act(async () => convert.props.onClick())
+    expect(onConvertSpreadsheet).toHaveBeenCalledOnce()
+    expect(renderer.root.findByProps({ 'data-office-preview-mock': 'true' })).toBeTruthy()
   })
 })

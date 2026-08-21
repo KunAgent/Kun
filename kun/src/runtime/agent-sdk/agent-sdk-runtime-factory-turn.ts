@@ -22,6 +22,7 @@ import {
   type KunToolResult
 } from './sdk-tool-bridge.js'
 import type { SdkApi } from './sdk-protocol.js'
+import { subscriptionBillingKind } from '../../shared/subscription-billing.js'
 import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
 import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import type { TurnService } from '../../services/turn-service.js'
@@ -182,6 +183,12 @@ export function createAgentSdkTurnRuntimeDeps(
       const providerCfg = explicitRouteProviderId
         ? deps.providerConfigs[explicitRouteProviderId]
         : undefined
+      const billingKind = subscriptionBillingKind({
+        authType: providerCfg?.authType,
+        presetSource: providerCfg?.presetSource,
+        providerId: actingProviderId,
+        baseUrl: providerCfg?.baseUrl
+      })
       const model = actingModelRoute.model
       const approvalPolicy =
         turn.approvalPolicy ?? thread.approvalPolicy ?? deps.defaultApprovalPolicy
@@ -464,6 +471,7 @@ export function createAgentSdkTurnRuntimeDeps(
         // model (e.g. an old deepseek thread now routed to the subscription) to
         // the runtime default so the turn doesn't fail "model may not exist".
         model,
+        ...(billingKind ? { billingKind } : {}),
         ...(turn?.reasoningEffort ? { reasoningEffort: turn.reasoningEffort } : {}),
         ...(preparation?.nativeSessionId && turnDynamicContext.instructions.length === 0
           ? { resumeSessionId: preparation.nativeSessionId }

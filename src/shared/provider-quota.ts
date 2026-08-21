@@ -18,6 +18,23 @@ export type ProviderQuotaMetric = {
   resetsAt?: string
 }
 
+export type ProviderLocalCostCoverage = 'complete' | 'partial' | 'unavailable'
+
+export type ProviderLocalCostWindow = {
+  requests: number
+  totalTokens: number
+  amount: number | null
+  coverage: ProviderLocalCostCoverage
+}
+
+export type ProviderLocalCostSummary = {
+  kind: 'reference_api_estimate'
+  currency: 'USD'
+  today: ProviderLocalCostWindow
+  last30Days: ProviderLocalCostWindow
+  updatedAt: string
+}
+
 export type ProviderQuotaEntry = {
   providerId: string
   providerName: string
@@ -27,6 +44,7 @@ export type ProviderQuotaEntry = {
   dashboardUrl?: string
   summary?: string
   metrics: ProviderQuotaMetric[]
+  localCost?: ProviderLocalCostSummary
   updatedAt?: string
   message?: string
 }

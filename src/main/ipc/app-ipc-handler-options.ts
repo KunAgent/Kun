@@ -61,6 +61,7 @@ export type RegisterAppIpcHandlersOptions = {
   startWeixinInstallQrcode: (weixinBridgeUrl?: string) => Promise<ClawImInstallQrResult>
   pollWeixinInstall: (deviceCode: string, weixinBridgeUrl?: string) => Promise<ClawImInstallPollResult>
   resolveKunConfigPath: () => string
+  resolveSettingsConfigPath: () => string
   onKunMcpConfigWritten?: (path: string, content: string) => Promise<void> | void
   onKunProjectConfigChanged?: (path: string, content: string) => Promise<void> | void
   showTurnCompleteNotification: (

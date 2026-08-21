@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   isLowRiskAutomaticAction,
+  withBrowserUseDeadline,
   type BrowserTarget
 } from './browser-use-manager-support'
 
@@ -23,6 +24,35 @@ function target(role: string, name: string): BrowserTarget {
     fingerprint: 'fingerprint'
   }
 }
+
+describe('Browser Use operation deadlines', () => {
+  it('returns a named timeout and runs cleanup for a stalled boundary', async () => {
+    vi.useFakeTimers()
+    const cleanup = vi.fn()
+    const pending = withBrowserUseDeadline(
+      new Promise<never>(() => undefined), new AbortController().signal,
+      25, 'navigation_timeout', 'Navigation timed out.', cleanup
+    )
+    const rejection = expect(pending).rejects.toMatchObject({ code: 'navigation_timeout' })
+    await vi.advanceTimersByTimeAsync(25)
+    await rejection
+    expect(cleanup).toHaveBeenCalledOnce()
+    vi.useRealTimers()
+  })
+
+  it('prefers abort over a later timeout', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const pending = withBrowserUseDeadline(
+      new Promise<never>(() => undefined), controller.signal,
+      25, 'navigation_timeout', 'Navigation timed out.'
+    )
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'BrowserUseOperationAbortedError' })
+    await vi.advanceTimersByTimeAsync(25)
+    vi.useRealTimers()
+  })
+})
 
 describe('Browser Use automatic interaction classification', () => {
   it('never treats a target-focused key press as an automatic interaction', () => {

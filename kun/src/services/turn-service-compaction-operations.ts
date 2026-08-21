@@ -57,6 +57,8 @@ import {
 } from '../loop/continuation-instructions.js'
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
+import { buildArchivedActiveHistory } from './archive-history-commit.js'
+
 export const turnServiceCompactionOperations = {
 async compact(this: TurnService, input: {
     threadId: string
@@ -68,6 +70,104 @@ async compact(this: TurnService, input: {
   }): Promise<CompactResponse> {
     const thread = await this['deps'].threadStore.get(input.threadId)
     if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+    if (input.request.cutoffTurnId) {
+      return this['withThreadMutation'](input.threadId, async () => {
+        const current = await this['deps'].threadStore.get(input.threadId)
+        if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        if (current.turns.some(isActiveTurn)) {
+          throw new TurnConflictError('thread has an active turn')
+        }
+        const cutoffTurn = current.turns.find((candidate) => candidate.id === input.request.cutoffTurnId)
+        if (!cutoffTurn || cutoffTurn.status !== 'completed') {
+          throw new TurnConflictError('cutoffTurnId must identify a completed turn')
+        }
+        const archiveItems = this['deps'].sessionStore.archiveItems
+        if (!archiveItems) throw new Error('session archive is unavailable for this store')
+        const snapshot = await this['deps'].sessionStore.loadItemSnapshot(input.threadId)
+        const cutoffIndex = snapshot.items.reduce(
+          (last, item, index) => item.turnId === cutoffTurn.id ? index : last,
+          -1
+        )
+        if (cutoffIndex < 0) throw new TurnConflictError('cutoff turn has no persisted history')
+        if (snapshot.items.slice(cutoffIndex + 1).some((item) => item.turnId === cutoffTurn.id)) {
+          throw new TurnConflictError('cutoff turn is not a contiguous history boundary')
+        }
+        const archivedHead = snapshot.items.slice(0, cutoffIndex + 1)
+        const retainedTail = snapshot.items.slice(cutoffIndex + 1)
+        if (archivedHead.some((item) => item.kind === 'tool_call' &&
+          !archivedHead.some((candidate) => candidate.kind === 'tool_result' && candidate.callId === item.callId))) {
+          throw new TurnConflictError('cutoff would split a tool interaction')
+        }
+        const prefix = this['deps'].prefix ?? createImmutablePrefix({
+          pinnedConstraints: ['user: preserve recent turns']
+        })
+        const history = effectiveHistoryAfterLatestCompaction(snapshot.items)
+          .filter((item) => item.kind !== 'error')
+        const retainedIds = new Set(retainedTail.map((item) => item.id))
+        const keepRecent = history.filter((item) => retainedIds.has(item.id)).length
+        const summaryItemId = this['deps'].ids.next('compaction')
+        const result = this['deps'].compactor.compact({
+          threadId: input.threadId,
+          turnId: cutoffTurn.id,
+          history,
+          prefix,
+          keepRecent,
+          budgetTokens: input.request.budgetTokens,
+          reason: input.request.reason ?? `archive through ${cutoffTurn.id}`,
+          summaryItemId,
+          auto: false
+        })
+        if (result.replacedTokens === 0) {
+          throw new TurnConflictError('cutoff does not contain compactable history')
+        }
+        const nextItems = buildArchivedActiveHistory(result.next, result.summaryItem, retainedTail)
+        const staged = await archiveItems.call(this['deps'].sessionStore, {
+          threadId: input.threadId,
+          cutoffTurnId: cutoffTurn.id,
+          createdAt: this['deps'].nowIso(),
+          items: archivedHead,
+          retainedItems: retainedTail.length,
+          replacedTokens: result.replacedTokens
+        })
+        const commit = await this['deps'].sessionStore.rewriteItemsIfRevision(
+          input.threadId,
+          snapshot.revision,
+          nextItems
+        )
+        if (!commit.applied) {
+          await staged.cleanup()
+          throw new TurnConflictError('history changed while archive was being committed')
+        }
+        await this['threadItems'].syncFromSession(input.threadId)
+        await this['deps'].events.record({
+          kind: 'compaction_completed',
+          threadId: input.threadId,
+          turnId: cutoffTurn.id,
+          itemId: result.summaryItem.id,
+          summary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
+          replacedTokens: result.replacedTokens,
+          auto: false,
+          pinnedConstraints: prefix.pinnedConstraints,
+          ...(result.summaryItem.kind === 'compaction' && result.summaryItem.sourceItemIds
+            ? { sourceItemIds: result.summaryItem.sourceItemIds }
+            : {})
+        })
+        await this['deps'].onCompacted?.(input.threadId)
+        return {
+          threadId: input.threadId,
+          replacedTokens: result.replacedTokens,
+          summary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
+          pinnedConstraints: prefix.pinnedConstraints,
+          archivePath: staged.path,
+          archivedItems: archivedHead.length,
+          retainedItems: retainedTail.length,
+          contextEstimate: this['deps'].compactor.estimate(nextItems),
+          ...(result.summaryItem.kind === 'compaction' && result.summaryItem.sourceItemIds
+            ? { sourceItemIds: result.summaryItem.sourceItemIds }
+            : {})
+        }
+      })
+    }
     const turnId = input.turnId ?? thread.turns[thread.turns.length - 1]?.id ?? this['deps'].ids.next('turn')
     const bindingTurn = thread.turns.find((candidate) => candidate.id === turnId)
     const {

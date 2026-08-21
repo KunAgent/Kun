@@ -99,6 +99,14 @@ function normalizeQueuedMessage(value: unknown): QueuedUserMessage | null {
   } else {
     delete normalized.messageSource
   }
+  const backgroundRuntimeText = typeof source.backgroundRuntimeText === 'string'
+    ? source.backgroundRuntimeText
+    : ''
+  if (backgroundRuntimeText) normalized.backgroundRuntimeText = backgroundRuntimeText
+  else delete normalized.backgroundRuntimeText
+  const backgroundCheckpointRequestId = normalizedString(source.backgroundCheckpointRequestId)
+  if (backgroundCheckpointRequestId) normalized.backgroundCheckpointRequestId = backgroundCheckpointRequestId
+  else delete normalized.backgroundCheckpointRequestId
   const clientRequestId = normalizedString(source.clientRequestId)
   if (clientRequestId) normalized.clientRequestId = clientRequestId
   else delete normalized.clientRequestId

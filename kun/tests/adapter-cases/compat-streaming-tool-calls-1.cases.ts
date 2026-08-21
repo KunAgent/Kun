@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { CompatModelClient, type ModelStreamLimits } from '../../src/adapters/model/compat-model-client.js'
+import {
+  CompatModelClient,
+  type CompatModelClientConfig,
+  type ModelStreamLimits
+} from '../../src/adapters/model/compat-model-client.js'
 
 import {
   ModelStreamResourceBudget,
@@ -107,7 +111,7 @@ function expectResourceLimit(chunk: ModelStreamChunk | undefined, messagePrefix:
   expect(chunk.message).toContain('pendingArgumentFragments=')
 }
 
-function chatToolDelta(d: { index: number; id?: string; name?: string; args?: string }): string {
+function chatToolDelta(d: { index: number; id?: unknown; name?: string; args?: string }): string {
   const fn: Record<string, unknown> = {}
   if (d.name !== undefined) fn.name = d.name
   if (d.args !== undefined) fn.arguments = d.args
@@ -130,7 +134,8 @@ function chatToolCallDeltas(): string[] {
 function makeClient(
   fetchImpl: typeof fetch,
   modelCapabilities?: (model: string) => ModelCapabilityMetadata,
-  streamLimits?: Partial<ModelStreamLimits>
+  streamLimits?: Partial<ModelStreamLimits>,
+  retry?: CompatModelClientConfig['retry']
 ) {
   return new CompatModelClient({
     baseUrl: 'https://provider.example/v1/chat/completions',
@@ -139,7 +144,8 @@ function makeClient(
     endpointFormat: 'chat_completions',
     fetchImpl,
     ...(modelCapabilities ? { modelCapabilities } : {}),
-    ...(streamLimits ? { streamLimits } : {})
+    ...(streamLimits ? { streamLimits } : {}),
+    ...(retry ? { retry } : {})
   })
 }
 
@@ -264,9 +270,14 @@ it('reports malformed or truncated SSE instead of completing a partial response'
     const malformed = await drain(makeClient(streamingFetch(['data: {bad-json}\n\n'])).stream(request()))
     expect(malformed).toEqual([{ kind: 'error', message: 'model stream contained invalid SSE JSON', code: 'stream_invalid_frame' }])
 
-    const truncated = await drain(makeClient(streamingFetch([
-      frame({ choices: [{ index: 0, delta: { content: 'partial' } }] })
-    ])).stream(request()))
+    const truncated = await drain(makeClient(
+      streamingFetch([
+        frame({ choices: [{ index: 0, delta: { content: 'partial' } }] })
+      ]),
+      undefined,
+      undefined,
+      { maxAttempts: 0 }
+    ).stream(request()))
     expect(truncated).toEqual([
       { kind: 'assistant_text_delta', text: 'partial' },
       expect.objectContaining({
@@ -320,6 +331,148 @@ it('surfaces truncated arguments as __raw (instead of dropping) on finish_reason
     expect(completed(chunks).stopReason).toBe('length')
   })
 
+it('keeps bash arguments together when the provider supplies the call id late', async () => {
+    const frames = [
+      chatToolDelta({ index: 0, name: 'bash', args: '{"command":"printf ' }),
+      chatToolDelta({ index: 0, id: 'call_bash', args: 'hello"}' }),
+      chatFinish('tool_calls')
+    ]
+    const chunks = await drain(makeClient(streamingFetch(frames)).stream(request()))
+    expect(toolCallCompletes(chunks)).toEqual([{
+      kind: 'tool_call_complete',
+      callId: 'call_bash',
+      toolName: 'bash',
+      arguments: { command: 'printf hello' }
+    }])
+  })
+
+  it('treats an empty chat fragment id as omitted and keeps the indexed tool call', async () => {
+    const frames = [
+      chatToolDelta({ index: 0, id: 'call_grep', name: 'grep', args: '{"pattern":"plan' }),
+      chatToolDelta({ index: 0, id: '', args: 'Worktree"}' }),
+      chatFinish('tool_calls')
+    ]
+    const chunks = await drain(makeClient(streamingFetch(frames)).stream(request()))
+    expect(toolCallCompletes(chunks)).toEqual([{
+      kind: 'tool_call_complete',
+      callId: 'call_grep',
+      toolName: 'grep',
+      arguments: { pattern: 'planWorktree' }
+    }])
+    expect(completed(chunks).stopReason).toBe('tool_calls')
+  })
+
+  it('treats a null chat fragment id as omitted and keeps the indexed tool call', async () => {
+    const frames = [
+      chatToolDelta({ index: 0, id: 'call_grep', name: 'grep', args: '{"pattern":"plan' }),
+      chatToolDelta({ index: 0, id: null, args: 'Worktree"}' }),
+      chatFinish('tool_calls')
+    ]
+    const chunks = await drain(makeClient(streamingFetch(frames)).stream(request()))
+    expect(toolCallCompletes(chunks)).toEqual([{
+      kind: 'tool_call_complete',
+      callId: 'call_grep',
+      toolName: 'grep',
+      arguments: { pattern: 'planWorktree' }
+    }])
+    expect(completed(chunks).stopReason).toBe('tool_calls')
+  })
+
+  it('migrates a null-id indexed call when a later chat fragment supplies the id', async () => {
+    const frames = [
+      chatToolDelta({ index: 0, id: null, name: 'read', args: '{"path":"src/' }),
+      chatToolDelta({ index: 0, id: 'call_read', args: 'main.ts"}' }),
+      chatFinish('tool_calls')
+    ]
+    const chunks = await drain(makeClient(streamingFetch(frames)).stream(request()))
+    expect(toolCallCompletes(chunks)).toEqual([{
+      kind: 'tool_call_complete',
+      callId: 'call_read',
+      toolName: 'read',
+      arguments: { path: 'src/main.ts' }
+    }])
+  })
+
+  it.each([
+    { label: 'number', id: 42 },
+    { label: 'object', id: { value: 'do-not-log-provider-id' } },
+    { label: 'oversized string', id: 'x'.repeat(513) },
+    { label: 'control-character string', id: 'call_secret\nvalue' }
+  ])('rejects an invalid $label chat fragment id with a redacted protocol error', async ({ id }) => {
+    const chunks = await drain(makeClient(streamingFetch([
+      chatToolDelta({ index: 0, id, name: 'grep', args: '{"pattern":"secret"}' })
+    ])).stream(request()))
+    expect(chunks.at(-1)).toEqual({
+      kind: 'error',
+      code: 'stream_tool_call_protocol',
+      message: 'model stream tool-call protocol error: provider call id is invalid (pendingToolCalls=0)'
+    })
+    expect(JSON.stringify(chunks.at(-1))).not.toContain('do-not-log-provider-id')
+    expect(JSON.stringify(chunks.at(-1))).not.toContain('call_secret')
+    expect(JSON.stringify(chunks.at(-1))).not.toContain('Cannot read properties')
+  })
+
+  it('merges an anonymous chat fragment into the only pending tool call', async () => {
+    const frames = [
+      chatToolDelta({ index: 0, id: 'call_bash', name: 'bash', args: '{"command":"echo ' }),
+      frame({ choices: [{ index: 0, delta: { tool_calls: [{ function: { arguments: 'safe"}' } }] } }] }),
+      chatFinish('tool_calls')
+    ]
+    const chunks = await drain(makeClient(streamingFetch(frames)).stream(request()))
+    expect(toolCallCompletes(chunks)[0]).toMatchObject({
+      callId: 'call_bash', arguments: { command: 'echo safe' }
+    })
+  })
+
+  it('rejects an anonymous fragment with multiple candidates using redacted diagnostics', async () => {
+    const secret = 'do-not-log-this-command'
+    const chunks = await drain(makeClient(streamingFetch([
+      chatToolDelta({ index: 0, id: 'call_1', name: 'bash', args: '{"command":"one"}' }),
+      chatToolDelta({ index: 1, id: 'call_2', name: 'bash', args: '{"command":"two"}' }),
+      frame({ choices: [{ index: 0, delta: { tool_calls: [{ function: { arguments: secret } }] } }] })
+    ])).stream(request()))
+    expect(chunks.at(-1)).toEqual({
+      kind: 'error',
+      code: 'stream_tool_call_protocol',
+      message: 'model stream tool-call protocol error: fragment omitted both id and index with multiple candidates (pendingToolCalls=2)'
+    })
+    expect(JSON.stringify(chunks)).not.toContain(secret)
+  })
+
+  it('migrates a Responses index identity when output_item.done supplies the call id', async () => {
+    const call = {
+      type: 'function_call', call_id: 'response_bash', name: 'bash',
+      arguments: '{"command":"echo ok"}'
+    }
+    const chunks = await drain(makeResponsesClient([
+      frame({
+        type: 'response.function_call_arguments.delta', output_index: 0,
+        delta: '{"command":"echo '
+      }),
+      frame({ type: 'response.output_item.done', output_index: 0, item: call }),
+      frame({ type: 'response.completed', response: { status: 'completed', output: [call] } })
+    ]).stream(request()))
+    expect(toolCallCompletes(chunks)).toEqual([{
+      kind: 'tool_call_complete', callId: 'response_bash', toolName: 'bash',
+      arguments: { command: 'echo ok' }
+    }])
+  })
+
+  it('rejects a pending call without a tool name instead of silently dropping it', async () => {
+    const chunks = await drain(makeClient(streamingFetch([
+      chatToolDelta({ index: 0, id: 'secret-provider-id', args: '{"command":"secret"}' }),
+      chatFinish('tool_calls')
+    ])).stream(request()))
+    expect(chunks.at(-1)).toEqual({
+      kind: 'error',
+      code: 'stream_tool_call_protocol',
+      message: 'model stream tool-call protocol error: pending call is missing a tool name (pendingToolCalls=1)'
+    })
+    const diagnostic = JSON.stringify(chunks.at(-1))
+    expect(diagnostic).not.toContain('secret-provider-id')
+    expect(diagnostic).not.toContain('"secret"')
+  })
+
 it('does not emit a tool call when no tool deltas were streamed', async () => {
     const frames = [
       frame({ choices: [{ index: 0, delta: { content: 'hello' } }] }),
@@ -329,6 +482,28 @@ it('does not emit a tool call when no tool deltas were streamed', async () => {
     const chunks = await drain(makeClient(streamingFetch(frames)).stream(request()))
     expect(toolCallCompletes(chunks)).toHaveLength(0)
     expect(completed(chunks).stopReason).toBe('stop')
+  })
+
+  it('merges indexless Anthropic argument and stop frames into the sole tool block', async () => {
+    const frames = [
+      frame({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_bash', name: 'bash' } }),
+      frame({ type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{"command":"echo ok"}' } }),
+      frame({ type: 'content_block_stop' }),
+      frame({ type: 'message_delta', delta: { stop_reason: 'tool_use' } }),
+      frame({ type: 'message_stop' })
+    ]
+    const client = new CompatModelClient({
+      baseUrl: 'https://provider.example/anthropic',
+      apiKey: 'sk-test',
+      model: 'test-model',
+      endpointFormat: 'messages',
+      fetchImpl: streamingFetch(frames)
+    })
+    const chunks = await drain(client.stream(request()))
+    expect(toolCallCompletes(chunks)).toEqual([{
+      kind: 'tool_call_complete', callId: 'toolu_bash', toolName: 'bash',
+      arguments: { command: 'echo ok' }
+    }])
   })
 
 it('recovers an Anthropic Messages tool_use block cut off before content_block_stop', async () => {

@@ -3,7 +3,8 @@ import {
   contextThresholdsForModel,
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
-  modelContextProfilesFromConfig
+  modelContextProfilesFromConfig,
+  safeProviderReasoningCapability
 } from './model-context-profile.js'
 
 describe('contextThresholdsForModel safety cap', () => {
@@ -113,6 +114,27 @@ describe('per-model endpointFormat', () => {
 })
 
 describe('built-in reasoning compatibility profiles', () => {
+  it('suppresses a stale thinking toggle only for OpenCode Go accounts', () => {
+    const stale = {
+      supportedEfforts: ['off', 'low', 'medium', 'high', 'max'],
+      defaultEffort: 'max',
+      requestProtocol: 'thinking-toggle-chat-completions'
+    } satisfies NonNullable<Parameters<typeof safeProviderReasoningCapability>[1]>
+    expect(safeProviderReasoningCapability({
+      providerId: 'opencode-go-2',
+      presetSource: 'opencode-go',
+      model: 'muse-spark-1.2-contributor'
+    }, stale)).toEqual({
+      supportedEfforts: ['auto'],
+      defaultEffort: 'auto',
+      requestProtocol: 'none'
+    })
+    expect(safeProviderReasoningCapability({
+      providerId: 'custom-provider',
+      model: 'muse-spark-1.2-contributor'
+    }, stale)).toEqual(stale)
+  })
+
   it('keeps audited Codex Responses variants available for legacy snapshots', () => {
     expect(modelCapabilitiesForModel('gpt-5.6-luna')).toMatchObject({
       contextWindowTokens: 372_000,

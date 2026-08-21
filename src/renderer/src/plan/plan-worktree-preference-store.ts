@@ -2,26 +2,28 @@ import { create } from 'zustand'
 
 export type PlanWorktreePreference = {
   initialized: boolean
-  featureEnabled: boolean
+  /** Legacy test/store input; no runtime behavior reads this value. */
+  featureEnabled?: boolean
   usePromptWorktree: boolean
+  overridden?: boolean
   branchPrefix: string
 }
 
 type PlanWorktreePreferenceState = {
   plans: Record<string, PlanWorktreePreference>
-  initializePlan: (planId: string, featureEnabled: boolean, branchPrefix: string) => void
-  syncSettings: (featureEnabled: boolean, branchPrefix: string) => void
+  initializePlan: (planId: string, useWorktreeByDefault: boolean, branchPrefix: string) => void
+  syncSettings: (useWorktreeByDefault: boolean, branchPrefix: string) => void
   setUsePromptWorktree: (planId: string, enabled: boolean) => void
 }
 
 function initialPreference(
-  featureEnabled = false,
+  useWorktreeByDefault = true,
   branchPrefix = 'codex/'
 ): PlanWorktreePreference {
   return {
     initialized: false,
-    featureEnabled,
-    usePromptWorktree: featureEnabled,
+    usePromptWorktree: useWorktreeByDefault,
+    overridden: false,
     branchPrefix
   }
 }
@@ -29,14 +31,14 @@ function initialPreference(
 export const usePlanWorktreePreferenceStore = create<PlanWorktreePreferenceState>((set) => ({
   plans: {},
 
-  initializePlan: (planId, featureEnabled, branchPrefix) => {
+  initializePlan: (planId, useWorktreeByDefault, branchPrefix) => {
     set((state) => {
       if (state.plans[planId]?.initialized) return state
       return {
         plans: {
           ...state.plans,
           [planId]: {
-            ...initialPreference(featureEnabled, branchPrefix),
+            ...initialPreference(useWorktreeByDefault, branchPrefix),
             initialized: true
           }
         }
@@ -44,17 +46,15 @@ export const usePlanWorktreePreferenceStore = create<PlanWorktreePreferenceState
     })
   },
 
-  syncSettings: (featureEnabled, branchPrefix) => {
+  syncSettings: (useWorktreeByDefault, branchPrefix) => {
     set((state) => ({
-      plans: Object.fromEntries(Object.entries(state.plans).map(([planId, current]) => {
-        const featureChanged = current.featureEnabled !== featureEnabled
-        return [planId, {
-          ...current,
-          featureEnabled,
-          branchPrefix,
-          usePromptWorktree: featureChanged ? featureEnabled : current.usePromptWorktree
-        }]
-      }))
+      plans: Object.fromEntries(Object.entries(state.plans).map(([planId, current]) => [planId, {
+        ...current,
+        branchPrefix,
+        usePromptWorktree: current.overridden === true
+          ? current.usePromptWorktree
+          : useWorktreeByDefault
+      }]))
     }))
   },
 
@@ -67,7 +67,8 @@ export const usePlanWorktreePreferenceStore = create<PlanWorktreePreferenceState
           [planId]: {
             ...current,
             initialized: true,
-            usePromptWorktree: current.featureEnabled && enabled
+            overridden: true,
+            usePromptWorktree: enabled
           }
         }
       }

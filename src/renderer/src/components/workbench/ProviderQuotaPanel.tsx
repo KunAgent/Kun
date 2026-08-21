@@ -17,6 +17,11 @@ import type {
   ProviderQuotaMetric,
   ProviderQuotaStatus
 } from '@shared/provider-quota'
+import { ProviderIcon } from '../provider-icon'
+import {
+  formatProviderLocalCostAmount,
+  ProviderLocalCostSummaryView
+} from '../provider-local-cost-summary'
 
 type StatusPresentation = {
   labelKey: string
@@ -76,8 +81,12 @@ export function ProviderQuotaPanel({
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
-  const availableEntries = result?.entries.filter((entry) => entry.status === 'available') ?? []
-  const unavailableEntries = result?.entries.filter((entry) => entry.status !== 'available') ?? []
+  const primaryEntries = result?.entries.filter(
+    (entry) => entry.status === 'available' || entry.localCost !== undefined
+  ) ?? []
+  const unavailableEntries = result?.entries.filter(
+    (entry) => entry.status !== 'available' && entry.localCost === undefined
+  ) ?? []
 
   const refresh = useCallback(async (manual = false): Promise<void> => {
     if (manual) setRefreshing(true)
@@ -189,7 +198,7 @@ export function ProviderQuotaPanel({
                 {error}
               </div>
             ) : null}
-            {availableEntries.map((entry) => (
+            {primaryEntries.map((entry) => (
               <ProviderQuotaCard
                 key={entry.providerId}
                 entry={entry}
@@ -327,8 +336,12 @@ function ProviderQuotaCard({
             data-expanded={expanded ? 'true' : 'false'}
             strokeWidth={1.9}
           />
-          <span className="provider-quota-monogram" aria-hidden="true">
-            {providerMonogram(entry.providerName)}
+          <span className="provider-quota-monogram">
+            <ProviderIcon
+              presetId={entry.presetId}
+              providerId={entry.providerId}
+              size={17}
+            />
           </span>
           <div className="provider-quota-card-copy">
             <div className="provider-quota-card-title">
@@ -376,6 +389,14 @@ function ProviderQuotaCard({
             <p className="provider-quota-summary">{entry.summary}</p>
           ) : null}
 
+          {entry.localCost ? (
+            <ProviderLocalCostSummaryView
+              summary={entry.localCost}
+              locale={locale}
+              variant="workbench"
+            />
+          ) : null}
+
           {entry.status === 'available' ? (
             entry.metrics.length > 0 ? (
               <div className={`provider-quota-metrics ${entry.summary ? 'has-summary' : ''}`}>
@@ -416,6 +437,13 @@ function providerQuotaCompactSummary(
   t: TFunction
 ): string {
   if (entry.status !== 'available') {
+    if (entry.localCost) {
+      const today = entry.localCost.today
+      const amount = today.amount === null || today.coverage === 'unavailable'
+        ? t('providerQuotaLocalCostUnavailable')
+        : formatProviderLocalCostAmount(today.amount, locale)
+      return `${t('providerQuotaLocalCostToday')}: ${amount}`
+    }
     if (entry.message) return entry.message
     if (entry.status === 'unsupported') return t('providerQuotaUnsupportedHint')
     if (entry.status === 'missing_credentials') return t('providerQuotaMissingCredentialsHint')
@@ -523,21 +551,6 @@ function QuotaMetric({
       ) : null}
     </div>
   )
-}
-
-function providerMonogram(providerName: string): string {
-  const words = providerName.trim().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return '?'
-  const firstWord = Array.from(words[0])
-  const secondWord = words[1] ? Array.from(words[1]) : []
-  const startsWithLatin = (characters: string[]): boolean => (
-    characters.length > 0 && /^[A-Za-z0-9]$/.test(characters[0])
-  )
-
-  if (startsWithLatin(firstWord) && startsWithLatin(secondWord)) {
-    return `${firstWord[0]}${secondWord[0]}`.toLocaleUpperCase()
-  }
-  return firstWord.slice(0, 2).join('').toLocaleUpperCase()
 }
 
 function clampPercent(value: number): number {

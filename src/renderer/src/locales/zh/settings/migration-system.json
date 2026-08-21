@@ -224,5 +224,9 @@
   "uninstallConfirmType": "输入 UNINSTALL 以确认",
   "uninstallConfirmButton": "确认卸载",
   "uninstallConfirmCancel": "取消",
-  "uninstallRunning": "正在卸载…Kun 即将关闭。"
+  "uninstallRunning": "正在卸载…Kun 即将关闭。",
+  "labConversationVisualizationTitle": "会话可视化",
+  "labConversationVisualizationDescription": "用于流程、分组说明和重要约束的实验性结构化可视化。仅当空间结构比纯文本更清晰时，Agent 才会使用。",
+  "labConversationVisualizationEnabled": "允许 Agent 展示可视化",
+  "labConversationVisualizationEnabledDesc": "开启后，后续桌面会话请求会获得 show_visualization 工具。关闭会移除工具，但保留历史会话中已有的可视化。"
 }

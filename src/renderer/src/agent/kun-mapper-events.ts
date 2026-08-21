@@ -157,11 +157,19 @@ export function childLifecycleToolEventFromRuntimeEvent(event: CoreRuntimeEventJ
       detached: child.detached === true,
       resumable: child.resumable === true,
       resumeCount: child.resumeCount ?? 0,
+      ...(child.failure ? { failure: child.failure } : {}),
+      ...(child.proactiveRetry ? { proactiveRetry: child.proactiveRetry } : {}),
       launcher: (child.childLauncher as string | undefined) === 'explore_agent' ? 'fast_context' : child.childLauncher,
       terminationReason: child.childTerminationReason,
       parentTurnId: child.parentTurnId
     }),
-    meta: { child }
+    meta: {
+      child: {
+        ...child,
+        ...(event.child?.failure ? { failure: event.child.failure } : {}),
+        ...(event.child?.proactiveRetry ? { proactiveRetry: event.child.proactiveRetry } : {})
+      }
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import type { TurnItem } from '../contracts/items.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import { ContextEstimator } from '../loop/context-estimator.js'
 import type { ChildResultRef, ChildRunRecord } from './delegation-runtime-contracts.js'
+import type { ChildRunFailure } from '../contracts/subagent-retry.js'
 import { PptReviewBundleV1 } from '../ppt/ppt-review-manifest.js'
 import { PptDirectionBundleV1 } from '../ppt/ppt-direction-workflow.js'
 import {
@@ -33,11 +34,16 @@ export class ChildResultExecutionError extends Error {
   /** Cumulative child-thread usage at failure time; settlement input, not a display field. */
   readonly usage?: ChildRunRecord['usage']
   readonly toolInvocations?: number
+  readonly failure?: ChildRunFailure
 
   constructor(
     message: string,
     result: MaterializedChildResult,
-    settlement?: { usage?: ChildRunRecord['usage']; toolInvocations?: number }
+    settlement?: {
+      usage?: ChildRunRecord['usage']
+      toolInvocations?: number
+      failure?: ChildRunFailure
+    }
   ) {
     super(message)
     this.name = 'ChildResultExecutionError'
@@ -46,6 +52,7 @@ export class ChildResultExecutionError extends Error {
     // never strips the usage settlement the runtime must still account for.
     this.usage = settlement?.usage
     this.toolInvocations = settlement?.toolInvocations
+    this.failure = settlement?.failure
   }
 }
 

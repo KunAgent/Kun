@@ -16,6 +16,7 @@ describe('delegation result retention', () => {
           enabled: true,
           useExistingAgents: true,
           maxParallel: 1,
+          proactiveRetry: { enabled: true, maxAttempts: 3 },
           defaultToolPolicy: 'readOnly',
           profiles: {}
         },
@@ -74,6 +75,7 @@ describe('delegation result retention', () => {
           enabled: true,
           useExistingAgents: true,
           maxParallel: 2,
+          proactiveRetry: { enabled: true, maxAttempts: 3 },
           defaultToolPolicy: 'readOnly',
           profiles: {}
         },

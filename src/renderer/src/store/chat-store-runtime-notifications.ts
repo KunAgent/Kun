@@ -93,6 +93,8 @@ export const completionNotificationKeys: string[] = []
 export const completionNotificationKeySet = new Set<string>()
 export const watchCompletionNotificationKeys = new Map<string, string>()
 export const watchCompletionNotificationSources = new Map<string, TurnCompleteNotificationSource>()
+const lastCompletionWatchTimeByThread = new Map<string, number>()
+let completionWatchGeneration = 0
 
 export type PendingClawFeishuMirror = {
   threadId: string
@@ -111,7 +113,13 @@ export function watchTurnCompletionNotification(
   if (!normalizedThreadId) return
   watchCompletionNotificationKeys.delete(normalizedThreadId)
   watchCompletionNotificationSources.delete(normalizedThreadId)
-  watchCompletionNotificationKeys.set(normalizedThreadId, `watch:${normalizedThreadId}:${now}`)
+  completionWatchGeneration += 1
+  const sameTick = lastCompletionWatchTimeByThread.get(normalizedThreadId) === now
+  lastCompletionWatchTimeByThread.set(normalizedThreadId, now)
+  watchCompletionNotificationKeys.set(
+    normalizedThreadId,
+    `watch:${normalizedThreadId}:${now}${sameTick ? `:${completionWatchGeneration}` : ''}`
+  )
   watchCompletionNotificationSources.set(normalizedThreadId, source)
   while (watchCompletionNotificationKeys.size > MAX_WATCHED_COMPLETION_NOTIFICATIONS) {
     const oldestThreadId = watchCompletionNotificationKeys.keys().next().value

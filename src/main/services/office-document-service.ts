@@ -53,7 +53,7 @@ const VISUAL_PREVIEW_MAX_DIMENSION = 1920
 let activeOfficeCliProcesses = 0
 const officeCliProcessWaiters: Array<() => void> = []
 
-type OfficeCliResult = {
+export type OfficeCliResult = {
   stdout: string
   stderr: string
   exitCode: number
@@ -350,7 +350,7 @@ function isBenignOoxmlSchemaError(error: Record<string, unknown>): boolean {
   return /not declared|undeclared|wps\.cn|etCustomData|officeDocument\/2017/i.test(combined)
 }
 
-async function runOfficeCli(
+export async function runOfficeCli(
   binaryPath: string,
   args: string[],
   signal?: AbortSignal

@@ -31,10 +31,17 @@ import {
   type DesignTaskProfileSelection,
   type ResolvedDesignTaskProfileSelection
 } from '../../design/design-task-profile-input'
+import {
+  activateLockedDesignDocument as restoreAuthoritativeDesignDocument,
+  mergeThreadDesignProfile,
+  resolveAuthoritativeDesignProfile
+} from '../../design/design-locked-profile'
 import type {
   DesignDocumentTarget,
   DesignTaskProfile
 } from '../../agent/design-task-profile'
+import { getProvider } from '../../agent/registry'
+import { useChatStore } from '../../store/chat-store'
 import { deriveDrawingTitleFromPrompt } from '../../design/design-drawing-title'
 import { removePersistedDesignDocument } from '../../design/design-document-persistence'
 import { designDocKey, readDesignThreadRegistry } from '../../design/design-thread-registry'
@@ -74,6 +81,7 @@ export type DesignPromptControllerOptions = {
   rollbackProvisionalThread?: (threadId: string) => Promise<boolean>
   designTaskProfileSelection?: DesignTaskProfileSelection
   lockedDesignProfile?: DesignTaskProfile | null
+  expectedThreadId?: string | null
   imageGenerationAvailable?: boolean
   imageGenerationReason?: string
   sendMessage: DesignTurnSubmitSendMessage
@@ -87,6 +95,7 @@ export type SendDesignPromptOptions = {
   source?: DesignPromptSource
   screenShapeId?: string
   svgArtifactId?: string
+  imageEditReferencePath?: string
 }
 
 type PreparedDrawing = {
@@ -138,6 +147,7 @@ export function useDesignPromptController({
   rollbackProvisionalThread,
   designTaskProfileSelection,
   lockedDesignProfile,
+  expectedThreadId,
   imageGenerationAvailable,
   imageGenerationReason,
   sendMessage,
@@ -161,41 +171,70 @@ export function useDesignPromptController({
 
   const designProfileForTarget = (
     target: DesignDocumentTarget,
-    selection: DesignTaskProfileSelection | undefined = designTaskProfileSelection
+    selection: DesignTaskProfileSelection | undefined = designTaskProfileSelection,
+    profileLock: DesignTaskProfile | null = lockedDesignProfile ?? null
   ) => {
+    if (profileLock) {
+      return buildDesignTaskProfileInput({
+        selection: selection ?? {
+          outputMedium: profileLock.outputMedium,
+          target: profileLock.target,
+          preset: profileLock.preset,
+          presetSource: profileLock.presetSource,
+          styleSnapshot: profileLock.styleSnapshot
+        },
+        documentTarget: target,
+        designContext: useDesignWorkspaceStore.getState().designContext,
+        lockedProfile: profileLock
+      })
+    }
     if (!selection) return undefined
     return buildDesignTaskProfileInput({
       selection,
       documentTarget: target,
-      designContext: useDesignWorkspaceStore.getState().designContext,
-      lockedProfile: lockedDesignProfile
+      designContext: useDesignWorkspaceStore.getState().designContext
     })
   }
 
-  const activateLockedDesignDocument = (): boolean => {
-    if (!lockedDesignProfile) return true
-    const documentId = lockedDesignProfile.documentTarget.documentId
-    const state = useDesignWorkspaceStore.getState()
-    const document = state.documents.find((candidate) => candidate.id === documentId)
-    const boardArtifactId = lockedDesignProfile.documentTarget.boardArtifactId
-    if (!document || !document.artifacts.some(
-      (artifact) => artifact.id === boardArtifactId && artifact.kind === 'canvas'
-    )) {
-      const message = 'The whiteboard bound to this Design task is unavailable.'
-      state.setFileError(message)
-      setError(message)
-      return false
-    }
-    if (state.activeDocumentId !== documentId) state.switchActiveDocument(documentId)
-    return useDesignWorkspaceStore.getState().activeDocumentId === documentId
+  const resolveSubmitDesignProfile = async (): Promise<DesignTaskProfile | null> => {
+    const threadId = expectedThreadId?.trim() || ''
+    const localProfile = lockedDesignProfile ?? (
+      threadId
+        ? useChatStore.getState().threads.find((thread) => thread.id === threadId)?.designProfile
+        : undefined
+    ) ?? null
+    if (!threadId) return localProfile
+    return resolveAuthoritativeDesignProfile({
+      threadId,
+      localProfile,
+      getThread: (id) => useChatStore.getState().threads.find((thread) => thread.id === id),
+      fetchThreadDetail: (id) => getProvider().getThreadDetail(id),
+      applyProfile: (id, profile) => {
+        useChatStore.setState((state) => ({
+          threads: mergeThreadDesignProfile(state.threads, id, profile)
+        }))
+      }
+    })
   }
 
-  const prepareDrawingForFirstPrompt = (titleSource: string): PreparedDrawing | null => {
+  const activateLockedDesignDocument = async (
+    profileLock: DesignTaskProfile | null = lockedDesignProfile ?? null
+  ): Promise<boolean> => {
+    return restoreAuthoritativeDesignDocument(profileLock, setError, {
+      threadId: expectedThreadId
+    })
+  }
+
+  const prepareDrawingForFirstPrompt = (
+    titleSource: string,
+    profileLock: DesignTaskProfile | null
+  ): PreparedDrawing | null => {
     const state = useDesignWorkspaceStore.getState()
-    const unlockedTaskNeedsOwnDrawing = Boolean(designTaskProfileSelection && !lockedDesignProfile)
-    const shouldCreate =
+    const unlockedTaskNeedsOwnDrawing = Boolean(designTaskProfileSelection && !profileLock)
+    const shouldCreate = !profileLock && (
       unlockedTaskNeedsOwnDrawing ||
       state.drawingCreationOpen || state.documents.length === 0 || !state.activeDocumentId
+    )
     if (!shouldCreate) {
       return {
         docId: state.ensureActiveDocument(),
@@ -330,7 +369,8 @@ export function useDesignPromptController({
 
   async function generateDesignPages(
     brief: string,
-    resolvedProfileSelection?: ResolvedDesignTaskProfileSelection
+    resolvedProfileSelection?: ResolvedDesignTaskProfileSelection,
+    profileLock: DesignTaskProfile | null = null
   ): Promise<boolean> {
     const designState = useDesignWorkspaceStore.getState()
     const designWorkspaceRoot = designState.workspaceRoot || workspaceRoot
@@ -344,7 +384,7 @@ export function useDesignPromptController({
     // thread-scoped target; restored if this first send fails.
     let previousSurface: CodeCanvasDesignSurface | undefined = null
     try {
-      drawing = prepareDrawingForFirstPrompt(brief)
+      drawing = prepareDrawingForFirstPrompt(brief, profileLock)
       if (!drawing) return false
       previousSurface = useCodeCanvasDesignSurface.getState().surface
       const threadId = await ensureDesignThreadForWorkspace(designWorkspaceRoot, drawing.docId)
@@ -438,9 +478,10 @@ export function useDesignPromptController({
 
   async function sendDesignPrompt(value: string, options: SendDesignPromptOptions = {}): Promise<boolean> {
     const source = options.source ?? 'user'
+    const authoritativeProfile = await resolveSubmitDesignProfile()
     // A file-tree preview is never an implicit retarget. Existing Design tasks
     // always return to their immutable whiteboard before routing or admission.
-    if (!activateLockedDesignDocument()) return false
+    if (!(await activateLockedDesignDocument(authoritativeProfile))) return false
     const initialDesignState = useDesignWorkspaceStore.getState()
     if (designTaskProfileSelection?.outputMedium === 'image' && !imageGenerationAvailable) {
       setError(imageGenerationReason || t('designImageGenerationUnavailable'))
@@ -481,11 +522,11 @@ export function useDesignPromptController({
     let resolvedProfileSelection: ResolvedDesignTaskProfileSelection | undefined
     if (designTaskProfileSelection) {
       try {
-        resolvedProfileSelection = lockedDesignProfile
+        resolvedProfileSelection = authoritativeProfile
           ? {
               ...designTaskProfileSelection,
-              presetSource: lockedDesignProfile.presetSource ?? (
-                lockedDesignProfile.preset === 'none' ? 'none' : 'explicit'
+              presetSource: authoritativeProfile.presetSource ?? (
+                authoritativeProfile.preset === 'none' ? 'none' : 'explicit'
               )
             }
           : await resolveDesignTaskProfileSelection(
@@ -499,7 +540,11 @@ export function useDesignPromptController({
     }
     setDesignAssistantOpen(true)
     if (promptRoute.kind === 'multi-page') {
-      const started = await generateDesignPages(promptRoute.brief, resolvedProfileSelection)
+      const started = await generateDesignPages(
+        promptRoute.brief,
+        resolvedProfileSelection,
+        authoritativeProfile
+      )
       if (started) setInput('')
       return started
     }
@@ -520,7 +565,7 @@ export function useDesignPromptController({
     try {
       // The drawing title comes from the user's raw description. Attachment-only
       // creation intentionally falls back to the localized untitled placeholder.
-      const drawing = prepareDrawingForFirstPrompt(routeText)
+      const drawing = prepareDrawingForFirstPrompt(routeText, authoritativeProfile)
       if (!drawing) return false
       const docId = drawing.docId
       if (drawing.created) {
@@ -561,8 +606,8 @@ export function useDesignPromptController({
         expectedThreadId: threadId,
         // A locked task pins its board; submit resolves by id instead of
         // re-selecting the most recently updated canvas artifact.
-        ...(lockedDesignProfile
-          ? { boardArtifactId: lockedDesignProfile.documentTarget.boardArtifactId }
+        ...(authoritativeProfile
+          ? { boardArtifactId: authoritativeProfile.documentTarget.boardArtifactId }
           : {}),
         attachmentIds,
         attachments,
@@ -572,12 +617,14 @@ export function useDesignPromptController({
         htmlElementContext: drawing.created ? null : designHtmlElementContext,
         explicitScreenShapeId: options.screenShapeId,
         explicitSvgArtifactId: options.svgArtifactId,
+        imageEditReferencePath: options.imageEditReferencePath,
         clearAutoRepairScope: clearDesignAutoRepairScope,
         ...(drawing.created ? { waitForRuntimeAdmission: true } : {}),
-        ...(designTaskProfileSelection
+        ...(authoritativeProfile || designTaskProfileSelection
           ? {
               designTaskProfileForTarget: (target: DesignDocumentTarget) =>
-                designProfileForTarget(target, resolvedProfileSelection)!
+                designProfileForTarget(target, resolvedProfileSelection, authoritativeProfile)!,
+              omitDesignProfileWhenUnavailable: Boolean(authoritativeProfile)
             }
           : {})
       })

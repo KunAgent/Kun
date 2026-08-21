@@ -102,6 +102,14 @@ describe('watched completion notifications', () => {
     expect(completionNotificationDedupeKeyForWatchedThread('thread-1', 2000)).toBe('watch:thread-1:2000')
   })
 
+  it('creates a distinct generation when the same thread is re-armed in one millisecond', () => {
+    watchTurnCompletionNotification('thread-same-tick', 1000)
+    const first = completionNotificationDedupeKeyForWatchedThread('thread-same-tick')
+    watchTurnCompletionNotification('thread-same-tick', 1000)
+
+    expect(completionNotificationDedupeKeyForWatchedThread('thread-same-tick')).not.toBe(first)
+  })
+
   it('ignores empty watched thread ids', () => {
     watchTurnCompletionNotification(' ', 1000)
 

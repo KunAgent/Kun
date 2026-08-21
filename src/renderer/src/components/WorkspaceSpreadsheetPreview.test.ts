@@ -102,7 +102,7 @@ describe('WorkspaceSpreadsheetPreview outside-click dismissal', () => {
     }))
   })
 
-  it('keeps the cell selection when the click targets the floating writing assistant menu', async () => {
+  it('keeps the cell selection when the click targets the sidebar quote action', async () => {
     const onSelectionChange = vi.fn()
     await act(async () => {
       renderer = create(createElement(WorkspaceSpreadsheetPreview, {

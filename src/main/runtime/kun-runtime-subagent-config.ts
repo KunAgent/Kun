@@ -27,6 +27,12 @@ export function subagentProfilesForRuntime(
     enabled: subagents.enabled !== false,
     useExistingAgents: subagents.useExistingAgents !== false,
     maxParallel: validMaxParallel(subagents.maxParallel) ? subagents.maxParallel : 256,
+    proactiveRetry: {
+      enabled: subagents.proactiveRetry?.enabled !== false,
+      maxAttempts: validProactiveRetryAttempts(subagents.proactiveRetry?.maxAttempts)
+        ? subagents.proactiveRetry.maxAttempts
+        : 3
+    },
     ...(subagents.defaultToolPolicy ? { defaultToolPolicy: subagents.defaultToolPolicy } : {}),
     ...(subagents.defaultProfile ? { defaultProfile: subagents.defaultProfile } : {}),
     profiles
@@ -43,8 +49,13 @@ export function subagentProfilesForRuntime(
     enabled: candidate.enabled,
     useExistingAgents: candidate.useExistingAgents,
     maxParallel: candidate.maxParallel,
+    proactiveRetry: candidate.proactiveRetry,
     ...(subagents.defaultToolPolicy ? { defaultToolPolicy: subagents.defaultToolPolicy } : {})
   })
+}
+
+function validProactiveRetryAttempts(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 3
 }
 
 function validMaxParallel(value: unknown): value is number {

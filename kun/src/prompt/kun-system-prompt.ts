@@ -153,6 +153,12 @@ export function buildToolPreferenceInstruction(
     bullets.push(
       'Do not delegate trivial work, tightly coupled sequential steps, or tasks the parent can complete faster directly. Issue multiple child calls together only when they are genuinely independent.'
     )
+    bullets.push(
+      'When delegate_task returns a failed child with proactiveRetry.eligible=true, decide whether continuing that exact child can make progress. Prefer same-child continuation for transient provider/runtime failures or substantial preserved work; do not blindly retry unchanged authentication, quota, configuration, permission, capability, or deterministic request failures.'
+    )
+    bullets.push(
+      'To proactively continue an eligible failed child, call delegate_task with its exact resumeChildId and expectedResumeCount plus a concise continuation prompt. Do not create a replacement child, do not pass creation-only fields, and respect the remaining host-enforced retry budget.'
+    )
     if (names.has('list_subagent_profiles')) {
       if (profileAdvertised) {
         bullets.push(

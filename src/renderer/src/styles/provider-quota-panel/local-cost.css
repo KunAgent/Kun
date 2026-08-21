@@ -1,0 +1,108 @@
+.provider-local-cost-workbench {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-surface-subtle);
+}
+
+.provider-local-cost-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.provider-local-cost-heading strong {
+  overflow: hidden;
+  color: var(--ds-text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-local-cost-heading > span {
+  flex: none;
+  color: var(--ds-text-faint);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.provider-local-cost-windows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.provider-local-cost-window {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 5px;
+}
+
+.provider-local-cost-window-label {
+  width: 100%;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-local-cost-amount {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-local-cost-window[data-coverage='unavailable'] .provider-local-cost-amount {
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.provider-local-cost-coverage {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--provider-quota-warning) 38%, transparent);
+  border-radius: var(--ds-radius-pill);
+  color: var(--provider-quota-warning);
+  font-size: 10px;
+  line-height: 13px;
+}
+
+.provider-local-cost-window small {
+  width: 100%;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 10px;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-local-cost-disclaimer {
+  margin: 8px 0 0;
+  color: var(--ds-text-faint);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+@container (max-width: 250px) {
+  .provider-local-cost-workbench .provider-local-cost-windows {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -276,6 +276,9 @@
   "summarizeSession": "Summarize",
   "summarizing": "Summarizing…",
   "summarizeFailed": "Could not summarize this conversation",
+  "summarizeSummaryTitle": "Session summary",
+  "summarizeThreadMissing": "This conversation is no longer stored by the runtime. The list has been refreshed.",
+  "sidebarThreadCopySummary": "Copy summary",
   "name": "Name",
   "description": "Description",
   "color": "Color",
@@ -579,5 +582,13 @@
   "graphStatus_promoted": "promoted",
   "graphStatus_rolled_back": "rolled back",
   "graphStatus_merged": "merged",
-  "rightPanelGraph": "Graph"
+  "rightPanelGraph": "Graph",
+  "visualizationLabel": "Visualization",
+  "visualizationCollapse": "Collapse visualization",
+  "visualizationExpand": "Expand visualization",
+  "visualizationCopy": "Copy as text",
+  "visualizationCopied": "Copied",
+  "visualizationFlow": "Flow",
+  "visualizationCardGrid": "Grouped details",
+  "visualizationCallout": "Important note"
 }

@@ -279,6 +279,37 @@ describe('FileSessionStore item ordering', () => {
     expect(store.itemCacheStats()).toMatchObject({ entries: 0, bytes: 0 })
   })
 
+  it('writes an atomic recoverable archive bundle', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-archive-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_archive'
+    const item = makeUserItem({
+      id: 'user_archive',
+      threadId,
+      turnId: 'turn_archive',
+      text: 'archive me'
+    })
+    const archive = await store.archiveItems({
+      threadId,
+      cutoffTurnId: item.turnId,
+      createdAt: '2026-08-18T12:00:00.000Z',
+      items: [item],
+      retainedItems: 2,
+      replacedTokens: 12
+    })
+    expect(JSON.parse(await readFile(join(archive.path, 'manifest.json'), 'utf8'))).toMatchObject({
+      version: 1,
+      archivedItems: 1,
+      retainedItems: 2,
+      cutoffTurnId: 'turn_archive'
+    })
+    expect(await readFile(join(archive.path, 'messages.jsonl'), 'utf8')).toContain('user_archive')
+    expect(await readFile(join(archive.path, 'conversation.md'), 'utf8')).toContain('archive me')
+    await archive.cleanup()
+    await expect(stat(archive.path)).rejects.toThrow()
+  })
+
   it('streams a cold event high-water scan without loading an event array', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-session-highest-seq-'))
     roots.push(root)

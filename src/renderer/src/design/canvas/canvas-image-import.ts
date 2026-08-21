@@ -72,7 +72,7 @@ function workspaceRelativeFromAbsolute(absolutePath: string, workspaceRoot: stri
 export async function pasteClipboardImageToCanvas(options: {
   vbox: ViewBox
   /**
-   * When provided, the pasted bytes are persisted to `.deepseekgui-images/` and
+   * When provided, the pasted bytes are persisted to `.kun/images/` and
    * the shape.imageUrl is the workspace-relative path. Without a workspace root
    * we fall back to a data: URL (rendering-only). The snapshot layer is the
    * second line of defense and will not emit a data: URL into the AI prompt.

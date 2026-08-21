@@ -280,11 +280,13 @@ describe('UiPluginStagePresentation', () => {
   it('keeps the Grand Line conversation card and composer status rail visually connected', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
-    const [css, workbenchStage, sidebarFocusMode, executionPicker] = await Promise.all([
+    const [css, workbenchStage, sidebarFocusMode, executionPicker, nauticalCss, grandLineCss] = await Promise.all([
       readStylesheetBundle(new URL('../../styles/surfaces-write.css', import.meta.url)),
       readFile(new URL('../workbench/WorkbenchChatStage.tsx', import.meta.url), 'utf8'),
       readFile(new URL('../sidebar/SidebarFocusModeControl.tsx', import.meta.url), 'utf8'),
-      readFile(new URL('./FloatingComposerExecutionPicker.tsx', import.meta.url), 'utf8')
+      readFile(new URL('./FloatingComposerExecutionPicker.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('../../styles/surfaces-write/plugin-chrome-recipes.css', import.meta.url), 'utf8'),
+      readFile(new URL('../../styles/surfaces-write/grand-line-sidebar.css', import.meta.url), 'utf8')
     ])
 
     expect(css).toContain(
@@ -329,6 +331,12 @@ describe('UiPluginStagePresentation', () => {
     expect(executionPicker).toContain('ds-composer-permission-menu')
     expect(executionPicker).toContain('ds-composer-permission-option')
     expect(executionPicker).toContain('data-permission-mode={mode}')
+    expect(nauticalCss).toContain(".ds-composer-permission-button[data-permission-mode='full-access']")
+    expect(nauticalCss).toContain('background: transparent;')
+    expect(nauticalCss).toContain('box-shadow: none;')
+    expect(grandLineCss).toContain(".ds-composer-permission-button[data-permission-mode='full-access']")
+    expect(grandLineCss).toContain('background: transparent !important;')
+    expect(grandLineCss).toContain('clip-path: none;')
     expect(workbenchStage).toContain('ds-composer-dock')
   })
 })

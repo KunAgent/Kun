@@ -139,6 +139,19 @@ describe('runtimeRequestViaHost', () => {
     )).toBe(60_000)
   })
 
+  it('lets an on-demand session summary outlive the generic POST budget', () => {
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/threads/thr_1/summarize',
+      'POST'
+    )).toBe(120_000)
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/threads/thr_1/summarize',
+      'POST',
+      30_000
+    )).toBe(30_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/threads/thr_1/fork', 'POST')).toBe(60_000)
+  })
+
   it('forwards daily usage requests to the Kun runtime with bearer auth', async () => {
     let seenUrl = ''
     let seenAuthorization = ''

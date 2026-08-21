@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   nextSidebarProjectExpansionStage,
   sidebarProjectHasVisibleThreadOverflow,
+  sidebarProjectVisibleItems,
   sidebarProjectVisibleThreadCount,
   type SidebarProjectExpansionStage
 } from './sidebar-project-expansion'
@@ -24,6 +25,13 @@ describe('sidebar project expansion', () => {
     ])
   })
 
+  it('advances a six-thread project to its complete local batch before collapsing', () => {
+    const stages = expansionCycle(6, 2)
+
+    expect(stages).toEqual([0, 1, 0])
+    expect(stages.map((stage) => sidebarProjectVisibleThreadCount(6, stage))).toEqual([5, 6, 5])
+  })
+
   it.each([
     [8, [5, 8, 5]],
     [12, [5, 10, 12, 5]]
@@ -32,6 +40,24 @@ describe('sidebar project expansion', () => {
 
     expect(stages.map((stage) => sidebarProjectVisibleThreadCount(threadCount, stage))).toEqual(visibleCounts)
     expect(stages.every((stage) => sidebarProjectVisibleThreadCount(threadCount, stage) <= threadCount)).toBe(true)
+  })
+
+  it('keeps forced running items visible without changing the expansion stage', () => {
+    const threads = ['one', 'two', 'three', 'four', 'five', 'running', 'hidden']
+    const visibleCount = sidebarProjectVisibleThreadCount(threads.length, 0)
+
+    expect(sidebarProjectVisibleItems(
+      threads,
+      visibleCount,
+      (thread) => thread === 'running'
+    )).toEqual({
+      items: ['one', 'two', 'three', 'four', 'five', 'running'],
+      hiddenCount: 1
+    })
+    expect(sidebarProjectVisibleItems(threads, visibleCount, () => false)).toEqual({
+      items: ['one', 'two', 'three', 'four', 'five'],
+      hiddenCount: 2
+    })
   })
 
   it('reports remaining threads only until all threads are visible', () => {

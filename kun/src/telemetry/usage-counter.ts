@@ -80,6 +80,14 @@ export class UsageCounter {
       current.tokenEconomySavingsCny === undefined && snapshot.tokenEconomySavingsCny === undefined
         ? undefined
         : (current.tokenEconomySavingsCny ?? 0) + (snapshot.tokenEconomySavingsCny ?? 0)
+    const carryAttribution = !hasModelRequestUsage(snapshot)
+    const actualProviderId = attributionText(snapshot.actualProviderId, current.actualProviderId, carryAttribution)
+    const actualModelId = attributionText(snapshot.actualModelId, current.actualModelId, carryAttribution)
+    const requestedModelId = attributionText(snapshot.requestedModelId, current.requestedModelId, carryAttribution)
+    const routePoolId = attributionText(snapshot.routePoolId, current.routePoolId, carryAttribution)
+    const routeTargetId = attributionText(snapshot.routeTargetId, current.routeTargetId, carryAttribution)
+    const billingKind = snapshot.billingKind ?? (carryAttribution ? current.billingKind : undefined)
+    const serviceTier = snapshot.serviceTier ?? (carryAttribution ? current.serviceTier : undefined)
     const next: UsageSnapshot = {
       promptTokens,
       completionTokens,
@@ -94,6 +102,13 @@ export class UsageCounter {
       totalInputTokenHitRate: snapshot.totalInputTokenHitRate,
       cacheMissReasons: snapshot.cacheMissReasons,
       cacheSuggestions: snapshot.cacheSuggestions,
+      ...(actualProviderId ? { actualProviderId } : {}),
+      ...(actualModelId ? { actualModelId } : {}),
+      ...(billingKind ? { billingKind } : {}),
+      ...(serviceTier ? { serviceTier } : {}),
+      ...(requestedModelId ? { requestedModelId } : {}),
+      ...(routePoolId ? { routePoolId } : {}),
+      ...(routeTargetId ? { routeTargetId } : {}),
       turns,
       costUsd,
       costCny,
@@ -254,6 +269,13 @@ function normalizeUsageSnapshot(snapshot: UsageSnapshot): UsageSnapshot {
       : {}),
     ...(snapshot.cacheMissReasons ? { cacheMissReasons: [...snapshot.cacheMissReasons] } : {}),
     ...(snapshot.cacheSuggestions ? { cacheSuggestions: [...snapshot.cacheSuggestions] } : {}),
+    ...(snapshot.actualProviderId ? { actualProviderId: snapshot.actualProviderId } : {}),
+    ...(snapshot.actualModelId ? { actualModelId: snapshot.actualModelId } : {}),
+    ...(snapshot.billingKind ? { billingKind: snapshot.billingKind } : {}),
+    ...(snapshot.serviceTier ? { serviceTier: snapshot.serviceTier } : {}),
+    ...(snapshot.requestedModelId ? { requestedModelId: snapshot.requestedModelId } : {}),
+    ...(snapshot.routePoolId ? { routePoolId: snapshot.routePoolId } : {}),
+    ...(snapshot.routeTargetId ? { routeTargetId: snapshot.routeTargetId } : {}),
     turns: Math.max(0, Math.floor(snapshot.turns)),
     ...(snapshot.costUsd !== undefined ? { costUsd: Math.max(0, snapshot.costUsd) } : {}),
     ...(snapshot.costCny !== undefined ? { costCny: Math.max(0, snapshot.costCny) } : {}),
@@ -341,6 +363,13 @@ function mergeUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapshot {
     totalInputTokenHitRate,
     cacheMissReasons,
     cacheSuggestions,
+    ...(delta.actualProviderId ? { actualProviderId: delta.actualProviderId } : into.actualProviderId ? { actualProviderId: into.actualProviderId } : {}),
+    ...(delta.actualModelId ? { actualModelId: delta.actualModelId } : into.actualModelId ? { actualModelId: into.actualModelId } : {}),
+    ...(delta.billingKind ? { billingKind: delta.billingKind } : into.billingKind ? { billingKind: into.billingKind } : {}),
+    ...(delta.serviceTier ? { serviceTier: delta.serviceTier } : into.serviceTier ? { serviceTier: into.serviceTier } : {}),
+    ...(delta.requestedModelId ? { requestedModelId: delta.requestedModelId } : into.requestedModelId ? { requestedModelId: into.requestedModelId } : {}),
+    ...(delta.routePoolId ? { routePoolId: delta.routePoolId } : into.routePoolId ? { routePoolId: into.routePoolId } : {}),
+    ...(delta.routeTargetId ? { routeTargetId: delta.routeTargetId } : into.routeTargetId ? { routeTargetId: into.routeTargetId } : {}),
     turns,
     costUsd,
     costCny,
@@ -355,6 +384,19 @@ function mergeUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapshot {
 
 function sumOptional(left: number | undefined, right: number | undefined): number | undefined {
   return left === undefined && right === undefined ? undefined : (left ?? 0) + (right ?? 0)
+}
+
+function attributionText(
+  latest: string | undefined,
+  previous: string | undefined,
+  carryPrevious: boolean
+): string | undefined {
+  return latest?.trim() || (carryPrevious ? previous?.trim() : undefined) || undefined
+}
+
+function hasModelRequestUsage(snapshot: UsageSnapshot): boolean {
+  return snapshot.turns > 0 || snapshot.promptTokens > 0 ||
+    snapshot.completionTokens > 0 || snapshot.totalTokens > 0
 }
 
 function mergeCurrencyCosts(

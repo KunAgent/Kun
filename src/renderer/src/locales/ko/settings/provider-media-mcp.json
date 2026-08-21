@@ -115,6 +115,7 @@
   "providerModelImportContextBadge": "컨텍스트 {{value}}",
   "providerModelImportOutputBadge": "출력 {{value}}",
   "providerModelImportVisionBadge": "이미지 입력",
+  "providerModelImportAudioInputBadge": "오디오 입력",
   "providerModelImportToolsBadge": "도구",
   "providerModelImportNoToolsBadge": "도구 미지원",
   "providerModelImportReasoningBadge": "추론",

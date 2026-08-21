@@ -6,6 +6,7 @@ import { InMemoryUserInputGate } from '../adapters/in-memory-user-input-gate.js'
 import { setSystemPrompt, type ImmutablePrefix } from '../cache/immutable-prefix.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES, type ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { TurnItem } from '../contracts/items.js'
+import { ChildRunFailureSchema, type ChildRunFailure } from '../contracts/subagent-retry.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   type ApprovalPolicy,
@@ -124,6 +125,12 @@ export type ChildAgentExecutorOptions = {
   sessionStore?: SessionStore
   threadStore?: ThreadStore
   events?: RuntimeEventRecorder
+  /**
+   * Shared runtime usage ledger. When supplied, child usage counts live in the
+   * runtime aggregate under the child thread id; tests that omit it keep an
+   * isolated throwaway counter.
+   */
+  usage?: UsageService
 }
 
 export function createChildAgentExecutor(options: ChildAgentExecutorOptions): ChildRunExecutor {
@@ -163,7 +170,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
           nowIso
         })
       })()
-    const usage = new UsageService()
+    const usage = options.usage ?? new UsageService()
     const ids = new RandomIdGenerator()
     const inflight = new InflightTracker()
     const steering = new SteeringQueue()
@@ -496,16 +503,25 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         event.severity !== 'info'
     )
     if (runtimeError?.kind === 'error') {
-      throw new ChildResultExecutionError(runtimeError.message, structuredResult, settlement)
+      throw new ChildResultExecutionError(runtimeError.message, structuredResult, {
+        ...settlement,
+        failure: childFailureFromRuntimeError(runtimeError)
+      })
     }
     if (executionError !== undefined) {
-      throw new ChildResultExecutionError(childExecutionErrorMessage(executionError), structuredResult, settlement)
+      throw new ChildResultExecutionError(childExecutionErrorMessage(executionError), structuredResult, {
+        ...settlement,
+        failure: { source: 'runtime' }
+      })
     }
     const evidence = input.returnFormat === 'evidence'
       ? childToolEvidence(items, started.turnId)
       : undefined
     if (status !== 'completed') {
-      throw new ChildResultExecutionError(result.summary || `child agent ${status}`, structuredResult, settlement)
+      throw new ChildResultExecutionError(result.summary || `child agent ${status}`, structuredResult, {
+        ...settlement,
+        failure: { source: 'runtime' }
+      })
     }
     return {
       ...result,
@@ -592,4 +608,25 @@ function childThreadTitle(childId: string, label?: string, profile?: string): st
 
 function childExecutionErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function childFailureFromRuntimeError(
+  event: Extract<import('../contracts/events.js').RuntimeEvent, { kind: 'error' }>
+): ChildRunFailure {
+  const details = event.details && typeof event.details === 'object' && !Array.isArray(event.details)
+    ? event.details as Record<string, unknown>
+    : undefined
+  const modelFailure = details?.modelFailure
+  const parsed = ChildRunFailureSchema.safeParse(
+    modelFailure && typeof modelFailure === 'object' && !Array.isArray(modelFailure)
+      ? {
+          source: 'model',
+          code: event.code,
+          category: (modelFailure as Record<string, unknown>).category,
+          httpStatus: (modelFailure as Record<string, unknown>).httpStatus,
+          retryAfterMs: (modelFailure as Record<string, unknown>).retryAfterMs
+        }
+      : { source: 'runtime', code: event.code }
+  )
+  return parsed.success ? parsed.data : { source: 'runtime' }
 }

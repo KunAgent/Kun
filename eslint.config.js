@@ -11,9 +11,11 @@ export default tseslint.config(
       '**/build/**',
       '**/dist/**',
       '**/node_modules/**',
+      '**/.venv/**',
       '**/out/**',
       '**/coverage/**',
       '.cache/**',
+      'artifacts/**',
       '.claude/**'
     ]
   },

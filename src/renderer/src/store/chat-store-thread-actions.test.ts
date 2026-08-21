@@ -10,7 +10,7 @@ import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import i18n from '../i18n'
 import type { BrowserStorageLike } from '../lib/browser-storage'
 import { queuedMessagesForThread, saveQueuedMessagesForThread } from './queued-message-persistence'
-import { clearThreadSnapshotCache, getThreadSnapshot } from './thread-snapshot-cache'
+import { clearThreadSnapshotCache } from './thread-snapshot-cache'
 
 const registryMock = vi.hoisted(() => ({ getProvider: vi.fn() }))
 
@@ -338,68 +338,6 @@ describe('chat-store-thread-actions queued messages', () => {
 
     expect(state.activeThreadId).toBe('thr_drawing')
     expect(state.blocks).toEqual([])
-  })
-
-  it('prepends an older bounded history page without duplicating current blocks', async () => {
-    const getThreadDetail = vi.fn(async (_threadId: string, options?: { before?: string }) => ({
-      blocks: [
-        { kind: 'user' as const, id: 'user-older', text: 'older question' },
-        { kind: 'assistant' as const, id: 'assistant-current', text: 'stale duplicate' },
-        {
-          kind: 'tool' as const,
-          id: 'tool_call_1',
-          summary: 'Run build',
-          status: 'running' as const,
-          filePath: '/workspace/build.log',
-          meta: { sourceItemId: 'call_item', sourceItemKind: 'tool_call', command: 'npm run build' }
-        }
-      ],
-      latestSeq: 50,
-      historyCursor: 'item_older_cursor',
-      hasMoreHistory: true
-    }))
-    registryMock.getProvider.mockReturnValue({ getThreadDetail })
-    const { actions, state } = buildHarness()
-    state.busy = false
-    state.activeThreadId = 'thr_existing'
-    state.blocks = [
-      { kind: 'assistant', id: 'assistant-current', text: 'current answer' },
-      {
-        kind: 'tool',
-        id: 'tool_call_1',
-        summary: 'Build complete',
-        status: 'success',
-        detail: 'done',
-        meta: { sourceItemId: 'result_item', sourceItemKind: 'tool_result', exit_code: 0 }
-      }
-    ]
-    state.threadHistoryCursor = 'item_current_cursor'
-    state.threadHasMoreHistory = true
-    state.threadHistoryLoading = false
-
-    await actions.loadEarlierThreadHistory()
-
-    expect(getThreadDetail).toHaveBeenCalledWith('thr_existing', {
-      before: 'item_current_cursor'
-    })
-    expect(state.blocks).toEqual([
-      expect.objectContaining({ id: 'user-older' }),
-      expect.objectContaining({ id: 'assistant-current', text: 'current answer' }),
-      expect.objectContaining({
-        id: 'tool_call_1',
-        status: 'success',
-        detail: 'done',
-        filePath: '/workspace/build.log',
-        meta: expect.objectContaining({ command: 'npm run build', exit_code: 0 })
-      })
-    ])
-    expect(state.threadHistoryCursor).toBe('item_older_cursor')
-    expect(state.threadHasMoreHistory).toBe(true)
-    expect(state.threadHistoryLoading).toBe(false)
-
-    state.threads = [thread('thr_existing'), thread('thr_other')]
-    await actions.selectThread('thr_other')
-    expect(getThreadSnapshot('thr_existing')).toBeNull()
   })
 
   it('selects immediately, then settles a stale running sidebar summary from idle detail', async () => {

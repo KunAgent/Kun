@@ -81,6 +81,10 @@ export function WriteEditorGroups({
     openFile,
     createWhiteboard,
     setDocumentContent,
+    setSpreadsheetMutations,
+    convertSpreadsheet,
+    reloadSpreadsheetConflict,
+    resolveSpreadsheetConflict,
     saveDocument,
     setSelection,
     setPresentationViewForGroup,
@@ -110,6 +114,10 @@ export function WriteEditorGroups({
     openFile: state.openFile,
     createWhiteboard: state.createWhiteboard,
     setDocumentContent: state.setDocumentContent,
+    setSpreadsheetMutations: state.setSpreadsheetMutations,
+    convertSpreadsheet: state.convertSpreadsheet,
+    reloadSpreadsheetConflict: state.reloadSpreadsheetConflict,
+    resolveSpreadsheetConflict: state.resolveSpreadsheetConflict,
     saveDocument: state.saveDocument,
     setSelection: state.setSelection,
     setPresentationViewForGroup: state.setPresentationViewForGroup,
@@ -292,6 +300,10 @@ export function WriteEditorGroups({
               onImagePasteSaved={() => { setFileError(null); void refreshWorkspace(workspaceRoot) }}
               onImagePasteError={setFileError}
               onReviewStateChange={setReviewActive}
+              onSpreadsheetMutations={setSpreadsheetMutations}
+              onConvertSpreadsheet={(nextPath) => { void convertSpreadsheet(workspaceRoot, nextPath) }}
+              onReloadSpreadsheetConflict={reloadSpreadsheetConflict}
+              onResolveSpreadsheetConflict={resolveSpreadsheetConflict}
               onboarding={group.id === 'primary' && onboardingDecision === 'show'}
               workspaceLoading={group.id === 'primary' && onboardingDecision === 'pending' && !settingsError && !treeError}
             />

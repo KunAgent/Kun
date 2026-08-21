@@ -112,6 +112,38 @@ describe('SdkEventMapper', () => {
     })
   })
 
+  test('redacts Browser Use arguments from durable SDK events', () => {
+    const events = makeMapper().map({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'toolu_browser',
+          name: 'mcp__kun__browser_use',
+          input: {
+            action: 'open',
+            url: 'https://example.com/path?token=secret#fragment',
+            unexpected: 'private-value'
+          }
+        }]
+      }
+    } as SdkMessage)
+
+    expect(events.find((event) => event.kind === 'item_created')).toMatchObject({
+      item: {
+        arguments: {
+          action: 'open',
+          url: 'https://example.com/path',
+          unexpectedFields: ['unexpected']
+        }
+      }
+    })
+    expect(JSON.stringify(events)).not.toContain('token=secret')
+    expect(JSON.stringify(events)).not.toContain('private-value')
+  })
+
   test('omits unresolved raw arguments from durable SDK tool-call events', () => {
     const m = makeMapper()
     const raw = '{"plan":{"title":"private-sdk-event-marker"'
@@ -410,6 +442,18 @@ describe('mapSdkUsage', () => {
     expect(usage.cacheMissTokens).toBe(300) // 200 input + 100 creation
     expect(usage.cacheHitRate).toBeCloseTo(0.7)
     expect(usage.costUsd).toBe(0.5)
+  })
+
+  test('preserves subscription attribution for downstream value estimation', () => {
+    expect(mapSdkUsage(
+      { input_tokens: 25_300, output_tokens: 700 },
+      1,
+      undefined,
+      { billingKind: 'subscription', model: 'gpt-5.6-luna' }
+    )).toMatchObject({
+      actualModelId: 'gpt-5.6-luna',
+      billingKind: 'subscription'
+    })
   })
 
   test('null cache hit rate when no prompt tokens', () => {

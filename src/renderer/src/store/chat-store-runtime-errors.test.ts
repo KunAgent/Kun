@@ -494,6 +494,51 @@ describe('thread event sink runtime errors', () => {
     expect(systemBlocks[0].detail).toContain(`Message:\n${message}`)
   })
 
+  it('settles a model_empty_response turn with one conversation card and clears busy state', () => {
+    const { getState, set, get } = makeSinkHarness({
+      activeThreadId: 'thread-current',
+      busy: true,
+      currentTurnId: 'turn-current',
+      currentTurnUserId: 'user-current',
+      blocks: [{ kind: 'user', id: 'user-current', text: 'please answer' }]
+    })
+    const sink = buildThreadEventSink(set, get, { threadId: 'thread-current' })
+    const message =
+      'Model provider completed without returning text, reasoning, a tool call, or generated output. ' +
+      'Check provider/model availability and routing, then resend the message.'
+
+    sink.onRuntimeError?.({
+      itemId: 'runtime_error_turn-current',
+      turnId: 'turn-current',
+      createdAt: '2026-08-18T00:00:00.000Z',
+      message,
+      code: 'model_empty_response',
+      details: { model: 'empty-model', providerId: 'test' },
+      severity: 'error'
+    })
+    sink.onError(
+      new Error(JSON.stringify({
+        code: 'model_empty_response',
+        message,
+        details: { model: 'empty-model' },
+        severity: 'error'
+      })),
+      { terminal: true, scope: 'conversation' }
+    )
+
+    expect(getState().busy).toBe(false)
+    expect(getState().currentTurnId).toBeNull()
+    expect(getState().error).toBeNull()
+    const systemBlocks = getState().blocks.filter((block) => block.kind === 'system')
+    expect(systemBlocks).toHaveLength(1)
+    expect(systemBlocks[0]).toMatchObject({
+      code: 'model_empty_response',
+      severity: 'error'
+    })
+    expect(systemBlocks[0].text).toContain('without returning text, reasoning')
+    expect(systemBlocks[0].detail).not.toContain('empty-model model-only-secret')
+  })
+
   it('does not keep an aborted turn busy after interrupt', () => {
     const blocks: ChatBlock[] = [
       { kind: 'user', id: 'user-1', text: 'run command' },

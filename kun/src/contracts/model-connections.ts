@@ -27,6 +27,7 @@ export const ModelConnectionProfileSchema = z.object({
   accountId: z.string().min(1).max(128),
   name: z.string().min(1).max(120),
   presetSource: z.string().min(1).max(128).optional(),
+  presetMode: z.enum(['api', 'token-plan']).optional(),
   kind: z.enum([
     'http',
     'agent-sdk',
@@ -70,6 +71,7 @@ export const ModelConnectionConnectRequestSchema = z.object({
   id: z.string().min(1).max(128).optional(),
   name: z.string().min(1).max(120),
   presetSource: z.string().min(1).max(128).optional(),
+  presetMode: z.enum(['api', 'token-plan']).optional(),
   kind: z.enum([
     'http',
     'agent-sdk',
@@ -127,6 +129,8 @@ export const ModelConnectionCredentialCommitRequestSchema = z.object({
 export const ModelConnectionPatchRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   name: z.string().min(1).max(120).optional(),
+  presetSource: z.string().min(1).max(128).optional(),
+  presetMode: z.enum(['api', 'token-plan']).optional(),
   kind: z.enum([
     'http',
     'agent-sdk',

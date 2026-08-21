@@ -29,8 +29,11 @@ describe('WorkbenchTopActions', () => {
       })
     )
 
-    expect(html).toContain(`data-tooltip="Restart Kun and clear historical services"`)
-    expect(html).toContain(`aria-label="Restart Kun"`)
+    expect(html).toContain(
+      'data-tooltip="Restart all Kun service processes owned by the current user. Running tasks will be interrupted; saved conversations, memory, archives, settings, and workspace files will not be deleted. You will be asked to confirm."'
+    )
+    expect(html).toContain('data-tooltip-wrap="true"')
+    expect(html).toContain(`aria-label="Restart all Kun services"`)
     expect(html).not.toContain('rounded-full bg-amber-500')
     expect(html).toContain(`data-tooltip="Choose default editor"`)
     expect(html).toContain(`aria-label="Choose default editor"`)
@@ -47,7 +50,36 @@ describe('WorkbenchTopActions', () => {
       html.indexOf('data-tooltip="Toggle right workspace"')
     )
     expect(html.indexOf('data-tooltip="Toggle right workspace"')).toBeLessThan(
-      html.indexOf('aria-label="Restart Kun"')
+      html.indexOf('aria-label="Restart all Kun services"')
+    )
+  })
+
+  it('shows the complete Chinese restart scope in the wrapped tooltip', async () => {
+    await i18n.changeLanguage('zh')
+    const html = renderToStaticMarkup(createElement(WorkbenchTopActions, {}))
+
+    expect(html).toContain('aria-label="重启所有 Kun 服务"')
+    expect(html).toContain(
+      'data-tooltip="重启当前用户的所有 Kun 服务进程。运行中的任务会中断；不会删除已保存的对话、记忆、归档、设置或工作区文件。点击后会再次确认。"'
+    )
+    expect(html).toContain('data-tooltip-wrap="true"')
+  })
+
+  it('wraps the detailed restart tooltip on hover and keyboard focus', async () => {
+    const nodeFs = 'node:fs/promises'
+    const { readFile } = await import(/* @vite-ignore */ nodeFs)
+    const shellCss = await readFile(
+      new URL('../../styles/base-shell/session-sidebar-shell.css', import.meta.url),
+      'utf8'
+    )
+    const wrappedRule = shellCss.match(
+      /\.ds-topbar-action-button\[data-tooltip-wrap='true'\]::after\s*\{([^}]*)\}/u
+    )?.[1] ?? ''
+
+    expect(wrappedRule).toContain('width: min(360px, calc(100vw - 2rem))')
+    expect(wrappedRule).toContain('white-space: normal')
+    expect(shellCss).toMatch(
+      /\.ds-topbar-action-button:focus-visible::after\s*\{[^}]*opacity:\s*1;/su
     )
   })
 
@@ -59,7 +91,7 @@ describe('WorkbenchTopActions', () => {
     await act(async () => {
       renderer = createRenderer(createElement(WorkbenchTopActions, {}))
     })
-    const button = renderer.root.findByProps({ 'aria-label': 'Restart Kun' })
+    const button = renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' })
     await act(async () => {
       button.props.onClick()
       await Promise.resolve()
@@ -76,7 +108,7 @@ describe('WorkbenchTopActions', () => {
       renderer = createRenderer(createElement(WorkbenchTopActions, {}))
     })
 
-    const button = renderer.root.findByProps({ 'aria-label': 'Restart Kun' })
+    const button = renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' })
     expect(button.props.className).toContain('h-8 w-8')
     expect(button.findAllByType('span')).toHaveLength(0)
     expect(button.findAllByType('svg')).toHaveLength(1)
@@ -95,7 +127,7 @@ describe('WorkbenchTopActions', () => {
     })
 
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Restart Kun' }).props.onClick()
+      renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' }).props.onClick()
       await Promise.resolve()
     })
     const busyButton = renderer.root.findByProps({ 'aria-label': 'Restarting…' })
@@ -121,11 +153,11 @@ describe('WorkbenchTopActions', () => {
       renderer = createRenderer(createElement(WorkbenchTopActions, {}))
     })
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Restart Kun' }).props.onClick()
+      renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' }).props.onClick()
       await Promise.resolve()
     })
 
-    const button = renderer.root.findByProps({ 'aria-label': 'Restart Kun' })
+    const button = renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' })
     expect(button.props['data-tooltip']).toBe('cleanup failed')
     expect(button.findAllByType('span')).toHaveLength(0)
     act(() => renderer.unmount())

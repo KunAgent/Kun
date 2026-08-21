@@ -32,7 +32,8 @@ export type SharedModelConnection = {
   accountId: string
   name: string
   presetSource?: string
-  kind: 'http' | 'agent-sdk' | 'antigravity-cli' | 'cursor-sdk' | 'gemini-code-assist'
+  presetMode?: 'api' | 'token-plan'
+  kind: 'http' | 'agent-sdk' | 'antigravity-cli' | 'cursor-sdk' | 'gemini-code-assist' | 'gemini-cli-api'
   authType: 'api-key' | 'oauth' | 'subscription'
   baseUrl?: string
   endpointFormat: ModelEndpointFormat
@@ -55,6 +56,8 @@ export type SharedModelConnectionsSnapshot = {
   routePools?: ModelProviderSettingsV1['routePools']
   localModelGateway?: { enabled: boolean }
 }
+
+export const MAX_SHARED_MODEL_CONNECTION_MODELS = 500
 
 export function shouldUseSharedModelConnectionProbe(
   provider: Pick<ModelProviderProfileV1, 'apiKey'>,

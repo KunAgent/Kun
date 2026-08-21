@@ -197,10 +197,10 @@ export function FloatingComposerExecutionPicker({
             event,
             () => toggleMenu('approval')
           )}
-          className={`ds-composer-permission-button inline-flex min-h-7 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-0.5 text-[12.5px] font-semibold shadow-none transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
+          className={`ds-composer-permission-button inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-55 ${
             fullAccess
-              ? 'bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-950/30 dark:text-orange-300 dark:hover:bg-orange-950/45'
-              : 'bg-ds-hover/65 text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+              ? 'text-orange-600 hover:text-orange-700 focus-visible:outline-orange-500 dark:text-orange-300 dark:hover:text-orange-200 dark:focus-visible:outline-orange-300'
+              : 'text-ds-muted hover:text-ds-ink focus-visible:outline-ds-accent'
           }`}
           title={`${t(permissionLabelKey(permissionMode))}. ${t(permissionDescriptionKey(permissionMode))}`}
           aria-expanded={openMenu === 'approval'}

@@ -256,7 +256,7 @@ export function FloatingComposerTodoProgress({
           onBlur={closeDetailsSoon}
           onMouseEnter={openDetails}
           onMouseLeave={closeDetailsSoon}
-          className="ds-no-drag inline-flex h-11 items-center gap-2.5 rounded-full border border-ds-border bg-white/96 px-4 text-[14px] font-medium text-ds-muted shadow-[0_10px_30px_rgba(20,47,95,0.10)] backdrop-blur-xl transition hover:border-ds-border-strong hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 dark:bg-ds-card/96"
+          className="ds-no-drag ds-composer-status-glass inline-flex h-11 items-center gap-2.5 rounded-full border px-4 text-[14px] font-medium text-ds-muted transition hover:border-ds-border-strong hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
           aria-label={triggerAriaLabel}
           aria-expanded={open}
           aria-haspopup="dialog"

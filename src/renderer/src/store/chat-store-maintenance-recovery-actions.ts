@@ -27,6 +27,9 @@ import {
   saveThreadForkRegistry
 } from '../lib/thread-fork-registry'
 import {
+  forgetStoredThreadRightPanelExpansion
+} from '../lib/thread-right-panel-expansion'
+import {
   forgetThreadWorktree,
   readThreadWorktreeRegistry,
   saveThreadWorktreeRegistry
@@ -353,6 +356,7 @@ export function createMaintenanceRecoveryActions(
       saveWriteThreadRegistry(forgetWriteThread(targetId))
       saveDesignThreadRegistry(forgetDesignThread(targetId))
       saveThreadForkRegistry(forgetThreadFork(targetId))
+      forgetStoredThreadRightPanelExpansion(targetId)
       if (wtRecord) saveThreadWorktreeRegistry(forgetThreadWorktree(targetId))
       if (deletingActive) {
         sseAbortRef.current?.abort()

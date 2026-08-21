@@ -7,6 +7,7 @@ import {
   DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES,
   DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
   DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
+  MODEL_REQUEST_RETRY_DEFAULTS_VERSION,
   NETWORK_PROXY_PROTOCOLS,
   DEFAULT_SPEECH_TO_TEXT_PROTOCOL,
   DEFAULT_TEXT_TO_SPEECH_PROTOCOL,
@@ -269,7 +270,8 @@ export function defaultModelRequestRetrySettings(): ModelRequestRetrySettingsV1 
   return {
     maxAttempts: DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
     initialDelayMs: DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
-    httpStatusCodes: [...DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES]
+    httpStatusCodes: [...DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES],
+    defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
   }
 }
 
@@ -277,11 +279,21 @@ export function normalizeModelRequestRetrySettings(
   input: Partial<ModelRequestRetrySettingsV1> | undefined
 ): ModelRequestRetrySettingsV1 {
   const defaults = defaultModelRequestRetrySettings()
+  const httpStatusCodes = normalizeRetryHttpStatusCodes(input?.httpStatusCodes, defaults.httpStatusCodes)
+  const defaultsVersion = boundedNonNegativeInteger(input?.defaultsVersion, 0, 1_000)
+  const inheritedLegacyStatusList =
+    defaultsVersion < MODEL_REQUEST_RETRY_DEFAULTS_VERSION &&
+    sameRetryHttpStatusCodes(httpStatusCodes, [429, 503])
   return {
     maxAttempts: boundedNonNegativeInteger(input?.maxAttempts, defaults.maxAttempts, 10),
     initialDelayMs: boundedNonNegativeInteger(input?.initialDelayMs, defaults.initialDelayMs, 600_000),
-    httpStatusCodes: normalizeRetryHttpStatusCodes(input?.httpStatusCodes, defaults.httpStatusCodes)
+    httpStatusCodes: inheritedLegacyStatusList ? [...defaults.httpStatusCodes] : httpStatusCodes,
+    defaultsVersion: Math.max(defaultsVersion, MODEL_REQUEST_RETRY_DEFAULTS_VERSION)
   }
+}
+
+function sameRetryHttpStatusCodes(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((code, index) => code === right[index])
 }
 
 export function normalizeRetryHttpStatusCodes(input: unknown, fallback: readonly number[]): number[] {

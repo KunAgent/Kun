@@ -31,6 +31,7 @@ import {
   GeneratedPill,
   KNOWN_POSE_IDS,
   MetaChip,
+  ProactiveRetryBadge,
   StatusPill,
   hashHue,
   isTerminal,
@@ -184,6 +185,7 @@ export function SubagentCallCard({
   const resumeObservedBusy = useRef(false)
   const expanded = hasBody && !peekOpen && conclusionExpanded
   const resumeCount = child.resumeCount ?? detail.resumeCount ?? 0
+  const proactiveRetry = child.proactiveRetry ?? detail.proactiveRetry
   const attemptParentTurnId = child.parentTurnId || detail.parentTurnId
   const canResume = Boolean(
     childId &&
@@ -284,6 +286,9 @@ export function SubagentCallCard({
             <span className="truncate text-[14px] font-semibold text-ds-ink" title={taskTitle}>{taskTitle}</span>
             {generated ? <GeneratedPill t={t} /> : null}
             {detached ? <BackgroundPill t={t} /> : null}
+            {proactiveRetry && proactiveRetry.count > 0
+              ? <ProactiveRetryBadge retry={proactiveRetry} t={t} />
+              : null}
             {resultExternalized ? (
               <span
                 className="whitespace-nowrap rounded-full bg-amber-500/10 px-2 py-[2px] text-[10.5px] font-semibold text-amber-700 dark:text-amber-300"
@@ -446,6 +451,9 @@ export function SubagentCallCard({
                 {detail.toolPolicy === 'readOnly' ? t('subagentPolicyReadOnly') : t('subagentPolicyFull')}
               </MetaChip>
             ) : null}
+            {proactiveRetry
+              ? <ProactiveRetryBadge retry={proactiveRetry} t={t} remaining />
+              : null}
             {resultRef ? (
               <MetaChip title={resultRef.artifactId}>
                 {t('subagentResultSize', {

@@ -9,8 +9,9 @@ describe('buildImageAnnotationPrompt', () => {
     expect(prompt).toContain('generate_image')
     expect(prompt).toContain('reference_image_paths')
     expect(prompt).toContain(path)
-    // Must update the existing shape, not create a new layer.
-    expect(prompt).toContain('update')
+    expect(prompt).toContain('源 shape')
+    expect(prompt).toContain('新版本')
+    expect(prompt).not.toContain('用返回的新图 update')
   })
 
   it('tells the model to strip the markup and not build a screen / HTML', () => {

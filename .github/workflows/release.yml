@@ -65,6 +65,10 @@ jobs:
       APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       CSC_FOR_PULL_REQUEST: 'true'
+      # The renderer bundle can exceed Node's default ~2 GiB heap on the
+      # macOS ARM runner; signed release packaging needs the same allowance
+      # that PR packaging uses.
+      NODE_OPTIONS: '--max-old-space-size=4096'
     steps:
       - name: Check out merge commit
         uses: actions/checkout@v4

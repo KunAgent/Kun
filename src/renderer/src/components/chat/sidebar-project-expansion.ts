@@ -26,6 +26,18 @@ export function sidebarProjectHasVisibleThreadOverflow(
   return sidebarProjectVisibleThreadCount(threadCount, stage) < Math.max(0, threadCount)
 }
 
+export function sidebarProjectVisibleItems<T>(
+  items: readonly T[],
+  visibleCount: number,
+  forceVisible: (item: T) => boolean
+): { items: T[]; hiddenCount: number } {
+  const visible = items.filter((item, index) => index < visibleCount || forceVisible(item))
+  return {
+    items: visible,
+    hiddenCount: Math.max(0, items.length - visible.length)
+  }
+}
+
 export function nextSidebarProjectExpansionStage(
   threadCount: number,
   stage: SidebarProjectExpansionStage

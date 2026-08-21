@@ -221,8 +221,8 @@ export function createServerRuntimeComposition(
     resumeInterruptedGoals(threadIds) {
       return agent.loop.resumeInterruptedGoals(threadIds)
     },
-    resumeInterruptedTurns(threadIds) {
-      return agent.loop.resumeInterruptedTurns(threadIds)
+    resumeInterruptedTurns(threadIds, childRecoveryCandidates) {
+      return agent.loop.resumeInterruptedTurns(threadIds, childRecoveryCandidates)
     },
     runReview(input) {
       return runReview(input)

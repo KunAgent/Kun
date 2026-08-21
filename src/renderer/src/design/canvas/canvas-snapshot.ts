@@ -64,7 +64,7 @@ export type CanvasSnapshotShape = {
   aiImageHolder?: boolean
   /**
    * Workspace-relative path of the picture already in this image shape
-   * (e.g. `.deepseekgui-images/img-….png`). Present only on `image` shapes
+   * (e.g. `.kun/images/img-….png`). Present only on `image` shapes
    * that have been filled — empty image holders omit it. The agent passes
    * this path back into `generate_image` as `reference_image_paths` when the
    * user asks to edit/restyle/redo the existing picture.

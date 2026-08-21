@@ -2,6 +2,7 @@ import { ImageGenHttpError } from './image-gen-tool-provider.js'
 import type { GeneratedMedia, VideoGenClient, VideoGenRequest } from './media-gen-tool-provider.js'
 import {
   assertMiniMaxOk,
+  createMediaFetch,
   dataUri,
   delay,
   isFailureStatus,
@@ -69,14 +70,17 @@ export function createVideoGenClient(config: {
   baseUrl?: string
   apiKey?: string
   headers?: Record<string, string>
+  proxyUrl?: string
 }): VideoGenClient {
+  // Media generation shares the provider-level model proxy with chat requests.
+  const fetchImpl = createMediaFetch(config.proxyUrl)
   if (config.protocol === 'grok-imagine-video') {
-    return new GrokImagineVideoClient(config.baseUrl!, config.apiKey!, config.headers)
+    return new GrokImagineVideoClient(config.baseUrl!, config.apiKey!, config.headers, fetchImpl)
   }
   if (config.protocol === 'volcengine-ark-video') {
-    return new VolcengineArkVideoClient(config.baseUrl!, config.apiKey!)
+    return new VolcengineArkVideoClient(config.baseUrl!, config.apiKey!, fetchImpl)
   }
-  return new MiniMaxVideoClient(config.baseUrl!, config.apiKey!)
+  return new MiniMaxVideoClient(config.baseUrl!, config.apiKey!, fetchImpl)
 }
 
 
@@ -86,7 +90,8 @@ export class MiniMaxVideoClient implements VideoGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.rootUrl = minimaxRootUrl(baseUrl)
   }
@@ -109,7 +114,7 @@ export class MiniMaxVideoClient implements VideoGenClient {
           : {})
       }),
       signal
-    }, request)
+    }, request, this.fetchImpl)
     assertMiniMaxOk(createPayload.base_resp, 'MiniMax video provider')
     const taskId = createPayload.task_id
     if (!taskId) throw new Error('MiniMax video provider returned no task_id')
@@ -127,7 +132,7 @@ export class MiniMaxVideoClient implements VideoGenClient {
         method: 'GET',
         headers: this.headers(),
         signal
-      }, request)
+      }, request, this.fetchImpl)
       assertMiniMaxOk(queryPayload.base_resp, 'MiniMax video provider')
       lastStatus = queryPayload.status || lastStatus
       await request.onUpdate?.({
@@ -140,7 +145,7 @@ export class MiniMaxVideoClient implements VideoGenClient {
       const fileId = queryPayload.file_id
       if (!fileId) throw new Error('MiniMax video provider finished without file_id')
       const downloadUrl = await this.retrieveDownloadUrl(fileId, request)
-      const response = await requestResponse(downloadUrl, { method: 'GET', signal }, request)
+      const response = await requestResponse(downloadUrl, { method: 'GET', signal }, request, this.fetchImpl)
       if (!response.ok) throw new ImageGenHttpError(response.status, await response.text())
       const mimeType = response.headers.get('content-type')?.split(';')[0] || 'video/mp4'
       return {
@@ -159,7 +164,7 @@ export class MiniMaxVideoClient implements VideoGenClient {
       method: 'GET',
       headers: this.headers(),
       signal: withTimeout(request.signal, request.timeoutMs)
-    }, request)
+    }, request, this.fetchImpl)
     assertMiniMaxOk(payload.base_resp, 'MiniMax video provider')
     const downloadUrl = payload.file?.download_url
     if (!downloadUrl) throw new Error('MiniMax video provider returned no download_url')
@@ -180,7 +185,8 @@ export class VolcengineArkVideoClient implements VideoGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.tasksUrl = volcengineArkVideoTasksUrl(baseUrl)
   }
@@ -222,7 +228,7 @@ export class VolcengineArkVideoClient implements VideoGenClient {
         watermark: false
       }),
       signal
-    }, request)
+    }, request, this.fetchImpl)
     const taskId = createPayload.id?.trim()
     if (!taskId) throw new Error('Volcano Ark video provider returned no task id')
     await request.onUpdate?.({
@@ -241,7 +247,8 @@ export class VolcengineArkVideoClient implements VideoGenClient {
             headers: this.headers(),
             signal
           },
-          request
+          request,
+          this.fetchImpl
         )
         lastStatus = pollPayload.status?.trim().toLowerCase() || lastStatus
         await request.onUpdate?.({
@@ -258,7 +265,7 @@ export class VolcengineArkVideoClient implements VideoGenClient {
         if (!downloadUrl) {
           throw new Error('Volcano Ark video provider finished without content.video_url')
         }
-        const response = await requestResponse(downloadUrl, { method: 'GET', signal }, request)
+        const response = await requestResponse(downloadUrl, { method: 'GET', signal }, request, this.fetchImpl)
         if (!response.ok) throw new ImageGenHttpError(response.status, await response.text())
         const mimeType = response.headers.get('content-type')?.split(';')[0] || 'video/mp4'
         return {
@@ -296,7 +303,8 @@ export class GrokImagineVideoClient implements VideoGenClient {
   constructor(
     baseUrl: string,
     private readonly apiKey: string,
-    private readonly extraHeaders: Record<string, string> = {}
+    private readonly extraHeaders: Record<string, string> = {},
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.rootUrl = trimTrailingSlashes(baseUrl)
   }
@@ -322,7 +330,7 @@ export class GrokImagineVideoClient implements VideoGenClient {
         reference_images: []
       }),
       signal
-    }, request)
+    }, request, this.fetchImpl)
     const requestId = createPayload.request_id?.trim()
     if (!requestId) throw new Error('Grok Imagine video provider returned no request_id')
     await request.onUpdate?.({
@@ -336,7 +344,8 @@ export class GrokImagineVideoClient implements VideoGenClient {
       const pollPayload = await requestJson<GrokVideoPollPayload>(
         `${this.rootUrl}/videos/${encodeURIComponent(requestId)}`,
         { method: 'GET', headers: this.headers(), signal },
-        request
+        request,
+        this.fetchImpl
       )
       lastStatus = pollPayload.status?.trim().toLowerCase() || lastStatus
       await request.onUpdate?.({
@@ -348,7 +357,7 @@ export class GrokImagineVideoClient implements VideoGenClient {
       if (lastStatus !== 'done') continue
       const downloadUrl = pollPayload.video?.url?.trim()
       if (!downloadUrl) throw new Error('Grok Imagine video provider finished without a download URL')
-      const response = await requestResponse(downloadUrl, { method: 'GET', signal }, request)
+      const response = await requestResponse(downloadUrl, { method: 'GET', signal }, request, this.fetchImpl)
       if (!response.ok) throw new ImageGenHttpError(response.status, await response.text())
       const mimeType = response.headers.get('content-type')?.split(';')[0] || 'video/mp4'
       return {

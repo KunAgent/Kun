@@ -113,6 +113,26 @@ describe('ModelStreamCollector', () => {
       .toEqual(['call_runtime_1', 'call_runtime_2'])
   })
 
+  it('rejects an incomplete completed call with content-free diagnostics', () => {
+    const stream = collector()
+    const reduction = stream.reduce({
+      kind: 'tool_call_complete',
+      callId: 'provider-secret-id',
+      toolName: '',
+      arguments: { command: 'provider-secret-command' }
+    })
+
+    expect(reduction).toEqual({
+      intents: [{
+        kind: 'model_error',
+        message: 'model stream produced an incomplete tool call',
+        code: 'stream_tool_call_protocol'
+      }]
+    })
+    expect(JSON.stringify(reduction)).not.toContain('provider-secret')
+    expect(stream.snapshot()).toMatchObject({ toolCalls: [], stopReason: 'error' })
+  })
+
   it('does not accept a tool call past the configured cap', () => {
     const stream = collector({ maxToolCallsPerStep: 1 })
     stream.reduce({ kind: 'tool_call_complete', callId: 'call_1', toolName: 'edit', arguments: {} })
@@ -159,6 +179,29 @@ describe('ModelStreamCollector', () => {
     expect(stream.snapshot().stopReason).toBe('error')
     expect(image.intents).toEqual([{
       kind: 'generated_image', imageBase64: 'aW1hZ2U=', mimeType: 'image/png'
+    }])
+  })
+
+  it('preserves safe provider failure metadata on model errors', () => {
+    const stream = collector()
+    expect(stream.reduce({
+      kind: 'error',
+      message: 'model request failed with status 520',
+      code: 'http_520',
+      failure: {
+        category: 'unavailable',
+        httpStatus: 520,
+        failoverAllowed: true
+      }
+    }).intents).toEqual([{
+      kind: 'model_error',
+      message: 'model request failed with status 520',
+      code: 'http_520',
+      failure: {
+        category: 'unavailable',
+        httpStatus: 520,
+        failoverAllowed: true
+      }
     }])
   })
 })

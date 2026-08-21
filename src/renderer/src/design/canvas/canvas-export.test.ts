@@ -70,7 +70,7 @@ describe('canvas export bounds', () => {
       request: {
         format: 'svg',
         fileName: 'prototype-board.svg',
-        relativePath: '.deepseekgui-images/prototype-board.svg'
+        relativePath: '.kun/images/prototype-board.svg'
       },
       workspaceRoot: '/workspace',
       rejectPortalPreviews: true
@@ -97,12 +97,26 @@ describe('canvas agent export request', () => {
       exportRequest: {
         format: 'png',
         fileName: 'architecture-a1b2c3.png',
-        relativePath: '.deepseekgui-images/architecture-a1b2c3.png'
+        relativePath: '.kun/images/architecture-a1b2c3.png'
       }
     })).toEqual({
       format: 'png',
       fileName: 'architecture-a1b2c3.png',
-      relativePath: '.deepseekgui-images/architecture-a1b2c3.png'
+      relativePath: '.kun/images/architecture-a1b2c3.png'
+    })
+  })
+
+  it('accepts legacy export requests when replaying stored turns', () => {
+    expect(extractCanvasAgentExportRequest({
+      exportRequest: {
+        format: 'png',
+        fileName: 'legacy.png',
+        relativePath: '.deepseekgui-images/legacy.png'
+      }
+    })).toEqual({
+      format: 'png',
+      fileName: 'legacy.png',
+      relativePath: '.deepseekgui-images/legacy.png'
     })
   })
 
@@ -111,14 +125,14 @@ describe('canvas agent export request', () => {
       exportRequest: {
         format: 'png',
         fileName: '../architecture.png',
-        relativePath: '.deepseekgui-images/../architecture.png'
+        relativePath: '.kun/images/../architecture.png'
       }
     })).toBeNull()
     expect(extractCanvasAgentExportRequest({
       exportRequest: {
         format: 'svg',
         fileName: 'architecture.png',
-        relativePath: '.deepseekgui-images/architecture.png'
+        relativePath: '.kun/images/architecture.png'
       }
     })).toBeNull()
   })

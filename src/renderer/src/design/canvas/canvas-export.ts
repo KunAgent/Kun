@@ -1,3 +1,4 @@
+import { WORKSPACE_GENERATED_IMAGE_FILE_PATTERN } from '@shared/generated-image-path'
 import { getCanvasDocumentContentBounds } from './canvas-placement'
 import { loadWorkspaceImageDataUrl } from './canvas-image-source'
 import { useCanvasShapeStore } from './canvas-shape-store'
@@ -40,8 +41,6 @@ const MAX_RASTER_EDGE = 8192
 // About 40 MiB of RGBA pixels; even a poorly-compressing PNG remains below the
 // main-process IPC payload ceiling after base64 expansion.
 const MAX_RASTER_PIXELS = 10 * 1024 * 1024
-const CANVAS_EXPORT_PATH_PATTERN = /^\.deepseekgui-images\/([A-Za-z0-9][A-Za-z0-9._-]{0,199}\.(png|svg))$/i
-
 export function canvasExportBounds(document: CanvasDocument, padding = EXPORT_PADDING): Rect | null {
   const bounds = getCanvasDocumentContentBounds(document)
   if (!bounds) return null
@@ -113,8 +112,13 @@ export function extractCanvasAgentExportRequest(value: unknown): CanvasAgentExpo
     ? value.exportRequest.relativePath.trim()
     : ''
   if (format !== 'png' && format !== 'svg') return null
-  const match = relativePath.match(CANVAS_EXPORT_PATH_PATTERN)
-  if (!match || match[1] !== fileName || match[2]?.toLowerCase() !== format) return null
+  const relativeFileName = relativePath.slice(relativePath.lastIndexOf('/') + 1)
+  const extension = relativeFileName.match(/\.(png|svg)$/i)?.[1]?.toLowerCase()
+  if (
+    !WORKSPACE_GENERATED_IMAGE_FILE_PATTERN.test(relativePath) ||
+    relativeFileName !== fileName ||
+    extension !== format
+  ) return null
   return { format, fileName, relativePath }
 }
 

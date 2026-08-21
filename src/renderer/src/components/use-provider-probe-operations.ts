@@ -33,6 +33,7 @@ import {
   type ProbeState
 } from './settings-section-providers-profile'
 import {
+  MAX_SHARED_MODEL_CONNECTION_MODELS,
   requestSharedModelConnectionProbe,
   shouldUseSharedModelConnectionProbe
 } from './settings-section-providers-shared-api'
@@ -46,7 +47,7 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 export function useProviderProbeOperations(scope: Record<string, any>): Record<string, any> {
-  const { t, sharedConnectionFor, fetchModelsDevCatalogFor, openModelImport } = scope
+  const { t, sharedConnectionFor, fetchModelsDevCatalogFor, openModelImport, flushSharedProviderCatalog } = scope
   const setProbeStates = scope.setProbeStates as Dispatch<SetStateAction<Record<string, ProbeState>>>
   const setCursorAccounts = scope.setCursorAccounts as Dispatch<SetStateAction<Record<string, {
     fingerprint: string
@@ -430,16 +431,25 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
     }))
   }
 
-  const importPickedModels = (
+  const importPickedModels = async (
     target: ModelProviderProfileV1,
     picked: ProviderModelImportResult,
     authoritative = false,
     modelAliases: Readonly<Record<string, readonly string[]>> = {},
     discoveredModelProfiles: Readonly<Record<string, ModelProviderModelProfileV1>> = {}
-  ): void => {
+  ): Promise<number> => {
     const nextChatModels = authoritative
       ? [...picked.chat]
       : mergeProviderModelIds(target.models, picked.chat)
+    if (
+      sharedConnectionFor(target.id) &&
+      nextChatModels.length > MAX_SHARED_MODEL_CONNECTION_MODELS
+    ) {
+      throw new Error(t('providerModelImportSharedLimit', {
+        count: nextChatModels.length,
+        max: MAX_SHARED_MODEL_CONNECTION_MODELS
+      }))
+    }
     const nextImageModels = target.image
       ? mergeProviderModelIds(target.image.models, picked.image)
       : picked.image
@@ -507,6 +517,7 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
           : {})
       }))
     }
+    if (sharedConnectionFor(target.id)) await flushSharedProviderCatalog(target.id)
     setProbeStates((prev) => {
       const previous = prev[target.id]
       if (!previous) return prev
@@ -515,6 +526,7 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
         [target.id]: { ...previous, total: added }
       }
     })
+    return added
   }
   return { runProbe, importPickedModels }
 }

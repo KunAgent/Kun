@@ -103,13 +103,21 @@ export function resolveDesignTurnAdmission(input: {
       throw new TurnConflictError('a locked Design profile requires a Code or Design turn')
     }
     if (submittedProfile && !sameDesignTaskProfile(lockedProfile, submittedProfile)) {
-      throw new DesignProfileLockedError(lockedProfile.lockedAtTurnId)
+      throw new DesignProfileLockedError(lockedProfile.lockedAtTurnId, {
+        lockedDocumentId: lockedProfile.documentTarget.documentId,
+        lockedBoardArtifactId: lockedProfile.documentTarget.boardArtifactId,
+        mismatch: 'profile'
+      })
     }
     if (
       submittedTarget &&
       !sameDesignDocumentTarget(lockedProfile.documentTarget, submittedTarget)
     ) {
-      throw new DesignProfileLockedError(lockedProfile.lockedAtTurnId)
+      throw new DesignProfileLockedError(lockedProfile.lockedAtTurnId, {
+        lockedDocumentId: lockedProfile.documentTarget.documentId,
+        lockedBoardArtifactId: lockedProfile.documentTarget.boardArtifactId,
+        mismatch: 'document-target'
+      })
     }
     return {
       effectiveSurface,

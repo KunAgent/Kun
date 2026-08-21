@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { KUN_GENERATED_IMAGE_DIR } from '../../contracts/generated-image-path.js'
 import {
   DESIGN_UPDATE_SHAPES_MAX_OPS,
   designCanvasReceiptKey,
@@ -439,7 +440,7 @@ export function createDesignExportCanvasTool(): LocalTool {
         .digest('hex')
         .slice(0, 12)
       const fileName = `${stem}-${suffix}.${format}`
-      const relativePath = `.deepseekgui-images/${fileName}`
+      const relativePath = `${KUN_GENERATED_IMAGE_DIR}/${fileName}`
       const exportRequest = { format, fileName, relativePath }
 
       return {

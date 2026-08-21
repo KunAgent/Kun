@@ -139,7 +139,14 @@ export class TaskSurfaceLockedError extends TurnConflictError {
 }
 
 export class DesignProfileLockedError extends TurnConflictError {
-  constructor(readonly lockedAtTurnId: string) {
+  constructor(
+    readonly lockedAtTurnId: string,
+    readonly details: {
+      lockedDocumentId?: string
+      lockedBoardArtifactId?: string
+      mismatch?: 'profile' | 'document-target'
+    } = {}
+  ) {
     super('Design task profile is locked and does not match the submitted profile')
     this.name = 'DesignProfileLockedError'
   }

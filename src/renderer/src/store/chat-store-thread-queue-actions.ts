@@ -174,8 +174,9 @@ export function createThreadQueueActions(
   const { set, get, sseAbortRef } = context
   return {
   drainQueuedMessages: async () => {
-    if (threadActionSharedState.drainingQueuedMessages) return
-    threadActionSharedState.drainingQueuedMessages = true
+    const threadId = get().activeThreadId?.trim()
+    if (!threadId || threadActionSharedState.drainingQueuedMessageThreadIds.has(threadId)) return
+    threadActionSharedState.drainingQueuedMessageThreadIds.add(threadId)
     try {
       while (true) {
         let state = get()
@@ -215,7 +216,7 @@ export function createThreadQueueActions(
         }
       }
     } finally {
-      threadActionSharedState.drainingQueuedMessages = false
+      threadActionSharedState.drainingQueuedMessageThreadIds.delete(threadId)
     }
   },
 

@@ -113,6 +113,7 @@ const api = {
     respondRendererRequest: (response) => ipcRenderer.invoke('data-migration:renderer-response', response)
   },
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  openSettingsConfigFile: () => ipcRenderer.invoke('settings:open-config-file'),
   revealModelProviderCredential: (providerId) =>
     ipcRenderer.invoke('model-provider:credential:reveal', { providerId }),
   resetUnreadableCredentials: () => ipcRenderer.invoke('credentials:reset-unreadable'),
@@ -164,6 +165,8 @@ const api = {
   readLocalOfficeDocument: (options) => ipcRenderer.invoke('file:read-local-office-document', options),
   readWorkspaceOfficePreview: (options) => ipcRenderer.invoke('file:read-workspace-office-preview', options),
   readWorkspaceOfficeSemantic: (options) => ipcRenderer.invoke('file:read-workspace-office-semantic', options),
+  saveWorkspaceSpreadsheet: (payload) => ipcRenderer.invoke('file:save-workspace-spreadsheet', payload),
+  convertWorkspaceSpreadsheet: (payload) => ipcRenderer.invoke('file:convert-workspace-spreadsheet', payload),
   resolveKunApproval: (request) => ipcRenderer.invoke('approval:decide', request),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   restartKunServe: () => ipcRenderer.invoke('runtime:restart-serve'),
@@ -175,6 +178,9 @@ const api = {
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) => ipcRenderer.invoke('claw:task:run', taskId),
   getScheduleStatus: () => ipcRenderer.invoke('schedule:status'),
+  createScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:create', payload),
+  updateScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:update', payload),
+  deleteScheduleTask: (taskId) => ipcRenderer.invoke('schedule:task:delete', taskId),
   runScheduleTask: (taskId) =>
     ipcRenderer.invoke('schedule:task:run', taskId),
   getDaemonStatus: () => ipcRenderer.invoke('daemon:status'),
@@ -646,6 +652,29 @@ const api = {
     ipcRenderer.invoke('extension:consent:request', request),
   extensionSyncHostContentScripts: (request) =>
     ipcRenderer.invoke('extension:sync-host-content-scripts', request),
+  resetRemoteSshHostKey: (hostId) => ipcRenderer.invoke('remote-ssh:host-key:reset', hostId),
+  disconnectRemoteSshHost: (hostId) => ipcRenderer.invoke('remote-ssh:disconnect', hostId),
+  pickRemoteSshIdentityFile: () => ipcRenderer.invoke('remote-ssh:pick-identity-file'),
+  connectRemoteSshHost: (hostId) => ipcRenderer.invoke('remote-ssh:connect', hostId),
+  listRemoteSshHosts: () => ipcRenderer.invoke('remote-ssh:hosts:list'),
+  createRemoteSshHost: (host) => ipcRenderer.invoke('remote-ssh:hosts:create', host),
+  updateRemoteSshHost: (id, host) => ipcRenderer.invoke('remote-ssh:hosts:update', { id, host }),
+  removeRemoteSshHost: (hostId) => ipcRenderer.invoke('remote-ssh:hosts:remove', hostId),
+  confirmRemoteSshHostKey: (confirmation) => ipcRenderer.invoke('remote-ssh:host-key:confirm', confirmation),
+  createRemoteSshTerminal: (payload) => ipcRenderer.invoke('remote-ssh:terminal:create', payload),
+  writeToRemoteSshTerminal: (payload) => ipcRenderer.invoke('remote-ssh:terminal:write', payload),
+  resizeRemoteSshTerminal: (payload) => ipcRenderer.invoke('remote-ssh:terminal:resize', payload),
+  disposeRemoteSshTerminal: (sessionId) => ipcRenderer.invoke('remote-ssh:terminal:dispose', sessionId),
+  onRemoteSshTerminalData: (handler) => {
+    const wrapped = (_: Electron.IpcRendererEvent, payload: Parameters<typeof handler>[0]) => handler(payload)
+    ipcRenderer.on('remote-ssh:terminal:data', wrapped)
+    return () => ipcRenderer.removeListener('remote-ssh:terminal:data', wrapped)
+  },
+  onRemoteSshTerminalExit: (handler) => {
+    const wrapped = (_: Electron.IpcRendererEvent, payload: Parameters<typeof handler>[0]) => handler(payload)
+    ipcRenderer.on('remote-ssh:terminal:exit', wrapped)
+    return () => ipcRenderer.removeListener('remote-ssh:terminal:exit', wrapped)
+  },
   createTerminal: (payload) => ipcRenderer.invoke('terminal:create', payload),
   writeToTerminal: (payload) => ipcRenderer.invoke('terminal:write', payload),
   resizeTerminal: (payload) => ipcRenderer.invoke('terminal:resize', payload),

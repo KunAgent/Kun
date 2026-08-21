@@ -123,7 +123,6 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
   it('labels an active turn as processing even after timing starts', () => {
     const html = renderToStaticMarkup(createElement(WorkMetaRow, {
       processing: true,
-      stepCount: 0,
       durationMs: 15,
       expanded: true,
       collapsible: false,
@@ -131,6 +130,30 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     }))
     expect(html).toMatch(/Processing|处理中|processing/)
     expect(html).not.toMatch(/Processed|已处理/)
+  })
+
+  it('renders a completed collapsed turn as processed with duration only', () => {
+    const html = renderToStaticMarkup(createElement(WorkMetaRow, {
+      processing: false,
+      durationMs: 101_000,
+      expanded: false,
+      onToggle: () => undefined
+    }))
+
+    expect(html).toMatch(/Processed 1m 41s|已处理 1m 41s/)
+    expect(html).not.toMatch(/Work process|工作过程|steps|步|Read|读取|Thought|思考/)
+    expect(html).toContain('aria-expanded="false"')
+  })
+
+  it('never falls back to a work-process summary when completed timing is unavailable', () => {
+    const html = renderToStaticMarkup(createElement(WorkMetaRow, {
+      processing: false,
+      expanded: false,
+      onToggle: () => undefined
+    }))
+
+    expect(html).toMatch(/Processed|已处理/)
+    expect(html).not.toMatch(/Work process|工作过程|steps|步/)
   })
 
   it('renders the fork action before copy in completed assistant response actions', () => {

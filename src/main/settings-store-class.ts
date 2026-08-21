@@ -91,6 +91,7 @@ export class JsonSettingsStore {
     const document = this.options.documentBackend
       ? await this.options.documentBackend.read()
       : undefined
+    const lastValidCache = this.cache
     if (this.cache && (!document || document.revision === this.documentRevision)) return this.cache
     if (document) {
       this.cache = null
@@ -119,6 +120,14 @@ export class JsonSettingsStore {
       parsed = JSON.parse(raw)
     } catch (error) {
       if (error instanceof SyntaxError) {
+        if (lastValidCache) {
+          console.warn('[kun-gui] Ignoring invalid externally modified settings; retaining the last valid snapshot.', {
+            sourcePath,
+            reason: 'invalid JSON'
+          })
+          this.cache = lastValidCache
+          return lastValidCache
+        }
         return replaceInvalidSettingsWithDefaults(
           (defaults) => this.saveOnce(defaults),
           sourcePath,
@@ -131,6 +140,14 @@ export class JsonSettingsStore {
     }
 
     if (!isRecord(parsed)) {
+      if (lastValidCache) {
+        console.warn('[kun-gui] Ignoring invalid externally modified settings; retaining the last valid snapshot.', {
+          sourcePath,
+          reason: 'top-level value is not an object'
+        })
+        this.cache = lastValidCache
+        return lastValidCache
+      }
       return replaceInvalidSettingsWithDefaults(
         (defaults) => this.saveOnce(defaults),
         sourcePath,

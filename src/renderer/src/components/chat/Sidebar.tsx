@@ -10,7 +10,7 @@ import type {
 import {
   ClawSidebarContent
 } from './SidebarClaw'
-import type { ClawImDialogMode } from './SidebarClawDialogHelpers'
+import type { ClawImDialogMode, ClawInstallTarget } from './SidebarClawDialogHelpers'
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
@@ -28,6 +28,7 @@ type Props = {
   activeThreadId: string | null
   activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'nodeGraph' | 'subagents'
   connectPhoneSidebarOpen: boolean
+  connectPhoneInitialTarget: ClawInstallTarget
   pluginsActive: boolean
   extensionsActive: boolean
   runtimeReady: boolean
@@ -65,6 +66,7 @@ export function Sidebar({
   activeThreadId,
   activeView,
   connectPhoneSidebarOpen,
+  connectPhoneInitialTarget,
   pluginsActive,
   extensionsActive,
   runtimeReady,
@@ -119,6 +121,7 @@ export function Sidebar({
   const busy = useChatStore((s) => s.busy)
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
+  const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
   const clawChannels = useChatStore((s) => s.clawChannels)
   const activeClawChannelId = useChatStore((s) => s.activeClawChannelId)
   const selectClawChannel = useChatStore((s) => s.selectClawChannel)
@@ -228,6 +231,7 @@ export function Sidebar({
       {connectPhoneSidebarOpen ? (
         <ConnectPhoneSidebarPanel
           channels={clawChannels}
+          initialTarget={connectPhoneInitialTarget}
           onAddProvider={async (provider, agentProfile, platformCredential, options) => {
             await addClawChannel(provider, agentProfile, platformCredential, options)
             onToggleConnectPhone()
@@ -271,6 +275,7 @@ export function Sidebar({
           busy={busy}
           watchTurnCompletion={watchTurnCompletion}
           unreadThreadIds={unreadThreadIds}
+          scheduledThreadActivities={scheduledThreadActivities}
           locale={i18n.language}
           onPickWorkspace={() => void chooseWorkspace()}
           onRemoveWorkspace={deleteWorkspace}
@@ -304,6 +309,7 @@ export function Sidebar({
         busy={busy}
         watchTurnCompletion={watchTurnCompletion}
         unreadThreadIds={unreadThreadIds}
+        scheduledThreadActivities={scheduledThreadActivities}
         locale={i18n.language}
         onPickWorkspace={() => void chooseWorkspace()}
         onRemoveWorkspace={deleteWorkspace}

@@ -117,6 +117,7 @@ import { createMaintenanceActions } from './chat-store-maintenance-actions'
 import { createInitialChatStoreState } from './chat-store-initial-state'
 import { createComposerContextActions } from './chat-store-composer-context-actions'
 import { createKnowledgeBaseActions } from './chat-store-knowledge-base-actions'
+import { createSidebarActivityActions } from './chat-store-sidebar-activity'
 
 export type { AppRoute, SettingsRouteSection } from './chat-store-types'
 export { CLAW_COMPOSER_MODEL_IDS } from './chat-store-helpers'
@@ -196,6 +197,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   ...createComposerContextActions({ set, get }),
 
   ...createKnowledgeBaseActions({ set, get, getProvider }),
+
+  ...createSidebarActivityActions(set, get),
 
   ...createThreadActions({ set, get, sseAbortRef }),
 

@@ -84,7 +84,7 @@ export function providersConfigForRuntime(
       ...(credentialSourceId ? { credentialSourceId } : {}),
       ...(baseUrl ? { baseUrl } : {}),
       ...(provider.kind ? { kind: provider.kind } : {}),
-      ...(presetSource ? { presetSource: presetSource.preset.id } : {}),
+      ...(presetSource ? { presetSource: presetSource.preset.id, presetMode: presetSource.mode } : {}),
       ...(presetSource?.mode === 'token-plan' || presetSource?.preset.category === 'subscription'
         ? { authType: 'subscription' }
         : {}),

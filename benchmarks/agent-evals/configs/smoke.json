@@ -1,0 +1,10 @@
+{
+  "name": "smoke",
+  "attempts": 1,
+  "concurrency": 1,
+  "suites": {
+    "swebench": { "tasks": ["sympy__sympy-20590"] },
+    "deepswe": { "tasks": ["abs-module-cache-flags"] },
+    "terminal-bench": { "tasks": ["regex-log"] }
+  }
+}

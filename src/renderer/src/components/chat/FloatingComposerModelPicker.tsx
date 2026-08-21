@@ -28,6 +28,7 @@ import {
   type FloatingSubmenuPlacement
 } from './floating-composer-model-picker-logic'
 import { MenuSectionTitle, MenuSeparator, ModelCapabilityBadge, PickerRow, ProviderRow, SubmenuRow } from './floating-composer-model-picker-rows'
+import { ProviderIcon } from '../provider-icon'
 
 export type { ComposerReasoningEffort } from './floating-composer-model-picker-logic'
 export {
@@ -112,13 +113,22 @@ export function FloatingComposerModelPicker({
     })
   }, [composerModelGroups, modelOptions, t])
   const currentModel = composerModel.trim()
-  const selectedProviderGroup = providerMenuGroups.find((group) =>
+  const selectedProviderId = providerMenuGroups.find((group) =>
     group.providerId === composerProviderId.trim() &&
     group.modelIds.some((id) => modelIdsMatch(id, currentModel))
-  ) ?? null
-  const selectedProviderId = selectedProviderGroup?.providerId ?? providerMenuGroups.find((group) =>
+  )?.providerId ?? providerMenuGroups.find((group) =>
     group.modelIds.some((id) => modelIdsMatch(id, currentModel))
   )?.providerId ?? null
+  const selectedProviderGroup = providerMenuGroups.find((group) =>
+    group.providerId === selectedProviderId
+  ) ?? null
+  const selectedProviderIcon = selectedProviderGroup ? (
+    <ProviderIcon
+      presetId={selectedProviderGroup.presetSource}
+      providerId={selectedProviderGroup.providerId}
+      className="h-4 w-4 shrink-0 text-ds-faint"
+    />
+  ) : null
   const currentModelProfile = modelProfileForSelection(providerMenuGroups, currentModel, selectedProviderId)
   const needsProviderSetup = shouldShowProviderSetupPrompt(providerMenuGroups)
   const reasoningOptions = reasoningOptionsForModel(currentModelProfile)
@@ -153,9 +163,7 @@ export function FloatingComposerModelPicker({
     showProviderInModelLabel && selectedProviderGroup?.label
       ? `${selectedProviderGroup.label} · ${modelLabel}`
       : modelLabel
-  const controlsTitle = reasoningEnabled
-    ? `${modelLabel} / ${currentReasoningLabel}`
-    : modelLabel
+  const controlsTitle = [selectedProviderGroup?.label, modelLabel, reasoningEnabled ? currentReasoningLabel : ''].filter(Boolean).join(' / ')
   const activeProviderGroup =
     providerMenuGroups.find((group) => group.providerId === activeProviderId) ?? null
   const activeProviderModelIds = activeProviderGroup
@@ -544,9 +552,10 @@ export function FloatingComposerModelPicker({
           }`}
           aria-expanded={menuOpen}
           aria-haspopup="menu"
-          aria-label={t('composerModel')}
+          aria-label={`${t('composerModel')}: ${[selectedProviderGroup?.label, modelLabel].filter(Boolean).join(' / ')}`}
           title={splitModelLabel}
         >
+          {selectedProviderIcon}
           <span className="min-w-0 truncate">{splitModelLabel}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
         </button>
@@ -624,13 +633,14 @@ export function FloatingComposerModelPicker({
           title={controlsTitle}
           aria-expanded={menuOpen}
           aria-haspopup="menu"
-          aria-label={t('composerModelControls')}
+          aria-label={`${t('composerModelControls')}: ${controlsTitle}`}
           className={`flex h-9 min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden rounded-full py-2 pl-3 pr-1 text-[13px] font-medium outline-none transition ${
             canOpenModelControls
               ? 'text-current focus-visible:ring-2 focus-visible:ring-accent/25'
               : 'cursor-not-allowed text-ds-faint'
           }`}
         >
+          {selectedProviderIcon}
           <span className="min-w-0 truncate text-right">
             {modelLabel}
           </span>
@@ -668,9 +678,10 @@ export function FloatingComposerModelPicker({
         }`}
         aria-expanded={menuOpen}
         aria-haspopup="menu"
-        aria-label={t('composerModelControls')}
+        aria-label={`${t('composerModelControls')}: ${controlsTitle}`}
         title={controlsTitle}
       >
+        {selectedProviderIcon}
         <span className="min-w-0 truncate">{modelLabel}</span>
         {reasoningEnabled ? (
           <span className="max-w-[72px] shrink-0 truncate text-ds-faint" title={t(reasoningLabelKey(currentReasoning))}>

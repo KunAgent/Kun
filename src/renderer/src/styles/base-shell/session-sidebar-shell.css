@@ -64,6 +64,16 @@
   padding: 7px 9px;
 }
 
+.ds-topbar-action-button[data-tooltip-wrap='true']::after {
+  width: min(360px, calc(100vw - 2rem));
+  max-width: min(360px, calc(100vw - 2rem));
+  overflow: visible;
+  text-align: left;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.45;
+}
+
 .ds-topbar-action-button:hover::before,
 .ds-topbar-action-button:hover::after,
 .ds-topbar-action-button:focus-visible::before,

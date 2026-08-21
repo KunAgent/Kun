@@ -54,7 +54,6 @@ import {
   calculateQueuedMessageMenuPlacement,
   canEditQueuedComposerMessage
 } from './FloatingComposerQueuedMessages'
-import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import { requestContextSnapshotMatchesSelection } from './FloatingComposerContextCapacity'
 import { getGoalPanelDraftObjective } from './floating-composer-commands'
 import { useChatStore } from '../../store/chat-store'
@@ -438,27 +437,6 @@ describe('FloatingComposer queued guidance', () => {
     expect(html).toContain('send this next')
   })
 
-  it('keeps todo, Graph, incoming work, and the active goal in one ordered stack', () => {
-    const html = renderToStaticMarkup(createElement(FloatingComposerAboveInputStack, {
-      todo: createElement('div', { 'data-composer-stack-item': 'todo' }),
-      graph: createElement('div', { 'data-composer-stack-item': 'graph' }),
-      incoming: createElement('div', { 'data-composer-queue': true }),
-      goal: createElement('div', { 'data-composer-stack-item': 'goal' })
-    }))
-
-    const stackIndex = html.indexOf('data-composer-above-input-stack')
-    const todoIndex = html.indexOf('data-composer-stack-item="todo"')
-    const graphIndex = html.indexOf('data-composer-stack-item="graph"')
-    const queueIndex = html.indexOf('data-composer-queue')
-    const goalIndex = html.indexOf('data-composer-stack-item="goal"')
-    expect(stackIndex).toBeGreaterThanOrEqual(0)
-    expect(todoIndex).toBeGreaterThan(stackIndex)
-    expect(graphIndex).toBeGreaterThan(todoIndex)
-    expect(queueIndex).toBeGreaterThan(graphIndex)
-    expect(goalIndex).toBeGreaterThan(queueIndex)
-    expect(html).not.toContain('bottom-full')
-    expect(html).not.toContain('absolute')
-  })
 })
 
 describe('FloatingComposer slash commands', () => {

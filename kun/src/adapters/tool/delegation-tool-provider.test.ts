@@ -366,6 +366,7 @@ describe('delegate_task observability output', () => {
       expectedResumeCount: 1,
       expectedLaunchers: ['delegate_task'],
       requireResumable: true,
+      proactive: false,
       prompt: expect.stringContaining('persisted child session')
     }))
 
@@ -385,6 +386,42 @@ describe('delegate_task observability output', () => {
       output: { error: expect.stringContaining('omit resumeChildId and expectedResumeCount') }
     })
     expect(resumeChild).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks a model-initiated resume as proactive', async () => {
+    const resumeChild = vi.fn(async () => ({
+      id: 'child_retry', parentThreadId: 'thread_parent', parentTurnId: 'turn_parent',
+      launcher: 'delegate_task' as const, prompt: 'continue', profile: 'general',
+      profileSnapshot: { name: 'General Agent' },
+      security: { sandboxRoot: '/workspace', memoryEnabled: false },
+      approvalReviewer: 'user' as const, status: 'completed' as const,
+      resumable: false, resumeCount: 1, proactiveRetryCount: 1,
+      summary: 'done', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      returnFormat: 'summary' as const,
+      createdAt: '2026-08-19T00:00:00.000Z', updatedAt: '2026-08-19T00:00:01.000Z'
+    }))
+    const runtime = {
+      enabled: () => true,
+      useExistingAgents: false,
+      defaultToolPolicy: 'inherit',
+      proactiveRetryPolicy: { enabled: true, maxAttempts: 3 },
+      runChild: vi.fn(),
+      resumeChild
+    } as unknown as DelegationRuntime
+    const tool = buildDelegationToolProviders(runtime)[0]!.tools[0]!
+
+    await expect(tool.execute({
+      prompt: 'continue after the transient failure',
+      resumeChildId: 'child_retry',
+      expectedResumeCount: 0
+    }, context())).resolves.toMatchObject({
+      isError: false,
+      output: {
+        childId: 'child_retry',
+        proactiveRetry: { count: 1, limit: 3, remaining: 2 }
+      }
+    })
+    expect(resumeChild).toHaveBeenCalledWith(expect.objectContaining({ proactive: true }))
   })
 
   it('creates a new child when a provider materializes neutral resume placeholders', async () => {

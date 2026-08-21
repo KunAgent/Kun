@@ -213,6 +213,40 @@ describe('SidebarProjectsSection collapse memory', () => {
   })
 })
 
+describe('SidebarProjectsSection project expansion', () => {
+  const expansionTranslation = (key: string, options?: Record<string, unknown>): string =>
+    key === 'sidebarWorkspaceShowMore'
+      ? `sidebarWorkspaceShowMore:${String(options?.count)}`
+      : key
+
+  it('does not use a global thread total as a project remaining count', () => {
+    const cindyThreads = Array.from({ length: 6 }, (_, index) => thread({
+      id: `cindy-${index + 1}`,
+      title: `Cindy ${index + 1}`,
+      workspace: '/Users/zxy/cindy',
+      updatedAt: `2026-06-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`
+    }))
+
+    const html = renderToStaticMarkup(createElement(SidebarProjectsSection, sidebarProjectProps({
+      threads: cindyThreads,
+      workspaceRoot: '/Users/zxy/cindy',
+      workspaceRoots: ['/Users/zxy/cindy', '/Users/zxy/other'],
+      threadListCursorByWorkspace: {
+        '/users/zxy/other': {
+          workspaceKey: '/users/zxy/other',
+          hasMore: false,
+          total: 1040
+        }
+      },
+      t: expansionTranslation
+    })))
+
+    expect(html).toContain('sidebarWorkspaceShowMore:1')
+    expect(html).not.toContain('sidebarWorkspaceShowMore:1034')
+  })
+
+})
+
 describe('SidebarProjectsSection groups', () => {
   it('reconciles linked worktrees into the primary project after Git discovery', async () => {
     const projectPath = '/Users/zxy/codeproject/ds_project/DeepSeek-GUI'
@@ -568,7 +602,7 @@ describe('SidebarProjectsSection groups', () => {
     ).toEqual(['thread-normal', 'thread-sdd-active-build'])
   })
 
-  it('prioritizes unread threads, then running threads, while preserving each bucket order', () => {
+  it('prioritizes running threads, then unread threads, while preserving each bucket order', () => {
     const base = [
       thread({ id: 'read-newer', workspace: '/tmp/app' }),
       thread({ id: 'running-status', workspace: '/tmp/app', status: 'running' }),
@@ -585,10 +619,10 @@ describe('SidebarProjectsSection groups', () => {
     }
 
     expect(prioritizeSidebarThreadActivity(base, context).map((item) => item.id)).toEqual([
-      'unread-first',
-      'unread-second',
       'running-status',
       'running-watched',
+      'unread-first',
+      'unread-second',
       'read-newer',
       'read-older'
     ])

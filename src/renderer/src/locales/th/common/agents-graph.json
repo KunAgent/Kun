@@ -276,6 +276,9 @@
   "summarizeSession": "สรุป",
   "summarizing": "กำลังสรุป...",
   "summarizeFailed": "ไม่สามารถสรุปการสนทนานี้ได้",
+  "summarizeSummaryTitle": "สรุปเซสชัน",
+  "summarizeThreadMissing": "รันไทม์ไม่ได้จัดเก็บการสนทนานี้อีกต่อไป รายการถูกรีเฟรชแล้ว",
+  "sidebarThreadCopySummary": "คัดลอกสรุป",
   "name": "ชื่อ",
   "description": "คำอธิบาย",
   "color": "สี",
@@ -288,5 +291,13 @@
   "writeEnableLineWrapping": "เปิดใช้งานการตัดบรรทัด",
   "writeDisableLineWrapping": "ปิดการใช้งานการตัดบรรทัด",
   "systemPrompt": "พร้อมท์ระบบ",
-  "toolPolicy": "การเข้าถึงเครื่องมือ"
+  "toolPolicy": "การเข้าถึงเครื่องมือ",
+  "visualizationLabel": "Visualization",
+  "visualizationCollapse": "Collapse visualization",
+  "visualizationExpand": "Expand visualization",
+  "visualizationCopy": "Copy as text",
+  "visualizationCopied": "Copied",
+  "visualizationFlow": "Flow",
+  "visualizationCardGrid": "Grouped details",
+  "visualizationCallout": "Important note"
 }

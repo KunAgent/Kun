@@ -9,6 +9,7 @@ import {
   buildTodoLocalTools,
   buildDelegationToolProviders,
   buildComponentDesignToolProviders,
+  buildConversationVisualizationToolProvider,
   protocolSupportsImageEdit,
   buildRuntimeCapabilityManifest,
   DEFAULT_APPROVAL_REVIEWER,
@@ -229,6 +230,9 @@ export function createRuntimeRegistry(
           sessionStore,
           threadStore,
           events,
+          // Share the runtime ledger so child usage stays live-queryable under
+          // the child thread id without folding onto the parent.
+          usage: usageService,
 	          ...(core.activeOptions.runtime ? { runtime: core.activeOptions.runtime } : {}),
 	          ...(services.memoryStore ? { memoryStore: services.memoryStore } : {}),
           attachmentStore: () => services.attachmentStore,
@@ -352,7 +356,10 @@ export function createRuntimeRegistry(
       }),
       turnService
     ),
-    ...buildComponentDesignToolProviders(delegationRuntime)
+    ...buildComponentDesignToolProviders(delegationRuntime),
+    ...buildConversationVisualizationToolProvider(
+      () => core.activeOptions.lab?.conversationVisualization
+    )
   ])
   return {
     services,

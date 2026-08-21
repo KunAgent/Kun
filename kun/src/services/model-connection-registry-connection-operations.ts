@@ -110,6 +110,14 @@ async initialize(this: ModelConnectionRegistry,
         current = await this['file'].read(emptyDocument)
       }
     }
+    current = await this['file'].read(emptyDocument)
+    if (repairRegistryModelCapabilityLimits(current)) {
+      current = await this['file'].update(emptyDocument, (document) => {
+        const repaired = repairRegistryModelCapabilityLimits(document)
+        return repaired ? { ...repaired, revision: document.revision + 1 } : document
+      })
+      await this['changed'](current)
+    }
     if (globals) {
       const nextProxy = globals.proxy ?? current.proxy
       const nextRoutePools = globals.routePools ?? current.routePools
@@ -246,6 +254,7 @@ async connectAuthenticated(this: ModelConnectionRegistry,
         accountId: existing?.accountId ?? `account:${connectedId}`,
         name: input.name,
         presetSource: input.presetSource,
+        ...(input.presetMode ? { presetMode: input.presetMode } : {}),
         kind: input.kind,
         authType: input.authType,
         baseUrl: input.baseUrl,
@@ -468,6 +477,7 @@ async connectInternal(this: ModelConnectionRegistry,
             accountId,
             name: input.name,
             presetSource: input.presetSource,
+            ...(input.presetMode ? { presetMode: input.presetMode } : {}),
             kind: input.kind,
             authType: input.authType,
             baseUrl: input.baseUrl,
@@ -530,6 +540,7 @@ async connectInternal(this: ModelConnectionRegistry,
         accountId,
         name: input.name,
         presetSource: input.presetSource,
+        ...(input.presetMode ? { presetMode: input.presetMode } : {}),
         kind: input.kind,
         authType: input.authType,
         baseUrl: input.baseUrl,

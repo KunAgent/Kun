@@ -411,6 +411,72 @@ describe('chat projection reducer', () => {
 
     expect(projected.blocks.find((block) => block.id === 'assistant_1')).toBe(assistant)
   })
+
+  it('replaces a flushed synthetic assistant projection with its durable item', () => {
+    const projected = project({
+      ...state(),
+      busy: true,
+      currentTurnId: 'turn_1',
+      blocks: [{
+        kind: 'assistant' as const,
+        id: 'a-123',
+        turnId: 'turn_1',
+        text: 'The answer is ready.'
+      }]
+    }, [{
+      type: 'assistant_item_upserted',
+      payload: {
+        itemId: 'item_answer',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        kind: 'agent_message',
+        status: 'completed',
+        createdAt: '2026-07-11T00:00:00.000Z',
+        text: 'The answer is ready.'
+      }
+    }])
+
+    expect(projected.blocks).toEqual([{
+      kind: 'assistant',
+      id: 'item_answer',
+      turnId: 'turn_1',
+      createdAt: '2026-07-11T00:00:00.000Z',
+      text: 'The answer is ready.'
+    }])
+  })
+
+  it('deduplicates repeated assistant snapshots while reconciling an active turn', () => {
+    const projected = project({
+      ...state(),
+      busy: true,
+      currentTurnId: 'turn_1',
+      currentTurnUserId: 'user_1',
+      blocks: [{ kind: 'user' as const, id: 'user_1', turnId: 'turn_1', text: 'Question' }]
+    }, [{
+      type: 'thread_snapshot_reconciled',
+      payload: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        userBlockId: 'user_1',
+        latestSeq: 8,
+        threadStatus: 'running',
+        latestTurnId: 'turn_1',
+        latestTurnStatus: 'running',
+        blocks: [
+          { kind: 'user', id: 'user_1', turnId: 'turn_1', text: 'Question' },
+          { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'partial' },
+          { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'complete' }
+        ]
+      }
+    }], { ...context, threadSnapshotLooksRunning: () => true })
+
+    expect(projected.blocks).toEqual([
+      { kind: 'user', id: 'user_1', turnId: 'turn_1', text: 'Question' },
+      { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'complete' }
+    ])
+    expect(projected.busy).toBe(true)
+    expect(projected.currentTurnId).toBe('turn_1')
+  })
 })
 
 describe('chat projection reducer usage timing metrics', () => {

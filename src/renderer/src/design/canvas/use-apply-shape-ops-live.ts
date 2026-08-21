@@ -19,6 +19,7 @@ import {
   applyCanvasToolBlock
 } from './apply-canvas-tool-block'
 import type { GeneratedImageFallbackTarget } from './canvas-generated-image-replay'
+import { imageGenerationPlaceholderShapeId } from './canvas-image-generation-progress'
 import type {
   PptCanvasProjectionOpenRequest,
   PptCanvasProjectionOptions
@@ -180,6 +181,26 @@ export function useApplyShapeOpsLive(
       const captured = captureCanvasGeneratedImageFallback(state)
       generatedImageFallbackTarget = captured.fallback
       generatedImagePlacementTargetId = captured.placementTargetId
+    }
+
+    const materializeActiveGeneratedImages = (state: CanvasTurnReplayState): void => {
+      if (!activeDesignTarget || !state.currentTurnId || !canvasDocumentReady()) return
+      const userId = activeCanvasUserId(state.blocks)
+      if (!userId) return
+      const user = state.blocks.find((block) => block.id === userId)
+      const turnBlocks = blocksForActiveCanvasTurn({ ...state, currentTurnUserId: userId })
+      const durableTurnBlocks = user ? [user, ...turnBlocks] : turnBlocks
+      const placed = placeLiveCanvasTurnImages({
+        blocks: durableTurnBlocks,
+        affectedIds: [...affectedThisTurn],
+        threadId: targetThreadId ?? state.activeThreadId,
+        turnId: state.currentTurnId,
+        target: activeDesignTarget,
+        fallback: generatedImageFallbackTarget,
+        fallbackPlacementTargetId: generatedImagePlacementTargetId,
+        placeholderShapeIdForTool: imageGenerationPlaceholderShapeId
+      })
+      for (const id of placed) affectedThisTurn.add(id)
     }
 
     // The in-progress (or just-completed) turn's full assistant text. Using the
@@ -464,7 +485,8 @@ export function useApplyShapeOpsLive(
         turnId: completedTurnId,
         target: activeDesignTarget,
         fallback: generatedImageFallbackTarget,
-        fallbackPlacementTargetId: generatedImagePlacementTargetId
+        fallbackPlacementTargetId: generatedImagePlacementTargetId,
+        placeholderShapeIdForTool: imageGenerationPlaceholderShapeId
       })
       for (const placed of placedImages) affectedThisTurn.add(placed)
       if (placedImages.length > 0) {
@@ -551,6 +573,7 @@ export function useApplyShapeOpsLive(
         activeDesignTarget,
         unboundTargetPolicy
       )
+      materializeActiveGeneratedImages(initialState)
       replayIdle(initialState)
     }
 
@@ -579,6 +602,7 @@ export function useApplyShapeOpsLive(
             ) ?? undefined
           )
         }
+        materializeActiveGeneratedImages(replayState)
       }
       if (!state.currentTurnId && state.blocks !== prev.blocks) {
         replayIdle(state)
@@ -611,6 +635,7 @@ export function useApplyShapeOpsLive(
           activeDesignTarget,
           unboundTargetPolicy
         )
+        materializeActiveGeneratedImages(chatState)
       } else replayIdle(chatState)
     })
 

@@ -623,14 +623,47 @@ describe('ModelRoundEngine', () => {
 
     await expect(test.run()).resolves.toEqual({ kind: 'failed' })
     expect(test.trace).toEqual([
-      'stage:pre_send',
-      'stage:post_send',
-      'item:assistant_text:delta',
-      'event:assistant_text_delta',
-      'failure',
-      'event:error',
-      'stage:response_received',
-      'item:assistant_text'
+      'stage:pre_send', 'stage:post_send', 'item:assistant_text:delta',
+      'event:assistant_text_delta', 'failure', 'event:error',
+      'stage:response_received', 'item:assistant_text'
+    ])
+    // The provider's own error chunk must remain the surfaced failure.
+    expect(test.recordedEvents.at(-1)).toMatchObject({
+      kind: 'error', message: 'upstream failed', code: 'upstream'
+    })
+  })
+
+  it('synthesizes a diagnostic when a provider ends with only an error stop reason', async () => {
+    const test = harness([{ kind: 'completed', stopReason: 'error' }])
+
+    await expect(test.run()).resolves.toEqual({ kind: 'failed' })
+    expect(test.trace).toEqual([
+      'stage:pre_send', 'stage:post_send', 'stage:response_received',
+      'failure', 'event:error'
+    ])
+    expect(test.recordedEvents.at(-1)).toMatchObject({
+      kind: 'error', code: 'model_error_without_message',
+      message: expect.stringContaining('without returning a diagnostic message')
+    })
+  })
+
+  it('keeps usage-only successful streams replayable through the coordinator safety net', async () => {
+    // The engine intentionally still returns completed for an empty-but-
+    // successful stream: bounded recovery paths (post-tool, goal, required
+    // tool) need the empty snapshot. RoundOutcomeCoordinator owns the
+    // terminal model_empty_response failure once recovery declines to act.
+    const test = harness([
+      { kind: 'usage', usage },
+      { kind: 'completed', stopReason: 'stop' }
+    ])
+
+    await expect(test.run()).resolves.toEqual({
+      kind: 'completed',
+      snapshot: { text: '', reasoning: '', toolCalls: [], stopReason: 'stop' }
+    })
+    expect(test.trace).toEqual([
+      'stage:pre_send', 'stage:post_send', 'telemetry:pressure', 'usage:record',
+      'goal:usage', 'event:usage', 'stage:response_received'
     ])
   })
 

@@ -515,6 +515,20 @@ describe('approval mapping', () => {
 })
 
 describe('tool block merging', () => {
+  it('coalesces repeated hydrated assistant and reasoning item snapshots by identity', () => {
+    const blocks = mergeChatBlocks([
+      { kind: 'assistant', id: 'item_answer', turnId: 'turn_1', text: 'partial answer' },
+      { kind: 'reasoning', id: 'item_think', turnId: 'turn_1', text: 'first thought' },
+      { kind: 'assistant', id: 'item_answer', turnId: 'turn_1', text: 'complete answer' },
+      { kind: 'reasoning', id: 'item_think', turnId: 'turn_1', text: 'complete thought' }
+    ])
+
+    expect(blocks).toEqual([
+      { kind: 'assistant', id: 'item_answer', turnId: 'turn_1', text: 'complete answer' },
+      { kind: 'reasoning', id: 'item_think', turnId: 'turn_1', text: 'complete thought' }
+    ])
+  })
+
   it('coalesces tool_call and tool_result items for the same call id into one block', () => {
     const blocks = mergeChatBlocks([
       chatBlockFromItem({

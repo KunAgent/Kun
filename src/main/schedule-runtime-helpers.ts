@@ -82,11 +82,14 @@ export type RunPromptOptions = {
   prompt: string
   title: string
   workspaceRoot: string
+  /** Existing thread that should receive the scheduled turn instead of creating a new one. */
+  threadId?: string
   model: string
   /** Optional provider id; routed via Kun's MultiProviderModelClient. */
   providerId?: string
   reasoningEffort: ScheduleReasoningEffort
   mode: ScheduleRunMode
+  orchestration?: 'direct' | 'graph'
   clawChannel?: ClawImChannelV1 | null
   waitForResult: boolean
   responseTimeoutMs: number
@@ -348,6 +351,8 @@ export type RunPromptViaRuntimeOptions = {
   title: string
   /** Resolved workspace path (callers apply the default fallback). */
   workspaceRoot: string
+  /** Existing thread that should receive the scheduled turn instead of creating a new one. */
+  threadId?: string
   model: string
   /**
    * Optional provider id override. Forwarded to Kun's `POST /v1/threads` so
@@ -359,6 +364,7 @@ export type RunPromptViaRuntimeOptions = {
   providerId?: string
   reasoningEffort: ScheduleReasoningEffort | ''
   mode: ScheduleRunMode
+  orchestration?: 'direct' | 'graph'
   waitForResult: boolean
   responseTimeoutMs: number
   signal?: AbortSignal
@@ -382,19 +388,24 @@ export async function runPromptViaRuntime(
   }
   const model = normalizeTaskModel(options.model) ?? (settings.agents.kun.model.trim() || DEFAULT_SCHEDULE_MODEL)
   const providerId = options.providerId?.trim()
-  const create = await deps.runtimeRequest(settings, '/v1/threads', {
-    method: 'POST',
-    ...(options.signal ? { signal: options.signal } : {}),
-    body: JSON.stringify({
-      workspace,
-      model,
-      mode: options.mode,
-      ...(providerId ? { providerId } : {}),
-      ...(options.title.trim() ? { title: options.title.trim() } : {})
+  const existingThreadId = options.threadId?.trim()
+  let threadId = existingThreadId ?? ''
+  if (!threadId) {
+    const create = await deps.runtimeRequest(settings, '/v1/threads', {
+      method: 'POST',
+      ...(options.signal ? { signal: options.signal } : {}),
+      body: JSON.stringify({
+        workspace,
+        model,
+        mode: options.mode,
+        ...(providerId ? { providerId } : {}),
+        ...(options.title.trim() ? { title: options.title.trim() } : {})
+      })
     })
-  })
-  if (!create.ok) return { ok: false, message: runtimeErrorMessage(create, 'Failed to create thread.') }
-  const thread = JSON.parse(create.body) as ThreadRecordJson
+    if (!create.ok) return { ok: false, message: runtimeErrorMessage(create, 'Failed to create thread.') }
+    const thread = JSON.parse(create.body) as ThreadRecordJson
+    threadId = thread.id
+  }
 
   const turnBody: Record<string, unknown> = {
     prompt: options.prompt,
@@ -402,13 +413,15 @@ export async function runPromptViaRuntime(
     clientSurface: 'api',
     // Headless turns — nobody can answer a user_input prompt; a turn that asks
     // one hangs until the response timeout.
-    disableUserInput: true
+    disableUserInput: true,
+    orchestration: options.orchestration ?? 'direct'
   }
   if (model) turnBody.model = model
+  if (providerId) turnBody.providerId = providerId
   if (options.reasoningEffort) turnBody.reasoningEffort = options.reasoningEffort
   const turn = await deps.runtimeRequest(
     settings,
-    `/v1/threads/${encodeURIComponent(thread.id)}/turns`,
+    `/v1/threads/${encodeURIComponent(threadId)}/turns`,
     {
       method: 'POST',
       body: JSON.stringify(turnBody),
@@ -423,18 +436,18 @@ export async function runPromptViaRuntime(
     return { ok: false, message: 'Failed to start turn: missing turn id.' }
   }
   if (!options.waitForResult) {
-    return { ok: true, threadId: thread.id, turnId, message: 'Started' }
+    return { ok: true, threadId, turnId, message: 'Started' }
   }
 
   const text = await waitForAssistantTextViaRuntime(
     deps,
     settings,
-    thread.id,
+    threadId,
     turnId,
     options.responseTimeoutMs,
     options.signal
   )
-  return { ok: true, threadId: thread.id, turnId, text, message: text || 'Completed' }
+  return { ok: true, threadId, turnId, text, message: text || 'Completed' }
 }
 
 export async function waitForAssistantTextViaRuntime(

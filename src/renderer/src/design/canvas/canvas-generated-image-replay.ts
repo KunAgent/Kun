@@ -1,9 +1,16 @@
 import type { ChatBlock, GeneratedFileReference } from '../../agent/types'
 import type { DesignImagePlacementTarget } from '../../agent/design-task-profile'
+import { isWorkspaceGeneratedImagePath } from '@shared/generated-image-path'
 import { isImplicitImageSlot, type CanvasDocument } from './canvas-types'
 
 export type GeneratedImageFallbackTarget = { id: string; imageUrl: string }
-export type GeneratedImageResult = { imageUrl: string; completionIdentity: string }
+export type GeneratedImageResult = {
+  imageUrl: string
+  completionIdentity: string
+  toolBlockId: string
+  width?: number
+  height?: number
+}
 
 const EXISTING_IMAGE_EDIT_PATTERN =
   /(?:按图片批注修改|修改|编辑|改成|改为|改一下|换成?|替换|重画|重绘|修复|调整|变成|去掉|去除|清除|换个颜色|change|edit|modify|replace|transform|restyle|redo|fix|recolor|remove|clean up)/i
@@ -94,10 +101,8 @@ function generatedFileCompletionIdentity(
   return `${blockId}:${generatedFileImageUrl(candidate) || `file:${index}`}`
 }
 
-const GENERATED_IMAGE_PATH_PREFIXES = ['.kun/images/', '.deepseekgui-images/'] as const
-
 function isGeneratedImagePath(path: string): boolean {
-  return GENERATED_IMAGE_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
+  return isWorkspaceGeneratedImagePath(path)
 }
 
 function latestGeneratedImageMarkdownPath(text: string): string | null {
@@ -196,8 +201,65 @@ export function generatedImageResultsForTurn(
       const imageUrl = generatedFileImageUrl(file)
       if (!imageUrl) return
       const completionIdentity = generatedFileCompletionIdentity(block.id, file, index)
-      results.set(completionIdentity, { imageUrl, completionIdentity })
+      const candidate = file as GeneratedFileReference
+      const width = typeof candidate.width === 'number' && Number.isFinite(candidate.width) &&
+        candidate.width > 0 ? candidate.width : undefined
+      const height = typeof candidate.height === 'number' && Number.isFinite(candidate.height) &&
+        candidate.height > 0 ? candidate.height : undefined
+      results.set(completionIdentity, {
+        imageUrl,
+        completionIdentity,
+        toolBlockId: block.id,
+        ...(width ? { width } : {}),
+        ...(height ? { height } : {})
+      })
     })
   }
   return [...results.values()]
+}
+
+export function coalesceGeneratedImageAddsForTurn(
+  value: unknown,
+  blocks: readonly ChatBlock[],
+  document: CanvasDocument
+): unknown {
+  if (!isRecord(value) || !Array.isArray(value.ops)) return value
+  const generatedUrls = new Set(
+    generatedImageResultsForTurn(blocks).map((result) => result.imageUrl)
+  )
+  if (generatedUrls.size === 0) return value
+  const user = blocks.find((block) => block.kind === 'user')
+  const placement = user?.kind === 'user' && isRecord(user.meta?.designImagePlacementTarget)
+    ? user.meta.designImagePlacementTarget
+    : undefined
+  const filledDesignTarget = user?.kind === 'user' && isRecord(user.meta?.designDocumentTarget) &&
+    placement && typeof placement.shapeId === 'string' &&
+    typeof placement.expectedImageUrl === 'string'
+    ? { shapeId: placement.shapeId.trim(), expectedImageUrl: placement.expectedImageUrl.trim() }
+    : null
+  const existingUrls = new Set(
+    Object.values(document.objects)
+      .filter((shape) => shape?.type === 'image' && shape.parentId === document.rootId && shape.imageUrl)
+      .map((shape) => shape.imageUrl!)
+      .filter((url) => generatedUrls.has(url))
+  )
+  if (existingUrls.size === 0 && !filledDesignTarget) return value
+  const ops = value.ops.filter((operation) => {
+    if (!isRecord(operation)) return true
+    if (operation.op === 'update' && filledDesignTarget && operation.id === filledDesignTarget.shapeId &&
+      isRecord(operation.patch)) {
+      const imageUrl = typeof operation.patch.imageUrl === 'string'
+        ? operation.patch.imageUrl.trim()
+        : ''
+      if (imageUrl && generatedUrls.has(imageUrl)) return false
+    }
+    if (operation.op !== 'add' || operation.parentId !== undefined ||
+      !isRecord(operation.shape) || operation.shape.type !== 'image') return true
+    const imageUrl = typeof operation.shape.imageUrl === 'string'
+      ? operation.shape.imageUrl.trim()
+      : ''
+    if (!imageUrl) return true
+    return filledDesignTarget ? !generatedUrls.has(imageUrl) : !existingUrls.has(imageUrl)
+  })
+  return ops.length === value.ops.length ? value : { ...value, ops }
 }

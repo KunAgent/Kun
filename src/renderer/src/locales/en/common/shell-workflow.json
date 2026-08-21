@@ -648,5 +648,15 @@
   "workflowEnableShort": "Enabled",
   "workflowEnableHint": "When on, this flow fires on its schedule / webhook / local API.",
   "workflowCallableShort": "AI-callable",
-  "workflowCallableHint": "Let the code-mode agent run it directly via run_workflow."
+  "workflowCallableHint": "Let the code-mode agent run it directly via run_workflow.",
+  "designWhiteboardFocus": "Focus whiteboard",
+  "designWhiteboardExitFocus": "Exit focused whiteboard",
+  "designCanvasConversationOpen": "Open design conversation",
+  "designCanvasConversationCollapse": "Collapse design conversation",
+  "designCanvasConversationClose": "Close design conversation",
+  "designCanvasConversationNew": "New design conversation",
+  "designCanvasConversationDragHint": "Drag to move; double-click to reset position",
+  "designCanvasConversationResetPosition": "Reset panel position",
+  "designCanvasConversationRunning": "Conversation is running",
+  "designCanvasConversationPanelLabel": "Design conversation: {{title}}"
 }

@@ -6,8 +6,7 @@ import {
   ModelReasoningEffort,
   SubagentProfileConfig,
   SubagentToolPolicy,
-  type SubagentMode,
-  type SubagentsCapabilityConfig
+  type SubagentMode
 } from '../contracts/capabilities.js'
 import {
   ApprovalPolicySchema,
@@ -40,13 +39,13 @@ import { withManagerDataMutex } from '../manager/data-mutex.js'
 import {
   ChildSecuritySnapshot,
   ChildRunRecord,
-  isResumableChildRun,
   type ChildRunAggregate,
   type ChildRunExecutor,
   type ChildRunLifecycleMetadata,
   type ChildReturnFormat
 } from './delegation-runtime-contracts.js'
 import type { MaterializedChildResult } from './child-result-materializer.js'
+import { hasResumableChildSnapshot } from './delegation-proactive-retry.js'
 
 export function childPptWorkflowSnapshot(scope: PptWorkflowScope): {
   workflowId: string
@@ -237,6 +236,7 @@ export function buildFailedChildRecord(
     childResult?: MaterializedChildResult
     usage?: ChildRunRecord['usage']
     toolInvocations?: number
+    failure?: import('../contracts/subagent-retry.js').ChildRunFailure
     previewChars: number
   }
 ): ChildRunRecord {
@@ -253,7 +253,8 @@ export function buildFailedChildRecord(
     terminationReason: input.signal.aborted || input.runtimeRestart
       ? input.abort.terminationReason
       : 'child_error',
-    resumable: input.signal.aborted && isResumableChildRun(current),
+    resumable: hasResumableChildSnapshot(current),
+    failure: input.failure,
     ...(childResult ? {
       summary: childResult.summary,
       summaryTruncated: childResult.summaryTruncated,
@@ -328,45 +329,6 @@ export function formatDetachedChildDisplayText(record: ChildRunRecord): string {
     return `Background subagent ${label} was stopped by the user`
   }
   return `Background subagent ${label} ${record.status}`
-}
-
-export function formatDetachedChildNotice(record: ChildRunRecord): string {
-  const label = record.label?.trim() || record.profile?.trim() || record.id
-  const lines = [
-    '<background_subagent_completed>',
-    `<child_id>${escapeXml(record.id)}</child_id>`,
-    `<label>${escapeXml(label)}</label>`,
-    `<status>${record.status}</status>`
-  ]
-  if (record.terminationReason) {
-    lines.push(`<termination_reason>${record.terminationReason}</termination_reason>`)
-  }
-  if (record.summary?.trim()) {
-    lines.push(`<summary>${escapeXml(record.summary.trim())}</summary>`)
-  }
-  if (record.resultRef) {
-    lines.push(
-      `<result_artifact id="${escapeXml(record.resultRef.artifactId)}" ` +
-      `bytes="${record.resultRef.byteSize}" lines="${record.resultRef.lineCount}" ` +
-      'mime_type="text/markdown">Use read_artifact with bounded ranges.</result_artifact>'
-    )
-  }
-  if (record.resultUnavailableReason?.trim()) {
-    lines.push(`<result_unavailable>${escapeXml(record.resultUnavailableReason.trim())}</result_unavailable>`)
-  }
-  if (record.error?.trim()) {
-    lines.push(`<error>${escapeXml(record.error.trim())}</error>`)
-  }
-  lines.push('</background_subagent_completed>')
-  return lines.join('\n')
-}
-
-export function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 export function childActivityFromEvent(

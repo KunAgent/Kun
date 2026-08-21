@@ -28,7 +28,7 @@ const parsed = {
   exportRequest: {
     format: 'png',
     fileName: 'architecture.png',
-    relativePath: '.deepseekgui-images/architecture.png'
+    relativePath: '.kun/images/architecture.png'
   }
 }
 
@@ -42,8 +42,8 @@ describe('canvas export tool replay', () => {
   it('publishes the saved file preview after the renderer export succeeds', async () => {
     const onRequest = vi.fn(async () => ({
       name: 'architecture.png',
-      relativePath: '.deepseekgui-images/architecture.png',
-      absolutePath: '/workspace/.deepseekgui-images/architecture.png',
+      relativePath: '.kun/images/architecture.png',
+      absolutePath: '/workspace/.kun/images/architecture.png',
       mimeType: 'image/png' as const,
       byteSize: 128,
       previewUrl: 'data:image/png;base64,aW1hZ2U='
@@ -60,7 +60,7 @@ describe('canvas export tool replay', () => {
       const updated = useChatStore.getState().blocks[0]
       expect(updated.kind === 'tool' ? updated.meta?.generatedFiles : undefined).toEqual([
         expect.objectContaining({
-          relativePath: '.deepseekgui-images/architecture.png',
+          relativePath: '.kun/images/architecture.png',
           previewUrl: 'data:image/png;base64,aW1hZ2U='
         })
       ])
@@ -73,8 +73,8 @@ describe('canvas export tool replay', () => {
       errors: [],
       generatedFiles: [{
         name: 'architecture.png',
-        relativePath: '.deepseekgui-images/architecture.png',
-        absolutePath: '/workspace/.deepseekgui-images/architecture.png',
+        relativePath: '.kun/images/architecture.png',
+        absolutePath: '/workspace/.kun/images/architecture.png',
         mimeType: 'image/png',
         byteSize: 128
       }]

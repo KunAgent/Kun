@@ -295,6 +295,61 @@ describe('create_plan tool mapping', () => {
     })
   })
 
+  it('renders the model_empty_response safety net live and after reload without duplicates', async () => {
+    const runtimeErrors: unknown[] = []
+    let settledBy: string | null = null
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onRuntimeError: (event) => { runtimeErrors.push(event) },
+      onError: (error, options) => {
+        settledBy = error.message
+        expect(options).toEqual({ terminal: true, scope: 'conversation' })
+      }
+    }
+    const message =
+      'Model provider completed without returning text, reasoning, a tool call, or generated output. ' +
+      'Check provider/model availability and routing, then resend the message.'
+
+    await dispatchKunRuntimeEvent({
+      kind: 'error',
+      seq: 10,
+      timestamp: '2024-01-01T00:00:00.000Z',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      message,
+      code: 'model_empty_response',
+      details: { model: 'empty-model', providerId: 'test' },
+      severity: 'error'
+    }, sink, async () => undefined)
+    await dispatchKunRuntimeEvent({
+      kind: 'turn_failed',
+      seq: 11,
+      timestamp: '2024-01-01T00:00:01.000Z',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      message, code: 'model_empty_response'
+    }, sink, async () => undefined)
+
+    expect(runtimeErrors).toHaveLength(2)
+    expect(runtimeErrors[0]).toMatchObject({
+      code: 'model_empty_response',
+      message: expect.stringContaining('without returning text, reasoning')
+    })
+    expect(JSON.parse(settledBy ?? '{}')).toMatchObject({
+      code: 'model_empty_response',
+      message: expect.stringContaining('without returning text, reasoning')
+    })
+    const block = chatBlockFromItem({
+      id: 'item_turn_1_error', turnId: 'turn_1', threadId: 'thr_1',
+      role: 'system', status: 'failed', createdAt: '2024-01-01T00:00:01.000Z',
+      kind: 'error', message, code: 'model_empty_response',
+      details: { model: 'empty-model' }
+    })
+    expect(block).toMatchObject({
+      kind: 'system', code: 'model_empty_response', runtimeError: true
+    })
+  })
+
   it('omits legacy persisted tool catalog drift items from the conversation', () => {
     const block = chatBlockFromItem({
       id: 'item_tool_catalog_changed',

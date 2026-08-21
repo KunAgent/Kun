@@ -9,6 +9,8 @@ import type {
   ItemHistoryCommit,
   ItemHistorySnapshot,
   ItemTextSearchOptions,
+  SessionArchiveInput,
+  SessionArchiveResult,
   SessionStore
 } from '../../ports/session-store.js'
 import type { RuntimeEvent } from '../../contracts/events.js'
@@ -24,15 +26,11 @@ import {
 } from './file-session-jsonl.js'
 import { atomicWriteFile } from './atomic-write.js'
 import { isPathBelowDirectory } from './path-containment.js'
-import {
-  buildPublicItemHistoryPage
-} from '../../services/item-history-page.js'
+import { buildPublicItemHistoryPage } from '../../services/item-history-page.js'
 import { SessionCompactionScheduler } from './session-compaction-scheduler.js'
 import { searchItemTextFile } from './file-session-text-search.js'
-import {
-  compactUsageEventsIfLarge,
-  sessionDirectoryExists
-} from './file-session-usage-compaction.js'
+import { writeSessionArchive } from './session-history-archive.js'
+import { compactUsageEventsIfLarge, sessionDirectoryExists } from './file-session-usage-compaction.js'
 
 export { readLatestItemsFromJsonl } from './file-session-jsonl.js'
 
@@ -605,6 +603,11 @@ export class FileSessionStore implements SessionStore {
       if (oldest === undefined) return
       this.highestSeqCache.delete(oldest)
     }
+  }
+
+  async archiveItems(input: SessionArchiveInput): Promise<SessionArchiveResult> {
+    assertSafeThreadId(input.threadId)
+    return writeSessionArchive(this.threadDir(input.threadId), input)
   }
 
   private applyItemToCache(threadId: string, item: TurnItem): void {

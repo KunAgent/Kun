@@ -498,6 +498,7 @@ describe('ProviderQuotaService', () => {
     })
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
+
 })
 
 describe('provider quota response parsers', () => {

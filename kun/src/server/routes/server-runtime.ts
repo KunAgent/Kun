@@ -260,7 +260,10 @@ export type ServerRuntime = {
    * in-flight turn was just reconciled to `failed` after a runtime restart.
    * Optional so embedders without the agent loop can omit it.
    */
-  resumeInterruptedTurns?(threadIds: readonly string[]): Promise<number>
+  resumeInterruptedTurns?(
+    threadIds: readonly string[],
+    childRecoveryCandidates?: readonly import('../../loop/interrupted-turn-coordinator.js').InterruptedSubagentRecoveryCandidate[]
+  ): Promise<number>
   /**
    * Canonical thread store, exposed for maintenance sweeps (e.g. the
    * memory-pressure monitor compacting idle thread histories).

@@ -1,5 +1,6 @@
 import { Suspense, type ComponentProps, type PointerEventHandler, type ReactElement } from 'react'
 import type { SettingsRouteSection } from '../../store/chat-store'
+import type { ClawInstallTarget } from '../chat/SidebarClawDialogHelpers'
 import { Sidebar } from '../chat/Sidebar'
 import { WriteSidebar } from '../write/WriteSidebar'
 import type { RegisteredContribution } from '../../extensions/contribution-registry'
@@ -17,6 +18,7 @@ export type WorkbenchLeftSidebarProps = {
   activeThreadId: CodeSidebarProps['activeThreadId']
   sidebarView: CodeSidebarProps['activeView']
   connectPhoneSidebarOpen: boolean
+  connectPhoneInitialTarget?: ClawInstallTarget
   extensionsActive: boolean
   extensionView?: RegisteredContribution<'views.leftSidebar'>
   workspaceRoot?: string
@@ -61,6 +63,7 @@ export function WorkbenchLeftSidebar({
   activeThreadId,
   sidebarView,
   connectPhoneSidebarOpen,
+  connectPhoneInitialTarget = 'feishu',
   extensionsActive,
   extensionView,
   workspaceRoot,
@@ -122,6 +125,7 @@ export function WorkbenchLeftSidebar({
             activeThreadId={activeThreadId}
             activeView={sidebarView}
             connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+            connectPhoneInitialTarget={connectPhoneInitialTarget}
             pluginsActive={route === 'plugins'}
             extensionsActive={extensionsActive}
             runtimeReady={runtimeReady}

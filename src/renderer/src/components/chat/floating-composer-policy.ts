@@ -22,6 +22,30 @@ export function shouldShowVoiceDictation(
   return speechToText != null && isSpeechToTextConfigured(speechToText, { credentialReady })
 }
 
+export type ComposerPrimaryActionKind = 'interrupt' | 'submit'
+
+export function resolveComposerPrimaryActionKind({
+  busy,
+  input,
+  attachmentUploadEnabled,
+  attachmentCount,
+  fileReferenceEnabled,
+  fileReferenceCount
+}: {
+  busy: boolean
+  input: string
+  attachmentUploadEnabled: boolean
+  attachmentCount: number
+  fileReferenceEnabled: boolean
+  fileReferenceCount: number
+}): ComposerPrimaryActionKind {
+  const hasDraftPayload = input.trim().length > 0
+    || (attachmentUploadEnabled && attachmentCount > 0)
+    || (fileReferenceEnabled && fileReferenceCount > 0)
+
+  return busy && !hasDraftPayload ? 'interrupt' : 'submit'
+}
+
 export function returnQueuedMessageToComposer(
   message: QueuedComposerMessage,
   onRemove: (id: string) => void,

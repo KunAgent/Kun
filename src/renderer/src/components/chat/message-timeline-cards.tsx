@@ -50,8 +50,8 @@ export function ReviewPlanCard({
           <ListTodo className="h-5 w-5" strokeWidth={1.8} />
         </div>
         <div className="min-w-[220px] flex-1">
-          <div className="text-[12.5px] font-medium text-accent">
-            {t('reviewPlanCardStatus')}
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px] font-medium text-accent">
+            <span>{t('reviewPlanCardStatus')}</span>
           </div>
           <div className="mt-0.5 break-words text-[15px] font-medium text-ds-ink">{title}</div>
           <div className="mt-0.5 text-[12px] text-ds-muted">{t('reviewPlanCardHint')}</div>
@@ -382,22 +382,16 @@ export function TurnChangeSummary({
   )
 }
 
-/** Turn-level work-process summary. Details stay collapsed until the user opens them. */
+/** Turn-level work metadata disclosure. Details stay collapsed until the user opens them. */
 export function WorkMetaRow({
   processing,
-  stepCount,
   durationMs,
-  reasoningDurationMs,
-  summary,
   expanded,
   onToggle,
   collapsible = true
 }: {
   processing: boolean
-  stepCount: number
   durationMs?: number
-  reasoningDurationMs?: number
-  summary?: string
   expanded: boolean
   onToggle: () => void
   collapsible?: boolean
@@ -406,30 +400,11 @@ export function WorkMetaRow({
 
   const mainLabel = processing
     ? `${t('processing')}${typeof durationMs === 'number' ? ` · ${formatDuration(durationMs)}` : ''}`
-    : typeof durationMs === 'number'
-      ? `${t('processed')} ${formatDuration(durationMs)}`
-      : t('processSteps', { count: stepCount })
-
-  const showThoughtSuffix =
-    !processing &&
-    typeof reasoningDurationMs === 'number' &&
-    reasoningDurationMs >= 1000
-  const workSummary = summary?.trim() ?? ''
-  const showSummary = !expanded && workSummary.length > 0
-  const showStepSuffix = !expanded && !showSummary && stepCount > 0
+    : `${t('processed')}${typeof durationMs === 'number' ? ` ${formatDuration(durationMs)}` : ''}`
 
   const content = (
     <>
       <span className="tabular-nums">{mainLabel}</span>
-      {showSummary ? <span className="text-ds-faint">· {workSummary}</span> : null}
-      {showStepSuffix ? (
-        <span className="text-ds-faint">· {t('processStepCount', { count: stepCount })}</span>
-      ) : null}
-      {showThoughtSuffix ? (
-        <span className="text-ds-faint">
-          · {t('thoughtFor', { duration: formatDuration(reasoningDurationMs!) })}
-        </span>
-      ) : null}
       {collapsible ? (
         expanded ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-45" strokeWidth={1.8} />

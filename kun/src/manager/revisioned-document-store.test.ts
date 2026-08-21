@@ -41,6 +41,37 @@ describe('revisioned manager documents', () => {
     expect(await readFile(settingsPath, 'utf8')).toBe(committed.value)
   })
 
+  it('detects external replacements on read and advances the revision once', async () => {
+    const { store, settingsPath } = await fixture('{"version":1}\n')
+    const initial = await store.read('settings')
+
+    await writeFile(settingsPath, '{"version":1,"locale":"zh"}\n', 'utf8')
+
+    const refreshed = await store.read('settings')
+    expect(refreshed).toEqual({
+      revision: initial.revision + 1,
+      value: '{"version":1,"locale":"zh"}\n'
+    })
+    expect(await store.read('settings')).toEqual(refreshed)
+  })
+
+  it('checks the disk fingerprint immediately before a compare-and-swap write', async () => {
+    const { store, settingsPath } = await fixture('{"version":1}\n')
+    const initial = await store.read('settings')
+
+    await writeFile(settingsPath, '{"version":1,"theme":"dark"}\n', 'utf8')
+
+    await expect(store.write({
+      key: 'settings',
+      expectedRevision: initial.revision,
+      value: '{"version":1,"locale":"zh"}\n'
+    })).rejects.toMatchObject({
+      name: 'RevisionConflictError',
+      currentRevision: initial.revision + 1
+    })
+    expect(await readFile(settingsPath, 'utf8')).toBe('{"version":1,"theme":"dark"}\n')
+  })
+
   it('rejects stale compare-and-swap writes', async () => {
     const { store } = await fixture()
     await store.write({ key: 'client-state', expectedRevision: 0, value: '{"a":1}\n' })

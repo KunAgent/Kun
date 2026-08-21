@@ -209,6 +209,9 @@ describe('buildToolPreferenceInstruction', () => {
     expect(instruction).toContain('parallel investigation of independent workstreams')
     expect(instruction).toContain('keep integration and final verification in the parent agent')
     expect(instruction).toContain('Do not delegate trivial work')
+    expect(instruction).toContain('proactiveRetry.eligible=true')
+    expect(instruction).toContain('exact resumeChildId and expectedResumeCount')
+    expect(instruction).toContain('do not blindly retry unchanged authentication')
   })
 
   it('describes the stateful image-first PPT review loop without the legacy one-call board path', () => {

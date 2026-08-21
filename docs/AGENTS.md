@@ -35,11 +35,12 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
    `src/renderer/src/agent/kun-mapper.ts`.
 5. Add settings only under `agents.kun`.
 
-## Prompt-Managed Plan Worktrees
+## Agent-Managed Plan Worktrees
 
-- `agents.kun.lab.planWorktree.enabled` gates this experiment and defaults to
-  false. It applies only to Direct plan builds; Graph keeps its normal current-
-  workspace flow and its own node isolation.
+- `agents.kun.planExecution.useWorktreeByDefault` defaults to true for Direct
+  plan builds. Settings -> Worktrees can change this default, and an individual
+  plan may temporarily build in the current workspace. Graph keeps its normal
+  current-workspace flow and its own node isolation.
 - On execution, Renderer first saves the plan, then reads the exact local
   repository root, checked-out branch, and dirty-file count through the generic
   Git branch API. A non-Git workspace, unavailable Git, or detached HEAD blocks
@@ -110,10 +111,9 @@ Manual smoke:
   accepted turns freeze their own surface while the Code-owned thread and
   timeline remain stable. The first accepted Design turn locks only its
   document/output/style profile, and later Code turns remain valid.
-- With the Lab experiment enabled, a Direct plan build sends the prompt-managed
-  worktree protocol on the same task, leaves dirty source files untouched, and
-  preserves unresolved worktree/branch state for manual recovery. Graph does
-  not receive that protocol.
+- Direct plans use the Agent-managed worktree protocol by default, leave dirty
+  source files untouched, and preserve unresolved worktree/branch state for
+  manual recovery. Graph does not receive that protocol.
 - Work can open the workspace, request inline completion, and use selected-text
   assistant actions.
 - Connect phone can save settings and run a manual task through a Kun thread.

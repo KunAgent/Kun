@@ -1,10 +1,21 @@
 import { z } from 'zod'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
-import { ERRORS } from './runtime-error.js'
-import { generateSessionSummary } from '../../loop/session-summary.js'
+import { ERRORS, errorResponse } from './runtime-error.js'
+import {
+  generateSessionSummary,
+  type SessionSummaryOutcome
+} from '../../loop/session-summary.js'
 import { resolveRoleModel } from '../../loop/title-generator.js'
 import type { ServerRuntime } from './server-runtime.js'
+
+/**
+ * On-demand summaries are user-initiated and run over the whole transcript, so
+ * they get a far larger budget than the background 20s default. Keep this below
+ * the desktop POST budget for `/summarize` so the runtime is the side that
+ * times out and can answer with a structured reason (#1200).
+ */
+export const ON_DEMAND_SESSION_SUMMARY_TIMEOUT_MS = 90_000
 
 const SummarizeThreadRequest = z
   .object({
@@ -68,9 +79,9 @@ export async function summarizeThread(
   const onAbort = (): void => abortController.abort()
   request.signal?.addEventListener('abort', onAbort)
 
-  let summary: string | undefined
+  let outcome: SessionSummaryOutcome
   try {
-    summary = await generateSessionSummary({
+    outcome = await generateSessionSummary({
       threadId,
       modelClient: runtime.modelClient,
       model: resolved.model,
@@ -81,13 +92,57 @@ export async function summarizeThread(
       ...(runtime.roles?.summaryReasoningEffort
         ? { reasoningEffort: runtime.roles.summaryReasoningEffort }
         : {}),
+      timeoutMs: ON_DEMAND_SESSION_SUMMARY_TIMEOUT_MS,
       abortSignal: abortController.signal
     })
   } finally {
     request.signal?.removeEventListener('abort', onAbort)
   }
-  if (!summary) return ERRORS.unavailable('session summary returned no content')
+  if (!outcome.ok) return summaryFailureResponse(outcome, resolved.model)
 
+  const summary = outcome.summary
   const updated = await runtime.threadService.update(threadId, { summary })
   return jsonResponse(SummarizeThreadResponse.parse({ id: updated.id, summary: updated.summary ?? summary }))
+}
+
+/**
+ * Every branch keeps the model id in the message: a summary failure is almost
+ * always a route/credential problem on the resolved summary model, and the
+ * desktop only shows this string.
+ */
+function summaryFailureResponse(
+  outcome: Extract<SessionSummaryOutcome, { ok: false }>,
+  model: string
+): JsonResponse {
+  const details = { reason: outcome.reason, model }
+  switch (outcome.reason) {
+    case 'timeout':
+      return errorResponse({
+        code: 'capability_unavailable',
+        message: `session summary timed out after ${Math.round(
+          (outcome.timeoutMs ?? ON_DEMAND_SESSION_SUMMARY_TIMEOUT_MS) / 1_000
+        )}s using model ${model}`,
+        details
+      }, 503)
+    case 'aborted':
+      return errorResponse({ code: 'aborted', message: 'session summary was cancelled', details }, 499)
+    case 'model_error':
+      return errorResponse({
+        code: 'provider_unavailable',
+        message: `session summary failed on model ${model}: ${outcome.message ?? 'the provider returned an error'}`,
+        details: outcome.code ? { ...details, providerCode: outcome.code } : details
+      }, 502)
+    case 'empty_transcript':
+      return errorResponse({
+        code: 'validation_error',
+        message: 'thread has no readable transcript to summarize',
+        details
+      }, 400)
+    default:
+      return errorResponse({
+        code: 'capability_unavailable',
+        message: `model ${model} returned an empty session summary`,
+        details
+      }, 503)
+  }
 }

@@ -72,6 +72,10 @@ import {
   sameChildActivity,
   sameModelRoute
 } from './delegation-runtime-support.js'
+import {
+  hasResumableChildSnapshot,
+  proactiveRetryStatus
+} from './delegation-proactive-retry.js'
 
 export class DelegationRuntime extends DelegationRuntimeRun {
   /**
@@ -122,6 +126,8 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     expectedResumeCount?: number
     expectedLaunchers?: readonly ChildRunLauncher[]
     requireResumable?: boolean
+    /** Model-initiated continuation governed by the global proactive retry policy. */
+    proactive?: boolean
     /** Current parent boundary; the resumed child receives its intersection with the stored snapshot. */
     security?: ChildSecuritySnapshot
     /** Trusted deny-list for this resume execution only. */
@@ -154,6 +160,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     expectedResumeCount?: number
     expectedLaunchers?: readonly ChildRunLauncher[]
     requireResumable?: boolean
+    proactive?: boolean
     security?: ChildSecuritySnapshot
     executionBlockedTools?: string[]
     signal: AbortSignal
@@ -187,6 +194,34 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     if (input.requireResumable && previous.resumable !== true) {
       throw new Error(`child run ${input.childId} is not resumable`)
     }
+    if (input.proactive) {
+      const policy = this.options.config.proactiveRetry
+      const count = previous.proactiveRetryCount ?? 0
+      if (!policy.enabled) throw new Error('proactive subagent retry is disabled')
+      if (previous.launcher !== 'delegate_task' || previous.fastContext === true) {
+        throw new Error(`child run ${input.childId} is not owned by ordinary delegate_task`)
+      }
+      if (
+        previous.status !== 'failed' ||
+        (previous.terminationReason !== 'child_error' && previous.terminationReason !== 'runtime_restart')
+      ) {
+        throw new Error(`child run ${input.childId} is not eligible for proactive retry`)
+      }
+      if (!previous.profileSnapshot || !previous.security || !previous.workspace) {
+        throw new Error(`child run ${input.childId} lacks a resumable security/profile snapshot`)
+      }
+      if (count >= policy.maxAttempts) {
+        throw new Error(`child run ${input.childId} exhausted its ${policy.maxAttempts} proactive retries`)
+      }
+      const delayMs = Math.max(
+        previous.failure?.retryAfterMs ?? 0,
+        Math.min(12_000, 3_000 * 2 ** count)
+      )
+      const wait = this.options.proactiveRetryWait ?? waitForProactiveRetry
+      if (await wait(delayMs, input.signal)) {
+        throw new Error('proactive subagent retry was cancelled during backoff')
+      }
+    }
     if (input.expectedProfile && previous.profile !== input.expectedProfile) {
       throw new Error(`child run ${input.childId} is not a ${input.expectedProfile} child`)
     }
@@ -215,6 +250,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     if (input.signal.aborted) throw new Error('child resume aborted before start')
 
     const queuedAt = this.now()
+    const preserveDetached = input.proactive === true && previous.detached === true
     const record = ChildRunRecord.parse({
       ...previous,
       prompt: input.prompt,
@@ -225,6 +261,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       status: 'queued',
       terminationReason: undefined,
       resumable: false,
+      failure: undefined,
       ...(input.pptWorkflowScope
         ? { pptWorkflow: childPptWorkflowSnapshot(input.pptWorkflowScope) }
         : {}),
@@ -232,10 +269,12 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       evidence: undefined,
       error: undefined,
       activity: undefined,
-      detached: undefined,
+      detached: preserveDetached ? true : undefined,
       queuedMs: undefined,
       startedAt: undefined,
       resumeCount: (previous.resumeCount ?? 0) + 1,
+      proactiveRetryCount: (previous.proactiveRetryCount ?? 0) + (input.proactive ? 1 : 0),
+      lastProactiveRetryAt: input.proactive ? queuedAt : previous.lastProactiveRetryAt,
       lastResumeAt: queuedAt,
       updatedAt: queuedAt
     })
@@ -244,56 +283,74 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     await notifyLifecycle(input.onQueued, record)
 
     const state: ChildExecutionState = { record, commits: Promise.resolve() }
+    const execution = (signal: AbortSignal) => this.executeChild({
+      state,
+      queuedAt,
+      profileName: record.profile,
+      toolPolicy: record.toolPolicy ?? this.options.config.defaultToolPolicy,
+      resolvedModel: record.model,
+      resolvedProviderId: record.providerId,
+      resolvedAccountId: record.accountId,
+      resolvedSystemPrompt: profileSnapshot.systemPrompt,
+      resolvedOmitBasePrompt: profileSnapshot.omitBasePrompt === true,
+      resolvedAllowedTools: profileSnapshot.allowedTools,
+      resolvedBlockedTools: [...new Set([
+        'delegate_task',
+        'generate_subagent',
+        ...(profileSnapshot.blockedTools ?? []),
+        ...(input.executionBlockedTools ?? [])
+      ])],
+      resolvedBlockedMcpServers: profileSnapshot.blockedMcpServers,
+      resolvedBlockedSkills: profileSnapshot.blockedSkills,
+      skillsEnabled: profileSnapshot.skillsEnabled !== false,
+      promptPreamble: profileSnapshot.promptPreamble,
+      approvalPolicy: record.approvalPolicy,
+      sandboxMode: record.sandboxMode,
+      approvalReviewer: record.approvalReviewer,
+      clientSurface: record.clientSurface,
+      agentSurface,
+      guiDesignCanvas: false,
+      resolvedReasoningEffort: record.reasoningEffort,
+      resolvedServiceTier: record.serviceTier,
+      returnFormat: record.returnFormat,
+      fastContext: record.fastContext === true,
+      fastContextTasks: record.fastContextTasks,
+      workspace,
+      security,
+      onRunning: input.onRunning,
+      label: record.label,
+      parentThreadId: record.parentThreadId,
+      parentTurnId: input.parentTurnId,
+      prompt: input.prompt,
+      source,
+      controlPrompt,
+      pptWorkflowScope: input.pptWorkflowScope,
+      resumeChild: true,
+      signal
+    })
+
+    if (preserveDetached) {
+      const detachedController = new AbortController()
+      this.detachedAborts.set(record.id, detachedController)
+      this.detachedParentThreads.set(record.id, record.parentThreadId)
+      const completion = execution(detachedController.signal)
+        .then((settled) => this.notifyDetachedChild(settled))
+        .catch(() => undefined)
+        .finally(() => {
+          this.detachedAborts.delete(record.id)
+          this.detachedParentThreads.delete(record.id)
+          this.detachedSettlements.delete(record.id)
+        })
+      this.detachedSettlements.set(record.id, completion)
+      return record
+    }
+
     const controller = new AbortController()
     const abortFromParent = (): void => controller.abort(input.signal.reason)
     if (input.signal.aborted) controller.abort(input.signal.reason)
     else input.signal.addEventListener('abort', abortFromParent, { once: true })
     try {
-      return await this.executeChild({
-        state,
-        queuedAt,
-        profileName: record.profile,
-        toolPolicy: record.toolPolicy ?? this.options.config.defaultToolPolicy,
-        resolvedModel: record.model,
-        resolvedProviderId: record.providerId,
-        resolvedAccountId: record.accountId,
-        resolvedSystemPrompt: profileSnapshot.systemPrompt,
-        resolvedOmitBasePrompt: profileSnapshot.omitBasePrompt === true,
-        resolvedAllowedTools: profileSnapshot.allowedTools,
-        resolvedBlockedTools: [...new Set([
-          'delegate_task',
-          'generate_subagent',
-          ...(profileSnapshot.blockedTools ?? []),
-          ...(input.executionBlockedTools ?? [])
-        ])],
-        resolvedBlockedMcpServers: profileSnapshot.blockedMcpServers,
-        resolvedBlockedSkills: profileSnapshot.blockedSkills,
-        skillsEnabled: profileSnapshot.skillsEnabled !== false,
-        promptPreamble: profileSnapshot.promptPreamble,
-        approvalPolicy: record.approvalPolicy,
-        sandboxMode: record.sandboxMode,
-        approvalReviewer: record.approvalReviewer,
-        clientSurface: record.clientSurface,
-        agentSurface,
-        guiDesignCanvas: false,
-        resolvedReasoningEffort: record.reasoningEffort,
-        resolvedServiceTier: record.serviceTier,
-        returnFormat: record.returnFormat,
-        fastContext: record.fastContext === true,
-        fastContextTasks: record.fastContextTasks,
-        workspace,
-        security,
-        onRunning: input.onRunning,
-        label: record.label,
-        parentThreadId: record.parentThreadId,
-        parentTurnId: input.parentTurnId,
-        prompt: input.prompt,
-        source,
-        controlPrompt,
-        pptWorkflowScope: input.pptWorkflowScope,
-        resumeChild: true,
-        signal: controller.signal
-      })
+      return await execution(controller.signal)
     } finally {
       input.signal.removeEventListener('abort', abortFromParent)
     }
@@ -385,7 +442,8 @@ export class DelegationRuntime extends DelegationRuntimeRun {
         ...record,
         status: 'failed',
         terminationReason: 'runtime_restart',
-        resumable: isResumableChildRun(record),
+        resumable: hasResumableChildSnapshot(record),
+        failure: { source: 'runtime', code: 'runtime_restart' },
         error: record.error ?? 'Subagent run was interrupted by a runtime restart.',
         updatedAt: this.now()
       })
@@ -409,4 +467,51 @@ export class DelegationRuntime extends DelegationRuntimeRun {
         .map((record) => record.parentThreadId)
     )]
   }
+
+  /** Safe child facts injected into parent recovery turns after a restart. */
+  async proactiveRetryRecoveryCandidates(): Promise<Array<{
+    parentThreadId: string
+    childId: string
+    label?: string
+    error?: string
+    failure?: ChildRunRecord['failure']
+    resumeCount: number
+    proactiveRetry: ReturnType<typeof proactiveRetryStatus>
+    detached: boolean
+  }>> {
+    const records = await this.options.store.list()
+    return records
+      .filter((record) => record.terminationReason === 'runtime_restart')
+      .map((record) => ({
+        record,
+        retry: proactiveRetryStatus(record, this.options.config.proactiveRetry)
+      }))
+      .filter(({ retry }) => retry.eligible)
+      .map(({ record, retry }) => ({
+        parentThreadId: record.parentThreadId,
+        childId: record.id,
+        ...(record.label ? { label: record.label } : {}),
+        ...(record.error ? { error: record.error } : {}),
+        ...(record.failure ? { failure: record.failure } : {}),
+        resumeCount: record.resumeCount ?? 0,
+        proactiveRetry: retry,
+        detached: record.detached === true
+      }))
+  }
+}
+
+function waitForProactiveRetry(ms: number, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout>
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      resolve(true)
+    }
+    timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve(false)
+    }, ms)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }

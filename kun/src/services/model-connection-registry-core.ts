@@ -30,6 +30,7 @@ import { modelConnectionRegistryCredentialMutationOperations } from './model-con
 import { modelConnectionRegistrySelectionOperations } from './model-connection-registry-selection-operations.js'
 import { modelConnectionRegistryMaterializationOperations } from './model-connection-registry-materialization-operations.js'
 import { modelConnectionRegistryCredentialRecoveryOperations } from './model-connection-registry-credential-recovery-operations.js'
+import { reconciledSeedIdentity } from './model-connection-registry-seed-support.js'
 import type { ModelConnectionRegistryOperations } from './model-connection-registry-operations-contract.js'
 
 export const StoredProfileSchema = ModelConnectionSnapshotSchema.shape.providers.element.omit({
@@ -377,21 +378,19 @@ export function reconcileSeedProfile(
     ...request.models,
     ...(request.selectedModel ? [request.selectedModel] : [])
   ])
-  const migrateGeminiSubscription =
-    existing.id === 'gemini-subscription' &&
-    existing.kind === 'gemini-code-assist' &&
-    request.kind === 'antigravity-cli'
+  const seedIdentity = reconciledSeedIdentity(existing, request)
+  const migrateTransport = seedIdentity.kind !== undefined
   // Once a profile exists, the Registry owns its catalog and selection.
   // AppSettings seeds are a compatibility import, not a union source: using
   // them to add models would resurrect a user-deleted model after restart.
   // The one exception is the explicit one-time Gemini transport migration.
-  const models = migrateGeminiSubscription && incomingModels.length > 0
+  const models = migrateTransport && incomingModels.length > 0
     ? incomingModels
     : existing.models
-  const selectedModel = migrateGeminiSubscription
+  const selectedModel = migrateTransport
     ? request.selectedModel ?? models[0]
     : existing.selectedModel ?? models[0]
-  const modelCapabilities = migrateGeminiSubscription && request.modelCapabilities
+  const modelCapabilities = migrateTransport && request.modelCapabilities
     ? capabilitiesForModels(request.modelCapabilities, models)
     : existing.modelCapabilities
 
@@ -401,14 +400,12 @@ export function reconcileSeedProfile(
     // Re-applying GUI/settings seeds must never replace a Registry-owned
     // credentialRef, resurrect a cleared credential, or switch an existing
     // profile back to a legacy settings:provider:* source.
-    ...(migrateGeminiSubscription
+    ...seedIdentity,
+    ...(migrateTransport
       ? {
-          kind: request.kind,
-          authType: request.authType,
           baseUrl: request.baseUrl,
           endpointFormat: request.endpointFormat,
-          configured: true,
-          ...(request.presetSource ? { presetSource: request.presetSource } : {})
+          configured: true
         }
       : {}),
     models,
@@ -422,6 +419,7 @@ export function sameStoredProfile(left: StoredProfile, right: StoredProfile): bo
     left.accountId === right.accountId &&
     left.name === right.name &&
     left.presetSource === right.presetSource &&
+    left.presetMode === right.presetMode &&
     left.kind === right.kind &&
     left.authType === right.authType &&
     left.baseUrl === right.baseUrl &&

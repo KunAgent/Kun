@@ -311,7 +311,7 @@ describe('FloatingComposer model controls', () => {
     expect(html).toContain('deepseek-v4-pro')
     expect(html).toContain('Reasoning')
     expect(html).toContain('Ultra')
-    expect(html).toContain('aria-label="Model"')
+    expect(html).toContain('aria-label="Model: DeepSeek / deepseek-v4-pro"')
     expect(html).toContain('aria-label="Reasoning: Ultra"')
     expect(html).not.toContain('Model and reasoning settings')
   })
@@ -338,6 +338,42 @@ describe('FloatingComposer model controls', () => {
     expect(html).toContain('aria-label="Fast mode on"')
     expect(html).toContain('aria-pressed="true"')
     expect(html).toContain('lucide-zap')
+  })
+
+  it('uses the shared preset icon in the current model control and provider menu', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal('window', {
+      innerHeight: 800,
+      innerWidth: 1200,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    let renderer: ReturnType<typeof createRenderer> | undefined
+    try {
+      await act(async () => {
+        renderer = createRenderer(createElement(FloatingComposerModelPicker, {
+          compact: false,
+          mode: 'select',
+          composerModel: 'gpt-5.4',
+          composerProviderId: 'codex-2',
+          composerPickList: ['gpt-5.4'],
+          composerModelGroups: [CODEX_PROVIDER_GROUP],
+          canChangeModel: true,
+          onComposerModelChange: () => undefined
+        }))
+      })
+      const trigger = renderer!.root.findAllByType('button')
+        .find((button) => button.props['aria-haspopup'] === 'menu')
+      expect(trigger).toBeTruthy()
+      await act(async () => trigger!.props.onClick())
+
+      expect(renderer!.root.findAllByProps({ 'data-provider-icon': 'codex' }).length)
+        .toBeGreaterThanOrEqual(2)
+    } finally {
+      if (renderer) await act(async () => renderer!.unmount())
+      vi.unstubAllGlobals()
+      ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    }
   })
 
   it('hides Fast for Codex subscription models that do not advertise priority', () => {

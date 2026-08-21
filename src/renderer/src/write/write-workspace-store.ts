@@ -20,6 +20,7 @@ import { createWriteEditorGroupActions } from './write-editor-group-actions'
 import { createWritePresentationViewActions } from './write-presentation-view-state'
 import { createWorkWhiteboardActions } from './work-whiteboard'
 import { writeDocumentKey } from './write-editor-layout'
+import { createWriteSpreadsheetActions } from './write-workspace-spreadsheet-actions'
 import { writeBrowserStorageItem } from '../lib/browser-storage'
 import {
   captureWriteDocumentContext,
@@ -132,6 +133,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   ...editorGroupActions,
   ...presentationViewActions,
   ...whiteboardActions,
+  ...createWriteSpreadsheetActions(set, get),
 
   setFileContent: (content) => {
     cancelExternalSyncAnimation()

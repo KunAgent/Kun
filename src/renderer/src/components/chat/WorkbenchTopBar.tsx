@@ -425,6 +425,7 @@ export function WorkbenchTopActions({
         data-tooltip={restartingKunServe
           ? t('restartKunServeRestarting')
           : restartKunServeError || t('restartKunServeTooltip')}
+        data-tooltip-wrap="true"
         aria-label={restartingKunServe
           ? t('restartKunServeRestarting')
           : t('restartKunServe')}

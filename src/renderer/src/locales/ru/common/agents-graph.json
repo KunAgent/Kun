@@ -276,6 +276,9 @@
   "summarizeSession": "Подвести итог",
   "summarizing": "Обобщение",
   "summarizeFailed": "Не удалось подвести итоги этого разговора.",
+  "summarizeSummaryTitle": "Итог сессии",
+  "summarizeThreadMissing": "Среда выполнения больше не хранит этот разговор. Список обновлён.",
+  "sidebarThreadCopySummary": "Скопировать итог",
   "name": "Имя",
   "description": "Описание",
   "color": "Цвет",
@@ -288,5 +291,13 @@
   "writeEnableLineWrapping": "Включить перенос строк",
   "writeDisableLineWrapping": "Отключить перенос строк",
   "systemPrompt": "Системная подсказка",
-  "toolPolicy": "Доступ к инструментам"
+  "toolPolicy": "Доступ к инструментам",
+  "visualizationLabel": "Visualization",
+  "visualizationCollapse": "Collapse visualization",
+  "visualizationExpand": "Expand visualization",
+  "visualizationCopy": "Copy as text",
+  "visualizationCopied": "Copied",
+  "visualizationFlow": "Flow",
+  "visualizationCardGrid": "Grouped details",
+  "visualizationCallout": "Important note"
 }

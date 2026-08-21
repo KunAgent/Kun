@@ -10,6 +10,7 @@ type Props = {
   error: string | null
   threads: readonly { id: string; title: string }[]
   weixinChannels: readonly ClawImChannelV1[]
+  onConnectWeixin?: () => void
   onDraftChange: (draft: SessionDaemonV1) => void
   onPickWorkspace: () => void
   onSubmit: () => void
@@ -59,6 +60,7 @@ export function SessionDaemonDialog({
   error,
   threads,
   weixinChannels,
+  onConnectWeixin,
   onDraftChange,
   onPickWorkspace,
   onSubmit,
@@ -237,9 +239,18 @@ export function SessionDaemonDialog({
               </button>
               {draft.push.enabled ? (
                 weixinChannels.length === 0 ? (
-                  <p className="rounded-xl bg-warning-soft px-3 py-2 text-[12px] leading-5 text-amber-900 dark:text-amber-100">
-                    {t('daemonPushUnavailable')}
-                  </p>
+                  <div className="flex items-center justify-between gap-3 rounded-xl bg-warning-soft px-3 py-2 text-[12px] leading-5 text-amber-900 dark:text-amber-100">
+                    <span>{t('daemonPushUnavailable')}</span>
+                    {onConnectWeixin ? (
+                      <button
+                        type="button"
+                        onClick={onConnectWeixin}
+                        className="shrink-0 rounded-lg border border-amber-500/25 bg-ds-card px-3 py-1.5 font-semibold transition hover:bg-ds-hover"
+                      >
+                        {t('daemonConnectWeixin')}
+                      </button>
+                    ) : null}
+                  </div>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="grid gap-2">

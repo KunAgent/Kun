@@ -38,6 +38,9 @@ describe('DelegationRuntime host shutdown classification', () => {
         parentTurnId: 'parent_turn',
         prompt: 'inspect the repository',
         launcher: 'fast_context',
+        profile: 'general',
+        workspace: '/workspace',
+        security: { sandboxRoot: '/workspace', memoryEnabled: false },
         signal: parent.signal
       })
       await executionStarted.promise

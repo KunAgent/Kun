@@ -45,6 +45,7 @@ const labels: Record<string, string> = {
   providerModelImportContextBadge: 'Context {{value}}',
   providerModelImportOutputBadge: 'Output {{value}}',
   providerModelImportVisionBadge: 'Vision',
+  providerModelImportAudioInputBadge: 'Audio input',
   providerModelImportToolsBadge: 'Tools',
   providerModelImportNoToolsBadge: 'No tools',
   providerModelImportReasoningBadge: 'Reasoning'
@@ -96,7 +97,7 @@ function render(input: {
     providerError: input.providerError,
     t,
     onCancel: () => undefined,
-    onConfirm: () => undefined
+    onConfirm: async () => undefined
   }))
 }
 
@@ -109,7 +110,7 @@ describe('ProviderModelImportDialog', () => {
           id: 'gpt-4o',
           name: 'GPT 4o',
           description: 'Multimodal flagship',
-          inputModalities: ['text', 'image'],
+          inputModalities: ['text', 'image', 'audio'],
           outputModalities: ['text'],
           contextWindowTokens: 128_000,
           maxOutputTokens: 16_000,
@@ -134,10 +135,28 @@ describe('ProviderModelImportDialog', () => {
     expect(html).toContain('Context 128K')
     expect(html).toContain('Output 16K')
     expect(html).toContain('Vision')
+    expect(html).toContain('Audio input')
+    expect(html).toContain('Text chat · 2')
+    expect(html).not.toContain('Speech to text ·')
     expect(html).toContain('Tools')
     expect(html).toContain('Reasoning')
     expect(html).toContain('No tools')
     expect(html).toContain('Import 1')
+  })
+
+  it('keeps a dedicated audio-to-text model classified as speech recognition', () => {
+    const html = render({
+      providerModelIds: ['sound-reader'],
+      catalogResult: catalog([{
+        id: 'sound-reader',
+        inputModalities: ['audio'],
+        outputModalities: ['text']
+      }])
+    })
+
+    expect(html).toContain('Speech to text · 1')
+    expect(html).toContain('Audio input')
+    expect(html).not.toContain('Text chat ·')
   })
 
   it('shows ignored catalog metadata without removing the affected model', () => {

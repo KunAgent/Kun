@@ -46,6 +46,7 @@ import {
 import { MemoMessageTurn } from './message-timeline-conversation-turn'
 import type { MessageTimelineProps } from './message-timeline-props'
 import { ThreadHydrationLoading } from './ThreadHydrationLoading'
+import { useTurnUsageState } from '../../hooks/use-turn-usage'
 
 export {
   TimelineJumpPreviewTitle,
@@ -120,7 +121,9 @@ export function MessageTimeline({
 }: MessageTimelineProps): ReactElement {
   const { t } = useTranslation('common')
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
+  const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
+  const turnUsage = useTurnUsageState(activeThreadId, usageRefreshKey)
   const handleCancelToolCall = useCallback(async (block: ToolBlock): Promise<boolean> => {
     if (!activeThreadId || !block.turnId) return false
     const callId = typeof block.meta?.callId === 'string' ? block.meta.callId : ''
@@ -580,6 +583,8 @@ export function MessageTimeline({
                 filePreviewWorkspaceRoot={filePreviewWorkspaceRoot}
                 viewportRef={containerRef}
                 compactCards={compactCards}
+                turnUsage={turn.turnId ? turnUsage.byTurnId.get(turn.turnId) : undefined}
+                turnUsageStale={turnUsage.stale}
               />
               {!turnIsProcessing && turnMessageActions.length && onExtensionCommand ? (
                 <div className="mt-1 flex justify-end">

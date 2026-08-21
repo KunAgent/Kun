@@ -4,6 +4,7 @@ import {
   GeminiCodeAssistModelClient,
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
+  safeProviderReasoningCapability,
   modelContextProfilesFromConfig,
   type ServeProviderConfig,
   type ModelClient,
@@ -18,6 +19,7 @@ import {
   type GeminiCodeAssistCredential
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import { subscriptionBillingKind } from '../shared/subscription-billing.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -94,6 +96,12 @@ export function buildModelClientRouterInput(
     activeProvider,
     modelCapabilities
   )
+  const defaultBillingKind = subscriptionBillingKind({
+    authType: activeProvider?.authType,
+    presetSource: activeProvider?.presetSource,
+    providerId: activeProviderId,
+    baseUrl: activeProvider?.baseUrl ?? options.baseUrl
+  })
   const defaultClient: ModelClient =
     process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-code-assist'
       ? new GeminiCodeAssistModelClient({
@@ -117,6 +125,7 @@ export function buildModelClientRouterInput(
           ...(llmDebug ? { debugSink: llmDebug } : {})
         })
       : new CompatModelClient({
+          providerId: activeProviderId,
           baseUrl: options.baseUrl,
           apiKey: options.apiKey,
           modelProxyUrl: options.modelProxyUrl,
@@ -125,6 +134,7 @@ export function buildModelClientRouterInput(
           model: options.model,
           modelCapabilities: defaultModelCapabilities,
           headers: options.headers,
+          ...(defaultBillingKind ? { billingKind: defaultBillingKind } : {}),
           ...(options.credentialSourceId && credentialResolver
             ? {
                 resolveCredentials: (rejectedAccessToken?: string) =>
@@ -145,6 +155,12 @@ export function buildModelClientRouterInput(
       provider,
       modelCapabilities
     )
+    const providerBillingKind = subscriptionBillingKind({
+      authType: provider.authType,
+      presetSource: provider.presetSource,
+      providerId: trimmedId,
+      baseUrl: provider.baseUrl
+    })
     const client: ModelClient = kind === 'gemini-code-assist'
       ? new GeminiCodeAssistModelClient({
           baseUrl: provider.baseUrl ?? options.baseUrl,
@@ -167,6 +183,7 @@ export function buildModelClientRouterInput(
           ...(llmDebug ? { debugSink: llmDebug } : {})
         })
       : new CompatModelClient({
+          providerId: trimmedId,
           baseUrl: provider.baseUrl ?? options.baseUrl ?? '',
           apiKey: provider.apiKey,
           modelProxyUrl: provider.modelProxyUrl ?? options.modelProxyUrl,
@@ -175,6 +192,7 @@ export function buildModelClientRouterInput(
           model: options.model,
           modelCapabilities: scopedModelCapabilities,
           headers: provider.headers,
+          ...(providerBillingKind ? { billingKind: providerBillingKind } : {}),
           ...(provider.credentialSourceId && credentialResolver
             ? {
                 resolveCredentials: (rejectedAccessToken?: string) =>
@@ -222,7 +240,7 @@ export function providerScopedModelCapabilities(
       model
     })
     if (explicit) {
-      const reasoning = shouldUpgradeProviderReasoning(
+      const requestedReasoning = shouldUpgradeProviderReasoning(
         providerId,
         provider?.endpointFormat,
         model,
@@ -231,10 +249,17 @@ export function providerScopedModelCapabilities(
       )
         ? providerFallback.reasoning
         : explicit.reasoning ?? providerFallback.reasoning
+      const reasoning = safeProviderReasoningCapability({
+        providerId,
+        presetSource: provider?.presetSource ?? providerId,
+        baseUrl: provider?.baseUrl,
+        kind: provider?.kind,
+        model
+      }, requestedReasoning)
       return {
         ...explicit,
         id: model,
-        ...(reasoning ? { reasoning } : {}),
+        ...((reasoning ?? explicit.reasoning) ? { reasoning: reasoning ?? explicit.reasoning } : {}),
         ...(explicit.serviceTiers ?? providerFallback.serviceTiers
           ? { serviceTiers: [...(explicit.serviceTiers ?? providerFallback.serviceTiers ?? [])] }
           : {})
@@ -338,7 +363,10 @@ export function modelConnectionSeedsForOptions(
       id: activeConnectionId,
       name: activeConnectionId === 'default' ? 'Default provider' : activeConnectionId,
       ...(activeProvider?.presetSource
-        ? { presetSource: activeProvider.presetSource }
+        ? {
+            presetSource: activeProvider.presetSource,
+            ...(activeProvider.presetMode ? { presetMode: activeProvider.presetMode } : {})
+          }
         : activeConnectionId === 'default' ? {} : { presetSource: activeConnectionId }),
       kind: activeKind,
       authType: activeProvider?.authType ?? modelConnectionAuthType(activeKind, options.apiKey),
@@ -370,7 +398,12 @@ export function modelConnectionSeedsForOptions(
         expectedRevision: 0,
         id: providerId,
         name: providerId,
-        ...(provider.presetSource ? { presetSource: provider.presetSource } : {}),
+        ...(provider.presetSource
+          ? {
+              presetSource: provider.presetSource,
+              ...(provider.presetMode ? { presetMode: provider.presetMode } : {})
+            }
+          : {}),
         kind: provider.kind ?? 'http',
         authType: provider.authType ?? modelConnectionAuthType(provider.kind ?? 'http', provider.apiKey),
         ...((provider.kind ?? 'http') === 'http'

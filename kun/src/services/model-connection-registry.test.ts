@@ -482,6 +482,76 @@ describe('ModelConnectionRegistry', () => {
       })
     })
 
+  it('backfills an OpenCode Go numbered account without changing its credential binding', async () => {
+    const { dataDir, value } = await registry()
+    const connected = await value.connect({
+      expectedRevision: 0,
+      id: 'opencode-go-2',
+      name: 'OpenCode Go 2',
+      kind: 'http',
+      authType: 'subscription',
+      baseUrl: 'https://opencode.ai/zen/go/v1',
+      endpointFormat: 'chat_completions',
+      credential: 'opencode-second-secret',
+      models: ['muse-spark-1.2-contributor'],
+      modelCapabilities: {
+        'muse-spark-1.2-contributor': {
+          id: 'muse-spark-1.2-contributor',
+          inputModalities: ['text', 'image'],
+          outputModalities: ['text'],
+          supportsToolCalling: true,
+          messageParts: ['text', 'image_url'],
+          reasoning: {
+            supportedEfforts: ['off', 'low', 'medium', 'high', 'max'],
+            defaultEffort: 'max',
+            requestProtocol: 'thinking-toggle-chat-completions'
+          }
+        }
+      },
+      selectedModel: 'muse-spark-1.2-contributor',
+      probe: false,
+      select: true
+    })
+    const before = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+      profiles: Record<string, { credentialRef?: string }>
+    }
+    const credentialRef = before.profiles['opencode-go-2']?.credentialRef
+
+    const repaired = await value.initialize([{
+      expectedRevision: connected.revision,
+      id: 'opencode-go-2',
+      name: 'OpenCode Go 2',
+      presetSource: 'opencode-go',
+      presetMode: 'api',
+      kind: 'http',
+      authType: 'subscription',
+      baseUrl: 'https://opencode.ai/zen/go/v1',
+      endpointFormat: 'chat_completions',
+      models: ['muse-spark-1.2-contributor'],
+      selectedModel: 'muse-spark-1.2-contributor',
+      probe: false,
+      select: false
+    }])
+
+    expect(repaired.providers.find((profile) => profile.id === 'opencode-go-2')).toMatchObject({
+      accountId: 'account:opencode-go-2',
+      presetSource: 'opencode-go',
+      presetMode: 'api',
+      authType: 'subscription',
+      modelCapabilities: {
+        'muse-spark-1.2-contributor': {
+          reasoning: { requestProtocol: 'none', supportedEfforts: ['auto'] }
+        }
+      }
+    })
+    const after = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+      profiles: Record<string, { credentialRef?: string }>
+    }
+    expect(after.profiles['opencode-go-2']?.credentialRef).toBe(credentialRef)
+    const reapplied = await value.initialize([])
+    expect(reapplied.revision).toBe(repaired.revision)
+  })
+
   it('rotates a legacy source to a Registry-owned credential that survives hot apply', async () => {
       const { dataDir, value } = await registry()
       const seed = {

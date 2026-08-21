@@ -238,7 +238,6 @@ describe('AnimatedWorkLogo', () => {
     const html = renderToStaticMarkup(
       createElement(WorkMetaRow, {
         processing: true,
-        stepCount: 3,
         durationMs: 74_000,
         expanded: true,
         collapsible: false,
@@ -254,17 +253,18 @@ describe('AnimatedWorkLogo', () => {
     expect(html).not.toContain('aria-expanded')
   })
 
-  it('summarizes collapsed work with its step count', () => {
+  it('labels collapsed completed work without a step count', () => {
     const html = renderToStaticMarkup(
       createElement(WorkMetaRow, {
         processing: false,
-        stepCount: 12,
+        durationMs: 101_000,
         expanded: false,
         onToggle: () => undefined
       })
     )
 
-    expect(html).toMatch(/12 steps|12 步|processStepCount/)
+    expect(html).toMatch(/Processed 1m 41s|已处理 1m 41s/)
+    expect(html).not.toMatch(/steps|步|Work process|工作过程/)
     expect(html).toContain('aria-expanded="false"')
   })
 

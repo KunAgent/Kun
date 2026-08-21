@@ -314,10 +314,13 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
   const snapshotJson = snapshot ? snapshotToCompactJson(snapshot) : '(empty canvas)'
   const errorLines = formatPreviousOpErrorLines(options.previousOpErrors)
   const editHint = deriveSelectedImageEditHint(snapshot)
+  const editReferencePath = options.imageEditReferencePath?.trim() || editHint?.imageUrl
   const targetFrameSize = defaultFrameSizeForDesignTarget(options.designContext?.designTarget)
   const editHintLines = editHint
     ? [
-        `IMPORTANT PRIOR — the user has EXACTLY ONE filled image selected (id "${editHint.id}", imageUrl \`${editHint.imageUrl}\`). Unless they EXPLICITLY ask for a NEW page / screen / 页面, this is the EDIT AN EXISTING IMAGE lane: call generate_image with reference_image_paths: ["${editHint.imageUrl}"], then call design_update_shapes to update that SAME shape's imageUrl. Do NOT call design_create_screen / add-screen and do NOT write or edit HTML.`,
+        codeCanvasMode
+          ? `IMPORTANT PRIOR — the user has EXACTLY ONE filled image selected (id "${editHint.id}", imageUrl \`${editHint.imageUrl}\`). Unless they EXPLICITLY ask for a NEW page / screen / 页面, this is the EDIT AN EXISTING IMAGE lane: call generate_image with reference_image_paths: ["${editReferencePath}"], then call design_update_shapes to update that SAME shape's imageUrl. Do NOT call design_create_screen / add-screen and do NOT write or edit HTML.`
+          : `IMPORTANT PRIOR — the user has EXACTLY ONE filled source image selected (id "${editHint.id}", imageUrl \`${editHint.imageUrl}\`). This is the EDIT AN EXISTING IMAGE lane: call generate_image with reference_image_paths: ["${editReferencePath}"]. Preserve the selected source shape and URL; the renderer adds the result as a same-size revision beside it. Do NOT call design_update_shapes for the generated URL, do not create a screen, and do not write or edit HTML.`,
         ''
       ]
     : []
@@ -355,14 +358,18 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
         ]),
     '',
     'FIRST classify the request and commit to ONE primary lane:',
-    '- EDIT AN EXISTING IMAGE — the user wants to change/edit/restyle/redo/recolor/fix/transform a picture that is ALREADY on the canvas, and the snapshot has a SELECTED `image` shape carrying an `imageUrl`. Phrasings like "change X into Y", "把这张图改成…", "改成 X", or "改一下这张图" all land here when the selected picture is the thing being changed. → call `generate_image` with `reference_image_paths` set to that `imageUrl`, then `design_update_shapes` that same shape (full rules under "Editing or restyling an EXISTING image" below). In this lane you MUST NOT use `design_create_screen` / `add-screen` and MUST NOT write or edit any HTML file.',
+    codeCanvasMode
+      ? '- EDIT AN EXISTING IMAGE — when a filled image is selected and the user asks to edit it, call `generate_image` with that imageUrl and then update the same shape. Do not create a screen.'
+      : '- EDIT AN EXISTING IMAGE — when a filled image is selected and the user asks to edit it, call `generate_image` with the selected or explicit annotation reference. Preserve the source shape; renderer adds the result as a separate nearby revision. Do not update the source or create a screen.',
     '- FILL AN EMPTY SLOT — a selected empty holder / frame / rect (no `imageUrl`) needs a fresh picture. → `generate_image` from text only, then place it (see "Filling a selected panel" below).',
     ...(codeCanvasMode ? [] : [
       '- ANIMATE A DESIGN FRAME OR LAYERS — the user asks for timeline/keyframe animation of existing canvas shapes or a whole HTML/running-app/SVG frame container. → use `design_motion_set_timeline`, `design_motion_upsert_keyframes`, `design_motion_apply_preset`, or `design_motion_delete` with stable ids from `snapshot.motion`. This is editable per-frame Motion; do NOT generate CSS/GSAP/HTML animation and do NOT use ShapeOps for keyframes.',
       '- CREATE AN SVG OR SVG-MOTION ASSET — the user asks for a vector logo/icon/loader/illustration, path animation, animated mark, or reusable animated vector asset. → call `design_svg_create` exactly once with a clear name, self-contained brief, and optional dimensions. The system then opens a dedicated SVG turn with structured element and animation tools. SVG motion edits the standalone SVG inner animation; it is not the outer Design Motion timeline.',
       '- EDIT PROTOTYPE NAVIGATION — the user asks what happens after a click, which screen opens, or how screens/routes connect. → preserve or edit Prototype links/navigation. Prototype is screen-to-screen navigation; do NOT encode it as a time-based Motion timeline.'
     ]),
-    '- CREATE A STANDALONE RASTER IMAGE ASSET — the user asks for a photo, textured/painterly illustration, poster, mascot, or other raster visual material, not a full page/screen. → call `generate_image`, then add/update an `image` shape on the canvas with the saved workspace-relative path. Keep it as a reusable whiteboard asset for later page drafts. Do NOT call `design_create_screen` and do NOT write or edit HTML.',
+    codeCanvasMode
+      ? '- CREATE A STANDALONE RASTER IMAGE ASSET — the user asks for a photo, textured/painterly illustration, poster, mascot, or other raster visual material, not a full page/screen. → call `generate_image`, then add/update an `image` shape with the saved workspace-relative path. Do NOT call `design_create_screen`.'
+      : '- CREATE A STANDALONE RASTER IMAGE ASSET — the user asks for a photo, textured/painterly illustration, poster, mascot, or other raster visual material, not a full page/screen. → call `generate_image`; the renderer immediately materializes every successful result as a reusable whiteboard image. Do NOT add the same image again, call `design_create_screen`, or write/edit HTML.',
     ...(codeCanvasMode
       ? [
           '- MAP CODE / ARCHITECTURE / FLOW — the user asks for system architecture, code structure, module relationships, data flow, API flow, state machine, database/schema map, sequence diagram, dependency graph, implementation plan, or debugging notes. → use `design_update_shapes` / `design_arrange` with normal frames, rects, text, arrows, lines, groups, and auto-layout. Do NOT use `design_create_screen` unless they explicitly ask for a UI screen mockup. If they also ask for an image/PNG/SVG/file, call `design_export_canvas` directly when the current snapshot already contains the requested diagram; otherwise finish the editable diagram first and then export it.'
@@ -492,24 +499,45 @@ export function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     'Placing a generated image on the canvas:',
     '- Call the `generate_image` tool to create the picture (pass an `aspect_ratio` matching the box you want).',
     '- For logo/icon/brand asset requests, generate a clean reusable asset first; prefer transparent or simple neutral backgrounds when the brief allows, so it can be selected and reused in later screen/page designs.',
-    '- Read the saved file path from the tool result (`output.files[0].relativePath`, e.g. `.deepseekgui-images/img-….png`).',
-    '- Then call `design_update_shapes` with an `add` op with `"type": "image"` and `"imageUrl": "<that relativePath>"` plus `x`/`y`/`width`/`height` for placement. The canvas renders the workspace file automatically.',
-    '- To replace an existing image, `update` that shape\'s `imageUrl` instead of adding another.',
+    ...(codeCanvasMode
+      ? [
+          '- Read the saved workspace-relative path from the successful tool result, then add or update the intended `image` shape with that `imageUrl`.',
+          '- Use the current placement recommendations and visible occupied shapes; do not overlap existing whiteboard content.'
+        ]
+      : [
+          '- The renderer reads every saved file from the successful tool result and durably places it on the whiteboard immediately. Do NOT follow `generate_image` with an `add` op for the same result.',
+          '- For exact placement, create or select the intended empty image holder BEFORE calling `generate_image`; otherwise the renderer chooses an aspect-correct non-overlapping slot.',
+          '- To intentionally reuse an already materialized result later, issue an explicit `duplicate` or later-turn image operation rather than repeating the immediate generated-image add.'
+        ]),
     '',
     'Filling a selected panel or an AI image holder (do this BEFORE scattering new image boxes):',
     '- Snapshot flags: `"selected": true` = the shape the user is pointing at ("here" / "this panel" / "这里" / "这个框"). `"aiImageHolder": true` = an image slot waiting to be filled — set automatically for any empty box (image with no picture, or a childless frame/rect) the user has selected, so they never need to mark it first.',
     '- Treat `"selected": true` as the highest-priority target for ambiguous wording like "this", "here", "这个", "这里", or "选中的".',
     '- When the user asks for an image and there is a selected holder (or a single selected `image`/`frame`), fill THAT shape instead of creating a loose new image:',
-    '  • selected EMPTY `image` holder (no `imageUrl` field in the snapshot): `generate_image` with `aspect_ratio` ≈ its w:h, then `update` THAT shape — set `imageUrl` to the relativePath. Do NOT change its x/y/width/height; the picture fills the existing box exactly. If the selected `image` already carries an `imageUrl` in the snapshot, STOP — this is an EDIT, not a fill; jump to the "Editing or restyling an EXISTING image" section below and follow that rule instead.',
-    '  • selected EMPTY `frame` or `rect` holder: `generate_image` with `aspect_ratio` ≈ its w:h, then `update` THAT SAME shape id — set `imageUrl` to the relativePath. Do NOT add a child image; the renderer converts the holder itself into a single image shape so the frame/image remain one selectable object with the original x/y/width/height.',
-    '- If nothing is selected but the canvas has `aiImageHolder` shapes, fill the most relevant holder(s) the same way before adding brand-new image boxes.',
-    '- Only `add` a free-floating new image box when there is no suitable selected target or holder.',
+    codeCanvasMode
+      ? '  • selected EMPTY `image` holder: call `generate_image`, then update THAT shape with the returned imageUrl without changing its bounds.'
+      : '  • selected EMPTY `image` holder (no `imageUrl` field in the snapshot): call `generate_image` with `aspect_ratio` ≈ its w:h. The renderer fills THAT shape and preserves x/y/width/height; do not send a redundant update. If the selected `image` already carries an `imageUrl`, follow the edit rule below.',
+    codeCanvasMode
+      ? '  • selected EMPTY `frame` or `rect` holder: call `generate_image`, then update THAT SAME shape with the returned imageUrl without adding a child.'
+      : '  • selected EMPTY `frame` or `rect` holder: call `generate_image` with `aspect_ratio` ≈ its w:h. The renderer converts THAT SAME shape into one image with the original bounds; do not add a child or send a redundant update.',
+    codeCanvasMode
+      ? '- If nothing is selected but the canvas has `aiImageHolder` shapes, fill the most relevant holder before adding a new image box.'
+      : '- If nothing is selected but the canvas has `aiImageHolder` shapes, identify the intended holder before generation and update it with `aiImageHolder: true` in this turn; the renderer then treats that affected holder as the placement target.',
+    codeCanvasMode
+      ? '- Only add a free-floating image box when there is no suitable target or holder.'
+      : '- When there is no suitable target or holder, call `generate_image` directly and let the renderer add a free-floating non-overlapping image.',
     '',
     'Editing or restyling an EXISTING image (image-to-image with a reference):',
-    '- Trigger: the user asks to modify, edit, restyle, redo, transform, recolor, enhance, fix, or otherwise change a picture that is ALREADY in the canvas — including "change X into Y" / "把这张图改成…" / "改成 X" where the selected picture is the thing being changed — AND the snapshot shows the target `image` shape carries an `imageUrl` (a workspace-relative path like `.deepseekgui-images/…`). Selected `image` shapes with `imageUrl` are the primary target; same applies if the user names one by id/position. This is an image edit, NOT a request to build a new screen — do NOT call `design_create_screen` / `add-screen` and do NOT write HTML for it.',
-    '- Implicit target via container: if the user selects a `frame` or `group` that contains EXACTLY ONE `image` child with an `imageUrl`, treat that child as the implicit edit target — use the child\'s `imageUrl` as the reference and `update` the child shape\'s `imageUrl` (do NOT add a new image, do NOT touch the parent frame\'s bounds). Two or more `image` children with `imageUrl` ⇒ ask the user which one (or apply the multi-reference clause below only if they explicitly asked to compose).',
-    '- Action: call `generate_image` with `reference_image_paths: ["<that imageUrl exactly as it appears in the snapshot>"]` so the model edits the existing picture instead of inventing a fresh one. Keep `aspect_ratio` ≈ the shape\'s w:h. Then `update` THAT shape\'s `imageUrl` to the new `output.files[0].relativePath`; do NOT change its x/y/width/height.',
-    '- Multiple selected images for a single composed result: pass each filled shape\'s `imageUrl` in `reference_image_paths` (cap at 4 — drop extras if there are more). The references are treated symmetrically by the model — compose freely from all of them and pick the most coherent result; the order in the array is not load-bearing. Then `update` the PRIMARY target shape\'s `imageUrl` with the new file (when the user named a specific shape, that one; otherwise the first filled `image` in the selection as it appears in the snapshot). Do not touch the other reference shapes unless the user asked you to.',
+    '- Trigger: the user asks to modify, edit, restyle, redo, transform, recolor, enhance, fix, or otherwise change a picture that is ALREADY in the canvas — including "change X into Y" / "把这张图改成…" / "改成 X" where the selected picture is the thing being changed — AND the snapshot shows the target `image` shape carries an `imageUrl` (a workspace-relative path like `.kun/images/…`). Selected `image` shapes with `imageUrl` are the primary target; same applies if the user names one by id/position. This is an image edit, NOT a request to build a new screen — do NOT call `design_create_screen` / `add-screen` and do NOT write HTML for it.',
+    codeCanvasMode
+      ? '- Implicit target via container: if a selected frame/group contains exactly one filled image child, use it as the edit reference and update that child without changing the parent.'
+      : '- Implicit target via container: if a selected frame/group contains exactly one filled image child, use it as the edit reference but preserve it; renderer adds the result as a root-level comparison revision. If there are multiple image children, ask which source to edit.',
+    codeCanvasMode
+      ? '- Action: call `generate_image` with the selected imageUrl in `reference_image_paths`, then update THAT selected image with the returned imageUrl without changing its bounds.'
+      : '- Action: call `generate_image` with the explicit annotation reference when provided, otherwise with the selected source imageUrl. Keep `aspect_ratio` ≈ the source bounds. Preserve the selected source; renderer adds the clean result as a same-size nearby revision.',
+    codeCanvasMode
+      ? '- Multiple selected images for one composed result: pass up to four imageUrls, then update the primary target shape with the result.'
+      : '- Multiple selected images for one composed result: pass up to four imageUrls and preserve every source; renderer adds the composed result as a new comparison image.',
     '- Do NOT pass `reference_image_paths` when filling an empty `aiImageHolder` (no `imageUrl` in the snapshot) or any empty `frame`/`rect` slot — those are fresh generations from text only. The empty-holder rule above still applies unchanged.',
     '- Before constructing `reference_image_paths`, locate each target shape in the snapshot by its `id` and copy its `imageUrl` verbatim. If the `imageUrl` field is absent on any target, drop that target from the array (do not guess or reconstruct a path from the shape name, position, or any other field).',
     '- Do NOT invent paths. If the target shape has no `imageUrl` field in the snapshot, treat it as empty and generate fresh.',

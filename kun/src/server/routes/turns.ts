@@ -74,7 +74,14 @@ export async function startTurn(
     }
     if (error instanceof DesignProfileLockedError) {
       return ERRORS.designProfileLocked(error.message, {
-        lockedAtTurnId: error.lockedAtTurnId
+        lockedAtTurnId: error.lockedAtTurnId,
+        ...(error.details.lockedDocumentId
+          ? { lockedDocumentId: error.details.lockedDocumentId }
+          : {}),
+        ...(error.details.lockedBoardArtifactId
+          ? { lockedBoardArtifactId: error.details.lockedBoardArtifactId }
+          : {}),
+        ...(error.details.mismatch ? { mismatch: error.details.mismatch } : {})
       })
     }
     if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)

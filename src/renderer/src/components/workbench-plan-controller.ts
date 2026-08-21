@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ChatBlock } from '../agent/types'
 import { useChatStore } from '../store/chat-store'
 import type { ChatState } from '../store/chat-store-types'
-import { buildPlanBuildPrompt, buildRefinePlanPrompt } from '../plan/plan-prompts'
+import { buildRefinePlanPrompt } from '../plan/plan-prompts'
+import { preparePlanBuild } from '../plan/prepare-plan-build'
 import { buildSddVerifyPrompt } from '../sdd/sdd-verify-prompt'
 import { sddDraftRelativePathForPlanPath, sddDraftTraceRelativePath } from '@shared/sdd'
 import { buildSddTraceSnapshot, parseSddRequirementBlocks } from '@shared/sdd-trace'
@@ -330,57 +331,35 @@ export function useWorkbenchPlanController({
       return
     }
     const preference = usePlanWorktreePreferenceStore.getState().plans[plan.id]
-    const usePromptWorktree = orchestration === 'direct' &&
-      preference?.initialized === true &&
-      preference.featureEnabled &&
-      preference.usePromptWorktree
-    const saved = await savePlanContentToDisk(plan, snapshot.content)
-    if (!saved) return
-
-    let prompt = buildPlanBuildPrompt(plan.relativePath, snapshot.content, orchestration)
-    const labelKey = orchestration === 'graph' ? 'planBuildGraph' : 'planBuildDirect'
-    let displayText = `${t(labelKey)}: ${plan.relativePath}`
-    if (usePromptWorktree) {
-      let branchResult: Awaited<ReturnType<typeof window.kunGui.getGitBranches>>
-      try {
-        branchResult = await window.kunGui.getGitBranches(plan.workspaceRoot)
-      } catch (error) {
-        setError(error instanceof Error ? error.message : String(error))
-        return
-      }
-      if (!branchResult.ok) {
-        setError(branchResult.message)
-        return
-      }
-      const targetBranch = branchResult.currentBranch?.trim()
-      if (!targetBranch) {
-        setError(t('planWorktreeDetachedHead'))
-        return
-      }
-      if (useChatStore.getState().activeThreadId !== chatState.activeThreadId) {
-        setError(t('planWorktreeTaskChanged'))
-        return
-      }
-      prompt = buildPlanBuildPrompt(plan.relativePath, snapshot.content, orchestration, {
-        repositoryRoot: branchResult.repositoryRoot,
-        targetBranch,
-        branchPrefix: preference.branchPrefix,
-        dirtyCount: branchResult.dirtyCount,
-        planTitle: plan.featureName
+    try {
+      const prepared = await preparePlanBuild({
+        plan,
+        content: snapshot.content,
+        orchestration,
+        graphEnabled: chatState.graphEnabled,
+        usePromptWorktree: orchestration === 'direct' && preference?.initialized === true &&
+          preference.usePromptWorktree,
+        branchPrefix: preference?.branchPrefix ?? 'codex/',
+        activeThreadId: chatState.activeThreadId,
+        save: savePlanContentToDisk,
+        currentPlanId: () => useGuiPlanStore.getState().activePlan?.id,
+        currentThreadId: () => useChatStore.getState().activeThreadId,
+        getGitBranches: window.kunGui.getGitBranches
       })
-      displayText = t('planWorktreeBuildDisplay', {
-        branch: targetBranch,
-        title: plan.featureName
+      setComposerMode('agent')
+      const displayText = prepared.prompt.includes('<prompt_managed_worktree_protocol>')
+        ? t('planWorktreeBuildDisplay', { branch: prepared.displayText.match(/\((.+)\)$/)?.[1] ?? '', title: plan.featureName })
+        : `${t(orchestration === 'graph' ? 'planBuildGraph' : 'planBuildDirect')}: ${plan.relativePath}`
+      const sent = await sendMessage(prepared.prompt, 'agent', {
+        displayText,
+        orchestration: prepared.orchestration
       })
-    }
-
-    setComposerMode('agent')
-    const sent = await sendMessage(prompt, 'agent', {
-      displayText,
-      orchestration
-    })
-    if (sent) {
-      await onPlanBuildStarted?.(plan)
+      if (sent) await onPlanBuildStarted?.(plan)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setError(message === 'Prompt Worktree requires a checked-out Git branch.'
+        ? t('planWorktreeDetachedHead')
+        : message)
     }
   }
 

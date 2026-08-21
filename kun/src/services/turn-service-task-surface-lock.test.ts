@@ -140,6 +140,46 @@ describe('turn task-surface lock', () => {
       },
       turnId: 'turn_design_2'
     })).toThrow(DesignProfileLockedError)
+    try {
+      resolveDesignTurnAdmission({
+        thread,
+        request: {
+          prompt: 'Continue Design differently',
+          agentSurface: 'design',
+          designProfile: { ...profile, outputMedium: 'image' },
+          designDocumentTarget: profile.documentTarget
+        },
+        turnId: 'turn_design_2'
+      })
+    } catch (error) {
+      expect(error).toBeInstanceOf(DesignProfileLockedError)
+      expect(error).toMatchObject({
+        lockedAtTurnId: 'turn_design_1',
+        details: {
+          lockedDocumentId: 'doc_1',
+          lockedBoardArtifactId: 'board_1',
+          mismatch: 'profile'
+        }
+      })
+    }
+  })
+
+  it('reuses a locked Design profile when the follow-up omits profile fields', () => {
+    const thread = codeWorkbench()
+    thread.designProfile = { ...profile, lockedAtTurnId: 'turn_design_1' }
+
+    expect(resolveDesignTurnAdmission({
+      thread,
+      request: { prompt: 'Continue Design', agentSurface: 'design' },
+      turnId: 'turn_design_2'
+    })).toMatchObject({
+      effectiveSurface: 'design',
+      locksProfile: false,
+      effectiveProfile: expect.objectContaining({
+        lockedAtTurnId: 'turn_design_1',
+        documentTarget: profile.documentTarget
+      })
+    })
   })
 
   it('rejects a Code turn that carries a Design profile or document target', () => {

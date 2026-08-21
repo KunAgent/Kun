@@ -16,6 +16,8 @@ Kun 有两层配置。
 
    Agent 运行时设置在 `agents.kun` 下，例如端口、data dir、默认模型、审批策略、sandbox、token economy 等。多数用户通过设置页修改这些字段。
 
+   Service Manager 以该文件的内容 SHA-256 作为磁盘指纹，并在每次读取和 compare-and-swap 写入前重新核对。外部工具写入有效 JSON 后，GUI 会热加载新 revision；若 GUI 同时保存 patch，revision 冲突会基于最新有效 snapshot 重新合并一次。外部写入暂时无效的 JSON 时，GUI 不会用默认值覆盖文件，而是继续使用最后一份有效 snapshot，等待后续有效修改。Manager 自己提交的相同内容不会触发重复 revision 或热加载循环。
+
 2. Kun runtime config
 
    这是 Kun 本地运行时读取的高级配置文件。默认路径是：

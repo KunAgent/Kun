@@ -32,6 +32,7 @@ type Props = {
   activeFileIsImage: boolean
   activeFileIsPdf?: boolean
   activeFileIsOffice?: boolean
+  activeFileIsEditableSpreadsheet?: boolean
   activeFileIsCode?: boolean
   activeFileIsText: boolean
   activeFileLabel: string
@@ -71,6 +72,7 @@ export function WriteWorkspaceToolbar({
   activeFileIsImage,
   activeFileIsPdf = false,
   activeFileIsOffice = false,
+  activeFileIsEditableSpreadsheet = false,
   activeFileIsCode = false,
   activeFileIsText,
   activeFileLabel,
@@ -140,16 +142,31 @@ export function WriteWorkspaceToolbar({
               <BookOpen className="h-4 w-4" strokeWidth={1.85} />
               <span>
                 {activeFileIsOffice
-                  ? t('writeOfficePreview')
+                  ? activeFileIsEditableSpreadsheet ? t('writeSpreadsheetEditable') : t('writeOfficePreview')
                   : activeFileIsCode
                     ? t('writeModeSource')
                     : t('writePdfPreview')}
               </span>
               <span className="write-pdf-topbar-dot" aria-hidden="true" />
-              <span>{t('writeReadOnly')}</span>
+              <span>{activeFileIsEditableSpreadsheet ? saveLabel : t('writeReadOnly')}</span>
             </div>
 
-            <div className="write-pdf-topbar-actions" />
+            <div className="write-pdf-topbar-actions">
+              {activeFileIsEditableSpreadsheet ? (
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={saveStatus === 'saved' || saveStatus === 'saving'}
+                  className={`${toolbarIconButtonClass} disabled:cursor-default disabled:opacity-45`}
+                  title={saveLabel}
+                  aria-label={saveLabel}
+                >
+                  {saveStatus === 'saving'
+                    ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.9} />
+                    : <Save className="h-4 w-4" strokeWidth={1.9} />}
+                </button>
+              ) : null}
+            </div>
           </div>
         </header>
       </div>

@@ -19,8 +19,7 @@ import type {
 } from '@shared/model-provider-presets'
 import {
   AlertCircle,
-  Image as ImageIcon,
-  ServerCog
+  Image as ImageIcon
 } from 'lucide-react'
 import {
   type ReactElement
@@ -29,6 +28,7 @@ import { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 import {
   type InlineNotice
 } from './settings-controls'
+import { ProviderIcon } from './provider-icon'
 import {
   ProviderBadge,
   StatusPill
@@ -211,7 +211,11 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
               ? 'border-accent/20 bg-ds-card text-accent'
               : 'border-ds-border-muted bg-ds-main/45 text-ds-faint group-hover:text-ds-muted'
           }`}>
-            <ServerCog className="h-4 w-4" strokeWidth={1.8} />
+            <ProviderIcon
+              presetId={item.presetSource?.presetId}
+              providerId={item.id}
+              className="h-4 w-4"
+            />
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1.5">
@@ -302,7 +306,16 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
         className="group grid min-h-20 w-full gap-2 rounded-xl border border-ds-border bg-ds-card px-3.5 py-3 text-left transition hover:border-accent/45 hover:bg-ds-hover"
       >
         <span className="flex min-w-0 items-start justify-between gap-2">
-          <span className="truncate text-[13.5px] font-semibold text-ds-ink">{entry.label}</span>
+          <span className="flex min-w-0 items-center gap-2.5">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-ds-border-muted bg-ds-main/45 text-ds-muted">
+              <ProviderIcon
+                presetId={entry.preset.id}
+                providerId={entry.profileId}
+                className="h-4 w-4"
+              />
+            </span>
+            <span className="truncate text-[13.5px] font-semibold text-ds-ink">{entry.label}</span>
+          </span>
           <StatusPill tone={exists ? 'warning' : accountCount > 0 ? 'success' : 'muted'}>
             {accountCount > 0
               ? t('modelProviderAccountCount', { count: accountCount })

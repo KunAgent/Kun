@@ -325,6 +325,35 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     }
   }
 
+  async archiveThreadHistory(threadId: string, cutoffTurnId: string): Promise<{
+    replacedTokens: number
+    archivedItems: number
+    retainedItems: number
+    archivePath: string
+  }> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadCompactPath(threadId),
+      'POST',
+      JSON.stringify({ cutoffTurnId })
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'archive thread history failed'))
+    }
+    const body = readRuntimeJson<{
+      replacedTokens?: number
+      archivedItems?: number
+      retainedItems?: number
+      archivePath?: string
+    }>(response.body, 'runtime returned an invalid archive response')
+    if (!body.archivePath) throw new Error('runtime archive response is missing archivePath')
+    return {
+      replacedTokens: Math.max(0, Math.floor(body.replacedTokens ?? 0)),
+      archivedItems: Math.max(0, Math.floor(body.archivedItems ?? 0)),
+      retainedItems: Math.max(0, Math.floor(body.retainedItems ?? 0)),
+      archivePath: body.archivePath
+    }
+  }
+
   async getThreadGoal(threadId: string): Promise<NonNullable<NormalizedThread['goal']> | null> {
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadGoalPath(threadId),

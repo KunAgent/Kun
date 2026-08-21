@@ -71,7 +71,7 @@ export async function seedUsageCarryover(input: {
       // Fall through to JSONL replay when the optional index is unavailable.
     }
   }
-  const threadSummaries = await input.threadStore.list()
+  const threadSummaries = await input.threadStore.list({ includeSide: true })
   for (let offset = 0; offset < threadSummaries.length; offset += 8) {
     await Promise.all(threadSummaries.slice(offset, offset + 8).map(async (thread) => {
       const latestUsage = await findLatestUsageEvent(input.sessionStore, thread.id)

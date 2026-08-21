@@ -281,7 +281,9 @@ describe('KunRuntimeProvider', () => {
               threadId: 'thr_1',
               status: 'completed',
               prompt: 'hi',
-              createdAt: 't0',
+              createdAt: '2026-05-25T09:00:00.000Z',
+              startedAt: '2026-05-25T09:00:01.000Z',
+              finishedAt: '2026-05-25T09:01:42.000Z',
               guiDesignCanvas: true,
               items: [
                 {
@@ -290,7 +292,7 @@ describe('KunRuntimeProvider', () => {
                   threadId: 'thr_1',
                   role: 'user',
                   status: 'completed',
-                  createdAt: 't0',
+                  createdAt: '2026-05-25T09:00:00.000Z',
                   kind: 'user_message',
                   text: 'hi'
                 },
@@ -300,7 +302,8 @@ describe('KunRuntimeProvider', () => {
                   threadId: 'thr_1',
                   role: 'assistant',
                   status: 'completed',
-                  createdAt: 't1',
+                  createdAt: '2026-05-25T09:01:41.000Z',
+                  finishedAt: '2026-05-25T09:01:42.000Z',
                   kind: 'assistant_text',
                   text: 'hello'
                 }
@@ -320,6 +323,7 @@ describe('KunRuntimeProvider', () => {
     expect(detail.latestSeq).toBe(9)
     expect(detail.latestTurnId).toBe('turn_1')
     expect(detail.latestUserMessageId).toBe('item_user')
+    expect(detail.turnDurationByUserId).toEqual({ item_user: 101_000 })
   })
 
   it.each([

@@ -62,6 +62,25 @@ describe('Browser Use address policy', () => {
     })).rejects.toMatchObject({ code: 'non_public_destination' })
   })
 
+  it('fails closed with dns_timeout when the resolver never settles', async () => {
+    const startedAt = Date.now()
+    await expect(resolveBrowserUseNetworkTarget('https://github.com', {
+      mode: 'public',
+      dnsTimeoutMs: 50,
+      resolve: () => new Promise(() => undefined)
+    })).rejects.toMatchObject({ code: 'dns_timeout' })
+    expect(Date.now() - startedAt).toBeLessThan(5_000)
+  })
+
+  it('keeps literal IP destinations on the fast path without DNS resolution', async () => {
+    const resolve = vi.fn(async () => [{ address: '93.184.216.34', family: 4 as const }])
+    await expect(resolveBrowserUseNetworkTarget('https://93.184.216.34/path', {
+      mode: 'public',
+      resolve
+    })).resolves.toMatchObject({ port: 443 })
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
   it('pins local development to one exact scheme/host/port origin', async () => {
     await expect(resolveBrowserUseNetworkTarget('http://127.0.0.1:4173/ws', {
       mode: 'local-development',
@@ -85,6 +104,46 @@ describe('BrowserUsePolicyProxy', () => {
       proxyRules: 'http=127.0.0.1:34567;https=127.0.0.1:34567;ws=127.0.0.1:34567;wss=127.0.0.1:34567',
       proxyBypassRules: '<-loopback>'
     })
+  })
+
+  it('answers CONNECT with 403 dns_timeout and audits the block when DNS never settles', async () => {
+    const events: Array<{ outcome: string; sanitizedUrl: string; code?: string }> = []
+    const proxy = new BrowserUsePolicyProxy({
+      mode: 'public',
+      dnsTimeoutMs: 100,
+      resolve: () => new Promise(() => undefined),
+      onPolicyEvent: (event) => events.push(event)
+    })
+    const proxyUrl = new URL(await proxy.start())
+    try {
+      const status = await new Promise<string | undefined>((resolve, reject) => {
+        const request = httpRequest({
+          host: proxyUrl.hostname,
+          port: Number(proxyUrl.port),
+          method: 'CONNECT',
+          path: 'github.com:443',
+          headers: { host: 'github.com:443' }
+        })
+        request.once('connect', (response, socket: import('node:net').Socket) => {
+          socket.destroy()
+          resolve(response.statusCode?.toString())
+        })
+        request.once('response', (response) => {
+          response.resume()
+          response.once('end', () => resolve(response.statusCode?.toString()))
+        })
+        request.once('error', reject)
+        request.end()
+      })
+      expect(status).toBe('403')
+      expect(events).toContainEqual({
+        outcome: 'blocked',
+        sanitizedUrl: 'https://github.com/',
+        code: 'dns_timeout'
+      })
+    } finally {
+      await proxy.stop()
+    }
   })
 
   it('fails closed when a public request targets loopback', async () => {

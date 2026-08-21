@@ -100,6 +100,8 @@ describe('design turn prompt payload', () => {
 
     expect(payload.prompt).toContain('BUILD A SINGLE SCREEN')
     expect(payload.prompt).toContain('BUILD A COMPLETE MULTI-SCREEN EXPERIENCE')
+    expect(payload.prompt).toContain('renderer immediately materializes every successful result')
+    expect(payload.prompt).toContain('Do NOT follow `generate_image` with an `add` op')
     expect(payload.prompt).not.toContain('Design mode workflow contract:')
     expect(payload.prompt).not.toContain('Suggested tool call: design.plan')
     expect(payload.promptState.activeDocumentId).toBe('doc')

@@ -40,17 +40,19 @@ import {
 
 export function ConnectPhoneSidebarPanel({
   channels,
+  initialTarget = 'feishu',
   onAddProvider,
   onDisconnect,
   onOpenSettings
 }: {
   channels: ClawImChannelV1[]
+  initialTarget?: ClawInstallTarget
   onAddProvider: AddClawPhoneChannel
   onDisconnect: (channelId: string) => Promise<void>
   onOpenSettings: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const [target, setTarget] = useState<ClawInstallTarget>('feishu')
+  const [target, setTarget] = useState<ClawInstallTarget>(initialTarget)
   const [installQr, setInstallQr] = useState<ClawInstallQrState>(INITIAL_QR_STATE)
   const [saving, setSaving] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
@@ -90,6 +92,10 @@ export function ConnectPhoneSidebarPanel({
     installRequestInFlightRef.current = false
     clearInstallTimers()
   }, [clearInstallTimers])
+
+  useEffect(() => {
+    setTarget(initialTarget)
+  }, [initialTarget])
 
   useEffect(() => {
     return cancelInstallAttempt
@@ -443,6 +449,11 @@ export function ConnectPhoneSidebarPanel({
               </span>
             </div>
             <div className="mt-3 grid gap-2">
+              {!connectedChannel.enabled ? (
+                <div className="rounded-[8px] bg-amber-500/10 px-2.5 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-200">
+                  {t('connectPhoneDisabledConnectionHint')}
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={onOpenSettings}

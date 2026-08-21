@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { parseDelegateDetail, parseFastContextEvidencePack } from './subagent-call-card-support'
+import type { ToolBlock } from '../../agent/types'
+import {
+  parseDelegateDetail,
+  parseFastContextEvidencePack,
+  resolveStatus,
+  type ChildMeta
+} from './subagent-call-card-support'
 
 describe('parseDelegateDetail', () => {
   it('reads the generated role name from the direct generated-agent result', () => {
@@ -95,3 +101,54 @@ describe('parseDelegateDetail', () => {
     }))).toBeUndefined()
   })
 })
+
+describe('resolveStatus', () => {
+  it('keeps a detached running child live after its wrapper tool succeeds', () => {
+    const block = toolBlock('success', { childId: 'child_live', status: 'running', detached: true })
+    const child: ChildMeta = { childId: 'child_live', childStatus: 'running', detached: true }
+
+    expect(resolveStatus(block, child, parseDelegateDetail(block.detail))).toBe('running')
+  })
+
+  it.each([
+    ['completed', 'done'],
+    ['failed', 'failed'],
+    ['aborted', 'failed']
+  ] as const)('uses detached child terminal status %s', (childStatus, expected) => {
+    const block = toolBlock('success', { childId: 'child_terminal', status: childStatus, detached: true })
+    expect(resolveStatus(block, {
+      childId: 'child_terminal', childStatus, detached: true
+    }, parseDelegateDetail(block.detail))).toBe(expected)
+  })
+
+  it('shows a user-stopped detached child as stopped', () => {
+    const block = toolBlock('error', {
+      childId: 'child_stopped', status: 'aborted', detached: true, terminationReason: 'user_stop'
+    })
+    expect(resolveStatus(block, {
+      childId: 'child_stopped', childStatus: 'aborted', detached: true,
+      childTerminationReason: 'user_stop'
+    }, parseDelegateDetail(block.detail))).toBe('stopped')
+  })
+
+  it('keeps foreground and legacy wrapper status fallbacks', () => {
+    const foreground = toolBlock('success', { childId: 'child_foreground', status: 'running' })
+    expect(resolveStatus(foreground, {
+      childId: 'child_foreground', childStatus: 'running'
+    }, parseDelegateDetail(foreground.detail))).toBe('done')
+    expect(resolveStatus(toolBlock('success'), {})).toBe('done')
+    expect(resolveStatus(toolBlock('error'), {})).toBe('failed')
+  })
+})
+
+function toolBlock(status: ToolBlock['status'], detail?: Record<string, unknown>): ToolBlock {
+  return {
+    kind: 'tool',
+    id: 'tool_delegate',
+    summary: 'delegate_task',
+    status,
+    toolKind: 'tool_call',
+    ...(detail ? { detail: JSON.stringify(detail) } : {}),
+    meta: { toolName: 'delegate_task' }
+  }
+}

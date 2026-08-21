@@ -122,11 +122,11 @@ const KUN_ROOT_HOISTED_VERSION_ANCHORS = [
   'quickjs-wasi'
 ]
 const REQUIRED_BUNDLED_EXTENSION_IDS = [
-  'kun-examples.presentation-studio',
   'kun-examples.social-media-sidebar'
 ]
 const REQUIRED_RETIRED_BUNDLED_EXTENSION_IDS = [
-  'kun-examples.kun-video-editor'
+  'kun-examples.kun-video-editor',
+  'kun-examples.presentation-studio'
 ]
 
 function normalizePlatform(platform) {

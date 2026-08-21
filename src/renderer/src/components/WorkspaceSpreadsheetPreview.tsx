@@ -53,7 +53,6 @@ export function WorkspaceSpreadsheetPreview({
   const [error, setError] = useState<string | null>(null)
   const [selectionStart, setSelectionStart] = useState<SpreadsheetSelectionPoint | null>(null)
   const [selectionEnd, setSelectionEnd] = useState<SpreadsheetSelectionPoint | null>(null)
-  const [selectionAnchorRect, setSelectionAnchorRect] = useState<DOMRect | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -103,7 +102,6 @@ export function WorkspaceSpreadsheetPreview({
     draggingRef.current = false
     setSelectionStart(null)
     setSelectionEnd(null)
-    setSelectionAnchorRect(null)
     if (onSelectionChange) {
       onSelectionChange({
         sourceKind: 'spreadsheet',
@@ -116,9 +114,8 @@ export function WorkspaceSpreadsheetPreview({
 
   const selectionActive = selectionStart !== null && selectionEnd !== null
 
-  // Dismiss the selection (and the floating writing-assistant menu it anchors)
-  // when the pointer lands outside the table and outside that menu. The menu
-  // opts out of this with `data-selection-ignore` so its buttons keep working.
+  // Dismiss the selection when the pointer lands outside the table. Explicit
+  // sidebar quote controls opt out so they can consume the current selection.
   useEffect(() => {
     if (!selectionActive) return
     const handlePointerDown = (event: PointerEvent): void => {
@@ -170,10 +167,9 @@ export function WorkspaceSpreadsheetPreview({
       charCount: Array.from(selectionText).length,
       sheetName: activeSheetName,
       cellRange: spreadsheetRangeLabel(selectedRange),
-      formulas,
-      ...(selectionAnchorRect ? { anchorRect: rectSnapshot(selectionAnchorRect) } : {})
+      formulas
     })
-  }, [activeSheetName, onSelectionChange, result.sourceFormat, selectedRange, selectionAnchorRect, tableWindow])
+  }, [activeSheetName, onSelectionChange, result.sourceFormat, selectedRange, tableWindow])
 
   useEffect(() => {
     clearSelection()
@@ -295,12 +291,10 @@ export function WorkspaceSpreadsheetPreview({
                           draggingRef.current = true
                           setSelectionStart(point)
                           setSelectionEnd(point)
-                          setSelectionAnchorRect(event.currentTarget.getBoundingClientRect())
                         }}
-                        onPointerEnter={(event) => {
+                        onPointerEnter={() => {
                           if (!onSelectionChange || !draggingRef.current) return
                           setSelectionEnd(point)
-                          setSelectionAnchorRect(event.currentTarget.getBoundingClientRect())
                         }}
                       >
                         {cell.text}
@@ -404,15 +398,4 @@ function columnLabel(column: number): string {
 export function spreadsheetRangeLabel(range: SpreadsheetSelectionRange): string {
   return `${columnLabel(range.columnStart)}${range.rowStart + 1}:` +
     `${columnLabel(range.columnEnd)}${range.rowEnd + 1}`
-}
-
-function rectSnapshot(rect: DOMRect): NonNullable<WorkspaceOfficeSelection['anchorRect']> {
-  return {
-    left: rect.left,
-    right: rect.right,
-    top: rect.top,
-    bottom: rect.bottom,
-    width: rect.width,
-    height: rect.height
-  }
 }

@@ -472,7 +472,24 @@ export async function initializeMainServices(): Promise<MainServices | null> {
       return {
         webhookUrl: webhookUrl(settings),
         webhookSecret: settings.claw.im.secret,
-        channelId: channel?.id ?? ''
+        channelId: channel?.id ?? '',
+        resolveLocalSendTarget: (channelId, conversationId) => {
+          const targetChannel = settings.claw.channels.find(
+            (item) => item.id === channelId && item.enabled && item.provider === 'weixin'
+          )
+          if (!targetChannel) {
+            return { ok: false, code: 'channel_not_found', message: 'WeChat channel is missing or disabled.' }
+          }
+          const conversation = targetChannel.conversations.find((item) => item.id === conversationId)
+          if (!conversation?.chatId.trim()) {
+            return { ok: false, code: 'conversation_not_found', message: 'WeChat conversation is missing.' }
+          }
+          const credential = targetChannel.platformCredential
+          if (credential?.kind !== 'weixin' || !credential.accountId.trim()) {
+            return { ok: false, code: 'channel_not_configured', message: 'WeChat account is not configured.' }
+          }
+          return { ok: true, accountId: credential.accountId.trim(), to: conversation.chatId.trim() }
+        }
       }
     })
     configureManagedWeixinBridgeUrlResolver(ensureWeixinBridgeRpcUrl)

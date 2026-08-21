@@ -351,10 +351,99 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
       mainWindow,
       expect.objectContaining({
         type: 'warning',
+        title: 'Restart all Kun services',
+        message: 'Stop all Kun service processes owned by the current user and start a new service?',
+        buttons: ['Restart all services', 'Cancel'],
         defaultId: 1,
         cancelId: 1,
-        detail: expect.stringContaining('All historical Kun serve processes')
+        detail: expect.stringMatching(
+          /old ports or data directories[\s\S]*Running Agent tasks, tool calls, background work, and pending approvals may be interrupted[\s\S]*Workspace changes already in progress will remain and may be incomplete[\s\S]*Saved sessions and conversations, memory, archives, settings, logs, and workspace files will not be deleted[\s\S]*No automatic backup is created[\s\S]*desktop app and Kun Service Manager are not cleared/u
+        )
       })
+    )
+  })
+
+  it('explains the complete restart scope in Chinese before invoking restart', async () => {
+    electronMock.appLocale = 'zh-CN'
+    const mainFrame = { processId: 10, routingId: 20 }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const restartKunServe = vi.fn(async () => undefined)
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => mainWindow as never,
+      restartKunServe
+    }))
+    electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
+
+    await expect(handlers.get('runtime:restart-serve')?.({
+      sender: contents,
+      senderFrame: mainFrame
+    })).resolves.toEqual({ accepted: false })
+
+    expect(restartKunServe).not.toHaveBeenCalled()
+    expect(electronMock.showMessageBox).toHaveBeenCalledWith(
+      mainWindow,
+      expect.objectContaining({
+        type: 'warning',
+        title: '重启所有 Kun 服务',
+        message: '停止当前用户的所有 Kun 服务进程并启动新服务？',
+        buttons: ['重启所有服务', '取消'],
+        defaultId: 1,
+        cancelId: 1,
+        detail: expect.stringMatching(
+          /旧端口、旧数据目录[\s\S]*Agent 任务、工具调用、后台任务和待审批操作可能中断[\s\S]*工作区修改会原样保留，可能处于未完成状态[\s\S]*会话和对话记录、记忆、归档、设置、日志及工作区文件不会被删除[\s\S]*不会自动创建备份[\s\S]*桌面应用和 Kun Service Manager 不会被清理/u
+        )
+      })
+    )
+  })
+
+  it.each([
+    {
+      locale: 'en-US',
+      title: 'Kun restart failed',
+      message: 'Kun could not stop every service and finish restarting.',
+      detail: 'Some services may already have stopped. Saved data was not deleted; check the logs and retry.',
+      error: 'Restart failed. Check the logs and retry.'
+    },
+    {
+      locale: 'zh-CN',
+      title: 'Kun 重启失败',
+      message: '未能停止全部 Kun 服务并完成重启。',
+      detail: '部分服务可能已经停止。已保存的数据未被删除；请查看日志后重试。',
+      error: '重启失败，请查看日志后重试。'
+    }
+  ])('reports partial service shutdown without implying data deletion in $locale', async ({
+    locale,
+    title,
+    message,
+    detail,
+    error
+  }) => {
+    electronMock.appLocale = locale
+    const mainFrame = { processId: 10, routingId: 20 }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const restartKunServe = vi.fn(async () => {
+      throw new Error('cleanup failed')
+    })
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => mainWindow as never,
+      restartKunServe
+    }))
+    electronMock.showMessageBox
+      .mockResolvedValueOnce({ response: 0 })
+      .mockResolvedValueOnce({ response: 0 })
+
+    await expect(handlers.get('runtime:restart-serve')?.({
+      sender: contents,
+      senderFrame: mainFrame
+    })).resolves.toEqual({ accepted: true, error })
+
+    expect(restartKunServe).toHaveBeenCalledOnce()
+    expect(electronMock.showMessageBox).toHaveBeenNthCalledWith(
+      2,
+      mainWindow,
+      expect.objectContaining({ type: 'error', title, message, detail })
     )
   })
 

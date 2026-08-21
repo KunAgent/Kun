@@ -1,4 +1,8 @@
 import type { ChatBlock, ThreadDeltaEvent, ToolBlock, ToolEventPayload } from '../agent/types'
+import {
+  dedupeTimelineTextBlocks,
+  isSyntheticTimelineTextBlock
+} from '../agent/timeline-text-blocks'
 import type { ChatState } from './chat-store-types'
 
 export function monotonicToolStatus(
@@ -230,22 +234,77 @@ export function mergeToolProjectionEvents(
 ): ToolEventPayload {
   const newAttempt = isNewChildAttempt(base, update)
   const staleAttempt = isStaleChildAttempt(base, update)
-  const status = newAttempt ? update.status : monotonicToolStatus(base.status, update.status)
+  const status = mergedToolProjectionStatus(base, update, newAttempt, staleAttempt)
   // The pending update may be an older queued/running lifecycle snapshot that
   // raced ahead of the settled tool result. Keep terminal summary/detail intact
   // instead of replacing them with the minimal lifecycle payload.
   const staleRunning = staleAttempt || (!newAttempt && status !== update.status)
+  const preserveTerminalResult = shouldPreserveTerminalResult(base, update, newAttempt)
   return {
     ...base,
     turnId: staleAttempt ? base.turnId : (update.turnId ?? base.turnId),
     createdAt: base.createdAt ?? update.createdAt,
-    summary: staleRunning ? base.summary : (update.summary || base.summary),
+    summary: staleRunning || preserveTerminalResult ? base.summary : (update.summary || base.summary),
     status,
     toolKind: update.toolKind ?? base.toolKind,
-    detail: staleRunning ? base.detail : (update.detail ?? base.detail),
+    detail: staleRunning || preserveTerminalResult ? base.detail : (update.detail ?? base.detail),
     filePath: update.filePath ?? base.filePath,
     meta: mergeToolProjectionMeta(base.meta, update.meta)
   }
+}
+
+function shouldPreserveTerminalResult(
+  base: ToolEventPayload,
+  update: ToolEventPayload,
+  newAttempt: boolean
+): boolean {
+  if (newAttempt || update.updateOnly !== true || !base.detail) return false
+  const current = childProjectionStatus(base)
+  const incoming = childProjectionStatus(update)
+  return Boolean(current && incoming && isTerminalChildStatus(current) && isTerminalChildStatus(incoming))
+}
+
+function mergedToolProjectionStatus(
+  base: ToolEventPayload,
+  update: ToolEventPayload,
+  newAttempt: boolean,
+  staleAttempt: boolean
+): ToolEventPayload['status'] {
+  if (staleAttempt) return base.status
+  const childStatus = authoritativeChildStatus(base, update, newAttempt)
+  const detached = newAttempt
+    ? isDetachedSubagentToolEvent(update)
+    : isDetachedSubagentToolEvent(base) || isDetachedSubagentToolEvent(update)
+  if (detached && (childStatus === 'queued' || childStatus === 'running')) return 'running'
+  if (childStatus === 'completed') return 'success'
+  if (childStatus === 'failed' || childStatus === 'aborted') return 'error'
+  return newAttempt ? update.status : monotonicToolStatus(base.status, update.status)
+}
+
+function authoritativeChildStatus(
+  base: Pick<ToolEventPayload, 'meta' | 'detail'>,
+  update: Pick<ToolEventPayload, 'meta' | 'detail'>,
+  newAttempt: boolean
+): string | undefined {
+  const current = childProjectionStatus(base)
+  const incoming = childProjectionStatus(update)
+  if (newAttempt) return incoming
+  if (current && isTerminalChildStatus(current) && (incoming === 'queued' || incoming === 'running')) {
+    return current
+  }
+  return incoming ?? current
+}
+
+function childProjectionStatus(
+  value: Pick<ToolEventPayload, 'meta' | 'detail'>
+): string | undefined {
+  const child = value.meta?.child
+  if (child && typeof child === 'object' && !Array.isArray(child)) {
+    const status = (child as Record<string, unknown>).childStatus
+    if (typeof status === 'string') return status
+  }
+  const status = detailRecord(value.detail)?.status
+  return typeof status === 'string' ? status : undefined
 }
 
 export function mergeToolProjectionMeta(
@@ -281,10 +340,11 @@ function mergeChildMetadata(
   const currentResumeCount = childResumeCount(current) ?? 0
   const incomingResumeCount = childResumeCount(incoming) ?? 0
   if (currentResumeCount > incomingResumeCount) return { ...incoming, ...current }
-  const merged = { ...current, ...incoming }
   const currentStatus = current.childStatus
   const incomingStatus = incoming.childStatus
   const newAttempt = incomingResumeCount > currentResumeCount
+  if (newAttempt) return mergeNewChildAttemptMetadata(current, incoming)
+  const merged = { ...current, ...incoming }
   if (
     !newAttempt &&
     typeof currentStatus === 'string' &&
@@ -293,6 +353,23 @@ function mergeChildMetadata(
     (incomingStatus === 'queued' || incomingStatus === 'running')
   ) {
     merged.childStatus = currentStatus
+  }
+  return merged
+}
+
+const CHILD_ATTEMPT_SCOPED_KEYS = [
+  'detached', 'childTerminationReason', 'resumable', 'failure', 'proactiveRetry',
+  'activity', 'toolInvocations', 'durationMs', 'queuedMs', 'totalTokens',
+  'summaryTruncated', 'resultRef', 'resultUnavailableReason'
+] as const
+
+function mergeNewChildAttemptMetadata(
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): Record<string, unknown> {
+  const merged = { ...current, ...incoming }
+  for (const key of CHILD_ATTEMPT_SCOPED_KEYS) {
+    if (!(key in incoming)) delete merged[key]
   }
   return merged
 }
@@ -344,13 +421,34 @@ export function isUserInputInterruptError(message: string | undefined): boolean 
 }
 
 export function upsertTimelineBlock(blocks: ChatBlock[], incoming: ChatBlock): ChatBlock[] {
-  const index = blocks.findIndex(
-    (block) => block.kind === incoming.kind && block.id === incoming.id
+  const canonicalBlocks = dedupeTimelineTextBlocks(blocks)
+  const incomingKind = incoming.kind
+  const incomingTurnId = incoming.turnId
+  const incomingText = incoming.kind === 'assistant' || incoming.kind === 'reasoning'
+    ? incoming.text
+    : ''
+  const incomingIsTextBlock = incoming.kind === 'assistant' || incoming.kind === 'reasoning'
+  const incomingIsSynthetic = isSyntheticTimelineTextBlock(incoming)
+  const index = canonicalBlocks.findIndex(
+    (block) => block.kind === incomingKind && block.id === incoming.id
   )
-  if (index < 0) return [...blocks, incoming]
-  const current = blocks[index]
-  if (sameStableTimelineBlock(current, incoming)) return blocks
-  const next = [...blocks]
+  if (index < 0) {
+    const syntheticIndex = !incomingIsTextBlock || incomingIsSynthetic
+      ? -1
+      : canonicalBlocks.findIndex((block) => (
+          isSyntheticTimelineTextBlock(block) &&
+          block.kind === incomingKind &&
+          block.turnId === incomingTurnId &&
+          block.text === incomingText
+        ))
+    if (syntheticIndex < 0) return [...canonicalBlocks, incoming]
+    const next = [...canonicalBlocks]
+    next[syntheticIndex] = incoming
+    return next
+  }
+  const current = canonicalBlocks[index]
+  if (sameStableTimelineBlock(current, incoming)) return canonicalBlocks
+  const next = [...canonicalBlocks]
   next[index] = incoming
   return next
 }
@@ -371,10 +469,11 @@ function sameStableTimelineBlock(left: ChatBlock, right: ChatBlock): boolean {
 }
 
 export function reconcileSnapshotBlocks(current: ChatBlock[], persisted: ChatBlock[]): ChatBlock[] {
+  const canonicalPersisted = dedupeTimelineTextBlocks(persisted)
   const currentByIdentity = new Map(
     current.map((block) => [`${block.kind}:${block.id}`, block] as const)
   )
-  return persisted.map((block) => {
+  return canonicalPersisted.map((block) => {
     const existing = currentByIdentity.get(`${block.kind}:${block.id}`)
     return existing && sameStableTimelineBlock(existing, block) ? existing : block
   })
@@ -386,7 +485,7 @@ export function reconcileSnapshotTurn(
   turnId: string,
   userBlockId?: string | null
 ): ChatBlock[] {
-  const persistedTurn = persisted.filter(
+  const persistedTurn = dedupeTimelineTextBlocks(persisted).filter(
     (block) => block.turnId === turnId || Boolean(userBlockId && block.id === userBlockId)
   )
   if (persistedTurn.length === 0) return current

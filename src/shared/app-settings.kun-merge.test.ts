@@ -174,7 +174,8 @@ describe('mergeKunRuntimeSettings', () => {
       subagents: {
         enabled: true,
         useExistingAgents: true,
-        maxParallel: 3,
+      maxParallel: 3,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
         maxChildRuns: 12,
         defaultToolPolicy: 'inherit' as const,
         defaultProfile: 'researcher',
@@ -195,6 +196,7 @@ describe('mergeKunRuntimeSettings', () => {
       enabled: true,
       useExistingAgents: true,
       maxParallel: 5,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
       defaultToolPolicy: 'inherit',
       defaultProfile: 'researcher',
       profiles: current.subagents?.profiles
@@ -208,6 +210,7 @@ describe('mergeKunRuntimeSettings', () => {
       enabled: true,
       useExistingAgents: true,
       maxParallel: 5,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
       defaultToolPolicy: 'inherit',
       defaultProfile: 'researcher',
       profiles: []
@@ -234,6 +237,7 @@ describe('mergeKunRuntimeSettings', () => {
     expect(next.subagents).toEqual({
       enabled: false,
       useExistingAgents: true,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
       profiles: []
     })
     expect(normalizeAppSettings({
@@ -242,6 +246,7 @@ describe('mergeKunRuntimeSettings', () => {
     }).agents.kun.subagents).toEqual({
       enabled: false,
       useExistingAgents: true,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
       profiles: []
     })
   })

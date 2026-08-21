@@ -7,7 +7,9 @@ import {
   type ApplyCanvasOpsSinceResult
 } from './apply-shape-ops'
 import {
-  ensureGeneratedImageOnCanvas,
+  designImagePlacementTargetFromUserBlock,
+  materializeHistoricalGeneratedImages,
+  placeGeneratedImagesForTurn,
   replayDurableDesignCanvasTurns,
   type CanvasDesignDocumentTarget,
   type DurableDesignCanvasTurnCompletion
@@ -100,25 +102,25 @@ export function replayIdleDesignCanvas(options: {
     onToolBlock: (block, blocks, replayKey, turnId) =>
       options.applyToolBlock(block, { blocks, replayKey, turnId }),
     onTurnComplete: (completion) => {
-      if (completion.primaryAiImage) {
-        for (const image of completion.generatedImages) {
-          const placed = ensureGeneratedImageOnCanvas(image.imageUrl, {
-            replayKey: completion.replayKeyForImage(image.completionIdentity),
-            ...(completion.placementTarget ? { target: completion.placementTarget } : {}),
-            preferredShapeIds: [...options.affectedIds]
-          })
-          if (placed) options.affectedIds.add(placed)
-        }
-      } else if (options.affectedIds.size === 0 && completion.legacyGeneratedImageUrl) {
-        const placed = ensureGeneratedImageOnCanvas(completion.legacyGeneratedImageUrl)
-        if (placed) options.affectedIds.add(placed)
-      }
+      const placementTarget = designImagePlacementTargetFromUserBlock(
+        completion.blocks.find((block) => block.kind === 'user')
+      )
+      const placedImages = placeGeneratedImagesForTurn({
+        blocks: completion.blocks,
+        affectedIds: [...options.affectedIds],
+        threadId,
+        turnId: completion.turnId,
+        target,
+        ...(placementTarget ? { placementTarget } : {})
+      })
+      placedImages.forEach((id) => options.affectedIds.add(id))
       const affectedIds = [...options.affectedIds]
       if (affectedIds.length > 0) useCanvasSelectionStore.getState().select(affectedIds)
       setLastCanvasOpErrors([...options.errors], options.errorKey)
       options.onTurnReplayed?.(completion, affectedIds)
     }
   })
+  materializeHistoricalGeneratedImages({ threadId, blocks: state.blocks, target })
 }
 
 export function replayIdleCodeCanvas(options: {

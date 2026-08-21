@@ -46,6 +46,41 @@ function inspection(overrides: Partial<RuntimeDiscoveryRecord> = {}): SharedRunt
 }
 
 describe('stopSharedRuntimeForReplacement', () => {
+  it('gracefully stops an authenticated old Runtime even when its full info schema is incompatible', async () => {
+    const target = inspection()
+    const fetchMock = vi.fn(async () => Response.json({ stopping: true }))
+    const removeDiscovery = vi.fn(async () => true)
+    const unregister = vi.fn(async () => undefined)
+
+    await expect(stopSharedRuntimeForReplacement(dataDir, fetchMock as unknown as typeof fetch, {
+      runtimeFlavor: 'production',
+      manager
+    }, {
+      inspect: vi.fn(async () => target),
+      waitForExit: vi.fn(async () => true),
+      commandLine: vi.fn(async () => 'kun-runtime'),
+      listenerPids: vi.fn(async () => [target.discovery.pid]),
+      terminate: vi.fn(),
+      removeDiscovery,
+      withAncillaryWriter: async (_dataDir, action) => action(),
+      unregister
+    })).resolves.toEqual({ stopped: true, forced: false })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${target.discovery.baseUrl}/v1/runtime/shutdown`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${target.discovery.runtimeToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ instanceId: target.discovery.instanceId })
+      })
+    )
+    expect(removeDiscovery).toHaveBeenCalledOnce()
+    expect(unregister).toHaveBeenCalledOnce()
+  })
+
   it('uses authenticated graceful shutdown without touching another flavor or the manager', async () => {
     const target = inspection()
     const requestShutdown = vi.fn(async () => undefined)

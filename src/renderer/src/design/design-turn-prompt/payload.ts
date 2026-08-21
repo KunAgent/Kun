@@ -56,6 +56,7 @@ export type BuildDesignTurnPromptPayloadOptions = {
   htmlFrameContext?: DesignFrameContext
   selectedFrame?: CanvasShape | null
   previousOpErrors?: OpError[]
+  imageEditReferencePath?: string
 }
 
 export type DesignTurnPromptPayload = {
@@ -183,6 +184,9 @@ export async function buildDesignTurnPromptPayload(
     ...(options.projectDesignMdSourceHash ? { projectDesignMdSourceHash: options.projectDesignMdSourceHash } : {}),
     ...(options.htmlFrameContext ? { frameContext: options.htmlFrameContext } : {}),
     ...(options.previousOpErrors?.length ? { previousOpErrors: options.previousOpErrors } : {}),
+    ...(options.imageEditReferencePath
+      ? { imageEditReferencePath: options.imageEditReferencePath }
+      : {}),
     ...(derivedTokens ? { derivedTokens } : {}),
     ...(qualityFindings.length > 0 ? { qualityFindings } : {}),
     ...(htmlSiblingManifest.length > 0 ? { screenManifest: htmlSiblingManifest } : {}),

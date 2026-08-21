@@ -305,6 +305,7 @@ describe('chat-store navigation workspace selection', () => {
       latestTurnId: 'turn_B',
       latestTurnStatus: 'running'
     })
+    expect(harness.state.watchTurnCompletion).toEqual({ thr_turn: true })
   })
 
   it('does not roll a confirmed terminal thread back to a stale raw running summary', async () => {

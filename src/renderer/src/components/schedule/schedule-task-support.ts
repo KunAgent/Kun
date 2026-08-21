@@ -5,6 +5,7 @@ import {
   type AppSettingsV1,
   type ClawImChannelV1,
   type ModelProviderModelProfileV1,
+  type ModelProviderProfileV1,
   type ScheduleKind,
   type ScheduleReasoningEffort,
   type ScheduledTaskV1
@@ -25,6 +26,7 @@ export type ScheduleModelProviderOption = {
   label: string
   modelIds: string[]
   modelProfiles?: Record<string, ModelProviderModelProfileV1>
+  provider: ModelProviderProfileV1
 }
 export type TaskDialogState =
   | { mode: 'create'; draft: ScheduledTaskV1 }
@@ -61,7 +63,8 @@ export function scheduleModelProviderOptions(settings: AppSettingsV1): ScheduleM
         providerId: provider.id,
         label: provider.name.trim() || provider.id,
         modelIds,
-        modelProfiles: provider.modelProfiles
+        modelProfiles: provider.modelProfiles,
+        provider
       }
     })
     .filter((provider) => provider.modelIds.length > 0)
@@ -160,6 +163,7 @@ export function newScheduledTask(workspaceRoot: string, defaults?: Partial<Sched
     providerId: '',
     model: DEFAULT_SCHEDULE_MODEL,
     reasoningEffort: DEFAULT_SCHEDULE_REASONING_EFFORT,
+    orchestration: 'direct',
     priority: 0,
     dependsOn: [],
     useWorktree: false,
@@ -209,8 +213,15 @@ export function scheduleTaskSummary(
   t: (key: string, values?: Record<string, unknown>) => string
 ): string {
   if (task.schedule.kind === 'at') {
+    const timeZone = task.schedule.timeZone
     return t('scheduleAt', {
-      datetime: task.schedule.atTime ? new Date(task.schedule.atTime).toLocaleString() : '-'
+      datetime: task.schedule.atTime
+        ? new Intl.DateTimeFormat(undefined, {
+            ...(timeZone ? { timeZone } : {}),
+            dateStyle: 'medium',
+            timeStyle: 'short'
+          }).format(new Date(task.schedule.atTime)) + (timeZone ? ` (${timeZone})` : '')
+        : '-'
     })
   }
   if (task.schedule.kind === 'interval') {

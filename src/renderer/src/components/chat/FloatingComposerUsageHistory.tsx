@@ -190,7 +190,7 @@ export function FloatingComposerUsageHistory({ title, children }: Props): ReactE
       <button
         ref={buttonRef}
         type="button"
-        className="ds-composer-usage ds-no-drag inline-flex min-h-7 max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 overflow-visible rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-0.5 text-[12.5px] font-medium leading-5 text-ds-muted shadow-sm transition hover:border-accent/30 hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+        className="ds-composer-usage ds-no-drag inline-flex min-h-7 max-w-full min-w-0 flex-nowrap items-center overflow-hidden whitespace-nowrap rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-0.5 text-[12.5px] font-medium leading-5 text-ds-muted shadow-sm transition hover:border-accent/30 hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
         title={title}
         aria-label={t('usageHistoryOpen', { defaultValue: 'Open usage history' })}
         aria-expanded={open}

@@ -5,6 +5,7 @@ import {
   ModelStreamResourceBudget,
   type PendingToolCall
 } from './model-stream-resource-budget.js'
+import { resolvePendingToolCall } from './tool-call-stream-identity.js'
 
 type AnthropicThinkingBlock = NonNullable<
   NonNullable<ToolCallProviderMetadata['anthropic']>['thinkingBlocks']
@@ -56,9 +57,13 @@ export function decodeAnthropicMessagesStreamPayload(input: {
     if (block && (blockType === 'thinking' || blockType === 'redacted_thinking')) {
       rememberThinkingBlock(input.thinkingState, index, block, blockType)
     } else if (block && blockType === 'tool_use') {
-      const callId = recordString(block, 'id') || indexFallbackCallId(index, input.pendingArguments)
-      const pending = input.budget.pendingCall(input.pendingArguments, callId, index)
-      if (index !== undefined) input.budget.bindPendingIndex(input.pendingByIndex, index, callId)
+      const { pending } = resolvePendingToolCall({
+        explicitId: recordString(block, 'id') || undefined,
+        ...(index !== undefined ? { index } : {}),
+        pending: input.pendingArguments,
+        pendingByIndex: input.pendingByIndex,
+        budget: input.budget
+      })
       const name = recordString(block, 'name')
       if (name) pending.name = name
       const initial = recordValue(block, 'input')
@@ -85,8 +90,12 @@ export function decodeAnthropicMessagesStreamPayload(input: {
       const signature = recordString(delta!, 'signature')
       if (signature) setThinkingSignature(input.thinkingState, index, signature)
     } else if (deltaType === 'input_json_delta') {
-      const callId = anthropicStreamCallId(index, input.pendingArguments, input.pendingByIndex)
-      const pending = input.budget.pendingCall(input.pendingArguments, callId, index)
+      const { callId, pending } = resolvePendingToolCall({
+        ...(index !== undefined ? { index } : {}),
+        pending: input.pendingArguments,
+        pendingByIndex: input.pendingByIndex,
+        budget: input.budget
+      })
       const value = recordString(delta!, 'partial_json')
       if (index !== undefined) input.budget.bindPendingIndex(input.pendingByIndex, index, callId)
       if (value) {
@@ -95,7 +104,9 @@ export function decodeAnthropicMessagesStreamPayload(input: {
       }
     }
   } else if (type === 'content_block_stop') {
-    const callId = index === undefined ? undefined : input.pendingByIndex.get(index)
+    const callId = index === undefined
+      ? (input.pendingArguments.size === 1 ? input.pendingArguments.keys().next().value as string : undefined)
+      : input.pendingByIndex.get(index)
     const pending = callId ? input.pendingArguments.get(callId) : undefined
     if (callId && pending?.name) {
       const raw = input.budget.pendingArguments(pending)
@@ -219,16 +230,6 @@ function anthropicProviderMetadata(
   }
 }
 
-function anthropicStreamCallId(
-  index: number | undefined,
-  pending: Map<string, PendingToolCall>,
-  byIndex: Map<number, string>
-): string {
-  if (index !== undefined) return byIndex.get(index) ?? indexFallbackCallId(index, pending)
-  if (pending.size === 1) return [...pending.keys()][0]
-  return indexFallbackCallId(undefined, pending)
-}
-
 function anthropicStopReason(value: string): 'stop' | 'tool_calls' | 'length' | 'error' | null {
   if (value === 'tool_use') return 'tool_calls'
   if (value === 'max_tokens') return 'length'
@@ -241,10 +242,6 @@ function responseErrorMessage(payload: Record<string, unknown>): string {
   const error = recordValue(payload, 'error')
   return (error ? recordString(error, 'message') : '') || recordString(payload, 'message') ||
     'model stream reported an error'
-}
-
-function indexFallbackCallId(index: number | undefined, pending: Map<string, PendingToolCall>): string {
-  return index === undefined ? `call_${pending.size + 1}` : `call_${index + 1}`
 }
 
 function recordString(record: Record<string, unknown>, key: string): string {

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { TFunction } from 'i18next'
 import { Brain, Gauge, Search } from 'lucide-react'
 import { modelSupportsImageInput } from '@shared/app-settings-provider-core'
+import { ProviderIcon } from '../provider-icon'
 import {
   UNGROUPED_MODEL_PROVIDER_ID,
   composerModelMenuItemSelected,
@@ -135,6 +136,13 @@ export function renderComposerModelMenu({
                     }}
                     active={activeProviderId === group.providerId}
                     selected={selectedProviderId === group.providerId}
+                    icon={(
+                      <ProviderIcon
+                        presetId={group.presetSource}
+                        providerId={group.providerId}
+                        className="h-4 w-4 text-ds-faint"
+                      />
+                    )}
                     title={group.label}
                     subtitle={selectedModel}
                     onClick={() => {

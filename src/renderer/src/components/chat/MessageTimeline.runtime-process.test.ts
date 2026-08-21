@@ -438,7 +438,8 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('1m 27s')
     expect(html).toContain('The final answer is ready.')
     expect(html).toContain('ds-chat-answer')
-    expect(html).toContain('Read 1 file')
+    expect(html).toMatch(/Processed 1m 27s|已处理 1m 27s/)
+    expect(html).not.toContain('Read 1 file')
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('I am checking the relevant path.')
     expect(html).not.toContain('intermediate reasoning')
@@ -584,7 +585,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(afterIndex).toBeGreaterThan(compactionIndex)
   })
 
-  it('folds a completed runtime error into the collapsed work summary', () => {
+  it('folds a completed runtime error behind the processed disclosure', () => {
     const blocks: ChatBlock[] = [
       {
         kind: 'user',
@@ -625,10 +626,10 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       })
     )
 
-    // Completed turns auto-collapse: a runtime error folds into the toggleable
-    // work summary rather than rendering inline, so its text and detail stay
-    // hidden until the user expands the panel.
-    expect(html).toContain('Work process (1 steps)')
+    // Completed turns auto-collapse behind the processed disclosure, so the
+    // error text and detail stay hidden until the user expands the panel.
+    expect(html).toMatch(/Processed|已处理/)
+    expect(html).not.toMatch(/Work process|工作过程/)
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('request failed with status 400')
     expect(html).not.toContain('Code: http_400')

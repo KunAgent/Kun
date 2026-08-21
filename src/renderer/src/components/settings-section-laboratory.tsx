@@ -15,12 +15,12 @@ import type {
   ComputerUsePermissionState
 } from '@shared/kun-gui-api'
 import {
-  GitBranch,
   Globe2,
   Monitor,
   Presentation,
   Search,
   UserRound,
+  Waypoints,
   Workflow
 } from 'lucide-react'
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
@@ -38,14 +38,15 @@ import {
 import { GraphModeSettingsPanel } from './settings-section-graph-panel'
 import { FastContextSettingsPanel } from './settings-section-lab-fast-context'
 import { ComposerPersonaSettingsPanel } from './settings-section-lab-persona'
+import { ConversationVisualizationSettingsPanel } from './settings-section-lab-conversation-visualization'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 
 type LaboratorySettingsPanel =
   | 'persona'
+  | 'visualization'
   | 'computer'
   | 'browser'
   | 'graph'
-  | 'worktree'
   | 'explore'
   | 'ppt'
 
@@ -90,10 +91,10 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
         contentSized
         items={[
           { id: 'persona', label: t('labComposerPersonaTitle'), icon: UserRound },
+          { id: 'visualization', label: t('labConversationVisualizationTitle'), icon: Waypoints },
           { id: 'computer', label: t('computerUseTitle'), icon: Monitor },
           { id: 'browser', label: t('browserUseSettingsTitle'), icon: Globe2 },
           { id: 'graph', label: t('graphSettingsTitle'), icon: Workflow },
-          { id: 'worktree', label: t('labPlanWorktreeTitle'), icon: GitBranch },
           { id: 'explore', label: t('labExploreTitle'), icon: Search },
           { id: 'ppt', label: t('labPptTitle'), icon: Presentation }
         ]}
@@ -113,6 +114,19 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           presets={form.codeAgentPresets ?? []}
           onEnabledChange={(enabled) => update({ codeAgentPersonaEnabled: enabled })}
           onPresetsChange={(next) => update({ codeAgentPresets: next })}
+        />
+      </SettingsTabPanel>
+
+      <SettingsTabPanel<LaboratorySettingsPanel>
+        baseId="laboratory-settings"
+        tabId="visualization"
+        active={activePanel === 'visualization'}
+        className="[&>div]:mt-0"
+      >
+        <ConversationVisualizationSettingsPanel
+          t={t}
+          value={lab}
+          onChange={(patch) => updateKun({ lab: patch })}
         />
       </SettingsTabPanel>
 
@@ -161,32 +175,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ graph: patch })}
         />
-      </SettingsTabPanel>
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="worktree"
-        active={activePanel === 'worktree'}
-        className="[&>div]:mt-0"
-      >
-        <SettingsCard
-          title={t('labPlanWorktreeTitle')}
-          description={t('labPlanWorktreeDescription')}
-        >
-          <SettingRow
-            title={t('labPlanWorktreeEnabled')}
-            description={t('labPlanWorktreeEnabledDesc')}
-            control={(
-              <Toggle
-                checked={lab.planWorktree?.enabled ?? false}
-                ariaLabel={t('labPlanWorktreeEnabled')}
-                onChange={(enabled) => updateKun({
-                  lab: { planWorktree: { enabled } }
-                })}
-              />
-            )}
-          />
-        </SettingsCard>
       </SettingsTabPanel>
 
       <SettingsTabPanel<LaboratorySettingsPanel>

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildThreadUsageResponse, type ThreadUsageRecord, UsageService } from './usage-service.js'
+import {
+  buildModelUsageResponse,
+  buildThreadUsageResponse,
+  buildTurnUsageResponse,
+  type ThreadUsageRecord,
+  UsageService
+} from './usage-service.js'
 
 const signature = {
   model: 'model-a',
@@ -96,6 +102,75 @@ describe('usage cache diagnostics', () => {
     expect(switched.cacheSuggestions?.some((s) => /Cache hit rate dropped/.test(s))).toBe(false)
   })
 
+  it('aggregates a gpt-5.6-luna subscription estimate without mixing it into API cost', () => {
+    const response = buildThreadUsageResponse([{
+      threadId: 'thread-luna',
+      model: 'gpt-5.6-luna',
+      completedAt: '2026-08-18T00:00:00.000Z',
+      usage: {
+        promptTokens: 25_300,
+        completionTokens: 700,
+        totalTokens: 26_000,
+        cacheHitRate: 0,
+        billingKind: 'subscription',
+        turns: 1
+      }
+    }])
+
+    expect(response.buckets[0]).toMatchObject({
+      thread_id: 'thread-luna',
+      cost_usd: 0,
+      cost_cny: 0
+    })
+    expect(response.buckets[0]?.value_estimate_usd).toBeGreaterThan(0)
+    expect(response.buckets[0]?.value_estimate_cny).toBeGreaterThan(0)
+  })
+
+  it('restores a reference estimate for legacy known-model records without billing metadata', () => {
+    const response = buildThreadUsageResponse([{
+      threadId: 'thread-legacy-luna',
+      model: 'codex/gpt-5.6-luna',
+      completedAt: '2026-08-18T00:00:00.000Z',
+      usage: {
+        promptTokens: 25_000,
+        completionTokens: 1_000,
+        totalTokens: 26_000,
+        cacheHitRate: null,
+        turns: 1
+      }
+    }])
+
+    expect(response.buckets[0]).toMatchObject({
+      thread_id: 'thread-legacy-luna',
+      cost_usd: 0,
+      cost_cny: 0
+    })
+    expect(response.buckets[0]?.value_estimate_usd).toBeGreaterThan(0)
+    expect(response.buckets[0]?.value_estimate_cny).toBeGreaterThan(0)
+  })
+
+  it('does not infer subscription value from an unqualified API model record', () => {
+    const response = buildThreadUsageResponse([{
+      threadId: 'thread-api-luna',
+      model: 'gpt-5.6-luna',
+      completedAt: '2026-08-18T00:00:00.000Z',
+      usage: {
+        promptTokens: 25_000,
+        completionTokens: 1_000,
+        totalTokens: 26_000,
+        cacheHitRate: null,
+        costUsd: 0.02,
+        turns: 1
+      }
+    }])
+
+    expect(response.buckets[0]).toMatchObject({
+      cost_usd: 0.02,
+      value_estimate_usd: 0,
+      value_estimate_cny: 0
+    })
+  })
+
   it('surfaces the latest-turn cache diagnostic fields in thread usage', () => {
     const records: ThreadUsageRecord[] = [
       {
@@ -129,6 +204,105 @@ describe('usage cache diagnostics', () => {
       avg_ttft_ms: 850,
       avg_tokens_per_second: 42.5
     })
+  })
+})
+
+describe('model usage aggregation', () => {
+  it('keeps every model family, sorts buckets stably, and preserves unknown records', () => {
+    const tokensByModel: Array<[string | undefined, number]> = [
+      ['deepseek-v4', 700],
+      ['gpt-5.6-sol', 600],
+      ['glm-5.2', 500],
+      ['qwen3-coder', 400],
+      ['gemini-3-pro', 300],
+      ['claude-opus-4', 200],
+      ['custom/model', 100],
+      [undefined, 50],
+      ['tie-z', 25],
+      ['tie-a', 25]
+    ]
+    const records: ThreadUsageRecord[] = tokensByModel.map(([model, totalTokens], index) => ({
+      threadId: `thread-${index}`,
+      ...(model ? { model } : {}),
+      completedAt: '2026-08-09T00:00:00.000Z',
+      usage: {
+        promptTokens: totalTokens,
+        completionTokens: 0,
+        totalTokens,
+        cacheHitRate: null,
+        turns: 1
+      }
+    }))
+
+    const response = buildModelUsageResponse(records, {
+      groupBy: 'model',
+      from: '2026-08-01',
+      to: '2026-08-09',
+      timezone: 'UTC'
+    })
+
+    expect(response.buckets.map((bucket) => bucket.model)).toEqual([
+      'deepseek-v4',
+      'gpt-5.6-sol',
+      'glm-5.2',
+      'qwen3-coder',
+      'gemini-3-pro',
+      'claude-opus-4',
+      'custom/model',
+      'unknown',
+      'tie-a',
+      'tie-z'
+    ])
+    expect(response.buckets).toHaveLength(tokensByModel.length)
+    expect(response.totals.total_tokens).toBe(2_900)
+  })
+})
+
+describe('turn reference price breakdown', () => {
+  it('returns mixed effective-rate groups only on buckets and preserves partial coverage', () => {
+    const response = buildTurnUsageResponse([
+      {
+        threadId: 'thread-priced', turnId: 'turn-mixed', model: 'gpt-5.6-sol',
+        completedAt: '2026-08-20T00:00:00.000Z',
+        usage: {
+          promptTokens: 100_000, completionTokens: 1_000, totalTokens: 101_000,
+          cacheHitTokens: 80_000, cacheHitRate: 0.8, turns: 1,
+          billingKind: 'subscription', serviceTier: 'priority'
+        }
+      },
+      {
+        threadId: 'thread-priced', turnId: 'turn-mixed', model: 'gpt-5.6-sol',
+        completedAt: '2026-08-20T00:01:00.000Z',
+        usage: {
+          promptTokens: 300_000, completionTokens: 2_000, totalTokens: 302_000,
+          cacheHitTokens: 250_000, cacheHitRate: 5 / 6, turns: 1,
+          billingKind: 'subscription'
+        }
+      },
+      {
+        threadId: 'thread-priced', turnId: 'turn-mixed', model: 'unknown-model',
+        completedAt: '2026-08-20T00:02:00.000Z',
+        usage: {
+          promptTokens: 10, completionTokens: 1, totalTokens: 11,
+          cacheHitRate: null, turns: 1, billingKind: 'subscription'
+        }
+      }
+    ], { groupBy: 'turn', threadId: 'thread-priced' })
+
+    expect(response.buckets[0]).toMatchObject({
+      estimate_coverage: 'partial',
+      reference_price_breakdown: {
+        currency: 'USD', priced_requests: 2, unpriced_requests: 1,
+        groups: [
+          expect.objectContaining({ pricing_mode: 'fast', fast_multiplier: 2 }),
+          expect.objectContaining({ pricing_mode: 'long_context', fast_multiplier: null })
+        ]
+      }
+    })
+    expect(response.totals).not.toHaveProperty('reference_price_breakdown')
+    const breakdown = response.buckets[0]?.reference_price_breakdown
+    expect(breakdown?.groups.reduce((sum, group) => sum + group.amount, 0))
+      .toBe(response.buckets[0]?.reference_estimate_usd)
   })
 })
 

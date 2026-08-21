@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { emptyUsageSnapshot } from '../contracts/usage.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
-import { addUsage, zeroUsage } from './usage.js'
+import { addUsage, diffUsage, zeroUsage } from './usage.js'
 
 function delta(overrides: Partial<UsageSnapshot>): UsageSnapshot {
   return { ...emptyUsageSnapshot(), ...overrides }
@@ -74,5 +74,43 @@ describe('addUsage', () => {
     // No hit/miss counters folded in -> no fabricated aggregate rate.
     expect(result.cacheableTokenHitRate).toBeUndefined()
     expect(result.totalInputTokenHitRate).toBeUndefined()
+  })
+})
+
+describe('diffUsage', () => {
+  it('preserves cache-write and current point-in-time attribution', () => {
+    const previous = delta({
+      promptTokens: 100,
+      completionTokens: 10,
+      totalTokens: 110,
+      cacheWriteTokens: 20,
+      turns: 1,
+      actualProviderId: 'codex-old',
+      actualModelId: 'gpt-5.6-sol',
+      billingKind: 'subscription',
+      serviceTier: 'priority'
+    })
+    const current = delta({
+      promptTokens: 250,
+      completionTokens: 30,
+      totalTokens: 280,
+      cacheWriteTokens: 70,
+      turns: 2,
+      actualProviderId: 'codex-new',
+      actualModelId: 'gpt-5.6-terra',
+      billingKind: 'subscription'
+    })
+
+    expect(diffUsage(current, previous)).toMatchObject({
+      promptTokens: 150,
+      completionTokens: 20,
+      totalTokens: 170,
+      cacheWriteTokens: 50,
+      turns: 1,
+      actualProviderId: 'codex-new',
+      actualModelId: 'gpt-5.6-terra',
+      billingKind: 'subscription'
+    })
+    expect(diffUsage(current, previous).serviceTier).toBeUndefined()
   })
 })

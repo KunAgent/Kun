@@ -8,6 +8,13 @@ resources/bundled-extensions/
 *.log
 .DS_Store
 
+### Agent benchmark runs
+artifacts/benchmarks/
+benchmarks/agent-evals/.venv/
+benchmarks/agent-evals/swebench/.venv/
+__pycache__/
+*.pyc
+
 ### Local environment
 .env
 .env.*
@@ -51,6 +58,8 @@ TestResults.xml
 .workbuddy/
 .kun-design/
 .kun/images/
+# Generated images from releases before the Kun directory migration.
+.deepseekgui-images/
 .kun-canvas/
 .kun-whiteboards/
 .kunsdd/

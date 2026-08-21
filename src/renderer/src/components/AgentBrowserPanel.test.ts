@@ -155,6 +155,30 @@ describe('AgentBrowserPanel supervision', () => {
     expect(clearBrowserUse).toHaveBeenCalledWith('thread-1')
   })
 
+  it.each([
+    ['loading', undefined, 'Starting secure browser', 'Applying network safeguards'],
+    ['error', 'Policy proxy configuration timed out.', 'Browser failed to start', 'Policy proxy configuration timed out.']
+  ] as const)('renders an explicit no-tab %s state in the browser surface', async (lifecycle, reason, title, body) => {
+    const next = state({ lifecycle, reason, tabs: [], activeTabId: undefined })
+    vi.stubGlobal('window', {
+      kunGui: {
+        getBrowserUseState: vi.fn(async () => next),
+        onBrowserUseState: vi.fn(() => vi.fn()),
+        mountBrowserUse: vi.fn(async () => next),
+        decideBrowserUseAction: vi.fn(), decideBrowserUseOrigin: vi.fn(),
+        navigateBrowserUse: vi.fn(), setBrowserUseControl: vi.fn(),
+        stopBrowserUse: vi.fn(), clearBrowserUse: vi.fn(async () => next)
+      },
+      addEventListener: vi.fn(), removeEventListener: vi.fn()
+    })
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(AgentBrowserPanel, { threadId: 'thread-1', active: true }))
+    })
+    expect(textContent(renderer.root)).toContain(title)
+    expect(textContent(renderer.root)).toContain(body)
+  })
+
   it('uses a webpage-first surface without permanent toolbars in picture-in-picture mode', async () => {
     vi.stubGlobal('window', {
       kunGui: {

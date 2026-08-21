@@ -2,6 +2,7 @@ import {
   app,
   dialog,
   ipcMain,
+  shell,
   type BrowserWindow,
   type IpcMainInvokeEvent
 } from 'electron'
@@ -101,11 +102,21 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     getRuntimeSettingsSyncStatus,
     restartRuntime,
     restartKunServe,
+    resolveSettingsConfigPath,
     logError,
     logInfo: logInfoHandler = () => undefined
   } = options
   const withRegistryCredentials = options.withRegistryCredentials ?? (async (settings) => settings)
   const nativeDialogs = options.nativeDialogs ?? new NativeDialogCoordinator()
+  ipcMain.handle('settings:open-config-file', async () => {
+    try {
+      await store.save(await store.load())
+      const message = await shell.openPath(resolveSettingsConfigPath())
+      return message ? { ok: false as const, message } : { ok: true as const }
+    } catch (error) {
+      return { ok: false as const, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
   const showMainWindowMessageBox = (
     parent: BrowserWindow,
     messageBoxOptions: Electron.MessageBoxOptions
@@ -513,14 +524,22 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     const chinese = app.getLocale?.().toLowerCase().startsWith('zh') === true
     const confirmation = await showMainWindowMessageBox(parent, {
       type: 'warning',
-      title: chinese ? '重启 Kun 服务' : 'Restart Kun service',
+      title: chinese ? '重启所有 Kun 服务' : 'Restart all Kun services',
       message: chinese
-        ? '停止当前用户的所有 Kun 服务并启动新服务？'
-        : 'Stop all Kun services owned by the current user and start a new one?',
+        ? '停止当前用户的所有 Kun 服务进程并启动新服务？'
+        : 'Stop all Kun service processes owned by the current user and start a new service?',
       detail: chinese
-        ? '当前用户的所有 Kun serve 历史进程都会被停止。正在运行的任务和待审批操作会中断；桌面应用、Service Manager、设置和对话记录会保留。'
-        : 'All historical Kun serve processes owned by the current user will be stopped. Active tasks and pending approvals will be interrupted; the desktop app, Service Manager, settings, and conversations are preserved.',
-      buttons: chinese ? ['重启服务', '取消'] : ['Restart service', 'Cancel'],
+        ? [
+            '将停止当前用户下所有已识别的 Kun serve 进程，包括使用旧端口、旧数据目录或已成为遗留实例的服务。',
+            '运行中的 Agent 任务、工具调用、后台任务和待审批操作可能中断；可恢复任务可能在新服务启动后继续，但不保证无缝恢复。已经开始的工作区修改会原样保留，可能处于未完成状态。',
+            '已保存的会话和对话记录、记忆、归档、设置、日志及工作区文件不会被删除。本操作不会自动创建备份；桌面应用和 Kun Service Manager 不会被清理。'
+          ].join('\n\n')
+        : [
+            'Every identified Kun serve process owned by the current user will be stopped, including services using old ports or data directories and other stale instances.',
+            'Running Agent tasks, tool calls, background work, and pending approvals may be interrupted. Recoverable work may continue after the new service starts, but seamless recovery is not guaranteed. Workspace changes already in progress will remain and may be incomplete.',
+            'Saved sessions and conversations, memory, archives, settings, logs, and workspace files will not be deleted. No automatic backup is created; the desktop app and Kun Service Manager are not cleared.'
+          ].join('\n\n'),
+      buttons: chinese ? ['重启所有服务', '取消'] : ['Restart all services', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
       noLink: true,
@@ -538,11 +557,11 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
         type: 'error',
         title: chinese ? 'Kun 重启失败' : 'Kun restart failed',
         message: chinese
-          ? '未能清理历史 Kun 服务并完成重启。'
-          : 'Kun could not clear historical services and finish restarting.',
+          ? '未能停止全部 Kun 服务并完成重启。'
+          : 'Kun could not stop every service and finish restarting.',
         detail: chinese
-          ? '请查看日志后重试；应用和数据未被删除。'
-          : 'Check the logs and retry. The app and its data were not removed.',
+          ? '部分服务可能已经停止。已保存的数据未被删除；请查看日志后重试。'
+          : 'Some services may already have stopped. Saved data was not deleted; check the logs and retry.',
         buttons: [chinese ? '知道了' : 'OK'],
         defaultId: 0,
         cancelId: 0,

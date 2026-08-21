@@ -282,7 +282,22 @@ module.exports = {
     ]
   },
   dmg: {
-    sign: hasExplicitMacSigningIdentity
+    sign: hasExplicitMacSigningIdentity,
+    // Volume name carries the same artifact version as artifactName so users
+    // can tell installers apart in Finder; without release env overrides,
+    // electron-builder expands the ${version} macro from package.json.
+    title: `${productName} Installer ${artifactVersion}`,
+    background: './build/dmg-background.png',
+    iconSize: 88,
+    iconTextSize: 13,
+    window: {
+      width: 660,
+      height: 430
+    },
+    contents: [
+      { x: 350, y: 310, type: 'file' },
+      { x: 535, y: 310, type: 'link', path: '/Applications' }
+    ]
   },
   win: {
     // Windows and Linux use BCP 47 locale names for Chromium .pak files.
@@ -297,6 +312,9 @@ module.exports = {
   },
   nsis: {
     oneClick: false,
+    installerHeader: './build/installerHeader.bmp',
+    installerSidebar: './build/installerSidebar.bmp',
+    uninstallerSidebar: './build/installerSidebar.bmp',
     // The stock assisted directory page appends APP_FILENAME by substring and
     // turns a registered `DeepSeek GUI` location into `DeepSeek GUI\Kun`.
     // installer.nsh adds one MUI directory page with component-aware migration.

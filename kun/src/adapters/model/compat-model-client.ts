@@ -34,7 +34,9 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
   async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     const sink = this.config.debugSink
     if (!sink) {
-      yield* this.streamInner(request, null)
+      for await (const chunk of this.streamInner(request, null)) {
+        yield this.attributeUsage(chunk, request)
+      }
       return
     }
     const round = await startLlmDebugRoundIfEnabled(sink, {
@@ -53,19 +55,39 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       ]
     }, warnModelTraceFailure)
     if (!round) {
-      yield* this.streamInner(request, null)
+      for await (const chunk of this.streamInner(request, null)) {
+        yield this.attributeUsage(chunk, request)
+      }
       return
     }
     try {
       for await (const chunk of this.streamInner(request, round)) {
-        ignoreModelTraceFailure(() => sink.captureChunk(round, chunk))
-        yield chunk
+        const attributed = this.attributeUsage(chunk, request)
+        ignoreModelTraceFailure(() => sink.captureChunk(round, attributed))
+        yield attributed
       }
     } finally {
       try {
         await sink.finish(round)
       } catch {
         warnModelTraceFailure()
+      }
+    }
+  }
+
+  private attributeUsage(chunk: ModelStreamChunk, request: ModelRequest): ModelStreamChunk {
+    if (chunk.kind !== 'usage') return chunk
+    const configuredProviderId = this.config.providerId?.trim()
+    const requestProviderId = request.providerId?.trim()
+    const actualProviderId = configuredProviderId || (
+      requestProviderId && requestProviderId !== 'default' ? requestProviderId : undefined
+    )
+    return {
+      ...chunk,
+      usage: {
+        ...chunk.usage,
+        ...(actualProviderId ? { actualProviderId } : {}),
+        ...(request.serviceTier === 'priority' ? { serviceTier: 'priority' as const } : {})
       }
     }
   }

@@ -29,6 +29,7 @@ import {
   TurnReasoningEffortSchema,
   TurnServiceTierSchema
 } from './turns.js'
+import { ChildRunFailureSchema, ProactiveRetryStatusSchema } from './subagent-retry.js'
 import { MAX_TURN_ATTACHMENT_IDS } from './attachments.js'
 import {
   DesignDocumentTargetSchema,
@@ -141,6 +142,8 @@ const RuntimeEventBase = z.object({
     childTerminationReason: z.enum(['user_stop', 'manual_stop', 'runtime_restart', 'child_error']).optional(),
     resumable: z.boolean().optional(),
     resumeCount: z.number().int().nonnegative().optional(),
+    failure: ChildRunFailureSchema.optional(),
+    proactiveRetry: ProactiveRetryStatusSchema.optional(),
     detached: z.boolean().optional(),
     // Observability metrics carried alongside the child lifecycle event so
     // the GUI can show prefix reuse, tool fan-out, timing, and cost per

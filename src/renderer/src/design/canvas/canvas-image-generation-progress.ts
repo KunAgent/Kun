@@ -8,6 +8,7 @@ import { currentCanvasOccupiedRects } from './canvas-occupied-regions'
 import { placeRectInViewportAvoiding } from './canvas-placement'
 import { useCanvasShapeStore } from './canvas-shape-store'
 import { createDefaultShape } from './canvas-types'
+import { generatedImageResultsForTurn } from './canvas-generated-image-replay'
 import { useCanvasViewportStore } from './canvas-viewport-store'
 import { useDesignSystemBoardLayoutStore } from './design-system-board-layout'
 
@@ -149,25 +150,6 @@ function markPlaceholderFailed(shapeId: string, toolCallId: string): void {
   )
 }
 
-function removePlaceholderShape(shapeId: string): void {
-  const { document } = useCanvasShapeStore.getState()
-  if (document.objects[shapeId]) {
-    useCanvasShapeStore.getState().deleteShape(shapeId, { skipUndo: true })
-  }
-}
-
-function entryForShape(toolCallId: string, failed: boolean): ImageGenerationProgressEntry {
-  const shape = Object.values(useCanvasShapeStore.getState().document.objects).find(
-    (candidate) => candidate.name === placeholderName(toolCallId, failed)
-  )
-  return {
-    toolCallId,
-    shapeId: shape?.id ?? '',
-    status: failed ? 'failed' : 'generating',
-    startedAt: Date.now()
-  }
-}
-
 /**
  * Reconcile placeholder entries against the live chat tool stream. Returns the
  * entries that changed so the hook can persist and react (auto-open, first
@@ -191,8 +173,25 @@ export function reconcileImageGenerationProgress(
     if (tool.status === 'success') {
       resolvedToolIds.add(id)
       if (previous) {
-        removePlaceholderShape(previous.shapeId)
-        succeeded = true
+        const shape = useCanvasShapeStore.getState().document.objects[previous.shapeId]
+        const results = generatedImageResultsForTurn([tool])
+        const materializedElsewhere = results.length > 0 && results.every((result) =>
+          Object.values(useCanvasShapeStore.getState().document.objects).some((candidate) =>
+            candidate.type === 'image' && candidate.imageUrl === result.imageUrl
+          )
+        )
+        if (!shape || (shape.type === 'image' && Boolean(shape.imageUrl))) {
+          succeeded = true
+        } else if (materializedElsewhere) {
+          useCanvasShapeStore.getState().deleteShape(previous.shapeId, { skipUndo: true })
+          succeeded = true
+        } else {
+          // The live Design materializer runs before this progress subscriber
+          // and converts the producing placeholder. If the target document is
+          // not ready yet, retain the entry and shape so remount replay can
+          // still materialize the successful result instead of losing its slot.
+          next[id] = previous
+        }
       }
       continue
     }
@@ -267,6 +266,14 @@ export const useImageGenerationProgressStore = create<ImageGenerationProgressSta
   entries: {},
   replaceEntries: (entries) => set({ entries })
 }))
+
+export function imageGenerationPlaceholderShapeId(toolCallId: string): string | null {
+  const entry = useImageGenerationProgressStore.getState().entries[toolCallId]
+  if (!entry?.shapeId) return null
+  return useCanvasShapeStore.getState().document.objects[entry.shapeId]
+    ? entry.shapeId
+    : null
+}
 
 /**
  * Mount inside a whiteboard host (CodeCanvasPanel / DesignCanvas). Watches the

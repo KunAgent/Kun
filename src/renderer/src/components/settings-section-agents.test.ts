@@ -180,7 +180,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
               fast: true,
               imageFirst: true
             },
-            planWorktree: { enabled: false }
+            conversationVisualization: { enabled: false }
           },
           modelProviders,
           leadProviderId: 'codex-2',

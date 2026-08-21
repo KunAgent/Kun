@@ -6,10 +6,10 @@ import {
 } from './canvas-generated-image-replay'
 import { canvasReplayResult } from './canvas-replay-receipt'
 import { currentCanvasOccupiedRects } from './canvas-occupied-regions'
-import { placeRectInViewportAvoiding } from './canvas-placement'
+import { placeRectInViewportAvoiding, placeRectNearAnchorAvoiding } from './canvas-placement'
 import { useCanvasSelectionStore } from './canvas-selection-store'
 import { useCanvasShapeStore } from './canvas-shape-store'
-import { createDefaultShape, isImplicitImageSlot } from './canvas-types'
+import { createDefaultShape, isImplicitImageSlot, shapeGeometry } from './canvas-types'
 import { useCanvasViewportStore } from './canvas-viewport-store'
 
 export type CanvasDesignDocumentTarget = {
@@ -39,11 +39,6 @@ export type CanvasTurnReplayState = {
 export type DurableDesignCanvasTurnCompletion = {
   turnId: string
   blocks: readonly ChatBlock[]
-  primaryAiImage: boolean
-  generatedImages: GeneratedImageResult[]
-  legacyGeneratedImageUrl: string | null
-  placementTarget?: CanvasGeneratedImagePlacementTarget
-  replayKeyForImage: (completionIdentity: string) => string
 }
 
 export type CanvasGeneratedImagePlacementTarget = {
@@ -69,13 +64,6 @@ function designTargetFromUserBlock(block: ChatBlock | undefined): CanvasDesignDo
 
 export function userBlockHasDesignDocumentTarget(block: ChatBlock | undefined): boolean {
   return Boolean(designTargetFromUserBlock(block))
-}
-
-function isPrimaryAiImageTurn(blocks: readonly ChatBlock[]): boolean {
-  const user = blocks.find((block) => block.kind === 'user')
-  if (user?.kind !== 'user') return false
-  const profile = (user.meta as Record<string, unknown> | undefined)?.designProfile
-  return isRecord(profile) && profile.outputMedium === 'image'
 }
 
 export function designImagePlacementTargetFromUserBlock(
@@ -252,40 +240,68 @@ export function codeCanvasReplayKey(options: {
 
 export function placeGeneratedImagesForTurn(options: {
   blocks: readonly ChatBlock[]
-  primaryImageLane: boolean
   affectedIds: readonly string[]
   threadId?: string | null
   turnId?: string | null
   target?: CanvasDesignDocumentTarget
   placementTarget?: CanvasGeneratedImagePlacementTarget
+  placeholderShapeIdForTool?: (toolBlockId: string) => string | null
 }): string[] {
   const placedIds: string[] = []
-  const place = (imageUrl: string, completionIdentity?: string): void => {
-    const replayKey = completionIdentity && options.threadId && options.turnId && options.target
+  let submittedTargetAvailable = Boolean(options.placementTarget)
+  const consumedPlaceholderTools = new Set<string>()
+  const place = (result: GeneratedImageResult): void => {
+    const replayKey = options.threadId && options.turnId && options.target
       ? designCanvasReplayKey({
           threadId: options.threadId,
           turnId: options.turnId,
           target: options.target,
-          source: `image:${completionIdentity}`
+          source: `image:${result.completionIdentity}`
         })
       : undefined
-    const placed = ensureGeneratedImageOnCanvas(imageUrl, {
+    const placeholderId = !consumedPlaceholderTools.has(result.toolBlockId)
+      ? options.placeholderShapeIdForTool?.(result.toolBlockId) ?? null
+      : null
+    const target = submittedTargetAvailable
+      ? options.placementTarget
+      : placeholderId
+        ? { id: placeholderId, expectedHolderKind: 'explicit' as const }
+        : undefined
+    const usingSubmittedTarget = Boolean(submittedTargetAvailable && target)
+    if (usingSubmittedTarget) submittedTargetAvailable = false
+    if (placeholderId) consumedPlaceholderTools.add(result.toolBlockId)
+    const placed = ensureGeneratedImageOnCanvas(result.imageUrl, {
       ...(replayKey ? { replayKey } : {}),
-      ...(options.placementTarget ? { target: options.placementTarget } : {}),
-      preferredShapeIds: options.affectedIds
+      ...(target ? { target } : {}),
+      preferredShapeIds: placeholderId
+        ? [...options.affectedIds, placeholderId]
+        : options.affectedIds,
+      ...(result.width ? { imageWidth: result.width } : {}),
+      ...(result.height ? { imageHeight: result.height } : {}),
+      ...(placeholderId ? { resizeTargetId: placeholderId } : {}),
+      preserveTargetAsRevision: Boolean(options.target && target?.expectedImageUrl)
     })
     if (placed) placedIds.push(placed)
-  }
-  if (options.primaryImageLane) {
-    const results = generatedImageResultsForTurn(options.blocks)
-    results.forEach((result) => place(result.imageUrl, result.completionIdentity))
-    if (results.length === 0) {
-      const legacy = latestGeneratedImageUrlForTurn(options.blocks)
-      if (legacy) place(legacy)
+    if (placeholderId && placed !== placeholderId) {
+      const store = useCanvasShapeStore.getState()
+      const placeholder = store.document.objects[placeholderId]
+      if (placeholder?.aiImageHolder && !placeholder.imageUrl && (placed ||
+        (replayKey && canvasReplayResult(store.document, replayKey)))) {
+        store.deleteShape(placeholderId, { skipUndo: true })
+      }
     }
-  } else if (options.affectedIds.length === 0) {
+  }
+  const results = generatedImageResultsForTurn(options.blocks)
+  results.forEach(place)
+  if (results.length === 0) {
     const legacy = latestGeneratedImageUrlForTurn(options.blocks)
-    if (legacy) place(legacy)
+    if (legacy) {
+      place({
+        imageUrl: legacy,
+        completionIdentity: `legacy:${legacy}`,
+        toolBlockId: 'legacy-generated-image'
+      })
+    }
   }
   return placedIds
 }
@@ -392,19 +408,78 @@ export function replayDurableDesignCanvasTurns(options: {
         options.onToolBlock(block, turn.blocks, key(`tool:${block.id}`), turn.turnId)
       }
     }
+    options.onTurnComplete({
+      turnId: turn.turnId,
+      blocks: turn.blocks
+    })
+  }
+}
+
+export function materializeHistoricalGeneratedImages(options: {
+  threadId: string
+  blocks: readonly ChatBlock[]
+  target: CanvasDesignDocumentTarget
+}): string[] {
+  const placedIds: string[] = []
+  const claimedExistingIds = new Set<string>()
+  for (const turn of durableDesignCanvasTurns(options.blocks, options.target)) {
     const placementTarget = designImagePlacementTargetFromUserBlock(
       turn.blocks.find((block) => block.kind === 'user')
     )
-    options.onTurnComplete({
-      turnId: turn.turnId,
-      blocks: turn.blocks,
-      primaryAiImage: isPrimaryAiImageTurn(turn.blocks),
-      generatedImages: generatedImageResultsForTurn(turn.blocks),
-      legacyGeneratedImageUrl: latestGeneratedImageUrlForTurn(turn.blocks),
-      ...(placementTarget ? { placementTarget } : {}),
-      replayKeyForImage: (completionIdentity) => key(`image:${completionIdentity}`)
-    })
+    const place = (result: GeneratedImageResult, source: string): void => {
+      const replayKey = designCanvasReplayKey({
+        threadId: options.threadId,
+        turnId: turn.turnId,
+        target: options.target,
+        source
+      })
+      const document = useCanvasShapeStore.getState().document
+      const replayed = canvasReplayResult(document, replayKey)
+      if (replayed) {
+        const replayedId = replayed.affectedIds.find((id) => Boolean(document.objects[id])) ??
+          Object.values(document.objects).find((shape) =>
+            shape.type === 'image' && shape.imageUrl === result.imageUrl &&
+            !claimedExistingIds.has(shape.id)
+          )?.id
+        if (replayedId) claimedExistingIds.add(replayedId)
+        return
+      }
+      const preferredShapeIds = Object.values(useCanvasShapeStore.getState().document.objects)
+        .filter((shape) => shape.type === 'image' && shape.imageUrl === result.imageUrl &&
+          !claimedExistingIds.has(shape.id))
+        .map((shape) => shape.id)
+      const placed = ensureGeneratedImageOnCanvas(result.imageUrl, {
+        replayKey,
+        ...(placementTarget ? { target: placementTarget } : {}),
+        // Historical hydration must not fill whatever the user happens to have
+        // selected while reopening a board.
+        preferredShapeIds,
+        ...(result.width ? { imageWidth: result.width } : {}),
+        ...(result.height ? { imageHeight: result.height } : {}),
+        preserveTargetAsRevision: Boolean(placementTarget?.expectedImageUrl)
+      })
+      if (placed) {
+        placedIds.push(placed)
+        claimedExistingIds.add(placed)
+      }
+    }
+    const generatedImages = generatedImageResultsForTurn(turn.blocks)
+    if (generatedImages.length > 0) {
+      for (const image of generatedImages) {
+        place(image, `image:${image.completionIdentity}`)
+      }
+      continue
+    }
+    const legacyImageUrl = latestGeneratedImageUrlForTurn(turn.blocks)
+    if (legacyImageUrl) {
+      place({
+        imageUrl: legacyImageUrl,
+        completionIdentity: `legacy:${legacyImageUrl}`,
+        toolBlockId: 'legacy-generated-image'
+      }, `image:legacy:${legacyImageUrl}`)
+    }
   }
+  return placedIds
 }
 
 /** Idempotently place a generated main-lane image in the visible whiteboard. */
@@ -412,6 +487,10 @@ export function ensureGeneratedImageOnCanvas(imageUrl: string, options?: {
   replayKey?: string
   target?: CanvasGeneratedImagePlacementTarget
   preferredShapeIds?: readonly string[]
+  imageWidth?: number
+  imageHeight?: number
+  resizeTargetId?: string
+  preserveTargetAsRevision?: boolean
 }): string | null {
   const shapeStore = useCanvasShapeStore.getState()
   if (options?.replayKey) {
@@ -426,14 +505,6 @@ export function ensureGeneratedImageOnCanvas(imageUrl: string, options?: {
     }
     return shapeId
   }
-  const preferredImage = (options?.preferredShapeIds ?? [])
-    .map((id) => shapeStore.document.objects[id])
-    .find((shape) => shape?.type === 'image' && shape.imageUrl === imageUrl)
-  if (preferredImage) return recordReceipt(preferredImage.id)
-  const existing = options?.replayKey ? undefined : Object.values(shapeStore.document.objects)
-    .find((shape) => shape?.type === 'image' && shape.imageUrl === imageUrl)
-  if (existing) return recordReceipt(existing.id)
-
   const targeted = options?.target
     ? shapeStore.document.objects[options.target.id]
     : undefined
@@ -451,6 +522,35 @@ export function ensureGeneratedImageOnCanvas(imageUrl: string, options?: {
     (options?.target?.expectedImageUrl === undefined && !expectedHolderKind &&
       (targeted.aiImageHolder || isImplicitImageSlot(targeted)))
   ) ? targeted : undefined
+  const preferredImage = (options?.preferredShapeIds ?? [])
+    .map((id) => shapeStore.document.objects[id])
+    .find((shape) => shape?.type === 'image' && shape.imageUrl === imageUrl)
+  if (options?.preserveTargetAsRevision && validTarget?.type === 'image' &&
+    options.target?.expectedImageUrl) {
+    if (preferredImage && preferredImage.id !== validTarget.id) {
+      return recordReceipt(preferredImage.id)
+    }
+    const anchor = shapeGeometry(validTarget).selrect
+    const placement = placeRectNearAnchorAvoiding(
+      { width: anchor.width, height: anchor.height },
+      anchor,
+      currentCanvasOccupiedRects()
+    )
+    const revision = createDefaultShape('image', placement.x, placement.y)
+    revision.name = `${validTarget.name || 'AI image'} revision`
+    revision.width = anchor.width
+    revision.height = anchor.height
+    revision.imageUrl = imageUrl
+    shapeStore.addShape(revision)
+    return recordReceipt(revision.id)
+  }
+  const submittedTargetStillValid = Boolean(
+    validTarget && validTarget.id !== options?.resizeTargetId
+  )
+  if (!submittedTargetStillValid && preferredImage) return recordReceipt(preferredImage.id)
+  const existing = options?.replayKey ? undefined : Object.values(shapeStore.document.objects)
+    .find((shape) => shape?.type === 'image' && shape.imageUrl === imageUrl)
+  if (!submittedTargetStillValid && existing) return recordReceipt(existing.id)
   const explicitHolder = (options?.preferredShapeIds ?? [])
     .map((id) => shapeStore.document.objects[id])
     .find((shape) => Boolean(shape?.aiImageHolder && !shape.imageUrl))
@@ -464,14 +564,32 @@ export function ensureGeneratedImageOnCanvas(imageUrl: string, options?: {
       : undefined
   )
   if (selected) {
-    shapeStore.updateShape(selected.id, { type: 'image', imageUrl })
+    if (options?.resizeTargetId === selected.id) {
+      const viewBox = useCanvasViewportStore.getState().vbox
+      const size = generatedImageRenderSize(
+        options.imageWidth,
+        options.imageHeight,
+        viewBox
+      )
+      const placement = placeRectInViewportAvoiding(
+        size,
+        viewBox,
+        currentCanvasOccupiedRects(new Set([selected.id]))
+      )
+      shapeStore.updateShape(selected.id, {
+        type: 'image', name: 'AI image', imageUrl, aiImageHolder: false,
+        x: placement.x, y: placement.y, width: size.width, height: size.height
+      })
+    } else {
+      shapeStore.updateShape(selected.id, { type: 'image', imageUrl, aiImageHolder: false })
+    }
     return recordReceipt(selected.id)
   }
 
   const viewBox = useCanvasViewportStore.getState().vbox
-  const size = Math.max(240, Math.min(640, viewBox.width * 0.62, viewBox.height * 0.72))
+  const size = generatedImageRenderSize(options?.imageWidth, options?.imageHeight, viewBox)
   const placement = placeRectInViewportAvoiding(
-    { width: size, height: size },
+    size,
     viewBox,
     currentCanvasOccupiedRects()
   )
@@ -481,9 +599,24 @@ export function ensureGeneratedImageOnCanvas(imageUrl: string, options?: {
     placement.y
   )
   shape.name = 'AI image'
-  shape.width = size
-  shape.height = size
+  shape.width = size.width
+  shape.height = size.height
   shape.imageUrl = imageUrl
   shapeStore.addShape(shape)
   return recordReceipt(shape.id)
+}
+
+function generatedImageRenderSize(
+  imageWidth: number | undefined,
+  imageHeight: number | undefined,
+  viewBox: { width: number; height: number }
+): { width: number; height: number } {
+  const bound = Math.max(240, Math.min(640, viewBox.width * 0.62, viewBox.height * 0.72))
+  if (!imageWidth || !imageHeight || !Number.isFinite(imageWidth) || !Number.isFinite(imageHeight) ||
+    imageWidth <= 0 || imageHeight <= 0) return { width: bound, height: bound }
+  const scale = Math.min(bound / imageWidth, bound / imageHeight)
+  return {
+    width: Math.max(1, Math.round(imageWidth * scale)),
+    height: Math.max(1, Math.round(imageHeight * scale))
+  }
 }

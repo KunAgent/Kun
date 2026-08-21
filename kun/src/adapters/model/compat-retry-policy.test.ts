@@ -10,7 +10,7 @@ describe('compat retry policy', () => {
     expect(normalizeModelRequestRetryConfig(undefined)).toEqual({
       maxAttempts: 5,
       initialDelayMs: 3_000,
-      httpStatusCodes: [429, 503]
+      httpStatusCodes: [429, 500, 502, 503, 504]
     })
   })
 

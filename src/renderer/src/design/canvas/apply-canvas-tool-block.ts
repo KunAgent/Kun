@@ -20,7 +20,10 @@ import {
   extractMotionOpsFromValue,
   isDesignMotionRendererToolName
 } from './motion-ops'
-import { rewriteGeneratedImageUrlsForTurn } from './canvas-generated-image-replay'
+import {
+  coalesceGeneratedImageAddsForTurn,
+  rewriteGeneratedImageUrlsForTurn
+} from './canvas-generated-image-replay'
 import {
   blocksForActiveCanvasTurn
 } from './canvas-design-turn-replay'
@@ -144,6 +147,16 @@ export function applyCanvasToolBlock(
         currentTurnUserId: chatState.currentTurnUserId,
         blocks: chatState.blocks
       })
+  )
+  parsed = coalesceGeneratedImageAddsForTurn(
+    parsed,
+    replay?.blocks ?? blocksForActiveCanvasTurn({
+      activeThreadId: chatState.activeThreadId,
+      currentTurnId: chatState.currentTurnId,
+      currentTurnUserId: chatState.currentTurnUserId,
+      blocks: chatState.blocks
+    }),
+    useCanvasShapeStore.getState().document
   )
   if (dispatchCanvasExportToolBlock(
     block,

@@ -55,6 +55,7 @@ import {
   hasTaskDependencyCycle,
   scheduledThreadTitle
 } from './schedule-runtime-queue'
+import { boundThreadTasksForStatus } from './schedule-runtime-status'
 
 export {
   hasTaskDependencyCycle,
@@ -157,11 +158,14 @@ export class ScheduleRuntime {
 
   async status(): Promise<ScheduleRuntimeStatus> {
     const settings = await this.loadSettings()
+    const runningTaskIds = this.queue.runningIds()
+    const queuedTaskIds = this.queue.queuedIds()
     return {
       internalServerRunning: this.server !== null,
       internalUrl: internalUrl(settings),
-      runningTaskIds: this.queue.runningIds(),
-      queuedTaskIds: this.queue.queuedIds(),
+      runningTaskIds,
+      queuedTaskIds,
+      boundThreadTasks: boundThreadTasksForStatus(settings.schedule.tasks, runningTaskIds, queuedTaskIds),
       powerSaveBlockerActive: this.isPowerSaveBlockerActive()
     }
   }
@@ -237,13 +241,15 @@ export class ScheduleRuntime {
   }
 
   async createTask(task: ScheduledTaskV1): Promise<ScheduledTaskV1> {
-    const settings = await this.loadSettings()
-    const saved = await this.deps.store.patch({
+    const saved = await this.deps.store.update((current) => ({
+      ...current,
       schedule: {
+        ...current.schedule,
         enabled: true,
-        tasks: [...settings.schedule.tasks, task]
+        keepAwake: true,
+        tasks: [...current.schedule.tasks, task]
       }
-    })
+    }))
     this.sync(saved)
     return saved.schedule.tasks.find((item) => item.id === task.id) ?? task
   }
@@ -252,10 +258,13 @@ export class ScheduleRuntime {
     title: string
     prompt: string
     workspaceRoot?: string
+    sourcePlanId?: string
+    sourceThreadId?: string
     providerId?: string
     model?: string
     reasoningEffort?: ScheduleReasoningEffort
     mode?: ScheduleRunMode
+    orchestration?: 'direct' | 'graph'
     clawChannelId?: string
     enabled?: boolean
     schedule: Partial<ScheduledTaskV1['schedule']> & { kind: ScheduledTaskV1['schedule']['kind'] }
@@ -276,11 +285,14 @@ export class ScheduleRuntime {
       workspaceRoot:
         input.workspaceRoot?.trim() ||
         (clawChannel ? this.queue.resolveClawChannelWorkspaceRoot(settings, clawChannel) : this.queue.resolveDefaultWorkspaceRoot(settings)),
+      sourcePlanId: input.sourcePlanId?.trim() || '',
+      sourceThreadId: input.sourceThreadId?.trim() || '',
       clawChannelId: clawChannel?.id ?? '',
       providerId: modelConfig.providerId,
       model: modelConfig.model,
       reasoningEffort: modelConfig.reasoningEffort,
       mode: input.mode ?? settings.schedule.mode,
+      orchestration: input.orchestration ?? 'direct',
       priority: 0,
       dependsOn: [],
       useWorktree: false,
@@ -288,7 +300,8 @@ export class ScheduleRuntime {
         kind: input.schedule.kind,
         everyMinutes: typeof input.schedule.everyMinutes === 'number' ? input.schedule.everyMinutes : 60,
         timeOfDay: input.schedule.timeOfDay?.trim() || '09:00',
-        atTime: input.schedule.atTime?.trim() || ''
+        atTime: input.schedule.atTime?.trim() || '',
+        ...(input.schedule.timeZone?.trim() ? { timeZone: input.schedule.timeZone.trim() } : {})
       },
       createdAt: now,
       updatedAt: now,
@@ -303,7 +316,10 @@ export class ScheduleRuntime {
     return saved
   }
 
-  async updateTaskById(taskId: string, patch: Partial<ScheduledTaskV1>): Promise<ScheduledTaskV1 | null> {
+  async updateTaskById(
+    taskId: string,
+    patch: Omit<Partial<ScheduledTaskV1>, 'schedule'> & { schedule?: Partial<ScheduledTaskV1['schedule']> }
+  ): Promise<ScheduledTaskV1 | null> {
     const settings = await this.loadSettings()
     const task = settings.schedule.tasks.find((item) => item.id === taskId)
     if (!task) return null
@@ -323,7 +339,9 @@ export class ScheduleRuntime {
       }
     })
     this.sync(saved)
-    return saved.schedule.tasks.find((item) => item.id === taskId) ?? nextTask
+    if (shouldRecomputeNextRun) await this.queue.ensureNextRuns(await this.loadSettings())
+    const latest = await this.loadSettings()
+    return latest.schedule.tasks.find((item) => item.id === taskId) ?? nextTask
   }
 
   async deleteTaskById(taskId: string): Promise<boolean> {

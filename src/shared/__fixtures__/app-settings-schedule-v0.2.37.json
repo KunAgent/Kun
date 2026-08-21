@@ -1,0 +1,29 @@
+{
+  "version": "0.2.37",
+  "schedule": {
+    "enabled": true,
+    "tasks": [
+      {
+        "id": "historical-task",
+        "title": "Historical task",
+        "prompt": "Run",
+        "schedule": {
+          "kind": "daily",
+          "everyMinutes": 60,
+          "timeOfDay": "09:00",
+          "atTime": ""
+        }
+      }
+    ],
+    "daemons": {
+      "enabled": true,
+      "items": [
+        {
+          "id": "historical-daemon",
+          "title": "Historical daemon",
+          "scriptPath": "daemon.py"
+        }
+      ]
+    }
+  }
+}

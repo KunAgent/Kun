@@ -186,6 +186,37 @@ describe('Kun runtime config service', () => {
     expect(body.modelSelection).toBeUndefined()
   })
 
+  it('maps conversation visualization settings into persisted and hot-applied config', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-visualization-'))
+    const base = normalizeAppSettings({} as AppSettingsV1)
+    const project = async (enabled?: boolean): Promise<RuntimeConfigApplyPayload> => {
+      const defaults = defaultKunRuntimeSettings()
+      const runtime = enabled === undefined
+        ? defaults
+        : {
+            ...defaults,
+            lab: {
+              ...defaults.lab,
+              conversationVisualization: { enabled }
+            }
+          }
+      const settings = normalizeAppSettings({
+        ...base,
+        provider: defaultModelProviderSettings(),
+        agents: { kun: runtime }
+      })
+      const config = await syncGuiManagedKunConfig(dataDir, runtime)
+      return buildManagedRuntimeHotApplyBody(settings, config)
+    }
+
+    try {
+      expect((await project(true)).lab?.conversationVisualization).toEqual({ enabled: true })
+      expect((await project()).lab?.conversationVisualization).toEqual({ enabled: false })
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('persists only provider ids for Registry-backed media capabilities', () => {
     const defaults = defaultKunRuntimeSettings()
     const capabilities = {

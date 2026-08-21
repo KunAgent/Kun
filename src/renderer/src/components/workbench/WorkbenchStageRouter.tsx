@@ -42,6 +42,7 @@ export type WorkbenchStageRouterProps = {
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
   onOpenThread: (threadId: string) => void
+  onConnectWeixin?: () => void
   write: WriteStageProps
   conversation: WorkbenchConversationStageProps
   imageAnnotationHost: ReactNode
@@ -63,6 +64,7 @@ export function WorkbenchStageRouter({
   leftSidebarCollapsed,
   onToggleLeftSidebar,
   onOpenThread,
+  onConnectWeixin = () => undefined,
   write,
   conversation,
   imageAnnotationHost,
@@ -102,6 +104,7 @@ export function WorkbenchStageRouter({
               leftSidebarCollapsed={leftSidebarCollapsed}
               onToggleLeftSidebar={onToggleLeftSidebar}
               onOpenThread={onOpenThread}
+              onConnectWeixin={onConnectWeixin}
             />
           </Suspense>
         ) : normalizedRoute === 'workflow' ? (

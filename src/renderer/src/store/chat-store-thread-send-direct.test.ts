@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultClawSettings } from '@shared/app-settings'
-import { runtimePromptForSurface } from './chat-store-thread-send-direct'
+import { runtimePromptForSurface } from './chat-store-send-prompt'
 
 describe('runtimePromptForSurface', () => {
   it('does not apply Code managed instructions to Work turns', () => {

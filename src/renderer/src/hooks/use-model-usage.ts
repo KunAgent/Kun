@@ -177,7 +177,7 @@ export function useModelUsageState(enabled: boolean, refreshKey: unknown, days: 
       setState({ usage: null, loading: false, loaded: false, error: null })
       return
     }
-    setState((current) => ({ ...current, loading: true, error: null }))
+    setState({ usage: null, loading: true, loaded: false, error: null })
     const range = defaultDailyUsageRange(new Date(), days)
     void loadModelUsage(range)
       .then((usage) => {

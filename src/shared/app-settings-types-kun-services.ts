@@ -392,7 +392,51 @@ export type ScheduledTaskScheduleV1 = {
   everyMinutes: number
   timeOfDay: string
   atTime: string
+  /** IANA zone used when the user chose the wall-clock time. Execution uses atTime. */
+  timeZone?: string
 }
+
+export type ScheduleTaskOrchestration = 'direct' | 'graph'
+
+export type ScheduleTaskCreateInput = {
+  title: string
+  prompt: string
+  workspaceRoot: string
+  /** Plan artifact that owns this scheduled build. */
+  sourcePlanId: string
+  /** Existing GUI thread that should receive this scheduled turn. */
+  sourceThreadId?: string
+  providerId: string
+  model: string
+  reasoningEffort: ScheduleReasoningEffort
+  mode: ScheduleRunMode
+  orchestration: ScheduleTaskOrchestration
+  schedule: {
+    kind: 'at'
+    atTime: string
+    timeZone: string
+  }
+}
+
+export type ScheduleTaskUpdateInput = {
+  taskId: string
+  providerId: string
+  model: string
+  reasoningEffort: ScheduleReasoningEffort
+  schedule: {
+    kind: 'at'
+    atTime: string
+    timeZone: string
+  }
+}
+
+export type ScheduleTaskDeleteResult =
+  | { ok: true }
+  | { ok: false; message: string }
+
+export type ScheduleTaskMutationResult =
+  | { ok: true; task: ScheduledTaskV1 }
+  | { ok: false; message: string }
 
 export type ScheduledTaskV1 = {
   id: string
@@ -400,6 +444,10 @@ export type ScheduledTaskV1 = {
   enabled: boolean
   prompt: string
   workspaceRoot: string
+  /** Plan artifact that owns this scheduled build. */
+  sourcePlanId?: string
+  /** Existing GUI thread reused by plan-scheduled builds. */
+  sourceThreadId?: string
   /** Optional Claw IM channel whose persona/defaults should drive this scheduled task. */
   clawChannelId: string
   /** Selected model provider for this scheduled task. Empty means the current/default runtime provider. */
@@ -407,7 +455,8 @@ export type ScheduledTaskV1 = {
   model: string
   reasoningEffort: ScheduleReasoningEffort
   mode: ScheduleRunMode
-  /** Higher-priority queued tasks run first. */
+  /** Runtime orchestration for this task. Old tasks normalize to direct. */
+  orchestration?: ScheduleTaskOrchestration
   priority?: number
   /** Task ids that must have completed successfully before this task runs. */
   dependsOn?: string[]

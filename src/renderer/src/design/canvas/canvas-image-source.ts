@@ -171,7 +171,7 @@ export function workspaceImageDataUrlCacheStats(workspaceRoot?: string): {
 /**
  * Resolve a shape's `imageUrl` into something an SVG `<image>` can render.
  * Direct URLs (`data:`/`http(s):`/`blob:`) pass through untouched; a
- * workspace-relative path (e.g. `.deepseekgui-images/img-*.png`) is loaded once
+ * workspace-relative path (e.g. `.kun/images/img-*.png`) is loaded once
  * via `readWorkspaceImage` and cached. Returns null while loading or on failure
  * so the caller can show its placeholder.
  */

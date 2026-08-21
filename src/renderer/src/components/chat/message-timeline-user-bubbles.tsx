@@ -465,27 +465,34 @@ export function UserFileReferenceChips({
   if (references.length === 0) return null
 
   return (
-    <div className="mt-3 flex min-w-0 flex-col items-end gap-1.5 border-t border-white/10 pt-2">
-      <div className="text-[11px] font-medium text-ds-faint">
+    <div className="mt-3 min-w-0 border-t border-white/10 pt-2">
+      <div className="mb-1.5 text-[11px] font-medium text-ds-faint">
         {t('messageFileReferences', { count: references.length })}
       </div>
-      <div className="flex max-w-full flex-wrap justify-end gap-1.5">
-        {references.map((reference) => {
-          const isDirectory = reference.kind === 'directory'
-          const label = isDirectory
-            ? `${reference.relativePath.replace(/\/+$/g, '')}/`
-            : reference.relativePath
-          return (
-            <span
-              key={`${reference.kind ?? 'file'}:${reference.path}`}
-              title={reference.path}
-              className="inline-flex max-w-[260px] items-center gap-1.5 rounded-md border border-white/10 bg-white/8 px-2 py-1 text-[11.5px] font-medium text-ds-muted"
-            >
-              <File className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-              <span className="truncate">{label}</span>
-            </span>
-          )
-        })}
+      <div
+        role="region"
+        tabIndex={0}
+        aria-label={t('messageFileReferences', { count: references.length })}
+        className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/20 dark:[&::-webkit-scrollbar-thumb]:bg-white/20"
+      >
+        <div className="flex w-max min-w-full justify-end gap-1.5">
+          {references.map((reference) => {
+            const isDirectory = reference.kind === 'directory'
+            const label = isDirectory
+              ? `${reference.relativePath.replace(/\/+$/g, '')}/`
+              : reference.relativePath
+            return (
+              <span
+                key={`${reference.kind ?? 'file'}:${reference.path}`}
+                title={reference.path}
+                className="inline-flex max-w-[260px] shrink-0 items-center gap-1.5 rounded-md border border-white/10 bg-white/8 px-2 py-1 text-[11.5px] font-medium text-ds-muted"
+              >
+                <File className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                <span className="truncate">{label}</span>
+              </span>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

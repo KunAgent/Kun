@@ -158,18 +158,16 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       'Computer control',
       'Browser',
       'Graph mode',
-      'Prompt-managed worktree',
       'Fast Context',
       'PPT agent'
     ])
     expect(laboratoryTabs.map((tab) => tab.props['aria-selected']))
-      .toEqual([true, false, false, false, false, false, false])
+      .toEqual([true, false, false, false, false, false])
     expect(laboratoryTabs.map((tab) => tab.props['aria-controls'])).toEqual([
       'laboratory-settings-panel-persona',
       'laboratory-settings-panel-computer',
       'laboratory-settings-panel-browser',
       'laboratory-settings-panel-graph',
-      'laboratory-settings-panel-worktree',
       'laboratory-settings-panel-explore',
       'laboratory-settings-panel-ppt'
     ])
@@ -180,33 +178,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const laboratoryPanels = renderer.root
       .findAllByProps({ role: 'tabpanel' })
       .filter((panel) => String(panel.props.id ?? '').startsWith('laboratory-settings-panel-'))
-    expect(laboratoryPanels).toHaveLength(7)
+    expect(laboratoryPanels).toHaveLength(6)
     expect(laboratoryPanels.map((panel) => panel.props.hidden))
-      .toEqual([false, true, true, true, true, true, true])
-  })
-
-  it('defaults prompt-managed plan builds off and persists opt-in from Laboratory', () => {
-    const updateKun = vi.fn()
-    let renderer!: ReactTestRenderer
-    act(() => {
-      renderer = createRenderer(createElement(LaboratorySettingsSection, {
-        ctx: { ...baseCtx(), updateKun }
-      }))
-    })
-
-    const panel = renderer.root.findByProps({
-      id: 'laboratory-settings-panel-worktree'
-    })
-    const toggle = panel.findByProps({
-      role: 'switch',
-      'aria-label': 'Enable prompt-managed plan worktrees'
-    })
-    expect(toggle.props['aria-checked']).toBe(false)
-
-    act(() => toggle.props.onClick())
-    expect(updateKun).toHaveBeenCalledWith({
-      lab: { planWorktree: { enabled: true } }
-    })
+      .toEqual([false, true, true, true, true, true])
   })
 
   it('passes the runtime Browser Use capability into its settings panel', () => {
@@ -274,7 +248,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const followMain = renderPanel({
       fastContext: { enabled: true, model: '', providerId: '', fast: false },
       pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
     })
     expect(followMain).toContain('Enable fast_context')
     expect(followMain).toContain('Follow main model')
@@ -283,7 +257,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const fixed = renderPanel({
       fastContext: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false },
       pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
     })
     expect(fixed).toContain('Use fixed model')
     expect(fixed).toContain('Explore reasoning effort')
@@ -292,7 +266,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const disabled = renderPanel({
       fastContext: { enabled: false, model: '', providerId: '', fast: false },
       pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
     })
     expect(disabled).not.toContain('Follow main model')
   })
@@ -314,7 +288,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const followMain = renderPanel({
       fastContext: { enabled: true, model: '', providerId: '', fast: false },
       pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
     })
     expect(followMain).toContain('Enable ppt_agent')
     expect(followMain).toContain('Follow main model')
@@ -323,7 +297,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const fixed = renderPanel({
       fastContext: { enabled: true, model: '', providerId: '', fast: false },
       pptAgent: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false, imageFirst: true },
-      planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
     })
     expect(fixed).toContain('Use fixed model')
     expect(fixed).toContain('PPT reasoning effort')
@@ -332,7 +306,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const disabled = renderPanel({
       fastContext: { enabled: true, model: '', providerId: '', fast: false },
       pptAgent: { enabled: false, model: '', providerId: '', fast: false, imageFirst: true },
-      planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
     })
     expect(disabled).not.toContain('Follow main model')
   })
@@ -370,7 +344,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
           value: {
             fastContext: { enabled: true, model: 'gpt-5.4', providerId: 'codex-2', fast: true },
             pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-            planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
           },
           modelProviders,
           leadProviderId: 'codex-2',

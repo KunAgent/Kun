@@ -265,7 +265,7 @@ function resolveCheckpointExpectedWorkspaceRoot(state: {
 export function createMaintenanceMetadataActions(
   { set, get, sseAbortRef }: StoreActionContext,
   dependencies: MaintenanceActionDependencies = {}
-): Pick<ChatState, 'renameActiveThread' | 'renameThread' | 'pinThread' | 'archiveThread' | 'compactActiveThread' | 'forkActiveThread' | 'forkThreadFromTurn' | 'setActiveThreadGoal' | 'setActiveThreadGoalStatus' | 'clearActiveThreadGoal' | 'setActiveThreadTodoStatus' | 'clearActiveThreadTodos' | 'syncPlanTodosFromMarkdown'> {
+): Pick<ChatState, 'renameActiveThread' | 'renameThread' | 'pinThread' | 'archiveThread' | 'compactActiveThread' | 'archiveActiveThreadToTurn' | 'forkActiveThread' | 'forkThreadFromTurn' | 'setActiveThreadGoal' | 'setActiveThreadGoalStatus' | 'clearActiveThreadGoal' | 'setActiveThreadTodoStatus' | 'clearActiveThreadTodos' | 'syncPlanTodosFromMarkdown'> {
   const prepareCanvasResend = dependencies.prepareCodeCanvasResend ?? prepareCodeCanvasResend
     const openCodeCanvasPanel =
       dependencies.requestCodeCanvasPanelOpen ?? requestCodeCanvasPanelOpen
@@ -437,6 +437,37 @@ export function createMaintenanceMetadataActions(
           ? { route: 'settings' as const, settingsSection: 'agents' as const }
           : {})
       })
+    }
+  },
+
+  archiveActiveThreadToTurn: async (turnId) => {
+    const targetTurnId = turnId.trim()
+    const { activeThreadId, busy } = get()
+    if (!activeThreadId || !targetTurnId) return
+    if (busy) {
+      set({ error: i18n.t('common:threadActionBusy') })
+      return
+    }
+    if (get().runtimeConnection !== 'ready') {
+      set({ error: i18n.t('common:runtimeActionNeedsConnection') })
+      return
+    }
+    const p = getProvider()
+    if (typeof p.archiveThreadHistory !== 'function') {
+      set({ error: i18n.t('common:runtimeFeatureUnsupported') })
+      return
+    }
+    try {
+      const result = await p.archiveThreadHistory(activeThreadId, targetTurnId)
+      await get().refreshThreads()
+      await get().selectThread(activeThreadId)
+      set({ error: i18n.t('common:archiveHistorySuccess', {
+        count: result.archivedItems,
+        tokens: result.replacedTokens,
+        path: result.archivePath
+      }) })
+    } catch (e) {
+      set({ error: formatRuntimeError(e) })
     }
   },
 

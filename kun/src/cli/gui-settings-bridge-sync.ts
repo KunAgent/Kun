@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/pro
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve, win32 } from 'node:path'
 import { z } from 'zod'
+import { resolveProviderCatalogSource } from '@kun/provider-catalog'
 import {
   KUN_CONFIG_FILENAME,
   ModelConfigSchema,
@@ -82,10 +83,16 @@ export async function projectModelConnectionsToGuiSettings(
     .filter(([id]) => Boolean(id)))
   const providers = snapshot.providers.map((profile) => {
     const existing = existingById.get(profile.id) ?? {}
+    const source = resolveProviderCatalogSource({
+      id: profile.id,
+      presetSource: profile.presetSource,
+      presetMode: profile.presetMode
+    }) ?? existingGuiPresetSource(existing)
     return {
       ...existing,
       id: profile.id,
       name: profile.name,
+      ...(source ? { presetSource: { presetId: source.presetSource, mode: source.presetMode } } : {}),
       apiKey: (options.protectedProviderIds ? options.protectedProviderIds.has(profile.id) : true)
         ? ''
         : typeof existing.apiKey === 'string' ? existing.apiKey : '',
@@ -123,15 +130,23 @@ export async function projectModelConnectionsToGuiSettings(
     ...settings,
     defaultProviderId: snapshot.defaultProviderId ?? '',
     defaultModel: snapshot.defaultModel ?? '',
-    providers: snapshot.providers.map((profile) => ({
-      id: profile.id,
-      name: profile.name,
-      baseUrl: profile.baseUrl ?? '',
-      endpointFormat: profile.endpointFormat,
-      kind: profile.kind,
-      models: [...profile.models],
-      modelProfiles: projectGuiModelProfiles(undefined, profile.modelCapabilities)
-    }))
+    providers: snapshot.providers.map((profile) => {
+      const source = resolveProviderCatalogSource({
+        id: profile.id,
+        presetSource: profile.presetSource,
+        presetMode: profile.presetMode
+      })
+      return {
+        id: profile.id,
+        name: profile.name,
+        ...(source ? { presetSource: { presetId: source.presetSource, mode: source.presetMode } } : {}),
+        baseUrl: profile.baseUrl ?? '',
+        endpointFormat: profile.endpointFormat,
+        kind: profile.kind,
+        models: [...profile.models],
+        modelProfiles: projectGuiModelProfiles(undefined, profile.modelCapabilities)
+      }
+    })
   }
 }
 
@@ -243,6 +258,7 @@ export async function syncGuiProviderCatalogToConfig(
         apiKey: options.stripCredentials ? '' : current?.apiKey ?? '',
         credentialSourceId: current?.credentialSourceId ?? credentialSourceId(provider.id),
         presetSource: guiProviderPresetId(provider),
+        ...(guiProviderPresetMode(provider) ? { presetMode: guiProviderPresetMode(provider) } : {}),
         authType: legacyAuthType(provider),
         ...(baseUrl ? { baseUrl } : {}),
         endpointFormat: provider.endpointFormat ?? current?.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
@@ -330,6 +346,18 @@ export async function syncGuiProviderCatalogToConfig(
     ...(options.afterWriterClaimAcquired
       ? { afterClaimAcquired: options.afterWriterClaimAcquired }
       : {})
+  })
+}
+
+export function existingGuiPresetSource(value: Record<string, unknown>) {
+  const raw = value.presetSource
+  if (!isRecordValue(raw)) return null
+  const presetSource = typeof raw.presetId === 'string' ? raw.presetId : undefined
+  const presetMode = raw.mode === 'api' || raw.mode === 'token-plan' ? raw.mode : undefined
+  return resolveProviderCatalogSource({
+    id: typeof value.id === 'string' ? value.id : undefined,
+    presetSource,
+    presetMode
   })
 }
 
@@ -424,21 +452,30 @@ export function uniqueModels(models: readonly string[]): string[] {
 }
 
 export function legacyAuthType(provider: GuiProviderCatalog): 'api-key' | 'subscription' {
-  const id = guiProviderPresetId(provider).toLowerCase()
-  return provider.kind === 'agent-sdk' ||
+  const source = guiProviderCatalogSource(provider)
+  return source?.preset.authType === 'subscription' ||
+    provider.kind === 'agent-sdk' ||
     provider.kind === 'antigravity-cli' ||
-    provider.kind === 'cursor-sdk' ||
-    id.includes('subscription') ||
-    id.includes('token-plan') ||
-    id === 'codex' ||
-    id === 'kimi-code' ||
-    id === 'opencode-go'
+    provider.kind === 'cursor-sdk'
     ? 'subscription'
     : 'api-key'
 }
 
+export function guiProviderCatalogSource(provider: GuiProviderCatalog) {
+  return resolveProviderCatalogSource({
+    id: provider.id,
+    presetSource: provider.presetSource?.presetId,
+    presetMode: provider.presetSource?.mode
+  })
+}
+
 export function guiProviderPresetId(provider: GuiProviderCatalog): string {
-  return provider.presetSource?.presetId.trim() || provider.id
+  return guiProviderCatalogSource(provider)?.presetSource ??
+    (provider.presetSource?.presetId.trim() || provider.id)
+}
+
+export function guiProviderPresetMode(provider: GuiProviderCatalog): 'api' | 'token-plan' | undefined {
+  return guiProviderCatalogSource(provider)?.presetMode ?? provider.presetSource?.mode
 }
 
 export function httpUrl(value: string): boolean {

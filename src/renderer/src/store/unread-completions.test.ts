@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatState } from './chat-store-types'
 import {
   MAX_UNREAD_COMPLETION_IDS,
+  LEGACY_UNREAD_COMPLETIONS_STORAGE_KEY,
   UNREAD_COMPLETIONS_STORAGE_KEY,
   clearCurrentlyVisibleUnreadCompletions,
   clearUnreadCompletion,
@@ -41,7 +42,7 @@ describe('unread completions', () => {
     const normalized = normalizeUnreadCompletions({ ids: ['', ...ids, 'thread-0', 42] })
 
     expect(Object.keys(normalized)).toHaveLength(MAX_UNREAD_COMPLETION_IDS)
-    expect(normalized['thread-0']).toBe(true)
+    expect(normalized['thread-0']).toBe('completed')
     expect(unreadCompletionCount(normalized)).toBe(MAX_UNREAD_COMPLETION_IDS)
   })
 
@@ -51,7 +52,7 @@ describe('unread completions', () => {
     })
     vi.stubGlobal('window', { localStorage: storage })
 
-    expect(readUnreadCompletions()).toEqual({ a: true, b: true })
+    expect(readUnreadCompletions()).toEqual({ a: 'completed', b: 'completed' })
     storage.getItem.mockReturnValueOnce('{bad json')
     expect(readUnreadCompletions()).toEqual({})
   })
@@ -64,14 +65,27 @@ describe('unread completions', () => {
     expect(markUnreadCompletion(one, 'thread-1')).toBe(one)
     expect(clearUnreadCompletion(one, 'missing')).toBe(one)
     expect(clearUnreadCompletion(one, 'thread-1')).toEqual({})
-    expect(retainUnreadCompletions({ 'thread-1': true, 'thread-2': true }, ['thread-2']))
-      .toEqual({ 'thread-2': true })
+    expect(retainUnreadCompletions({ 'thread-1': true, 'thread-2': 'failed' }, ['thread-2']))
+      .toEqual({ 'thread-2': 'failed' })
 
     persistUnreadCompletions({ 'thread-1': true, 'thread-2': false })
     expect(storage.setItem).toHaveBeenCalledWith(
       UNREAD_COMPLETIONS_STORAGE_KEY,
-      JSON.stringify({ version: 1, ids: ['thread-1'] })
+      JSON.stringify({ version: 2, outcomes: { 'thread-1': 'completed' } })
     )
+  })
+
+  it('migrates v1 ids and lets failure attention override completion', () => {
+    const storage = storageFixture({
+      [LEGACY_UNREAD_COMPLETIONS_STORAGE_KEY]: JSON.stringify({ version: 1, ids: ['legacy'] })
+    })
+    vi.stubGlobal('window', { localStorage: storage })
+
+    expect(readUnreadCompletions()).toEqual({ legacy: 'completed' })
+    const completed = markUnreadCompletion({}, 'thread', 'completed')
+    const failed = markUnreadCompletion(completed, 'thread', 'failed')
+    expect(failed).toEqual({ thread: 'failed' })
+    expect(markUnreadCompletion(failed, 'thread', 'completed')).toBe(failed)
   })
 
   it('recognizes only the focused visible main conversation as viewed', () => {
@@ -100,6 +114,6 @@ describe('unread completions', () => {
       { main: true, 'side-1': true, 'side-2': true },
       state,
       attention
-    )).toEqual({ 'side-2': true })
+    )).toEqual({ 'side-2': 'completed' })
   })
 })

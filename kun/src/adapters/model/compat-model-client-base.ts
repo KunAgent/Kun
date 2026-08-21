@@ -307,7 +307,8 @@ export class CompatModelClientBase {
     return normalizeCompatUsage({
       usage,
       model,
-      providerBaseUrl: this.config.baseUrl
+      providerBaseUrl: this.config.baseUrl,
+      ...(this.config.billingKind ? { billingKind: this.config.billingKind } : {})
     })
   }
 

@@ -207,7 +207,7 @@ export type StoreActionContext = {
 }
 
 export const threadActionSharedState = {
-  drainingQueuedMessages: false,
+  drainingQueuedMessageThreadIds: new Set<string>(),
   guidingQueuedMessageIds: new Set<string>(),
   expandedHistoryThreadIds: new Set<string>(),
   checkpointGitAvailability: new GitCheckpointAvailabilityCache()

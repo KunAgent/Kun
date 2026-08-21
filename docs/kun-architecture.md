@@ -338,9 +338,12 @@ Electron main 不再持久化计划运行记录、监听完成、自动合入、
   / `user_input` tool 暂停，GUI 回答后继续模型回合。
 - `POST /v1/approvals/{id}` 继续支持工具审批；approval 和 user-input 都是
   gate/route/service 分层，不在 renderer 内实现 agent 逻辑。
-- `GET /v1/usage?group_by=thread|day` 返回累计 token、turn、cache hit 数据。
-  Workbench 首页、composer 底部和右侧“用量与额度”面板只消费 Kun usage，
-  不提供 runtime diagnostics 或控制动作。
+- `GET /v1/usage?group_by=thread|day|model` 返回累计 token、turn、cache hit
+  和实际/参考价格数据；`group_by=turn&thread_id=<id>` 只聚合该 thread 内
+  每个 turn 的直接模型调用，side-thread 用量保持独立，避免父子重复计费。
+  Workbench 首页、composer 底部、逐轮价格和右侧“用量与额度”面板只消费
+  Kun 自己持久化的 usage，不扫描外部 Codex 日志，也不提供 runtime diagnostics
+  或控制动作。订阅价格明确标记为 API 参考估值，不冒充供应商账单。
 
 ## 已删除/应保持删除的旧入口
 
@@ -384,7 +387,7 @@ headless 压缩包，不替代 GUI 中的终端命令。两种形态必须从同
 TUI 没有独立版本、独立 tag 或 npm 发布流程。
 
 独立 TUI 中 `/usage` 是只读 Kun 本地用量报告，展示当前会话、全部会话和
-Top Sessions；`/quota` 展示 provider 订阅额度，`/provider usage` 与
+Top Sessions；`/quota` 展示 provider 订阅额度及可用的本地今日/30 天参考价值，`/provider usage` 与
 `/provider quota` 保持相同的 provider 兼容语义，`/context` 继续展示当前
 请求上下文。这些命令只复用现有查询接口，不增加 runtime 诊断或控制入口。
 

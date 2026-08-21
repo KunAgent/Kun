@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactElement } from 'react'
-import { AlertTriangle, Check, Info, Search, X } from 'lucide-react'
+import { AlertTriangle, Check, Info, Loader2, Search, X } from 'lucide-react'
 import type { ModelProviderProfileV1 } from '@shared/app-settings'
 import type {
   ModelsDevCatalogMetadataIssue,
@@ -51,7 +51,7 @@ export function ProviderModelImportDialog({
   authoritative?: boolean
   t: Translate
   onCancel: () => void
-  onConfirm: (result: ProviderModelImportResult) => void
+  onConfirm: (result: ProviderModelImportResult) => Promise<void>
 }): ReactElement {
   const entries = useMemo(
     () => buildProviderModelImportEntries(provider, providerModelIds, catalogResult),
@@ -61,6 +61,8 @@ export function ProviderModelImportDialog({
   const [kindFilter, setKindFilter] = useState<ProviderModelKind | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [hideExisting, setHideExisting] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [selected, setSelected] = useState<Set<string>>(
     () => defaultSelectedProviderModelImportKeys(entries, authoritative)
   )
@@ -119,6 +121,7 @@ export function ProviderModelImportDialog({
     })
   }
   const clearVisible = (): void => {
+    setSubmitError('')
     setSelected((previous) => {
       const next = new Set(previous)
       for (const entry of visibleEntries) {
@@ -126,6 +129,19 @@ export function ProviderModelImportDialog({
       }
       return next
     })
+  }
+
+  const submit = async (): Promise<void> => {
+    if (submitting) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      await onConfirm(providerModelImportResult(entries, selected))
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const totalSelected = selected.size
@@ -172,6 +188,11 @@ export function ProviderModelImportDialog({
         </header>
 
         <div className="grid gap-2.5 border-b border-ds-border px-5 py-3">
+          {submitError ? (
+            <ImportNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
+              {t('providerModelImportSubmitFailed', { message: submitError })}
+            </ImportNotice>
+          ) : null}
           {providerError ? (
             <ImportNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
               {t('providerModelImportProviderWarning', { message: providerError })}
@@ -341,6 +362,9 @@ export function ProviderModelImportDialog({
                           {entry.catalog?.inputModalities.includes('image') ? (
                             <ModelBadge tone="accent">{t('providerModelImportVisionBadge')}</ModelBadge>
                           ) : null}
+                          {entry.catalog?.inputModalities.includes('audio') ? (
+                            <ModelBadge tone="accent">{t('providerModelImportAudioInputBadge')}</ModelBadge>
+                          ) : null}
                           {entry.catalog?.toolCalling === true ? (
                             <ModelBadge tone="accent">{t('providerModelImportToolsBadge')}</ModelBadge>
                           ) : entry.catalog?.toolCalling === false ? (
@@ -390,17 +414,23 @@ export function ProviderModelImportDialog({
             <button
               type="button"
               onClick={onCancel}
-              className="inline-flex h-8 items-center rounded-full border border-ds-border bg-ds-card px-3.5 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
+              disabled={submitting}
+              className="inline-flex h-8 items-center rounded-full border border-ds-border bg-ds-card px-3.5 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
             >
               {t('providerModelImportCancel')}
             </button>
             <button
               type="button"
-              onClick={() => onConfirm(providerModelImportResult(entries, selected))}
-              disabled={totalSelected === 0 && existingMetadataCount === 0}
-              className="inline-flex h-8 items-center rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void submit()}
+              disabled={submitting || (totalSelected === 0 && existingMetadataCount === 0)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {totalSelected > 0
+              {submitting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
+                  {t('providerModelImportSubmitting')}
+                </>
+              ) : totalSelected > 0
                 ? t('providerModelImportConfirm', { count: totalSelected })
                 : existingMetadataCount > 0
                   ? t('providerModelImportApplyMetadata')

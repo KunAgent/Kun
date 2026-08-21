@@ -308,6 +308,11 @@ describe('BrowserUseManager', () => {
     expect(harness.webContents.loadURL).toHaveBeenCalledWith(
       'https://example.com/start?secret=redacted'
     )
+    const loadOrder = harness.webContents.loadURL.mock.invocationCallOrder[0]
+    const domEnableOrder = harness.sendCommand.mock.invocationCallOrder[
+      harness.sendCommand.mock.calls.findIndex(([method]) => method === 'DOM.enable')
+    ]
+    expect(loadOrder).toBeLessThan(domEnableOrder)
     expect(harness.view.setBounds).toHaveBeenCalledWith({
       x: 0,
       y: 0,
@@ -328,6 +333,17 @@ describe('BrowserUseManager', () => {
       entry.origin === 'https://example.com'
     )).toBe(true)
     expect(JSON.stringify(harness.manager.auditSnapshot())).not.toContain('secret=redacted')
+  })
+
+  it('keeps a main-frame load failure visible after loading stops', async () => {
+    const harness = fakeHarness()
+    await openAuthorized(harness)
+    harness.emitWebContents('did-fail-load', {}, -105, 'NAME_NOT_RESOLVED', '', true)
+    harness.emitWebContents('did-stop-loading')
+    expect(harness.manager.stateForThread('thread-1')).toMatchObject({
+      lifecycle: 'error',
+      reason: 'NAME_NOT_RESOLVED'
+    })
   })
 
   it('stops a cross-origin redirect and asks for a new exact-origin decision', async () => {

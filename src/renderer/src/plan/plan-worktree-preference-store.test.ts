@@ -7,37 +7,35 @@ import {
 describe('plan worktree preference store', () => {
   beforeEach(() => resetPlanWorktreePreferenceStoreForTests())
 
-  it('defaults each plan to the Laboratory feature value', () => {
+  it('defaults each plan from the formal worktree preference', () => {
     const store = usePlanWorktreePreferenceStore.getState()
-    store.initializePlan('disabled', false, 'codex/')
-    store.initializePlan('enabled', true, 'kun/')
+    store.initializePlan('default', true, 'codex/')
+    store.initializePlan('opt-out', false, 'kun/')
 
     expect(usePlanWorktreePreferenceStore.getState().plans).toMatchObject({
-      disabled: { featureEnabled: false, usePromptWorktree: false, branchPrefix: 'codex/' },
-      enabled: { featureEnabled: true, usePromptWorktree: true, branchPrefix: 'kun/' }
+      default: { usePromptWorktree: true, overridden: false, branchPrefix: 'codex/' },
+      'opt-out': { usePromptWorktree: false, overridden: false, branchPrefix: 'kun/' }
     })
   })
 
-  it('shares a per-plan override and preserves it while the feature stays enabled', () => {
+  it('preserves a per-plan override when the global default changes', () => {
     const store = usePlanWorktreePreferenceStore.getState()
     store.initializePlan('plan', true, 'codex/')
     store.setUsePromptWorktree('plan', false)
     store.syncSettings(true, 'team/')
 
     expect(usePlanWorktreePreferenceStore.getState().plans.plan).toMatchObject({
-      featureEnabled: true,
       usePromptWorktree: false,
+      overridden: true,
       branchPrefix: 'team/'
     })
   })
 
-  it('turns the choice off with the experiment and defaults it on when re-enabled', () => {
+  it('updates plans that have not been overridden', () => {
     const store = usePlanWorktreePreferenceStore.getState()
     store.initializePlan('plan', true, 'codex/')
     store.syncSettings(false, 'codex/')
-    expect(usePlanWorktreePreferenceStore.getState().plans.plan?.usePromptWorktree).toBe(false)
 
-    usePlanWorktreePreferenceStore.getState().syncSettings(true, 'codex/')
-    expect(usePlanWorktreePreferenceStore.getState().plans.plan?.usePromptWorktree).toBe(true)
+    expect(usePlanWorktreePreferenceStore.getState().plans.plan?.usePromptWorktree).toBe(false)
   })
 })

@@ -36,7 +36,57 @@ const POST_TOOL_FAILURE_EXCLUDED_TOOL_NAMES = new Set([
   DESIGN_SVG_VALIDATE_TOOL_NAME
 ])
 
+const MODEL_EMPTY_RESPONSE_CODE = 'model_empty_response'
+
 export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredToolPhase {
+  /**
+   * Terminal safety net after every bounded recovery window declined to act.
+   * A provider can end an otherwise successful stream (usage, `stop`) without
+   * text, reasoning, tool calls, or generated output. Persisting that as a
+   * completed turn leaves the conversation with a bare user bubble and no
+   * replayable answer, so fail visibly instead. Recovery paths that need the
+   * empty snapshot (post-tool, goal, required-tool) run before this net.
+   */
+  protected async failEmptyTerminalResponse(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
+    const message =
+      'Model provider completed without returning text, reasoning, a tool call, or generated output. ' +
+      'Check provider/model availability and routing, then resend the message.'
+    const route = input.prepared.actingModelRoute
+    const details = {
+      model: input.prepared.model,
+      ...(input.modelProviderId ? { providerId: input.modelProviderId } : {}),
+      ...(route ? { route } : {})
+    }
+    this.deps.rememberFailure(input.turnId, {
+      error: message,
+      code: MODEL_EMPTY_RESPONSE_CODE,
+      details,
+      severity: 'error'
+    })
+    await this.deps.events.record({
+      kind: 'error',
+      threadId: input.threadId,
+      turnId: input.turnId,
+      message,
+      code: MODEL_EMPTY_RESPONSE_CODE,
+      details,
+      severity: 'error'
+    })
+    await this.deps.turns.applyItem(
+      input.threadId,
+      makeErrorItem({
+        id: this.deps.ids.next('item_error'),
+        turnId: input.turnId,
+        threadId: input.threadId,
+        message,
+        code: MODEL_EMPTY_RESPONSE_CODE,
+        details,
+        severity: 'error'
+      })
+    )
+    return 'failed'
+  }
+
   protected async resolveEmptyPostToolResponse(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
     const recoverySteps = (this.emptyPostToolRecoveryStepsByTurn.get(input.turnId) ?? 0) + 1
     if (recoverySteps <= EMPTY_POST_TOOL_MAX_RECOVERY_STEPS) {

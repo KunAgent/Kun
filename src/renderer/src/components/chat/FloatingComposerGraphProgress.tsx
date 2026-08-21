@@ -140,7 +140,7 @@ export function FloatingComposerGraphProgress({
       <div
         data-composer-stack-item="graph"
         data-graph-planning-correction
-        className="pointer-events-auto flex min-h-12 w-full max-w-[46rem] shrink-0 items-center gap-3 rounded-2xl border border-amber-400/35 bg-amber-50/95 px-3 py-2 text-left shadow-[0_10px_30px_rgba(120,72,20,0.10)] backdrop-blur-xl dark:bg-amber-950/35"
+        className="ds-composer-status-glass ds-composer-status-glass--warning pointer-events-auto flex min-h-12 w-full max-w-[46rem] shrink-0 items-center gap-3 rounded-2xl border px-3 py-2 text-left"
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-200">
           <AlertTriangle className="h-4 w-4" strokeWidth={1.9} />
@@ -284,7 +284,7 @@ export function FloatingComposerGraphProgress({
           onBlur={closeDetailsSoon}
           onPointerEnter={openDetails}
           onPointerLeave={closeDetailsSoon}
-          className="ds-no-drag flex min-h-11 w-full items-center gap-3 rounded-2xl border border-ds-border bg-white/96 px-3 py-2 text-left shadow-[0_10px_30px_rgba(20,47,95,0.10)] backdrop-blur-xl transition hover:border-ds-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 dark:bg-ds-card/96"
+          className="ds-no-drag ds-composer-status-glass flex min-h-11 w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition hover:border-ds-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
           aria-label={t('graphComposerAria', {
             completed: progress.completed,
             total: progress.total,

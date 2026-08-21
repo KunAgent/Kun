@@ -84,6 +84,7 @@ export function ModelCapabilityBadge({
 export function ProviderRow({
   active,
   selected,
+  icon,
   title,
   subtitle,
   refNode,
@@ -92,6 +93,7 @@ export function ProviderRow({
 }: {
   active: boolean
   selected: boolean
+  icon?: ReactElement | null
   title: string
   subtitle: string
   refNode: (node: HTMLButtonElement | null) => void
@@ -103,6 +105,7 @@ export function ProviderRow({
       refNode={refNode}
       active={active}
       selected={selected}
+      icon={icon}
       title={title}
       subtitle={subtitle}
       onClick={onClick}

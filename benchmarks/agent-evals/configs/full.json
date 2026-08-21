@@ -1,0 +1,10 @@
+{
+  "name": "full",
+  "attempts": 1,
+  "concurrency": 1,
+  "suites": {
+    "swebench": { "all": true },
+    "deepswe": { "all": true },
+    "terminal-bench": { "all": true }
+  }
+}

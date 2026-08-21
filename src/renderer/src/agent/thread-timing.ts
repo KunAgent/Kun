@@ -1,18 +1,20 @@
 export type RuntimeTurnRecord = {
   id: string
-  item_ids?: string[]
-  created_at?: string | null
-  started_at?: string | null
-  ended_at?: string | null
+  status?: string
+  createdAt?: string | null
+  startedAt?: string | null
+  finishedAt?: string | null
+  items?: RuntimeTurnItem[]
 }
 
 export type RuntimeTurnItem = {
   id: string
-  turn_id?: string
   kind: string
-  started_at?: string | null
-  ended_at?: string | null
+  createdAt?: string | null
+  finishedAt?: string | null
 }
+
+const TERMINAL_TURN_STATUSES = new Set(['completed', 'failed', 'aborted'])
 
 function parseTimestampMs(value: string | null | undefined): number | undefined {
   if (!value) return undefined
@@ -20,8 +22,12 @@ function parseTimestampMs(value: string | null | undefined): number | undefined 
   return Number.isFinite(ms) ? ms : undefined
 }
 
-function itemTimestampMs(item: RuntimeTurnItem): number | undefined {
-  return parseTimestampMs(item.started_at) ?? parseTimestampMs(item.ended_at)
+function itemStartedAtMs(item: RuntimeTurnItem): number | undefined {
+  return parseTimestampMs(item.createdAt) ?? parseTimestampMs(item.finishedAt)
+}
+
+function itemFinishedAtMs(item: RuntimeTurnItem): number | undefined {
+  return parseTimestampMs(item.finishedAt) ?? parseTimestampMs(item.createdAt)
 }
 
 function durationFromRange(startedAt: number | undefined, endedAt: number | undefined): number | undefined {
@@ -31,48 +37,30 @@ function durationFromRange(startedAt: number | undefined, endedAt: number | unde
 }
 
 export function buildTurnDurationByUserId(
-  turns: readonly RuntimeTurnRecord[] | undefined,
-  items: readonly RuntimeTurnItem[]
+  turns: readonly RuntimeTurnRecord[] | undefined
 ): Record<string, number> {
-  if (!turns?.length || items.length === 0) return {}
-
-  const itemsById = new Map(items.map((item) => [item.id, item]))
-  const turnIdByItemId = new Map<string, string>()
-  for (const turn of turns) {
-    for (const itemId of turn.item_ids ?? []) {
-      turnIdByItemId.set(itemId, turn.id)
-    }
-  }
-
-  const userIdByTurnId = new Map<string, string>()
-  for (const item of items) {
-    if (item.kind !== 'user_message') continue
-    const turnId = item.turn_id ?? turnIdByItemId.get(item.id)
-    if (turnId && !userIdByTurnId.has(turnId)) {
-      userIdByTurnId.set(turnId, item.id)
-    }
-  }
+  if (!turns?.length) return {}
 
   const durations: Record<string, number> = {}
   for (const turn of turns) {
-    const userId = userIdByTurnId.get(turn.id)
+    const items = turn.items ?? []
+    const userId = items.find((item) => item.kind === 'user_message')?.id
     if (!userId) continue
+    const finishedAt = parseTimestampMs(turn.finishedAt)
+    if (!TERMINAL_TURN_STATUSES.has(turn.status ?? '') && finishedAt === undefined) continue
 
-    const turnItems = (turn.item_ids ?? [])
-      .map((itemId) => itemsById.get(itemId))
-      .filter((item): item is RuntimeTurnItem => Boolean(item))
-    const firstItemStartedAt = turnItems
-      .map(itemTimestampMs)
+    const firstItemStartedAt = items
+      .map(itemStartedAtMs)
       .filter((ms): ms is number => typeof ms === 'number')
       .sort((a, b) => a - b)[0]
-    const lastItemEndedAt = turnItems
-      .map((item) => parseTimestampMs(item.ended_at) ?? itemTimestampMs(item))
+    const lastItemFinishedAt = items
+      .map(itemFinishedAtMs)
       .filter((ms): ms is number => typeof ms === 'number')
       .sort((a, b) => b - a)[0]
 
     const duration = durationFromRange(
-      parseTimestampMs(turn.started_at) ?? parseTimestampMs(turn.created_at) ?? firstItemStartedAt,
-      parseTimestampMs(turn.ended_at) ?? lastItemEndedAt
+      parseTimestampMs(turn.startedAt) ?? parseTimestampMs(turn.createdAt) ?? firstItemStartedAt,
+      finishedAt ?? lastItemFinishedAt
     )
     if (typeof duration === 'number') durations[userId] = duration
   }

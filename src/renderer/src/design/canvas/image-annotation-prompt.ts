@@ -1,15 +1,11 @@
 /**
  * Builds the synthetic design-turn prompt fired after the user annotates an
- * image in the canvas editor and clicks 应用. By the time this runs, the target
- * `image` shape's `imageUrl` has already been swapped to the flattened
- * annotated PNG and the shape is selected — so the existing "EDIT AN EXISTING
- * IMAGE" lane (and its auto-derived reference hint) point at the annotated file
- * for free. This prompt's job is to add the markup semantics: treat the red
- * hand-drawn marks as edit instructions, apply them, and return a CLEAN result
- * with the marks removed.
+ * image in the canvas editor and clicks 应用. The flattened annotation is a
+ * hidden image-generation reference; the selected visible source shape stays
+ * unchanged so the clean result can be added as a separate revision.
  */
 export type ImageAnnotationPromptInput = {
-  /** Workspace-relative path of the flattened annotated PNG (also the shape's current imageUrl). */
+  /** Workspace-relative path of the hidden flattened annotation PNG. */
   annotatedRelativePath: string
   /** Typed text labels the user placed on the image (verbatim), e.g. "改成闪电". */
   textNotes?: string[]
@@ -36,13 +32,13 @@ export function buildImageAnnotationPrompt(input: ImageAnnotationPromptInput): s
   const instruction = input.instruction?.trim()
 
   const lines: string[] = [
-    '我在选中的这张图片上直接画了批注，标出想要的修改：箭头指向要改的地方、框线圈出区域、文字写明改成什么。这张带批注的图已经保存，就是当前选中 image 的 imageUrl。',
+    '我在选中的这张图片上直接画了批注，标出想要的修改：箭头指向要改的地方、框线圈出区域、文字写明改成什么。带批注的图已另存为隐藏参考文件，当前选中的源 image 必须保持不变。',
     '',
     '请按图片编辑（image-to-image）的方式处理：',
     `1. 调用 generate_image，reference_image_paths 传入这张带批注的图：\`${path}\`，保持 aspect_ratio 与该 shape 的宽高比一致。`,
     '2. 把批注理解为修改指令去执行：只改批注指向/圈出的部分，图片其余的构图、风格、配色和未被标注的内容都尽量保持不变。',
     '3. 结果里【不要】保留这些手绘批注本身（红色箭头、框线、文字标签都不能出现在最终图里），输出一张干净的成品图。',
-    '4. 用返回的新图 update 这个选中 shape 的 imageUrl（output.files[0].relativePath），不要改它的 x/y/width/height，也不要新增别的图层。',
+    '4. 不要 update 或删除选中的源 shape；renderer 会把返回的新图作为同尺寸的新版本放在源图旁边。',
     '这是一次图片编辑，不要新建页面 / screen，也不要写或改任何 HTML 文件。'
   ]
 

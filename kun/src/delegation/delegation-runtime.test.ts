@@ -21,6 +21,7 @@ import { TurnService } from '../services/turn-service.js'
 import { createChildAgentExecutor } from './child-agent-executor.js'
 import { ChildRunRecord, DelegationRuntime, FileDelegationStore } from './delegation-runtime.js'
 import type { ChildRunExecutor } from './delegation-runtime.js'
+import { ChildResultExecutionError } from './child-result-materializer.js'
 
 class HangingModel implements ModelClient {
   readonly provider = 'test'
@@ -185,7 +186,7 @@ describe('DelegationRuntime abort handling', () => {
       expect((await store.list())[0]).toMatchObject({
         status: 'aborted',
         terminationReason: 'manual_stop',
-        resumable: true,
+        resumable: false,
         detached: true
       })
     } finally {
@@ -286,6 +287,54 @@ describe('DelegationRuntime abort handling', () => {
         messageSource: 'background_subagent',
         displayText: 'Background subagent research completed'
       })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('includes proactive retry facts in one detached failure notice', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-delegation-detached-retry-'))
+    try {
+      const { runtime, threadStore, turns } = makeRuntime(dir, async () => {
+        throw new ChildResultExecutionError(
+          'model request failed with status 520',
+          { summary: 'review interrupted' },
+          {
+            failure: {
+              source: 'model', code: 'http_520', category: 'unavailable', httpStatus: 520
+            }
+          }
+        )
+      })
+      await threadStore.upsert(createThreadRecord({
+        id: 'parent_retry', title: 'Parent', workspace: '/ws', model: 'test-model'
+      }))
+      const parentTurn = await turns.startTurn({
+        threadId: 'parent_retry', request: { prompt: 'start parent' }
+      })
+      await turns.interruptTurn({ threadId: 'parent_retry', turnId: parentTurn.turnId })
+      const runTurn = vi.fn(async () => undefined)
+      runtime.bindAgentLoop({ runTurn })
+
+      await runtime.runChild({
+        parentThreadId: 'parent_retry', parentTurnId: parentTurn.turnId,
+        launcher: 'delegate_task', label: 'review', prompt: 'background review',
+        workspace: '/ws', detach: true,
+        inlineProfile: {
+          id: 'reviewer', source: 'builtin',
+          profile: { mode: 'subagent', toolPolicy: 'readOnly' }
+        },
+        security: { sandboxRoot: '/ws', memoryEnabled: false },
+        signal: new AbortController().signal
+      })
+
+      await waitFor(() => runTurn.mock.calls.length === 1)
+      const thread = await threadStore.get('parent_retry')
+      const notice = thread?.turns.at(-1)?.prompt ?? ''
+      expect(notice).toContain('<code>http_520</code>')
+      expect(notice).toContain('<resumable>true</resumable>')
+      expect(notice).toContain('proactive_retry enabled="true" eligible="true"')
+      expect(runTurn).toHaveBeenCalledTimes(1)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -592,7 +641,7 @@ function subagentConfig() {
   })
 }
 
-function makeRuntime(dir: string): {
+function makeRuntime(dir: string, executor: ChildRunExecutor = async () => ({ summary: 'done' })): {
   runtime: DelegationRuntime
   threadStore: InMemoryThreadStore
   turns: TurnService
@@ -624,9 +673,7 @@ function makeRuntime(dir: string): {
     threadStore,
     turns,
     nowIso,
-    executor: async () => ({
-      summary: 'done'
-    })
+    executor
   })
   return { runtime, threadStore, turns }
 }

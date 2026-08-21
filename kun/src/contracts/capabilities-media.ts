@@ -7,6 +7,7 @@ import {
   McpCapabilityConfig,
   McpToolDiscoveryMode,
   ModelCapabilityMetadata,
+  ProactiveSubagentRetryConfig,
   RUNTIME_CAPABILITY_CONTRACT_VERSION,
   RuntimeCapabilityState,
   SkillsCapabilityConfig,
@@ -229,6 +230,7 @@ export const RuntimeCapabilityManifest = z
     subagents: RuntimeCapabilityState.extend({
       useExistingAgents: z.boolean(),
       maxParallel: z.number().int().nonnegative(),
+      proactiveRetry: ProactiveSubagentRetryConfig,
       defaultToolPolicy: SubagentToolPolicy,
       defaultProfile: z.string().optional(),
       profiles: z
@@ -426,6 +428,7 @@ export function buildRuntimeCapabilityManifest(input: {
       ),
       useExistingAgents: config.subagents.useExistingAgents,
       maxParallel: config.subagents.maxParallel,
+      proactiveRetry: config.subagents.proactiveRetry,
       defaultToolPolicy: config.subagents.defaultToolPolicy,
       ...(config.subagents.defaultProfile ? { defaultProfile: config.subagents.defaultProfile } : {}),
       profiles: Object.entries(config.subagents.profiles).map(([name, profile]) => ({

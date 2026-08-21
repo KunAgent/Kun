@@ -23,11 +23,9 @@ import {
   sanitizeBrowserUseUrl
 } from './network-policy'
 import {
-  ACTION_DECISION_TIMEOUT_MS,
-  BrowserUseOperationAbortedError,
-  MAX_AUDIT_ENTRIES,
-  MOUNT_TIMEOUT_MS,
-  ORIGIN_DECISION_TIMEOUT_MS,
+  ACTION_DECISION_TIMEOUT_MS, BrowserUseOperationAbortedError, MAX_AUDIT_ENTRIES,
+  MOUNT_TIMEOUT_MS, NAVIGATION_TIMEOUT_MS, ORIGIN_DECISION_TIMEOUT_MS,
+  PROXY_CONFIGURATION_TIMEOUT_MS, STRUCTURED_OBSERVATION_TIMEOUT_MS,
   attributesRecord,
   assertBrowserUseOperationActive,
   auditDecision,
@@ -67,14 +65,18 @@ export abstract class BrowserUseManagerFoundation {
   protected readonly createView: (partition: string) => WebContentsView
   protected readonly createProxy: NonNullable<BrowserUseManagerOptions['createProxy']>
   protected readonly fingerprintKey = randomBytes(32)
-
+  protected readonly timeouts
   constructor(protected readonly options: BrowserUseManagerOptions) {
     this.now = options.now ?? (() => new Date())
+    this.timeouts = {
+      proxyConfigurationMs: options.timeouts?.proxyConfigurationMs ?? PROXY_CONFIGURATION_TIMEOUT_MS,
+      navigationMs: options.timeouts?.navigationMs ?? NAVIGATION_TIMEOUT_MS,
+      structuredObservationMs: options.timeouts?.structuredObservationMs ?? STRUCTURED_OBSERVATION_TIMEOUT_MS
+    }
     this.createView = options.createView ?? createBrowserUseView
     this.createProxy = options.createProxy ?? ((mode, exactLocalOrigin, onPolicyEvent) =>
       new BrowserUsePolicyProxy({ mode, exactLocalOrigin, onPolicyEvent }))
   }
-
   abstract clear(threadId: string, reason?: string): Promise<boolean>
 
   protected tabs(
@@ -599,7 +601,6 @@ export abstract class BrowserUseManagerFoundation {
       entry.agentInputDispatchActive = false
     }
   }
-
   protected state(entry: BrowserSessionEntry): BrowserUseViewState {
     const tabs = [...entry.tabs.values()].slice(0, 3).map((tab) => {
       const url = tab.view.webContents.getURL()
@@ -621,6 +622,7 @@ export abstract class BrowserUseManagerFoundation {
       sessionId: entry.id,
       threadId: entry.threadId,
       lifecycle: entry.lifecycle,
+      ...(entry.reason ? { reason: entry.reason } : {}),
       controlOwner: entry.controlOwner,
       visible: entry.mount?.visible === true,
       mounted: Boolean(entry.mount),
@@ -633,7 +635,6 @@ export abstract class BrowserUseManagerFoundation {
       updatedAt: this.now().toISOString()
     }
   }
-
   protected defaultState(): BrowserUseViewState {
     const settings = this.options.settings()
     return {
@@ -649,7 +650,6 @@ export abstract class BrowserUseManagerFoundation {
       updatedAt: this.now().toISOString()
     }
   }
-
   protected publish(entry: BrowserSessionEntry): void {
     const state = this.state(entry)
     this.options.onState?.(state)

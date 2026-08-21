@@ -25,34 +25,34 @@ function manifest(name, overrides = {}) {
 test('declares every product-owned default extension', () => {
   assert.deepEqual(
     BUNDLED_EXTENSION_DEFINITIONS.map((entry) => entry.id),
-    [
-      'kun-examples.presentation-studio',
-      'kun-examples.social-media-sidebar'
-    ]
+    ['kun-examples.social-media-sidebar']
   )
   assert.deepEqual(
     RETIRED_BUNDLED_EXTENSION_IDS,
-    ['kun-examples.kun-video-editor']
+    [
+      'kun-examples.kun-video-editor',
+      'kun-examples.presentation-studio'
+    ]
   )
 })
 
 test('derives bounded catalog entries from canonical manifests', () => {
   const definition = BUNDLED_EXTENSION_DEFINITIONS[0]
   assert.equal(
-    bundledArchiveName(manifest('presentation-studio'), definition.name),
-    'presentation-studio-0.1.0.kunx'
+    bundledArchiveName(manifest('social-media-sidebar'), definition.name),
+    'social-media-sidebar-0.1.0.kunx'
   )
   assert.deepEqual(
     bundledCatalogEntry(
       definition,
-      manifest('presentation-studio'),
-      'presentation-studio-0.1.0.kunx',
+      manifest('social-media-sidebar'),
+      'social-media-sidebar-0.1.0.kunx',
       digest
     ),
     {
-      id: 'kun-examples.presentation-studio',
+      id: 'kun-examples.social-media-sidebar',
       version: '0.1.0',
-      archive: 'presentation-studio-0.1.0.kunx',
+      archive: 'social-media-sidebar-0.1.0.kunx',
       sha256: digest,
       enginesKun: '>=0.1.0',
       apiVersion: '1.0.0',
@@ -63,7 +63,7 @@ test('derives bounded catalog entries from canonical manifests', () => {
     () => bundledCatalogEntry(
       definition,
       manifest('other'),
-      'presentation-studio-0.1.0.kunx',
+      'social-media-sidebar-0.1.0.kunx',
       digest
     ),
     /Unexpected/
@@ -80,12 +80,15 @@ test('sorts catalog entries and rejects duplicate extension ids', () => {
   const catalog = bundledExtensionCatalog(entries)
   assert.deepEqual(
     catalog.extensions.map((entry) => entry.id),
+    ['kun-examples.social-media-sidebar']
+  )
+  assert.deepEqual(
+    catalog.retiredExtensions,
     [
-      'kun-examples.presentation-studio',
-      'kun-examples.social-media-sidebar'
+      'kun-examples.kun-video-editor',
+      'kun-examples.presentation-studio'
     ]
   )
-  assert.deepEqual(catalog.retiredExtensions, ['kun-examples.kun-video-editor'])
   assert.throws(
     () => bundledExtensionCatalog([entries[0], entries[0]]),
     /duplicate/

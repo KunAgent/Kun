@@ -115,6 +115,7 @@
   "providerModelImportContextBadge": "บริบท {{value}}",
   "providerModelImportOutputBadge": "เอาต์พุต {{value}}",
   "providerModelImportVisionBadge": "อินพุตรูปภาพ",
+  "providerModelImportAudioInputBadge": "อินพุตเสียง",
   "providerModelImportToolsBadge": "เครื่องมือ",
   "providerModelImportNoToolsBadge": "ไม่รองรับเครื่องมือ",
   "providerModelImportReasoningBadge": "การให้เหตุผล",

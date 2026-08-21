@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DailyUsageResponseSchema, ModelUsageResponseSchema, ThreadUsageResponseSchema } from '../src/contracts/usage.js'
+import { DailyUsageResponseSchema, ModelUsageResponseSchema, ThreadUsageResponseSchema, TurnUsageResponseSchema } from '../src/contracts/usage.js'
 import {
   MAX_DAILY_USAGE_DAYS,
   UsageService,
@@ -7,9 +7,11 @@ import {
   buildDailyUsageResponse,
   buildModelUsageResponse,
   buildThreadUsageResponse,
+  buildTurnUsageResponse,
   formatDateInTimezone,
   parseDailyUsageQuery,
   parseModelUsageQuery,
+  parseTurnUsageQuery,
   type ThreadUsageRecord
 } from '../src/services/usage-service.js'
 
@@ -424,5 +426,144 @@ describe('daily usage service', () => {
       active_days: 2,
       thread_count: 3
     })
+  })
+
+  it('tracks complete, partial, and unavailable reference-price coverage', () => {
+    const response = buildDailyUsageResponse([
+      {
+        threadId: 'thr_codex',
+        model: 'gpt-5.6-sol',
+        completedAt: '2026-08-01T10:00:00.000Z',
+        usage: usage({ billingKind: 'subscription', actualModelId: 'gpt-5.6-sol' })
+      },
+      {
+        threadId: 'thr_codex',
+        model: 'unknown-preview',
+        completedAt: '2026-08-01T10:01:00.000Z',
+        usage: usage({ billingKind: 'subscription', actualModelId: 'unknown-preview' })
+      },
+      {
+        threadId: 'thr_api',
+        model: 'gpt-5.4-mini',
+        completedAt: '2026-08-01T10:02:00.000Z',
+        usage: usage({ billingKind: 'api', actualModelId: 'gpt-5.4-mini', costUsd: 0.3, costCny: 2.16 })
+      }
+    ], { groupBy: 'day', from: '2026-08-01', to: '2026-08-01', timezone: 'UTC' })
+
+    expect(response.buckets[0]).toMatchObject({
+      value_estimate_coverage: 'partial',
+      value_estimate_priced_requests: 1,
+      value_estimate_unpriced_requests: 1
+    })
+    expect(response.buckets[0]?.value_estimate_usd).toBeGreaterThan(0)
+    expect(response.buckets[0]).toMatchObject({ cost_usd: 0.3, cost_cny: 2.16 })
+    expect(response.totals.value_estimate_coverage).toBe('partial')
+  })
+
+  it('validates and aggregates usage by turn without folding side threads', () => {
+    expect(parseTurnUsageQuery({ group_by: 'turn', thread_id: 'thread-parent' })).toEqual({
+      groupBy: 'turn',
+      threadId: 'thread-parent'
+    })
+    expect(() => parseTurnUsageQuery({ group_by: 'turn' })).toThrow('requires thread_id')
+
+    const response = buildTurnUsageResponse([
+      {
+        threadId: 'thread-parent',
+        turnId: 'turn-1',
+        model: 'gpt-5.6-sol',
+        completedAt: '2026-08-01T10:00:00.000Z',
+        usage: usage({
+          promptTokens: 100_000,
+          completionTokens: 10_000,
+          totalTokens: 110_000,
+          cacheHitTokens: 20_000,
+          cacheWriteTokens: 10_000,
+          actualProviderId: 'codex-work',
+          actualModelId: 'gpt-5.6-sol',
+          billingKind: 'subscription',
+          costUsd: 0.25
+        })
+      },
+      {
+        threadId: 'thread-parent',
+        turnId: 'turn-1',
+        model: 'unknown-preview',
+        completedAt: '2026-08-01T10:01:00.000Z',
+        usage: usage({
+          promptTokens: 50,
+          completionTokens: 5,
+          totalTokens: 55,
+          cacheWriteTokens: 5,
+          actualProviderId: 'codex-work',
+          actualModelId: 'unknown-preview',
+          billingKind: 'subscription',
+          costUsd: 0.05
+        })
+      },
+      {
+        threadId: 'thread-parent',
+        turnId: 'turn-2',
+        model: 'gpt-5.3-codex-spark',
+        completedAt: '2026-08-01T10:02:00.000Z',
+        usage: usage({
+          actualProviderId: 'codex-work',
+          actualModelId: 'gpt-5.3-codex-spark',
+          billingKind: 'subscription',
+          costUsd: undefined,
+          costCny: undefined
+        })
+      },
+      {
+        threadId: 'thread-child',
+        turnId: 'turn-1',
+        model: 'gpt-5.6-sol',
+        completedAt: '2026-08-01T10:03:00.000Z',
+        usage: usage({ billingKind: 'subscription', actualModelId: 'gpt-5.6-sol' })
+      },
+      {
+        threadId: 'thread-parent',
+        turnId: 'turn-3',
+        model: 'gpt-5.4-mini',
+        completedAt: '2026-08-01T10:04:00.000Z',
+        usage: usage({
+          actualProviderId: 'openai-api',
+          actualModelId: 'gpt-5.4-mini',
+          billingKind: 'api',
+          costUsd: 0.2,
+          costCny: undefined
+        })
+      }
+    ], { groupBy: 'turn', threadId: 'thread-parent' })
+
+    expect(TurnUsageResponseSchema.parse(response)).toEqual(response)
+    expect(response.buckets).toHaveLength(3)
+    expect(response.buckets[0]).toMatchObject({
+      turn_id: 'turn-1',
+      requests: 2,
+      input_tokens: 100_050,
+      output_tokens: 10_005,
+      cache_write_tokens: 10_005,
+      total_tokens: 110_055,
+      actual_cost: null,
+      estimate_coverage: 'partial',
+      provider_ids: ['codex-work'],
+      models: ['gpt-5.6-sol', 'unknown-preview']
+    })
+    expect(response.buckets[0]?.reference_estimate_usd).toBeGreaterThan(0)
+    expect(response.buckets[1]).toMatchObject({
+      turn_id: 'turn-2',
+      reference_estimate_usd: 0,
+      estimate_coverage: 'complete'
+    })
+    expect(response.buckets[2]).toMatchObject({
+      turn_id: 'turn-3',
+      actual_cost: { currency: 'USD', amount: 0.2 },
+      reference_estimate_usd: null,
+      estimate_coverage: 'unavailable'
+    })
+    expect(response.totals.requests).toBe(4)
+    expect(response.totals.actual_cost).toEqual({ currency: 'USD', amount: 0.2 })
+    expect(response.totals.estimate_coverage).toBe('partial')
   })
 })

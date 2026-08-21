@@ -39,7 +39,7 @@ function settings(imageFirst: boolean): KunLabSettingsV1 {
   return {
     fastContext: { enabled: true, model: '', providerId: '', fast: false },
     pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst },
-    planWorktree: { enabled: false }
+      conversationVisualization: { enabled: false }
   }
 }
 

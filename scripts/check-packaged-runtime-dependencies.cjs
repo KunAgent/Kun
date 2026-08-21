@@ -13,6 +13,17 @@ const KNOWN_DYNAMIC_RUNTIME_SPECIFIERS = [
   '@tesseract.js-data/eng',
   'html-to-docx'
 ]
+// Packages that are only imported by the Vite-bundled renderer. Vite compiles
+// them into out/renderer, so shipping them again as production node_modules
+// duplicates tens of MiB inside app.asar. They must stay dev-only in the
+// lockfile; if main/preload ever needs one, the compiled-runtime check below
+// fails until the package is deliberately reclassified.
+const RENDERER_BUNDLED_ONLY_PACKAGES = [
+  '@univerjs/presets',
+  '@univerjs/preset-sheets-core',
+  'pptx-preview',
+  'docx-preview'
+]
 
 function packageNameFromSpecifier(specifier) {
   if (
@@ -84,6 +95,27 @@ function isProductionPackage(lockfile, packageName) {
   return Boolean(entry && entry.dev !== true)
 }
 
+function rendererBundledOnlyFailures(lockfile) {
+  const failures = []
+  for (const packageName of RENDERER_BUNDLED_ONLY_PACKAGES) {
+    const entry = lockfile?.packages?.[packageLockPath(packageName)]
+    if (!entry) {
+      failures.push({ packageName, reason: 'missing from package-lock.json' })
+    } else if (entry.dev !== true) {
+      failures.push({ packageName, reason: 'listed as a production dependency' })
+    }
+  }
+  return failures
+}
+
+function formatRendererBundledOnlyError(failures) {
+  return (
+    'Renderer-bundled-only packages must stay dev-only; Vite compiles them into ' +
+    'out/renderer and electron-builder must not copy them into production node_modules:\n' +
+    failures.map((failure) => `- ${failure.packageName} (${failure.reason})`).join('\n')
+  )
+}
+
 function checkPackagedRuntimeDependencies(options = {}) {
   const root = resolve(options.root ?? join(__dirname, '..'))
   const lockfilePath = join(root, 'package-lock.json')
@@ -99,6 +131,19 @@ function checkPackagedRuntimeDependencies(options = {}) {
       missing.map((name) => `- ${name}`).join('\n')
     )
   }
+  const runtimeImportsRendererOnly = packages.filter((name) =>
+    RENDERER_BUNDLED_ONLY_PACKAGES.includes(name)
+  )
+  if (runtimeImportsRendererOnly.length > 0) {
+    throw new Error(
+      `Compiled main/preload code imports renderer-bundled-only packages; reclassify them first:\n` +
+      runtimeImportsRendererOnly.map((name) => `- ${name}`).join('\n')
+    )
+  }
+  const rendererOnlyFailures = rendererBundledOnlyFailures(lockfile)
+  if (rendererOnlyFailures.length > 0) {
+    throw new Error(formatRendererBundledOnlyError(rendererOnlyFailures))
+  }
   return { packages, lockfilePath: relative(root, lockfilePath) }
 }
 
@@ -112,9 +157,12 @@ if (require.main === module) {
 module.exports = {
   ELECTRON_PROVIDED_PACKAGES,
   KNOWN_DYNAMIC_RUNTIME_SPECIFIERS,
+  RENDERER_BUNDLED_ONLY_PACKAGES,
   packageNameFromSpecifier,
   sourceSpecifiers,
   compiledRuntimePackages,
   isProductionPackage,
+  rendererBundledOnlyFailures,
+  formatRendererBundledOnlyError,
   checkPackagedRuntimeDependencies
 }

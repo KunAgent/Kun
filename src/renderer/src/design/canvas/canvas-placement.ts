@@ -113,6 +113,70 @@ export function placeRectInViewportAvoiding(
   return { ...centered, x: round(rightmost + safeGap) }
 }
 
+/** Place a revision beside its source before expanding in deterministic rings. */
+export function placeRectNearAnchorAvoiding(
+  size: { width: number; height: number },
+  anchor: Rect,
+  occupied: readonly Rect[],
+  gap = CANVAS_SCREEN_GAP
+): Rect {
+  const safeGap = Math.max(0, finite(gap))
+  const width = Math.max(1, finite(size.width, 1))
+  const height = Math.max(1, finite(size.height, 1))
+  const centeredX = round(anchor.x + anchor.width / 2 - width / 2)
+  const centeredY = round(anchor.y + anchor.height / 2 - height / 2)
+  const candidates: Rect[] = [
+    { x: round(anchor.x + anchor.width + safeGap), y: centeredY, width, height },
+    { x: round(anchor.x - width - safeGap), y: centeredY, width, height },
+    { x: centeredX, y: round(anchor.y + anchor.height + safeGap), width, height },
+    { x: centeredX, y: round(anchor.y - height - safeGap), width, height }
+  ]
+  for (const candidate of candidates) {
+    if (!collides(candidate, occupied, safeGap)) return candidate
+  }
+
+  const stepX = Math.max(anchor.width, width) + safeGap
+  const stepY = Math.max(anchor.height, height) + safeGap
+  const seen = new Set(candidates.map((rect) => `${rect.x}:${rect.y}`))
+  const tryOffset = (column: number, row: number): Rect | null => {
+    const candidate = {
+      x: round(centeredX + column * stepX),
+      y: round(centeredY + row * stepY),
+      width,
+      height
+    }
+    const key = `${candidate.x}:${candidate.y}`
+    if (seen.has(key)) return null
+    seen.add(key)
+    return collides(candidate, occupied, safeGap) ? null : candidate
+  }
+  const maxRings = Math.max(12, occupied.length + 8)
+  for (let ring = 1; ring <= maxRings; ring += 1) {
+    for (const [column, row] of [[ring, 0], [-ring, 0], [0, ring], [0, -ring]] as const) {
+      const candidate = tryOffset(column, row)
+      if (candidate) return candidate
+    }
+    for (let row = -ring; row <= ring; row += 1) {
+      for (const column of [ring, -ring]) {
+        const candidate = tryOffset(column, row)
+        if (candidate) return candidate
+      }
+    }
+    for (let column = -ring + 1; column <= ring - 1; column += 1) {
+      for (const row of [ring, -ring]) {
+        const candidate = tryOffset(column, row)
+        if (candidate) return candidate
+      }
+    }
+  }
+
+  const rightmost = occupied.reduce(
+    (max, rect) => Math.max(max, rect.x + rect.width),
+    anchor.x + anchor.width
+  )
+  return { x: round(rightmost + safeGap), y: centeredY, width, height }
+}
+
 type RowItem = { index: number; width: number; height: number }
 type Row = { items: RowItem[]; width: number; height: number }
 

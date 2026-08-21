@@ -115,6 +115,7 @@
   "providerModelImportContextBadge": "Контекст {{value}}",
   "providerModelImportOutputBadge": "Вывод {{value}}",
   "providerModelImportVisionBadge": "Изображения",
+  "providerModelImportAudioInputBadge": "Аудиоввод",
   "providerModelImportToolsBadge": "Инструменты",
   "providerModelImportNoToolsBadge": "Без инструментов",
   "providerModelImportReasoningBadge": "Рассуждение",

@@ -15,6 +15,7 @@ import {
   buildSkillToolProviders,
   buildDelegationToolProviders,
   buildComponentDesignToolProviders,
+  buildConversationVisualizationToolProvider,
   buildWebToolProviders,
   buildImageGenToolProviders,
   protocolSupportsImageEdit,
@@ -459,7 +460,10 @@ export function createRuntimeConfigController(
 	        }),
 	        turnService
 	      ),
-	      ...buildComponentDesignToolProviders(delegationRuntime)
+	      ...buildComponentDesignToolProviders(delegationRuntime),
+	      ...buildConversationVisualizationToolProvider(
+	        () => activeOptions.lab?.conversationVisualization
+	      )
 	    ])
 
 	    // Import provider catalogs for rolling GUI compatibility, but preserve

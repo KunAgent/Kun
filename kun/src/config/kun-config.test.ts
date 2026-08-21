@@ -59,6 +59,13 @@ describe('default subagent parallelism', () => {
   it('defaults max parallel subagent runs to 256', () => {
     expect(DEFAULT_KUN_CAPABILITIES_CONFIG.subagents.maxParallel).toBe(256)
   })
+
+  it('defaults proactive retry to three main-agent attempts', () => {
+    expect(DEFAULT_KUN_CAPABILITIES_CONFIG.subagents.proactiveRetry).toEqual({
+      enabled: true,
+      maxAttempts: 3
+    })
+  })
 })
 
 describe('expandHomePath', () => {

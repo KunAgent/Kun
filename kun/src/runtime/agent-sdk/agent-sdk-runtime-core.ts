@@ -129,6 +129,7 @@ export class AgentSdkRuntime {
     const mapper = new SdkEventMapper({
       threadId,
       turnId,
+      ...(ctx.billingKind ? { billingKind: ctx.billingKind, model: ctx.model } : {}),
       nextId: (p) => this.deps.nextId(p),
       streamLimits: {
         ...sdkStreamLimits,

@@ -266,7 +266,8 @@ describe('chat projection reducer', () => {
             childId: 'child_1',
             childStatus: 'running',
             resumable: false,
-            resumeCount: 1
+            resumeCount: 1,
+            proactiveRetry: { enabled: true, eligible: false, count: 1, limit: 3, remaining: 2 }
           }
         }
       }
@@ -275,7 +276,12 @@ describe('chat projection reducer', () => {
     expect(resumed.blocks[0]).toMatchObject({
       kind: 'tool',
       status: 'running',
-      meta: { child: { parentTurnId: 'turn_resume', childStatus: 'running', resumeCount: 1 } }
+      meta: {
+        child: {
+          parentTurnId: 'turn_resume', childStatus: 'running', resumeCount: 1,
+          proactiveRetry: { count: 1, limit: 3 }
+        }
+      }
     })
     const settled = project(resumed, [{
       type: 'tool_updated',

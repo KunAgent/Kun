@@ -526,6 +526,26 @@ describe('SubagentCallCard route metadata', () => {
     expect(card.props['data-activity-label']).toBe('')
   })
 
+  it('shows proactive retry progress on the existing child card', async () => {
+    await act(async () => {
+      renderer = create(createElement(SubagentCallCard, {
+        block: childBlock({
+          childId: 'child_retry',
+          childProfile: 'general',
+          childProfileName: 'General Agent',
+          proactiveRetry: { enabled: true, eligible: false, count: 1, limit: 3, remaining: 2 }
+        }, {
+          summary: 'Completed after retry.',
+          proactiveRetry: { enabled: true, eligible: false, count: 1, limit: 3, remaining: 2 }
+        })
+      }))
+    })
+
+    expect(renderer!.root.findByProps({
+      'data-testid': 'subagent-proactive-retry-progress'
+    })).toBeDefined()
+  })
+
 })
 
 function childBlock(

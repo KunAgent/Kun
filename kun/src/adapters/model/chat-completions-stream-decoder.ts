@@ -4,6 +4,10 @@ import {
   ModelStreamResourceBudget,
   type PendingToolCall
 } from './model-stream-resource-budget.js'
+import {
+  assertPendingToolCallsComplete,
+  resolvePendingToolCall
+} from './tool-call-stream-identity.js'
 
 export type ChatCompletionsStreamDecodeResult = {
   chunks: ModelStreamChunk[]
@@ -40,13 +44,18 @@ export function decodeChatCompletionsStreamPayload(input: {
       }
       const toolCalls = delta.tool_calls as Array<{
         index?: number
-        id?: string
+        id?: unknown
         function?: { name?: string; arguments?: string }
       }> | undefined
       for (const call of toolCalls ?? []) {
-        const callId = resolveToolCallDeltaId(call, input.pendingArguments)
         const index = numericIndex(call.index)
-        const pending = input.budget.pendingCall(input.pendingArguments, callId, index)
+        const { callId, pending } = resolvePendingToolCall({
+          ...(call.id !== undefined ? { explicitId: call.id } : {}),
+          ...(index !== undefined ? { index } : {}),
+          pending: input.pendingArguments,
+          pendingByIndex: input.pendingByIndex,
+          budget: input.budget
+        })
         if (call.function?.name) pending.name = call.function.name
         if (typeof call.function?.arguments === 'string') {
           input.budget.appendArguments(pending, call.function.arguments)
@@ -64,14 +73,15 @@ export function decodeChatCompletionsStreamPayload(input: {
   const usagePayload = input.payload.usage as Record<string, unknown> | undefined
   if (usagePayload) usage = input.normalizeUsage(usagePayload)
   if (finishReason === 'tool_calls' && input.pendingArguments.size > 0) {
+    assertPendingToolCallsComplete(input.pendingArguments)
     for (const [callId, pending] of input.pendingArguments) {
-      if (!pending.name) continue
+      const toolName = pending.name!
       const raw = input.budget.pendingArguments(pending)
       input.budget.completeToolCall(raw)
       chunks.push({
         kind: 'tool_call_complete',
         callId,
-        toolName: pending.name,
+        toolName,
         arguments: input.parseToolArguments(raw || '{}')
       })
     }
@@ -79,36 +89,6 @@ export function decodeChatCompletionsStreamPayload(input: {
     input.pendingByIndex.clear()
   }
   return { chunks, sawTextDelta: sawText, finishReason, usage }
-}
-
-function resolveToolCallDeltaId(
-  call: { index?: number; id?: string },
-  pending: Map<string, PendingToolCall>
-): string {
-  const index = numericIndex(call.index)
-  const existingByIndex = findPendingToolCallIdByIndex(pending, index)
-  if (call.id) {
-    if (existingByIndex && existingByIndex !== call.id) {
-      const existing = pending.get(existingByIndex)
-      if (existing) {
-        pending.delete(existingByIndex)
-        pending.set(call.id, existing)
-      }
-    }
-    return call.id
-  }
-  return existingByIndex ?? `call_${pending.size + 1}`
-}
-
-function findPendingToolCallIdByIndex(
-  pending: Map<string, PendingToolCall>,
-  index: number | undefined
-): string | undefined {
-  if (index === undefined) return undefined
-  for (const [callId, value] of pending) {
-    if (value.index === index) return callId
-  }
-  return undefined
 }
 
 function numericIndex(value: unknown): number | undefined {

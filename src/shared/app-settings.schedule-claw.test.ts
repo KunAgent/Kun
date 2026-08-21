@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   APP_LOCALES,
@@ -100,6 +102,23 @@ describe('schedule settings', () => {
     expect(defaults.keepAwake).toBe(false)
     expect(defaults.internal.port).toBe(DEFAULT_SCHEDULE_INTERNAL_PORT)
     expect(defaults.tasks).toEqual([])
+  })
+
+  it('keeps explicit enabled locks from the v0.2.37 settings shape', () => {
+    const fixturePath = fileURLToPath(new URL(
+      './__fixtures__/app-settings-schedule-v0.2.37.json',
+      import.meta.url
+    ))
+    const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as {
+      schedule: Parameters<typeof normalizeScheduleSettings>[0]
+    }
+
+    const normalized = normalizeScheduleSettings(fixture.schedule)
+
+    expect(normalized.enabled).toBe(true)
+    expect(normalized.tasks[0].enabled).toBe(true)
+    expect(normalized.daemons.enabled).toBe(true)
+    expect(normalized.daemons.items[0].enabled).toBe(true)
   })
 
   it('normalizes and merges schedule patches without reading legacy claw tasks', () => {

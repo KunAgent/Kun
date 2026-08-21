@@ -499,6 +499,34 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(developmentConfig.publish).toEqual([])
   })
 
+  it('stamps the DMG volume name with the same artifact version as artifactName', () => {
+    // No release env override: electron-builder expands the ${version} macro
+    // from package.json when it mounts the volume.
+    expect(builderConfig.dmg.title).toBe('Kun Installer ${version}')
+    expect(builderConfig.artifactName).toContain('Kun-${version}-')
+
+    const releaseConfig = loadBuilderConfigWithEnv({
+      KUN_APP_VERSION: '1.2.3',
+      KUN_ARTIFACT_VERSION: undefined
+    })
+    expect(releaseConfig.dmg.title).toBe('Kun Installer 1.2.3')
+    expect(releaseConfig.artifactName).toContain('Kun-1.2.3-')
+
+    const dailyConfig = loadBuilderConfigWithEnv({
+      KUN_APP_VERSION: '0.0.0-dev-20260819-1200',
+      KUN_ARTIFACT_VERSION: '20260819.1200'
+    })
+    expect(dailyConfig.dmg.title).toBe('Kun Installer 20260819.1200')
+    expect(dailyConfig.artifactName).toContain('Kun-20260819.1200-')
+
+    const developmentConfig = loadBuilderConfigWithEnv({
+      KUN_APP_FLAVOR: 'development',
+      KUN_APP_VERSION: '1.2.3'
+    })
+    expect(developmentConfig.dmg.title).toBe('kun-dv Installer 1.2.3')
+    expect(developmentConfig.artifactName).toContain('kun-dv-1.2.3-')
+  })
+
   it('keeps sandboxed preload free of Node builtin imports', () => {
     for (const sourcePath of preloadSourceFiles()) {
       expect(forbiddenPreloadImports(readFileSync(sourcePath, 'utf8'))).toEqual([])

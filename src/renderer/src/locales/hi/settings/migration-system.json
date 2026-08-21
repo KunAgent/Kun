@@ -76,5 +76,9 @@
   "uninstallConfirmType": "पुष्टि के लिए UNINSTALL टाइप करें",
   "uninstallConfirmButton": "अनइंस्टॉल की पुष्टि करें",
   "uninstallConfirmCancel": "रद्द करें",
-  "uninstallRunning": "अनइंस्टॉल हो रहा है… Kun अभी बंद होगा।"
+  "uninstallRunning": "अनइंस्टॉल हो रहा है… Kun अभी बंद होगा।",
+  "labConversationVisualizationTitle": "Conversation visualization",
+  "labConversationVisualizationDescription": "Experimental structured visuals for flows, grouped explanations, and important constraints. The agent uses them only when spatial structure is clearer than prose.",
+  "labConversationVisualizationEnabled": "Allow agent visualizations",
+  "labConversationVisualizationEnabledDesc": "Adds show_visualization to future desktop agent requests. Turning it off removes the tool while preserving visualizations already stored in conversation history."
 }

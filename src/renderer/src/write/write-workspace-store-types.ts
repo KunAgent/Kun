@@ -7,6 +7,7 @@ import type {
 import type { WriteEditorSelectionState } from '../components/write/WriteMarkdownEditor'
 import type { WriteQuotedSelection } from './quoted-selection'
 import type { WriteRecentEdit } from './recent-edits'
+import type { WorkspaceSpreadsheetMutation } from '@shared/workspace-spreadsheet'
 
 export type WritePreviewMode = 'rich' | 'source' | 'live' | 'preview'
 export type WriteSaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
@@ -78,6 +79,14 @@ export type WriteDocumentSession = {
   officeSemanticText: string
   officeSemanticSha256: string
   officeSemanticTruncated: boolean
+  spreadsheetMutations: WorkspaceSpreadsheetMutation[]
+  spreadsheetMutationBaseFingerprints: Record<string, string>
+  spreadsheetUnsupportedReason: string | null
+  spreadsheetConflictPreview: WorkspaceOfficePreviewSuccess | null
+  spreadsheetConflictTargets: string[]
+  spreadsheetConflictBaseFingerprints: Record<string, string>
+  spreadsheetCommitRevision: number
+  spreadsheetSourceSha256: string
   fileSize: number
   fileTruncated: boolean
   fileError: string | null
@@ -223,6 +232,18 @@ export type WriteWorkspaceState = {
     source: Pick<WorkspacePresentationViewReference, 'path' | 'sourceSha256'>
   ) => void
   setDocumentContent: (path: string, content: string) => void
+  setSpreadsheetMutations: (
+    path: string,
+    mutations: WorkspaceSpreadsheetMutation[],
+    unsupportedReason?: string | null,
+    baseFingerprints?: Record<string, string>
+  ) => void
+  convertSpreadsheet: (workspaceRoot: string, path: string) => Promise<string | null>
+  reloadSpreadsheetConflict: (path: string) => void
+  resolveSpreadsheetConflict: (
+    path: string,
+    decision: 'keep-local' | 'use-external'
+  ) => void
   saveDocument: (
     workspaceRoot: string,
     path: string,

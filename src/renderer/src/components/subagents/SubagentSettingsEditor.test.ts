@@ -32,6 +32,10 @@ vi.mock('react-i18next', () => ({
       subagentsUseExistingAgents: 'Use existing agents',
       subagentsUseExistingAgentsDesc: 'Choose configured profiles or parent-defined one-run roles.',
       subagentsMaxParallel: 'Maximum parallel subagents',
+      subagentsProactiveRetry: 'Main agent retries failed subagents',
+      subagentsProactiveRetryDesc: 'Continue eligible failed children.',
+      subagentsProactiveRetryAttempts: 'Maximum proactive retries',
+      subagentsProactiveRetryAttemptsDesc: 'One to three retries.',
       subagentsDelegatable: 'Delegatable subagents',
       subagentsAutomaticRoles: 'Automatic model roles',
       'agentsView.followDefault': 'Follow default',
@@ -125,6 +129,7 @@ describe('SubagentSettingsEditor', () => {
       subagents: {
         enabled: true,
         maxParallel: 5,
+        proactiveRetry: { enabled: true, maxAttempts: 3 },
         defaultToolPolicy: 'inherit' as const,
         profiles: [customProfile()]
       }
@@ -142,6 +147,8 @@ describe('SubagentSettingsEditor', () => {
     const text = JSON.stringify(renderer.toJSON())
     expect(text).toContain('Runtime policy')
     expect(text).toContain('Maximum parallel subagents')
+    expect(text).toContain('Main agent retries failed subagents')
+    expect(text).toContain('Maximum proactive retries')
     expect(text).not.toContain('subagentsMaxChildRuns')
     expect(text).not.toContain('Child runs per session')
     expect(text).toContain('General')
@@ -169,7 +176,7 @@ describe('SubagentSettingsEditor', () => {
     ])
     const policyPanel = renderer.root.findByProps({ id: 'subagent-settings-panel-policy' })
     expect(policyPanel.props.hidden).toBe(false)
-    expect(policyPanel.findAllByType('input').filter((input) => input.props.type === 'number')).toHaveLength(1)
+    expect(policyPanel.findAllByType('input').filter((input) => input.props.type === 'number')).toHaveLength(2)
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-profiles' }).props.hidden).toBe(true)
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-automatic' }).props.hidden).toBe(true)
 
@@ -262,6 +269,48 @@ describe('SubagentSettingsEditor', () => {
     })
     text = JSON.stringify(renderer.toJSON())
     expect(text).toContain('Researcher')
+  })
+
+  it('persists proactive retry enablement and the bounded attempt count', async () => {
+    const onPatch = vi.fn()
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(SubagentSettingsEditor, {
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          subagents: {
+            enabled: true,
+            proactiveRetry: { enabled: true, maxAttempts: 3 },
+            profiles: []
+          }
+        },
+        onPatch,
+        variant: 'settings'
+      }))
+    })
+
+    await act(async () => {
+      renderer.root.findByProps({
+        role: 'switch',
+        'aria-label': 'Main agent retries failed subagents'
+      }).props.onClick()
+    })
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({
+      subagents: expect.objectContaining({
+        proactiveRetry: { enabled: false, maxAttempts: 3 }
+      })
+    }))
+
+    const attempts = renderer.root.findAllByType('input').find((input) => input.props.max === 3)
+    expect(attempts).toBeDefined()
+    await act(async () => {
+      attempts!.props.onChange({ target: { value: '2' } })
+    })
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({
+      subagents: expect.objectContaining({
+        proactiveRetry: { enabled: true, maxAttempts: 2 }
+      })
+    }))
   })
 
   it('defaults to existing-agent reuse and persists delegation mode changes', async () => {

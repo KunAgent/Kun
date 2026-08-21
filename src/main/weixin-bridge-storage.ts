@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
-import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, unlink, rename } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { DEFAULT_WEIXIN_BRIDGE_RPC_URL } from '../shared/app-settings'
 import {
@@ -302,7 +302,14 @@ export async function writeJsonIfChanged(filePath: string, value: unknown): Prom
     /* create the file below */
   }
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, next, 'utf8')
+  const temporaryPath = `${filePath}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
+  await writeFile(temporaryPath, next, { encoding: 'utf8', mode: 0o600 })
+  try {
+    await rename(temporaryPath, filePath)
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined)
+    throw error
+  }
 }
 
 export async function listIndexedWeixinAccountIds(): Promise<string[]> {

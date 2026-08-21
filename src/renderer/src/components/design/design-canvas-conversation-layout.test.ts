@@ -1,0 +1,107 @@
+import { describe, expect, it } from 'vitest'
+import {
+  CANVAS_CONVERSATION_EDGE_MARGIN,
+  canvasConversationLayoutKey,
+  canvasConversationPanelSize,
+  canvasConversationResponsiveMode,
+  clampCanvasConversationLayout,
+  defaultCanvasConversationLayout,
+  normalizeCanvasConversationLayout
+} from './design-canvas-conversation-layout'
+
+describe('canvasConversationResponsiveMode', () => {
+  it('uses a bottom sheet below the mobile breakpoint', () => {
+    expect(canvasConversationResponsiveMode(500)).toBe('sheet')
+    expect(canvasConversationResponsiveMode(767)).toBe('sheet')
+  })
+
+  it('uses compact between mobile and desktop', () => {
+    expect(canvasConversationResponsiveMode(768)).toBe('compact')
+    expect(canvasConversationResponsiveMode(1099)).toBe('compact')
+  })
+
+  it('uses desktop from 1100px', () => {
+    expect(canvasConversationResponsiveMode(1100)).toBe('desktop')
+    expect(canvasConversationResponsiveMode(1920)).toBe('desktop')
+  })
+})
+
+describe('defaultCanvasConversationLayout', () => {
+  it('places the panel on the right, clear of the canvas toolbar', () => {
+    const layout = defaultCanvasConversationLayout({ width: 1600, height: 900 }, 'desktop')
+    expect(layout.open).toBe(false)
+    expect(layout.minimized).toBe(false)
+    // Right-aligned with a 24px edge margin plus toolbar (56px) + 16px gap.
+    expect(layout.x).toBe(1600 - 420 - 24 - 56 - 16)
+    expect(layout.y).toBeGreaterThanOrEqual(CANVAS_CONVERSATION_EDGE_MARGIN)
+  })
+
+  it('pins the sheet to the bottom on mobile', () => {
+    const layout = defaultCanvasConversationLayout({ width: 500, height: 800 }, 'sheet')
+    expect(layout.x).toBe(0)
+    expect(layout.y).toBeGreaterThan(0)
+  })
+})
+
+describe('clampCanvasConversationLayout', () => {
+  it('keeps the panel inside the viewport with an edge margin', () => {
+    const clamped = clampCanvasConversationLayout(
+      { open: true, minimized: false, x: -400, y: 9000 },
+      { width: 1200, height: 800 },
+      'desktop'
+    )
+    expect(clamped.x).toBe(CANVAS_CONVERSATION_EDGE_MARGIN)
+    expect(clamped.y).toBeLessThan(800)
+    expect(clamped.y).toBeGreaterThanOrEqual(CANVAS_CONVERSATION_EDGE_MARGIN)
+  })
+
+  it('forces sheet mode geometry on mobile', () => {
+    const clamped = clampCanvasConversationLayout(
+      { open: true, minimized: false, x: 300, y: 120 },
+      { width: 420, height: 700 },
+      'sheet'
+    )
+    expect(clamped.x).toBe(0)
+    expect(clamped.y).toBe(0)
+  })
+})
+
+describe('canvasConversationPanelSize', () => {
+  it('caps the desktop panel at 420px wide and 680px tall', () => {
+    const size = canvasConversationPanelSize({ width: 1600, height: 900 }, 'desktop')
+    expect(size.width).toBe(420)
+    expect(size.height).toBe(680)
+  })
+
+  it('narrows the panel in compact mode', () => {
+    const size = canvasConversationPanelSize({ width: 900, height: 800 }, 'compact')
+    expect(size.width).toBeLessThanOrEqual(400)
+  })
+
+  it('uses nearly the full sheet width on mobile', () => {
+    const size = canvasConversationPanelSize({ width: 400, height: 800 }, 'sheet')
+    expect(size.width).toBe(400 - CANVAS_CONVERSATION_EDGE_MARGIN * 2)
+    expect(size.height).toBeLessThanOrEqual(Math.round(800 * 0.72))
+  })
+})
+
+describe('canvasConversationLayoutKey', () => {
+  it('combines workspace and document identity and rejects blanks', () => {
+    expect(canvasConversationLayoutKey('/ws', 'doc-1')).toBe('/ws::doc-1')
+    expect(canvasConversationLayoutKey('  ', 'doc-1')).toBe('')
+    expect(canvasConversationLayoutKey('/ws', ' ')).toBe('')
+  })
+})
+
+describe('normalizeCanvasConversationLayout', () => {
+  it('accepts finite coordinates and rounds them', () => {
+    expect(normalizeCanvasConversationLayout({ open: true, minimized: false, x: 12.6, y: 40.2 }))
+      .toEqual({ open: true, minimized: false, x: 13, y: 40 })
+  })
+
+  it('rejects missing or non-finite geometry', () => {
+    expect(normalizeCanvasConversationLayout(null)).toBeNull()
+    expect(normalizeCanvasConversationLayout({ x: 1 })).toBeNull()
+    expect(normalizeCanvasConversationLayout({ x: Number.NaN, y: 2 })).toBeNull()
+  })
+})

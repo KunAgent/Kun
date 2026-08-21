@@ -48,6 +48,7 @@ describe('coerceRendererSettings', () => {
       enabled: true,
       useExistingAgents: true,
       maxParallel: 3,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
       profiles: []
     })
     expect(normalized.agents.kun.subagents).not.toHaveProperty('maxChildRuns')
@@ -212,6 +213,7 @@ describe('diffSettingsPatch', () => {
       enabled: true,
       useExistingAgents: true,
       maxParallel: 3,
+      proactiveRetry: { enabled: true, maxAttempts: 3 },
       defaultToolPolicy: 'inherit',
       defaultProfile: 'researcher',
       profiles: [replacement]

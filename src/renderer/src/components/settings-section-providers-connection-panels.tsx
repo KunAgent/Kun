@@ -34,6 +34,7 @@ import { GrokLoginSection } from './settings-section-providers-grok-login'
 import {
   MODEL_ENDPOINT_FORMAT_LABEL_KEYS,
   antigravityProviderCatalogPatch,
+  geminiCliApiCatalogPatch,
   isAgentSdkProvider, isCodexProvider, isCursorSubscriptionProvider,
   isDelegatedEndpointProvider,
   isGeminiCliApiSubscriptionProvider, isGeminiSubscriptionProvider, isGrokSubscriptionProvider,
@@ -99,7 +100,10 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                     />
                   ) : isGeminiCliApiSubscriptionProvider(activeProvider) ? (
                     <GeminiCliApiSubscriptionSection
-                      onModelsChange={(models) => updateModelProvider(activeProvider.id, { models })}
+                      onModelsChange={(models) => updateModelProvider(
+                        activeProvider.id,
+                        geminiCliApiCatalogPatch(models, activeProvider.models, activeProvider.modelProfiles)
+                      )}
                       t={t}
                     />
                   ) : isCursorSubscriptionProvider(activeProvider) ? (

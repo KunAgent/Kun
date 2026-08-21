@@ -108,4 +108,21 @@ describe('WriteWorkspaceToolbar code preview', () => {
     expect(disabledHtml).toContain('data-inline-completion-state="off"')
     expect(disabledHtml).toContain('translate-x-0.5')
   })
+
+  it('exposes save status and a save action for editable XLSX files', () => {
+    const html = renderToStaticMarkup(createElement(WriteWorkspaceToolbar, {
+      ...textToolbarProps(false),
+      activeFileIsOffice: true,
+      activeFileIsEditableSpreadsheet: true,
+      activeFileIsText: false,
+      activeFileName: 'book.xlsx',
+      activeFilePath: '/workspace/book.xlsx',
+      saveLabel: 'writeUnsaved',
+      saveStatus: 'dirty'
+    }))
+    expect(html).toContain('writeSpreadsheetEditable')
+    expect(html).toContain('writeUnsaved')
+    expect(html).toContain('title="writeUnsaved"')
+    expect(html).not.toContain('writeReadOnly')
+  })
 })

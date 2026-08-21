@@ -1,7 +1,7 @@
 import type { NormalizedThread } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { getProvider } from '../agent/registry'
-import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../lib/workspace-path'
 
 /**
  * Paginated sidebar thread loading. `refreshThreads` (in the workspace actions
@@ -26,13 +26,23 @@ function mergeThreadPages(
   })
 }
 
+export type WorkspaceThreadPageMeta = {
+  workspaceKey: string
+  nextCursor?: string
+  hasMore: boolean
+  total?: number
+}
+
 export async function loadMoreThreads(
   workspacePath: string,
   set: ChatStoreSet,
   get: ChatStoreGet
 ): Promise<void> {
   if (get().runtimeConnection !== 'ready') return
-  const scope = get().threadListCursorByWorkspace[workspacePath]
+  const normalizedWorkspace = normalizeWorkspaceRoot(workspacePath)
+  const workspaceKey = workspaceRootIdentityKey(normalizedWorkspace)
+  if (!workspaceKey) return
+  const scope = get().threadListCursorByWorkspace[workspaceKey]
   if (!scope || !scope.nextCursor || scope.hasMore !== true) return
 
   try {
@@ -42,14 +52,14 @@ export async function loadMoreThreads(
       set((s) => ({
         threadListCursorByWorkspace: {
           ...s.threadListCursorByWorkspace,
-          [workspacePath]: { hasMore: false }
+          [workspaceKey]: { workspaceKey, hasMore: false }
         }
       }))
       return
     }
     const page = await p.listThreadsPage({
       cursor: scope.nextCursor,
-      workspace: normalizeWorkspaceRoot(workspacePath),
+      workspace: normalizedWorkspace,
       includeArchived: get().showArchivedThreads,
       includeSide: true,
       lean: true
@@ -59,40 +69,15 @@ export async function loadMoreThreads(
       threads: mergeThreadPages(s.threads, filtered),
       threadListCursorByWorkspace: {
         ...s.threadListCursorByWorkspace,
-        [workspacePath]: {
+        [workspaceKey]: {
+          workspaceKey,
           nextCursor: page.nextCursor,
           hasMore: page.hasMore,
-          ...(page.total != null ? { total: page.total } : {})
+          ...(page.total != null ? { total: page.total } : scope.total != null ? { total: scope.total } : {})
         }
       }
     }))
   } catch {
     // Keep the existing cursor so the user can retry "show more" later.
   }
-}
-
-export type ThreadListPageMeta = { nextCursor?: string; hasMore: boolean; total?: number }
-
-/**
- * Build the per-workspace cursor map after a full calibration refresh. Every
- * workspace present in the committed list is fully loaded, so `hasMore` stays
- * false unless the runtime reports a pending cursor; `total` feeds the
- * "show more" count badge.
- */
-export function buildWorkspaceCursorByWorkspace(
-  threads: NormalizedThread[],
-  meta: ThreadListPageMeta | null
-): Record<string, { nextCursor?: string; hasMore: boolean; total?: number }> {
-  if (!meta) return {}
-  const cursorByWorkspace: Record<string, { nextCursor?: string; hasMore: boolean; total?: number }> = {}
-  for (const thread of threads) {
-    const workspace = normalizeWorkspaceRoot(thread.workspace ?? '')
-    if (!workspace || cursorByWorkspace[workspace]) continue
-    cursorByWorkspace[workspace] = {
-      nextCursor: meta.nextCursor,
-      hasMore: meta.hasMore,
-      total: meta.total
-    }
-  }
-  return cursorByWorkspace
 }

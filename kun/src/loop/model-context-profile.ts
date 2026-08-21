@@ -251,6 +251,22 @@ function providerServiceTiers(
   return CODEX_PRIORITY_SERVICE_TIER_MODELS.has(model) ? ['priority'] : undefined
 }
 
+export function safeProviderReasoningCapability(
+  input: ProviderModelCapabilityInput,
+  reasoningCapability: ModelReasoningCapabilityMetadata | undefined
+): ModelReasoningCapabilityMetadata | undefined {
+  const providerId = input.providerId?.trim().toLowerCase() ?? ''
+  const presetSource = input.presetSource?.trim().toLowerCase() ?? ''
+  const openCodeGo = presetSource === 'opencode-go' || /^opencode-go(?:-\d+)?$/u.test(providerId)
+  if (!openCodeGo || reasoningCapability?.requestProtocol !== 'thinking-toggle-chat-completions') {
+    return reasoningCapability
+  }
+  // OpenCode Go's aggregate endpoint does not advertise the generic thinking
+  // toggle. Keeping this safety repair provider-scoped preserves explicit
+  // thinking-toggle support for unrelated custom HTTP providers.
+  return reasoning(['auto'], 'auto', 'none')
+}
+
 function providerReasoningCapability(
   input: ProviderModelCapabilityInput
 ): ModelReasoningCapabilityMetadata | undefined {

@@ -28,6 +28,10 @@ import {
   type ModelStreamLimits,
   type PendingToolCall
 } from './model-stream-resource-budget.js'
+import {
+  assertPendingToolCallsComplete,
+  ModelStreamProtocolError
+} from './tool-call-stream-identity.js'
 import { normalizeCompatUsage } from './compat-usage-normalizer.js'
 import {
   exponentialRetryDelayMs,
@@ -63,10 +67,11 @@ import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder
 import { CompatModelClientBase } from './compat-model-client-base.js'
 import { IncrementalSseFrameBuffer } from './incremental-sse-frame-buffer.js'
 import { summarizeModelRetryFailure } from './model-retry-failure-summary.js'
+import { StreamOutputReplayBuffer } from './stream-output-replay-buffer.js'
+import { StreamTextReplayReconciler } from './stream-text-replay-reconciler.js'
 import type { ChatCompletionResponse, CompatPostResult, ModelStopReason, StreamPayloadResult } from './compat-model-types.js'
 import {
   enforceNonStreamingLimits,
-  isCommittedStreamOutput,
   isRecoverableStreamTransportError,
   mergeStreamFinishReason,
   mergeUsageSnapshots,
@@ -96,7 +101,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
     let response = input.response
     let usedRetryAttempts = input.usedRetryAttempts
     let emittedReasoning = false
-    let committedOutput = false
+    const textReplay = new StreamTextReplayReconciler()
     // maxAttempts counts retries after the initial request everywhere, and
     // `0` is an explicit "no automatic transport retries" setting. Unlike the
     // older code, this stream-recovery budget must not sneak in a minimum of
@@ -110,40 +115,63 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
       }
 
       let recoverableError: Extract<ModelStreamChunk, { kind: 'error' }> | null = null
-      const suppressReasoning = emittedReasoning
+      const deferredOutput = new StreamOutputReplayBuffer()
+      const suppressReasoning = emittedReasoning || textReplay.hasDeliveredText
+      textReplay.beginAttempt()
       for await (const chunk of this.streamSse(
         response.body,
         input.request.abortSignal,
         input.endpointFormat,
         input.model
       )) {
-        if (isRecoverableStreamTransportError(chunk)) {
-          recoverableError = chunk
+        if (chunk.kind === 'error') {
+          if (isRecoverableStreamTransportError(chunk)) {
+            recoverableError = chunk
+            continue
+          }
+          // Protocol/provider errors are terminal diagnostics, not replay
+          // divergence. Commit any completed output before preserving the
+          // provider's remaining error/completed terminal sequence.
+          for (const deferred of deferredOutput.drain()) yield deferred
+          yield chunk
           continue
         }
         if (chunk.kind === 'assistant_reasoning_delta') {
           if (suppressReasoning) continue
           emittedReasoning = true
         }
-        if (isCommittedStreamOutput(chunk)) committedOutput = true
+        if (chunk.kind === 'assistant_text_delta') {
+          const reconciled = textReplay.accept(chunk.text)
+          if (reconciled.kind === 'conflict') {
+            recoverableError = streamReplayConflict()
+            break
+          }
+          if (reconciled.kind === 'suppress') continue
+          yield { ...chunk, text: reconciled.text }
+          continue
+        }
+        if (
+          textReplay.waitingForReplayPrefix &&
+          chunk.kind !== 'assistant_reasoning_delta'
+        ) {
+          recoverableError = streamReplayConflict()
+          break
+        }
+        if (deferredOutput.defer(chunk)) {
+          // Tool calls and generated media become observable side effects in
+          // AgentLoop. Hold them until this attempt reaches a terminal marker
+          // so an interrupted attempt can be discarded and replayed safely.
+          continue
+        }
+        if (chunk.kind === 'usage' || chunk.kind === 'completed') {
+          for (const deferred of deferredOutput.drain()) yield deferred
+        }
         yield chunk
       }
 
       if (!recoverableError) return
       if (input.request.abortSignal.aborted) {
         yield recoverableError
-        return
-      }
-      if (committedOutput) {
-        // Final assistant text, tool calls, and generated images are commit
-        // points: replaying the identical request could append a different
-        // answer or duplicate a side effect. Surface the transport failure
-        // with an explicit reason (while keeping the original code, which
-        // consumers already map) instead of silently retrying.
-        yield {
-          ...recoverableError,
-          message: `${recoverableError.message} (stream recovery was blocked because final text, a tool call, or generated output had already started)`
-        }
         return
       }
       if (usedRetryAttempts >= maxRetryAttempts) {
@@ -426,13 +454,19 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         if (sawDone) break
       }
     } catch (error) {
-      if (error instanceof ModelStreamResourceLimitError) {
+      if (error instanceof ModelStreamResourceLimitError || error instanceof ModelStreamProtocolError) {
         frameBuffer.clear()
         budget.clearPendingCalls(pendingArguments)
         pendingByIndex.clear()
         completedToolCalls.clear()
-        cancelReader('model stream resource limit exceeded')
-        yield { kind: 'error', message: error.message, code: 'stream_resource_limit' }
+        cancelReader(error instanceof ModelStreamProtocolError
+          ? 'model stream tool-call protocol error'
+          : 'model stream resource limit exceeded')
+        yield {
+          kind: 'error',
+          message: error.message,
+          code: error instanceof ModelStreamProtocolError ? error.code : 'stream_resource_limit'
+        }
         return
       }
       throw error
@@ -466,6 +500,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
     // `{ __raw }` (a tool error the model can react to) instead of vanishing.
     let flushedPendingToolCall = false
     try {
+      assertPendingToolCallsComplete(pendingArguments)
       for (const [callId, pending] of pendingArguments) {
         if (!pending.name) continue
         if (completedToolCalls.has(callId)) continue
@@ -481,8 +516,12 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         }
       }
     } catch (error) {
-      if (error instanceof ModelStreamResourceLimitError) {
-        yield { kind: 'error', message: error.message, code: 'stream_resource_limit' }
+      if (error instanceof ModelStreamResourceLimitError || error instanceof ModelStreamProtocolError) {
+        yield {
+          kind: 'error',
+          message: error.message,
+          code: error instanceof ModelStreamProtocolError ? error.code : 'stream_resource_limit'
+        }
         return
       }
       throw error
@@ -631,4 +670,13 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
     )
   }
 
+}
+
+function streamReplayConflict(): Extract<ModelStreamChunk, { kind: 'error' }> {
+  return {
+    kind: 'error',
+    message: 'model stream retry diverged before replaying the already-delivered assistant text',
+    code: 'stream_replay_conflict',
+    failure: { category: 'network', failoverAllowed: true }
+  }
 }

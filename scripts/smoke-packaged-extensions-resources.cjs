@@ -15,7 +15,6 @@ const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path
 const { KUN_RUNTIME_REQUIRED_PATHS } = require('./after-pack.cjs')
 
 const DEFAULT_EXTENSION_IDS = [
-  'kun-examples.presentation-studio',
   'kun-examples.social-media-sidebar'
 ]
 const PACKAGED_EXTENSION_SMOKE_SUCCESS_MARKER = 'Packaged Extension smoke OK ('

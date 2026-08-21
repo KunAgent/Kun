@@ -66,12 +66,16 @@ import {
   elapsedMs,
   executeWithParentSignal,
   formatDetachedChildDisplayText,
-  formatDetachedChildNotice,
   notifyLifecycle,
   sameChildActivity,
   subtractChildUsage,
   toUsageSnapshot
 } from './delegation-runtime-support.js'
+import {
+  formatDetachedChildNotice,
+  hasResumableChildSnapshot,
+  proactiveRetryStatus
+} from './delegation-proactive-retry.js'
 import {
   CHILD_RESULT_PREVIEW_CHARS,
   ChildResultExecutionError
@@ -141,6 +145,7 @@ export abstract class DelegationRuntimeBase {
     idGenerator?: () => string
     executor?: ChildRunExecutor
     recordExternalUsage?: (threadId: string, usage: UsageSnapshot) => void
+    proactiveRetryWait?: (delayMs: number, signal: AbortSignal) => Promise<boolean>
   }) {}
 
   bindAgentLoop(input: { runTurn: RunTurnFn }): void {
@@ -314,6 +319,10 @@ export abstract class DelegationRuntimeBase {
     return this.options.config.defaultToolPolicy
   }
 
+  get proactiveRetryPolicy(): SubagentsCapabilityConfig['proactiveRetry'] {
+    return this.options.config.proactiveRetry
+  }
+
   async diagnostics(parentThreadId?: string): Promise<{
     enabled: boolean
     active: number
@@ -352,6 +361,8 @@ export abstract class DelegationRuntimeBase {
         ...(record.terminationReason ? { childTerminationReason: record.terminationReason } : {}),
         resumable: record.resumable === true,
         resumeCount: record.resumeCount ?? 0,
+        ...(record.failure ? { failure: record.failure } : {}),
+        proactiveRetry: proactiveRetryStatus(record, this.options.config.proactiveRetry),
         ...(record.detached ? { detached: true } : {}),
         ...(record.model ? { childModel: record.model } : {}),
         ...(record.providerId ? { childProviderId: record.providerId } : {}),
@@ -400,7 +411,9 @@ export abstract class DelegationRuntimeBase {
   ): void {
     const usage = toUsageSnapshot(childUsage)
     if (usage.totalTokens <= 0 && usage.costUsd === undefined && usage.costCny === undefined) return
-    this.options.recordExternalUsage?.(record.parentThreadId, usage)
+    // Independent ledger: child usage settles on the child's own side thread,
+    // never the parent, so parent cache telemetry and budgets stay clean.
+    this.options.recordExternalUsage?.(record.id, usage)
   }
 
   protected async notifyDetachedChild(record: ChildRunRecord): Promise<void> {
@@ -409,7 +422,10 @@ export abstract class DelegationRuntimeBase {
     if (!this.options.threadStore || !this.options.turns || !this.runTurn) return
     const thread = await this.options.threadStore.get(record.parentThreadId)
     if (!thread) return
-    const notice = formatDetachedChildNotice(record)
+    const notice = formatDetachedChildNotice(
+      record,
+      proactiveRetryStatus(record, this.options.config.proactiveRetry)
+    )
     const displayText = formatDetachedChildDisplayText(record)
     if (thread.status === 'running') {
       const runningTurn = [...thread.turns].reverse().find((turn) => turn.status === 'running')
@@ -491,7 +507,7 @@ export abstract class DelegationRuntimeBase {
         ...current,
         status: abort.terminationReason === 'runtime_restart' ? 'failed' : 'aborted',
         terminationReason: abort.terminationReason,
-        resumable: isResumableChildRun(current),
+        resumable: hasResumableChildSnapshot(current),
         error: abort.error.slice(0, CHILD_RESULT_PREVIEW_CHARS),
         updatedAt: this.now()
       }))
@@ -562,7 +578,7 @@ export abstract class DelegationRuntimeBase {
         ...current,
         status: contractError ? 'failed' : 'completed',
         terminationReason: contractError ? 'child_error' : undefined,
-        resumable: false,
+        resumable: contractError ? hasResumableChildSnapshot(current) : false,
         summary: result.summary,
         summaryTruncated: result.summaryTruncated,
         resultRef: result.resultRef,
@@ -588,6 +604,9 @@ export abstract class DelegationRuntimeBase {
         prefixReused: result.prefixReused,
         inheritedHistoryItems: result.inheritedHistoryItems,
         ...(contractError ? { error: contractError } : {}),
+        ...(contractError ? {
+          failure: { source: 'contract' as const, code: 'child_contract_error' }
+        } : { failure: undefined }),
         durationMs: (current.durationMs ?? 0) + elapsedMs(startedAt, finishedAt),
         updatedAt: finishedAt
       }))
@@ -612,10 +631,11 @@ export abstract class DelegationRuntimeBase {
         ...(failedError?.toolInvocations !== undefined
           ? { toolInvocations: failedError.toolInvocations }
           : {}),
+        ...(failedError?.failure ? { failure: failedError.failure } : {}),
         previewChars: CHILD_RESULT_PREVIEW_CHARS
       }))
       // Settle usage for failed/aborted children too: tokens burned before the
-      // failure are real cost and must reach the parent aggregate exactly once
+      // failure are real cost and must reach the child ledger exactly once
       // (issue #1155). Same delta mechanism as the success path, so resume and
       // retry never double-count, and zero-usage failures stay zero.
       if (usageBeforeRun !== undefined && failedError?.usage !== undefined) {

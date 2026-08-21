@@ -347,11 +347,21 @@ export const SubagentProfileConfig = z
   })
 export type SubagentProfileConfig = z.infer<typeof SubagentProfileConfig>
 
+export const ProactiveSubagentRetryConfig = z.object({
+  /** Let the main agent resume an eligible failed delegate_task child. */
+  enabled: z.boolean().default(true),
+  /** Model-initiated child continuations after the initial run. */
+  maxAttempts: z.number().int().min(1).max(3).default(3)
+}).strict()
+export type ProactiveSubagentRetryConfig = z.infer<typeof ProactiveSubagentRetryConfig>
+
 export const SubagentsCapabilityConfig = CapabilityToggleConfig.extend({
   /** Reuse configured profiles instead of requiring the parent to define a one-run role. */
   useExistingAgents: z.boolean().default(true),
   /** Max children running at once; extra spawns queue instead of erroring. */
   maxParallel: z.number().int().nonnegative().default(256),
+  /** Bounded main-agent continuation policy for failed ordinary children. */
+  proactiveRetry: ProactiveSubagentRetryConfig.default(() => ProactiveSubagentRetryConfig.parse({})),
   // Accept the removed cumulative limit so old configs keep loading, but ignore it.
   maxChildRuns: z.number().int().nonnegative().optional(),
   /**

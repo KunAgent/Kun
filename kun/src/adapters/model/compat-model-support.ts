@@ -12,7 +12,14 @@ export function mergeStreamFinishReason(current: string | null, next: string): s
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 450_000
 
 export function isCodexEndpoint(baseUrl: string): boolean {
-  return baseUrl.includes('chatgpt.com/backend-api/codex')
+  try {
+    const url = new URL(baseUrl.trim())
+    return url.protocol === 'https:' &&
+      url.hostname === 'chatgpt.com' &&
+      url.pathname.replace(/\/+$/u, '').startsWith('/backend-api/codex')
+  } catch {
+    return false
+  }
 }
 
 export function normalizeCodexResponsesUrl(baseUrl: string): string {
@@ -317,15 +324,6 @@ export function isRecoverableStreamTransportError(
     chunk.code === 'stream_read_error' ||
     chunk.code === 'stream_truncated' ||
     chunk.code === 'stream_idle_timeout'
-  )
-}
-
-export function isCommittedStreamOutput(chunk: ModelStreamChunk): boolean {
-  return (
-    chunk.kind === 'assistant_text_delta' ||
-    chunk.kind === 'tool_call_delta' ||
-    chunk.kind === 'tool_call_complete' ||
-    chunk.kind === 'image_generation_complete'
   )
 }
 

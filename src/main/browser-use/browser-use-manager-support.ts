@@ -32,6 +32,9 @@ import {
 export const ORIGIN_DECISION_TIMEOUT_MS = 60_000
 export const ACTION_DECISION_TIMEOUT_MS = 30_000
 export const MOUNT_TIMEOUT_MS = 15_000
+export const PROXY_CONFIGURATION_TIMEOUT_MS = 15_000
+export const NAVIGATION_TIMEOUT_MS = 45_000
+export const STRUCTURED_OBSERVATION_TIMEOUT_MS = 10_000
 export const PREPARED_ACTION_TTL_MS = 30_000
 export const MAX_AUDIT_ENTRIES = 2_000
 export const MAX_BROWSER_USE_SESSIONS = 4
@@ -74,9 +77,16 @@ const LOW_RISK_CONTROL_PATTERNS = [
   /^(?:展開|折りたたむ|メニュー)$/,
   /^(?:펼치기|접기|메뉴)$/
 ]
+export type BrowserUseManagerTimeouts = {
+  proxyConfigurationMs: number
+  navigationMs: number
+  structuredObservationMs: number
+}
+
 export type BrowserUseManagerOptions = {
   settings: () => KunBrowserUseSettingsV1
   now?: () => Date
+  timeouts?: Partial<BrowserUseManagerTimeouts>
   createView?: (partition: string) => WebContentsView
   createProxy?: (
     mode: BrowserUseMode,
@@ -150,6 +160,7 @@ export type BrowserSessionEntry = {
   createdAt: number
   lastActivityAt: number
   lifecycle: BrowserUseViewState['lifecycle']
+  reason?: string
   controlOwner: BrowserUseViewState['controlOwner']
   mount?: BrowserMount
   mountWaiters: Set<() => void>
@@ -437,6 +448,48 @@ export class BrowserUseOperationAbortedError extends Error {
     super('Browser Use operation was cancelled or invalidated.')
     this.name = 'BrowserUseOperationAbortedError'
   }
+}
+
+export class BrowserUseDeadlineError extends Error {
+  constructor(
+    readonly code: string,
+    message: string
+  ) {
+    super(message)
+    this.name = 'BrowserUseDeadlineError'
+  }
+}
+
+export async function withBrowserUseDeadline<T>(
+  operation: Promise<T>,
+  signal: AbortSignal,
+  timeoutMs: number,
+  code: string,
+  message: string,
+  onTimeout?: () => void
+): Promise<T> {
+  if (signal.aborted) throw new BrowserUseOperationAbortedError()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let onAbort: (() => void) | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(new BrowserUseOperationAbortedError())
+    signal.addEventListener('abort', onAbort, { once: true })
+    timer = setTimeout(() => {
+      onTimeout?.()
+      reject(new BrowserUseDeadlineError(code, message))
+    }, timeoutMs)
+  })
+  operation.catch(() => undefined)
+  try {
+    return await Promise.race([operation, deadline])
+  } finally {
+    if (timer) clearTimeout(timer)
+    if (onAbort) signal.removeEventListener('abort', onAbort)
+  }
+}
+
+export function browserUseErrorCode(error: unknown, fallback: string): string {
+  return error instanceof BrowserUseDeadlineError ? error.code : fallback
 }
 
 export function assertBrowserUseOperationActive(

@@ -10,10 +10,35 @@ import {
   modelsDevCatalogPayloadSchema,
   notificationPayloadSchema,
   runtimeRequestPayloadSchema,
+  scheduleTaskCreatePayloadSchema,
+  scheduleTaskUpdatePayloadSchema,
   settingsPatchSchema,
   skillGithubImportPayloadSchema,
   skillListPayloadSchema
 } from './app-ipc-schemas'
+
+describe('schedule task IPC schemas', () => {
+  const future = '2099-01-01T10:00:00.000Z'
+
+  it('requires a plan binding when creating a plan schedule', () => {
+    const payload = {
+      title: 'Plan build', prompt: 'Build it', workspaceRoot: '/tmp/project', sourcePlanId: 'plan-1',
+      providerId: 'deepseek', model: 'deepseek-v4-flash', reasoningEffort: 'medium', mode: 'agent',
+      orchestration: 'direct', schedule: { kind: 'at', atTime: future, timeZone: 'Asia/Shanghai' }
+    }
+    expect(scheduleTaskCreatePayloadSchema.parse(payload).sourcePlanId).toBe('plan-1')
+    expect(() => scheduleTaskCreatePayloadSchema.parse({ ...payload, sourcePlanId: '' })).toThrow()
+  })
+
+  it('accepts only the narrow editable schedule fields', () => {
+    const payload = {
+      taskId: 'task-1', providerId: 'deepseek', model: 'deepseek-v4-flash', reasoningEffort: 'medium',
+      schedule: { kind: 'at', atTime: future, timeZone: 'Asia/Shanghai' }
+    }
+    expect(scheduleTaskUpdatePayloadSchema.parse(payload).taskId).toBe('task-1')
+    expect(() => scheduleTaskUpdatePayloadSchema.parse({ ...payload, sourcePlanId: 'plan-2' })).toThrow()
+  })
+})
 
 describe('app-ipc-schemas runtime', () => {
   it('accepts only bounded non-negative integer app badge counts', () => {
@@ -186,6 +211,20 @@ describe('app-ipc-schemas runtime', () => {
       path: '/v1/model-connections/provider-a/credential/finalize',
       method: 'POST',
       body: '{}'
+    })).toThrow(/runtime request path is not allowed/)
+  })
+
+  it('lets the sidebar summarize a thread (#1200)', () => {
+    // The action shipped without an allowlist entry, so every summarize POST
+    // was rejected in Main and never reached the runtime.
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/threads/thr_9e795326bb0b/summarize',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/threads/thr_9e795326bb0b/summarize')
+    expect(() => runtimeRequestPayloadSchema.parse({
+      path: '/v1/threads/thr_9e795326bb0b/summarize',
+      method: 'GET'
     })).toThrow(/runtime request path is not allowed/)
   })
 

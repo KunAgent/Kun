@@ -40,6 +40,20 @@ export type ItemHistoryCompactionResult = {
   itemCount: number
 }
 
+export type SessionArchiveResult = {
+  path: string
+  cleanup: () => Promise<void>
+}
+
+export type SessionArchiveInput = {
+  threadId: string
+  cutoffTurnId: string
+  createdAt: string
+  items: TurnItem[]
+  retainedItems: number
+  replacedTokens: number
+}
+
 /**
  * A bounded chronological window from the durable item projection. `before`
  * is the stable id of the first item in the previously returned page and is
@@ -98,6 +112,8 @@ export interface SessionStore {
    * and explicit discard flows.
    */
   rewriteItems(threadId: string, items: TurnItem[]): Promise<void>
+  /** Stage an atomic, human-readable archive before a conditional history rewrite. */
+  archiveItems?(input: SessionArchiveInput): Promise<SessionArchiveResult>
   /** Load item history and its opaque revision as one consistent snapshot. */
   loadItemSnapshot(threadId: string): Promise<ItemHistorySnapshot>
   /**

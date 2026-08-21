@@ -79,6 +79,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     extensionComposerContexts: [],
     watchTurnCompletion: {},
     unreadThreadIds: readUnreadCompletions(),
+    scheduledThreadActivities: {},
     sideConversations: {},
     sidePanel: { open: false, activeSideId: null },
     clawChannels: [],

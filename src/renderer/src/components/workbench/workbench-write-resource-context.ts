@@ -14,7 +14,9 @@ export function activeWriteResourceReference(
     sourceName: locator,
     locator,
     resourceKind: fileKind,
-    access: fileKind === 'text' || fileKind === 'code' ? 'read-write' : 'read-only',
+    access: fileKind === 'text' || fileKind === 'code' || (fileKind === 'office' && sourceFormat === 'xlsx')
+      ? 'read-write'
+      : 'read-only',
     ...(sourceFormat ? { sourceFormat } : {})
   }
 }

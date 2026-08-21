@@ -276,6 +276,9 @@
   "summarizeSession": "总结此会话",
   "summarizing": "总结中…",
   "summarizeFailed": "无法总结此会话",
+  "summarizeSummaryTitle": "会话总结",
+  "summarizeThreadMissing": "运行时已不再保存该会话，会话列表已刷新。",
+  "sidebarThreadCopySummary": "复制总结",
   "name": "名称",
   "description": "描述",
   "color": "颜色",
@@ -579,5 +582,13 @@
   "graphStatus_promoted": "已晋升",
   "graphStatus_rolled_back": "已回滚",
   "graphStatus_merged": "已合并",
-  "rightPanelGraph": "Graph"
+  "rightPanelGraph": "Graph",
+  "visualizationLabel": "可视化",
+  "visualizationCollapse": "收起可视化",
+  "visualizationExpand": "展开可视化",
+  "visualizationCopy": "复制为文本",
+  "visualizationCopied": "已复制",
+  "visualizationFlow": "流程",
+  "visualizationCardGrid": "分组说明",
+  "visualizationCallout": "重要说明"
 }

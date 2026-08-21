@@ -3,6 +3,7 @@ import type { ChatBlock } from '../agent/types'
 import {
   extractAutoOpenDevPreviewUrls,
   extractDetectedDevPreviewUrls,
+  extractLatestTurnAutoOpenDevPreviewSignal,
   extractLatestTurnAutoOpenDevPreviewUrls,
   extractLatestTurnDevPreviewUrls
 } from './dev-preview-detection'
@@ -71,6 +72,35 @@ describe('dev preview detection', () => {
 
     expect(extractDetectedDevPreviewUrls(blocks)).toEqual(['http://localhost:5173/'])
     expect(extractAutoOpenDevPreviewUrls(blocks)).toEqual(['http://localhost:5173/'])
+  })
+
+  it('qualifies the same auto-open URL by its latest user turn', () => {
+    const firstTurn: ChatBlock[] = [
+      user('start the app'),
+      commandExecutionBlock({
+        command: 'npm run dev',
+        status: 'running',
+        detail: 'VITE v5.4.0 ready in 180 ms\nLocal: http://localhost:5173/'
+      })
+    ]
+    const secondTurn: ChatBlock[] = [
+      ...firstTurn,
+      user('restart the app'),
+      commandExecutionBlock({
+        command: 'npm run dev',
+        status: 'running',
+        detail: 'VITE v5.4.0 ready in 160 ms\nLocal: http://localhost:5173/'
+      })
+    ]
+
+    expect(extractLatestTurnAutoOpenDevPreviewSignal(firstTurn)).toEqual({
+      turnId: 'user:start the app',
+      url: 'http://localhost:5173/'
+    })
+    expect(extractLatestTurnAutoOpenDevPreviewSignal(secondTurn)).toEqual({
+      turnId: 'user:restart the app',
+      url: 'http://localhost:5173/'
+    })
   })
 
   it('ignores runtime API URLs even when they are local', () => {

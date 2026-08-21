@@ -47,6 +47,10 @@ const officeDocumentServiceMocks = vi.hoisted(() => ({
 const officeCliResourceMocks = vi.hoisted(() => ({
   resolveOfficeCliBinary: vi.fn()
 }))
+const spreadsheetServiceMocks = vi.hoisted(() => ({
+  saveWorkspaceSpreadsheet: vi.fn(),
+  convertWorkspaceSpreadsheet: vi.fn()
+}))
 
 vi.mock('../services/office-document-service', () => ({
   readLocalOfficeDocument: vi.fn()
@@ -60,6 +64,8 @@ vi.mock('../services/office-workspace-semantic-service', () => ({
   readWorkspaceOfficeSemantic: officeDocumentServiceMocks.readWorkspaceOfficeSemantic
 }))
 
+vi.mock('../services/workspace-spreadsheet-service', () => spreadsheetServiceMocks)
+
 vi.mock('../officecli-resources', () => ({
   resolveOfficeCliBinary: officeCliResourceMocks.resolveOfficeCliBinary
 }))
@@ -72,6 +78,8 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     officeDocumentServiceMocks.readWorkspaceOfficePreview.mockReset()
     officeDocumentServiceMocks.readWorkspaceOfficeSemantic.mockReset()
     officeCliResourceMocks.resolveOfficeCliBinary.mockReset()
+    spreadsheetServiceMocks.saveWorkspaceSpreadsheet.mockReset()
+    spreadsheetServiceMocks.convertWorkspaceSpreadsheet.mockReset()
   })
   afterEach(cleanupAppIpcHandlerTestState)
 
@@ -400,6 +408,79 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
         path: '../outside.docx'
       })).resolves.toMatchObject({ ok: false })
       expect(officeDocumentServiceMocks.readWorkspaceOfficeSemantic).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(temp, { recursive: true, force: true })
+    }
+  })
+
+  it('saves and converts spreadsheets through trusted workspace-scoped IPC', async () => {
+    const temp = mkdtempSync(join(tmpdir(), 'kun-spreadsheet-ipc-'))
+    const xlsxPath = join(temp, 'book.xlsx')
+    const xlsPath = join(temp, 'legacy.xls')
+    writeFileSync(xlsxPath, 'xlsx-source')
+    writeFileSync(xlsPath, 'xls-source')
+    const mainFrame = { processId: 10, routingId: 20 }
+    const sender = Object.assign(new EventEmitter(), {
+      id: 78,
+      mainFrame,
+      isDestroyed: () => false
+    })
+    const expectedSha256 = 'a'.repeat(64)
+
+    try {
+      officeCliResourceMocks.resolveOfficeCliBinary.mockReturnValue('/tmp/officecli')
+      spreadsheetServiceMocks.saveWorkspaceSpreadsheet.mockResolvedValue({
+        ok: true,
+        path: realpathSync(xlsxPath),
+        sourceSha256: 'b'.repeat(64),
+        size: 12,
+        mtimeMs: 2,
+        appliedMutations: 1
+      })
+      spreadsheetServiceMocks.convertWorkspaceSpreadsheet.mockResolvedValue({
+        ok: true,
+        path: join(temp, 'legacy.xlsx'),
+        name: 'legacy.xlsx',
+        sourceSha256: 'c'.repeat(64),
+        size: 14,
+        mtimeMs: 3
+      })
+      registerAppIpcHandlers(registerOptions({
+        getMainWindow: () => ({
+          isDestroyed: () => false,
+          webContents: sender
+        }) as never
+      }))
+
+      const saveHandler = handlers.get('file:save-workspace-spreadsheet')!
+      const savePayload = {
+        path: 'book.xlsx',
+        workspaceRoot: temp,
+        expectedSha256,
+        mutations: [{ kind: 'cell', sheetName: 'Data', address: 'A1', value: 42 }]
+      }
+      await expect(saveHandler({ sender, senderFrame: mainFrame }, savePayload)).resolves.toMatchObject({ ok: true })
+      expect(spreadsheetServiceMocks.saveWorkspaceSpreadsheet).toHaveBeenCalledWith({
+        path: realpathSync(xlsxPath),
+        expectedSha256,
+        mutations: savePayload.mutations
+      }, expect.objectContaining({ binaryPath: '/tmp/officecli', signal: expect.any(AbortSignal) }))
+
+      const convertHandler = handlers.get('file:convert-workspace-spreadsheet')!
+      await expect(convertHandler({ sender, senderFrame: mainFrame }, {
+        path: 'legacy.xls', workspaceRoot: temp, expectedSha256
+      })).resolves.toMatchObject({ ok: true, name: 'legacy.xlsx' })
+      expect(spreadsheetServiceMocks.convertWorkspaceSpreadsheet).toHaveBeenCalledWith({
+        path: realpathSync(xlsPath), expectedSha256
+      }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
+
+      await expect(saveHandler({ sender, senderFrame: mainFrame }, {
+        ...savePayload, path: '../outside.xlsx'
+      })).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
+      await expect(saveHandler({
+        sender: { id: 99 },
+        senderFrame: { processId: 99, routingId: 99 }
+      }, savePayload)).rejects.toThrow(/trusted workbench frame/)
     } finally {
       rmSync(temp, { recursive: true, force: true })
     }

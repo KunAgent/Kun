@@ -1,4 +1,5 @@
 import { emptyUsageSnapshot, type UsageSnapshot } from '../../contracts/usage.js'
+import { isCodexEndpoint } from './compat-model-support.js'
 import { estimateDeepseekCost } from './deepseek-pricing.js'
 import { estimateMiniMaxCost } from './minimax-pricing.js'
 
@@ -6,8 +7,10 @@ export function normalizeCompatUsage(input: {
   usage: Record<string, unknown>
   model: string
   providerBaseUrl: string
+  billingKind?: 'subscription'
 }): UsageSnapshot {
-  const { usage, model, providerBaseUrl } = input
+  const { usage, model, providerBaseUrl, billingKind } = input
+  const subscription = billingKind === 'subscription' || isCodexEndpoint(providerBaseUrl)
   const completionTokens = numberValue(usage.completion_tokens ?? usage.eval_count ?? usage.output_tokens)
   const promptDetails = recordValue(usage.prompt_tokens_details)
   const inputDetails = recordValue(usage.input_tokens_details)
@@ -16,7 +19,13 @@ export function normalizeCompatUsage(input: {
   const hasNativeCache = nativeHit > 0 || nativeMiss > 0
   const cachedTokens = numberValue(promptDetails.cached_tokens ?? inputDetails.cached_tokens)
   const cacheRead = numberValue(usage.cache_read_input_tokens)
-  const cacheCreation = numberValue(usage.cache_creation_input_tokens)
+  const cacheCreation = numberValue(
+    usage.cache_creation_input_tokens ??
+    usage.cache_write_input_tokens ??
+    usage.cache_write_tokens ??
+    promptDetails.cache_write_tokens ??
+    inputDetails.cache_write_tokens
+  )
   const anthropicUsage = usage.prompt_tokens === undefined &&
     usage.prompt_eval_count === undefined &&
     usage.input_tokens !== undefined &&
@@ -62,8 +71,11 @@ export function normalizeCompatUsage(input: {
     cachedTokens: cacheHit || cachedTokens || cacheRead || 0,
     cacheHitTokens: cacheHit,
     cacheMissTokens: cacheMiss,
+    cacheWriteTokens: pricingCacheWrite,
     cacheHitRate: cacheTotal === 0 ? null : cacheHit / cacheTotal,
     turns: 1,
+    actualModelId: model,
+    billingKind: subscription ? 'subscription' : 'api',
     costUsd: Number.isFinite(reportedCostUsd) ? reportedCostUsd : estimatedCost?.costUsd,
     costCny: Number.isFinite(reportedCostCny) ? reportedCostCny : estimatedCost?.costCny
   }

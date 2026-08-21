@@ -34,7 +34,7 @@ import {
   SidebarEmpty,
   ThreadRow
 } from './SidebarProjectRows'
-export { SddDraftHistoryRows, ThreadRow } from './SidebarProjectRows'
+export { SddDraftHistoryRows, ThreadRow, ThreadRunningIndicator } from './SidebarProjectRows'
 import {
   FolderContextMenu,
   MoveThreadDialog,
@@ -154,7 +154,7 @@ type SidebarProjectsSectionProps = {
   threadListError: string | null
   onRetryThreads: () => void
   onLoadMoreThreads: (workspacePath: string) => void
-  threadListCursorByWorkspace: Record<string, { nextCursor?: string; hasMore: boolean; total?: number }>
+  threadListCursorByWorkspace: Record<string, import('../../store/chat-store-thread-pagination').WorkspaceThreadPageMeta>
   searchQuery: string
   showArchived: boolean
   workspaceRoot: string
@@ -163,7 +163,8 @@ type SidebarProjectsSectionProps = {
   conversationRoot: string
   busy: boolean
   watchTurnCompletion: Record<string, boolean>
-  unreadThreadIds: Record<string, boolean>
+  unreadThreadIds: Parameters<typeof sidebarThreadActivity>[1]['unreadThreadIds']
+  scheduledThreadActivities?: Parameters<typeof sidebarThreadActivity>[1]['scheduledThreadActivities']
   locale: string
   onPickWorkspace: () => void
   onRemoveWorkspace: (workspacePath: string) => Promise<void>
@@ -205,6 +206,7 @@ export function SidebarProjectsSection({
   busy,
   watchTurnCompletion,
   unreadThreadIds,
+  scheduledThreadActivities = {},
   locale,
   onPickWorkspace,
   onRemoveWorkspace,
@@ -290,7 +292,8 @@ export function SidebarProjectsSection({
     activeThreadId,
     busy,
     watchTurnCompletion,
-    unreadThreadIds
+    unreadThreadIds,
+    scheduledThreadActivities
   }
 
   const groups = useMemo(() => {
@@ -422,6 +425,7 @@ export function SidebarProjectsSection({
     closeRenameThreadDialog,
     confirmThreadWorkspaceMove,
     handleArchiveThread,
+    handleCopyThreadId,
     handleDeleteThread,
     handlePinThread,
     handleRestoreThread,
@@ -640,7 +644,8 @@ export function SidebarProjectsSection({
     handleWorkspaceDragLeave, handleWorkspaceDrop, handleThreadDragStart, handleThreadDragEnd,
     handleThreadDragOver, handleThreadDragLeave, handleThreadDrop, handleFolderDragOver,
     handleFolderDragLeave, handleFolderDrop, threadMoveDisabledReason, openMoveThreadDialog,
-    handlePinThread, openRenameThreadDialog, handleSummarizeThread, handleArchiveThread,
+    handlePinThread, openRenameThreadDialog, handleSummarizeThread, handleCopyThreadId,
+    handleArchiveThread,
     handleDeleteThread, handleRestoreThread, openWorkspaceInSystem, handleArchiveWorkspaceThreads,
     handleRemoveWorkspace, archivableWorkspaceThreads, closeRenameThreadDialog,
     submitRenameThreadDialog, closeMoveThreadDialog, confirmThreadWorkspaceMove,

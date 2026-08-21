@@ -242,6 +242,9 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
     pptAgent: {
       ...labAgentConfigForRuntime(lab?.pptAgent),
       imageFirst: lab?.pptAgent?.imageFirst !== false
+    },
+    conversationVisualization: {
+      enabled: lab?.conversationVisualization?.enabled === true
     }
   }
 }

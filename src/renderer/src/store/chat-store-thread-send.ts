@@ -263,8 +263,12 @@ export async function sendThreadMessage(
       (queued?.waitForRuntimeAdmission ?? overrides?.waitForRuntimeAdmission) === true
     const expectedThreadId = (queued?.expectedThreadId ?? overrides?.expectedThreadId ?? '').trim()
     const requestedAgentSurface = queued?.agentSurface ?? overrides?.agentSurface
-    const designProfile = queued?.designProfile ?? overrides?.designProfile
-    const designDocumentTarget = queued?.designDocumentTarget ?? overrides?.designDocumentTarget
+    const designProfile = requestedAgentSurface === 'code'
+      ? undefined
+      : queued?.designProfile ?? overrides?.designProfile
+    const designDocumentTarget = requestedAgentSurface === 'code'
+      ? undefined
+      : queued?.designDocumentTarget ?? overrides?.designDocumentTarget
     const designImagePlacementTarget = queued?.designImagePlacementTarget ?? overrides?.designImagePlacementTarget
     const messageSource = queued?.messageSource ?? overrides?.messageSource
     const persona = resolveTurnPersona(

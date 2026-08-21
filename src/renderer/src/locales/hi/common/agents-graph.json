@@ -276,6 +276,9 @@
   "summarizeSession": "संक्षेप करें",
   "summarizing": "संक्षेप में...",
   "summarizeFailed": "इस बातचीत का सारांश नहीं दिया जा सका",
+  "summarizeSummaryTitle": "सत्र सारांश",
+  "summarizeThreadMissing": "यह बातचीत अब रनटाइम में संग्रहीत नहीं है। सूची ताज़ा कर दी गई है।",
+  "sidebarThreadCopySummary": "सारांश कॉपी करें",
   "name": "नाम",
   "description": "विवरण",
   "color": "रंग",
@@ -288,5 +291,13 @@
   "writeEnableLineWrapping": "लाइन रैपिंग सक्षम करें",
   "writeDisableLineWrapping": "लाइन रैपिंग अक्षम करें",
   "systemPrompt": "सिस्टम प्रॉम्प्ट",
-  "toolPolicy": "टूल एक्सेस"
+  "toolPolicy": "टूल एक्सेस",
+  "visualizationLabel": "Visualization",
+  "visualizationCollapse": "Collapse visualization",
+  "visualizationExpand": "Expand visualization",
+  "visualizationCopy": "Copy as text",
+  "visualizationCopied": "Copied",
+  "visualizationFlow": "Flow",
+  "visualizationCardGrid": "Grouped details",
+  "visualizationCallout": "Important note"
 }

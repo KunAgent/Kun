@@ -5,6 +5,8 @@ import {
   type ServerResponse
 } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
+import type { WeixinLocalSendRequest, WeixinLocalSendRejected } from '../shared/weixin-local-send'
+import { coordinateWeixinOutbound, localSendResponse, resetWeixinOutboundCoordinator } from './weixin-bridge-outbound-coordinator'
 import { logError, logInfo } from './logger'
 import {
   activeLogins,
@@ -25,17 +27,13 @@ import {
   listIndexedWeixinAccountIds,
   normalizeAccountId,
   prepareBridgeState,
-  readBridgeConfig,
   recordString,
   resolveRpcUrl,
+  resolveRuntimeContext,
   resolveWeixinAccount
 } from './weixin-bridge-storage'
 import {
-  getContextToken,
   postToDeepSeekGuiWebhook,
-  restoreContextTokens,
-  sendGeneratedFilesWeixin,
-  sendMessageWeixin,
   startWeixinChannels,
   startWeixinLogin,
   stopWeixinChannels,
@@ -79,11 +77,85 @@ function writeJson(response: ServerResponse, status: number, body: unknown): voi
   response.end(`${JSON.stringify(body)}\n`)
 }
 
+function rejected(
+  response: ServerResponse,
+  status: number,
+  code: WeixinLocalSendRejected['error']['code'],
+  message: string,
+  idempotencyKey?: string
+): void {
+  writeJson(response, status, {
+    status: 'rejected',
+    error: { code, message },
+    ...(idempotencyKey ? { idempotencyKey } : {})
+  } satisfies WeixinLocalSendRejected)
+}
+
+function localSendRequest(value: unknown): WeixinLocalSendRequest | null {
+  const body = asRecord(value)
+  const channelId = recordString(body, 'channelId')
+  const conversationId = recordString(body, 'conversationId')
+  const text = recordString(body, 'text')
+  const idempotencyKey = recordString(body, 'idempotencyKey')
+  return channelId && conversationId && text && idempotencyKey
+    ? { channelId, conversationId, text, idempotencyKey }
+    : null
+}
+
+async function handleLocalSend(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const context = await resolveRuntimeContext()
+  const secret = context.webhookSecret.trim()
+  if (!secret) {
+    rejected(response, 503, 'unauthorized', 'Local send authentication is not configured.')
+    return
+  }
+  const authorization = request.headers.authorization ?? ''
+  const rawHeaderSecret = request.headers['x-kun-secret'] ?? request.headers['x-deepseek-gui-secret']
+  const headerSecret = Array.isArray(rawHeaderSecret) ? rawHeaderSecret[0] : rawHeaderSecret
+  if (authorization !== `Bearer ${secret}` && headerSecret !== secret) {
+    rejected(response, 401, 'unauthorized', 'Unauthorized.')
+    return
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(await readRequestBody(request)) as unknown
+  } catch {
+    rejected(response, 400, 'invalid_request', 'Expected a JSON object.')
+    return
+  }
+  const input = localSendRequest(parsed)
+  if (!input) {
+    rejected(response, 400, 'invalid_request', 'channelId, conversationId, text, and idempotencyKey are required.')
+    return
+  }
+  const target = context.resolveLocalSendTarget?.(input.channelId, input.conversationId)
+  if (!target) {
+    rejected(response, 503, 'channel_not_configured', 'Local send target resolver is unavailable.', input.idempotencyKey)
+    return
+  }
+  if (!target.ok) {
+    rejected(response, 404, target.code, target.message, input.idempotencyKey)
+    return
+  }
+  const result = localSendResponse(await coordinateWeixinOutbound({
+    accountId: target.accountId,
+    to: target.to,
+    text: input.text,
+    idempotencyKey: input.idempotencyKey
+  }), input.idempotencyKey)
+  if (result.status === 'accepted') writeJson(response, 202, result)
+  else writeJson(response, result.error.code === 'idempotency_conflict' ? 409 : 502, result)
+}
+
 async function handleBridgeRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   try {
     const url = new URL(request.url || '/', `http://127.0.0.1:${weixinBridgeState.activeBridgePort}`)
     if (request.method === 'GET' && url.pathname === '/health') {
       writeJson(response, 200, { ok: true, status: 'live' })
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/api/v1/messages/send') {
+      await handleLocalSend(request, response)
       return
     }
     if (request.method !== 'POST' || url.pathname !== '/api/v1/admin/rpc') {
@@ -220,28 +292,7 @@ export async function sendWeixinBridgeMessage(options: {
 
   try {
     await ensureWeixinBridgeRpcUrl()
-    const cfg = await readBridgeConfig()
-    void cfg
-    const account = await resolveWeixinAccount(accountId)
-    if (!account.configured || !account.token?.trim()) {
-      return { ok: false as const, message: 'WeChat account is not configured.' }
-    }
-    await restoreContextTokens(account.accountId)
-    const contextToken = getContextToken(account.accountId, to)
-    let messageId = ''
-    if (text) {
-      const result = await sendMessageWeixin({
-        account,
-        to,
-        text,
-        contextToken
-      })
-      messageId = result.messageId
-    }
-    if (files.length > 0) {
-      await sendGeneratedFilesWeixin(account, to, files, contextToken)
-    }
-    return { ok: true as const, messageId }
+    return coordinateWeixinOutbound(options)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logError('weixin-bridge', 'Failed to send WeChat message from GUI.', {
@@ -272,6 +323,7 @@ export async function stopWeixinBridgeRuntime(): Promise<void> {
   for (const monitor of activeMonitors) monitor.controller.abort()
   activeLogins.clear()
   contextTokenStore.clear()
+  resetWeixinOutboundCoordinator()
   await Promise.allSettled(activeMonitors.map((monitor) => monitor.promise))
   monitors.clear()
   await closeBridgeServer()
@@ -283,6 +335,7 @@ export async function stopWeixinBridgeRuntime(): Promise<void> {
 
 export const weixinBridgeRuntimeInternals = {
   buildBaseInfo,
+  handleLocalSend,
   normalizeAccountId,
   postToDeepSeekGuiWebhook,
   webhookGeneratedFiles

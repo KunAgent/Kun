@@ -32,7 +32,7 @@ export const kunLabPatchSchema = z.preprocess(
       fast: z.boolean().optional(),
       imageFirst: z.boolean().optional()
     }).strict().optional(),
-    planWorktree: z.object({
+    conversationVisualization: z.object({
       enabled: z.boolean().optional()
     }).strict().optional()
   }).strict()

@@ -57,11 +57,13 @@ export type BrowserUseNetworkPolicyOptions = {
   mode: BrowserUseMode
   exactLocalOrigin?: string
   resolve?: BrowserUseDnsResolver
+  dnsTimeoutMs?: number
 }
 
 export type BrowserUsePolicyProxyOptions = BrowserUseNetworkPolicyOptions & {
   maxConcurrentConnections?: number
   connectTimeoutMs?: number
+  startTimeoutMs?: number
   onPolicyEvent?: (event: {
     outcome: 'allowed' | 'blocked'
     sanitizedUrl: string
@@ -127,6 +129,33 @@ export function normalizeBrowserUseOrigin(rawUrl: string, mode: BrowserUseMode):
   return url.origin
 }
 
+export const BROWSER_USE_DNS_TIMEOUT_MS = 10_000
+
+async function resolveBrowserUseAddressWithDeadline(
+  hostname: string,
+  options: BrowserUseNetworkPolicyOptions
+): Promise<readonly BrowserUseResolvedAddress[]> {
+  let timer: NodeJS.Timeout | undefined
+  const lookup = Promise.resolve()
+    .then(() => (options.resolve ?? systemBrowserUseDnsResolver)(hostname))
+  // A stalled getaddrinfo (for example behind an unresponsive VPN DNS) must
+  // never hold the policy proxy's CONNECT decision open forever.
+  lookup.catch(() => undefined)
+  try {
+    return await Promise.race([
+      lookup,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new BrowserUseNetworkPolicyError(
+          'dns_timeout',
+          'Browser Use destination DNS resolution timed out.'
+        )), options.dnsTimeoutMs ?? BROWSER_USE_DNS_TIMEOUT_MS)
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function resolveBrowserUseNetworkTarget(
   rawUrl: string | URL,
   options: BrowserUseNetworkPolicyOptions
@@ -179,7 +208,7 @@ export async function resolveBrowserUseNetworkTarget(
 
   const literalFamily = isIP(hostname)
   const rawAddresses = literalFamily === 0
-    ? await (options.resolve ?? systemBrowserUseDnsResolver)(hostname)
+    ? await resolveBrowserUseAddressWithDeadline(hostname, options)
     : [{ address: hostname, family: literalFamily as 4 | 6 }]
   if (rawAddresses.length === 0) {
     throw new BrowserUseNetworkPolicyError('dns_empty', 'Destination DNS returned no addresses.')
@@ -255,12 +284,12 @@ export function classifyBrowserUseAddress(address: string): {
     normalized
   }
 }
+const PROXY_START_TIMEOUT_MS = 10_000
 
 export class BrowserUsePolicyProxy {
   private server?: HttpServer
   private readonly sockets = new Set<Socket>()
   private activeConnections = 0
-
   constructor(private readonly options: BrowserUsePolicyProxyOptions) {}
 
   async start(): Promise<string> {
@@ -285,11 +314,33 @@ export class BrowserUsePolicyProxy {
       socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n')
     })
     await new Promise<void>((resolve, reject) => {
-      server.once('error', reject)
-      server.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => {
-        server.off('error', reject)
-        resolve()
-      })
+      let settled = false
+      const finish = (error?: Error): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        server.off('error', onError)
+        if (error) reject(error)
+        else resolve()
+      }
+      const onError = (error: Error): void => {
+        server.close()
+        for (const socket of this.sockets) socket.destroy()
+        this.sockets.clear()
+        finish(new BrowserUseNetworkPolicyError(
+          'proxy_start_failed', 'Browser Use policy proxy failed to start.'
+        ))
+      }
+      const timer = setTimeout(() => {
+        server.close()
+        for (const socket of this.sockets) socket.destroy()
+        this.sockets.clear()
+        finish(new BrowserUseNetworkPolicyError(
+          'proxy_start_timeout', 'Browser Use policy proxy startup timed out.'
+        ))
+      }, this.options.startTimeoutMs ?? PROXY_START_TIMEOUT_MS)
+      server.once('error', onError)
+      server.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => finish())
     })
     this.server = server
     const address = server.address()

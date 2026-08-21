@@ -4,6 +4,7 @@ import type {
   WorkspacePresentationViewReference,
   WorkspacePresentationViewSource
 } from '@shared/office-document'
+import type { WorkspaceSpreadsheetMutation } from '@shared/workspace-spreadsheet'
 import { useTranslation } from 'react-i18next'
 import type {
   WriteDocumentSession,
@@ -58,6 +59,18 @@ type Props = {
     source: WorkspacePresentationViewSource
   ) => void
   onReviewStateChange: (active: boolean) => void
+  onSpreadsheetMutations: (
+    path: string,
+    mutations: WorkspaceSpreadsheetMutation[],
+    unsupportedReason?: string,
+    baseFingerprints?: Record<string, string>
+  ) => void
+  onConvertSpreadsheet: (path: string) => void
+  onReloadSpreadsheetConflict: (path: string) => void
+  onResolveSpreadsheetConflict: (
+    path: string,
+    decision: 'keep-local' | 'use-external'
+  ) => void
   onboarding?: boolean
   workspaceLoading?: boolean
 }
@@ -95,6 +108,10 @@ export function WriteEditorGroupContent({
   onImagePasteError,
   onPresentationViewChange,
   onReviewStateChange,
+  onSpreadsheetMutations,
+  onConvertSpreadsheet,
+  onReloadSpreadsheetConflict,
+  onResolveSpreadsheetConflict,
   onboarding,
   workspaceLoading
 }: Props): ReactElement {
@@ -175,6 +192,17 @@ export function WriteEditorGroupContent({
         officeLoading={document?.officeLoading ?? false}
         officeRefreshError={document?.officeRefreshError ?? null}
         officeAgentEditing={document?.officeAgentEditing ?? false}
+        spreadsheetMutations={document?.spreadsheetMutations ?? []}
+        spreadsheetSourceSha256={document?.spreadsheetSourceSha256 ?? ''}
+        spreadsheetCommitRevision={document?.spreadsheetCommitRevision ?? 0}
+        spreadsheetUnsupportedReason={document?.spreadsheetUnsupportedReason ?? null}
+        spreadsheetSaveError={
+          document?.saveStatus === 'error' && !document.spreadsheetConflictPreview
+            ? document.fileError
+            : null
+        }
+        spreadsheetConflict={Boolean(document?.spreadsheetConflictPreview)}
+        spreadsheetConflictTargets={document?.spreadsheetConflictTargets ?? []}
         fileSize={document?.fileSize ?? 0}
         workspaceRoot={workspaceRoot}
         workspaceName={workspaceName}
@@ -216,6 +244,16 @@ export function WriteEditorGroupContent({
         onImagePasteSaved={onImagePasteSaved}
         onImagePasteError={onImagePasteError}
         onPresentationViewChange={onPresentationViewChange}
+        onSpreadsheetMutations={path
+          ? (mutations, unsupportedReason, baseFingerprints) => onSpreadsheetMutations(
+              path, mutations, unsupportedReason, baseFingerprints
+            )
+          : undefined}
+        onConvertSpreadsheet={path ? () => onConvertSpreadsheet(path) : undefined}
+        onReloadSpreadsheetConflict={path ? () => onReloadSpreadsheetConflict(path) : undefined}
+        onResolveSpreadsheetConflict={path
+          ? (decision) => onResolveSpreadsheetConflict(path, decision)
+          : undefined}
       />
     </div>
   )

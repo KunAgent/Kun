@@ -36,6 +36,7 @@ type WorkbenchDesignAgentRuntimeOptions = {
   rollbackProvisionalThread?: DesignPromptControllerOptions['rollbackProvisionalThread']
   designTaskProfileSelection?: DesignPromptControllerOptions['designTaskProfileSelection']
   lockedDesignProfile?: DesignPromptControllerOptions['lockedDesignProfile']
+  expectedThreadId?: DesignPromptControllerOptions['expectedThreadId']
   imageGenerationAvailable?: DesignPromptControllerOptions['imageGenerationAvailable']
   imageGenerationReason?: DesignPromptControllerOptions['imageGenerationReason']
   ensureDesignThreadForWorkspace: DesignPromptControllerOptions['ensureDesignThreadForWorkspace']
@@ -80,6 +81,7 @@ export function useWorkbenchDesignAgentRuntime({
   rollbackProvisionalThread,
   designTaskProfileSelection,
   lockedDesignProfile,
+  expectedThreadId,
   imageGenerationAvailable,
   imageGenerationReason,
   ensureDesignThreadForWorkspace,
@@ -155,6 +157,7 @@ export function useWorkbenchDesignAgentRuntime({
     rollbackProvisionalThread,
     designTaskProfileSelection,
     lockedDesignProfile,
+    expectedThreadId,
     imageGenerationAvailable,
     imageGenerationReason,
     sendMessage,

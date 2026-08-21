@@ -33,7 +33,7 @@ function failureUsage(): ChildRunRecord['usage'] {
 }
 
 function failureExecutor(
-  settlement: { usage?: ChildRunRecord['usage']; toolInvocations?: number } | undefined
+  settlement: ConstructorParameters<typeof ChildResultExecutionError>[2]
 ): ChildRunExecutor {
   return async () => {
     throw new ChildResultExecutionError('insufficient balance', { summary: 'partial work' }, settlement)
@@ -44,11 +44,11 @@ describe('DelegationRuntime failed/aborted child usage settlement', () => {
   it('retains accrued usage on a failed child and settles it exactly once', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-delegation-failure-usage-'))
     try {
-      const externalUsage: UsageSnapshot[] = []
+      const externalUsage: Array<{ threadId: string; usage: UsageSnapshot }> = []
       const runtime = new DelegationRuntime({
         config: subagentConfig(),
         store: new FileDelegationStore(dir),
-        recordExternalUsage: (_threadId, usage) => externalUsage.push(usage),
+        recordExternalUsage: (threadId, usage) => externalUsage.push({ threadId, usage }),
         executor: failureExecutor({ usage: failureUsage(), toolInvocations: 12 })
       })
       const record = await runtime.runChild({
@@ -61,7 +61,56 @@ describe('DelegationRuntime failed/aborted child usage settlement', () => {
       expect(record.usage).toMatchObject(failureUsage())
       expect(record.toolInvocations).toBe(12)
       expect(externalUsage).toHaveLength(1)
-      expect(externalUsage[0]).toMatchObject({ promptTokens: 5621, totalTokens: 5795 })
+      expect(externalUsage[0]).toMatchObject({
+        threadId: record.id,
+        usage: { promptTokens: 5621, totalTokens: 5795 }
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('persists HTTP 520 classification and makes the ordinary child resumable', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-delegation-http-520-'))
+    try {
+      const runtime = new DelegationRuntime({
+        config: subagentConfig(),
+        store: new FileDelegationStore(dir),
+        executor: failureExecutor({
+          usage: failureUsage(),
+          failure: {
+            source: 'model',
+            code: 'http_520',
+            category: 'unavailable',
+            httpStatus: 520
+          }
+        })
+      })
+      const record = await runtime.runChild({
+        parentThreadId: 'parent',
+        parentTurnId: 'turn-1',
+        launcher: 'delegate_task',
+        prompt: 'review the change',
+        workspace: '/workspace',
+        inlineProfile: {
+          id: 'reviewer', source: 'builtin',
+          profile: { mode: 'subagent', toolPolicy: 'readOnly' }
+        },
+        security: { sandboxRoot: '/workspace', memoryEnabled: false },
+        signal: new AbortController().signal
+      })
+
+      expect(record).toMatchObject({
+        status: 'failed',
+        terminationReason: 'child_error',
+        resumable: true,
+        failure: {
+          source: 'model',
+          code: 'http_520',
+          category: 'unavailable',
+          httpStatus: 520
+        }
+      })
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

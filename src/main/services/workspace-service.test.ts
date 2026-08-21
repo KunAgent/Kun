@@ -288,7 +288,6 @@ describe('workspace-service boundary checks', () => {
     const bytes = Buffer.from('whiteboard-png')
     const result = await saveWorkspaceImageBytes({
       workspaceRoot,
-      imageDirectory: '.deepseekgui-images',
       fileName: 'architecture-a1b2c3.png',
       mimeType: 'image/png',
       dataBase64: bytes.toString('base64')
@@ -296,7 +295,7 @@ describe('workspace-service boundary checks', () => {
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.workspaceRelativePath).toBe('.deepseekgui-images/architecture-a1b2c3.png')
+    expect(result.workspaceRelativePath).toBe('.kun/images/architecture-a1b2c3.png')
     await expect(readFile(result.path)).resolves.toEqual(bytes)
   })
 

@@ -25,6 +25,7 @@ import {
   defaultTerminalSettings,
   defaultWriteSettings,
   defaultModelRequestRetrySettings,
+  MODEL_REQUEST_RETRY_DEFAULTS_VERSION,
   CHATGPT_SUBSCRIPTION_MODEL_IDS,
   GROK_SUBSCRIPTION_PROVIDER_ID,
   OLLAMA_CLOUD_MODEL_IDS,
@@ -56,7 +57,12 @@ describe('model provider retry settings', () => {
     const settings = defaultModelProviderSettings()
 
     expect(settings.providers[0].retry).toEqual(defaultModelRequestRetrySettings())
-    expect(settings.providers[0]?.retry?.maxAttempts).toBe(5)
+    expect(settings.providers[0]?.retry).toEqual({
+      maxAttempts: 5,
+      initialDelayMs: 3_000,
+      httpStatusCodes: [429, 500, 502, 503, 504],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
+    })
   })
 
   it('uses the common five-retry default for new ChatGPT subscription profiles', () => {
@@ -65,7 +71,8 @@ describe('model provider retry settings', () => {
 
     expect(modelProviderPresetProfile(preset!, '').retry).toMatchObject({
       maxAttempts: 5,
-      httpStatusCodes: expect.arrayContaining([429, 503])
+      httpStatusCodes: [429, 500, 502, 503, 504],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
     })
   })
 
@@ -93,7 +100,78 @@ describe('model provider retry settings', () => {
     expect(provider?.retry).toEqual({
       maxAttempts: 10,
       initialDelayMs: 600_000,
-      httpStatusCodes: [429, 503, 599]
+      httpStatusCodes: [429, 503, 599],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
+    })
+  })
+
+  it('upgrades an unversioned legacy status list without changing its retry budget', () => {
+    const settings = normalizeModelProviderSettings({
+      providers: [{
+        id: 'legacy',
+        name: 'Legacy',
+        apiKey: 'k',
+        baseUrl: 'https://example.com/v1',
+        endpointFormat: 'chat_completions',
+        retry: { maxAttempts: 3, initialDelayMs: 9_000, httpStatusCodes: [429, 503] },
+        models: ['m'],
+        modelProfiles: {}
+      }]
+    })
+
+    expect(settings.providers.find((provider) => provider.id === 'legacy')?.retry).toEqual({
+      maxAttempts: 3,
+      initialDelayMs: 9_000,
+      httpStatusCodes: [429, 500, 502, 503, 504],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
+    })
+  })
+
+  it('upgrades a disabled legacy provider without enabling retries', () => {
+    const settings = normalizeModelProviderSettings({
+      providers: [{
+        id: 'disabled',
+        name: 'Disabled',
+        apiKey: 'k',
+        baseUrl: 'https://example.com/v1',
+        endpointFormat: 'chat_completions',
+        retry: { maxAttempts: 0, initialDelayMs: 3_000, httpStatusCodes: [429, 503] },
+        models: ['m'],
+        modelProfiles: {}
+      }]
+    })
+
+    expect(settings.providers.find((provider) => provider.id === 'disabled')?.retry).toMatchObject({
+      maxAttempts: 0,
+      httpStatusCodes: [429, 500, 502, 503, 504],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
+    })
+  })
+
+  it('preserves a current-version explicit narrow status list', () => {
+    const settings = normalizeModelProviderSettings({
+      providers: [{
+        id: 'explicit',
+        name: 'Explicit',
+        apiKey: 'k',
+        baseUrl: 'https://example.com/v1',
+        endpointFormat: 'chat_completions',
+        retry: {
+          maxAttempts: 5,
+          initialDelayMs: 3_000,
+          httpStatusCodes: [429, 503],
+          defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
+        },
+        models: ['m'],
+        modelProfiles: {}
+      }]
+    })
+
+    expect(settings.providers.find((provider) => provider.id === 'explicit')?.retry).toEqual({
+      maxAttempts: 5,
+      initialDelayMs: 3_000,
+      httpStatusCodes: [429, 503],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
     })
   })
 })

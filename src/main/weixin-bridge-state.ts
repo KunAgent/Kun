@@ -31,6 +31,12 @@ export type WeixinBridgeRuntimeContext = {
   webhookUrl: string
   webhookSecret: string
   channelId: string
+  resolveLocalSendTarget?: (
+    channelId: string,
+    conversationId: string
+  ) =>
+    | { ok: true; accountId: string; to: string }
+    | { ok: false; code: 'channel_not_found' | 'conversation_not_found' | 'channel_not_configured'; message: string }
 }
 
 export type WeixinPackageInfo = {

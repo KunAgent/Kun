@@ -10,11 +10,11 @@ import {
 } from './plan-worktree-preference-store'
 
 function settingsValues(settings: AppSettingsV1): {
-  featureEnabled: boolean
+  useWorktreeByDefault: boolean
   branchPrefix: string
 } {
   return {
-    featureEnabled: getKunRuntimeSettings(settings).lab.planWorktree.enabled,
+    useWorktreeByDefault: getKunRuntimeSettings(settings).planExecution.useWorktreeByDefault,
     branchPrefix: settings.gitBranchPrefix || DEFAULT_GIT_BRANCH_PREFIX
   }
 }
@@ -33,7 +33,7 @@ export function usePlanWorktreePreference(
       if (!settings) return
       const values = settingsValues(settings)
       usePlanWorktreePreferenceStore.getState().syncSettings(
-        values.featureEnabled,
+        values.useWorktreeByDefault,
         values.branchPrefix
       )
     }
@@ -50,13 +50,13 @@ export function usePlanWorktreePreference(
       const values = settingsValues(settings)
       const store = usePlanWorktreePreferenceStore.getState()
       if (!store.plans[plan.id]?.initialized) {
-        store.initializePlan(plan.id, values.featureEnabled, values.branchPrefix)
+        store.initializePlan(plan.id, values.useWorktreeByDefault, values.branchPrefix)
       }
     }).catch(() => {
       if (cancelled) return
       const store = usePlanWorktreePreferenceStore.getState()
       if (!store.plans[plan.id]?.initialized) {
-        store.initializePlan(plan.id, false, DEFAULT_GIT_BRANCH_PREFIX)
+        store.initializePlan(plan.id, true, DEFAULT_GIT_BRANCH_PREFIX)
       }
     })
     return () => { cancelled = true }

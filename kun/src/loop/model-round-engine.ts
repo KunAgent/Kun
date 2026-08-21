@@ -129,6 +129,7 @@ export class ModelRoundEngine {
     let queuedTextChars = 0
     let selectedRoute: ModelRouteTargetMetadata | undefined
     let contextOverflow: ModelContextOverflowError | undefined
+    let sawModelError = false
     const persistAccumulatedResponse = async (): Promise<void> => {
       if (collector.reasoning && collector.reasoning !== persistedReasoningText) {
         const nextReasoning = collector.reasoning
@@ -394,11 +395,13 @@ export class ModelRoundEngine {
               break
             }
             case 'model_error':
+              sawModelError = true
               contextOverflow = modelContextOverflowError(intent.message, intent.code)
               if (contextOverflow) break
               this.deps.rememberFailure(input.turnId, {
                 error: intent.message,
                 ...(intent.code ? { code: intent.code } : {}),
+                ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
                 severity: 'error'
               })
               await this.deps.events.record({
@@ -407,6 +410,7 @@ export class ModelRoundEngine {
                 turnId: input.turnId,
                 message: intent.message,
                 code: intent.code,
+                ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
                 severity: 'error'
               })
               break
@@ -458,6 +462,26 @@ export class ModelRoundEngine {
           error: contextOverflow,
           partialOutput: Boolean(snapshot.text || snapshot.reasoning || snapshot.toolCalls.length)
         }
+      }
+      // A provider can end with only `completed(stopReason: "error")` and no
+      // preceding `error` chunk. Without this synthesis the turn fails with an
+      // empty message, which the renderer cannot render as a useful card.
+      if (!sawModelError) {
+        const message =
+          'Model provider ended the response with an error status without returning a diagnostic message.'
+        this.deps.rememberFailure(input.turnId, {
+          error: message,
+          code: 'model_error_without_message',
+          severity: 'error'
+        })
+        await this.deps.events.record({
+          kind: 'error',
+          threadId: input.threadId,
+          turnId: input.turnId,
+          message,
+          code: 'model_error_without_message',
+          severity: 'error'
+        })
       }
       return { kind: 'failed' }
     }

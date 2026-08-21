@@ -566,65 +566,38 @@ html[data-ui-plugin-scene-chrome-composer='grand-line']
 
 html[data-ui-plugin-scene-chrome-composer='grand-line']
   .ds-composer-permission-button {
-  --ds-permission-border: #477996;
-  --ds-permission-bg: linear-gradient(160deg, #1a668a, #0a3d5e);
-  --ds-permission-ink: #edf9ff;
-  min-height: 2.7rem;
-  border: 2px solid var(--ds-permission-border) !important;
-  border-radius: 0.7rem 1rem 0.7rem 1rem;
-  background: var(--ds-permission-bg) !important;
-  padding: 0.3rem 1rem;
-  color: var(--ds-permission-ink) !important;
-  font-size: 0.9rem;
-  font-weight: 700;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 235, 194, 0.2),
-    0 4px 8px rgba(2, 25, 43, 0.3) !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #17364d !important;
 }
 
 html[data-ui-plugin-scene-chrome-composer='grand-line']
   .ds-composer-permission-button > svg:first-child {
-  width: 1.55rem;
+  background: transparent;
+  border: 0;
   height: 1.55rem;
-  border: 1px solid rgba(255, 240, 202, 0.38);
-  border-radius: 0.48rem;
-  background: rgba(2, 25, 43, 0.18);
-  padding: 0.25rem;
+  padding: 0;
+  width: 1.55rem;
 }
 
 html[data-ui-plugin-scene-chrome-composer='grand-line']
   .ds-composer-permission-button:hover:not(:disabled) {
-  filter: brightness(1.09) saturate(1.04);
-  transform: translateY(-1px);
+  filter: none;
+  transform: none;
 }
 
 html[data-ui-plugin-scene-chrome-composer='grand-line']
-  .ds-composer-permission-button[data-permission-mode='ask-for-approval'] {
-  --ds-permission-border: #5eb4d7;
-  --ds-permission-bg: linear-gradient(160deg, #176b91, #093b5c);
-  --ds-permission-ink: #effaff;
-}
-
+  .ds-composer-permission-button[data-permission-mode='ask-for-approval'],
 html[data-ui-plugin-scene-chrome-composer='grand-line']
   .ds-composer-permission-button[data-permission-mode='approve-for-me'] {
-  --ds-permission-border: #61d3c1;
-  --ds-permission-bg: linear-gradient(160deg, #17766e, #084740);
-  --ds-permission-ink: #e8fff9;
-  border-radius: 1rem 0.5rem 1rem 0.5rem;
+  color: #17364d !important;
 }
 
 html[data-ui-plugin-scene-chrome-composer='grand-line']
   .ds-composer-permission-button[data-permission-mode='full-access'] {
-  --ds-permission-border: #7e211d;
-  --ds-permission-bg:
-    radial-gradient(circle at 18% 25%, rgba(255, 218, 173, 0.24), transparent 30%),
-    linear-gradient(160deg, #bd4938, #81241f);
-  --ds-permission-ink: #fff0cf;
-  border-radius: 0.8rem;
-  clip-path: polygon(3% 12%, 10% 8%, 16% 12%, 24% 7%, 34% 11%, 44% 7%, 54% 11%, 64% 7%, 74% 11%, 84% 7%, 96% 12%, 98% 26%, 96% 42%, 99% 57%, 96% 75%, 97% 88%, 88% 94%, 78% 91%, 68% 95%, 58% 91%, 48% 95%, 38% 91%, 28% 95%, 18% 91%, 8% 94%, 2% 85%, 4% 69%, 1% 53%, 4% 37%, 1% 23%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 220, 174, 0.28),
-    0 4px 8px rgba(80, 21, 17, 0.34) !important;
+  clip-path: none;
+  color: #a43d31 !important;
 }
 
 html[data-ui-plugin='grand-line-logbook'] .ds-composer-permission-menu {

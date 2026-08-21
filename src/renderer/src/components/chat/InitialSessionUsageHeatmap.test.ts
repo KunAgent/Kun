@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { act, create as createRenderer } from 'react-test-renderer'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import i18n from '../../i18n'
@@ -175,10 +176,12 @@ describe('InitialSessionUsageHeatmap', () => {
           to: '2026-06-04',
           timezone: 'UTC',
           buckets: [
-            {
-              model: 'deepseek-v4-pro',
-              ...detailedDay
-            }
+            { ...detailedDay, model: 'deepseek-v4-pro' },
+            { ...detailedDay, model: 'gpt-5.6-sol', totalTokens: 1_800_000 },
+            { ...detailedDay, model: 'claude-opus-4', totalTokens: 1_200_000 },
+            { ...detailedDay, model: 'gemini-3-pro', totalTokens: 800_000 },
+            { ...detailedDay, model: 'glm-5.2', totalTokens: 400_000 },
+            { ...detailedDay, model: 'custom/qwen3-coder', totalTokens: 200_000 }
           ],
           days: [detailedDay],
           totals: {
@@ -200,6 +203,79 @@ describe('InitialSessionUsageHeatmap', () => {
     expect(html).toContain('459,039 tokens')
     expect(html).toContain('Output')
     expect(html).toContain('44,702 tokens')
+    expect(html).toContain('glm-5.2')
+    expect(html).not.toContain('custom/qwen3-coder')
+    expect(html).toContain('Showing 1–5 / 6')
+    expect(html).toContain('1 / 2')
+  })
+
+  it('moves the modal model list between pages without changing the percentage denominator', async () => {
+    const detailedDay = bucket('2026-06-04', 1_000)
+    const models = Array.from({ length: 6 }, (_, index) => ({
+      ...detailedDay,
+      model: `model-${index + 1}`,
+      totalTokens: 600 - index * 50
+    }))
+    let renderer!: ReturnType<typeof createRenderer>
+
+    await act(async () => {
+      renderer = createRenderer(createElement(InitialSessionUsageHeatmapView, {
+        state: state({ usage: usage(), loaded: true }),
+        initialActiveTab: 'models',
+        modelState: modelState({
+          usage: {
+            groupBy: 'model',
+            from: detailedDay.date,
+            to: detailedDay.date,
+            timezone: 'UTC',
+            buckets: models,
+            days: [detailedDay],
+            totals: { ...usage().totals, totalTokens: 2_850, days: 1, activeDays: 1 }
+          },
+          loaded: true
+        })
+      }))
+    })
+
+    expect(JSON.stringify(renderer.toJSON())).toContain('Showing 1–5 / 6')
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('model-6')
+    await act(async () => {
+      renderer.root.findByProps({ 'aria-label': 'Next page' }).props.onClick()
+    })
+
+    const output = JSON.stringify(renderer.toJSON())
+    expect(output).toContain('model-6')
+    expect(output).not.toContain('model-1')
+    expect(output).toContain('Showing 6–6 / 6')
+    expect(output).toContain('12.3')
+    expect(renderer.root.findByProps({ 'aria-label': 'Next page' }).props.disabled).toBe(true)
+    renderer.unmount()
+  })
+
+  it('keeps complete calendar ranges in the model chart, including zero-usage days', () => {
+    const days = Array.from({ length: 30 }, (_, index) =>
+      bucket(`2026-06-${String(index + 1).padStart(2, '0')}`, index % 6 === 0 ? 1_000 : 0, index % 6 === 0 ? 1 : 0)
+    )
+    const html = render(state({ usage: usage(days), loaded: true }), {
+      initialActiveTab: 'models',
+      modelState: modelState({
+        usage: {
+          groupBy: 'model',
+          from: days[0].date,
+          to: days[days.length - 1].date,
+          timezone: 'UTC',
+          buckets: [{ ...days[0], model: 'deepseek-v4' }],
+          days,
+          totals: { ...usage(days).totals }
+        },
+        loaded: true
+      })
+    })
+
+    expect(html).toContain('data-usage-model-chart="true"')
+    expect(html.match(/aria-label="Jun \d+/g)).toHaveLength(30)
+    expect(html).toContain('aria-label="Jun 1')
+    expect(html).toContain('aria-label="Jun 30')
   })
 
   it('changes only metric totals when a shorter range is selected', () => {

@@ -397,7 +397,7 @@ Typecheck/lint/unit tests cover the code shape, not these (need a real `npm run 
 - Artifact rehydration (list survives reload), PDF export (hidden-window `printToPDF`).
 - Node-canvas execution (sequential agent turns, live status), image nodes (the agent
   must land the generated image at the node path — `generate_image` writes to
-  `.deepseekgui-images/` by default, so the node prompt asks it to copy to the reserved
+  `.kun/images/` by default, so the node prompt asks it to copy to the reserved
   path; if it doesn't, the node shows an error rather than breaking).
 - The built-in design skill activating (appears after a runtime restart).
 - The code-drift ⚠ badge appearing after the shared design system changes.

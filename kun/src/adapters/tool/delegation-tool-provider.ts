@@ -16,6 +16,7 @@ import {
 import type { ToolExecutionUpdate, ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
+import { proactiveRetryStatus } from '../../delegation/delegation-proactive-retry.js'
 
 type InlineProfile = {
   id: string
@@ -387,7 +388,7 @@ async function runChild(
     }),
     signal: context.abortSignal
   })
-  return childToolResult(record)
+  return childToolResult(runtime, record)
 }
 
 type ResumeArgs = { childId: string; expectedResumeCount?: number }
@@ -474,12 +475,13 @@ async function resumeChild(
         : {}),
       expectedLaunchers: ['delegate_task'],
       requireResumable: true,
+      proactive: context.subagentResume === undefined,
       security: childSecurity(context),
       signal: context.abortSignal,
       onQueued: (childId, profile, metadata) => emit('queued', childId, profile, metadata),
       onRunning: (childId, profile, metadata) => emit('running', childId, profile, metadata)
     })
-    return childToolResult(record)
+    return childToolResult(runtime, record)
   } catch (error) {
     return toolError(error instanceof Error ? error.message : String(error))
   }
@@ -501,7 +503,10 @@ function childSecurity(context: ToolHostContext) {
   }
 }
 
-function childToolResult(record: ChildRunRecord): { output: Record<string, unknown>; isError: boolean } {
+function childToolResult(
+  runtime: DelegationRuntime,
+  record: ChildRunRecord
+): { output: Record<string, unknown>; isError: boolean } {
   return {
     output: {
       childId: record.id,
@@ -513,6 +518,11 @@ function childToolResult(record: ChildRunRecord): { output: Record<string, unkno
       terminationReason: record.terminationReason,
       resumable: record.resumable === true,
       resumeCount: record.resumeCount ?? 0,
+      ...(record.failure ? { failure: record.failure } : {}),
+      proactiveRetry: proactiveRetryStatus(
+        record,
+        runtime.proactiveRetryPolicy ?? { enabled: true, maxAttempts: 3 }
+      ),
       summary: record.summary,
       summaryTruncated: record.summaryTruncated,
       resultRef: record.resultRef,

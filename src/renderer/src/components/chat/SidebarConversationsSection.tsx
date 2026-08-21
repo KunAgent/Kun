@@ -17,12 +17,14 @@ import {
   RenameThreadDialogState,
   ThreadRow,
   ThreadRenameDialog,
+  ThreadRunningIndicator,
   sortSidebarThreads
 } from './SidebarProjectsSection'
 import { useChatStore } from '../../store/chat-store'
 import {
   prioritizeSidebarThreadActivity,
-  sidebarThreadActivity
+  sidebarThreadActivity,
+  sidebarThreadsHaveRunningActivity
 } from './sidebar-project-selectors'
 import {
   SIDEBAR_THREAD_DRAG_DATA_KEY,
@@ -73,6 +75,7 @@ export function SidebarConversationsSection({
   const busy = useChatStore((s) => s.busy)
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
+  const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
 
   const [collapsed, setCollapsed] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -90,8 +93,9 @@ export function SidebarConversationsSection({
     activeThreadId,
     busy,
     watchTurnCompletion,
-    unreadThreadIds
-  }), [activeThreadId, busy, unreadThreadIds, watchTurnCompletion])
+    unreadThreadIds,
+    scheduledThreadActivities
+  }), [activeThreadId, busy, scheduledThreadActivities, unreadThreadIds, watchTurnCompletion])
 
   const allConversationThreads = useMemo(() => sortSidebarThreads(threads.filter((thread) =>
     isConversationWorkspacePath(thread.workspace, conversationRoot) && thread.archived !== true
@@ -119,6 +123,12 @@ export function SidebarConversationsSection({
     sidebarOrder.threadIdsByScope,
     sidebarThreadActivityContext
   ])
+
+  const conversationsHaveRunning = sidebarThreadsHaveRunningActivity(
+    allConversationThreads,
+    sidebarThreadActivityContext
+  )
+  const runningLabel = t('sidebarThreadRunning')
 
   const handlePin = (threadId: string, pinned: boolean): void => {
     void onPinThread(threadId, pinned)
@@ -247,7 +257,10 @@ export function SidebarConversationsSection({
           onClick={() => setCollapsed((open) => !open)}
           className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-ds-faint transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-muted"
           title={t('sidebarConversations')}
-          aria-label={t('sidebarConversations')}
+          aria-label={[
+            t('sidebarConversations'),
+            conversationsHaveRunning ? runningLabel : ''
+          ].filter(Boolean).join(' - ')}
         >
           {collapsed ? (
             <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2} />
@@ -255,6 +268,7 @@ export function SidebarConversationsSection({
             <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2} />
           )}
           <span className="truncate">{t('sidebarConversations')}</span>
+          {conversationsHaveRunning ? <ThreadRunningIndicator label={runningLabel} /> : null}
         </button>
         <div className="flex shrink-0 items-center gap-1">
           <SidebarIconButton
@@ -303,15 +317,20 @@ export function SidebarConversationsSection({
             </button>
           ) : null}
 
-          {conversationThreads.map((thread) => (
-            <ThreadRow
+          {conversationThreads.map((thread) => {
+            const activity = sidebarThreadActivity(thread, sidebarThreadActivityContext)
+            return <ThreadRow
               key={thread.id}
               thread={thread}
               active={activeThreadId === thread.id}
               deleting={deletingThreadIds[thread.id] === true}
               locale={locale}
-              showRunning={sidebarThreadActivity(thread, sidebarThreadActivityContext) === 'running'}
-              showUnread={sidebarThreadActivity(thread, sidebarThreadActivityContext) === 'unread'}
+              showRunning={activity === 'running'}
+              showFailed={activity === 'failed'}
+              showUnread={activity === 'unread'}
+              scheduledActivity={activity === 'scheduled'
+                ? scheduledThreadActivities[thread.id]
+                : undefined}
               onSelect={() => onSelectThread(thread.id)}
               onContextMenu={noOp}
               onPreviewOpen={noOp}
@@ -330,7 +349,7 @@ export function SidebarConversationsSection({
               onDelete={() => void handleDelete(thread.id)}
               onRestore={() => void onRestoreThread(thread.id)}
             />
-          ))}
+          })}
         </div>
       ) : null}
 

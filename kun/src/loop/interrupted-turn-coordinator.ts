@@ -8,6 +8,8 @@ import {
 } from './interrupted-turn-resume-coordinator.js'
 import type { TurnRunOutcome } from './turn-execution-types.js'
 import { resolveTurnClientSurface } from './turn-context-resolver.js'
+import type { ChildRunFailure, ProactiveRetryStatus } from '../contracts/subagent-retry.js'
+import { computeShortHash } from './compaction-marker.js'
 
 /**
  * Prompt used for the synthetic continuation turn launched after a restart
@@ -34,6 +36,17 @@ export type InterruptedTurnResumeOptions = Pick<
   cooldownMs?: number
 }
 
+export type InterruptedSubagentRecoveryCandidate = {
+  parentThreadId: string
+  childId: string
+  label?: string
+  error?: string
+  failure?: ChildRunFailure
+  resumeCount: number
+  proactiveRetry: ProactiveRetryStatus
+  detached: boolean
+}
+
 export type InterruptedTurnCoordinatorDeps = {
   threadStore: ThreadStore
   turns: Pick<TurnService, 'startTurn'>
@@ -51,6 +64,7 @@ export type InterruptedTurnCoordinatorDeps = {
  */
 export class InterruptedTurnCoordinator {
   private readonly resume: InterruptedTurnResumeCoordinator
+  private readonly childRecoveryByThread = new Map<string, InterruptedSubagentRecoveryCandidate[]>()
 
   constructor(private readonly deps: InterruptedTurnCoordinatorDeps) {
     const options = deps.interruptedResume ?? {}
@@ -81,8 +95,16 @@ export class InterruptedTurnCoordinator {
    * a restart. Goal threads and threads still inside the cooldown window are
    * skipped; each process start resumes a given thread at most once.
    */
-  async resumeInterruptedTurns(threadIds: readonly string[]): Promise<number> {
+  async resumeInterruptedTurns(
+    threadIds: readonly string[],
+    childRecoveryCandidates: readonly InterruptedSubagentRecoveryCandidate[] = []
+  ): Promise<number> {
     if (!this.enabled) return 0
+    for (const candidate of childRecoveryCandidates) {
+      const entries = this.childRecoveryByThread.get(candidate.parentThreadId) ?? []
+      entries.push(candidate)
+      this.childRecoveryByThread.set(candidate.parentThreadId, entries)
+    }
     let resumed = 0
     for (const threadId of threadIds) {
       if (await this.resume.resumeInterrupted(threadId)) resumed += 1
@@ -95,8 +117,13 @@ export class InterruptedTurnCoordinator {
     const thread = await this.deps.threadStore.get(threadId)
     if (!thread) return false
     if (thread.relation === 'side') return false
-    // A still-active goal owns its own resume path; never double-resume.
-    if (thread.goal && thread.goal.status === 'active') return false
+    // A still-active goal normally owns restart recovery. A failed child needs
+    // the structured parent decision context instead, so reconciliation omits
+    // that parent from goal auto-resume and allows this one continuation turn.
+    if (
+      thread.goal && thread.goal.status === 'active' &&
+      !this.childRecoveryByThread.has(threadId)
+    ) return false
     const lastResumeAt = thread.lastAutoResumeAt
     if (!lastResumeAt) return true
     const elapsedMs = this.deps.nowMs() - Date.parse(lastResumeAt)
@@ -111,6 +138,7 @@ export class InterruptedTurnCoordinator {
     await this.deps.threadStore.upsert(
       touchThread({ ...thread, lastAutoResumeAt: now }, now)
     ).catch(() => undefined)
+    this.childRecoveryByThread.delete(threadId)
   }
 
   private async launchResumeTurn(threadId: string): Promise<void> {
@@ -119,10 +147,15 @@ export class InterruptedTurnCoordinator {
     const lastTurn = thread.turns[thread.turns.length - 1]
     let started
     try {
+      const recoveryContext = childRecoveryContext(this.childRecoveryByThread.get(threadId) ?? [])
+      const recoveryRequestId = recoveryContext
+        ? `subagent-recovery:${computeShortHash(recoveryContext, 32)}`
+        : undefined
       started = await this.deps.turns.startTurn({
         threadId,
         request: {
           prompt: INTERRUPTED_RESUME_PROMPT,
+          ...(recoveryRequestId ? { clientRequestId: recoveryRequestId } : {}),
           mode: 'agent',
           ...(lastTurn ? { clientSurface: resolveTurnClientSurface(lastTurn) } : {}),
           ...(lastTurn?.agentSurface ? { agentSurface: lastTurn.agentSurface } : {}),
@@ -135,7 +168,9 @@ export class InterruptedTurnCoordinator {
             : {}),
           ...(lastTurn?.disableUserInput ? { disableUserInput: true } : {})
         }
-      })
+      }, recoveryContext ? {
+        runtimeContext: { kind: 'host-control', content: recoveryContext }
+      } : undefined)
     } catch (error) {
       if (error instanceof TurnCapacityError) {
         this.resume.defer(threadId)
@@ -153,4 +188,24 @@ export class InterruptedTurnCoordinator {
     })
     void this.deps.runTurn(threadId, started.turnId)
   }
+}
+
+function childRecoveryContext(candidates: readonly InterruptedSubagentRecoveryCandidate[]): string | undefined {
+  if (candidates.length === 0) return undefined
+  return [
+    'One or more ordinary delegated children were interrupted by the runtime restart.',
+    'Inspect each candidate and decide whether to continue the exact child with delegate_task.',
+    'Do not create a replacement child. Respect proactiveRetry eligibility and remaining attempts.',
+    '<subagent_recovery_candidates>',
+    ...candidates.map((candidate) => JSON.stringify({
+      childId: candidate.childId,
+      label: candidate.label,
+      error: candidate.error,
+      failure: candidate.failure,
+      resumeCount: candidate.resumeCount,
+      proactiveRetry: candidate.proactiveRetry,
+      detached: candidate.detached
+    })),
+    '</subagent_recovery_candidates>'
+  ].join('\n')
 }

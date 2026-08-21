@@ -5,6 +5,7 @@ import {
   BrowserUseBridgeResponse,
   BrowserUseHostChallengeRequest,
   isBrowserUseStateAdvancingAction,
+  normalizeBrowserUseActionInput,
   redactBrowserUseActionForPersistence,
   redactBrowserUseUrl,
   signBrowserUseBridgeResponse,
@@ -46,6 +47,27 @@ describe('BrowserUseActionInput', () => {
       expectedTarget,
       text: 'bounded text'
     })
+  })
+
+  it('removes optional null placeholders while preserving required or unknown fields', () => {
+    const raw = {
+      action: 'open',
+      url: 'https://example.com',
+      newTab: null,
+      ref: null,
+      text: null
+    }
+    expect(normalizeBrowserUseActionInput(raw)).toEqual({
+      action: 'open',
+      url: 'https://example.com'
+    })
+    expect(normalizeBrowserUseActionInput({ ...raw, ref: 'non-empty' })).toHaveProperty('ref')
+    expect(normalizeBrowserUseActionInput({ ...raw, url: null })).toHaveProperty('url', null)
+    expect(normalizeBrowserUseActionInput({
+      action: 'open',
+      url: 'https://example.com',
+      selector: null
+    })).toHaveProperty('selector')
   })
 
   it.each([
@@ -214,12 +236,18 @@ describe('redactBrowserUseUrl', () => {
     })
   })
 
-  it('preserves only a recognized action when malformed arguments are persisted', () => {
+  it('preserves safe diagnostics for malformed recognized actions', () => {
     expect(redactBrowserUseActionForPersistence({
       action: 'open',
-      url: 'https://example.com/path?token=secret',
+      url: 'https://example.com/path?token=secret#fragment',
+      newTab: true,
       unexpected: 'do not persist'
-    })).toEqual({ action: 'open' })
+    })).toEqual({
+      action: 'open',
+      url: 'https://example.com/path',
+      newTab: true,
+      unexpectedFields: ['unexpected']
+    })
     expect(redactBrowserUseActionForPersistence({
       action: 'navigate',
       url: 'https://example.com/path?token=secret'
@@ -240,10 +268,11 @@ describe('redactBrowserUseUrl', () => {
       requiredFields: ['action', 'url'],
       allowedFields: ['action', 'url', 'newTab'],
       issueCodes: expect.arrayContaining(['invalid_field', 'unexpected_field']),
-      issuePaths: ['url']
+      issuePaths: ['url'],
+      unexpectedFields: ['secretField']
     })
     expect(JSON.stringify(summary)).not.toContain('oauth-secret')
-    expect(JSON.stringify(summary)).not.toContain('secretField')
+    expect(summary.unexpectedFields).toEqual(['secretField'])
 
     const unsupported = summarizeBrowserUseActionValidation({ action: 'navigate' })
     expect(unsupported).toMatchObject({

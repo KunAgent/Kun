@@ -85,6 +85,7 @@ export { buildKnowledgeToolProvider } from '../knowledge/knowledge-tools.js'
 export { buildSkillToolProviders } from '../adapters/tool/skill-tool-provider.js'
 export { buildDelegationToolProviders } from '../adapters/tool/delegation-tool-provider.js'
 export { buildComponentDesignToolProviders } from '../adapters/tool/component-design-tool-provider.js'
+export { buildConversationVisualizationToolProvider } from '../adapters/tool/conversation-visualization-tool-provider.js'
 export { buildWebToolProviders } from '../adapters/tool/web-tool-provider.js'
 export { buildImageGenToolProviders, protocolSupportsImageEdit } from '../adapters/tool/image-gen-tool-provider.js'
 export { buildComputerUseToolProviders } from '../adapters/tool/computer-use-tool-provider.js'
@@ -119,6 +120,7 @@ export {
   DEFAULT_CONTEXT_THRESHOLDS,
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
+  safeProviderReasoningCapability,
   modelContextProfilesFromConfig,
   contextThresholdsForModel,
   type ContextCompactionConfig,

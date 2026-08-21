@@ -48,6 +48,12 @@ describe('DelegationRuntime user child stop', () => {
         parentTurnId: 'turn',
         launcher: 'delegate_task',
         prompt: 'selected work',
+        workspace: '/workspace',
+        inlineProfile: {
+          id: 'general', source: 'builtin',
+          profile: { mode: 'subagent', toolPolicy: 'inherit' }
+        },
+        security: { sandboxRoot: '/workspace', memoryEnabled: false },
         signal: new AbortController().signal
       })
       const sibling = runtime.runChild({

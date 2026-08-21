@@ -305,24 +305,39 @@ function classifyImportModel(
   modelId: string,
   catalog?: ModelsDevCatalogModel
 ): ProviderModelKind {
+  const catalogKind = catalogModelKind(provider, modelId, catalog)
+  if (catalogKind) return catalogKind
+
   const existingKind = providerModelListEntries(provider)
     .find((entry) => modelKey(entry.modelId) === modelKey(modelId))?.kind
   if (existingKind) return existingKind
 
-  if (catalog) {
-    if (catalog.outputModalities.includes('video')) return 'video'
-    if (catalog.outputModalities.includes('image')) return 'image'
-    if (
-      catalog.inputModalities.includes('audio') &&
-      catalog.outputModalities.includes('text')
-    ) return 'speech'
-    if (catalog.outputModalities.includes('audio')) {
-      const heuristic = heuristicModelKind(provider, modelId)
-      return heuristic === 'music' ? 'music' : 'tts'
-    }
-  }
-
   return heuristicModelKind(provider, modelId) ?? 'chat'
+}
+
+function catalogModelKind(
+  provider: ModelProviderProfileV1,
+  modelId: string,
+  catalog?: ModelsDevCatalogModel
+): ProviderModelKind | undefined {
+  if (!catalog) return undefined
+  if (catalog.outputModalities.includes('video')) return 'video'
+  if (catalog.outputModalities.includes('image')) return 'image'
+  if (catalog.outputModalities.includes('audio')) {
+    const heuristic = heuristicModelKind(provider, modelId)
+    return heuristic === 'music' ? 'music' : 'tts'
+  }
+  // Catalog modalities are capabilities, not endpoint roles. A model that accepts
+  // and returns text remains chat-capable even when it also accepts audio input.
+  if (
+    catalog.inputModalities.includes('text') &&
+    catalog.outputModalities.includes('text')
+  ) return 'chat'
+  if (
+    catalog.inputModalities.includes('audio') &&
+    catalog.outputModalities.includes('text')
+  ) return 'speech'
+  return undefined
 }
 
 function heuristicModelKind(

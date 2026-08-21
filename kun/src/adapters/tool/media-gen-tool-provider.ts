@@ -511,13 +511,15 @@ async function resolveProviderCredential<T extends {
 }>(config: T, resolveCredential?: ProviderCredentialResolver): Promise<T & {
   apiKey?: string
   headers?: Record<string, string>
+  proxyUrl?: string
 }> {
   if (!config.providerId || !resolveCredential) return config
   const credential = await resolveCredential(config.providerId)
   return {
     ...config,
     apiKey: credential.apiKey,
-    headers: { ...(config.headers ?? {}), ...(credential.headers ?? {}) }
+    headers: { ...(config.headers ?? {}), ...(credential.headers ?? {}) },
+    ...(credential.proxyUrl ? { proxyUrl: credential.proxyUrl } : {})
   }
 }
 

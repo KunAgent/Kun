@@ -114,7 +114,10 @@ export class LocalToolHost implements ToolHost {
         approved: false
       }
     }
-    const normalizedArguments = normalizeRawToolArgumentsEnvelope(preHooks.call.arguments)
+    const transportArguments = normalizeRawToolArgumentsEnvelope(preHooks.call.arguments)
+    const normalizedArguments = tool.normalizeArguments
+      ? tool.normalizeArguments(transportArguments)
+      : transportArguments
     const activeCall = normalizedArguments === preHooks.call.arguments
       ? preHooks.call
       : { ...preHooks.call, arguments: normalizedArguments }
@@ -585,6 +588,7 @@ export class LocalToolHost implements ToolHost {
       execute: tool.execute,
       ...(tool.modelAdvertised === false ? { modelAdvertised: false } : {}),
       ...(tool.shouldAdvertise ? { shouldAdvertise: tool.shouldAdvertise } : {}),
+      ...(tool.normalizeArguments ? { normalizeArguments: tool.normalizeArguments } : {}),
       ...(tool.requiresExplicitApproval
         ? { requiresExplicitApproval: tool.requiresExplicitApproval }
         : {}),

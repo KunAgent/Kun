@@ -34,10 +34,6 @@ function writeBundledExtensionResources(context: ReturnType<typeof packContext>)
   const root = join(afterPack._internals.packedResourcesDir(context), 'bundled-extensions')
   const extensions = [
     {
-      id: 'kun-examples.presentation-studio',
-      archive: 'presentation-studio-0.1.0.kunx'
-    },
-    {
       id: 'kun-examples.social-media-sidebar',
       archive: 'social-media-sidebar-0.1.3.kunx'
     }
@@ -55,7 +51,10 @@ function writeBundledExtensionResources(context: ReturnType<typeof packContext>)
   }
   writeFileSync(join(root, 'catalog.json'), `${JSON.stringify({
     schemaVersion: 1,
-    retiredExtensions: ['kun-examples.kun-video-editor'],
+    retiredExtensions: [
+      'kun-examples.kun-video-editor',
+      'kun-examples.presentation-studio'
+    ],
     extensions: extensions.map((extension) => ({
       id: extension.id,
       version: '0.1.0',
@@ -103,9 +102,10 @@ describe('Extension Platform packaged release resources', () => {
       'kun-examples.kun-video-editor'
     )
     expect(afterPack.REQUIRED_RETIRED_BUNDLED_EXTENSION_IDS).toEqual([
-      'kun-examples.kun-video-editor'
+      'kun-examples.kun-video-editor',
+      'kun-examples.presentation-studio'
     ])
-    expect(afterPack.REQUIRED_BUNDLED_EXTENSION_IDS).toContain(
+    expect(afterPack.REQUIRED_BUNDLED_EXTENSION_IDS).not.toContain(
       'kun-examples.presentation-studio'
     )
     expect(afterPack.REQUIRED_BUNDLED_EXTENSION_IDS).toContain(
@@ -145,7 +145,7 @@ describe('Extension Platform packaged release resources', () => {
     const context = packContext(root, 'darwin')
     writeBundledExtensionResources(context)
     writeFileSync(
-      join(afterPack._internals.packedResourcesDir(context), 'bundled-extensions', 'presentation-studio-0.1.0.kunx'),
+      join(afterPack._internals.packedResourcesDir(context), 'bundled-extensions', 'social-media-sidebar-0.1.3.kunx'),
       'tampered'
     )
     expect(() => afterPack._internals.validateBundledExtensionResources(context)).toThrow(
@@ -153,7 +153,7 @@ describe('Extension Platform packaged release resources', () => {
     )
   })
 
-  it('rejects video editor and orphan archives from packaged defaults', () => {
+  it('rejects retired Presentation Studio and orphan archives from packaged defaults', () => {
     const root = temporaryRoot()
     const context = packContext(root, 'darwin')
     writeBundledExtensionResources(context)
@@ -161,14 +161,14 @@ describe('Extension Platform packaged release resources', () => {
       afterPack._internals.packedResourcesDir(context),
       'bundled-extensions'
     )
-    const archive = 'kun-video-editor-0.4.4.kunx'
-    const bytes = Buffer.from('retired video editor archive')
+    const archive = 'presentation-studio-0.1.10.kunx'
+    const bytes = Buffer.from('retired Presentation Studio archive')
     writeFileSync(join(bundledRoot, archive), bytes)
     const catalogPath = join(bundledRoot, 'catalog.json')
     const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
     catalog.extensions.push({
-      id: 'kun-examples.kun-video-editor',
-      version: '0.4.4',
+      id: 'kun-examples.presentation-studio',
+      version: '0.1.10',
       archive,
       sha256: createHash('sha256').update(bytes).digest('hex')
     })

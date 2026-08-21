@@ -210,11 +210,6 @@ export function userBlockForActiveCanvasTurn(
   return null
 }
 
-export function userBlockUsesPrimaryImageLane(block: ChatBlock | null | undefined): boolean {
-  if (block?.kind !== 'user') return false
-  return Boolean(block.meta?.designProfile?.outputMedium === 'image')
-}
-
 export function enqueueCanvasTurnScreens(options: {
   turnId: string
   blocks: readonly ChatBlock[]
@@ -281,6 +276,7 @@ export function placeLiveCanvasTurnImages(options: {
   target?: CanvasDesignDocumentTarget
   fallback: GeneratedImageFallbackTarget | null
   fallbackPlacementTargetId: string | null
+  placeholderShapeIdForTool?: (toolBlockId: string) => string | null
 }): string[] {
   const user = options.blocks.find((block) => block.kind === 'user')
   const placementTarget: CanvasGeneratedImagePlacementTarget | undefined =
@@ -292,11 +288,13 @@ export function placeLiveCanvasTurnImages(options: {
         : undefined)
   return placeGeneratedImagesForTurn({
     blocks: options.blocks,
-    primaryImageLane: userBlockUsesPrimaryImageLane(user),
     affectedIds: options.affectedIds,
     ...(options.threadId ? { threadId: options.threadId } : {}),
     ...(options.turnId ? { turnId: options.turnId } : {}),
     ...(options.target ? { target: options.target } : {}),
-    ...(placementTarget ? { placementTarget } : {})
+    ...(placementTarget ? { placementTarget } : {}),
+    ...(options.placeholderShapeIdForTool
+      ? { placeholderShapeIdForTool: options.placeholderShapeIdForTool }
+      : {})
   })
 }

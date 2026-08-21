@@ -64,8 +64,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         {
           id: 'model-a',
           name: 'Model A',
-          description: 'Vision-capable catalog metadata',
-          inputModalities: ['text', 'image'],
+          description: 'Multimodal catalog metadata',
+          inputModalities: ['text', 'image', 'audio'],
           outputModalities: ['text'],
           contextWindowTokens: 128_000,
           maxOutputTokens: 16_000,
@@ -182,6 +182,36 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       const renderer = await renderProviders(ctx)
       mountedRenderers.push(renderer)
       return renderer
+    }
+
+    const sharedImportFixture = () => {
+      const settings = defaultModelProviderSettings()
+      const target = {
+        id: 'shared-provider', name: 'Shared Provider', apiKey: '',
+        baseUrl: 'https://api.example.com/v1', endpointFormat: 'chat_completions',
+        models: ['old-model'], modelProfiles: {}
+      } satisfies ModelProviderProfileV1
+      const snapshot = (revision: number, models = target.models) => ({
+        schemaVersion: 1,
+        revision,
+        providers: [{
+          ...target,
+          accountId: `account:${target.id}`,
+          kind: 'http',
+          authType: 'api-key',
+          configured: true,
+          credentialStatus: 'ready',
+          models,
+          selectedModel: models[0]
+        }],
+        defaultProviderId: target.id,
+        defaultAccountId: `account:${target.id}`,
+        defaultModel: models[0],
+        proxy: settings.proxy,
+        routePools: settings.routePools,
+        localModelGateway: { enabled: settings.localGateway.enabled }
+      })
+      return { settings, target, snapshot }
     }
 
     const installDraftRegistry = (): ReturnType<typeof vi.fn> => {
@@ -404,6 +434,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       const updatedTarget = updatedProviders.find((item) => item.id === target.id)
       expect(updatedTarget?.models).toEqual(['model-a', 'model-b'])
       expect(updatedTarget?.models).not.toContain('catalog-only')
+      expect(updatedTarget?.speech).toBeUndefined()
       expect(updatedTarget?.modelProfiles['model-a']).toEqual(expect.objectContaining({
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_000,
@@ -453,6 +484,155 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         supportsToolCalling: true,
         messageParts: ['text', 'image_url']
       }))
+    })
+
+    it('waits for a shared catalog commit before closing the import dialog', async () => {
+      const { settings, target, snapshot } = sharedImportFixture()
+      let revision = 1
+      let registryModels = [...target.models]
+      const currentSnapshot = () => snapshot(revision, registryModels)
+      const patchBodies: Array<{ models: string[] }> = []
+      const runtimeRequest = vi.fn(async (path: string, method = 'GET', body?: string) => {
+        if (path.includes('/events?')) return new Promise<never>(() => undefined)
+        if (path === '/v1/model-connections' && method === 'GET') {
+          return { ok: true, status: 200, body: JSON.stringify(currentSnapshot()) }
+        }
+        if (path === `/v1/model-connections/${target.id}/probe` && method === 'POST') {
+          return { ok: true, status: 200, body: JSON.stringify({ ok: true, models: ['old-model', 'new-model'] }) }
+        }
+        if (path === `/v1/model-connections/${target.id}` && method === 'PATCH') {
+          const request = JSON.parse(body ?? '{}') as { models: string[] }
+          patchBodies.push(request)
+          registryModels = [...request.models]
+          revision += 1
+          return { ok: true, status: 200, body: JSON.stringify(currentSnapshot()) }
+        }
+        throw new Error(`Unexpected runtime request: ${method} ${path}`)
+      })
+      Object.assign(window.kunGui, { runtimeRequest })
+      const renderer = await mountProviders({
+        ...baseCtx(),
+        provider: { ...settings, providers: [...settings.providers, target] },
+        kun: { ...defaultKunRuntimeSettings(), providerId: target.id, model: target.models[0] },
+        update: vi.fn()
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => findButton(renderer, 'Models').props.onClick())
+      await act(async () => {
+        findButton(renderer, 'Fetch models').props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(findButton(renderer, 'Import 2').props.disabled).toBe(false)
+      await act(async () => {
+        findButton(renderer, 'Import 2').props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(patchBodies).toHaveLength(1)
+      expect(patchBodies[0]?.models).toEqual(['old-model', 'new-model'])
+      expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
+    })
+
+    it('keeps the picker open when a shared catalog commit fails', async () => {
+      const { settings, target, snapshot } = sharedImportFixture()
+      const shared = snapshot(1)
+      const runtimeRequest = vi.fn(async (path: string, method = 'GET') => {
+        if (path.includes('/events?')) return new Promise<never>(() => undefined)
+        if (path === '/v1/model-connections' && method === 'GET') {
+          return { ok: true, status: 200, body: JSON.stringify(shared) }
+        }
+        if (path === `/v1/model-connections/${target.id}/probe` && method === 'POST') {
+          return { ok: true, status: 200, body: JSON.stringify({ ok: true, models: ['old-model', 'new-model'] }) }
+        }
+        if (path === `/v1/model-connections/${target.id}` && method === 'PATCH') {
+          return { ok: false, status: 422, body: JSON.stringify({ message: 'catalog rejected' }) }
+        }
+        throw new Error(`Unexpected runtime request: ${method} ${path}`)
+      })
+      Object.assign(window.kunGui, { runtimeRequest })
+      const renderer = await mountProviders({
+        ...baseCtx(),
+        provider: { ...settings, providers: [...settings.providers, target] },
+        kun: { ...defaultKunRuntimeSettings(), providerId: target.id, model: target.models[0] },
+        update: vi.fn()
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => findButton(renderer, 'Models').props.onClick())
+      await act(async () => {
+        findButton(renderer, 'Fetch models').props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => {
+        findButton(renderer, 'Import 2').props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(1)
+      expect(rendererText(renderer)).toContain('catalog rejected')
+      expect(findButton(renderer, 'Import 2').props.disabled).toBe(false)
+    })
+
+    it('blocks a shared catalog above the runtime model limit before PATCH', async () => {
+      const { settings, target, snapshot } = sharedImportFixture()
+      const fetchedModels = Array.from({ length: 501 }, (_, index) => `model-${index}`)
+      const shared = snapshot(1)
+      const runtimeRequest = vi.fn(async (path: string, method = 'GET') => {
+        if (path.includes('/events?')) return new Promise<never>(() => undefined)
+        if (path === '/v1/model-connections' && method === 'GET') {
+          return { ok: true, status: 200, body: JSON.stringify(shared) }
+        }
+        if (path === `/v1/model-connections/${target.id}/probe` && method === 'POST') {
+          return { ok: true, status: 200, body: JSON.stringify({ ok: true, models: fetchedModels }) }
+        }
+        if (path === `/v1/model-connections/${target.id}` && method === 'PATCH') {
+          throw new Error('PATCH must not be called for an oversized catalog')
+        }
+        throw new Error(`Unexpected runtime request: ${method} ${path}`)
+      })
+      Object.assign(window.kunGui, { runtimeRequest })
+      const renderer = await mountProviders({
+        ...baseCtx(),
+        provider: { ...settings, providers: [...settings.providers, target] },
+        kun: { ...defaultKunRuntimeSettings(), providerId: target.id, model: target.models[0] },
+        update: vi.fn()
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => findButton(renderer, 'Models').props.onClick())
+      await act(async () => {
+        findButton(renderer, 'Fetch models').props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => {
+        findButton(renderer, 'Import 501').props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(1)
+      expect(rendererText(renderer)).toContain('providerModelImportSubmitFailed')
+      expect(runtimeRequest.mock.calls.some(([path, method]) =>
+        path === `/v1/model-connections/${target.id}` && method === 'PATCH'
+      )).toBe(false)
     })
 
     it('keeps catalog-only candidates unchecked when the provider model request fails', async () => {

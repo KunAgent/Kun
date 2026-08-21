@@ -340,7 +340,7 @@ describe('FloatingComposer capability controls', () => {
 
     expect(html).toContain('deepseek-v4-pro')
     expect(html).toContain('Stop')
-    const modelTrigger = html.match(/<button[^>]*aria-label="Model"[^>]*>/)?.[0]
+    const modelTrigger = html.match(/<button[^>]*aria-label="Model: DeepSeek \/ deepseek-v4-pro"[^>]*>/)?.[0]
     const reasoningTrigger = html.match(/<button[^>]*aria-label="Reasoning: High"[^>]*>/)?.[0]
     expect(modelTrigger).toBeDefined()
     expect(modelTrigger).not.toContain('disabled=""')

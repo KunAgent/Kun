@@ -165,6 +165,20 @@ export type CoreChildRuntimeMetadataJson = {
   childTerminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'
   resumable?: boolean
   resumeCount?: number
+  failure?: {
+    source: 'model' | 'runtime' | 'contract'
+    code?: string
+    category?: string
+    httpStatus?: number
+    retryAfterMs?: number
+  }
+  proactiveRetry?: {
+    enabled: boolean
+    eligible: boolean
+    count: number
+    limit: number
+    remaining: number
+  }
   detached?: boolean
   childModel?: string
   childProviderId?: string

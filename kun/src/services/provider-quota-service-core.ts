@@ -1,5 +1,6 @@
 import {
   ProviderQuotaListResponseSchema,
+  type ProviderLocalCostSummary,
   type ProviderQuotaEntry,
   type ProviderQuotaListResponse,
   type ProviderQuotaMetric
@@ -46,6 +47,10 @@ export type ProviderQuotaSourceSnapshot = {
   proxyUrl: string
 }
 
+export type ProviderLocalCostLoader = (
+  profiles: readonly ProviderQuotaProbeProfile[]
+) => Promise<Readonly<Record<string, ProviderLocalCostSummary | undefined>>>
+
 export type ProbeContext = {
   fetcher: ProviderQuotaFetch
   proxyUrl: string
@@ -71,6 +76,7 @@ export class ProviderQuotaService {
     fetcher?: ProviderQuotaFetch
     nowIso?: () => string
     subscriptionRuntime?: Partial<SubscriptionQuotaRuntime>
+    loadLocalCosts?: ProviderLocalCostLoader
   }) {
     this.fetcher = options.fetcher ?? proxyAwareFetch
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
@@ -80,11 +86,26 @@ export class ProviderQuotaService {
   async list(): Promise<ProviderQuotaListResponse> {
     const refreshedAt = this.nowIso()
     const source = await this.options.loadSource()
-    const entries = await mapWithConcurrency(
-      source.profiles,
-      QUOTA_CONCURRENCY,
-      async (profile) => this.refreshProfile(profile, source.proxyUrl)
-    )
+    const localCostsPromise: Promise<Readonly<Record<
+      string,
+      ProviderLocalCostSummary | undefined
+    >>> = this.options.loadLocalCosts
+      ? this.options.loadLocalCosts(source.profiles).catch(() => ({}))
+      : Promise.resolve({})
+    const [probedEntries, localCosts] = await Promise.all([
+      mapWithConcurrency(
+        source.profiles,
+        QUOTA_CONCURRENCY,
+        async (profile) => this.refreshProfile(profile, source.proxyUrl)
+      ),
+      localCostsPromise
+    ])
+    const entries = probedEntries.map((entry) => {
+      const localCost = Object.hasOwn(localCosts, entry.providerId)
+        ? localCosts[entry.providerId]
+        : undefined
+      return localCost ? { ...entry, localCost } : entry
+    })
     return ProviderQuotaListResponseSchema.parse({ entries, refreshedAt })
   }
 

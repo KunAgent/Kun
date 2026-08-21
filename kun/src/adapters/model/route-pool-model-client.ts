@@ -323,14 +323,30 @@ export class RoutePoolModelClient implements ModelClient {
         failures.push(`${target.providerId}/${target.modelId}: ${message}`)
       }
       if (!failed) {
-        // Some providers return only usage/completed markers. Publish those
-        // after the stream closes successfully so a later pre-content failure
-        // can still fail over without leaking the rejected route.
-        if (pending.length === 0 && !committed) {
-          yield { kind: 'completed', stopReason: 'stop', route }
-        } else {
-          for (const buffered of pending) yield attributeRouteChunk(buffered, route)
+        if (!committed) {
+          // Success requires at least one content commit point (text,
+          // reasoning, a complete tool call, or generated output). A stream
+          // that ends with only usage/completed markers, or nothing at all,
+          // would otherwise persist as a healthy empty answer. Fail the
+          // target and fail over instead of fabricating completion.
+          const message =
+            `route target ${target.providerId}/${target.modelId} completed without any content`
+          const failure = withRouteFailure(
+            { category: 'unavailable', failoverAllowed: true },
+            route
+          )
+          this.health.failure(
+            pool,
+            target,
+            Math.max(0, this.now() - started),
+            failure,
+            message,
+            request.routeTestId
+          )
+          failures.push(`${target.providerId}/${target.modelId}: ${message}`)
+          continue
         }
+        for (const buffered of pending) yield attributeRouteChunk(buffered, route)
         this.health.success(pool, target, Math.max(0, this.now() - started), request.routeTestId)
         return
       }

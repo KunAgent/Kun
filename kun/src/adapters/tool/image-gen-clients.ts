@@ -1,4 +1,5 @@
 import type { ImageGenClient, ImageGenEditRequest, ImageGenRequest, GeneratedImage } from './image-gen-tool-provider.js'
+import { createProxyFetch } from '../model/proxy-fetch.js'
 import {
   CODEX_IMAGE_INSTRUCTIONS,
   CODEX_IMAGE_RESPONSES_MODEL,
@@ -28,20 +29,24 @@ export function createImageGenClient(config: {
   baseUrl?: string
   apiKey?: string
   headers?: Record<string, string>
+  proxyUrl?: string
 }): ImageGenClient {
+  // Media generation shares the provider-level model proxy so a
+  // proxy-restricted provider stays reachable for tool calls too.
+  const fetchImpl = createProxyFetch(config.proxyUrl ?? '') ?? fetch
   if (config.protocol === 'minimax-image') {
-    return new MiniMaxImageClient(config.baseUrl!, config.apiKey!)
+    return new MiniMaxImageClient(config.baseUrl!, config.apiKey!, fetchImpl)
   }
   if (config.protocol === 'codex-responses-image') {
-    return new CodexResponsesImageClient(config.baseUrl!, config.apiKey!, config.headers)
+    return new CodexResponsesImageClient(config.baseUrl!, config.apiKey!, config.headers, fetchImpl)
   }
   if (config.protocol === 'grok-imagine-image') {
-    return new GrokImagineImageClient(config.baseUrl!, config.apiKey!, config.headers)
+    return new GrokImagineImageClient(config.baseUrl!, config.apiKey!, config.headers, fetchImpl)
   }
   if (config.protocol === 'volcengine-ark-image') {
-    return new VolcengineArkImageClient(config.baseUrl!, config.apiKey!)
+    return new VolcengineArkImageClient(config.baseUrl!, config.apiKey!, fetchImpl)
   }
-  return new OpenAiCompatImageClient(config.baseUrl!, config.apiKey!)
+  return new OpenAiCompatImageClient(config.baseUrl!, config.apiKey!, fetchImpl)
 }
 
 /**
@@ -59,7 +64,8 @@ export class OpenAiCompatImageClient implements ImageGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.baseUrl = trimTrailingSlashes(baseUrl)
   }
@@ -124,7 +130,7 @@ export class OpenAiCompatImageClient implements ImageGenClient {
     const signal = withTimeout(request.signal, request.timeoutMs)
     const post = async (includeResponseFormat: boolean, includeQuality: boolean): Promise<Response> => {
       try {
-        return await fetch(url, { method: 'POST', ...init(includeResponseFormat, includeQuality), signal })
+        return await this.fetchImpl(url, { method: 'POST', ...init(includeResponseFormat, includeQuality), signal })
       } catch (error) {
         throw imageFetchFailure(url, error, request)
       }
@@ -158,7 +164,7 @@ export class OpenAiCompatImageClient implements ImageGenClient {
     if (entry?.url) {
       let download: Response
       try {
-        download = await fetch(entry.url, { signal })
+        download = await this.fetchImpl(entry.url, { signal })
       } catch (error) {
         throw imageFetchFailure(entry.url, error, request)
       }
@@ -176,7 +182,8 @@ export class VolcengineArkImageClient implements ImageGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = volcengineArkImageUrl(baseUrl)
   }
@@ -196,7 +203,7 @@ export class VolcengineArkImageClient implements ImageGenClient {
     const signal = withTimeout(request.signal, request.timeoutMs)
     let response: Response
     try {
-      response = await fetch(this.endpointUrl, {
+      response = await this.fetchImpl(this.endpointUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -229,7 +236,7 @@ export class VolcengineArkImageClient implements ImageGenClient {
     if (entry?.url) {
       let download: Response
       try {
-        download = await fetch(entry.url, { signal })
+        download = await this.fetchImpl(entry.url, { signal })
       } catch (error) {
         throw imageFetchFailure(entry.url, error, request)
       }
@@ -251,7 +258,8 @@ export class GrokImagineImageClient implements ImageGenClient {
   constructor(
     baseUrl: string,
     private readonly apiKey: string,
-    private readonly headers: Record<string, string> = {}
+    private readonly headers: Record<string, string> = {},
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = openAiCompatImageUrl(baseUrl, 'generations')
   }
@@ -260,7 +268,7 @@ export class GrokImagineImageClient implements ImageGenClient {
     const signal = withTimeout(request.signal, request.timeoutMs)
     let response: Response
     try {
-      response = await fetch(this.endpointUrl, {
+      response = await this.fetchImpl(this.endpointUrl, {
         method: 'POST',
         headers: {
           ...this.headers,
@@ -310,7 +318,8 @@ export class CodexResponsesImageClient implements ImageGenClient {
   constructor(
     baseUrl: string,
     private readonly apiKey: string,
-    private readonly headers: Record<string, string> = {}
+    private readonly headers: Record<string, string> = {},
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = codexResponsesImageUrl(baseUrl)
   }
@@ -388,7 +397,7 @@ export class CodexResponsesImageClient implements ImageGenClient {
     ): Promise<{ response: Response; text: string }> => {
       let response: Response
       try {
-        response = await fetch(this.endpointUrl, {
+        response = await this.fetchImpl(this.endpointUrl, {
           method: 'POST',
           headers: {
             ...this.headers,
@@ -446,7 +455,8 @@ export class MiniMaxImageClient implements ImageGenClient {
 
   constructor(
     baseUrl: string,
-    private readonly apiKey: string
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
   ) {
     this.endpointUrl = minimaxImageGenerationUrl(baseUrl)
   }
@@ -484,7 +494,7 @@ export class MiniMaxImageClient implements ImageGenClient {
     const signal = withTimeout(request.signal, request.timeoutMs)
     let response: Response
     try {
-      response = await fetch(this.endpointUrl, {
+      response = await this.fetchImpl(this.endpointUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -516,7 +526,7 @@ export class MiniMaxImageClient implements ImageGenClient {
     if (imageUrl) {
       let download: Response
       try {
-        download = await fetch(imageUrl, { signal })
+        download = await this.fetchImpl(imageUrl, { signal })
       } catch (error) {
         throw imageFetchFailure(imageUrl, error, request)
       }

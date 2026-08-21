@@ -92,6 +92,39 @@ describe('JsonSettingsStore', () => {
     expect(writes).toBe(2)
   })
 
+  it('retains the last valid snapshot while an external edit contains invalid JSON', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'kun-invalid-external-settings-'))
+    let revision = 1
+    let value: string | null = JSON.stringify({ version: 1, locale: 'zh' })
+    const writes: string[] = []
+    const backend = {
+      async read() {
+        return { revision, value }
+      },
+      async write(expectedRevision: number, next: string) {
+        if (expectedRevision !== revision) throw new Error('revision conflict')
+        writes.push(next)
+        value = next
+        revision += 1
+        return { revision, value: next }
+      }
+    }
+    const store = new JsonSettingsStore(userDataDir, { documentBackend: backend })
+    const valid = await store.load()
+    value = '{invalid'
+    revision += 1
+
+    const retained = await store.load()
+
+    expect(retained).toBe(valid)
+    expect(retained.locale).toBe('zh')
+    expect(writes).toEqual([])
+
+    value = JSON.stringify({ version: 1, locale: 'en', theme: 'dark' })
+    revision += 1
+    await expect(store.load()).resolves.toMatchObject({ locale: 'en', theme: 'dark' })
+  })
+
   it('retries a Manager revision conflict from the exact mutation snapshot', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'kun-revision-retry-settings-'))
     let revision = 0

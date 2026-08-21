@@ -140,7 +140,7 @@ describe('dedicated design tools', () => {
       exportRequest: {
         format: 'png',
         fileName: expect.stringMatching(/^kun-whiteboard-[a-f0-9]{12}\.png$/),
-        relativePath: expect.stringMatching(/^\.deepseekgui-images\/kun-whiteboard-[a-f0-9]{12}\.png$/)
+        relativePath: expect.stringMatching(/^\.kun\/images\/kun-whiteboard-[a-f0-9]{12}\.png$/)
       },
       status: 'accepted',
       receiptKey: expect.stringMatching(/^design-receipt-[a-f0-9]{32}$/),
@@ -214,7 +214,7 @@ describe('dedicated design tools', () => {
         status: 'accepted',
         receiptKey: expect.stringMatching(/^design-receipt-[a-f0-9]{32}$/),
         exportRequest: {
-          relativePath: expect.stringMatching(/^\.deepseekgui-images\/service-map-.+\.png$/)
+          relativePath: expect.stringMatching(/^\.kun\/images\/service-map-.+\.png$/)
         }
       }
     })

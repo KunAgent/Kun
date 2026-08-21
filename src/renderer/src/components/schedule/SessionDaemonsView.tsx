@@ -37,8 +37,9 @@ type Props = {
   schedule: ScheduleSettingsV1
   clawChannels: ClawImChannelV1[]
   defaultWorkspaceRoot: string
-  onPatchSchedule: (patch: Parameters<typeof mergeScheduleSettings>[1]) => Promise<void>
+  onPatchSchedule: (patch: Parameters<typeof mergeScheduleSettings>[1]) => Promise<ScheduleSettingsV1>
   onOpenThread?: (threadId: string) => void
+  onConnectWeixin?: () => void
 }
 
 const STATUS_POLL_MS = 2_000
@@ -90,11 +91,15 @@ export function SessionDaemonsView({
   clawChannels,
   defaultWorkspaceRoot,
   onPatchSchedule,
-  onOpenThread
+  onOpenThread,
+  onConnectWeixin
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const threads = useChatStore((state) => state.threads)
   const [status, setStatus] = useState<DaemonRuntimeStatus | null>(null)
+  const [masterPending, setMasterPending] = useState(false)
+  const [masterError, setMasterError] = useState<string | null>(null)
+  const [runtimeReachable, setRuntimeReachable] = useState(false)
   const [dialog, setDialog] = useState<DaemonDialogState | null>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
   const [logDrawer, setLogDrawer] = useState<{ id: string; name: string; logPath: string } | null>(null)
@@ -110,9 +115,12 @@ export function SessionDaemonsView({
       if (typeof window.kunGui?.getDaemonStatus !== 'function') return
       try {
         const next = await window.kunGui.getDaemonStatus()
-        if (!cancelled) setStatus(next)
+        if (!cancelled) {
+          setStatus(next)
+          setRuntimeReachable(true)
+        }
       } catch {
-        /* runtime not ready */
+        if (!cancelled) setRuntimeReachable(false)
       }
     }
     void poll()
@@ -146,7 +154,21 @@ export function SessionDaemonsView({
   }
 
   const toggleMaster = async (): Promise<void> => {
-    await onPatchSchedule({ daemons: { ...schedule.daemons, enabled: !globalEnabled } })
+    if (masterPending) return
+    setMasterPending(true)
+    setMasterError(null)
+    try {
+      const saved = await onPatchSchedule({
+        daemons: { ...schedule.daemons, enabled: !globalEnabled }
+      })
+      if (saved.daemons.enabled === globalEnabled) {
+        throw new Error(t('daemonMasterSaveMismatch'))
+      }
+    } catch (error) {
+      setMasterError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setMasterPending(false)
+    }
   }
 
   const toggleDaemon = async (daemon: SessionDaemonV1): Promise<void> => {
@@ -212,26 +234,51 @@ export function SessionDaemonsView({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ds-border bg-ds-card px-4 py-3 shadow-sm">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ds-subtle text-ds-muted">
-            <Power className="h-4 w-4" strokeWidth={1.8} />
-          </span>
-          <div className="min-w-0">
-            <div className="text-[14px] font-semibold text-ds-ink">{t('daemonMasterTitle')}</div>
-            <div className="truncate text-[12px] text-ds-faint">
-              {globalEnabled ? t('daemonMasterSub') : t('daemonMasterDisabled')}
-            </div>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-4">
-          {globalEnabled ? (
-            <span className="text-[12px] whitespace-nowrap text-ds-muted">
-              {t('daemonSummary', { running: runningCount, paused: pausedCount })}
+      <section className="rounded-xl border border-ds-border bg-ds-card shadow-sm">
+        <button
+          type="button"
+          onClick={() => void toggleMaster()}
+          disabled={masterPending}
+          className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-ds-hover disabled:cursor-wait disabled:opacity-70"
+          role="switch"
+          aria-checked={globalEnabled}
+          aria-busy={masterPending}
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${globalEnabled ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200' : 'bg-ds-subtle text-ds-muted'}`}>
+              <Power className="h-4 w-4" strokeWidth={1.8} />
             </span>
-          ) : null}
+            <span className="min-w-0">
+              <span className="block text-[14px] font-semibold text-ds-ink">{t('daemonMasterTitle')}</span>
+              <span className="block truncate text-[12px] text-ds-faint">
+                {masterPending
+                  ? t('daemonMasterSaving')
+                  : globalEnabled
+                    ? (runtimeReachable ? t('daemonMasterSub') : t('daemonMasterRuntimeOffline'))
+                    : t('daemonMasterDisabled')}
+              </span>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-3">
+            <span className="text-[12px] font-semibold text-ds-muted">
+              {globalEnabled ? t('daemonMasterOn') : t('daemonMasterOff')}
+            </span>
+            <span className={`relative h-5 w-9 rounded-full transition ${globalEnabled ? 'bg-ds-ink' : 'bg-ds-border-strong'}`} aria-hidden>
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${globalEnabled ? 'left-[18px]' : 'left-0.5'}`} />
+            </span>
+          </span>
+        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ds-border-muted px-4 py-2.5">
+          <span className="text-[12px] text-ds-muted">
+            {globalEnabled
+              ? t('daemonSummary', { running: runningCount, paused: pausedCount })
+              : t('daemonMasterAllPaused')}
+          </span>
           <label className="flex shrink-0 items-center gap-2 text-[13px] font-medium text-ds-muted">
-            {t('scheduleKeepAwake')}
+            <span>
+              {t('scheduleKeepAwake')}
+              <span className="ml-1 text-[11px] font-normal text-ds-faint">{t('daemonKeepAwakeHint')}</span>
+            </span>
             <input
               type="checkbox"
               checked={Boolean(schedule.keepAwake)}
@@ -242,17 +289,15 @@ export function SessionDaemonsView({
               <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${schedule.keepAwake ? 'left-[18px]' : 'left-0.5'}`} />
             </span>
           </label>
-          <button
-            type="button"
-            onClick={() => void toggleMaster()}
-            className={`relative h-5 w-9 rounded-full transition ${globalEnabled ? 'bg-ds-ink' : 'bg-ds-border-strong'}`}
-            role="switch"
-            aria-checked={globalEnabled}
-            aria-label={t('daemonMasterTitle')}
-          >
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${globalEnabled ? 'left-[18px]' : 'left-0.5'}`} />
-          </button>
         </div>
+        {masterError ? (
+          <div role="alert" className="flex items-center justify-between gap-3 border-t border-red-500/20 bg-red-500/8 px-4 py-2.5 text-[12px] text-red-700 dark:text-red-200">
+            <span>{t('daemonMasterSaveFailed', { error: masterError })}</span>
+            <button type="button" onClick={() => void toggleMaster()} className="shrink-0 font-semibold underline underline-offset-2">
+              {t('retry')}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -398,6 +443,7 @@ export function SessionDaemonsView({
           error={dialogError}
           threads={threads}
           weixinChannels={weixinChannels}
+          onConnectWeixin={onConnectWeixin}
           onDraftChange={(draft) => setDialog({ mode: dialog.mode, draft })}
           onSubmit={() => void saveDialog()}
           onClose={() => setDialog(null)}

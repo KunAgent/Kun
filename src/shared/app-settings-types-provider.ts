@@ -311,12 +311,16 @@ export const DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS = 5
 
 export const DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS = 3_000
 
-export const DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES = [429, 503] as const
+export const DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES = [429, 500, 502, 503, 504] as const
+
+export const MODEL_REQUEST_RETRY_DEFAULTS_VERSION = 1
 
 export type ModelRequestRetrySettingsV1 = {
   maxAttempts: number
   initialDelayMs: number
   httpStatusCodes: number[]
+  /** Tracks which materialized default status list has been applied. */
+  defaultsVersion?: number
 }
 
 export const MODEL_PROVIDER_INPUT_MODALITIES = ['text', 'image'] as const

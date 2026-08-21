@@ -125,6 +125,22 @@ describe('jsonSchemaToZodShape', () => {
     expect(obj.safeParse({ count: 1 }).success).toBe(false) // missing required prompt
   })
 
+  test('allows explicitly compatible optional null placeholders without relaxing required fields', () => {
+    const shape = jsonSchemaToZodShape({
+      type: 'object',
+      properties: {
+        action: { type: 'string' },
+        url: { type: 'string' },
+        newTab: { type: 'boolean' }
+      },
+      required: ['action', 'url']
+    }, { nullableOptionals: true })
+    const obj = z.object(shape)
+    expect(obj.safeParse({ action: 'open', url: 'https://example.com', newTab: null }).success)
+      .toBe(true)
+    expect(obj.safeParse({ action: 'open', url: null }).success).toBe(false)
+  })
+
   test('empty schema yields an empty shape', () => {
     expect(jsonSchemaToZodShape({})).toEqual({})
   })

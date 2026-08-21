@@ -10,6 +10,7 @@ import {
   makeUserItem
 } from '../../domain/item.js'
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import { LlmDebugRecorder } from '../../services/llm-debug-recorder.js'
 import { CompatModelClient } from './compat-model-client.js'
 import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder.js'
 
@@ -286,6 +287,85 @@ describe('CompatModelClient model-switch continuity', () => {
     expect(calls).toHaveLength(1)
     expect(chunks).toHaveLength(1)
     expect(chunks[0]).toMatchObject({ kind: 'error', code: 'http_400' })
+  })
+
+  it('attributes provider, cache writes, billing, and service tier at the request boundary', async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({
+      choices: [{ finish_reason: 'stop', message: { content: 'ok' } }],
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 20,
+        total_tokens: 120,
+        cache_creation_input_tokens: 10
+      }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })) as unknown as typeof fetch
+    const client = new CompatModelClient({
+      providerId: 'codex-work',
+      baseUrl: 'https://proxy.example/v1',
+      apiKey: 'test-key',
+      model: 'gpt-5.6-sol',
+      endpointFormat: 'chat_completions',
+      nonStreaming: true,
+      fetchImpl,
+      billingKind: 'subscription'
+    })
+    const request = {
+      ...switchedRequest(false),
+      model: 'gpt-5.6-sol',
+      serviceTier: 'priority' as const
+    }
+    const priority = await drain(client.stream(request))
+    const priorityUsage = priority.find((chunk) => chunk.kind === 'usage')
+
+    expect(priorityUsage).toMatchObject({
+      kind: 'usage',
+      usage: {
+        actualProviderId: 'codex-work',
+        actualModelId: 'gpt-5.6-sol',
+        billingKind: 'subscription',
+        serviceTier: 'priority',
+        cacheWriteTokens: 10
+      }
+    })
+
+    const standard = await drain(client.stream({ ...request, turnId: 'turn-standard', serviceTier: undefined }))
+    const standardUsage = standard.find((chunk) => chunk.kind === 'usage')
+    expect(standardUsage?.kind === 'usage' ? standardUsage.usage.serviceTier : 'missing').toBeUndefined()
+  })
+
+  it('attributes usage when debug recording exists but capture is disabled', async () => {
+    const client = new CompatModelClient({
+      providerId: 'codex-personal',
+      baseUrl: 'https://proxy.example/v1',
+      apiKey: 'test-key',
+      model: 'gpt-5.6-terra',
+      endpointFormat: 'chat_completions',
+      nonStreaming: true,
+      fetchImpl: (async () => new Response(JSON.stringify({
+        choices: [{ finish_reason: 'stop', message: { content: 'ok' } }],
+        usage: { prompt_tokens: 80, completion_tokens: 10, total_tokens: 90 }
+      }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch,
+      billingKind: 'subscription',
+      debugSink: new LlmDebugRecorder({ shouldCapture: () => false })
+    })
+    const chunks = await drain(client.stream({
+      ...switchedRequest(false),
+      model: 'gpt-5.6-terra',
+      serviceTier: 'priority'
+    }))
+    const usage = chunks.find((chunk) => chunk.kind === 'usage')
+
+    expect(usage).toMatchObject({
+      kind: 'usage',
+      usage: {
+        actualProviderId: 'codex-personal',
+        billingKind: 'subscription',
+        serviceTier: 'priority'
+      }
+    })
   })
 })
 

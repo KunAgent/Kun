@@ -16,6 +16,7 @@ import {
   DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES,
   DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
   DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
+  MODEL_REQUEST_RETRY_DEFAULTS_VERSION,
   DEFAULT_SANDBOX_MODE,
   DEFAULT_TOOL_OUTPUT_MAX_BYTES,
   DEFAULT_TOOL_OUTPUT_MAX_LINES,
@@ -181,7 +182,8 @@ export function defaultKunRuntimeSettings(
     retry: {
       maxAttempts: DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
       initialDelayMs: DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
-      httpStatusCodes: [...DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES]
+      httpStatusCodes: [...DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
     },
     runtimeToken: '',
     dataDir: DEFAULT_KUN_DATA_DIR,
@@ -210,7 +212,7 @@ export function defaultKunRuntimeSettings(
     browserUse: defaultKunBrowserUseSettings(),
     quality: defaultKunQualitySettings(),
     graph: defaultKunGraphSettings(),
-    planExecution: { useWorktreeByDefault: false },
+    planExecution: { useWorktreeByDefault: true },
     lab: defaultKunLabSettings()
   }
 }

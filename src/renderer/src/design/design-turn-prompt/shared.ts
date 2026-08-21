@@ -67,6 +67,8 @@ export type DesignTurnOptions = {
   workspaceRoot: string
   /** User override prompt; empty = built-in default. */
   customPrompt?: string
+  /** Annotation-flattened image used as the edit reference without replacing the visible source. */
+  imageEditReferencePath?: string
   designContext?: DesignContext
   /** Canvas mode only: current snapshot of the shape document for AI reasoning. */
   canvasSnapshot?: CanvasSnapshot

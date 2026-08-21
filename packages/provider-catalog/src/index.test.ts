@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getProviderCatalogPreset,
   providerCatalogEntries,
+  resolveProviderCatalogSource,
   PROVIDER_CATALOG
 } from './index.js'
 
@@ -61,6 +62,19 @@ describe('provider catalog', () => {
         category: 'subscription'
       })
     ]))
+  })
+
+  it('resolves numbered subscription and token-plan accounts without matching base URLs', () => {
+    expect(resolveProviderCatalogSource({ id: 'opencode-go-2' })).toMatchObject({
+      presetSource: 'opencode-go',
+      presetMode: 'api',
+      preset: { category: 'subscription', authType: 'subscription' }
+    })
+    expect(resolveProviderCatalogSource({ id: 'minimax-token-plan-2' })).toMatchObject({
+      presetSource: 'minimax',
+      presetMode: 'token-plan'
+    })
+    expect(resolveProviderCatalogSource({ id: 'custom-opencode-go-2' })).toBeNull()
   })
 
   it('keeps OAuth connection routing in the shared source of truth', () => {

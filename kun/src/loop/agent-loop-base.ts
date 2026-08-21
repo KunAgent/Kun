@@ -265,8 +265,11 @@ export abstract class AgentLoopBase {
    * Gated by the per-thread cooldown and the master switch so a crash loop
    * cannot burn model budget by resuming the same thread on every boot.
    */
-  async resumeInterruptedTurns(threadIds: readonly string[]): Promise<number> {
-    return this.interruptedTurns.resumeInterruptedTurns(threadIds)
+  async resumeInterruptedTurns(
+    threadIds: readonly string[],
+    childRecoveryCandidates: readonly import('./interrupted-turn-coordinator.js').InterruptedSubagentRecoveryCandidate[] = []
+  ): Promise<number> {
+    return this.interruptedTurns.resumeInterruptedTurns(threadIds, childRecoveryCandidates)
   }
 
   /**

@@ -23,16 +23,15 @@ const cliPath = join(root, 'kun', 'dist', 'cli', 'serve-entry.js')
 const defaultOutput = join(root, 'resources', 'bundled-extensions')
 
 export const BUNDLED_EXTENSION_CATALOG_FILE = 'catalog.json'
-const RETIRED_BUNDLED_EXTENSION_NAMES = Object.freeze(['kun-video-editor'])
+const RETIRED_BUNDLED_EXTENSION_NAMES = Object.freeze([
+  'kun-video-editor',
+  'presentation-studio'
+])
 export const RETIRED_BUNDLED_EXTENSION_IDS = Object.freeze([
-  'kun-examples.kun-video-editor'
+  'kun-examples.kun-video-editor',
+  'kun-examples.presentation-studio'
 ])
 export const BUNDLED_EXTENSION_DEFINITIONS = Object.freeze([
-  Object.freeze({
-    id: 'kun-examples.presentation-studio',
-    name: 'presentation-studio',
-    root: join(root, 'examples', 'extensions', 'presentation-studio')
-  }),
   Object.freeze({
     id: 'kun-examples.social-media-sidebar',
     name: 'social-media-sidebar',

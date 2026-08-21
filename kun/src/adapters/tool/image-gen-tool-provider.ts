@@ -5,6 +5,7 @@ import type {
   ImageGenerationResolution,
   KunCapabilitiesConfig
 } from '../../contracts/capabilities.js'
+import { KUN_GENERATED_IMAGE_DIR } from '../../contracts/generated-image-path.js'
 import type { AttachmentContent, AttachmentStore } from '../../attachments/attachment-store.js'
 import { detectImage } from '../../attachments/attachment-store.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
@@ -35,7 +36,7 @@ export {
   volcengineArkImageUrl
 } from './image-gen-client-codecs.js'
 
-const GENERATED_IMAGE_DIR = '.kun/images'
+const GENERATED_IMAGE_DIR = KUN_GENERATED_IMAGE_DIR
 const MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024
 const REFERENCE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const ASPECT_RATIOS = new Set(['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9'])
@@ -102,6 +103,7 @@ export type ImageGenToolProviderOptions = {
 export type ProviderCredentialResolver = (providerId: string) => Promise<{
   apiKey: string
   headers?: Record<string, string>
+  proxyUrl?: string
 }>
 
 export type ImageGenToolProviderBuildResult = {
@@ -318,7 +320,8 @@ export function buildImageGenToolProviders(
             ...config,
             ...(credential ? {
               apiKey: credential.apiKey,
-              headers: { ...(config.headers ?? {}), ...(credential.headers ?? {}) }
+              headers: { ...(config.headers ?? {}), ...(credential.headers ?? {}) },
+              ...(credential.proxyUrl ? { proxyUrl: credential.proxyUrl } : {})
             } : {})
           })
         }

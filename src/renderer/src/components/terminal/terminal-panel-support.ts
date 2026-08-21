@@ -5,10 +5,13 @@ import {
   type TerminalColorSettingsV1
 } from '@shared/app-settings'
 
+import type { TerminalTarget } from './terminal-backend'
+
 export type TerminalTab = {
   id: string
   index: number
   title?: string
+  target: TerminalTarget
 }
 
 export type TerminalTabContextMenu = {
@@ -41,7 +44,7 @@ export const MAX_RENDERER_TABS = 8
 
 export function initialTerminalTabState(): TerminalTabState {
   return {
-    tabs: [{ id: INITIAL_TAB_ID, index: 1 }],
+    tabs: [{ id: INITIAL_TAB_ID, index: 1, target: { kind: 'local' } }],
     activeTabId: INITIAL_TAB_ID
   }
 }

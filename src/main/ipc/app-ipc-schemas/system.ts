@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isValidTimeZone } from '../../../shared/zoned-date-time'
 import { DESKTOP_COMMANDS, MAX_APP_BADGE_COUNT } from '../../../shared/kun-gui-api'
 import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { SPEECH_TRANSCRIPTION_MAX_BASE64_CHARS, SPEECH_TRANSCRIPTION_MAX_DURATION_MS } from '../../../shared/speech-to-text'
@@ -102,6 +103,40 @@ export const clawTaskFromTextPayloadSchema = z
     modelHint: modelIdSchema.nullable().optional(),
     reasoningEffort: scheduleReasoningEffortSchema.nullable().optional(),
     mode: z.enum(['agent', 'plan']).nullable().optional()
+  })
+  .strict()
+
+export const scheduleTaskCreatePayloadSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    prompt: z.string().min(1).max(500_000),
+    workspaceRoot: defaultPathSchema,
+    sourcePlanId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+    sourceThreadId: z.string().trim().min(1).max(MAX_ID_LENGTH).optional(),
+    providerId: z.string().trim().min(1).max(128),
+    model: modelIdSchema,
+    reasoningEffort: scheduleReasoningEffortSchema,
+    mode: z.enum(['agent', 'plan']),
+    orchestration: z.enum(['direct', 'graph']),
+    schedule: z.object({
+      kind: z.literal('at'),
+      atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),
+      timeZone: z.string().trim().min(1).max(128).refine(isValidTimeZone, 'Invalid IANA time zone.')
+    }).strict()
+  })
+  .strict()
+
+export const scheduleTaskUpdatePayloadSchema = z
+  .object({
+    taskId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+    providerId: z.string().trim().min(1).max(128),
+    model: modelIdSchema,
+    reasoningEffort: scheduleReasoningEffortSchema,
+    schedule: z.object({
+      kind: z.literal('at'),
+      atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),
+      timeZone: z.string().trim().min(1).max(128).refine(isValidTimeZone, 'Invalid IANA time zone.')
+    }).strict()
   })
   .strict()
 

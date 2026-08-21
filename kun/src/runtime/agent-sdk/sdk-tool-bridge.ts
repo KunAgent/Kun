@@ -144,10 +144,14 @@ export function buildBridgedToolSpecs(
  * the parameter surface to the model; unknown/complex types fall back to a
  * permissive `z.any()`. Top-level only (the SDK tool schema is one object).
  */
-export function jsonSchemaToZodShape(schema: Record<string, unknown>): z.ZodRawShape {
+export function jsonSchemaToZodShape(
+  schema: Record<string, unknown>,
+  options: { nullableOptionals?: boolean } = {}
+): z.ZodRawShape {
   const shape: Record<string, z.ZodTypeAny> = {}
   const properties = (schema?.properties as Record<string, Record<string, unknown>> | undefined) ?? {}
   const required = new Set((schema?.required as string[] | undefined) ?? [])
+  const nullableOptionals = options.nullableOptionals === true
   for (const [key, prop] of Object.entries(properties)) {
     let base: z.ZodTypeAny
     switch (prop?.type) {
@@ -168,7 +172,9 @@ export function jsonSchemaToZodShape(schema: Record<string, unknown>): z.ZodRawS
         base = z.any()
     }
     if (typeof prop?.description === 'string') base = base.describe(prop.description)
-    shape[key] = required.has(key) ? base : base.optional()
+    shape[key] = required.has(key)
+      ? base
+      : nullableOptionals ? base.nullable().optional() : base.optional()
   }
   return shape
 }
@@ -184,9 +190,10 @@ export function toSdkMcpServer(
   serverName = 'kun'
 ): SdkMcpServerInstance {
   const tools = specs.map((spec) =>
-    sdk.tool(spec.name, spec.description, jsonSchemaToZodShape(spec.inputSchema), async (args) =>
-      spec.handler((args ?? {}) as Record<string, unknown>)
-    )
+    sdk.tool(spec.name, spec.description, jsonSchemaToZodShape(
+      spec.inputSchema,
+      { nullableOptionals: spec.name === 'browser_use' }
+    ), async (args) => spec.handler((args ?? {}) as Record<string, unknown>))
   )
   return sdk.createSdkMcpServer({ name: serverName, version: '1.0.0', tools })
 }

@@ -220,6 +220,55 @@ describe('ProviderQuotaPanel', () => {
     act(() => renderer.unmount())
   })
 
+  it('keeps Codex local value visible when the upstream probe fails', async () => {
+    vi.stubGlobal('window', {
+      kunGui: {
+        listProviderQuotas: vi.fn(async () => ({
+          refreshedAt: '2026-08-20T12:00:00.000Z',
+          entries: [{
+            providerId: 'codex-work',
+            providerName: 'Codex work',
+            presetId: 'codex',
+            status: 'error' as const,
+            metrics: [],
+            message: 'Sign-in expired.',
+            localCost: {
+              kind: 'reference_api_estimate' as const,
+              currency: 'USD' as const,
+              today: { requests: 0, totalTokens: 0, amount: 0, coverage: 'complete' as const },
+              last30Days: { requests: 3, totalTokens: 5_000, amount: 0.08, coverage: 'partial' as const },
+              updatedAt: '2026-08-20T12:00:00.000Z'
+            }
+          }]
+        }))
+      }
+    })
+
+    let renderer!: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(ProviderQuotaPanel))
+    })
+
+    expect(renderer.root.findAllByProps({ 'data-provider-quota-status': 'error' })).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ 'data-provider-quota-status-group': 'error' })).toHaveLength(0)
+    expect(renderer.root.findByProps({ 'data-provider-icon': 'codex' })).toBeTruthy()
+    act(() => renderer.root.findByProps({
+      'data-provider-quota-toggle': 'codex-work'
+    }).props.onClick())
+    expect(renderer.root.findByProps({ 'data-provider-local-cost': 'workbench' })).toBeTruthy()
+    expect(renderer.root.findByProps({
+      'data-provider-local-cost-window': 'today'
+    }).props['data-coverage']).toBe('complete')
+    expect(renderer.root.findByProps({
+      'data-provider-local-cost-window': 'last-30-days'
+    }).props['data-coverage']).toBe('partial')
+    const html = JSON.stringify(renderer.toJSON())
+    expect(html).toContain('$0.0000')
+    expect(html).toContain('Partial')
+    expect(html).toContain('not an actual subscription charge')
+    act(() => renderer.unmount())
+  })
+
   it('formats large quotas compactly while preserving their unit', () => {
     expect(formatQuotaValue(250_000, 'tokens', 'en')).toBe('250K tokens')
   })

@@ -157,6 +157,7 @@ export function importDisabledAutomations(input: {
       ...raw,
       id,
       enabled: false,
+      sourcePlanId: '',
       clawChannelId: '',
       providerId: '',
       lastThreadId: '',

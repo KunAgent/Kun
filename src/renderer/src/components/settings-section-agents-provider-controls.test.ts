@@ -364,7 +364,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         retry: {
           maxAttempts: 3,
           initialDelayMs: 3000,
-          httpStatusCodes: [429, 503]
+          httpStatusCodes: [429, 503],
+          defaultsVersion: 1
         },
         models: ['retry-model'],
         modelProfiles: {}
@@ -388,9 +389,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(panelText).toContain('Retry HTTP status codes')
       expect(renderer.root.findAllByType('input').some((input) => input.props.value === '429,503')).toBe(true)
       expect(renderer.root.findAllByType('input').some((input) => input.props.value === '429, 503')).toBe(false)
-      expect(panelText).toContain('Separate multiple status codes with commas, for example 429,503.')
-      expect(panelText).toContain('Excludes the initial request. Default 5, maximum 10.')
-      expect(panelText.indexOf('Separate multiple status codes with commas, for example 429,503.'))
+      expect(panelText).toContain('Separate multiple status codes with commas. Current defaults: 429,500,502,503,504.')
+      expect(panelText).toContain('Applies to eligible transport failures and the HTTP statuses listed below.')
+      expect(panelText.indexOf('Separate multiple status codes with commas. Current defaults: 429,500,502,503,504.'))
         .toBeLessThan(panelText.indexOf('Retry attempts'))
 
       const retryCountInput = renderer.root.findAllByType('input')
@@ -415,7 +416,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         retry: {
           maxAttempts: 0,
           initialDelayMs: 3000,
-          httpStatusCodes: [429, 503]
+          httpStatusCodes: [429, 500, 502, 503, 504],
+          defaultsVersion: 1
         }
       } satisfies ModelProviderProfileV1
       const renderer = await mountProviders({
@@ -444,6 +446,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         | undefined
       expect(updatedProviders?.find((item) => item.id === disabledProvider.id)?.retry?.maxAttempts)
         .toBe(5)
+      expect(updatedProviders?.find((item) => item.id === disabledProvider.id)?.retry?.httpStatusCodes)
+        .toEqual([429, 500, 502, 503, 504])
     })
 
     it('locks preset IDs and blocks probes without required credentials', async () => {

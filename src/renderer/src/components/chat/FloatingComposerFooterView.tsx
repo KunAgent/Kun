@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
+import { summarizeThreadMoney } from '../../hooks/use-thread-usage'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
 type AnimatedCacheValueState = {
@@ -52,12 +53,21 @@ export function FloatingComposerFooterView({
 }): ReactElement | null {
   const {
     BarChart3, FloatingComposerUsageHistory, activeThreadId, compact,
-    primaryCacheHitRate, footerHint, formatCompactNumber, formatCost, formatPercent, formatTps,
+    primaryCacheHitRate, footerHint, formatCompactNumber, formatPercent, formatTps,
     formatTtftSeconds, i18n, showUsageHistoryFooter, t, threadUsage, threadUsageState,
     timingThreadUsage
   } = context
   if (compact) return null
   const latestCacheHitRate = threadUsage ? primaryCacheHitRate(threadUsage) : null
+  const usageLocale = i18n.resolvedLanguage ?? i18n.language
+  const moneyItems = threadUsage ? summarizeThreadMoney({
+    costUsd: threadUsage.costUsd,
+    costCny: threadUsage.costCny,
+    valueEstimateUsd: threadUsage.valueEstimateUsd,
+    valueEstimateCny: threadUsage.valueEstimateCny,
+    valueEstimateCoverage: threadUsage.valueEstimateCoverage,
+    locale: usageLocale
+  }) : []
 
   return (
     <div className="ds-composer-footer ds-no-drag">
@@ -72,7 +82,7 @@ export function FloatingComposerFooterView({
                       : 'sessionUsageDetailsTitle',
                     {
                       tokens: formatCompactNumber(threadUsage.totalTokens),
-                      cost: formatCost(threadUsage.costUsd, i18n.language, threadUsage.costCny),
+                      cost: moneyItems[0]?.value ?? '-',
                       cache: formatPercent(threadUsage.cacheHitRate),
                       latestCache: formatPercent(threadUsage.lastTurnCacheHitRate),
                       cached: formatCompactNumber(threadUsage.cachedTokens),
@@ -86,9 +96,6 @@ export function FloatingComposerFooterView({
             }
           >
             <BarChart3 className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
-            <span className="ds-composer-usage-label shrink-0">
-              {t('sessionUsageFooterLabel')}
-            </span>
             {threadUsage ? (
               <>
                 <span className="ds-composer-usage-metric ds-composer-usage-tokens shrink-0 tabular-nums">
@@ -127,6 +134,33 @@ export function FloatingComposerFooterView({
                     {t('sessionUsageFooterTps', {
                       tps: formatTps(timingThreadUsage.avgTokensPerSecond) ?? '-'
                     })}
+                  </span>
+                ) : null}
+                {moneyItems.length > 0 ? moneyItems.map((item) => (
+                  <span
+                    key={item.kind}
+                    className="ds-composer-usage-metric ds-composer-usage-money shrink-0 tabular-nums"
+                    title={item.kind === 'estimate'
+                      ? t('sessionUsageEstimateTitle', { defaultValue: 'Reference API-price estimate, not an actual subscription charge.' })
+                      : t('sessionUsageActualCostTitle', { defaultValue: 'Recorded API cost.' })}
+                  >
+                    {item.kind === 'estimate'
+                      ? t('sessionUsageFooterEstimate', { value: item.value, defaultValue: 'Estimate ≈{{value}}' })
+                      : t('sessionUsageFooterActualCost', { value: item.value, defaultValue: 'Cost {{value}}' })}
+                    {item.kind === 'estimate' && item.coverage === 'partial' ? (
+                      <span className="ml-1" data-session-usage-estimate-partial>
+                        · {t('turnUsageEstimatePartial', { defaultValue: 'Partial estimate' })}
+                      </span>
+                    ) : null}
+                  </span>
+                )) : threadUsage.totalTokens > 0 ? (
+                  <span
+                    className="ds-composer-usage-metric ds-composer-usage-money shrink-0"
+                    title={t('sessionUsagePriceUnavailableTitle', {
+                      defaultValue: 'The provider did not report a cost and this model has no trusted local price.'
+                    })}
+                  >
+                    {t('sessionUsagePriceUnavailable', { defaultValue: 'Price unavailable' })}
                   </span>
                 ) : null}
               </>

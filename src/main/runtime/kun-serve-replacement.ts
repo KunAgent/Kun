@@ -124,11 +124,6 @@ async function requestExactRuntimeShutdown(
   target: SharedRuntimeInspection,
   fetchImpl: typeof fetch
 ): Promise<void> {
-  if (!target.connection) {
-    throw new Error(
-      `Kun shared runtime process ${target.discovery.pid} is still alive but did not respond to the shutdown probe; its discovery record was preserved`
-    )
-  }
   const response = await fetchImpl(`${target.discovery.baseUrl.replace(/\/$/u, '')}/v1/runtime/shutdown`, {
     method: 'POST',
     headers: {

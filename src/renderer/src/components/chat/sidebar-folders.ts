@@ -322,10 +322,10 @@ export function sidebarChildFolders(
   return folders.filter((folder) => folder.parentId === parentId)
 }
 
-export function sidebarFolderThreadCount(
+export function sidebarFolderDescendantThreadIds(
   folders: readonly SidebarVirtualFolder[],
   folderId: string
-): number {
+): string[] {
   const descendantIds = new Set([folderId])
   let changed = true
   while (changed) {
@@ -337,10 +337,14 @@ export function sidebarFolderThreadCount(
       }
     }
   }
-  return folders.reduce(
-    (count, folder) => count + (descendantIds.has(folder.id) ? folder.threadIds.length : 0),
-    0
-  )
+  return folders.flatMap((folder) => descendantIds.has(folder.id) ? folder.threadIds : [])
+}
+
+export function sidebarFolderThreadCount(
+  folders: readonly SidebarVirtualFolder[],
+  folderId: string
+): number {
+  return sidebarFolderDescendantThreadIds(folders, folderId).length
 }
 
 export function sidebarFolderNameExists(

@@ -7,34 +7,32 @@ import {
 } from './app-settings'
 
 describe('Kun plan execution settings', () => {
-  it('defaults isolated worktree builds off for new and legacy settings', () => {
-    expect(defaultKunRuntimeSettings().planExecution.useWorktreeByDefault).toBe(false)
-    expect(defaultKunRuntimeSettings().lab.planWorktree.enabled).toBe(false)
+  it('defaults Direct plan builds to isolated worktrees', () => {
+    expect(defaultKunRuntimeSettings().planExecution).toEqual({ useWorktreeByDefault: true })
+    expect(defaultKunRuntimeSettings().lab).not.toHaveProperty('planWorktree')
+  })
 
-    const legacy = defaultKunRuntimeSettings() as Partial<ReturnType<typeof defaultKunRuntimeSettings>>
-    delete (legacy.lab as Partial<ReturnType<typeof defaultKunRuntimeSettings>['lab']>)
-      .planWorktree
-    delete legacy.planExecution
+  it('drops the retired Lab setting while retaining the formal preference', () => {
+    const legacy = {
+      ...defaultKunRuntimeSettings(),
+      lab: {
+        ...defaultKunRuntimeSettings().lab,
+        planWorktree: { enabled: false }
+      }
+    }
+    delete (legacy as Partial<typeof legacy>).planExecution
     const normalized = normalizeAppSettings({
       version: 1,
       agents: { kun: legacy }
     } as unknown as AppSettingsV1)
 
-    expect(normalized.agents.kun.planExecution).toEqual({ useWorktreeByDefault: false })
-    expect(normalized.agents.kun.lab.planWorktree).toEqual({ enabled: false })
+    expect(normalized.agents.kun.planExecution).toEqual({ useWorktreeByDefault: true })
+    expect(normalized.agents.kun.lab).not.toHaveProperty('planWorktree')
   })
 
-  it('migrates the legacy preference and keeps the compatibility alias synchronized', () => {
-    const legacyEnabled = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
-      planExecution: { useWorktreeByDefault: true }
-    })
-    const disabled = mergeKunRuntimeSettings(legacyEnabled, {
-      lab: { planWorktree: { enabled: false } }
-    })
-
-    expect(legacyEnabled.lab.planWorktree.enabled).toBe(true)
-    expect(legacyEnabled.planExecution.useWorktreeByDefault).toBe(true)
-    expect(disabled.lab.planWorktree.enabled).toBe(false)
-    expect(disabled.planExecution.useWorktreeByDefault).toBe(false)
+  it('retains an explicit formal opt-out', () => {
+    expect(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
+      planExecution: { useWorktreeByDefault: false }
+    }).planExecution).toEqual({ useWorktreeByDefault: false })
   })
 })

@@ -115,6 +115,7 @@
   "providerModelImportContextBadge": "コンテキスト {{value}}",
   "providerModelImportOutputBadge": "出力 {{value}}",
   "providerModelImportVisionBadge": "画像入力",
+  "providerModelImportAudioInputBadge": "音声入力",
   "providerModelImportToolsBadge": "ツール",
   "providerModelImportNoToolsBadge": "ツール非対応",
   "providerModelImportReasoningBadge": "推論",

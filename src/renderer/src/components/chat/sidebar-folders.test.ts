@@ -10,6 +10,7 @@ import {
   removeSidebarThreadAssignments,
   renameSidebarFolder,
   saveSidebarFolderRegistry,
+  sidebarFolderDescendantThreadIds,
   sidebarFolderIdForThread,
   sidebarFolderNameExists,
   sidebarFolderThreadCount,
@@ -163,6 +164,7 @@ describe('sidebar virtual folder registry', () => {
 
     let folders = sidebarFoldersForWorkspace(registry, '/tmp/app')
     expect(sidebarFolderNameExists(folders, 'Research', undefined, 'parent')).toBe(true)
+    expect(sidebarFolderDescendantThreadIds(folders, 'parent')).toEqual(['thread-a', 'thread-b'])
     expect(sidebarFolderThreadCount(folders, 'parent')).toBe(2)
     expect(folders).toEqual([
       { id: 'parent', name: 'Research', parentId: null, threadIds: [] },

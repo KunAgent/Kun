@@ -115,6 +115,7 @@
   "providerModelImportContextBadge": "कॉन्टेक्स्ट {{value}}",
   "providerModelImportOutputBadge": "आउटपुट {{value}}",
   "providerModelImportVisionBadge": "इमेज इनपुट",
+  "providerModelImportAudioInputBadge": "ऑडियो इनपुट",
   "providerModelImportToolsBadge": "टूल्स",
   "providerModelImportNoToolsBadge": "टूल्स नहीं",
   "providerModelImportReasoningBadge": "रीज़निंग",

@@ -36,6 +36,7 @@ import type {
   ModelProviderPreset,
   ModelProviderSubscriptionRegion
 } from '@shared/model-provider-presets'
+import { GEMINI_CLI_API_REASONING } from '@shared/model-provider-preset-types'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 
@@ -122,6 +123,45 @@ export const PROVIDER_TASK_TABS: Array<{ id: ProviderTaskTab; labelKey: string }
   { id: 'capabilities', labelKey: 'modelProviderTabCapabilities' },
   { id: 'advanced', labelKey: 'modelProviderTabAdvanced' }
 ]
+
+/**
+ * Merge the Gemini CLI Code Assist sync catalog into a provider without
+ * dropping ids the user added manually (e.g. a newer `gemini-3.7-*` release
+ * the bootstrap catalog has not caught up with). Synced ids keep their wire
+ * casing; unknown ids get a conservative text+vision tool-calling profile so
+ * the main chat picker treats them as usable models.
+ */
+export function geminiCliApiCatalogPatch(
+  syncedModels: readonly string[],
+  currentModels: readonly string[],
+  currentProfiles: Readonly<Record<string, ModelProviderModelProfileV1>>
+): Pick<ModelProviderProfileV1, 'models' | 'modelProfiles'> {
+  const merged: string[] = []
+  const seen = new Set<string>()
+  const keyOf = (model: string): string => model.trim().toLowerCase()
+  const profilesByLowerKey = new Map(
+    Object.entries(currentProfiles).map(([id, profile]) => [keyOf(id), profile])
+  )
+  for (const model of [...syncedModels, ...currentModels]) {
+    const id = model.trim()
+    const key = keyOf(id)
+    if (!id || seen.has(key)) continue
+    seen.add(key)
+    merged.push(id)
+  }
+  const modelProfiles = Object.fromEntries(merged.map((model) => {
+    const existing = profilesByLowerKey.get(keyOf(model))
+    if (existing) return [model, existing]
+    return [model, {
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      supportsToolCalling: true,
+      messageParts: ['text', 'image_url'],
+      reasoning: { ...GEMINI_CLI_API_REASONING }
+    } satisfies ModelProviderModelProfileV1]
+  }))
+  return { models: merged, modelProfiles }
+}
 
 export const SUBSCRIPTION_REGION_TABS: Array<{
   id: SubscriptionRegionFilter

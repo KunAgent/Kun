@@ -100,6 +100,13 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
         await this.recordOutputTruncated(input)
         return 'stop'
       }
+      if (
+        streamSnapshot.stopReason === 'stop' &&
+        !streamSnapshot.text.trim() &&
+        !streamSnapshot.reasoning.trim()
+      ) {
+        return this.failEmptyTerminalResponse(input)
+      }
       return 'stop'
     }
 

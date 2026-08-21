@@ -39,6 +39,7 @@ import type {
   WorkspaceImageReadResult,
   WorkspacePdfReadResult
 } from '../../shared/workspace-file'
+import { KUN_GENERATED_IMAGE_DIR } from '../../shared/generated-image-path'
 import {
   canonicalPath,
   compareWorkspaceEntries,
@@ -61,8 +62,8 @@ import {
   buildWorkspaceImageName
 } from './workspace-file-core'
 
-/** Directory the design agent's `generate_image` writes to (and reads references from). */
-export const GENERATED_IMAGE_DIR = '.deepseekgui-images'
+/** Directory Kun writes generated images, annotations, and canvas exports to. */
+export const GENERATED_IMAGE_DIR = KUN_GENERATED_IMAGE_DIR
 
 export function readUInt24LE(buffer: Buffer, offset: number): number {
   return buffer[offset] + (buffer[offset + 1] << 8) + (buffer[offset + 2] << 16)

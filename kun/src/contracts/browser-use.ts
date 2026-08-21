@@ -74,7 +74,7 @@ export const BROWSER_USE_ACTIONS = [
 
 export type BrowserUseActionName = typeof BROWSER_USE_ACTIONS[number]
 
-const BROWSER_USE_ACTION_FIELDS: Readonly<Record<BrowserUseActionName, {
+export const BROWSER_USE_ACTION_FIELDS: Readonly<Record<BrowserUseActionName, {
   required: readonly string[]
   allowed: readonly string[]
 }>> = {
@@ -92,11 +92,8 @@ const BROWSER_USE_ACTION_FIELDS: Readonly<Record<BrowserUseActionName, {
 }
 
 export type BrowserUseValidationIssueCode =
-  | 'missing_action'
-  | 'unsupported_action'
-  | 'missing_required_field'
-  | 'invalid_field'
-  | 'unexpected_field'
+  | 'missing_action' | 'unsupported_action' | 'missing_required_field'
+  | 'invalid_field' | 'unexpected_field'
 
 export type BrowserUseValidationSummary = {
   attemptedAction: BrowserUseActionName | 'missing' | 'unsupported'
@@ -105,10 +102,12 @@ export type BrowserUseValidationSummary = {
   allowedFields: readonly string[]
   issueCodes: readonly BrowserUseValidationIssueCode[]
   issuePaths: readonly string[]
+  unexpectedFields: readonly string[]
   guidance: string
 }
-
 const BROWSER_USE_ACTION_SET = new Set<string>(BROWSER_USE_ACTIONS)
+const BROWSER_USE_KNOWN_FIELDS = new Set(Object.values(BROWSER_USE_ACTION_FIELDS)
+  .flatMap(({ allowed }) => allowed))
 
 function browserUseActionName(value: unknown): BrowserUseActionName | undefined {
   return typeof value === 'string' && BROWSER_USE_ACTION_SET.has(value)
@@ -119,19 +118,31 @@ function browserUseActionName(value: unknown): BrowserUseActionName | undefined 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
+export function normalizeBrowserUseActionInput(input: Record<string, unknown>): Record<string, unknown> {
+  const action = browserUseActionName(input.action)
+  if (!action) return input
+  const required = new Set(BROWSER_USE_ACTION_FIELDS[action].required)
+  let normalized: Record<string, unknown> | undefined
+  for (const [key, value] of Object.entries(input)) {
+    const nullPlaceholder = value === null && BROWSER_USE_KNOWN_FIELDS.has(key)
+    if (!nullPlaceholder || required.has(key)) continue
+    normalized ??= { ...input }
+    delete normalized[key]
+  }
+  return normalized ?? input
+}
 
 export function summarizeBrowserUseActionValidation(input: unknown): BrowserUseValidationSummary {
   const raw = isRecord(input) ? input : {}
   const rawAction = raw.action
   const action = browserUseActionName(rawAction)
-  const attemptedAction = action
-    ? action
-    : typeof rawAction === 'string' && rawAction.trim()
-      ? 'unsupported'
-      : 'missing'
+  const attemptedAction = action ?? (
+    typeof rawAction === 'string' && rawAction.trim() ? 'unsupported' : 'missing'
+  )
   const shape = action ? BROWSER_USE_ACTION_FIELDS[action] : undefined
   const issueCodes = new Set<BrowserUseValidationIssueCode>()
   const issuePaths = new Set<string>()
+  const unexpectedFields = new Set<string>()
 
   if (attemptedAction === 'missing') {
     issueCodes.add('missing_action')
@@ -143,6 +154,7 @@ export function summarizeBrowserUseActionValidation(input: unknown): BrowserUseV
       for (const issue of parsed.error.issues) {
         if (issue.code === 'unrecognized_keys') {
           issueCodes.add('unexpected_field')
+          for (const key of issue.keys) unexpectedFields.add(key)
           continue
         }
         const path = issue.path[0]
@@ -176,6 +188,7 @@ export function summarizeBrowserUseActionValidation(input: unknown): BrowserUseV
     allowedFields,
     issueCodes: [...issueCodes],
     issuePaths: [...issuePaths],
+    unexpectedFields: [...unexpectedFields],
     guidance
   }
 }
@@ -640,8 +653,21 @@ export function redactBrowserUseUrl(value: string): string {
 export function redactBrowserUseActionForPersistence(input: unknown): unknown {
   const parsed = BrowserUseActionInput.safeParse(input)
   if (!parsed.success) {
-    const action = isRecord(input) ? browserUseActionName(input.action) : undefined
-    return action ? { action } : {}
+    const raw = isRecord(input) ? input : undefined
+    if (!raw) return {}
+    const action = browserUseActionName(raw.action)
+    if (!action) return {}
+    const shape = BROWSER_USE_ACTION_FIELDS[action]
+    const unexpectedFields = Object.keys(raw).filter((key) => !shape.allowed.includes(key))
+    const safe: Record<string, unknown> = { action }
+    if (action === 'open') {
+      if (typeof raw.url === 'string' && BrowserUseTopLevelUrl.safeParse(raw.url).success) {
+        safe.url = redactBrowserUseUrl(raw.url)
+      }
+      if (typeof raw.newTab === 'boolean') safe.newTab = raw.newTab
+    }
+    if (unexpectedFields.length > 0) safe.unexpectedFields = unexpectedFields
+    return safe
   }
   const action = parsed.data
   if (action.action === 'open') {

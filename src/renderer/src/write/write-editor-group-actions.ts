@@ -24,6 +24,12 @@ import {
   writeWhiteboardIdFromTabKey
 } from './write-editor-layout'
 import { enqueueWriteWorkspaceSave, flushWriteWorkspaceSaveQueue } from './write-save-coordinator'
+import {
+  commitWriteSpreadsheetEditorSave,
+  finishWriteSpreadsheetEditorSave,
+  prepareWriteSpreadsheetEditorSave,
+  type CoordinatedSpreadsheetSave
+} from './write-spreadsheet-editor-coordinator'
 import { normalizePath, pathsEqual } from './write-workspace-store-helpers'
 
 type WriteEditorActions = Pick<
@@ -38,6 +44,7 @@ type WriteEditorActions = Pick<
   | 'setSplitOrientation'
   | 'setSplitRatio'
   | 'setDocumentContent'
+  | 'setSpreadsheetMutations'
   | 'saveDocument'
   | 'saveAllDocuments'
 >
@@ -131,7 +138,132 @@ export function createWriteEditorGroupActions(
       if (capturedDocuments !== rawSnapshot.documentsByPath) set({ documentsByPath: capturedDocuments })
       const snapshot = { ...rawSnapshot, documentsByPath: capturedDocuments }
       const document = snapshot.documentsByPath[key]
-      if (!document || document.kind !== 'text') return true
+      if (!document) return true
+      if (document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx') {
+        if (document.spreadsheetConflictPreview) return false
+        let coordinated: CoordinatedSpreadsheetSave | null = null
+        try {
+          coordinated = await prepareWriteSpreadsheetEditorSave(path)
+        } catch (error) {
+          set((state) => {
+            const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
+              ...current,
+              saveStatus: 'error',
+              fileError: error instanceof Error ? error.message : String(error)
+            }))
+            return withProjection(documentsByPath, state.editorLayout)
+          })
+          return false
+        }
+        const latestDocument = get().documentsByPath[key]
+        if (!latestDocument || latestDocument.kind !== 'office') {
+          if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          return true
+        }
+        if (latestDocument.spreadsheetConflictPreview) {
+          if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          return false
+        }
+        const mutations = coordinated?.prepared.mutations ?? latestDocument.spreadsheetMutations
+        const unsupportedReason = coordinated?.prepared.unsupportedReason ?? latestDocument.spreadsheetUnsupportedReason
+        if (unsupportedReason) {
+          if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          set((state) => {
+            const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
+              ...current, saveStatus: 'error', fileError: unsupportedReason
+            }))
+            return withProjection(documentsByPath, state.editorLayout)
+          })
+          return false
+        }
+        if (mutations.length === 0) {
+          if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          set((state) => {
+            const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
+              ...current,
+              spreadsheetMutations: [],
+              spreadsheetMutationBaseFingerprints: {},
+              saveStatus: 'saved',
+              fileError: null
+            }))
+            return withProjection(documentsByPath, state.editorLayout)
+          })
+          return true
+        }
+        const revision = latestDocument.contentRevision
+        const expectedSha256 = latestDocument.spreadsheetSourceSha256 || latestDocument.officePreview?.sourceSha256 || ''
+        set((state) => {
+          const documentsByPath = updateDocument(state.documentsByPath, path, (current) => (
+            current.contentRevision === revision
+              ? { ...current, spreadsheetMutations: mutations, saveStatus: 'saving', fileError: null }
+              : current
+          ))
+          return withProjection(documentsByPath, state.editorLayout)
+        })
+        let result: Awaited<ReturnType<typeof window.kunGui.saveWorkspaceSpreadsheet>>
+        try {
+          result = await window.kunGui.saveWorkspaceSpreadsheet({
+            path: document.path,
+            workspaceRoot,
+            expectedSha256,
+            mutations
+          })
+        } catch (error) {
+          result = {
+            ok: false,
+            code: 'mutation_failed',
+            message: error instanceof Error ? error.message : String(error)
+          }
+        }
+        if (!result.ok) {
+          if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          set((state) => {
+            const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
+              ...current,
+              saveStatus: 'error',
+              fileError: result.message,
+              ...(result.code === 'source_changed' && current.officePreview?.sourceSha256 !== expectedSha256
+                ? { spreadsheetConflictPreview: current.officePreview }
+                : {})
+            }))
+            return withProjection(documentsByPath, state.editorLayout)
+          })
+          return false
+        }
+        const remaining = coordinated
+          ? commitWriteSpreadsheetEditorSave(
+              path,
+              coordinated.registrationId,
+              coordinated.prepared.token,
+              result.sourceSha256
+            )
+          : null
+        if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+        set((state) => {
+          const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
+            ...current,
+            spreadsheetSourceSha256: result.sourceSha256,
+            spreadsheetMutations: remaining?.mutations ?? (
+              current.contentRevision === revision ? [] : current.spreadsheetMutations
+            ),
+            spreadsheetMutationBaseFingerprints: remaining?.baseFingerprints ?? (
+              current.contentRevision === revision ? {} : current.spreadsheetMutationBaseFingerprints
+            ),
+            spreadsheetUnsupportedReason: remaining?.unsupportedReason ?? null,
+            spreadsheetCommitRevision: coordinated
+              ? current.spreadsheetCommitRevision
+              : current.spreadsheetCommitRevision + 1,
+            saveStatus: (remaining?.mutations.length ?? 0) > 0 || current.contentRevision !== revision
+              ? 'dirty'
+              : 'saved',
+            fileSize: result.size,
+            fileError: null
+          }))
+          return withProjection(documentsByPath, state.editorLayout)
+        })
+        return true
+      }
+      if (document.kind !== 'text') return true
       if (document.fileTruncated) return false
       const resolveConflict = options.resolveExternalConflict === 'keep-local'
       if (document.reviewActive && !document.pendingAgentReview) return false
@@ -226,11 +358,14 @@ export function createWriteEditorGroupActions(
         document.saveStatus === 'dirty' || document.saveStatus === 'error' || document.reviewActive
       )
       if (needsDecision && !force) {
-        if (snapshot.autoSaveEnabled && document.kind === 'text') {
+        const savable = document.kind === 'text' || (
+          document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx'
+        )
+        if (snapshot.autoSaveEnabled && savable) {
           const saved = await saveDocument(snapshot.workspaceRoot, filePath ?? path, { resolveExternalConflict: 'keep-local' })
           if (!saved) return false
         } else {
-          const saveBeforeClosing = document.kind === 'text' && window.confirm(
+          const saveBeforeClosing = savable && window.confirm(
             i18n.t('common:writeSaveUnsavedTabConfirm')
           )
           if (saveBeforeClosing) {
@@ -406,11 +541,36 @@ export function createWriteEditorGroupActions(
       })
     },
 
+    setSpreadsheetMutations: (path, mutations, unsupportedReason = null, baseFingerprints = {}) => {
+      set((state) => {
+        const documentsByPath = updateDocument(state.documentsByPath, path, (document) => {
+          if (document.kind !== 'office' || document.officePreview?.sourceFormat !== 'xlsx') return document
+          const sameMutations = JSON.stringify(document.spreadsheetMutations) === JSON.stringify(mutations)
+          const sameReason = document.spreadsheetUnsupportedReason === unsupportedReason
+          const sameFingerprints = JSON.stringify(document.spreadsheetMutationBaseFingerprints) === JSON.stringify(baseFingerprints)
+          if (sameMutations && sameReason && sameFingerprints) return document
+          return {
+            ...document,
+            spreadsheetMutations: mutations,
+            spreadsheetMutationBaseFingerprints: baseFingerprints,
+            spreadsheetUnsupportedReason: unsupportedReason,
+            contentRevision: document.contentRevision + 1,
+            saveStatus: unsupportedReason ? 'error' : mutations.length ? 'dirty' : 'saved',
+            fileError: unsupportedReason
+          }
+        })
+        return withProjection(documentsByPath, state.editorLayout)
+      })
+    },
+
     saveDocument,
 
     saveAllDocuments: async (workspaceRoot) => {
       const paths = Object.values(get().documentsByPath)
-        .filter((document) => document.kind === 'text' && document.saveStatus !== 'saved')
+        .filter((document) => (
+          document.kind === 'text' ||
+          (document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx')
+        ) && document.saveStatus !== 'saved')
         .map((document) => document.path)
       const results = await Promise.all(paths.map((path) => saveDocument(workspaceRoot, path)))
       return results.every(Boolean)

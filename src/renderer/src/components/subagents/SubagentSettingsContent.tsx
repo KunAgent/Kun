@@ -21,6 +21,7 @@ import {
 } from './SubagentCatalogViews'
 import { ModelSelect, ReasoningEffortPicker, Row, RowActions, SubagentPanelHeader } from './SubagentProfileControls'
 import { ProfileDialog } from './SubagentProfileDialog'
+import { SubagentRetryPolicyControls } from './SubagentRetryPolicyControls'
 import {
   newProfile,
   normalizeStoredReasoning,
@@ -107,6 +108,11 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
                 />
               </CompactPolicySetting>
             </div>
+            <SubagentRetryPolicyControls
+              subagents={subagents}
+              patchSubagents={patchSubagents}
+              tSettings={tSettings}
+            />
           </div>
           </section>
         </SettingsTabPanel>

@@ -648,5 +648,15 @@
   "workflowEnableShort": "启用",
   "workflowEnableHint": "开启后，这个流程会按定时 / Webhook / 本地 API 自动触发。",
   "workflowCallableShort": "AI 可调用",
-  "workflowCallableHint": "允许 code 模式的智能体用 run_workflow 直接调用它。"
+  "workflowCallableHint": "允许 code 模式的智能体用 run_workflow 直接调用它。",
+  "designWhiteboardFocus": "聚焦白板",
+  "designWhiteboardExitFocus": "退出聚焦白板",
+  "designCanvasConversationOpen": "打开设计会话",
+  "designCanvasConversationCollapse": "收起设计会话",
+  "designCanvasConversationClose": "关闭设计会话",
+  "designCanvasConversationNew": "新建设计会话",
+  "designCanvasConversationDragHint": "拖动移动面板；双击恢复默认位置",
+  "designCanvasConversationResetPosition": "恢复默认位置",
+  "designCanvasConversationRunning": "会话正在运行",
+  "designCanvasConversationPanelLabel": "设计会话：{{title}}"
 }

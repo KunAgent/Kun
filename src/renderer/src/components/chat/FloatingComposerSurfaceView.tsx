@@ -19,7 +19,7 @@ export function FloatingComposerSurfaceView({
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
     activeThreadId, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
     canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
-    canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen,
+    canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
     composerReasoningEffort, contextChips, designTaskProfile, designProfileLocked, dictation, draft, effectiveWorkspaceRoot,
     executionSettings, executionSettingsApplying, fileInputRef, fileMentions, fileReferences,
@@ -29,10 +29,9 @@ export function FloatingComposerSurfaceView({
     handlePromptOptimizationClick, hideModelPicker, input, isComposerDirectoryReference, mode,
     imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, modelControlVariant, modelPickerMode, onComposerFastModeChange, onComposerModelChange,
     onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange, onInterrupt,
-    onComposerPersonaChange, codeAgentPresets, composerPersonaId, resolvedCodeAgentPresets, FloatingComposerPersonaPicker,
     onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onToggleWorktreeMode,
     onWorktreeBranchChange, openSettings, orchestration, placeholder, primaryActionDisabled,
-    primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError,
+    primaryActionKind, primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError,
     promptOptimizationSettings, route, runningGraphTurn, runtimeReady, setGoalInputMode, showComposerMenuButton,
     showCodeExecutionControls, showExecutionSettingsPicker, showProviderInModelLabel, showToolbarStartControls,
     showVoiceDictation, showWorkspaceControls, side, stretchModelPicker, t, useWorktreePool,
@@ -109,6 +108,7 @@ export function FloatingComposerSurfaceView({
         ) : null}
 
         <div
+          ref={composerShellRef}
           className={`ds-composer-shell ds-chat-composer ds-frosted ds-no-drag flex flex-col gap-1 transition ${
             draft.focused ? 'ds-chat-composer-focus' : ''
           } ${compact
@@ -225,6 +225,9 @@ export function FloatingComposerSurfaceView({
                       className={`ds-composer-menu-button ds-no-drag flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 ${
                         composerMenuOpen ? 'bg-ds-hover text-ds-ink' : ''
                       }`}
+                      aria-expanded={composerMenuOpen}
+                      aria-haspopup="menu"
+                      aria-controls="floating-composer-action-menu"
                       aria-label={t('composerMenuTitle')}
                       title={t('composerMenuTitle')}
                     >
@@ -318,15 +321,6 @@ export function FloatingComposerSurfaceView({
                     disabled={!canCompose || busy}
                     onChange={onExecutionSettingsChange}
                     onOpenPermissionSettings={() => openSettings('agents')}
-                  />
-                ) : null}
-                {codeAgentPresets && onComposerPersonaChange ? (
-                  <FloatingComposerPersonaPicker
-                    presets={resolvedCodeAgentPresets}
-                    activePresetId={composerPersonaId ?? ''}
-                    disabled={!canCompose}
-                    onSelect={onComposerPersonaChange}
-                    onOpenPersonaSettings={() => openSettings('laboratory')}
                   />
                 ) : null}
               </div>
@@ -441,26 +435,19 @@ export function FloatingComposerSurfaceView({
                       )}
                     </button>
                   ) : null}
-                  {busy ? (
-                    <button
-                      type="button"
-                      onClick={() => onInterrupt()}
-                      className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
-                      aria-label={t('interrupt')}
-                      title={t('interrupt')}
-                    >
-                      <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.4} />
-                    </button>
-                  ) : null}
                   <button
                     type="button"
-                    disabled={primaryActionDisabled}
-                    onClick={handlePrimaryAction}
+                    disabled={primaryActionKind === 'submit' && primaryActionDisabled}
+                    onClick={primaryActionKind === 'interrupt'
+                      ? () => onInterrupt()
+                      : handlePrimaryAction}
                     className="ds-composer-primary-action ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:bg-ds-card disabled:text-ds-faint"
-                    aria-label={primaryActionLabel}
-                    title={primaryActionLabel}
+                    aria-label={primaryActionKind === 'interrupt' ? t('interrupt') : primaryActionLabel}
+                    title={primaryActionKind === 'interrupt' ? t('interrupt') : primaryActionLabel}
                   >
-                    {primaryActionLoading ? (
+                    {primaryActionKind === 'interrupt' ? (
+                      <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.4} />
+                    ) : primaryActionLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
                     ) : (
                       <Send className="h-4 w-4" strokeWidth={2.2} />

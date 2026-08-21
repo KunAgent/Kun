@@ -44,6 +44,8 @@ import {
   hydrateLegacyCredentialOptions,
   modelConnectionSeedsForOptions
 } from './runtime-factory-model.js'
+import { aggregateCodexProviderLocalCosts } from '../services/provider-local-cost.js'
+import { loadUsageHistory } from '../services/usage-history.js'
 
 export async function createRuntimeModelComposition(
   core: Awaited<ReturnType<typeof createRuntimeCore>>
@@ -352,8 +354,10 @@ export async function createRuntimeModelComposition(
   const resolveCapabilityProviderCredential = async (providerId: string): Promise<{
     apiKey: string
     headers?: Record<string, string>
+    proxyUrl?: string
   }> => {
-    const provider = (await modelConnections.materialize()).providers.get(providerId)
+    const materialized = await modelConnections.materialize()
+    const provider = materialized.providers.get(providerId)
     if (!provider || provider.kind !== 'http') {
       throw new Error(`Model connection ${providerId} is unavailable for media generation`)
     }
@@ -367,7 +371,20 @@ export async function createRuntimeModelComposition(
     if (!apiKey) {
       throw new Error(`Model connection ${providerId} has no usable credential`)
     }
-    return { apiKey, ...(headers ? { headers } : {}) }
+    // Media tools share the provider-level global proxy with chat model
+    // requests so a proxy-restricted provider stays reachable end to end.
+    const proxyUrl = materialized.proxy.enabled ? materialized.proxy.url.trim() : ''
+    return {
+      apiKey,
+      ...(headers ? { headers } : {}),
+      ...(proxyUrl ? { proxyUrl } : {})
+    }
+  }
+  const providerUsageHistorySource = {
+    threadService: core.threadService,
+    sessionStore: core.sessionStore,
+    usageService,
+    nowIso
   }
   const providerQuotaService = new ProviderQuotaService({
     loadSource: async () => {
@@ -408,6 +425,14 @@ export async function createRuntimeModelComposition(
         proxyUrl: snapshot.proxy.enabled ? snapshot.proxy.url : ''
       }
     },
+    loadLocalCosts: async (profiles) => aggregateCodexProviderLocalCosts({
+      profiles: profiles.map((profile) => ({
+        id: profile.id,
+        ...(profile.presetId ? { presetId: profile.presetId } : {})
+      })),
+      records: await loadUsageHistory(providerUsageHistorySource),
+      now: new Date(nowIso())
+    }),
     subscriptionRuntime: {
       resolveCodexCredential: async (provider, rejectedAccessToken) => {
         if (!provider.credentialSourceId) {
