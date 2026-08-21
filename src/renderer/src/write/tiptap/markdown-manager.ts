@@ -142,8 +142,27 @@ export function parseWriteMarkdown(markdown: string): JSONContent {
   return getWriteMarkdownManager().parse(markdown)
 }
 
+/**
+ * `@tiptap/markdown` escapes every `[` it writes as plain text, so a
+ * `[[wikilink]]` typed through the rich editor's `[[` menu reaches disk with a
+ * backslash before every bracket — a form the knowledge indexer never matches,
+ * so the link is silently never drawn in the node graph. Restore the bare form
+ * on the way out. The same pass runs inside the fidelity audit, so a note
+ * that already contains wikilinks round-trips cleanly and stays rich-editable
+ * instead of being pushed into CodeMirror as "unstable".
+ */
+const ESCAPED_WIKILINK_PATTERN = /\\\[\\\[([^\]\n]*?)\\\]\\\]/g
+
+export function restoreWikilinkBrackets(markdown: string): string {
+  return markdown.replace(ESCAPED_WIKILINK_PATTERN, '[[$1]]')
+}
+
+function serializeDocument(manager: MarkdownManager, doc: JSONContent): string {
+  return restoreWikilinkBrackets(manager.serialize(doc))
+}
+
 export function serializeWriteMarkdown(doc: JSONContent): string {
-  return getWriteMarkdownManager().serialize(doc)
+  return serializeDocument(getWriteMarkdownManager(), doc)
 }
 
 function collectPlainText(node: JSONContent | undefined, acc: string[]): string[] {
@@ -177,9 +196,9 @@ export function auditWriteMarkdownFidelity(markdown: string): WriteRichFidelity 
   let secondDoc: JSONContent
   try {
     firstDoc = manager.parse(markdown)
-    firstPass = manager.serialize(firstDoc)
+    firstPass = serializeDocument(manager, firstDoc)
     secondDoc = manager.parse(firstPass)
-    secondPass = manager.serialize(secondDoc)
+    secondPass = serializeDocument(manager, secondDoc)
   } catch (error) {
     return {
       eligible: false,

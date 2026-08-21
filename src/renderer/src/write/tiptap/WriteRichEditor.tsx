@@ -27,8 +27,8 @@ import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
 import {
   WriteCodeBlock,
   auditWriteMarkdownFidelity,
-  getWriteMarkdownManager,
   parseWriteMarkdown,
+  serializeWriteMarkdown,
   type WriteRichFidelity
 } from './markdown-manager'
 import {
@@ -369,7 +369,6 @@ export function WriteRichEditor({
   useEffect(() => {
     if (eligible !== true || !hostRef.current || editorRef.current) return
 
-    const manager = getWriteMarkdownManager()
     const saveShortcut = Extension.create({
       name: 'writeSaveShortcut',
       addKeyboardShortcuts() {
@@ -473,7 +472,7 @@ export function WriteRichEditor({
           return
         }
         try {
-          const markdown = manager.serialize(instance.state.doc.toJSON())
+          const markdown = serializeWriteMarkdown(instance.state.doc.toJSON())
           lastEmittedValueRef.current = markdown
           onChangeRef.current(markdown)
         } catch (error) {

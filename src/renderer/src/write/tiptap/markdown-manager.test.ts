@@ -112,6 +112,29 @@ describe('write markdown round-trip', () => {
   })
 })
 
+describe('wikilink serialization', () => {
+  it('writes a wikilink typed in the rich editor as bare brackets', () => {
+    const doc = parseWriteMarkdown('See [[concepts/node-graph]] for the map.\n')
+    expect(serializeWriteMarkdown(doc)).toContain('[[concepts/node-graph]]')
+    expect(serializeWriteMarkdown(doc)).not.toContain('\\[')
+  })
+
+  it('keeps a relative wikilink target intact', () => {
+    const doc = parseWriteMarkdown('Now it links to [[../concepts/wikilinks]]\n')
+    expect(serializeWriteMarkdown(doc)).toContain('[[../concepts/wikilinks]]')
+  })
+
+  it('leaves an ordinary markdown link escaped exactly as before', () => {
+    const doc = parseWriteMarkdown('A [real link](https://example.com) stays a link.\n')
+    expect(serializeWriteMarkdown(doc)).toContain('[real link](https://example.com)')
+  })
+
+  it('keeps a note that already contains wikilinks eligible for the rich editor', () => {
+    const audit = auditWriteMarkdownFidelity('# Note\n\nLinks to [[concepts/node-graph]] and [[index]].\n')
+    expect(audit.eligible).toBe(true)
+  })
+})
+
 describe('auditWriteMarkdownFidelity', () => {
   it('accepts simple generated markdown', () => {
     const fidelity = auditWriteMarkdownFidelity(SIMPLE_DOC)
