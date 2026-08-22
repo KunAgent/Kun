@@ -584,7 +584,8 @@ Before submitting a PR, confirm each item:
       Write it in the PR description
 - [ ] When the public contract is changed, update the `kun/README.md` endpoint table
 - [ ] When references/acknowledgments change, update root directories `README.md` and `README.en.md`
-- [ ] When adding a new SSE event, add a line to `docs/kun-architecture.md`- [ ] in the borrow map of `docs/kun-architecture.md` (as in the future
+- [ ] When adding a new SSE event, add a line to `docs/kun-architecture.md`
+- [ ] in the borrow map of `docs/kun-architecture.md` (as in the future
       Add OpenAI-style reference) to explain the design source
 
 ### 6.3 Don’t do it
