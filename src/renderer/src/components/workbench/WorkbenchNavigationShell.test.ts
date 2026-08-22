@@ -88,6 +88,7 @@ describe('legacy Design workbench navigation', () => {
       onWriteOpen: noop,
       onScheduleOpen: noop,
       onWorkflowOpen: noop,
+      onNodeGraphOpen: noop,
       onNewConversation: noop,
       onBeginResize: noop
     }))
@@ -130,6 +131,7 @@ describe('legacy Design workbench navigation', () => {
       onWriteOpen: noop,
       onScheduleOpen: noop,
       onWorkflowOpen: noop,
+      onNodeGraphOpen: noop,
       onNewConversation: noop,
       onBeginResize: noop
     }))
@@ -167,7 +169,8 @@ describe('legacy Design workbench navigation', () => {
         workspaceRoot: '',
         onOpenIntegrations: noop,
         onOpenView: asyncNoop
-      }
+      },
+      nodeGraph: { workspaceRoot: '' }
     }))
 
     expect(html).toContain('data-testid="conversation-stage"')

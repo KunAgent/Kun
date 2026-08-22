@@ -27,8 +27,8 @@ import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
 import {
   WriteCodeBlock,
   auditWriteMarkdownFidelity,
-  getWriteMarkdownManager,
   parseWriteMarkdown,
+  serializeWriteMarkdown,
   type WriteRichFidelity
 } from './markdown-manager'
 import {
@@ -47,6 +47,12 @@ import {
   writeRichExternalSyncMeta
 } from './extensions/term-propagation'
 import { WriteRichTemplateShortcuts } from './extensions/template-shortcuts'
+import {
+  WriteRichWikilinkMenu,
+  setRichWikilinkTargets
+} from './extensions/wikilink-menu'
+import { useWikilinkTargets } from '../wikilink/use-wikilink-targets'
+import i18n from '../../i18n'
 import { SddRequirementBadges } from './extensions/sdd-requirement-badges'
 
 /**
@@ -276,6 +282,9 @@ export function WriteRichEditor({
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const wikilink = useWikilinkTargets()
+  const wikilinkRef = useRef(wikilink)
+  wikilinkRef.current = wikilink
   const editorRef = useRef<Editor | null>(null)
   const workspaceRootRef = useRef(workspaceRoot ?? '')
   const filePathRef = useRef(filePath ?? '')
@@ -302,6 +311,14 @@ export function WriteRichEditor({
 
   workspaceRootRef.current = workspaceRoot ?? ''
   filePathRef.current = filePath ?? ''
+
+  // The scan resolves after the menu has already opened, so results are pushed
+  // into the live editor rather than passed at construction time.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    setRichWikilinkTargets(editor.view, wikilink.targets)
+  }, [wikilink.targets])
   documentEpochRef.current = documentEpoch ?? 0
   imageDirectoryRef.current = imageDirectory ?? ''
   readOnlyRef.current = readOnly
@@ -352,7 +369,6 @@ export function WriteRichEditor({
   useEffect(() => {
     if (eligible !== true || !hostRef.current || editorRef.current) return
 
-    const manager = getWriteMarkdownManager()
     const saveShortcut = Extension.create({
       name: 'writeSaveShortcut',
       addKeyboardShortcuts() {
@@ -415,6 +431,18 @@ export function WriteRichEditor({
           return { text: completionText, action: result.action, mode }
         }
       }),
+      WriteRichWikilinkMenu.configure({
+        workspaceRoot: () => workspaceRootRef.current,
+        activePath: () => filePathRef.current,
+        isReadOnly: () => readOnlyRef.current,
+        onRequestTargets: () => wikilinkRef.current.request(),
+        emptyStateText: (hasTargets) => {
+          const state = wikilinkRef.current
+          if (state.error) return i18n.t('writeWikilinkError', { message: state.error })
+          if (state.scanning || !hasTargets) return i18n.t('writeWikilinkScanning')
+          return i18n.t('writeWikilinkNoMatch')
+        }
+      }),
       WriteRichTermPropagation,
       WriteRichTemplateShortcuts.configure({
         isReadOnly: () => readOnlyRef.current
@@ -444,7 +472,7 @@ export function WriteRichEditor({
           return
         }
         try {
-          const markdown = manager.serialize(instance.state.doc.toJSON())
+          const markdown = serializeWriteMarkdown(instance.state.doc.toJSON())
           lastEmittedValueRef.current = markdown
           onChangeRef.current(markdown)
         } catch (error) {

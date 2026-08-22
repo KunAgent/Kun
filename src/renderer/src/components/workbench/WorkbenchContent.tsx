@@ -24,7 +24,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
     deleteThread, startNewChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone, openConnectWeixin,
-    openCodeMode, openWriteMode, openScheduleView, openWorkflowView,
+    openCodeMode, openWriteMode, openScheduleView, openWorkflowView, openNodeGraphView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy,
     input, rightPanel, writeRuntimeBanner, setInput, sendWritePrompt,
     conversationRuntimeBanner, activeSddDraft, rightPanelMode, toggleSddAssistantPanel,
@@ -112,6 +112,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onWriteOpen={openWriteMode}
         onScheduleOpen={openScheduleView}
         onWorkflowOpen={openWorkflowView}
+        onNodeGraphOpen={openNodeGraphView}
         onNewConversation={startNewConversation}
         onBeginResize={beginLeftResize}
       />
@@ -263,6 +264,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
           onOpenIntegrations: openPluginsView,
           onOpenView: openManagedExtensionView
         }}
+        nodeGraph={{ workspaceRoot: activeSkillWorkspace ?? '' }}
       />
       )}
       <AgentBrowserFloatingPreview activeThreadId={activeThreadId} />

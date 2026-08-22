@@ -11,7 +11,10 @@ import { createThreadRecord, normalizeKnowledgeBaseMounts } from '../domain/thre
 import { KnowledgeBaseError, KnowledgeBaseService } from './knowledge-base-service.js'
 import { KnowledgeOfficeExtractorRegistry } from './knowledge-office-extractor.js'
 import { buildKnowledgeLocalTools } from './knowledge-tools.js'
-import type { StoredKnowledgeIndex } from './knowledge-types.js'
+import {
+  KNOWLEDGE_INDEX_SCHEMA_VERSION,
+  type StoredKnowledgeIndex
+} from './knowledge-types.js'
 
 const roots: string[] = []
 
@@ -235,7 +238,7 @@ describe('knowledge-base service and tools', () => {
     const catalog = await service.catalog(thread.id, 'Current')
     expect(catalog.matches.some((match) => match.node.title === 'Current source')).toBe(true)
     const stored = JSON.parse(await readFile(join(indexDirectory, `${key}.json`), 'utf8')) as { version: number }
-    expect(stored.version).toBe(2)
+    expect(stored.version).toBe(KNOWLEDGE_INDEX_SCHEMA_VERSION)
   })
 
   it('keeps usable sources ready when an optional Office extractor is unavailable', async () => {

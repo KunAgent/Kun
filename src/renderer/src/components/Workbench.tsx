@@ -115,7 +115,7 @@ export function Workbench(): ReactElement {
     codeWorkspaceRoots, selectWorkspaceRoot,
     setRoute, openCode, openWrite, openDesign, ensureWriteThreadForWorkspace,
     ensureDesignThreadForWorkspace, createWriteThread, clearDesignHistory, openSettings,
-    openPlugins, openClaw, openSchedule, openWorkflow, chooseWorkspace, clawChannels,
+    openPlugins, openClaw, openSchedule, openWorkflow, openNodeGraph, chooseWorkspace, clawChannels,
     activeClawChannelId, selectClawChannel, resetClawChannelSession, setClawChannelModel,
     appendLocalClawTurn, setError, sendMessage, reviewActiveThread, queuedMessages,
     extensionComposerContexts, attachExtensionComposerContext,
@@ -552,7 +552,7 @@ export function Workbench(): ReactElement {
 
   const {
     closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openPluginsView, openExtensionsView, openScheduleView,
-    openThread, openWorkflowView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
+    openThread, openWorkflowView, openNodeGraphView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
     startNewChat, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
     toggleConnectPhone
   } = useWorkbenchNavigationController({
@@ -560,7 +560,7 @@ export function Workbench(): ReactElement {
     runtimeConnection, sddDraftContent, threads, useWorktreePool, workspaceRoot, worktreeBranch,
     clearFilePreviewTargets, createConversation, createThread, createWriteThread, dismissActiveSddDraft,
     ensureWriteThreadForWorkspace, findSddDraftForSidebarThread, openClaw, openCode,
-    openPlugins, openSchedule, openWorkflow, openWrite,
+    openPlugins, openSchedule, openWorkflow, openNodeGraph, openWrite,
     selectThread, setConnectPhoneSidebarOpen, setDesignAssistantOpen, setFilePreviewTarget, setInput,
     setRightPanelMode, setRoute, setUseWorktreePool, setWriteAssistantOpen
   })
@@ -648,7 +648,7 @@ export function Workbench(): ReactElement {
     deleteThread, deleteDrawing, startNewChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone,
     openConnectWeixin: () => { setConnectPhoneInitialTarget('weixin'); openClaw(); setConnectPhoneSidebarOpen(true) },
-    openCodeMode, openWriteMode, openDesignMode, openScheduleView, openWorkflowView,
+    openCodeMode, openWriteMode, openDesignMode, openScheduleView, openWorkflowView, openNodeGraphView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy, implementDesignInCode,
     handleDesignHtmlElementAsContext, selectCanvasShape, sendDesignPrompt,
     handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest, rightPanelSharedProps,
@@ -690,7 +690,8 @@ export function Workbench(): ReactElement {
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
       actions={{ routes: { chat: openCodeMode, write: openWriteMode, design: openDesignMode,
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
-        claw: openClaw, schedule: openScheduleView, workflow: openWorkflowView },
+        claw: openClaw, schedule: openScheduleView, workflow: openWorkflowView,
+        nodeGraph: openNodeGraphView },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,
         openCode, setInput, setError, setComposerModel, archiveThread, pinThread }}
       input={input}

@@ -1,17 +1,7 @@
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Clock3,
-  LayoutGrid,
-  Moon,
-  Plus,
-  Puzzle,
-  Settings,
-  Smartphone,
-  Sun,
-  Workflow
-} from 'lucide-react'
+import { Clock3, LayoutGrid, Moon, Network, Plus, Puzzle, Settings, Smartphone, Sun, Workflow } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
 import type {
@@ -36,7 +26,7 @@ import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
 type Props = {
   threads: NormalizedThread[]
   activeThreadId: string | null
-  activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'subagents'
+  activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'nodeGraph' | 'subagents'
   connectPhoneSidebarOpen: boolean
   connectPhoneInitialTarget: ClawInstallTarget
   pluginsActive: boolean
@@ -67,6 +57,7 @@ type Props = {
   onWriteOpen: () => void
   onScheduleOpen: () => void
   onWorkflowOpen: () => void
+  onNodeGraphOpen: () => void
   onNewConversation: () => void
 }
 
@@ -101,6 +92,7 @@ export function Sidebar({
   onWriteOpen,
   onScheduleOpen,
   onWorkflowOpen,
+  onNodeGraphOpen,
   onNewConversation
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -193,7 +185,7 @@ export function Sidebar({
           onWriteOpen={onWriteOpen}
         />
 
-        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' ? (
+        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' && activeView !== 'nodeGraph' ? (
           <SidebarCommandRow
             icon={<Plus className="h-4 w-4" strokeWidth={2} />}
             label={t('newAgent')}
@@ -226,6 +218,12 @@ export function Sidebar({
           label={t('workflowCreate')}
           onClick={onWorkflowOpen}
           active={activeView === 'workflow'}
+        />
+        <SidebarCommandRow
+          icon={<Network className="h-4 w-4" strokeWidth={1.75} />}
+          label={t('nodeGraph')}
+          onClick={onNodeGraphOpen}
+          active={activeView === 'nodeGraph'}
         />
       </div>
 

@@ -1,35 +1,7 @@
 import type { TFunction } from 'i18next'
 import type { KeyboardShortcutBindingsV1 } from '@shared/keyboard-shortcuts'
 import { KEYBOARD_SHORTCUT_COMMANDS } from '@shared/keyboard-shortcuts'
-import {
-  Archive,
-  Clock3,
-  Code2,
-  Command,
-  Cpu,
-  FolderOpen,
-  GitFork,
-  LayoutGrid,
-  ListTodo,
-  MessageCircleMore,
-  MessageSquare,
-  MessageSquarePlus,
-  Minimize2,
-  Palette,
-  PencilLine,
-  Pin,
-  Plus,
-  Puzzle,
-  RotateCcw,
-  Search,
-  SearchCode,
-  Settings,
-  Smartphone,
-  Sparkles,
-  Target,
-  Workflow,
-  type LucideIcon
-} from 'lucide-react'
+import { Archive, Clock3, Code2, Command, Cpu, FolderOpen, GitFork, LayoutGrid, ListTodo, MessageCircleMore, MessageSquare, MessageSquarePlus, Minimize2, Network, Palette, PencilLine, Pin, Plus, Puzzle, RotateCcw, Search, SearchCode, Settings, Smartphone, Sparkles, Target, Workflow, type LucideIcon } from 'lucide-react'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { NormalizedThread } from '../agent/types'
 import type { AppRoute, SettingsRouteSection } from '../store/chat-store-types'
@@ -99,7 +71,8 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   extensions: 'extensions',
   claw: 'claw',
   schedule: 'schedule',
-  workflow: 'workflowCreate'
+  workflow: 'workflowCreate',
+  nodeGraph: 'nodeGraph'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
@@ -111,7 +84,8 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   extensions: Puzzle,
   claw: Smartphone,
   schedule: Clock3,
-  workflow: Workflow
+  workflow: Workflow,
+  nodeGraph: Network
 }
 
 /**
