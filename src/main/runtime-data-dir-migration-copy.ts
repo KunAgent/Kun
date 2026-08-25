@@ -47,6 +47,7 @@ import {
   runtimeStoreInventory,
   uniqueSiblingBackup
 } from './runtime-data-dir-migration-inventory'
+import { assertSupportedSettingsVersion } from './settings-store-foundation'
 import { applyPosixModeSync } from '../../kun/src/security/posix-permissions.js'
 
 
@@ -379,6 +380,7 @@ export function rewriteSettingsToCurrent(settingsWritePath: string | undefined):
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error(`settings file is not an object: ${settingsWritePath}`)
   }
+  assertSupportedSettingsVersion(parsed, settingsWritePath)
   const root = parsed as Record<string, unknown>
   const agents = typeof root.agents === 'object' && root.agents !== null && !Array.isArray(root.agents)
     ? root.agents as Record<string, unknown>

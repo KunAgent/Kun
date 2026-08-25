@@ -125,6 +125,43 @@ describe('JsonSettingsStore', () => {
     await expect(store.load()).resolves.toMatchObject({ locale: 'en', theme: 'dark' })
   })
 
+  it('refuses a newer schema before normalization and leaves the source unchanged', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'kun-newer-settings-schema-'))
+    const settingsPath = join(userDataDir, 'kun-settings.json')
+    const raw = JSON.stringify({
+      version: 2,
+      futureProviderState: { keep: true },
+      locale: 'zh'
+    })
+    await writeFile(settingsPath, raw, 'utf8')
+    const store = new JsonSettingsStore(userDataDir)
+
+    await expect(store.load()).rejects.toMatchObject({
+      name: 'NewerSettingsSchemaError',
+      code: 'settings_schema_newer',
+      storedVersion: 2,
+      supportedVersion: 1
+    })
+    expect(await readFile(settingsPath, 'utf8')).toBe(raw)
+  })
+
+  it('refuses saving a future schema supplied by an untyped caller', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'kun-newer-settings-save-'))
+    const store = new JsonSettingsStore(userDataDir)
+    const futureSettings = {
+      version: 2,
+      futureProviderState: { keep: true }
+    } as never
+
+    await expect(store.save(futureSettings)).rejects.toMatchObject({
+      code: 'settings_schema_newer',
+      storedVersion: 2
+    })
+    await expect(readFile(join(userDataDir, 'kun-settings.json'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
+
   it('retries a Manager revision conflict from the exact mutation snapshot', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'kun-revision-retry-settings-'))
     let revision = 0

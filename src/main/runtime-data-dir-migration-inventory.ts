@@ -34,6 +34,7 @@ import {
   pathState,
   type SettingsSelection
 } from './runtime-data-dir-migration-journal-v2'
+import { assertSupportedSettingsVersion } from './settings-store-foundation'
 
 
 
@@ -94,6 +95,11 @@ export function readSettingsSelection(
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       return { authority: legacyState === 'dir' ? 'legacy' : 'current' }
+    }
+    try {
+      assertSupportedSettingsVersion(parsed, sourcePath)
+    } catch {
+      return { authority: 'unknown' }
     }
     const agents = (parsed as Record<string, unknown>).agents
     const kun = typeof agents === 'object' && agents !== null && !Array.isArray(agents)

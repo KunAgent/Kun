@@ -55,6 +55,34 @@ import {
 
 export type { AppSettingsV1 }
 
+export const CURRENT_SETTINGS_SCHEMA_VERSION = 1
+
+export class NewerSettingsSchemaError extends Error {
+  readonly code = 'settings_schema_newer'
+  readonly storedVersion: number
+  readonly supportedVersion = CURRENT_SETTINGS_SCHEMA_VERSION
+
+  constructor(storedVersion: number, sourcePath?: string) {
+    super(
+      `Settings schema version ${storedVersion} is newer than the supported version ${CURRENT_SETTINGS_SCHEMA_VERSION}` +
+        (sourcePath ? ` (${sourcePath})` : '')
+    )
+    this.name = 'NewerSettingsSchemaError'
+    this.storedVersion = storedVersion
+  }
+}
+
+/** Reject future schemas before defaults, migrations, or normalization can drop fields. */
+export function assertSupportedSettingsVersion(value: unknown, sourcePath?: string): void {
+  if (!isRecord(value)) return
+  const version = value.version
+  if (version === undefined) return
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+    throw new Error(`Invalid settings schema version${sourcePath ? ` (${sourcePath})` : ''}`)
+  }
+  if (version > CURRENT_SETTINGS_SCHEMA_VERSION) throw new NewerSettingsSchemaError(version, sourcePath)
+}
+
 export type SettingsCredentialMigrationResult = {
   runtimeSettings: AppSettingsV1
   persistedSettings: AppSettingsV1
@@ -398,6 +426,7 @@ export async function readLegacyCredentialSettingsBackup(path: string): Promise<
     if (!metadata.isFile() || metadata.isSymbolicLink()) return null
     const parsed = JSON.parse(await readFile(backupPath, 'utf8')) as unknown
     if (!isRecord(parsed)) return null
+    assertSupportedSettingsVersion(parsed, backupPath)
     return normalizeStoredSettings(buildMergedSettings(parsed as Partial<AppSettingsV1>))
   } catch (error) {
     if (isErrnoException(error) && error.code === 'ENOENT') return null

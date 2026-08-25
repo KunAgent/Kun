@@ -310,6 +310,28 @@ describe('rewriteLegacyPathsInSettingsFile', () => {
     expect(await readFile(join(userData, 'kun-settings.json'), 'utf8')).toBe('{not json')
   })
 
+  it('does not rewrite a settings file from a newer schema', async () => {
+    const home = await makeTempRoot()
+    const userData = join(home, 'userData')
+    await mkdir(userData, { recursive: true })
+    const settingsPath = join(userData, 'kun-settings.json')
+    const raw = JSON.stringify({
+      version: 2,
+      workspaceRoot: join(home, '.deepseekgui', 'default_workspace'),
+      futureField: { keep: true }
+    })
+    await writeFile(settingsPath, raw, 'utf8')
+
+    const rewritten = rewriteLegacyPathsInSettingsFile({
+      userDataPath: userData,
+      homeDir: home,
+      mappings: HOME_DATA_MIGRATION_MAPPINGS
+    })
+
+    expect(rewritten).toBe(false)
+    expect(await readFile(settingsPath, 'utf8')).toBe(raw)
+  })
+
   it('rewrites absolute paths even when separators differ', async () => {
     const home = await makeTempRoot()
     const userData = join(home, 'userData')

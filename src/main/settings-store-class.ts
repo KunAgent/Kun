@@ -67,7 +67,8 @@ import {
   replaceInvalidSettingsWithDefaults,
   serializeSettingsForDisk,
   storedKunRuntimeTuning,
-  writeLegacyCredentialSettingsBackup
+  writeLegacyCredentialSettingsBackup,
+  assertSupportedSettingsVersion
 } from './settings-store-foundation'
 
 export class JsonSettingsStore {
@@ -156,6 +157,8 @@ export class JsonSettingsStore {
       )
     }
 
+    assertSupportedSettingsVersion(parsed, sourcePath)
+
     const persistRuntimeTuningDefaultsMigration = (() => {
       const runtimeTuning = storedKunRuntimeTuning(parsed)
       return runtimeTuning !== undefined &&
@@ -221,6 +224,7 @@ export class JsonSettingsStore {
   }
 
   private async saveOnce(data: AppSettingsV1, expectedRevision = this.documentRevision): Promise<void> {
+    assertSupportedSettingsVersion(data, this.path)
     const normalized = normalizeStoredSettings(data)
     await ensureManagedWorkspaceRootsExist(normalized)
     const prepared = normalized

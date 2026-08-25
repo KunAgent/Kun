@@ -252,6 +252,21 @@ describe('Manager-owned Main data plane', () => {
     expect(readFileSync(settingsPath, 'utf8')).toBe(before)
   })
 
+  it('fails closed when selecting Manager data from a newer settings schema', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const settingsPath = join(tempRoot, 'future-settings.json')
+    writeFileSync(settingsPath, JSON.stringify({
+      version: 2,
+      agents: { kun: { dataDir: join(tempRoot, 'future-runtime-data') } }
+    }))
+    const module = await import('./kun-process')
+
+    await expect(module.resolveKunManagerDataDirFromSettings(settingsPath)).rejects.toMatchObject({
+      code: 'settings_schema_newer',
+      storedVersion: 2
+    })
+  })
+
   it('safely hands a healthy old Manager from the default data directory to custom authority', async () => {
     const module = await import('./kun-process')
     const oldManager = {

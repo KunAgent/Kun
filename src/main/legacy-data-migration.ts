@@ -9,6 +9,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { assertSupportedSettingsVersion } from './settings-store-foundation'
 
 /**
  * 一次性把 “DeepSeek GUI” 时代的本地数据搬到 Kun 的新命名下。
@@ -415,7 +416,9 @@ export function legacyHomeDataMigrationRequiresExclusiveAccess(input: {
     const state = pathState(settingsPath)
     if (state !== 'other' && state !== 'symlink') continue
     try {
-      if (rewriteDeep(JSON.parse(readFileSync(settingsPath, 'utf8')), pairs).changed) return true
+      const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as unknown
+      assertSupportedSettingsVersion(parsed, settingsPath)
+      if (rewriteDeep(parsed, pairs).changed) return true
     } catch {
       // Invalid or unreadable settings are left to the settings-store recovery path.
     }
@@ -461,6 +464,16 @@ export function rewriteLegacyPathsInSettingsFile(input: {
       parsed = JSON.parse(raw)
     } catch {
       log('legacy-migration: settings file is not valid JSON; skipping path rewrite', { settingsPath })
+      continue
+    }
+
+    try {
+      assertSupportedSettingsVersion(parsed, settingsPath)
+    } catch (error) {
+      log('legacy-migration: settings schema is newer than this build; skipping path rewrite', {
+        settingsPath,
+        message: error instanceof Error ? error.message : String(error)
+      })
       continue
     }
 

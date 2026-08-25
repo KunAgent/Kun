@@ -53,6 +53,23 @@ describe('GUI settings bridge', () => {
     })
   })
 
+  it('ignores GUI settings from a newer schema without rewriting them', async () => {
+    const fixture = await createFixture()
+    const raw = JSON.stringify({
+      version: 2,
+      agents: { kun: { dataDir: fixture.dataDir } },
+      futureProviderState: { keep: true }
+    })
+    await writeFile(fixture.settingsPath, raw, 'utf8')
+
+    await expect(readGuiSharedSettings({
+      env: { KUN_GUI_SETTINGS_PATH: fixture.settingsPath },
+      platform: 'darwin',
+      homeDir: fixture.home
+    })).resolves.toBeNull()
+    await expect(readFile(fixture.settingsPath, 'utf8')).resolves.toBe(raw)
+  })
+
   it('keeps the current GUI profile authoritative when it contains a newer provider transport', async () => {
     const home = await mkdtemp(join(tmpdir(), 'kun-gui-settings-forward-compatible-'))
     roots.push(home)
