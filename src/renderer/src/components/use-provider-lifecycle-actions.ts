@@ -1,4 +1,5 @@
 import type {
+  KunRuntimeSettingsPatchV1,
   ModelProviderModelProfileV1,
   ModelProviderPresetMode,
   ModelProviderProfileV1
@@ -71,7 +72,7 @@ export function catalogResultForProviderImport(
 }
 
 export function useProviderLifecycleActions(scope: Record<string, any>): Record<string, any> {
-  const { t, form, kun, provider, setSharedConnections, setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers, credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation, selectedProviderId, setSelectedProviderId, activeTab, setActiveTab, previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts, setDraftProvider, activeKunProviderId, confirmAction, updateModelProviders } = scope
+  const { t, form, kun, provider, setSharedConnections, setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers, credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation, selectedProviderId, setSelectedProviderId, activeTab, setActiveTab, previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts, setDraftProvider, activeKunProviderId, confirmAction, updateModelProviders, sharedProjectionInput } = scope
   const modelProviders = scope.modelProviders as ModelProviderProfileV1[]
   const displayProviders = scope.displayProviders as ModelProviderProfileV1[]
   const draftProvider = scope.draftProvider as ModelProviderProfileV1 | null
@@ -298,6 +299,54 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
         })
         setSharedConnections(snapshot)
         setSharedConnectionsError('')
+      }
+
+      // Registry deletion must be reflected in AppSettings as part of the
+      // same successful mutation. Otherwise the next shared-settings refresh
+      // sees the stale local provider and recreates the deleted connection.
+      const latest = sharedProjectionInput.current
+      const latestProviders = latest.provider.providers as ModelProviderProfileV1[]
+      const latestKun = latest.kun as typeof kun
+      const remainingProviders = latestProviders.filter((item) => item.id !== id)
+      const fallbackProvider = remainingProviders.find((item) => item.id === DEFAULT_MODEL_PROVIDER_ID) ??
+        remainingProviders[0]
+      const kunPatch: KunRuntimeSettingsPatchV1 = {}
+      if (latestKun.providerId?.trim() === id && fallbackProvider) {
+        Object.assign(kunPatch, kunProviderSelectionPatch({
+          providerId: fallbackProvider.id,
+          model: nonEmptyModelId(fallbackProvider.models[0])
+        }))
+      }
+      if ((latestKun.imageGeneration?.providerId ?? '').trim() === id) {
+        kunPatch.imageGeneration = { providerId: '' }
+      }
+      if ((latestKun.speechToText?.providerId ?? '').trim() === id) {
+        kunPatch.speechToText = { providerId: '' }
+      }
+      if ((latestKun.textToSpeech?.providerId ?? '').trim() === id) {
+        kunPatch.textToSpeech = { providerId: '' }
+      }
+      if ((latestKun.musicGeneration?.providerId ?? '').trim() === id) {
+        kunPatch.musicGeneration = { providerId: '' }
+      }
+      if ((latestKun.videoGeneration?.providerId ?? '').trim() === id) {
+        kunPatch.videoGeneration = { providerId: '' }
+      }
+
+      const latestWriteInline = latest.form?.write?.inlineCompletion
+      const latestUsedByWrite = Boolean(
+        latestWriteInline && !latestWriteInline.inheritProvider && latestWriteInline.providerId === id
+      )
+      const writePatch = latestUsedByWrite
+        ? { write: { inlineCompletion: { inheritProvider: true, providerId: '' } } }
+        : undefined
+      updateModelProviders(
+        remainingProviders,
+        Object.keys(kunPatch).length > 0 ? kunPatch : undefined,
+        writePatch
+      )
+      if (selectedProviderId === id) {
+        setSelectedProviderId(fallbackProvider?.id ?? DEFAULT_MODEL_PROVIDER_ID)
       }
     } catch (error) {
       if (pendingSharedProviderDeletions.current.get(id)?.generation === generation) {

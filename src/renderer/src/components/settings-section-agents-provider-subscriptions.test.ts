@@ -666,7 +666,13 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         method === 'DELETE' && path.includes('/v1/model-connections/custom-provider-2?')
       )
       expect(deleteCallIndex).toBeGreaterThanOrEqual(0)
-      expect(update).not.toHaveBeenCalled()
+      expect(update).toHaveBeenCalledTimes(1)
+      expect(update.mock.calls[0]?.[0].provider.providers)
+        .toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: unrelatedProvider.id })
+        ]))
+      expect(update.mock.calls[0]?.[0].provider.providers)
+        .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: target.id })]))
       expect(sharedProviderMutationCoordinator.pendingDeletions.get(target.id)).toMatchObject({
         committedRevision: 2
       })

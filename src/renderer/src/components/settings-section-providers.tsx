@@ -304,6 +304,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames,
     pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers,
     credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation,
+    sharedProjectionInput,
     selectedProviderId, setSelectedProviderId, activeTab, setActiveTab,
     previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts,
     draftProvider, setDraftProvider, displayProviders, activeProvider, activeKunProviderId,
