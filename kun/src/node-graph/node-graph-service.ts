@@ -1,6 +1,6 @@
 import type { NodeGraphProjection } from '../contracts/node-graph.js'
 import type { KnowledgeBaseMount, ThreadSummary } from '../contracts/threads.js'
-import type { KnowledgeBaseService } from '../knowledge/knowledge-base-service.js'
+import type { KnowledgeBaseService, KnowledgeScanBudget } from '../knowledge/knowledge-base-service.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import { buildNodeGraphProjection } from './node-graph-builder.js'
 import {
@@ -17,7 +17,13 @@ import type {
 
 /** Only the Graph Mode surface the projection touches, so tests can fake it. */
 export type NodeGraphRunSource = {
-  list(filter?: { threadId?: string }): Promise<readonly {
+  list(filter?: {
+    threadId?: string
+    /** Restrict to these threads before any snapshot is loaded. */
+    threadIds?: readonly string[]
+    /** Newest-first cap, applied with the scope, so the store never reads more. */
+    limit?: number
+  }): Promise<readonly {
     threadId: string
     updatedAt: string
     summary?: { changedFiles: readonly string[] }
@@ -37,6 +43,12 @@ export type NodeGraphServiceOptions = {
   changedFilesTimeoutMs?: number
   /** Most recent runs to read changed files from. */
   maxRuns?: number
+  /** Most roots one folder projection will index; the rest are dropped. */
+  maxFolderRoots?: number
+  /** Shared file/byte allowance across every root of one folder projection. */
+  folderScanBudget?: { files: number; bytes: number }
+  /** Roots indexed at once. Bounds the CPU/I/O spike of a many-root load. */
+  folderConcurrency?: number
 }
 
 export type NodeGraphRequest = {
@@ -51,9 +63,14 @@ export type NodeGraphRequest = {
 const DEFAULT_CACHE_TTL_MS = 10_000
 const DEFAULT_CHANGED_FILES_TIMEOUT_MS = 2_500
 const DEFAULT_MAX_RUNS = 40
+export const DEFAULT_MAX_FOLDER_ROOTS = 12
+export const DEFAULT_FOLDER_SCAN_BUDGET = { files: 1_600, bytes: 96 * 1024 * 1024 }
+const DEFAULT_FOLDER_CONCURRENCY = 2
 
 export class NodeGraphService {
   private readonly cache = new Map<string, { at: number; projection: NodeGraphProjection }>()
+  /** In-flight run scans by thread scope, so concurrent projections share one. */
+  private readonly changedFilesScans = new Map<string, ReturnType<NodeGraphRunSource['list']>>()
   private readonly nowIso: () => string
 
   constructor(private readonly options: NodeGraphServiceOptions) {
@@ -105,29 +122,54 @@ export class NodeGraphService {
     if (!options.refresh && cached && Date.now() - cached.at < ttl) return cached.projection
     const service = this.options.knowledgeBaseService
     const diagnostics: string[] = []
+    const maxRoots = this.options.maxFolderRoots ?? DEFAULT_MAX_FOLDER_ROOTS
+    const kept = unique.slice(0, maxRoots)
+    if (kept.length < unique.length) {
+      diagnostics.push(
+        `folder root limit reached: projecting ${kept.length} of ${unique.length} requested roots`
+      )
+    }
+    let budgetHit = false
     let loaded: NodeGraphFolderRoot[] = []
     if (!service) {
       diagnostics.push('folder indexing is not available in this runtime')
     } else {
-      loaded = await Promise.all(unique.map(async (root) => {
+      // One allowance for the whole request. The indexer's per-root caps bound
+      // each tree, but with many roots their sum was unbounded — which is what
+      // let a default "all workspaces" load scan thousands of files at once.
+      const allowance = this.options.folderScanBudget ?? DEFAULT_FOLDER_SCAN_BUDGET
+      const budget: KnowledgeScanBudget = {
+        remainingFiles: allowance.files,
+        remainingBytes: allowance.bytes
+      }
+      const concurrency = Math.max(1, this.options.folderConcurrency ?? DEFAULT_FOLDER_CONCURRENCY)
+      loaded = await mapWithConcurrency(kept, concurrency, async (root) => {
         try {
           // Folder projections always verify freshness: this view exists to
           // reflect files on disk, and the projection cache above already keeps
           // repeated opens from re-scanning.
           const result = await service.readyFolderIndex(root, folderMountId(root), {
-            verifyFreshness: true
+            verifyFreshness: true,
+            budget
           })
+          if (result.budgetExhausted) {
+            budgetHit = true
+            diagnostics.push(result.index
+              ? `scan budget reached: "${root}" shows its last built index`
+              : `scan budget reached: "${root}" was skipped`)
+          }
           return { root, index: result.index, ...(result.state ? { state: result.state } : {}) }
         } catch (error) {
           diagnostics.push(`folder index failed for "${root}": ${errorText(error)}`)
           return { root, index: null }
         }
-      }))
+      })
     }
     const projection = buildNodeGraphFolderProjection({
       builtAt: this.nowIso(),
-      roots: loaded.length > 0 ? loaded : unique.map((root) => ({ root, index: null })),
-      diagnostics
+      roots: loaded.length > 0 ? loaded : kept.map((root) => ({ root, index: null })),
+      diagnostics,
+      ...(kept.length < unique.length || budgetHit ? { truncated: true } : {})
     })
     this.cache.set(key, { at: Date.now(), projection })
     return projection
@@ -213,9 +255,11 @@ export class NodeGraphService {
 
   /**
    * Graph Mode runs are the only durable record of which files a conversation
-   * changed. Reading them loads whole run snapshots, so the scan is both time-
-   * boxed and count-capped; exceeding either budget degrades to a diagnostic
-   * rather than stalling the view.
+   * changed. The thread scope and the run cap are pushed into the store query,
+   * so unrelated snapshots are never read and the newest runs *of these
+   * threads* are what fill the cap — a burst of runs in another workspace
+   * cannot crowd this one's out. The scan is still time-boxed, and concurrent
+   * requests for the same scope share one in-flight scan.
    */
   private async loadChangedFiles(
     threads: readonly ThreadSummary[],
@@ -223,16 +267,23 @@ export class NodeGraphService {
   ): Promise<NodeGraphChangedFilesInput[]> {
     const runs = this.options.runs
     if (!runs) return []
+    if (threads.length === 0) return []
     const workspaceOf = new Map(threads.map((thread) => [thread.id, thread.workspace]))
+    const threadIds = [...workspaceOf.keys()].sort()
+    const scanKey = threadIds.join('|')
     const timeoutMs = this.options.changedFilesTimeoutMs ?? DEFAULT_CHANGED_FILES_TIMEOUT_MS
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      // The scan keeps running after a timeout, so its rejection must be
-      // absorbed here or it surfaces as an unhandled rejection later.
-      const scan = runs.list().catch((error: unknown) => {
-        throw error instanceof Error ? error : new Error(String(error))
-      })
-      scan.catch(() => undefined)
+      const existing = this.changedFilesScans.get(scanKey)
+      const scan = existing ?? runs
+        .list({ threadIds, limit: this.options.maxRuns ?? DEFAULT_MAX_RUNS })
+        .finally(() => this.changedFilesScans.delete(scanKey))
+      if (!existing) {
+        this.changedFilesScans.set(scanKey, scan)
+        // The scan keeps running after a timeout, so its rejection must be
+        // absorbed here or it surfaces as an unhandled rejection later.
+        scan.catch(() => undefined)
+      }
       const listed = await Promise.race([
         scan,
         new Promise<null>((resolve) => {
@@ -244,9 +295,7 @@ export class NodeGraphService {
         return []
       }
       const byThread = new Map<string, Set<string>>()
-      for (const run of [...listed]
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-        .slice(0, this.options.maxRuns ?? DEFAULT_MAX_RUNS)) {
+      for (const run of listed) {
         if (!workspaceOf.has(run.threadId)) continue
         const files = run.summary?.changedFiles ?? []
         if (files.length === 0) continue
@@ -266,6 +315,28 @@ export class NodeGraphService {
       if (timer) clearTimeout(timer)
     }
   }
+}
+
+/** Order-preserving map with at most `concurrency` callbacks in flight. */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  map: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(concurrency, items.length)) },
+    async () => {
+      while (next < items.length) {
+        const index = next
+        next += 1
+        results[index] = await map(items[index]!)
+      }
+    }
+  )
+  await Promise.all(workers)
+  return results
 }
 
 function toThreadInput(thread: ThreadSummary): NodeGraphThreadInput {

@@ -21,6 +21,16 @@ const IndexSchema = z.array(EntrySchema)
 const SnapshotStateSchema = z.object({ state: GraphRunV1Schema }).passthrough()
 type Entry = z.infer<typeof EntrySchema>
 
+export type GraphRunListFilter = {
+  threadId?: string
+  /** Restrict to any of these threads. Applied before snapshots are loaded. */
+  threadIds?: readonly string[]
+  projectId?: string
+  statuses?: GraphRunStatus[]
+  /** Newest-first cap on index entries, so at most this many snapshots load. */
+  limit?: number
+}
+
 export class FileGraphRunIndex {
   private readonly entries = new Map<string, Entry>()
   private readonly file: AtomicJsonFile<Entry[]>
@@ -54,17 +64,20 @@ export class FileGraphRunIndex {
     this.apply(entries)
   }
 
-  async candidates(filter: {
-    threadId?: string
-    projectId?: string
-    statuses?: GraphRunStatus[]
-  }): Promise<Entry[]> {
+  async candidates(filter: GraphRunListFilter): Promise<Entry[]> {
     await this.refresh()
-    return [...this.entries.values()]
+    const threadIds = filter.threadIds ? new Set(filter.threadIds) : null
+    const matched = [...this.entries.values()]
       .filter((entry) => !filter.threadId || entry.threadId === filter.threadId)
+      .filter((entry) => !threadIds || threadIds.has(entry.threadId))
       .filter((entry) => !filter.projectId || entry.projectId === filter.projectId)
       .filter((entry) => !filter.statuses || filter.statuses.includes(entry.status))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.runId.localeCompare(b.runId))
+    // The limit is applied to index entries, before any snapshot is read, so a
+    // scoped listing never pays for unrelated or older runs.
+    return typeof filter.limit === 'number' && filter.limit >= 0
+      ? matched.slice(0, filter.limit)
+      : matched
   }
 
   async update(state: GraphRunV1): Promise<void> {

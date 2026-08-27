@@ -57,6 +57,8 @@ export type NodeGraphFolderInput = {
   roots: readonly NodeGraphFolderRoot[]
   limits?: Partial<NodeGraphLimits>
   diagnostics?: readonly string[]
+  /** Force the truncation flag: the caller dropped roots or hit a scan budget. */
+  truncated?: boolean
 }
 
 /** Absolute POSIX path of a document, used to match links across roots. */
@@ -86,9 +88,11 @@ export function buildNodeGraphFolderProjection(
   for (const entry of scoped) {
     if (entry.index) contributeReferences(graph, entry, documentsByAbsolutePath)
   }
+  const finished = graph.finish(input.builtAt)
   return {
-    ...graph.finish(input.builtAt),
+    ...finished,
     version: NODE_GRAPH_CONTRACT_VERSION,
+    ...(input.truncated ? { truncated: true } : {}),
     ...(scoped.length === 1 ? { workspace: scoped[0]!.root } : {})
   }
 }

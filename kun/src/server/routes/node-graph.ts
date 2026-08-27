@@ -33,11 +33,19 @@ export async function getNodeGraph(
 }
 
 /**
+ * Requests above this are rejected outright rather than truncated: no client
+ * of ours sends this many roots, so such a request is malformed or hostile.
+ * Below it, `NodeGraphService` still truncates to its own root cap with a
+ * diagnostic, so an over-eager legitimate load degrades instead of failing.
+ */
+export const MAX_NODE_GRAPH_FOLDER_ROOTS = 64
+
+/**
  * GET /v1/node-graph/folder
  *
  * Folder projection for the Work tab: markdown files in one directory, their
  * `[[wikilinks]]`, and the folders nesting them. Query params:
- * - `root` (required, repeatable) — absolute directory paths
+ * - `root` (required, repeatable, at most 64) — absolute directory paths
  * - `refresh=true` — bypass the short projection cache
  */
 export async function getNodeGraphFolder(
@@ -48,6 +56,9 @@ export async function getNodeGraphFolder(
   const params = new URL(request.url).searchParams
   const roots = params.getAll('root').map((root) => root.trim()).filter(Boolean)
   if (roots.length === 0) return ERRORS.validation('a root query parameter is required')
+  if (roots.length > MAX_NODE_GRAPH_FOLDER_ROOTS) {
+    return ERRORS.validation(`at most ${MAX_NODE_GRAPH_FOLDER_ROOTS} root parameters are accepted`)
+  }
   try {
     const projection = await service.projectFolder(roots, {
       refresh: params.get('refresh') === 'true'

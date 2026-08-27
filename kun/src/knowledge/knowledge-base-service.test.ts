@@ -263,6 +263,66 @@ describe('knowledge-base service and tools', () => {
   })
 })
 
+describe('knowledge scan budget', () => {
+  function folderIndexService(dataDir: string): KnowledgeBaseService {
+    return new KnowledgeBaseService({
+      dataDir,
+      threadStore: { get: async () => null },
+      nowIso: () => '2026-08-12T00:00:00.000Z'
+    })
+  }
+
+  it('refuses a rebuild that exceeds the budget, serves the stored index, and charges later rebuilds', async () => {
+    const root = await tempRoot('kun-kb-budget-')
+    const dataDir = await tempRoot('kun-kb-budget-data-')
+    await writeFile(join(root, 'a.md'), '# A\n\nAlpha note body.\n')
+    const service = folderIndexService(dataDir)
+
+    const first = await service.readyFolderIndex(root, 'mount-a', { verifyFreshness: true })
+    expect(first.state).toBe('ready')
+    expect(first.index?.documents).toHaveLength(1)
+
+    // The tree changed, so a rebuild is due — but the request has no allowance
+    // left. The last built index is served instead and nothing is scheduled.
+    await writeFile(join(root, 'b.md'), '# B\n\nBeta note body.\n')
+    const refused = await service.readyFolderIndex(root, 'mount-a', {
+      verifyFreshness: true,
+      budget: { remainingFiles: 0, remainingBytes: 0 }
+    })
+    expect(refused.budgetExhausted).toBe(true)
+    expect(refused.state).toBe('stale')
+    expect(refused.index?.documents.map((document) => document.relativePath)).toEqual(['a.md'])
+
+    // A request with allowance rebuilds and pays for exactly what it scanned.
+    const allowance = { remainingFiles: 10, remainingBytes: 1024 * 1024 }
+    const rebuilt = await service.readyFolderIndex(root, 'mount-a', {
+      verifyFreshness: true,
+      budget: allowance
+    })
+    expect(rebuilt.budgetExhausted).toBeUndefined()
+    expect(rebuilt.index?.documents).toHaveLength(2)
+    expect(allowance.remainingFiles).toBe(8)
+    expect(allowance.remainingBytes).toBeLessThan(1024 * 1024)
+  })
+
+  it('charges nothing when the fingerprint has not moved', async () => {
+    const root = await tempRoot('kun-kb-budget-fresh-')
+    const dataDir = await tempRoot('kun-kb-budget-fresh-data-')
+    await writeFile(join(root, 'a.md'), '# A\n\nAlpha note body.\n')
+    const service = folderIndexService(dataDir)
+    await service.readyFolderIndex(root, 'mount-a', { verifyFreshness: true })
+
+    const allowance = { remainingFiles: 5, remainingBytes: 4_096 }
+    const unchanged = await service.readyFolderIndex(root, 'mount-a', {
+      verifyFreshness: true,
+      budget: allowance
+    })
+    expect(unchanged.state).toBe('ready')
+    expect(unchanged.index?.documents).toHaveLength(1)
+    expect(allowance).toEqual({ remainingFiles: 5, remainingBytes: 4_096 })
+  })
+})
+
 describe('knowledge-base mount contracts', () => {
   it('rejects duplicate and overlapping roots while keeping mounts read-only', () => {
     expect(() => KnowledgeBaseMountsSchema.parse([
