@@ -307,8 +307,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         case 'list': {
           const filter = z.object({
             threadId: z.string().min(1).optional(),
+            threadIds: z.array(z.string().min(1)).optional(),
             projectId: z.string().min(1).optional(),
-            statuses: z.array(GraphRunStatusSchema).optional()
+            statuses: z.array(GraphRunStatusSchema).optional(),
+            limit: z.number().int().nonnegative().optional()
           }).strict().parse(body.value ?? {})
           return this.graphStore.list(filter)
         }

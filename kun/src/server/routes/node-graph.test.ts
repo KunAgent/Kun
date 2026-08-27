@@ -95,6 +95,13 @@ describe('GET /v1/node-graph/folder', () => {
     expect((await getNodeGraphFolder(service(), folderRequest('?root=%20'))).status).toBe(400)
   })
 
+  it('rejects a request with more roots than the hard cap', async () => {
+    const query = `?${Array.from({ length: 65 }, (_, index) => `root=%2Fr${index}`).join('&')}`
+    const response = await getNodeGraphFolder(service(), folderRequest(query))
+    expect(response.status).toBe(400)
+    expect(response.body).toContain('64')
+  })
+
   it('accepts repeated root parameters', async () => {
     const seen: string[][] = []
     const multi = {

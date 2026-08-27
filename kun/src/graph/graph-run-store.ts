@@ -23,7 +23,7 @@ import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { applyGraphEvent } from './graph-reducer.js'
 import { assertValidGraphPlan } from './graph-validator.js'
-import { FileGraphRunIndex } from './graph-run-index.js'
+import { FileGraphRunIndex, type GraphRunListFilter } from './graph-run-index.js'
 import {
   checksumJson,
   diagnosticForStoreError,
@@ -87,11 +87,7 @@ export type AppendGraphEventResult = {
   duplicate: boolean
 }
 
-export type GraphRunListFilter = {
-  threadId?: string
-  projectId?: string
-  statuses?: GraphRunStatus[]
-}
+export type { GraphRunListFilter }
 
 export type GraphEventReplay = {
   events: GraphEventEnvelopeV1[]

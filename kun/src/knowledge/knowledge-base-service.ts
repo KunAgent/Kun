@@ -36,11 +36,26 @@ const INDEX_CACHE_TTL_MS = 5_000
 export class KnowledgeBaseError extends Error {
   constructor(
     message: string,
-    readonly code: 'not_found' | 'busy' | 'unavailable' | 'invalid'
+    readonly code: 'not_found' | 'busy' | 'unavailable' | 'invalid' | 'budget'
   ) {
     super(message)
     this.name = 'KnowledgeBaseError'
   }
+}
+
+/**
+ * Shared file/byte allowance for one request that indexes several roots.
+ * Charged only when a root actually needs a rebuild — a fingerprint match
+ * reuses the stored index and costs nothing — so per-root caps bound each
+ * tree while this bounds their sum.
+ */
+export type KnowledgeScanBudget = {
+  remainingFiles: number
+  remainingBytes: number
+}
+
+function isBudgetError(error: unknown): boolean {
+  return error instanceof KnowledgeBaseError && error.code === 'budget'
 }
 
 type KnowledgeBaseServiceOptions = {
@@ -102,10 +117,12 @@ export class KnowledgeBaseService {
    */
   async readyIndex(
     mount: KnowledgeBaseMount,
-    options: { verifyFreshness?: boolean } = {}
+    options: { verifyFreshness?: boolean; budget?: KnowledgeScanBudget } = {}
   ): Promise<{
     index: StoredKnowledgeIndex | null
     state: KnowledgeBaseIndexStatus['state']
+    /** True when the request's scan budget refused this root's rebuild. */
+    budgetExhausted?: boolean
   }> {
     if (options.verifyFreshness) {
       // Checked before the TTL cache on purpose: this path exists to reflect the
@@ -114,8 +131,22 @@ export class KnowledgeBaseService {
       // rebuilds when the scan fingerprint moved, so an unchanged tree costs one
       // stat pass and reuses the persisted index.
       try {
-        return { index: await this.ensureIndex(mount, { verifyFreshness: true }), state: 'ready' }
-      } catch {
+        return {
+          index: await this.ensureIndex(mount, {
+            verifyFreshness: true,
+            ...(options.budget ? { budget: options.budget } : {})
+          }),
+          state: 'ready'
+        }
+      } catch (error) {
+        if (isBudgetError(error)) {
+          // The request's allowance is spent. Serve the last built index and
+          // skip the non-blocking path below: its status inspection would
+          // schedule a background rebuild, spending off-request exactly the
+          // work the budget refused.
+          const stored = await this.readStored(mount)
+          return { index: stored, state: stored ? 'stale' : 'pending', budgetExhausted: true }
+        }
         /* fall through to the non-blocking path below */
       }
     }
@@ -143,10 +174,11 @@ export class KnowledgeBaseService {
   async readyFolderIndex(
     root: string,
     mountId: string,
-    options: { verifyFreshness?: boolean } = {}
+    options: { verifyFreshness?: boolean; budget?: KnowledgeScanBudget } = {}
   ): Promise<{
     index: StoredKnowledgeIndex | null
     state: KnowledgeBaseIndexStatus['state']
+    budgetExhausted?: boolean
   }> {
     const trimmed = root.trim()
     if (!trimmed) throw new KnowledgeBaseError('a folder root is required', 'invalid')
@@ -288,7 +320,7 @@ export class KnowledgeBaseService {
 
   private async ensureIndex(
     mount: KnowledgeBaseMount,
-    options: { force?: boolean; verifyFreshness?: boolean } = {}
+    options: { force?: boolean; verifyFreshness?: boolean; budget?: KnowledgeScanBudget } = {}
   ): Promise<StoredKnowledgeIndex> {
     const force = options.force === true
     const key = mountKey(mount)
@@ -303,7 +335,7 @@ export class KnowledgeBaseService {
     }
     const existing = this.inFlight.get(key)
     if (existing) return existing
-    const promise = this.buildOrLoad(mount, force)
+    const promise = this.buildOrLoad(mount, force, options.budget)
     this.inFlight.set(key, promise)
     try {
       return await promise
@@ -312,7 +344,11 @@ export class KnowledgeBaseService {
     }
   }
 
-  private async buildOrLoad(mount: KnowledgeBaseMount, force: boolean): Promise<StoredKnowledgeIndex> {
+  private async buildOrLoad(
+    mount: KnowledgeBaseMount,
+    force: boolean,
+    budget?: KnowledgeScanBudget
+  ): Promise<StoredKnowledgeIndex> {
     const key = mountKey(mount)
     let previous = this.indexCache.get(key)?.index ?? null
     this.statuses.set(key, status(mount.id, 'indexing', undefined, previous ?? undefined))
@@ -324,6 +360,20 @@ export class KnowledgeBaseService {
         this.indexCache.set(key, { index: stored, checkedAt: Date.now() })
         this.statuses.set(key, this.readyStatus(mount, stored))
         return stored
+      }
+      // Charged only here — after the fingerprint check — because everything
+      // above is a stat pass. What the budget bounds is the rebuild, which
+      // reads file contents and runs PDF/Office extraction.
+      if (budget) {
+        const scanBytes = scan.files.reduce((total, file) => total + file.size, 0)
+        if (scan.files.length > budget.remainingFiles || scanBytes > budget.remainingBytes) {
+          throw new KnowledgeBaseError(
+            `knowledge base ${mount.name} needs ${scan.files.length} files / ${scanBytes} bytes, exceeding the request's remaining scan budget`,
+            'budget'
+          )
+        }
+        budget.remainingFiles -= scan.files.length
+        budget.remainingBytes -= scanBytes
       }
       const artifacts = this.artifactStore(mount)
       await artifacts.prune(new Set(previous?.documents.flatMap((document) =>
@@ -340,6 +390,13 @@ export class KnowledgeBaseService {
     } catch (error) {
       if (previous) this.indexCache.set(key, { index: previous, checkedAt: 0 })
       else this.indexCache.delete(key)
+      if (isBudgetError(error)) {
+        // A budget refusal is not a fault of this mount: the tree may be fine
+        // and merely too expensive for what remains of the request. Report it
+        // stale (a later, cheaper request can rebuild) rather than errored.
+        this.statuses.set(key, status(mount.id, previous ? 'stale' : 'pending', undefined, previous ?? undefined))
+        throw error
+      }
       const state = isUnavailable(error) ? 'unavailable' : 'error'
       this.statuses.set(key, status(mount.id, state, message(error), previous ?? undefined))
       throw new KnowledgeBaseError(`knowledge base ${mount.name} is unavailable: ${message(error)}`, 'unavailable')
