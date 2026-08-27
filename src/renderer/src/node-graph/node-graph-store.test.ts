@@ -393,6 +393,60 @@ describe('useNodeGraphStore background refresh', () => {
     expect(useNodeGraphStore.getState().projection.edges).toHaveLength(1)
   })
 
+  it('replaces the projection when only node metadata changed', async () => {
+    client.fetchNodeGraphFolder.mockResolvedValue(folderProjection(['a']))
+    await useNodeGraphStore.getState().loadFolder(['/vault'])
+    const before = useNodeGraphStore.getState().projection
+    // Identical topology, but the note was renamed: same id, new label.
+    const renamed = {
+      ...folderProjection(['a'], 'second'),
+      nodes: [{ id: 'a', kind: 'thread' as const, label: 'renamed', degree: 0 }]
+    }
+    client.fetchNodeGraphFolder.mockResolvedValue(renamed)
+    await useNodeGraphStore.getState().loadFolder(['/vault'], { background: true })
+    expect(useNodeGraphStore.getState().projection).not.toBe(before)
+    expect(useNodeGraphStore.getState().projection.nodes[0]!.label).toBe('renamed')
+  })
+
+  it('coalesces polls: a tick during a slow scan is dropped, the scan still lands', async () => {
+    client.fetchNodeGraphFolder.mockResolvedValue(folderProjection(['a']))
+    await useNodeGraphStore.getState().loadFolder(['/vault'])
+    client.fetchNodeGraphFolder.mockClear()
+    let release!: (value: NodeGraphProjection) => void
+    client.fetchNodeGraphFolder.mockImplementationOnce(
+      () => new Promise<NodeGraphProjection>((resolve) => {
+        release = resolve
+      })
+    )
+    const slowPoll = useNodeGraphStore.getState().loadFolder(['/vault'], { background: true })
+    // The next tick arrives while the scan is still running: dropped, not queued.
+    await useNodeGraphStore.getState().loadFolder(['/vault'], { background: true })
+    expect(client.fetchNodeGraphFolder).toHaveBeenCalledTimes(1)
+    release(folderProjection(['a', 'b'], 'later'))
+    await slowPoll
+    // The slow scan's own result is applied — before, the next tick's token
+    // bump would have discarded it, and a large workspace never refreshed.
+    expect(useNodeGraphStore.getState().projection.nodes).toHaveLength(2)
+  })
+
+  it('never lets a background poll discard a foreground load', async () => {
+    client.fetchNodeGraphFolder.mockResolvedValue(folderProjection(['a']))
+    await useNodeGraphStore.getState().loadFolder(['/vault'])
+    let release!: (value: NodeGraphProjection) => void
+    client.fetchNodeGraphFolder.mockImplementationOnce(
+      () => new Promise<NodeGraphProjection>((resolve) => {
+        release = resolve
+      })
+    )
+    const slowPoll = useNodeGraphStore.getState().loadFolder(['/vault'], { background: true })
+    client.fetchNodeGraphFolder.mockResolvedValue(folderProjection(['a', 'b'], 'fg'))
+    await useNodeGraphStore.getState().loadFolder(['/vault'])
+    release(folderProjection(['stale'], 'bg'))
+    await slowPoll
+    const ids = useNodeGraphStore.getState().projection.nodes.map((node) => node.id)
+    expect(ids).toEqual(['a', 'b'])
+  })
+
   it('keeps the graph on screen when a background poll fails', async () => {
     client.fetchNodeGraphFolder.mockResolvedValue(folderProjection(['a']))
     await useNodeGraphStore.getState().loadFolder(['/vault'])
