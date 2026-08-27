@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import {
+  DEFAULT_WIKILINK_SCAN_LIMITS,
   isWikilinkMarkdownName,
   scanAllWorkspaceMarkdown,
   scanWorkspaceMarkdown,
-  type WikilinkDirectoryLister
+  type WikilinkDirectoryLister,
+  type WikilinkScanLimits
 } from './wikilink-scan'
+
+function limits(overrides: Partial<WikilinkScanLimits>): WikilinkScanLimits {
+  return { ...DEFAULT_WIKILINK_SCAN_LIMITS, ...overrides }
+}
 
 function file(name: string): WorkspaceEntry {
   return { name, path: name, type: 'file', ext: name.slice(name.lastIndexOf('.')) }
@@ -67,7 +73,7 @@ describe('scanWorkspaceMarkdown', () => {
         a: [directory('b'), file('shallow.md')],
         'a/b': [file('deep.md')]
       }),
-      { maxDepth: 1, maxDirectoriesPerRoot: 50, maxFilesPerRoot: 50 }
+      limits({ maxDepth: 1 })
     )
     expect(found.map((item) => item.relativePath)).toEqual(['a/shallow.md'])
   })
@@ -76,7 +82,7 @@ describe('scanWorkspaceMarkdown', () => {
     const found = await scanWorkspaceMarkdown(
       ROOT,
       lister({ '': Array.from({ length: 10 }, (_, index) => file(`n${index}.md`)) }),
-      { maxDepth: 4, maxDirectoriesPerRoot: 50, maxFilesPerRoot: 3 }
+      limits({ maxFilesPerRoot: 3 })
     )
     expect(found).toHaveLength(3)
   })
@@ -88,11 +94,7 @@ describe('scanWorkspaceMarkdown', () => {
       b: [file('b.md')],
       c: [file('c.md')]
     }))
-    await scanWorkspaceMarkdown(ROOT, list, {
-      maxDepth: 4,
-      maxDirectoriesPerRoot: 2,
-      maxFilesPerRoot: 50
-    })
+    await scanWorkspaceMarkdown(ROOT, list, limits({ maxDirectoriesPerRoot: 2 }))
     expect(list).toHaveBeenCalledTimes(2)
   })
 
@@ -103,7 +105,7 @@ describe('scanWorkspaceMarkdown', () => {
         '': [directory('deep'), file('root.md')],
         deep: [file('nested.md')]
       }),
-      { maxDepth: 4, maxDirectoriesPerRoot: 1, maxFilesPerRoot: 50 }
+      limits({ maxDirectoriesPerRoot: 1 })
     )
     expect(found.map((item) => item.relativePath)).toEqual(['root.md'])
   })
@@ -160,5 +162,45 @@ describe('scanAllWorkspaceMarkdown', () => {
     const list = vi.fn(async () => ({ ok: true as const, entries: [] }))
     expect(await scanAllWorkspaceMarkdown([], list)).toEqual([])
     expect(list).not.toHaveBeenCalled()
+  })
+
+  it('caps the total files across every root, not only per root', async () => {
+    // Three roots of 3 files each stay under the per-root cap of 50; the
+    // global cap of 4 is what stops the walk mid-way through the second root.
+    const list = async () => ({
+      ok: true as const,
+      entries: [file('a.md'), file('b.md'), file('c.md')]
+    })
+    const found = await scanAllWorkspaceMarkdown(
+      [
+        { root: '/one', name: 'one' },
+        { root: '/two', name: 'two' },
+        { root: '/three', name: 'three' }
+      ],
+      list,
+      limits({ maxFilesTotal: 4 })
+    )
+    expect(found).toHaveLength(4)
+    expect(found.map((item) => item.workspaceName)).toEqual(['one', 'one', 'one', 'two'])
+  })
+
+  it('caps the total directory listings across every root', async () => {
+    const list = vi.fn(lister({
+      '': [directory('a'), directory('b')],
+      a: [file('a.md')],
+      b: [file('b.md')]
+    }))
+    // Each root would list 3 directories (root, a, b); the global cap of 4
+    // allows the first root plus only the second root's top level.
+    await scanAllWorkspaceMarkdown(
+      [
+        { root: '/one', name: 'one' },
+        { root: '/two', name: 'two' },
+        { root: '/three', name: 'three' }
+      ],
+      list,
+      limits({ maxDirectoriesTotal: 4 })
+    )
+    expect(list).toHaveBeenCalledTimes(4)
   })
 })

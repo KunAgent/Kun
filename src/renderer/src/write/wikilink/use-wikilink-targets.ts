@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
-import { scanAllWorkspaceMarkdown, type WikilinkScanRoot } from './wikilink-scan'
+import type { WikilinkScanRoot } from './wikilink-scan'
+import {
+  getWikilinkTargetsSnapshot,
+  invalidateWikilinkTargets,
+  requestWikilinkTargets,
+  subscribeWikilinkTargets
+} from './wikilink-target-service'
 import { toPosix, type WikilinkTarget } from './wikilink-targets'
 
 export type WikilinkTargetsHandle = {
@@ -23,68 +29,39 @@ function workspaceName(root: string): string {
 /**
  * Markdown targets for the `[[` menu, across every Work workspace.
  *
- * The scan costs one directory IPC call per folder, so it is deferred until the
- * menu is actually opened and then cached until the workspace list changes.
+ * A thin view over the shared target service: the scan is deferred until a
+ * menu first asks for completions (`request()` fires from the menu's own
+ * update, never from mount), and its cache is workspace-level, so any number
+ * of mounted editors share one walk.
  */
 export function useWikilinkTargets(): WikilinkTargetsHandle {
   const workspaceRoots = useWriteWorkspaceStore((state) => state.workspaceRoots)
-  const [targets, setTargets] = useState<readonly WikilinkTarget[]>([])
-  const [scanning, setScanning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const scanningRef = useRef(false)
-  const scannedKeyRef = useRef('')
+  const snapshot = useSyncExternalStore(subscribeWikilinkTargets, getWikilinkTargetsSnapshot)
 
   const roots = useMemo<WikilinkScanRoot[]>(
     () => workspaceRoots.map((root) => ({ root, name: workspaceName(root) })),
     [workspaceRoots]
   )
-  const rootsKey = useMemo(() => roots.map((entry) => entry.root).join(' '), [roots])
-
-  const invalidate = useCallback(() => {
-    scannedKeyRef.current = ''
-    setTargets([])
-    setError(null)
-  }, [])
-
-  // A workspace added or removed invalidates the cache; the next open rescans.
-  useEffect(() => {
-    invalidate()
-  }, [invalidate, rootsKey])
 
   const request = useCallback(() => {
-    if (scanningRef.current || scannedKeyRef.current === rootsKey) return
     const api = window.kunGui
-    if (typeof api?.listWorkspaceDirectory !== 'function') {
-      setError('workspace listing is unavailable')
-      return
-    }
-    if (roots.length === 0) {
-      setError('no Work workspace is open')
-      return
-    }
-    scanningRef.current = true
-    setScanning(true)
-    setError(null)
-    void scanAllWorkspaceMarkdown(roots, (input) => api.listWorkspaceDirectory(input))
-      .then((found) => {
-        scannedKeyRef.current = rootsKey
-        setTargets(found)
-      })
-      .catch((scanError: unknown) => {
-        // Swallowing this made a broken scan look identical to an empty vault.
-        setError(scanError instanceof Error ? scanError.message : String(scanError))
-      })
-      .finally(() => {
-        scanningRef.current = false
-        setScanning(false)
-      })
-  }, [roots, rootsKey])
+    requestWikilinkTargets(
+      roots,
+      typeof api?.listWorkspaceDirectory === 'function'
+        ? (input) => api.listWorkspaceDirectory(input)
+        : undefined
+    )
+  }, [roots])
 
-  // Scan as soon as an editor mounts, so the list is usually ready before the
-  // first `[[` rather than arriving after it.
-  useEffect(() => {
-    request()
-  }, [request])
+  const invalidate = useCallback(() => {
+    invalidateWikilinkTargets()
+  }, [])
 
-  return { targets, scanning, error, request, invalidate }
+  return {
+    targets: snapshot.targets,
+    scanning: snapshot.scanning,
+    error: snapshot.error,
+    request,
+    invalidate
+  }
 }
