@@ -56,6 +56,7 @@ import type {
   ItemTextSearchOptions,
   SessionLatestUsageSnapshot,
   SessionStore,
+  SessionUsageQueryOptions,
   SessionUsageRecord
 } from '../ports/session-store.js'
 import type {
@@ -102,6 +103,7 @@ const UsageRecordSchema = z.object({
   threadId: z.string(),
   turnId: z.string().optional(),
   model: z.string().optional(),
+  providerId: z.string().optional(),
   completedAt: z.string(),
   usage: z.record(z.string(), z.unknown())
 })
@@ -203,8 +205,20 @@ export class ManagerRemoteThreadStore implements ThreadStore {
     return ThreadSchema.parse(await this.call('upsert', { thread }))
   }
 
+  async upsertIfRevision(thread: ThreadRecord, expectedRevision: number) {
+    return z.object({
+      applied: z.boolean(),
+      thread: ThreadSchema.optional(),
+      revision: z.number().int().nonnegative()
+    }).strict().parse(await this.call('upsertIfRevision', { thread, expectedRevision }))
+  }
+
   async delete(threadId: string) {
     return z.boolean().parse(await this.call('delete', { threadId }))
+  }
+
+  async deleteByWorkspace(workspace: string) {
+    return z.string().array().parse(await this.call('deleteByWorkspace', { workspace }))
   }
 
   private call(operation: string, value?: unknown): Promise<unknown> {
@@ -330,7 +344,7 @@ export class ManagerRemoteSessionStore implements SessionStore {
     return z.number().int().nonnegative().parse(await this.call('highestSeq', { threadId }))
   }
 
-  async loadUsageRecords(options: { threadId?: string } = {}): Promise<SessionUsageRecord[]> {
+  async loadUsageRecords(options: SessionUsageQueryOptions = {}): Promise<SessionUsageRecord[]> {
     return UsageRecordSchema.array().parse(await this.call('loadUsageRecords', options)) as SessionUsageRecord[]
   }
 

@@ -340,7 +340,7 @@ export function createRuntimeRegistry(
     ...buildDelegationToolProviders(delegationRuntime, subagentRouter),
     ...buildFastContextToolProvider(
       delegationRuntime,
-      () => core.activeOptions.lab?.fastContext
+      () => core.activeOptions.fastContext
     ),
     ...buildPptAgentToolProvider(
       delegationRuntime,

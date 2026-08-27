@@ -472,6 +472,8 @@ function scrubDesktopEnvironment(environment) {
       exactOverrides.has(key) ||
       (key.startsWith('KUN_') &&
         key !== 'KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE' &&
+        key !== 'KUN_PACKAGED_UPDATE_HANDOFF_SMOKE' &&
+        key !== 'KUN_PACKAGED_UPDATE_HANDOFF_DENY_INSPECTION' &&
         key !== 'KUN_DISABLE_OS_CREDENTIAL_STORE') ||
       key.startsWith('DEEPSEEK_')
     ) {

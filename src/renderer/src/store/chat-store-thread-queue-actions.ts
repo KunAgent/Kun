@@ -367,6 +367,11 @@ export function createThreadQueueActions(
             : state.queuedMessages
           ).filter((candidate) => candidate.id !== id)
         )
+        // The parked snapshot still carries the guided message; without this
+        // invalidation a later cache hit could resurrect it (selection actions
+        // now read the durable queue on restore, but the stale snapshot must
+        // not be reused at all).
+        invalidateThreadSnapshot(guidanceThreadId)
         return true
       }
       set((current) => {

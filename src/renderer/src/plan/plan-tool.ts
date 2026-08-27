@@ -43,6 +43,27 @@ export function hasSuccessfulGuiPlanToolCall(blocks: ChatBlock[], startIndex: nu
  * Extract the structured plan metadata from a successful `create_plan`
  * tool block, or `null` if the block does not contain plan metadata.
  */
+export type GuiPlanToolMeta = NonNullable<ReturnType<typeof extractPlanMetadataFromBlock>>
+
+/**
+ * Decide whether a GUI plan artifact is the same plan a `create_plan`
+ * tool block refers to. The runtime lowercases the relative path when it
+ * builds `plan_id` while the renderer artifact keeps the original casing,
+ * so id string equality is not reliable; compare normalized
+ * workspace + relative path instead.
+ */
+export function guiPlanMetaMatchesArtifact(
+  meta: GuiPlanToolMeta,
+  plan: { workspaceRoot: string; relativePath: string }
+): boolean {
+  const normalizeRoot = (value: string): string =>
+    value.trim().replaceAll('\\', '/').replace(/\/+$/, '')
+  const normalizePath = (value: string): string =>
+    value.trim().replaceAll('\\', '/').replace(/\/+/g, '/').replace(/^\.\//, '').toLowerCase()
+  return normalizeRoot(meta.workspaceRoot) === normalizeRoot(plan.workspaceRoot)
+    && normalizePath(meta.relativePath) === normalizePath(plan.relativePath)
+}
+
 export function extractPlanMetadataFromBlock(
   block: ChatBlock
 ): {

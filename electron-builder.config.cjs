@@ -213,6 +213,11 @@ module.exports = {
       to: 'THIRD_PARTY_NOTICES.md'
     },
     {
+      from: 'build',
+      to: 'installer-recovery',
+      filter: ['windows-installer-migration*.ps1']
+    },
+    {
       from: 'resources/bundled-extensions',
       to: 'bundled-extensions',
       filter: ['catalog.json', '*.kunx']

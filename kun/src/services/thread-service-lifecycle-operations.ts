@@ -105,6 +105,21 @@ async delete(this: ThreadService, threadId: string): Promise<boolean> {
     }
   },
 
+async deleteByWorkspace(this: ThreadService, workspace: string): Promise<string[]> {
+    const normalized = workspace.trim()
+    if (!normalized) return []
+    const summaries = await this.list({
+      workspace: normalized,
+      includeArchived: true,
+      includeSide: true
+    })
+    const deleted: string[] = []
+    for (const summary of summaries) {
+      if (await this.delete(summary.id)) deleted.push(summary.id)
+    }
+    return deleted
+  },
+
 async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {}): Promise<ThreadRecord> {
     const internalOptions = options as InternalForkThreadOptions
     if (options.designCloneOperationId && !internalOptions[DESIGN_CLONE_COMMIT]) {

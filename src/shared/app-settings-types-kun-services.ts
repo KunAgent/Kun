@@ -16,6 +16,7 @@ import {
   KunBrowserUseSettingsV1,
   KunComputerUseSettingsV1,
   KunDesignQualitySettingsV1,
+  KunFastContextSettingsV1,
   KunGraphSettingsPatchV1,
   KunInstructionSettingsV1,
   KunLabSettingsPatchV1,
@@ -49,6 +50,8 @@ export type KunImageGenerationSettingsV1 = {
   baseUrl: string
   /** Custom image API key override. Empty inherits the selected provider API key when providerId is set. */
   apiKey: string
+  /** Read-only renderer projection; never contains the API key itself. */
+  apiKeyConfigured?: boolean
   model: string
   /** Default resolution tier used when the model does not explicitly request one. */
   defaultResolution: ImageGenerationResolution
@@ -69,6 +72,8 @@ export type KunSpeechToTextSettingsV1 = {
   baseUrl: string
   /** Custom speech API key override. Empty inherits the selected provider API key when providerId is set. */
   apiKey: string
+  /** Read-only renderer projection; never contains the API key itself. */
+  apiKeyConfigured?: boolean
   model: string
   /** Download source used when protocol is local-whisper. */
   localWhisperDownloadSource: LocalWhisperDownloadSourceId
@@ -87,6 +92,8 @@ export type KunTextToSpeechSettingsV1 = {
   baseUrl: string
   /** Custom TTS API key override. Empty inherits the selected provider API key when providerId is set. */
   apiKey: string
+  /** Read-only renderer projection; never contains the API key itself. */
+  apiKeyConfigured?: boolean
   model: string
   /** Provider voice id/name. Empty means provider default. */
   voice: string
@@ -113,6 +120,8 @@ export type KunMusicGenerationSettingsV1 = {
   protocol: MusicGenerationProtocol
   baseUrl: string
   apiKey: string
+  /** Read-only renderer projection; never contains the API key itself. */
+  apiKeyConfigured?: boolean
   model: string
   /** Default output audio format such as mp3 or wav. */
   format: string
@@ -126,6 +135,8 @@ export type KunVideoGenerationSettingsV1 = {
   protocol: VideoGenerationProtocol
   baseUrl: string
   apiKey: string
+  /** Read-only renderer projection; never contains the API key itself. */
+  apiKeyConfigured?: boolean
   model: string
   /** Default video duration in seconds. */
   defaultDuration: number
@@ -272,7 +283,7 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'lab'
+    'mcpSearch' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
@@ -297,6 +308,7 @@ export type KunRuntimeSettingsPatchV1 = Partial<
   subagents?: KunSubagentsSettingsPatchV1
   graph?: KunGraphSettingsPatchV1
   planExecution?: Partial<KunPlanExecutionSettingsV1>
+  fastContext?: Partial<KunFastContextSettingsV1>
   lab?: KunLabSettingsPatchV1
 }
 

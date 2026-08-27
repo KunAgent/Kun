@@ -65,7 +65,10 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
   const runtime = getKunRuntimeSettings(currentSettings)
 
   const healthy = connectionResolved &&
-    await kunRuntimeHealthMonitor.waitForHealthy(currentSettings, 2_000)
+    // Match the watchdog probe budget: a single big scan (large events.jsonl
+    // cold read) can exceed 2s without the runtime being unhealthy, and the
+    // hung path below still provides the multi-second confirmation window.
+    await kunRuntimeHealthMonitor.waitForHealthy(currentSettings, 5_000)
   if (healthy) {
     const runtimeApi = await probeRuntimeApi(currentSettings)
     if (runtimeApi.ok) {
@@ -241,7 +244,9 @@ export async function reconcileBundledRuntimeAfterInstall(
 ): Promise<void> {
   mainState.assertCanonicalRuntimeMigrationReady()
   const requested = runtimeSupervisor.latestOr(settings)
-  if (!(await kunRuntimeAdapter.requiresBundledBuildReplacement(requested))) return
+  const probe = await kunRuntimeAdapter.probeBundledBuildReplacement(requested)
+  if (probe.state === 'matched') return
+  if (probe.state === 'unknown') throw probe.error
   if (getKunRuntimeSettings(requested).autoStart) {
     await replaceKunServe(requested)
     return

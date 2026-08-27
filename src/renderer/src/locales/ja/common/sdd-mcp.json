@@ -161,6 +161,7 @@
   "providerQuotaUsed": "使用済み",
   "providerQuotaLimit": "上限",
   "providerQuotaResetsAt": "リセット：{{time}}",
+  "providerQuotaEarliestExpiry": "最早期限：{{time}}",
   "rightPanelAgentPerspective": "エージェント視点",
   "agentPerspectiveTitle": "エージェント視点",
   "agentPerspectiveSubtitle": "この会話のモデルリクエスト：{{count}}件",

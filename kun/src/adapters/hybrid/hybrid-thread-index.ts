@@ -1,5 +1,6 @@
 import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
+import { decodeThreadCursor } from '../../domain/thread-list-query.js'
 import {
   rowFromIndexRecord,
   type ThreadIndexRecord,
@@ -15,7 +16,7 @@ export class HybridThreadIndexRepository {
 
   query(options: ThreadStoreListOptions): ThreadRow[] {
     const { where, params } = this.buildWhere(options)
-    const cursor = decodeKeysetCursor(options.cursor)
+    const cursor = decodeThreadCursor(options.cursor)
     if (cursor) {
       where.push('(updated_at_ms < @cursorMs OR (updated_at_ms = @cursorMs AND id < @cursorId))')
       params.cursorMs = cursor.updatedAtMs
@@ -119,29 +120,4 @@ export class HybridThreadIndexRepository {
     } catch (error) { this.warn('delete index row', error) }
   }
 }
-
 function escapeLike(value: string): string { return value.replace(/[%_]/g, (match) => `\\${match}`) }
-
-type KeysetCursor = { updatedAtMs: number; id: string }
-
-/**
- * Cursor encoding: base64url of `JSON.stringify([updatedAtMs, id])`. The id
- * tiebreaker keeps the key unique for the `(updated_at_ms DESC, id DESC)` sort.
- */
-export function encodeKeysetCursor(updatedAt: string, id: string): string {
-  const updatedAtMs = Number.isFinite(Date.parse(updatedAt)) ? Date.parse(updatedAt) : 0
-  return Buffer.from(JSON.stringify([updatedAtMs, id])).toString('base64url')
-}
-
-export function decodeKeysetCursor(cursor: string | undefined): KeysetCursor | null {
-  if (!cursor) return null
-  try {
-    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown
-    if (!Array.isArray(parsed) || parsed.length !== 2) return null
-    const [updatedAtMs, id] = parsed as [unknown, unknown]
-    if (typeof updatedAtMs !== 'number' || typeof id !== 'string' || !id) return null
-    return { updatedAtMs, id }
-  } catch {
-    return null
-  }
-}

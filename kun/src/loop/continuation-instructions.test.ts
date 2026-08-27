@@ -5,7 +5,8 @@ import {
   filterGoalContextsForActiveGoal,
   filterGoalContextsForGoalKey,
   goalContextKey,
-  isPostToolFailureProgressText
+  isPostToolFailureProgressText,
+  isUserDirectedNoToolText
 } from './continuation-instructions.js'
 
 function activeGoal(overrides: Partial<ThreadGoal> = {}): ThreadGoal {
@@ -136,5 +137,19 @@ describe('post-tool-failure progress classifier', () => {
     expect(isPostToolFailureProgressText('这个路径不存在，需要你确认工作区。')).toBe(false)
     expect(isPostToolFailureProgressText('请问要继续使用这个路径吗？')).toBe(false)
     expect(isPostToolFailureProgressText('搜索失败：工作区不存在，无法继续。')).toBe(false)
+  })
+})
+
+describe('user-directed no-tool classifier', () => {
+  it('recognizes Chinese and English questions and wait-for-user replies', () => {
+    expect(isUserDirectedNoToolText('请问你选择哪个方案？')).toBe(true)
+    expect(isUserDirectedNoToolText('Which option should I use?')).toBe(true)
+    expect(isUserDirectedNoToolText('需要你确认后才能继续。')).toBe(true)
+  })
+
+  it('does not classify ordinary progress announcements as user-directed', () => {
+    expect(isUserDirectedNoToolText('I will run the build now.')).toBe(false)
+    expect(isUserDirectedNoToolText('下一步我会运行构建')).toBe(false)
+    expect(isUserDirectedNoToolText('   ')).toBe(false)
   })
 })

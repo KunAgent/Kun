@@ -214,9 +214,13 @@ describe('app-ipc-schemas runtime', () => {
     })).toThrow(/runtime request path is not allowed/)
   })
 
-  it('lets the sidebar summarize a thread (#1200)', () => {
-    // The action shipped without an allowlist entry, so every summarize POST
-    // was rejected in Main and never reached the runtime.
+  it('lets the sidebar summarize and prune a thread (#1200)', () => {
+    // Thread maintenance actions must be explicitly admitted by Main's runtime allowlist.
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/threads/thr_9e795326bb0b/prune',
+      method: 'POST',
+      body: '{"keepLastTurns":100}'
+    }).path).toBe('/v1/threads/thr_9e795326bb0b/prune')
     expect(runtimeRequestPayloadSchema.parse({
       path: '/v1/threads/thr_9e795326bb0b/summarize',
       method: 'POST',

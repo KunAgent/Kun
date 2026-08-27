@@ -145,6 +145,27 @@ it('ignores null entries in persisted Claw channels and schedule tasks', async (
     expect(saved.agents.kun.approvalPolicy).toBe('on-request')
   })
 
+  it('persists Graphite defaults and preserves dark color siblings on partial patches', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
+    const store = new JsonSettingsStore(userDataDir)
+    const initial = await store.load()
+
+    expect(initial.darkUiColors).toEqual({
+      background: '#181818',
+      border: '#272727',
+      panel: '#2c2c2c'
+    })
+    await store.patch({ darkUiColors: { background: '#101010', panel: '#303030' } })
+    const saved = await store.patch({ darkUiColors: { border: '#AABBCC' } })
+
+    expect(saved.darkUiColors).toEqual({
+      background: '#101010',
+      border: '#aabbcc',
+      panel: '#303030'
+    })
+    expect((await new JsonSettingsStore(userDataDir).load()).darkUiColors).toEqual(saved.darkUiColors)
+  })
+
   it('merges desktop behavior patches without keeping invalid startup state', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
     const store = new JsonSettingsStore(userDataDir)

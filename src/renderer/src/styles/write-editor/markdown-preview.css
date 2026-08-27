@@ -266,10 +266,6 @@ html[data-theme='dark'] .cm-write-md-code-block-html > pre span {
   max-width: min(94%, 520px);
 }
 
-.write-assistant-panel .ds-user-message-footer {
-  min-height: 1.75rem;
-}
-
 .write-assistant-panel [data-work-meta-row='true'] {
   padding-block: 0.45rem;
   font-size: 12.5px;

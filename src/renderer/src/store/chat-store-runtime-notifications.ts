@@ -389,6 +389,46 @@ export function notifyTurnComplete(
 }
 
 /**
+ * Alert the user that a turn is parked on a user_input gate. Fires only when
+ * the asking thread is not the one currently visible (e.g. a background watch
+ * or after switching away); the asking thread itself shows the composer panel,
+ * the awaiting progress row, and the top-bar badge instead.
+ */
+export function notifyUserInputAwaiting(
+  threadId: string | null,
+  state: ChatState,
+  dedupeKey: string
+): void {
+  if (
+    !threadId ||
+    typeof window === 'undefined' ||
+    typeof window.kunGui?.showTurnCompleteNotification !== 'function'
+  ) {
+    return
+  }
+  if (!rememberCompletionNotificationKey(dedupeKey)) return
+
+  const threadTitle =
+    state.threads.find((thread) => thread.id === threadId)?.title?.trim() ||
+    i18n.t('common:untitledThread')
+
+  void window.kunGui
+    .showTurnCompleteNotification({
+      threadId,
+      source: turnCompleteNotificationSource(threadId, state),
+      title: i18n.t('common:userInputNotificationTitle'),
+      body: i18n.t('common:userInputNotificationBody', { title: threadTitle })
+    })
+    .catch((error: unknown) => {
+      if (typeof window.kunGui?.logError !== 'function') return
+      void window.kunGui.logError('notification', 'User-input awaiting notification failed', {
+        message: error instanceof Error ? error.message : String(error),
+        threadId
+      }).catch(() => undefined)
+    })
+}
+
+/**
  * Release the worktree pool slot owned by a thread when the task completes.
  * This makes worktree slots task-scoped (like Talkcody) rather than
  * thread-scoped: the slot is returned to the pool as soon as the agent

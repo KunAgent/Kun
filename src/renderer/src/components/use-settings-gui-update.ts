@@ -27,8 +27,13 @@ export function useSettingsGuiUpdate({
   const [guiUpdateProgress, setGuiUpdateProgress] = useState<GuiUpdateProgress | null>(null)
   const [guiUpdateError, setGuiUpdateError] = useState<string | null>(null)
   const checkedGuiUpdateChannel = useRef<GuiUpdateChannel | null>(null)
+  const operationGeneration = useRef(0)
 
   const resetGuiUpdateState = useCallback((): void => {
+    operationGeneration.current += 1
+    setCheckingGuiUpdate(false)
+    setDownloadingGuiUpdate(false)
+    setInstallingGuiUpdate(false)
     setGuiUpdateInfo(null)
     setGuiUpdateError(null)
     setGuiUpdateDownloaded(false)
@@ -36,6 +41,11 @@ export function useSettingsGuiUpdate({
   }, [])
 
   const applyGuiUpdateState = useCallback((state: GuiUpdateState): void => {
+    if ('info' in state && state.info?.ok && channel && state.info.channel !== channel) return
+    if (state.status === 'idle') {
+      resetGuiUpdateState()
+      return
+    }
     if ('info' in state && state.info) {
       setGuiUpdateInfo(state.info)
     }
@@ -84,41 +94,48 @@ export function useSettingsGuiUpdate({
       setGuiUpdateProgress(null)
       setGuiUpdateError(state.message)
     }
-  }, [])
+  }, [channel, resetGuiUpdateState])
 
   const checkGuiUpdate = useCallback(async (): Promise<void> => {
     if (typeof window.kunGui?.checkGuiUpdate !== 'function') return
+    const operation = ++operationGeneration.current
     setCheckingGuiUpdate(true)
     setGuiUpdateError(null)
     try {
       const info = await window.kunGui.checkGuiUpdate(channel)
+      if (operation !== operationGeneration.current) return
       setGuiUpdateInfo(info)
       if (!info.ok) {
         setGuiUpdateError(info.code === 'not_configured' ? null : guiUpdateFailureMessage(info, t))
       }
     } catch (e) {
+      if (operation !== operationGeneration.current) return
       setGuiUpdateError(e instanceof Error ? e.message : String(e))
     } finally {
-      setCheckingGuiUpdate(false)
+      if (operation === operationGeneration.current) setCheckingGuiUpdate(false)
     }
   }, [channel, t])
 
   const downloadGuiUpdate = async (): Promise<void> => {
     if (typeof window.kunGui?.downloadGuiUpdate !== 'function') return
+    const operation = ++operationGeneration.current
+    const selectedChannel = form?.guiUpdate?.channel
     setDownloadingGuiUpdate(true)
     setGuiUpdateProgress(null)
     setGuiUpdateError(null)
     try {
-      const result = await window.kunGui.downloadGuiUpdate(form?.guiUpdate?.channel)
+      const result = await window.kunGui.downloadGuiUpdate(selectedChannel)
+      if (operation !== operationGeneration.current) return
       if (!result.ok) {
         setGuiUpdateError(result.message)
         return
       }
       setGuiUpdateDownloaded(true)
     } catch (e) {
+      if (operation !== operationGeneration.current) return
       setGuiUpdateError(e instanceof Error ? e.message : String(e))
     } finally {
-      setDownloadingGuiUpdate(false)
+      if (operation === operationGeneration.current) setDownloadingGuiUpdate(false)
     }
   }
 
@@ -140,11 +157,22 @@ export function useSettingsGuiUpdate({
 
   useEffect(() => {
     if (typeof window.kunGui?.onGuiUpdateState !== 'function') return
-    const unsubscribe = window.kunGui.onGuiUpdateState(applyGuiUpdateState)
-    if (typeof window.kunGui?.getGuiUpdateState === 'function') {
-      void window.kunGui.getGuiUpdateState().then(applyGuiUpdateState).catch(() => undefined)
+    let receivedEvent = false
+    let cancelled = false
+    const applyEvent = (state: GuiUpdateState): void => {
+      receivedEvent = true
+      applyGuiUpdateState(state)
     }
-    return unsubscribe
+    const unsubscribe = window.kunGui.onGuiUpdateState(applyEvent)
+    if (typeof window.kunGui?.getGuiUpdateState === 'function') {
+      void window.kunGui.getGuiUpdateState().then((state) => {
+        if (!cancelled && !receivedEvent) applyGuiUpdateState(state)
+      }).catch(() => undefined)
+    }
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [applyGuiUpdateState])
 
   useEffect(() => {

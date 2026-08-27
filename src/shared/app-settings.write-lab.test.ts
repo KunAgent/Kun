@@ -119,10 +119,10 @@ describe('write agent presets', () => {
   })
 })
 
-describe('lab settings', () => {
-  it('defaults fast_context to enabled with follow-main model and no fast', () => {
-    const lab = defaultKunRuntimeSettings().lab
-    expect(lab.fastContext).toEqual({
+describe('Fast Context settings', () => {
+  it('defaults Fast Context to enabled with follow-main model and no fast', () => {
+    const fastContext = defaultKunRuntimeSettings().fastContext
+    expect(fastContext).toEqual({
       enabled: true,
       model: '',
       providerId: '',
@@ -130,7 +130,7 @@ describe('lab settings', () => {
     })
   })
 
-  it('mirrors fastContext for lab.pptAgent defaults and merging', () => {
+  it('keeps lab.pptAgent defaults and merging', () => {
     const lab = defaultKunRuntimeSettings().lab
     expect(lab.pptAgent).toEqual({
       enabled: true,
@@ -199,16 +199,14 @@ describe('lab settings', () => {
     expect(bad.lab.pptAgent.reasoningEffort).toBeUndefined()
   })
 
-  it('merges nested lab patches field by field', () => {
+  it('merges top-level Fast Context patches field by field', () => {
     const current = defaultKunRuntimeSettings()
     const next = mergeKunRuntimeSettings(current, {
-      lab: {
-        fastContext: {
-          enabled: false
-        }
+      fastContext: {
+        enabled: false
       }
     })
-    expect(next.lab.fastContext).toEqual({
+    expect(next.fastContext).toEqual({
       enabled: false,
       model: '',
       providerId: '',
@@ -216,16 +214,14 @@ describe('lab settings', () => {
     })
 
     const configured = mergeKunRuntimeSettings(current, {
-      lab: {
-        fastContext: {
-          model: 'gpt-5.4',
-          providerId: 'codex-2',
-          reasoningEffort: 'medium',
-          fast: true
-        }
+      fastContext: {
+        model: 'gpt-5.4',
+        providerId: 'codex-2',
+        reasoningEffort: 'medium',
+        fast: true
       }
     })
-    expect(configured.lab.fastContext).toEqual({
+    expect(configured.fastContext).toEqual({
       enabled: true,
       model: 'gpt-5.4',
       providerId: 'codex-2',
@@ -234,46 +230,53 @@ describe('lab settings', () => {
     })
   })
 
-  it('drops a half-configured model override (follow-main fallback)', () => {
+  it('migrates a historical Lab fastContext patch to the top level', () => {
     const next = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       lab: {
         fastContext: {
           model: 'gpt-5.4',
-          providerId: ''
+          providerId: 'codex-2'
         }
+      } as never
+    })
+    expect(next.fastContext.model).toBe('gpt-5.4')
+    expect(next.fastContext.providerId).toBe('codex-2')
+  })
+
+  it('drops a half-configured model override (follow-main fallback)', () => {
+    const next = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
+      fastContext: {
+        model: 'gpt-5.4',
+        providerId: ''
       }
     })
-    expect(next.lab.fastContext.model).toBe('')
-    expect(next.lab.fastContext.providerId).toBe('')
+    expect(next.fastContext.model).toBe('')
+    expect(next.fastContext.providerId).toBe('')
   })
 
   it('ignores an invalid reasoning effort value', () => {
     const next = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
-      lab: {
-        fastContext: {
-          model: 'gpt-5.4',
-          providerId: 'codex-2',
-          reasoningEffort: 'bogus' as never
-        }
+      fastContext: {
+        model: 'gpt-5.4',
+        providerId: 'codex-2',
+        reasoningEffort: 'bogus' as never
       }
     })
-    expect(next.lab.fastContext.reasoningEffort).toBeUndefined()
+    expect(next.fastContext.reasoningEffort).toBeUndefined()
   })
 
-  it('normalizes a persisted lab section through the full settings envelope', () => {
+  it('normalizes Fast Context through the full settings envelope', () => {
     const runtime = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
-      lab: {
-        fastContext: {
-          model: 'deepseek-v4-flash',
-          providerId: 'deepseek',
-          fast: true
-        }
+      fastContext: {
+        model: 'deepseek-v4-flash',
+        providerId: 'deepseek',
+        fast: true
       }
     })
     const normalized = normalizeAppSettings({
       ...settings(),
       agents: { kun: runtime }
-    }).agents.kun.lab.fastContext
+    }).agents.kun.fastContext
     expect(normalized).toEqual({
       enabled: true,
       model: 'deepseek-v4-flash',

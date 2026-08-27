@@ -75,7 +75,8 @@ export class ExtensionCredentialStore {
     this.encryptedPath = join(options.dataDir, 'credentials', 'credentials.enc.json')
     this.encryptedFile = new AtomicJsonFile(
       this.encryptedPath,
-      (value) => validateEncryptedDocument(value, options.profileId)
+      (value) => validateEncryptedDocument(value, options.profileId),
+      false
     )
   }
 

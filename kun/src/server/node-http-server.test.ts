@@ -4,6 +4,29 @@ import { jsonResponse } from './response.js'
 import { Router } from './router.js'
 
 describe('startNodeHttpServer', () => {
+  it('waits for active request handlers before close resolves', async () => {
+    const router = new Router()
+    let finish!: () => void
+    const gate = new Promise<void>((resolve) => { finish = resolve })
+    router.add('GET', '/slow', async () => {
+      await gate
+      return jsonResponse({ done: true })
+    })
+    const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
+    const request = fetch(`http://127.0.0.1:${server.port}/slow`).catch(() => undefined)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const close = server.close()
+    let closed = false
+    void close.then(() => { closed = true })
+    await Promise.resolve()
+    expect(closed).toBe(false)
+
+    finish()
+    await close
+    await request
+    expect(closed).toBe(true)
+  })
+
   it('logs sanitized context before returning an unexpected internal error', async () => {
     const router = new Router()
     router.add('POST', '/broken', () => {

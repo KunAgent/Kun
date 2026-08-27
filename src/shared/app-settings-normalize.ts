@@ -52,6 +52,7 @@ import { normalizeWriteSettings } from './app-settings-write'
 import { normalizeCodeAgentPresets } from './app-settings-code-agents'
 import { normalizeDesignSettings } from './app-settings-design'
 import { normalizeTerminalSettings, type TerminalSettingsPatchV1 } from './app-settings-terminal'
+import { normalizeDarkUiColors } from './app-settings-dark-ui'
 
 export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
   const migrated = shouldMigrateLegacySettings(settings)
@@ -70,6 +71,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     design?: DesignSettingsPatchV1
     guiUpdate?: Partial<GuiUpdateConfigV1>
     terminal?: TerminalSettingsPatchV1
+    darkUiColors?: Parameters<typeof normalizeDarkUiColors>[0]
   }
   const providerSettings = normalizeModelProviderSettings(maybeSettings.provider)
   const rawKun = maybeSettings.agents?.kun
@@ -115,6 +117,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     composerSendKey: normalizeComposerSendKey(maybeSettings.composerSendKey),
     cursorSpotlight: maybeSettings.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(maybeSettings.cursorSpotlightColor),
+    darkUiColors: normalizeDarkUiColors(maybeSettings.darkUiColors),
     provider: providerSettings,
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       ...runtime,

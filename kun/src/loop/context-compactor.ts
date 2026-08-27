@@ -172,6 +172,8 @@ export class ContextCompactor {
     frozenMessageCount?: number
     /** `false` marks a user-requested (`/compact`) compaction; omit for auto. */
     auto?: boolean
+    /** Token budget for the verbatim tail; complete turns are folded when exceeded. */
+    tailTokenBudget?: number
   }): {
     next: TurnItem[]
     summaryItem: TurnItem
@@ -230,6 +232,28 @@ export class ContextCompactor {
         tailStart,
         activeTurnStart
       )
+    }
+    // Token-targeted tail: the item-count floor only sets the minimum.
+    // When a configured budget exists, walk backwards over complete-turn
+    // boundaries so a handful of multi-KB assistant/tool items cannot pin
+    // the post-compaction request near the threshold. Completed turns that
+    // do not fit are folded into the summary head instead.
+    if (input.tailTokenBudget !== undefined && input.tailTokenBudget > 0) {
+      const maxTailStart = Math.max(1, tailStart)
+      let candidate = maxTailStart
+      let used = 0
+      while (candidate > 0) {
+        const turnId = history[candidate - 1]?.turnId
+        let boundary = candidate - 1
+        while (boundary > 0 && history[boundary - 1]?.turnId === turnId) boundary -= 1
+        const turnTokens = this.estimator.estimateItems(history.slice(boundary, candidate))
+        if (used > 0 && used + turnTokens > input.tailTokenBudget) break
+        used += turnTokens
+        candidate = boundary
+      }
+      const repaired = repairTailStartForToolResults(history, candidate)
+      if (repaired < tailStart) tailStart = repaired
+      else if (candidate > 0 && candidate < tailStart) tailStart = candidate
     }
     if (tailStart === 0) {
       return {

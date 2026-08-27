@@ -87,7 +87,7 @@ export function parseClaudeSubscriptionQuota(payload: unknown): ProviderQuotaMet
   return metrics
 }
 
-export function parseCodexSubscriptionQuota(payload: unknown): {
+export function parseCodexSubscriptionQuota(payload: unknown, resetCreditsPayload?: unknown): {
   metrics: ProviderQuotaMetric[]
   summary?: string
 } {
@@ -119,8 +119,51 @@ export function parseCodexSubscriptionQuota(payload: unknown): {
     if (second) metrics.push(second)
   })
   if (metrics.length === 0) throw new Error('Codex did not return a recognized rate-limit window.')
+  const resetCredits = codexResetCreditsMetric(root, resetCreditsPayload)
+  if (resetCredits) metrics.push(resetCredits)
   const summary = stringValue(root.plan_type)
   return { metrics, ...(summary ? { summary } : {}) }
+}
+
+function codexResetCreditsMetric(
+  root: JsonRecord,
+  detailsPayload: unknown
+): ProviderQuotaMetric | null {
+  const usageSummary = optionalRecord(root.rate_limit_reset_credits)
+  const details = optionalRecord(detailsPayload)
+  const credits = Array.isArray(details?.credits) ? details.credits : []
+  const now = Date.now()
+  let earliestExpiryMs: number | undefined
+  let availableDetails = 0
+  for (const value of credits) {
+    const credit = optionalRecord(value)
+    if (!credit) continue
+    const status = stringValue(credit.status)
+    if (status && status !== 'available') continue
+    const resetType = stringValue(credit.reset_type)
+    if (resetType && resetType !== 'codex_rate_limits') continue
+    const expiresAt = isoDateValue(credit.expires_at)
+    if (expiresAt) {
+      const expiryMs = new Date(expiresAt).getTime()
+      if (expiryMs <= now) continue
+      earliestExpiryMs = earliestExpiryMs === undefined
+        ? expiryMs
+        : Math.min(earliestExpiryMs, expiryMs)
+    }
+    availableDetails += 1
+  }
+  // available_count is authoritative; the backend may cap the detail rows.
+  const count = numberValue(details?.available_count) ??
+    numberValue(usageSummary?.available_count) ??
+    (credits.length > 0 ? availableDetails : undefined)
+  if (count === undefined || count <= 0) return null
+  return {
+    id: 'reset-credits',
+    label: 'Rate-limit resets',
+    unit: 'credits',
+    remaining: Math.floor(count),
+    ...(earliestExpiryMs === undefined ? {} : { resetsAt: new Date(earliestExpiryMs).toISOString() })
+  }
 }
 
 export function parseCursorSubscriptionQuota(payload: unknown): {

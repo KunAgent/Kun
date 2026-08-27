@@ -390,6 +390,20 @@ describe('pending shared model connection catalogs', () => {
 })
 
 describe('shared model connection credential replacement', () => {
+  it('treats clearing an absent connection credential as already complete', async () => {
+    const snapshot = { schemaVersion: 1 as const, revision: 20, providers: [] }
+    const runtimeRequest = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, body: JSON.stringify(snapshot) })
+    vi.stubGlobal('window', { kunGui: { runtimeRequest } })
+
+    try {
+      await expect(replaceSharedModelConnectionCredential('missing', '')).resolves.toEqual(snapshot)
+      expect(runtimeRequest).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('uses the latest revision for a replacement and retries one conflict', async () => {
     const provider = {
       id: 'deepseek',

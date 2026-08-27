@@ -72,6 +72,7 @@ import {
   CHATGPT_SUBSCRIPTION_NAME,
   CHATGPT_SUBSCRIPTION_PROVIDER_ID,
   GEMINI_SUBSCRIPTION_MODEL_IDS,
+  OPENCODE_FREE_PROVIDER_ID,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
   getModelProviderPreset,
   modelProviderPresetProfile,
@@ -132,11 +133,14 @@ export const NON_TEXT_MODEL_PATTERN =
 
 export function defaultModelProviderSettings(): ModelProviderSettingsV1 {
   const defaultProvider = defaultModelProviderProfile('', DEFAULT_DEEPSEEK_BASE_URL)
+  const openCodeFreeProvider = modelProviderPresetProfile(
+    getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
+  )
   return {
     apiKey: defaultProvider.apiKey,
     baseUrl: defaultProvider.baseUrl,
     proxy: defaultNetworkProxySettings(),
-    providers: [defaultProvider],
+    providers: [defaultProvider, openCodeFreeProvider],
     routePools: [],
     localGateway: { enabled: false, name: 'Kun API' }
   }
@@ -151,7 +155,11 @@ export function normalizeModelProviderSettings(
   const rawProviders = Array.isArray(input?.providers) ? input.providers : []
   const providersById = new Map<string, ModelProviderProfileV1>()
   const defaultProvider = defaultModelProviderProfile(apiKey, baseUrl)
+  const openCodeFreeProvider = modelProviderPresetProfile(
+    getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
+  )
   providersById.set(defaultProvider.id, defaultProvider)
+  providersById.set(openCodeFreeProvider.id, openCodeFreeProvider)
   for (const rawProvider of rawProviders) {
     const provider = normalizeModelProviderProfile(rawProvider)
     if (!provider) continue
@@ -373,7 +381,11 @@ export function modelProviderRequiresApiKey(
   }
 
   const source = resolveModelProviderPresetSource(provider)
-  if (source?.preset.id === 'litellm') return false
+  if (
+    provider.id === OPENCODE_FREE_PROVIDER_ID ||
+    source?.preset.id === 'litellm' ||
+    source?.preset.id === OPENCODE_FREE_PROVIDER_ID
+  ) return false
   if (provider.id === DEFAULT_MODEL_PROVIDER_ID) return true
   return Boolean(source)
 }

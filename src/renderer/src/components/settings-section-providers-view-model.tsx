@@ -4,6 +4,7 @@ import type {
 } from '@shared/app-settings'
 import {
   MODEL_PROVIDER_PRESETS,
+  OPENCODE_FREE_PROVIDER_ID,
   isMultiAccountProviderPreset,
   modelProviderPresetAccountCount,
   resolveModelProviderPresetSource,
@@ -54,6 +55,11 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 
+
+export function isOpenCodeFreeProvider(provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>): boolean {
+  return provider.id === OPENCODE_FREE_PROVIDER_ID ||
+    resolveModelProviderPresetSource(provider)?.preset.id === OPENCODE_FREE_PROVIDER_ID
+}
 
 export function buildProvidersViewModel(scope: Record<string, any>): Record<string, any> {
   const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, updateProviderProxy, setGlobalNetworkOpen } = scope
@@ -182,9 +188,11 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
       )
     : displayProviders
   const planProviders = filteredProviders.filter((item) => isSubscriptionProvider(item))
-  const apiProviders = filteredProviders.filter((item) => !isSubscriptionProvider(item))
-  // 只要存在任一套餐类供应商就分组展示;否则(通常只有默认 DeepSeek)保持单一平铺列表。
-  const grouped = displayProviders.some((item) => isSubscriptionProvider(item))
+  const freeProviders = filteredProviders.filter(isOpenCodeFreeProvider)
+  const apiProviders = filteredProviders.filter((item) =>
+    !isSubscriptionProvider(item) && !isOpenCodeFreeProvider(item)
+  )
+  const grouped = freeProviders.length > 0 || displayProviders.some((item) => isSubscriptionProvider(item))
 
   const renderProviderButton = (item: ModelProviderProfileV1): ReactElement => {
     const selected = activeProvider?.id === item.id
@@ -253,7 +261,7 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
       mode: ModelProviderPresetMode
       profileId: string
       label: string
-      group: 'subscription' | 'api'
+      group: 'free' | 'subscription' | 'api'
       region?: ModelProviderSubscriptionRegion
     }[] = [
       {
@@ -261,7 +269,11 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
         mode: 'api',
         profileId: preset.id,
         label: preset.name,
-        group: preset.category === 'subscription' ? 'subscription' : 'api',
+        group: preset.category === 'subscription'
+          ? 'subscription'
+          : preset.category === 'free'
+            ? 'free'
+            : 'api',
         region: preset.subscriptionRegion
       }
     ]
@@ -283,6 +295,7 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
         `${entry.label} ${entry.profileId}`.toLowerCase().includes(normalizedAddProviderQuery)
       )
     : addMenuEntries
+  const freeAddEntries = visibleAddEntries.filter((entry) => entry.group === 'free')
   const queriedPlanAddEntries = visibleAddEntries.filter((entry) => entry.group === 'subscription')
   const planAddEntries = subscriptionRegion === 'all'
     ? queriedPlanAddEntries
@@ -321,7 +334,9 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
               ? t('modelProviderAccountCount', { count: accountCount })
               : exists
               ? t('modelProviderPresetUpdateTag')
-              : entry.group === 'subscription'
+              : entry.group === 'free'
+                ? t('modelProviderFreeBadge')
+                : entry.group === 'subscription'
                 ? t('modelProviderPlanBadge')
                 : t('modelProviderPresetBadge')}
           </StatusPill>
@@ -336,5 +351,5 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
   const pendingImportProvider = pendingImport
     ? displayProviders.find((item) => item.id === pendingImport.providerId)
     : null
-  return { activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, planProviders, apiProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider }
+  return { activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider }
 }

@@ -12,7 +12,7 @@ import { SteeringQueue } from '../../loop/steering-queue.js'
 import { SequentialIdGenerator } from '../../ports/id-generator.js'
 import { ThreadExecutionBusyError } from '../../ports/thread-execution-lease.js'
 import { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
-import { TurnService } from '../../services/turn-service.js'
+import { ThreadClosingError, TurnService } from '../../services/turn-service.js'
 import type { JsonResponse } from '../response.js'
 import { cancelToolCall, getTurn, rewindThread, startTurn, steerTurn } from './turns.js'
 
@@ -118,6 +118,28 @@ describe('POST /v1/threads/:id/turns/:turnId/tool-calls/:callId/cancel', () => {
 })
 
 describe('POST /v1/threads/:id/turns admission', () => {
+  it('distinguishes a closing thread from a missing thread', async () => {
+    const request = () => new Request('http://kun.local/v1/threads/thr_closing/turns', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'hello' })
+    })
+    const closing = await startTurn({
+      startTurn: async () => { throw new ThreadClosingError('thr_closing') }
+    } as unknown as TurnService, 'thr_closing', request()) as JsonResponse
+    expect(closing.status).toBe(409)
+    expect(JSON.parse(closing.body)).toEqual({
+      code: 'thread_closing',
+      message: 'thread is closing: thr_closing'
+    })
+
+    const missing = await startTurn({
+      startTurn: async () => { throw new Error('thread not found: thr_missing') }
+    } as unknown as TurnService, 'thr_missing', request()) as JsonResponse
+    expect(missing.status).toBe(404)
+    expect(JSON.parse(missing.body).code).toBe('not_found')
+  })
+
   it('returns one admitted turn for exact retries and conflicts when the keyed request changes', async () => {
     const threadStore = new InMemoryThreadStore()
     const sessionStore = new InMemorySessionStore()

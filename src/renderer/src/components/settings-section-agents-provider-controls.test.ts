@@ -228,6 +228,41 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       return runtimeRequest
     }
 
+    it('places a stored OpenCore Free profile in the free group without an API key field', async () => {
+      const provider = defaultModelProviderSettings()
+      const storedFreeProvider = {
+        ...provider.providers.find((item) => item.id === 'opencode-free')!,
+        name: 'opencode-free',
+        presetSource: undefined
+      } satisfies ModelProviderProfileV1
+      const customProvider = {
+        id: 'custom-provider-2',
+        name: 'Custom Provider',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'messages',
+        models: ['custom-model-1'],
+        modelProfiles: {}
+      } satisfies ModelProviderProfileV1
+      const renderer = await mountProviders({
+        ...baseCtx(),
+        provider: {
+          ...provider,
+          providers: [storedFreeProvider, customProvider]
+        },
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          providerId: storedFreeProvider.id
+        }
+      })
+
+      expect(rendererText(renderer)).toContain('Free')
+      expect(activePanelText(renderer)).toContain('Provider connection')
+      expect(rendererText(renderer)).not.toContain('Enter provider API key')
+      expect(rendererText(renderer)).not.toContain('未找到可用凭据')
+      expect(rendererText(renderer)).not.toContain('No usable credential is stored')
+    })
+
     it('renders task tabs and keeps the selected task while switching providers', async () => {
       const provider = defaultModelProviderSettings()
       const customProvider = {
@@ -291,7 +326,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(activePanelText(renderer)).toContain('Provider connection')
       expect(activePanelText(renderer)).not.toContain('Provider models')
       expect(renderer.root.findAllByType('select').some((select) => select.props.value === 'messages')).toBe(true)
-      expect(rendererText(renderer)).toContain('Enter provider API key')
+      expect(rendererText(renderer)).not.toContain('Enter provider API key')
       expect(rendererText(renderer)).not.toContain('Inherit API key')
 
       const preventDefault = vi.fn()
@@ -335,7 +370,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       await clickProviderTab(renderer, 'Advanced')
       const customIdInput = renderer.root.findAllByType('input')
         .find((input) => input.props.value === 'custom-provider-2')
-      expect(customIdInput?.props.readOnly).toBe(false)
+      expect(customIdInput?.props.readOnly).toBe(true)
       expect(activePanelText(renderer)).toContain('Provider identity')
       expect(activePanelText(renderer)).toContain('Failure retry')
       expect(rendererText(renderer)).toContain('Danger zone')

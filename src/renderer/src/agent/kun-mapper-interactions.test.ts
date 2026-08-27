@@ -297,6 +297,49 @@ describe('user input mapping', () => {
     })
   })
 
+  it('maps timeoutSeconds from runtime events and timeout resolutions', async () => {
+    let request: unknown = null
+    let status: unknown = null
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onUserInput: (payload) => {
+        request = payload
+      },
+      onUserInputStatus: (payload) => {
+        status = payload
+      }
+    }
+    await dispatchKunRuntimeEvent(
+      {
+        kind: 'user_input_requested',
+        seq: 21,
+        itemId: 'item_input_timeout',
+        inputId: 'input_timeout',
+        prompt: 'Choose',
+        timeoutSeconds: 45,
+        questions: [
+          { header: 'Mode', id: 'mode', question: 'Choose', options: [] }
+        ]
+      },
+      sink,
+      async () => undefined
+    )
+    expect(request).toMatchObject({ timeoutSeconds: 45 })
+
+    await dispatchKunRuntimeEvent(
+      {
+        kind: 'user_input_resolved',
+        seq: 22,
+        itemId: 'item_input_timeout',
+        inputId: 'input_timeout',
+        status: 'timeout'
+      },
+      sink,
+      async () => undefined
+    )
+    expect(status).toMatchObject({ itemId: 'item_input_timeout', status: 'timeout' })
+  })
+
   it('maps prompt/message aliases on user-input questions', async () => {
     let request: unknown = null
     const sink: ThreadEventSink = {

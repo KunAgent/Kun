@@ -323,6 +323,7 @@ export function ThreadContextMenu({
   onPin,
   onRename,
   onSummarize,
+  onPrune,
   onCopyId,
   onArchive,
   onDelete,
@@ -338,6 +339,7 @@ export function ThreadContextMenu({
   onPin: () => void
   onRename: () => void
   onSummarize: () => void
+  onPrune: () => void
   onCopyId: () => void
   onArchive: () => void
   onDelete: () => void
@@ -368,6 +370,7 @@ export function ThreadContextMenu({
       <MenuItem icon={<MoveRight className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadMove')} disabled={moveDisabled} title={moveDisabledTitle} onClick={() => run(onMove)} />
       <MenuItem icon={<PencilLine className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadRename')} disabled={busy} onClick={() => run(onRename)} />
       <MenuItem icon={<ScrollText className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('summarizeSession')} disabled={busy} onClick={() => run(onSummarize)} />
+      <MenuItem icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadPrune')} disabled={busy || archived} onClick={() => run(onPrune)} />
       <MenuItem
         icon={<ClipboardCopy className="h-3.5 w-3.5" strokeWidth={1.9} />}
         label={t('sidebarThreadCopyId')}

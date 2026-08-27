@@ -34,7 +34,7 @@ describe('sidebar thread activity indicators', () => {
     }
 
     expect(prioritizeSidebarThreadActivity(items, context).map((item) => item.id)).toEqual([
-      'running', 'failed', 'completed', 'read', 'scheduled'
+      'read', 'scheduled', 'completed', 'failed', 'running'
     ])
     expect(sidebarThreadActivity(items[1]!, context)).toBe('scheduled')
   })

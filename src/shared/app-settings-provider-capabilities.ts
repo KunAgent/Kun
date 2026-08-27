@@ -35,6 +35,7 @@ import {
   type ModelProviderMessagePartSupport,
   type ModelProviderModelProfilePatchV1,
   type ModelProviderModelProfileV1,
+  type ModelProviderModelPricingV1,
   type ModelProviderMusicCapabilityPatchV1,
   type ModelProviderMusicCapabilityV1,
   type ModelProviderReasoningCapabilityV1,
@@ -130,6 +131,7 @@ export function normalizeModelProviderModelProfile(
     MAX_MODEL_OUTPUT_TOKENS
   )
   const reasoning = normalizeModelReasoningCapability(input?.reasoning)
+  const pricing = normalizeModelProviderPricing(input?.pricing)
   const serviceTiers = normalizeModelServiceTiers(input?.serviceTiers)
   const endpointFormat = normalizeOptionalModelEndpointFormat(input?.endpointFormat)
   const responsesMode = input?.responsesMode === 'lite' ? 'lite' : undefined
@@ -144,10 +146,36 @@ export function normalizeModelProviderModelProfile(
     supportsToolCalling: input?.supportsToolCalling !== false,
     messageParts: normalizeModelMessageParts(input?.messageParts, defaultMessageParts),
     ...(reasoning ? { reasoning } : {}),
+    ...(pricing ? { pricing } : {}),
     ...(serviceTiers.length ? { serviceTiers } : {}),
     ...(endpointFormat ? { endpointFormat } : {}),
     ...(responsesMode ? { responsesMode } : {})
   }
+}
+
+/**
+ * Catalog reference pricing is only meaningful when both input and output
+ * prices are finite non-negative numbers; cache prices stay optional. Invalid
+ * entries are dropped entirely rather than partially kept.
+ */
+export function normalizeModelProviderPricing(
+  input: ModelProviderModelProfileV1['pricing'] | undefined
+): ModelProviderModelPricingV1 | undefined {
+  const inputValue = nonNegativeFinitePrice(input?.inputUsdPerMillion)
+  const outputValue = nonNegativeFinitePrice(input?.outputUsdPerMillion)
+  if (inputValue == null || outputValue == null) return undefined
+  const cacheRead = nonNegativeFinitePrice(input?.cacheReadUsdPerMillion)
+  const cacheWrite = nonNegativeFinitePrice(input?.cacheWriteUsdPerMillion)
+  return {
+    inputUsdPerMillion: inputValue,
+    outputUsdPerMillion: outputValue,
+    ...(cacheRead != null ? { cacheReadUsdPerMillion: cacheRead } : {}),
+    ...(cacheWrite != null ? { cacheWriteUsdPerMillion: cacheWrite } : {})
+  }
+}
+
+function nonNegativeFinitePrice(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
 export function normalizeModelServiceTiers(

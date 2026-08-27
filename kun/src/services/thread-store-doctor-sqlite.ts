@@ -345,17 +345,19 @@ export function probeHybridThreadStoreWrites(db: BetterSqliteDatabase): boolean 
     threadUpsert.run(threadWriteProbeRow(firstId, 'Kun doctor schema probe updated'))
     threadUpsert.run(threadWriteProbeRow(secondId, 'KUN DOCTOR SCHEMA PROBE'))
     const defaults = db.prepare(`
-      SELECT id, model_request_capture_enabled, usage_backfilled
+      SELECT id, model_request_capture_enabled, usage_backfilled, usage_backfill_high_water
       FROM threads WHERE id IN (?, ?)
     `).all(firstId, secondId) as Array<{
       id?: unknown
       model_request_capture_enabled?: unknown
       usage_backfilled?: unknown
+      usage_backfill_high_water?: unknown
     }>
     if (
       defaults.length !== 2
       || defaults.some((row) => row.model_request_capture_enabled !== 0)
       || defaults.some((row) => row.usage_backfilled !== 0)
+      || defaults.some((row) => row.usage_backfill_high_water !== 0)
     ) throw new Error('unexpected thread index default')
 
     const timestamp = '2099-01-01T00:00:00.000Z'

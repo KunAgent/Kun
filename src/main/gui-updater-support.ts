@@ -1,10 +1,15 @@
 import { app } from 'electron'
 import { existsSync, readFileSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join, win32 as win32Path } from 'node:path'
 import electronUpdater from 'electron-updater'
 import type { UpdateInfo } from 'electron-updater'
+import semver from 'semver'
 import type { GuiUpdateChannel } from '../shared/gui-update'
+import {
+  normalizeGuiUpdateScheduleState,
+  type GuiUpdateScheduleState
+} from '../shared/gui-update-schedule'
 
 // R2 prefix 保持旧值:线上还在运行的 DeepSeek GUI 老版本轮询的
 // 就是 `deepseek-gui/channels/<channel>/latest/`,prefix 一改老客户端
@@ -14,6 +19,9 @@ export const SECONDARY_R2_PUBLIC_BASE_URL = 'https://kun-agent.com/api/r2'
 export const LEGACY_R2_PUBLIC_BASE_URL = 'https://deepseek-gui.com/api/r2'
 export const DEFAULT_R2_RELEASE_PREFIX = 'deepseek-gui'
 export const UPDATE_FEED_PROBE_TIMEOUT_MS = 5_000
+export const MANUAL_UPDATE_FETCH_TIMEOUT_MS = 10_000
+export const GUI_UPDATE_FEED_CACHE_FILE = 'gui-update-feed-cache.json'
+export const GUI_UPDATE_FEED_CACHE_TTL_MS = 86_400_000
 export const { autoUpdater } = electronUpdater
 export const DEVELOPMENT_APP_FLAVOR = process.env.KUN_APP_FLAVOR === 'development'
 export const DEVELOPMENT_UPDATE_MESSAGE =
@@ -106,34 +114,106 @@ export function updateFeedManifestUrl(feedUrl: string): string {
   return `${feedUrl}${platformManifestName()}`
 }
 
-export async function isUpdateFeedAccessible(feedUrl: string): Promise<boolean> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), UPDATE_FEED_PROBE_TIMEOUT_MS)
+export type UpdateFeedResolution =
+  | { ok: true; url: string }
+  | { ok: false; code: 'update_feed_unavailable'; message: string }
+
+type FeedCache = Partial<Record<GuiUpdateChannel, { url: string; at: string }>>
+let feedCacheWriteLane: Promise<void> = Promise.resolve()
+
+export function updateFeedCachePath(): string {
+  return join(app.getPath('userData'), GUI_UPDATE_FEED_CACHE_FILE)
+}
+
+async function readFeedCache(): Promise<FeedCache> {
   try {
-    const res = await fetch(updateFeedManifestUrl(feedUrl), {
-      method: 'HEAD',
-      headers: {
-        Accept: 'application/x-yaml,text/yaml,text/plain,*/*',
-        'User-Agent': `kun/${app.getVersion()}`
-      },
-      signal: controller.signal
-    })
-    return res.ok
+    const value = JSON.parse(await readFile(updateFeedCachePath(), 'utf8'))
+    return value && typeof value === 'object' ? value as FeedCache : {}
+  } catch { return {} }
+}
+
+async function writeFeedCache(channel: GuiUpdateChannel, url: string): Promise<void> {
+  const write = async (): Promise<void> => {
+    const path = updateFeedCachePath()
+    const temporary = `${path}.${process.pid}.${Date.now()}.tmp`
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(temporary, JSON.stringify({ ...(await readFeedCache()), [channel]: { url, at: new Date().toISOString() } }), 'utf8')
+    await rename(temporary, path)
+  }
+  const pending = feedCacheWriteLane.then(write, write)
+  feedCacheWriteLane = pending.catch(() => undefined)
+  await pending
+}
+
+function probeHeaders(): Record<string, string> {
+  return { Accept: 'application/x-yaml,text/yaml,text/plain,*/*', 'User-Agent': `kun/${app.getVersion()}` }
+}
+
+async function probeUpdateFeed(feedUrl: string, signal: AbortSignal): Promise<boolean> {
+  try {
+    const url = updateFeedManifestUrl(feedUrl)
+    const head = await fetch(url, { method: 'HEAD', headers: probeHeaders(), signal })
+    if (head.ok) return true
+    if (![403, 405, 501].includes(head.status)) return false
+    const get = await fetch(url, { method: 'GET', headers: { ...probeHeaders(), Range: 'bytes=0-0' }, signal })
+    if (get.body) await Promise.resolve(get.body.cancel()).catch(() => undefined)
+    return get.ok
+  } catch { return false }
+}
+
+export async function isUpdateFeedAccessible(feedUrl: string): Promise<boolean> {
+  return probeUpdateFeed(feedUrl, AbortSignal.timeout(UPDATE_FEED_PROBE_TIMEOUT_MS))
+}
+
+export async function resolveUpdateFeedUrl(channel: GuiUpdateChannel): Promise<UpdateFeedResolution> {
+  const configured = updateFeedUrlCandidates(channel)
+  const cached = (await readFeedCache())[channel]
+  const cachedAt = cached ? Date.parse(cached.at) : NaN
+  const candidates = uniqueStrings([
+    ...(cached && configured.includes(cached.url) && Date.now() - cachedAt <= GUI_UPDATE_FEED_CACHE_TTL_MS ? [cached.url] : []),
+    ...configured
+  ])
+  const controller = new AbortController()
+  let clearDeadline = (): void => undefined
+  const deadline = new Promise<null>((resolve) => {
+    const timer = setTimeout(() => {
+      controller.abort()
+      resolve(null)
+    }, UPDATE_FEED_PROBE_TIMEOUT_MS)
+    clearDeadline = () => clearTimeout(timer)
+  })
+  // 首个可达源立即胜出：慢源/无响应源不允许把已确认可用的更新源拖到
+  // 全局 deadline。全部候选失败时 Promise.any 才 reject。
+  const attempts = candidates.map(async (url) => {
+    if (!(await probeUpdateFeed(url, controller.signal))) {
+      throw new Error(`Update feed unavailable: ${url}`)
+    }
+    return { url }
+  })
+  try {
+    const selected = await Promise.race([Promise.any(attempts), deadline])
+    if (!selected) {
+      return {
+        ok: false,
+        code: 'update_feed_unavailable',
+        message: `The ${channel} update feed probe exceeded its ${UPDATE_FEED_PROBE_TIMEOUT_MS}ms deadline.`
+      }
+    }
+    await writeFeedCache(channel, selected.url).catch(() => undefined)
+    return { ok: true, url: selected.url }
   } catch {
-    return false
+    return { ok: false, code: 'update_feed_unavailable', message: `No reachable GUI update feed is available for the ${channel} channel.` }
   } finally {
-    clearTimeout(timeout)
+    clearDeadline()
+    controller.abort()
   }
 }
 
-export async function resolveUpdateFeedUrl(channel: GuiUpdateChannel): Promise<string> {
-  const candidates = updateFeedUrlCandidates(channel)
-  if (candidates.length <= 1) return candidates[0]
-
-  for (const candidate of candidates) {
-    if (await isUpdateFeedAccessible(candidate)) return candidate
-  }
-  return candidates[candidates.length - 1]
+export async function fetchUpdateFeedManifest(feedUrl: string, currentVersion: string): Promise<Response> {
+  return fetch(updateFeedManifestUrl(feedUrl), {
+    headers: { Accept: 'application/x-yaml,text/yaml,text/plain,*/*', 'User-Agent': `kun/${currentVersion}` },
+    signal: AbortSignal.timeout(MANUAL_UPDATE_FETCH_TIMEOUT_MS)
+  })
 }
 
 export function guiUpdateSchedulePath(): string {
@@ -198,23 +278,30 @@ export async function recordPendingUpdate(updateInfo: UpdateInfo): Promise<void>
     }
   })
 }
-export async function readLastScheduledCheckAt(): Promise<number | null> {
+export async function readGuiUpdateScheduleState(): Promise<GuiUpdateScheduleState> {
   try {
-    const raw = await readFile(guiUpdateSchedulePath(), 'utf8')
-    const parsed = JSON.parse(raw) as { lastCheckedAt?: unknown }
-    const ms = typeof parsed.lastCheckedAt === 'string' ? Date.parse(parsed.lastCheckedAt) : Number.NaN
-    return Number.isFinite(ms) ? ms : null
+    return normalizeGuiUpdateScheduleState(JSON.parse(await readFile(guiUpdateSchedulePath(), 'utf8')))
   } catch {
-    return null
+    return {}
   }
 }
 
-export async function writeLastScheduledCheckAt(nowMs: number): Promise<void> {
+export async function writeGuiUpdateScheduleState(state: GuiUpdateScheduleState): Promise<void> {
   const path = guiUpdateSchedulePath()
+  const toIso = (value: number | null | undefined): string | undefined =>
+    typeof value === 'number' && Number.isFinite(value) ? new Date(value).toISOString() : undefined
+  const normalized = normalizeGuiUpdateScheduleState(state)
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    JSON.stringify({ lastCheckedAt: new Date(nowMs).toISOString() }, null, 2),
+    JSON.stringify({
+      ...(toIso(normalized.lastAttemptAt) ? { lastAttemptAt: toIso(normalized.lastAttemptAt) } : {}),
+      ...(toIso(normalized.lastSuccessAt) ? { lastSuccessAt: toIso(normalized.lastSuccessAt) } : {}),
+      ...(typeof normalized.consecutiveFailures === 'number'
+        ? { consecutiveFailures: normalized.consecutiveFailures }
+        : {}),
+      ...(toIso(normalized.nextRetryAt) ? { nextRetryAt: toIso(normalized.nextRetryAt) } : {})
+    }, null, 2),
     'utf8'
   )
 }
@@ -280,22 +367,12 @@ export function releaseUrlForVersion(version: string, channel: GuiUpdateChannel)
   return page
 }
 
-export function parseVersionParts(v: string): number[] {
-  const cleaned = v.trim().replace(/^v/i, '').replace(/-.*$/, '')
-  return cleaned.split('.').map((part) => Number.parseInt(part, 10) || 0)
-}
-
 export function isVersionGreater(latest: string, current: string): boolean {
-  const a = parseVersionParts(latest)
-  const b = parseVersionParts(current)
-  const len = Math.max(a.length, b.length)
-  for (let i = 0; i < len; i += 1) {
-    const av = a[i] ?? 0
-    const bv = b[i] ?? 0
-    if (av > bv) return true
-    if (av < bv) return false
-  }
-  return false
+  const normalizedLatest = semver.clean(latest.trim())
+  const normalizedCurrent = semver.clean(current.trim())
+  if (!normalizedLatest || !semver.valid(normalizedLatest)) throw new TypeError(`Invalid update version: "${latest}"`)
+  if (!normalizedCurrent || !semver.valid(normalizedCurrent)) throw new TypeError(`Invalid current version: "${current}"`)
+  return semver.gt(normalizedLatest, normalizedCurrent)
 }
 
 export function platformManifestName(

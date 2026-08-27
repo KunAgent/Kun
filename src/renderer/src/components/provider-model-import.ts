@@ -112,7 +112,9 @@ export function providerModelImportEntryCanEnrich(
     (entry.catalog.contextWindowTokens !== undefined &&
       existing.contextWindowTokens !== entry.catalog.contextWindowTokens) ||
     (entry.catalog.maxOutputTokens !== undefined &&
-      existing.maxOutputTokens !== entry.catalog.maxOutputTokens)
+      existing.maxOutputTokens !== entry.catalog.maxOutputTokens) ||
+    (entry.catalog.pricing !== undefined &&
+      JSON.stringify(existing.pricing) !== JSON.stringify(entry.catalog.pricing))
   )
 }
 
@@ -197,9 +199,11 @@ export function enrichProviderModelProfiles(
       existing.contextWindowTokens !== catalog.contextWindowTokens
     const addOutput = catalog?.maxOutputTokens !== undefined &&
       existing.maxOutputTokens !== catalog.maxOutputTokens
+    const addPricing = catalog?.pricing !== undefined &&
+      JSON.stringify(existing.pricing) !== JSON.stringify(catalog.pricing)
     const mergedAliases = normalizeAliases([...(existing.aliases ?? []), ...aliases])
     const addAliases = mergedAliases.length !== (existing.aliases?.length ?? 0)
-    if (!addContext && !addOutput && !addAliases) continue
+    if (!addContext && !addOutput && !addPricing && !addAliases) continue
     if (next === provider.modelProfiles) next = { ...provider.modelProfiles }
     next[existingKey] = {
       ...existing,
@@ -209,7 +213,8 @@ export function enrichProviderModelProfiles(
         : {}),
       ...(addOutput
         ? { maxOutputTokens: catalog?.maxOutputTokens }
-        : {})
+        : {}),
+      ...(addPricing && catalog ? { pricing: { ...catalog.pricing! } } : {})
     }
   }
 
@@ -288,7 +293,8 @@ export function modelProfileFromCatalog(
     outputModalities: supportsImageOutput ? ['text', 'image'] : ['text'],
     supportsToolCalling: catalog.toolCalling ?? true,
     messageParts: supportsImageInput ? ['text', 'image_url'] : ['text'],
-    ...(catalog.reasoning === true ? { reasoning: catalogReasoningProfile() } : {})
+    ...(catalog.reasoning === true ? { reasoning: catalogReasoningProfile() } : {}),
+    ...(catalog.pricing ? { pricing: { ...catalog.pricing } } : {})
   }
 }
 

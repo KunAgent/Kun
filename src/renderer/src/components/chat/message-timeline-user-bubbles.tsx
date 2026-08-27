@@ -386,14 +386,13 @@ export function UserMessageBubble({
           <RuntimeMetaChips meta={block.meta} align="right" hideAttachments />
           </>
         )}
-        <div
-          data-user-message-actions="inline"
-          className={`${showClawInboundCard ? 'mt-2' : 'ds-user-message-footer mt-2 border-t border-black/5 pt-1.5 dark:border-white/10'} flex min-w-0 items-center justify-between gap-3 text-ds-faint opacity-70 transition group-hover:opacity-100 group-focus-within:opacity-100`}
-        >
-          <div className="min-w-0 flex-1">
-            <ModelMetaTag label={block.modelLabel} className="justify-start text-left" />
-          </div>
-          <div className="flex items-center justify-end gap-1">
+      </div>
+      <div
+        data-user-message-actions="inline"
+        className="invisible absolute right-0 top-full z-20 flex translate-y-0.5 items-center pt-1 text-ds-faint opacity-0 transition-[opacity,transform,visibility] duration-150 motion-reduce:transition-none group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+      >
+        <div className="flex items-center gap-4">
+          <ModelMetaTag label={block.modelLabel} className="text-left" />
           <CopyFeedbackButton text={displayText} iconOnly />
           {canEdit ? (
             <button
@@ -402,12 +401,11 @@ export function UserMessageBubble({
               disabled={busy}
               title={t('rewindEditMessage')}
               aria-label={t('rewindEditMessage')}
-              className="rounded-md p-1 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:hover:text-ds-faint"
+              className="rounded-full p-1.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:hover:text-ds-faint"
             >
               <PencilLine className="h-4 w-4" strokeWidth={1.8} />
             </button>
           ) : null}
-          </div>
         </div>
       </div>
     </div>

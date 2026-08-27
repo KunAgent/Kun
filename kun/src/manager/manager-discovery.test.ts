@@ -6,6 +6,8 @@ import {
   createManagerDiscoveryRecord,
   managerDiscoveryPath,
   publishManagerDiscovery,
+  readManagerHandoffDiscovery,
+  readManagerHandoffDiscoveryStrict,
   readManagerDiscovery,
   removeManagerDiscovery,
   withManagerStartLock
@@ -65,6 +67,46 @@ describe('manager discovery', () => {
     expect(legacy).not.toHaveProperty('buildId')
   })
 
+  it('reads older safe schemas only through the handoff contract', async () => {
+    const controlDir = await root()
+    await writeFile(managerDiscoveryPath(controlDir), JSON.stringify({
+      ...input(),
+      version: 7,
+      protocolVersion: 3,
+      instanceId: 'older-manager',
+      futureField: ['ignored', 'for-handoff']
+    }), 'utf8')
+
+    expect(await readManagerDiscovery(controlDir)).toBeNull()
+    expect(await readManagerHandoffDiscovery(controlDir)).toMatchObject({
+      instanceId: 'older-manager',
+      version: 7,
+      protocolVersion: 3,
+      futureField: ['ignored', 'for-handoff']
+    })
+    expect(await removeManagerDiscovery(controlDir, 'older-manager')).toBe(true)
+  })
+
+  it('rejects unsafe Manager handoff endpoints and missing identity fields', async () => {
+    const controlDir = await root()
+    await writeFile(managerDiscoveryPath(controlDir), JSON.stringify({
+      ...input(),
+      version: 1,
+      protocolVersion: 1,
+      instanceId: 'unsafe-manager',
+      host: 'example.com',
+      baseUrl: 'http://example.com:18991'
+    }), 'utf8')
+    expect(await readManagerHandoffDiscovery(controlDir)).toBeNull()
+
+    await writeFile(managerDiscoveryPath(controlDir), JSON.stringify({
+      ...input(),
+      version: 1,
+      protocolVersion: 1
+    }), 'utf8')
+    expect(await readManagerHandoffDiscovery(controlDir)).toBeNull()
+  })
+
   it('publishes an owner-only discovery record', async () => {
     const controlDir = await root()
     const record = await publishManagerDiscovery(controlDir, { ...input(), instanceId: 'manager-a' })
@@ -79,8 +121,21 @@ describe('manager discovery', () => {
     const controlDir = await root()
     await writeFile(managerDiscoveryPath(controlDir), '{broken', 'utf8')
     expect(await readManagerDiscovery(controlDir)).toBeNull()
+    expect(await readManagerHandoffDiscovery(controlDir)).toBeNull()
     await writeFile(managerDiscoveryPath(controlDir), 'x'.repeat(65 * 1024), 'utf8')
     expect(await readManagerDiscovery(controlDir)).toBeNull()
+    expect(await readManagerHandoffDiscovery(controlDir)).toBeNull()
+  })
+
+  it('fails closed in strict replacement probes when discovery exists but is invalid', async () => {
+    const controlDir = await root()
+    await writeFile(managerDiscoveryPath(controlDir), '{broken', 'utf8')
+
+    await expect(readManagerHandoffDiscoveryStrict(controlDir)).rejects.toThrow(
+      /invalid Kun Service Manager discovery/u
+    )
+    await rm(managerDiscoveryPath(controlDir))
+    await expect(readManagerHandoffDiscoveryStrict(controlDir)).resolves.toBeNull()
   })
 
   it('does not let an old manager remove a replacement record', async () => {

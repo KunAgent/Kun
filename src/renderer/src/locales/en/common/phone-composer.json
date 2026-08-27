@@ -342,6 +342,7 @@
   "composerVoiceMicDenied": "Microphone access was denied. Allow it in system settings and try again.",
   "composerVoiceTooShort": "Recording was too short. Hold on a bit longer.",
   "composerVoiceFailed": "Voice transcription failed: {{message}}",
+  "composerDismissError": "Dismiss error",
   "composerImageUnavailable": "Image input is unavailable for this runtime.",
   "composerAttachmentUnavailable": "Attachment upload is unavailable.",
   "composerDropFilesHere": "Release to add files to this conversation",

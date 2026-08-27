@@ -187,7 +187,8 @@ export function createCanonicalSqliteSchema(
       events_path TEXT NOT NULL,
       search_text TEXT NOT NULL,
       ${jsonColumnsAfterSearch}
-      usage_backfilled ${usageBackfilled}${generatedThreadColumn}
+      usage_backfilled ${usageBackfilled},
+      usage_backfill_high_water INTEGER NOT NULL DEFAULT 0${generatedThreadColumn}
     );
     CREATE INDEX threads_updated_idx
       ON threads(updated_at_ms DESC, id DESC);
@@ -203,6 +204,7 @@ export function createCanonicalSqliteSchema(
       timestamp TEXT NOT NULL,
       turn_id TEXT,
       model TEXT,
+      provider_id TEXT,
       usage_json TEXT NOT NULL,
       PRIMARY KEY(thread_id, seq)
     );

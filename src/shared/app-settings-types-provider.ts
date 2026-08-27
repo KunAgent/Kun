@@ -313,7 +313,7 @@ export const DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS = 3_000
 
 export const DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES = [429, 500, 502, 503, 504] as const
 
-export const MODEL_REQUEST_RETRY_DEFAULTS_VERSION = 1
+export const MODEL_REQUEST_RETRY_DEFAULTS_VERSION = 2
 
 export type ModelRequestRetrySettingsV1 = {
   maxAttempts: number
@@ -359,6 +359,17 @@ export type ModelProviderReasoningCapabilityV1 = {
   requestProtocol: ModelReasoningRequestProtocol
 }
 
+export type ModelProviderModelPricingV1 = {
+  /** USD per million input tokens (non-cache). */
+  inputUsdPerMillion: number
+  /** USD per million output tokens. */
+  outputUsdPerMillion: number
+  /** USD per million cache-read tokens; omitted falls back to input price. */
+  cacheReadUsdPerMillion?: number
+  /** USD per million cache-write tokens; omitted falls back to input price. */
+  cacheWriteUsdPerMillion?: number
+}
+
 export type ModelProviderModelProfileV1 = {
   aliases?: string[]
   contextWindowTokens?: number
@@ -368,6 +379,8 @@ export type ModelProviderModelProfileV1 = {
   supportsToolCalling: boolean
   messageParts: ModelProviderMessagePartSupport[]
   reasoning?: ModelProviderReasoningCapabilityV1
+  /** Reference catalog pricing (USD per million tokens) for cost estimates. */
+  pricing?: ModelProviderModelPricingV1
   /** Provider-advertised request service tiers supported by this model. */
   serviceTiers?: ModelServiceTier[]
   /** Per-model wire-format override. Omitted means "inherit the provider's endpointFormat". */

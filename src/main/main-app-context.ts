@@ -75,6 +75,7 @@ import {
 import {
   NativeDialogCoordinator
 } from './native-dialog-coordinator'
+import { DesktopStartupState } from './desktop-startup-state'
 import {
   type ClawRuntime
 } from './claw-runtime'
@@ -127,26 +128,20 @@ import {
   createAppEnvironmentInfo,
   resolveAppFlavor
 } from '../shared/app-environment'
+import {
+  isTrustedRendererUrl,
+  normalizeRendererPathname
+} from './renderer-trust-policy'
 
 export const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /** Compare only the immutable renderer origin and entry document; query/hash are UI state. */
 export function isTrustedWorkbenchUrl(candidate: string, trustedRendererUrl: string): boolean {
-  try {
-    const actual = new URL(candidate)
-    const expected = new URL(trustedRendererUrl)
-    return actual.protocol === expected.protocol &&
-      actual.username === expected.username &&
-      actual.password === expected.password &&
-      actual.host === expected.host &&
-      normalizeWorkbenchPathname(actual.pathname) === normalizeWorkbenchPathname(expected.pathname)
-  } catch {
-    return false
-  }
+  return isTrustedRendererUrl(candidate, trustedRendererUrl)
 }
 
 export function normalizeWorkbenchPathname(pathname: string): string {
-  return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+  return normalizeRendererPathname(pathname)
 }
 
 export function developmentRendererUrl(): string | undefined {
@@ -337,8 +332,11 @@ export const extensionViewSessions = new ExtensionViewSessionRegistry()
 export const extensionExternalBrowsers = new ExtensionExternalBrowserManager(extensionViewSessions)
 export const runtimeSettingsIntents = new RuntimeSettingsIntentSequencer()
 
+export const desktopStartupState: DesktopStartupState = new DesktopStartupState(() => mainState.mainWindow)
+
 export const mainState = {
   mainWindow: null as BrowserWindow | null,
+  updateHealthProbeOnly: false,
   store: undefined as unknown as JsonSettingsStore,
   logDir: '',
   clawRuntime: null as ClawRuntime | null,
@@ -377,6 +375,7 @@ export const mainState = {
     generation: 0,
     at: new Date().toISOString()
   } as KunRuntimeSettingsSyncStatusPayload,
+  startupState: desktopStartupState,
   createWindow: (_options: { suppressInitialShow?: boolean } = {}) => undefined as void,
   ensureRuntime: async (settings: AppSettingsV1) => settings,
   restartRuntime: async (_settings: AppSettingsV1) => undefined as void,

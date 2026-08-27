@@ -411,6 +411,81 @@ describe("TuiController reasoning and session lifecycle", () => {
     await controller.stop()
   })
 
+  it('marks generated TUI titles as provisional but locks explicit titles', async () => {
+    let threads: ThreadDetail[] = []
+    const createThread = vi.fn(async (input: Parameters<KunTuiClient['createThread']>[0]) => {
+      const created = detail({
+        id: `thr_${threads.length + 1}`,
+        title: input.title ?? 'Terminal chat',
+        titleAuto: input.titleAuto
+      })
+      threads = [...threads, created]
+      return created
+    })
+    const startTurn = vi.fn(async () => ({ turnId: 'turn_1' }))
+    const client = {
+      listThreads: vi.fn(async () => threads),
+      getThread: vi.fn(async (id: string) => threads.find((thread) => thread.id === id)!),
+      subscribeThreadEvents: vi.fn(async (input: { signal: AbortSignal }) => {
+        await new Promise<void>((resolve) => input.signal.addEventListener('abort', () => resolve(), { once: true }))
+      }),
+      createThread,
+      startTurn
+    } as unknown as KunTuiClient
+    const controller = new TuiController(client, { ...options(), continueLatest: false }, runtime)
+    await controller.start()
+
+    await controller.createThread()
+    expect(createThread).toHaveBeenLastCalledWith(expect.objectContaining({
+      title: 'Terminal chat', titleAuto: true
+    }))
+
+    await controller.createThread('Fixed TUI title')
+    expect(createThread).toHaveBeenLastCalledWith(expect.objectContaining({
+      title: 'Fixed TUI title', titleAuto: false
+    }))
+
+    const newController = new TuiController(client, { ...options(), continueLatest: false }, runtime)
+    await newController.submit('Summarize this new conversation')
+    expect(createThread).toHaveBeenLastCalledWith(expect.objectContaining({
+      title: 'Summarize this new conversation', titleAuto: true
+    }))
+
+    await Promise.all([controller.stop(), newController.stop()])
+  })
+
+  it('opens a newly created session before refreshing the session list', async () => {
+    const created = detail({ id: 'thr_new', title: 'New session' })
+    const calls: string[] = []
+    const client = {
+      listThreads: vi.fn(async () => {
+        calls.push('list')
+        return [created]
+      }),
+      createThread: vi.fn(async () => {
+        calls.push('create')
+        return created
+      }),
+      getThread: vi.fn(async () => {
+        calls.push('get')
+        return created
+      }),
+      subscribeThreadEvents: vi.fn(async (input: { signal: AbortSignal }) => {
+        calls.push('subscribe')
+        await new Promise<void>((resolve) => input.signal.addEventListener('abort', () => resolve(), { once: true }))
+      })
+    } as unknown as KunTuiClient
+    const controller = new TuiController(client, { ...options(), continueLatest: false }, runtime)
+    await controller.start()
+    calls.length = 0
+
+    await controller.createThread('New session')
+
+    expect(calls).toEqual(['create', 'get', 'subscribe', 'list'])
+    expect(controller.state.projection?.thread.id).toBe(created.id)
+    await controller.stop()
+  })
+
   it('executes session lifecycle mutations through authoritative runtime routes', async () => {
     let threads = [detail()]
     const compactThread = vi.fn(async () => ({ ok: true }))

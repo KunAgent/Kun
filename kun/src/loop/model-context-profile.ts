@@ -1,5 +1,6 @@
 import type {
   ModelCapabilityMetadata,
+  ModelCatalogPricing,
   ModelInputModality,
   ModelMessagePartSupport,
   ModelReasoningCapabilityMetadata
@@ -28,6 +29,7 @@ export type ModelContextProfile = ModelContextThresholds & {
   supportsToolCalling: boolean
   messageParts: readonly ModelMessagePartSupport[]
   reasoning?: ModelReasoningCapabilityMetadata
+  pricing?: ModelCatalogPricing
   serviceTiers?: readonly ('priority' | 'flex')[]
   endpointFormat?: ModelEndpointFormat
   responsesMode?: 'lite'
@@ -51,6 +53,7 @@ export type ModelContextProfileConfig = {
   supportsToolCalling?: boolean
   messageParts?: readonly ModelMessagePartSupport[]
   reasoning?: ModelReasoningCapabilityMetadata
+  pricing?: ModelCatalogPricing
   serviceTiers?: readonly ('priority' | 'flex')[]
   endpointFormat?: ModelEndpointFormat
   responsesMode?: 'lite'
@@ -71,6 +74,14 @@ export type ContextCompactionConfig = {
   summaryModel?: string
   /** Provider id paired with summaryModel. */
   summaryProviderId?: string
+  /**
+   * Target post-compaction input ratio relative to the model context window
+   * (0 < ratio < 1). The verbatim tail is trimmed to complete turns that fit
+   * this budget so consecutive compactions actually reclaim capacity.
+   */
+  targetInputRatio?: number
+  /** Absolute post-compaction input target in tokens; overrides the ratio when set. */
+  targetInputTokens?: number
   /**
    * @deprecated Model-specific context windows and compaction thresholds belong
    * in top-level models.profiles. This field is still read for compatibility.
@@ -146,6 +157,7 @@ export const MODEL_CONTEXT_PROFILES: readonly ModelContextProfile[] = [
     'deepseek-chat',
     'deepseek-reasoner'
   ]),
+  glmReasoningProfile('glm-5.3-flash', 200_000),
   glmReasoningProfile('glm-5.2', 1_000_000),
   glmReasoningProfile('glm-5.1', 200_000),
   glmReasoningProfile('glm-5', 200_000),
@@ -209,6 +221,7 @@ export function modelCapabilitiesForModel(
     ...(profile?.maxOutputTokens ? { maxOutputTokens: profile.maxOutputTokens } : {}),
     messageParts: [...(profile?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS)],
     ...(profile?.reasoning ? { reasoning: copyReasoningCapability(profile.reasoning) } : {}),
+    ...(profile?.pricing ? { pricing: { ...profile.pricing } } : {}),
     ...(profile?.serviceTiers ? { serviceTiers: [...profile.serviceTiers] } : {}),
     ...(profile?.endpointFormat ? { endpointFormat: profile.endpointFormat } : {}),
     ...(profile?.responsesMode ? { responsesMode: profile.responsesMode } : {})
@@ -511,6 +524,7 @@ function mergeModelContextProfile(
     ...(input.aliases ?? [])
   ])
   const reasoning = input.reasoning ?? current?.reasoning
+  const pricing = input.pricing ?? current?.pricing
   const serviceTiers = input.serviceTiers ?? current?.serviceTiers
   const endpointFormat = input.endpointFormat ?? current?.endpointFormat
   const responsesMode = input.responsesMode ?? current?.responsesMode
@@ -529,6 +543,7 @@ function mergeModelContextProfile(
     ...(reasoning
       ? { reasoning: copyReasoningCapability(reasoning) }
       : {}),
+    ...(pricing ? { pricing: { ...pricing } } : {}),
     ...(serviceTiers ? { serviceTiers: [...serviceTiers] } : {}),
     ...(endpointFormat ? { endpointFormat } : {}),
     ...(responsesMode ? { responsesMode } : {})

@@ -6,6 +6,7 @@ import type {
   ModelProviderTextToSpeechCapabilityV1,
   ModelProviderVideoCapabilityV1
 } from '@shared/app-settings'
+import { sharedProviderMutationCoordinator } from './shared-provider-mutation-coordinator'
 import { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 import {
   defaultImageCapability, defaultMusicCapability,
@@ -28,7 +29,8 @@ export function useProviderProfileMutations(scope: Record<string, any>): Record<
   const activeProvider = scope.activeProvider as ModelProviderProfileV1 | undefined
   const patchProviderProfile = (
     item: ModelProviderProfileV1,
-    transform: (item: ModelProviderProfileV1) => ModelProviderProfileV1
+    transform: (item: ModelProviderProfileV1) => ModelProviderProfileV1,
+    apiKeyOverride?: string
   ): void => {
     if (draftProvider && item.id === draftProvider.id) {
       setDraftProvider(transform(draftProvider))
@@ -39,7 +41,7 @@ export function useProviderProfileMutations(scope: Record<string, any>): Record<
     const transformed = transform(item)
     stageSharedProviderCatalog(item, transformed)
     updateModelProviders(modelProviders.map((existing) => existing.id === item.id
-      ? { ...transformed, apiKey: canonical.apiKey }
+      ? { ...transformed, apiKey: apiKeyOverride ?? canonical.apiKey }
       : existing))
   }
 
@@ -58,22 +60,36 @@ export function useProviderProfileMutations(scope: Record<string, any>): Record<
     ) {
       stageSharedProviderCredential(id, nextCredential)
       const { apiKey: _apiKey, ...withoutCredential } = patch
-      settingsPatch = withoutCredential
+      settingsPatch = nextCredential === ''
+        ? { ...withoutCredential, apiKey: '' }
+        : withoutCredential
     }
+    const nextProvider = { ...target, ...settingsPatch }
     if (
       !draftProvider &&
-      Object.prototype.hasOwnProperty.call(patch, 'name') &&
-      typeof patch.name === 'string' &&
-      patch.name !== target.name
+      (
+        nextProvider.name !== target.name ||
+        nextProvider.baseUrl !== target.baseUrl ||
+        nextProvider.endpointFormat !== target.endpointFormat
+      )
     ) {
+      const generation = sharedProviderMutationCoordinator.profileGeneration + 1
+      sharedProviderMutationCoordinator.profileGeneration = generation
       pendingSharedProviderNames.current.set(id, {
-        localName: patch.name,
-        canonicalName: patch.name.trim() || id,
+        generation,
+        localName: nextProvider.name,
+        canonicalName: nextProvider.name.trim() || id,
+        localBaseUrl: nextProvider.baseUrl,
+        localEndpointFormat: nextProvider.endpointFormat,
         committedRevision: null
       })
     }
     if (Object.keys(settingsPatch).length > 0) {
-      patchProviderProfile(target, (item) => ({ ...item, ...settingsPatch }))
+      patchProviderProfile(
+        target,
+        (item) => ({ ...item, ...settingsPatch }),
+        hasCredentialPatch && nextCredential === '' ? '' : undefined
+      )
     }
   }
 

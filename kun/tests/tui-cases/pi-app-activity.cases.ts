@@ -203,6 +203,13 @@ describe("PiTuiApplication activity and tool rendering", () => {
     expect(submitting).toContain('Sending message')
     expect(submitting).toContain('Old model notice')
 
+    const connecting = renderActivityRow({
+      ...controller.state,
+      connection: 'connecting'
+    }, controller, 100, 0)
+    expect(connecting).toContain('Connecting')
+    expect(connecting).not.toContain('Reconnecting')
+
     const current = detail()
     current.status = 'running'
     current.turns = [{

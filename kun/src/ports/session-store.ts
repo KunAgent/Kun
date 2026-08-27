@@ -3,10 +3,19 @@ import type { RuntimeEvent } from '../contracts/events.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 
+export type SessionUsageQueryOptions = {
+  threadId?: string
+  /** Inclusive ISO-8601 UTC timestamp boundary. Requires `toExclusive`. */
+  fromInclusive?: string
+  /** Exclusive ISO-8601 UTC timestamp boundary. Requires `fromInclusive`. */
+  toExclusive?: string
+}
+
 export type SessionUsageRecord = {
   threadId: string
   turnId?: string
   model?: string
+  providerId?: string
   completedAt: string
   usage: UsageSnapshot
 }
@@ -114,6 +123,18 @@ export interface SessionStore {
   rewriteItems(threadId: string, items: TurnItem[]): Promise<void>
   /** Stage an atomic, human-readable archive before a conditional history rewrite. */
   archiveItems?(input: SessionArchiveInput): Promise<SessionArchiveResult>
+  /**
+   * Replace the persisted event log, keeping only events at or after
+   * `fromSeqInclusive`. Returns the new byte size; implementations must
+   * rewrite atomically and keep `highestSeq()` monotonic.
+   */
+  trimEventsFromSeq?(threadId: string, fromSeqInclusive: number): Promise<{ afterBytes: number }>
+  /**
+   * The earliest event sequence still present in the durable log. Stores
+   * that never trim return 0. SSE clients with cursors below this floor
+   * must re-sync from a fresh state fetch instead of replaying.
+   */
+  eventReplayFloorSeq?(threadId: string): Promise<number>
   /** Load item history and its opaque revision as one consistent snapshot. */
   loadItemSnapshot(threadId: string): Promise<ItemHistorySnapshot>
   /**
@@ -188,7 +209,7 @@ export interface SessionStore {
    * Optional indexed usage query. Implementations may return per-event
    * usage deltas without replaying the full event log.
    */
-  loadUsageRecords?(options?: { threadId?: string }): Promise<SessionUsageRecord[]>
+  loadUsageRecords?(options?: SessionUsageQueryOptions): Promise<SessionUsageRecord[]>
   /** Optional indexed latest cumulative usage snapshot query. */
   loadLatestUsageSnapshots?(options?: { threadIds?: string[] }): Promise<SessionLatestUsageSnapshot[]>
   /** Forget the per-thread in-memory state without touching disk. */

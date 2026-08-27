@@ -17,6 +17,7 @@ import {
   t,
   useChatStore,
   vi,
+  type KunFastContextSettingsV1,
   type KunLabSettingsV1,
   type ModelProviderModelGroup,
   type ModelProviderModelProfileV1, type ModelProviderProfileV1,
@@ -155,20 +156,20 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       .filter((tab) => String(tab.props.id ?? '').startsWith('laboratory-settings-tab-'))
     expect(laboratoryTabs.map(instanceText)).toEqual([
       'Personas',
+      'Conversation visualization',
       'Computer control',
       'Browser',
       'Graph mode',
-      'Fast Context',
       'PPT agent'
     ])
     expect(laboratoryTabs.map((tab) => tab.props['aria-selected']))
       .toEqual([true, false, false, false, false, false])
     expect(laboratoryTabs.map((tab) => tab.props['aria-controls'])).toEqual([
       'laboratory-settings-panel-persona',
+      'laboratory-settings-panel-visualization',
       'laboratory-settings-panel-computer',
       'laboratory-settings-panel-browser',
       'laboratory-settings-panel-graph',
-      'laboratory-settings-panel-explore',
       'laboratory-settings-panel-ppt'
     ])
     expect(laboratoryTabs.every((tab) => tab.props.className.includes('min-w-max'))).toBe(true)
@@ -231,8 +232,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(update).toHaveBeenCalledWith({ codeAgentPersonaEnabled: false })
   })
 
-  it('renders the fast_context lab panel and gates fast mode on Codex priority models', () => {
-    const renderPanel = (value: KunLabSettingsV1) => renderToStaticMarkup(createElement(
+  it('renders the Fast Context assistant panel and gates fast mode on Codex priority models', () => {
+    const renderPanel = (value: KunFastContextSettingsV1) => renderToStaticMarkup(createElement(
       FastContextSettingsPanel,
       {
         t,
@@ -246,27 +247,30 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     ))
 
     const followMain = renderPanel({
-      fastContext: { enabled: true, model: '', providerId: '', fast: false },
-      pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      conversationVisualization: { enabled: false }
+      enabled: true,
+      model: '',
+      providerId: '',
+      fast: false
     })
-    expect(followMain).toContain('Enable fast_context')
+    expect(followMain).toContain('Enable Fast Context')
     expect(followMain).toContain('Follow main model')
     expect(followMain).not.toContain('Codex Fast mode')
 
     const fixed = renderPanel({
-      fastContext: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false },
-      pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      conversationVisualization: { enabled: false }
+      enabled: true,
+      model: 'deepseek-v4-pro',
+      providerId: 'deepseek',
+      fast: false
     })
     expect(fixed).toContain('Use fixed model')
-    expect(fixed).toContain('Explore reasoning effort')
+    expect(fixed).toContain('Fast Context reasoning effort')
     expect(fixed).toContain('Codex Fast mode')
 
     const disabled = renderPanel({
-      fastContext: { enabled: false, model: '', providerId: '', fast: false },
-      pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      conversationVisualization: { enabled: false }
+      enabled: false,
+      model: '',
+      providerId: '',
+      fast: false
     })
     expect(disabled).not.toContain('Follow main model')
   })
@@ -286,7 +290,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     ))
 
     const followMain = renderPanel({
-      fastContext: { enabled: true, model: '', providerId: '', fast: false },
       pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
       conversationVisualization: { enabled: false }
     })
@@ -295,7 +298,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(followMain).not.toContain('Codex Fast mode')
 
     const fixed = renderPanel({
-      fastContext: { enabled: true, model: '', providerId: '', fast: false },
       pptAgent: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false, imageFirst: true },
       conversationVisualization: { enabled: false }
     })
@@ -304,7 +306,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(fixed).toContain('Codex Fast mode')
 
     const disabled = renderPanel({
-      fastContext: { enabled: true, model: '', providerId: '', fast: false },
       pptAgent: { enabled: false, model: '', providerId: '', fast: false, imageFirst: true },
       conversationVisualization: { enabled: false }
     })
@@ -342,9 +343,10 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         renderer = createRenderer(createElement(FastContextSettingsPanel, {
           t,
           value: {
-            fastContext: { enabled: true, model: 'gpt-5.4', providerId: 'codex-2', fast: true },
-            pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
-      conversationVisualization: { enabled: false }
+            enabled: true,
+            model: 'gpt-5.4',
+            providerId: 'codex-2',
+            fast: true
           },
           modelProviders,
           leadProviderId: 'codex-2',

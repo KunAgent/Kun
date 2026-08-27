@@ -1,5 +1,6 @@
 import {
   useMemo,
+  useRef,
   useState,
   type DragEvent as ReactDragEvent,
   type FormEvent,
@@ -22,10 +23,10 @@ import {
 } from './SidebarProjectsSection'
 import { useChatStore } from '../../store/chat-store'
 import {
-  prioritizeSidebarThreadActivity,
   sidebarThreadActivity,
   sidebarThreadsHaveRunningActivity
 } from './sidebar-project-selectors'
+import { createSidebarThreadOrderTracker } from './sidebar-thread-order-tracker'
 import {
   SIDEBAR_THREAD_DRAG_DATA_KEY,
   readSidebarOrderRegistry,
@@ -70,12 +71,14 @@ export function SidebarConversationsSection({
   onRestoreThread,
   t
 }: Props): ReactElement {
+  const orderTracker = useRef(createSidebarThreadOrderTracker()).current
   const { i18n } = useTranslation('common')
   const locale = i18n.language
   const busy = useChatStore((s) => s.busy)
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
+  const awaitingUserInputThreadIds = useChatStore((s) => s.awaitingUserInputThreadIds)
 
   const [collapsed, setCollapsed] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -94,21 +97,29 @@ export function SidebarConversationsSection({
     busy,
     watchTurnCompletion,
     unreadThreadIds,
-    scheduledThreadActivities
-  }), [activeThreadId, busy, scheduledThreadActivities, unreadThreadIds, watchTurnCompletion])
+    scheduledThreadActivities,
+    awaitingUserInputThreadIds
+  }), [activeThreadId, awaitingUserInputThreadIds, busy, scheduledThreadActivities, unreadThreadIds, watchTurnCompletion])
 
-  const allConversationThreads = useMemo(() => sortSidebarThreads(threads.filter((thread) =>
-    isConversationWorkspacePath(thread.workspace, conversationRoot) && thread.archived !== true
-  )), [conversationRoot, threads])
+  const allConversationThreads = useMemo(() => {
+    const savedOrder = sidebarOrder.threadIdsByScope[conversationOrderScope] ?? []
+    const baseThreads = reconcileSidebarThreadOrder(
+      sortSidebarThreads(threads.filter((thread) =>
+        isConversationWorkspacePath(thread.workspace, conversationRoot) && thread.archived !== true
+      )),
+      savedOrder
+    )
+    return orderTracker.reconcile({
+      baselineKey: savedOrder.join('\n'),
+      containerKey: `conversations:${conversationOrderScope}`,
+      context: sidebarThreadActivityContext,
+      threads: baseThreads
+    })
+  }, [conversationOrderScope, conversationRoot, orderTracker, sidebarOrder.threadIdsByScope, sidebarThreadActivityContext, threads])
 
   const conversationThreads = useMemo(() => {
     const query = search.trim().toLowerCase()
-    const ordered = reconcileSidebarThreadOrder(
-      allConversationThreads,
-      sidebarOrder.threadIdsByScope[conversationOrderScope] ?? []
-    )
-    const prioritized = prioritizeSidebarThreadActivity(ordered, sidebarThreadActivityContext)
-    return prioritized.filter((thread) => {
+    return allConversationThreads.filter((thread) => {
       if (!query) return true
       const haystack = [thread.title, thread.preview, thread.workspace]
         .filter(Boolean)
@@ -118,10 +129,7 @@ export function SidebarConversationsSection({
     })
   }, [
     allConversationThreads,
-    conversationOrderScope,
-    search,
-    sidebarOrder.threadIdsByScope,
-    sidebarThreadActivityContext
+    search
   ])
 
   const conversationsHaveRunning = sidebarThreadsHaveRunningActivity(
@@ -233,10 +241,7 @@ export function SidebarConversationsSection({
     if (!sourceId || sourceId === targetThreadId) return
     if (!allConversationThreads.some((thread) => thread.id === sourceId)) return
     event.preventDefault()
-    const orderedIds = reconcileSidebarThreadOrder(
-      allConversationThreads,
-      sidebarOrder.threadIdsByScope[conversationOrderScope] ?? []
-    ).map((thread) => thread.id)
+    const orderedIds = allConversationThreads.map((thread) => thread.id)
     const rect = event.currentTarget.getBoundingClientRect()
     const nextIds = reorderSidebarThreadIds({
       threadIds: orderedIds,
@@ -328,6 +333,7 @@ export function SidebarConversationsSection({
               showRunning={activity === 'running'}
               showFailed={activity === 'failed'}
               showUnread={activity === 'unread'}
+              showAwaitingInput={activity === 'awaiting-input'}
               scheduledActivity={activity === 'scheduled'
                 ? scheduledThreadActivities[thread.id]
                 : undefined}

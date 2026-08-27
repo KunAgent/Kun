@@ -581,6 +581,39 @@ describe('thread event sink runtime errors', () => {
     ])
   })
 
+  it('ignores a stale turn failure that belongs to an older turn', () => {
+    const state = {
+      activeThreadId: 'thr-1',
+      busy: true,
+      currentTurnId: 'turn-2',
+      currentTurnUserId: 'user-2',
+      error: null,
+      liveAssistant: '',
+      liveReasoning: '',
+      turnStartedAtByUserId: { 'user-2': Date.now() - 1000 },
+      turnDurationByUserId: {},
+      turnReasoningFirstAtByUserId: {},
+      turnReasoningLastAtByUserId: {},
+      threads: []
+    } as unknown as ChatState
+    const set = (partial: Partial<ChatState> | ((value: ChatState) => Partial<ChatState>)): void => {
+      Object.assign(state, typeof partial === 'function' ? partial(state) : partial)
+    }
+
+    buildThreadEventSink(set, () => state).onError(new Error('old turn failed'), {
+      terminal: true,
+      scope: 'conversation',
+      threadId: 'thr-1',
+      turnId: 'turn-1',
+      seq: 9
+    })
+
+    expect(state.busy).toBe(true)
+    expect(state.currentTurnId).toBe('turn-2')
+    expect(state.currentTurnUserId).toBe('user-2')
+    expect(state.error).toBeNull()
+  })
+
   it('settles conversation-scoped terminal failures without showing the global banner', () => {
     const blocks: ChatBlock[] = [
       { kind: 'user', id: 'user-1', text: 'work toward goal' },

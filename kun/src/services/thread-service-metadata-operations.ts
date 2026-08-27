@@ -27,6 +27,11 @@ import type {
   SandboxMode
 } from '../contracts/policy.js'
 import type { Turn } from '../contracts/turns.js'
+import {
+  applyThreadCursor,
+  filterThreadSummaries,
+  pageThreadSummaries
+} from '../domain/thread-list-query.js'
 import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
 import {
   createThreadRecord,
@@ -59,6 +64,8 @@ function toThreadStoreListOptions(options: ListThreadsOptions): ThreadStoreListO
   return storeOptions
 }
 
+const DEFAULT_THREAD_PAGE_SIZE = 100
+
 export const threadServiceMetadataOperations = {
 updateRuntimeDefaults(this: ThreadService, input: {
     approvalPolicy: ApprovalPolicy
@@ -83,6 +90,9 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     if (!options.includeSide) {
       threads = threads.filter((thread) => (thread.relation ?? 'primary') !== 'side')
     }
+    if (options.workspace) {
+      threads = threads.filter((thread) => thread.workspace === options.workspace)
+    }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))
     }
@@ -96,34 +106,29 @@ async listPage(this: ThreadService, options: ListThreadsOptions = {}): Promise<T
     // holds (hasMore + total) without breaking existing consumers.
     const store = this['threadStore']
     const storeListPage = store.listPage
-    const storeOptions = toThreadStoreListOptions(options)
-    if (typeof storeListPage === 'function' && (options.cursor || options.workspace || options.limit != null)) {
+    const storeOptions = toThreadStoreListOptions({
+      ...options,
+      limit: options.limit ?? DEFAULT_THREAD_PAGE_SIZE
+    })
+    if (typeof storeListPage === 'function') {
       return storeListPage.call(store, storeOptions)
     }
-    const query = options.search?.trim().toLowerCase()
-    let threads = await store.list({
+    const allThreads = await store.list({
       ...storeOptions,
-      ...(options.limit != null ? {} : { limit: undefined })
+      limit: undefined,
+      cursor: undefined,
+      search: undefined,
+      workspace: undefined,
+      includeArchived: true,
+      archivedOnly: false,
+      includeSide: true
     })
-    if (options.archivedOnly) {
-      threads = threads.filter((thread) => thread.status === 'archived')
-    } else if (!options.includeArchived) {
-      threads = threads.filter((thread) => thread.status !== 'archived' && thread.status !== 'deleted')
-    }
-    if (!options.includeSide) {
-      threads = threads.filter((thread) => (thread.relation ?? 'primary') !== 'side')
-    }
-    if (query) {
-      threads = threads.filter((thread) => matchesThreadSearch(thread, query))
-    }
-    const total = threads.length
-    const pageSize = options.limit ?? total
-    const page = threads.slice(0, pageSize)
-    return {
-      threads: page,
-      hasMore: page.length < total,
-      ...(options.cursor ? {} : { total })
-    }
+    const filtered = filterThreadSummaries(allThreads, storeOptions)
+    return pageThreadSummaries(
+      applyThreadCursor(filtered, options.cursor),
+      storeOptions,
+      filtered.length
+    )
   },
 
 async get(this: ThreadService, threadId: string): Promise<ThreadRecord | null> {

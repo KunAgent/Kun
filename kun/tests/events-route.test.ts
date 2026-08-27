@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { appendFile, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { RuntimeEvent } from '../src/contracts/events.js'
-import { makeGoalContextItem } from '../src/domain/item.js'
+import { makeAssistantTextItem, makeGoalContextItem } from '../src/domain/item.js'
+import { createThreadRecord } from '../src/domain/thread.js'
+import { FileSessionStore } from '../src/adapters/file/file-session-store.js'
+import { InMemoryEventBus } from '../src/adapters/in-memory-event-bus.js'
+import { getThreadTimeline } from '../src/server/routes/threads.js'
+import type { ThreadService } from '../src/services/thread-service.js'
 import type { EventBus } from '../src/ports/event-bus.js'
 import type { SessionStore } from '../src/ports/session-store.js'
 import { ThreadEventStreamRegistry } from '../src/server/thread-event-stream-registry.js'
@@ -58,8 +66,12 @@ describe('event stream replay', () => {
       const decoder = new TextDecoder()
       const first = await reader.read()
       const second = await reader.read()
-      expect(`${decoder.decode(first.value)}${decoder.decode(second.value)}`).toContain('id: 1')
-      expect(`${decoder.decode(first.value)}${decoder.decode(second.value)}`).toContain('id: 2')
+      const third = await reader.read()
+      const text = `${decoder.decode(first.value)}${decoder.decode(second.value)}${decoder.decode(third.value)}`
+      expect(text).toContain('id: 1')
+      expect(text).toContain('id: 2')
+      expect(text.indexOf('id: 1')).toBeLessThan(text.indexOf('event: replay_synchronized'))
+      expect(text.indexOf('event: replay_synchronized')).toBeLessThan(text.indexOf('id: 2'))
     } finally {
       await reader.cancel()
     }
@@ -92,6 +104,7 @@ describe('event stream replay', () => {
       }
       let persisted: RuntimeEvent[] = [hidden]
       const sessionStore = {
+        highestSeq: async () => persisted.at(-1)?.seq ?? 0,
         async *iterateEventsSince(_threadId: string, sinceSeq: number): AsyncIterable<RuntimeEvent> {
           for (const event of persisted) {
             if (event.seq > sinceSeq) yield event
@@ -115,8 +128,9 @@ describe('event stream replay', () => {
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
       const firstReader = first.body!.getReader()
+      const synchronized = await firstReader.read()
       const heartbeat = await firstReader.read()
-      const heartbeatText = new TextDecoder().decode(heartbeat.value)
+      const heartbeatText = `${new TextDecoder().decode(synchronized.value)}${new TextDecoder().decode(heartbeat.value)}`
 
       expect(heartbeatText).toContain('id: 1')
       expect(heartbeatText).toContain('event: heartbeat')
@@ -250,7 +264,9 @@ describe('event stream replay', () => {
 
     const reader = response.body!.getReader()
     const first = await reader.read()
-    expect(new TextDecoder().decode(first.value)).toContain('id: 1')
+    const second = await reader.read()
+    expect(new TextDecoder().decode(first.value)).toContain('event: replay_synchronized')
+    expect(new TextDecoder().decode(second.value)).toContain('id: 1')
     await expect(reader.read()).resolves.toMatchObject({ done: true })
   })
 
@@ -279,7 +295,9 @@ describe('event stream replay', () => {
     expect(unsubscribed).toBe(true)
     const reader = response.body!.getReader()
     const first = await reader.read()
-    expect(new TextDecoder().decode(first.value)).toContain('event: heartbeat')
+    const second = await reader.read()
+    expect(new TextDecoder().decode(first.value)).toContain('event: replay_synchronized')
+    expect(new TextDecoder().decode(second.value)).toContain('event: heartbeat')
     await expect(reader.read()).resolves.toMatchObject({ done: true })
   })
 
@@ -314,8 +332,10 @@ describe('event stream replay', () => {
     })
     const firstReader = first.body!.getReader()
     const firstFrames = [await firstReader.read(), await firstReader.read()]
-    expect(firstFrames.map((frame) => new TextDecoder().decode(frame.value)).join('')).toContain('id: 1')
-    expect(firstFrames.map((frame) => new TextDecoder().decode(frame.value)).join('')).toContain('id: 2')
+    const firstText = firstFrames.map((frame) => new TextDecoder().decode(frame.value)).join('')
+    expect(firstText).toContain('id: 1')
+    expect(firstText).toContain('id: 2')
+    expect(firstText).not.toContain('event: replay_synchronized')
     await expect(firstReader.read()).resolves.toMatchObject({ done: true })
 
     const second = buildEventStreamResponse({
@@ -326,9 +346,93 @@ describe('event stream replay', () => {
     const secondReader = second.body!.getReader()
     const third = await secondReader.read()
     expect(new TextDecoder().decode(third.value)).toContain('id: 3')
+    const synchronized = await secondReader.read()
+    expect(new TextDecoder().decode(synchronized.value)).toContain('event: replay_synchronized')
     await secondReader.cancel()
 
     expect(loadEventsSince).not.toHaveBeenCalled()
-    expect(highestSeq).not.toHaveBeenCalled()
+    expect(highestSeq).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an in-flight event append become the SSE snapshot cursor', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-events-snapshot-'))
+    try {
+      const threadId = 'thr_snapshot_race'
+      const turnId = 'turn_snapshot_race'
+      const store = new FileSessionStore({ dataDir })
+      const first: RuntimeEvent = {
+        kind: 'heartbeat',
+        seq: 1,
+        timestamp: '2026-08-22T00:00:00.000Z',
+        threadId
+      }
+      await store.appendEvent(threadId, first)
+      const item = makeAssistantTextItem({
+        id: 'item_delta',
+        threadId,
+        turnId,
+        text: 'delta',
+        status: 'running'
+      })
+      const second: RuntimeEvent = {
+        kind: 'assistant_text_delta',
+        seq: 2,
+        timestamp: '2026-08-22T00:00:01.000Z',
+        threadId,
+        turnId,
+        itemId: item.id,
+        item
+      }
+      const secondLine = JSON.stringify(second)
+      const splitAt = secondLine.indexOf('"seq":2') + '"seq":2'.length
+      await appendFile(
+        join(dataDir, 'threads', threadId, 'events.jsonl'),
+        secondLine.slice(0, splitAt)
+      )
+      const thread = createThreadRecord({
+        id: threadId,
+        title: 'Snapshot race',
+        workspace: '/tmp',
+        model: 'deepseek-chat',
+        status: 'running'
+      })
+      const service = {
+        get: vi.fn(async () => thread)
+      } as unknown as ThreadService
+
+      const timeline = await getThreadTimeline(
+        service,
+        threadId,
+        new Request(`http://localhost/v1/threads/${threadId}/timeline`),
+        store
+      )
+      const timelineBody = JSON.parse(timeline.body) as { latestSeq: number }
+      expect(timelineBody.latestSeq).toBe(1)
+
+      await appendFile(
+        join(dataDir, 'threads', threadId, 'events.jsonl'),
+        `${secondLine.slice(splitAt)}\n`
+      )
+      const response = buildEventStreamResponse({
+        request: new Request(
+          `http://localhost/v1/threads/${threadId}/events?since_seq=${timelineBody.latestSeq}`
+        ),
+        threadId,
+        eventBus: new InMemoryEventBus(),
+        sessionStore: store
+      })
+      const reader = response.body!.getReader()
+      try {
+        const frame = await reader.read()
+        const text = new TextDecoder().decode(frame.value)
+        expect(text).toContain('id: 2')
+        expect(text).toContain('event: assistant_text_delta')
+        expect(text).toContain('delta')
+      } finally {
+        await reader.cancel()
+      }
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
   })
 })

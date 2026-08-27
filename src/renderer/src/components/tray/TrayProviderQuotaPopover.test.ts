@@ -50,7 +50,8 @@ function createApi(overrides: Partial<KunTrayProviderQuotaApi> = {}): KunTrayPro
     context: vi.fn(async () => ({
       locale: 'en' as const,
       colorMode: 'light' as const,
-      platform: 'win32' as const
+      platform: 'win32' as const,
+      darkUiColors: { background: '#181818', border: '#272727', panel: '#2c2c2c' }
     })),
     action: vi.fn(async () => undefined),
     openExternal: vi.fn(async () => undefined),
@@ -91,7 +92,11 @@ describe('TrayProviderQuotaPopover', () => {
     await i18n.changeLanguage('en')
     keydown = undefined
     vi.stubGlobal('document', {
-      documentElement: { lang: 'en', dataset: {} }
+      documentElement: {
+        lang: 'en',
+        dataset: {},
+        style: { setProperty: vi.fn() }
+      }
     })
     vi.stubGlobal('window', {
       addEventListener: vi.fn((name: string, handler: (event: KeyboardEvent) => void) => {
@@ -139,7 +144,8 @@ describe('TrayProviderQuotaPopover', () => {
       context: vi.fn(async () => ({
         locale: 'zh' as const,
         colorMode: 'dark' as const,
-        platform: 'darwin' as const
+        platform: 'darwin' as const,
+        darkUiColors: { background: '#101010', border: '#202020', panel: '#303030' }
       }))
     })
     let renderer!: ReactTestRenderer
@@ -152,9 +158,49 @@ describe('TrayProviderQuotaPopover', () => {
       theme: 'dark',
       platform: 'darwin'
     })
+    expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
+      '--kun-dark-ui-background',
+      '#101010'
+    )
     await vi.waitFor(() => {
       expect(renderer.root.findByType('main').props['data-context-ready']).toBe('true')
     })
+    await act(async () => renderer.unmount())
+  })
+
+  it('refreshes tray source colors when the settings notification fires', async () => {
+    let publishRefresh: (() => void) | undefined
+    const context = vi.fn()
+      .mockResolvedValueOnce({
+        locale: 'en' as const,
+        colorMode: 'dark' as const,
+        platform: 'win32' as const,
+        darkUiColors: { background: '#101010', border: '#202020', panel: '#303030' }
+      })
+      .mockResolvedValueOnce({
+        locale: 'en' as const,
+        colorMode: 'dark' as const,
+        platform: 'win32' as const,
+        darkUiColors: { background: '#111111', border: '#222222', panel: '#333333' }
+      })
+    const api = createApi({
+      context,
+      onRefresh: vi.fn((handler) => {
+        publishRefresh = handler
+        return () => undefined
+      })
+    })
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(TrayProviderQuotaPopover, { api }))
+    })
+    await act(async () => publishRefresh?.())
+
+    expect(context).toHaveBeenCalledTimes(2)
+    expect(document.documentElement.style.setProperty).toHaveBeenLastCalledWith(
+      '--kun-dark-ui-panel',
+      '#333333'
+    )
     await act(async () => renderer.unmount())
   })
 
@@ -262,8 +308,9 @@ describe('TrayProviderQuotaPopover', () => {
     expect(css).toContain('--tray-bg: #ededed')
     expect(css).toContain('--tray-panel: #f8f8f8')
     expect(css).toContain('--tray-text: #3c3f43')
-    expect(css).toContain('--tray-bg: #2a2828')
-    expect(css).toContain('--tray-panel: #312f2f')
+    expect(css).toContain('--tray-bg: var(--kun-dark-ui-background, #181818)')
+    expect(css).toContain('--tray-panel: var(--kun-dark-ui-panel, #2c2c2c)')
+    expect(css).toContain('--tray-border: var(--kun-dark-ui-border, #272727)')
     expect(css).toContain('--tray-text: #d4d4d4')
     expect(css).toContain('--tray-radius-control: 8px')
     expect(css).toContain('--tray-radius-card: 12px')
@@ -276,6 +323,6 @@ describe('TrayProviderQuotaPopover', () => {
     expect(css).not.toMatch(/font-size:\s*(?:8(?:\.5)?|9(?:\.5)?|10(?:\.5)?)px/)
     expect(css).not.toMatch(/font-weight:\s*(?:5[1-9]\d|6\d{2}|7\d{2})/)
     expect(contrastRatio('#686b72', '#f8f8f8')).toBeGreaterThanOrEqual(4.5)
-    expect(contrastRatio('#999ba0', '#312f2f')).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio('#999ba0', '#2c2c2c')).toBeGreaterThanOrEqual(4.5)
   })
 })

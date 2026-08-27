@@ -19,7 +19,7 @@ export function RuntimeMigrationRecoveryView(): React.JSX.Element {
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await window.kunGui.runtimeDataRecovery.getStatus())
+      setStatus(await window.kunRuntimeDataRecovery.getStatus())
     } catch (cause) {
       setError(messageOf(cause))
     }
@@ -39,19 +39,19 @@ export function RuntimeMigrationRecoveryView(): React.JSX.Element {
     try {
       if (action === 'restore') {
         if (!candidateId) return
-        setStatus(await window.kunGui.runtimeDataRecovery.execute({
+        setStatus(await window.kunRuntimeDataRecovery.execute({
           action,
           generation: status.generation,
           candidateId
         }))
       } else if (action === 'initialize-new-install') {
-        setStatus(await window.kunGui.runtimeDataRecovery.execute({
+        setStatus(await window.kunRuntimeDataRecovery.execute({
           action,
           generation: status.generation,
           confirmation: 'initialize-empty-new-install'
         }))
       } else {
-        setStatus(await window.kunGui.runtimeDataRecovery.execute({
+        setStatus(await window.kunRuntimeDataRecovery.execute({
           action,
           generation: status.generation,
           confirmation: 'preserve-existing-evidence-and-start-over'

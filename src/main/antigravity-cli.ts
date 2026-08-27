@@ -198,7 +198,7 @@ const ANTIGRAVITY_EFFORT_ORDER: readonly AntigravityReasoningEffort[] = [
 export function parseAntigravityModels(stdout: string): AntigravitySubscriptionModelCatalog {
   const models = new Map<string, Set<AntigravityReasoningEffort>>()
   for (const line of stdout.split(/\r?\n/)) {
-    const rawModel = line.trim()
+    const [rawModel = ''] = line.trim().split(/\s+/, 1)
     if (
       !rawModel
       || rawModel.length > ANTIGRAVITY_MODEL_ID_MAX_LENGTH

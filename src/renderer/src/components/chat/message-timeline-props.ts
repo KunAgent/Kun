@@ -3,6 +3,7 @@ import type { JsonValue } from '@kun/extension-api'
 import type { ChatBlock, RuntimeConnectionStatus } from '../../agent/types'
 import type { RegisteredContribution } from '../../extensions/contribution-registry'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
+import type { GuiPlanToolMeta } from '../../plan/plan-tool'
 import type { EmptyTaskSurfaceControl } from './message-timeline-empty'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
 
@@ -21,8 +22,8 @@ export type MessageTimelineProps = {
   devPreviewCard?: ReactElement | null
   planActionsBusy?: boolean
   graphEnabled?: boolean
-  onBuildPlan?: (orchestration: PlanBuildOrchestration) => void
-  onOpenPlan?: () => void
+  onBuildPlan?: (orchestration: PlanBuildOrchestration, meta?: GuiPlanToolMeta) => void
+  onOpenPlan?: (meta?: GuiPlanToolMeta) => void
   onOpenChanges?: () => void
   onReviewChanges?: () => void
   reviewChangesDisabled?: boolean

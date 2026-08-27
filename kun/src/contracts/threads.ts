@@ -12,9 +12,12 @@ import {
   DesignDocumentTargetSchema,
   DesignTaskProfileSchema
 } from './design-task-profile.js'
+import { ThreadRetentionPolicySchema } from './thread-retention.js'
 
 export const ThreadStatus = z.enum(['idle', 'running', 'archived', 'deleted'])
 export type ThreadStatus = z.infer<typeof ThreadStatus>
+
+export const THREAD_RUNTIME_STATE_SCHEMA_VERSION = 1
 
 /**
  * Small runtime-facing projection for background status checks.  Unlike the
@@ -22,10 +25,13 @@ export type ThreadStatus = z.infer<typeof ThreadStatus>
  * it safe to poll while another conversation is selected.
  */
 export const ThreadRuntimeStateSchema = z.object({
+  schemaVersion: z.literal(THREAD_RUNTIME_STATE_SCHEMA_VERSION),
   id: z.string().min(1),
   status: ThreadStatus,
   updatedAt: z.string(),
   latestSeq: z.number().int().nonnegative(),
+  /** Live request ids that still require a user response. */
+  pendingUserInputIds: z.array(z.string().min(1)),
   latestTurn: z.object({
     id: z.string().min(1),
     status: TurnStatus,
@@ -33,6 +39,67 @@ export const ThreadRuntimeStateSchema = z.object({
   }).nullable()
 })
 export type ThreadRuntimeState = z.infer<typeof ThreadRuntimeStateSchema>
+
+/**
+ * Wire reader for state forwarded by another execution owner. Older runtimes
+ * predate both the version marker and live user-input projection; accept only
+ * those two omissions, then normalize the result through the strict schema.
+ */
+export const CompatibleThreadRuntimeStateSchema = ThreadRuntimeStateSchema.extend({
+  schemaVersion: z.literal(THREAD_RUNTIME_STATE_SCHEMA_VERSION).optional(),
+  pendingUserInputIds: z.array(z.string().min(1)).optional().default([])
+})
+
+export function normalizeThreadRuntimeStateWire(
+  value: unknown
+): ThreadRuntimeState {
+  return ThreadRuntimeStateSchema.parse({
+    schemaVersion: THREAD_RUNTIME_STATE_SCHEMA_VERSION,
+    ...CompatibleThreadRuntimeStateSchema.parse(value)
+  })
+}
+
+export const THREAD_RUNTIME_STATE_BATCH_MAX_IDS = 200
+export const THREAD_RUNTIME_STATE_BATCH_CONCURRENCY = 4
+
+export const ThreadRuntimeStateBatchRequestSchema = z.object({
+  threadIds: z.array(z.string().trim().min(1))
+    .min(1)
+    .max(THREAD_RUNTIME_STATE_BATCH_MAX_IDS)
+}).strict()
+export type ThreadRuntimeStateBatchRequest = z.infer<typeof ThreadRuntimeStateBatchRequestSchema>
+
+export const ThreadRuntimeStateBatchResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    id: z.string().min(1),
+    ok: z.literal(true),
+    state: ThreadRuntimeStateSchema
+  }),
+  z.object({
+    id: z.string().min(1),
+    ok: z.literal(false),
+    error: z.object({
+      // `unavailable` stays the generic bucket; the finer codes exist so logs
+      // and operators can tell owner/schema/storage failures apart. Renderers
+      // should keep showing a single "state unavailable" affordance.
+      code: z.enum([
+        'not_found',
+        'unavailable',
+        'owner_unreachable',
+        'owner_error',
+        'schema_incompatible',
+        'storage_error'
+      ]),
+      message: z.string().min(1)
+    })
+  })
+])
+export type ThreadRuntimeStateBatchResult = z.infer<typeof ThreadRuntimeStateBatchResultSchema>
+
+export const ThreadRuntimeStateBatchResponseSchema = z.object({
+  results: z.array(ThreadRuntimeStateBatchResultSchema).max(THREAD_RUNTIME_STATE_BATCH_MAX_IDS)
+})
+export type ThreadRuntimeStateBatchResponse = z.infer<typeof ThreadRuntimeStateBatchResponseSchema>
 
 export const THREAD_TIMELINE_MAX_ITEMS = 300
 export const THREAD_TIMELINE_MAX_ITEM_BYTES = 4 * 1024 * 1024
@@ -279,6 +346,8 @@ export type DesignCloneOperation = z.infer<typeof DesignCloneOperationSchema>
 
 export const ThreadSchemaBase = z.object({
   id: z.string().min(1),
+  /** Internal optimistic-concurrency version; defaults for legacy records. */
+  revision: z.number().int().nonnegative().optional(),
   title: z.string(),
   /**
    * Whether the current title was auto-derived (client-side first-message
@@ -360,6 +429,7 @@ export const ThreadSchemaBase = z.object({
   forkedFromTurnCount: z.number().int().nonnegative().optional(),
   goal: ThreadGoalSchema.optional(),
   todos: ThreadTodoListSchema.optional(),
+  retentionPolicy: ThreadRetentionPolicySchema.optional(),
   /**
    * ISO timestamp of the last time this thread was auto-resumed after a
    * runtime restart. Used as a cooldown gate so a crash loop cannot burn

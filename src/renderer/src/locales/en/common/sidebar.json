@@ -1,6 +1,10 @@
 {
+  "threadRefreshing": "Refreshing…",
   "sidebarWorkspaceLoading": "Loading threads…",
   "sidebarWorkspaceLoadError": "Failed to load threads.",
   "threadHydrationLoadingTitle": "Loading conversation…",
-  "threadHydrationLoadingDescription": "Reading messages and restoring the latest conversation state."
+  "threadHydrationLoadingDescription": "Reading messages and restoring the latest conversation state.",
+  "threadHydrationTakingLongTitle": "Conversation recovery is taking longer",
+  "threadHydrationTakingLongDescription": "The event stream has not caught up yet. You can retry the connection.",
+  "threadHydrationRetry": "Retry connection"
 }

@@ -1,5 +1,6 @@
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import type { DesignArtifact } from '../design-types'
+import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 import {
   extractSvgArtifactCreateSpecsFromValue,
   isDesignCanvasToolName,
@@ -159,5 +160,88 @@ export async function applySvgArtifactToolBlock(
   } finally {
     if (sharedSvgApplyTasks.get(sharedKey) === task) sharedSvgApplyTasks.delete(sharedKey)
     options.processingBlockIds.delete(block.id)
+  }
+}
+
+export type ApplySvgToolBlockWithQueueOptions = {
+  block: ToolBlock
+  allowLegacy?: boolean
+  sourceTurnId?: string
+  onRequest?: SvgArtifactRequestHandler
+  chatState: {
+    currentTurnId: string | null
+    busy: boolean
+    blocks: readonly ChatBlock[]
+  }
+  artifacts: readonly DesignArtifact[]
+  appliedBlockIds: Set<string>
+  processingBlockIds: Set<string>
+  pendingBlocks: Map<string, ToolBlock>
+  svgSourceTurnIds: Map<string, string>
+  retryCounts: Map<string, number>
+  scheduleDrain: (delay?: number) => void
+  ensureBarrier: (turnId: string) => { pendingSvgBlockIds: Set<string> } | null
+  commitWatermarks: () => void
+  onApplied: (shapeIds: string[]) => void
+}
+
+/**
+ * Apply a design_svg_create tool block with queue/backoff semantics used by the
+ * live canvas hook. Kept here so the hook stays under the file-line budget.
+ */
+export async function applySvgToolBlockWithQueue(
+  options: ApplySvgToolBlockWithQueueOptions
+): Promise<void> {
+  const { block, onRequest } = options
+  if (!onRequest) return
+  const sourceTurnId = options.sourceTurnId ?? options.svgSourceTurnIds.get(block.id) ?? ''
+  const result = await applySvgArtifactToolBlock({
+    block,
+    allowLegacy: options.allowLegacy ?? false,
+    busy: Boolean(
+      options.chatState.currentTurnId ||
+      options.chatState.busy ||
+      threadHasPendingRuntimeWork([...options.chatState.blocks])
+    ),
+    blocks: options.chatState.blocks,
+    artifacts: options.artifacts,
+    appliedBlockIds: options.appliedBlockIds,
+    processingBlockIds: options.processingBlockIds,
+    onDefer: (deferred) => {
+      options.pendingBlocks.set(deferred.id, deferred)
+      options.scheduleDrain()
+    },
+    onRequest
+  }).catch(() => ({ status: 'failed' as const, shapeIds: [] as string[] }))
+  if (result.shapeIds.length > 0) {
+    options.onApplied(result.shapeIds)
+  }
+  if ((result.status === 'applied' || result.status === 'ignored') && sourceTurnId) {
+    options.ensureBarrier(sourceTurnId)?.pendingSvgBlockIds.delete(block.id)
+    options.svgSourceTurnIds.delete(block.id)
+    options.commitWatermarks()
+  } else if (result.status === 'failed' && sourceTurnId) {
+    markFailedSvgForRetry({
+      blockId: block.id,
+      block,
+      retryCounts: options.retryCounts,
+      pendingBlocks: options.pendingBlocks,
+      schedule: () => options.scheduleDrain(400)
+    })
+  }
+}
+
+function markFailedSvgForRetry(options: {
+  blockId: string
+  block: ToolBlock
+  retryCounts: Map<string, number>
+  pendingBlocks: Map<string, ToolBlock>
+  schedule: () => void
+}): void {
+  const retries = (options.retryCounts.get(options.blockId) ?? 0) + 1
+  options.retryCounts.set(options.blockId, retries)
+  if (retries < 2) {
+    options.pendingBlocks.set(options.blockId, options.block)
+    options.schedule()
   }
 }

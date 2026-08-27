@@ -44,11 +44,13 @@
     "extensionAgents": {
       "title": "Extension agents",
       "description": "Agents beyond the base set · {{count}}",
-      "enabled": "Enabled",
+      "enabled": "All enabled",
+      "partial": "{{enabled}}/{{count}} enabled",
       "disabled": "Disabled",
       "toggle": "Toggle extension agents",
       "keepBaseOnly": "Keep base agents only",
       "enableExtensions": "Enable extension agents",
+      "enableAllExtensions": "Enable all extension agents",
       "baseAlwaysAvailable": "Base agents are always available"
     },
     "category": {

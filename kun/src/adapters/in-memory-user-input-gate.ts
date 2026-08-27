@@ -2,7 +2,8 @@ import type {
   UserInputGate,
   UserInputRequest,
   UserInputResolution,
-  UserInputResolutionClaim
+  UserInputResolutionClaim,
+  UserInputResolveResult
 } from '../ports/user-input-gate.js'
 
 type PendingResolver = {
@@ -42,29 +43,38 @@ export class InMemoryUserInputGate implements UserInputGate {
         if (closed) return false
         closed = true
         if (!this.resolutionClaims.delete(inputId)) return false
-        return this.settle(inputId, resolution)
+        return this.settle(inputId, resolution) === 'settled'
       },
       release: () => {
         if (closed) return false
         closed = true
-        return this.resolutionClaims.delete(inputId)
+        if (!this.resolutionClaims.delete(inputId)) return false
+        this.settleExpiredDeadline(inputId)
+        return true
       }
     }
   }
 
-  resolve(inputId: string, resolution: UserInputResolution): boolean {
-    if (this.resolutionClaims.has(inputId)) return false
+  resolve(inputId: string, resolution: UserInputResolution): UserInputResolveResult {
+    if (this.resolutionClaims.has(inputId)) return 'claimed'
     return this.settle(inputId, resolution)
   }
 
-  private settle(inputId: string, resolution: UserInputResolution): boolean {
+  private settleExpiredDeadline(inputId: string): void {
     const request = this.requests.get(inputId)
-    if (!request) return false
+    if (request?.deadlineAtMs !== undefined && Date.now() >= request.deadlineAtMs) {
+      this.settle(inputId, { status: 'timeout' })
+    }
+  }
+
+  private settle(inputId: string, resolution: UserInputResolution): UserInputResolveResult {
+    const request = this.requests.get(inputId)
+    if (!request) return 'missing'
     this.requests.delete(inputId)
     const resolver = this.resolvers.get(inputId)
     this.resolvers.delete(inputId)
     resolver?.resolve(resolution)
-    return true
+    return 'settled'
   }
 
   pending(threadId?: string): UserInputRequest[] {

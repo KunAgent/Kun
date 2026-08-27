@@ -269,7 +269,11 @@ export function writeReport(
     salvaged: journal.salvaged,
     conflicts: journal.conflicts,
     completedAt: journal.completedAt,
-    runtimeVerifiedAt: journal.runtimeVerifiedAt
+    runtimeVerifiedAt: journal.runtimeVerifiedAt,
+    runtimeVerificationAttempts: journal.runtimeVerificationAttempts,
+    runtimeVerificationLastAttemptAt: journal.runtimeVerificationLastAttemptAt,
+    runtimeVerificationMissingThreadIds: journal.runtimeVerificationMissingThreadIds,
+    runtimeVerificationStoppedAt: journal.runtimeVerificationStoppedAt
   })
   return reportPath
 }

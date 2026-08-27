@@ -126,6 +126,8 @@
   "modelProviderCustomBadge": "Пользовательский",
   "modelProviderTokenPlanBadge": "План токенов",
   "modelProviderPlanBadge": "Тариф",
+  "modelProviderFreeBadge": "Бесплатно",
+  "modelProviderGroupFree": "Бесплатно",
   "modelProviderGroupPlans": "Тарифы подписки",
   "modelProviderSubscriptionRegions": "Регионы подписки",
   "modelProviderSubscriptionRegionAll": "Все",

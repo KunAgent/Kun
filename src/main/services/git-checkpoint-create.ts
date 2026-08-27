@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { dirname, basename, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -17,7 +17,7 @@ import {
   collectReferencedCheckpointIds,
   pruneThreadCheckpoints
 } from './git-checkpoint-cleanup'
-import { ensureQuotaForCreate } from './git-checkpoint-quota'
+import { checkpointsTotalBytes, ensureQuotaForCreate } from './git-checkpoint-quota'
 import {
   CHECKPOINT_GATE_DIRECTORY,
   DEFAULT_MAX_CHECKPOINTS_PER_THREAD,
@@ -39,6 +39,15 @@ import {
   writeHeadBundle,
   writePatch
 } from './git-checkpoint-foundation'
+
+const checkpointCreateQueues = new Map<string, Promise<unknown>>()
+
+async function withCheckpointRootLock<T>(root: string, task: () => Promise<T>): Promise<T> {
+  const previous = checkpointCreateQueues.get(root) ?? Promise.resolve()
+  const run = previous.catch(() => undefined).then(task)
+  checkpointCreateQueues.set(root, run)
+  try { return await run } finally { if (checkpointCreateQueues.get(root) === run) checkpointCreateQueues.delete(root) }
+}
 
 export async function createGitCheckpoint(params: {
   dataDir: string
@@ -88,11 +97,25 @@ export async function createGitCheckpointSnapshot(params: {
   deferRetention?: boolean
   storage?: GitCheckpointStorageOptions
 }): Promise<GitCheckpointCreateResult> {
+  const root = resolveCheckpointsRoot(params.dataDir, params.storage?.checkpointsRoot)
+  return withCheckpointRootLock(root, () => createGitCheckpointSnapshotUnlocked(params, root))
+}
+
+async function createGitCheckpointSnapshotUnlocked(params: {
+  dataDir: string
+  workspaceRoot: string
+  threadId: string
+  checkpointId: string
+  deferRetention?: boolean
+  storage?: GitCheckpointStorageOptions
+}, root: string): Promise<GitCheckpointCreateResult> {
+  const stagingId = `.staging-${randomUUID()}`
+  const finalId = params.checkpointId
+  const stagingDir = checkpointDir(root, stagingId)
   const workspaceRoot = params.workspaceRoot.trim()
   if (!workspaceRoot) {
     return { ok: false, reason: 'no_workspace', message: 'No working directory selected.' }
   }
-  const root = resolveCheckpointsRoot(params.dataDir, params.storage?.checkpointsRoot)
   const maxFileBytes = params.storage?.maxUntrackedFileBytes ?? DEFAULT_MAX_UNTRACKED_FILE_BYTES
   const maxTotalBytes = params.storage?.maxUntrackedTotalBytes ?? DEFAULT_MAX_UNTRACKED_TOTAL_BYTES
   const maxPerThread = params.storage?.maxPerThread ?? DEFAULT_MAX_CHECKPOINTS_PER_THREAD
@@ -103,27 +126,10 @@ export async function createGitCheckpointSnapshot(params: {
     }
     await assertNoUnmerged(repositoryRoot)
 
-    // Global disk quota (issue #1156): per-thread caps alone cannot bound the
-    // store while referenced bundles are kept. Evict the oldest checkpoints
-    // (referenced or not) to make room; when the cap still cannot be met, skip
-    // creating this snapshot instead of growing past the quota.
-    const quotaDecision = await ensureQuotaForCreate({
-      root,
-      quota: {
-        ...(params.storage?.maxTotalBytes !== undefined ? { maxTotalBytes: params.storage.maxTotalBytes } : {}),
-        ...(params.storage?.minFreeDiskBytes !== undefined ? { minFreeDiskBytes: params.storage.minFreeDiskBytes } : {})
-      },
-      // Worst-case projection: a full HEAD bundle plus the untracked budget.
-      // A shared/deduplicated bundle layout (M2) shrinks this.
-      projectedNewBytes: 512 * 1_024 * 1_024 + maxTotalBytes,
-      protectIds: new Set([params.checkpointId])
-    })
-    if (!quotaDecision.allowed) {
-      return { ok: false, reason: 'quota_exceeded', message: quotaDecision.message }
-    }
-
-    const checkpointId = params.checkpointId
-    const dir = checkpointDir(root, checkpointId)
+    await mkdir(root, { recursive: true })
+    const checkpointId = stagingId
+    const dir = stagingDir
+    await rm(checkpointDir(root, finalId), { recursive: true, force: true })
     await rm(dir, { recursive: true, force: true })
     await mkdir(join(dir, 'untracked'), { recursive: true })
 
@@ -172,7 +178,7 @@ export async function createGitCheckpointSnapshot(params: {
     }
 
     const metadata: GitCheckpointMetadata = {
-      checkpointId,
+      checkpointId: finalId,
       threadId: params.threadId,
       repositoryRoot,
       workspaceRoot,
@@ -185,20 +191,37 @@ export async function createGitCheckpointSnapshot(params: {
     }
     await writeFile(join(dir, 'metadata.json'), JSON.stringify(metadata, null, 2), 'utf-8')
     const manifest = await createCheckpointManifestV1({ metadata, workspaceRoot })
-    await writeFile(manifestPath(root, checkpointId), JSON.stringify(manifest, null, 2), 'utf-8')
+    await writeFile(manifestPath(root, stagingId), JSON.stringify(manifest, null, 2), 'utf-8')
+    const stagedBytes = await checkpointsTotalBytes(stagingDir)
+    const quotaDecision = await ensureQuotaForCreate({
+      root,
+      quota: params.storage,
+      projectedNewBytes: 0,
+      protectIds: new Set([stagingId])
+    })
+    if (stagedBytes > (params.storage?.maxTotalBytes ?? Number.MAX_SAFE_INTEGER)) {
+      await rm(stagingDir, { recursive: true, force: true })
+      return { ok: false, reason: 'quota_exceeded', message: `Git checkpoint needs ${stagedBytes} bytes, exceeding the configured quota.` }
+    }
+    if (!quotaDecision.allowed) {
+      await rm(stagingDir, { recursive: true, force: true })
+      return { ok: false, reason: 'quota_exceeded', message: quotaDecision.message }
+    }
+    await rename(stagingDir, checkpointDir(root, finalId))
     // The snapshot is already safe to use. Retention is maintenance work and
     // must not hold the first mutating tool behind a full thread-history scan.
     const runRetention = async (): Promise<void> => {
       const referenced = await collectReferencedCheckpointIds(params.dataDir)
-      await pruneThreadCheckpoints(root, params.threadId, maxPerThread, checkpointId, referenced)
+      await pruneThreadCheckpoints(root, params.threadId, maxPerThread, finalId, referenced)
     }
     if (params.deferRetention === true) {
       scheduleDeferredRetention(`${root}:${params.threadId}`, runRetention)
     } else {
       await runRetention().catch(() => undefined)
     }
-    return { ok: true, checkpointId, repositoryRoot, head, currentBranch }
+    return { ok: true, checkpointId: finalId, repositoryRoot, head, currentBranch }
   } catch (error) {
+    await rm(stagingDir, { recursive: true, force: true }).catch(() => undefined)
     const failure = checkpointFailure(error)
     if (/merge conflicts/i.test(failure.message)) {
       return { ...failure, reason: 'conflict' }

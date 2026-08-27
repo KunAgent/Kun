@@ -13,20 +13,15 @@ import '@xterm/xterm/css/xterm.css'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import {
-  TERMINAL_DEFAULT_COLS,
-  TERMINAL_DEFAULT_ROWS
-} from '@shared/terminal'
-import {
-  defaultTerminalColors,
-  type TerminalColorSettingsV1
-} from '@shared/app-settings'
+import { TERMINAL_DEFAULT_COLS, TERMINAL_DEFAULT_ROWS } from '@shared/terminal'
+import { defaultTerminalColors, type TerminalColorSettingsV1 } from '@shared/app-settings'
 import type { RemoteSshHost } from '@shared/remote-ssh'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 import { terminalBackend } from './terminal-backend'
 import { terminalSessionIdForWorkspace, terminalWorkspaceSessionKey } from './terminal-session'
 import { TerminalTabContextMenu } from './TerminalTabContextMenu'
+import { TerminalNewTabMenu, type TerminalNewTabMenuAnchor } from './TerminalNewTabMenu'
 import {
   FIT_DEBOUNCE_MS,
   INITIAL_TAB_ID,
@@ -34,6 +29,7 @@ import {
   TERMINAL_FONT_FAMILY,
   TERMINAL_FONT_SIZE,
   TERMINAL_SCROLLBACK,
+  attachTerminalClipboardKeys,
   initialTerminalTabState,
   resolveTerminalTheme,
   type TerminalTab,
@@ -78,7 +74,8 @@ export function TerminalPanel({
   const [renameValue, setRenameValue] = useState('')
   const [terminalBackground, setTerminalBackground] = useState<string | null>(null)
   const [remoteHosts, setRemoteHosts] = useState<RemoteSshHost[]>([])
-  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [newTabMenuAnchor, setNewTabMenuAnchor] = useState<TerminalNewTabMenuAnchor | null>(null)
+  const newTabButtonRef = useRef<HTMLButtonElement | null>(null)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
   const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const workspaceTabStatesRef = useRef<Record<string, TerminalTabState>>({})
@@ -225,6 +222,7 @@ export function TerminalPanel({
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.loadAddon(new WebLinksAddon())
+    attachTerminalClipboardKeys(term)
     term.open(container)
     termRef.current = term
     fitRef.current = fit
@@ -368,6 +366,26 @@ export function TerminalPanel({
   }, [contextMenu])
 
   useEffect(() => {
+    if (!newTabMenuAnchor) return
+    const close = (): void => setNewTabMenuAnchor(null)
+    const onPointerDown = (event: PointerEvent): void => {
+      // Let the anchor button's own click toggle the menu closed; otherwise
+      // pointerdown would close it and the click would immediately reopen.
+      if (event.target instanceof Node && newTabButtonRef.current?.contains(event.target)) return
+      close()
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [newTabMenuAnchor])
+
+  useEffect(() => {
     if (!renamingTabId) return
     requestAnimationFrame(() => {
       renameInputRef.current?.focus()
@@ -385,12 +403,20 @@ export function TerminalPanel({
     }
     setTabs((current) => [...current, tab])
     setActiveTabId(tab.id)
-    setNewTabMenuOpen(false)
+    setNewTabMenuAnchor(null)
   }, [tabs.length])
 
   const handleNewTab = useCallback(() => {
     createTab({ kind: 'local' })
   }, [createTab])
+
+  const toggleNewTabMenu = useCallback((): void => {
+    setNewTabMenuAnchor((current) => {
+      if (current) return null
+      const rect = newTabButtonRef.current?.getBoundingClientRect()
+      return rect ? { x: rect.left, y: rect.top } : null
+    })
+  }, [])
 
   const handleCloseTab = useCallback((tabId: string) => {
     const closingIndex = tabs.findIndex((tab) => tab.id === tabId)
@@ -536,8 +562,7 @@ export function TerminalPanel({
                       if (event.key === 'Enter') {
                         event.preventDefault()
                         commitRenameTab()
-                      }
-                      if (event.key === 'Escape') {
+                      } else if (event.key === 'Escape') {
                         event.preventDefault()
                         cancelRenameTab()
                       }
@@ -552,8 +577,7 @@ export function TerminalPanel({
                     ref={(node) => {
                       tabButtonRefs.current[tab.id] = node
                     }}
-                    aria-selected={active}
-                    onClick={() => setActiveTabId(tab.id)}
+                    aria-selected={active} onClick={() => setActiveTabId(tab.id)}
                     onPointerDownCapture={(event) => openTabContextMenuOnSecondaryPointer(event, tab.id)}
                     onContextMenu={(event) => openTabContextMenu(event, tab.id)}
                     className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left"
@@ -567,8 +591,7 @@ export function TerminalPanel({
                 {tabs.length > 1 ? (
                   <button
                     type="button"
-                    aria-label={t('terminalCloseTab')}
-                    title={t('terminalCloseTab')}
+                    aria-label={t('terminalCloseTab')} title={t('terminalCloseTab')}
                     onClick={(event) => {
                       event.stopPropagation()
                       handleCloseTab(tab.id)
@@ -583,54 +606,27 @@ export function TerminalPanel({
           })}
           <div className="relative mb-1 shrink-0">
             <button
-              type="button"
-              onClick={() => setNewTabMenuOpen((open) => !open)}
+              type="button" ref={newTabButtonRef} onClick={toggleNewTabMenu}
               disabled={tabs.length >= MAX_RENDERER_TABS}
               className="flex h-7 w-7 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label={t('terminalNewTab')}
-              aria-expanded={newTabMenuOpen}
-              title={t('terminalNewTab')}
+              aria-label={t('terminalNewTab')} aria-expanded={newTabMenuAnchor !== null} title={t('terminalNewTab')}
             >
               <Plus className="h-4 w-4" strokeWidth={1.8} />
             </button>
-            {newTabMenuOpen ? (
-              <div className="absolute bottom-9 left-0 z-50 min-w-56 rounded-xl border border-ds-border bg-ds-card p-1.5 text-[12px] shadow-xl">
-                <button type="button" onClick={handleNewTab} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-ds-ink hover:bg-ds-hover">
-                  <TerminalSquare className="h-4 w-4" />
-                  {t('terminalNewLocalTab', { defaultValue: 'Local terminal' })}
-                </button>
-                {remoteHosts.map((host) => (
-                  <button
-                    key={host.id}
-                    type="button"
-                    onClick={() => createTab({ kind: 'ssh', hostId: host.id, hostName: host.label })}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-ds-ink hover:bg-ds-hover"
-                  >
-                    <Server className="h-4 w-4" />
-                    <span className="min-w-0"><span className="block truncate">SSH · {host.label}</span><span className="block truncate text-[10px] text-ds-muted">{host.username}@{host.hostname}</span></span>
-                  </button>
-                ))}
-                {remoteHosts.length === 0 ? <p className="px-3 py-2 text-ds-muted">{t('terminalNoSshServers', { defaultValue: 'Add an SSH server in Terminal settings.' })}</p> : null}
-              </div>
-            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 px-3">
           <button
-            type="button"
-            onClick={() => void handleRestart()}
+            type="button" onClick={() => void handleRestart()}
             className="rounded-full p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-            aria-label={t('terminalRestart')}
-            title={t('terminalRestart')}
+            aria-label={t('terminalRestart')} title={t('terminalRestart')}
           >
             <RotateCw className="h-4 w-4" strokeWidth={1.75} />
           </button>
           <button
-            type="button"
-            onClick={onCollapse}
+            type="button" onClick={onCollapse}
             className="rounded-full p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-            aria-label={t('rightPanelCollapse')}
-            title={t('rightPanelCollapse')}
+            aria-label={t('rightPanelCollapse')} title={t('rightPanelCollapse')}
           >
             <X className="h-4 w-4" strokeWidth={1.85} />
           </button>
@@ -643,6 +639,18 @@ export function TerminalPanel({
               onRename={() => startRenameTab(contextMenu.tabId)}
               onCloseOthers={() => handleCloseOtherTabs(contextMenu.tabId)}
               onCloseAll={handleCloseAllTabs}
+              t={t}
+            />,
+            document.body
+          )
+        ) : null}
+        {newTabMenuAnchor ? (
+          createPortal(
+            <TerminalNewTabMenu
+              anchor={newTabMenuAnchor}
+              remoteHosts={remoteHosts}
+              onNewLocalTab={handleNewTab}
+              onNewSshTab={(host) => createTab({ kind: 'ssh', hostId: host.id, hostName: host.label })}
               t={t}
             />,
             document.body

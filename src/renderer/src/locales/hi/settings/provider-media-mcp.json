@@ -126,6 +126,8 @@
   "modelProviderCustomBadge": "कस्टम",
   "modelProviderTokenPlanBadge": "टोकन योजना",
   "modelProviderPlanBadge": "योजना",
+  "modelProviderFreeBadge": "निःशुल्क",
+  "modelProviderGroupFree": "निःशुल्क",
   "modelProviderGroupPlans": "सदस्यता योजनाएँ",
   "modelProviderSubscriptionRegions": "सदस्यता योजना क्षेत्र",
   "modelProviderSubscriptionRegionAll": "सभी",

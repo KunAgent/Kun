@@ -228,10 +228,10 @@ export function CopyFeedbackButton({
       onClick={() => void handleCopy()}
       title={label}
       aria-label={label}
-      className={`flex shrink-0 items-center rounded-md transition ${
+      className={`flex shrink-0 items-center transition ${
         iconOnly
-          ? 'gap-0 p-1 hover:bg-ds-hover'
-          : 'gap-1 px-1.5 py-0.5 hover:bg-ds-hover'
+          ? 'gap-0 rounded-full p-1.5 hover:bg-ds-hover'
+          : 'gap-1 rounded-md px-1.5 py-0.5 hover:bg-ds-hover'
       } ${
         success
           ? 'text-emerald-500'
@@ -365,17 +365,19 @@ export function UserInputBubble({
       ? t('userInputSubmitted')
       : block.status === 'cancelled'
         ? t('userInputCancelled')
-        : block.status === 'error'
-          ? t('userInputFailed')
-          : pending
-            ? t('userInputPending')
-            : t('userInputCancelled')
+        : block.status === 'timeout'
+          ? t('userInputTimedOut')
+          : block.status === 'error'
+            ? t('userInputFailed')
+            : pending
+              ? t('userInputPending')
+              : t('userInputCancelled')
   const tone =
     block.status === 'error'
       ? 'error'
       : block.status === 'submitted'
         ? 'success'
-        : block.status === 'cancelled'
+        : block.status === 'cancelled' || block.status === 'timeout'
           ? 'muted'
           : pending
             ? 'active'

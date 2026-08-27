@@ -1,5 +1,10 @@
 import type { Router } from '../router.js'
 import {
+  normalizeThreadRuntimeStateWire,
+  type ThreadRuntimeState
+} from '../../contracts/threads.js'
+import { ThreadStateLoadError } from './thread-state-error.js'
+import {
   createThread,
   clearThreadGoal,
   clearThreadTodos,
@@ -9,16 +14,23 @@ import {
   getThreadTodos,
   getThread,
   getThreadState,
+  getThreadStates,
   getThreadTimeline,
+  loadThreadRuntimeState,
   listThreads,
   setThreadGoal,
   setThreadTodos,
   updateThread
 } from './threads.js'
+import { deleteThreadsByWorkspace } from './threads-bulk-delete.js'
 import { contentSearchThreads } from './thread-content-search.js'
 import { summarizeThread } from './threads-summarize.js'
 import {
   compactTurn,
+  pruneThread,
+  previewThreadPrune,
+  listThreadSnapshots,
+  restoreThreadSnapshot,
   cancelToolCall,
   getSteeringQueue,
   getTurn,
@@ -38,6 +50,7 @@ import { usageJsonResponse } from './usage.js'
 import { listProviderQuotas } from './provider-quotas.js'
 import { llmDebugRoundsResponse } from './debug-llm.js'
 import { modelRequestsResponse } from './model-requests.js'
+import { jsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import type { ApprovalConsentVerifier } from '../approval-consent.js'
@@ -46,6 +59,8 @@ import {
   getThreadKnowledgeBases,
   reindexThreadKnowledgeBase
 } from './knowledge-bases.js'
+
+export const THREAD_RUNTIME_STATE_OWNER_TIMEOUT_MS = 3_000
 
 export function registerThreadRoutes(
   router: Router,
@@ -60,10 +75,20 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return createThread(runtime.threadService, request)
   })
+  router.add('POST', '/v1/threads/bulk-delete', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return deleteThreadsByWorkspace(runtime.threadService, request)
+  })
   // Static content-search suffix must be registered before `/:id`.
   router.add('GET', '/v1/threads/content-search', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return contentSearchThreads(runtime.threadService, runtime.sessionStore, request)
+  })
+  // Static batch suffix must stay before the generic `/:id` detail route.
+  router.add('POST', '/v1/threads/states', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getThreadStates(request, (threadId) =>
+      loadOwnerAwareThreadState(runtime, request, threadId))
   })
   // This static suffix must be registered before `/:id`, because Router uses
   // first-match ordering for parameterized paths.
@@ -71,7 +96,12 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     const forwarded = await runtime.forwardThreadControl?.(request, ctx.params.id)
     if (forwarded) return forwarded
-    return getThreadState(runtime.threadService, ctx.params.id, runtime.sessionStore)
+    return getThreadState(
+      runtime.threadService,
+      ctx.params.id,
+      runtime.sessionStore,
+      runtime.userInputGate
+    )
   })
   router.add('GET', '/v1/threads/:id/timeline', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -243,6 +273,32 @@ export function registerThreadRoutes(
       ctx.params.callId
     )
   })
+  router.add('POST', '/v1/threads/:id/prune', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return pruneThread(runtime.turnService, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/threads/:id/prune/preview', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return previewThreadPrune(runtime.turnService, ctx.params.id, request)
+  })
+  router.add('GET', '/v1/threads/:id/snapshots', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return listThreadSnapshots(runtime.turnService, ctx.params.id)
+  })
+  router.add('GET', '/v1/threads/:id/health', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.sessionGuardian) return ERRORS.unavailable('session guardian is not available')
+    return jsonResponse(await runtime.sessionGuardian.scanThread(ctx.params.id))
+  })
+  router.add('GET', '/v1/session-health', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.sessionGuardian) return ERRORS.unavailable('session guardian is not available')
+    return jsonResponse({ threads: await runtime.sessionGuardian.scanAll() })
+  })
+  router.add('POST', '/v1/threads/:id/snapshots/:snapshotId/restore', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return restoreThreadSnapshot(runtime.turnService, ctx.params.id, ctx.params.snapshotId)
+  })
   router.add('POST', '/v1/threads/:id/compact', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return compactTurn(runtime.turnService, ctx.params.id, request)
@@ -329,4 +385,56 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return llmDebugRoundsResponse(runtime)
   })
+}
+
+async function loadOwnerAwareThreadState(
+  runtime: ServerRuntime,
+  batchRequest: Request,
+  threadId: string
+): Promise<ThreadRuntimeState | null> {
+  const stateUrl = new URL(
+    `/v1/threads/${encodeURIComponent(threadId)}/state`,
+    batchRequest.url
+  )
+  const headers = new Headers(batchRequest.headers)
+  headers.delete('content-length')
+  headers.delete('content-type')
+  const signal = AbortSignal.any([
+    batchRequest.signal,
+    AbortSignal.timeout(THREAD_RUNTIME_STATE_OWNER_TIMEOUT_MS)
+  ])
+  const stateRequest = new Request(stateUrl, {
+    method: 'GET',
+    headers,
+    signal
+  })
+  let forwarded: Response | null | undefined
+  try {
+    forwarded = await runtime.forwardThreadControl?.(stateRequest, threadId)
+  } catch (error) {
+    throw new ThreadStateLoadError('owner_unreachable', 'owner_forward', { cause: error })
+  }
+  if (forwarded) {
+    if (forwarded.status === 404) return null
+    if (!forwarded.ok) {
+      throw new ThreadStateLoadError('owner_error', 'owner_response', {
+        httpStatus: forwarded.status
+      })
+    }
+    try {
+      return normalizeThreadRuntimeStateWire(await forwarded.json())
+    } catch (error) {
+      throw new ThreadStateLoadError('schema_incompatible', 'schema_parse', { cause: error })
+    }
+  }
+  try {
+    return await loadThreadRuntimeState(
+      runtime.threadService,
+      threadId,
+      runtime.sessionStore,
+      runtime.userInputGate
+    )
+  } catch (error) {
+    throw new ThreadStateLoadError('storage_error', 'metadata', { cause: error })
+  }
 }

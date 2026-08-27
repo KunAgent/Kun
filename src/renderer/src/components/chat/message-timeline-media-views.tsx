@@ -20,6 +20,8 @@ import {
   mediaMime,
   mediaName,
   mediaPath,
+  mediaTileDisplaySize,
+  mediaTileFitConstraints,
   mergeMediaReferences,
   metaGeneratedFileReferences,
   useMediaPreviews,
@@ -47,6 +49,7 @@ export function MediaPreviewTile({
   const workspaceRoot = timelineWorkspaceRoot || globalWorkspaceRoot
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false)
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null)
   const unavailable = 'availability' in media && media.availability === 'unavailable'
   const title = mediaName(media)
   const filePath = mediaPath(media)
@@ -60,6 +63,11 @@ export function MediaPreviewTile({
         : userMediaTileClass(mediaCount)
   const revealClass = variant === 'user' ? '' : ' ds-media-printer-reveal'
   const mediaClass = `h-full w-full ${variant === 'tool' ? 'object-contain' : 'object-cover'}`
+  // Fitted tiles adapt to the image's natural aspect ratio (contain, no crop)
+  // once the intrinsic size is known; before that the legacy fixed tile keeps
+  // the layout stable.
+  const fitConstraints = mediaTileFitConstraints(variant, mediaCount)
+  const fittedImageSize = naturalSize ? mediaTileDisplaySize(naturalSize, fitConstraints) : null
   const canSave = !unavailable && Boolean(filePath || dataUrlPayload(previewUrl))
   const canOpenArtifact = !unavailable && Boolean(
     media.artifactId && media.ownerExtensionId && media.ownerExtensionVersion &&
@@ -140,8 +148,19 @@ export function MediaPreviewTile({
   }
 
   if (previewUrl && mediaIsImage(media)) {
+    const fittedFigureClass =
+      'group relative block shrink-0 overflow-hidden rounded-lg border border-ds-border-muted bg-ds-card shadow-sm'
+    const figureClass = fittedImageSize ? fittedFigureClass : tileClass
+    const figureStyle = fittedImageSize
+      ? { width: `${fittedImageSize.width}px`, height: `${fittedImageSize.height}px` }
+      : undefined
     return (
-      <figure className={`${tileClass}${revealClass} relative`} title={title} {...extensionAttachmentContext}>
+      <figure
+        className={`${figureClass}${revealClass} relative`}
+        style={figureStyle}
+        title={title}
+        {...extensionAttachmentContext}
+      >
         <button
           type="button"
           onClick={() => setImagePreviewOpen(true)}
@@ -149,7 +168,18 @@ export function MediaPreviewTile({
           title={t('imagePreviewOpen', { name: title })}
           aria-label={t('imagePreviewOpen', { name: title })}
         >
-          <img src={previewUrl} alt={title} className={mediaClass} loading="lazy" />
+          <img
+            src={previewUrl}
+            alt={title}
+            className={fittedImageSize ? 'block h-full w-full object-contain' : mediaClass}
+            loading="lazy"
+            onLoad={(event) => {
+              const image = event.currentTarget
+              if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+                setNaturalSize({ width: image.naturalWidth, height: image.naturalHeight })
+              }
+            }}
+          />
         </button>
         {variant === 'user' ? null : (
           <button

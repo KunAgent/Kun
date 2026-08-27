@@ -1,10 +1,12 @@
 import {
   documentLanguageForAppLocale,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  normalizeDarkUiColors,
   normalizeChatContentMaxWidth,
   normalizeUiFontScale,
   writeFontStackFor,
   type ChatContentMaxWidthPx,
+  type DarkUiColorsPatchV1,
   type UiFontScale,
   type WriteTypographySettingsV1
 } from '@shared/app-settings'
@@ -46,6 +48,14 @@ export function applyTheme(pref: ThemePreference): void {
   }
 
   apply()
+}
+
+export function applyDarkUiColors(colors?: DarkUiColorsPatchV1 | null): void {
+  const normalized = normalizeDarkUiColors(colors)
+  const root = document.documentElement.style
+  root.setProperty('--kun-dark-ui-background', normalized.background)
+  root.setProperty('--kun-dark-ui-border', normalized.border)
+  root.setProperty('--kun-dark-ui-panel', normalized.panel)
 }
 
 export function applyUiFontScale(scale: UiFontScale): void {

@@ -85,6 +85,9 @@ export function TrayProviderQuotaPopover({
     document.documentElement.lang = context.locale
     document.documentElement.dataset.theme = context.colorMode
     document.documentElement.dataset.platform = context.platform
+    document.documentElement.style.setProperty('--kun-dark-ui-background', context.darkUiColors.background)
+    document.documentElement.style.setProperty('--kun-dark-ui-border', context.darkUiColors.border)
+    document.documentElement.style.setProperty('--kun-dark-ui-panel', context.darkUiColors.panel)
     if (i18n.resolvedLanguage !== context.locale) {
       await i18n.changeLanguage(context.locale)
     }
@@ -527,7 +530,7 @@ function QuotaMetricDetail({
       {metric.resetsAt ? (
         <p className="tray-quota-reset">
           <Clock3 aria-hidden="true" />
-          {t('providerQuotaResetsAt', { time: formatQuotaDate(metric.resetsAt, locale) })}
+          {t(metric.id === 'reset-credits' ? 'providerQuotaEarliestExpiry' : 'providerQuotaResetsAt', { time: formatQuotaDate(metric.resetsAt, locale) })}
         </p>
       ) : null}
     </article>

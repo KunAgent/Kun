@@ -126,6 +126,8 @@
   "modelProviderCustomBadge": "กำหนดเอง",
   "modelProviderTokenPlanBadge": "แผนโทเค็น",
   "modelProviderPlanBadge": "แผน",
+  "modelProviderFreeBadge": "ฟรี",
+  "modelProviderGroupFree": "ฟรี",
   "modelProviderGroupPlans": "แผนการสมัครสมาชิก",
   "modelProviderSubscriptionRegions": "ภูมิภาคแพ็กเกจสมัครสมาชิก",
   "modelProviderSubscriptionRegionAll": "ทั้งหมด",

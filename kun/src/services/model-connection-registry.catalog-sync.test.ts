@@ -171,7 +171,7 @@ describe('ModelConnectionRegistry', () => {
       expect((await value.materialize()).selected).toBeUndefined()
     })
 
-  it('atomically migrates the legacy Gemini subscription transport without changing identity or default', async () => {
+  it('migrates the legacy Gemini subscription transport without changing identity or default', async () => {
       const { dataDir, value } = await registry()
       const codex = await value.connect({
         expectedRevision: 0,
@@ -225,7 +225,7 @@ describe('ModelConnectionRegistry', () => {
       }])
 
       expect(migrated).toMatchObject({
-        revision: legacy.revision + 1,
+        revision: legacy.revision + 2,
         defaultProviderId: 'codex',
         defaultAccountId: 'account:codex',
         defaultModel: 'gpt-5.6-luna'

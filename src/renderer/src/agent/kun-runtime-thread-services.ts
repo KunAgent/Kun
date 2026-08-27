@@ -20,6 +20,7 @@ import {
   KUN_RUNTIME_INFO_PATH,
   KUN_RUNTIME_TOOLS_PATH,
   KUN_SKILLS_PATH,
+  KUN_THREAD_STATES_PATH,
   kunThreadCompactPath,
   kunThreadEventsPath,
   kunThreadForkPath,
@@ -76,10 +77,15 @@ import type {
   CoreThreadGoalResponseJson,
   CoreThreadJson,
   CoreThreadRuntimeStateJson,
+  CoreThreadRuntimeStateBatchResponseJson,
   CoreThreadTimelineJson,
   CoreThreadSummaryJson,
   CoreThreadTodosResponseJson
 } from './kun-contract'
+import type {
+  ThreadRuntimeState,
+  ThreadRuntimeStateBatchResult
+} from './provider-types'
 import {
   buildQuery,
   chatBlockFromItem,
@@ -99,6 +105,35 @@ import {
 } from './kun-runtime-services'
 
 export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
+  async getThreadState(threadId: string): Promise<ThreadRuntimeState> {
+    const response = await rendererRuntimeClient.runtimeRequest(kunThreadStatePath(threadId), 'GET')
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread state'))
+    }
+    return runtimeStateFromCore(readRuntimeJson<CoreThreadRuntimeStateJson>(
+      response.body,
+      'runtime returned an invalid thread state response'
+    ))
+  }
+
+  async getThreadStates(threadIds: string[]): Promise<ThreadRuntimeStateBatchResult[]> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      KUN_THREAD_STATES_PATH,
+      'POST',
+      JSON.stringify({ threadIds })
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread states'))
+    }
+    const body = readRuntimeJson<CoreThreadRuntimeStateBatchResponseJson>(
+      response.body,
+      'runtime returned an invalid thread states response'
+    )
+    return body.results.map((result) => result.ok
+      ? { id: result.id, ok: true, state: runtimeStateFromCore(result.state) }
+      : result)
+  }
+
   async rewindThread(threadId: string, turnId: string): Promise<void> {
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadRewindPath(threadId),
@@ -299,6 +334,24 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'delete thread failed'))
     }
+  }
+
+  async deleteThreadsByWorkspace(workspace: string): Promise<string[]> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      '/v1/threads/bulk-delete',
+      'POST',
+      JSON.stringify({ workspace })
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'delete workspace threads failed'))
+    }
+    const body = readRuntimeJson<{ deletedIds?: unknown }>(
+      response.body,
+      'runtime returned an invalid workspace thread deletion response'
+    )
+    return Array.isArray(body.deletedIds)
+      ? body.deletedIds.filter((id): id is string => typeof id === 'string')
+      : []
   }
 
   async compactThread(threadId: string, reason?: string): Promise<{ replacedTokens: number }> {
@@ -508,4 +561,20 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     }
   }
 
+}
+
+function runtimeStateFromCore(state: CoreThreadRuntimeStateJson): ThreadRuntimeState {
+  return {
+    status: state.status,
+    updatedAt: state.updatedAt,
+    latestSeq: state.latestSeq,
+    pendingUserInputIds: state.pendingUserInputIds,
+    ...(state.latestTurn
+      ? {
+          latestTurnId: state.latestTurn.id,
+          latestTurnStatus: state.latestTurn.status,
+          latestTurnOrchestration: state.latestTurn.orchestration
+        }
+      : {})
+  }
 }

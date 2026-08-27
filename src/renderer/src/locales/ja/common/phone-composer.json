@@ -342,6 +342,7 @@
   "composerVoiceMicDenied": "マイクへのアクセスが拒否されました。システム設定で許可して、もう一度試してください。",
   "composerVoiceTooShort": "録音が短すぎました。もう少し待ってください。",
   "composerVoiceFailed": "音声文字起こしに失敗しました: {{message}}",
+  "composerDismissError": "エラーを閉じる",
   "composerImageUnavailable": "このランタイムでは画像入力は利用できません。",
   "composerAttachmentUnavailable": "添付ファイルのアップロードは利用できません。",
   "composerDropFilesHere": "離すとこの会話にファイルを追加します",

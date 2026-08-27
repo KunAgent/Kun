@@ -340,7 +340,7 @@ describe("PiTuiApplication composer and paste handling", () => {
         busyLabel: 'Sending message'
       })
       expect(client.createThread).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'Explain this repository', workspace: '/tmp/project'
+        title: 'Explain this repository', titleAuto: true, workspace: '/tmp/project'
       }))
       expect(startTurn).toHaveBeenCalledWith('thr_pi', expect.objectContaining({
         prompt: 'Explain this repository'

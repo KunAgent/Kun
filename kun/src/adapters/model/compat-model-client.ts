@@ -96,10 +96,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     request: ModelRequest,
     round: LlmDebugRound | null
   ): AsyncIterable<ModelStreamChunk> {
-    if (request.abortSignal.aborted) {
-      yield { kind: 'error', message: 'request was aborted before start' }
-      return
-    }
+    if (request.abortSignal.aborted) return
     const requestModel = request.model?.trim() || this.config.model
     // Resolve the wire format per request model: a single provider (e.g.
     // OpenCode Go) can route some models to chat completions and others to
@@ -180,7 +177,6 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         }
         const aborted = await sleepWithAbort(delayMs, request.abortSignal)
         if (aborted || request.abortSignal.aborted) {
-          yield { kind: 'error', message: 'request was aborted during retry backoff' }
           return
         }
         transportRetryAttempt = nextAttempt
@@ -230,13 +226,15 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       }
       const aborted = await sleepWithAbort(delayMs, request.abortSignal)
       if (aborted || request.abortSignal.aborted) {
-        yield { kind: 'error', message: 'request was aborted during retry backoff' }
         return
       }
       transportRetryAttempt += 1
       result = await post(body, 'transport_retry')
     }
     if (result.kind === 'error') {
+      // Abort (user stop / tool cancel / host shutdown) owns the terminal
+      // outcome. Do not surface the racing transport error as a turn failure.
+      if (request.abortSignal.aborted) return
       yield {
         kind: 'error',
         message: result.message,

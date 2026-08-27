@@ -11,6 +11,7 @@ import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { FloatingComposer } from '../chat/FloatingComposer'
 import { ConversationFileDropZone } from '../chat/ConversationFileDropZone'
 import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
+import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
 import {
   GraphChildSessionBar,
   SubagentReturnBar,
@@ -26,8 +27,11 @@ import type { JsonValue } from '@kun/extension-api'
 import type { RegisteredContribution } from '../../extensions/contribution-registry'
 import { DeclarativeActionBar } from '../../extensions/ControlledContributionSurfaces'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
+import type { GuiPlanToolMeta } from '../../plan/plan-tool'
 import { useChatStore } from '../../store/chat-store'
+import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
 import { shouldUseEmptyTaskLayout } from './workbench-chat-layout'
+import { CircleHelp, Loader2 } from 'lucide-react'
 
 const TerminalPanel = lazy(() =>
   import('../terminal/TerminalPanel').then((module) => ({ default: module.TerminalPanel }))
@@ -66,8 +70,8 @@ export type WorkbenchChatStageProps = {
   onRetryConnection: () => void
   onOpenSettings: () => void
   onSelectSuggestion: (text: string) => void
-  onBuildPlan: (orchestration: PlanBuildOrchestration) => void
-  onOpenPlan: () => void
+  onBuildPlan: (orchestration: PlanBuildOrchestration, meta?: GuiPlanToolMeta) => void
+  onOpenPlan: (meta?: GuiPlanToolMeta) => void
   onOpenChanges: () => void
   onReviewChanges: () => void
   reviewChangesDisabled: boolean
@@ -153,6 +157,7 @@ export function WorkbenchChatStage({
 }: WorkbenchChatStageProps): ReactElement {
   const { t } = useTranslation('common')
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
+  const threadRefreshingId = useChatStore((state) => state.threadRefreshingId)
   const effectiveConversationDropWorkspaceRoot = normalizeWorkspaceRoot(conversationDropWorkspaceRoot)
   const canComposeForConversationDrop =
     composerProps.fileReferenceEnabled === true &&
@@ -221,10 +226,27 @@ export function WorkbenchChatStage({
                   compact
                 />
               ) : null}
-              {busy ? (
-                <span className="inline-flex shrink-0 rounded-full bg-amber-500/16 px-2.5 py-1 text-[11.5px] font-semibold text-amber-950 dark:text-amber-100">
-                  {t('running')}
+              {threadRefreshingId === activeThreadId ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground"
+                  role="status"
+                  aria-label={t('sidebar:threadRefreshing')}
+                >
+                  <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden="true" />
+                  {t('sidebar:threadRefreshing')}
                 </span>
+              ) : null}
+              {busy ? (
+                hasLivePendingUserInput(blocks) ? (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/25 px-2.5 py-1 text-[11.5px] font-semibold text-amber-950 motion-safe:animate-pulse dark:text-amber-100">
+                    <CircleHelp className="h-3 w-3" strokeWidth={2.2} aria-hidden="true" />
+                    {t('awaitingYourInput')}
+                  </span>
+                ) : (
+                  <span className="inline-flex shrink-0 rounded-full bg-amber-500/16 px-2.5 py-1 text-[11.5px] font-semibold text-amber-950 dark:text-amber-100">
+                    {t('running')}
+                  </span>
+                )
               ) : null}
               <WorkbenchTopActions
                 terminalOpen={terminalOpen}
@@ -251,7 +273,7 @@ export function WorkbenchChatStage({
             options={conversationFileDropOptions}
           >
             <LazyMessageTimeline
-              fallback={<WorkbenchPaneFallback />}
+              fallback={activeThreadId ? <ThreadHydrationLoading /> : <WorkbenchPaneFallback />}
               blocks={blocks}
               liveReasoning={liveReasoning}
               live={liveAssistant}

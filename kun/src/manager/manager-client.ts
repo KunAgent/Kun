@@ -1,10 +1,5 @@
-import { randomBytes, randomUUID } from 'node:crypto'
-import { closeSync, openSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { spawn } from 'node:child_process'
 import { z } from 'zod'
 import {
   RuntimeFlavorSchema,
@@ -14,10 +9,6 @@ import {
   type RuntimeRegistration,
   type ThreadExecutionLease
 } from '../contracts/runtime-flavor.js'
-import {
-  ThreadExecutionBusyError,
-  type ThreadExecutionLeasePort
-} from '../ports/thread-execution-lease.js'
 import { GraphRunConflictError } from '../graph/graph-run-store.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
 import {
@@ -36,9 +27,15 @@ import {
 } from './manager-discovery.js'
 import { sameCanonicalPath } from './canonical-path.js'
 import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-lease.js'
+import { ManagerResourceLeaseSchema, type ManagerResourceFence } from './resource-lease-state.js'
+import type { ManagerRequestOptions } from './manager-client-support.js'
 import {
   resolveServiceManager
 } from './manager-resolution.js'
+import {
+  launchServiceManagerProcess,
+  type ManagerLaunchOverride
+} from './manager-launch.js'
 export {
   resolveServiceManager,
   resolveServiceManagerForMigration
@@ -49,6 +46,7 @@ const LEGACY_HANDOVER_TIMEOUT_MS = 5 * 60_000
 export type ServiceManagerConnection = {
   discovery: ManagerDiscoveryRecord
 }
+export { ManagerThreadExecutionLeaseClient } from './manager-thread-execution-lease-client.js'
 
 export class ManagerRevisionConflictError extends Error {
   constructor(readonly currentRevision: number) {
@@ -100,12 +98,7 @@ export class ManagerRevisionedDocumentClient {
 }
 
 export class ManagerResourceLeaseClient {
-  private readonly resources = new Map<string, {
-    held: boolean
-    timer: ReturnType<typeof setInterval>
-    onAcquired: () => void | Promise<void>
-    onLost: () => void | Promise<void>
-  }>()
+  private readonly resources = new Map<string, ResourceLeaseState>()
 
   constructor(
     private readonly manager: ServiceManagerConnection,
@@ -119,9 +112,12 @@ export class ManagerResourceLeaseClient {
     onLost: () => void | Promise<void>
   }): Promise<boolean> {
     if (this.resources.has(input.resource)) throw new Error(`resource lease already maintained: ${input.resource}`)
-    const timer = setInterval(() => void this.tick(input.resource), 3_000)
-    timer.unref?.()
-    this.resources.set(input.resource, { held: false, timer, ...input })
+    this.resources.set(input.resource, {
+      held: false,
+      generation: 0,
+      inFlight: false,
+      ...input
+    })
     await this.tick(input.resource)
     return this.resources.get(input.resource)?.held === true
   }
@@ -130,52 +126,98 @@ export class ManagerResourceLeaseClient {
     const resources = [...this.resources.entries()]
     this.resources.clear()
     await Promise.all(resources.map(async ([resource, state]) => {
-      clearInterval(state.timer)
-      if (state.held) await this.release(resource).catch(() => undefined)
+      state.generation += 1
+      if (state.timer) clearTimeout(state.timer)
+      if (state.held && state.fence) await this.release(resource, state.fence).catch(() => undefined)
     }))
   }
 
   private async tick(resource: string): Promise<void> {
     const state = this.resources.get(resource)
-    if (!state) return
+    if (!state || state.inFlight) return
+    const generation = ++state.generation
+    const fence = state.fence
+    state.inFlight = true
     try {
+      const endpoint = fence ? 'renew' : 'acquire'
       const body = await requestManagerJson(
         this.manager,
-        `/v1/leases/resources/${encodeURIComponent(resource)}/acquire`,
+        `/v1/leases/resources/${encodeURIComponent(resource)}/${endpoint}`,
         {
           method: 'POST',
-          body: { ownerFlavor: this.flavor, ownerInstanceId: this.instanceId }
+          body: fence ?? { ownerFlavor: this.flavor, ownerInstanceId: this.instanceId }
         }
       )
-      const acquired = z.object({ acquired: z.boolean() }).parse(body).acquired
+      if (!this.isCurrent(resource, state, generation)) return
+      const parsed = fence
+        ? z.object({ lease: ManagerResourceLeaseSchema }).parse(body)
+        : z.object({ acquired: z.boolean(), lease: ManagerResourceLeaseSchema }).parse(body)
+      const acquired = 'acquired' in parsed ? parsed.acquired : true
+      if (acquired && state.fence && parsed.lease.fencingToken < state.fence.fencingToken) return
+      if (acquired) state.fence = fenceOf(parsed.lease)
       if (acquired && !state.held) {
         state.held = true
         await state.onAcquired()
       } else if (!acquired && state.held) {
         state.held = false
+        state.fence = undefined
         await state.onLost()
       }
     } catch {
+      if (!this.isCurrent(resource, state, generation)) return
       if (state.held) {
         state.held = false
+        state.fence = undefined
         await state.onLost()
       }
+    } finally {
+      state.inFlight = false
+      if (this.isCurrent(resource, state, generation)) this.scheduleTick(resource, state)
     }
   }
 
-  private async release(resource: string): Promise<void> {
+  private isCurrent(resource: string, state: ResourceLeaseState, generation: number): boolean {
+    return this.resources.get(resource) === state && state.generation === generation
+  }
+
+  private scheduleTick(resource: string, state: ResourceLeaseState): void {
+    if (state.timer) clearTimeout(state.timer)
+    state.timer = setTimeout(() => void this.tick(resource), 3_000)
+    state.timer.unref?.()
+  }
+
+  private async release(resource: string, fence: ManagerResourceFence): Promise<void> {
     await requestManagerJson(
       this.manager,
       `/v1/leases/resources/${encodeURIComponent(resource)}/release`,
       {
         method: 'POST',
-        body: { ownerFlavor: this.flavor, ownerInstanceId: this.instanceId }
+        body: fence
       }
     )
   }
 }
 
-export async function ensureServiceManager(input: {
+type ResourceLeaseState = {
+  held: boolean
+  fence?: ManagerResourceFence
+  timer?: ReturnType<typeof setTimeout>
+  generation: number
+  inFlight: boolean
+  onAcquired: () => void | Promise<void>
+  onLost: () => void | Promise<void>
+}
+
+function fenceOf(lease: z.infer<typeof ManagerResourceLeaseSchema>): ManagerResourceFence {
+  return {
+    resource: lease.resource,
+    ownerFlavor: lease.ownerFlavor,
+    ownerInstanceId: lease.ownerInstanceId,
+    fencingToken: lease.fencingToken
+  }
+}
+
+export type EnsureServiceManagerInput = {
   flavor: RuntimeFlavor
   controlDir?: string
   fetch?: typeof fetch
@@ -184,13 +226,20 @@ export async function ensureServiceManager(input: {
   buildId?: string
   dataDir: string
   settingsPath?: string
-  launch?: {
-    command: string
-    args: string[]
-    env?: NodeJS.ProcessEnv
-    runAsNode?: boolean
-  }
-}): Promise<ServiceManagerConnection> {
+  launch?: ManagerLaunchOverride
+  /** Progress sink for the legacy production Runtime handover wait. */
+  onLegacyHandoverStatus?: (status: LegacyRuntimeHandoverStatus) => void
+}
+
+export type LegacyRuntimeHandoverStatus =
+  | { kind: 'idle' }
+  | { kind: 'waiting'; activeTurnCount: number }
+  | { kind: 'shutdown-requested' }
+  | { kind: 'released' }
+
+export async function ensureServiceManager(
+  input: EnsureServiceManagerInput
+): Promise<ServiceManagerConnection> {
   const controlDir = input.controlDir ?? defaultKunControlDir()
   const settingsPath = input.settingsPath ?? defaultProductionSettingsPath()
   const fetchImpl = input.fetch ?? fetch
@@ -203,80 +252,67 @@ export async function ensureServiceManager(input: {
     }
     return existing
   }
+  assertManagerBootstrapAllowed(input)
+  return withManagerStartLock(
+    controlDir,
+    () => ensureServiceManagerWithStartLockHeld(input)
+  )
+}
+
+/** Caller must already hold withManagerStartLock for this control directory. */
+export async function ensureServiceManagerWithStartLockHeld(
+  input: EnsureServiceManagerInput
+): Promise<ServiceManagerConnection> {
+  const controlDir = input.controlDir ?? defaultKunControlDir()
+  const settingsPath = input.settingsPath ?? defaultProductionSettingsPath()
+  const fetchImpl = input.fetch ?? fetch
+  const elected = await resolveServiceManager(controlDir, fetchImpl)
+  if (elected) {
+    if (!managerOwnsPaths(elected.discovery, input.dataDir, settingsPath)) {
+      throw new Error('Kun Service Manager owns a different canonical data or settings path')
+    }
+    return elected
+  }
+  assertManagerBootstrapAllowed(input)
+  const stale = await readManagerDiscovery(controlDir).catch(() => null)
+  if (stale && !processIsAlive(stale.pid)) {
+    await removeManagerDiscovery(controlDir, stale.instanceId).catch(() => undefined)
+  } else if (stale) {
+    throw new Error(`Kun Service Manager process ${stale.pid} is alive but unavailable`)
+  }
+  // The Manager owns the canonical data plane for both flavor slots. Even
+  // an explicitly allowed source-DV bootstrap must drain a pre-manager
+  // production writer before opening shared stores; otherwise the DV
+  // Runtime and legacy production Runtime can concurrently mutate JSONL.
+  await handoverLegacyProductionRuntime({
+    dataDir: input.dataDir,
+    fetch: fetchImpl,
+    timeoutMs: Math.max(input.timeoutMs ?? START_TIMEOUT_MS, LEGACY_HANDOVER_TIMEOUT_MS),
+    ...(input.onLegacyHandoverStatus ? { onStatus: input.onLegacyHandoverStatus } : {})
+  })
+  const { child, logPath } = await launchServiceManagerProcess({
+    controlDir,
+    dataDir: input.dataDir,
+    settingsPath,
+    ...(input.buildId ? { buildId: input.buildId } : {}),
+    ...(input.launch ? { launch: input.launch } : {})
+  })
+  const deadline = Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
+  while (Date.now() < deadline) {
+    const connection = await resolveServiceManager(controlDir, fetchImpl)
+    if (connection) return connection
+    if (child.exitCode !== null) break
+    await delay(POLL_MS)
+  }
+  throw new Error(`Kun Service Manager did not become ready; inspect ${logPath}`)
+}
+
+function assertManagerBootstrapAllowed(input: EnsureServiceManagerInput): void {
   if (input.flavor === 'development' && !input.allowDevelopmentBootstrap) {
     throw new Error(
       'kun-dv requires the compatible Kun Service Manager installed by the production application; start or update Kun first'
     )
   }
-  return withManagerStartLock(controlDir, async () => {
-    const elected = await resolveServiceManager(controlDir, fetchImpl)
-    if (elected) {
-      if (!managerOwnsPaths(elected.discovery, input.dataDir, settingsPath)) {
-        throw new Error('Kun Service Manager owns a different canonical data or settings path')
-      }
-      return elected
-    }
-    const stale = await readManagerDiscovery(controlDir).catch(() => null)
-    if (stale && !processIsAlive(stale.pid)) {
-      await removeManagerDiscovery(controlDir, stale.instanceId).catch(() => undefined)
-    } else if (stale) {
-      throw new Error(`Kun Service Manager process ${stale.pid} is alive but unavailable`)
-    }
-    // The Manager owns the canonical data plane for both flavor slots. Even
-    // an explicitly allowed source-DV bootstrap must drain a pre-manager
-    // production writer before opening shared stores; otherwise the DV
-    // Runtime and legacy production Runtime can concurrently mutate JSONL.
-    await handoverLegacyProductionRuntime({
-      dataDir: input.dataDir,
-      fetch: fetchImpl,
-      timeoutMs: Math.max(input.timeoutMs ?? START_TIMEOUT_MS, LEGACY_HANDOVER_TIMEOUT_MS)
-    })
-    await mkdir(controlDir, { recursive: true, mode: 0o700 })
-    const logPath = join(controlDir, 'manager.log')
-    const logFd = openSync(logPath, 'a', 0o600)
-    const managerToken = randomBytes(32).toString('base64url')
-    const instanceId = randomUUID()
-    const entry = fileURLToPath(new URL('./manager-entry.js', import.meta.url))
-    const command = input.launch?.command ?? process.execPath
-    const args = input.launch?.args ?? [entry]
-    const runAsNode = input.launch?.runAsNode ?? Boolean(process.versions.electron)
-    let child
-    try {
-      child = spawn(command, args, {
-        detached: true,
-        windowsHide: true,
-        stdio: ['ignore', logFd, logFd],
-        env: {
-          ...process.env,
-          ...(input.launch?.env ?? {}),
-          ...(runAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
-          // The spawning runtime may be recovering from a dead manager and
-          // therefore still carry its old client endpoint. A manager is the
-          // physical writer and must not proxy AtomicJsonFile operations to a
-          // predecessor (or recursively to itself).
-          KUN_MANAGER_BASE_URL: '',
-          KUN_MANAGER_CONTROL_DIR: controlDir,
-          KUN_MANAGER_TOKEN: managerToken,
-          KUN_MANAGER_INSTANCE_ID: instanceId,
-          ...(input.buildId ? { KUN_RUNTIME_BUILD_ID: input.buildId } : {}),
-          KUN_MANAGER_DATA_DIR: input.dataDir,
-          KUN_MANAGER_SETTINGS_PATH: settingsPath,
-          KUN_MANAGER_LOG_PATH: logPath
-        }
-      })
-      child.unref()
-    } finally {
-      closeSync(logFd)
-    }
-    const deadline = Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
-    while (Date.now() < deadline) {
-      const connection = await resolveServiceManager(controlDir, fetchImpl)
-      if (connection) return connection
-      if (child.exitCode !== null) break
-      await delay(POLL_MS)
-    }
-    throw new Error(`Kun Service Manager did not become ready; inspect ${logPath}`)
-  })
 }
 
 function managerOwnsPaths(
@@ -299,11 +335,16 @@ async function handoverLegacyProductionRuntime(input: {
   dataDir: string
   fetch: typeof fetch
   timeoutMs: number
+  onStatus?: (status: LegacyRuntimeHandoverStatus) => void
 }): Promise<void> {
   const discovery = await readRuntimeDiscovery(input.dataDir, 'production').catch(() => null)
-  if (!discovery) return
+  if (!discovery) {
+    input.onStatus?.({ kind: 'idle' })
+    return
+  }
   if (!processIsAlive(discovery.pid)) {
     await removeLegacyProductionRuntimeDiscovery(input.dataDir, discovery.instanceId)
+    input.onStatus?.({ kind: 'released' })
     return
   }
   const deadline = Date.now() + input.timeoutMs
@@ -319,8 +360,12 @@ async function handoverLegacyProductionRuntime(input: {
         'the Service Manager will not open shared data until that process exits'
       )
     }
-    if (probe.managerProtocolVersion === KUN_MANAGER_PROTOCOL_VERSION) return
+    if (probe.managerProtocolVersion === KUN_MANAGER_PROTOCOL_VERSION) {
+      input.onStatus?.({ kind: 'released' })
+      return
+    }
     if (probe.activeTurnCount !== undefined && probe.activeTurnCount > 0) {
+      input.onStatus?.({ kind: 'waiting', activeTurnCount: probe.activeTurnCount })
       if (Date.now() >= deadline) {
         throw new Error(
           'Timed out waiting for the legacy production Runtime to finish its active turn; ' +
@@ -330,6 +375,7 @@ async function handoverLegacyProductionRuntime(input: {
       await delay(500)
       continue
     }
+    input.onStatus?.({ kind: 'shutdown-requested' })
     const response = await input.fetch(`${discovery.baseUrl.replace(/\/$/u, '')}/v1/runtime/shutdown`, {
       method: 'POST',
       headers: {
@@ -473,117 +519,15 @@ export async function unregisterRuntimeWithManager(input: {
 export async function readManagerRuntime(
   manager: ServiceManagerConnection,
   flavor: RuntimeFlavor,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal
 ): Promise<RuntimeRegistration | null> {
   const parsedFlavor = RuntimeFlavorSchema.parse(flavor)
-  const response = await requestManagerJson(manager, `/v1/runtimes/${parsedFlavor}`, { fetch: fetchImpl })
+  const response = await requestManagerJson(manager, `/v1/runtimes/${parsedFlavor}`, {
+    fetch: fetchImpl,
+    ...(signal ? { signal } : {})
+  })
   return z.object({ registration: RuntimeRegistrationSchema.nullable() }).parse(response).registration
-}
-
-export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePort {
-  private readonly renewals = new Map<string, {
-    lease: ThreadExecutionLease
-    timer: ReturnType<typeof setInterval>
-  }>()
-  private onLeaseLost: ((lease: ThreadExecutionLease) => void) | undefined
-
-  constructor(
-    private readonly manager: ServiceManagerConnection,
-    private readonly flavor: RuntimeFlavor,
-    private readonly instanceId: string
-  ) {}
-
-  setLeaseLostHandler(handler: (lease: ThreadExecutionLease) => void): void {
-    this.onLeaseLost = handler
-  }
-
-  async acquire(threadId: string, turnId: string): Promise<ThreadExecutionLease> {
-    const response = await requestManagerResponse(
-      this.manager,
-      `/v1/leases/threads/${encodeURIComponent(threadId)}/acquire`,
-      {
-        method: 'POST',
-        body: { turnId, ownerFlavor: this.flavor, ownerInstanceId: this.instanceId }
-      }
-    )
-    if (response.status === 409) {
-      const body = await response.json().catch(() => null)
-      const owner = z.object({ owner: ThreadExecutionLeaseSchema }).safeParse(body)
-      if (owner.success) throw new ThreadExecutionBusyError(owner.data.owner)
-    }
-    const parsed = z.object({ lease: ThreadExecutionLeaseSchema }).parse(
-      await requireManagerJson(response)
-    )
-    this.startRenewal(parsed.lease)
-    return parsed.lease
-  }
-
-  async release(threadId: string, turnId: string): Promise<void> {
-    this.stopRenewal(threadId, turnId)
-    await requestManagerJson(
-      this.manager,
-      `/v1/leases/threads/${encodeURIComponent(threadId)}/release`,
-      {
-        method: 'POST',
-        body: { turnId, ownerFlavor: this.flavor, ownerInstanceId: this.instanceId }
-      }
-    )
-  }
-
-  async owner(threadId: string): Promise<ThreadExecutionLease | null> {
-    const body = await requestManagerJson(
-      this.manager,
-      `/v1/leases/threads/${encodeURIComponent(threadId)}`,
-      {}
-    )
-    return z.object({ lease: ThreadExecutionLeaseSchema.nullable() }).parse(body).lease
-  }
-
-  shutdown(): void {
-    for (const { timer } of this.renewals.values()) clearInterval(timer)
-    this.renewals.clear()
-  }
-
-  private startRenewal(lease: ThreadExecutionLease): void {
-    this.stopRenewal(lease.threadId)
-    const timer = setInterval(() => void this.renew(lease.threadId), 5_000)
-    timer.unref?.()
-    this.renewals.set(lease.threadId, { lease, timer })
-  }
-
-  private async renew(threadId: string): Promise<void> {
-    const current = this.renewals.get(threadId)
-    if (!current) return
-    try {
-      const response = await requestManagerResponse(
-        this.manager,
-        `/v1/leases/threads/${encodeURIComponent(threadId)}/renew`,
-        {
-          method: 'POST',
-          body: {
-            turnId: current.lease.turnId,
-            ownerFlavor: this.flavor,
-            ownerInstanceId: this.instanceId
-          }
-        }
-      )
-      const parsed = z.object({ lease: ThreadExecutionLeaseSchema }).parse(
-        await requireManagerJson(response)
-      )
-      const latest = this.renewals.get(threadId)
-      if (latest?.lease.turnId === current.lease.turnId) latest.lease = parsed.lease
-    } catch {
-      this.stopRenewal(threadId, current.lease.turnId)
-      this.onLeaseLost?.(current.lease)
-    }
-  }
-
-  private stopRenewal(threadId: string, turnId?: string): void {
-    const current = this.renewals.get(threadId)
-    if (!current || (turnId && current.lease.turnId !== turnId)) return
-    clearInterval(current.timer)
-    this.renewals.delete(threadId)
-  }
 }
 
 export async function forwardRequestToExecutionOwner(input: {
@@ -599,10 +543,17 @@ export async function forwardRequestToExecutionOwner(input: {
     const owner = await requestManagerJson(
       input.manager,
       `/v1/leases/threads/${encodeURIComponent(input.threadId)}`,
-      {}
+      { signal: input.request.signal }
     )
     lease = z.object({ lease: ThreadExecutionLeaseSchema.nullable() }).parse(owner).lease
-    if (lease) registration = await readManagerRuntime(input.manager, lease.ownerFlavor)
+    if (lease) {
+      registration = await readManagerRuntime(
+        input.manager,
+        lease.ownerFlavor,
+        fetch,
+        input.request.signal
+      )
+    }
   } else if (input.control) {
     const owner = await requestManagerJson(
       input.manager,
@@ -654,7 +605,7 @@ export {
 export async function requestManagerJson(
   manager: ServiceManagerConnection,
   path: string,
-  options: { method?: string; body?: unknown; fetch?: typeof fetch; timeoutMs?: number }
+  options: ManagerRequestOptions
 ): Promise<unknown> {
   const response = await requestManagerResponse(manager, path, options)
   if (response.status === 409) {

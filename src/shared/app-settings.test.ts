@@ -9,6 +9,7 @@ import {
   DEFAULT_KUN_STREAM_IDLE_TIMEOUT_MS,
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  DEFAULT_DARK_UI_COLORS,
   DEFAULT_GIT_BRANCH_PREFIX,
   DEFAULT_APPROVAL_POLICY,
   DEFAULT_SANDBOX_MODE,
@@ -39,6 +40,8 @@ import {
   isKunRuntimeInsecure,
   migrateLegacyAppSettings,
   normalizeAppSettings,
+  normalizeDarkUiColors,
+  mergeDarkUiColors,
   KUN_RUNTIME_TUNING_DEFAULTS_VERSION,
   normalizeChatContentMaxWidth,
   normalizeChatWelcomeMessage,
@@ -71,6 +74,7 @@ function settings(): AppSettingsV1 {
     uiFontScale: 0.82,
     chatContentMaxWidthPx: 896,
     composerSendKey: 'enter',
+    darkUiColors: { background: '#181818', border: '#272727', panel: '#2c2c2c' },
     provider: defaultModelProviderSettings(),
     agents: {
       kun: defaultKunRuntimeSettings()
@@ -104,6 +108,38 @@ describe('application locale settings', () => {
   it('falls back to English for an unsupported persisted locale', () => {
     const input = { ...settings(), locale: 'fr' } as unknown as AppSettingsV1
     expect(normalizeAppSettings(input).locale).toBe('en')
+  })
+})
+
+describe('dark UI color settings', () => {
+  it('normalizes valid values and falls back field by field to Graphite', () => {
+    expect(normalizeDarkUiColors({
+      background: ' #ABCDEF ',
+      border: 'invalid',
+      panel: '#123456'
+    })).toEqual({
+      background: '#abcdef',
+      border: DEFAULT_DARK_UI_COLORS.border,
+      panel: '#123456'
+    })
+    expect(normalizeDarkUiColors()).toEqual(DEFAULT_DARK_UI_COLORS)
+  })
+
+  it('preserves untouched siblings when merging a partial patch', () => {
+    expect(mergeDarkUiColors({
+      background: '#101010',
+      border: '#202020',
+      panel: '#303030'
+    }, { border: '#AABBCC' })).toEqual({
+      background: '#101010',
+      border: '#aabbcc',
+      panel: '#303030'
+    })
+  })
+
+  it('migrates legacy application snapshots to Graphite defaults', () => {
+    const legacy = { ...settings(), darkUiColors: undefined } as unknown as AppSettingsV1
+    expect(normalizeAppSettings(legacy).darkUiColors).toEqual(DEFAULT_DARK_UI_COLORS)
   })
 })
 

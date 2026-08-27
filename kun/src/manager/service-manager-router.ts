@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { chmod, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -30,14 +30,17 @@ import {
   type ManagerArtifactStoreOperation,
   type ManagerGraphStoreOperation,
   type ManagerMemoryStoreOperation,
-  type ManagerSessionStoreOperation,
-  type ManagerThreadStoreOperation
+  type ManagerSessionStoreOperation
 } from './shared-data-store.js'
 import {
   RevisionConflictError,
   RevisionedDocumentStore
 } from './revisioned-document-store.js'
 
+import {
+  ManagerResourceFenceSchema,
+  ResourceFenceStaleError
+} from './resource-lease-state.js'
 import {
   ArtifactStoreOperationSchema,
   AttachmentStoreOperationSchema,
@@ -62,6 +65,7 @@ export function buildServiceManagerRouter(input: {
   sharedData?: ManagerSharedDataStore
   documents?: RevisionedDocumentStore
   requestShutdown?: () => void
+  flushState?: () => Promise<void>
 }): Router {
   const router = new Router()
   const capabilities = input.sharedData
@@ -174,10 +178,81 @@ export function buildServiceManagerRouter(input: {
         ownerInstanceId: z.string().min(1).max(256)
       }).strict().safeParse(body.value)
       if (!parsed.success) return validation('invalid resource lease request', parsed.error.issues)
-      return jsonResponse(input.state.acquireResource({
+      const result = input.state.acquireResource({
         resource: context.params.resource,
         ...parsed.data
-      }))
+      })
+      if (result.acquired) await input.flushState?.()
+      return jsonResponse(result)
+    }
+  ))
+  router.add('POST', '/v1/leases/resources/:resource/renew', (request, context) => authorizedAsync(
+    request,
+    input.managerToken,
+    async () => {
+      const body = await readJsonBody(request)
+      if (!body.ok) return body.response
+      const parsed = resourceFenceBody(context.params.resource, body.value)
+      if (!parsed.success) return validation('invalid resource lease renewal', parsed.error.issues)
+      const lease = input.state.renewResource(parsed.data)
+      if (lease) await input.flushState?.()
+      return lease
+        ? jsonResponse({ lease })
+        : resourceFenceStale()
+    }
+  ))
+  router.add('POST', '/v1/leases/resources/:resource/validate', (request, context) => authorizedAsync(
+    request,
+    input.managerToken,
+    async () => {
+      const body = await readJsonBody(request)
+      if (!body.ok) return body.response
+      const parsed = resourceFenceBody(context.params.resource, body.value)
+      if (!parsed.success) return validation('invalid resource lease validation', parsed.error.issues)
+      return input.state.validateResource(parsed.data)
+        ? jsonResponse({ valid: true })
+        : resourceFenceStale()
+    }
+  ))
+  router.add('POST', '/v1/leases/resources/:resource/commits/:commitId/begin', (request, context) => authorizedAsync(
+    request,
+    input.managerToken,
+    async () => {
+      const body = await readJsonBody(request)
+      if (!body.ok) return body.response
+      const parsed = resourceFenceBody(context.params.resource, body.value)
+      if (!parsed.success) return validation('invalid resource commit reservation', parsed.error.issues)
+      const lease = input.state.beginResourceCommit(parsed.data, context.params.commitId)
+      if (!lease) return resourceFenceStale()
+      await input.flushState?.()
+      return jsonResponse({ lease })
+    }
+  ))
+  router.add('POST', '/v1/leases/resources/:resource/commits/:commitId/renew', (request, context) => authorizedAsync(
+    request,
+    input.managerToken,
+    async () => {
+      const body = await readJsonBody(request)
+      if (!body.ok) return body.response
+      const parsed = resourceFenceBody(context.params.resource, body.value)
+      if (!parsed.success) return validation('invalid resource commit renewal', parsed.error.issues)
+      const lease = input.state.renewResourceCommit(parsed.data, context.params.commitId)
+      if (!lease) return resourceFenceStale()
+      await input.flushState?.()
+      return jsonResponse({ lease })
+    }
+  ))
+  router.add('POST', '/v1/leases/resources/:resource/commits/:commitId/end', (request, context) => authorizedAsync(
+    request,
+    input.managerToken,
+    async () => {
+      const body = await readJsonBody(request)
+      if (!body.ok) return body.response
+      const parsed = resourceFenceBody(context.params.resource, body.value)
+      if (!parsed.success) return validation('invalid resource commit release', parsed.error.issues)
+      const ended = input.state.endResourceCommit(parsed.data, context.params.commitId)
+      if (ended) await input.flushState?.()
+      return jsonResponse({ ended })
     }
   ))
   router.add('POST', '/v1/leases/resources/:resource/release', (request, context) => authorizedAsync(
@@ -186,15 +261,11 @@ export function buildServiceManagerRouter(input: {
     async () => {
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
-      const parsed = z.object({
-        ownerFlavor: RuntimeFlavorSchema,
-        ownerInstanceId: z.string().min(1).max(256)
-      }).strict().safeParse(body.value)
+      const parsed = resourceFenceBody(context.params.resource, body.value)
       if (!parsed.success) return validation('invalid resource lease release', parsed.error.issues)
-      return jsonResponse({ released: input.state.releaseResource({
-        resource: context.params.resource,
-        ...parsed.data
-      }) })
+      const released = input.state.releaseResource(parsed.data)
+      if (released) await input.flushState?.()
+      return jsonResponse({ released })
     }
   ))
   router.add('PUT', '/v1/runtimes/:flavor/register', (request, context) => authorizedAsync(
@@ -272,7 +343,7 @@ export function buildServiceManagerRouter(input: {
       if (!body.ok) return body.response
       try {
         const result = await input.sharedData!.executeThread(
-          operation.data as ManagerThreadStoreOperation,
+          operation.data,
           body.value
         )
         return jsonResponse({ result })
@@ -405,12 +476,25 @@ export function buildServiceManagerRouter(input: {
       const parsed = z.object({
         path: z.string().min(1).max(4_096),
         expectedRevision: z.number().int().nonnegative(),
-        value: z.unknown()
+        value: z.unknown(),
+        fence: ManagerResourceFenceSchema.optional(),
+        commitId: z.string().min(1).max(256).optional()
       }).strict().safeParse(body.value)
       if (!parsed.success) return validation('invalid atomic JSON write', parsed.error.issues)
       try {
-        return jsonResponse({ snapshot: await input.sharedData!.writeAtomicJson(parsed.data) })
+        return await fencedAtomicJsonMutation(input, parsed.data, (commitId) =>
+          input.sharedData!.writeAtomicJson({
+            path: parsed.data.path,
+            expectedRevision: parsed.data.expectedRevision,
+            value: parsed.data.value,
+            ...(parsed.data.fence && commitId ? {
+              beforeCommit: () => input.state.assertResourceCommit(
+                parsed.data.fence!, commitId
+              )
+            } : {})
+          }))
       } catch (error) {
+        if (isResourceFenceStale(error)) return resourceFenceStale()
         if (error instanceof RevisionConflictError) {
           return jsonResponse({
             code: 'revision_conflict',
@@ -429,12 +513,24 @@ export function buildServiceManagerRouter(input: {
       if (!body.ok) return body.response
       const parsed = z.object({
         path: z.string().min(1).max(4_096),
-        expectedRevision: z.number().int().nonnegative()
+        expectedRevision: z.number().int().nonnegative(),
+        fence: ManagerResourceFenceSchema.optional(),
+        commitId: z.string().min(1).max(256).optional()
       }).strict().safeParse(body.value)
       if (!parsed.success) return validation('invalid atomic JSON delete', parsed.error.issues)
       try {
-        return jsonResponse({ snapshot: await input.sharedData!.deleteAtomicJson(parsed.data) })
+        return await fencedAtomicJsonMutation(input, parsed.data, (commitId) =>
+          input.sharedData!.deleteAtomicJson({
+            path: parsed.data.path,
+            expectedRevision: parsed.data.expectedRevision,
+            ...(parsed.data.fence && commitId ? {
+              beforeCommit: () => input.state.assertResourceCommit(
+                parsed.data.fence!, commitId
+              )
+            } : {})
+          }))
       } catch (error) {
+        if (isResourceFenceStale(error)) return resourceFenceStale()
         if (error instanceof RevisionConflictError) {
           return jsonResponse({
             code: 'revision_conflict',
@@ -528,6 +624,63 @@ export function tokenMatches(header: string | null, expected: string): boolean {
 
 export function validation(message: string, details?: unknown): JsonResponse {
   return jsonResponse({ code: 'validation_error', message, ...(details ? { details } : {}) }, 400)
+}
+
+async function fencedAtomicJsonMutation<T>(
+  input: { state: ServiceManagerState; flushState?: () => Promise<void> },
+  mutation: { fence?: z.infer<typeof ManagerResourceFenceSchema>; commitId?: string },
+  operation: (commitId?: string) => Promise<T>
+): Promise<JsonResponse> {
+  const needsReservation = Boolean(mutation.fence && !mutation.commitId)
+  const commitId = mutation.commitId ?? (needsReservation ? randomUUID() : undefined)
+  if (mutation.fence && commitId && needsReservation) {
+    const lease = input.state.beginResourceCommit(mutation.fence, commitId)
+    if (!lease) return resourceFenceStale()
+    await input.flushState?.()
+  }
+  let renewalInFlight: Promise<void> | undefined
+  const renewalTimer = needsReservation && mutation.fence && commitId
+    ? setInterval(() => {
+        if (renewalInFlight) return
+        renewalInFlight = Promise.resolve().then(async () => {
+          const lease = input.state.renewResourceCommit(mutation.fence!, commitId)
+          if (!lease) throw new ResourceFenceStaleError()
+          await input.flushState?.()
+        }).finally(() => { renewalInFlight = undefined })
+        void renewalInFlight.catch(() => undefined)
+      }, 3_000)
+    : undefined
+  renewalTimer?.unref?.()
+  try {
+    if (mutation.fence && commitId) input.state.assertResourceCommit(mutation.fence, commitId)
+    return jsonResponse({ snapshot: await operation(commitId) })
+  } finally {
+    if (renewalTimer) clearInterval(renewalTimer)
+    if (renewalInFlight) await renewalInFlight
+    if (mutation.fence && commitId && needsReservation) {
+      input.state.endResourceCommit(mutation.fence, commitId)
+      await input.flushState?.()
+    }
+  }
+}
+
+export function resourceFenceStale(): JsonResponse {
+  return jsonResponse({
+    code: 'resource_fence_stale',
+    message: 'resource lease fencing token is no longer current'
+  }, 409)
+}
+
+function isResourceFenceStale(error: unknown): boolean {
+  return error instanceof ResourceFenceStaleError ||
+    (error instanceof Error && error.cause instanceof ResourceFenceStaleError)
+}
+
+function resourceFenceBody(resource: string, value: unknown) {
+  return ManagerResourceFenceSchema.safeParse({
+    resource,
+    ...(typeof value === 'object' && value !== null ? value : {})
+  })
 }
 
 export function leaseOwnerBody(value: unknown) {

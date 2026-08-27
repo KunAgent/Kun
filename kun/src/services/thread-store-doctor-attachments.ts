@@ -240,7 +240,8 @@ export const REQUIRED_SQLITE_COLUMNS: Readonly<Record<string, readonly SqliteCol
     sqliteColumn('messages_path', 'TEXT', true),
     sqliteColumn('events_path', 'TEXT', true),
     sqliteColumn('search_text', 'TEXT', true),
-    sqliteColumn('usage_backfilled', 'INTEGER', true, 0, '0')
+    sqliteColumn('usage_backfilled', 'INTEGER', true, 0, '0'),
+    sqliteColumn('usage_backfill_high_water', 'INTEGER', true, 0, '0')
   ],
   usage_events: [
     sqliteColumn('thread_id', 'TEXT', true, 1),
@@ -248,6 +249,7 @@ export const REQUIRED_SQLITE_COLUMNS: Readonly<Record<string, readonly SqliteCol
     sqliteColumn('timestamp', 'TEXT', true),
     sqliteColumn('turn_id', 'TEXT', false),
     sqliteColumn('model', 'TEXT', false),
+    sqliteColumn('provider_id', 'TEXT', false),
     sqliteColumn('usage_json', 'TEXT', true)
   ]
 }

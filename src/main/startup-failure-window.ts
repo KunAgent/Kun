@@ -4,12 +4,21 @@ import { logError, logWarn } from './logger'
 import {
   parseStartupFailureAction,
   sanitizeStartupFailureMessage,
+  startupFailurePresentation,
   startupFailureHtml
 } from './startup-failure-content'
 
-export function showStartupFailureWindow(error: unknown, logDir: string): BrowserWindow | null {
-  const message = sanitizeStartupFailureMessage(error)
-  logError('startup', 'Kun failed before main-window creation.', {
+export function showStartupFailureWindow(
+  error: unknown,
+  logDir: string,
+  options: { recoverHandoff?: () => Promise<void> } = {}
+): BrowserWindow | null {
+  const presentation = startupFailurePresentation(error)
+  const message = presentation.message
+  const canRecoverHandoff = presentation.handoff &&
+    presentation.retryable &&
+    Boolean(options.recoverHandoff)
+  logError('startup', 'Kun failed before the desktop became ready.', {
     platform: process.platform,
     packaged: app.isPackaged,
     message
@@ -32,6 +41,23 @@ export function showStartupFailureWindow(error: unknown, logDir: string): Browse
       }
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    let recoveryInFlight = false
+    const render = (detail: string, busy = false): void => {
+      if (window.isDestroyed()) return
+      void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupFailureHtml(
+        detail,
+        logDir,
+        {
+          handoff: presentation.handoff,
+          retryable: presentation.handoff ? canRecoverHandoff : true,
+          busy
+        }
+      ))}`).catch((loadError) => {
+        logError('startup', 'Failed to render startup recovery window.', {
+          message: sanitizeStartupFailureMessage(loadError)
+        })
+      })
+    }
     window.webContents.on('will-navigate', (event, targetUrl) => {
       const action = parseStartupFailureAction(targetUrl)
       if (!action) {
@@ -40,8 +66,24 @@ export function showStartupFailureWindow(error: unknown, logDir: string): Browse
       }
       event.preventDefault()
       if (action === 'retry') {
-        app.relaunch()
-        app.quit()
+        if (recoveryInFlight) return
+        if (!presentation.handoff) {
+          app.relaunch()
+          app.quit()
+          return
+        }
+        if (!canRecoverHandoff || !options.recoverHandoff) return
+        recoveryInFlight = true
+        render(message, true)
+        void options.recoverHandoff().then(() => {
+          app.relaunch()
+          app.quit()
+        }).catch((recoveryError) => {
+          recoveryInFlight = false
+          const detail = sanitizeStartupFailureMessage(recoveryError)
+          logWarn('startup', 'Safe Kun handoff retry failed.', { message: detail })
+          render(`${message}\n\nRetry failed: ${detail}`)
+        })
       } else if (action === 'quit') {
         app.quit()
       } else {
@@ -53,7 +95,14 @@ export function showStartupFailureWindow(error: unknown, logDir: string): Browse
       }
     })
     window.once('ready-to-show', () => window.show())
-    void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupFailureHtml(message, logDir))}`)
+    void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupFailureHtml(
+      message,
+      logDir,
+      {
+        handoff: presentation.handoff,
+        retryable: presentation.handoff ? canRecoverHandoff : true
+      }
+    ))}`)
       .catch((loadError) => {
         logError('startup', 'Failed to render startup recovery window.', {
           message: sanitizeStartupFailureMessage(loadError)

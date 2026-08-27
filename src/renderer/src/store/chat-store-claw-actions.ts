@@ -9,6 +9,7 @@ import {
 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
+import { emptyLiveProjection } from './chat-store-live-projection'
 import type { ChatBlock, NormalizedThread } from '../agent/types'
 import { clawThreadTitleLooksManaged, clawThreadIdsFromChannels } from './chat-store-helpers'
 import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
@@ -216,8 +217,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
               text: replyText
             }
           ],
-          liveReasoning: '',
-          liveAssistant: '',
+          ...emptyLiveProjection(state.lastSeq),
           error: null
         }
       }),

@@ -56,6 +56,21 @@ describe('application state migration', () => {
     expect(applyPortableSettingsMigration(current, { locale: 'ko' }).locale).toBe('ko')
   })
 
+  it('merges and normalizes imported dark UI colors field by field', () => {
+    const current = settings({
+      darkUiColors: { background: '#101010', border: '#202020', panel: '#303030' }
+    })
+    const migrated = applyPortableSettingsMigration(current, {
+      darkUiColors: { border: '#AABBCC', panel: 'invalid' }
+    })
+
+    expect(migrated.darkUiColors).toEqual({
+      background: '#101010',
+      border: '#aabbcc',
+      panel: '#2c2c2c'
+    })
+  })
+
   it('rebinds schema-declared renderer references without rewriting prose', () => {
     const restored = restoreSemanticRendererState({
       state: {

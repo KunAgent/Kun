@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CompatModelClient } from './compat-model-client.js'
 import type { ModelRequestRetryConfig } from '../../config/kun-config.js'
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
@@ -71,6 +71,17 @@ function client(fetchImpl: typeof fetch, retry?: ModelRequestRetryConfig): Compa
 }
 
 describe('CompatModelClient transient gateway retry', () => {
+  it('does not request or emit an error when the turn was already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const fetchImpl = vi.fn() as unknown as typeof fetch
+
+    const chunks = await drain(client(fetchImpl).stream(request(controller.signal)))
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(chunks).toEqual([])
+  })
+
   it('retries a 502 Bad Gateway and then succeeds', async () => {
     let calls = 0
     const fetchImpl = (async () => {
@@ -156,7 +167,7 @@ describe('CompatModelClient transient gateway retry', () => {
     expect(detail).not.toContain(credential)
   })
 
-  it('stops retrying when the request is aborted during backoff', async () => {
+  it('stops retrying silently when the request is aborted during backoff', async () => {
     const controller = new AbortController()
     let calls = 0
     const fetchImpl = (async () => {
@@ -173,7 +184,7 @@ describe('CompatModelClient transient gateway retry', () => {
     )
 
     expect(calls).toBe(1)
-    expect(chunks.some((c) => c.kind === 'error')).toBe(true)
+    expect(chunks.some((c) => c.kind === 'error')).toBe(false)
   })
 })
 
@@ -234,7 +245,7 @@ describe('CompatModelClient network retry', () => {
     })
   })
 
-  it('stops a network retry while waiting in backoff when the request is cancelled', async () => {
+  it('stops a network retry silently while waiting in backoff when the request is cancelled', async () => {
     const controller = new AbortController()
     let calls = 0
     const fetchImpl = (async () => {
@@ -258,9 +269,9 @@ describe('CompatModelClient network retry', () => {
       failureSummary: expect.stringContaining('model provider did not return a response')
     }))
     expect(chunks.at(-1)).toMatchObject({
-      kind: 'error',
-      message: 'request was aborted during retry backoff'
+      kind: 'retrying'
     })
+    expect(chunks.some((chunk) => chunk.kind === 'error')).toBe(false)
   })
 
   it('preserves the concrete network cause when the provider never responds', async () => {

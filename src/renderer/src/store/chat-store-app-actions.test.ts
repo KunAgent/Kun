@@ -102,6 +102,7 @@ function buildHarness(fetchModelsResult: FetchModelsResult): {
     applyChatContentMaxWidth: () => undefined,
     applyCursorSpotlight: () => undefined,
     applyCursorSpotlightColor: () => undefined,
+    applyDarkUiColors: () => undefined,
     applyWriteTypography: () => undefined,
     applyDocumentLocale: () => undefined,
     workspaceLabelFromPath: (workspaceRoot) => workspaceRoot,
@@ -567,6 +568,98 @@ describe('chat-store app actions composer model loading', () => {
     expect(JSON.parse(localStorage.getItem(THREAD_COMPOSER_SELECTION_STORAGE_KEY) ?? '{}')).toEqual({
       'thread-a': { model: 'deepseek-v4-pro', providerId: '', source: 'default' }
     })
+  })
+  it('uses the current thread when an in-flight catalog load finishes after a switch', async () => {
+    const pending = deferred<FetchModelsResult>()
+    const fetchUpstreamModels = vi.fn(() => pending.promise)
+    vi.stubGlobal('window', {
+      kunGui: {
+        fetchUpstreamModels,
+        saveSettingsSilent: vi.fn(async () => undefined)
+      }
+    })
+    const state = {
+      activeThreadId: 'thread-a',
+      blocks: [{ kind: 'user', id: 'u-a', text: 'on A' }],
+      threads: [
+        {
+          id: 'thread-a',
+          title: 'Thread A',
+          workspace: '/tmp/project',
+          model: 'model-a',
+          providerId: 'provider-a',
+          status: 'idle',
+          mode: 'plan',
+          updatedAt: '2026-06-01T00:00:00.000Z'
+        },
+        {
+          id: 'thread-b',
+          title: 'Thread B',
+          workspace: '/tmp/project',
+          model: 'model-b',
+          providerId: 'provider-b',
+          status: 'idle',
+          mode: 'agent',
+          updatedAt: '2026-06-01T00:00:00.000Z'
+        }
+      ],
+      composerMode: 'plan',
+      composerModel: 'model-a',
+      composerProviderId: 'provider-a',
+      composerReasoningEffort: 'max',
+      composerPickList: mergeComposerPickList(false, []),
+      composerModelGroups: []
+    } as unknown as ChatState
+    let loadPromise: Promise<void> | null = null
+    const set: ChatStoreSet = (partial) => {
+      const update = typeof partial === 'function' ? partial(state) : partial
+      Object.assign(state, update)
+    }
+    const get: ChatStoreGet = () => state
+    const actions = createAppActions({
+      set,
+      get,
+      i18n: { t: (key: string) => key, changeLanguage: vi.fn(async () => undefined) } as unknown as typeof i18next,
+      persistComposerModel,
+      persistComposerMode,
+      persistComposerFastMode,
+      persistComposerReasoningEffort,
+      rememberThreadComposerMode,
+      readStoredComposerModel,
+      mergeComposerPickList,
+      fallbackComposerModel,
+      getComposerModelLoadPromise: () => loadPromise,
+      setComposerModelLoadPromise: (promise) => {
+        loadPromise = promise
+      },
+      applyTheme: () => undefined,
+      applyUiFontScale: () => undefined,
+      applyChatContentMaxWidth: () => undefined,
+      applyCursorSpotlight: () => undefined,
+      applyCursorSpotlightColor: () => undefined,
+      applyDarkUiColors: () => undefined,
+      applyWriteTypography: () => undefined,
+      applyDocumentLocale: () => undefined,
+      workspaceLabelFromPath: (workspaceRoot) => workspaceRoot,
+      normalizeWorkspaceRoot: (workspaceRoot) => workspaceRoot?.trim() ?? ''
+    })
+
+    const loading = actions.loadComposerModels()
+    state.activeThreadId = 'thread-b'
+    state.blocks = [{ kind: 'user', id: 'u-b', text: 'on B' }]
+    pending.resolve({
+      ok: true,
+      modelIds: ['model-a', 'model-b'],
+      defaultModel: { providerId: 'provider-a', modelId: 'model-a' },
+      modelGroups: [
+        { providerId: 'provider-a', label: 'Provider A', modelIds: ['model-a'] },
+        { providerId: 'provider-b', label: 'Provider B', modelIds: ['model-b'] }
+      ]
+    })
+    await loading
+
+    expect(state.composerModel).toBe('model-b')
+    expect(state.composerProviderId).toBe('provider-b')
   })
 
 })

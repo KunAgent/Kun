@@ -542,6 +542,14 @@ export type TerminalSettingsPatchV1 = {
   colors?: Partial<TerminalColorSettingsV1>
 }
 
+export type DarkUiColorsV1 = {
+  background: string
+  border: string
+  panel: string
+}
+
+export type DarkUiColorsPatchV1 = Partial<DarkUiColorsV1>
+
 export type AppSettingsV1 = {
   version: 1
   /** Persisted independently from credentials so SDK/subscription providers do not reopen onboarding. */
@@ -554,6 +562,8 @@ export type AppSettingsV1 = {
   composerSendKey: ComposerSendKey
   cursorSpotlight?: boolean
   cursorSpotlightColor?: string
+  /** Legacy snapshots omit this field; normalized settings always populate it. */
+  darkUiColors?: DarkUiColorsV1
   provider: ModelProviderSettingsV1
   agents: KunSettingsEnvelopeV1
   workspaceRoot: string
@@ -588,8 +598,9 @@ export type AppSettingsV1 = {
 }
 
 export type AppSettingsPatch = Partial<
-  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal'>
+  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'darkUiColors'>
 > & {
+  darkUiColors?: DarkUiColorsPatchV1
   provider?: ModelProviderSettingsPatchV1
   agents?: KunSettingsEnvelopePatchV1
   log?: Partial<LogConfigV1>

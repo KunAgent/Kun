@@ -10,18 +10,23 @@ describe('Runtime background maintenance', () => {
     vi.useFakeTimers()
     const seedUsage = vi.fn(async () => undefined)
     const pruneAttachments = vi.fn(async () => undefined)
+    const inspectThreads = vi.fn(async () => undefined)
     const maintenance = createRuntimeBackgroundMaintenance({
       seedUsage,
       pruneAttachments,
+      inspectThreads,
       onError: vi.fn(),
       usageDelayMs: 50,
       attachmentDelayMs: 100,
-      attachmentIntervalMs: 200
+      attachmentIntervalMs: 200,
+      guardianDelayMs: 150,
+      guardianIntervalMs: 300
     })
 
     await vi.advanceTimersByTimeAsync(1_000)
     expect(seedUsage).not.toHaveBeenCalled()
     expect(pruneAttachments).not.toHaveBeenCalled()
+    expect(inspectThreads).not.toHaveBeenCalled()
 
     maintenance.start()
     await vi.advanceTimersByTimeAsync(49)
@@ -30,7 +35,9 @@ describe('Runtime background maintenance', () => {
     expect(seedUsage).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(50)
     expect(pruneAttachments).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(inspectThreads).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(150)
     expect(pruneAttachments).toHaveBeenCalledTimes(2)
   })
 
@@ -41,9 +48,11 @@ describe('Runtime background maintenance', () => {
     const maintenance = createRuntimeBackgroundMaintenance({
       seedUsage: vi.fn(async () => { throw failure }),
       pruneAttachments: vi.fn(async () => undefined),
+      inspectThreads: vi.fn(async () => undefined),
       onError,
       usageDelayMs: 1,
-      attachmentDelayMs: 100
+      attachmentDelayMs: 100,
+      guardianDelayMs: 100
     })
 
     maintenance.start()
@@ -56,21 +65,27 @@ describe('Runtime background maintenance', () => {
     vi.useFakeTimers()
     const seedUsage = vi.fn(async () => undefined)
     const pruneAttachments = vi.fn(async () => undefined)
+    const inspectThreads = vi.fn(async () => undefined)
     const maintenance = createRuntimeBackgroundMaintenance({
       seedUsage,
       pruneAttachments,
+      inspectThreads,
       onError: vi.fn(),
       usageDelayMs: 100,
       attachmentDelayMs: 10,
-      attachmentIntervalMs: 10
+      attachmentIntervalMs: 10,
+      guardianDelayMs: 10,
+      guardianIntervalMs: 10
     })
 
     maintenance.start()
     await vi.advanceTimersByTimeAsync(10)
     expect(pruneAttachments).toHaveBeenCalledOnce()
+    expect(inspectThreads).toHaveBeenCalledOnce()
     maintenance.stop()
     await vi.advanceTimersByTimeAsync(1_000)
     expect(seedUsage).not.toHaveBeenCalled()
     expect(pruneAttachments).toHaveBeenCalledOnce()
+    expect(inspectThreads).toHaveBeenCalledOnce()
   })
 })

@@ -18,7 +18,6 @@ import {
   Globe2,
   Monitor,
   Presentation,
-  Search,
   UserRound,
   Waypoints,
   Workflow
@@ -36,7 +35,6 @@ import {
   ComputerUseSettingsPanel
 } from './settings-section-agent-panels'
 import { GraphModeSettingsPanel } from './settings-section-graph-panel'
-import { FastContextSettingsPanel } from './settings-section-lab-fast-context'
 import { ComposerPersonaSettingsPanel } from './settings-section-lab-persona'
 import { ConversationVisualizationSettingsPanel } from './settings-section-lab-conversation-visualization'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
@@ -47,7 +45,6 @@ type LaboratorySettingsPanel =
   | 'computer'
   | 'browser'
   | 'graph'
-  | 'explore'
   | 'ppt'
 
 export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
@@ -95,7 +92,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           { id: 'computer', label: t('computerUseTitle'), icon: Monitor },
           { id: 'browser', label: t('browserUseSettingsTitle'), icon: Globe2 },
           { id: 'graph', label: t('graphSettingsTitle'), icon: Workflow },
-          { id: 'explore', label: t('labExploreTitle'), icon: Search },
           { id: 'ppt', label: t('labPptTitle'), icon: Presentation }
         ]}
         value={activePanel}
@@ -174,23 +170,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           leadModel={kun.model}
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ graph: patch })}
-        />
-      </SettingsTabPanel>
-
-      <SettingsTabPanel<LaboratorySettingsPanel>
-        baseId="laboratory-settings"
-        tabId="explore"
-        active={activePanel === 'explore'}
-        className="[&>div]:mt-0"
-      >
-        <FastContextSettingsPanel
-          t={t}
-          value={lab}
-          modelProviders={modelProviders}
-          leadProviderId={activeProviderId}
-          leadModel={kun.model}
-          selectControlClass={selectControlClass}
-          onChange={(patch) => updateKun({ lab: patch })}
         />
       </SettingsTabPanel>
 

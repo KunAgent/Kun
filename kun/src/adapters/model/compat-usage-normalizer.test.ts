@@ -93,4 +93,66 @@ describe('normalizeCompatUsage', () => {
       providerBaseUrl: 'https://gateway.example/v1'
     }).billingKind).toBe('api')
   })
+
+  it('estimates cost from catalog pricing when no first-party estimator matches', () => {
+    expect(normalizeCompatUsage({
+      usage: { input_tokens: 1_000_000, output_tokens: 500_000 },
+      model: 'custom-model',
+      providerBaseUrl: 'https://gateway.example/v1',
+      catalogPricing: {
+        inputUsdPerMillion: 1,
+        outputUsdPerMillion: 4,
+        cacheReadUsdPerMillion: 0.1
+      }
+    })).toMatchObject({
+      billingKind: 'api',
+      costUsd: 1 + 2,
+      costCny: (1 + 2) * 7.2
+    })
+  })
+
+  it('prefers provider-reported cost over catalog pricing estimates', () => {
+    expect(normalizeCompatUsage({
+      usage: { input_tokens: 1_000_000, output_tokens: 500_000, cost_usd: 0.5 },
+      model: 'custom-model',
+      providerBaseUrl: 'https://gateway.example/v1',
+      catalogPricing: { inputUsdPerMillion: 1, outputUsdPerMillion: 4 }
+    }).costUsd).toBe(0.5)
+  })
+
+  it('prefers the DeepSeek estimator over catalog pricing on a DeepSeek host', () => {
+    const result = normalizeCompatUsage({
+      usage: { prompt_tokens: 1_000_000, completion_tokens: 500_000 },
+      model: 'deepseek-chat',
+      providerBaseUrl: 'https://api.deepseek.com',
+      catalogPricing: { inputUsdPerMillion: 99, outputUsdPerMillion: 99 }
+    })
+    expect(result.costUsd).toBeDefined()
+    expect(result.costUsd).not.toBe(99 + 99 * 0.5)
+  })
+
+  it('writes catalog pricing as a value estimate for subscription billing', () => {
+    const result = normalizeCompatUsage({
+      usage: { input_tokens: 1_000_000, output_tokens: 500_000 },
+      model: 'k3',
+      providerBaseUrl: 'https://api.kimi.com/coding/v1',
+      billingKind: 'subscription',
+      catalogPricing: { inputUsdPerMillion: 1, outputUsdPerMillion: 4 }
+    })
+    expect(result.billingKind).toBe('subscription')
+    expect(result.valueEstimateUsd).toBeCloseTo(1 + 2)
+    expect(result.valueEstimateCny).toBeCloseTo((1 + 2) * 7.2)
+  })
+
+  it('does not write a value estimate for non-subscription billing', () => {
+    const result = normalizeCompatUsage({
+      usage: { input_tokens: 1_000_000, output_tokens: 500_000 },
+      model: 'custom-model',
+      providerBaseUrl: 'https://gateway.example/v1',
+      catalogPricing: { inputUsdPerMillion: 1, outputUsdPerMillion: 4 }
+    })
+    expect(result.billingKind).toBe('api')
+    expect(result.valueEstimateUsd).toBeUndefined()
+    expect(result.valueEstimateCny).toBeUndefined()
+  })
 })

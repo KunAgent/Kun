@@ -4,6 +4,9 @@ import { dirname } from 'node:path'
 
 export type AtomicWriteFileOptions = {
   allowDirectWriteFallback?: boolean
+  /** Synchronous guard run immediately before each irreversible commit attempt. */
+  beforeCommit?: () => void
+  signal?: AbortSignal
   renameRetry?: {
     attempts?: number
     baseDelayMs?: number
@@ -19,17 +22,20 @@ export async function atomicWriteFile(
   contents: string,
   options: AtomicWriteFileOptions = {}
 ): Promise<void> {
+  options.signal?.throwIfAborted()
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const tmp = `${path}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`
   try {
-    await writeFile(tmp, contents, { encoding: 'utf-8', mode: 0o600 })
+    await writeFile(tmp, contents, { encoding: 'utf-8', mode: 0o600, signal: options.signal })
     try {
-      await renameFileWithRetry(tmp, path, options.renameRetry)
+      await renameFileWithRetry(tmp, path, options.renameRetry, options.beforeCommit, options.signal)
     } catch (error) {
       if (options.allowDirectWriteFallback === false || !shouldFallbackToDirectWrite(error)) {
         throw error
       }
-      await writeFile(path, contents, { encoding: 'utf-8', mode: 0o600 })
+      options.signal?.throwIfAborted()
+      options.beforeCommit?.()
+      await writeFile(path, contents, { encoding: 'utf-8', mode: 0o600, signal: options.signal })
     }
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => undefined)
@@ -65,20 +71,24 @@ function describeAtomicWriteError(path: string, error: unknown): unknown {
 export async function renameFileWithRetry(
   from: string,
   to: string,
-  options?: NonNullable<AtomicWriteFileOptions['renameRetry']>
+  options?: NonNullable<AtomicWriteFileOptions['renameRetry']>,
+  beforeCommit?: () => void,
+  signal?: AbortSignal
 ): Promise<void> {
   const attempts = Math.max(1, Math.floor(options?.attempts ?? DEFAULT_RENAME_RETRY_ATTEMPTS))
   const baseDelayMs = Math.max(0, Math.floor(options?.baseDelayMs ?? DEFAULT_RENAME_RETRY_BASE_DELAY_MS))
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      signal?.throwIfAborted()
+      beforeCommit?.()
       await rename(from, to)
       return
     } catch (error) {
       if (attempt >= attempts || !isRetryableRenameError(error)) {
         throw error
       }
-      await delay(baseDelayMs * attempt)
+      await delay(baseDelayMs * attempt, signal)
     }
   }
 }
@@ -91,7 +101,13 @@ function shouldFallbackToDirectWrite(error: unknown): boolean {
   return process.platform === 'win32' && isRetryableRenameError(error)
 }
 
-function delay(ms: number): Promise<void> {
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
   if (ms <= 0) return Promise.resolve()
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      reject(signal.reason)
+    }, { once: true })
+  })
 }

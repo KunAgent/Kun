@@ -162,6 +162,29 @@ describe('FileSessionStore', () => {
     expect(await sessionStore.highestSeq('thr_high_water')).toBe(7)
   })
 
+  it('ignores an uncommitted event tail and refreshes the cached high-water mark', async () => {
+    const sessionStore = new FileSessionStore({ dataDir })
+    const threadId = 'thr_partial_high_water'
+    await sessionStore.appendEvent(threadId, {
+      kind: 'heartbeat', seq: 1, timestamp: '2026-01-01T00:00:00.000Z', threadId
+    })
+    const eventsPath = join(dataDir, 'threads', threadId, 'events.jsonl')
+    const eventTwo = JSON.stringify({
+      kind: 'heartbeat', seq: 2, timestamp: '2026-01-01T00:00:01.000Z', threadId
+    })
+
+    await appendFile(eventsPath, eventTwo.slice(0, Math.ceil(eventTwo.length / 2)))
+    expect(await sessionStore.highestSeq(threadId)).toBe(1)
+    await expect((async () => {
+      const seen: number[] = []
+      for await (const event of sessionStore.iterateEventsSince(threadId, 0)) seen.push(event.seq)
+      return seen
+    })()).resolves.toEqual([1])
+
+    await appendFile(eventsPath, `${eventTwo.slice(Math.ceil(eventTwo.length / 2))}\n`)
+    expect(await sessionStore.highestSeq(threadId)).toBe(2)
+  })
+
   it('streams replay records in order and rejects an oversized unterminated record', async () => {
     const sessionStore = new FileSessionStore({ dataDir })
     for (const seq of [1, 2, 3]) {

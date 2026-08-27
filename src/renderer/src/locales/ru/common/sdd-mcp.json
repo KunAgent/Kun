@@ -161,6 +161,7 @@
   "providerQuotaUsed": "Использовано",
   "providerQuotaLimit": "Лимит",
   "providerQuotaResetsAt": "Сброс {{time}}",
+  "providerQuotaEarliestExpiry": "Ближайшее истечение {{time}}",
   "rightPanelAgentPerspective": "Перспектива агента",
   "agentPerspectiveTitle": "Перспектива агента",
   "agentPerspectiveSubtitle": "Запросов модели в диалоге: {{count}}",

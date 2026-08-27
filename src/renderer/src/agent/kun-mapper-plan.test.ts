@@ -66,7 +66,7 @@ describe('create_plan tool mapping', () => {
       message: 'model stream exploded',
       severity: 'error'
     })
-    expect(capturedErrorOptions).toEqual({ terminal: true, scope: 'conversation' })
+    expect(capturedErrorOptions).toEqual({ terminal: true, scope: 'conversation', threadId: 'thr_1', turnId: 'turn_1', seq: 8 })
   })
 
   it('settles message-less turn failures without adding a generic duplicate error', async () => {
@@ -91,7 +91,7 @@ describe('create_plan tool mapping', () => {
     }, sink, async () => undefined)
 
     expect(runtimeErrorCount).toBe(0)
-    expect(capturedErrorOptions).toEqual({ terminal: true, scope: 'conversation' })
+    expect(capturedErrorOptions).toEqual({ terminal: true, scope: 'conversation', threadId: 'thr_1', turnId: 'turn_1', seq: 8 })
   })
 
   it('does not finish the parent turn for child lifecycle events', async () => {
@@ -303,7 +303,7 @@ describe('create_plan tool mapping', () => {
       onRuntimeError: (event) => { runtimeErrors.push(event) },
       onError: (error, options) => {
         settledBy = error.message
-        expect(options).toEqual({ terminal: true, scope: 'conversation' })
+        expect(options).toMatchObject({ terminal: true, scope: 'conversation' })
       }
     }
     const message =

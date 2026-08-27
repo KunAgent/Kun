@@ -567,7 +567,7 @@ describe('createAgentSdkRuntime turn context', () => {
             immediatelyResolved = userInputGate.resolve(event.inputId, {
               status: 'submitted',
               answers: []
-            })
+            }) === 'settled'
           }
         }
       } as never,

@@ -161,6 +161,7 @@
   "providerQuotaUsed": "已用",
   "providerQuotaLimit": "总额度",
   "providerQuotaResetsAt": "重置时间：{{time}}",
+  "providerQuotaEarliestExpiry": "最早过期：{{time}}",
   "providerQuotaLocalCostTitle": "本地 API 参考价值",
   "providerQuotaLocalCostCurrencyCny": "CNY（参考汇率）",
   "providerQuotaLocalCostToday": "今日",

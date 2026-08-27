@@ -39,10 +39,18 @@ import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-le
 
 import type { ServiceManagerConnection } from './manager-client.js'
 
+export type ManagerRequestOptions = {
+  method?: string
+  body?: unknown
+  fetch?: typeof fetch
+  timeoutMs?: number
+  signal?: AbortSignal
+}
+
 export async function requestManagerJson(
   manager: ServiceManagerConnection,
   path: string,
-  options: { method?: string; body?: unknown; fetch?: typeof fetch; timeoutMs?: number }
+  options: ManagerRequestOptions
 ): Promise<unknown> {
   return requireManagerJson(await requestManagerResponse(manager, path, options))
 }
@@ -50,7 +58,7 @@ export async function requestManagerJson(
 export async function requestManagerResponse(
   manager: ServiceManagerConnection,
   path: string,
-  options: { method?: string; body?: unknown; fetch?: typeof fetch; timeoutMs?: number }
+  options: ManagerRequestOptions
 ): Promise<Response> {
   const fetchImpl = options.fetch ?? fetch
   return fetchImpl(`${manager.discovery.baseUrl}${path}`, {
@@ -60,7 +68,9 @@ export async function requestManagerResponse(
       ...(options.body === undefined ? {} : { 'content-type': 'application/json' })
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    signal: AbortSignal.timeout(options.timeoutMs ?? 5_000)
+    signal: options.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs ?? 5_000)])
+      : AbortSignal.timeout(options.timeoutMs ?? 5_000)
   })
 }
 

@@ -7,7 +7,7 @@ describe('app-ipc-schemas retry defaults version', () => {
       maxAttempts: 5,
       initialDelayMs: 3_000,
       httpStatusCodes: [429, 500, 502, 503, 504],
-      defaultsVersion: 1
+      defaultsVersion: 2
     }
     const payload = settingsPatchSchema.parse({
       provider: {

@@ -37,6 +37,7 @@ function baseCtx(): Record<string, unknown> {
       workspaceRoot: '~/data/code/python/Kook-Voices',
       cursorSpotlight: true,
       cursorSpotlightColor: '#3b82f6',
+      darkUiColors: { background: '#101010', border: '#202020', panel: '#303030' },
       appBehavior: {
         openAtLogin: false,
         startMinimized: false,
@@ -134,6 +135,18 @@ describe('GeneralSettingsSection workspace layout', () => {
       expect(html).toContain(`value="${option.value}"`)
       expect(html).toContain(option.label)
     }
+  })
+
+  it('shows editable dark colors, a live preview, and the global reset action', () => {
+    const html = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+
+    expect(html).toContain('darkUiColorsTitle')
+    expect(html).toContain('value="#101010"')
+    expect(html).toContain('value="#202020"')
+    expect(html).toContain('value="#303030"')
+    expect(html).toContain('background-color:#101010')
+    expect(html).toContain('border-color:#202020')
+    expect(html).toContain('darkUiColorsReset')
   })
 
   it('keeps every directory and desktop subtab panel mounted', () => {

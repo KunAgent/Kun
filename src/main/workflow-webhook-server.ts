@@ -44,6 +44,11 @@ type WorkflowWebhookOptions = {
 export class WorkflowWebhookServer {
   private server: Server | null = null
   private serverKey = ''
+  // Synchronous /workflow/run + internal runs execute inside this server's
+  // event loop. Cap concurrent awaited runs so several slow workflows cannot
+  // pile up unbounded work in the main process.
+  private activeRuns = 0
+  private static readonly MAX_CONCURRENT_SYNC_RUNS = 4
 
   constructor(private readonly options: WorkflowWebhookOptions) {}
 
@@ -106,6 +111,10 @@ export class WorkflowWebhookServer {
       }
       // Public local API: run any workflow by name/id and get its output back.
       if (pathname === '/workflow/run') {
+        if (this.activeRuns >= WorkflowWebhookServer.MAX_CONCURRENT_SYNC_RUNS) {
+          writeJson(res, 503, { ok: false, message: 'Too many concurrent workflow runs; retry later.' })
+          return
+        }
         const body = await readRequestBody(req)
         const parsed = parseJsonObject(body) ?? {}
         const idOrName = String(parsed.workflow ?? parsed.name ?? parsed.workflowId ?? '').trim()
@@ -114,7 +123,13 @@ export class WorkflowWebhookServer {
           return
         }
         const workspaceOverride = typeof parsed.workspaceRoot === 'string' ? parsed.workspaceRoot : undefined
-        const result = await this.options.runWorkflowByRef(idOrName, parsed.input, workspaceOverride)
+        this.activeRuns += 1
+        let result: Awaited<ReturnType<WorkflowWebhookOptions['runWorkflowByRef']>>
+        try {
+          result = await this.options.runWorkflowByRef(idOrName, parsed.input, workspaceOverride)
+        } finally {
+          this.activeRuns -= 1
+        }
         writeJson(res, result.ok ? 200 : 400, result)
         return
       }

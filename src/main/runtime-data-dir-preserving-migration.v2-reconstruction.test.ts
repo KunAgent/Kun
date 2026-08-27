@@ -190,7 +190,7 @@ describe('history-preserving Kun Runtime migration', () => {
       .toBe('2026-07-26T01:00:00.000Z')
   })
 
-  it('revokes stale verification evidence when migrated history disappears from the API', async () => {
+  it('retains successful Runtime verification after migrated history disappears from the API', async () => {
     const test = await fixture()
     await writeThread(test.legacy, 'thr_history', 'history')
     const result = runCanonicalKunRuntimeDataMigration({
@@ -203,16 +203,13 @@ describe('history-preserving Kun Runtime migration', () => {
       test.userData,
       ['thr_history']
     ).status).toBe('verified')
+    const verifiedJournal = await readFile(result.journalPath, 'utf8')
 
     expect(markCanonicalKunRuntimeMigrationRuntimeVerified(
       test.userData,
       []
-    )).toMatchObject({
-      status: 'incomplete',
-      missingThreadIds: ['thr_history']
-    })
-    expect(JSON.parse(await readFile(result.journalPath, 'utf8')).runtimeVerifiedAt)
-      .toBeUndefined()
+    )).toMatchObject({ status: 'not-needed', missingThreadIds: [] })
+    expect(await readFile(result.journalPath, 'utf8')).toBe(verifiedJournal)
   })
 
   it('reconstructs an explicitly labeled independent snapshot for a version-2 profile', async () => {

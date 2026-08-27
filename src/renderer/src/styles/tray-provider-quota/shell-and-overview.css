@@ -33,16 +33,16 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --tray-bg: #2a2828;
-  --tray-panel: #312f2f;
-  --tray-panel-strong: #383636;
-  --tray-subtle: #353333;
-  --tray-hover: #3a3838;
+  --tray-bg: var(--kun-dark-ui-background, #181818);
+  --tray-panel: var(--kun-dark-ui-panel, #2c2c2c);
+  --tray-panel-strong: color-mix(in srgb, var(--kun-dark-ui-panel, #2c2c2c) 96%, white);
+  --tray-subtle: color-mix(in srgb, var(--kun-dark-ui-panel, #2c2c2c) 98%, white);
+  --tray-hover: color-mix(in srgb, var(--kun-dark-ui-panel, #2c2c2c) 96%, white);
   --tray-text: #d4d4d4;
   --tray-muted: #bfc1c4;
   --tray-faint: #999ba0;
-  --tray-border: #434343;
-  --tray-border-strong: #555353;
+  --tray-border: var(--kun-dark-ui-border, #272727);
+  --tray-border-strong: color-mix(in srgb, var(--kun-dark-ui-border, #272727) 90%, white);
   --tray-control: #eeeeee;
   --tray-control-hover: #ffffff;
   --tray-control-foreground: #252222;

@@ -174,6 +174,7 @@ export interface ThreadService {
   list(options?: ListThreadsOptions ): Promise<ThreadSummary[]>;
   /** Paginated listing with keyset cursor. Falls back to `list` when the backing store cannot paginate. */
   listPage(options?: ListThreadsOptions): Promise<ThreadStoreListPage>;
+  deleteByWorkspace(workspace: string): Promise<string[]>;
   get(threadId: string): Promise<ThreadRecord | null>;
   getMetadata(threadId: string): Promise<ThreadRecord | null>;
   create(

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import {
   FloatingComposerTaskProfile,
+  resolveDesignProfileSummaryPopupLayout,
   resolveDesignStylePopupLayout
 } from './FloatingComposerTaskProfile'
 
@@ -13,6 +14,17 @@ vi.mock('react-i18next', () => ({
 const htmlProfile = { outputMedium: 'html', target: 'web', preset: 'none' } as const
 
 describe('FloatingComposerTaskProfile', () => {
+  it('flips the design profile summary popover above when the viewport bottom would clip it', () => {
+    expect(resolveDesignProfileSummaryPopupLayout({ top: 900, bottom: 936 }, 1100)).toEqual({
+      placement: 'top',
+      maxHeight: 320
+    })
+    expect(resolveDesignProfileSummaryPopupLayout({ top: 300, bottom: 336 }, 900)).toEqual({
+      placement: 'bottom',
+      maxHeight: 320
+    })
+  })
+
   it('flips the design style popover above when the viewport bottom would clip it', () => {
     expect(resolveDesignStylePopupLayout({ top: 900, bottom: 936 }, 1100)).toEqual({
       placement: 'top',
@@ -37,9 +49,9 @@ describe('FloatingComposerTaskProfile', () => {
 
     expect(html).toContain('role="radiogroup"')
     expect(html).toContain('data-task-surface="design"')
-    expect(html).toContain('flex-wrap')
+    expect(html).toContain('ds-design-profile-summary')
+    expect(html).toContain('designConfiguration')
     expect(html).toContain('designOutputHtml')
-    expect(html).toContain('designOutputImage')
     expect(html).toContain('designStyleAuto')
   })
 
@@ -59,7 +71,7 @@ describe('FloatingComposerTaskProfile', () => {
 
     expect(html).toContain('data-task-surface-locked="true"')
     expect(html).not.toContain('role="radiogroup"')
-    expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(3)
+    expect(html).toContain('ds-design-profile-summary')
     expect(html).toContain('designConfigureImageGeneration')
   })
 
@@ -75,8 +87,8 @@ describe('FloatingComposerTaskProfile', () => {
       onProfileChange: vi.fn()
     }))
 
-    expect(html).toContain('<option value="html" selected="">')
-    expect(html).not.toContain('value="image"')
+    expect(html).toContain('ds-design-profile-summary')
+    expect(html).toContain('designOutputHtml')
     expect(html).not.toContain('designOutputImage')
   })
 
@@ -90,7 +102,6 @@ describe('FloatingComposerTaskProfile', () => {
       onProfileChange: vi.fn()
     }))
 
-    expect(html).not.toContain('value="image"')
     expect(html).not.toContain('designOutputImage')
   })
 
@@ -138,7 +149,8 @@ describe('FloatingComposerTaskProfile', () => {
       onProfileChange: vi.fn()
     }))
 
-    expect(html).toContain('<option value="image" disabled="">')
+    expect(html).toContain('ds-design-profile-summary')
+    expect(html).toContain('designOutputHtml')
   })
 
   it('can render Design profile controls without duplicating the page-level selector', () => {
@@ -153,6 +165,7 @@ describe('FloatingComposerTaskProfile', () => {
     }))
 
     expect(html).toContain('data-task-surface="design"')
+    expect(html).toContain('ds-design-profile-summary')
     expect(html).toContain('designOutputHtml')
     expect(html).not.toContain('role="radiogroup"')
   })

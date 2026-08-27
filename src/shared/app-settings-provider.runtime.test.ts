@@ -28,6 +28,7 @@ import {
   CHATGPT_SUBSCRIPTION_MODEL_IDS,
   GROK_SUBSCRIPTION_PROVIDER_ID,
   OLLAMA_CLOUD_MODEL_IDS,
+  OPENCODE_FREE_PROVIDER_ID,
   listMusicGenerationProviderProfiles,
   listSpeechToTextProviderProfiles,
   listTextToSpeechProviderProfiles,
@@ -56,6 +57,29 @@ import {
 import { settings } from './app-settings-provider.test-support'
 
 describe('model provider settings', () => {
+  it('resolves an empty key so keyless OpenCore Free requests stay anonymous', () => {
+    const state = settings()
+    const openCodeFree = state.provider.providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID)!
+    state.agents.kun.providerId = OPENCODE_FREE_PROVIDER_ID
+    state.agents.kun.apiKey = 'sk-stale-runtime'
+
+    const runtime = resolveKunRuntimeSettings(state)
+
+    expect(openCodeFree.apiKey).toBe('')
+    // A stale runtime key must not leak into the anonymous free tier either.
+    expect(runtime.apiKey).toBe('')
+  })
+
+  it('uses a configured OpenCore Free key instead of staying anonymous', () => {
+    const state = settings()
+    state.provider.providers = state.provider.providers.map((provider) =>
+      provider.id === OPENCODE_FREE_PROVIDER_ID ? { ...provider, apiKey: 'sk-zen' } : provider
+    )
+    state.agents.kun.providerId = OPENCODE_FREE_PROVIDER_ID
+
+    expect(resolveKunRuntimeSettings(state).apiKey).toBe('sk-zen')
+  })
+
   it('resolves Kun runtime credentials from the selected provider', () => {
     const state = settings()
     state.agents.kun.apiKey = 'sk-stale-runtime'

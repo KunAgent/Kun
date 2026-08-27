@@ -2,6 +2,7 @@ import type {
   ApprovalPolicy,
   ApprovalReviewer,
   ContextCompactionConfig,
+  FastContextConfig,
   FaultInjectionController,
   GeminiCodeAssistCredential,
   GraphRuntimeConfig,
@@ -65,6 +66,7 @@ export type KunServeRuntimeOptions = {
   capabilities?: KunCapabilitiesConfig
   hooks?: HooksConfig
   quality?: QualityConfig
+  fastContext?: FastContextConfig
   lab?: LabConfig
   startedAt?: string
   instanceId?: string

@@ -263,13 +263,14 @@ async function listModelTools(
   toolHost: Pick<ToolHost, 'listTools'>,
   contexts: readonly ToolHostContext[]
 ): Promise<DiscoveredTool[]> {
+  const listings = await Promise.all(contexts.map((context) => toolHost.listTools(context)))
   const byName = new Map<string, DiscoveredTool>()
-  for (const context of contexts) {
-    for (const tool of await toolHost.listTools(context)) {
+  for (const tools of listings) {
+    for (const tool of tools) {
       if (!byName.has(tool.name)) byName.set(tool.name, tool)
     }
   }
-  return [...byName.values()]
+  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name))
 }
 
 export function resolveTurnClientSurface(turn: Pick<

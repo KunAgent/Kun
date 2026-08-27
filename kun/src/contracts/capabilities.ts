@@ -11,6 +11,7 @@ export {
   ModelReasoningRequestProtocol,
   ModelReasoningCapabilityMetadata,
   ModelCapabilityMetadata,
+  ModelCatalogPricing,
   McpTransportKind,
   McpTrustScope,
   McpToolDiscoveryMode,

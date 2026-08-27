@@ -325,7 +325,7 @@ describe('chat projection reducer', () => {
       currentTurnId: 'turn_graph',
       currentTurnOrchestration: 'graph',
       threads: [{ ...state().threads[0]!, status: 'running' }]
-    }, [{ type: 'turn_completed' }])
+    }, [{ type: 'turn_completed', payload: { status: 'completed', turnId: 'turn_graph' } }])
 
     expect(projected.busy).toBe(false)
     expect(projected.currentTurnId).toBeNull()
@@ -349,7 +349,7 @@ describe('chat projection reducer', () => {
         summary: 'Run command',
         status: 'running'
       }]
-    }, [{ type: 'turn_aborted' }], {
+    }, [{ type: 'turn_aborted', payload: { status: 'aborted', turnId: 'turn_1' } }], {
       ...context,
       settlePendingRuntimeWork: (blocks) => blocks.map((block) =>
         block.kind === 'tool' && block.status === 'running'
@@ -376,8 +376,7 @@ describe('chat projection reducer', () => {
       composerOrchestration: 'graph'
     }, [{
       type: 'turn_failed',
-      error: new Error('stopped'),
-      options: { terminal: true }
+      payload: { turnId: 'turn_graph', error: new Error('stopped'), options: { terminal: true } }
     }])
 
     expect(projected.busy).toBe(false)
@@ -386,7 +385,7 @@ describe('chat projection reducer', () => {
     expect(projected.composerOrchestration).toBe('graph')
   })
 
-  it('settles a stale running sidebar status when a terminal event is replayed (#1028)', () => {
+  it('keeps a stale running sidebar status unchanged when an unidentified terminal event is replayed', () => {
     const projected = project({
       ...state(),
       busy: false,
@@ -401,11 +400,10 @@ describe('chat projection reducer', () => {
         updatedAt: '2026-07-11T00:00:30.000Z'
       },
       threads: [{ ...state().threads[0]!, status: 'running' }]
-    }, [{ type: 'turn_completed' }])
+    }, [{ type: 'turn_completed', payload: { status: 'completed', turnId: 'turn_unknown' } }])
 
     expect(projected.threads[0]).toMatchObject({
-      status: 'idle',
-      latestTurnStatus: 'completed'
+      status: 'running'
     })
   })
 

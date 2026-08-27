@@ -79,8 +79,8 @@ export class NoopUserInputGate implements UserInputGate {
     return undefined
   }
 
-  resolve(): boolean {
-    return false
+  resolve(): 'missing' {
+    return 'missing'
   }
 
   pending(): UserInputRequest[] {

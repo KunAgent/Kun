@@ -8,7 +8,7 @@ const englishCommonResources = enCommon as Record<string, unknown>
 const englishGraphSettingsResources = Object.fromEntries(
   Object.entries(enSettings).filter(([key]) =>
     key.startsWith('graphSettings') ||
-    key.startsWith('labExplore') ||
+    key.startsWith('fastContext') ||
     key.startsWith('labPpt') ||
     key.startsWith('storageRelocation') ||
     key.startsWith('modelRoutes')

@@ -222,7 +222,7 @@ async function startWeixinBridgeChannel(
   accountId: string,
   weixinBridgeUrl?: string
 ): Promise<void> {
-  await requestWeixinBridge(
+  const result = await requestWeixinBridge(
     'channels.start',
     {
       channel: WEIXIN_CHANNEL_ID,
@@ -231,6 +231,10 @@ async function startWeixinBridgeChannel(
     30_000,
     weixinBridgeUrl
   )
+  const code = recordString(result, 'code')
+  if (code === 'account_not_configured') {
+    throw new Error(recordString(result, 'message') || 'WeChat account is not configured. Please scan the QR code again.')
+  }
 }
 
 export async function startFeishuInstallQrcode(isLark: boolean): Promise<ClawPlatformInstallStartResult> {
@@ -375,11 +379,15 @@ export async function pollWeixinInstall(
     if (!connected) {
       return { done: false, error: message || 'WeChat login was not completed.' }
     }
-    const accountId = recordString(data, 'accountId') || sessionKey
+    const accountId = recordString(data, 'accountId')
     if (!accountId) {
-      return { done: false, error: 'WeChat login completed, but no account id was returned.' }
+      weixinInstallSessions.delete(deviceCode)
+      return {
+        done: false,
+        error: 'WeChat login completed without a configured account. Please scan a new QR code.'
+      }
     }
-    await startWeixinBridgeChannel(recordString(data, 'accountId'), weixinBridgeUrl)
+    await startWeixinBridgeChannel(accountId, weixinBridgeUrl)
     weixinInstallSessions.delete(deviceCode)
     return { done: true, kind: 'weixin', accountId, sessionKey }
   } catch (error) {

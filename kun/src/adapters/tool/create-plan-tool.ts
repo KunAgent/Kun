@@ -49,7 +49,7 @@ export const CREATE_PLAN_INPUT_SCHEMA: Record<string, unknown> = {
     },
     title: {
       type: 'string',
-      description: 'Short display title for the plan.'
+      description: 'Concise plan summary used for the display title and Markdown filename. Prefer the plan title or main section name; omit only when title generation fails so the reserved session-id filename is kept.'
     },
     operation: {
       type: 'string',
@@ -274,7 +274,7 @@ export async function executeCreatePlanTool(
   }
 
   const resolved = context.guiPlan
-    ? resolveReservedTarget(input, context)
+    ? await resolveReservedTarget(input, context, options)
     : await resolveFreeFormTarget(input, context, options)
   if ('error' in resolved) {
     return { output: { error: resolved.error }, isError: true }
@@ -357,10 +357,11 @@ export async function executeCreatePlanTool(
  * host-owned operation, with parity checks on workspace, id, and
  * explicit path overrides.
  */
-function resolveReservedTarget(
+async function resolveReservedTarget(
   input: Partial<CreatePlanToolInput>,
-  context: ToolHostContext
-): ResolvedPlanTarget | { error: string } {
+  context: ToolHostContext,
+  options: CreatePlanAdapterOptions
+): Promise<ResolvedPlanTarget | { error: string }> {
   const contextPlan = context.guiPlan
   if (!contextPlan) {
     return { error: 'create_plan requires an active reserved plan context' }
@@ -368,11 +369,11 @@ function resolveReservedTarget(
   if (!guiPlanWorkspaceMatches(context.workspace, contextPlan.workspaceRoot)) {
     return { error: 'tool workspace does not match the active plan workspace' }
   }
-  const relativePath = toRelativePath(contextPlan.relativePath)
-  if (!relativePath || !isGuiPlanRelativePath(relativePath)) {
+  const reservedRelativePath = toRelativePath(contextPlan.relativePath)
+  if (!reservedRelativePath || !isGuiPlanRelativePath(reservedRelativePath)) {
     return { error: 'plan_relative_path must be a direct Markdown file under .kunsdd/plan' }
   }
-  if (contextPlan.operation === 'draft' && !isGuiPlanCurrentRelativePath(relativePath)) {
+  if (contextPlan.operation === 'draft' && !isGuiPlanCurrentRelativePath(reservedRelativePath)) {
     return { error: 'legacy .deepseekgui/plan paths can only be refined' }
   }
   if (input.plan_relative_path && toRelativePath(input.plan_relative_path) !== contextPlan.relativePath) {
@@ -385,13 +386,24 @@ function resolveReservedTarget(
   if (!workspaceRoot) {
     return { error: 'workspace root is required' }
   }
+  let relativePath = reservedRelativePath
+  if (contextPlan.operation === 'draft') {
+    // The renderer reserves a provisional path before the model responds. Use
+    // the model's concise plan title when available; only fall back to the
+    // stable session id when the title call/tool argument is unavailable.
+    const featureName = deriveFeatureName(input.title?.trim() || context.threadId)
+    const existing = await listExistingPlanRelativePaths(workspaceRoot, options)
+    relativePath = nextAvailablePlanRelativePath(featureName, existing)
+  }
   return {
     workspaceRoot,
     relativePath,
-    planId: contextPlan.planId ?? input.plan_id ?? buildGuiPlanId(workspaceRoot, relativePath),
+    planId: relativePath === reservedRelativePath
+      ? contextPlan.planId ?? input.plan_id ?? buildGuiPlanId(workspaceRoot, relativePath)
+      : buildGuiPlanId(workspaceRoot, relativePath),
     operation: contextPlan.operation,
     sourceRequest: contextPlan.sourceRequest,
-    title: contextPlan.title
+    title: input.title ?? contextPlan.title
   }
 }
 

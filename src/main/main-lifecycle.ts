@@ -48,6 +48,9 @@ import {
   ManagedRuntimeShutdownCoordinator
 } from './runtime/managed-runtime-shutdown-coordinator'
 import {
+  requestProviderMutationFlush
+} from './provider-mutation-barrier'
+import {
   revokeManagedRuntimeBrowserUseBinding
 } from './runtime/browser-use-binding-revoke'
 import {
@@ -56,6 +59,7 @@ import {
 import {
   installWebviewSecurityGuards
 } from './extensions/extension-webview-security'
+import { probeRuntimeApi } from './main-runtime-health'
 import {
   beginBrowserUseHostShutdown,
   stopBrowserUseHost,
@@ -231,7 +235,11 @@ export function stopManagedRuntimes(): Promise<void> {
   return runtimeShutdown.stop()
 }
 
-export function prepareManagedRuntimesForUpdate(): Promise<void> {
+export async function prepareManagedRuntimesForUpdate(): Promise<void> {
+  const mutationFlush = await requestProviderMutationFlush(() => mainState.mainWindow)
+  if (!mutationFlush.ok) {
+    throw new Error(`Provider mutations could not be flushed before update (${mutationFlush.errorCode ?? 'unknown'})`)
+  }
   return runtimeShutdown.prepareForUpdate()
 }
 
@@ -252,7 +260,8 @@ export async function loadGuiUpdaterModule(): Promise<GuiUpdaterModule> {
             async () => (await mainState.store.load()).guiUpdate.channel,
             prepareManagedRuntimesForUpdate,
             async () => (await mainState.store.load()).locale,
-            setUpdateInstallQuitting
+            setUpdateInstallQuitting,
+            async () => (await probeRuntimeApi(await mainState.store.load())).ok
           )
           mainState.guiUpdaterInitialized = true
         }

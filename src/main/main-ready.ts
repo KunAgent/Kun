@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
 import { maybePromptCliInstall } from './cli-install-service'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
@@ -14,6 +14,7 @@ import {
 } from './main-lifecycle'
 import {
   assertCanonicalRuntimeMigrationReady,
+  createStartupKunHandoffRecovery,
   shutdownActiveServiceManagerForUpdate
 } from './main-migrations'
 import {
@@ -28,17 +29,26 @@ import {
   reconcileBundledRuntimeAfterInstall,
   restartRuntime
 } from './main-runtime-startup'
+import {
+  createStartupSettingsApply,
+  runPostWindowRuntimeStartup
+} from './main-runtime-startup-flow'
+import { startWindowFirstStartup } from './main-startup-orchestrator'
 import { createWindow } from './main-window'
 import { MainWindowActivationCoordinator } from './main-window-activation'
 import { initializeMainServices } from './main-ready-services'
-import { registerMainIpc } from './main-ready-ipc'
-import { revealMainWindow } from './main-tray'
+import { initializeWindowShell } from './main-ready-shell'
+import { registerShellIpc } from './main-ready-ipc'
+import { registerMainIpc } from './main-ready-ipc-full'
+import { revealMainWindow, syncTray } from './main-tray'
 import { resolveLogDirectory } from './main-paths'
 import { showStartupFailureWindow } from './startup-failure-window'
 import { sanitizeStartupFailureMessage } from './startup-failure-content'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
+import { prefetchCatalogPricing } from './catalog-prefetch'
+import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 
-export function startMainApp(): void {
+export function startMainApp(): Promise<void> {
   mainState.createWindow = createWindow
   mainState.ensureRuntime = ensureRuntime
   mainState.restartRuntime = restartRuntime
@@ -62,71 +72,17 @@ export function startMainApp(): void {
   )
   app.on('second-instance', () => activation.requestReveal())
 
-  app.whenReady().then(async () => {
-    traceStartup('app.whenReady:start')
-    if (!gotSingleInstanceLock) return
-
-    const services = await initializeMainServices()
-    if (!services) return
-    const { initial } = services
-    registerMainIpc(services)
-
-    createWindow({
-      suppressInitialShow: shouldStartHidden(initial),
-      useSystemTitleBar: initial.appBehavior.useSystemTitleBar
-    })
-    activation.windowAvailable()
-    void maybePromptCliInstall(() => mainState.mainWindow).catch((error) => {
-      console.warn('[kun-gui] CLI install prompt failed:', error)
-    })
-    traceStartup('createWindow:returned')
-    void loadGuiUpdaterModule()
-      .then((module) => module.showPostUpdateReleaseNotes())
-      .catch((error) => {
-        console.warn('[kun-gui updater] failed to show post-update release notes:', error)
-      })
-
-    void pruneOnStartup().catch((err) => {
-      console.warn('[kun-gui] prune logs:', err)
-    })
-
-    setTimeout(() => {
-      void reconcileBundledRuntimeAfterInstall(initial)
-        .then(() => resolveManagedRuntimeStartupTarget(
-          initial,
-          managedKunHostCanAutoStart(initial),
-          {
-            ensure: ensureKunServeFreshOnStartup,
-            resolveExisting: (settings) => kunRuntimeAdapter.resolveConnection(settings)
-          }
-        ))
-        .then((current) => {
-          if (!current) return
-          runtimeSupervisor.enqueueSettingsApply(async () => {
-            const startupSettings = mainState.settledRuntimeSettings ?? current
-            const applied = await applyManagedRuntimeSettingsHot(startupSettings, 'startup-settings')
-            if (applied === 'restart_required') {
-              logWarn(
-                'startup-settings',
-                'Kun attached successfully, but the configured default model could not be hot-applied.'
-              )
-            }
-          }, (error) => {
-            logWarn('startup-settings', 'Kun startup settings apply failed', {
-              message: error instanceof Error ? error.message : String(error)
-            })
-          }, 'startup-settings')
-        })
-        .catch((err) => {
-          console.warn('[kun-gui] failed to start, attach, or configure the shared Kun runtime:', err)
-        })
-    }, 1500)
-
-    app.on('activate', () => {
-      if (!mainState.mainWindow || mainState.mainWindow.isDestroyed()) createWindow()
-      else revealMainWindow()
-    })
-  }).catch((error) => {
+  const handleStartupFailure = (error: unknown): void => {
+    if (!mainState.startupState.isReady()) {
+      try {
+        mainState.startupState.transition('recovery_required')
+      } catch {
+        // Keep the recovery path total even if a test or future caller reaches
+        // failure from an unexpected state.
+      }
+    }
+    const earlyWindow = mainState.mainWindow
+    if (earlyWindow && !earlyWindow.isDestroyed()) earlyWindow.destroy()
     const message = sanitizeStartupFailureMessage(error)
     console.error('[kun-gui] startup failed:', message)
     logError('startup', 'Desktop startup failed.', {
@@ -134,7 +90,12 @@ export function startMainApp(): void {
       packaged: app.isPackaged,
       message
     })
-    const recoveryWindow = showStartupFailureWindow(error, mainState.logDir)
+    const recoverHandoff = createStartupKunHandoffRecovery(error)
+    const recoveryWindow = showStartupFailureWindow(
+      error,
+      mainState.logDir,
+      recoverHandoff ? { recoverHandoff } : {}
+    )
     if (recoveryWindow) {
       mainState.mainWindow = recoveryWindow
       recoveryWindow.on('closed', () => {
@@ -142,5 +103,99 @@ export function startMainApp(): void {
       })
       activation.windowAvailable()
     }
-  })
+  }
+
+  const createWorkbenchWindow = (options: {
+    suppressInitialShow?: boolean
+    useSystemTitleBar?: boolean
+  } = {}): void => {
+    createWindow(options)
+    const window = mainState.mainWindow as BrowserWindow | null
+    if (!window) return
+    const publishState = (): void => mainState.startupState.publish()
+    if (window.webContents.isLoadingMainFrame()) {
+      window.webContents.once('did-finish-load', publishState)
+    } else {
+      publishState()
+    }
+  }
+
+  return app.whenReady().then(async () => {
+    traceStartup('app.whenReady:start')
+    if (!gotSingleInstanceLock) return
+    if (await recoverUpdateBeforeRuntimeStart()) return
+
+    const startup = await startWindowFirstStartup({
+      initializeShell: initializeWindowShell,
+      registerShellIpc,
+      transitionShellReady: () => mainState.startupState.transition('shell_ready'),
+      createWindow: (settings) => {
+        createWorkbenchWindow({
+          suppressInitialShow: shouldStartHidden(settings),
+          useSystemTitleBar: settings.appBehavior.useSystemTitleBar
+        })
+        traceStartup('createWindow:returned')
+      },
+      windowAvailable: () => activation.windowAvailable(),
+      syncTray,
+      startBackground: async (shell) => {
+        mainState.startupState.transition('services_starting', 'Checking for an existing Kun runtime...')
+        const attached = await kunRuntimeAdapter.resolveConnection(shell.shellSettings).catch(() => false)
+        if (attached) {
+          mainState.startupState.noteDetail(
+            'Connected to the existing Kun runtime; keeping active work available during startup.'
+          )
+        }
+        return initializeMainServices({
+          productionSettingsPath: shell.productionSettingsPath,
+          onPhase: (phase, detail) => {
+            try {
+              mainState.startupState.transition(phase, detail)
+            } catch {
+              // A later phase may already have been published; keep the latest.
+            }
+          }
+        })
+      }
+    })
+    if (!startup?.background) return
+
+    const { initial } = startup.background
+    registerMainIpc(startup.background)
+
+    void pruneOnStartup().catch((err) => {
+      console.warn('[kun-gui] prune logs:', err)
+    })
+
+    void prefetchCatalogPricing(mainState.store).catch((err) => {
+      console.warn('[kun-gui] catalog pricing prefetch failed:', err)
+    })
+
+    await runPostWindowRuntimeStartup(initial, {
+      startupState: mainState.startupState,
+      reconcileBundledRuntimeAfterInstall,
+      resolveManagedRuntimeStartupTarget,
+      managedKunHostCanAutoStart,
+      ensureKunServeFreshOnStartup,
+      resolveRuntimeConnection: (settings) => kunRuntimeAdapter.resolveConnection(settings),
+      enqueueStartupSettingsApply: (settings) => createStartupSettingsApply(settings, {
+        runtimeSupervisor,
+        settledRuntimeSettings: mainState.settledRuntimeSettings,
+        applyManagedRuntimeSettingsHot,
+        logWarn
+      }),
+      loadGuiUpdaterModule,
+      showCliInstallPrompt: () => maybePromptCliInstall(() => mainState.mainWindow),
+      logWarn
+    })
+
+    app.on('activate', () => {
+      if (!mainState.startupState.isReady()) {
+        activation.requestReveal()
+        return
+      }
+      if (!mainState.mainWindow || mainState.mainWindow.isDestroyed()) createWorkbenchWindow()
+      else revealMainWindow()
+    })
+  }).catch(handleStartupFailure)
 }

@@ -12,6 +12,9 @@ const electron = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ ipcMain: electron.ipcMain }))
+vi.mock('./main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
 
 import {
   RuntimeDataRecoveryController,
@@ -20,7 +23,8 @@ import {
 } from './runtime-data-recovery-controller'
 
 describe('Runtime data recovery IPC boundary', () => {
-  const mainFrame = { processId: 10, routingId: 20 }
+  const recoveryUrl = 'http://127.0.0.1:5173/index.html?runtimeMigrationRecovery=1'
+  const mainFrame = { processId: 10, routingId: 20, url: recoveryUrl }
   const mainContents = { id: 1, mainFrame }
   const mainWindow = {
     isDestroyed: () => false,
@@ -38,7 +42,11 @@ describe('Runtime data recovery IPC boundary', () => {
     expect(() => assertTrustedRuntimeDataRecoverySender(trustedEvent as never, getMainWindow)).not.toThrow()
     expect(() => assertTrustedRuntimeDataRecoverySender({
       sender: mainContents,
-      senderFrame: { processId: 10, routingId: 99 }
+      senderFrame: { processId: 10, routingId: 99, url: recoveryUrl }
+    } as never, getMainWindow)).toThrow(/trusted top-level frame/)
+    expect(() => assertTrustedRuntimeDataRecoverySender({
+      sender: mainContents,
+      senderFrame: { ...mainFrame, url: 'http://127.0.0.1:5173/index.html' }
     } as never, getMainWindow)).toThrow(/trusted top-level frame/)
     expect(() => assertTrustedRuntimeDataRecoverySender({
       sender: { id: 2 },

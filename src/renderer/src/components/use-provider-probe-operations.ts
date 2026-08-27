@@ -37,6 +37,7 @@ import {
   requestSharedModelConnectionProbe,
   shouldUseSharedModelConnectionProbe
 } from './settings-section-providers-shared-api'
+import { flushProviderMutations } from './provider-mutation-flush'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 
@@ -309,6 +310,21 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
       }))
       const startedAt = performance.now()
       try {
+        // Probe must observe committed Registry credentials. A staged
+        // credential/catalog mutation that has not drained yet would make the
+        // main process probe with the previous key and report a false auth
+        // failure, so wait for this provider's mutations first.
+        const barrier = await flushProviderMutations({
+          providerIds: [target.id],
+          mutationKinds: ['credential', 'catalog']
+        })
+        if (!barrier.ok) {
+          throw barrier.timedOut
+            ? new Error(`Provider credential sync timed out: ${target.id}`)
+            : barrier.error instanceof Error
+              ? barrier.error
+              : String(barrier.error)
+        }
         const models = await requestSharedModelConnectionProbe(target.id)
         if (mode === 'fetch') {
           openModelImport({

@@ -42,9 +42,10 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 export function useProviderSharedSynchronization(scope: Record<string, any>): void {
-  const { form, kun, update, saveStatus, provider, modelProviders, sharedConnections, setSharedConnections, setSharedConnectionsError, sharedSyncFingerprint, sharedProjectionPending, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, enqueueSharedMutation, sharedProjectionInput } = scope
+  const { form, kun, update, saveStatus, provider, modelProviders, sharedConnections, setSharedConnections, setSharedConnectionsError, sharedSyncFingerprint, sharedProjectionPending, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, enqueueSharedMutation, sharedProjectionInput, onSharedSyncRecovered } = scope
   useEffect(() => {
     let disposed = false
+    let hadRefreshError = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let revision = 0
     const refresh = async (): Promise<void> => {
@@ -62,6 +63,8 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
           revision = snapshot.revision
           setSharedConnections(snapshot)
           setSharedConnectionsError('')
+          if (hadRefreshError) onSharedSyncRecovered?.()
+          hadRefreshError = false
           const current = sharedProjectionInput.current
           replaceMapContents(pendingSharedProviderDeletions.current, reconcilePendingSharedProviderDeletions(
             snapshot,
@@ -146,6 +149,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
           }
         }
       } catch (error) {
+        hadRefreshError = true
         if (!disposed) setSharedConnectionsError(error instanceof Error ? error.message : String(error))
       } finally {
         if (!disposed) timer = setTimeout(refresh, revision === 0 ? 2_000 : 0)
@@ -239,6 +243,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
           if (needsPatch) {
             if (pendingSharedProviderDeletions.current.has(item.id)) continue
             const canonicalName = item.name.trim() || item.id
+            const pendingProfile = pendingSharedProviderNames.current.get(item.id)
             snapshot = await requestSharedModelConnections(
               `/v1/model-connections/${encodeURIComponent(item.id)}`,
               'PATCH',
@@ -256,10 +261,16 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
                 } : {})
               }
             )
-            const pendingName = pendingSharedProviderNames.current.get(item.id)
-            if (pendingName?.canonicalName === canonicalName) {
+            const currentProfile = pendingSharedProviderNames.current.get(item.id)
+            if (
+              pendingProfile &&
+              currentProfile?.generation === pendingProfile.generation &&
+              pendingProfile.canonicalName === canonicalName &&
+              pendingProfile.localBaseUrl === item.baseUrl &&
+              pendingProfile.localEndpointFormat === item.endpointFormat
+            ) {
               pendingSharedProviderNames.current.set(item.id, {
-                ...pendingName,
+                ...currentProfile,
                 committedRevision: snapshot.revision
               })
             }

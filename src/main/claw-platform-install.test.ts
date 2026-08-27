@@ -182,6 +182,30 @@ describe('claw platform install', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://127.0.0.1:18790/api/v1/admin/rpc')
   })
 
+  it('rejects a completed WeChat login without a real bridge account id', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body ?? '{}')) as { method?: string }
+      if (payload.method === 'web.login.start') {
+        return jsonResponse({ ok: true, payload: {
+          qrDataUrl: 'data:image/png;base64,qr', sessionKey: 'random-session-uuid'
+        } })
+      }
+      if (payload.method === 'web.login.wait') {
+        return jsonResponse({ ok: true, payload: { connected: true } })
+      }
+      return jsonResponse({ ok: false, error: { message: 'channels.start must not be called' } }, 400)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const start = await startWeixinInstallQrcode()
+    if (!start.ok) throw new Error(start.message)
+    await expect(pollWeixinInstall(start.deviceCode)).resolves.toEqual({
+      done: false,
+      error: 'WeChat login completed without a configured account. Please scan a new QR code.'
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('starts the WeChat channel after QR login completes', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const payload = JSON.parse(String(init?.body ?? '{}')) as { method?: string; params?: Record<string, unknown> }

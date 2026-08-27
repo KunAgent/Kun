@@ -5,8 +5,13 @@ import i18n from '../../i18n'
 import { DesignCanvasConversationOverlay } from './DesignCanvasConversationOverlay'
 import type { DesignCanvasConversationOverlayConversationProps } from './DesignCanvasConversationOverlay'
 
+const contentProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
+
 vi.mock('./DesignConversationContent', () => ({
-  DesignConversationContent: () => createElement('div'),
+  DesignConversationContent: (props: Record<string, unknown>) => {
+    contentProps.current = props
+    return createElement('div')
+  },
   DesignConversationHistoryHeader: () => createElement('div')
 }))
 
@@ -87,8 +92,9 @@ describe('DesignCanvasConversationOverlay', () => {
     const { root } = render()
     openPanel(root)
     act(() => {
-      // The launcher (first) and the panel header (second) share the label.
-      root.findAllByProps({ 'aria-label': i18n.t('designCanvasConversationCollapse') })[1].props.onClick()
+      // The panel header carries the collapse control; the launcher now always
+      // shows the open label, so the header button is the only collapse match.
+      root.findAllByProps({ 'aria-label': i18n.t('designCanvasConversationCollapse') })[0].props.onClick()
     })
     expect(root.findAllByProps({ 'data-design-canvas-conversation-panel': true }).length)
       .toBe(0)
@@ -135,5 +141,52 @@ describe('DesignCanvasConversationOverlay', () => {
     })
     expect(onNewConversation).toHaveBeenCalledTimes(1)
     expect(onClearHistory).not.toHaveBeenCalled()
+  })
+
+  it('offsets the launcher by the window-controls safe area so it clears the titlebar', () => {
+    const { root } = render()
+    const launcher = root.findByProps({ 'aria-label': i18n.t('designCanvasConversationOpen') })
+    const style = launcher.props.style as { top: string }
+    expect(style.top).toContain('72px')
+    expect(style.top).toContain('--ds-window-controls-safe-block')
+  })
+
+  it('mirrors the active conversation inside the floating panel', () => {
+    const { root } = render()
+    openPanel(root)
+    expect(contentProps.current?.showActiveThreadConversation).toBe(true)
+  })
+
+  it('resizes the panel from the bottom-right grip', () => {
+    const { root } = render()
+    openPanel(root)
+    const grip = root.findByProps({ 'data-design-canvas-conversation-resize-handle': true })
+    const styleBefore = root
+      .findByProps({ 'data-design-canvas-conversation-panel': true })
+      .props.style as { width: number; height: number }
+    act(() => {
+      grip.props.onPointerDown({
+        button: 0,
+        pointerId: 7,
+        clientX: 500,
+        clientY: 500,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        currentTarget: { setPointerCapture: () => {} }
+      })
+    })
+    act(() => {
+      grip.props.onPointerMove({
+        pointerId: 7,
+        clientX: 560,
+        clientY: 460,
+        preventDefault: () => {}
+      })
+    })
+    const styleAfter = root
+      .findByProps({ 'data-design-canvas-conversation-panel': true })
+      .props.style as { width: number; height: number }
+    expect(styleAfter.width).toBe(styleBefore.width + 60)
+    expect(styleAfter.height).toBe(styleBefore.height - 40)
   })
 })

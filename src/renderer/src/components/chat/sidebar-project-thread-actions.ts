@@ -1,5 +1,5 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
-import { kunThreadSummarizePath } from '@shared/kun-endpoints'
+import { kunThreadPrunePath, kunThreadSummarizePath, kunThreadPath } from '@shared/kun-endpoints'
 import { parseRuntimeErrorBody } from '@shared/runtime-error'
 import type { NormalizedThread } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
@@ -190,6 +190,64 @@ export function createSidebarProjectThreadActions({
     })
   }
 
+  const handlePruneThread = async (thread: NormalizedThread): Promise<void> => {
+    const threadId = thread.id.trim()
+    if (!threadId || deletingThreadIds[threadId]) return
+    const keepTurnsText = window.prompt(t('sidebarThreadPruneKeepTurnsPrompt'), '100')
+    if (keepTurnsText === null) return
+    const keepDaysText = window.prompt(t('sidebarThreadPruneKeepDaysPrompt'), '30')
+    if (keepDaysText === null) return
+    const keepLastTurns = Number.parseInt(keepTurnsText.trim(), 10)
+    const keepDays = Number.parseInt(keepDaysText.trim(), 10)
+    if ((!Number.isFinite(keepLastTurns) || keepLastTurns <= 0) &&
+        (!Number.isFinite(keepDays) || keepDays <= 0)) {
+      useChatStore.getState().setError(t('sidebarThreadPrunePolicyRequired'))
+      return
+    }
+    let totalTurns: number | undefined
+    try {
+      const detail = await rendererRuntimeClient.runtimeRequest(kunThreadPath(threadId), 'GET')
+      if (detail.ok) {
+        const parsed = JSON.parse(detail.body) as { turns?: unknown[] }
+        totalTurns = Array.isArray(parsed.turns) ? parsed.turns.length : undefined
+      }
+    } catch {
+      // Preview is best-effort; the runtime validates the policy at commit time.
+    }
+    const estimated = totalTurns !== undefined && Number.isFinite(keepLastTurns) && keepLastTurns > 0
+      ? Math.max(0, totalTurns - keepLastTurns)
+      : undefined
+    openActionDialog({
+      title: t('sidebarThreadPruneDialogTitle', { title: thread.title }),
+      description: t('sidebarThreadPruneDialogDescription', {
+        turns: Number.isFinite(keepLastTurns) && keepLastTurns > 0 ? keepLastTurns : '—',
+        days: Number.isFinite(keepDays) && keepDays > 0 ? keepDays : '—'
+      }),
+      detail: estimated === undefined
+        ? t('sidebarThreadPruneDialogDetail')
+        : t('sidebarThreadPruneDialogEstimate', { count: estimated }),
+      confirmLabel: t('sidebarThreadPruneConfirmButton'),
+      danger: true,
+      onConfirm: () => withThreadBusy(threadId, async () => {
+        const policy = {
+          ...(Number.isFinite(keepLastTurns) && keepLastTurns > 0 ? { keepLastTurns } : {}),
+          ...(Number.isFinite(keepDays) && keepDays > 0 ? { keepDays } : {}),
+          archiveBeforePrune: true
+        }
+        const response = await rendererRuntimeClient.runtimeRequest(
+          kunThreadPrunePath(threadId),
+          'POST',
+          JSON.stringify(policy)
+        )
+        if (!response.ok) {
+          const runtimeError = parseRuntimeErrorBody(response.body, t('sidebarThreadPruneFailed'))
+          throw new Error(runtimeError.message)
+        }
+        await useChatStore.getState().refreshThreads()
+      })
+    })
+  }
+
   const handleCopyThreadId = async (thread: NormalizedThread): Promise<void> => {
     const threadId = thread.id.trim()
     if (!threadId) return
@@ -363,6 +421,7 @@ export function createSidebarProjectThreadActions({
     handleCopyThreadId,
     handleDeleteThread,
     handlePinThread,
+    handlePruneThread,
     handleRestoreThread,
     handleSummarizeThread,
     moveTargetsForThread,

@@ -3,16 +3,20 @@ import {
   type ModelProviderModelProfileV1
 } from '@shared/app-settings'
 import { describe, expect, it, vi } from 'vitest'
+import type { SharedModelConnection } from './settings-section-providers-shared-api'
 import {
   clearPendingSharedProviderDeletionForExplicitAdd,
   createSharedModelMutationQueue,
   projectSharedModelConnections,
+  reconcilePendingSharedProviderCatalogs,
   selectSharedModelConnection,
   sharedProvidersEligibleForSync
 } from './settings-section-providers'
 import {
+  credentialRetryDelayMs,
   drainSharedProviderCredentialMutation,
   enqueueSharedModelMutation,
+  isCredentialRetryableError,
   resetSharedProviderMutationCoordinatorForTests,
   sharedProviderMutationCoordinator,
   stageSharedProviderCredentialMutation
@@ -24,6 +28,47 @@ const textModelProfile: ModelProviderModelProfileV1 = {
   supportsToolCalling: true,
   messageParts: ['text']
 }
+
+describe('credential retry policy', () => {
+  it('uses capped exponential backoff with bounded jitter', () => {
+    expect(credentialRetryDelayMs(1, () => 0)).toBe(800)
+    expect(credentialRetryDelayMs(2, () => 0.5)).toBe(2_000)
+    expect(credentialRetryDelayMs(9, () => 1)).toBe(30_000)
+  })
+
+  it('retries transient failures but not credential validation failures', () => {
+    expect(isCredentialRetryableError(new TypeError('network unavailable'))).toBe(true)
+    expect(isCredentialRetryableError({ status: 409 })).toBe(true)
+    expect(isCredentialRetryableError({ status: 503 })).toBe(true)
+    expect(isCredentialRetryableError({ status: 400 })).toBe(false)
+  })
+})
+
+describe('pending provider profile metadata', () => {
+  it('keeps the overlay until baseUrl and endpoint metadata reach the registry', () => {
+    const connection = {
+      id: 'custom-provider-2', accountId: 'account:custom-provider-2',
+      name: 'Custom Provider', kind: 'http' as const, authType: 'api-key' as const,
+      baseUrl: 'https://old.example.com/v1', endpointFormat: 'chat_completions' as const,
+      configured: true, models: ['model-a'], modelCapabilities: { 'model-a': { id: 'model-a', ...textModelProfile } }
+    } satisfies SharedModelConnection
+    const pending = {
+      generation: 4, localProviderName: 'Edited Provider',
+      localProviderBaseUrl: 'https://new.example.com/v1',
+      localProviderEndpointFormat: 'responses' as const, localProviderKind: 'http' as const,
+      baseModels: ['model-a'], baseModelProfiles: { 'model-a': textModelProfile },
+      localModels: ['model-a'], localModelProfiles: { 'model-a': textModelProfile }, committedRevision: 5
+    }
+    const snapshot = (provider: SharedModelConnection) => ({ schemaVersion: 1 as const, revision: 5, providers: [provider] })
+
+    expect(reconcilePendingSharedProviderCatalogs(snapshot(connection), new Map([[connection.id, pending]]))
+      .has(connection.id)).toBe(true)
+    expect(reconcilePendingSharedProviderCatalogs(snapshot({
+      ...connection, name: 'Edited Provider', baseUrl: pending.localProviderBaseUrl,
+      endpointFormat: pending.localProviderEndpointFormat
+    }), new Map([[connection.id, pending]])).has(connection.id)).toBe(false)
+  })
+})
 
 describe('shared model connection mutation ordering', () => {
   it('continues processing after an earlier queued mutation fails', async () => {
@@ -264,6 +309,51 @@ describe('shared model connection settings projection', () => {
     })
     expect(projected.provider.providers.find((provider) => provider.id === 'deepseek')?.apiKey)
       .toBe('legacy-plaintext')
+  })
+
+  it('preserves pending connection profile edits against an older registry snapshot', () => {
+    const current = defaultModelProviderSettings()
+    current.providers[0] = {
+      ...current.providers[0]!,
+      name: 'Edited provider',
+      baseUrl: 'https://new.example/v1',
+      endpointFormat: 'responses'
+    }
+    const projected = projectSharedModelConnections(
+      current,
+      {
+        schemaVersion: 1,
+        revision: 7,
+        providers: [{
+          id: current.providers[0]!.id,
+          accountId: `account:${current.providers[0]!.id}`,
+          name: 'Old provider',
+          kind: 'http',
+          authType: 'api-key',
+          baseUrl: 'https://old.example/v1',
+          endpointFormat: 'chat_completions',
+          configured: true,
+          models: [...current.providers[0]!.models]
+        }]
+      },
+      new Map(),
+      new Map([[
+        current.providers[0]!.id,
+        {
+          localName: 'Edited provider',
+          canonicalName: 'Edited provider',
+          localBaseUrl: 'https://new.example/v1',
+          localEndpointFormat: 'responses',
+          committedRevision: null
+        }
+      ]])
+    )
+
+    expect(projected.provider.providers[0]).toMatchObject({
+      name: 'Edited provider',
+      baseUrl: 'https://new.example/v1',
+      endpointFormat: 'responses'
+    })
   })
 
   it('clears an existing settings credential while applying shared registry metadata', () => {

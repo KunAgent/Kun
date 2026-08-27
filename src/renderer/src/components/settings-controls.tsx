@@ -18,6 +18,7 @@ export type InlineNotice = {
 export function SecretInput({
   value,
   onChange,
+  onBlur,
   visible,
   onToggleVisibility,
   placeholder,
@@ -30,6 +31,7 @@ export function SecretInput({
 }: {
   value: string
   onChange: (value: string) => void
+  onBlur?: () => void
   visible: boolean
   onToggleVisibility: () => void
   placeholder?: string
@@ -55,6 +57,7 @@ export function SecretInput({
         className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[13px] text-ds-ink focus:outline-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
       />
       <button
         type="button"

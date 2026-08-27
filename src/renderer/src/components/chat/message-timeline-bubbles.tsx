@@ -23,12 +23,25 @@ import {
   formatMessageDateTime
 } from './message-timeline-bubble-support'
 import { ToolAttachmentPreviews } from './message-timeline-media-views'
+import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
 
 export { GeneratedFilesPanel } from './message-timeline-media-views'
 export { generatedMediaScrollAvailability } from './message-timeline-media-logic'
 
 export const MessageBubble = memo(MessageBubbleImpl)
+
+export function shouldAnimateAssistantStream({
+  isLiveAssistant,
+  busyUnconfirmed,
+  catchingUpThread
+}: {
+  isLiveAssistant: boolean
+  busyUnconfirmed: boolean
+  catchingUpThread: boolean
+}): boolean {
+  return isLiveAssistant && !busyUnconfirmed && !catchingUpThread
+}
 
 type TurnMetricsLike = {
   avgTtftMs: number | null
@@ -72,6 +85,10 @@ function MessageBubbleImpl({
   const { t, i18n } = useTranslation('common')
   const resolveApproval = useChatStore((s) => s.resolveApproval)
   const turnTimingMetrics = useChatStore((s) => s.turnTimingMetrics)
+  const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
+  const catchingUpThread = useChatStore((s) =>
+    Boolean(s.activeThreadId && s.threadLoadingId === s.activeThreadId)
+  )
   if (block.kind === 'user' && isBackgroundShellNoticeBlock(block)) {
     return <BackgroundShellNoticeBubble block={block} nested={nested} />
   }
@@ -83,6 +100,13 @@ function MessageBubbleImpl({
   }
   if (block.kind === 'assistant') {
     const streaming = block.id === 'live-assistant'
+    // Replayed events are folded into the hidden timeline at full speed.
+    // Typewriter pacing resumes only after the selected thread has caught up.
+    const effectiveStreaming = shouldAnimateAssistantStream({
+      isLiveAssistant: streaming,
+      busyUnconfirmed,
+      catchingUpThread
+    })
     const createdAtLabel = block.createdAt
       ? formatMessageDateTime(block.createdAt, i18n.language)
       : null
@@ -91,10 +115,11 @@ function MessageBubbleImpl({
         ? turnTimingMetrics.get(block.turnId)
         : undefined
     return (
-      <div className="group/message flex min-w-0 max-w-full flex-col">
-        <div className="ds-markdown ds-chat-answer min-w-0 max-w-full text-ds-ink">
-          <AssistantMarkdown text={block.text} streaming={streaming} />
-        </div>
+      <LiveAssistantStreamingProvider streaming={effectiveStreaming}>
+        <div className="group/message flex min-w-0 max-w-full flex-col">
+          <div className="ds-markdown ds-chat-answer min-w-0 max-w-full text-ds-ink">
+            <AssistantMarkdown text={block.text} streaming={effectiveStreaming} />
+          </div>
         {!streaming ? (
           <div className="mt-1 flex min-h-5 min-w-0 items-center justify-between gap-3 text-[11.5px] text-ds-faint opacity-0 transition duration-150 group-hover/message:opacity-100">
             <span className="flex min-w-0 items-center gap-2">
@@ -140,7 +165,8 @@ function MessageBubbleImpl({
             </div>
           </div>
         ) : null}
-      </div>
+        </div>
+      </LiveAssistantStreamingProvider>
     )
   }
   if (block.kind === 'reasoning') {

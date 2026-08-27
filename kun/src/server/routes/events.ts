@@ -1,4 +1,4 @@
-import { encodeSseEvent } from '../sse.js'
+import { encodeReplaySynchronized, encodeSseEvent } from '../sse.js'
 import type { EventBus } from '../../ports/event-bus.js'
 import type { SessionStore } from '../../ports/session-store.js'
 import { isPublicRuntimeEvent, type RuntimeEvent } from '../../contracts/events.js'
@@ -105,6 +105,7 @@ export function buildEventStreamResponse(input: {
       try {
         let lastDeliveredSeq = sinceSeq
         let replaying = true
+        let synchronizationMarkerMayFillQueue = false
         const frameFor = (event: RuntimeEvent): Uint8Array => encoder.encode(encodeSseEvent(event))
         const deliver = (event: RuntimeEvent, frame?: Uint8Array): boolean => {
           if (typeof event.seq === 'number' && event.seq <= lastDeliveredSeq) return false
@@ -120,8 +121,18 @@ export function buildEventStreamResponse(input: {
           // events for a stalled client is worse than closing it: the client can
           // replay the durable gap from its last cursor.
           if (!replaying && controller.desiredSize !== null && controller.desiredSize <= 0) {
-            close()
-            return false
+            // The transport-only synchronization marker may occupy the
+            // stream's single queue slot before the HTTP reader attaches.
+            // Permit exactly one following live frame in that case; normal
+            // backpressure resumes immediately afterwards.
+            if (synchronizationMarkerMayFillQueue) {
+              synchronizationMarkerMayFillQueue = false
+            } else {
+              close()
+              return false
+            }
+          } else if (!replaying) {
+            synchronizationMarkerMayFillQueue = false
           }
           if (typeof event.seq === 'number') {
             lastDeliveredSeq = event.seq
@@ -155,6 +166,22 @@ export function buildEventStreamResponse(input: {
             close()
           }
         })
+        const replayBoundary = Math.max(
+          sinceSeq,
+          await input.sessionStore.highestSeq(input.threadId)
+        )
+        // Prune/restore can drop the event prefix a client's cursor points
+        // into. Replaying silently from that cursor would hide the gap; emit
+        // an explicit reset marker so the client re-hydrates from /state and
+        // resubscribes from the new floor.
+        const replayFloor = await input.sessionStore.eventReplayFloorSeq?.(input.threadId) ?? 0
+        if (replayFloor > 0 && sinceSeq > 0 && sinceSeq < replayFloor - 1) {
+          controller.enqueue(encoder.encode(
+            `event: replay_reset_required\ndata: {"threadId":${JSON.stringify(input.threadId)},"floorSeq":${replayFloor}}\n\n`
+          ))
+          close()
+          return
+        }
         let replayEventCount = 0
         let replayBytes = 0
         let replayPageHasMore = false
@@ -165,6 +192,7 @@ export function buildEventStreamResponse(input: {
           replayLimits.maxRecordBytes
         )) {
           if (closed) return
+          if (event.seq > replayBoundary) break
           if (!isPublicRuntimeEvent(event)) {
             deliver(event)
             continue
@@ -205,12 +233,28 @@ export function buildEventStreamResponse(input: {
           close()
           return
         }
-        // Publishing is synchronous, so no new event can slip between this
-        // drain and switching the subscriber into direct-delivery mode.
-        for (const entry of liveDuringReplay.sort((a, b) => a.event.seq - b.event.seq)) {
+        const orderedLive = liveDuringReplay.sort((a, b) => a.event.seq - b.event.seq)
+        for (const entry of orderedLive.filter((entry) => entry.event.seq <= replayBoundary)) {
           deliver(entry.event)
           if (closed) return
         }
+        if (lastDeliveredSeq < replayBoundary) {
+          close()
+          return
+        }
+        controller.enqueue(encoder.encode(encodeReplaySynchronized({
+          threadId: input.threadId,
+          cursor: lastDeliveredSeq
+        })))
+        synchronizationMarkerMayFillQueue = true
+        // Publishing is synchronous, so the buffered tail remains ordered
+        // after the fixed replay boundary and synchronization marker.
+        let deliveredBufferedTail = false
+        for (const entry of orderedLive.filter((entry) => entry.event.seq > replayBoundary)) {
+          deliveredBufferedTail = deliver(entry.event) || deliveredBufferedTail
+          if (closed) return
+        }
+        if (deliveredBufferedTail) synchronizationMarkerMayFillQueue = false
         replaying = false
         if (input.sessionStore.watchEventsSince) {
           void (async () => {
@@ -231,8 +275,14 @@ export function buildEventStreamResponse(input: {
           // receives a new frame every interval forever and keeps its SSE
           // subscription/timer alive indefinitely.
           if (controller.desiredSize !== null && controller.desiredSize <= 0) {
-            close()
-            return
+            if (synchronizationMarkerMayFillQueue) {
+              synchronizationMarkerMayFillQueue = false
+            } else {
+              close()
+              return
+            }
+          } else {
+            synchronizationMarkerMayFillQueue = false
           }
           try {
             controller.enqueue(

@@ -189,19 +189,18 @@ describe('runtime factory usage carryover', () => {
       expect(modelConnections).toBeDefined()
       if (!modelConnections) throw new Error('Expected model connections to be available')
       const initialize = vi.spyOn(modelConnections, 'initialize')
-      initialize.mockRejectedValueOnce(new Error('staged subagent config failed'))
       await expect(runtime.applyConfig({
         capabilities: subagentCapabilities(true, false)
-      })).resolves.toEqual({
-        ok: false,
-        code: 'invalid_config',
-        message: 'staged subagent config failed'
-      })
-      expect(runtime.delegationRuntime?.useExistingAgents).toBe(true)
-      expect(await delegateProperties()).toMatchObject({ profile: expect.any(Object) })
-      expect(await delegateProperties()).not.toHaveProperty('custom_agent')
+      })).resolves.toEqual({ ok: true })
+      expect(initialize).not.toHaveBeenCalled()
+      expect(runtime.delegationRuntime?.useExistingAgents).toBe(false)
+      expect(await delegateProperties()).toMatchObject({ custom_agent: expect.any(Object) })
       initialize.mockRestore()
 
+      await expect(runtime.applyConfig({
+        capabilities: subagentCapabilities(true, true)
+      })).resolves.toEqual({ ok: true })
+      const registryBeforeFailedApply = await modelConnections.snapshot()
       const extensionTools = runtime.extensionPlatform?.tools
       expect(extensionTools).toBeDefined()
       if (!extensionTools) throw new Error('Expected extension tools to be available')
@@ -216,6 +215,7 @@ describe('runtime factory usage carryover', () => {
         code: 'invalid_config',
         message: 'extension registry preflight failed'
       })
+      expect(await modelConnections.snapshot()).toEqual(registryBeforeFailedApply)
       expect(runtime.info().capabilities.subagents.useExistingAgents).toBe(true)
       expect(runtime.delegationRuntime?.useExistingAgents).toBe(true)
       expect(await delegateProperties()).toMatchObject({ profile: expect.any(Object) })
@@ -289,7 +289,8 @@ describe('runtime factory usage carryover', () => {
       tokenEconomyMode: false,
       insecure: false,
       storage: { backend: 'file' },
-      lab: { fastContext: { enabled: true, fast: false }, pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } },
+      fastContext: { enabled: true, fast: false },
+      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -327,12 +328,12 @@ describe('runtime factory usage carryover', () => {
       expect(await listExplore()).toBe(true)
 
       expect(await runtime.applyConfig({
-        lab: { fastContext: { enabled: false, fast: false }, pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
+        fastContext: { enabled: false, fast: false }
       })).toEqual({ ok: true })
       expect(await listExplore()).toBe(false)
 
       expect(await runtime.applyConfig({
-        lab: { fastContext: { enabled: true, fast: false }, pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
+        fastContext: { enabled: true, fast: false }
       })).toEqual({ ok: true })
       expect(await listExplore()).toBe(true)
     } finally {
@@ -356,7 +357,8 @@ describe('runtime factory usage carryover', () => {
       tokenEconomyMode: false,
       insecure: false,
       storage: { backend: 'file' },
-      lab: { fastContext: { enabled: true, fast: false }, pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } },
+      fastContext: { enabled: true, fast: false },
+      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -394,12 +396,12 @@ describe('runtime factory usage carryover', () => {
       expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
-        lab: { fastContext: { enabled: true, fast: false }, pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
+        lab: { pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(false)
 
       expect(await runtime.applyConfig({
-        lab: { fastContext: { enabled: true, fast: false }, pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
+        lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(true)
     } finally {

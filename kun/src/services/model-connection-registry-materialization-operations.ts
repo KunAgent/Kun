@@ -32,6 +32,10 @@ async materialize(this: ModelConnectionRegistry): Promise<MaterializedModelConne
     return this['materializeDocument'](await this['file'].read(emptyDocument))
   },
 
+async materializeReadOnly(this: ModelConnectionRegistry): Promise<MaterializedModelConnections> {
+    return this['materializeDocument'](await this['file'].read(emptyDocument))
+  },
+
 async materializeDocument(this: ModelConnectionRegistry,
     document: RegistryDocument,
     recoveryProviderId?: string

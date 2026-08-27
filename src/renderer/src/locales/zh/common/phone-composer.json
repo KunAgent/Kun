@@ -342,6 +342,7 @@
   "composerVoiceMicDenied": "麦克风权限被拒绝，请在系统设置中允许后重试。",
   "composerVoiceTooShort": "录音太短，请再说久一点。",
   "composerVoiceFailed": "语音转写失败：{{message}}",
+  "composerDismissError": "关闭错误提示",
   "composerImageUnavailable": "当前运行时暂不可用图片输入。",
   "composerAttachmentUnavailable": "当前暂不可上传附件。",
   "composerDropFilesHere": "松开以添加文件到当前对话",

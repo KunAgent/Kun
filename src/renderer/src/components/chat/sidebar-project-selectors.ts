@@ -33,7 +33,7 @@ const THREAD_PREVIEW_MAX_HEIGHT = 220
 const THREAD_PREVIEW_GAP = 10
 const THREAD_PREVIEW_VIEWPORT_MARGIN = 12
 
-export type SidebarThreadActivity = 'failed' | 'unread' | 'running' | 'scheduled' | 'read'
+export type SidebarThreadActivity = 'awaiting-input' | 'failed' | 'unread' | 'running' | 'scheduled' | 'read'
 
 export type SidebarThreadActivityContext = {
   activeThreadId: string | null
@@ -41,18 +41,22 @@ export type SidebarThreadActivityContext = {
   watchTurnCompletion: Record<string, boolean>
   unreadThreadIds: CompletionAttentionRegistry
   scheduledThreadActivities?: Record<string, ScheduledThreadActivity>
+  awaitingUserInputThreadIds?: Record<string, true>
 }
 
 /**
  * Classifies a sidebar row from transient renderer state without mutating the
- * durable thread record. Running wins over unread during refresh races, so a
- * live turn never appears as a completed notification.
+ * durable thread record. A thread waiting on the user's answer outranks
+ * everything else (only user action can move it forward); running wins over
+ * unread during refresh races, so a live turn never appears as a completed
+ * notification.
  */
 export function sidebarThreadActivity(
   thread: NormalizedThread,
   context: SidebarThreadActivityContext
 ): SidebarThreadActivity {
   const id = thread.id.trim()
+  if (context.awaitingUserInputThreadIds?.[id] === true) return 'awaiting-input'
   const running =
     threadLooksRunning(thread) ||
     context.watchTurnCompletion[id] === true ||
@@ -68,24 +72,17 @@ export function sidebarThreadActivity(
   return 'read'
 }
 
-/** Keeps the caller's existing chronological/manual order within each state. */
+/**
+ * Deprecated: activity state (running, awaiting-input, unread, ...) drives row
+ * indicators only and must not reorder rows. Poll/SSE refreshes flip activity
+ * state every few seconds, so bucketing rows by activity made the sidebar list
+ * jump under the user's pointer. This now returns the caller's order unchanged.
+ */
 export function prioritizeSidebarThreadActivity(
   threads: readonly NormalizedThread[],
-  context: SidebarThreadActivityContext
+  _context: SidebarThreadActivityContext
 ): NormalizedThread[] {
-  const running: NormalizedThread[] = []
-  const failed: NormalizedThread[] = []
-  const unread: NormalizedThread[] = []
-  const read: NormalizedThread[] = []
-  for (const thread of threads) {
-    switch (sidebarThreadActivity(thread, context)) {
-      case 'running': running.push(thread); break
-      case 'failed': failed.push(thread); break
-      case 'unread': unread.push(thread); break
-      default: read.push(thread)
-    }
-  }
-  return [...running, ...failed, ...unread, ...read]
+  return [...threads]
 }
 
 export function sidebarThreadsHaveRunningActivity(

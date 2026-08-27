@@ -3,6 +3,7 @@ import type {
   ChatBlock,
   NormalizedThread,
   ReviewTarget,
+  ThreadDetail,
   ThreadEventSink,
   ThreadUsageSnapshot,
   UserInputAnswer
@@ -29,7 +30,6 @@ import {
   kunThreadInterruptPath,
   kunThreadToolCancelPath,
   kunThreadPath,
-  kunThreadStatePath,
   kunThreadTimelinePath,
   kunThreadSteerPath,
   kunThreadTurnsPath,
@@ -72,7 +72,6 @@ import type {
   CoreStartTurnResponseJson,
   CoreThreadGoalResponseJson,
   CoreThreadJson,
-  CoreThreadRuntimeStateJson,
   CoreThreadTimelineJson,
   CoreThreadSummaryJson,
   CoreThreadTodosResponseJson
@@ -86,6 +85,7 @@ import {
   todosFromCore,
   threadFromCore
 } from './kun-mapper'
+import { restoredThreadLiveProjection } from './kun-runtime-thread-live-projection'
 import { rendererRuntimeClient } from './runtime-client'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { KunRuntimeThreadServices } from './kun-runtime-thread-services'
@@ -239,8 +239,18 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   }
 
   async listThreads(options: ThreadListOptions = {}): Promise<NormalizedThread[]> {
-    const page = await this.listThreadsPage(options)
-    return page.threads
+    const threads: NormalizedThread[] = []
+    let cursor = options.cursor
+    do {
+      const page = await this.listThreadsPage({
+        ...options,
+        limit: options.limit ?? 500,
+        ...(cursor ? { cursor } : {})
+      })
+      threads.push(...page.threads)
+      cursor = page.hasMore ? page.nextCursor : undefined
+    } while (cursor)
+    return threads
   }
 
   async listThreadsPage(options: ThreadListOptions = {}): Promise<ThreadListPage> {
@@ -344,25 +354,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     ))
   }
 
-  async getThreadDetail(threadId: string, options: { before?: string } = {}): Promise<{
-    blocks: ChatBlock[]
-    latestSeq: number
-    threadStatus?: string
-    latestTurnId?: string
-    latestTurnStatus?: string
-    latestTurnOrchestration?: 'direct' | 'graph'
-    latestUserMessageId?: string
-    turnDurationByUserId?: Record<string, number>
-    usage?: ThreadUsageSnapshot
-    relation?: 'primary' | 'fork' | 'side'
-    parentThreadId?: string
-    goal?: NormalizedThread['goal']
-    todos?: NormalizedThread['todos']
-    payloadBytes?: number
-    historyCursor?: string
-    hasMoreHistory?: boolean
-    designProfile?: DesignTaskProfile
-  }> {
+  async getThreadDetail(threadId: string, options: { before?: string } = {}): Promise<ThreadDetail> {
     let response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTimelinePath(threadId, {
         ...(options.before ? { before: options.before } : {}),
@@ -405,7 +397,14 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
       }))
     )
+    const latestTurn = thread.latestTurn ?? turns.at(-1)
+    const restoredLive = restoredThreadLiveProjection(
+      items,
+      latestTurn?.id,
+      latestTurn?.status
+    )
     const blocks = mergeChatBlocks(items.flatMap((item) => {
+      if (restoredLive.liveItemIds.has(item.id)) return []
       const block = chatBlockFromItem(item)
       return block ? [block] : []
     }))
@@ -439,7 +438,6 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         }
       }
     }
-    const latestTurn = thread.latestTurn ?? turns.at(-1)
     const latestTurnId = latestTurn?.id
     // Prefer the active turn's opening user message: a long running turn may
     // push its own prompt to the front of the page (timeline anchor) while
@@ -456,6 +454,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     return {
       blocks,
       latestSeq: thread.latestSeq ?? 0,
+      ...(restoredLive.liveProjection ? { liveProjection: restoredLive.liveProjection } : {}),
       threadStatus: thread.status ?? latestTurn?.status,
       latestTurnId: latestTurn?.id,
       latestTurnStatus: latestTurn?.status,
@@ -473,36 +472,6 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(thread.timeline?.nextCursor ? { historyCursor: thread.timeline.nextCursor } : {}),
       hasMoreHistory: thread.timeline?.hasMore === true,
       ...(thread.designProfile ? { designProfile: thread.designProfile } : {})
-    }
-  }
-
-  async getThreadState(threadId: string): Promise<{
-    status: string
-    updatedAt: string
-    latestSeq: number
-    latestTurnId?: string
-    latestTurnStatus?: string
-    latestTurnOrchestration?: 'direct' | 'graph'
-  }> {
-    const response = await rendererRuntimeClient.runtimeRequest(kunThreadStatePath(threadId), 'GET')
-    if (!response.ok) {
-      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread state'))
-    }
-    const state = readRuntimeJson<CoreThreadRuntimeStateJson>(
-      response.body,
-      'runtime returned an invalid thread state response'
-    )
-    return {
-      status: state.status,
-      updatedAt: state.updatedAt,
-      latestSeq: state.latestSeq,
-      ...(state.latestTurn
-        ? {
-            latestTurnId: state.latestTurn.id,
-            latestTurnStatus: state.latestTurn.status,
-            latestTurnOrchestration: state.latestTurn.orchestration
-          }
-        : {})
     }
   }
 

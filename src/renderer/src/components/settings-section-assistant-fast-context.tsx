@@ -1,7 +1,6 @@
 import type { ReactElement } from 'react'
 import type {
-  KunLabSettingsPatchV1,
-  KunLabSettingsV1,
+  KunFastContextSettingsV1,
   ModelReasoningEffort,
   ModelProviderProfileV1
 } from '@shared/app-settings'
@@ -53,7 +52,7 @@ function compatibleReasoningEffort(
 }
 
 /**
- * Lab → Fast Context panel. Configures the first-class `fast_context` tool:
+ * Fast Context settings panel. Configures the first-class `fast_context` tool:
  * a master switch plus an optional model/provider/reasoning/fast override.
  * Empty model + providerId means "follow the main session model".
  */
@@ -67,14 +66,14 @@ export function FastContextSettingsPanel({
   onChange
 }: {
   t: Translate
-  value: KunLabSettingsV1
+  value: KunFastContextSettingsV1
   modelProviders: ModelProviderProfileV1[]
   leadProviderId: string
   leadModel: string
   selectControlClass: string
-  onChange: (patch: KunLabSettingsPatchV1) => void
+  onChange: (patch: Partial<KunFastContextSettingsV1>) => void
 }): ReactElement {
-  const agent = value.fastContext
+  const agent = value
   const fixed = Boolean(agent.model?.trim() && agent.providerId?.trim())
   const providerId = fixed ? agent.providerId : leadProviderId
   const provider = modelProviders.find((candidate) => candidate.id === providerId) ?? modelProviders[0]
@@ -85,25 +84,25 @@ export function FastContextSettingsPanel({
 
   return (
     <div className="mt-6">
-      <SettingsCard title={t('labExploreTitle')}>
+      <SettingsCard title={t('fastContextTitle')}>
         <div className="space-y-3 px-3 py-4">
-          <InlineNoticeView notice={{ tone: 'info', message: t('labExploreDescription') }} />
+          <InlineNoticeView notice={{ tone: 'info', message: t('fastContextDescription') }} />
         </div>
         <SettingRow
-          title={t('labExploreEnabled')}
-          description={t('labExploreEnabledDesc')}
+          title={t('fastContextEnabled')}
+          description={t('fastContextEnabledDesc')}
           control={
             <Toggle
               checked={agent.enabled}
-              onChange={(enabled) => onChange({ fastContext: { enabled } })}
+              onChange={(enabled) => onChange({ enabled })}
             />
           }
         />
         {agent.enabled ? (
           <>
             <SettingRow
-              title={t('labExploreModelMode')}
-              description={t('labExploreModelModeDesc')}
+              title={t('fastContextModelMode')}
+              description={t('fastContextModelModeDesc')}
               control={
                 <select
                   className={selectControlClass}
@@ -111,12 +110,10 @@ export function FastContextSettingsPanel({
                   onChange={(event) => {
                     if (event.target.value === 'inherit') {
                       onChange({
-                        fastContext: {
-                          model: '',
-                          providerId: '',
-                          reasoningEffort: undefined,
-                          fast: false
-                        }
+                        model: '',
+                        providerId: '',
+                        reasoningEffort: undefined,
+                        fast: false
                       })
                       return
                     }
@@ -125,29 +122,27 @@ export function FastContextSettingsPanel({
                       ? leadModel
                       : provider?.models?.[0] ?? leadModel
                     onChange({
-                      fastContext: {
-                        model,
-                        providerId,
-                        reasoningEffort: undefined,
-                        fast: false
-                      }
+                      model,
+                      providerId,
+                      reasoningEffort: undefined,
+                      fast: false
                     })
                   }}
                 >
-                  <option value="inherit">{t('labExploreModelModeInherit')}</option>
-                  <option value="fixed">{t('labExploreModelModeFixed')}</option>
+                  <option value="inherit">{t('fastContextModelModeInherit')}</option>
+                  <option value="fixed">{t('fastContextModelModeFixed')}</option>
                 </select>
               }
             />
             {fixed ? (
               <SettingRow
-                title={t('labExploreModel')}
-                description={t('labExploreModelDesc')}
+                title={t('fastContextModel')}
+                description={t('fastContextModelDesc')}
                 wideControl
                 control={
                   <div className="grid gap-3 sm:grid-cols-2">
                     <select
-                      aria-label={t('labExploreProvider')}
+                      aria-label={t('fastContextProvider')}
                       className={selectControlClass}
                       value={provider?.id ?? providerId}
                       onChange={(event) => {
@@ -157,15 +152,13 @@ export function FastContextSettingsPanel({
                           ? model
                           : nextProvider?.models?.[0] ?? model
                         onChange({
-                          fastContext: {
-                            model: nextModel,
-                            providerId: nextProviderId,
-                            reasoningEffort: compatibleReasoningEffort(
-                              nextProvider,
-                              nextModel,
-                              agent.reasoningEffort
-                            )
-                          }
+                          model: nextModel,
+                          providerId: nextProviderId,
+                          reasoningEffort: compatibleReasoningEffort(
+                            nextProvider,
+                            nextModel,
+                            agent.reasoningEffort
+                          )
                         })
                       }}
                     >
@@ -183,15 +176,13 @@ export function FastContextSettingsPanel({
                       onChange={(nextModel) => {
                         const trimmed = nextModel.trim()
                         onChange({
-                          fastContext: {
-                            model: trimmed || model,
-                            providerId: provider?.id ?? providerId,
-                            reasoningEffort: compatibleReasoningEffort(
-                              provider,
-                              trimmed || model,
-                              agent.reasoningEffort
-                            )
-                          }
+                          model: trimmed || model,
+                          providerId: provider?.id ?? providerId,
+                          reasoningEffort: compatibleReasoningEffort(
+                            provider,
+                            trimmed || model,
+                            agent.reasoningEffort
+                          )
                         })
                       }}
                     />
@@ -201,22 +192,20 @@ export function FastContextSettingsPanel({
             ) : null}
             {fixed ? (
               <SettingRow
-                title={t('labExploreReasoning')}
-                description={t('labExploreReasoningDesc')}
+                title={t('fastContextReasoning')}
+                description={t('fastContextReasoningDesc')}
                 control={
                   <select
-                    aria-label={t('labExploreReasoning')}
+                    aria-label={t('fastContextReasoning')}
                     className={selectControlClass}
                     value={agent.reasoningEffort ?? ''}
                     onChange={(event) => onChange({
-                      fastContext: {
-                        reasoningEffort: event.target.value
-                          ? event.target.value as ModelReasoningEffort
-                          : undefined
-                      }
+                      reasoningEffort: event.target.value
+                        ? event.target.value as ModelReasoningEffort
+                        : undefined
                     })}
                   >
-                    <option value="">{t('labExploreReasoningInherit')}</option>
+                    <option value="">{t('fastContextReasoningInherit')}</option>
                     {reasoningEfforts.map((effort) => (
                       <option key={effort} value={effort}>
                         {t(REASONING_EFFORT_LABEL_KEYS[effort])}
@@ -228,13 +217,13 @@ export function FastContextSettingsPanel({
             ) : null}
             {fixed ? (
               <SettingRow
-                title={t('labExploreFast')}
-                description={t('labExploreFastDesc')}
+                title={t('fastContextFast')}
+                description={t('fastContextFastDesc')}
                 control={
                   <Toggle
                     checked={agent.fast === true && fastSupported}
                     disabled={!fastSupported}
-                    onChange={(fast) => onChange({ fastContext: { fast } })}
+                    onChange={(fast) => onChange({ fast })}
                   />
                 }
               />
@@ -242,7 +231,7 @@ export function FastContextSettingsPanel({
             {fixed && !fastSupported ? (
               <div className="px-3 pb-3">
                 <p className="text-[12px] leading-5 text-ds-faint">
-                  {t('labExploreFastUnsupportedHint')}
+                  {t('fastContextFastUnsupportedHint')}
                 </p>
               </div>
             ) : null}

@@ -165,14 +165,31 @@ describe('CapabilityRegistry Plan mode policy', () => {
       'read',
       'generate_image',
       'create_plan',
-      'user_input',
-      'request_user_input'
+      'user_input'
     ])
+    expect(registry.resolveTool('request_user_input', planContext).tool.name)
+      .toBe('request_user_input')
     expect(registry.resolveTool('generate_image', planContext).provider.id).toBe('builtin')
     for (const name of ['write', 'edit']) {
       expect(() => registry.resolveTool(name, planContext))
         .toThrow(`tool ${name} is not advertised by active tool policy`)
     }
+  })
+
+  it('advertises the legacy user-input name only when the canonical name is unavailable', () => {
+    const legacyOnly = CapabilityRegistry.fromLocalTools([tool('request_user_input')])
+    const onlyLegacyAllowed = CapabilityRegistry.fromLocalTools([
+      tool('user_input'),
+      tool('request_user_input')
+    ])
+    const agentContext = context([], 'agent')
+
+    expect(legacyOnly.listTools(agentContext).map((spec) => spec.name))
+      .toEqual(['request_user_input'])
+    expect(onlyLegacyAllowed.listTools({
+      ...agentContext,
+      allowedToolNames: ['request_user_input']
+    }).map((spec) => spec.name)).toEqual(['request_user_input'])
   })
 
   it('keeps read-only fast_context visible in plan mode while hiding delegate_task', () => {

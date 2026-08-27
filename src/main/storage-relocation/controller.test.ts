@@ -1,8 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({
+  dialog: { showOpenDialog: vi.fn() },
+  ipcMain: { handle: vi.fn(), removeHandler: vi.fn() }
+}))
+
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 import { StorageRelocationController, assertTrustedStorageRelocationSender } from './controller'
 
 describe('storage relocation IPC sender boundary', () => {
-  const mainFrame = { processId: 10, routingId: 20 }
+  const trustedUrl = 'http://127.0.0.1:5173/index.html?storageRelocation=1'
+  const workbenchUrl = 'http://127.0.0.1:5173/index.html'
+  const mainFrame = { processId: 10, routingId: 20, url: trustedUrl }
   const mainContents = { id: 1, mainFrame }
   const getMainWindow = () => ({
     isDestroyed: () => false,
@@ -16,12 +28,23 @@ describe('storage relocation IPC sender boundary', () => {
     } as never, getMainWindow)).not.toThrow()
     expect(() => assertTrustedStorageRelocationSender({
       sender: mainContents,
-      senderFrame: { processId: 10, routingId: 99 }
+      senderFrame: { processId: 10, routingId: 99, url: trustedUrl }
+    } as never, getMainWindow)).toThrow(/trusted top-level frame/)
+    expect(() => assertTrustedStorageRelocationSender({
+      sender: mainContents,
+      senderFrame: { ...mainFrame, url: 'https://example.com' }
     } as never, getMainWindow)).toThrow(/trusted top-level frame/)
     expect(() => assertTrustedStorageRelocationSender({
       sender: { id: 9 },
       senderFrame: mainFrame
     } as never, getMainWindow)).toThrow(/trusted top-level frame/)
+  })
+
+  it('also accepts the normal workbench settings surface', () => {
+    expect(() => assertTrustedStorageRelocationSender({
+      sender: mainContents,
+      senderFrame: { ...mainFrame, url: workbenchUrl }
+    } as never, getMainWindow)).not.toThrow()
   })
 })
 

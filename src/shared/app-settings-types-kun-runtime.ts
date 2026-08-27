@@ -103,8 +103,8 @@ export type KunSubagentsSettingsPatchV1 = Partial<
   profiles?: KunSubagentProfileV1[]
 }
 
-/** Experimental Lab feature settings for the first-class `fast_context` tool. */
-export type KunLabFastContextSettingsV1 = {
+/** Formal assistant settings for the first-class `fast_context` tool. */
+export type KunFastContextSettingsV1 = {
   /** Master switch for the fast_context tool. Default true. */
   enabled: boolean
   /** Optional child model override. Empty = follow the main session model. */
@@ -141,14 +141,12 @@ export type KunLabConversationVisualizationSettingsV1 = {
 
 /** Experimental Lab feature settings written into Kun config `lab`. */
 export type KunLabSettingsV1 = {
-  fastContext: KunLabFastContextSettingsV1
   pptAgent: KunLabPptAgentSettingsV1
   conversationVisualization: KunLabConversationVisualizationSettingsV1
 }
 
 /** Partial settings patch for the Lab section. Nested fields merge with current values. */
 export type KunLabSettingsPatchV1 = {
-  fastContext?: Partial<KunLabFastContextSettingsV1>
   pptAgent?: Partial<KunLabPptAgentSettingsV1>
   conversationVisualization?: Partial<KunLabConversationVisualizationSettingsV1>
 }
@@ -375,7 +373,9 @@ export type KunRuntimeSettingsV1 = {
   graph: KunGraphSettingsV1
   /** Host-owned defaults for executing reviewed GUI plans. */
   planExecution: KunPlanExecutionSettingsV1
-  /** Experimental Lab features (fast_context toggle + model overrides). */
+  /** Formal Fast Context settings. Enabled by default. */
+  fastContext: KunFastContextSettingsV1
+  /** Experimental Lab features that remain in Laboratory. */
   lab: KunLabSettingsV1
   /** Global small-model slot. Title & Summary default to this. Empty = follow main model. */
   smallModel?: string

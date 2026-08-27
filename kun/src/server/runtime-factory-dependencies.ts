@@ -141,6 +141,7 @@ export {
   type ServeProviderConfig,
   type StorageConfig,
   type ToolOutputLimitsConfig,
+  type FastContextConfig,
   type LabConfig
 } from '../config/kun-config.js'
 export { createAgentObservabilityRecorder } from '../telemetry/agent-observability.js'

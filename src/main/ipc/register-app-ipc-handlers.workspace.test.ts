@@ -40,6 +40,10 @@ import {
   registerAppIpcHandlers
 } from './register-app-ipc-handlers'
 
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 const officeDocumentServiceMocks = vi.hoisted(() => ({
   readWorkspaceOfficePreview: vi.fn(),
   readWorkspaceOfficeSemantic: vi.fn()
@@ -110,7 +114,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
   })
 
   it('opens and reveals only runtime-validated generated artifacts', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const mainContents = { id: 1, mainFrame }
     const runtimeRequest = vi.fn(async () => ({
       ok: true,
@@ -159,7 +163,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     )).resolves.toEqual({ ok: true })
     expect(electronMock.showItemInFolder).toHaveBeenCalledWith('/tmp/workspace/exports/final.mp4')
     await expect(handler(
-      { sender: { id: 99 }, senderFrame: { processId: 99, routingId: 99 } },
+      { sender: { id: 99 }, senderFrame: { processId: 99, routingId: 99, url: 'http://127.0.0.1:5173/index.html' } },
       payload
     )).rejects.toThrow(/trusted workbench frame/)
   })
@@ -294,7 +298,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     const target = join(temp, 'report.docx')
     writeFileSync(target, 'office-preview-source')
     const resolvedTarget = realpathSync(target)
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const sender = Object.assign(new EventEmitter(), {
       id: 76,
       mainFrame,
@@ -354,7 +358,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
 
       await expect(handler({
         sender: { id: 99 },
-        senderFrame: { processId: 99, routingId: 99 }
+        senderFrame: { processId: 99, routingId: 99, url: 'http://127.0.0.1:5173/index.html' }
       }, payload)).rejects.toThrow(/trusted workbench frame/)
     } finally {
       rmSync(temp, { recursive: true, force: true })
@@ -366,7 +370,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     const target = join(temp, 'report.docx')
     writeFileSync(target, 'office-semantic-source')
     const resolvedTarget = realpathSync(target)
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const sender = Object.assign(new EventEmitter(), {
       id: 77,
       mainFrame,
@@ -419,7 +423,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     const xlsPath = join(temp, 'legacy.xls')
     writeFileSync(xlsxPath, 'xlsx-source')
     writeFileSync(xlsPath, 'xls-source')
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const sender = Object.assign(new EventEmitter(), {
       id: 78,
       mainFrame,
@@ -479,7 +483,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
       })).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
       await expect(saveHandler({
         sender: { id: 99 },
-        senderFrame: { processId: 99, routingId: 99 }
+        senderFrame: { processId: 99, routingId: 99, url: 'http://127.0.0.1:5173/index.html' }
       }, savePayload)).rejects.toThrow(/trusted workbench frame/)
     } finally {
       rmSync(temp, { recursive: true, force: true })

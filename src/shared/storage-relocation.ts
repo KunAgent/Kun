@@ -193,6 +193,11 @@ export type StorageRelocationApi = {
   onProgress: (handler: (progress: StorageRelocationProgress) => void) => () => void
 }
 
+export type StorageRelocationRecoveryApi = Pick<
+  StorageRelocationApi,
+  'getStatus' | 'cancel' | 'retry' | 'rollback' | 'onProgress'
+>
+
 export function storageRelocationRequiredBytes(uniqueBytes: number): number {
   const bytes = Number.isSafeInteger(uniqueBytes) && uniqueBytes > 0 ? uniqueBytes : 0
   return bytes + Math.max(

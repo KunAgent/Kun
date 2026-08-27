@@ -86,6 +86,7 @@ import {
 } from './local-whisper'
 
 import {
+  defaultKunFastContextSettings,
   defaultKunLabSettings,
   mergeKunRuntimeSettings
 } from './app-settings-kun-merge'
@@ -213,6 +214,7 @@ export function defaultKunRuntimeSettings(
     quality: defaultKunQualitySettings(),
     graph: defaultKunGraphSettings(),
     planExecution: { useWorktreeByDefault: true },
+    fastContext: defaultKunFastContextSettings(),
     lab: defaultKunLabSettings()
   }
 }

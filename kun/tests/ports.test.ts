@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { InMemoryEventBus } from '../src/adapters/in-memory-event-bus.js'
 import { InMemoryApprovalGate } from '../src/adapters/in-memory-approval-gate.js'
 import { InMemoryUserInputGate } from '../src/adapters/in-memory-user-input-gate.js'
@@ -174,9 +174,60 @@ describe('InMemoryUserInputGate', () => {
 
     expect(claim?.request.id).toBe('input_1')
     expect(gate.pending('thread_1')).toEqual([])
-    expect(gate.resolve('input_1', { status: 'cancelled' })).toBe(false)
+    expect(gate.resolve('input_1', { status: 'cancelled' })).toBe('claimed')
     expect(claim?.resolve({ status: 'submitted', answers: [] })).toBe(true)
     await expect(pending).resolves.toEqual({ status: 'submitted', answers: [] })
+  })
+
+  it('settles an expired request when a failed claim releases it', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-08-22T00:00:00.000Z'))
+      const gate = new InMemoryUserInputGate()
+      const pending = gate.request({
+        id: 'input_expired',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        itemId: 'item_expired',
+        prompt: 'Continue?',
+        questions: [],
+        timeoutSeconds: 1,
+        deadlineAtMs: Date.now() + 1_000
+      })
+      const claim = gate.claimResolution('input_expired')
+      vi.setSystemTime(new Date('2026-08-22T00:00:01.100Z'))
+
+      expect(gate.resolve('input_expired', { status: 'timeout' })).toBe('claimed')
+      expect(claim?.release()).toBe(true)
+      await expect(pending).resolves.toEqual({ status: 'timeout' })
+      expect(gate.resolve('input_expired', { status: 'timeout' })).toBe('missing')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores a claim when its deadline has not elapsed', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-08-22T00:00:00.000Z'))
+      const gate = new InMemoryUserInputGate()
+      const pending = gate.request({
+        id: 'input_reclaimed',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        itemId: 'item_reclaimed',
+        prompt: 'Continue?',
+        questions: [],
+        deadlineAtMs: Date.now() + 10_000
+      })
+      const claim = gate.claimResolution('input_reclaimed')
+      expect(claim?.release()).toBe(true)
+      expect(gate.pending('thread_1').map((request) => request.id)).toEqual(['input_reclaimed'])
+      expect(gate.resolve('input_reclaimed', { status: 'submitted', answers: [] })).toBe('settled')
+      await expect(pending).resolves.toEqual({ status: 'submitted', answers: [] })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

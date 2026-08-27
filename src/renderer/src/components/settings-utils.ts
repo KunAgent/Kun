@@ -12,6 +12,7 @@ import {
   mergeWorkflowSettings,
   mergeWriteSettings,
   mergeTerminalSettings,
+  mergeDarkUiColors,
   normalizeAppBehaviorSettings,
   normalizeClawSettings,
   normalizeDesignSettings,
@@ -25,6 +26,7 @@ import {
   normalizeWriteSettings,
   normalizeCodeAgentPresets,
   normalizeTerminalSettings,
+  normalizeDarkUiColors,
   normalizeChatContentMaxWidth,
   normalizeChatWelcomeMessage,
   normalizeComposerSendKey,
@@ -90,10 +92,16 @@ export function hasValidPort(settings: AppSettingsV1): boolean {
 
 export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): AppSettingsV1 {
   const safeCurrent = coerceRendererSettings(current)
-  const { agents: agentsPatch, provider: providerPatch, ...restPatch } = patch
+  const {
+    agents: agentsPatch,
+    provider: providerPatch,
+    darkUiColors: darkUiColorsPatch,
+    ...restPatch
+  } = patch
   return {
     ...applyKunRuntimePatch(safeCurrent, agentsPatch?.kun),
     ...restPatch,
+    darkUiColors: mergeDarkUiColors(safeCurrent.darkUiColors, darkUiColorsPatch),
     provider: mergeModelProviderSettings(safeCurrent.provider, providerPatch),
     log: {
       ...safeCurrent.log,
@@ -150,6 +158,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     composerSendKey: normalizeComposerSendKey(raw.composerSendKey),
     cursorSpotlight: raw.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(raw.cursorSpotlightColor),
+    darkUiColors: normalizeDarkUiColors(raw.darkUiColors),
     provider: normalizeModelProviderSettings(raw.provider),
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), getKunRuntimeSettings(settings))),
     workspaceRoot: typeof raw.workspaceRoot === 'string' ? raw.workspaceRoot : DEFAULT_WORKSPACE_ROOT,
@@ -255,6 +264,8 @@ export function guiUpdateFailureMessage(
       return t('guiUpdateErrDownloadFailed', { message: info.message.trim() })
     case 'install_failed':
       return t('guiUpdateErrInstallFailed', { message: info.message.trim() })
+    case 'update_feed_unavailable':
+      return t('guiUpdateErrFeedUnavailable')
     case 'github_repo_not_found':
       return t('guiUpdateErrRepoNotFound', { repo: info.repo?.trim() || 'owner/repo' })
     case 'github_forbidden':

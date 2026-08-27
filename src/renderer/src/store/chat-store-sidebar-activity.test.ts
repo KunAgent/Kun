@@ -8,7 +8,10 @@ import {
   scheduledThreadActivities
 } from './chat-store-sidebar-activity'
 
-let provider: Pick<AgentProvider, 'listThreadsPage' | 'listThreads' | 'getThreadState'>
+let provider: Pick<
+  AgentProvider,
+  'listThreadsPage' | 'listThreads' | 'getThreadState' | 'getThreadStates'
+>
 
 vi.mock('../agent/registry', () => ({ getProvider: () => provider }))
 
@@ -44,10 +47,10 @@ function storageFixture(): Storage {
   }
 }
 
-function harness(initialThread = thread()) {
+function harness(initialThread: NormalizedThread | NormalizedThread[] = thread()) {
   let state = {
     runtimeConnection: 'ready',
-    threads: [initialThread],
+    threads: Array.isArray(initialThread) ? initialThread : [initialThread],
     activeThreadId: null,
     activeThreadRelation: null,
     route: 'settings',
@@ -55,6 +58,7 @@ function harness(initialThread = thread()) {
     sidePanel: { open: false, activeSideId: null },
     watchTurnCompletion: {},
     unreadThreadIds: {},
+    awaitingUserInputThreadIds: {},
     scheduledThreadActivities: {},
     refreshThreads: vi.fn(async () => undefined)
   } as unknown as ChatState
@@ -123,6 +127,140 @@ describe('sidebar activity observer', () => {
 
     expect(getThreadState).toHaveBeenCalledTimes(2)
     expect(h.get().unreadThreadIds).toEqual({ 'thread-1': 'completed' })
+  })
+
+  it('shows and clears awaiting-input state from an unselected thread batch read', async () => {
+    const getThreadStates = vi.fn()
+      .mockResolvedValueOnce([{
+        id: 'thread-1', ok: true,
+        state: {
+          status: 'idle', updatedAt: '', latestSeq: 2,
+          pendingUserInputIds: ['input-1']
+        }
+      }])
+      .mockResolvedValueOnce([{
+        id: 'thread-1', ok: true,
+        state: {
+          status: 'idle', updatedAt: '', latestSeq: 2,
+          pendingUserInputIds: []
+        }
+      }])
+    const listed = thread({ status: 'running', latestSeq: 2 })
+    provider = {
+      listThreads: vi.fn(async () => [listed]),
+      listThreadsPage: vi.fn(async () => ({ threads: [listed], hasMore: false })),
+      getThreadState: vi.fn(),
+      getThreadStates
+    }
+    const h = harness(thread({ status: 'running', latestSeq: 2 }))
+
+    await h.action()
+    expect(h.get().awaitingUserInputThreadIds).toEqual({ 'thread-1': true })
+
+    await h.action()
+    expect(h.get().awaitingUserInputThreadIds).toEqual({})
+    expect(getThreadStates).toHaveBeenCalledTimes(2)
+    expect(provider.getThreadState).not.toHaveBeenCalled()
+  })
+
+  it('preserves awaiting-input state when a later batch item is transiently unavailable', async () => {
+    const listed = thread({ status: 'running' })
+    const getThreadStates = vi.fn()
+      .mockResolvedValueOnce([{
+        id: listed.id, ok: true,
+        state: {
+          status: 'idle', updatedAt: listed.updatedAt, latestSeq: 1,
+          pendingUserInputIds: ['input-1']
+        }
+      }])
+      .mockResolvedValueOnce([{
+        id: listed.id, ok: false,
+        error: { code: 'unavailable', message: 'owner restarting' }
+      }])
+    provider = {
+      listThreads: vi.fn(async () => [listed]),
+      listThreadsPage: vi.fn(async () => ({ threads: [listed], hasMore: false })),
+      getThreadState: vi.fn(),
+      getThreadStates
+    }
+    const h = harness(thread({ status: 'running' }))
+
+    await h.action()
+    await h.action()
+
+    expect(h.get().awaitingUserInputThreadIds).toEqual({ 'thread-1': true })
+  })
+
+  it('uses one batch for 20 changed conversations and preserves unchanged store identities', async () => {
+    let listed = Array.from({ length: 20 }, (_, index) => thread({
+      id: `thread-${index}`,
+      latestSeq: 1
+    }))
+    const getThreadStates = vi.fn(async (ids: string[]) => ids.map((id) => ({
+      id,
+      ok: true as const,
+      state: {
+        status: 'idle', updatedAt: '2026-08-20T00:01:00.000Z', latestSeq: 2,
+        pendingUserInputIds: []
+      }
+    })))
+    provider = {
+      listThreads: vi.fn(async () => listed),
+      listThreadsPage: vi.fn(async () => ({ threads: listed, hasMore: false })),
+      getThreadState: vi.fn(),
+      getThreadStates
+    }
+    const h = harness(listed)
+    await h.action()
+    listed = listed.map((item) => ({
+      ...item,
+      latestSeq: 2,
+      updatedAt: '2026-08-20T00:01:00.000Z'
+    }))
+
+    await h.action()
+    const threadsRef = h.get().threads
+    const watchRef = h.get().watchTurnCompletion
+    const awaitingRef = h.get().awaitingUserInputThreadIds
+    const scheduledRef = h.get().scheduledThreadActivities
+    await h.action()
+
+    expect(getThreadStates).toHaveBeenCalledTimes(1)
+    expect(getThreadStates).toHaveBeenCalledWith(listed.map((item) => item.id))
+    expect(provider.getThreadState).not.toHaveBeenCalled()
+    expect(h.get().threads).toBe(threadsRef)
+    expect(h.get().watchTurnCompletion).toBe(watchRef)
+    expect(h.get().awaitingUserInputThreadIds).toBe(awaitingRef)
+    expect(h.get().scheduledThreadActivities).toBe(scheduledRef)
+  })
+
+  it('limits legacy single-state fallback to four concurrent reads for 20 conversations', async () => {
+    let listed = Array.from({ length: 20 }, (_, index) => thread({
+      id: `legacy-${index}`,
+      latestSeq: 1
+    }))
+    let active = 0
+    let maxActive = 0
+    const getThreadState = vi.fn(async () => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      active -= 1
+      return { status: 'idle', updatedAt: '', latestSeq: 2, pendingUserInputIds: [] }
+    })
+    provider = {
+      listThreads: vi.fn(async () => listed),
+      listThreadsPage: vi.fn(async () => ({ threads: listed, hasMore: false })),
+      getThreadState
+    }
+    const h = harness(listed)
+    await h.action()
+    listed = listed.map((item) => ({ ...item, latestSeq: 2 }))
+
+    await h.action()
+
+    expect(getThreadState).toHaveBeenCalledTimes(20)
+    expect(maxActive).toBe(4)
   })
 
   it('projects a bound schedule from pending to running and reports a pre-turn failure', async () => {

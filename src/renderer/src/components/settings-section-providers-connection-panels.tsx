@@ -4,7 +4,8 @@ import type {
 } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
-  MODEL_ENDPOINT_FORMATS
+  MODEL_ENDPOINT_FORMATS,
+  modelProviderRequiresApiKey
 } from '@shared/app-settings'
 import type {
   ModelProviderTokenPlanRegion
@@ -46,6 +47,10 @@ import {
   type SharedModelConnection, type SharedModelConnectionsSnapshot
 } from './settings-section-providers-shared-api'
 
+import {
+  sharedProviderMutationCoordinator
+} from './shared-provider-mutation-coordinator'
+
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 
 
@@ -55,9 +60,25 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, showApiKey, selectControlClass, zh, sharedConnectionsError, credentialRevealError, activeTab, expandedCapabilities, activeProvider, activeRetry, isDraftActive, canEditActiveProviderId, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, updateModelProviderImage, removeModelProviderImage, updateModelProviderId, activeProbe, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeMissingCredential, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy } = view
+  const { t, showApiKey, selectControlClass, zh, sharedConnectionsError, credentialRevealError, activeTab, expandedCapabilities, activeProvider, activeRetry, isDraftActive, canEditActiveProviderId, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderId, activeProbe, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeMissingCredential, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy } = view
+  const activeProviderNeedsApiKey = modelProviderRequiresApiKey(activeProvider)
   const activeTokenPlanRegions = view.activeTokenPlanRegions as ModelProviderTokenPlanRegion[]
   const sharedConnections = view.sharedConnections as SharedModelConnectionsSnapshot | null
+  const credentialRetry = sharedProviderMutationCoordinator.credentialRetryStates.get(activeProvider.id)
+  const credentialSyncNotice = credentialRetry ? (
+    <span className="text-[12px] font-normal text-amber-600 dark:text-amber-300">
+      {credentialRetry.nextRetryAt > 0
+        ? (zh ? `等待同步，将自动重试：${credentialRetry.lastError}` : `Waiting to sync; retrying automatically: ${credentialRetry.lastError}`)
+        : (zh ? `保存失败：${credentialRetry.lastError}` : `Save failed: ${credentialRetry.lastError}`)}
+      {credentialRetry.nextRetryAt === 0 ? (
+        <button type="button" className="ml-2 underline" onClick={() => {
+          void flushSharedProviderCredential(activeProvider.id).catch(() => undefined)
+        }}>
+          {zh ? '重试' : 'Retry'}
+        </button>
+      ) : null}
+    </span>
+  ) : null
   const selectSharedModel = view.selectSharedModel as (
     connection: SharedModelConnection,
     model: string
@@ -83,6 +104,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                   </div>
                 </DetailSection>
                 <DetailSection title={t('modelProviderSectionConnection')}>
+                  {credentialSyncNotice}
                   {isCodexProvider(activeProvider) ? (
                     <CodexLoginSection
                       provider={activeProvider}
@@ -130,6 +152,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                           className="min-h-11 !rounded-lg"
                           value={activeApiKeyValue}
                           onChange={updateActiveProviderCredential}
+                          onBlur={() => { void flushSharedProviderCredential(activeProvider.id) }}
                           visible={showApiKey}
                           onToggleVisibility={() => { void toggleActiveProviderCredentialVisibility() }}
                           toggleBusy={activeCredentialRevealBusy}
@@ -187,12 +210,14 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                     />
                   ) : (
                     <>
+                      {activeProviderNeedsApiKey ? (
                       <label className={fieldLabelClass}>
                         {t('modelProviderApiKey')}
                         <SecretInput
                           className="min-h-11 !rounded-lg"
                           value={activeApiKeyValue}
                           onChange={updateActiveProviderCredential}
+                          onBlur={() => { void flushSharedProviderCredential(activeProvider.id).catch(() => undefined) }}
                           visible={showApiKey}
                           onToggleVisibility={() => { void toggleActiveProviderCredentialVisibility() }}
                           toggleBusy={activeCredentialRevealBusy}
@@ -224,6 +249,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                             </span>
                           ) : null}
                       </label>
+                      ) : null}
                       <label className={fieldLabelClass}>
                         {t('modelProviderBaseUrl')}
                         <input

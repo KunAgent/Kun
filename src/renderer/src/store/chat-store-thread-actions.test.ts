@@ -63,6 +63,7 @@ function buildHarness(): {
     activeThreadId: 'thr_existing',
     blocks: [],
     busy: true,
+    busyUnconfirmed: false,
     clawChannels: [],
     codeWorkspaceRoots: [],
     composerModel: '',
@@ -110,6 +111,7 @@ function expectSink(sink: ThreadEventSink | null): ThreadEventSink {
 describe('chat-store-thread-actions queued messages', () => {
   beforeEach(() => {
     clearThreadSnapshotCache()
+    vi.stubGlobal('localStorage', new MemoryStorage())
     rendererRuntimeClient.invalidateSettings()
     registryMock.getProvider.mockReset()
     registryMock.getProvider.mockReturnValue({})
@@ -421,6 +423,9 @@ describe('chat-store-thread-actions queued messages', () => {
       deliveryState: 'paused',
       orchestration: 'graph'
     }]
+    // The durable queue is the authoritative source for cache-hit restores, so
+    // keep it in sync like persistActiveQueuedMessages does in production.
+    saveQueuedMessagesForThread('thr_a', state.queuedMessages)
 
     await actions.selectThread('thr_b')
     state.composerOrchestration = 'direct'

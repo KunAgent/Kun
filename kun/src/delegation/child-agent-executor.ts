@@ -49,6 +49,7 @@ import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { ThreadService } from '../services/thread-service.js'
 import { isHostShutdownTurnSuspension, TurnService } from '../services/turn-service.js'
 import { UsageService } from '../services/usage-service.js'
+import { submittedDesignTaskProfile } from '../domain/design-task-profile.js'
 import type { ChildRunExecutor } from './delegation-runtime.js'
 import {
   ChildResultExecutionError,
@@ -371,6 +372,17 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     if (input.resumeChild && (thread.relation !== 'side' || thread.parentThreadId !== input.parentThreadId)) {
       throw new Error(`child thread ${input.childId} is not a side thread of the expected parent`)
     }
+    const parentDesignProfile = agentSurface === 'design' && !thread.designProfile
+      ? (threadStore.getMetadata
+          ? await threadStore.getMetadata(input.parentThreadId)
+          : await threadStore.get(input.parentThreadId))?.designProfile
+      : undefined
+    const designAdmission = parentDesignProfile
+      ? {
+          designProfile: submittedDesignTaskProfile(parentDesignProfile),
+          designDocumentTarget: parentDesignProfile.documentTarget
+        }
+      : undefined
     // A profile preamble rides in the prompt body (not the system prompt) so
     // the cached stable prefix stays byte-identical to the main agent's.
     const promptBase = source
@@ -412,6 +424,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
         ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
         ...(agentSurface ? { agentSurface } : {}),
+        ...(designAdmission ?? {}),
         // Child runs have no independent interactive surface for structured prompts.
         disableUserInput: true
       }
@@ -479,6 +492,18 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
           ...(status === 'completed' ? {} : { failure: `Retrieval child ${status}.` })
         })
       : undefined
+    // For a Fast Context child the evidence pack is the contract product.
+    // When the model spent its whole budget on retrieval and wrote no final
+    // text, the pack still carries every task conclusion, so never let a
+    // stringified tool_result or duplicated loop error text impersonate the
+    // summary (that produced self-contradictory "failed + status: completed"
+    // cards). The placeholder text tracks the settled terminal status.
+    if (input.fastContext && evidencePack && childResultUsedNoTextSummary(items, started.turnId)) {
+      result.summary = status === 'completed'
+        ? 'Fast Context retrieval completed; see evidence pack.'
+        : 'Fast Context retrieval incomplete; see evidence pack.'
+      result.summaryTruncated = undefined
+    }
     const structuredResult = {
       ...result,
       ...(directionBundle !== undefined ? { directionBundle } : {}),
@@ -503,10 +528,23 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         event.severity !== 'info'
     )
     if (runtimeError?.kind === 'error') {
-      throw new ChildResultExecutionError(runtimeError.message, structuredResult, {
-        ...settlement,
-        failure: childFailureFromRuntimeError(runtimeError)
-      })
+      // A Fast Context child that exhausted its retrieval budget can still
+      // settle `completed` with a fatal-looking loop bookkeeping error (empty
+      // final answer / suppressed repeat tool calls). Only those whitelisted
+      // loop-cleanup codes are outranked by the evidence pack; any other fatal
+      // error (provider crash, sandbox failure, unknown) still fails the run.
+      const fastContextRecovered =
+        input.fastContext === true &&
+        status === 'completed' &&
+        evidencePack !== undefined &&
+        runtimeError.code !== undefined &&
+        FAST_CONTEXT_RECOVERABLE_LOOP_ERROR_CODES.has(runtimeError.code)
+      if (!fastContextRecovered) {
+        throw new ChildResultExecutionError(runtimeError.message, structuredResult, {
+          ...settlement,
+          failure: childFailureFromRuntimeError(runtimeError)
+        })
+      }
     }
     if (executionError !== undefined) {
       throw new ChildResultExecutionError(childExecutionErrorMessage(executionError), structuredResult, {
@@ -540,8 +578,30 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
   }
 }
 
+/** Loop bookkeeping error codes that a completed Fast Context child may
+ * outrank with its evidence pack (kun/src/loop/round-outcome-recovery-phase.ts).
+ * Anything outside this set remains fatal and fails the run as before. */
+const FAST_CONTEXT_RECOVERABLE_LOOP_ERROR_CODES = new Set([
+  'model_empty_response',
+  'empty_post_tool_continuation',
+  'tool_loop_suppressed'
+])
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** True when childResultSource had no assistant text and fell back to a
+ * tool_result stringification or loop error text — the fake-summary cases. */
+function childResultUsedNoTextSummary(items: readonly TurnItem[], turnId: string): boolean {
+  const turnItems = items.filter((item) => item.turnId === turnId)
+  const hasAssistantText = turnItems.some(
+    (item) => item.kind === 'assistant_text' && item.text.trim().length > 0
+  )
+  if (hasAssistantText) return false
+  return turnItems.some(
+    (item) => item.kind === 'tool_result' || item.kind === 'error'
+  )
 }
 
 function childToolEvidence(items: readonly TurnItem[], turnId: string): string[] {

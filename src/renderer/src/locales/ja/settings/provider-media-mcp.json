@@ -126,6 +126,8 @@
   "modelProviderCustomBadge": "カスタム",
   "modelProviderTokenPlanBadge": "トークンプラン",
   "modelProviderPlanBadge": "計画",
+  "modelProviderFreeBadge": "無料",
+  "modelProviderGroupFree": "無料",
   "modelProviderGroupPlans": "サブスクリプションプラン",
   "modelProviderSubscriptionRegions": "サブスクリプションプランの地域",
   "modelProviderSubscriptionRegionAll": "すべて",

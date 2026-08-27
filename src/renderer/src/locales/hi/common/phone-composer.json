@@ -342,6 +342,7 @@
   "composerVoiceMicDenied": "माइक्रोफ़ोन पहुंच अस्वीकृत कर दी गई थी. इसे सिस्टम सेटिंग्स में अनुमति दें और पुनः प्रयास करें।",
   "composerVoiceTooShort": "रिकॉर्डिंग बहुत छोटी थी. थोड़ी देर और रुकें.",
   "composerVoiceFailed": "Voice transcription failed: {{message}}",
+  "composerDismissError": "Dismiss error",
   "composerImageUnavailable": "इस रनटाइम के लिए छवि इनपुट अनुपलब्ध है.",
   "composerAttachmentUnavailable": "अनुलग्नक अपलोड अनुपलब्ध है.",
   "composerDropFilesHere": "इस बातचीत में फ़ाइलें जोड़ने के लिए छोड़ें",

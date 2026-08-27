@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import type { TFunction } from 'i18next'
-import type { ChatBlock } from '../../agent/types'
+import type { ChatBlock, ToolBlock } from '../../agent/types'
 import {
   isTerminalSubagentStatus,
   type SubagentLivenessStatus
@@ -308,6 +308,20 @@ function stringList(value: unknown, maxItems: number, maxLength: number): string
     : []
 }
 
+const COMPLETED_STATUS_MARKERS = [
+  'status: completed',
+  '"status":"completed"',
+  '"status": "completed"'
+] as const
+
+/** Detects legacy bad records where a stringified completed tool_result was
+ * used as the failure error text; such cards must not render as failed. */
+function errorSelfDescribesCompletion(error: string | undefined): boolean {
+  if (!error) return false
+  const normalized = error.replace(/\s+/g, ' ')
+  return COMPLETED_STATUS_MARKERS.some((marker) => normalized.includes(marker))
+}
+
 /** Parse the new aggregate explore result without changing legacy scalar parsing. */
 export function parseExploreBatchChildren(detail: string | undefined): ExploreBatchChildDetail[] {
   if (!detail || !detail.trim()) return []
@@ -447,6 +461,16 @@ export function resolveStatus(block: ChatBlock, child: ChildMeta, detail?: Deleg
   if (cs === 'failed') return 'failed'
   if (detail?.status === 'completed') return 'done'
   if (detail?.status === 'aborted') return userStopped ? 'stopped' : 'failed'
+  // Legacy bad records: a failed detail whose error text self-describes a
+  // completed child (stringified tool_result used as a fake summary) must not
+  // render a misleading red "failed" card. Requiring an evidence pack keeps
+  // this downgrade pinned to the Fast Context bad-record shape instead of any
+  // failure whose error text happens to mention "status: completed".
+  if (
+    detail?.status === 'failed' &&
+    errorSelfDescribesCompletion(detail.error) &&
+    parseFastContextEvidencePack(block.kind === 'tool' ? (block as ToolBlock).detail : undefined) !== undefined
+  ) return 'done'
   if (detail?.status === 'failed') return 'failed'
 
   // Detaching settles the wrapper tool call, not the child run. Keep live

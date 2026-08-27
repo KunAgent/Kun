@@ -11,6 +11,8 @@ import {
   BrowserUseThreadInputSchema
 } from '../../shared/browser-use'
 import type { BrowserUseManager } from './browser-use-manager'
+import { trustedRendererSenderIsCurrent } from '../renderer-trust-policy'
+import { trustedWorkbenchRendererUrl } from '../main-window'
 
 const CHANNELS = [
   'browser-use:state:get',
@@ -92,20 +94,13 @@ function assertTrustedWorkbenchSender(
   getMainWindow: () => BrowserWindow | null
 ): BrowserWindow {
   const window = getMainWindow()
-  const senderFrame = event.senderFrame
-  const mainFrame = window?.webContents.mainFrame
-  if (
-    !window ||
-    window.isDestroyed() ||
-    event.sender.id !== window.webContents.id ||
-    !senderFrame ||
-    !mainFrame ||
-    senderFrame.processId !== mainFrame.processId ||
-    senderFrame.routingId !== mainFrame.routingId
-  ) {
+  if (!trustedRendererSenderIsCurrent(event, window, {
+    trustedRendererUrl: trustedWorkbenchRendererUrl(),
+    surface: 'workbench'
+  })) {
     throw new Error('Browser Use IPC sender is not the trusted workbench frame.')
   }
-  return window
+  return window as BrowserWindow
 }
 
 function assertBoundSession(

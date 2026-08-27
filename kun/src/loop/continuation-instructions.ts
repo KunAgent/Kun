@@ -229,12 +229,13 @@ export function postToolFailureRecoveryInstruction(recoveryStep: number): string
 }
 
 /**
- * Conservative classifier for "progress announcement" text produced after a
- * tool failure. Questions directed at the user and explicit blocker/final
- * reports are excluded so a legitimate answer is never forced into another
- * round.
+ * Conservative classifier for text that is directed at the user: a question
+ * or an explicit blocker/waiting report. Shared by the post-tool-failure
+ * progress classifier (which additionally requires commitment wording) and
+ * the goal continuation no-tool guard, so a legitimate user-directed reply
+ * is never forced into another model round.
  */
-const POST_TOOL_FAILURE_QUESTION_OR_BLOCKER_PATTERNS: RegExp[] = [
+const USER_DIRECTED_QUESTION_OR_BLOCKER_PATTERNS: RegExp[] = [
   /[?？]/,
   /请问|是否|能不能|可不可以|麻烦你|请(你|先|确认|提供|补充|告诉|检查|调整|修复|重试|修改|选择|决定|告诉我|再看看)/,
   /需要(你|用户|手动|人工)/,
@@ -271,10 +272,22 @@ const POST_TOOL_FAILURE_COMMITMENT_PATTERNS: RegExp[] = [
 export function isPostToolFailureProgressText(text: string): boolean {
   const trimmed = text.trim()
   if (!trimmed) return false
-  if (POST_TOOL_FAILURE_QUESTION_OR_BLOCKER_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+  if (USER_DIRECTED_QUESTION_OR_BLOCKER_PATTERNS.some((pattern) => pattern.test(trimmed))) {
     return false
   }
   return POST_TOOL_FAILURE_COMMITMENT_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
+/**
+ * True when a no-tool assistant reply is asking the user something or
+ * explicitly waiting on user input. The goal continuation guard stops the
+ * turn for such replies instead of counting them as repetition: the model
+ * followed the documented "ask in prose and end the turn" guidance.
+ */
+export function isUserDirectedNoToolText(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  return USER_DIRECTED_QUESTION_OR_BLOCKER_PATTERNS.some((pattern) => pattern.test(trimmed))
 }
 
 /**

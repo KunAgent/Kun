@@ -1,4 +1,10 @@
 import { createServer } from 'node:net'
+import type { RuntimeFlavor } from '../../kun/src/contracts/runtime-flavor.js'
+import {
+  readRuntimeHandoffDiscovery,
+  type RuntimeHandoffDiscoveryRecord
+} from '../../kun/src/server/runtime-discovery.js'
+import { identityMatchesExpectedRuntime } from './kun-process-identity'
 import { appendManagedLogLine } from './logger'
 import {
   execFileAsync,
@@ -8,19 +14,27 @@ import {
   sleep
 } from './kun-process-state'
 
+export type KunPortReclaimContext = {
+  dataDir: string
+  flavor?: RuntimeFlavor
+  expectedServeEntryPath?: string
+}
+
 export async function reclaimKunPort(
-  port: number
+  port: number,
+  context?: KunPortReclaimContext
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (port <= 0) return { ok: true }
   if (await canBindTcpPort(port, '127.0.0.1')) return { ok: true }
-  if (await killStaleKunOnPort(port) && await canBindTcpPort(port, '127.0.0.1')) {
+  if (await killStaleKunOnPort(port, context) && await canBindTcpPort(port, '127.0.0.1')) {
     return { ok: true }
   }
   return { ok: false, message: `port ${port} is in use` }
 }
 
 export async function resolveAvailableKunPort(
-  preferredPort: number
+  preferredPort: number,
+  context?: KunPortReclaimContext
 ): Promise<{ port: number; changed: boolean; message?: string }> {
   if (preferredPort > 0) {
     // A temporarily unresponsive managed child still owns its configured
@@ -35,7 +49,7 @@ export async function resolveAvailableKunPort(
     // Prefer reclaiming the configured port from a stale kun left by a
     // crashed previous app run over silently moving to a new port.
     if (
-      await killStaleKunOnPort(preferredPort) &&
+      await killStaleKunOnPort(preferredPort, context) &&
       await canBindTcpPort(preferredPort, '127.0.0.1')
     ) {
       return { port: preferredPort, changed: false }
@@ -68,25 +82,54 @@ export async function resolveAvailableKunPort(
  * identify the holder as our own serve-entry leaves it untouched and the
  * caller allocates a different port instead.
  */
-export async function killStaleKunOnPort(port: number): Promise<boolean> {
+export async function killStaleKunOnPort(
+  port: number,
+  context?: KunPortReclaimContext
+): Promise<boolean> {
+  // Generic port probes do not know a runtime owner, so they intentionally
+  // fail closed and let callers choose another available port.
+  if (!context) return false
   const pids = await listListeningPidsOnPort(port)
   let reclaimed = false
   for (const pid of pids) {
     if (processController.isCurrentPid(pid)) continue
-    let command = ''
-    try {
-      command = await processCommandLine(pid)
-    } catch {
+    const verifyTarget = async (): Promise<boolean> => {
+      const identity = await processIdentity(pid)
+      const discovery = await readKunPortOwner(context, port)
+      return Boolean(discovery && identityMatchesExpectedRuntime(
+        identity,
+        discovery,
+        context.dataDir,
+        context.flavor ?? 'production',
+        context.expectedServeEntryPath
+      ))
+    }
+    if (!(await verifyTarget())) {
+      void appendManagedLogLine(
+        'kun',
+        formatKunLogLine('lifecycle', pid, `skipped non-kun listener on port ${port}`)
+      )
       continue
     }
-    if (!command.includes('serve-entry')) continue
     void appendManagedLogLine(
       'kun',
       formatKunLogLine('lifecycle', pid, `killing stale kun process holding port ${port}`)
     )
-    if (await terminateStalePid(pid)) reclaimed = true
+    if (await terminateVerifiedPid(pid, verifyTarget)) reclaimed = true
   }
   return reclaimed
+}
+
+async function readKunPortOwner(
+  context: KunPortReclaimContext,
+  port: number
+): Promise<RuntimeHandoffDiscoveryRecord | null> {
+  try {
+    const discovery = await readRuntimeHandoffDiscovery(context.dataDir, context.flavor ?? 'production')
+    return discovery?.port === port ? discovery : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -94,6 +137,7 @@ export async function killStaleKunOnPort(port: number): Promise<boolean> {
  * macOS/Linux and `netstat -ano` on Windows.
  */
 export async function listListeningPidsOnPort(port: number): Promise<number[]> {
+  if (packagedUpdateHandoffInspectionDenied()) return []
   if (process.platform === 'win32') {
     try {
       const { stdout } = await execFileAsync('netstat', ['-ano'], {
@@ -138,6 +182,9 @@ export function parseListeningPidsFromNetstat(stdout: string, port: number): num
 
 /** Read a process's full command line (best effort, platform-specific). */
 export async function processCommandLine(pid: number): Promise<string> {
+  if (packagedUpdateHandoffInspectionDenied()) {
+    throw Object.assign(new Error('packaged smoke denied process inspection'), { code: 'EPERM' })
+  }
   if (process.platform === 'win32') {
     const { stdout } = await execFileAsync(
       'powershell',
@@ -153,6 +200,75 @@ export async function processCommandLine(pid: number): Promise<string> {
   }
   const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'command='])
   return stdout.trim()
+}
+
+export type ProcessIdentity = {
+  pid: number
+  commandLine: string
+  executablePath: string | null
+  startedAtMs: number | null
+}
+
+/**
+ * Read immutable process identity attributes so replacement can reject a PID
+ * that was recycled after its runtime discovery record was written.
+ */
+export async function processIdentity(pid: number): Promise<ProcessIdentity | null> {
+  if (packagedUpdateHandoffInspectionDenied()) return null
+  try {
+    if (process.platform === 'win32') return await windowsProcessIdentity(pid)
+    const { stdout } = await execFileAsync(
+      'ps',
+      ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
+      { timeout: 5_000 }
+    )
+    const line = stdout.trim()
+    if (line.length < 25) return null
+    const startedAtMs = Date.parse(line.slice(0, 24))
+    const commandLine = line.slice(24).trim()
+    if (!commandLine || !Number.isFinite(startedAtMs)) return null
+    return { pid, commandLine, executablePath: null, startedAtMs }
+  } catch {
+    return null
+  }
+}
+
+async function windowsProcessIdentity(pid: number): Promise<ProcessIdentity | null> {
+  const { stdout } = await execFileAsync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `$process = Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}'; if ($process) { [pscustomobject]@{ ProcessId = $process.ProcessId; ExecutablePath = $process.ExecutablePath; CommandLine = $process.CommandLine; CreationDate = $process.CreationDate } | ConvertTo-Json -Compress }`
+    ],
+    { windowsHide: true, timeout: 5_000 }
+  )
+  const record = JSON.parse(stdout.trim()) as {
+    ProcessId?: unknown
+    ExecutablePath?: unknown
+    CommandLine?: unknown
+    CreationDate?: unknown
+  }
+  const commandLine = typeof record.CommandLine === 'string' ? record.CommandLine.trim() : ''
+  const startedAtMs = typeof record.CreationDate === 'string'
+    ? Date.parse(record.CreationDate)
+    : Number.NaN
+  if (record.ProcessId !== pid || !commandLine || !Number.isFinite(startedAtMs)) return null
+  return {
+    pid,
+    commandLine,
+    executablePath: typeof record.ExecutablePath === 'string' ? record.ExecutablePath : null,
+    startedAtMs
+  }
+}
+
+export function packagedUpdateHandoffInspectionDenied(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return env.KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE === '1' &&
+    env.KUN_PACKAGED_UPDATE_HANDOFF_SMOKE === '1' &&
+    env.KUN_PACKAGED_UPDATE_HANDOFF_DENY_INSPECTION === '1'
 }
 
 /** Terminate a positively-identified stale kun process. */
@@ -196,12 +312,20 @@ export async function terminateStalePid(pid: number): Promise<boolean> {
 export async function terminateVerifiedPid(
   pid: number,
   verifyTarget: () => Promise<boolean>,
-  waitForExit: (pid: number, timeoutMs: number) => Promise<boolean> = waitForPidExit
+  waitForExit: (pid: number, timeoutMs: number) => Promise<boolean> = waitForPidExit,
+  system: {
+    platform?: NodeJS.Platform
+    kill?: typeof process.kill
+    execFile?: typeof execFileAsync
+  } = {}
 ): Promise<boolean> {
+  const platform = system.platform ?? process.platform
+  const kill = system.kill ?? process.kill.bind(process)
+  const execFile = system.execFile ?? execFileAsync
   if (!(await verifyTarget())) return false
-  if (process.platform === 'win32') {
+  if (platform === 'win32') {
     try {
-      await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      await execFile('taskkill', ['/PID', String(pid), '/T', '/F'], {
         windowsHide: true,
         timeout: 5_000
       })
@@ -212,7 +336,7 @@ export async function terminateVerifiedPid(
   }
 
   try {
-    process.kill(pid, 'SIGTERM')
+    kill(pid, 'SIGTERM')
   } catch {
     return waitForExit(pid, 0)
   }
@@ -220,7 +344,7 @@ export async function terminateVerifiedPid(
   // Do not escalate after PID reuse or an identity change.
   if (!(await verifyTarget())) return false
   try {
-    process.kill(pid, 'SIGKILL')
+    kill(pid, 'SIGKILL')
   } catch {
     return waitForExit(pid, 0)
   }

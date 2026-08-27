@@ -52,6 +52,21 @@ export const ModelReasoningCapabilityMetadata = z
   .strict()
 export type ModelReasoningCapabilityMetadata = z.infer<typeof ModelReasoningCapabilityMetadata>
 
+/**
+ * Reference catalog pricing in USD per million tokens. Used only as the
+ * last-resort local cost estimate when the provider reports no cost and no
+ * first-party estimator (DeepSeek/MiniMax) matched the model.
+ */
+export const ModelCatalogPricing = z
+  .object({
+    inputUsdPerMillion: z.number().nonnegative(),
+    outputUsdPerMillion: z.number().nonnegative(),
+    cacheReadUsdPerMillion: z.number().nonnegative().optional(),
+    cacheWriteUsdPerMillion: z.number().nonnegative().optional()
+  })
+  .strict()
+export type ModelCatalogPricing = z.infer<typeof ModelCatalogPricing>
+
 export const ModelCapabilityMetadata = z
   .object({
     id: z.string().min(1),
@@ -66,6 +81,8 @@ export const ModelCapabilityMetadata = z
     maxOutputTokens: z.number().int().positive().optional(),
     messageParts: z.array(ModelMessagePartSupport).min(1),
     reasoning: ModelReasoningCapabilityMetadata.optional(),
+    /** Reference catalog pricing for local cost estimation. */
+    pricing: ModelCatalogPricing.optional(),
     /** Provider-advertised request service tiers supported by this model. */
     serviceTiers: z.array(ModelServiceTier).min(1).optional(),
     // Per-model wire-format override. Lets one provider route some models to

@@ -165,7 +165,7 @@ function renderContextUpdate(
     lines.push(
       `<kun_context_update key="${escapeAttribute(block.key)}" kind="${escapeAttribute(block.kind)}" authority="${escapeAttribute(block.authority)}" state="${state}">`
     )
-    if ('content' in block) lines.push(block.content)
+    if ('content' in block && block.content !== undefined) lines.push(block.content)
     lines.push('</kun_context_update>')
   }
   return lines.join('\n')

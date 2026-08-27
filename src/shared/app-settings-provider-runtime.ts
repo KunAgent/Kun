@@ -72,6 +72,7 @@ import {
   CHATGPT_SUBSCRIPTION_NAME,
   CHATGPT_SUBSCRIPTION_PROVIDER_ID,
   GEMINI_SUBSCRIPTION_MODEL_IDS,
+  OPENCODE_FREE_PROVIDER_ID,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
   getModelProviderPreset,
   modelProviderPresetProfile,
@@ -202,17 +203,24 @@ export function resolveKunRuntimeSettings(settings: AppSettingsV1): KunRuntimeSe
   const runtimeBaseUrl = runtime.baseUrl?.trim() ?? ''
   const providerBaseUrl = provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL
   const useProviderCredentials = Boolean(providerId)
+  const useOpenCodeAnonymousAccess =
+    (
+      provider.id === OPENCODE_FREE_PROVIDER_ID ||
+      resolveModelProviderPresetSource(provider)?.preset.id === OPENCODE_FREE_PROVIDER_ID
+    ) &&
+    !provider.apiKey.trim()
 
   return {
     ...runtime,
-    // When a provider is selected we prefer that profile's key, but fall back
-    // to the agent's own runtime.apiKey if the profile happens to be keyless.
-    // A providerId pointing at a keyless profile must NOT resolve to an empty
-    // key (issue #329) — that briefly reads as "no API key" and the
-    // settings-apply gate then stops a perfectly healthy Kun runtime.
-    apiKey: useProviderCredentials
-      ? provider.apiKey.trim() || runtimeApiKey
-      : runtimeApiKey || provider.apiKey.trim(),
+    // OpenCode Zen free models authenticate by omitting the credential header
+    // entirely; a placeholder bearer would be treated as a real (unknown) key
+    // and rejected with 401. Never fall back to a stale runtime key here — that
+    // would silently attach an unrelated DeepSeek credential to the free tier.
+    apiKey: useOpenCodeAnonymousAccess
+      ? ''
+      : useProviderCredentials
+        ? provider.apiKey.trim() || runtimeApiKey
+        : runtimeApiKey || provider.apiKey.trim(),
     baseUrl:
       !useProviderCredentials && runtimeBaseUrl && runtimeBaseUrl !== DEFAULT_DEEPSEEK_BASE_URL
         ? normalizeDeepseekBaseUrl(runtimeBaseUrl)

@@ -71,5 +71,6 @@
   "planAgentStartFailed": "Could not start the agent turn for this plan.",
   "planExtractFailed": "Could not find plan Markdown in the agent response.",
   "planToolResultMissing": "Kun did not return a matching create_plan result for this plan.",
+  "planLoadFailed": "Could not load the plan. Use \"Open plan\" to reload it.",
   "planRequestRequired": "Describe a request first, or use `/plan your request` to create a new plan."
 }

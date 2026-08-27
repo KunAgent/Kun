@@ -8,7 +8,8 @@ import {
   reconcileSnapshotBlocks,
   reconcileSnapshotTurn,
   settleProjectedThreadStatus,
-  updateProjectedThreadStatus
+  updateProjectedThreadStatus,
+  upsertProjectedTimelineBlock
 } from './chat-projection-reducer-support'
 
 export function reduceLateChatProjection(
@@ -19,7 +20,7 @@ export function reduceLateChatProjection(
   switch (action.type) {
     case 'runtime_status_received': {
       const event = action.payload
-      const base: Partial<ChatState> = state.busy ? {} : { busy: true }
+      const base: Partial<ChatState> = state.busy ? {} : { busy: true, busyUnconfirmed: false }
       const block: ChatBlock = {
         kind: 'system',
         id: event.itemId,
@@ -35,9 +36,9 @@ export function reduceLateChatProjection(
       const index = state.blocks.findIndex(
         (candidate) => candidate.kind === 'system' && candidate.id === event.itemId
       )
-      const blocks = [...state.blocks]
-      if (index >= 0) blocks[index] = block
-      else blocks.push(block)
+      const blocks = index >= 0
+        ? state.blocks.map((candidate, blockIndex) => blockIndex === index ? block : candidate)
+        : upsertProjectedTimelineBlock(state, block)
       return {
         ...base,
         blocks,
@@ -88,26 +89,29 @@ export function reduceLateChatProjection(
         }
         return { ...base, blocks, error: context.clearRecoveringError(state.error) }
       }
+      const block: Extract<ChatBlock, { kind: 'compaction' }> = {
+        kind: 'compaction',
+        id: event.itemId,
+        turnId: event.turnId,
+        createdAt: event.createdAt ?? new Date(context.now).toISOString(),
+        summary: event.summary,
+        status: event.status,
+        detail: event.detail,
+        auto: event.auto,
+        messagesBefore: event.messagesBefore,
+        messagesAfter: event.messagesAfter
+      }
+      const blocks = upsertProjectedTimelineBlock(state, block)
+      if (blocks === state.blocks) return base
       return {
         ...base,
-        blocks: [...state.blocks, {
-          kind: 'compaction',
-          id: event.itemId,
-          turnId: event.turnId,
-          createdAt: event.createdAt ?? new Date(context.now).toISOString(),
-          summary: event.summary,
-          status: event.status,
-          detail: event.detail,
-          auto: event.auto,
-          messagesBefore: event.messagesBefore,
-          messagesAfter: event.messagesAfter
-        }],
+        blocks,
         error: context.clearRecoveringError(state.error)
       }
     }
     case 'review_updated': {
       const event = action.payload
-      const base: Partial<ChatState> = !state.busy && event.status === 'running' ? { busy: true } : {}
+      const base: Partial<ChatState> = !state.busy && event.status === 'running' ? { busy: true, busyUnconfirmed: false } : {}
       const index = state.blocks.findIndex(
         (block) => block.kind === 'review' && block.id === event.itemId
       )
@@ -127,19 +131,22 @@ export function reduceLateChatProjection(
         }
         return { ...base, blocks, error: context.clearRecoveringError(state.error) }
       }
+      const block: Extract<ChatBlock, { kind: 'review' }> = {
+        kind: 'review',
+        id: event.itemId,
+        turnId: event.turnId,
+        createdAt: event.createdAt ?? new Date(context.now).toISOString(),
+        title: event.title,
+        status: event.status,
+        target: event.target,
+        reviewText: event.reviewText,
+        output: event.output
+      }
+      const blocks = upsertProjectedTimelineBlock(state, block)
+      if (blocks === state.blocks) return base
       return {
         ...base,
-        blocks: [...state.blocks, {
-          kind: 'review',
-          id: event.itemId,
-          turnId: event.turnId,
-          createdAt: event.createdAt ?? new Date(context.now).toISOString(),
-          title: event.title,
-          status: event.status,
-          target: event.target,
-          reviewText: event.reviewText,
-          output: event.output
-        }],
+        blocks,
         error: context.clearRecoveringError(state.error)
       }
     }
@@ -308,16 +315,13 @@ export function reduceLateChatProjection(
       const aborted = action.type === 'turn_aborted'
       const threadId = state.activeThreadId
       const threads = threadId
-        ? settleProjectedThreadStatus(state.threads, threadId, aborted ? 'aborted' : 'completed')
+        ? settleProjectedThreadStatus(
+            state.threads,
+            threadId,
+            aborted ? 'aborted' : 'completed',
+            action.payload.turnId
+          )
         : state.threads
-      if (!state.busy && !state.currentTurnId) {
-        if (!aborted) return threads === state.threads ? {} : { threads }
-        const blocks = context.settlePendingRuntimeWork(state.blocks)
-        return {
-          ...(threads !== state.threads ? { threads } : {}),
-          ...(blocks !== state.blocks ? { blocks } : {})
-        }
-      }
       const patch = flushLiveProjection(state, context.now, {
         ...finalizeTurnTimingAt(state, context.now),
         error: null,
@@ -327,7 +331,7 @@ export function reduceLateChatProjection(
           currentTurnUserId: null,
           blocks: context.settlePendingRuntimeWork(state.blocks)
         } : {}),
-        ...(state.busy ? { busy: false } : {}),
+        ...(state.busy ? { busy: false, busyUnconfirmed: false } : {}),
         ...(threads !== state.threads ? { threads } : {})
       })
       if (!threadId) return patch
@@ -338,11 +342,16 @@ export function reduceLateChatProjection(
       return { ...patch, watchTurnCompletion, unreadThreadIds }
     }
     case 'turn_failed': {
-      const message = context.formatRuntimeError(action.error)
-      const detail = context.runtimeErrorDetail(action.error)
-      const terminal = action.options?.terminal === true
-      const conversationScoped = action.options?.scope === 'conversation'
-      const interrupted = context.isInterruptSettledError(action.error, message)
+      const { error, options, threadId, turnId } = action.payload
+      // Replay paths can feed the reducer directly without the store's sink
+      // guard. A failure carrying another turn's identity must never settle
+      // the currently active turn.
+      if (turnId && state.currentTurnId && turnId !== state.currentTurnId) return undefined
+      const message = context.formatRuntimeError(error)
+      const detail = context.runtimeErrorDetail(error)
+      const terminal = options?.terminal === true
+      const conversationScoped = options?.scope === 'conversation'
+      const interrupted = context.isInterruptSettledError(error, message)
       const shouldSettle = terminal || !state.busy || interrupted
       const patch = flushLiveProjection(state, context.now, {
         ...finalizeTurnTimingAt(state, context.now),
@@ -351,23 +360,26 @@ export function reduceLateChatProjection(
       })
       if (!shouldSettle) return patch
       patch.busy = false
+      patch.busyUnconfirmed = false
       patch.currentTurnId = null
       patch.currentTurnOrchestration = null
       patch.currentTurnUserId = null
       patch.blocks = context.settlePendingRuntimeWork(patch.blocks ?? state.blocks)
-      if (state.activeThreadId) {
+      const settleThreadId = threadId ?? state.activeThreadId
+      if (settleThreadId) {
         const threads = settleProjectedThreadStatus(
           state.threads,
-          state.activeThreadId,
-          interrupted ? 'aborted' : 'failed'
+          settleThreadId,
+          interrupted ? 'aborted' : 'failed',
+          turnId
         )
         if (threads !== state.threads) patch.threads = threads
       }
-      if (terminal && state.activeThreadId) {
+      if (terminal && settleThreadId) {
         const watchTurnCompletion = { ...state.watchTurnCompletion }
         const unreadThreadIds = { ...state.unreadThreadIds }
-        delete watchTurnCompletion[state.activeThreadId]
-        delete unreadThreadIds[state.activeThreadId]
+        delete watchTurnCompletion[settleThreadId]
+        delete unreadThreadIds[settleThreadId]
         patch.watchTurnCompletion = watchTurnCompletion
         patch.unreadThreadIds = unreadThreadIds
       }

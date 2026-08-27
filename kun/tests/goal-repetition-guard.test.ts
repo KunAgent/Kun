@@ -244,4 +244,67 @@ describe('goal continuation repetition guard', () => {
     expect(calls).toBe(7)
     expect(await loadRepetitionStops(h)).toHaveLength(1)
   })
+
+  it('stops immediately when the first no-tool reply asks the user a question', async () => {
+    let h: Harness
+    let calls = 0
+    const requests: ModelRequest[] = []
+    h = makeHarness(
+      {
+        provider: 'goal-question',
+        model: 'goal-question',
+        async *stream(request): AsyncIterable<ModelStreamChunk> {
+          requests.push(request)
+          calls += 1
+          yield {
+            kind: 'assistant_text_delta',
+            text: 'I found two viable approaches. Which option should I use for the release?'
+          }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      },
+      { tools: [...buildDefaultLocalTools(), ...makeGoalTools(() => h)] }
+    )
+    await bootstrapThread(h, { request: { prompt: 'prepare the release' } })
+    await h.threads.setGoal(h.threadId, { objective: 'prepare the release', status: 'active' })
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(1)
+    expect((await h.threads.getGoal(h.threadId))?.status).toBe('active')
+    expect(requests.some((request) =>
+      modelRequestContextText(request).includes('Goal continuation recovery:')
+    )).toBe(false)
+    expect(await loadRepetitionStops(h)).toHaveLength(0)
+  })
+
+  it('stops a repeated user question instead of entering recovery', async () => {
+    let h: Harness
+    let calls = 0
+    h = makeHarness(
+      {
+        provider: 'goal-repeat-question',
+        model: 'goal-repeat-question',
+        async *stream(): AsyncIterable<ModelStreamChunk> {
+          calls += 1
+          yield {
+            kind: 'assistant_text_delta',
+            text: 'Before I continue, which option should I use?'
+          }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      },
+      { tools: [...buildDefaultLocalTools(), ...makeGoalTools(() => h)] }
+    )
+    await bootstrapThread(h, { request: { prompt: 'ship the feature' } })
+    await h.threads.setGoal(h.threadId, { objective: 'ship the feature', status: 'active' })
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(1)
+    expect((await h.threads.getGoal(h.threadId))?.status).toBe('active')
+    expect(await loadRepetitionStops(h)).toHaveLength(0)
+  })
 })

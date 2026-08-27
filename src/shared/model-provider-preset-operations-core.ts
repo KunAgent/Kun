@@ -47,9 +47,11 @@ export function getModelProviderPreset(id: string): ModelProviderPreset | null {
   return MODEL_PROVIDER_PRESETS.find((preset) => preset.id === id) ?? null
 }
 
-export function defaultPresetRetrySettings() {
+export function defaultPresetRetrySettings(
+  preset?: Pick<ModelProviderPreset, 'defaultRetryMaxAttempts'>
+) {
   return {
-    maxAttempts: DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
+    maxAttempts: preset?.defaultRetryMaxAttempts ?? DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
     initialDelayMs: DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
     httpStatusCodes: [...DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES],
     defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
@@ -69,7 +71,7 @@ export function modelProviderPresetProfile(
     endpointFormat: preset.endpointFormat,
     // Subscription and API transports share the same bounded default. An
     // explicit provider setting can still reduce or disable retries.
-    retry: defaultPresetRetrySettings(),
+    retry: defaultPresetRetrySettings(preset),
     ...(preset.kind ? { kind: preset.kind } : {}),
     models: [...preset.models],
     modelProfiles: copyModelProfiles(preset.modelProfiles),
@@ -102,7 +104,7 @@ export function modelProviderTokenPlanProfile(
     apiKey: apiKey.trim(),
     baseUrl: resolvedBaseUrl,
     endpointFormat: tokenPlan.endpointFormat,
-    retry: defaultPresetRetrySettings(),
+    retry: defaultPresetRetrySettings(preset),
     models: [...tokenPlan.models],
     modelProfiles: copyModelProfiles(tokenPlan.modelProfiles),
     ...(tokenPlan.image

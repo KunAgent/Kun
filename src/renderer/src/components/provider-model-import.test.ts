@@ -352,6 +352,38 @@ describe('models.dev profile enrichment', () => {
     }])).toBe(target.modelProfiles)
   })
 
+  it('refreshes catalog pricing on an existing profile when it differs', () => {
+    const profile: ModelProviderModelProfileV1 = {
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 8_000,
+      inputModalities: ['text'],
+      outputModalities: ['text'],
+      supportsToolCalling: true,
+      messageParts: ['text']
+    }
+    const target = provider({ modelProfiles: { 'model-a': profile } })
+    const next = enrichProviderModelProfiles(target, ['model-a'], [{
+      id: 'model-a',
+      inputModalities: ['text'],
+      outputModalities: ['text'],
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 8_000,
+      pricing: { inputUsdPerMillion: 2, outputUsdPerMillion: 6 }
+    }])
+    expect(next['model-a']?.pricing).toEqual({
+      inputUsdPerMillion: 2,
+      outputUsdPerMillion: 6
+    })
+    // Unchanged pricing keeps the original profile map identity.
+    expect(enrichProviderModelProfiles(target, ['model-a'], [{
+      id: 'model-a',
+      inputModalities: ['text'],
+      outputModalities: ['text'],
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 8_000
+    }])).toBe(target.modelProfiles)
+  })
+
   it('hydrates existing unprofiled models with current models.dev capabilities', () => {
     const target = provider({ models: ['glm-5.2', 'kimi-k2.5'] })
     const entries = buildProviderModelImportEntries(
@@ -365,7 +397,12 @@ describe('models.dev profile enrichment', () => {
           contextWindowTokens: 1_000_000,
           maxOutputTokens: 131_072,
           reasoning: true,
-          toolCalling: true
+          toolCalling: true,
+          pricing: {
+            inputUsdPerMillion: 1,
+            outputUsdPerMillion: 3,
+            cacheReadUsdPerMillion: 0.1
+          }
         },
         {
           id: 'kimi-k2.5',
@@ -386,7 +423,12 @@ describe('models.dev profile enrichment', () => {
       maxOutputTokens: 131_072,
       inputModalities: ['text'],
       supportsToolCalling: true,
-      reasoning: { requestProtocol: 'none' }
+      reasoning: { requestProtocol: 'none' },
+      pricing: {
+        inputUsdPerMillion: 1,
+        outputUsdPerMillion: 3,
+        cacheReadUsdPerMillion: 0.1
+      }
     })
     expect(next['kimi-k2.5']).toMatchObject({
       contextWindowTokens: 262_144,

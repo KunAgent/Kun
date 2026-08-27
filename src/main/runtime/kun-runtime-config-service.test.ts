@@ -355,4 +355,43 @@ describe('Kun runtime config service', () => {
     }
   })
 
+  it('projects catalog pricing into provider modelCapabilities and model profiles', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-pricing-'))
+    const base = normalizeAppSettings({} as AppSettingsV1)
+    const defaultProvider = defaultModelProviderSettings().providers[0]!
+    const pricing = {
+      inputUsdPerMillion: 1,
+      outputUsdPerMillion: 4,
+      cacheReadUsdPerMillion: 0.1
+    }
+    const settings = normalizeAppSettings({
+      ...base,
+      provider: {
+        ...defaultModelProviderSettings(),
+        providers: [{
+          ...defaultProvider,
+          models: ['openai-model'],
+          modelProfiles: {
+            'openai-model': {
+              inputModalities: ['text'],
+              outputModalities: ['text'],
+              supportsToolCalling: true,
+              messageParts: ['text'],
+              pricing
+            }
+          }
+        }]
+      }
+    })
+    try {
+      await syncGuiManagedKunConfig(dataDir, resolveKunRuntimeSettings(settings), { appSettings: settings })
+      const config = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'))
+      expect(config.serve.providers.deepseek.modelCapabilities['openai-model'].pricing)
+        .toEqual(pricing)
+      expect(config.models.profiles['openai-model'].pricing).toEqual(pricing)
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
 })

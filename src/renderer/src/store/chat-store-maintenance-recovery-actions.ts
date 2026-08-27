@@ -39,6 +39,7 @@ import {
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
+import { emptyLiveProjection } from './chat-store-live-projection'
 import { invalidatePendingTurnStarts } from './turn-start-fence'
 
 /**
@@ -197,6 +198,7 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
     const out = flushLiveBlocks(s, {
       ...finalizeTurnTiming(s),
       busy: false,
+      busyUnconfirmed: false,
       currentTurnId: null,
       currentTurnOrchestration: null,
       currentTurnUserId: null,
@@ -478,8 +480,7 @@ export function createMaintenanceRecoveryActions(
       invalidateThreadSnapshot(state.activeThreadId)
       set({
         blocks: trimmedBlocks,
-        liveReasoning: '',
-        liveAssistant: '',
+        ...emptyLiveProjection(state.lastSeq),
         currentTurnId: null,
         currentTurnOrchestration: null,
         currentTurnUserId: null,

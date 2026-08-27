@@ -39,6 +39,7 @@ import {
   withRuntimeDataDirAncillaryWriter,
   withRuntimeDataDirConfigWriter
 } from '../server/runtime-data-dir-lease.js'
+import { requestExactRuntimeShutdown } from './runtime-shutdown-client.js'
 
 const START_TIMEOUT_MS = 30_000
 const STOP_TIMEOUT_MS = 15_000
@@ -542,21 +543,16 @@ async function stopInspectedSharedRuntime(
   const discoveryDir = runtimeDiscoveryDirectory(dataDir, runtimeFlavor, scope.controlDir)
   const record = inspected.discovery
   const live = inspected.connection
-  if (!live) {
+  try {
+    await requestExactRuntimeShutdown(record, fetchImpl)
+  } catch (error) {
+    if (live) throw error
+    const detail = error instanceof Error ? error.message : String(error)
     throw new Error(
-      `Kun shared runtime process ${record.pid} is still alive but did not respond to the shutdown probe; its discovery record was preserved`
+      `Kun shared runtime process ${record.pid} did not accept its authenticated shutdown request; ` +
+      `its discovery record was preserved: ${detail}`
     )
   }
-  const response = await fetchImpl(`${record.baseUrl.replace(/\/$/u, '')}/v1/runtime/shutdown`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${record.runtimeToken}`,
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify({ instanceId: record.instanceId }),
-    signal: AbortSignal.timeout(5_000)
-  })
-  if (!response.ok) throw new Error(`runtime shutdown failed with HTTP ${response.status}`)
   const deadline = Date.now() + STOP_TIMEOUT_MS
   while (Date.now() < deadline) {
     if (!processAlive(record.pid)) {

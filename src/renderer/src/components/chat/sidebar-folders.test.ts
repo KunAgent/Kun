@@ -143,6 +143,32 @@ describe('sidebar virtual folder registry', () => {
     )).toBeNull()
   })
 
+  it('reorders from the currently displayed folder order after an attention promotion', () => {
+    let registry = createSidebarFolder(
+      emptySidebarFolderRegistry(),
+      '/tmp/app',
+      { id: 'folder', name: 'Folder' }
+    )
+    for (const threadId of ['thread-a', 'thread-b', 'thread-c']) {
+      registry = moveThreadToSidebarFolder(registry, '/tmp/app', threadId, 'folder')
+    }
+    registry = moveThreadToSidebarFolder(
+      registry,
+      '/tmp/app',
+      'thread-a',
+      'folder',
+      'thread-b',
+      'after',
+      ['thread-c', 'thread-a', 'thread-b']
+    )
+
+    expect(sidebarFoldersForWorkspace(registry, '/tmp/app')[0]?.threadIds).toEqual([
+      'thread-c',
+      'thread-b',
+      'thread-a'
+    ])
+  })
+
   it('creates nested folders with sibling-scoped names and promotes children when deleting a parent', () => {
     let registry = createSidebarFolder(
       emptySidebarFolderRegistry(),

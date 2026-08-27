@@ -139,6 +139,33 @@ describe('runtimeRequestViaHost', () => {
     )).toBe(60_000)
   })
 
+  it('allows the bounded provider quota scan to outlive the generic GET budget', () => {
+    expect(resolveRuntimeRequestTimeoutMs('/v1/provider-quotas', 'GET')).toBe(120_000)
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/provider-quotas?refresh=true',
+      'GET',
+      45_000
+    )).toBe(45_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/provider-quotas', 'POST')).toBe(60_000)
+  })
+
+  it('lets usage history aggregations outlive the generic GET budget', () => {
+    const usagePath =
+      '/v1/usage?group_by=day&from=2026-05-01&to=2026-08-24&timezone=Asia%2FShanghai'
+    expect(resolveRuntimeRequestTimeoutMs(usagePath, 'GET')).toBe(120_000)
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/usage?group_by=model&from=2026-08-01&to=2026-08-24&timezone=UTC',
+      'GET'
+    )).toBe(120_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/usage?group_by=turn&thread_id=thr_1', 'GET')).toBe(120_000)
+    expect(resolveRuntimeRequestTimeoutMs(usagePath, 'GET', 45_000)).toBe(45_000)
+    // Runtime-cumulative usage is a cheap in-memory counter read; keep the
+    // generic budget so status-style callers still fail fast.
+    expect(resolveRuntimeRequestTimeoutMs('/v1/usage', 'GET')).toBe(15_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/usage?group_by=runtime', 'GET')).toBe(15_000)
+    expect(resolveRuntimeRequestTimeoutMs(usagePath, 'POST')).toBe(60_000)
+  })
+
   it('lets an on-demand session summary outlive the generic POST budget', () => {
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/threads/thr_1/summarize',

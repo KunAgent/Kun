@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { reloadRenderer } from './dev-renderer-cache'
-import { resolvePreloadPath } from './main-paths'
+import { resolveNamedPreloadPath } from './main-paths'
 import {
   MAIN_WINDOW_RENDERER_RECOVERY_DELAY_MS,
   MAIN_WINDOW_RENDERER_RECOVERY_MAX_ATTEMPTS,
@@ -20,7 +20,6 @@ import {
   appEnvironment,
   appIcon,
   developmentRendererUrl,
-  isTrustedWorkbenchUrl,
   mainState,
   traceStartup
 } from './main-app-context'
@@ -30,9 +29,25 @@ import {
   showRendererContextMenu
 } from './main-tray'
 import { runtimeSupervisor } from './main-runtime-health'
+import {
+  isTrustedRendererSurfaceUrl,
+  type RendererSurface
+} from './renderer-trust-policy'
 
-function resolveMainRendererUrl(): string {
+export function trustedWorkbenchRendererUrl(): string {
   return developmentRendererUrl() ?? pathToFileURL(join(__dirname, '../renderer/index.html')).href
+}
+
+function hardenTrustedRendererWindow(window: BrowserWindow, surface: RendererSurface): void {
+  const trustedRendererUrl = trustedWorkbenchRendererUrl()
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  const preventUntrustedNavigation = (event: Electron.Event, targetUrl: string): void => {
+    if (!isTrustedRendererSurfaceUrl(targetUrl, trustedRendererUrl, surface)) {
+      event.preventDefault()
+    }
+  }
+  window.webContents.on('will-navigate', preventUntrustedNavigation)
+  window.webContents.on('will-redirect', preventUntrustedNavigation)
 }
 
 export function createWindow(options: {
@@ -40,7 +55,7 @@ export function createWindow(options: {
   useSystemTitleBar?: boolean
 } = {}): void {
   traceStartup('createWindow:start')
-  const preloadPath = resolvePreloadPath(__dirname)
+  const preloadPath = resolveNamedPreloadPath(__dirname, 'index')
   const desktopTitleBarMode = resolveDesktopTitleBarMode(
     process.platform,
     options.useSystemTitleBar === true
@@ -76,13 +91,7 @@ export function createWindow(options: {
     window.setTitle(windowTitle)
   })
   mainState.mainWindow = window
-  const trustedRendererUrl = resolveMainRendererUrl()
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  const preventUntrustedNavigation = (event: Electron.Event, targetUrl: string): void => {
-    if (!isTrustedWorkbenchUrl(targetUrl, trustedRendererUrl)) event.preventDefault()
-  }
-  window.webContents.on('will-navigate', preventUntrustedNavigation)
-  window.webContents.on('will-redirect', preventUntrustedNavigation)
+  hardenTrustedRendererWindow(window, 'workbench')
   mainState.bindExtensionMainWindow?.(window)
   if (usesCustomDesktopTitleBar) {
     window.setMenu(null)
@@ -233,7 +242,7 @@ export function createStorageRelocationWindow(): BrowserWindow {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
-      preload: resolvePreloadPath(__dirname),
+      preload: resolveNamedPreloadPath(__dirname, 'storage-relocation-recovery'),
       contextIsolation: true,
       sandbox: true,
       webviewTag: false,
@@ -245,7 +254,7 @@ export function createStorageRelocationWindow(): BrowserWindow {
   })
   mainState.mainWindow = window
   window.setMenu(null)
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  hardenTrustedRendererWindow(window, 'storage-relocation')
   window.on('closed', () => {
     if (mainState.mainWindow === window) mainState.mainWindow = null
   })
@@ -274,7 +283,7 @@ export function createRuntimeDataRecoveryWindow(): BrowserWindow {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
-      preload: resolvePreloadPath(__dirname),
+      preload: resolveNamedPreloadPath(__dirname, 'runtime-data-recovery'),
       contextIsolation: true,
       sandbox: true,
       webviewTag: false,
@@ -286,13 +295,7 @@ export function createRuntimeDataRecoveryWindow(): BrowserWindow {
   })
   mainState.mainWindow = window
   window.setMenu(null)
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  const trustedRendererUrl = resolveMainRendererUrl()
-  const preventUntrustedNavigation = (event: Electron.Event, targetUrl: string): void => {
-    if (!isTrustedWorkbenchUrl(targetUrl, trustedRendererUrl)) event.preventDefault()
-  }
-  window.webContents.on('will-navigate', preventUntrustedNavigation)
-  window.webContents.on('will-redirect', preventUntrustedNavigation)
+  hardenTrustedRendererWindow(window, 'runtime-data-recovery')
   window.on('closed', () => {
     if (mainState.mainWindow === window) mainState.mainWindow = null
   })

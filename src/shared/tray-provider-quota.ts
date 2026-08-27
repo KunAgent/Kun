@@ -1,4 +1,5 @@
 import type { AppLocale } from './app-locales'
+import type { DarkUiColorsV1 } from './app-settings-types'
 import type { ProviderQuotaListResult } from './provider-quota'
 
 export const TRAY_PROVIDER_QUOTA_CHANNELS = {
@@ -23,6 +24,7 @@ export type TrayProviderQuotaContext = {
   locale: AppLocale
   colorMode: 'light' | 'dark'
   platform: TrayProviderQuotaPlatform
+  darkUiColors: DarkUiColorsV1
 }
 
 export type KunTrayProviderQuotaApi = {

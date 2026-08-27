@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { APP_LOCALE_OPTIONS } from '@shared/app-locales'
-import { applyCursorSpotlight, applyCursorSpotlightColor, applyDocumentLocale } from './apply-theme'
+import {
+  applyCursorSpotlight,
+  applyCursorSpotlightColor,
+  applyDarkUiColors,
+  applyDocumentLocale
+} from './apply-theme'
 
 describe('applyDocumentLocale', () => {
   afterEach(() => {
@@ -77,5 +82,28 @@ describe('applyCursorSpotlight', () => {
 
     applyCursorSpotlightColor('#85c1f1')
     expect(values.size).toBe(0)
+  })
+})
+
+describe('applyDarkUiColors', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('writes normalized source colors and uses Graphite fallbacks', () => {
+    const values = new Map<string, string>()
+    vi.stubGlobal('document', {
+      documentElement: {
+        style: { setProperty: (name: string, value: string) => values.set(name, value) }
+      }
+    })
+
+    applyDarkUiColors({ background: '#AABBCC', border: 'bad', panel: '#123456' })
+
+    expect(Object.fromEntries(values)).toEqual({
+      '--kun-dark-ui-background': '#aabbcc',
+      '--kun-dark-ui-border': '#272727',
+      '--kun-dark-ui-panel': '#123456'
+    })
   })
 })

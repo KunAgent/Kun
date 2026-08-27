@@ -32,6 +32,10 @@ import {
   registerAppIpcHandlers
 } from './register-app-ipc-handlers'
 
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 const electronMock = getAppIpcElectronMock()
 const telegramMocks = getTelegramMocks()
 const uiPluginMocks = getUiPluginMocks()
@@ -41,13 +45,13 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
   afterEach(cleanupAppIpcHandlerTestState)
 
   it('rejects every UI plugin bridge outside the trusted top-level workbench frame', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     registerAppIpcHandlers(registerOptions({ getMainWindow: () => mainWindow as never }))
     const untrustedEvent = {
       sender: contents,
-      senderFrame: { processId: 10, routingId: 21 }
+      senderFrame: { processId: 10, routingId: 21, url: 'http://127.0.0.1:5173/index.html' }
     }
 
     for (const [channel, payload] of [
@@ -65,7 +69,7 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
   })
 
   it('builds presentation variables in Main before activating the fixed CDP stylesheet', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     uiPluginMocks.loadUiPluginFigures.mockResolvedValueOnce({
@@ -124,7 +128,7 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
   })
 
   it('returns validated scene assets while CDP receives only host numeric scene variables', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const presentation = {
@@ -313,15 +317,24 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
 
   it('restarts the managed runtime through the restart IPC handler', async () => {
     const restartRuntime = vi.fn(async () => undefined)
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
 
-    registerAppIpcHandlers(registerOptions({ restartRuntime }))
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => mainWindow as never,
+      restartRuntime
+    }))
 
-    await expect(handlers.get('runtime:restart')?.({})).resolves.toBeUndefined()
+    await expect(handlers.get('runtime:restart')?.({
+      sender: contents,
+      senderFrame: mainFrame
+    })).resolves.toBeUndefined()
     expect(restartRuntime).toHaveBeenCalledTimes(1)
   })
 
   it('restarts all current-user Kun serves only after trusted confirmation', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const restartKunServe = vi.fn(async () => undefined)
@@ -333,7 +346,7 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
 
     await expect(handler?.({
       sender: contents,
-      senderFrame: { processId: 10, routingId: 21 }
+      senderFrame: { processId: 10, routingId: 21, url: 'http://127.0.0.1:5173/index.html' }
     })).rejects.toThrow(/trusted workbench frame/)
 
     electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
@@ -365,7 +378,7 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
 
   it('explains the complete restart scope in Chinese before invoking restart', async () => {
     electronMock.appLocale = 'zh-CN'
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const restartKunServe = vi.fn(async () => undefined)
@@ -420,7 +433,7 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
     error
   }) => {
     electronMock.appLocale = locale
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const restartKunServe = vi.fn(async () => {

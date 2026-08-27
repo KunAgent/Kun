@@ -39,6 +39,10 @@ type RawUsageCounters = {
   total_tokens?: unknown
   cost_usd?: unknown
   cost_cny?: unknown
+  value_estimate_usd?: unknown
+  value_estimate_cny?: unknown
+  value_estimate_coverage?: unknown
+  value_estimate_unpriced_requests?: unknown
   token_economy_savings_tokens?: unknown
   turns?: unknown
   thread_count?: unknown
@@ -75,6 +79,10 @@ function usageRate(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : null
 }
 
+function usageEstimateCoverage(value: unknown): 'complete' | 'partial' | 'unavailable' {
+  return value === 'complete' || value === 'partial' ? value : 'unavailable'
+}
+
 function normalizeCounters(raw: RawUsageCounters): Omit<DailyUsageBucket, 'date'> {
   const inputTokens = usageNumber(raw.input_tokens)
   const outputTokens = usageNumber(raw.output_tokens)
@@ -88,6 +96,10 @@ function normalizeCounters(raw: RawUsageCounters): Omit<DailyUsageBucket, 'date'
     totalTokens,
     costUsd: usageNumber(raw.cost_usd),
     costCny: usageOptionalNumber(raw.cost_cny),
+    valueEstimateUsd: usageNumber(raw.value_estimate_usd),
+    valueEstimateCny: usageOptionalNumber(raw.value_estimate_cny),
+    valueEstimateCoverage: usageEstimateCoverage(raw.value_estimate_coverage),
+    valueEstimateUnpricedRequests: usageNumber(raw.value_estimate_unpriced_requests),
     tokenEconomySavingsTokens: usageNumber(raw.token_economy_savings_tokens),
     turns: usageNumber(raw.turns),
     threadCount: usageNumber(raw.thread_count),

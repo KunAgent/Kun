@@ -94,4 +94,12 @@ describe('ThreadService sidebar listing', () => {
       includeSide: true
     })
   })
+
+  it('defaults paginated listings to 100 items', async () => {
+    const raw = new CapturingThreadStore()
+
+    await serviceWith(raw).listPage()
+
+    expect(raw.pageOptions).toEqual({ limit: 100 })
+  })
 })

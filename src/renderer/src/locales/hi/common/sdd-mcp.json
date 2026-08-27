@@ -161,6 +161,7 @@
   "providerQuotaUsed": "उपयोग",
   "providerQuotaLimit": "सीमा",
   "providerQuotaResetsAt": "रीसेट {{time}}",
+  "providerQuotaEarliestExpiry": "सबसे जल्दी समाप्ति {{time}}",
   "rightPanelAgentPerspective": "एजेंट परिप्रेक्ष्य",
   "agentPerspectiveTitle": "एजेंट परिप्रेक्ष्य",
   "agentPerspectiveSubtitle": "इस वार्तालाप में {{count}} मॉडल अनुरोध",

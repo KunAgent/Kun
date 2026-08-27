@@ -51,4 +51,19 @@ describe('compat model capabilities', () => {
     expect(capabilities.maxOutputTokens).toBe(12_000)
     expect(capabilities.reasoning?.requestProtocol).toBe('openai-responses')
   })
+
+  it('passes catalog pricing through model metadata', () => {
+    const pricing = {
+      inputUsdPerMillion: 1,
+      outputUsdPerMillion: 4,
+      cacheReadUsdPerMillion: 0.1
+    }
+    expect(resolveCompatModelCapabilities({
+      model: 'priced-model',
+      modelCapabilities: (model) => metadata({ id: model, pricing })
+    }).pricing).toEqual(pricing)
+    expect(resolveCompatModelCapabilities({
+      model: 'unpriced-model'
+    }).pricing).toBeUndefined()
+  })
 })

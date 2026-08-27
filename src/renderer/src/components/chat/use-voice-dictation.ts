@@ -23,6 +23,7 @@ export type VoiceDictationIntent = 'insert' | 'send'
 
 const TRANSCRIPTION_SAMPLE_RATE = 16_000
 const MIN_RECORDING_MS = 500
+const VOICE_ERROR_AUTO_DISMISS_MS = 10_000
 const RECORDER_MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
 
 export type SpeechToTextSettingsState = {
@@ -137,6 +138,7 @@ export function useVoiceDictation({
 }): {
   status: VoiceDictationStatus
   error: string | null
+  clearError: () => void
   startedAtMs: number
   start: () => void
   stop: (intent?: VoiceDictationIntent) => void
@@ -155,6 +157,7 @@ export function useVoiceDictation({
   const levelDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
   const stopIntentRef = useRef<VoiceDictationIntent>('insert')
   const maxDurationTimerRef = useRef<number | null>(null)
+  const errorTimerRef = useRef<number | null>(null)
   const startedAtRef = useRef(0)
   const onTextRef = useRef(onText)
   const mountedRef = useRef(true)
@@ -162,6 +165,24 @@ export function useVoiceDictation({
   useEffect(() => {
     onTextRef.current = onText
   }, [onText])
+
+  const clearError = useCallback((): void => {
+    if (errorTimerRef.current != null) {
+      window.clearTimeout(errorTimerRef.current)
+      errorTimerRef.current = null
+    }
+    setError(null)
+  }, [])
+
+  // 错误条不允许永久驻留:可手动关闭,超时也会自动消失。
+  const showError = useCallback((message: string): void => {
+    setError(message)
+    if (errorTimerRef.current != null) window.clearTimeout(errorTimerRef.current)
+    errorTimerRef.current = window.setTimeout(() => {
+      errorTimerRef.current = null
+      if (mountedRef.current) setError(null)
+    }, VOICE_ERROR_AUTO_DISMISS_MS)
+  }, [])
 
   const releaseStream = useCallback((): void => {
     if (maxDurationTimerRef.current != null) {
@@ -196,6 +217,10 @@ export function useVoiceDictation({
       mountedRef.current = false
       recorderRef.current?.stop()
       releaseStream()
+      if (errorTimerRef.current != null) {
+        window.clearTimeout(errorTimerRef.current)
+        errorTimerRef.current = null
+      }
     }
   }, [releaseStream])
 
@@ -212,20 +237,20 @@ export function useVoiceDictation({
       if (result.ok) {
         onTextRef.current(result.text, intent)
       } else {
-        setError(t('composerVoiceFailed', { message: result.message }))
+        showError(t('composerVoiceFailed', { message: result.message }))
       }
     } catch (cause) {
       if (mountedRef.current) {
-        setError(t('composerVoiceFailed', { message: cause instanceof Error ? cause.message : String(cause) }))
+        showError(t('composerVoiceFailed', { message: cause instanceof Error ? cause.message : String(cause) }))
       }
     } finally {
       if (mountedRef.current) setStatus('idle')
     }
-  }, [speechToText, t])
+  }, [showError, speechToText, t])
 
   const start = useCallback((): void => {
     if (recorderRef.current) return
-    setError(null)
+    clearError()
     void (async () => {
       let stream: MediaStream
       try {
@@ -234,7 +259,7 @@ export function useVoiceDictation({
         const denied = cause instanceof DOMException &&
           (cause.name === 'NotAllowedError' || cause.name === 'SecurityError')
         if (mountedRef.current) {
-          setError(denied
+          showError(denied
             ? t('composerVoiceMicDenied')
             : t('composerVoiceFailed', { message: cause instanceof Error ? cause.message : String(cause) }))
         }
@@ -260,7 +285,7 @@ export function useVoiceDictation({
         if (!mountedRef.current) return
         if (durationMs < MIN_RECORDING_MS || blob.size === 0) {
           setStatus('idle')
-          setError(t('composerVoiceTooShort'))
+          showError(t('composerVoiceTooShort'))
           return
         }
         setStatus('transcribing')
@@ -289,7 +314,7 @@ export function useVoiceDictation({
         if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
       }, SPEECH_TRANSCRIPTION_MAX_DURATION_MS)
     })()
-  }, [releaseStream, t, transcribeBlob])
+  }, [clearError, releaseStream, showError, t, transcribeBlob])
 
   const stop = useCallback((intent: VoiceDictationIntent = 'insert'): void => {
     if (recorderRef.current?.state === 'recording') {
@@ -306,7 +331,7 @@ export function useVoiceDictation({
     }
   }, [start, status, stop])
 
-  return { status, error, startedAtMs, start, stop, toggle, getLevel }
+  return { status, error, clearError, startedAtMs, start, stop, toggle, getLevel }
 }
 
 /**

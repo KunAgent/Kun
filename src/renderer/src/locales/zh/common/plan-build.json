@@ -71,5 +71,6 @@
   "planAgentStartFailed": "无法为这个计划启动智能体回合。",
   "planExtractFailed": "无法从智能体回复中提取计划 Markdown。",
   "planToolResultMissing": "Kun 没有为这个计划返回匹配的 create_plan 结果。",
+  "planLoadFailed": "计划加载失败，请点击「查看计划」重新加载。",
   "planRequestRequired": "请先描述需求，或使用 `/plan 你的需求` 创建新计划。"
 }

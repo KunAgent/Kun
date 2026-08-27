@@ -13,6 +13,10 @@ export type DailyUsageBucket = {
   totalTokens: number
   costUsd: number
   costCny: number | null
+  valueEstimateUsd: number
+  valueEstimateCny: number | null
+  valueEstimateCoverage: 'complete' | 'partial' | 'unavailable'
+  valueEstimateUnpricedRequests: number
   tokenEconomySavingsTokens: number
   turns: number
   threadCount: number
@@ -22,6 +26,7 @@ export type DailyUsageBucket = {
 export type DailyUsageTotals = Omit<DailyUsageBucket, 'date'> & {
   days: number
   activeDays: number
+  valueEstimateCoverage: 'complete' | 'partial' | 'unavailable'
 }
 
 export type DailyUsageSummary = {
@@ -50,6 +55,10 @@ type RawDailyUsageBucket = {
   total_tokens?: unknown
   cost_usd?: unknown
   cost_cny?: unknown
+  value_estimate_usd?: unknown
+  value_estimate_cny?: unknown
+  value_estimate_coverage?: unknown
+  value_estimate_unpriced_requests?: unknown
   token_economy_savings_tokens?: unknown
   turns?: unknown
   thread_count?: unknown
@@ -81,6 +90,10 @@ function usageOptionalNumber(value: unknown): number | null {
 
 function usageRate(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : null
+}
+
+function usageEstimateCoverage(value: unknown): 'complete' | 'partial' | 'unavailable' {
+  return value === 'complete' || value === 'partial' ? value : 'unavailable'
 }
 
 function dateStringFromParts(date: Date, timezone: string): string {
@@ -146,6 +159,10 @@ function normalizeBucket(raw: RawDailyUsageBucket): DailyUsageBucket {
     totalTokens,
     costUsd: usageNumber(raw.cost_usd),
     costCny: usageOptionalNumber(raw.cost_cny),
+    valueEstimateUsd: usageNumber(raw.value_estimate_usd),
+    valueEstimateCny: usageOptionalNumber(raw.value_estimate_cny),
+    valueEstimateCoverage: usageEstimateCoverage(raw.value_estimate_coverage),
+    valueEstimateUnpricedRequests: usageNumber(raw.value_estimate_unpriced_requests),
     tokenEconomySavingsTokens: usageNumber(raw.token_economy_savings_tokens),
     turns: usageNumber(raw.turns),
     threadCount: usageNumber(raw.thread_count),
@@ -164,6 +181,10 @@ function normalizeTotals(raw: RawDailyUsageBucket & { days?: unknown; active_day
     totalTokens: bucket.totalTokens,
     costUsd: bucket.costUsd,
     costCny: bucket.costCny,
+    valueEstimateUsd: bucket.valueEstimateUsd,
+    valueEstimateCny: bucket.valueEstimateCny,
+    valueEstimateCoverage: bucket.valueEstimateCoverage,
+    valueEstimateUnpricedRequests: bucket.valueEstimateUnpricedRequests,
     tokenEconomySavingsTokens: bucket.tokenEconomySavingsTokens,
     turns: bucket.turns,
     threadCount: bucket.threadCount,

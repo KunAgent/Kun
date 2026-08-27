@@ -35,6 +35,11 @@ import {
 import {
   registerAppIpcHandlers
 } from './register-app-ipc-handlers'
+
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 import {
   ApprovalConsentVerifier,
   KUN_APPROVAL_CONSENT_HEADER
@@ -115,11 +120,14 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   it('redacts plaintext model credentials from settings:get without mutating the Main snapshot', async () => {
     const current = settingsWithPlaintextModelCredentials()
     const original = JSON.stringify(current)
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
+    const contents = { id: 7, mainFrame }
     registerAppIpcHandlers(registerOptions({
-      store: { load: vi.fn(async () => current) } as never
+      store: { load: vi.fn(async () => current) } as never,
+      getMainWindow: () => ({ isDestroyed: () => false, webContents: contents }) as never
     }))
 
-    const result = await handlers.get('settings:get')?.({})
+    const result = await handlers.get('settings:get')?.({ sender: contents, senderFrame: mainFrame })
 
     expectRendererModelCredentialsRedacted(result)
     expect(JSON.stringify(current)).toBe(original)
@@ -156,7 +164,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
         }))
       }
     }
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const trustedEvent = { sender: contents, senderFrame: mainFrame }
@@ -176,7 +184,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('rejects untrusted provider credential reveal before loading protected settings', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const storeLoad = vi.fn(async () => settings())
@@ -188,7 +196,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
     }))
 
     await expect(handlers.get('model-provider:credential:reveal')?.(
-      { sender: { id: 99 }, senderFrame: { processId: 90, routingId: 91 } },
+      { sender: { id: 99 }, senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' } },
       { providerId: 'deepseek' }
     )).rejects.toThrow(/trusted workbench frame/)
     expect(storeLoad).not.toHaveBeenCalled()
@@ -196,7 +204,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('requires trusted native confirmation before resetting unreadable credentials', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const resetUnreadableCredentials = vi.fn(async () => ({
@@ -212,7 +220,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
 
     await expect(handler?.({
       sender: { id: 99 },
-      senderFrame: { processId: 90, routingId: 91 }
+      senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' }
     })).rejects.toThrow(/trusted workbench frame/)
 
     electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
@@ -329,7 +337,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
       sandboxMode: 'workspace-write',
       approvalReviewer: 'user'
     })
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const applySettingsPatch = vi.fn(async () => settings())
@@ -353,7 +361,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
 
     await expect(handlers.get('settings:set')?.({
       sender: { id: 99 },
-      senderFrame: { processId: 90, routingId: 91 }
+      senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' }
     }, payload)).rejects.toThrow(/trusted workbench frame/)
     expect(applySettingsPatch).not.toHaveBeenCalled()
 
@@ -384,7 +392,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
     const current = settings()
     const resolvedRuntimeToken = 'approval-runtime-secret'
     expect(current.agents.kun.runtimeToken).toBe('')
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const leaseRequest = vi.fn(async (
@@ -409,7 +417,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
 
     await expect(handler({
       sender: { id: 99 },
-      senderFrame: { processId: 90, routingId: 91 }
+      senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' }
     }, payload)).rejects.toThrow(/trusted workbench frame/)
     expect(runtimeRequest).not.toHaveBeenCalled()
     expect(acquireRuntimeRequestLease).not.toHaveBeenCalled()
@@ -437,7 +445,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('reveals the approval parent and records only a redacted native-dialog reference', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const restore = vi.fn()
     const show = vi.fn()
@@ -504,7 +512,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('fails closed when the approval parent is destroyed while the native dialog closes', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     let destroyed = false
     const contents = { id: 7, mainFrame, isDestroyed: () => destroyed }
     const mainWindow = { isDestroyed: () => destroyed, webContents: contents }
@@ -538,7 +546,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('fails closed when the approval sender navigates while the native dialog is open', async () => {
-    const mainFrame = { processId: 10, routingId: 20, detached: false }
+    const mainFrame = { processId: 10, routingId: 20, detached: false, url: 'http://127.0.0.1:5173/index.html' }
     const contents = {
       id: 7,
       mainFrame,
@@ -553,7 +561,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
       logInfo
     }))
     electronMock.showMessageBox.mockImplementationOnce(async () => {
-      contents.mainFrame = { processId: 11, routingId: 21, detached: false }
+      contents.mainFrame = { processId: 11, routingId: 21, detached: false, url: 'http://127.0.0.1:5173/index.html' }
       return { response: 0 }
     })
 
@@ -575,7 +583,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('fails closed when the approval sender changes while the Runtime lease is acquired', async () => {
-    const mainFrame = { processId: 10, routingId: 20, detached: false }
+    const mainFrame = { processId: 10, routingId: 20, detached: false, url: 'http://127.0.0.1:5173/index.html' }
     const contents = {
       id: 7,
       mainFrame,
@@ -606,7 +614,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
       source: 'user'
     })
     await vi.waitFor(() => expect(acquireRuntimeRequestLease).toHaveBeenCalledOnce())
-    contents.mainFrame = { processId: 11, routingId: 21, detached: false }
+    contents.mainFrame = { processId: 11, routingId: 21, detached: false, url: 'http://127.0.0.1:5173/index.html' }
     releaseLease()
 
     await expect(decision).resolves.toEqual({ confirmed: false })
@@ -619,7 +627,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('revalidates a policy approval sender after Runtime lease acquisition', async () => {
-    const mainFrame = { processId: 10, routingId: 20, detached: false }
+    const mainFrame = { processId: 10, routingId: 20, detached: false, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame, isDestroyed: () => false }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const leaseGate = createGate()
@@ -642,7 +650,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
       source: 'policy'
     })
     await vi.waitFor(() => expect(acquireRuntimeRequestLease).toHaveBeenCalledOnce())
-    contents.mainFrame = { processId: 11, routingId: 21, detached: false }
+    contents.mainFrame = { processId: 11, routingId: 21, detached: false, url: 'http://127.0.0.1:5173/index.html' }
     leaseGate.release()
 
     await expect(decision).resolves.toEqual({ confirmed: false })
@@ -651,7 +659,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
   })
 
   it('returns a safe Runtime failure when approval lease acquisition fails', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame, isDestroyed: () => false }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const logError = vi.fn()

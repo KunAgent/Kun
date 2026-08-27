@@ -74,6 +74,26 @@ export function recordReadyCanvasReplayWatermarks(options: {
   if (!options.disposed) commitReadyCanvasReplayBarriers(options.barriers, options.record)
 }
 
+export type CanvasReplayBarrierCollection = Map<string, CanvasReplayBarrierState>
+
+export function suppressPendingCanvasContinuations<T>(options: {
+  pendingScreens: PendingScreenGeneration[]
+  pendingSvgToolBlocks: Map<string, T>
+  svgSourceTurnIds: Map<string, string>
+  svgRetryCounts: Map<string, number>
+  barriers: Map<string, CanvasReplayBarrierState>
+}): void {
+  options.pendingScreens.length = 0
+  options.pendingSvgToolBlocks.clear()
+  options.svgSourceTurnIds.clear()
+  options.svgRetryCounts.clear()
+  for (const barrier of options.barriers.values()) {
+    barrier.pendingScreenIds.clear()
+    barrier.pendingSvgBlockIds.clear()
+    barrier.replayComplete = true
+  }
+}
+
 export function activeCanvasUserId(blocks: readonly ChatBlock[]): string | null {
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     if (blocks[index].kind === 'user') return blocks[index].id

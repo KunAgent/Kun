@@ -23,7 +23,8 @@ import {
   nextAvailablePlanRelativePath,
   planFeatureNameFromRequest
 } from '../plan/plan-path'
-import { extractPlanMetadataFromBlock } from '../plan/plan-tool'
+import { extractPlanMetadataFromBlock, guiPlanMetaMatchesArtifact, type GuiPlanToolMeta } from '../plan/plan-tool'
+import { ensureGuiPlanLoadedFromMeta } from '../plan/load-plan-from-meta'
 import type { PlanBuildOrchestration } from '../plan/plan-build'
 import type { RightPanelMode } from './chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../extensions/contribution-ids'
@@ -34,7 +35,7 @@ import { usePlanWorktreePreference } from '../plan/use-plan-worktree-preference'
 
 type PlanResultMatch = {
   blockId: string
-  meta: NonNullable<ReturnType<typeof extractPlanMetadataFromBlock>>
+  meta: GuiPlanToolMeta
 }
 
 type PlanTurnOverrides = Pick<
@@ -182,9 +183,21 @@ export function useWorkbenchPlanController({
   const planTurnInFlightThreadIdRef = useRef<string | null>(null)
   const lastLoadedPlanBlockIdRef = useRef<string | null>(null)
 
-  const openGuiPlanPanel = useCallback((): void => {
+  const openGuiPlanPanel = useCallback((meta?: GuiPlanToolMeta): void => {
     setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
     setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.plan)
+    // Card "open plan" must recover the plan when the store lost it (app
+    // restart, another thread's plan taking over the registry); otherwise
+    // the panel opens blank.
+    if (!meta) return
+    const current = useGuiPlanStore.getState().activePlan
+    if (current && guiPlanMetaMatchesArtifact(meta, current)) return
+    void ensureGuiPlanLoadedFromMeta(meta).catch((error) => {
+      useGuiPlanStore.getState().setOperationStatus(
+        'error',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
   }, [setRightPanelMode, setRightSidebarWidth])
 
   const savePlanContentToDisk = async (
@@ -291,31 +304,37 @@ export function useWorkbenchPlanController({
   const loadPlanFromMeta = useCallback(async (
     meta: PlanResultMatch['meta'],
     shouldOpen: boolean
-  ): Promise<void> => {
-    const result = await window.kunGui.readWorkspaceFile({
-      workspaceRoot: meta.workspaceRoot,
-      path: meta.relativePath
-    })
-    if (!result.ok) {
-      useGuiPlanStore.getState().setOperationStatus('error', result.message)
-      return
-    }
-    const base = createGuiPlanArtifact({
-      workspaceRoot: meta.workspaceRoot,
-      threadId: useChatStore.getState().activeThreadId,
-      relativePath: meta.relativePath,
-      absolutePath: meta.absolutePath ?? result.path,
-      sourceRequest: meta.sourceRequest ?? ''
-    })
-    const plan = meta.title?.trim() ? { ...base, featureName: meta.title.trim() } : base
-    useGuiPlanStore.getState().setActivePlan(plan, result.content)
-    if (shouldOpen) openGuiPlanPanel()
+  ): Promise<GuiPlanArtifact | null> => {
+    // Force a reload: after a refine turn the file on disk is newer than
+    // whatever the store currently holds.
+    const plan = await ensureGuiPlanLoadedFromMeta(meta, { forceReload: true })
+    if (plan && shouldOpen) openGuiPlanPanel()
+    return plan
   }, [openGuiPlanPanel])
 
-  const buildGuiPlan = async (orchestration: PlanBuildOrchestration): Promise<void> => {
+  const buildGuiPlan = async (
+    orchestration: PlanBuildOrchestration,
+    meta?: GuiPlanToolMeta
+  ): Promise<void> => {
+    // The card's build button carries its own plan meta: recover the plan
+    // when the store is empty or points at a different plan, instead of
+    // silently doing nothing.
+    if (meta) {
+      const current = useGuiPlanStore.getState().activePlan
+      if (!current || !guiPlanMetaMatchesArtifact(meta, current)) {
+        await ensureGuiPlanLoadedFromMeta(meta)
+      }
+    }
     const snapshot = useGuiPlanStore.getState()
     const plan = snapshot.activePlan
-    if (!plan) return
+    if (!plan) {
+      setError(t('planLoadFailed'))
+      return
+    }
+    if (meta && !guiPlanMetaMatchesArtifact(meta, plan)) {
+      setError(t('planLoadFailed'))
+      return
+    }
     const chatState = useChatStore.getState()
     if (chatState.runtimeConnection !== 'ready') {
       setError(t('runtimeActionNeedsConnection'))

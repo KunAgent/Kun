@@ -27,6 +27,7 @@ import {
   type SidebarThreadWorktrees,
   type SidebarWorkspaceGroup
 } from './sidebar-project-selectors'
+import type { SidebarThreadOrderTracker } from './sidebar-thread-order-tracker'
 
 export type WorkspaceOrderDropTarget = {
   workspacePath: string
@@ -51,6 +52,7 @@ type Params = {
   threadWorktrees: SidebarThreadWorktrees
   sidebarFolders: SidebarFolderRegistry
   sidebarOrder: SidebarOrderRegistry
+  orderTracker: SidebarThreadOrderTracker
   deletingThreadIds: Record<string, boolean>
   draggingWorkspacePath: string | null
   draggingThreadId: string | null
@@ -80,6 +82,7 @@ export function createSidebarProjectDragActions({
   threadWorktrees,
   sidebarFolders,
   sidebarOrder,
+  orderTracker,
   deletingThreadIds,
   draggingWorkspacePath,
   draggingThreadId,
@@ -304,21 +307,40 @@ export function createSidebarProjectDragActions({
       event.currentTarget.getBoundingClientRect().top,
       event.currentTarget.getBoundingClientRect().height
     )
+    const scope = sidebarThreadOrderScope(workspacePath)
+    const containerKey = folderId
+      ? `${scope}:folder:${folderId}`
+      : `${scope}:root`
+    const displayedIds = orderTracker.currentOrder(containerKey)
     persistSidebarFolders((current) =>
-      moveThreadToSidebarFolder(current, workspacePath, sourceId, folderId, targetThread.id, position)
+      moveThreadToSidebarFolder(
+        current,
+        workspacePath,
+        sourceId,
+        folderId,
+        targetThread.id,
+        position,
+        displayedIds
+      )
     )
     if (!folderId) {
-      const scope = sidebarThreadOrderScope(workspacePath)
-      const orderedIds = reconcileSidebarThreadOrder(
-        (allThreadIdsByScope[scope] ?? []).map((id) => ({ id })),
-        sidebarOrder.threadIdsByScope[scope] ?? []
-      ).map(({ id }) => id)
-      const nextIds = reorderSidebarThreadIds({
+      const orderedIds = displayedIds.length > 0
+        ? displayedIds
+        : reconcileSidebarThreadOrder(
+            (allThreadIdsByScope[scope] ?? []).map((id) => ({ id })),
+            sidebarOrder.threadIdsByScope[scope] ?? []
+          ).map(({ id }) => id)
+      const nextRootIds = reorderSidebarThreadIds({
         threadIds: orderedIds,
         sourceId,
         targetId: targetThread.id,
         position
       })
+      const rootIds = new Set(nextRootIds)
+      const nextIds = [
+        ...nextRootIds,
+        ...(allThreadIdsByScope[scope] ?? []).filter((id) => !rootIds.has(id))
+      ]
       persistSidebarOrder((current) => setSidebarThreadOrder(current, workspacePath, nextIds))
     }
     clearDragState()

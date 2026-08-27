@@ -2,7 +2,18 @@ import { readFile, rm } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
+import {
+  currentManagerDataCommitId,
+  currentManagerDataMutexContext
+} from '../manager/data-mutex-context.js'
 import { extensionError } from './errors.js'
+import type { ManagerResourceFence } from '../manager/resource-lease-state.js'
+
+export type AtomicJsonMutationOptions = {
+  signal?: AbortSignal
+  fence?: ManagerResourceFence
+  commitId?: string
+}
 
 export type JsonValidator<T> = (value: unknown) => T
 
@@ -11,7 +22,8 @@ export class AtomicJsonFile<T> {
 
   constructor(
     readonly path: string,
-    private readonly validate: JsonValidator<T>
+    private readonly validate: JsonValidator<T>,
+    private readonly allowDirectWriteFallback = true
   ) {}
 
   async read(fallback: () => T): Promise<T> {
@@ -34,7 +46,8 @@ export class AtomicJsonFile<T> {
     }
   }
 
-  async write(value: T): Promise<void> {
+  async write(value: T, options: AtomicJsonMutationOptions = {}): Promise<void> {
+    options = mutationOptions(options)
     const validated = this.validate(value)
     const manager = managerAtomicJsonConfig(this.path)
     if (manager) {
@@ -45,7 +58,8 @@ export class AtomicJsonFile<T> {
             manager,
             this.path,
             snapshot.revision,
-            validated
+            validated,
+            options
           )
           if (written) return
         }
@@ -53,10 +67,19 @@ export class AtomicJsonFile<T> {
       })
       return
     }
-    await atomicWriteFile(this.path, `${JSON.stringify(validated, null, 2)}\n`)
+    options.signal?.throwIfAborted()
+    await atomicWriteFile(this.path, `${JSON.stringify(validated, null, 2)}\n`, {
+      signal: options.signal,
+      allowDirectWriteFallback: this.allowDirectWriteFallback
+    })
   }
 
-  async update(fallback: () => T, mutate: (current: T) => T | Promise<T>): Promise<T> {
+  async update(
+    fallback: () => T,
+    mutate: (current: T) => T | Promise<T>,
+    options: AtomicJsonMutationOptions = {}
+  ): Promise<T> {
+    options = mutationOptions(options)
     return this.serialize(async () => {
       const manager = managerAtomicJsonConfig(this.path)
       if (manager) {
@@ -64,29 +87,35 @@ export class AtomicJsonFile<T> {
           const snapshot = await readManagerSnapshot(manager, this.path)
           const current = snapshot.value === null ? fallback() : this.validate(snapshot.value)
           const next = this.validate(await mutate(current))
-          if (await writeManagerSnapshot(manager, this.path, snapshot.revision, next)) return next
+          if (await writeManagerSnapshot(
+            manager, this.path, snapshot.revision, next, options
+          )) return next
         }
         throw managerConflictError(this.path)
       }
       const current = await this.read(fallback)
       const next = this.validate(await mutate(current))
-      await this.write(next)
+      await this.write(next, options)
       return next
     })
   }
 
-  async delete(): Promise<void> {
+  async delete(options: AtomicJsonMutationOptions = {}): Promise<void> {
+    options = mutationOptions(options)
     const manager = managerAtomicJsonConfig(this.path)
     if (manager) {
       await this.serialize(async () => {
         for (let attempt = 0; attempt < MAX_MANAGER_WRITE_ATTEMPTS; attempt += 1) {
           const snapshot = await readManagerSnapshot(manager, this.path)
-          if (await deleteManagerSnapshot(manager, this.path, snapshot.revision)) return
+          if (await deleteManagerSnapshot(
+            manager, this.path, snapshot.revision, options
+          )) return
         }
         throw managerConflictError(this.path)
       })
       return
     }
+    options.signal?.throwIfAborted()
     await rm(this.path, { force: true })
   }
 
@@ -199,15 +228,22 @@ async function writeManagerSnapshot<T>(
   manager: ManagerAtomicJsonConfig,
   path: string,
   expectedRevision: number,
-  value: T
+  value: T,
+  options: AtomicJsonMutationOptions
 ): Promise<boolean> {
   const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/write`, {
     method: 'PUT',
     headers: managerHeaders(manager.token),
-    body: JSON.stringify({ path, expectedRevision, value }),
-    signal: AbortSignal.timeout(5_000)
+    body: JSON.stringify({
+      path,
+      expectedRevision,
+      value,
+      ...(options.fence ? { fence: options.fence } : {}),
+      ...(options.commitId ? { commitId: options.commitId } : {})
+    }),
+    signal: requestSignal(options.signal)
   })
-  if (response.status === 409) return false
+  if (response.status === 409) return classifyConflict(response, path)
   if (!response.ok) throw await managerRequestError(response, path)
   ManagerAtomicJsonSnapshotSchema.parse(await response.json())
   return true
@@ -216,18 +252,43 @@ async function writeManagerSnapshot<T>(
 async function deleteManagerSnapshot(
   manager: ManagerAtomicJsonConfig,
   path: string,
-  expectedRevision: number
+  expectedRevision: number,
+  options: AtomicJsonMutationOptions
 ): Promise<boolean> {
   const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/delete`, {
     method: 'DELETE',
     headers: managerHeaders(manager.token),
-    body: JSON.stringify({ path, expectedRevision }),
-    signal: AbortSignal.timeout(5_000)
+    body: JSON.stringify({
+      path,
+      expectedRevision,
+      ...(options.fence ? { fence: options.fence } : {}),
+      ...(options.commitId ? { commitId: options.commitId } : {})
+    }),
+    signal: requestSignal(options.signal)
   })
-  if (response.status === 409) return false
+  if (response.status === 409) return classifyConflict(response, path)
   if (!response.ok) throw await managerRequestError(response, path)
   ManagerAtomicJsonSnapshotSchema.parse(await response.json())
   return true
+}
+
+async function classifyConflict(response: Response, path: string): Promise<false> {
+  const body = await response.clone().json().catch(() => null) as { code?: unknown } | null
+  if (body?.code === 'revision_conflict') return false
+  throw await managerRequestError(response, path)
+}
+
+function mutationOptions(options: AtomicJsonMutationOptions): AtomicJsonMutationOptions {
+  const context = currentManagerDataMutexContext()
+  return {
+    signal: options.signal ?? context?.signal,
+    fence: options.fence ?? context?.fence,
+    commitId: options.commitId ?? currentManagerDataCommitId()
+  }
+}
+
+function requestSignal(signal?: AbortSignal): AbortSignal {
+  return signal ? AbortSignal.any([signal, AbortSignal.timeout(5_000)]) : AbortSignal.timeout(5_000)
 }
 
 function managerHeaders(token: string): Record<string, string> {

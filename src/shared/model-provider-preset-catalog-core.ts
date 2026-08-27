@@ -55,6 +55,9 @@ import {
   OLLAMA_CLOUD_MODEL_IDS,
   OLLAMA_CLOUD_PROVIDER_ID,
   OLLAMA_CLOUD_PROVIDER_NAME,
+  OPENCODE_FREE_MODEL_IDS,
+  OPENCODE_FREE_PROVIDER_ID,
+  OPENCODE_FREE_PROVIDER_NAME,
   VOLCENGINE_AGENT_PLAN_CHAT_MODELS,
   VOLCENGINE_CHAT_MODELS,
   VOLCENGINE_IMAGE_MODELS,
@@ -62,6 +65,30 @@ import {
   ZAI_CODING_PLAN_MODELS,
   ZHIPU_CODING_PLAN_MODELS
 } from './model-provider-preset-types'
+
+const OPENCODE_FREE_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['auto'],
+  defaultEffort: 'auto',
+  requestProtocol: 'none'
+}
+
+/** models.dev/kun-agent explicitly publish Coding Plan models as zero-cost. */
+function codingPlanProfile(
+  contextWindowTokens: number,
+  vision = false
+): ModelProviderModelProfileV1 {
+  return {
+    ...(vision
+      ? visionChatProfile(contextWindowTokens, GLM_REASONING)
+      : textChatProfile(contextWindowTokens, GLM_REASONING)),
+    pricing: {
+      inputUsdPerMillion: 0,
+      outputUsdPerMillion: 0,
+      cacheReadUsdPerMillion: 0,
+      cacheWriteUsdPerMillion: 0
+    }
+  }
+}
 
 export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
 {
@@ -200,11 +227,14 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     endpointFormat: 'custom_endpoint',
     models: [...ZHIPU_CODING_PLAN_MODELS],
     modelProfiles: {
-      'glm-5.2': textChatProfile(1_000_000, GLM_REASONING),
-      'glm-5.1': textChatProfile(200_000, GLM_REASONING),
-      'glm-5-turbo': textChatProfile(200_000, GLM_REASONING),
-      'glm-4.7': textChatProfile(200_000, GLM_REASONING),
-      'glm-4.5-air': textChatProfile(200_000, GLM_REASONING)
+      'glm-5.3': codingPlanProfile(1_000_000),
+      // VLM variant per docs.bigmodel.cn (vlm/glm-5.3-flash); available in the GLM Coding Plan.
+      'glm-5.3-flash': codingPlanProfile(200_000, true),
+      'glm-5.2': codingPlanProfile(1_000_000),
+      'glm-5.1': codingPlanProfile(200_000),
+      'glm-5-turbo': codingPlanProfile(200_000),
+      'glm-4.7': codingPlanProfile(200_000),
+      'glm-4.5-air': codingPlanProfile(200_000)
     },
     docsUrl: 'https://docs.bigmodel.cn/cn/coding-plan/overview',
     apiKeyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys'
@@ -218,12 +248,13 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     endpointFormat: 'custom_endpoint',
     models: [...ZAI_CODING_PLAN_MODELS],
     modelProfiles: {
-      'glm-5.2': textChatProfile(1_000_000, GLM_REASONING),
-      'glm-5.1': textChatProfile(200_000, GLM_REASONING),
-      'glm-5': textChatProfile(200_000, GLM_REASONING),
-      'glm-5-turbo': textChatProfile(200_000, GLM_REASONING),
-      'glm-4.7': textChatProfile(200_000, GLM_REASONING),
-      'glm-4.5-air': textChatProfile(200_000, GLM_REASONING)
+      'glm-5.3': codingPlanProfile(1_000_000),
+      'glm-5.2': codingPlanProfile(1_000_000),
+      'glm-5.1': codingPlanProfile(200_000),
+      'glm-5': codingPlanProfile(200_000),
+      'glm-5-turbo': codingPlanProfile(200_000),
+      'glm-4.7': codingPlanProfile(200_000),
+      'glm-4.5-air': codingPlanProfile(200_000)
     },
     docsUrl: 'https://docs.z.ai/devpack/tool/others',
     apiKeyUrl: 'https://z.ai/subscribe'
@@ -237,9 +268,21 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     endpointFormat: 'chat_completions',
     models: ['k3', 'kimi-for-coding', 'kimi-for-coding-highspeed'],
     modelProfiles: {
-      k3: visionChatProfile(1_000_000, KIMI_K3_REASONING),
-      'kimi-for-coding': textChatProfile(262_144),
-      'kimi-for-coding-highspeed': textChatProfile(262_144)
+      // Reference prices mirror the public Moonshot API (moonshotai-cn on
+      // models.dev, fetched 2026-08-22). Kimi Code is a subscription plan, so
+      // these are reference estimates, not actual charges.
+      k3: {
+        ...visionChatProfile(1_000_000, KIMI_K3_REASONING),
+        pricing: { inputUsdPerMillion: 3, outputUsdPerMillion: 15, cacheReadUsdPerMillion: 0.3 }
+      },
+      'kimi-for-coding': {
+        ...textChatProfile(262_144),
+        pricing: { inputUsdPerMillion: 0.95, outputUsdPerMillion: 4, cacheReadUsdPerMillion: 0.19 }
+      },
+      'kimi-for-coding-highspeed': {
+        ...textChatProfile(262_144),
+        pricing: { inputUsdPerMillion: 1.9, outputUsdPerMillion: 8, cacheReadUsdPerMillion: 0.38 }
+      }
     },
     docsUrl: 'https://www.kimi.com/code/docs/en/',
     apiKeyUrl: 'https://www.kimi.com/code'
@@ -315,6 +358,51 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     },
     docsUrl: 'https://www.volcengine.com/docs/82379/1928262',
     apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
+  },
+{
+    id: OPENCODE_FREE_PROVIDER_ID,
+    name: OPENCODE_FREE_PROVIDER_NAME,
+    category: 'free',
+    // Anonymous requests use Bearer public; the gateway treats it as no
+    // account key and permits only allowAnonymous models.
+    baseUrl: 'https://opencode.ai/zen/v1',
+    endpointFormat: 'chat_completions',
+    defaultRetryMaxAttempts: 10,
+    models: [...OPENCODE_FREE_MODEL_IDS],
+    modelProfiles: {
+      'gpt-5-nano': openCodeFreeProfile(128_000, 16_000),
+      'ling-3.0-flash-free': openCodeFreeProfile(262_144, 32_768),
+      'laguna-s-2.1-free': openCodeFreeProfile(256_000, 32_000),
+      'nemotron-3.5-lightning-free': openCodeFreeProfile(262_144, 262_144),
+      'ring-2.6-1t-free': openCodeFreeProfile(262_000, 66_000),
+      'nemotron-3-super-free': openCodeFreeProfile(204_800, 128_000),
+      'kimi-k2.5-free': openCodeFreeProfile(262_144, 262_144, true),
+      'north-mini-code-free': openCodeFreeProfile(256_000, 64_000),
+      'deepseek-v4-flash-free': openCodeFreeProfile(200_000, 128_000),
+      'minimax-m3-free': openCodeFreeProfile(200_000, 32_000, true),
+      'nemotron-3-ultra-free': openCodeFreeProfile(1_000_000, 128_000),
+      'glm-4.7-free': openCodeFreeProfile(204_800, 131_072),
+      'trinity-large-preview-free': openCodeFreeProfile(131_072, 131_072, false, false),
+      'grok-code': openCodeFreeProfile(256_000, 256_000),
+      'hy3-preview-free': openCodeFreeProfile(256_000, 64_000),
+      'hy3-free': openCodeFreeProfile(190_000, 64_000),
+      'muse-spark-1.2-contributor-free': openCodeFreeProfile(1_048_576, 131_072, true),
+      'x-preview-f-free': openCodeFreeProfile(1_000_000, 131_072, true),
+      'ling-2.6-flash-free': openCodeFreeProfile(262_100, 32_800, false, false),
+      'mimo-v2-pro-free': openCodeFreeProfile(1_048_576, 64_000),
+      'mimo-v2-flash-free': openCodeFreeProfile(262_144, 65_536),
+      'minimax-m2.5-free': openCodeFreeProfile(204_800, 131_072),
+      'glm-5-free': openCodeFreeProfile(204_800, 131_072),
+      'qwen3.6-plus-free': openCodeFreeProfile(262_144, 65_536, true),
+      'mimo-v2.5-free': openCodeFreeProfile(200_000, 32_000, true),
+      'minimax-m2.1-free': openCodeFreeProfile(204_800, 131_072),
+      'ling-3.0-tiny-free': openCodeFreeProfile(262_144, 32_768),
+      'big-pickle': openCodeFreeProfile(200_000, 32_000),
+      'mimo-v2-omni-free': openCodeFreeProfile(262_144, 64_000, true),
+      'longcat-2.0-free': openCodeFreeProfile(1_000_000, 131_072)
+    },
+    docsUrl: 'https://opencode.ai/docs/zen/',
+    apiKeyUrl: 'https://opencode.ai/docs/zen/'
   },
 {
     id: 'opencode-go',
@@ -430,3 +518,17 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys'
   }
 ]
+
+function openCodeFreeProfile(
+  contextWindowTokens: number,
+  maxOutputTokens: number,
+  supportsImageInput = false,
+  supportsReasoning = true
+): ModelProviderModelProfileV1 {
+  return {
+    ...(supportsImageInput
+      ? visionChatProfile(contextWindowTokens, supportsReasoning ? OPENCODE_FREE_REASONING : undefined)
+      : textChatProfile(contextWindowTokens, supportsReasoning ? OPENCODE_FREE_REASONING : undefined)),
+    maxOutputTokens
+  }
+}

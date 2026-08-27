@@ -267,11 +267,12 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
       'windows-installer-migration-paths.ps1',
       'windows-installer-migration-journal.ps1',
       'windows-installer-migration-filesystem.ps1',
-      'windows-installer-migration-actions.ps1'
+      'windows-installer-migration-actions.ps1',
+      'windows-installer-migration-transaction.ps1'
     ].map((fileName) =>
       readFileSync(join(process.cwd(), 'build', fileName), 'utf8')
     ).join('\n')
-    const updaterSource = ['gui-updater.ts', 'gui-updater-support.ts']
+    const updaterSource = ['gui-updater.ts', 'gui-updater-install.ts', 'gui-updater-support.ts']
       .map((fileName) => readFileSync(join(process.cwd(), 'src/main', fileName), 'utf8'))
       .join('\n')
 
@@ -306,7 +307,10 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
       'Automatic update selected the only registered all-users ${PRODUCT_NAME} installation.'
     )
     expect(installerScript).toContain(
-      'Automatic update source marker is unavailable with registrations in both scopes; keeping the requested install mode.'
+      'Automatic update source marker is unavailable with registrations in both scopes; aborting the update.'
+    )
+    expect(installerScript).toContain(
+      '!insertmacro KunAbortAutomaticUpdate scope_ambiguous scope'
     )
     expect(installerScript).toContain('KUN_INSTALLER_CURRENT_USER_SOURCE')
     expect(installerScript).toContain('KUN_INSTALLER_ALL_USERS_SOURCE')
@@ -370,12 +374,12 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(installerScript).toContain('KunHandleOldUninstallerResult')
     expect(installerScript).toContain('Var /GLOBAL KunInstallerInPlaceUpdate')
     expect(installerScript).toContain('Function KunMarkInPlaceAutomaticUpdate')
-    expect(installerScript).toContain('${if} $KunInstallerInPlaceUpdate == 1')
+    expect(installerScript).toContain('# Automatic updates retain the old payload through candidate health validation.')
     expect(installerScript).toContain(
-      'skipping pre-install removal of $KunInstallerPrimarySourceDir'
+      'Automatic update; deferring removal of $KunInstallerPrimarySourceDir until commit.'
     )
     expect(installerScript).toContain(
-      'suppressed the selected-scope uninstaller until the new payload is installed'
+      'Automatic update; suppressed the selected-scope uninstaller until commit.'
     )
     expect(installerScript).toContain('!insertmacro kunRunMigrationHelper CleanupInPlaceLeftovers')
     expect(installerScript).toContain('!insertmacro addDesktopLink "false"')
@@ -383,6 +387,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
       installerScript.indexOf('!insertmacro addDesktopLink "false"')
     )
     expect(installerScript).toContain('KUN_INSTALLER_IN_PLACE_UPDATE')
+    expect(installerScript).toContain('KUN_INSTALLER_AUTOMATIC_UPDATE')
     expect(installerScript).toContain('Function KunSecureSelectedUninstallRegistration')
     expect(installerScript).toContain('Function KunSecureCurrentUserUninstallRegistration')
     expect(installerScript).toContain('!insertmacro kunRunMigrationHelper ResolveUninstaller')
@@ -420,11 +425,16 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(installerScript).toContain('KUN_INSTALLER_SECONDARY_SOURCE_STALE')
     expect(installerScript).not.toContain('Stop-Process -Id')
 
-    expect(migrationScript).toContain("'ResolveUpdateScope', 'ResolveUninstaller', 'StopProcesses'")
+    expect(migrationScript).toContain("'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'PrepareUpdateTransaction', 'SwitchUpdatePayload'")
     expect(migrationScript).toContain("'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath'")
     expect(migrationScript).toContain('function Invoke-CleanupInPlaceLeftovers')
     expect(migrationScript).toContain('function Test-RetainedInPlaceKnownEntry')
     expect(migrationScript).toContain("Get-EnvironmentValue 'KUN_INSTALLER_IN_PLACE_UPDATE'")
+    expect(migrationScript).toContain("Get-EnvironmentValue 'KUN_INSTALLER_AUTOMATIC_UPDATE'")
+    expect(migrationScript).toContain('function Resolve-RecoveryPayloadExecutable')
+    expect(migrationScript).toContain('function Initialize-UpdateTransaction')
+    expect(migrationScript).toContain('function Invoke-RollbackUpdateTransaction')
+    expect(migrationScript).toContain("Phase = 'rollback_incomplete'")
     expect(migrationScript).not.toContain("'old-uninstaller.exe'")
     expect(migrationScript).toContain("Join-Path $PSScriptRoot 'kun-windows-installer-result.txt'")
     expect(migrationScript).toContain('function Test-AppOwnedProcessPath')
@@ -484,7 +494,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(migrationScript).not.toMatch(/Remove-Item[^\n]*(?:APPDATA|USERPROFILE|\.kun|\.deepseekgui)/i)
 
     expect(updaterSource).toContain("const WINDOWS_INSTALLER_UPDATE_SOURCE_ENV = 'KUN_INSTALLER_UPDATE_SOURCE'")
-    expect(updaterSource).toContain('restoreInstallerUpdateSource = setWindowsInstallerUpdateSource()')
+    expect(updaterSource).toContain('const restoreUpdateSource = setWindowsInstallerUpdateSource()')
     expect(updaterSource).toContain('autoUpdater.quitAndInstall(true, true)')
   })
 

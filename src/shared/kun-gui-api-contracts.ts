@@ -439,6 +439,16 @@ export type ModelsDevCatalogMetadataIssue = {
   maxAllowed: number
 }
 
+export type ModelsDevCatalogPricing = {
+  /** USD per million input tokens (non-cache). */
+  inputUsdPerMillion: number
+  /** USD per million output tokens. */
+  outputUsdPerMillion: number
+  /** Cache-read/write USD per million tokens; omitted falls back to input. */
+  cacheReadUsdPerMillion?: number
+  cacheWriteUsdPerMillion?: number
+}
+
 export type ModelsDevCatalogModel = {
   id: string
   providerKey?: string
@@ -448,6 +458,9 @@ export type ModelsDevCatalogModel = {
   outputModalities: ModelsDevCatalogModality[]
   reasoning?: boolean
   toolCalling?: boolean
+  /** True only when models.dev reports both input and output cost as zero. */
+  free?: boolean
+  pricing?: ModelsDevCatalogPricing
   contextWindowTokens?: number
   maxOutputTokens?: number
   /** Import-only diagnostics for catalog fields omitted by the sanitizer. */

@@ -129,6 +129,8 @@
   "modelProviderCustomBadge": "Custom",
   "modelProviderTokenPlanBadge": "Token Plan",
   "modelProviderPlanBadge": "Plan",
+  "modelProviderFreeBadge": "Free",
+  "modelProviderGroupFree": "Free",
   "modelProviderGroupPlans": "Subscription plans",
   "modelProviderSubscriptionRegions": "Subscription plan regions",
   "modelProviderSubscriptionRegionAll": "All",

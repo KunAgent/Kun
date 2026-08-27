@@ -111,6 +111,7 @@ export function usageRangeBuckets(buckets: DailyUsageBucket[], rangeKey: UsageRa
 
 export function usageTotalsFromBuckets(buckets: DailyUsageBucket[]): UsageTotalsBucket {
   let hasCny = false
+  let hasEstimateCny = false
   const totals = buckets.reduce<UsageTotalsBucket>(
     (acc, bucket) => {
       acc.inputTokens += bucket.inputTokens
@@ -121,10 +122,14 @@ export function usageTotalsFromBuckets(buckets: DailyUsageBucket[]): UsageTotals
       acc.totalTokens += bucket.totalTokens
       acc.costUsd += bucket.costUsd
       acc.costCny = (acc.costCny ?? 0) + (bucket.costCny ?? 0)
+      acc.valueEstimateUsd += bucket.valueEstimateUsd
+      acc.valueEstimateCny = (acc.valueEstimateCny ?? 0) + (bucket.valueEstimateCny ?? 0)
+      acc.valueEstimateUnpricedRequests += bucket.valueEstimateUnpricedRequests
       acc.tokenEconomySavingsTokens += bucket.tokenEconomySavingsTokens
       acc.turns += bucket.turns
       acc.threadCount += bucket.threadCount
       if (bucket.costCny != null) hasCny = true
+      if (bucket.valueEstimateCny != null) hasEstimateCny = true
       if (usageHasBucketActivity(bucket)) acc.activeDays += 1
       return acc
     },
@@ -138,6 +143,10 @@ export function usageTotalsFromBuckets(buckets: DailyUsageBucket[]): UsageTotals
       totalTokens: 0,
       costUsd: 0,
       costCny: 0,
+      valueEstimateUsd: 0,
+      valueEstimateCny: 0,
+      valueEstimateCoverage: 'unavailable',
+      valueEstimateUnpricedRequests: 0,
       tokenEconomySavingsTokens: 0,
       turns: 0,
       threadCount: 0,
@@ -147,9 +156,19 @@ export function usageTotalsFromBuckets(buckets: DailyUsageBucket[]): UsageTotals
     }
   )
   const cacheTotal = totals.cachedTokens + totals.cacheMissTokens
+  let hasEstimate = false
+  let hasUnpriced = false
+  for (const bucket of buckets) {
+    if (bucket.valueEstimateUsd > 0 || (bucket.valueEstimateCny ?? 0) > 0) hasEstimate = true
+    if (bucket.valueEstimateUnpricedRequests > 0) hasUnpriced = true
+  }
   return {
     ...totals,
     costCny: hasCny ? totals.costCny : null,
+    valueEstimateCny: hasEstimateCny ? totals.valueEstimateCny : null,
+    // Slice-level coverage mirrors the backend rule: priced estimates plus any
+    // unpriced subscription requests reads as `partial`.
+    valueEstimateCoverage: hasEstimate ? (hasUnpriced ? 'partial' : 'complete') : 'unavailable',
     cacheHitRate: cacheTotal > 0 ? totals.cachedTokens / cacheTotal : null
   }
 }

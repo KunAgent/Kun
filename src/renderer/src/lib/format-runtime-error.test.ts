@@ -60,6 +60,30 @@ describe('format runtime error', () => {
     expect(view.detail).toContain('getaddrinfo ENOTFOUND api.luna.example')
   })
 
+  it('explains stream disconnects as transport interruptions, not provider errors', () => {
+    const view = describeRuntimeError(new Error(JSON.stringify({
+      code: 'stream_disconnected',
+      message: 'stream closed before response.completed',
+      severity: 'error'
+    })))
+
+    expect(view.code).toBe('stream_disconnected')
+    expect(view.summary).toBe(i18n.t('common:runtimeStreamDisconnected'))
+    expect(view.message).toBe(view.summary)
+    expect(view.message).not.toContain('response.completed')
+    expect(view.detail).toContain('stream closed before response.completed')
+  })
+
+  it('classifies gateway disconnect wording even without an explicit code', () => {
+    const view = describeRuntimeError(new Error(JSON.stringify({
+      message: 'stream closed before response.completed'
+    })))
+
+    expect(view.code).toBeUndefined()
+    expect(view.summary).toBe(i18n.t('common:runtimeStreamDisconnected'))
+    expect(view.message).not.toContain('response.completed')
+  })
+
   it('routes fixed-sampling provider errors to Agents settings for recovery', () => {
     const view = describeRuntimeError(new Error(JSON.stringify({
       code: 'http_400',

@@ -648,8 +648,26 @@ export async function startWeixinChannels(params: JsonRecord): Promise<JsonRecor
   const accountIds = requestedAccountId
     ? [normalizeAccountId(requestedAccountId)]
     : await listIndexedWeixinAccountIds()
-  for (const accountId of accountIds) await startAccountMonitor(accountId)
-  return { started: accountIds }
+  const started: string[] = []
+  const unconfigured: string[] = []
+  for (const accountId of accountIds) {
+    const account = await resolveWeixinAccount(accountId)
+    if (!account.configured) {
+      unconfigured.push(accountId)
+      continue
+    }
+    await startAccountMonitor(account.accountId)
+    started.push(account.accountId)
+  }
+  if (requestedAccountId && started.length === 0) {
+    return {
+      started,
+      unconfigured,
+      code: 'account_not_configured',
+      message: `WeChat account is not configured: ${normalizeAccountId(requestedAccountId)}`
+    }
+  }
+  return { started, ...(unconfigured.length ? { unconfigured } : {}) }
 }
 
 export async function stopWeixinChannels(params: JsonRecord): Promise<JsonRecord> {

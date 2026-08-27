@@ -28,7 +28,7 @@ export {
   ServeProviderConfigSchema,
   KunServeConfigSchema,
   RolesConfigSchema,
-  LabFastContextConfigSchema,
+  FastContextConfigSchema,
   LabPptAgentConfigSchema,
   LabConfigSchema,
   KunConfigSchema,
@@ -41,7 +41,7 @@ export {
 export type {
   ServeProviderConfig,
   RolesConfig,
-  LabFastContextConfig,
+  FastContextConfig,
   LabPptAgentConfig,
   LabConfig,
   KunConfig,

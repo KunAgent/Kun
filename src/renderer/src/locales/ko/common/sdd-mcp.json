@@ -161,6 +161,7 @@
   "providerQuotaUsed": "사용됨",
   "providerQuotaLimit": "한도",
   "providerQuotaResetsAt": "재설정: {{time}}",
+  "providerQuotaEarliestExpiry": "가장 빠른 만료: {{time}}",
   "rightPanelAgentPerspective": "에이전트 관점",
   "agentPerspectiveTitle": "에이전트 관점",
   "agentPerspectiveSubtitle": "이 대화의 모델 요청 {{count}}개",

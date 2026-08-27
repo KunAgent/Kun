@@ -146,6 +146,76 @@ describe('KunRuntimeProvider', () => {
     }])
   })
 
+  it('projects replay before synchronization and same-batch live events after it', async () => {
+    let onData: ((payload: { streamId: string; events: unknown[]; batchId?: string }) => void) | null = null
+    const ac = new AbortController()
+    const order: string[] = []
+    const sink: ThreadEventSink = {
+      onSeq: vi.fn((seq) => order.push(`seq:${seq}`)),
+      onReplaySynchronized: vi.fn((cursor) => order.push(`sync:${cursor}`)),
+      onDeltas: vi.fn((deltas: Parameters<ThreadEventSink['onDeltas']>[0]) =>
+        order.push(`delta:${deltas.map((delta) => delta.text).join('')}`)),
+      onUserMessage: vi.fn(),
+      onTool: vi.fn(),
+      onCompaction: vi.fn(),
+      onApproval: vi.fn(),
+      onUserInput: vi.fn(),
+      onUserInputStatus: vi.fn(),
+      onGoal: vi.fn(),
+      onTodos: vi.fn(),
+      onTurnComplete: vi.fn(),
+      onError: vi.fn()
+    }
+    installDsGui({
+      ackSse: vi.fn(async () => {
+        order.push('ack')
+        ac.abort()
+        return true
+      }),
+      onSseEvent: vi.fn((handler) => {
+        onData = handler
+        return () => undefined
+      }),
+      startSse: vi.fn(async (_threadId, _sinceSeq, streamId) => {
+        queueMicrotask(() => onData?.({
+          streamId: streamId ?? 'stream-1',
+          batchId: 'sync-batch',
+          events: [
+            {
+              kind: 'assistant_text_delta',
+              seq: 201,
+              item: {
+                id: 'item_text', turnId: 'turn_1', threadId: 'thr_1',
+                role: 'assistant', status: 'running', kind: 'assistant_text', text: 'replay'
+              }
+            },
+            { kind: 'replay_synchronized', threadId: 'thr_1', cursor: 201 },
+            {
+              kind: 'assistant_text_delta',
+              seq: 202,
+              item: {
+                id: 'item_text', turnId: 'turn_1', threadId: 'thr_1',
+                role: 'assistant', status: 'running', kind: 'assistant_text', text: 'live'
+              }
+            }
+          ]
+        }))
+        return { streamId: streamId ?? 'stream-1' }
+      })
+    })
+
+    await new KunRuntimeProvider().subscribeThreadEvents('thr_1', 200, sink, ac.signal)
+
+    expect(order).toEqual([
+      'delta:replay',
+      'seq:201',
+      'sync:201',
+      'delta:live',
+      'seq:202',
+      'ack'
+    ])
+  })
+
   it('gates stale non-delta events and their side effects at the subscription high-water mark', async () => {
     let onData: ((payload: { streamId: string; events: unknown[] }) => void) | null = null
     const ac = new AbortController()

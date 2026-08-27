@@ -11,6 +11,7 @@
     File /oname=$PLUGINSDIR\windows-installer-migration-journal.ps1 "${PROJECT_DIR}\build\windows-installer-migration-journal.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-filesystem.ps1 "${PROJECT_DIR}\build\windows-installer-migration-filesystem.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-actions.ps1 "${PROJECT_DIR}\build\windows-installer-migration-actions.ps1"
+    File /oname=$PLUGINSDIR\windows-installer-migration-transaction.ps1 "${PROJECT_DIR}\build\windows-installer-migration-transaction.ps1"
     StrCpy $KunInstallerHelperPath "$PLUGINSDIR\kun-windows-installer-migration.ps1"
     System::Call 'kernel32::GetCurrentProcessId() i .r0'
     StrCpy $KunInstallerCurrentPid $0
@@ -43,8 +44,7 @@
         ${endif}
 
         DetailPrint "Verified ${PRODUCT_NAME} processes are still running; stopping uninstall to preserve the installation."
-        SetErrorLevel 2
-        Quit
+        !insertmacro KunAbortAutomaticUpdate process_stop_failed process_stop "Running application processes could not be stopped."
       ${else}
         DetailPrint "${PRODUCT_NAME} could not safely inspect processes; stopping without changing the installation."
         ${ifNot} ${isUpdated}
@@ -53,8 +53,7 @@
         ${endif}
 
         DetailPrint "${PRODUCT_NAME} process inspection failed; stopping automatic update to preserve the installation."
-        SetErrorLevel 2
-        Quit
+        !insertmacro KunAbortAutomaticUpdate process_check_failed process_check "Application processes could not be inspected safely."
       ${endif}
 
     KunInstallDirProcessesStopped:

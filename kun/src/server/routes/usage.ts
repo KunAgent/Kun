@@ -9,6 +9,7 @@ import {
   parseDailyUsageQuery,
   parseModelUsageQuery,
   parseTurnUsageQuery,
+  usageQueryUtcRange,
   UsageValidationError
 } from '../../services/usage-service.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -44,13 +45,21 @@ export async function usageJsonResponse(
       })))
     }
     if (groupBy === 'day') {
+      const dayQuery = parseDailyUsageQuery(query)
       return jsonResponse(
-        buildDailyUsageResponse(await loadUsageHistory(runtime), parseDailyUsageQuery(query))
+        buildDailyUsageResponse(
+          await loadUsageHistory(runtime, usageQueryUtcRange(dayQuery)),
+          dayQuery
+        )
       )
     }
     if (groupBy === 'model') {
+      const modelQuery = parseModelUsageQuery(query)
       return jsonResponse(
-        buildModelUsageResponse(await loadUsageHistory(runtime), parseModelUsageQuery(query))
+        buildModelUsageResponse(
+          await loadUsageHistory(runtime, usageQueryUtcRange(modelQuery)),
+          modelQuery
+        )
       )
     }
     if (groupBy === 'turn') {

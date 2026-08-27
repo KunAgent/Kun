@@ -10,6 +10,7 @@ const settings = {
   ...mcpMigration,
   ...migrationSystem,
   ...codePersonas,
+  guiUpdateErrFeedUnavailable: '当前没有可连接的更新源，请稍后重试或前往下载页。',
 }
 
 export default settings

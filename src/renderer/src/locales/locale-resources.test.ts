@@ -88,6 +88,19 @@ const PLAN_BUILD_ACTION_KEYS = [
   'planWorktreeCurrentWorkspaceWarning'
 ] as const
 
+const DARK_UI_COLOR_KEYS = [
+  'darkUiColorsTitle',
+  'darkUiColorsBackground',
+  'darkUiColorsBackgroundDesc',
+  'darkUiColorsBorder',
+  'darkUiColorsBorderDesc',
+  'darkUiColorsPanel',
+  'darkUiColorsPanelDesc',
+  'darkUiColorsPreview',
+  'darkUiColorsDarkOnlyHint',
+  'darkUiColorsReset'
+] as const
+
 function flattenStrings(
   tree: LocaleTree,
   prefix = '',
@@ -159,6 +172,14 @@ describe('active locale resources', () => {
       }
     }
   )
+
+  it.each(APP_LOCALES)('authors every dark UI color label for %s', (locale) => {
+    for (const key of DARK_UI_COLOR_KEYS) {
+      const value = authoredSettings[locale][key]
+      expect(typeof value, `settings:${key}`).toBe('string')
+      expect(String(value).trim(), `settings:${key}`).not.toBe('')
+    }
+  })
 
   it.each(APP_LOCALES)('preserves model-route protocol literals in %s guidance', (locale) => {
     const modelRoutes = authoredSettings[locale].modelRoutes as Record<string, string>

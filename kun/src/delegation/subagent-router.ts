@@ -146,6 +146,7 @@ export class SubagentRouter {
       threadId: string
       turnId: string
       model: string
+      providerId?: string
       usage: UsageSnapshot
     }) => Promise<void> | void
   }) {}
@@ -190,6 +191,7 @@ export class SubagentRouter {
             threadId: input.threadId,
             turnId: request.turnId,
             model: request.model,
+            ...(request.providerId ? { providerId: request.providerId } : {}),
             usage: collected.usage
           })
         } catch {

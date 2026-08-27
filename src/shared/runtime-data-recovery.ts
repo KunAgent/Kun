@@ -110,3 +110,5 @@ export type RuntimeDataRecoveryApi = {
   getStatus: () => Promise<RuntimeDataRecoveryStatus>
   execute: (input: RuntimeDataRecoveryExecuteInput) => Promise<RuntimeDataRecoveryStatus>
 }
+
+export type RuntimeDataRecoveryWindowApi = RuntimeDataRecoveryApi

@@ -20,6 +20,7 @@ import {
   streamMigrationExport
 } from './migrations.js'
 import { runtimeInfoJsonResponse, runtimeToolDiagnosticsJsonResponse } from './runtime-info.js'
+import { jsonResponse } from '../response.js'
 import { shutdownRuntime } from './runtime-shutdown.js'
 import {
   cancelModelConnectionOAuth,
@@ -120,6 +121,11 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/v1/runtime/tools', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return runtimeToolDiagnosticsJsonResponse(runtime)
+  })
+  router.add('POST', '/v1/runtime/thread-guardian', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.inspectThreadStore) return ERRORS.unavailable('thread guardian is not available')
+    return jsonResponse(await runtime.inspectThreadStore())
   })
   router.add('POST', '/v1/runtime/shutdown', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

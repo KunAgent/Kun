@@ -89,6 +89,7 @@ export function createThreadRecord(input: {
   const now = input.createdAt ?? new Date().toISOString()
   return {
     id: input.id,
+    revision: 0,
     title: input.title,
     ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
     workspace: input.workspace,

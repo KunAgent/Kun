@@ -35,7 +35,7 @@ import {
   type KunHistoryHygieneSettingsV1,
   type KunImageGenerationSettingsV1,
   type KunInstructionSettingsV1,
-  type KunLabFastContextSettingsV1,
+  type KunFastContextSettingsV1,
   type KunLabSettingsPatchV1,
   type KunLabSettingsV1,
   type KunSubagentsSettingsV1,
@@ -302,6 +302,19 @@ export function mergeKunRuntimeSettings(
   const nextRoleModelSlots = mergeOptionalModelSlot(current, patch)
   const nextRoleReasoningSlots = mergeOptionalReasoningSlot(current, patch)
   const nextSubagents = mergeKunSubagentsSettings(current.subagents, patch?.subagents)
+  const legacyLab = current.lab as {
+    fastContext?: KunFastContextSettingsV1
+    exploreAgent?: KunFastContextSettingsV1
+  } | undefined
+  const legacyFastContext = legacyLab?.fastContext ?? legacyLab?.exploreAgent
+  const legacyFastContextPatch = (patch?.lab as {
+    fastContext?: Partial<KunFastContextSettingsV1>
+    exploreAgent?: Partial<KunFastContextSettingsV1>
+  } | undefined)
+  const nextFastContext = mergeLabAgentSettings(
+    current.fastContext ?? legacyFastContext ?? defaultKunFastContextSettings(),
+    patch?.fastContext ?? legacyFastContextPatch?.fastContext ?? legacyFastContextPatch?.exploreAgent
+  )
   const nextLab = mergeKunLabSettings(current.lab, patch?.lab)
   const nextPlanExecution = {
     useWorktreeByDefault: patch?.planExecution?.useWorktreeByDefault
@@ -369,6 +382,7 @@ export function mergeKunRuntimeSettings(
     quality: nextQuality,
     graph: nextGraph,
     planExecution: nextPlanExecution,
+    fastContext: nextFastContext,
     lab: nextLab,
     ...(nextSubagents !== undefined ? { subagents: nextSubagents } : {})
   }
@@ -417,14 +431,17 @@ function stripLegacyChildRunLimit(
   return effective
 }
 
+export function defaultKunFastContextSettings(): KunFastContextSettingsV1 {
+  return {
+    enabled: true,
+    model: '',
+    providerId: '',
+    fast: false
+  }
+}
+
 export function defaultKunLabSettings(): KunLabSettingsV1 {
   return {
-    fastContext: {
-      enabled: true,
-      model: '',
-      providerId: '',
-      fast: false
-    },
     pptAgent: {
       enabled: true,
       model: '',
@@ -451,20 +468,12 @@ export function mergeKunLabSettings(
   const defaults = defaultKunLabSettings()
   const legacyCurrent = current as Partial<KunLabSettingsV1> | undefined
   const base: KunLabSettingsV1 = {
-    fastContext: legacyCurrent?.fastContext ?? defaults.fastContext,
     pptAgent: legacyCurrent?.pptAgent ?? defaults.pptAgent,
     conversationVisualization:
       legacyCurrent?.conversationVisualization ?? defaults.conversationVisualization
   }
   if (!patch) return base
-  // Legacy migration: older settings wrote `exploreAgent`; treat it as the
-  // current `fastContext` key so persisted Lab config keeps its value.
-  const legacyPatch = patch as KunLabSettingsPatchV1 & {
-    exploreAgent?: Partial<KunLabFastContextSettingsV1>
-  }
-  const fastContextPatch = patch.fastContext ?? legacyPatch.exploreAgent
   return {
-    fastContext: mergeLabAgentSettings(base.fastContext, fastContextPatch),
     pptAgent: {
       ...mergeLabAgentSettings(base.pptAgent, patch.pptAgent),
       imageFirst: patch.pptAgent?.imageFirst ?? base.pptAgent.imageFirst
@@ -476,7 +485,7 @@ export function mergeKunLabSettings(
   }
 }
 
-/** Shared merge for Lab agent feature blocks (fastContext / pptAgent). */
+/** Shared merge for model-routed agent feature blocks. */
 export function mergeLabAgentSettings<
   T extends { enabled: boolean; model: string; providerId: string; reasoningEffort?: ModelReasoningEffort; fast: boolean }
 >(

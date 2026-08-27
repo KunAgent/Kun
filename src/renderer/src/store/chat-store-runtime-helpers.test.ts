@@ -6,6 +6,7 @@ import {
 import type { ChatBlock } from '../agent/types'
 import {
   hasPendingRuntimeWork,
+  clearedThreadSelection,
   isOptimisticUserBlockId,
   reconcileOptimisticUserBlock,
   settlePendingRuntimeWorkAfterInterrupt,
@@ -16,6 +17,20 @@ import {
 } from './chat-store-runtime-helpers'
 
 describe('chat store runtime helpers', () => {
+  it('clears live text and runtime identity in the same selection reset', () => {
+    expect(clearedThreadSelection()).toMatchObject({
+      liveDeltaSeqFloor: 0,
+      liveReasoning: '',
+      liveReasoningItemId: undefined,
+      liveReasoningTurnId: undefined,
+      liveReasoningCreatedAt: undefined,
+      liveAssistant: '',
+      liveAssistantItemId: undefined,
+      liveAssistantTurnId: undefined,
+      liveAssistantCreatedAt: undefined
+    })
+  })
+
   it('uses the latest turn as the execution-state authority', () => {
     expect(threadLooksRunning({ status: 'running', latestTurnStatus: 'completed' })).toBe(false)
     expect(threadLooksRunning({ status: 'running', latestTurnStatus: 'failed' })).toBe(false)

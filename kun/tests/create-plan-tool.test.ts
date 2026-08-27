@@ -460,12 +460,12 @@ describe('create_plan tool: success and atomic write', () => {
       byte_size: number
       saved_at: string
     }
-    expect(output.relative_path).toBe('.kunsdd/plan/login.md')
+    expect(output.relative_path).toBe('.kunsdd/plan/login-flow.md')
     expect(output.operation).toBe('draft')
-    expect(output.summary).toContain('.kunsdd/plan/login.md')
+    expect(output.summary).toContain('.kunsdd/plan/login-flow.md')
     expect(output.content_hash).toMatch(/^[a-f0-9]{16}$/)
     expect(output.byte_size).toBe(Buffer.byteLength('# Login plan\n\n- step 1', 'utf8'))
-    expect(output.absolute_path).toBe(join(workspace, '.kunsdd/plan/login.md'))
+    expect(output.absolute_path).toBe(join(workspace, '.kunsdd/plan/login-flow.md'))
     const persisted = await readFile(output.absolute_path, 'utf8')
     expect(persisted).toBe('# Login plan\n\n- step 1')
   })
@@ -517,6 +517,30 @@ describe('create_plan tool: success and atomic write', () => {
     )
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.output)).toMatch(/legacy/)
+  })
+
+  it('uses the reserved session id when a draft has no generated title', async () => {
+    const result = await executeCreatePlanTool(
+      { markdown: '# fallback' },
+      buildContext({
+        threadId: 'thr_plan_fallback',
+        threadMode: 'plan',
+        workspace,
+        guiPlan: {
+          operation: 'draft',
+          workspaceRoot: workspace,
+          relativePath: '.kunsdd/plan/raw-user-message.md',
+          planId: `${workspace}:.kunsdd/plan/raw-user-message.md`,
+          sourceRequest: 'A long follow-up user message that should not become the filename'
+        }
+      })
+    )
+
+    expect(result.isError).toBeFalsy()
+    expect(result.output).toMatchObject({
+      relative_path: '.kunsdd/plan/thr-plan-fallback.md',
+      plan_id: `${workspace}:.kunsdd/plan/thr-plan-fallback.md`
+    })
   })
 
   it('overwrites an existing plan when the same reserved path is reused', async () => {

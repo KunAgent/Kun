@@ -52,6 +52,7 @@ export type ThreadUsageRecord = {
   threadId: string
   turnId?: string
   model?: string
+  providerId?: string
   completedAt: string
   usage: UsageSnapshot
 }
@@ -192,6 +193,47 @@ export function parseModelUsageQuery(
   const { from, to } = resolveUsageWindow(input, timezone, now, 'model usage')
   inclusiveDayCount(from, to)
   return { groupBy: 'model', from, to, timezone }
+}
+
+export type UsageUtcRange = {
+  fromInclusive: string
+  toExclusive: string
+}
+
+export function usageQueryUtcRange(query: DailyUsageQuery | ModelUsageQuery): UsageUtcRange {
+  const from = zonedMidnightUtc(query.from, query.timezone, 'from')
+  const dayAfterTo = dateString(addUtcDays(parseDateString(query.to, 'to'), 1))
+  const to = zonedMidnightUtc(dayAfterTo, query.timezone, 'to')
+  if (from.getTime() >= to.getTime()) {
+    throw new UsageValidationError('usage range must have a positive UTC duration')
+  }
+  return { fromInclusive: from.toISOString(), toExclusive: to.toISOString() }
+}
+
+function zonedMidnightUtc(dateValue: string, timezone: string, field: string): Date {
+  const localDate = parseDateString(dateValue, field)
+  const targetMs = localDate.getTime()
+  let candidateMs = targetMs
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  })
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const parts = formatter.formatToParts(new Date(candidateMs))
+    const part = (type: Intl.DateTimeFormatPartTypes): number =>
+      Number(parts.find((entry) => entry.type === type)?.value)
+    const observedMs = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'))
+    const correction = targetMs - observedMs
+    if (correction === 0) return new Date(candidateMs)
+    candidateMs += correction
+  }
+  throw new UsageValidationError(`${field} cannot be represented in timezone: ${timezone}`)
 }
 
 export function resolveUsageWindow(

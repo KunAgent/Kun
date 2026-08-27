@@ -161,6 +161,7 @@
   "providerQuotaUsed": "Used",
   "providerQuotaLimit": "Limit",
   "providerQuotaResetsAt": "Resets {{time}}",
+  "providerQuotaEarliestExpiry": "Earliest expiry {{time}}",
   "providerQuotaLocalCostTitle": "Local API reference value",
   "providerQuotaLocalCostCurrencyCny": "CNY (reference rate)",
   "providerQuotaLocalCostToday": "Today",

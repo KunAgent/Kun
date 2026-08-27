@@ -260,13 +260,14 @@ export async function createRuntimeModelComposition(
     modelClient: timedModelClient,
     roles: () => core.activeOptions.roles,
     defaultModel: () => core.activeOptions.model,
-    recordUsage: async ({ threadId, turnId, model, usage }) => {
+    recordUsage: async ({ threadId, turnId, model, providerId, usage }) => {
       const cumulative = usageService.record(threadId, usage, undefined, turnId)
       await events.record({
         kind: 'usage',
         threadId,
         turnId,
         model,
+        ...(providerId ? { providerId } : {}),
         usage: cumulative
       })
     }

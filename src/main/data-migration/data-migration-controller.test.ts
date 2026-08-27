@@ -1,4 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({
+  dialog: { showOpenDialog: vi.fn() },
+  ipcMain: { handle: vi.fn(), removeHandler: vi.fn() }
+}))
+
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 import {
   assertTrustedDataMigrationSender,
   listRuntimeThreadsForMigration,
@@ -6,7 +16,8 @@ import {
 } from './data-migration-controller'
 
 describe('data migration IPC sender boundary', () => {
-  const mainFrame = { processId: 10, routingId: 20 }
+  const trustedUrl = 'http://127.0.0.1:5173/index.html'
+  const mainFrame = { processId: 10, routingId: 20, url: trustedUrl }
   const mainContents = { id: 1, mainFrame }
   const getMainWindow = () => ({
     isDestroyed: () => false,
@@ -23,12 +34,17 @@ describe('data migration IPC sender boundary', () => {
   it('rejects extension guests and stale workbench frames', () => {
     expect(() => assertTrustedDataMigrationSender({
       sender: { id: 2 },
-      senderFrame: { processId: 30, routingId: 40 }
+      senderFrame: { processId: 30, routingId: 40, url: trustedUrl }
     } as never, getMainWindow)).toThrow(/trusted workbench frame/)
 
     expect(() => assertTrustedDataMigrationSender({
       sender: mainContents,
-      senderFrame: { processId: 10, routingId: 99 }
+      senderFrame: { processId: 10, routingId: 99, url: trustedUrl }
+    } as never, getMainWindow)).toThrow(/trusted workbench frame/)
+
+    expect(() => assertTrustedDataMigrationSender({
+      sender: mainContents,
+      senderFrame: { ...mainFrame, url: 'https://example.com' }
     } as never, getMainWindow)).toThrow(/trusted workbench frame/)
   })
 })

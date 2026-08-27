@@ -304,12 +304,18 @@ describe('runtime projection action normalization', () => {
       kind: 'turn_completed',
       threadId: 'thread_1',
       turnId: 'turn_1'
-    })).toEqual([{ type: 'turn_completed' }])
+    })).toEqual([{
+      type: 'turn_completed',
+      payload: { status: 'completed', threadId: 'thread_1', turnId: 'turn_1' }
+    }])
     expect(runtimeProjectionActionsFromEvent({
       kind: 'turn_aborted',
       threadId: 'thread_1',
       turnId: 'turn_1'
-    })).toEqual([{ type: 'turn_aborted' }])
+    })).toEqual([{
+      type: 'turn_aborted',
+      payload: { status: 'aborted', threadId: 'thread_1', turnId: 'turn_1' }
+    }])
   })
 
   it('normalizes the same goal event to a stable action transcript', () => {
@@ -367,6 +373,55 @@ describe('runtime projection action normalization', () => {
       'runtime_error_received',
       'turn_failed'
     ])
+  })
+
+  it('keeps terminal identity on the turn_failed action payload', () => {
+    const actions = runtimeProjectionActionsFromEvent({
+      kind: 'turn_failed',
+      seq: 77,
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      message: 'provider failed'
+    })
+    const terminal = actions.find((action) => action.type === 'turn_failed')
+
+    expect(terminal).toMatchObject({
+      type: 'turn_failed',
+      seq: 77,
+      payload: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        seq: 77,
+        options: { terminal: true, scope: 'conversation' }
+      }
+    })
+    expect((terminal?.payload as { error: Error }).error).toBeInstanceOf(Error)
+  })
+
+  it('dispatches turn_failed identity through sink error options', async () => {
+    const observed: Array<{ message: string; options?: ThreadErrorOptions }> = []
+    const sink = makeSink()
+    sink.onError = (error, options) => {
+      observed.push({ message: error.message, options })
+    }
+
+    await dispatchKunRuntimeEvent({
+      kind: 'turn_failed',
+      seq: 78,
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      message: 'provider failed'
+    }, sink, async () => undefined)
+
+    expect(observed).toHaveLength(1)
+    expect(observed[0]!.message).toContain('provider failed')
+    expect(observed[0]!.options).toEqual({
+      terminal: true,
+      scope: 'conversation',
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      seq: 78
+    })
   })
 
   it('uses a deterministic fallback identity for legacy user-input events', () => {

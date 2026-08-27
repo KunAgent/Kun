@@ -142,6 +142,14 @@ function isFatalSseStatus(status: number | undefined): boolean {
   return typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429
 }
 
+// A just-created thread can briefly 404 on the events route while its durable
+// record becomes visible (runtime restart, writer hand-off). Retry a bounded
+// number of times before declaring the thread missing so a raced subscription
+// does not permanently strand an empty transcript.
+const SSE_NOT_FOUND_RETRY_BASE_MS = 750
+const SSE_NOT_FOUND_RETRY_MAX = 3
+
+
 function isTransientSseErrorMessage(message: string): boolean {
   return /sse start timeout|sse renderer acknowledgement timeout|fetch failed|network|terminated|aborted|socket|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|UND_ERR/i.test(message)
 }
@@ -179,10 +187,13 @@ export function registerRuntimeSseIpc(options: {
   ipcMain: IpcMain
   store: JsonSettingsStore
   ensureRuntime: (settings: AppSettingsV1) => Promise<AppSettingsV1 | void>
+  assertRendererRuntimeReady: () => void
   logError: (category: string, message: string, detail?: unknown) => void
 }): void {
-  const { ipcMain, store, ensureRuntime, logError } = options
+  const { ipcMain, store, ensureRuntime, assertRendererRuntimeReady, logError } = options
   ipcMain.handle('runtime:sse:start', async (event, args: unknown) => {
+    void event
+    assertRendererRuntimeReady()
     const request = sseStartPayloadSchema.parse(args)
     const loadedSettings = await store.load()
     const ensuredSettings = await ensureRuntime(loadedSettings)
@@ -205,6 +216,8 @@ export function registerRuntimeSseIpc(options: {
       const wc = event.sender
       let nextSinceSeq = request.sinceSeq
       let reconnectDelayMs = SSE_RECONNECT_BASE_MS
+      let notFoundRetries = 0
+
       try {
         while (!state.stoppedByClient && !ac.signal.aborted) {
           try {
@@ -231,7 +244,16 @@ export function registerRuntimeSseIpc(options: {
             const res = await fetchSseWithStartTimeout(url, requestHeaders, ac.signal, SSE_START_TIMEOUT_MS)
             if (!res.ok || !res.body) {
               if (isFatalSseStatus(res.status)) {
-                if (!sendSseMessage(wc, 'runtime:sse-error', { streamId: id, status: res.status })) {
+                if (res.status === 404 && notFoundRetries < SSE_NOT_FOUND_RETRY_MAX) {
+                  notFoundRetries += 1
+                  const delayMs = SSE_NOT_FOUND_RETRY_BASE_MS * 2 ** (notFoundRetries - 1)
+                  logError('sse', `SSE 404 for thread ${request.threadId}; retry ${notFoundRetries}/${SSE_NOT_FOUND_RETRY_MAX} in ${delayMs}ms`, {
+                    streamId: id
+                  })
+                  await sleepWithAbort(delayMs, ac.signal)
+                  continue
+                }
+                if (!sendSseMessage(wc, 'runtime:sse-error', { streamId: id, status: res.status, ...(res.status === 404 ? { threadMissing: true } : {}) })) {
                   state.stoppedByClient = true
                   ac.abort()
                   return
@@ -247,6 +269,7 @@ export function registerRuntimeSseIpc(options: {
               continue
             }
             reconnectDelayMs = SSE_RECONNECT_BASE_MS
+            notFoundRetries = 0
             const reader = res.body.getReader()
             const dec = new TextDecoder()
             let buffer = ''
@@ -266,6 +289,13 @@ export function registerRuntimeSseIpc(options: {
               for (const event of pendingEvents) {
                 if (typeof event.seq === 'number') {
                   batchMaxSeq = Math.max(batchMaxSeq, event.seq)
+                } else if (
+                  event.kind === 'replay_synchronized' &&
+                  typeof event.cursor === 'number' &&
+                  Number.isSafeInteger(event.cursor) &&
+                  event.cursor >= 0
+                ) {
+                  batchMaxSeq = Math.max(batchMaxSeq, event.cursor)
                 }
               }
 

@@ -27,9 +27,10 @@ describe('SessionDaemonsView master control', () => {
     }))
 
     expect(html).toContain('role="switch"')
-    expect(html).toContain('aria-checked="false"')
+    expect(html).toContain('aria-checked="true"')
     expect(html).toContain('daemonMasterTitle')
-    expect(html).toContain('daemonMasterOff')
+    expect(html).toContain('daemonMasterOn')
+    expect(html).toContain('daemonGuardianRun')
     expect(html).toContain('daemonKeepAwakeHint')
   })
 })

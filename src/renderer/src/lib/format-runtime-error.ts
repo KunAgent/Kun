@@ -88,6 +88,10 @@ function localizedRuntimeSummary(code: string | null, text: string): string | nu
     return i18n.t('common:runtimeModelProviderNoResponse')
   }
 
+  if (code === 'stream_disconnected' || lowered.includes('stream closed before')) {
+    return i18n.t('common:runtimeStreamDisconnected')
+  }
+
   if (code === 'model_request_failed' || lowered.includes('model request failed:')) {
     return i18n.t('common:runtimeModelRequestFailed')
   }
@@ -167,7 +171,11 @@ export function describeRuntimeError(error: unknown): RuntimeErrorView {
   const summary = localizedRuntimeSummary(errorCode, redactedText) ||
     redactedText ||
     i18n.t('common:runtimeRequestFailed')
-  const message = errorCode === 'thread_busy' || errorCode === 'model_provider_unreachable'
+  const isStreamDisconnect = errorCode === 'stream_disconnected' ||
+    redactedText.toLowerCase().includes('stream closed before')
+  const message = errorCode === 'thread_busy' ||
+    errorCode === 'model_provider_unreachable' ||
+    isStreamDisconnect
     ? summary
     : redactedText || summary
   const details: string[] = []
@@ -181,7 +189,9 @@ export function describeRuntimeError(error: unknown): RuntimeErrorView {
   ) {
     details.push(errorCode === 'model_provider_unreachable'
       ? i18n.t('common:runtimeModelProviderNoResponseDetail', { cause: redactedText })
-      : `Message:\n${redactedText}`)
+      : isStreamDisconnect
+        ? i18n.t('common:runtimeStreamDisconnectedDetail', { cause: redactedText })
+        : `Message:\n${redactedText}`)
   }
   const payloadDetails = hideBusyOwnerDetails ? '' : detailString(payload?.details)
   if (payloadDetails) details.push(`Details:\n${payloadDetails}`)

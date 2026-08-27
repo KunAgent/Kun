@@ -14,6 +14,7 @@ import {
 import { GraphOrchestrationStrategySchema } from './graph.js'
 import { GraphPlanningDraftStatusSchema } from './graph-planning.js'
 import { TurnReasoningEffortSchema } from './turn-reasoning.js'
+import { ThreadRetentionPolicySchema } from './thread-retention.js'
 import {
   DesignDocumentTargetSchema,
   DesignImagePlacementTargetSchema,
@@ -487,7 +488,9 @@ export const CompactRequest = z.object({
   /** Optional explicit token budget. */
   budgetTokens: z.number().int().positive().optional(),
   /** Archive history through this completed turn, preserving the later tail verbatim. */
-  cutoffTurnId: z.string().trim().min(1).optional()
+  cutoffTurnId: z.string().trim().min(1).optional(),
+  /** Internal prune path may explicitly skip the archive hook. */
+  archiveBeforePrune: z.boolean().optional()
 })
 export type CompactRequest = z.infer<typeof CompactRequest>
 
@@ -505,6 +508,76 @@ export const CompactResponse = z.object({
   contextEstimate: z.number().int().nonnegative().optional()
 })
 export type CompactResponse = z.infer<typeof CompactResponse>
+
+export const PruneThreadRequest = ThreadRetentionPolicySchema
+export type PruneThreadRequest = z.infer<typeof PruneThreadRequest>
+
+export const PruneThreadResponse = z.object({
+  threadId: z.string().min(1),
+  policy: ThreadRetentionPolicySchema,
+  pruned: z.boolean(),
+  cutoffTurnId: z.string().min(1).optional(),
+  archivedItems: z.number().int().nonnegative(),
+  retainedItems: z.number().int().nonnegative(),
+  archivePath: z.string().min(1).optional(),
+  /** Complete pre-prune snapshot created before any canonical rewrite. */
+  snapshotId: z.string().min(1).optional(),
+  /** Number of turn skeletons removed from ThreadRecord.turns. */
+  removedTurns: z.number().int().nonnegative().optional(),
+  /** New replay floor for SSE clients; cursors below it must re-sync. */
+  eventReplayFloorSeq: z.number().int().nonnegative().optional()
+}).strict()
+export type PruneThreadResponse = z.infer<typeof PruneThreadResponse>
+
+export const PrunePreviewRequest = ThreadRetentionPolicySchema
+export type PrunePreviewRequest = z.infer<typeof PrunePreviewRequest>
+
+export const PrunePreviewResponse = z.object({
+  threadId: z.string().min(1),
+  cutoffTurnId: z.string().min(1).optional(),
+  prunableTurns: z.number().int().nonnegative(),
+  prunableItems: z.number().int().nonnegative(),
+  retainedTurns: z.number().int().nonnegative(),
+  retainedItems: z.number().int().nonnegative(),
+  contextEstimateBefore: z.number().int().nonnegative(),
+  contextEstimateAfter: z.number().int().nonnegative(),
+  snapshotRequiredBytes: z.number().int().nonnegative(),
+  blockedBy: z.array(z.enum(['active_turn', 'thread_missing', 'nothing_to_prune'])).default([]),
+  /** Present when not blocked; pass back as expectedThreadRevision to prune. */
+  threadRevision: z.number().int().nonnegative().optional()
+}).strict()
+export type PrunePreviewResponse = z.infer<typeof PrunePreviewResponse>
+
+export const PruneCommitRequest = ThreadRetentionPolicySchema.extend({
+  /** Optional optimistic-concurrency guard from a preceding preview. */
+  expectedThreadRevision: z.number().int().nonnegative().optional()
+})
+export type PruneCommitRequest = z.infer<typeof PruneCommitRequest>
+
+export const ThreadSnapshotSummary = z.object({
+  snapshotId: z.string().min(1),
+  createdAt: z.string().min(1),
+  reason: z.enum(['prune', 'restore', 'scheduled', 'manual']),
+  threadRevision: z.number().int().nonnegative(),
+  bytes: z.number().int().nonnegative(),
+  verified: z.boolean()
+}).strict()
+export type ThreadSnapshotSummary = z.infer<typeof ThreadSnapshotSummary>
+
+export const ThreadSnapshotsResponse = z.object({
+  threadId: z.string().min(1),
+  snapshots: z.array(ThreadSnapshotSummary)
+}).strict()
+export type ThreadSnapshotsResponse = z.infer<typeof ThreadSnapshotsResponse>
+
+export const RestoreSnapshotResponse = z.object({
+  threadId: z.string().min(1),
+  snapshotId: z.string().min(1),
+  restored: z.boolean(),
+  /** Safety snapshot captured immediately before the restore ran. */
+  safetySnapshotId: z.string().min(1).optional()
+}).strict()
+export type RestoreSnapshotResponse = z.infer<typeof RestoreSnapshotResponse>
 
 export const RewindThreadRequest = z.object({
   turnId: z.string().min(1)

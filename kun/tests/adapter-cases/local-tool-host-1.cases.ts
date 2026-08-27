@@ -590,4 +590,43 @@ it('runs workspace file-change tools without approval when policy is auto', asyn
     })
   })
 
+  it('shares lazy catalog preparation across concurrent discovery contexts', async () => {
+    let prepareCalls = 0
+    let release!: () => void
+    const ready = new Promise<void>((resolve) => { release = resolve })
+    const host = new LocalToolHost({
+      tools: [LocalToolHost.defineTool({
+        name: 'prepared_tool', description: 'prepared', inputSchema: { type: 'object' },
+        policy: 'auto', execute: async () => ({ output: 'ok' })
+      })],
+      prepare: async () => {
+        prepareCalls += 1
+        await ready
+      }
+    })
+    const context = (epoch = 1): ToolHostContext => ({
+      threadId: 'thread_1', turnId: 'turn_1', workspace: '/tmp/workspace',
+      extensionToolCatalogEpoch: {
+        id: `epoch_${epoch}`,
+        fingerprint: `fingerprint_${epoch}`,
+        toolCount: 0,
+        canonicalToolIds: [],
+        schemaDigests: {},
+        createdAt: '2026-01-01T00:00:00.000Z'
+      },
+      approvalPolicy: 'auto', sandboxMode: 'danger-full-access',
+      abortSignal: new AbortController().signal,
+      awaitApproval: vi.fn(async () => 'allow' as const)
+    })
+
+    const listings = Promise.all([host.listTools(context()), host.listTools(context())])
+    await Promise.resolve()
+    expect(prepareCalls).toBe(1)
+    release()
+    await expect(listings).resolves.toHaveLength(2)
+
+    await host.listTools(context(2))
+    expect(prepareCalls).toBe(2)
+  })
+
 })

@@ -204,7 +204,7 @@ describe('InteractiveToolBridge', () => {
       record: vi.fn(async (event: { kind: string; inputId?: string }) => {
         order.push(event.kind)
         if (event.kind === 'user_input_requested' && event.inputId) {
-          expect(userInputGate.resolve(event.inputId, { status: 'submitted', answers: [] })).toBe(true)
+          expect(userInputGate.resolve(event.inputId, { status: 'submitted', answers: [] })).toBe('settled')
         }
       })
     } as unknown as RuntimeEventRecorder
@@ -230,5 +230,103 @@ describe('InteractiveToolBridge', () => {
       'item_updated',
       'user_input_resolved'
     ])
+  })
+
+  it('auto-resolves with status timeout when timeoutSeconds elapses', async () => {
+    vi.useFakeTimers()
+    try {
+      const userInputGate = new InMemoryUserInputGate()
+      const turns = {
+        applyItem: vi.fn(async () => undefined),
+        updateItem: vi.fn(async () => undefined)
+      } as unknown as TurnService
+      const recorded: Array<Record<string, unknown>> = []
+      const events = {
+        record: vi.fn(async (event: Record<string, unknown>) => {
+          recorded.push(event)
+        })
+      } as unknown as RuntimeEventRecorder
+      const bridge = new InteractiveToolBridge({
+        approvalGate: new InMemoryApprovalGate(),
+        userInputGate,
+        events,
+        turns,
+        sessionStore: { loadEventsSince: async () => [] } as unknown as SessionStore,
+        nowIso: () => '2026-07-10T00:00:00.000Z'
+      })
+
+      const pending = bridge.awaitUserInput({
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        input: {
+          id: 'input_timeout',
+          itemId: 'item_input_timeout',
+          prompt: 'Continue?',
+          questions: [],
+          timeoutSeconds: 30
+        },
+        signal: new AbortController().signal
+      })
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(userInputGate.get('input_timeout')).toBeDefined()
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(pending).resolves.toEqual({ status: 'timeout' })
+
+      const requested = recorded.find((event) => event.kind === 'user_input_requested')
+      expect(requested).toMatchObject({ timeoutSeconds: 30 })
+      const resolved = recorded.find((event) => event.kind === 'user_input_resolved')
+      expect(resolved).toMatchObject({ status: 'timeout' })
+      expect(turns.updateItem).toHaveBeenCalledWith(
+        'thread_1',
+        'item_input_timeout',
+        expect.objectContaining({ status: 'timeout' })
+      )
+
+      // A late user submission cannot revive the settled gate.
+      expect(userInputGate.resolve('input_timeout', { status: 'submitted', answers: [] })).toBe('missing')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('disarms the timeout when the user answers first', async () => {
+    vi.useFakeTimers()
+    try {
+      const userInputGate = new InMemoryUserInputGate()
+      const turns = {
+        applyItem: vi.fn(async () => undefined),
+        updateItem: vi.fn(async () => undefined)
+      } as unknown as TurnService
+      const events = {
+        record: vi.fn(async () => undefined)
+      } as unknown as RuntimeEventRecorder
+      const bridge = new InteractiveToolBridge({
+        approvalGate: new InMemoryApprovalGate(),
+        userInputGate,
+        events,
+        turns,
+        sessionStore: { loadEventsSince: async () => [] } as unknown as SessionStore,
+        nowIso: () => '2026-07-10T00:00:00.000Z'
+      })
+
+      const pending = bridge.awaitUserInput({
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        input: {
+          id: 'input_answered',
+          itemId: 'item_input_answered',
+          prompt: 'Continue?',
+          questions: [],
+          timeoutSeconds: 10
+        },
+        signal: new AbortController().signal
+      })
+      userInputGate.resolve('input_answered', { status: 'submitted', answers: [] })
+      await expect(pending).resolves.toEqual({ status: 'submitted', answers: [] })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(userInputGate.get('input_answered')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

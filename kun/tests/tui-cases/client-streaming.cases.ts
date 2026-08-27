@@ -176,6 +176,42 @@ describe('KunTuiClient streaming and model connections', () => {
     expect(seqs).toEqual([1, 2])
   })
 
+  it('defers runtime discovery until an SSE retry and reports reconnection states', async () => {
+    const abort = new AbortController()
+    const states: string[] = []
+    let request = 0
+    const resolveConnection = vi.fn(async () => ({
+      baseUrl: 'http://127.0.0.1:18900', runtimeToken: 'second-token'
+    }))
+    const fetchImpl = vi.fn(async () => {
+      if (request++ === 0) throw new Error('ECONNREFUSED')
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            'id: 1\nevent: turn_completed\ndata: {"kind":"turn_completed","seq":1,"timestamp":"2026-07-22T00:00:01.000Z","threadId":"thr_1","turnId":"turn_1","status":"completed"}\n\n'
+          ))
+          controller.close()
+        }
+      })
+      return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
+    }) as unknown as typeof fetch
+    const client = new KunTuiClient({
+      baseUrl: 'http://127.0.0.1:18899', runtimeToken: 'first-token', fetch: fetchImpl, resolveConnection
+    })
+
+    await client.subscribeThreadEvents({
+      threadId: 'thr_1',
+      sinceSeq: 0,
+      signal: abort.signal,
+      onConnection: (state) => states.push(state),
+      onEvent: () => abort.abort(),
+      sleep: async () => undefined
+    })
+
+    expect(resolveConnection).toHaveBeenCalledOnce()
+    expect(states).toEqual(['connecting', 'reconnecting', 'connected'])
+  })
+
   it('stops reconnecting when another client permanently deletes the active session', async () => {
     const fetchImpl = vi.fn(async () => Response.json(
       { code: 'not_found', message: 'thread not found' },

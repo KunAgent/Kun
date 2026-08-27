@@ -404,7 +404,7 @@ describe('FileGraphWriteCoordinator', () => {
     expect(claim.lease.baselineError).toBeTruthy()
     await expect(coordinator.captureChangedFiles('attempt_baseline')).resolves.toMatchObject({
       status: 'unavailable',
-      error: expect.stringContaining('not a git repository')
+      error: expect.stringContaining('status --porcelain=v1')
     })
   })
 })

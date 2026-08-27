@@ -385,6 +385,129 @@ function Assert-PackagedInstallPayload {
   ) 'the unpacked Kun service manager entry'
 }
 
+function Get-RecoveryPayloadSource {
+  $source = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_SOURCE')
+  if (-not [string]::IsNullOrWhiteSpace($source)) {
+    return $source
+  }
+  $target = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_TARGET')
+  if ([string]::IsNullOrWhiteSpace($target)) {
+    throw 'KUN_INSTALLER_SOURCE or KUN_INSTALLER_TARGET is required for automatic update backup.'
+  }
+  return $target
+}
+
+function Find-RecoveryPayloadExecutable([string]$Root) {
+  $candidates = @(
+    (Get-ExpectedApplicationExecutable),
+    'DeepSeek GUI.exe',
+    'deepseek-gui.exe'
+  ) | Select-Object -Unique
+  foreach ($name in $candidates) {
+    $path = Join-Path $Root $name
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+      Assert-NonEmptyPayloadFile $path 'the recovery application executable'
+      return $path
+    }
+  }
+  throw "The automatic update backup has no recognized application executable: $Root"
+}
+
+function Assert-RecoveryPayload([string]$Root) {
+  Assert-SafeInstallRoot $Root 'Automatic update recovery root'
+  if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
+    throw "The automatic update recovery payload directory is missing: $Root"
+  }
+  Find-RecoveryPayloadExecutable $Root | Out-Null
+  Assert-NonEmptyPayloadFile (Join-Path $Root 'resources\\app.asar') 'the recovery resources\\app.asar'
+}
+
+function Get-InPlacePayloadBackupPath {
+  $configured = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_PAYLOAD_BACKUP')
+  if (-not [string]::IsNullOrWhiteSpace($configured)) {
+    return $configured
+  }
+  $target = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_TARGET')
+  if ([string]::IsNullOrWhiteSpace($target)) {
+    throw 'KUN_INSTALLER_TARGET is required for in-place update backup.'
+  }
+  $recoveryRoot = Join-Path $env:APPDATA 'KunInstallerRecovery'
+  return Join-Path $recoveryRoot ("update-backup-" + (Get-EnvironmentValue 'KUN_INSTALLER_SELF_PID'))
+}
+
+function Set-InPlacePayloadBackupEnvironment([string]$PathValue) {
+  [Environment]::SetEnvironmentVariable('KUN_INSTALLER_PAYLOAD_BACKUP', $PathValue, 'Process')
+}
+
+function Backup-InPlacePayload {
+  if (-not (Test-AutomaticUpdateRequested)) { return }
+  $source = Get-RecoveryPayloadSource
+  Assert-RecoveryPayload $source
+  $backup = Get-InPlacePayloadBackupPath
+  if (Test-Path -LiteralPath $backup) {
+    Remove-Item -LiteralPath $backup -Recurse -Force
+  }
+  [IO.Directory]::CreateDirectory($backup) | Out-Null
+  foreach ($entry in @(Get-ChildItem -LiteralPath $source -Force)) {
+    if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Automatic update backup source' }
+    elseif (Test-ReparsePoint $entry.FullName) { throw "Automatic update backup source is a reparse point: $($entry.FullName)" }
+    Copy-Item -LiteralPath $entry.FullName -Destination $backup -Recurse -Force
+  }
+  Assert-RecoveryPayload $backup
+  Set-InPlacePayloadBackupEnvironment $backup
+}
+
+function Restore-InPlacePayloadBackup {
+  if (-not (Test-AutomaticUpdateRequested)) { return }
+  $backup = Get-InPlacePayloadBackupPath
+  if (-not (Test-Path -LiteralPath $backup -PathType Container)) {
+    throw 'The automatic update backup is unavailable.'
+  }
+  $source = Get-RecoveryPayloadSource
+  Assert-SafeInstallRoot $source 'Automatic update recovery destination'
+  [IO.Directory]::CreateDirectory($source) | Out-Null
+  foreach ($entry in @(Get-ChildItem -LiteralPath $backup -Force)) {
+    if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Automatic update backup' }
+    elseif (Test-ReparsePoint $entry.FullName) { throw "Automatic update backup is a reparse point: $($entry.FullName)" }
+    Copy-Item -LiteralPath $entry.FullName -Destination $source -Recurse -Force
+  }
+  Assert-RecoveryPayload $source
+  Set-InPlacePayloadBackupEnvironment $backup
+}
+
+function Resolve-RecoveryPayloadExecutable {
+  $transactionPath = Get-EnvironmentValue 'KUN_INSTALLER_TRANSACTION'
+  if (-not [string]::IsNullOrWhiteSpace($transactionPath) -and
+      (Test-Path -LiteralPath $transactionPath -PathType Leaf)) {
+    $transaction = Read-UpdateTransaction
+    if ($null -ne $transaction) {
+      $source = Normalize-FullPath ([string]$transaction.Source)
+      Assert-RecoveryPayload $source
+      return Find-RecoveryPayloadExecutable $source
+    }
+  }
+  $backup = Get-InPlacePayloadBackupPath
+  $source = Get-RecoveryPayloadSource
+  if (Test-Path -LiteralPath $source -PathType Container) {
+    try {
+      Assert-RecoveryPayload $source
+      return Find-RecoveryPayloadExecutable $source
+    } catch {
+      Write-InstallerDiagnostic "Recovery source is not runnable yet: $($_.Exception.Message)"
+    }
+  }
+  Assert-RecoveryPayload $backup
+  return Find-RecoveryPayloadExecutable $backup
+}
+
+function Test-AutomaticUpdateRequested {
+  return [string]::Equals(
+    (Get-EnvironmentValue 'KUN_INSTALLER_AUTOMATIC_UPDATE').Trim(),
+    '1',
+    [StringComparison]::Ordinal
+  )
+}
+
 function Test-InPlaceUpdateRequested {
   return [string]::Equals(
     (Get-EnvironmentValue 'KUN_INSTALLER_IN_PLACE_UPDATE').Trim(),

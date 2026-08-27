@@ -116,6 +116,17 @@ async reconcileOrphanedTurns(this: TurnService): Promise<string[]> {
       if (!metadata?.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')) {
         continue
       }
+      if (this['deps'].executionLeases) {
+        try {
+          // A managed sibling Runtime may own this thread. Only the Manager
+          // can expire that lease; startup recovery must never sweep live
+          // work merely because it is not inflight in this process.
+          if (await this['deps'].executionLeases.owner(summary.id)) continue
+        } catch {
+          // Losing Manager authority is not proof that the owner is gone.
+          continue
+        }
+      }
       const store = this['deps'].sessionStore
       if (store.scheduleItemHistoryCompaction) {
         store.scheduleItemHistoryCompaction(summary.id)

@@ -15,6 +15,8 @@ import {
   markExistingPaths,
   resolveAppRemovalTarget
 } from './paths'
+import { trustedRendererSenderIsCurrent } from '../renderer-trust-policy'
+import { trustedWorkbenchRendererUrl } from '../main-window'
 
 export type UninstallControllerOptions = {
   getMainWindow: () => BrowserWindow | null
@@ -166,18 +168,10 @@ export function assertTrustedUninstallSender(
   event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
   getMainWindow: () => BrowserWindow | null
 ): void {
-  const window = getMainWindow()
-  const senderFrame = event.senderFrame
-  const mainFrame = window?.webContents.mainFrame
-  if (
-    !window ||
-    window.isDestroyed() ||
-    event.sender.id !== window.webContents.id ||
-    !senderFrame ||
-    !mainFrame ||
-    senderFrame.processId !== mainFrame.processId ||
-    senderFrame.routingId !== mainFrame.routingId
-  ) {
+  if (!trustedRendererSenderIsCurrent(event, getMainWindow(), {
+    trustedRendererUrl: trustedWorkbenchRendererUrl(),
+    surface: 'workbench'
+  })) {
     throw new Error('Uninstall IPC sender is not the trusted top-level frame')
   }
 }

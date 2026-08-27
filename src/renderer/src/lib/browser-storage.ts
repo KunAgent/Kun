@@ -4,6 +4,40 @@ export type BrowserStorageLike = {
   removeItem?: (key: string) => void
 }
 
+export type BrowserStorageMutation = {
+  key: string
+  value: string | null
+}
+
+type BrowserStorageMutationObserver = (mutation: BrowserStorageMutation) => void
+
+let mutationObserver: BrowserStorageMutationObserver | null = null
+
+export function setBrowserStorageMutationObserver(
+  observer: BrowserStorageMutationObserver | null
+): void {
+  mutationObserver = observer
+}
+
+function observedStorage(storage: BrowserStorageLike): BrowserStorageLike {
+  if (!mutationObserver) return storage
+  return {
+    getItem: (key) => storage.getItem(key),
+    setItem: (key, value) => {
+      storage.setItem(key, value)
+      mutationObserver?.({ key, value })
+    },
+    ...(storage.removeItem
+      ? {
+          removeItem: (key: string) => {
+            storage.removeItem?.(key)
+            mutationObserver?.({ key, value: null })
+          }
+        }
+      : {})
+  }
+}
+
 function isStorageLike(value: unknown): value is BrowserStorageLike {
   return (
     Boolean(value) &&
@@ -16,7 +50,7 @@ function isStorageLike(value: unknown): value is BrowserStorageLike {
 export function browserStorage(): BrowserStorageLike | null {
   try {
     if (typeof window !== 'undefined' && isStorageLike(window.localStorage)) {
-      return window.localStorage
+      return observedStorage(window.localStorage)
     }
   } catch {
     return null
@@ -25,7 +59,7 @@ export function browserStorage(): BrowserStorageLike | null {
   try {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
     if (descriptor && 'value' in descriptor && isStorageLike(descriptor.value)) {
-      return descriptor.value
+      return observedStorage(descriptor.value)
     }
   } catch {
     return null

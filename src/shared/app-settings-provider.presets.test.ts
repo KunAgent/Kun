@@ -28,6 +28,8 @@ import {
   CHATGPT_SUBSCRIPTION_MODEL_IDS,
   GROK_SUBSCRIPTION_PROVIDER_ID,
   OLLAMA_CLOUD_MODEL_IDS,
+  OPENCODE_FREE_MODEL_IDS,
+  OPENCODE_FREE_PROVIDER_ID,
   listMusicGenerationProviderProfiles,
   listSpeechToTextProviderProfiles,
   listTextToSpeechProviderProfiles,
@@ -107,8 +109,19 @@ describe('provider presets', () => {
       name: 'Zhipu Coding Plan',
       baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
       endpointFormat: 'custom_endpoint',
-      models: ['glm-5.2', 'glm-5.1', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
+      models: ['glm-5.3', 'glm-5.3-flash', 'glm-5.2', 'glm-5.1', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
       modelProfiles: {
+        'glm-5.3': expect.objectContaining({
+          contextWindowTokens: 1_000_000,
+          pricing: { inputUsdPerMillion: 0, outputUsdPerMillion: 0,
+            cacheReadUsdPerMillion: 0, cacheWriteUsdPerMillion: 0 }
+        }),
+        'glm-5.3-flash': expect.objectContaining({
+          contextWindowTokens: 200_000,
+          inputModalities: ['text', 'image'],
+          pricing: { inputUsdPerMillion: 0, outputUsdPerMillion: 0,
+            cacheReadUsdPerMillion: 0, cacheWriteUsdPerMillion: 0 }
+        }),
         'glm-5.2': expect.objectContaining({
           contextWindowTokens: 1_000_000,
           supportsToolCalling: true,
@@ -132,8 +145,13 @@ describe('provider presets', () => {
       name: 'Z.ai Coding Plan',
       baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
       endpointFormat: 'custom_endpoint',
-      models: ['glm-5.2', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
+      models: ['glm-5.3', 'glm-5.2', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
       modelProfiles: {
+        'glm-5.3': expect.objectContaining({
+          contextWindowTokens: 1_000_000,
+          pricing: { inputUsdPerMillion: 0, outputUsdPerMillion: 0,
+            cacheReadUsdPerMillion: 0, cacheWriteUsdPerMillion: 0 }
+        }),
         'glm-5.2': expect.objectContaining({
           contextWindowTokens: 1_000_000,
           supportsToolCalling: true,
@@ -251,6 +269,68 @@ describe('provider presets', () => {
         supportsToolCalling: true
       }))
     }
+  })
+
+  it('ships OpenCore Free as a no-key built-in provider with ten retries', () => {
+    const preset = getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)
+    expect(preset).toMatchObject({
+      id: OPENCODE_FREE_PROVIDER_ID,
+      name: 'OpenCore Free',
+      baseUrl: 'https://opencode.ai/zen/v1',
+      endpointFormat: 'chat_completions',
+      defaultRetryMaxAttempts: 10,
+      models: [...OPENCODE_FREE_MODEL_IDS]
+    })
+
+    const profile = modelProviderPresetProfile(preset!)
+    expect(profile.retry?.maxAttempts).toBe(10)
+    expect(profile.modelProfiles['kimi-k2.5-free']).toMatchObject({
+      contextWindowTokens: 262_144,
+      maxOutputTokens: 262_144,
+      inputModalities: ['text', 'image']
+    })
+    expect(modelProviderRequiresApiKey(profile)).toBe(false)
+
+    const defaults = defaultModelProviderSettings()
+    expect(defaults.providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID))
+      .toMatchObject({ retry: { maxAttempts: 10 } })
+
+    const normalized = normalizeModelProviderSettings({ providers: [] })
+    expect(normalized.providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID))
+      .toMatchObject({ retry: { maxAttempts: 10 } })
+  })
+
+  it('repairs a stored OpenCore Free profile to the built-in free preset', () => {
+    const normalized = normalizeModelProviderSettings({
+      providers: [{
+        id: OPENCODE_FREE_PROVIDER_ID,
+        name: 'opencode-free',
+        apiKey: '',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        endpointFormat: 'chat_completions',
+        models: ['gpt-5-nano'],
+        modelProfiles: {}
+      }]
+    }).providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID)
+
+    expect(normalized).toMatchObject({
+      presetSource: { presetId: OPENCODE_FREE_PROVIDER_ID, mode: 'api' },
+      name: 'opencode-free',
+      retry: { maxAttempts: 10 }
+    })
+    expect(normalized && modelProviderRequiresApiKey(normalized)).toBe(false)
+  })
+
+  it('preserves explicit OpenCore Free retry settings during normalization', () => {
+    const profile = modelProviderPresetProfile(getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!)
+    const normalized = normalizeModelProviderSettings({
+      providers: [{
+        ...profile,
+        retry: { maxAttempts: 2, initialDelayMs: 3_000, httpStatusCodes: [429, 500, 502, 503, 504], defaultsVersion: 1 }
+      }]
+    }).providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID)
+
+    expect(normalized?.retry?.maxAttempts).toBe(2)
   })
 
   it('keeps per-model endpointFormat overrides on the OpenCode Go preset', () => {

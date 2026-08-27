@@ -327,9 +327,14 @@ export function SubagentSettingsEditor({
       .filter((agent) => agent.family !== 'base')
       .map((agent) => agent.id)
   ), [])
-  const extensionAgentsEnabled = delegatable.some((profile) =>
+  const enabledExtensionAgentCount = delegatable.filter((profile) =>
     extensionAgentIds.has(profile.id) && profileSurfaces(profile).length > 0
-  )
+  ).length
+  const extensionAgentsStatus = enabledExtensionAgentCount === 0
+    ? 'disabled'
+    : enabledExtensionAgentCount === extensionAgentIds.size
+      ? 'enabled'
+      : 'partial'
   const setExtensionAgentsEnabled = useCallback((enabled: boolean): void => {
     const profilesById = new Map(subagents.profiles.map((profile) => [profile.id, profile]))
     for (const builtin of BUILTIN_AGENTS) {
@@ -542,8 +547,8 @@ export function SubagentSettingsEditor({
     setProfileReasoning, toggleSurface, toggleEnabled, removeProfile, compactionSlot,
     persistCompactionSlot, codeReviewSlot, codeReviewReasoning, persistRoleSlot,
     persistRoleReasoning, planSlot, titleSlot, titleReasoning, summarySlot, summaryReasoning,
-    smallModel, saveDialog, isBuiltin, extensionAgentsEnabled, setExtensionAgentsEnabled,
-    delegatable, panelSurface, configuredCount, extensionAgentIds, systemRolesOpen,
+    smallModel, saveDialog, isBuiltin, extensionAgentsStatus, enabledExtensionAgentCount,
+    setExtensionAgentsEnabled, delegatable, panelSurface, configuredCount, extensionAgentIds, systemRolesOpen,
     setSystemRolesOpen
   }} />
 }

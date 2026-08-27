@@ -124,6 +124,7 @@ export abstract class ManagerSharedDataStoreCore {
     path: string
     expectedRevision: number
     value: unknown
+    beforeCommit?: () => void
   }): Promise<{ revision: number; value: unknown }> {
     const target = this.safeDataPath(input.path)
     const document = this.atomicJsonDocument(target)
@@ -133,7 +134,10 @@ export abstract class ManagerSharedDataStoreCore {
         throw new RevisionConflictError(document.revision)
       }
       const serialized = `${JSON.stringify(input.value, null, 2)}\n`
-      await atomicWriteFile(target, serialized)
+      await atomicWriteFile(target, serialized, {
+        beforeCommit: input.beforeCommit,
+        allowDirectWriteFallback: !requiresAtomicReplace(this.dataDir, target)
+      })
       document.value = input.value
       document.revision += 1
       return { revision: document.revision, value: input.value }
@@ -145,6 +149,7 @@ export abstract class ManagerSharedDataStoreCore {
   async deleteAtomicJson(input: {
     path: string
     expectedRevision: number
+    beforeCommit?: () => void
   }): Promise<{ revision: number; value: null }> {
     const target = this.safeDataPath(input.path)
     const document = this.atomicJsonDocument(target)
@@ -153,6 +158,7 @@ export abstract class ManagerSharedDataStoreCore {
       if (document.revision !== input.expectedRevision) {
         throw new RevisionConflictError(document.revision)
       }
+      input.beforeCommit?.()
       await rm(target, { force: true })
       document.value = null
       document.revision += 1
@@ -371,4 +377,16 @@ export abstract class ManagerSharedDataStoreCore {
     }
     document.loaded = true
   }
+}
+
+const ATOMIC_REPLACE_PATHS = new Set([
+  'model-connections.v1.json',
+  'credentials/credentials.enc.json',
+  'extensions/accounts.json',
+  'extensions/provider-bindings.json'
+])
+
+export function requiresAtomicReplace(dataDir: string, path: string): boolean {
+  const normalized = relative(resolve(dataDir), resolve(path)).split(sep).join('/')
+  return ATOMIC_REPLACE_PATHS.has(normalized)
 }

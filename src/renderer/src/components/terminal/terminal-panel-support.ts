@@ -6,6 +6,7 @@ import {
 } from '@shared/app-settings'
 
 import type { TerminalTarget } from './terminal-backend'
+import type { Terminal } from '@xterm/xterm'
 
 export type TerminalTab = {
   id: string
@@ -117,4 +118,39 @@ export function resolveTerminalTheme(
   const surfaceColor = resolveTerminalSurfaceColor(container)
   const mode = resolveThemeMode()
   return resolveTerminalThemeFromSettings(colors, mode, surfaceColor)
+}
+
+// xterm renders to canvas, so its selection is not a DOM selection and the
+// browser/Electron copy roles cannot see it. Map the platform copy/paste
+// shortcuts onto term.getSelection()/paste() instead. Plain Ctrl+C is left
+// untouched so it still sends SIGINT when nothing is selected.
+export function attachTerminalClipboardKeys(term: Terminal): void {
+  term.attachCustomKeyEventHandler((event) => {
+    if (event.type !== 'keydown') return true
+    const isMac = navigator.platform.toLowerCase().includes('mac')
+    const mod = isMac ? event.metaKey : event.ctrlKey
+    if (!mod) return true
+    const key = event.key.toLowerCase()
+    const copyShortcut = (isMac && key === 'c') || (!isMac && key === 'c' && event.shiftKey)
+    const pasteShortcut = (isMac && key === 'v') || (!isMac && key === 'v' && event.shiftKey)
+    if (copyShortcut) {
+      if (!term.hasSelection()) return true
+      event.preventDefault()
+      const selection = term.getSelection()
+      void navigator.clipboard.writeText(selection).catch(() => undefined)
+      term.clearSelection()
+      return false
+    }
+    if (pasteShortcut) {
+      event.preventDefault()
+      void navigator.clipboard
+        .readText()
+        .then((text) => {
+          if (text) term.paste(text)
+        })
+        .catch(() => undefined)
+      return false
+    }
+    return true
+  })
 }

@@ -234,6 +234,40 @@ describe('FileSessionStore item ordering', () => {
     expect(store.itemCacheStats()).toMatchObject({ entries: 0, bytes: 0 })
   })
 
+  it('compacts an oversized history after serving its cold item page', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-page-compact-'))
+    roots.push(root)
+    const store = new FileSessionStore({
+      dataDir: root,
+      itemHistoryCompactionMinBytes: 1,
+      compactionDelayMs: 60_000
+    })
+    const threadId = 'thread_page_compact'
+    for (let index = 0; index < 20; index += 1) {
+      await store.appendItem(threadId, makeToolResultItem({
+        id: 'result_1',
+        threadId,
+        turnId: 'turn_1',
+        callId: 'call_1',
+        toolName: 'bash',
+        output: { text: `snapshot-${index}-${'x'.repeat(4_096)}` },
+        status: index === 19 ? 'completed' : 'running'
+      }))
+    }
+    const path = join(root, 'threads', threadId, 'messages.jsonl')
+    const before = (await stat(path)).size
+    store.clearThreadMemory(threadId)
+
+    const page = await store.loadItemPage(threadId, { maxItems: 5, maxBytes: 64 * 1024 })
+    expect(page.items).toMatchObject([
+      { id: 'result_1', status: 'completed', output: { text: expect.stringContaining('snapshot-19') } }
+    ])
+
+    await store.flushScheduledCompaction(threadId)
+    expect((await stat(path)).size).toBeLessThan(before / 10)
+    expect((await readFile(path, 'utf-8')).trim().split('\n')).toHaveLength(1)
+  })
+
   it('pins the running turn user message on the newest JSONL page', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-session-anchor-'))
     roots.push(root)

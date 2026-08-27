@@ -466,6 +466,85 @@ describe('provider quota parsers', () => {
     })
   })
 
+  it('maps Codex rate-limit reset credits into a display metric', () => {
+    const usage = {
+      plan_type: 'pro',
+      rate_limit: {
+        primary_window: {
+          used_percent: 45,
+          reset_at: 1_800_000_000,
+          limit_window_seconds: 18_000
+        }
+      },
+      rate_limit_reset_credits: { available_count: 3 }
+    }
+    expect(parseCodexSubscriptionQuota(usage)).toMatchObject({
+      metrics: [
+        { id: 'primary' },
+        {
+          id: 'reset-credits',
+          label: 'Rate-limit resets',
+          unit: 'credits',
+          remaining: 3
+        }
+      ]
+    })
+    const withoutCredits = parseCodexSubscriptionQuota(usage).metrics
+      .find((metric) => metric.id === 'reset-credits')
+    expect(withoutCredits?.resetsAt).toBeUndefined()
+
+    const details = {
+      available_count: 2,
+      total_earned_count: 4,
+      credits: [
+        {
+          id: 'credit-1',
+          reset_type: 'codex_rate_limits',
+          status: 'available',
+          granted_at: '2026-06-17T00:00:00Z',
+          expires_at: '2999-07-17T00:00:00Z',
+          title: 'Full reset (Weekly + 5 hr)'
+        },
+        {
+          id: 'credit-2',
+          reset_type: 'codex_rate_limits',
+          status: 'redeemed',
+          granted_at: '2026-06-18T00:00:00Z',
+          expires_at: '2999-08-17T00:00:00Z'
+        },
+        {
+          id: 'credit-3',
+          reset_type: 'codex_rate_limits',
+          status: 'available',
+          granted_at: '2026-06-19T00:00:00Z',
+          expires_at: '2000-01-01T00:00:00Z'
+        }
+      ]
+    }
+    const withDetails = parseCodexSubscriptionQuota(usage, details).metrics
+      .find((metric) => metric.id === 'reset-credits')
+    expect(withDetails).toMatchObject({ remaining: 2, unit: 'credits' })
+    expect(withDetails?.resetsAt).toBe('2999-07-17T00:00:00.000Z')
+
+    const zeroed = parseCodexSubscriptionQuota({
+      ...usage,
+      rate_limit_reset_credits: { available_count: 0 }
+    }).metrics
+    expect(zeroed.some((metric) => metric.id === 'reset-credits')).toBe(false)
+
+    const baseline = parseCodexSubscriptionQuota({
+      plan_type: 'plus',
+      rate_limit: {
+        primary_window: {
+          used_percent: 45,
+          reset_at: 1_800_000_000,
+          limit_window_seconds: 18_000
+        }
+      }
+    }).metrics
+    expect(baseline.some((metric) => metric.id === 'reset-credits')).toBe(false)
+  })
+
   it('normalizes Cursor and Google subscription allowances', () => {
     expect(parseCursorSubscriptionQuota({
       billingCycleEnd: '2027-02-01T00:00:00Z',

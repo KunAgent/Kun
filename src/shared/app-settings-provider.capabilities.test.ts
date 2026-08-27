@@ -48,7 +48,8 @@ import {
   resolveKunTextToSpeechSettings,
   resolveKunVideoGenerationSettings,
   type AppSettingsV1,
-  type ModelProviderModelProfileV1
+  type ModelProviderModelProfileV1,
+  type ModelProviderModelPricingV1
 } from './app-settings'
 import { normalizeModelProviderModelProfile } from './app-settings-provider-capabilities'
 import { settings } from './app-settings-provider.test-support'
@@ -78,6 +79,47 @@ describe('model provider settings', () => {
       contextWindowTokens: 10_000_000,
       maxOutputTokens: 1_000_000
     }))
+  })
+
+  it('keeps valid catalog pricing and drops incomplete or negative pricing', () => {
+    expect(normalizeModelProviderModelProfile({
+      pricing: {
+        inputUsdPerMillion: 1,
+        outputUsdPerMillion: 2,
+        cacheReadUsdPerMillion: 0.1,
+        cacheWriteUsdPerMillion: 1.5
+      }
+    }).pricing).toEqual({
+      inputUsdPerMillion: 1,
+      outputUsdPerMillion: 2,
+      cacheReadUsdPerMillion: 0.1,
+      cacheWriteUsdPerMillion: 1.5
+    })
+    expect(normalizeModelProviderModelProfile({
+      pricing: { inputUsdPerMillion: 0, outputUsdPerMillion: 0 }
+    }).pricing).toEqual({
+      inputUsdPerMillion: 0,
+      outputUsdPerMillion: 0
+    })
+    expect(normalizeModelProviderModelProfile({
+      pricing: { inputUsdPerMillion: 1, outputUsdPerMillion: 2 }
+    }).pricing).toEqual({ inputUsdPerMillion: 1, outputUsdPerMillion: 2 })
+    expect(normalizeModelProviderModelProfile({
+      pricing: { inputUsdPerMillion: 1 } as unknown as ModelProviderModelProfileV1['pricing']
+    }).pricing).toBeUndefined()
+    expect(normalizeModelProviderModelProfile({
+      pricing: { outputUsdPerMillion: 2 } as unknown as ModelProviderModelProfileV1['pricing']
+    }).pricing).toBeUndefined()
+    expect(normalizeModelProviderModelProfile({
+      pricing: { inputUsdPerMillion: -1, outputUsdPerMillion: 2 }
+    }).pricing).toBeUndefined()
+    expect(normalizeModelProviderModelProfile({
+      pricing: {
+        inputUsdPerMillion: Number.NaN,
+        outputUsdPerMillion: 2,
+        cacheReadUsdPerMillion: 0.1
+      }
+    }).pricing).toBeUndefined()
   })
 
 it('backfills preset model capabilities for stale stored providers', () => {

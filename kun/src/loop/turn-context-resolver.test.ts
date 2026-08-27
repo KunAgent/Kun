@@ -219,6 +219,47 @@ describe('TurnContextResolver', () => {
     expect(started).toBe(4)
   })
 
+  it('discovers GUI code and design tool catalogs concurrently in stable name order', async () => {
+    let started = 0
+    let release!: () => void
+    const barrier = new Promise<void>((resolve) => { release = resolve })
+    const listTools = vi.fn(async (context) => {
+      started += 1
+      if (started === 2) release()
+      await barrier
+      return context.agentSurface === 'code'
+        ? [
+            { name: 'zeta', description: 'zeta', inputSchema: {}, providerId: 'gui' },
+            { name: 'shared', description: 'code shared', inputSchema: {}, providerId: 'gui' }
+          ]
+        : [
+            { name: 'alpha', description: 'alpha', inputSchema: {}, providerId: 'gui' },
+            { name: 'shared', description: 'design shared', inputSchema: {}, providerId: 'gui' }
+          ]
+    })
+    const resolver = new TurnContextResolver({
+      toolHost: { listTools },
+      resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
+    })
+    const inputTurn = turn({ clientSurface: 'gui', agentSurface: 'code', attachmentIds: [] })
+
+    const resolved = await resolver.resolve({
+      threadId: 'thread_1', turnId: 'turn_1', thread: thread(), turn: inputTurn,
+      history: [], model: 'model_1', modelCapabilities: capabilities(['text']),
+      signal: new AbortController().signal,
+      mode: resolveTurnModeContext({ turn: inputTurn, workspace: '/workspace', threadMode: 'agent' }),
+      goalNoToolRecoverySteps: 0
+    })
+
+    expect(started).toBe(2)
+    expect(resolved.tools).toEqual([
+      expect.objectContaining({ name: 'alpha' }),
+      expect.objectContaining({ name: 'shared', description: 'code shared' }),
+      expect.objectContaining({ name: 'zeta' })
+    ])
+  })
+
   it('drops stale plan state and forces SVG turns to agent mode', () => {
     const stalePlan = turn({
       mode: 'plan',

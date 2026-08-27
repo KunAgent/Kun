@@ -448,13 +448,16 @@ export function userInputBlockFromItem(
     requestId: item.inputId ?? item.id,
     questions: userInputQuestionsFromItem(item),
     ...(answers ? { answers } : {}),
+    ...(item.timeoutSeconds !== undefined ? { timeoutSeconds: item.timeoutSeconds } : {}),
     status:
       item.status === 'failed'
         ? 'error'
-        : item.status === 'submitted' || item.status === 'completed'
-          ? 'submitted'
-          : item.status === 'cancelled' || item.status === 'aborted'
-            ? 'cancelled'
+        : item.status === 'timeout'
+          ? 'timeout'
+          : item.status === 'submitted' || item.status === 'completed'
+            ? 'submitted'
+            : item.status === 'cancelled' || item.status === 'aborted'
+              ? 'cancelled'
           : 'pending'
   }
 }
@@ -466,6 +469,7 @@ export function userInputRequestFromCore(input: {
   createdAt?: string
   prompt?: string
   questions?: CoreTurnItemJson['questions'] | CoreRuntimeEventJson['questions']
+  timeoutSeconds?: number
   seq?: number
 }): UserInputRequestPayload {
   const fallbackId = input.inputId ?? input.itemId ?? `input_${input.seq ?? Date.now()}`
@@ -474,7 +478,8 @@ export function userInputRequestFromCore(input: {
     ...(input.turnId ? { turnId: input.turnId } : {}),
     ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     requestId: input.inputId ?? fallbackId,
-    questions: questionsFromCore(input.questions, input.prompt, input.inputId ?? fallbackId)
+    questions: questionsFromCore(input.questions, input.prompt, input.inputId ?? fallbackId),
+    ...(input.timeoutSeconds !== undefined ? { timeoutSeconds: input.timeoutSeconds } : {})
   }
 }
 

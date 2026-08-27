@@ -300,16 +300,30 @@ export function CatalogPagination({
 }
 
 export function ExtensionAgentsControl({
-  enabled,
+  status,
+  enabledCount,
   count,
   onToggle,
   t
 }: {
-  enabled: boolean
+  status: 'disabled' | 'partial' | 'enabled'
+  enabledCount: number
   count: number
   onToggle: (enabled: boolean) => void
   t: TFunction<'common'>
 }): ReactElement {
+  const enabled = status === 'enabled'
+  const partial = status === 'partial'
+  const statusLabel = enabled
+    ? t('subagentsPanel.extensionAgents.enabled', 'All enabled')
+    : partial
+      ? t('subagentsPanel.extensionAgents.partial', '{{enabled}}/{{count}} enabled', {
+        enabled: enabledCount,
+        count
+      })
+      : t('subagentsPanel.extensionAgents.disabled', 'Disabled')
+  const toggleTarget = !enabled
+
   return (
     <section className="mb-3 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5 shadow-sm shadow-black/5">
       <div className="flex items-center justify-between gap-3">
@@ -322,23 +336,22 @@ export function ExtensionAgentsControl({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className={`text-[10.5px] font-semibold ${enabled ? 'text-accent' : 'text-ds-faint'}`}>
-            {enabled
-              ? t('subagentsPanel.extensionAgents.enabled', 'Enabled')
-              : t('subagentsPanel.extensionAgents.disabled', 'Disabled')}
+          <span className={`text-[10.5px] font-semibold ${status !== 'disabled' ? 'text-accent' : 'text-ds-faint'}`}>
+            {statusLabel}
           </span>
           <button
             type="button"
             role="switch"
             aria-checked={enabled}
+            data-state={status}
             aria-label={t('subagentsPanel.extensionAgents.toggle', 'Toggle extension agents')}
-            onClick={() => onToggle(!enabled)}
+            onClick={() => onToggle(toggleTarget)}
             className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
-              enabled ? 'bg-accent' : 'bg-ds-border'
+              status !== 'disabled' ? 'bg-accent' : 'bg-ds-border'
             }`}
           >
             <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-              enabled ? 'translate-x-4' : 'translate-x-0'
+              enabled ? 'translate-x-4' : partial ? 'translate-x-2' : 'translate-x-0'
             }`} />
           </button>
         </div>
@@ -349,12 +362,14 @@ export function ExtensionAgentsControl({
         </span>
         <button
           type="button"
-          onClick={() => onToggle(!enabled)}
+          onClick={() => onToggle(toggleTarget)}
           className="shrink-0 rounded-md px-1.5 py-1 text-[10px] font-semibold text-accent transition hover:bg-accent-soft"
         >
           <span>{enabled
             ? t('subagentsPanel.extensionAgents.keepBaseOnly', 'Keep base agents only')
-            : t('subagentsPanel.extensionAgents.enableExtensions', 'Enable extension agents')}</span>
+            : partial
+              ? t('subagentsPanel.extensionAgents.enableAllExtensions', 'Enable all extension agents')
+              : t('subagentsPanel.extensionAgents.enableExtensions', 'Enable extension agents')}</span>
         </button>
       </div>
     </section>

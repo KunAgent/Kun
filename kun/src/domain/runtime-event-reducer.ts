@@ -448,6 +448,7 @@ function upsertUserInputFromEvent(
   if (item.kind === 'user_input') {
     if (event.questions) item.questions = event.questions
     if (event.answers) item.answers = event.answers
+    if (event.timeoutSeconds !== undefined) item.timeoutSeconds = event.timeoutSeconds
   }
   upsertItem(projection, item, 'replace')
 }

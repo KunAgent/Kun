@@ -1,9 +1,12 @@
 import type { ThreadStoreListOptions, ThreadStoreListPage } from '../../ports/thread-store.js'
 import type { ThreadSummary } from '../../contracts/threads.js'
 import type { ThreadRow } from './hybrid-thread-index-mapping.js'
-import { decodeKeysetCursor, encodeKeysetCursor } from './hybrid-thread-index.js'
-import { filterThreadSummaries, summaryFromRow } from './hybrid-thread-index-mapping.js'
-import { warnSqlite } from './hybrid-thread-support.js'
+import {
+  applyThreadCursor,
+  encodeThreadCursor,
+  filterThreadSummaries
+} from '../../domain/thread-list-query.js'
+import { summaryFromRow } from './hybrid-thread-index-mapping.js'
 
 /**
  * Internal access surface for keyset pagination. The HybridThreadStore keeps
@@ -18,6 +21,8 @@ export interface HybridThreadListPageSource {
   deleteIndexRow(threadId: string): void
   listFromFilesystem(): Promise<ThreadSummary[]>
   indexCount(options: ThreadStoreListOptions): number | undefined
+  markSqliteDegraded(action: string, error: unknown): void
+  markSqliteHealthy(): void
 }
 
 /** Hydrate readable index rows into summaries, dropping stale index rows. */
@@ -50,7 +55,7 @@ function pageFromSummaries(
   const last = page[page.length - 1]
   return {
     threads: page,
-    ...(hasMore && last ? { nextCursor: encodeKeysetCursor(last.updatedAt, last.id) } : {}),
+    ...(hasMore && last ? { nextCursor: encodeThreadCursor(last.updatedAt, last.id) } : {}),
     hasMore,
     ...(options.cursor ? {} : { total: total ? total() : summaries.length })
   }
@@ -64,33 +69,37 @@ export async function hybridThreadStoreListPage(
   if (source.hasDb()) {
     try {
       const pageSize = typeof options.limit === 'number' ? Math.max(1, Math.floor(options.limit)) : 0
-      // Fetch one extra row to decide `hasMore` without a second query.
-      const rows = source.queryThreadRows({
-        ...options,
-        ...(pageSize > 0 ? { limit: pageSize + 1 } : {})
-      })
-      return pageFromSummaries(
-        await summariesFromRows(source, rows),
+      const wanted = pageSize > 0 ? pageSize + 1 : 0
+      const readable: ThreadSummary[] = []
+      let cursor = options.cursor
+      while (true) {
+        const rows = source.queryThreadRows({
+          ...options,
+          cursor,
+          ...(wanted > 0 ? { limit: wanted - readable.length } : {})
+        })
+        readable.push(...await summariesFromRows(source, rows))
+        if (wanted === 0 || readable.length >= wanted || rows.length === 0) break
+        const lastRow = rows.at(-1)
+        if (!lastRow) break
+        cursor = encodeThreadCursor(lastRow.updated_at, lastRow.id)
+      }
+      const result = pageFromSummaries(
+        readable,
         options,
         () => source.indexCount(options)
       )
+      source.markSqliteHealthy()
+      return result
     } catch (error) {
-      warnSqlite('listPage', error)
+      source.markSqliteDegraded('listPage', error)
     }
   }
-  const cursor = decodeKeysetCursor(options.cursor)
-  let summaries = filterThreadSummaries(
+  const filtered = filterThreadSummaries(
     await source.listFromFilesystem(),
     { ...options, limit: undefined }
   )
-  if (cursor) {
-    summaries = summaries.filter((thread) => {
-      const updatedAtMs = Number.isFinite(Date.parse(thread.updatedAt)) ? Date.parse(thread.updatedAt) : 0
-      return updatedAtMs < cursor.updatedAtMs ||
-        (updatedAtMs === cursor.updatedAtMs && thread.id < cursor.id)
-    })
-  }
-  return pageFromSummaries(summaries, options)
+  return pageFromSummaries(applyThreadCursor(filtered, options.cursor), options, () => filtered.length)
 }
 
 /** Structural assertion from the store to the pagination access surface. */

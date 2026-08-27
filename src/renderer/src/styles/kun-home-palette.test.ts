@@ -28,3 +28,21 @@ describe('Kun default light palette', () => {
     )
   })
 })
+
+describe('Kun customizable dark palette', () => {
+  it('uses Graphite source fallbacks and derives surface and border hierarchy', async () => {
+    const css = await readStylesheetBundle(
+      new URL('./base-shell/tokens-window-workspace.css', import.meta.url)
+    )
+
+    expect(css).toContain('--kun-dark-ui-effective-background: var(--kun-dark-ui-background, #181818)')
+    expect(css).toContain('--kun-dark-ui-effective-border: var(--kun-dark-ui-border, #272727)')
+    expect(css).toContain('--kun-dark-ui-effective-panel: var(--kun-dark-ui-panel, #2c2c2c)')
+    expect(css).toContain('var(--kun-dark-ui-effective-panel) 98%, white')
+    expect(css).toContain('var(--kun-dark-ui-effective-panel) 96%, white')
+    expect(css).toContain('var(--kun-dark-ui-effective-border) 70%')
+    expect(css).toContain('var(--kun-dark-ui-effective-border) 90%, white')
+    expect(css).toContain("[data-theme='dark'][data-ui-plugin]")
+    expect(css).toContain("[data-theme='dark'][data-ikun-mode='on']")
+  })
+})

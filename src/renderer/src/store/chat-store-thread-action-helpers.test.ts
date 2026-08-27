@@ -1,7 +1,68 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentProvider, ThreadEventSink } from '../agent/types'
 import type { ChatState } from './chat-store-types'
-import { subscribeThreadEventsWithRecovery } from './chat-store-thread-action-helpers'
+import {
+  composerSelectionForThread,
+  subscribeThreadEventsWithRecovery
+} from './chat-store-thread-action-helpers'
+import { rememberThreadComposerSelection } from './chat-store-helpers'
+
+class MemoryStorage {
+  private readonly values = new Map<string, string>()
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
+  }
+}
+
+describe('composerSelectionForThread', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', new MemoryStorage())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps a user-selected model before the model catalog has loaded', () => {
+    rememberThreadComposerSelection('thread-a', 'k3', 'test-provider', 'user')
+    const state = {
+      composerPickList: [],
+      composerModelGroups: []
+    } as unknown as ChatState
+
+    const selection = composerSelectionForThread(state, { id: 'thread-a', model: 'terra' }, {
+      hasUserMessages: true,
+      runtimeModel: 'terra'
+    })
+
+    // Catalog not ready yet: the explicit user selection wins instead of
+    // flashing back to the first-sent thread model.
+    expect(selection).toEqual({ model: 'k3', providerId: 'test-provider' })
+  })
+
+  it('falls back to the thread model once the loaded catalog excludes the stored selection', () => {
+    rememberThreadComposerSelection('thread-b', 'k3', 'test-provider', 'user')
+    const state = {
+      composerPickList: ['terra'],
+      composerModelGroups: [{
+        providerId: 'test-provider',
+        label: 'Test',
+        modelIds: ['terra']
+      }]
+    } as unknown as ChatState
+
+    const selection = composerSelectionForThread(state, { id: 'thread-b', model: 'terra' }, {
+      hasUserMessages: true,
+      runtimeModel: 'terra'
+    })
+
+    // Catalog is ready and genuinely lacks k3: existing fallback behavior.
+    expect(selection).toEqual({ model: 'terra', providerId: 'test-provider' })
+  })
+})
 
 describe('subscribeThreadEventsWithRecovery', () => {
   afterEach(() => {

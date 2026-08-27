@@ -243,6 +243,21 @@ describe('provider quota registry and refresh', () => {
           }
         }))
       }
+      if (requestUrl.endsWith('/wham/rate-limit-reset-credits')) {
+        expect(headers.get('authorization')).toBe('Bearer codex-secret')
+        expect(headers.get('chatgpt-account-id')).toBe('acct-test')
+        return new Response(JSON.stringify({
+          available_count: 2,
+          credits: [{
+            id: 'credit-1',
+            reset_type: 'codex_rate_limits',
+            status: 'available',
+            granted_at: '2026-06-17T00:00:00Z',
+            expires_at: '2999-07-17T00:00:00Z',
+            title: 'Full reset (Weekly + 5 hr)'
+          }]
+        }))
+      }
       if (requestUrl.endsWith('/api/usage-summary')) {
         expect(headers.get('cookie')).toBe('WorkosCursorSessionToken=session-secret')
         return new Response(JSON.stringify({
@@ -294,6 +309,13 @@ describe('provider quota registry and refresh', () => {
       ['cursor-subscription', 'available'],
       ['gemini-subscription', 'available']
     ])
+    const codexEntry = result.entries.find((entry) => entry.providerId === 'codex')
+    expect(codexEntry?.metrics.find((metric) => metric.id === 'reset-credits')).toMatchObject({
+      label: 'Rate-limit resets',
+      unit: 'credits',
+      remaining: 2,
+      resetsAt: '2999-07-17T00:00:00.000Z'
+    })
     expect(JSON.stringify(result)).not.toMatch(/claude-secret|codex-secret|session-secret|google-secret/)
   })
 
@@ -311,8 +333,12 @@ describe('provider quota registry and refresh', () => {
               reset_at: 1_900_000_000,
               limit_window_seconds: 18_000
             }
-          }
+          },
+          rate_limit_reset_credits: { available_count: 1 }
         }))
+      }
+      if (requestUrl.endsWith('/wham/rate-limit-reset-credits')) {
+        return new Response('upstream unavailable', { status: 500 })
       }
       if (requestUrl.endsWith('/coding/v1/usages')) {
         expect(headers.get('authorization')).toBe('Bearer kimi-secret')
@@ -376,6 +402,13 @@ describe('provider quota registry and refresh', () => {
       ['kimi-code', 'available', 25],
       ['grok-subscription', 'available', 32]
     ])
+    // A failed details request degrades to the count embedded in the usage response.
+    const codexEntry = result.entries.find((entry) => entry.providerId === 'codex')
+    expect(codexEntry?.status).toBe('available')
+    expect(codexEntry?.metrics.find((metric) => metric.id === 'reset-credits')).toMatchObject({
+      label: 'Rate-limit resets',
+      remaining: 1
+    })
     expect(JSON.stringify(result)).not.toMatch(/codex-secret|kimi-secret|grok-secret/)
   })
 
@@ -389,11 +422,14 @@ describe('provider quota registry and refresh', () => {
       })
     })
     vi.stubGlobal('fetch', refreshFetch)
-    const fetcher = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    const fetcher = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const headers = new Headers(init?.headers)
       expect(headers.get('authorization')).toBe('Bearer codex-refreshed-access')
       expect(headers.get('chatgpt-account-id')).toBe('acct-refresh')
       expect(headers.get('user-agent')).toMatch(/^codex_cli_rs\//)
+      if (String(url).endsWith('/wham/rate-limit-reset-credits')) {
+        return Response.json({ available_count: 0, credits: [] })
+      }
       return Response.json({
         plan_type: 'plus',
         rate_limit: {
@@ -423,7 +459,7 @@ describe('provider quota registry and refresh', () => {
         metrics: [expect.objectContaining({ id: 'primary', usedPercent: 21 })]
       })
       expect(refreshFetch).toHaveBeenCalledTimes(1)
-      expect(fetcher).toHaveBeenCalledTimes(1)
+      expect(fetcher).toHaveBeenCalledTimes(2)
     } finally {
       vi.unstubAllGlobals()
     }
@@ -436,8 +472,12 @@ describe('provider quota registry and refresh', () => {
     ) => rejectedAccessToken
       ? { accessToken: 'codex-retry-access', accountId: 'acct-retry' }
       : { accessToken: 'codex-rejected-access', accountId: 'acct-retry' })
-    const fetcher = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    const fetcher = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const authorization = new Headers(init?.headers).get('authorization')
+      if (String(url).endsWith('/wham/rate-limit-reset-credits')) {
+        expect(authorization).not.toBe('Bearer codex-rejected-access')
+        return Response.json({ available_count: 0, credits: [] })
+      }
       if (authorization === 'Bearer codex-rejected-access') {
         return new Response('expired', { status: 401 })
       }
@@ -464,7 +504,8 @@ describe('provider quota registry and refresh', () => {
       metrics: [expect.objectContaining({ id: 'primary', usedPercent: 7 })]
     })
     expect(resolveCodexCredential).toHaveBeenNthCalledWith(2, expect.anything(), 'codex-rejected-access')
-    expect(fetcher).toHaveBeenCalledTimes(2)
+    // Usage + reset-credit details on the rejected token, then again on the retry token.
+    expect(fetcher).toHaveBeenCalledTimes(4)
   })
 
   it('refreshes and retries once when Grok rejects a current access token', async () => {

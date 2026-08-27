@@ -9,6 +9,9 @@ import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../lib/workspa
  * append older threads per workspace using the runtime's keyset cursor.
  */
 
+export const THREAD_LIST_FIRST_PAGE_SIZE = 100
+export const THREAD_LIST_PAGE_SIZE = 50
+
 function mergeThreadPages(
   existing: NormalizedThread[],
   incoming: NormalizedThread[]
@@ -33,6 +36,20 @@ export type WorkspaceThreadPageMeta = {
   total?: number
 }
 
+export function initialWorkspaceThreadPages(
+  workspaces: Array<string | undefined>
+): Record<string, WorkspaceThreadPageMeta> {
+  return Object.fromEntries(
+    [...new Set(workspaces)]
+      .map((workspace) => normalizeWorkspaceRoot(workspace))
+      .filter(Boolean)
+      .map((workspace) => {
+        const workspaceKey = workspaceRootIdentityKey(workspace)
+        return [workspaceKey, { workspaceKey, hasMore: true }]
+      })
+  )
+}
+
 export async function loadMoreThreads(
   workspacePath: string,
   set: ChatStoreSet,
@@ -43,7 +60,7 @@ export async function loadMoreThreads(
   const workspaceKey = workspaceRootIdentityKey(normalizedWorkspace)
   if (!workspaceKey) return
   const scope = get().threadListCursorByWorkspace[workspaceKey]
-  if (!scope || !scope.nextCursor || scope.hasMore !== true) return
+  if (!scope || scope.hasMore !== true) return
 
   try {
     const p = getProvider()
@@ -58,7 +75,8 @@ export async function loadMoreThreads(
       return
     }
     const page = await p.listThreadsPage({
-      cursor: scope.nextCursor,
+      ...(scope.nextCursor ? { cursor: scope.nextCursor } : {}),
+      limit: THREAD_LIST_PAGE_SIZE,
       workspace: normalizedWorkspace,
       includeArchived: get().showArchivedThreads,
       includeSide: true,

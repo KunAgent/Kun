@@ -239,6 +239,22 @@ export function readJournal(path: string): RuntimeMigrationJournal | null {
       typeof parsed.updatedAt !== 'string' ||
       (parsed.completedAt !== undefined && typeof parsed.completedAt !== 'string') ||
       (parsed.runtimeVerifiedAt !== undefined && typeof parsed.runtimeVerifiedAt !== 'string') ||
+      (
+        parsed.runtimeVerificationAttempts !== undefined &&
+        (!Number.isSafeInteger(parsed.runtimeVerificationAttempts) || parsed.runtimeVerificationAttempts < 0)
+      ) ||
+      (
+        parsed.runtimeVerificationLastAttemptAt !== undefined &&
+        typeof parsed.runtimeVerificationLastAttemptAt !== 'string'
+      ) ||
+      (
+        parsed.runtimeVerificationMissingThreadIds !== undefined &&
+        !stringArray(parsed.runtimeVerificationMissingThreadIds)
+      ) ||
+      (
+        parsed.runtimeVerificationStoppedAt !== undefined &&
+        typeof parsed.runtimeVerificationStoppedAt !== 'string'
+      ) ||
       (parsed.error !== undefined && typeof parsed.error !== 'string')
     ) {
       return null

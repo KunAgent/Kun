@@ -278,7 +278,7 @@ export function buildFailedChildRecord(
     // (issue #1155); a child that never reached a model request reports zero.
     ...(input.usage !== undefined ? { usage: input.usage } : {}),
     ...(input.toolInvocations !== undefined ? { toolInvocations: input.toolInvocations } : {}),
-    error: input.abort.error.slice(0, input.previewChars),
+    error: sanitizeFailedChildError(input.abort.error).slice(0, input.previewChars),
     durationMs: (current.durationMs ?? 0) + Math.max(0, Date.parse(input.finishedAt) - Date.parse(input.startedAt)),
     updatedAt: input.finishedAt
   })
@@ -287,6 +287,21 @@ export function buildFailedChildRecord(
 function ownedPptChildBundle(value: unknown, childId: string): boolean {
   return typeof value === 'object' && value !== null && !Array.isArray(value) &&
     (value as Record<string, unknown>).childId === childId
+}
+
+const COMPLETED_STATUS_MARKERS = [
+  'status: completed',
+  '"status":"completed"',
+  '"status": "completed"'
+] as const
+
+/** A failed record must never carry error text that self-describes success
+ * (e.g. a stringified completed tool_result used as a fake summary). Keeps the
+ * UI from rendering self-contradictory "failed + status: completed" cards. */
+function sanitizeFailedChildError(message: string): string {
+  const normalized = message.replace(/\s+/g, ' ')
+  if (!COMPLETED_STATUS_MARKERS.some((marker) => normalized.includes(marker))) return message
+  return 'Child result materialization failed; open the child session for details.'
 }
 
 export function fingerprintProfile(profile: SubagentProfileConfig): string {

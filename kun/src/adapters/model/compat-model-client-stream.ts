@@ -125,6 +125,11 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         input.model
       )) {
         if (chunk.kind === 'error') {
+          // A turn abort (user stop, tool cancellation, host shutdown) can
+          // race the provider's own disconnect noise. The abort already owns
+          // the terminal outcome; surfacing the raw transport error here would
+          // fail the turn with a misleading provider-looking message.
+          if (input.request.abortSignal.aborted) return
           if (isRecoverableStreamTransportError(chunk)) {
             recoverableError = chunk
             continue
@@ -170,10 +175,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
       }
 
       if (!recoverableError) return
-      if (input.request.abortSignal.aborted) {
-        yield recoverableError
-        return
-      }
+      if (input.request.abortSignal.aborted) return
       if (usedRetryAttempts >= maxRetryAttempts) {
         yield {
           ...recoverableError,
@@ -196,7 +198,6 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
       }
       const aborted = await sleepWithAbort(delayMs, input.request.abortSignal)
       if (aborted || input.request.abortSignal.aborted) {
-        yield { kind: 'error', message: 'request was aborted during stream retry backoff' }
         return
       }
       usedRetryAttempts = nextAttempt
@@ -236,7 +237,6 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
             input.request.abortSignal
           )
           if (networkRetryAborted || input.request.abortSignal.aborted) {
-            yield { kind: 'error', message: 'request was aborted during stream retry backoff' }
             return
           }
           usedRetryAttempts = networkRetryAttempt
@@ -266,7 +266,6 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
           }
           const httpRetryAborted = await sleepWithAbort(httpDelayMs, input.request.abortSignal)
           if (httpRetryAborted || input.request.abortSignal.aborted) {
-            yield { kind: 'error', message: 'request was aborted during retry backoff' }
             return
           }
           usedRetryAttempts = httpRetryAttempt
@@ -479,7 +478,6 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
       }
     }
     if (signal.aborted) {
-      yield { kind: 'error', message: 'request was aborted' }
       return
     }
     if (!sawDone && !finishReason) {

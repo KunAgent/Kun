@@ -16,11 +16,20 @@ type DeepseekPriceSet = {
   cny: DeepseekPrice
 }
 
-const TOKENS_PER_MILLION = 1_000_000
+type DeepseekTimePriceSet = {
+  offPeak: DeepseekPriceSet
+  peak: DeepseekPriceSet
+}
 
-// Official DeepSeek API prices per 1M tokens. As of 2026-06-02,
-// deepseek-chat/deepseek-reasoner are aliases for v4-flash modes.
-const DEEPSEEK_V4_PRICES: Record<'flash' | 'pro', DeepseekPriceSet> = {
+const TOKENS_PER_MILLION = 1_000_000
+const BEIJING_UTC_OFFSET_MS = 8 * 60 * 60 * 1_000
+const TIME_BASED_PRICING_EFFECTIVE_AT_MS = Date.UTC(2026, 7, 16, 16)
+const WEEKEND_OFF_PEAK_EFFECTIVE_AT_MS = Date.UTC(2026, 7, 22, 16)
+
+// Official DeepSeek API prices per 1M tokens before time-based pricing began.
+// Kept so callers that explicitly price historical usage do not apply the new
+// schedule retroactively.
+const DEEPSEEK_V4_LEGACY_PRICES: Record<'flash' | 'pro', DeepseekPriceSet> = {
   flash: {
     usd: {
       inputCacheHit: 0.0028,
@@ -47,7 +56,34 @@ const DEEPSEEK_V4_PRICES: Record<'flash' | 'pro', DeepseekPriceSet> = {
   }
 }
 
-function pricingTierForModel(model: string): keyof typeof DEEPSEEK_V4_PRICES | null {
+// Official DeepSeek API prices per 1M tokens since 2026-08-17.
+// deepseek-chat/deepseek-reasoner retain their v4-flash alias behavior.
+const DEEPSEEK_V4_PRICES: Record<'flash' | 'pro', DeepseekTimePriceSet> = {
+  flash: {
+    offPeak: {
+      usd: { inputCacheHit: 0.007, inputCacheMiss: 0.22, output: 0.66 },
+      cny: { inputCacheHit: 0.05, inputCacheMiss: 1.5, output: 4.5 }
+    },
+    peak: {
+      usd: { inputCacheHit: 0.014, inputCacheMiss: 0.44, output: 1.32 },
+      cny: { inputCacheHit: 0.1, inputCacheMiss: 3, output: 9 }
+    }
+  },
+  pro: {
+    offPeak: {
+      usd: { inputCacheHit: 0.022, inputCacheMiss: 0.66, output: 1.98 },
+      cny: { inputCacheHit: 0.15, inputCacheMiss: 4.5, output: 13.5 }
+    },
+    peak: {
+      usd: { inputCacheHit: 0.044, inputCacheMiss: 1.32, output: 3.96 },
+      cny: { inputCacheHit: 0.3, inputCacheMiss: 9, output: 27 }
+    }
+  }
+}
+
+type DeepseekPricingTier = keyof typeof DEEPSEEK_V4_PRICES
+
+function pricingTierForModel(model: string): DeepseekPricingTier | null {
   const normalized = model.trim().toLowerCase()
   if (!normalized) return null
   if (normalized === 'deepseek-v4-pro' || normalized.endsWith('/deepseek-v4-pro')) return 'pro'
@@ -62,6 +98,31 @@ function pricingTierForModel(model: string): keyof typeof DEEPSEEK_V4_PRICES | n
     return 'flash'
   }
   return null
+}
+
+function isPeakPriceAt(atMs: number): boolean {
+  // An invalid explicit date should never make the estimate look cheaper.
+  if (!Number.isFinite(atMs)) return true
+  const beijing = new Date(atMs + BEIJING_UTC_OFFSET_MS)
+  const weekDay = beijing.getUTCDay()
+  if (
+    atMs >= WEEKEND_OFF_PEAK_EFFECTIVE_AT_MS &&
+    (weekDay === 0 || weekDay === 6)
+  ) {
+    return false
+  }
+  const minute = beijing.getUTCHours() * 60 + beijing.getUTCMinutes()
+  return (minute >= 9 * 60 && minute < 12 * 60) ||
+    (minute >= 14 * 60 && minute < 18 * 60)
+}
+
+function pricesFor(tier: DeepseekPricingTier, at: Date): DeepseekPriceSet {
+  const atMs = at.getTime()
+  if (Number.isFinite(atMs) && atMs < TIME_BASED_PRICING_EFFECTIVE_AT_MS) {
+    return DEEPSEEK_V4_LEGACY_PRICES[tier]
+  }
+  const prices = DEEPSEEK_V4_PRICES[tier]
+  return isPeakPriceAt(atMs) ? prices.peak : prices.offPeak
 }
 
 function computeCost(
@@ -83,6 +144,11 @@ export function estimateDeepseekCost(input: {
   cacheMissTokens: number
   outputTokens: number
   /**
+   * When the request occurred. DeepSeek switches between peak and off-peak
+   * prices using Beijing time. Defaults to the current instant.
+   */
+  at?: Date
+  /**
    * Optional upstream base URL. When provided, the function returns
    * null for non-DeepSeek hosts (OpenRouter, llama.cpp, etc.) because
    * we don't have authoritative prices for third-party providers.
@@ -96,7 +162,7 @@ export function estimateDeepseekCost(input: {
   }
   const tier = pricingTierForModel(input.model)
   if (!tier) return null
-  const prices = DEEPSEEK_V4_PRICES[tier]
+  const prices = pricesFor(tier, input.at ?? new Date())
   return {
     costUsd: computeCost(prices.usd, input.cacheHitTokens, input.cacheMissTokens, input.outputTokens),
     costCny: computeCost(prices.cny, input.cacheHitTokens, input.cacheMissTokens, input.outputTokens)

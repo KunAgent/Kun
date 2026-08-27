@@ -290,6 +290,12 @@ export type ServerRuntime = {
   requestShutdown?(instanceId: string): Promise<boolean>
   /** Starts non-critical historical scans only after the HTTP server is live. */
   startBackgroundMaintenance?(): void
+  /** Runs the bounded thread-store guardian immediately. */
+  inspectThreadStore?(): Promise<import('../../services/thread-store-guardian.js').ThreadStoreGuardianResult>
+  /** Read-only session storage health scans (guardian). */
+  sessionGuardian?: import('../../services/session-guardian.js').SessionGuardian
+  /** Shared thread snapshot store for prune/restore flows. */
+  threadSnapshots?: import('../../services/thread-snapshot-store.js').ThreadSnapshotStore
   /** Forward active-turn controls to the flavor that currently owns the lease. */
   forwardThreadControl?(request: Request, threadId: string): Promise<Response | null>
   forwardControlById?(

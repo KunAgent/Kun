@@ -39,13 +39,17 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 xvfb xauth
 
       - name: Install root dependencies
         run: npm ci
 
       - name: Build Linux AppImage
         run: npm run dist:linux
+
+      - name: Smoke packaged update handoff (Linux x64)
+        timeout-minutes: 20
+        run: npm run smoke:packaged-update-handoff -- --resources dist/linux-unpacked/resources
 
       - name: Upload Linux package
         uses: actions/upload-artifact@v4
@@ -78,7 +82,7 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 cmake file
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 cmake file xvfb xauth
 
       - name: Install root dependencies
         run: npm ci
@@ -109,6 +113,10 @@ jobs:
           --version "$(node -p "require('./package.json').version")"
           --arch arm64
           --dist dist
+
+      - name: Smoke packaged update handoff (Linux ARM64)
+        timeout-minutes: 20
+        run: npm run smoke:packaged-update-handoff -- --resources dist/linux-arm64-unpacked/resources
 
       - name: Upload Linux ARM64 PR package
         uses: actions/upload-artifact@v4
@@ -154,6 +162,18 @@ jobs:
 
       - name: Build ad-hoc macOS packages (x64 and arm64)
         run: npm run dist:mac
+
+      - name: Smoke packaged update handoff (host-native macOS)
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(node -p 'process.arch')" == "arm64" ]]; then
+            resources="dist/mac-arm64/Kun.app/Contents/Resources"
+          else
+            resources="dist/mac/Kun.app/Contents/Resources"
+          fi
+          npm run smoke:packaged-update-handoff -- --resources "${resources}"
 
       - name: Upload ad-hoc macOS PR packages
         uses: actions/upload-artifact@v4
@@ -206,8 +226,19 @@ jobs:
             --commit $env:GITHUB_SHA `
             --target win32-x64 `
             --output dist/tui-pr
+      - name: Test Windows update rollback failpoints
+        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
+
       - name: Build Windows NSIS installer
         run: npm run dist:win
+
+      - name: Smoke Windows installer migration
+        timeout-minutes: 25
+        run: npm run smoke:windows-installer-migration -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
+
+      - name: Smoke packaged update handoff (Windows)
+        timeout-minutes: 20
+        run: npm run smoke:packaged-update-handoff -- --resources dist/win-unpacked/resources
 
       - name: Upload Windows PR package
         uses: actions/upload-artifact@v4

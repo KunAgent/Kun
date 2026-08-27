@@ -13,7 +13,8 @@ import {
   GOAL_NO_TOOL_REPEAT_MAX_RECOVERY_STEPS,
   POST_TOOL_FAILURE_MAX_RECOVERY_STEPS,
   TOOL_SUPPRESSION_FINAL_ANSWER_RECOVERY_STEP,
-  isRepeatedNoToolAssistantText
+  isRepeatedNoToolAssistantText,
+  isUserDirectedNoToolText
 } from './continuation-instructions.js'
 import type { SvgArtifactCompletionState } from './svg-artifact-completion.js'
 import type {
@@ -286,6 +287,16 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
     input: RoundOutcomeInput,
     assistantText: string
   ): Promise<ModelRoundOutcome> {
+    // A user-directed question or explicit wait-for-user reply is a legitimate
+    // terminal outcome, not repetition. Stop normally (goal stays active, but
+    // resume waits for the user's answer) so the question is never swallowed
+    // by another forced continuation round.
+    if (isUserDirectedNoToolText(assistantText)) {
+      this.lastNoToolTextByTurn.delete(input.turnId)
+      this.goalNoToolRecoveryStepsByTurn.delete(input.turnId)
+      this.deps.suppressGoalResume(input.turnId)
+      return 'stop'
+    }
     const previousText = this.lastNoToolTextByTurn.get(input.turnId)
     if (isRepeatedNoToolAssistantText(previousText, assistantText)) {
       const recoverySteps = (this.goalNoToolRecoveryStepsByTurn.get(input.turnId) ?? 0) + 1
@@ -295,7 +306,8 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
         return 'continue'
       }
       const message =
-        'Goal continuation stopped: the model kept repeating near-identical replies without calling tools or updating the goal.'
+        'Goal continuation stopped: the model kept repeating near-identical replies without calling tools or updating the goal. ' +
+        'The goal is still active; send a message to continue it, or ask to change or clear the goal.'
       await this.deps.turns.applyItem(
         input.threadId,
         makeErrorItem({

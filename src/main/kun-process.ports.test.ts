@@ -322,4 +322,5 @@ describe('terminateVerifiedPid', () => {
 
     expect(kill).not.toHaveBeenCalled()
   })
+
 })

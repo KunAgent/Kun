@@ -18,7 +18,12 @@ export function resolvePreloadPath(
 
 export function resolveNamedPreloadPath(
   distDir: string,
-  name: 'index' | 'extension-view' | 'extension-protected-surface' | 'tray-quota',
+  name: 'index' |
+    'extension-view' |
+    'extension-protected-surface' |
+    'storage-relocation-recovery' |
+    'runtime-data-recovery' |
+    'tray-quota',
   fileExists: (path: string) => boolean = existsSync
 ): string {
   const cjsPath = join(distDir, `../preload/${name}.cjs`)

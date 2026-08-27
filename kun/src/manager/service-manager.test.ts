@@ -11,6 +11,7 @@ import {
   type ServiceManagerConnection
 } from './manager-client.js'
 import { ManagerRemoteGraphRunStore } from './remote-data-stores.js'
+import { SessionUsageQuerySchema } from './shared-data-store-contracts.js'
 import type { ManagerSharedDataStore } from './shared-data-store.js'
 import {
   buildServiceManagerRouter,
@@ -18,6 +19,21 @@ import {
   ServiceManagerState,
   ThreadLeaseBusyError
 } from './service-manager.js'
+
+describe('manager usage query contract', () => {
+  it('accepts complete UTC ranges and rejects partial ranges', () => {
+    expect(SessionUsageQuerySchema.parse({
+      fromInclusive: '2026-08-01T00:00:00.000Z',
+      toExclusive: '2026-08-02T00:00:00.000Z'
+    })).toEqual({
+      fromInclusive: '2026-08-01T00:00:00.000Z',
+      toExclusive: '2026-08-02T00:00:00.000Z'
+    })
+    expect(() => SessionUsageQuerySchema.parse({
+      fromInclusive: '2026-08-01T00:00:00.000Z'
+    })).toThrow('usage range requires both boundaries')
+  })
+})
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -62,12 +78,55 @@ describe('service manager control plane', () => {
     expect(JSON.parse(text)).toMatchObject({
       status: 'ok',
       service: 'kun-service-manager',
-      protocolVersion: 1,
+      protocolVersion: 3,
       instanceId: 'manager-a',
       buildId: 'b'.repeat(64),
       capabilities: expect.arrayContaining(['item-page-v1'])
     })
     expect(text).not.toContain('manager-secret')
+  })
+
+  it('preserves resource fencing high-water across expiry, release, and v1 migration', () => {
+    const first = new ServiceManagerState()
+    const resource = 'data:state'
+    const leaseA = first.acquireResource({
+      resource,
+      ownerFlavor: 'production',
+      ownerInstanceId: 'runtime-a'
+    }, new Date('2026-08-01T00:00:00.000Z')).lease
+    expect(leaseA.fencingToken).toBe(1)
+    expect(first.renewResource(leaseA, new Date('2026-08-01T00:00:01.000Z'))?.fencingToken).toBe(1)
+    expect(first.releaseResource(leaseA)).toBe(true)
+    const leaseB = first.acquireResource({
+      resource,
+      ownerFlavor: 'development',
+      ownerInstanceId: 'runtime-b'
+    }, new Date('2026-08-01T00:00:02.000Z')).lease
+    expect(leaseB.fencingToken).toBe(2)
+    expect(first.releaseResource(leaseA)).toBe(false)
+    expect(first.validateResource(leaseB, new Date('2026-08-01T00:00:03.000Z'))).toBe(true)
+
+    const v1 = {
+      version: 1 as const,
+      slots: [],
+      leases: [],
+      resourceLeases: [{
+        resource: 'data:legacy',
+        ownerFlavor: 'production' as const,
+        ownerInstanceId: 'legacy',
+        acquiredAt: '2026-08-01T00:00:00.000Z',
+        expiresAt: '2026-08-01T00:00:10.000Z'
+      }]
+    }
+    const restored = ServiceManagerState.restore(v1)
+    const migrated = restored.durableSnapshot()
+    expect(migrated.version).toBe(2)
+    const next = restored.acquireResource({
+      resource: 'data:legacy',
+      ownerFlavor: 'development',
+      ownerInstanceId: 'runtime-new'
+    }, new Date('2026-08-01T00:00:11.000Z')).lease
+    expect(next.fencingToken).toBe(2)
   })
 
   it('keeps independent production and development runtime slots', async () => {
@@ -148,7 +207,7 @@ describe('service manager control plane', () => {
     const manager: ServiceManagerConnection = {
       discovery: {
         version: 1,
-        protocolVersion: 1,
+        protocolVersion: 3,
         instanceId: 'manager-a',
         pid: process.pid,
         startedAt: '2026-08-01T00:00:00.000Z',
@@ -198,7 +257,7 @@ describe('service manager control plane', () => {
     const manager: ServiceManagerConnection = {
       discovery: {
         version: 1,
-        protocolVersion: 1,
+        protocolVersion: 3,
         instanceId: 'manager-a',
         pid: process.pid,
         startedAt: '2026-08-01T00:00:00.000Z',
@@ -357,6 +416,53 @@ describe('service manager control plane', () => {
     const expired = state.expireStale(new Date('2026-08-01T00:00:21.000Z'))
     expect(expired).toMatchObject([{ threadId: 'thread-orphan', turnId: 'turn-orphan' }])
     expect(state.lease('thread-orphan', new Date('2026-08-01T00:00:21.000Z'))).toBeNull()
+  })
+
+  it('expires only the exact Runtime owner recorded by verified forced handoff', () => {
+    const state = new ServiceManagerState()
+    const now = new Date('2026-08-01T00:00:00.000Z')
+    state.register(registration('production', 'production-forced'), now)
+    state.register(registration('development', 'development-live'), now)
+    state.acquireLease({
+      threadId: 'thread-forced',
+      turnId: 'turn-forced',
+      ownerFlavor: 'production',
+      ownerInstanceId: 'production-forced'
+    }, now)
+    state.acquireLease({
+      threadId: 'thread-live',
+      turnId: 'turn-live',
+      ownerFlavor: 'development',
+      ownerInstanceId: 'development-live'
+    }, now)
+    state.acquireResource({
+      resource: 'forced-resource',
+      ownerFlavor: 'production',
+      ownerInstanceId: 'production-forced'
+    }, now)
+
+    const expired = state.expireVerifiedRuntimeOwners([{
+      flavor: 'production',
+      instanceId: 'production-forced',
+      pid: 4101,
+      startedAt: now.toISOString()
+    }])
+
+    expect(expired).toMatchObject([{
+      threadId: 'thread-forced',
+      turnId: 'turn-forced'
+    }])
+    expect(state.registration('production')).toBeNull()
+    expect(state.registration('development')).toMatchObject({
+      instanceId: 'development-live'
+    })
+    expect(state.lease('thread-forced', now)).toBeNull()
+    expect(state.lease('thread-live', now)).toMatchObject({ turnId: 'turn-live' })
+    expect(state.acquireResource({
+      resource: 'forced-resource',
+      ownerFlavor: 'development',
+      ownerInstanceId: 'development-live'
+    }, now).acquired).toBe(true)
   })
 
   it('gives production preference for singleton desktop resources', () => {

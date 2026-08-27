@@ -80,6 +80,29 @@ describe('Node HTTP server', () => {
     }
   })
 
+  it('flushes SSE headers before the first body chunk', async () => {
+    const router = new Router()
+    router.add('GET', '/events', () => new Response(new ReadableStream<Uint8Array>({
+      pull() {
+        // Keep the body pending: the client must receive headers without a frame.
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
+    const controller = new AbortController()
+
+    try {
+      const response = await Promise.race([
+        fetch(`http://${server.host}:${server.port}/events`, { signal: controller.signal }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SSE headers were not flushed')), 500))
+      ])
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('text/event-stream')
+    } finally {
+      controller.abort()
+      await server.close()
+    }
+  })
+
   it('force-closes a live SSE connection during shutdown', async () => {
     const router = new Router()
     router.add('GET', '/events', () => new Response(new ReadableStream({

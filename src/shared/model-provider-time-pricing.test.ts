@@ -35,6 +35,8 @@ describe('model provider time pricing', () => {
     expect(state('2030-01-07T06:00:00Z')).toBe('standard')
     expect(state('2030-01-07T09:59:00Z')).toBe('standard')
     expect(state('2030-01-07T10:00:00Z')).toBe('off-peak')
+    expect(state('2030-01-12T01:00:00Z')).toBe('off-peak')
+    expect(state('2030-01-12T06:00:00Z')).toBe('off-peak')
   })
 
   it('keeps Coding Plan quota semantics separate from API prices', () => {
@@ -64,9 +66,9 @@ describe('model provider time pricing', () => {
     const zai = resolveModelTimePricingRule(provider({
       presetSource: { presetId: 'zai-coding-plan', mode: 'api' }
     }), 'glm-5')!
-    expect(timePricingScheduleLabel(deepseek, 'zh')).toContain('每天 09:00–12:00、14:00–18:00（北京时间）')
+    expect(timePricingScheduleLabel(deepseek, 'zh')).toContain('周一至周五 09:00–12:00、14:00–18:00（北京时间）')
     expect(timePricingScheduleLabel(zhipu, 'zh')).toContain('周一至周五 14:00–18:00（北京时间）')
-    expect(timePricingScheduleLabel(deepseek, 'en')).toContain('daily 09:00–12:00, 14:00–18:00 (Beijing time)')
+    expect(timePricingScheduleLabel(deepseek, 'en')).toContain('Monday–Friday 09:00–12:00, 14:00–18:00 (Beijing time)')
     expect(timePricingScheduleLabel(zhipu, 'en')).toContain('Monday–Friday 14:00–18:00 (Beijing time)')
     expect(timePricingScheduleLabel(zai, 'en')).toContain('Singapore time')
   })

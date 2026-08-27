@@ -467,6 +467,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
               createdAt: req.createdAt ?? new Date().toISOString(),
               requestId: req.requestId,
               questions: req.questions,
+              ...(req.timeoutSeconds !== undefined ? { timeoutSeconds: req.timeoutSeconds } : {}),
               status: 'pending',
               live: true
             }

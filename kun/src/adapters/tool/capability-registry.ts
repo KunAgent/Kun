@@ -43,6 +43,9 @@ const PLAN_MODE_ALLOWED_TOOL_NAMES = new Set([
   'request_user_input'
 ])
 
+const USER_INPUT_TOOL_NAME = 'user_input'
+const LEGACY_USER_INPUT_TOOL_NAME = 'request_user_input'
+
 export class CapabilityRegistry {
   private readonly providers = new Map<string, CapabilityToolProvider>()
   private readonly tools = new Map<string, CapabilityToolRecord>()
@@ -137,7 +140,7 @@ export class CapabilityRegistry {
           : {})
       })
     }
-    return specs
+    return canonicalizeAdvertisedToolAliases(specs)
   }
 
   resolveTool(toolName: string, context: ToolHostContext, providerId?: string): CapabilityToolRecord {
@@ -200,6 +203,18 @@ export class CapabilityRegistry {
     const allowed = context?.allowedToolNames
     return !allowed || allowed.includes(toolName)
   }
+}
+
+/**
+ * Keep legacy aliases executable through resolveTool(), but avoid advertising
+ * duplicate schemas to models. If policy or an older catalog exposes only the
+ * legacy name, preserve it as a compatibility fallback.
+ */
+function canonicalizeAdvertisedToolAliases(
+  specs: readonly CapabilityToolSpec[]
+): CapabilityToolSpec[] {
+  if (!specs.some((spec) => spec.name === USER_INPUT_TOOL_NAME)) return [...specs]
+  return specs.filter((spec) => spec.name !== LEGACY_USER_INPUT_TOOL_NAME)
 }
 
 function effectiveClientSurface(context: ToolHostContext): NonNullable<ToolHostContext['clientSurface']> {

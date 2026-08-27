@@ -55,9 +55,11 @@ import {
   parseCursorSubscriptionQuota
 } from './provider-subscription-quota-parsers'
 import {
+  requestCodexRateLimitResetCredits,
   requestCodexSubscriptionQuota,
   requestSubscriptionJson
 } from './provider-subscription-quota-transport'
+import type { CodexQuotaCredential } from './provider-subscription-quota-types'
 import {
   ProviderQuotaAuthorizationError,
   ProviderQuotaMissingCredentialError,
@@ -65,6 +67,18 @@ import {
   SubscriptionQuotaProbeKind,
   SubscriptionQuotaRuntime
 } from './provider-subscription-quota-types'
+
+async function probeCodexSubscriptionQuota(
+  credential: CodexQuotaCredential,
+  context: SubscriptionProbeContext
+): Promise<{ metrics: ProviderQuotaMetric[]; summary?: string }> {
+  // Mirror the official Codex client: fetch usage and reset-credit details together;
+  // a details failure degrades to the count embedded in the usage response.
+  const usagePromise = requestCodexSubscriptionQuota(credential, context)
+  const detailsPromise = requestCodexRateLimitResetCredits(credential, context)
+    .catch(() => undefined)
+  return parseCodexSubscriptionQuota(await usagePromise, await detailsPromise)
+}
 
 export async function runSubscriptionQuotaProbe(
   kind: SubscriptionQuotaProbeKind,
@@ -103,7 +117,7 @@ export async function runSubscriptionQuotaProbe(
       )
     }
     try {
-      return parseCodexSubscriptionQuota(await requestCodexSubscriptionQuota(credential, context))
+      return await probeCodexSubscriptionQuota(credential, context)
     } catch (error) {
       if (!(error instanceof ProviderQuotaAuthorizationError)) throw error
       const refreshed = await runtime.resolveCodexCredential(provider, credential.accessToken)
@@ -113,7 +127,7 @@ export async function runSubscriptionQuotaProbe(
         )
       }
       credential = refreshed
-      return parseCodexSubscriptionQuota(await requestCodexSubscriptionQuota(credential, context))
+      return probeCodexSubscriptionQuota(credential, context)
     }
   }
   if (kind === 'grok-subscription') {

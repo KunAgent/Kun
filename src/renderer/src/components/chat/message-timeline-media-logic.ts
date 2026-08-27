@@ -371,3 +371,50 @@ export function userMediaTileClass(mediaCount: number): string {
   }
   return `${base} w-[calc((100%-1rem)/3)] max-w-56 shrink-0 snap-start`
 }
+
+export type MediaTileNaturalSize = {
+  width: number
+  height: number
+}
+
+export type MediaTileFitConstraints = {
+  maxWidth: number
+  maxHeight: number
+}
+
+// Per-variant fit constraints in px. User tiles keep their existing max
+// widths (single: 20rem, multi: 14rem) and add a height cap so tall
+// screenshots stay inside the bubble; tool tiles match h-32 w-40 and
+// conversation tiles match the w-52 square.
+const USER_SINGLE_CONSTRAINTS: MediaTileFitConstraints = { maxWidth: 320, maxHeight: 256 }
+const USER_MULTI_CONSTRAINTS: MediaTileFitConstraints = { maxWidth: 224, maxHeight: 160 }
+const TOOL_CONSTRAINTS: MediaTileFitConstraints = { maxWidth: 160, maxHeight: 128 }
+const CONVERSATION_CONSTRAINTS: MediaTileFitConstraints = { maxWidth: 208, maxHeight: 208 }
+
+export function mediaTileFitConstraints(
+  variant: 'user' | 'tool' | 'conversation',
+  mediaCount: number
+): MediaTileFitConstraints {
+  if (variant === 'tool') return TOOL_CONSTRAINTS
+  if (variant === 'conversation') return CONVERSATION_CONSTRAINTS
+  return mediaCount <= 1 ? USER_SINGLE_CONSTRAINTS : USER_MULTI_CONSTRAINTS
+}
+
+// Scales a media tile down to fit the constraints without ever cropping or
+// upscaling small images: the container adapts to the image's aspect ratio.
+export function mediaTileDisplaySize(
+  naturalSize: MediaTileNaturalSize,
+  constraints: MediaTileFitConstraints
+): MediaTileNaturalSize {
+  const naturalWidth = Math.max(1, naturalSize.width)
+  const naturalHeight = Math.max(1, naturalSize.height)
+  const scale = Math.min(
+    1,
+    constraints.maxWidth / naturalWidth,
+    constraints.maxHeight / naturalHeight
+  )
+  return {
+    width: Math.round(naturalWidth * scale),
+    height: Math.round(naturalHeight * scale)
+  }
+}

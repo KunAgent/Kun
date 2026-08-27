@@ -4,7 +4,7 @@ import type { Stats } from 'node:fs'
 import { lstat, opendir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
-import type { AppSettingsV1 } from '../../shared/app-settings'
+import { normalizeDarkUiColors, type AppSettingsV1 } from '../../shared/app-settings'
 import {
   classifyDataMigrationPath,
   parsePackageRelativePath,
@@ -223,6 +223,7 @@ export function portableSettingsForMigration(settings: AppSettingsV1): Record<st
     composerSendKey: settings.composerSendKey,
     cursorSpotlight: settings.cursorSpotlight,
     cursorSpotlightColor: settings.cursorSpotlightColor,
+    darkUiColors: normalizeDarkUiColors(settings.darkUiColors),
     notifications: settings.notifications,
     appBehavior: { closeAction: settings.appBehavior.closeAction },
     gitBranchPrefix: settings.gitBranchPrefix,

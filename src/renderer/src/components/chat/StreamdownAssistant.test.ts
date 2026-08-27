@@ -54,6 +54,49 @@ describe('visibleTextForTypewriter', () => {
   })
 })
 
+describe('file link hardening', () => {
+  function renderMarkdown(text: string): string {
+    return renderToStaticMarkup(createElement(StreamdownAssistant, {
+      text,
+      streaming: false
+    }))
+  }
+
+  it('keeps model-authored relative file links readable without a [blocked] marker', () => {
+    const html = renderMarkdown([
+      '- [.mcp.json](.mcp.json)',
+      '- [.claude/settings.json](.claude/settings.json)',
+      '- [.codegraph/codegraph.db](.codegraph/codegraph.db)'
+    ].join('\n'))
+
+    expect(html).toContain('.mcp.json')
+    expect(html).toContain('.claude/settings.json')
+    expect(html).toContain('.codegraph/codegraph.db')
+    expect(html).not.toContain('[blocked]')
+    expect(html).not.toContain('Blocked URL')
+  })
+
+  it('lets auto-detected workspace path references pass through harden for validation', () => {
+    const html = renderMarkdown('See src/renderer/src/main.tsx for the renderer entry.')
+
+    expect(html).toContain('src/renderer/src/main.tsx')
+    expect(html).not.toContain('[blocked]')
+    expect(html).not.toContain('Blocked URL')
+    // The internal deepseek-file: href must survive harden; without workspace
+    // validation available in static rendering the component degrades it to
+    // plain text, which is exactly the intended fallback path.
+    expect(html).not.toContain('href="javascript:')
+  })
+
+  it('still neutralizes dangerous protocols while hiding the block indicator', () => {
+    const html = renderMarkdown('[click me](javascript:alert(1))')
+
+    expect(html).toContain('click me')
+    expect(html).not.toContain('href="javascript:')
+    expect(html).not.toContain('[blocked]')
+  })
+})
+
 describe('reasoning HTML comment presentation', () => {
   function renderReasoning(text: string, streaming = false): string {
     return renderToStaticMarkup(createElement(StreamdownAssistant, {

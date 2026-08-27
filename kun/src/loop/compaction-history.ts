@@ -1,4 +1,8 @@
 import type { TurnItem } from '../contracts/items.js'
+import {
+  applyModelContextBaseline,
+  squashModelContextHistory
+} from './model-context-squash.js'
 
 export function effectiveHistoryAfterLatestCompaction(items: readonly TurnItem[]): TurnItem[] {
   for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -10,10 +14,18 @@ export function effectiveHistoryAfterLatestCompaction(items: readonly TurnItem[]
   return [...items]
 }
 
+/**
+ * Replace historical `model_context` deltas that precede the new summary
+ * with one canonical baseline. The active turn's capsules (after the
+ * summary position) keep their exact bytes for crash/resume replay.
+ */
 export function insertCompactionIntoVisibleHistory(input: {
   visibleItems: readonly TurnItem[]
   compactedItems: readonly TurnItem[]
   summaryItem: TurnItem
+  threadId?: string
+  activeTurnId?: string
+  nowIso?: () => string
 }): TurnItem[] {
   const summaryIndex = input.compactedItems.findIndex((item) => item.id === input.summaryItem.id)
   if (summaryIndex < 0) {
@@ -26,18 +38,37 @@ export function insertCompactionIntoVisibleHistory(input: {
   // path otherwise preserves folded items before that summary. Do not let
   // internal records choose the insertion point: doing so would leave folded
   // visible items after the summary and replay them again.
-  const internalRecords = uniqueInternalRecords([
+  let internalRecords = uniqueInternalRecords([
     ...input.compactedItems,
     ...input.visibleItems
   ])
+  if (input.threadId && input.nowIso) {
+    const squash = squashModelContextHistory({
+      threadId: input.threadId,
+      turnId: input.summaryItem.turnId,
+      history: internalRecords,
+      ...(input.activeTurnId ? { activeTurnId: input.activeTurnId } : {}),
+      nowIso: input.nowIso
+    })
+    internalRecords = applyModelContextBaseline(internalRecords, squash)
+  }
   const tailIds = new Set(
     input.compactedItems
       .slice(summaryIndex + 1)
       .filter((item) => !isInternalRecord(item))
       .map((item) => item.id)
   )
+  // A new canonical summary replaces every earlier visible compaction
+  // marker in the active window; keeping them nested the transcript and
+  // re-fed previous summaries into the next compaction.
+  const foldedSummaryIds = new Set<string>()
+  for (const item of input.visibleItems) {
+    if (item.kind === 'compaction' && item.replacedTokens > 0 && item.id !== input.summaryItem.id) {
+      foldedSummaryIds.add(item.id)
+    }
+  }
   const withoutSummary = input.visibleItems.filter(
-    (item) => item.id !== input.summaryItem.id && !isInternalRecord(item)
+    (item) => item.id !== input.summaryItem.id && !isInternalRecord(item) && !foldedSummaryIds.has(item.id)
   )
   if (tailIds.size === 0) return [...withoutSummary, input.summaryItem, ...internalRecords]
 

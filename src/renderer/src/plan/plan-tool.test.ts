@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatBlock } from '../agent/types'
-import { extractPlanMetadataFromBlock, hasSuccessfulGuiPlanToolCall, isGuiPlanToolBlock } from './plan-tool'
+import {
+  extractPlanMetadataFromBlock,
+  guiPlanMetaMatchesArtifact,
+  hasSuccessfulGuiPlanToolCall,
+  isGuiPlanToolBlock,
+  type GuiPlanToolMeta
+} from './plan-tool'
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+
+function planMeta(overrides: Partial<GuiPlanToolMeta> = {}): GuiPlanToolMeta {
+  return {
+    planId: '/tmp/ws:.deepseekgui/plan/login.md',
+    workspaceRoot: '/tmp/ws',
+    relativePath: '.deepseekgui/plan/login.md',
+    operation: 'draft',
+    ...overrides
+  }
+}
 
 function toolBlock(overrides: Partial<Extract<ChatBlock, { kind: 'tool' }>>): ChatBlock {
   return {
@@ -96,5 +112,25 @@ describe('plan-tool helpers', () => {
       toolBlock({ id: 'fresh', status: 'success' })
     ]
     expect(hasSuccessfulGuiPlanToolCall(blocks, 1)).toBe(true)
+  })
+
+  it('matches a plan artifact against create_plan meta regardless of id casing', () => {
+    const meta = planMeta()
+    expect(guiPlanMetaMatchesArtifact(meta, {
+      workspaceRoot: '/tmp/ws/',
+      relativePath: '.deepseekgui/plan/Login.md'
+    })).toBe(true)
+    expect(guiPlanMetaMatchesArtifact(meta, {
+      workspaceRoot: '/tmp/ws',
+      relativePath: '.deepseekgui/plan/other.md'
+    })).toBe(false)
+    expect(guiPlanMetaMatchesArtifact(meta, {
+      workspaceRoot: '/tmp/other',
+      relativePath: '.deepseekgui/plan/login.md'
+    })).toBe(false)
+    expect(guiPlanMetaMatchesArtifact(
+      planMeta({ workspaceRoot: 'C:\\code\\ws\\', relativePath: '.deepseekgui\\plan\\x.md' }),
+      { workspaceRoot: 'C:/code/ws', relativePath: '.deepseekgui/plan/X.md' }
+    )).toBe(true)
   })
 })

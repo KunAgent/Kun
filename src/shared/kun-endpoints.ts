@@ -16,6 +16,8 @@ export const KUN_RUNTIME_INFO_TEMPLATE = '/v1/runtime/info'
 
 export const KUN_RUNTIME_TOOLS_PATH = '/v1/runtime/tools'
 export const KUN_RUNTIME_TOOLS_TEMPLATE = '/v1/runtime/tools'
+export const KUN_THREAD_GUARDIAN_PATH = '/v1/runtime/thread-guardian'
+export const KUN_THREAD_GUARDIAN_TEMPLATE = '/v1/runtime/thread-guardian'
 
 export const KUN_MODEL_CONNECTIONS_PATH = '/v1/model-connections'
 export const KUN_MODEL_CONNECTIONS_TEMPLATE = '/v1/model-connections'
@@ -215,6 +217,9 @@ export function kunGraphProjectConsolidatePath(projectId: string): string {
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
 
+export const KUN_THREAD_STATES_PATH = '/v1/threads/states'
+export const KUN_THREAD_STATES_TEMPLATE = '/v1/threads/states'
+
 export const KUN_THREAD_TEMPLATE = '/v1/threads/{id}'
 export function kunThreadPath(threadId: string): string {
   return `/v1/threads/${encodeURIComponent(threadId)}`
@@ -274,6 +279,11 @@ export function kunThreadTodosPath(threadId: string): string {
 export const KUN_THREAD_COMPACT_TEMPLATE = '/v1/threads/{id}/compact'
 export function kunThreadCompactPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/compact`
+}
+
+export const KUN_THREAD_PRUNE_TEMPLATE = '/v1/threads/{id}/prune'
+export function kunThreadPrunePath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/prune`
 }
 
 export const KUN_THREAD_REVIEW_TEMPLATE = '/v1/threads/{id}/review'

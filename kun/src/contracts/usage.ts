@@ -38,6 +38,13 @@ export const UsageSnapshotSchema = z.object({
   turns: z.number().int().nonnegative(),
   costUsd: z.number().nonnegative().optional(),
   costCny: z.number().nonnegative().optional(),
+  /**
+   * Reference list-price estimate for subscription-billed requests, derived
+   * from catalog pricing. Never an account charge; only populated when the
+   * runtime has catalog pricing for a subscription model.
+   */
+  valueEstimateUsd: z.number().nonnegative().optional(),
+  valueEstimateCny: z.number().nonnegative().optional(),
   /** Provider-reported costs retained without assuming a two-currency world. */
   costByCurrency: z.record(
     z.string().regex(/^[A-Z]{3}$/),

@@ -342,6 +342,7 @@
   "composerVoiceMicDenied": "การเข้าถึงไมโครโฟนถูกปฏิเสธ อนุญาตในการตั้งค่าระบบแล้วลองอีกครั้ง",
   "composerVoiceTooShort": "การบันทึกสั้นเกินไป อดทนอีกสักหน่อย",
   "composerVoiceFailed": "การถอดเสียงเป็นคำล้มเหลว: {{message}}",
+  "composerDismissError": "ปิดข้อความผิดพลาด",
   "composerImageUnavailable": "อินพุตรูปภาพไม่พร้อมใช้งานสำหรับรันไทม์นี้",
   "composerAttachmentUnavailable": "การอัปโหลดไฟล์แนบไม่พร้อมใช้งาน",
   "composerDropFilesHere": "ปล่อยเพื่อเพิ่มไฟล์ในการสนทนานี้",

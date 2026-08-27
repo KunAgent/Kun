@@ -126,6 +126,8 @@
   "modelProviderCustomBadge": "맞춤",
   "modelProviderTokenPlanBadge": "토큰 계획",
   "modelProviderPlanBadge": "계획",
+  "modelProviderFreeBadge": "무료",
+  "modelProviderGroupFree": "무료",
   "modelProviderGroupPlans": "구독 계획",
   "modelProviderSubscriptionRegions": "구독 요금제 지역",
   "modelProviderSubscriptionRegionAll": "전체",

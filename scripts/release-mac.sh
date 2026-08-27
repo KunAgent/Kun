@@ -156,6 +156,10 @@ smoke_macos_extensions() {
   npm run smoke:packaged-extension-desktop -- --resources "${host_resources}" \
     || die "macOS packaged Extension desktop Chromium smoke failed"
 
+  cyan "Smoking packaged old-build update handoff (macOS ${host_arch})..."
+  npm run smoke:packaged-update-handoff -- --resources "${host_resources}" \
+    || die "macOS packaged update handoff smoke failed"
+
   cyan "Smoking host-native FFmpeg broker (macOS ${host_arch})..."
   KUN_RUN_MEDIA_SMOKE=1 npm run smoke:extension-native-media \
     || die "macOS host-native FFmpeg broker smoke failed"

@@ -106,11 +106,12 @@ export class KunTuiClientCore {
   }): Promise<void> {
     let cursor = Math.max(0, input.sinceSeq)
     let failures = 0
+    let hasConnected = false
     const sleep = input.sleep ?? abortableDelay
     while (!input.signal.aborted) {
-      input.onConnection?.(failures === 0 ? 'connecting' : 'reconnecting')
+      input.onConnection?.(hasConnected || failures > 0 ? 'reconnecting' : 'connecting')
       try {
-        await this.refreshConnection()
+        if (failures > 0) await this.refreshConnection()
         const response = await this.fetchImpl(
           `${this.baseUrl}/v1/threads/${segment(input.threadId)}/events?since_seq=${cursor}`,
           {
@@ -123,6 +124,7 @@ export class KunTuiClientCore {
           throw await responseError(response, '/v1/threads/:id/events', this.runtimeToken)
         }
         input.onConnection?.('connected')
+        hasConnected = true
         failures = 0
         const parser = new IncrementalSseParser()
         const reader = response.body.getReader()
@@ -152,9 +154,9 @@ export class KunTuiClientCore {
         const safe = error instanceof Error ? error : new Error(String(error))
         input.onError?.(safe)
         if (safe instanceof TuiClientError && (safe.status === 404 || safe.status === 410)) return
-        failures += 1
       }
       if (input.signal.aborted) return
+      failures += 1
       const delay = Math.min(5_000, 200 * 2 ** Math.min(failures, 5))
       await sleep(delay, input.signal)
     }

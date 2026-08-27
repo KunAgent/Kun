@@ -37,7 +37,7 @@ import { KEYBOARD_SHORTCUT_COMMANDS } from '../../../shared/keyboard-shortcuts'
 import { LOCAL_WHISPER_DOWNLOAD_SOURCES, LOCAL_WHISPER_MODELS } from '../../../shared/local-whisper'
 import type { LocalWhisperDownloadSourceId } from '../../../shared/local-whisper'
 import { kunGraphPatchSchema } from './settings-graph'
-import { kunLabPatchSchema } from './settings-lab'
+import { kunFastContextPatchSchema, kunLabPatchSchema } from './settings-lab'
 import {
   MAX_BODY_BYTES,
   MAX_CHANNEL_TEXT_LENGTH,
@@ -127,6 +127,12 @@ const modelProfilePatchShape = {
     supportedEfforts: z.array(modelReasoningEffortSchema).min(1).max(8),
     defaultEffort: modelReasoningEffortSchema,
     requestProtocol: modelReasoningRequestProtocolSchema
+  }).strict().optional(),
+  pricing: z.object({
+    inputUsdPerMillion: z.number().nonnegative().max(1_000_000),
+    outputUsdPerMillion: z.number().nonnegative().max(1_000_000),
+    cacheReadUsdPerMillion: z.number().nonnegative().max(1_000_000).optional(),
+    cacheWriteUsdPerMillion: z.number().nonnegative().max(1_000_000).optional()
   }).strict().optional(),
   serviceTiers: z.array(modelServiceTierSchema).min(1).max(MODEL_SERVICE_TIERS.length).optional(),
   endpointFormat: modelEndpointFormatSchema.optional(),
@@ -487,6 +493,7 @@ export const kunRuntimePatchSchema = z.object({
   summaryReasoningEffort: modelReasoningEffortSchema.optional(),
   codeReviewReasoningEffort: modelReasoningEffortSchema.optional(),
   graph: kunGraphPatchSchema.optional(),
+  fastContext: kunFastContextPatchSchema.optional(),
   planExecution: z.object({
     useWorktreeByDefault: z.boolean().optional()
   }).strict().optional(),

@@ -96,6 +96,71 @@ describe('daily usage helpers', () => {
     expect(normalized.totals.activeDays).toBe(1)
   })
 
+  it('normalizes subscription value estimates with coverage into renderer naming', () => {
+    const normalized = normalizeDailyUsageResponse({
+      group_by: 'day',
+      from: '2026-08-20',
+      to: '2026-08-20',
+      timezone: 'UTC',
+      buckets: [
+        {
+          date: '2026-08-20',
+          input_tokens: 1_000_000,
+          output_tokens: 50_000,
+          total_tokens: 1_050_000,
+          cost_usd: 0.0,
+          cost_cny: 0,
+          value_estimate_usd: 32.5,
+          value_estimate_cny: 234,
+          value_estimate_coverage: 'partial',
+          value_estimate_priced_requests: 40,
+          value_estimate_unpriced_requests: 7,
+          turns: 40,
+          thread_count: 3
+        }
+      ],
+      totals: {
+        total_tokens: 1_050_000,
+        value_estimate_usd: 32.5,
+        value_estimate_cny: 234,
+        value_estimate_coverage: 'partial',
+        value_estimate_unpriced_requests: 7,
+        turns: 40,
+        days: 1,
+        active_days: 1
+      }
+    })
+
+    expect(normalized.buckets[0]).toMatchObject({
+      valueEstimateUsd: 32.5,
+      valueEstimateCny: 234,
+      valueEstimateCoverage: 'partial',
+      valueEstimateUnpricedRequests: 7
+    })
+    expect(normalized.totals.valueEstimateUsd).toBe(32.5)
+    expect(normalized.totals.valueEstimateCny).toBe(234)
+    expect(normalized.totals.valueEstimateCoverage).toBe('partial')
+    expect(normalized.totals.valueEstimateUnpricedRequests).toBe(7)
+  })
+
+  it('falls back to unavailable coverage for malformed estimate values', () => {
+    const normalized = normalizeDailyUsageResponse({
+      group_by: 'day',
+      from: '2026-08-20',
+      to: '2026-08-20',
+      timezone: 'UTC',
+      buckets: [
+        { date: '2026-08-20', input_tokens: 10, output_tokens: 2, value_estimate_coverage: 'weird' }
+      ],
+      totals: { days: 1, active_days: 1 }
+    })
+
+    expect(normalized.buckets[0].valueEstimateCoverage).toBe('unavailable')
+    expect(normalized.buckets[0].valueEstimateUsd).toBe(0)
+    expect(normalized.buckets[0].valueEstimateCny).toBeNull()
+    expect(normalized.totals.valueEstimateCoverage).toBe('unavailable')
+  })
+
   it('loads daily usage from the runtime request bridge', async () => {
     const runtimeRequest = vi.fn<RuntimeRequest>(async () => ({
       ok: true,

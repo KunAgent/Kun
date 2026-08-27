@@ -67,6 +67,25 @@ function catalogBody(): string {
         }
       }
     },
+    opencode: {
+      id: 'opencode',
+      name: 'OpenCode Zen',
+      api: 'https://opencode.ai/zen/v1',
+      models: {
+        'free-model': {
+          id: 'free-model',
+          cost: { input: 0, output: 0 },
+          modalities: { input: ['text'], output: ['text'] },
+          limit: { context: 128_000, output: 16_000 }
+        },
+        'paid-model': {
+          id: 'paid-model',
+          cost: { input: 0, output: 1 },
+          modalities: { input: ['text'], output: ['text'] },
+          limit: { context: 128_000, output: 16_000 }
+        }
+      }
+    },
     openai: {
       id: 'openai',
       name: 'OpenAI',
@@ -193,6 +212,7 @@ describe('resolveModelsDevProvider', () => {
     ['zai-coding-plan', 'https://example.invalid/custom', 'zai-coding-plan', 'catalog'],
     ['kimi-code', 'https://api.kimi.com/coding/v1', 'kimi-for-coding', 'catalog'],
     ['opencode-go', 'https://opencode.ai/zen/go/v1', 'opencode-go', 'catalog'],
+    ['opencode-free', 'https://opencode.ai/zen/v1', 'opencode', 'catalog'],
     ['moonshot-cn', 'https://api.moonshot.cn/v1', 'moonshotai-cn', 'catalog'],
     ['moonshot-global', 'https://api.moonshot.ai/v1', 'moonshotai', 'catalog'],
     ['xiaomi', 'https://api.xiaomimimo.com/v1', 'xiaomi', 'catalog'],
@@ -266,6 +286,19 @@ describe('ModelsDevCatalogService', () => {
         },
         { id: 'catalog-only' }
       ]
+    })
+  })
+
+  it('marks only zero-cost OpenCode Zen models as free', async () => {
+    const fetcher = vi.fn(async () => new Response(catalogBody(), { status: 200 }))
+    const service = new ModelsDevCatalogService(fetcher)
+    await expect(service.fetch({
+      providerId: 'opencode-free',
+      baseUrl: 'https://opencode.ai/zen/v1'
+    })).resolves.toMatchObject({
+      status: 'ok',
+      providerKey: 'opencode',
+      models: [{ id: 'free-model', free: true }, { id: 'paid-model' }]
     })
   })
 
@@ -361,6 +394,7 @@ describe('ModelsDevCatalogService', () => {
         toolCalling: true,
         inputModalities: ['text', 'image'],
         outputModalities: ['text'],
+        pricing: { inputUsdPerMillion: 1, outputUsdPerMillion: 2 },
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_000
       }]

@@ -1,4 +1,4 @@
-import type { ChatBlock, ToolBlock } from '../../agent/types'
+import type { ChatBlock, NormalizedThread, ToolBlock } from '../../agent/types'
 import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 import {
   applyCanvasOpBlocks,
@@ -19,12 +19,17 @@ import { useCanvasShapeStore } from './canvas-shape-store'
 import type { ExecuteOpsOptions, OpError } from './shape-ops'
 import { isDesignMotionRendererToolName } from './motion-ops'
 import { replayDurableCodeCanvasToolBlocks } from './canvas-code-turn-replay'
+import {
+  canvasDurableTurnOutcome,
+  canvasTurnAllowsContinuation
+} from './canvas-turn-outcome'
 
 type IdleChatState = {
   activeThreadId: string | null
   currentTurnId: string | null
   busy: boolean
   blocks: ChatBlock[]
+  threads?: readonly NormalizedThread[]
 }
 
 export function shouldReplayIdleCanvasToolBlock(block: ToolBlock): boolean {
@@ -99,8 +104,18 @@ export function replayIdleDesignCanvas(options: {
       result.affectedIds.forEach((id) => options.affectedIds.add(id))
       options.errors.push(...result.errors)
     },
-    onToolBlock: (block, blocks, replayKey, turnId) =>
-      options.applyToolBlock(block, { blocks, replayKey, turnId }),
+    resolveTurnOutcome: (turnId) => canvasDurableTurnOutcome({
+      threads: state.threads,
+      threadId,
+      turnId
+    }),
+    onToolBlock: (block, blocks, replayKey, turnId, outcome) => {
+      if (
+        block.meta?.toolName === 'design_svg_create' &&
+        !canvasTurnAllowsContinuation(outcome)
+      ) return
+      options.applyToolBlock(block, { blocks, replayKey, turnId })
+    },
     onTurnComplete: (completion) => {
       const placementTarget = designImagePlacementTargetFromUserBlock(
         completion.blocks.find((block) => block.kind === 'user')

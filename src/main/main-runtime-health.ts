@@ -131,6 +131,7 @@ export function publishRuntimeStatus(status: Omit<KunRuntimeStatus, 'at'>): void
 
 let runtimeMigrationVerificationPromise: Promise<void> | null = null
 let runtimeMigrationVerificationCompleted = false
+let runtimeMigrationVerificationErrorWarned = false
 
 async function verifyRuntimeMigrationHistory(): Promise<void> {
   const settings = await mainState.store.load()
@@ -162,8 +163,9 @@ async function verifyRuntimeMigrationHistory(): Promise<void> {
     visibleThreadIds,
     { homeDir: app.getPath('home'), platform: process.platform }
   )
+  runtimeMigrationVerificationErrorWarned = false
   runtimeMigrationVerificationCompleted = result.status !== 'incomplete'
-  if (result.status === 'incomplete') {
+  if (result.status === 'incomplete' && result.attempt === 1) {
     logWarn(
       'runtime-data-migration',
       'Runtime is healthy but its thread API does not expose every migrated thread; verification remains pending.',
@@ -171,7 +173,22 @@ async function verifyRuntimeMigrationHistory(): Promise<void> {
         expectedThreadCount: result.expectedThreadCount,
         visibleThreadCount: result.visibleThreadCount,
         missingThreadCount: result.missingThreadIds.length,
-        missingThreadIds: result.missingThreadIds.slice(0, 20)
+        missingThreadIds: result.missingThreadIds.slice(0, 20),
+        attempt: result.attempt,
+        maxAttempts: result.maxAttempts
+      }
+    )
+  } else if (result.status === 'unresolved') {
+    logWarn(
+      'runtime-data-migration',
+      'Runtime history verification reached its retry limit; automatic retries stopped without blocking Runtime availability.',
+      {
+        expectedThreadCount: result.expectedThreadCount,
+        visibleThreadCount: result.visibleThreadCount,
+        missingThreadCount: result.missingThreadIds.length,
+        missingThreadIds: result.missingThreadIds.slice(0, 20),
+        attempt: result.attempt,
+        maxAttempts: result.maxAttempts
       }
     )
   }
@@ -181,6 +198,8 @@ function scheduleRuntimeMigrationHistoryVerification(): void {
   if (runtimeMigrationVerificationCompleted || runtimeMigrationVerificationPromise) return
   runtimeMigrationVerificationPromise = verifyRuntimeMigrationHistory()
     .catch((error) => {
+      if (runtimeMigrationVerificationErrorWarned) return
+      runtimeMigrationVerificationErrorWarned = true
       logWarn('runtime-data-migration', 'Could not verify migrated Runtime history through the thread API.', {
         message: error instanceof Error ? error.message : String(error)
       })

@@ -37,6 +37,7 @@ import {
   buildImRuntimePrompt,
   effectiveImRuntimeModel,
   errorMessage,
+  imRuntimeStartError,
   isMissingThreadResult,
   settingsWithImModelProvider
 } from './claw-im-model-support'
@@ -110,9 +111,10 @@ export abstract class ClawRuntimePrompt extends ClawRuntimeCore {
       turnBody.sandboxMode = runtimeSettings.agents.kun.sandboxMode
     }
     let turn = await this.startRuntimeTurn(runtimeSettings, thread.id, turnBody)
-    if (!turn.ok && existingThreadId && isMissingThreadResult(turn)) {
+    if (!turn.ok && isMissingThreadResult(turn)) {
+      const missingThreadId = thread.id
       this.deps.logError('claw-runtime', 'Configured IM thread was missing; creating a replacement thread.', {
-        threadId: existingThreadId,
+        threadId: missingThreadId,
         channelId: options.channel?.id,
         source: options.source
       })
@@ -121,7 +123,9 @@ export abstract class ClawRuntimePrompt extends ClawRuntimeCore {
       patchThreadTitle(thread)
       turn = await this.startRuntimeTurn(runtimeSettings, thread.id, turnBody)
     }
-    if (!turn.ok) return { ok: false, message: runtimeErrorMessage(turn, 'Failed to start turn.') }
+    if (!turn.ok) {
+      return { ok: false, message: imRuntimeStartError(runtimeSettings, turn, 'Failed to start turn.') }
+    }
 
     const parsedTurn = parseJsonObject(turn.body)
     const turnId = asString(parsedTurn?.turnId) || asString(nestedRecord(parsedTurn?.turn).id)

@@ -31,6 +31,15 @@ import { assertManagedKunDataDirIsCurrent } from './kun-data-dir-paths'
 
 export const LEGACY_PROVIDER_SOURCE_PREFIX = 'settings:provider:'
 export const LEGACY_RUNTIME_OVERRIDE_SOURCE_ID = 'settings:runtime:override'
+export const LEGACY_MEDIA_SOURCE_PREFIX = 'settings:media:'
+const LEGACY_MEDIA_SERVICES = [
+  'imageGeneration',
+  'speechToText',
+  'textToSpeech',
+  'musicGeneration',
+  'videoGeneration'
+] as const
+type LegacyMediaService = typeof LEGACY_MEDIA_SERVICES[number]
 
 export type PreparedLegacyProviderSettingsMigration = {
   /** Ephemeral compatibility projection used by existing in-process callers. */
@@ -172,8 +181,9 @@ export class LegacyProviderSettingsMigrationCoordinator {
   ): Promise<AppSettingsV1> {
     const dataDir = resolveSettingsDataDir(settings)
     assertManagedKunDataDirIsCurrent(dataDir)
-    const { resolveRegistryCredential } = await this.runtime(dataDir)
-    return projectRegistryCredentials(settings, resolveRegistryCredential, providerIds)
+    const { resolveRegistryCredential, service } = await this.runtime(dataDir)
+    const projected = await projectRegistryCredentials(settings, resolveRegistryCredential, providerIds)
+    return projectRegistryMediaCredentials(projected, (sourceId) => resolveLegacyApiKey(service, sourceId))
   }
 }
 
@@ -219,8 +229,31 @@ export async function projectRegistryCredentials(
   }
 }
 
+export async function projectRegistryMediaCredentials(
+  settings: AppSettingsV1,
+  resolve: (sourceId: string) => Promise<{ apiKey: string } | null>
+): Promise<AppSettingsV1> {
+  const runtime = getKunRuntimeSettings(settings)
+  const media = await Promise.all(mediaSettings(runtime).map(async ([service, value]) => {
+    const credential = await resolve(legacyMediaCredentialSourceId(service))
+    return [service, credential ? { ...value, apiKey: credential.apiKey } : value] as const
+  }))
+  return {
+    ...settings,
+    agents: { ...settings.agents, kun: { ...runtime, ...Object.fromEntries(media) } }
+  }
+}
+
 export function legacyProviderCredentialSourceId(providerId: string): string {
   return `${LEGACY_PROVIDER_SOURCE_PREFIX}${providerId.trim()}`
+}
+
+export function legacyMediaCredentialSourceId(service: LegacyMediaService): string {
+  return `${LEGACY_MEDIA_SOURCE_PREFIX}${service}`
+}
+
+function mediaSettings(runtime: ReturnType<typeof getKunRuntimeSettings>) {
+  return LEGACY_MEDIA_SERVICES.map((service) => [service, runtime[service]] as const)
 }
 
 function collectLegacyCredentialSources(settings: AppSettingsV1) {
@@ -249,6 +282,17 @@ function collectLegacyCredentialSources(settings: AppSettingsV1) {
       label: 'Kun legacy runtime override',
       apiKey: runtime.apiKey,
       ...(runtime.model.trim() ? { modelId: runtime.model.trim() } : {})
+    })
+  }
+  for (const [service, media] of mediaSettings(runtime)) {
+    if (!media.apiKey.trim()) continue
+    sources.push({
+      sourceId: legacyMediaCredentialSourceId(service),
+      providerId: `media:${service}`,
+      providerName: `Kun ${service}`,
+      label: `Kun ${service} credential`,
+      apiKey: media.apiKey,
+      ...(media.model.trim() ? { modelId: media.model.trim() } : {})
     })
   }
   return sources
@@ -351,6 +395,12 @@ function collectClearedLegacyCredentialSourceIds(
     getKunRuntimeSettings(previous).apiKey.trim() &&
     !getKunRuntimeSettings(current).apiKey.trim()
   ) sourceIds.push(LEGACY_RUNTIME_OVERRIDE_SOURCE_ID)
+  for (const [service, media] of mediaSettings(getKunRuntimeSettings(previous))) {
+    const next = getKunRuntimeSettings(current)[service]
+    if (media.apiKey.trim() && !next.apiKey.trim()) {
+      sourceIds.push(legacyMediaCredentialSourceId(service))
+    }
+  }
   return sourceIds
 }
 
@@ -364,6 +414,10 @@ function stripMigratedPlaintext(
     : entry)
   const defaultProvider = providers.find((entry) => entry.id === DEFAULT_MODEL_PROVIDER_ID) ?? providers[0]
   const runtime = getKunRuntimeSettings(settings)
+  const media = Object.fromEntries(mediaSettings(runtime).map(([service, value]) => [
+    service,
+    migratedSourceIds.has(legacyMediaCredentialSourceId(service)) ? { ...value, apiKey: '' } : value
+  ])) as Pick<typeof runtime, LegacyMediaService>
   return {
     ...settings,
     provider: {
@@ -375,9 +429,12 @@ function stripMigratedPlaintext(
     },
     agents: {
       ...settings.agents,
-      kun: migratedSourceIds.has(LEGACY_RUNTIME_OVERRIDE_SOURCE_ID)
-        ? { ...runtime, apiKey: '' }
-        : runtime
+      kun: {
+        ...(migratedSourceIds.has(LEGACY_RUNTIME_OVERRIDE_SOURCE_ID)
+          ? { ...runtime, apiKey: '' }
+          : runtime),
+        ...media
+      }
     }
   }
 }
@@ -398,6 +455,10 @@ async function hydrateSettingsFromBindings(
   const defaultProvider = providers.find((entry) => entry.id === DEFAULT_MODEL_PROVIDER_ID) ?? providers[0]
   const runtime = getKunRuntimeSettings(settings)
   const runtimeOverride = await resolveLegacyApiKey(service, LEGACY_RUNTIME_OVERRIDE_SOURCE_ID)
+  const hydratedMedia = await Promise.all(mediaSettings(runtime).map(async ([mediaService, value]) => {
+    const resolved = await resolveLegacyApiKey(service, legacyMediaCredentialSourceId(mediaService))
+    return [mediaService, resolved ? { ...value, apiKey: resolved.apiKey } : value] as const
+  }))
   return {
     ...settings,
     provider: {
@@ -407,7 +468,10 @@ async function hydrateSettingsFromBindings(
     },
     agents: {
       ...settings.agents,
-      kun: runtimeOverride ? { ...runtime, apiKey: runtimeOverride.apiKey } : runtime
+      kun: {
+        ...(runtimeOverride ? { ...runtime, apiKey: runtimeOverride.apiKey } : runtime),
+        ...Object.fromEntries(hydratedMedia)
+      }
     }
   }
 }
@@ -438,7 +502,9 @@ function preferredProviderModel(provider: ModelProviderProfileV1, runtimeModel: 
 }
 
 function isRecognizedSettingsSource(sourceId: string): boolean {
-  return sourceId === LEGACY_RUNTIME_OVERRIDE_SOURCE_ID || sourceId.startsWith(LEGACY_PROVIDER_SOURCE_PREFIX)
+  return sourceId === LEGACY_RUNTIME_OVERRIDE_SOURCE_ID ||
+    sourceId.startsWith(LEGACY_PROVIDER_SOURCE_PREFIX) ||
+    sourceId.startsWith(LEGACY_MEDIA_SOURCE_PREFIX)
 }
 
 export function resolveSettingsDataDir(settings: AppSettingsV1): string {

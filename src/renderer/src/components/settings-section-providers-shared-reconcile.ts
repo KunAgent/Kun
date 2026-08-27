@@ -70,10 +70,13 @@ export function reconcilePendingSharedProviderNames(
       next.delete(providerId)
       continue
     }
-    const canonicalNameObserved = connection.name === rename.canonicalName
+    const canonicalProfileObserved =
+      connection.name === rename.canonicalName &&
+      (rename.localBaseUrl === undefined || (connection.baseUrl ?? '') === rename.localBaseUrl) &&
+      (rename.localEndpointFormat === undefined || connection.endpointFormat === rename.localEndpointFormat)
     const committedRevisionPassed =
       rename.committedRevision !== null && snapshot.revision > rename.committedRevision
-    if (canonicalNameObserved || committedRevisionPassed) {
+    if (canonicalProfileObserved || committedRevisionPassed) {
       next.delete(providerId)
     }
   }
@@ -131,6 +134,11 @@ export function reconcilePendingSharedProviderCatalogs(
       continue
     }
     const canonicalObserved =
+      (catalog.localProviderName === undefined || connection.name === (catalog.localProviderName.trim() || providerId)) &&
+      (catalog.localProviderBaseUrl === undefined || (connection.baseUrl ?? '') === catalog.localProviderBaseUrl) &&
+      (catalog.localProviderEndpointFormat === undefined ||
+        connection.endpointFormat === catalog.localProviderEndpointFormat) &&
+      (catalog.localProviderKind === undefined || connection.kind === (catalog.localProviderKind ?? 'http')) &&
       JSON.stringify(connection.models) === JSON.stringify(catalog.localModels) &&
       sameCatalogCapabilities(
         connection.modelCapabilities,
@@ -239,6 +247,8 @@ export async function commitSharedModelConnectionCatalog(
       if (!connectSource) {
         throw new Error(`Shared model connection ${providerId} is no longer available`)
       }
+      const credential = connectSource.credential?.trim() ?? ''
+      if (modelProviderRequiresApiKey(connectSource.provider) && !credential) return snapshot
       try {
         snapshot = await connectSharedModelConnectionWithCatalog(
           snapshot,
@@ -266,11 +276,14 @@ export async function commitSharedModelConnectionCatalog(
       }
     }
     const catalog = applyPendingSharedProviderCatalog(connection, pending)
+    const providerPatch = connectSource
+      ? sharedConnectionProfilePatch(connectSource.provider)
+      : {}
     try {
       return await requestSharedModelConnections(
         `/v1/model-connections/${encodeURIComponent(providerId)}`,
         'PATCH',
-        { expectedRevision: snapshot.revision, ...catalog }
+        { expectedRevision: snapshot.revision, ...providerPatch, ...catalog }
       )
     } catch (error) {
       if (!(error instanceof SharedModelConnectionConflictError) || attempt === 1) throw error
@@ -278,6 +291,17 @@ export async function commitSharedModelConnectionCatalog(
     }
   }
   return snapshot
+}
+
+export function sharedConnectionProfilePatch(provider: ModelProviderProfileV1): Record<string, unknown> {
+  const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
+  return {
+    name: provider.name.trim() || provider.id,
+    kind: provider.kind ?? 'http',
+    authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
+    ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
+    endpointFormat: provider.endpointFormat
+  }
 }
 
 async function connectSharedModelConnectionWithCatalog(
@@ -322,6 +346,7 @@ export async function replaceSharedModelConnectionCredential(
       throw new Error(`Shared model connection ${providerId} is pending deletion`)
     }
     if (!snapshot.providers.some((item) => item.id === providerId)) {
+      if (!credential.trim()) return snapshot
       throw new Error(`Shared model connection ${providerId} is no longer available`)
     }
     try {
@@ -370,28 +395,34 @@ export async function replaceSharedModelConnectionCredential(
 export async function fenceSharedModelConnectionCredential(
   providerId: string,
   operationToken: string
-): Promise<void> {
+): Promise<boolean> {
   let snapshot = await requestSharedModelConnections('/v1/model-connections')
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (!snapshot.providers.some((provider) => provider.id === providerId)) return
+    if (!snapshot.providers.some((provider) => provider.id === providerId)) return false
     try {
       await requestSharedModelConnections(
         `/v1/model-connections/${encodeURIComponent(providerId)}/credential/fence`,
         'POST',
         { expectedRevision: snapshot.revision, operationToken }
       )
-      return
+      return true
     } catch (error) {
       if (!(error instanceof SharedModelConnectionConflictError) || attempt === 1) throw error
       snapshot = error.snapshot
     }
   }
+  return false
 }
 
 export async function connectOrReplaceSharedModelConnectionCredential(
   provider: ModelProviderProfileV1,
   credential: string,
-  isProviderTombstoned: (providerId: string) => boolean = () => false
+  isProviderTombstoned: (providerId: string) => boolean = () => false,
+  operation?: {
+    operationToken: string
+    isCurrent: () => boolean
+    fenceInstalled?: boolean
+  }
 ): Promise<SharedModelConnectionsSnapshot> {
   let snapshot = await requestSharedModelConnections('/v1/model-connections')
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -401,14 +432,21 @@ export async function connectOrReplaceSharedModelConnectionCredential(
     const existing = snapshot.providers.find((item) => item.id === provider.id)
     try {
       if (existing) {
-        return await requestSharedModelConnections(
-          `/v1/model-connections/${encodeURIComponent(provider.id)}/credential`,
-          'PUT',
-          { expectedRevision: snapshot.revision, credential }
+        if (operation && !operation.fenceInstalled) {
+          if (!operation.isCurrent()) return snapshot
+          await fenceSharedModelConnectionCredential(provider.id, operation.operationToken)
+          if (!operation.isCurrent()) return snapshot
+        }
+        return await replaceSharedModelConnectionCredential(
+          provider.id,
+          credential,
+          isProviderTombstoned,
+          operation
         )
       }
+      if (operation && !operation.isCurrent()) return snapshot
       const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
-      return await requestSharedModelConnections('/v1/model-connections/connect', 'POST', {
+      const connected = await requestSharedModelConnections('/v1/model-connections/connect', 'POST', {
         expectedRevision: snapshot.revision,
         id: provider.id,
         name: provider.name.trim() || provider.id,
@@ -417,13 +455,22 @@ export async function connectOrReplaceSharedModelConnectionCredential(
         authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
         ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
         endpointFormat: provider.endpointFormat,
-        credential,
+        ...(!operation ? { credential } : {}),
         models: provider.models,
         modelCapabilities: sharedCapabilitiesFromProvider(provider),
         ...(provider.models[0] ? { selectedModel: provider.models[0] } : {}),
         probe: false,
         select: false
       })
+      if (!operation || !operation.isCurrent()) return connected
+      await fenceSharedModelConnectionCredential(provider.id, operation.operationToken)
+      if (!operation.isCurrent()) return connected
+      return await replaceSharedModelConnectionCredential(
+        provider.id,
+        credential,
+        isProviderTombstoned,
+        operation
+      )
     } catch (error) {
       if (!(error instanceof SharedModelConnectionConflictError) || attempt === 1) throw error
       snapshot = error.snapshot
@@ -546,8 +593,8 @@ export function projectSharedModelConnections(
       // Canonical connections expose only configured state. Secret material
       // stays in the protected Registry and the in-memory edit generation.
       apiKey: '',
-      baseUrl: connection.baseUrl ?? '',
-      endpointFormat: connection.endpointFormat,
+      baseUrl: pendingNames.get(connection.id)?.localBaseUrl ?? connection.baseUrl ?? '',
+      endpointFormat: pendingNames.get(connection.id)?.localEndpointFormat ?? connection.endpointFormat,
       kind: connection.kind,
       models: pendingCatalog ? [...pendingCatalog.localModels] : [...connection.models],
       modelProfiles: pendingCatalog

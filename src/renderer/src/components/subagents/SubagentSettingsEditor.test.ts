@@ -350,7 +350,7 @@ describe('SubagentSettingsEditor', () => {
     })
   })
 
-  it('turns off every extension agent in one action without changing base agents', async () => {
+  it('shows a partial extension state and enables every extension agent in one action', async () => {
     const onPatch = vi.fn()
     const kun = {
       ...defaultKunRuntimeSettings(),
@@ -376,11 +376,12 @@ describe('SubagentSettingsEditor', () => {
       role: 'switch',
       'aria-label': 'Toggle extension agents'
     })
-    expect(extensionSwitch.props['aria-checked']).toBe(true)
-    const keepBaseOnly = buttonWithText(renderer, 'Keep base agents only')
-    expect(keepBaseOnly).toBeDefined()
+    expect(extensionSwitch.props['aria-checked']).toBe(false)
+    expect(extensionSwitch.props['data-state']).toBe('partial')
+    const enableAllExtensions = buttonWithText(renderer, 'Enable all extension agents')
+    expect(enableAllExtensions).toBeDefined()
     await act(async () => {
-      keepBaseOnly!.props.onClick()
+      enableAllExtensions!.props.onClick()
     })
     const patch = onPatch.mock.calls.at(-1)?.[0] as KunRuntimeSettingsPatchV1
     const profiles = patch.subagents?.profiles ?? []
@@ -395,7 +396,7 @@ describe('SubagentSettingsEditor', () => {
       'web-performance-auditor'
     ].includes(profile.id))
     expect(extensionProfiles).toHaveLength(37)
-    expect(extensionProfiles.every((profile) => profile.surfaces?.length === 0)).toBe(true)
+    expect(extensionProfiles.every((profile) => (profile.surfaces?.length ?? 0) > 0)).toBe(true)
     expect(profiles.some((profile) => profile.id === 'general')).toBe(false)
   })
 

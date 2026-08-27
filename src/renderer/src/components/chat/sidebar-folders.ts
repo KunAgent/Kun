@@ -266,7 +266,8 @@ export function moveThreadToSidebarFolder(
   threadId: string,
   folderId: string | null,
   targetThreadId?: string,
-  position: SidebarDropPosition = 'after'
+  position: SidebarDropPosition = 'after',
+  targetThreadOrder?: readonly string[]
 ): SidebarFolderRegistry {
   const normalizedThreadId = threadId.trim()
   const normalizedFolderId = folderId?.trim() || null
@@ -281,13 +282,20 @@ export function moveThreadToSidebarFolder(
     if (!normalizedFolderId) return withoutThread
     return withoutThread.map((folder) => {
       if (folder.id !== normalizedFolderId) return folder
+      const requestedOrder = compactStrings(targetThreadOrder ?? folder.threadIds)
+        .filter((id) => id !== normalizedThreadId && folder.threadIds.includes(id))
+      const requestedIds = new Set(requestedOrder)
+      const baseThreadIds = [
+        ...requestedOrder,
+        ...folder.threadIds.filter((id) => id !== normalizedThreadId && !requestedIds.has(id))
+      ]
       const targetIndex = normalizedTargetId
-        ? folder.threadIds.findIndex((id) => id === normalizedTargetId)
+        ? baseThreadIds.findIndex((id) => id === normalizedTargetId)
         : -1
       const insertionIndex = targetIndex < 0
-        ? folder.threadIds.length
+        ? baseThreadIds.length
         : targetIndex + (position === 'after' ? 1 : 0)
-      const threadIds = [...folder.threadIds]
+      const threadIds = [...baseThreadIds]
       threadIds.splice(insertionIndex, 0, normalizedThreadId)
       return { ...folder, threadIds }
     })

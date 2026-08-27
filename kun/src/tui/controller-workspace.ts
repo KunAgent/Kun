@@ -248,7 +248,7 @@ export abstract class TuiControllerWorkspace extends TuiControllerAttachments {
     if (!trimmed) return false
     this.patch({ composerMode: 'agent', composerOrchestration: 'direct' })
     if (!this.stateValue.projection) {
-      await this.createThread(trimmed.slice(0, 80))
+      await this.createThread(trimmed.slice(0, 80), { titleAuto: true })
     }
     const projection = this.requireProjection()
     if (!projection) return false

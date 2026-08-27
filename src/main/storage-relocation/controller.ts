@@ -9,6 +9,8 @@ import {
 } from '../../shared/storage-relocation'
 import { classifyCanonicalKunDataDir } from '../kun-data-dir-paths'
 import { StorageRelocationEngine } from './engine'
+import { trustedRendererSenderIsCurrent } from '../renderer-trust-policy'
+import { trustedWorkbenchRendererUrl } from '../main-window'
 
 const operationIdSchema = z.string().uuid()
 
@@ -141,17 +143,14 @@ export function assertTrustedStorageRelocationSender(
   getMainWindow: () => BrowserWindow | null
 ): void {
   const window = getMainWindow()
-  const senderFrame = event.senderFrame
-  const mainFrame = window?.webContents.mainFrame
-  if (
-    !window ||
-    window.isDestroyed() ||
-    event.sender.id !== window.webContents.id ||
-    !senderFrame ||
-    !mainFrame ||
-    senderFrame.processId !== mainFrame.processId ||
-    senderFrame.routingId !== mainFrame.routingId
-  ) {
+  const trusted = trustedRendererSenderIsCurrent(event, window, {
+    trustedRendererUrl: trustedWorkbenchRendererUrl(),
+    surface: 'storage-relocation'
+  }) || trustedRendererSenderIsCurrent(event, window, {
+    trustedRendererUrl: trustedWorkbenchRendererUrl(),
+    surface: 'workbench'
+  })
+  if (!trusted) {
     throw new Error('Storage relocation IPC sender is not the trusted top-level frame')
   }
 }

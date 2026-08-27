@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type ReactElement } from 'react'
+import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { DesignArtifact } from '../../../design/design-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 import type { DesignRuntimeQualityPayload } from '../../../design/design-html-quality'
@@ -46,6 +46,13 @@ export type DesignDocumentCanvasSurfaceProps = {
   onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
 }
 
+export function canvasDocumentReadyForRuntime(
+  expectedDocumentKey: string | undefined,
+  loadedDocumentKey: string | null
+): boolean {
+  return Boolean(expectedDocumentKey && loadedDocumentKey === expectedDocumentKey)
+}
+
 /** Full DesignDocument runtime shared by the legacy stage and Code's right whiteboard. */
 export function DesignDocumentCanvasSurface({
   workspaceRoot,
@@ -54,7 +61,7 @@ export function DesignDocumentCanvasSurface({
   boardArtifactId,
   readOnly = false,
   leftSidebarCollapsed = false,
-  onToggleLeftSidebar = () => undefined,
+  onToggleLeftSidebar,
   busy = false,
   onOpenAgentSettings,
   onImplementDesign,
@@ -79,6 +86,14 @@ export function DesignDocumentCanvasSurface({
   const expectedCanvasDocumentKey = boardArtifact && baseDir
     ? canvasDocumentKey(workspaceRoot, boardArtifact.id, baseDir)
     : undefined
+  const [loadedCanvasDocumentKey, setLoadedCanvasDocumentKey] = useState<string | null>(null)
+  const canvasRuntimeReady = canvasDocumentReadyForRuntime(
+    expectedCanvasDocumentKey,
+    loadedCanvasDocumentKey
+  )
+  const handleDocumentLoadStateChange = useCallback((loaded: boolean): void => {
+    setLoadedCanvasDocumentKey(loaded ? expectedCanvasDocumentKey ?? null : null)
+  }, [expectedCanvasDocumentKey])
   useSvgArtifactStatusMonitor(workspaceRoot, artifacts, !readOnly)
 
   useEffect(() => {
@@ -131,7 +146,10 @@ export function DesignDocumentCanvasSurface({
   )
 
   useApplyShapeOpsLive(
-    Boolean(boardArtifact && activeThreadId && documentId && documentIsActive && !readOnly),
+    Boolean(
+      boardArtifact && activeThreadId && documentId && documentIsActive &&
+      !readOnly && canvasRuntimeReady
+    ),
     onScreenCreated,
     undefined,
     liveOpsErrorKey,
@@ -206,6 +224,7 @@ export function DesignDocumentCanvasSurface({
         onUseElementAsContext={onUseElementAsContext}
         onRuntimeQualityFindings={onRuntimeQualityFindings}
         onRequestQualityRepair={onRequestQualityRepair}
+        onDocumentLoadStateChange={handleDocumentLoadStateChange}
       />
       {!readOnly ? (
         <PropertiesPanel

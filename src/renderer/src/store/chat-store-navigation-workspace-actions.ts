@@ -1,6 +1,8 @@
 import type { NormalizedThread } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { loadThreadStates } from '../agent/thread-state-loader'
+import type { ThreadRuntimeState } from '../agent/provider-types'
 import i18n from '../i18n'
 import {
   applyChatContentMaxWidth,
@@ -106,7 +108,12 @@ import {
   stopTurnCompletionPoll
 } from './chat-store-schedulers'
 import { saveThreadListCache } from './thread-list-cache'
-import { loadMoreThreads as loadMoreThreadsAction } from './chat-store-thread-pagination'
+import { scheduleRecentThreadPrewarm } from './thread-detail-prewarm'
+import {
+  initialWorkspaceThreadPages,
+  loadMoreThreads as loadMoreThreadsAction,
+  THREAD_LIST_FIRST_PAGE_SIZE
+} from './chat-store-thread-pagination'
 import {
   collectRunningWatchTargets,
   normalizeListedThreadActivity
@@ -305,11 +312,14 @@ export function createNavigationWorkspaceActions(
       clearBusyWatchdog()
     }
     try {
-      for (const th of workspaceThreads) {
-        await p.deleteThread(th.id)
-        invalidateThreadSnapshot(th.id)
-      }
-      const removeIds = new Set(workspaceThreads.map((th) => th.id))
+      const deletedIds = typeof p.deleteThreadsByWorkspace === 'function'
+        ? await p.deleteThreadsByWorkspace(normalizedPath)
+        : await Promise.all(workspaceThreads.map(async (thread) => {
+          await p.deleteThread(thread.id)
+          return thread.id
+        }))
+      for (const threadId of deletedIds) invalidateThreadSnapshot(threadId)
+      const removeIds = new Set(deletedIds)
       const codeWorkspaceRoots = forgetCodeWorkspaceRoot(get().codeWorkspaceRoots, normalizedPath)
       set((s) => {
         const w = { ...s.watchTurnCompletion }
@@ -371,14 +381,17 @@ export function createNavigationWorkspaceActions(
     try {
       const p = getProvider()
       let rawThreads: NormalizedThread[]
+      let firstPageHasMore = false
       try {
         if (typeof p.listThreadsPage === 'function') {
           const page = await p.listThreadsPage({
+            limit: THREAD_LIST_FIRST_PAGE_SIZE,
             includeArchived: true,
             includeSide: true,
             lean: true
           })
           rawThreads = page.threads
+          firstPageHasMore = page.hasMore
         } else {
           rawThreads = await p.listThreads({
             includeArchived: true,
@@ -418,18 +431,16 @@ export function createNavigationWorkspaceActions(
         threadLooksRunning(thread) ||
         watchSnapshot[thread.id] === true
       )
-      const reconciledStateById = new Map<string, Awaited<ReturnType<typeof p.getThreadState>>>()
-      if (reconcileCandidates.length > 0 && typeof p.getThreadState === 'function') {
-        const results = await Promise.allSettled(
-          reconcileCandidates.map(async (thread) => ({
-            id: thread.id,
-            state: await p.getThreadState(thread.id)
-          }))
-        )
+      const reconciledStateById = new Map<string, ThreadRuntimeState>()
+      if (reconcileCandidates.length > 0 &&
+          (typeof p.getThreadState === 'function' || typeof p.getThreadStates === 'function')) {
+        // Bulk endpoint first (chunked + sequential inside the loader); bounded
+        // single reads keep older runtimes compatible.
+        const results = await loadThreadStates(p, reconcileCandidates.map((t) => t.id))
         for (const result of results) {
-          if (result.status !== 'fulfilled') continue
-          const localThread = localThreadById.get(result.value.id)
-          const latestTurnId = result.value.state.latestTurnId
+          if (!result.ok) continue
+          const localThread = localThreadById.get(result.id)
+          const latestTurnId = result.state.latestTurnId
           // Reject the response when the runtime reports a *newer* turn than
           // the one this refresh started from: the response is authoritative
           // for its own turn, but committing it here could regress local state
@@ -439,7 +450,7 @@ export function createNavigationWorkspaceActions(
             localThread?.latestTurnId &&
             localThread.latestTurnId !== latestTurnId
           ) continue
-          reconciledStateById.set(result.value.id, result.value.state)
+          reconciledStateById.set(result.id, result.state)
         }
         threads = threads.map((thread) => {
           const runtimeState = reconciledStateById.get(thread.id)
@@ -634,7 +645,12 @@ export function createNavigationWorkspaceActions(
           unreadThreadIds: u,
           threadListStatus: 'ready',
           threadListError: null,
-          threadListCursorByWorkspace: {},
+          threadListCursorByWorkspace: firstPageHasMore
+            ? initialWorkspaceThreadPages([
+              ...codeWorkspaceRoots,
+              ...threads.map((thread) => thread.workspace)
+            ])
+            : {},
           ...(staleCodeThreadMemory ? { lastCodeThreadId: null } : {}),
           ...(shouldClearSelection ? clearedThreadSelection() : {})
         }
@@ -644,6 +660,7 @@ export function createNavigationWorkspaceActions(
       // startup can paint the sidebar from local storage before the runtime
       // inventory arrives.
       saveThreadListCache(displayThreads)
+      scheduleRecentThreadPrewarm(get().threads, get().activeThreadId)
       if (activeThreadIsManagedInCodeRoute) {
         await get().openCode()
       }

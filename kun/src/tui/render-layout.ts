@@ -337,9 +337,11 @@ export function renderActivityRow(
     ? yellow('Action required')
     : waitingForInput
       ? magenta('Action required')
-      : connectionPending
-        ? yellow('Reconnecting')
-        : active && notice
+      : state.connection === 'connecting'
+        ? yellow('Connecting')
+        : state.connection === 'reconnecting'
+          ? yellow('Reconnecting')
+          : active && notice
           ? (notice.kind === 'error'
               ? red(`! ${sanitizeTerminalText(notice.message)}`)
               : green(`✓ ${sanitizeTerminalText(notice.message)}`))

@@ -1,4 +1,5 @@
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import type { CanvasTurnOutcome } from './canvas-turn-outcome'
 import {
   generatedImageResultsForTurn,
   latestGeneratedImageUrlForTurn,
@@ -39,6 +40,7 @@ export type CanvasTurnReplayState = {
 export type DurableDesignCanvasTurnCompletion = {
   turnId: string
   blocks: readonly ChatBlock[]
+  outcome: CanvasTurnOutcome
 }
 
 export type CanvasGeneratedImagePlacementTarget = {
@@ -380,9 +382,11 @@ export function replayDurableDesignCanvasTurns(options: {
     block: ToolBlock,
     turnBlocks: readonly ChatBlock[],
     replayKey: string,
-    turnId: string
+    turnId: string,
+    outcome: CanvasTurnOutcome
   ) => void
   onTurnComplete: (completion: DurableDesignCanvasTurnCompletion) => void
+  resolveTurnOutcome?: (turnId: string) => CanvasTurnOutcome
 }): void {
   const durableTurns = durableDesignCanvasTurns(options.blocks, options.target)
   const watermark = useCanvasShapeStore.getState().document.rendererReplayWatermarkTurnId
@@ -391,6 +395,7 @@ export function replayDurableDesignCanvasTurns(options: {
     : -1
   const turns = watermarkIndex >= 0 ? durableTurns.slice(watermarkIndex + 1) : durableTurns
   for (const turn of turns) {
+    const outcome = options.resolveTurnOutcome?.(turn.turnId) ?? 'unknown'
     options.onTurnStart()
     const key = (source: string) => designCanvasReplayKey({
       threadId: options.threadId,
@@ -405,12 +410,13 @@ export function replayDurableDesignCanvasTurns(options: {
     if (assistantText) options.onAssistantText(assistantText, key('assistant'))
     for (const block of turn.blocks) {
       if (block.kind === 'tool') {
-        options.onToolBlock(block, turn.blocks, key(`tool:${block.id}`), turn.turnId)
+        options.onToolBlock(block, turn.blocks, key(`tool:${block.id}`), turn.turnId, outcome)
       }
     }
     options.onTurnComplete({
       turnId: turn.turnId,
-      blocks: turn.blocks
+      blocks: turn.blocks,
+      outcome
     })
   }
 }

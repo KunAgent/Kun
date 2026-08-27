@@ -36,6 +36,10 @@ import {
   registerAppIpcHandlers
 } from './register-app-ipc-handlers'
 
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 const electronMock = getAppIpcElectronMock()
 const protectedProviderMocks = getProtectedProviderMocks()
 
@@ -44,7 +48,7 @@ describe('registerAppIpcHandlers security and provider', () => {
   afterEach(cleanupAppIpcHandlerTestState)
 
   it('applies bounded app badge counts only for the trusted workbench frame', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const trustedEvent = { sender: contents, senderFrame: mainFrame }
@@ -84,7 +88,7 @@ describe('registerAppIpcHandlers security and provider', () => {
         }))
       }
     }
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const trustedEvent = { sender: contents, senderFrame: mainFrame }
@@ -129,12 +133,12 @@ describe('registerAppIpcHandlers security and provider', () => {
 
   it('rejects untrusted Registry credential lookups before loading protected settings', async () => {
     const projected = settingsWithProtectedSubscriptionCredentials()
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const untrustedEvent = {
       sender: { id: 99 },
-      senderFrame: { processId: 90, routingId: 91 }
+      senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' }
     }
     const storeLoad = vi.fn(async () => settings())
     const withRegistryCredentials = vi.fn(async () => projected)
@@ -172,7 +176,7 @@ describe('registerAppIpcHandlers security and provider', () => {
 
   it('binds protected subscription credentials to the expected provider transport', async () => {
     const projected = settingsWithProtectedSubscriptionCredentials()
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const trustedEvent = { sender: contents, senderFrame: mainFrame }
@@ -205,7 +209,7 @@ describe('registerAppIpcHandlers security and provider', () => {
   })
 
   it('allows explicit subscription credential drafts without a Registry lookup', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const trustedEvent = { sender: contents, senderFrame: mainFrame }
@@ -265,7 +269,7 @@ describe('registerAppIpcHandlers security and provider', () => {
   })
 
   it('registers a trusted dedicated runtime image upload bridge', async () => {
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const runtimeRequest = vi.fn(async (path: string, _method?: string, body?: string) => {
@@ -322,7 +326,7 @@ describe('registerAppIpcHandlers security and provider', () => {
 
     await expect(handler?.({
       sender: { id: 99 },
-      senderFrame: { processId: 90, routingId: 91 }
+      senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' }
     }, payload)).rejects.toThrow(/trusted workbench frame/)
     await expect(handler?.({ sender: contents, senderFrame: mainFrame }, payload)).resolves.toMatchObject({
       ok: true,
@@ -338,7 +342,7 @@ describe('registerAppIpcHandlers security and provider', () => {
     const root = mkdtempSync(join(tmpdir(), 'kun-reveal-workspace-'))
     const filePath = join(root, 'preview.md')
     writeFileSync(filePath, '# Preview', 'utf8')
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     try {
@@ -348,7 +352,7 @@ describe('registerAppIpcHandlers security and provider', () => {
 
       await expect(handler?.({
         sender: { id: 99 },
-        senderFrame: { processId: 90, routingId: 91 }
+        senderFrame: { processId: 90, routingId: 91, url: 'http://127.0.0.1:5173/index.html' }
       }, payload)).rejects.toThrow(/trusted workbench frame/)
       await expect(handler?.({ sender: contents, senderFrame: mainFrame }, payload)).resolves.toEqual({ ok: true })
       const shownPath = electronMock.showItemInFolder.mock.calls[0]?.[0]
@@ -370,7 +374,7 @@ describe('registerAppIpcHandlers security and provider', () => {
     const outsideFile = join(root, 'outside.md')
     mkdirSync(workspaceRoot)
     writeFileSync(outsideFile, '# Outside', 'utf8')
-    const mainFrame = { processId: 10, routingId: 20 }
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
     const event = { sender: contents, senderFrame: mainFrame }
@@ -406,6 +410,33 @@ describe('registerAppIpcHandlers security and provider', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  it('requires startup readiness and a trusted workbench URL for generic Runtime requests', async () => {
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    const assertRendererRuntimeReady = vi.fn(() => {
+      throw new Error('Kun desktop startup is not ready (phase: runtime_handoff).')
+    })
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => mainWindow as never,
+      runtimeRequest,
+      assertRendererRuntimeReady
+    }))
+
+    await expect(handlers.get('runtime:request')?.({
+      sender: contents,
+      senderFrame: mainFrame
+    }, { path: '/health', method: 'GET' })).rejects.toThrow(/startup is not ready/)
+    expect(runtimeRequest).not.toHaveBeenCalled()
+
+    await expect(handlers.get('runtime:request')?.({
+      sender: contents,
+      senderFrame: { ...mainFrame, url: 'https://example.com' }
+    }, { path: '/health', method: 'GET' })).rejects.toThrow(/trusted workbench frame/)
+    expect(runtimeRequest).not.toHaveBeenCalled()
   })
 
 })

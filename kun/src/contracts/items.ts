@@ -140,7 +140,9 @@ export const ModelContextBlockState = z.object({
   kind: z.string().min(1),
   authority: ModelContextAuthority,
   state: z.enum(['active', 'inactive']),
-  digest: z.string().min(1).optional()
+  digest: z.string().min(1).optional(),
+  /** Format 2 baseline records carry the canonical content inline. */
+  content: z.string().optional()
 }).strict()
 export type ModelContextBlockState = z.infer<typeof ModelContextBlockState>
 
@@ -148,12 +150,19 @@ export type ModelContextBlockState = z.infer<typeof ModelContextBlockState>
  * Exact, private model-visible context appended before a model dispatch.
  * The rendered text is persisted so a restart never regenerates already-sent
  * time, persona, mode, workspace, Skill, or recovery bytes differently.
+ *
+ * Format 1 stores append-only deltas whose `text` is the rendered envelope.
+ * A baseline item adds `baseline: true` and carries canonical `content`
+ * inline on each active block so a squashed history can be rebuilt
+ * structurally without parsing rendered text.
  */
 export const ModelContextTurnItem = TurnItemBase.extend({
   kind: z.literal('model_context'),
   role: z.literal('system'),
   status: z.literal('completed'),
   formatVersion: z.literal(1),
+  /** Marks a squashed canonical baseline replacing all earlier deltas. */
+  baseline: z.literal(true).optional(),
   stepIndex: z.number().int().nonnegative(),
   contentDigest: z.string().min(1),
   blocks: z.array(ModelContextBlockState),
@@ -273,7 +282,8 @@ export const UserInputTurnItem = TurnItemBase.extend({
   prompt: z.string(),
   questions: z.array(UserInputQuestionSchema).default([]),
   answers: z.array(UserInputAnswerSchema).optional(),
-  status: z.enum(['pending', 'submitted', 'cancelled'])
+  status: z.enum(['pending', 'submitted', 'cancelled', 'timeout']),
+  timeoutSeconds: z.number().int().positive().optional()
 })
 export type UserInputTurnItem = z.infer<typeof UserInputTurnItem>
 

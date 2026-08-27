@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 import type { DesignArtifact, DesignDocument } from '../../../design/design-types'
-import { DesignDocumentCanvasSurface } from './DesignDocumentCanvasSurface'
+import {
+  DesignDocumentCanvasSurface,
+  canvasDocumentReadyForRuntime
+} from './DesignDocumentCanvasSurface'
 
 vi.mock('./CanvasViewport', () => ({
   CanvasViewport: (props: { artifactId?: string; surface?: string }) =>
@@ -68,6 +71,12 @@ function setDocumentWithBoards(artifacts: DesignArtifact[]): void {
 }
 
 describe('DesignDocumentCanvasSurface', () => {
+  it('keeps canvas replay disabled until the authoritative document key loads', () => {
+    expect(canvasDocumentReadyForRuntime('/workspace/doc/board', null)).toBe(false)
+    expect(canvasDocumentReadyForRuntime('/workspace/doc/board', '/workspace/doc/other')).toBe(false)
+    expect(canvasDocumentReadyForRuntime('/workspace/doc/board', '/workspace/doc/board')).toBe(true)
+  })
+
   it('picks the most recently updated board when no board is pinned', () => {
     setDocumentWithBoards([
       canvasArtifact('board-old', '2026-08-01T00:00:00.000Z'),

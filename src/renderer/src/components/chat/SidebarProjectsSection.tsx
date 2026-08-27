@@ -4,7 +4,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   ReactElement
 } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -76,6 +76,7 @@ import {
   type SidebarThreadWorktreeRecord,
   type SidebarThreadWorktrees
 } from './sidebar-project-selectors'
+import { createSidebarThreadOrderTracker } from './sidebar-thread-order-tracker'
 import {
   SIDEBAR_THREAD_DRAG_DATA_KEY,
   SIDEBAR_WORKSPACE_DRAG_DATA_KEY,
@@ -165,6 +166,7 @@ type SidebarProjectsSectionProps = {
   watchTurnCompletion: Record<string, boolean>
   unreadThreadIds: Parameters<typeof sidebarThreadActivity>[1]['unreadThreadIds']
   scheduledThreadActivities?: Parameters<typeof sidebarThreadActivity>[1]['scheduledThreadActivities']
+  awaitingUserInputThreadIds?: Parameters<typeof sidebarThreadActivity>[1]['awaitingUserInputThreadIds']
   locale: string
   onPickWorkspace: () => void
   onRemoveWorkspace: (workspacePath: string) => Promise<void>
@@ -188,6 +190,35 @@ export function sddDraftHistorySavedRevision(
   return draft ? `${draft.id}\n${draft.updatedAt}` : ''
 }
 
+/** Stable across title, status, sequence, and other activity-only updates. */
+export function sidebarThreadWorkspaceIdentityKey(threads: NormalizedThread[]): string {
+  return threads
+    .map((thread) => `${thread.id}\u0000${normalizeWorkspaceRoot(thread.workspace ?? '')}`)
+    .sort()
+    .join('\n')
+}
+
+export function sidebarWorktreeDiscoveryKey(
+  threads: NormalizedThread[],
+  workspaceRoot: string,
+  workspaceRoots: string[]
+): string {
+  const pathsByIdentity = new Map<string, string>()
+  for (const path of [
+    workspaceRoot,
+    ...workspaceRoots,
+    ...threads.map((thread) => thread.workspace ?? '')
+  ]) {
+    const key = workspaceRootIdentityKey(path)
+    if (key && !pathsByIdentity.has(key)) pathsByIdentity.set(key, path)
+  }
+  return JSON.stringify(
+    [...pathsByIdentity.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([, path]) => path)
+  )
+}
+
 export function SidebarProjectsSection({
   threads,
   activeView,
@@ -207,6 +238,7 @@ export function SidebarProjectsSection({
   watchTurnCompletion,
   unreadThreadIds,
   scheduledThreadActivities = {},
+  awaitingUserInputThreadIds,
   locale,
   onPickWorkspace,
   onRemoveWorkspace,
@@ -220,6 +252,7 @@ export function SidebarProjectsSection({
   onSearchQueryChange,
   t
 }: SidebarProjectsSectionProps): ReactElement {
+  const orderTracker = useRef(createSidebarThreadOrderTracker()).current
   const [sidebarCollapse, setSidebarCollapse] = useState<SidebarCollapseRegistry>(
     () => readSidebarCollapseRegistry()
   )
@@ -245,27 +278,18 @@ export function SidebarProjectsSection({
     () => readThreadWorktreeRegistry().worktrees
   )
   const [discoveredThreadWorktrees, setDiscoveredThreadWorktrees] = useState<SidebarThreadWorktrees>({})
+  const threadWorkspaceIdentityKey = sidebarThreadWorkspaceIdentityKey(threads)
+  const workspaceRootsIdentityKey = workspaceRoots.map(normalizeWorkspaceRoot).sort().join('\n')
 
   useEffect(() => {
     setRegisteredThreadWorktrees(readThreadWorktreeRegistry().worktrees)
-  }, [activeThreadId, threads, workspaceRoots])
+  }, [activeThreadId, threadWorkspaceIdentityKey, workspaceRootsIdentityKey])
 
-  const worktreeDiscoveryKey = useMemo(() => {
-    const pathsByIdentity = new Map<string, string>()
-    for (const path of [
-      workspaceRoot,
-      ...workspaceRoots,
-      ...threads.map((thread) => thread.workspace ?? '')
-    ]) {
-      const key = workspaceRootIdentityKey(path)
-      if (key && !pathsByIdentity.has(key)) pathsByIdentity.set(key, path)
-    }
-    return JSON.stringify(
-      [...pathsByIdentity.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([, path]) => path)
-    )
-  }, [threads, workspaceRoot, workspaceRoots])
+  const worktreeDiscoveryKey = sidebarWorktreeDiscoveryKey(
+    threads,
+    workspaceRoot,
+    workspaceRoots
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.kunGui?.getGitBranches !== 'function') return
@@ -293,7 +317,8 @@ export function SidebarProjectsSection({
     busy,
     watchTurnCompletion,
     unreadThreadIds,
-    scheduledThreadActivities
+    scheduledThreadActivities,
+    awaitingUserInputThreadIds
   }
 
   const groups = useMemo(() => {
@@ -430,6 +455,7 @@ export function SidebarProjectsSection({
     handlePinThread,
     handleRestoreThread,
     handleSummarizeThread,
+    handlePruneThread,
     moveTargetsForThread,
     moveThreadToWorkspace,
     openActionDialog,
@@ -585,6 +611,7 @@ export function SidebarProjectsSection({
     threadWorktrees,
     sidebarFolders,
     sidebarOrder,
+    orderTracker,
     deletingThreadIds,
     draggingWorkspacePath,
     draggingThreadId,
@@ -628,7 +655,7 @@ export function SidebarProjectsSection({
   })
   return <SidebarProjectsContent {...{
     t, runtimeReady, workspaceRoot, searchQuery, showArchived, allGroupsCollapsed, searchVisible,
-    busy, activeView, activeThreadId, locale, displayGroups, sidebarCollapse, sidebarOrder,
+    busy, activeView, activeThreadId, locale, displayGroups, sidebarCollapse, sidebarOrder, orderTracker,
     threadListStatus, threadListError, onRetryThreads, onLoadMoreThreads, threadListCursorByWorkspace,
     sidebarFolders, expandedWorkspaces, deletingThreadIds, draggingWorkspacePath, draggingThreadId,
     workspaceOrderDropTarget, threadOrderDropTarget, dragOverWorkspace, folderDropTarget,
@@ -644,7 +671,7 @@ export function SidebarProjectsSection({
     handleWorkspaceDragLeave, handleWorkspaceDrop, handleThreadDragStart, handleThreadDragEnd,
     handleThreadDragOver, handleThreadDragLeave, handleThreadDrop, handleFolderDragOver,
     handleFolderDragLeave, handleFolderDrop, threadMoveDisabledReason, openMoveThreadDialog,
-    handlePinThread, openRenameThreadDialog, handleSummarizeThread, handleCopyThreadId,
+    handlePinThread, openRenameThreadDialog, handleSummarizeThread, handlePruneThread, handleCopyThreadId,
     handleArchiveThread,
     handleDeleteThread, handleRestoreThread, openWorkspaceInSystem, handleArchiveWorkspaceThreads,
     handleRemoveWorkspace, archivableWorkspaceThreads, closeRenameThreadDialog,

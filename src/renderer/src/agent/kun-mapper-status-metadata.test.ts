@@ -383,6 +383,51 @@ describe('Kun extension metadata mapping', () => {
     }])
   })
 
+  it('keeps a child terminal lifecycle event out of the parent terminal sink', async () => {
+    const childEvents: unknown[] = []
+    const onTurnComplete = vi.fn()
+    const onTool = vi.fn()
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onChildRuntimeEvent: (event) => childEvents.push(event),
+      onTurnComplete,
+      onTool
+    }
+
+    await dispatchKunRuntimeEvent(
+      {
+        kind: 'turn_completed',
+        seq: 64,
+        timestamp: '2026-08-22T07:21:51.367Z',
+        threadId: 'thr_1',
+        turnId: 'turn_1',
+        child: {
+          parentThreadId: 'thr_1',
+          parentTurnId: 'turn_1',
+          childId: 'child_1',
+          childLabel: 'Fast Context retrieval',
+          childStatus: 'completed',
+          childSeq: 8,
+          childProviderId: 'deepseek'
+        }
+      },
+      sink,
+      async () => undefined
+    )
+
+    expect(childEvents).toHaveLength(1)
+    expect(childEvents[0]).toMatchObject({
+      seq: 64,
+      child: { childId: 'child_1', childStatus: 'completed' }
+    })
+    expect(onTool).toHaveBeenCalledWith(expect.objectContaining({
+      itemId: 'child_lifecycle_child_1',
+      updateOnly: true,
+      status: 'success'
+    }))
+    expect(onTurnComplete).not.toHaveBeenCalled()
+  })
+
   it('preserves background subagent message source on user messages', () => {
     const block = chatBlockFromItem({
       id: 'item_subagent_notice',

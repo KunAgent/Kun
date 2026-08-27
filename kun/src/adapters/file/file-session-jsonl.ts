@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { rm, type FileHandle } from 'node:fs/promises'
-import type { RuntimeEvent } from '../../contracts/events.js'
+import { rm, stat, type FileHandle } from 'node:fs/promises'
+import { RuntimeEvent as RuntimeEventSchema, type RuntimeEvent } from '../../contracts/events.js'
 import { isPublicTurnItem, type TurnItem } from '../../contracts/items.js'
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../../ports/session-store.js'
 import { buildPublicItemHistoryPage, timelineSafeItem } from '../../services/item-history-page.js'
@@ -201,6 +201,111 @@ function shouldRetainUsageEvent(
   return timestamp >= options.cutoffMs
 }
 
+/**
+ * Rewrite `events.jsonl`, keeping only events at or after `fromSeqInclusive`.
+ * Streamed two-pass so a 130 MiB log never materializes in memory; the
+ * replacement uses the same atomic tmp+rename discipline as item rewrites.
+ */
+export async function trimEventsJsonlFromSeq(
+  path: string,
+  fromSeqInclusive: number,
+  options: {
+    maxRecordBytes: number
+    commitReplacement?: (replace: () => Promise<void>) => Promise<boolean>
+  }
+): Promise<{ trimmed: boolean; keptEvents: number }> {
+  const tmp = `${path}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`
+  let keptEvents = 0
+  try {
+    const writer = createWriteStream(tmp, { encoding: 'utf-8', mode: 0o600 })
+    const writeLine = (line: string): Promise<void> => new Promise((resolve, reject) => {
+      if (writer.write(`${line}\n`)) { resolve(); return }
+      writer.once('error', reject)
+      writer.once('drain', () => { writer.off('error', reject); resolve() })
+    })
+    let lineIndex = 0
+    try {
+      for await (const record of iterateJsonlEventRecords(path, options.maxRecordBytes)) {
+        const keep = !record.event || record.event.seq >= fromSeqInclusive
+        if (keep && record.line.trim()) {
+          await writeLine(record.line)
+          keptEvents += 1
+        }
+        lineIndex += 1
+        if (lineIndex % YIELD_EVERY_LINES === 0) await yieldToEventLoop()
+      }
+    } catch (error) {
+      writer.destroy()
+      throw error
+    }
+    await new Promise<void>((resolve, reject) => {
+      writer.once('error', reject)
+      writer.end(() => resolve())
+    })
+    const replace = async (): Promise<void> => { await renameFileWithRetry(tmp, path) }
+    if (options.commitReplacement) {
+      const committed = await options.commitReplacement(replace)
+      return { trimmed: committed, keptEvents }
+    }
+    await replace()
+    return { trimmed: true, keptEvents }
+  } finally {
+    await rm(tmp, { force: true }).catch(() => undefined)
+  }
+}
+
+/**
+ * Return the seq of the first parseable event in the log, or 0 when the log
+ * is missing/empty. Used as the SSE replay floor; trimming only removes a
+ * prefix, so the head record alone determines the floor.
+ */
+export async function firstEventSeqFromJsonl(path: string): Promise<number> {
+  for await (const record of iterateJsonlEventRecords(path, 1024 * 1024)) {
+    if (record.event) return record.event.seq
+  }
+  return 0
+}
+
+/**
+ * Revision-fenced event-prefix trim shared by FileSessionStore. `guards`
+ * capture the store's revision/stat checks so the rewrite only commits when
+ * the log is unchanged since the scan began.
+ */
+export async function trimEventsWithGuards(options: {
+  path: string
+  fromSeqInclusive: number
+  maxRecordBytes: number
+  info: { size: number; mtimeMs: number }
+  revisionBefore: number
+  readRevision: () => number
+  bumpRevision: () => void
+  invalidateCache: () => void
+  withWrite: (operation: () => Promise<boolean>) => Promise<boolean>
+  scheduleRetry: () => void
+}): Promise<{ afterBytes: number }> {
+  const trimmed = await trimEventsJsonlFromSeq(options.path, options.fromSeqInclusive, {
+    maxRecordBytes: options.maxRecordBytes,
+    commitReplacement: (replace) => options.withWrite(async () => {
+      const currentInfo = await stat(options.path).catch(() => null)
+      if (
+        options.readRevision() !== options.revisionBefore ||
+        !currentInfo ||
+        currentInfo.size !== options.info.size ||
+        currentInfo.mtimeMs !== options.info.mtimeMs
+      ) {
+        return false
+      }
+      await replace()
+      options.bumpRevision()
+      options.invalidateCache()
+      return true
+    })
+  })
+  if (!trimmed.trimmed) options.scheduleRetry()
+  const after = await stat(options.path).catch(() => null)
+  return { afterBytes: after?.size ?? 0 }
+}
+
 function usageCoalescingBucket(event: RuntimeEvent): string {
   if (event.kind !== 'usage') return ''
   const day = Number.isFinite(Date.parse(event.timestamp))
@@ -216,9 +321,10 @@ export function parseReplayEventRecord(line: string, maxRecordBytes: number): Ru
   }
   try {
     const value = JSON.parse(line) as unknown
-    if (!value || typeof value !== 'object') return null
-    const event = value as RuntimeEvent
-    return typeof event.seq === 'number' && Number.isFinite(event.seq) ? event : null
+    const parsed = RuntimeEventSchema.safeParse(value)
+    // Keep the existing JSONL tolerance: one corrupt historical record must
+    // not poison replay of the rest of the thread.
+    return parsed.success ? parsed.data : null
   } catch {
     // Keep the existing JSONL tolerance: one corrupt historical record must
     // not poison replay of the rest of the thread.

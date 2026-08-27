@@ -1,11 +1,5 @@
-import type {
-  Dispatch,
-  DragEvent as ReactDragEvent,
-  FormEvent,
-  MouseEvent as ReactMouseEvent,
-  ReactElement,
-  SetStateAction
-} from 'react'
+import type { Dispatch, DragEvent as ReactDragEvent, FormEvent,
+  MouseEvent as ReactMouseEvent, ReactElement, SetStateAction } from 'react'
 import { ChevronDown, ChevronRight, Folder, FolderPlus, FolderOpen, Plus } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
@@ -30,7 +24,6 @@ import {
   type WorkspaceContextMenuState
 } from './SidebarProjectOverlays'
 import {
-  prioritizeSidebarThreadActivity,
   sidebarThreadActivity,
   sortSidebarThreads,
   workspaceContextLabel,
@@ -39,6 +32,7 @@ import {
   type SidebarThreadWorktrees,
   type SidebarWorkspaceGroup
 } from './sidebar-project-selectors'
+import type { SidebarThreadOrderTracker } from './sidebar-thread-order-tracker'
 import { reconcileSidebarThreadOrder, sidebarThreadOrderScope, type SidebarOrderRegistry } from './sidebar-order'
 import {
   isSidebarFolderCollapsed,
@@ -87,6 +81,7 @@ export type SidebarProjectsContentProps = {
   activeView: 'chat' | 'write' | 'claw'; activeThreadId: string | null; locale: string
   displayGroups: SidebarWorkspaceGroup[]
   sidebarCollapse: SidebarCollapseRegistry; sidebarOrder: SidebarOrderRegistry; sidebarFolders: SidebarFolderRegistry
+  orderTracker: SidebarThreadOrderTracker
   expandedWorkspaces: Record<string, SidebarProjectExpansionStage>; deletingThreadIds: Record<string, boolean>
   draggingWorkspacePath: string | null; draggingThreadId: string | null
   workspaceOrderDropTarget: WorkspaceOrderDropTarget | null
@@ -135,7 +130,7 @@ export type SidebarProjectsContentProps = {
   openMoveThreadDialog: (thread: NormalizedThread, record?: SidebarThreadWorktreeRecord) => void
   handlePinThread: (thread: NormalizedThread, pinned: boolean) => Promise<void>
   openRenameThreadDialog: (thread: NormalizedThread) => void
-  handleSummarizeThread: (thread: NormalizedThread) => Promise<void>
+  handleSummarizeThread: (thread: NormalizedThread) => Promise<void>; handlePruneThread: (thread: NormalizedThread) => Promise<void>
   handleCopyThreadId: (thread: NormalizedThread) => Promise<void>
   handleArchiveThread: (thread: NormalizedThread) => Promise<void>
   handleDeleteThread: (thread: NormalizedThread) => Promise<void>
@@ -153,7 +148,7 @@ export type SidebarProjectsContentProps = {
 export function SidebarProjectsContent(props: SidebarProjectsContentProps): ReactElement {
   const {
     t, runtimeReady, workspaceRoot, searchQuery, showArchived, allGroupsCollapsed, searchVisible,
-    busy, activeView, activeThreadId, locale, displayGroups, sidebarCollapse, sidebarOrder,
+    busy, activeView, activeThreadId, locale, displayGroups, sidebarCollapse, sidebarOrder, orderTracker,
     threadListStatus, threadListError, onRetryThreads, onLoadMoreThreads,
     threadListCursorByWorkspace,
     sidebarFolders, expandedWorkspaces, deletingThreadIds, draggingWorkspacePath, draggingThreadId,
@@ -170,7 +165,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
     handleWorkspaceDragLeave, handleWorkspaceDrop, handleThreadDragStart, handleThreadDragEnd,
     handleThreadDragOver, handleThreadDragLeave, handleThreadDrop, handleFolderDragOver,
     handleFolderDragLeave, handleFolderDrop, threadMoveDisabledReason, openMoveThreadDialog,
-    handlePinThread, openRenameThreadDialog, handleSummarizeThread, handleCopyThreadId,
+    handlePinThread, openRenameThreadDialog, handleSummarizeThread, handlePruneThread, handleCopyThreadId,
     handleArchiveThread,
     handleDeleteThread, handleRestoreThread, openWorkspaceInSystem, handleArchiveWorkspaceThreads,
     handleRemoveWorkspace, archivableWorkspaceThreads, closeRenameThreadDialog,
@@ -196,6 +191,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
       showRunning={activity === 'running'}
       showFailed={activity === 'failed'}
       showUnread={activity === 'unread'}
+      showAwaitingInput={activity === 'awaiting-input'}
       scheduledActivity={activity === 'scheduled'
         ? sidebarThreadActivityContext.scheduledThreadActivities?.[thread.id]
         : undefined}
@@ -289,19 +285,22 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
               ? workspaceOrderDropTarget.position
               : null
           const threadOrderScope = sidebarThreadOrderScope(workspacePath)
-          const sortedThreads = prioritizeSidebarThreadActivity(
-            reconcileSidebarThreadOrder(
-              sortSidebarThreads(list),
-              sidebarOrder.threadIdsByScope[threadOrderScope] ?? []
-            ),
-            sidebarThreadActivityContext
+          const savedThreadOrder = sidebarOrder.threadIdsByScope[threadOrderScope] ?? []
+          const sortedThreads = reconcileSidebarThreadOrder(
+            sortSidebarThreads(list),
+            savedThreadOrder
           )
           const workspaceFolders = sidebarFoldersForWorkspace(sidebarFolders, workspacePath)
           const assignedThreadIds = new Set(
             workspaceFolders.flatMap((folder) => folder.threadIds)
           )
-          const rootThreads = sortedThreads.filter((thread) => !assignedThreadIds.has(thread.id))
           const threadsById = new Map(sortedThreads.map((thread) => [thread.id, thread] as const))
+          const rootThreads = orderTracker.reconcile({
+            baselineKey: savedThreadOrder.join('\n'),
+            containerKey: `${threadOrderScope}:root`,
+            context: sidebarThreadActivityContext,
+            threads: sortedThreads.filter((thread) => !assignedThreadIds.has(thread.id))
+          })
           const visibleFolder = (folder: SidebarVirtualFolder): boolean => {
             if (!searchQuery.trim() && !showArchived) return true
             if (folder.threadIds.some((threadId) => threadsById.has(threadId))) return true
@@ -316,7 +315,8 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
           const visibleSelection = sidebarProjectVisibleItems(
             rootThreads,
             visibleThreadCount,
-            (thread) => sidebarThreadActivity(thread, sidebarThreadActivityContext) === 'running'
+            (thread) => thread.id === activeThreadId
+              || sidebarThreadActivity(thread, sidebarThreadActivityContext) === 'running'
           )
           const visibleThreads = visibleSelection.items
           const hiddenThreadCount = visibleSelection.hiddenCount
@@ -416,13 +416,15 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                         const thread = threadsById.get(threadId)
                         return thread && sidebarThreadActivity(thread, sidebarThreadActivityContext) === 'running'
                       })
-                      const folderThreads = prioritizeSidebarThreadActivity(
-                        item.threadIds.flatMap((threadId) => {
+                      const folderThreads = orderTracker.reconcile({
+                        baselineKey: item.threadIds.join('\n'),
+                        containerKey: `${threadOrderScope}:folder:${item.id}`,
+                        context: sidebarThreadActivityContext,
+                        threads: item.threadIds.flatMap((threadId) => {
                           const thread = threadsById.get(threadId)
                           return thread ? [thread] : []
-                        }),
-                        sidebarThreadActivityContext
-                      )
+                        })
+                      })
                       const childFolders = sidebarChildFolders(workspaceFolders, item.id).filter(visibleFolder)
                       const isFolderDragOver =
                         folderDropTarget?.folderId === item.id
@@ -596,7 +598,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
           onMove={() => openMoveThreadDialog(threadContextMenu.thread, threadContextMenu.worktreeRecord)}
           onPin={() => void handlePinThread(threadContextMenu.thread, threadContextMenu.thread.pinned !== true)}
           onRename={() => openRenameThreadDialog(threadContextMenu.thread)}
-          onSummarize={() => void handleSummarizeThread(threadContextMenu.thread)}
+          onSummarize={() => void handleSummarizeThread(threadContextMenu.thread)} onPrune={() => void handlePruneThread(threadContextMenu.thread)}
           onCopyId={() => void handleCopyThreadId(threadContextMenu.thread)}
           onArchive={() => void handleArchiveThread(threadContextMenu.thread)}
           onDelete={() => void handleDeleteThread(threadContextMenu.thread)}

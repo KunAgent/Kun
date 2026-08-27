@@ -118,8 +118,9 @@ export function InitialSessionUsageHeatmap({
 } = {}): ReactElement {
   const [refreshKey, setRefreshKey] = useState(0)
   const [rangeKey, setRangeKey] = useState<UsageRangeKey>('all')
+  const [modelUsageEnabled, setModelUsageEnabled] = useState(false)
   const state = useDailyUsageState(true, refreshKey, USAGE_RANGE_DAYS.all)
-  const modelState = useModelUsageState(true, `${refreshKey}:${rangeKey}`, USAGE_RANGE_DAYS[rangeKey])
+  const modelState = useModelUsageState(modelUsageEnabled, `${refreshKey}:${rangeKey}`, USAGE_RANGE_DAYS[rangeKey])
 
   return (
     <InitialSessionUsageHeatmapView
@@ -130,6 +131,7 @@ export function InitialSessionUsageHeatmap({
       embedded={embedded}
       initialCollapsed={!hideHero}
       onRangeChange={setRangeKey}
+      onActiveTabChange={(tab) => setModelUsageEnabled(tab === 'models')}
       onRefresh={() => setRefreshKey((value) => value + 1)}
     />
   )
@@ -145,6 +147,7 @@ export function InitialSessionUsageHeatmapView({
   hideHero = false,
   embedded = false,
   onRangeChange,
+  onActiveTabChange,
   onRefresh
 }: {
   state: DailyUsageState
@@ -156,6 +159,7 @@ export function InitialSessionUsageHeatmapView({
   hideHero?: boolean
   embedded?: boolean
   onRangeChange?: (rangeKey: UsageRangeKey) => void
+  onActiveTabChange?: (tab: UsageTabKey) => void
   onRefresh?: () => void
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -240,7 +244,10 @@ export function InitialSessionUsageHeatmapView({
                         activeTab === 'overview' ? 'bg-ds-card text-ds-ink shadow-sm dark:bg-white/10' : 'hover:text-ds-ink'
                       }`}
                       aria-pressed={activeTab === 'overview'}
-                      onClick={() => setActiveTab('overview')}
+                      onClick={() => {
+                        setActiveTab('overview')
+                        onActiveTabChange?.('overview')
+                      }}
                     >
                       {t('usageHeatmapTabOverview')}
                     </button>
@@ -251,7 +258,10 @@ export function InitialSessionUsageHeatmapView({
                       }`}
                       title={t('usageHeatmapTabModels')}
                       aria-pressed={activeTab === 'models'}
-                      onClick={() => setActiveTab('models')}
+                      onClick={() => {
+                        setActiveTab('models')
+                        onActiveTabChange?.('models')
+                      }}
                     >
                       {t('usageHeatmapTabModels')}
                     </button>

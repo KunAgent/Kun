@@ -288,7 +288,12 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
     }
   }
 
-  async createThread(title = 'Terminal chat'): Promise<void> {
+  async createThread(
+    title?: string,
+    options: { titleAuto?: boolean } = {}
+  ): Promise<void> {
+    const sessionTitle = title?.trim() || 'Terminal chat'
+    const titleAuto = options.titleAuto ?? !title?.trim()
     this.patch({ busy: true, busyLabel: 'Creating session' })
     try {
       const selection = this.newThreadSelection()
@@ -317,7 +322,8 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
         return
       }
       const thread = await this.client.createThread({
-        title,
+        title: sessionTitle,
+        titleAuto,
         workspace: this.options.workspace,
         model: selection.model ?? this.runtime.runtimeInfo.model ?? 'deepseek-chat',
         ...(selection.providerId ? { providerId: selection.providerId } : {}),
@@ -333,8 +339,8 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
           ? { approvalReviewer: this.options.approvalReviewer }
           : {})
       })
-      await this.refreshThreads('')
       await this.openThread(thread.id)
+      await this.refreshThreads('')
     } catch (error) {
       this.fail(error)
     }

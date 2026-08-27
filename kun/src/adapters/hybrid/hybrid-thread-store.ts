@@ -1,28 +1,24 @@
 import { mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type { Database as BetterSqliteDatabase, Statement } from 'better-sqlite3'
-import {
-  ThreadSchema,
-  type ThreadRecord,
-  type ThreadSummary
-} from '../../contracts/threads.js'
+import { ThreadSchema, type ThreadRecord, type ThreadSummary } from '../../contracts/threads.js'
 import type { RuntimeEvent } from '../../contracts/events.js'
-import type { ThreadStore, ThreadStoreListOptions, ThreadStoreListPage } from '../../ports/thread-store.js'
-import type { SessionLatestUsageSnapshot, SessionUsageRecord } from '../../ports/session-store.js'
-import { legacyWorkThreadTitleMatches, resolveThreadAgentSurface, toThreadSummary } from '../../domain/thread.js'
+import type { ThreadStore, ThreadStoreConditionalWrite, ThreadStoreListOptions, ThreadStoreListPage } from '../../ports/thread-store.js'
+import type { SessionLatestUsageSnapshot, SessionUsageQueryOptions, SessionUsageRecord } from '../../ports/session-store.js'
+import { legacyWorkThreadTitleMatches, resolveThreadAgentSurface } from '../../domain/thread.js'
+import { filterThreadSummaries } from '../../domain/thread-list-query.js'
 import { assertSafeThreadId, isSafeThreadId } from '../../contracts/thread-id.js'
-import { readJsonl } from '../file/file-thread-store.js'
 import { stripThreadItemBodies, type ThreadMetadataLine } from './hybrid-thread-projection.js'
 import { HybridThreadDocumentRepository } from './hybrid-thread-documents.js'
-import {
-  filterThreadSummaries,
-  type ThreadIndexRecord,
-  type ThreadRow
-} from './hybrid-thread-index-mapping.js'
+import { HybridFilesystemSummaryCache } from './hybrid-filesystem-summary-cache.js'
+import { HybridSqliteDegradedState } from './hybrid-sqlite-degraded-state.js'
+import { type ThreadIndexRecord, type ThreadRow } from './hybrid-thread-index-mapping.js'
 import { requiresLegacyWorkThreadHydration } from './hybrid-thread-legacy-surface.js'
 import { HybridThreadIndexRepository } from './hybrid-thread-index.js'
 import { hybridThreadStoreListPage, summariesFromRows } from './hybrid-thread-list-page.js'
 import { HybridThreadBackfillCoordinator } from './hybrid-thread-backfill.js'
+import { insertUsageEventsChunked, markUsageBackfilled } from './hybrid-usage-backfill-sqlite.js'
+import { scanEventsForUsageBackfill } from './hybrid-thread-usage-scan.js'
 import {
   METADATA_COMPACT_MIN_BYTES,
   addColumnIfMissing,
@@ -30,13 +26,13 @@ import {
   latestUsageSnapshotsFromRows,
   pathExists,
   previewFromItems,
-  usageRecordsFromRows,
   usageRowFromEvent,
   warnSqlite,
   yieldToEventLoop,
   type UsageRow,
   type UsageRuntimeEvent
 } from './hybrid-thread-support.js'
+import { loadIndexedUsageRecords } from './hybrid-usage-query.js'
 
 export { describeSqliteAbiMismatch } from './hybrid-thread-support.js'
 
@@ -61,15 +57,23 @@ export class HybridThreadStore implements ThreadStore {
   // Per-thread floor that keeps metadata compaction from re-running on every
   // append when a single snapshot is already larger than the threshold.
   private readonly metadataCompactFloor = new Map<string, number>()
-
+  private readonly filesystemSummaries: HybridFilesystemSummaryCache
+  private readonly sqliteState = new HybridSqliteDegradedState()
   constructor(options: { dataDir: string; sqlitePath?: string; nowIso?: () => string }) {
     this.dataDir = resolve(options.dataDir, 'threads')
     this.documents = new HybridThreadDocumentRepository(options.dataDir)
     this.sqlitePath = resolve(options.sqlitePath ?? join(options.dataDir, 'index.sqlite3'))
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
+    this.filesystemSummaries = new HybridFilesystemSummaryCache({
+      threadIds: () => this.threadIdsFromFilesystem(),
+      readMetadata: (threadId) => this.readThreadMetadataFromDisk(threadId),
+      readThread: (threadId) => this.readThreadFromDisk(threadId),
+      warn: (threadId, error) => console.warn(
+        `[kun] skipping unreadable filesystem thread ${threadId}: ${error instanceof Error ? error.message : String(error)}`
+      )
+    })
     this.readyPromise = this.initialize()
   }
-
   async ready(): Promise<void> {
     await this.readyPromise
   }
@@ -84,20 +88,25 @@ export class HybridThreadStore implements ThreadStore {
       this.statementCache.clear()
     }
   }
-
   async shutdown(): Promise<void> {
     await this.ready()
     this.backfill?.stop()
     await this.backfill?.wait()
     this.close()
   }
-
   async waitForBackfill(): Promise<void> {
     await this.ready()
     await this.backfill?.wait()
   }
+  private hasDb(): boolean { return this.sqliteState.available(this.db !== null) }
 
-  private hasDb(): boolean { return this.db !== null }
+  private markSqliteDegraded(action: string, error: unknown): void {
+    this.sqliteState.fail(action, error)
+  }
+
+  private markSqliteHealthy(): void {
+    this.sqliteState.recover()
+  }
 
   async list(options: ThreadStoreListOptions = {}): Promise<ThreadSummary[]> {
     await this.ready()
@@ -105,11 +114,13 @@ export class HybridThreadStore implements ThreadStore {
     // canonical JSONL metadata before the first list response. Usage/event
     // backfill remains in the background so large histories stay responsive.
     await this.backfill?.waitForIndex()
-    if (this.db) {
+    if (this.hasDb()) {
       try {
-        return summariesFromRows(this, this.queryThreadRows(options))
+        const summaries = await summariesFromRows(this, this.queryThreadRows(options))
+        this.markSqliteHealthy()
+        return summaries
       } catch (error) {
-        warnSqlite('list', error)
+        this.markSqliteDegraded('list', error)
       }
     }
     return filterThreadSummaries(await this.listFromFilesystem(), options)
@@ -151,6 +162,7 @@ export class HybridThreadStore implements ThreadStore {
     if (!current) return false
     const next = ThreadSchema.parse({ ...current, updatedAt })
     await this.appendMetadata(next)
+    this.invalidateFilesystemCache()
     if (this.db) {
       try {
         this.cachedStatement(`
@@ -170,14 +182,27 @@ export class HybridThreadStore implements ThreadStore {
   }
 
   async upsert(thread: ThreadRecord): Promise<ThreadRecord> {
-    const normalized = ThreadSchema.parse(thread)
-    assertSafeThreadId(normalized.id)
-    await this.ready()
-    await this.appendMetadata(normalized)
-    if (this.db) {
-      this.upsertIndexBestEffort(this.indexRecordForThread(normalized))
-    }
-    return normalized
+    assertSafeThreadId(thread.id); await this.ready()
+    return this.withMetadataMutation(thread.id, async () => this.storeRevision(thread, (await this.documents.readMetadata(thread.id))?.revision ?? -1))
+  }
+
+  async upsertIfRevision(thread: ThreadRecord, expectedRevision: number): Promise<ThreadStoreConditionalWrite> {
+    assertSafeThreadId(thread.id); await this.ready()
+    return this.withMetadataMutation(thread.id, async () => {
+      const current = await this.documents.readMetadata(thread.id)
+      const revision = current?.revision ?? 0
+      if (!current || revision !== expectedRevision) return { applied: false, revision }
+      const stored = await this.storeRevision(thread, revision)
+      return { applied: true, thread: stored, revision: stored.revision ?? revision + 1 }
+    })
+  }
+
+  private async storeRevision(thread: ThreadRecord, revision: number): Promise<ThreadRecord> {
+    const stored = ThreadSchema.parse({ ...thread, revision: revision + 1 })
+    await this.appendMetadataNow(stored)
+    this.invalidateFilesystemCache()
+    this.upsertIndexBestEffort(this.indexRecordForThread(stored))
+    return stored
   }
 
   async delete(threadId: string): Promise<boolean> {
@@ -193,8 +218,11 @@ export class HybridThreadStore implements ThreadStore {
     this.deleteIndexRow(threadId)
     this.documents.invalidate(threadId)
     this.metadataCompactFloor.delete(threadId)
+    this.invalidateFilesystemCache()
     return true
   }
+
+
 
   async noteEventSeq(threadId: string, seq: number): Promise<void> {
     await this.noteEventHighWater(threadId, seq)
@@ -208,15 +236,15 @@ export class HybridThreadStore implements ThreadStore {
     try {
       this.cachedStatement(`
         INSERT INTO usage_events (
-          thread_id, seq, timestamp, turn_id, model, usage_json
+          thread_id, seq, timestamp, turn_id, model, provider_id, usage_json
         )
         VALUES (
-          @thread_id, @seq, @timestamp, @turn_id, @model, @usage_json
+          @thread_id, @seq, @timestamp, @turn_id, @model, @provider_id, @usage_json
         )
         ON CONFLICT(thread_id, seq) DO UPDATE SET
           timestamp = excluded.timestamp,
           turn_id = excluded.turn_id,
-          model = excluded.model,
+          model = excluded.model, provider_id = excluded.provider_id,
           usage_json = excluded.usage_json
       `).run(usageRowFromEvent(event))
     } catch (error) {
@@ -238,23 +266,11 @@ export class HybridThreadStore implements ThreadStore {
     }
   }
 
-  async loadUsageRecords(options: { threadId?: string } = {}): Promise<SessionUsageRecord[]> {
+  async loadUsageRecords(options: SessionUsageQueryOptions = {}): Promise<SessionUsageRecord[]> {
     await this.ready()
     if (!this.db) throw new Error('hybrid sqlite unavailable')
     try {
-      const threadId = options.threadId?.trim()
-      const rows = threadId
-        ? this.db
-            .prepare(`
-              SELECT * FROM usage_events
-              WHERE thread_id = @thread_id
-              ORDER BY thread_id ASC, seq ASC
-            `)
-            .all({ thread_id: threadId }) as UsageRow[]
-        : this.db
-            .prepare('SELECT * FROM usage_events ORDER BY thread_id ASC, seq ASC')
-            .all() as UsageRow[]
-      return usageRecordsFromRows(rows)
+      return loadIndexedUsageRecords(this.db, options)
     } catch (error) {
       warnSqlite('load usage records', error)
       throw error
@@ -321,7 +337,13 @@ export class HybridThreadStore implements ThreadStore {
         eventsPath: this.eventsPath(threadId)
       }), warnSqlite)
       this.backfill = new HybridThreadBackfillCoordinator({
-        indexedRows: () => this.db!.prepare('SELECT id, usage_backfilled FROM threads').all() as Array<{ id: string; usage_backfilled?: number }>,
+        indexedRows: () => this.db!.prepare(`
+          SELECT id, usage_backfilled, usage_backfill_high_water FROM threads
+        `).all() as Array<{
+          id: string
+          usage_backfilled?: number
+          usage_backfill_high_water?: number
+        }>,
         filesystemThreadIds: () => this.threadIdsFromFilesystem(),
         readMissingThread: async (threadId) => Boolean(await this.readThreadMetadataFromDisk(threadId)),
         scanEvents: (threadId) => this.scanEventsForBackfill(threadId),
@@ -330,8 +352,10 @@ export class HybridThreadStore implements ThreadStore {
           if (thread) this.upsertIndexBestEffort({ ...this.indexRecordForThread(thread), eventSeqHighWater: highWater })
         },
         noteExistingHighWater: (threadId, highWater) => this.noteEventHighWaterSync(threadId, highWater),
-        insertUsage: (threadId, usage) => this.insertUsageEventsChunked(threadId, usage),
-        markUsageBackfilled: (threadId) => this.markUsageBackfilled(threadId),
+        insertUsage: (threadId, usage, resumeAfterSeq) => insertUsageEventsChunked(
+          this.db!, threadId, usage, resumeAfterSeq, yieldToEventLoop
+        ),
+        markUsageBackfilled: (threadId) => markUsageBackfilled(this.db!, threadId),
         threadDirectoryExists: (threadId) => pathExists(this.threadDir(threadId)),
         deleteIndexRow: (threadId) => this.deleteIndexRow(threadId),
         yieldToEventLoop,
@@ -385,6 +409,8 @@ export class HybridThreadStore implements ThreadStore {
         preview TEXT,
         message_count INTEGER NOT NULL DEFAULT 0,
         event_seq_high_water INTEGER NOT NULL DEFAULT 0,
+        usage_backfilled INTEGER NOT NULL DEFAULT 0,
+        usage_backfill_high_water INTEGER NOT NULL DEFAULT 0,
         metadata_path TEXT NOT NULL,
         messages_path TEXT NOT NULL,
         events_path TEXT NOT NULL,
@@ -402,8 +428,7 @@ export class HybridThreadStore implements ThreadStore {
         thread_id TEXT NOT NULL,
         seq INTEGER NOT NULL,
         timestamp TEXT NOT NULL,
-        turn_id TEXT,
-        model TEXT,
+        turn_id TEXT, model TEXT, provider_id TEXT,
         usage_json TEXT NOT NULL,
         PRIMARY KEY(thread_id, seq)
       );
@@ -416,8 +441,29 @@ export class HybridThreadStore implements ThreadStore {
     addColumnIfMissing(this.db, 'threads', 'extension_metadata_json TEXT')
     addColumnIfMissing(this.db, 'threads', 'model_request_capture_enabled INTEGER NOT NULL DEFAULT 0')
     addColumnIfMissing(this.db, 'threads', "approval_reviewer TEXT NOT NULL DEFAULT 'user'")
-    addColumnIfMissing(this.db, 'threads', 'usage_backfilled INTEGER NOT NULL DEFAULT 0')
+    this.migrateUsageBackfillState()
     addColumnIfMissing(this.db, 'threads', 'agent_surface TEXT')
+    addColumnIfMissing(this.db, 'usage_events', 'provider_id TEXT')
+  }
+
+  private migrateUsageBackfillState(): void {
+    if (!this.db) return
+    const columns = this.db.prepare('PRAGMA table_info(threads)').all() as Array<{ name: string }>
+    const names = new Set(columns.map((column) => column.name))
+    const missingCompletion = !names.has('usage_backfilled')
+    const missingHighWater = !names.has('usage_backfill_high_water')
+    if (!missingCompletion && !missingHighWater) return
+    this.db.transaction(() => {
+      if (missingCompletion) {
+        this.db!.exec('ALTER TABLE threads ADD COLUMN usage_backfilled INTEGER NOT NULL DEFAULT 0')
+      }
+      if (missingHighWater) {
+        this.db!.exec('ALTER TABLE threads ADD COLUMN usage_backfill_high_water INTEGER NOT NULL DEFAULT 0')
+        // Earlier versions could mark partially written usage as complete.
+        // Reopen all rows exactly once when this recovery state is introduced.
+        this.db!.exec('UPDATE threads SET usage_backfilled = 0, usage_backfill_high_water = 0')
+      }
+    })()
   }
 
   private cachedStatement(sql: string): Statement {
@@ -434,58 +480,7 @@ export class HybridThreadStore implements ThreadStore {
   private async scanEventsForBackfill(
     threadId: string
   ): Promise<{ highWater: number; usage: UsageRuntimeEvent[] }> {
-    let highWater = 0
-    const usage: UsageRuntimeEvent[] = []
-    try {
-      for (const event of await readJsonl<RuntimeEvent>(this.eventsPath(threadId))) {
-        if (event.seq > highWater) highWater = event.seq
-        if (event.kind === 'usage') usage.push(event)
-      }
-    } catch (error) {
-      warnSqlite(`scan events for ${threadId}`, error)
-    }
-    return { highWater, usage }
-  }
-
-  /**
-   * Inserts usage rows in small transactions, yielding between chunks.
-   * better-sqlite3 is synchronous: unchunked backfill of a large history
-   * starved the event loop long enough that the HTTP server never reported
-   * ready within the GUI's startup timeout.
-   */
-  private async insertUsageEventsChunked(threadId: string, events: UsageRuntimeEvent[]): Promise<void> {
-    if (!this.db || events.length === 0) return
-    const insert = this.cachedStatement(`
-      INSERT OR REPLACE INTO usage_events (
-        thread_id, seq, timestamp, turn_id, model, usage_json
-      )
-      VALUES (
-        @thread_id, @seq, @timestamp, @turn_id, @model, @usage_json
-      )
-    `)
-    const insertChunk = this.db.transaction((chunk: UsageRow[]) => {
-      for (const row of chunk) insert.run(row)
-    })
-    const chunkSize = 200
-    for (let start = 0; start < events.length; start += chunkSize) {
-      const chunk = events.slice(start, start + chunkSize).map(usageRowFromEvent)
-      try {
-        insertChunk(chunk)
-      } catch (error) {
-        warnSqlite(`backfill usage events for ${threadId}`, error)
-        return
-      }
-      await yieldToEventLoop()
-    }
-  }
-
-  private markUsageBackfilled(threadId: string): void {
-    if (!this.db) return
-    try {
-      this.db.prepare('UPDATE threads SET usage_backfilled = 1 WHERE id = ?').run(threadId)
-    } catch (error) {
-      warnSqlite('mark usage backfilled', error)
-    }
+    return scanEventsForUsageBackfill(this.eventsPath(threadId))
   }
 
   private queryThreadRows(options: ThreadStoreListOptions): ThreadRow[] {
@@ -525,36 +520,24 @@ export class HybridThreadStore implements ThreadStore {
   }
 
   private async appendMetadata(thread: ThreadRecord): Promise<void> {
-    const previous = this.metadataQueues.get(thread.id) ?? Promise.resolve()
-    const run = previous.catch(() => undefined).then(async () => {
-      await mkdir(this.threadDir(thread.id), { recursive: true })
-      const line: ThreadMetadataLine = {
-        kind: 'thread_metadata',
-        version: 1,
-        timestamp: this.nowIso(),
-        thread: stripThreadItemBodies(thread)
-      }
-      await appendJsonlLine(this.metadataPath(thread.id), line)
-      await this.maybeCompactMetadata(thread.id)
-    })
-    const guard = run.then(() => undefined, () => undefined)
-    this.metadataQueues.set(thread.id, guard)
-    try {
-      await run
-    } finally {
-      if (this.metadataQueues.get(thread.id) === guard) {
-        this.metadataQueues.delete(thread.id)
-      }
-    }
+    await this.withMetadataMutation(thread.id, () => this.appendMetadataNow(thread))
   }
 
-  /**
-   * Every upsert appends a full thread snapshot, so metadata.jsonl grows
-   * quadratically with turn activity (observed: 4.2MB for an 8-turn thread
-   * whose latest snapshot is 6KB). Once the file passes the threshold it is
-   * rewritten as a single normalized snapshot. Runs inside the per-thread
-   * metadata queue, so no append can interleave with the rewrite.
-   */
+  private async appendMetadataNow(thread: ThreadRecord): Promise<void> {
+    await mkdir(this.threadDir(thread.id), { recursive: true }); await appendJsonlLine(this.metadataPath(thread.id), {
+      kind: 'thread_metadata', version: 1, timestamp: this.nowIso(), thread: stripThreadItemBodies(thread)
+    }); await this.maybeCompactMetadata(thread.id)
+  }
+
+  private async withMetadataMutation<T>(threadId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.metadataQueues.get(threadId) ?? Promise.resolve()
+    const run = previous.catch(() => undefined).then(operation)
+    const guard = run.then(() => undefined, () => undefined)
+    this.metadataQueues.set(threadId, guard)
+    try { return await run } finally { if (this.metadataQueues.get(threadId) === guard) this.metadataQueues.delete(threadId) }
+  }
+
+  /** Compacts append-only metadata snapshots inside the per-thread queue. */
   private async maybeCompactMetadata(threadId: string): Promise<void> {
     const path = this.metadataPath(threadId)
     const tmpPath = `${path}.compact.tmp`
@@ -637,22 +620,21 @@ export class HybridThreadStore implements ThreadStore {
     }
   }
 
-  private async listFromFilesystem(): Promise<ThreadSummary[]> {
-    const summaries: ThreadSummary[] = []
-    for (const threadId of await this.threadIdsFromFilesystem()) {
-      const metadata = await this.readThreadMetadataFromDisk(threadId)
-      const thread = metadata && requiresLegacyWorkThreadHydration(metadata) ? await this.readThreadFromDisk(threadId) ?? metadata : metadata
-      if (thread) summaries.push(toThreadSummary(thread))
-    }
-    return summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  private invalidateFilesystemCache(): void {
+    this.filesystemSummaries.invalidate()
+  }
+
+  private listFromFilesystem(): Promise<ThreadSummary[]> {
+    return this.filesystemSummaries.list()
   }
 
   private async threadIdsFromFilesystem(): Promise<string[]> {
     try {
       const entries = await readdir(this.dataDir, { withFileTypes: true })
       return entries.filter((entry) => entry.isDirectory() && isSafeThreadId(entry.name)).map((entry) => entry.name)
-    } catch {
-      return []
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
     }
   }
 

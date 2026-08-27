@@ -114,6 +114,11 @@ export async function inspectTrackedFiles({ root, maxLines = DEFAULT_MAX_LINES, 
         missingTrackedFiles += 1
         continue
       }
+      // Tracked symlinks can point at directories (skill aliases). They have
+      // no physical lines of their own, so skip them instead of failing.
+      if (error && typeof error === 'object' && error.code === 'EISDIR') {
+        continue
+      }
       throw error
     }
 

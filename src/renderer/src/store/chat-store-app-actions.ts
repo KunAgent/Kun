@@ -6,20 +6,19 @@ import { extensionWorkbenchClient } from '../extensions/extension-workbench-clie
 import type { ChatState, ChatStoreGet, ChatStoreSet, InitialSetupMode, PluginHostRoute, SettingsRouteSection } from './chat-store-types'
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
-  composerModelSelectable,
-  composerModeForThread,
   composerReasoningEffortForSelection,
   persistComposerMode,
   persistComposerPersonaId,
   persistComposerProviderId,
   providerIdForComposerModel,
-  providerIdMatchesComposerModel,
-  readThreadComposerMode,
-  readThreadComposerSelection,
   rememberThreadComposerMode,
   rememberThreadComposerSelection,
   readStoredComposerProviderId
 } from './chat-store-helpers'
+import {
+  rememberCatalogComposerSelection,
+  resolveCatalogComposerSelection
+} from './chat-store-thread-composer-state'
 type CreateAppActionsOptions = {
   set: ChatStoreSet
   get: ChatStoreGet
@@ -47,6 +46,7 @@ type CreateAppActionsOptions = {
   applyChatContentMaxWidth: (widthPx: AppSettingsV1['chatContentMaxWidthPx']) => void
   applyCursorSpotlight: (enabled: boolean) => void
   applyCursorSpotlightColor: (color: AppSettingsV1['cursorSpotlightColor']) => void
+  applyDarkUiColors: (colors: AppSettingsV1['darkUiColors']) => void
   applyWriteTypography: (typography: AppSettingsV1['write']['typography']) => void
   applyDocumentLocale: (locale: AppSettingsV1['locale']) => void
   workspaceLabelFromPath: (workspaceRoot: string) => string
@@ -99,6 +99,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
     applyChatContentMaxWidth,
     applyCursorSpotlight,
     applyCursorSpotlightColor,
+    applyDarkUiColors,
     applyWriteTypography,
     applyDocumentLocale,
     workspaceLabelFromPath,
@@ -262,72 +263,34 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
           ? res.defaultModel?.providerId.trim() ?? ''
           : ''
         set((state) => {
-          const isSelectable = (model: string): boolean => composerModelSelectable(pick, groups, model)
-          const activeThread = state.activeThreadId
-            ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
-            : null
-          const threadSelection = activeThread ? readThreadComposerSelection(activeThread.id) : null
-          const currentModel = state.composerModel.trim()
-          const normalizedCurrentModel = currentModel.toLowerCase() === 'auto' ? '' : currentModel
-          const storedModel = readStoredComposerModel(pick)
-          const selectableRuntimeDefault = composerModelSelectable(
-            pick,
-            groups,
-            runtimeDefault,
-            runtimeDefaultProviderId
-          )
-            ? runtimeDefault
-            : runtimeDefaultProviderId
-              ? ''
-              : isSelectable(runtimeDefault)
-                ? runtimeDefault
-                : ''
-          const threadHasUserMessages = activeThread
-            ? state.blocks.some((block) => block.kind === 'user')
-            : false
-          const preserveThreadSelection =
-            threadHasUserMessages || threadSelection?.source === 'user'
-          const candidates = activeThread
-            ? preserveThreadSelection
-              ? [threadSelection?.model ?? '', activeThread.model, selectableRuntimeDefault]
-              : [selectableRuntimeDefault, activeThread.model, threadSelection?.model ?? '']
-            : [selectableRuntimeDefault, normalizedCurrentModel, storedModel]
-          const model = candidates.find(isSelectable) ??
-            fallbackComposerModel(pick, runtimeDefault, groups)
-          const selectedStoredModel =
-            threadSelection?.model.trim().toLowerCase() === model.trim().toLowerCase()
-          const threadProviderId =
-            threadSelection && selectedStoredModel &&
-              providerIdMatchesComposerModel(groups, threadSelection.providerId, model)
-              ? threadSelection.providerId
-              : ''
-          const storedProviderId = activeThread || selectableRuntimeDefault
-            ? ''
-            : readStoredComposerProviderId(groups, model)
-          const runtimeProviderId =
-            selectableRuntimeDefault &&
-            model.trim().toLowerCase() === selectableRuntimeDefault.trim().toLowerCase() &&
-            providerIdMatchesComposerModel(groups, runtimeDefaultProviderId, model)
-              ? runtimeDefaultProviderId
-              : ''
-          const providerId =
-            threadProviderId ||
-            runtimeProviderId ||
-            storedProviderId ||
-            providerIdForComposerModel(groups, model)
-          if (!activeThread && providerId !== state.composerProviderId) persistComposerProviderId(providerId)
-          if (
-            activeThread &&
-            (!threadSelection || threadSelection.model !== model || threadSelection.providerId !== providerId) &&
-            composerModelSelectable(pick, groups, model)
-          ) {
-            rememberThreadComposerSelection(activeThread.id, model, providerId, 'default')
+          const catalogState = {
+            ...state,
+            composerPickList: pick,
+            composerModelGroups: groups
           }
+          const selection = resolveCatalogComposerSelection(catalogState, {
+            runtimeDefaultModel: runtimeDefault,
+            runtimeDefaultProviderId,
+            globalComposerModel: state.composerModel,
+            globalStoredModel: readStoredComposerModel(pick),
+            globalStoredProviderId: readStoredComposerProviderId(
+              groups,
+              readStoredComposerModel(pick)
+            )
+          })
+          if (!state.activeThreadId && selection.providerId !== state.composerProviderId) {
+            persistComposerProviderId(selection.providerId)
+          }
+          rememberCatalogComposerSelection(catalogState, selection)
           return {
             composerPickList: pick,
-            composerModel: model,
-            composerProviderId: providerId,
-            composerReasoningEffort: composerReasoningEffortForSelection(groups, model, providerId),
+            composerModel: selection.model,
+            composerProviderId: selection.providerId,
+            composerReasoningEffort: composerReasoningEffortForSelection(
+              groups,
+              selection.model,
+              selection.providerId
+            ),
             composerModelGroups: groups
           }
         })
@@ -405,6 +368,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       applyChatContentMaxWidth(settings.chatContentMaxWidthPx)
       applyCursorSpotlight(settings.cursorSpotlight !== false)
       applyCursorSpotlightColor(settings.cursorSpotlightColor)
+      applyDarkUiColors(settings.darkUiColors)
       if (settings.write?.typography) applyWriteTypography(settings.write.typography)
       set({
         workspaceRoot,

@@ -23,6 +23,7 @@ import {
 } from './model-stream-collector.js'
 import type { LoopTelemetry } from './loop-telemetry.js'
 import type { TurnExecutionFailure } from './turn-execution-types.js'
+import { rewriteStreamDisconnectFailure } from './stream-disconnection-failure.js'
 import {
   modelContextOverflowError,
   normalizeModelContextOverflowError,
@@ -390,30 +391,49 @@ export class ModelRoundEngine {
                 threadId: input.threadId,
                 turnId: input.turnId,
                 model: input.request.model,
+                ...(input.request.providerId ? { providerId: input.request.providerId } : {}),
+                ...(input.request.accountId ? { accountId: input.request.accountId } : {}),
                 usage
               })
               break
             }
-            case 'model_error':
+            case 'model_error': {
               sawModelError = true
               contextOverflow = modelContextOverflowError(intent.message, intent.code)
               if (contextOverflow) break
-              this.deps.rememberFailure(input.turnId, {
+              // A turn abort (user stop / tool cancel / host shutdown) that
+              // races the provider's disconnect noise must not fail the turn.
+              // Drop the raw transport error; the aborted outcome below owns
+              // settlement.
+              if (input.signal.aborted) break
+              const rewritten = rewriteStreamDisconnectFailure({
+                error: intent.message,
+                ...(intent.code ? { code: intent.code } : {}),
+                ...(intent.failure ? { details: { modelFailure: intent.failure } } : {})
+              })
+              this.deps.rememberFailure(input.turnId, rewritten ?? {
                 error: intent.message,
                 ...(intent.code ? { code: intent.code } : {}),
                 ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
                 severity: 'error'
               })
-              await this.deps.events.record({
-                kind: 'error',
-                threadId: input.threadId,
-                turnId: input.turnId,
-                message: intent.message,
-                code: intent.code,
-                ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
-                severity: 'error'
-              })
+              // Disconnects are terminal-only diagnostics. If a stop races
+              // this chunk, TurnLifecycle will settle it as aborted; recording
+              // an immediate error here would flash a misleading error card
+              // before that terminal outcome arrives.
+              if (!rewritten) {
+                await this.deps.events.record({
+                  kind: 'error',
+                  threadId: input.threadId,
+                  turnId: input.turnId,
+                  message: intent.message,
+                  code: intent.code,
+                  ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
+                  severity: 'error'
+                })
+              }
               break
+            }
           }
         }
       }

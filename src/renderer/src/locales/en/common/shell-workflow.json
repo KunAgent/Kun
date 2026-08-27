@@ -657,6 +657,7 @@
   "designCanvasConversationNew": "New design conversation",
   "designCanvasConversationDragHint": "Drag to move; double-click to reset position",
   "designCanvasConversationResetPosition": "Reset panel position",
+  "designCanvasConversationResize": "Drag to resize the panel",
   "designCanvasConversationRunning": "Conversation is running",
   "designCanvasConversationPanelLabel": "Design conversation: {{title}}"
 }

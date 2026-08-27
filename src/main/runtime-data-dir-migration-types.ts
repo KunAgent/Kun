@@ -114,6 +114,10 @@ export type RuntimeMigrationJournal = {
   updatedAt: string
   completedAt?: string
   runtimeVerifiedAt?: string
+  runtimeVerificationAttempts?: number
+  runtimeVerificationLastAttemptAt?: string
+  runtimeVerificationMissingThreadIds?: string[]
+  runtimeVerificationStoppedAt?: string
   error?: string
 }
 
@@ -226,6 +230,10 @@ export type PreservationJournal = {
   updatedAt: string
   completedAt?: string
   runtimeVerifiedAt?: string
+  runtimeVerificationAttempts?: number
+  runtimeVerificationLastAttemptAt?: string
+  runtimeVerificationMissingThreadIds?: string[]
+  runtimeVerificationStoppedAt?: string
   error?: string
 }
 

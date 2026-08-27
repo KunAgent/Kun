@@ -28,11 +28,18 @@ export type UserInputRequest = {
   itemId: string
   prompt: string
   questions: UserInputQuestion[]
+  /** Optional wall-clock budget; when it elapses the gate self-resolves. */
+  timeoutSeconds?: number
+  /** Absolute deadline used to recover from timeout/claim races. */
+  deadlineAtMs?: number
 }
 
 export type UserInputResolution =
   | { status: 'submitted'; answers: UserInputAnswer[] }
   | { status: 'cancelled'; answers?: UserInputAnswer[] }
+  | { status: 'timeout'; answers?: UserInputAnswer[] }
+
+export type UserInputResolveResult = 'settled' | 'claimed' | 'missing'
 
 /**
  * Exclusive reservation used by the HTTP route to persist a resolution event
@@ -49,7 +56,7 @@ export interface UserInputGate {
   request(input: UserInputRequest): Promise<UserInputResolution>
   get(inputId: string): UserInputRequest | undefined
   claimResolution(inputId: string): UserInputResolutionClaim | undefined
-  resolve(inputId: string, resolution: UserInputResolution): boolean
+  resolve(inputId: string, resolution: UserInputResolution): UserInputResolveResult
   pending(threadId?: string): UserInputRequest[]
   reset(): void
 }

@@ -45,7 +45,6 @@ import {
 } from './message-timeline-jump-preview'
 import { MemoMessageTurn } from './message-timeline-conversation-turn'
 import type { MessageTimelineProps } from './message-timeline-props'
-import { ThreadHydrationLoading } from './ThreadHydrationLoading'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
 
 export {
@@ -69,6 +68,7 @@ export { summarizeToolBlock } from './message-timeline-process'
 
 export function timelineTurnIsProcessing(input: {
   busy: boolean
+  busyUnconfirmed?: boolean
   isLatestTurn: boolean
   isActiveTurn?: boolean
   turnPending: boolean
@@ -82,6 +82,10 @@ export function timelineTurnIsProcessing(input: {
   ) {
     return false
   }
+  // An unconfirmed busy flag comes from a persisted snapshot that claims a
+  // running turn; until live events confirm it, render the history settled
+  // instead of replaying live-progress UI over a finished conversation.
+  if (input.busyUnconfirmed && input.busy) return input.turnPending || input.hasLiveStream
   return (input.busy && (input.isActiveTurn ?? input.isLatestTurn)) ||
     input.turnPending ||
     input.hasLiveStream
@@ -123,7 +127,7 @@ export function MessageTimeline({
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
-  const turnUsage = useTurnUsageState(activeThreadId, usageRefreshKey)
+  const turnUsage = useTurnUsageState(threadLoadingId === activeThreadId ? null : activeThreadId, usageRefreshKey)
   const handleCancelToolCall = useCallback(async (block: ToolBlock): Promise<boolean> => {
     if (!activeThreadId || !block.turnId) return false
     const callId = typeof block.meta?.callId === 'string' ? block.meta.callId : ''
@@ -136,6 +140,7 @@ export function MessageTimeline({
     chooseWorkspace,
     activeClawChannel,
     busy,
+    busyUnconfirmed,
     threadHasMoreHistory,
     threadHistoryLoading,
     loadEarlierThreadHistory,
@@ -155,7 +160,6 @@ export function MessageTimeline({
     activeThread ? [activeThread] : [],
     workspaceRoot
   )
-
   const heroRoute: 'chat' | 'claw' = route === 'claw' ? 'claw' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
   const endRef = useRef<HTMLDivElement>(null)
@@ -179,7 +183,6 @@ export function MessageTimeline({
     position: { x: number; y: number }
     context: JsonValue
   } | null>(null)
-
   const turns = useMemo(() => groupTurns(blocks), [blocks])
   const latestBlock = blocks[blocks.length - 1]
   const scrollContentKey = [
@@ -366,14 +369,14 @@ export function MessageTimeline({
   const jumpRailHoveredIndex = jumpRailPreview
     ? visibleTurnAnchors.findIndex((item) => item.key === jumpRailPreview.key)
     : -1
-
   return (
     <TimelineFilePreviewWorkspaceProvider
       workspaceRoot={filePreviewWorkspaceRoot}
       threadId={activeThreadId}
     >
-    <InjectedMemoryLookupProvider workspaceRoot={workspaceRoot}>
-    <div ref={containerRef} className="ds-no-drag relative flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
+    <InjectedMemoryLookupProvider workspaceRoot={workspaceRoot} enabled={!activeThreadId || threadLoadingId !== activeThreadId}>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div ref={containerRef} className="ds-no-drag relative flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
       {visibleTurnAnchors.length > 2 && jumpRailLayout ? (
         <div className="timeline-jump-rail-anchor">
           <nav
@@ -444,9 +447,7 @@ export function MessageTimeline({
       <div className={`ds-message-timeline-content ds-chat-column-inset ds-chat-content-max-width mx-auto flex w-full min-w-0 flex-col ${compactCards ? 'gap-5' : 'gap-8'} pt-8 ${
         timelineBottomPaddingClass()
       }`}>
-        {activeThreadId && threadLoadingId === activeThreadId ? (
-          <ThreadHydrationLoading />
-        ) : !hasContent || !activeThreadId ? (
+        {!hasContent || !activeThreadId ? (
           <MessageTimelineEmptyHero
             route={heroRoute}
             ready={runtimeConnection === 'ready'}
@@ -466,7 +467,7 @@ export function MessageTimeline({
           <ThreadForkBanner parentTitle={forkedFromTitle} />
         ) : null}
 
-        {hasEarlierTurns && !busy ? (
+        {hasEarlierTurns ? (
           <div className="flex items-center justify-center">
             <button
               type="button"
@@ -509,6 +510,7 @@ export function MessageTimeline({
           const hasLiveStream = isActiveTurn && !!(liveReasoning.trim() || live.trim())
           const turnIsProcessing = timelineTurnIsProcessing({
             busy,
+            busyUnconfirmed,
             isLatestTurn,
             isActiveTurn,
             turnPending,
@@ -685,6 +687,7 @@ export function MessageTimeline({
           onClose={() => setMessageContextMenu(null)}
         />
       ) : null}
+      </div>
     </div>
     </InjectedMemoryLookupProvider>
     </TimelineFilePreviewWorkspaceProvider>

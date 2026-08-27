@@ -85,7 +85,7 @@ export abstract class TuiControllerTurns extends TuiControllerThreads {
     const prompt = text.trim()
     if (!prompt) return
     if (!this.stateValue.projection) {
-      await this.createThread(prompt.slice(0, 80))
+      await this.createThread(prompt.slice(0, 80), { titleAuto: true })
       if (!this.stateValue.projection) return
     }
     const { thread, runningTurnId } = this.stateValue.projection

@@ -148,10 +148,12 @@ describe('getThreadState', () => {
 
     expect(response.status).toBe(200)
     expect(JSON.parse(response.body)).toEqual({
+      schemaVersion: 1,
       id: record.id,
       status: 'running',
       updatedAt: record.updatedAt,
       latestSeq: 73,
+      pendingUserInputIds: [],
       latestTurn: { id: 'turn_state', status: 'running', orchestration: 'direct' }
     })
     expect(getMetadata).toHaveBeenCalledWith(record.id)
@@ -166,6 +168,27 @@ describe('getThreadState', () => {
 
     expect(response.status).toBe(404)
     expect(JSON.parse(response.body)).toMatchObject({ code: 'not_found' })
+  })
+
+  it('projects live pending user-input ids without reading item history', async () => {
+    const gate = new InMemoryUserInputGate()
+    void gate.request({
+      id: 'in_state',
+      threadId: 'thr_state',
+      turnId: 'turn_state',
+      itemId: 'item_state',
+      prompt: 'choose',
+      questions: []
+    }).catch(() => undefined)
+
+    const response = await getThreadState(
+      serviceWith('thr_state'),
+      'thr_state',
+      undefined,
+      gate
+    )
+
+    expect(JSON.parse(response.body).pendingUserInputIds).toEqual(['in_state'])
   })
 })
 
@@ -593,4 +616,5 @@ describe('GET /v1/threads/:id active-owner forwarding (#1053)', () => {
     const rejected = await match.handler(unauthorized, { params: match.params })
     expect(rejected.status).toBe(401)
   })
+
 })

@@ -490,7 +490,7 @@ describe('AgentLoop transcript characterization', () => {
         immediatelyResolved = harness.userInputGate.resolve(event.inputId, {
           status: 'submitted',
           answers: []
-        })
+        }) === 'settled'
       }
     })
 

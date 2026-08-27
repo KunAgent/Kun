@@ -114,7 +114,14 @@ const rehypePlugins = [
   [
     harden,
     {
-      allowedLinkPrefixes: ['*']
+      allowedLinkPrefixes: ['*'],
+      // Internal scheme synthesized by rehypeFileReferences; StreamdownLink
+      // re-validates every target against the workspace before any click
+      // handling, so allowing this protocol does not widen access.
+      allowedProtocols: ['deepseek-file:'],
+      // Harden's default "indicator" policy appends " [blocked]" after every
+      // denied link; that internal security state must not leak into chat.
+      linkBlockPolicy: 'text-only'
     }
   ]
 ] satisfies StreamdownProps['rehypePlugins']

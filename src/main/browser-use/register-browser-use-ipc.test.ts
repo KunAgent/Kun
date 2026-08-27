@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 import { registerBrowserUseIpc } from './register-browser-use-ipc'
 
 vi.mock('electron', () => ({
@@ -13,7 +18,11 @@ function harness() {
     }),
     removeHandler: vi.fn((channel: string) => handlers.delete(channel))
   }
-  const mainFrame = { processId: 7, routingId: 9 }
+  const mainFrame = {
+    processId: 7,
+    routingId: 9,
+    url: 'http://127.0.0.1:5173/index.html'
+  }
   const window = {
     isDestroyed: () => false,
     webContents: {
@@ -56,7 +65,19 @@ describe('registerBrowserUseIpc', () => {
     const handler = h.handlers.get('browser-use:state:get')!
     expect(() => handler({
       sender: { id: 999 },
-      senderFrame: { processId: 7, routingId: 9 }
+      senderFrame: {
+        processId: 7,
+        routingId: 9,
+        url: 'http://127.0.0.1:5173/index.html'
+      }
+    }, { threadId: 'thread-1' })).toThrow('trusted workbench')
+    expect(() => handler({
+      sender: { id: 42 },
+      senderFrame: {
+        processId: 7,
+        routingId: 9,
+        url: 'https://example.com'
+      }
     }, { threadId: 'thread-1' })).toThrow('trusted workbench')
     expect(h.manager.stateForThread).not.toHaveBeenCalled()
   })

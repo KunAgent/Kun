@@ -59,6 +59,9 @@ import {
   seedUsageCarryover
 } from './runtime-factory-storage.js'
 import { createRuntimeBackgroundMaintenance } from './runtime-background-maintenance.js'
+import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
+import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
+import { SessionGuardian } from '../services/session-guardian.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -114,6 +117,19 @@ export async function createRuntimeServices(
         options.instanceId ?? 'embedded'
       )
     : undefined
+  const threadStoreGuardian = new ThreadStoreGuardian({
+    dataDir: core.activeOptions.dataDir,
+    threadStore: rawThreadStore,
+    nowIso
+  })
+  const threadSnapshots = new ThreadSnapshotStore({
+    dataDir: core.activeOptions.dataDir,
+    nowIso
+  })
+  const sessionGuardian = new SessionGuardian({
+    dataDir: core.activeOptions.dataDir,
+    nowIso
+  })
   const turnService = new TurnService({
     threadStore,
     sessionStore,
@@ -130,6 +146,8 @@ export async function createRuntimeServices(
     maxConcurrentTurns: core.activeOptions.runtime?.turnLimits?.maxConcurrentTurns,
     lifecycleFence,
     executionLeases,
+    dataDir: core.activeOptions.dataDir,
+    snapshots: threadSnapshots,
     onCompacted: (threadId) => delegatedSessions.invalidate(threadId),
     resolveGraphLeadRun,
     createGraphPlanningDraft: (input) => graphRuntime.createPlanningDraft(input),
@@ -246,6 +264,26 @@ export async function createRuntimeServices(
   const backgroundMaintenance = createRuntimeBackgroundMaintenance({
     seedUsage: () => seedUsageCarryover({ threadStore, sessionStore, usageService }),
     pruneAttachments: () => pruneUnsentAttachments(attachmentStore),
+    inspectThreads: async () => {
+      const result = await threadStoreGuardian.run()
+      if (result.remainingIssues.length > 0) {
+        console.warn('[kun] thread guardian found unresolved storage issues', {
+          issueCount: result.remainingIssues.length,
+          repairedThreads: result.repairedThreads
+        })
+      }
+      const reports = await sessionGuardian.scanAll()
+      const flagged = reports.filter((report) => report.warnings.length > 0)
+      if (flagged.length > 0) {
+        console.warn('[kun] session guardian warnings', {
+          threads: flagged.length,
+          details: flagged.map((report) => ({
+            threadId: report.threadId,
+            warnings: report.warnings
+          }))
+        })
+      }
+    },
     onError: (task, error) => {
       console.warn(`[kun] background ${task} failed:`, error)
     }
@@ -431,6 +469,9 @@ export async function createRuntimeServices(
     reviewService,
     pruneUnsentAttachments,
     backgroundMaintenance,
+    threadStoreGuardian,
+    threadSnapshots,
+    sessionGuardian,
     migrationService,
     migrationImportService,
     knowledgeBaseService,

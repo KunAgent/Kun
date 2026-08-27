@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveUninstaller', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath')]
+  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveUninstaller', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'PrepareUpdateTransaction', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
   [string]$Action,
   [string]$ResultPath = ''
 )
@@ -13,6 +13,29 @@ Set-StrictMode -Version 2.0
 . (Join-Path $PSScriptRoot 'windows-installer-migration-journal.ps1')
 . (Join-Path $PSScriptRoot 'windows-installer-migration-filesystem.ps1')
 . (Join-Path $PSScriptRoot 'windows-installer-migration-actions.ps1')
+. (Join-Path $PSScriptRoot 'windows-installer-migration-transaction.ps1')
+
+function Invoke-InstallerFaultPoint([string]$Point) {
+  if (-not [string]::Equals((Get-EnvironmentValue 'KUN_INSTALLER_FAULT_INJECTION'), '1', [StringComparison]::Ordinal)) {
+    return
+  }
+  if (-not [string]::Equals((Get-EnvironmentValue 'KUN_INSTALLER_FAULT_POINT'), $Point, [StringComparison]::Ordinal)) {
+    return
+  }
+
+  $temporaryRoot = Normalize-FullPath ([IO.Path]::GetTempPath())
+  foreach ($pathValue in @(
+    (Get-EnvironmentValue 'KUN_INSTALLER_SOURCE'),
+    (Get-EnvironmentValue 'KUN_INSTALLER_TARGET'),
+    (Get-EnvironmentValue 'KUN_INSTALLER_JOURNAL')
+  )) {
+    $path = Normalize-FullPath $pathValue
+    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-PathWithin $path $temporaryRoot)) {
+      throw 'Installer fault injection is restricted to a temporary smoke-test transaction.'
+    }
+  }
+  throw "KUN_INSTALLER_FAULT_INJECTION:$Point"
+}
 
 function Update-UserPath {
   # Missing secondary sources do not participate in filesystem migration, but
@@ -45,6 +68,65 @@ function Update-UserPath {
       -not [string]::Equals($candidatePart, $targetBin.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
   })
   [Environment]::SetEnvironmentVariable('Path', (($kept + $targetBin) -join ';'), 'User')
+  Invoke-InstallerFaultPoint 'path.after_write'
+}
+
+function Write-AutomaticUpdateResult {
+  $path = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_PENDING_RESULT')
+  if ([string]::IsNullOrWhiteSpace($path)) {
+    throw 'KUN_INSTALLER_PENDING_RESULT is required for automatic update result reporting.'
+  }
+  $outcome = if ([string]::Equals((Get-EnvironmentValue 'KUN_INSTALLER_ABORT_CODE'), 'success', [StringComparison]::Ordinal)) { 'success' } else { 'aborted' }
+  $transactionPath = Get-EnvironmentValue 'KUN_INSTALLER_TRANSACTION'
+  $transaction = if ([string]::IsNullOrWhiteSpace($transactionPath)) { $null } else { Read-UpdateTransaction }
+  $transactionState = if ($null -eq $transaction) { '' } else { [string]$transaction.Phase }
+  $rollbackOutcome = if ($null -eq $transaction -or $null -eq $transaction.PSObject.Properties['RollbackOutcome']) {
+    ''
+  } else {
+    [string]$transaction.RollbackOutcome
+  }
+  $recoveryEnvironment = [ordered]@{}
+  foreach ($name in @(
+    'KUN_INSTALLER_APP_EXECUTABLE',
+    'KUN_INSTALLER_APP_GUID',
+    'KUN_INSTALLER_AUTOMATIC_UPDATE',
+    'KUN_INSTALLER_CANONICAL_LEAF',
+    'KUN_INSTALLER_COMMON_DESKTOP',
+    'KUN_INSTALLER_COMMON_PROGRAMS',
+    'KUN_INSTALLER_CURRENT_DESKTOP',
+    'KUN_INSTALLER_CURRENT_PROGRAMS',
+    'KUN_INSTALLER_INSTALL_MODE',
+    'KUN_INSTALLER_INSTALL_REGISTRY_KEY',
+    'KUN_INSTALLER_JOURNAL',
+    'KUN_INSTALLER_PAYLOAD_BACKUP',
+    'KUN_INSTALLER_PRESERVE_OTHER_SCOPE',
+    'KUN_INSTALLER_PRODUCT_NAME',
+    'KUN_INSTALLER_SECONDARY_SOURCE',
+    'KUN_INSTALLER_SOURCE',
+    'KUN_INSTALLER_TARGET',
+    'KUN_INSTALLER_TRANSACTION',
+    'KUN_INSTALLER_UNINSTALL_REGISTRY_KEY'
+  )) {
+    $value = Get-EnvironmentValue $name
+    if (-not [string]::IsNullOrWhiteSpace($value)) { $recoveryEnvironment[$name] = $value }
+  }
+  $payload = [ordered]@{
+    schemaVersion = 2
+    outcome = $outcome
+    code = (Get-EnvironmentValue 'KUN_INSTALLER_ABORT_CODE')
+    message = (Get-EnvironmentValue 'KUN_INSTALLER_ABORT_MESSAGE')
+    phase = (Get-EnvironmentValue 'KUN_INSTALLER_ABORT_PHASE')
+    backupDir = (Get-EnvironmentValue 'KUN_INSTALLER_PAYLOAD_BACKUP')
+    transactionState = $transactionState
+    rollbackOutcome = $rollbackOutcome
+    recoveryEnvironment = $recoveryEnvironment
+    at = [DateTime]::UtcNow.ToString('o')
+  }
+  $parent = Split-Path -Parent $path
+  [IO.Directory]::CreateDirectory($parent) | Out-Null
+  $temporaryPath = "$path.$PID.tmp"
+  $payload | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $temporaryPath -Encoding UTF8
+  Move-Item -LiteralPath $temporaryPath -Destination $path -Force
 }
 
 try {
@@ -65,6 +147,36 @@ try {
     }
     'ResolveUninstaller' {
       Write-InstallerResult (Resolve-TrustedAppUninstaller)
+    }
+    'ResolveRecoveryExecutable' {
+      Write-InstallerResult (Resolve-RecoveryPayloadExecutable)
+    }
+    'RecoverUpdateTransaction' {
+      Recover-PendingUpdateTransaction
+    }
+    'PrepareUpdateTransaction' {
+      Initialize-UpdateTransaction
+    }
+    'SwitchUpdatePayload' {
+      Invoke-SwitchUpdatePayload
+    }
+    'ValidateCutover' {
+      Assert-UpdateCutover
+    }
+    'RollbackUpdateTransaction' {
+      Invoke-RollbackUpdateTransaction
+    }
+    'ResolveHealthToken' {
+      Resolve-UpdateHealthToken
+    }
+    'ValidateHealthResult' {
+      Assert-UpdateHealthResult
+    }
+    'CommitUpdateTransaction' {
+      Invoke-CommitUpdateTransaction
+    }
+    'FinalizeUpdateTransaction' {
+      Finalize-TerminalUpdateTransaction
     }
     'StopProcesses' {
       $stopResult = Stop-InstallRootProcesses
@@ -92,7 +204,17 @@ try {
       Remove-EmptyLegacyContainers
     }
     'ValidatePayload' {
+      Invoke-InstallerFaultPoint 'validate.before_check'
       Assert-PackagedInstallPayload
+    }
+    'BackupPayload' {
+      Backup-InPlacePayload
+    }
+    'RestorePayloadBackup' {
+      Restore-InPlacePayloadBackup
+    }
+    'WriteUpdateResult' {
+      Write-AutomaticUpdateResult
     }
     'CleanupInPlaceLeftovers' {
       Invoke-CleanupInPlaceLeftovers

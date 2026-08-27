@@ -50,7 +50,7 @@ describe('manager-backed Graph supervision CAS retries', () => {
     const manager: ServiceManagerConnection = {
       discovery: {
         version: 1,
-        protocolVersion: 1,
+        protocolVersion: 3,
         instanceId: 'manager-graph-retry',
         pid: process.pid,
         startedAt: '2026-08-10T00:00:00.000Z',

@@ -139,6 +139,9 @@ export function createServerRuntimeComposition(
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
     }),
     startBackgroundMaintenance: () => backgroundMaintenance.start(),
+    inspectThreadStore: () => services.threadStoreGuardian.run(),
+    sessionGuardian: services.sessionGuardian,
+    threadSnapshots: services.threadSnapshots,
     approvalGate,
 	    userInputGate,
 	    workspaceInspector,

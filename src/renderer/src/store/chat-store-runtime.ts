@@ -1,5 +1,4 @@
 import type {
-  AgentProvider,
   ChatBlock,
   CompactionBlock,
   NormalizedThread,
@@ -9,6 +8,7 @@ import type {
   ThreadEventSink,
   ToolBlock,
   ToolEventPayload,
+  TurnTerminalEvent,
   UserInputQuestion
 } from '../agent/types'
 import { getProvider } from '../agent/registry'
@@ -27,6 +27,12 @@ import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-not
 import type { ChatState } from './chat-store-types'
 import { drainBackgroundQueuedMessage } from './chat-store-background-queue'
 import { isPendingQueuedMessage } from './queued-message-persistence'
+import {
+  clearThreadAwaitingUserInput,
+  markThreadAwaitingUserInput,
+  withoutAwaitingUserInput
+} from './awaiting-user-input-registry'
+import { reconcileCompletedTurnFromThreadDetail } from './chat-store-runtime-reconcile'
 import { hydrateBlockModelLabels, isClawThread } from './chat-store-helpers'
 import {
   collectAssistantTextForTurn,
@@ -57,6 +63,7 @@ import { readThreadWorktreeRegistry, saveThreadWorktreeRegistry, forgetThreadWor
 import { notifySddChatTranscriptMirror } from '../sdd/sdd-chat-transcript'
 import { notifyDesignChatTranscriptMirror } from '../design/design-chat-transcript'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
+import { recordCanvasTurnTerminal } from '../design/canvas/canvas-turn-terminal-registry'
 import {
   flushLiveProjection,
   mergeToolProjectionEvents,
@@ -90,6 +97,7 @@ import {
   completionNotificationDedupeKeyForWatchedThread,
   isInterruptSettledError,
   notifyTurnComplete,
+  notifyUserInputAwaiting,
   runtimeErrorDetail,
   takePendingClawFeishuMirror,
   watchTurnCompletionNotification,
@@ -108,40 +116,16 @@ import {
   runtimeStatusText,
   upsertRuntimeErrorBlock
 } from './chat-store-runtime-projection-support'
+import { loadThreadStates as loadProviderThreadStates } from '../agent/thread-state-loader'
+import {
+  replayCursorPatch,
+  replayLoadingIsPending,
+  replaySynchronizedPatch,
+  type ThreadEventSinkBinding
+} from './thread-presentation-readiness'
 
-export {
-  MAX_WATCHED_COMPLETION_NOTIFICATIONS,
-  MAX_PENDING_CLAW_FEISHU_MIRRORS,
-  MAX_PENDING_CHILD_TOOL_UPDATES,
-  type PendingClawFeishuMirror,
-  watchTurnCompletionNotification,
-  completionNotificationDedupeKeyForWatchedThread,
-  currentCompletionWatchToken,
-  clearWatchedCompletionNotifications,
-  rememberPendingClawFeishuMirror,
-  takePendingClawFeishuMirror,
-  clearPendingClawFeishuMirrors,
-  buildFollowupMessageFromUserInput,
-  readActiveWriteWorkspace,
-  readWriteWorkspaceRoots,
-  runtimeErrorDetail,
-  runtimeStreamRecoveringMessage,
-  forkedMessageCount,
-  forkedTurnCount,
-  clearWatchedCompletionNotification,
-  turnCompleteNotificationSource,
-  notifyTurnComplete
-} from './chat-store-runtime-notifications'
-export {
-  finalizeTurnTiming,
-  flushLiveBlocks,
-  shouldOpenSettingsForError,
-  looksLikeActiveTurnError,
-  isCodeThread,
-  isCodeSidebarThread,
-  latestThread,
-  runtimeStatusText
-} from './chat-store-runtime-projection-support'
+export * from './chat-store-runtime-reexports'
+export type { ThreadEventSinkBinding } from './thread-presentation-readiness'
 
 export function armBusyWatchdog(
   set: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void,
@@ -178,6 +162,26 @@ export function syncTurnCompletionPoll(
         ...(completionWatchKey ? { completionWatchKey } : {})
       }
     },
+    loadThreadStates: async (_state, threadIds) => {
+      const provider = getProvider()
+      const results = await loadProviderThreadStates(provider, threadIds)
+      return results.map((result) => result.ok
+        ? {
+            id: result.id,
+            ok: true as const,
+            state: {
+              ...result.state,
+              ...(watchCompletionNotificationKeys.get(result.id)
+                ? { completionWatchKey: watchCompletionNotificationKeys.get(result.id) }
+                : {})
+            }
+          }
+        : {
+            id: result.id,
+            ok: false as const,
+            missing: result.error.code === 'not_found'
+          })
+    },
     threadLooksRunning,
     onCompletedThreads: async (done, _state, setState, getState) => {
       // Claim watches atomically inside the functional update. Between the
@@ -188,11 +192,20 @@ export function syncTurnCompletionPoll(
       // claim so they never fire for a watch that was not actually removed.
       let claimed: typeof done = []
       setState((snapshot) => {
-        const accepted = done.filter(({ id, completionWatchKey }) => {
+        const accepted = done.filter(({ id, completionWatchKey, latestTurnId }) => {
           if (!snapshot.watchTurnCompletion[id]) return false
           if (
             completionWatchKey &&
             watchCompletionNotificationKeys.get(id) !== completionWatchKey
+          ) return false
+          // A slow poll can answer for an already-replaced turn. Never claim
+          // the newer watch with terminal evidence whose turn identity no
+          // longer matches the thread's current turn.
+          if (
+            latestTurnId &&
+            snapshot.activeThreadId === id &&
+            snapshot.currentTurnId &&
+            latestTurnId !== snapshot.currentTurnId
           ) return false
           return true
         })
@@ -278,79 +291,6 @@ export function syncTurnCompletionPoll(
   })
 }
 
-export type ThreadEventSinkBinding = {
-  threadId?: string
-  signal?: AbortSignal
-  /**
-   * Seq the subscription replays from. Deltas at or below this floor are
-   * duplicates of text already in the timeline (a replayed backlog or a
-   * re-delivered live event) and are dropped instead of appended, so a
-   * stale cursor can no longer re-stream the whole conversation into the
-   * live bubble.
-   */
-  sinceSeq?: number
-  getThreadDetail?: AgentProvider['getThreadDetail']
-}
-
-async function reconcileCompletedTurnFromThreadDetail(input: {
-  threadId: string | null | undefined
-  turnId: string | null | undefined
-  userBlockId: string | null | undefined
-  loadThreadDetail: AgentProvider['getThreadDetail']
-  set: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void
-  get: () => ChatState
-}): Promise<void> {
-  const threadId = input.threadId?.trim()
-  if (!threadId) return
-
-  try {
-    const {
-      blocks: rawBlocks,
-      latestSeq,
-      threadStatus,
-      latestTurnId,
-      latestTurnStatus,
-      goal,
-      todos
-    } = await input.loadThreadDetail(threadId)
-    const loaded = hydrateBlockModelLabels(threadId, rawBlocks)
-
-    input.set((state) => reduceChatProjection(state, {
-      type: 'thread_snapshot_reconciled',
-      payload: {
-        threadId,
-        blocks: loaded,
-        latestSeq,
-        threadStatus,
-        latestTurnId,
-        latestTurnStatus,
-        goal,
-        todos,
-        turnId: input.turnId,
-        userBlockId: input.userBlockId
-      }
-    }, {
-      now: Date.now(),
-      clearRecoveringError: clearRuntimeStreamRecoveringError,
-      goalTimelineText,
-      runtimeStatusText,
-      runtimeErrorView: (event) => describeRuntimeError(runtimeErrorPayloadToError(event)),
-      upsertRuntimeError: upsertRuntimeErrorBlock,
-      formatRuntimeError,
-      runtimeErrorDetail,
-      isInterruptSettledError,
-      settlePendingRuntimeWork: settlePendingRuntimeWorkAfterInterrupt,
-      threadSnapshotLooksRunning
-    }))
-  } catch (error) {
-    if (typeof window === 'undefined') return
-    void window.kunGui?.logError?.('turn-completion-reconcile', 'Failed to reconcile completed turn', {
-      message: error instanceof Error ? error.message : String(error),
-      threadId
-    }).catch(() => undefined)
-  }
-}
-
 export function buildThreadEventSink(
   set: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void,
   get: () => ChatState,
@@ -358,15 +298,18 @@ export function buildThreadEventSink(
 ): ThreadEventSink {
   const boundThreadId = binding.threadId?.trim() ?? ''
   let appliedDeltaSeqFloor = binding.sinceSeq ?? 0
+  // Hydrated threads subscribe exactly at their snapshot's high-water mark, so
+  // the first accepted event on a stream is live runtime evidence: any pending
+  // unconfirmed busy flag from snapshot hydration is resolved as soon as one
+  // arrives. Heartbeats alone do not confirm a running turn.
+  const confirmBusyOnce = (): void => {
+    if (get().busyUnconfirmed) set({ busyUnconfirmed: false })
+  }
   // Update-only child lifecycle events can race their parent tool card. Keep
   // that short-lived repair state inside this one stream so reconnects and
   // other threads cannot consume each other's child ids.
   const pendingChildToolUpdates = new Map<string, ToolEventPayload>()
   const loadThreadDetail = binding.getThreadDetail ?? ((threadId: string) => getProvider().getThreadDetail(threadId))
-  const isCurrentStream = (): boolean => {
-    if (binding.signal?.aborted) return false
-    return !boundThreadId || get().activeThreadId === boundThreadId
-  }
   const reduce = (state: ChatState, action: Parameters<typeof reduceChatProjection>[1]): Partial<ChatState> =>
     reduceChatProjection(state, action, {
       now: Date.now(),
@@ -381,6 +324,10 @@ export function buildThreadEventSink(
       settlePendingRuntimeWork: settlePendingRuntimeWorkAfterInterrupt,
       threadSnapshotLooksRunning
     })
+  const isCurrentStream = (): boolean => {
+    if (binding.signal?.aborted) return false
+    return !boundThreadId || get().activeThreadId === boundThreadId
+  }
   const runEffects = (effects: readonly ChatProjectionEffect[]): void => {
     for (const effect of effects) {
       switch (effect.type) {
@@ -435,27 +382,27 @@ export function buildThreadEventSink(
     onSeq: (seq) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
-      // Re-arm the busy watchdog on every live tick so it behaves as an
-      // *inactivity* timer rather than an absolute one. onSeq fires for
-      // every SSE batch — both content events and the runtime's 15s
-      // heartbeat (kun events route) — so a healthy turn always keeps the
-      // watchdog postponed, even a long-running tool call that produces no
-      // output for minutes. Recovery ("正在恢复运行时事件流…") then only
-      // triggers after the heartbeat genuinely stops for BUSY_WATCHDOG_MS
-      // (a dead stream), instead of on any turn that simply runs past it.
+      // Every event/heartbeat postpones recovery; only stream inactivity
+      // should trip the busy watchdog during a long-running tool call.
       if (get().busy) armBusyWatchdog(set, get)
-      // Monotonic: heartbeats and replays must never rewind the cursor —
-      // a rewound lastSeq becomes the next subscription's since_seq and
-      // replays history.
       set((s) => ({
-        lastSeq: Math.max(s.lastSeq, seq),
+        ...replayCursorPatch(s, seq),
         error: clearRuntimeStreamRecoveringError(s.error)
+      }))
+    },
+    onReplaySynchronized: (cursor) => {
+      if (!isCurrentStream()) return
+      resetBusyRecoveryAttempts()
+      set((state) => ({
+        ...replaySynchronizedPatch(state, boundThreadId, binding.awaitReplaySynchronization, cursor),
+        error: clearRuntimeStreamRecoveringError(state.error)
       }))
     },
     onUserMessage: (event) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
       armBusyWatchdog(set, get)
+      confirmBusyOnce()
       set((state) => reduce(state, { type: 'user_message_received', payload: event }))
     },
     onDeltas: (rawDeltas) => {
@@ -471,6 +418,7 @@ export function buildThreadEventSink(
       if (deltas.length === 0) return
       resetBusyRecoveryAttempts()
       if (!get().busy) armBusyWatchdog(set, get)
+      confirmBusyOnce()
       set((state) => reduce(state, { type: 'deltas_received', deltas }))
     },
     onAssistantItem: (item) => {
@@ -483,6 +431,7 @@ export function buildThreadEventSink(
       publishLiveOfficePreviewForToolEvent(get(), event, boundThreadId || undefined)
       runEffects([{ type: 'refresh_write_workspace', event }])
       resetBusyRecoveryAttempts()
+      confirmBusyOnce()
       if (!get().busy && !event.updateOnly && !isDetachedSubagentToolEvent(event)) {
         armBusyWatchdog(set, get)
       }
@@ -520,6 +469,7 @@ export function buildThreadEventSink(
     onCompaction: (event) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
+      confirmBusyOnce()
       if (!get().busy && event.status === 'running') armBusyWatchdog(set, get)
       if (get().busy && event.status !== 'running' && !get().currentTurnId) clearBusyWatchdog()
       set((state) => reduce(state, { type: 'compaction_updated', payload: event }))
@@ -550,11 +500,19 @@ export function buildThreadEventSink(
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
       clearBusyWatchdog()
+      const awaitingThreadId = boundThreadId || get().activeThreadId
+      markThreadAwaitingUserInput(set, get, awaitingThreadId)
+      // Only notify when the asking thread is not on screen; the visible thread
+      // already shows the composer panel, awaiting progress row, and badge.
+      if (awaitingThreadId && awaitingThreadId !== get().activeThreadId) {
+        notifyUserInputAwaiting(awaitingThreadId, get(), `user-input:${request.requestId}`)
+      }
       set((state) => reduce(state, { type: 'user_input_requested', payload: request }))
     },
     onUserInputStatus: (event) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
+      clearThreadAwaitingUserInput(set, get, boundThreadId || get().activeThreadId)
       if (event.status === 'submitted' && get().busy) armBusyWatchdog(set, get)
       set((state) => reduce(state, { type: 'user_input_status_changed', payload: event }))
     },
@@ -583,22 +541,37 @@ export function buildThreadEventSink(
       if (!isCurrentStream()) return
       set((state) => reduce(state, { type: 'thread_metadata_changed', payload: event }))
     },
-    onTurnComplete: (status = 'completed') => {
+    onTurnComplete: (event: TurnTerminalEvent = { status: 'completed' }) => {
       if (!isCurrentStream()) return
+      // The mapper now preserves terminal identity. A child lifecycle event or
+      // a replay for an older turn must never settle this stream's active turn.
+      if (event.child) return
+      if (event.turnId) recordCanvasTurnTerminal(event.turnId, event.status, event.threadId)
+      const activeState = get()
+      if (event.threadId && event.threadId !== (boundThreadId || activeState.activeThreadId)) return
+      if (!event.turnId) {
+        // Older producers dropped terminal identity. Do not settle the active
+        // turn from that weak signal; wake the state poll so the durable
+        // thread state can confirm it instead.
+        syncTurnCompletionPoll(set, get)
+        return
+      }
+      if (event.turnId !== activeState.currentTurnId) return
       // Reconnect/replay can deliver the same terminal event after the first
       // projection already cleared the active turn. Treat it as a no-op so
       // notifications, mirrors, workspace refreshes and queue drains remain
       // once-only for one completion identity.
-      if (!get().busy && !get().currentTurnId) return
+      if (!activeState.busy && !activeState.currentTurnId) return
+      const status = event.status
       resetBusyRecoveryAttempts()
       clearBusyWatchdog()
       const completedState = get()
       const completedThreadId = completedState.activeThreadId
-      const completedTurnId = completedState.currentTurnId
+      const completedTurnId = event.turnId ?? completedState.currentTurnId
       const completedUserBlockId = completedState.currentTurnUserId
       const completedKey = completedState.currentTurnId
         ? `turn:${completedState.currentTurnId}`
-        : `active:${completedThreadId ?? 'unknown'}:${completedState.lastSeq}`
+        : `active:${completedThreadId ?? 'unknown'}:${event.seq ?? completedState.lastSeq}`
       const pendingMirror = takePendingClawFeishuMirror(completedTurnId)
       const assistantMirrorText =
         pendingMirror
@@ -610,11 +583,21 @@ export function buildThreadEventSink(
           : ''
       set((state) => {
         const patch = reduce(state, {
-          type: status === 'aborted' ? 'turn_aborted' : 'turn_completed'
+          type: status === 'aborted' ? 'turn_aborted' : 'turn_completed',
+          payload: {
+            status,
+            ...(event.threadId ? { threadId: event.threadId } : {}),
+            ...(event.turnId ? { turnId: event.turnId } : {}),
+            ...(typeof event.seq === 'number' ? { seq: event.seq } : {})
+          }
         })
         if (!completedThreadId) return patch
         return {
           ...patch,
+          awaitingUserInputThreadIds: withoutAwaitingUserInput(
+            state.awaitingUserInputThreadIds,
+            completedThreadId
+          ),
           unreadThreadIds: status === 'aborted' || completionIsCurrentlyVisible(state, completedThreadId)
             ? clearUnreadCompletion(state.unreadThreadIds, completedThreadId)
             : markUnreadCompletion(state.unreadThreadIds, completedThreadId)
@@ -635,12 +618,29 @@ export function buildThreadEventSink(
     },
     onError: (err, options) => {
       if (!isCurrentStream()) return
+      // Stale-terminal guard mirroring onTurnComplete: a replayed or out-of-order
+      // failure for another thread/turn must never clear the newer active turn.
+      const active = get()
+      if (options?.threadId && options.threadId !== (boundThreadId || active.activeThreadId)) return
+      if (options?.turnId && active.currentTurnId && options.turnId !== active.currentTurnId) return
+      if (options?.terminal === true && options?.turnId) recordCanvasTurnTerminal(options.turnId, 'failed', options.threadId)
       resetBusyRecoveryAttempts()
       clearBusyWatchdog()
       const state = get()
       const terminal = options?.terminal === true
       takePendingClawFeishuMirror(state.currentTurnId)
-      set((current) => reduce(current, { type: 'turn_failed', error: err, options }))
+      const payload = {
+        ...(options?.threadId ? { threadId: options.threadId } : {}),
+        ...(options?.turnId ? { turnId: options.turnId } : {}),
+        ...(typeof options?.seq === 'number' ? { seq: options.seq } : {}),
+        error: err, options
+      }
+      set((current) => reduce(current, { type: 'turn_failed', payload }))
+      if (replayLoadingIsPending(get(), boundThreadId, binding.awaitReplaySynchronization)) {
+        // Do not leave the conversation permanently covered when replay must
+        // recover. The cached projection and recovery error remain usable.
+        set({ threadLoadingId: null })
+      }
       if (terminal && state.activeThreadId) {
         set((current) => ({
           unreadThreadIds: completionIsCurrentlyVisible(current, state.activeThreadId!)

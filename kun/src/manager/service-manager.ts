@@ -7,6 +7,7 @@ export {
   RuntimeSlotBusyError,
   RuntimeRegistrationRequiredError,
   ServiceManagerState,
+  reconcileVerifiedForcedRuntimeRecovery,
   startServiceManager
 } from './service-manager-state.js'
 export type {

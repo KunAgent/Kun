@@ -1,8 +1,5 @@
-import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { mkdir, readFile, realpath, rm } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
-import { promisify } from 'node:util'
+import { mkdir, realpath, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
@@ -10,9 +7,21 @@ import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { AtomicJsonFile } from '../extensions/atomic-json.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
 import {
+  assertGraphWriteFence,
+  boundedGraphError as boundedError,
+  canonicalGraphPath as canonicalPath,
+  graphCommitGit,
+  graphGit as git,
+  graphWriteMutexContext,
+  normalizeGraphScopes as normalizeScopes,
+  safeGraphId as safeId,
+  workingTreeChangedFiles,
+  workspaceChangeSnapshot,
+  withGraphWriteCommit
+} from './graph-write-coordinator-side-effects.js'
+import {
   GraphRelativePathSchema,
-  graphRelativePathsOverlap,
-  normalizeGraphRelativePath
+  graphRelativePathsOverlap
 } from '../contracts/graph-path.js'
 import {
   graphHostRelativePathCovers,
@@ -21,7 +30,6 @@ import {
   isGraphPhysicalPathContained
 } from './graph-platform-path.js'
 
-const execFileAsync = promisify(execFile)
 const Timestamp = z.string().datetime({ offset: true })
 const Identifier = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/)
 const RelativePath = GraphRelativePathSchema
@@ -251,7 +259,10 @@ export class FileGraphWriteCoordinator {
       }
       const worktree = state.worktrees.find((entry) => entry.attemptId === lease.attemptId)
       if (worktree && worktree.state === 'active') {
-        await git(worktree.repositoryRoot, ['worktree', 'remove', '--force', worktree.path])
+        await assertGraphWriteFence()
+        await graphCommitGit(
+          worktree.repositoryRoot, ['worktree', 'remove', '--force', worktree.path]
+        )
           .catch((error) => {
             worktree.state = 'orphaned'
             worktree.lastError = boundedError(error)
@@ -268,7 +279,8 @@ export class FileGraphWriteCoordinator {
       const state = await this.load()
       const record = state.worktrees.find((entry) => entry.attemptId === attemptId)
       if (!record) return null
-      await git(record.path, ['add', '-A'])
+      await assertGraphWriteFence()
+      await graphCommitGit(record.path, ['add', '-A'])
       const [head, files, patch] = await Promise.all([
         git(record.path, ['rev-parse', 'HEAD']),
         git(record.path, ['diff', '--cached', '-z', '--name-only', '--no-renames', record.baseRevision]),
@@ -339,7 +351,8 @@ export class FileGraphWriteCoordinator {
       if (record.state === 'accepted' || record.state === 'cleaned') {
         return { outcome: 'applied', record }
       }
-      await git(record.path, ['add', '-A'])
+      await assertGraphWriteFence()
+      await graphCommitGit(record.path, ['add', '-A'])
       record.changedFiles = normalizeScopes((await git(record.path, [
         'diff',
         '--cached',
@@ -392,25 +405,31 @@ export class FileGraphWriteCoordinator {
         await this.persist(state)
         return { outcome: 'applied', record }
       }
-      const patchPath = join(this.options.rootDir, 'patches', `${safeId(record.worktreeId)}.patch`)
-      await mkdir(dirname(patchPath), { recursive: true, mode: 0o700 })
-      await atomicWriteFile(patchPath, patch)
-      try {
-        await git(record.repositoryRoot, ['apply', '--check', patchPath])
-        await git(record.repositoryRoot, ['apply', '--index', patchPath])
-        record.state = 'accepted'
-        record.updatedAt = this.nowIso()
-        await this.persist(state)
-        return { outcome: 'applied', record }
-      } catch (error) {
-        record.state = 'conflict'
-        record.lastError = boundedError(error)
-        record.updatedAt = this.nowIso()
-        await this.persist(state)
-        return { outcome: 'conflict', record, reason: record.lastError }
-      } finally {
-        await rm(patchPath, { force: true }).catch(() => undefined)
-      }
+      const patchPath = join(
+        this.options.rootDir,
+        'patches',
+        `${safeId(record.worktreeId)}-${safeId(this.nextId('commit'))}.patch`
+      )
+      return withGraphWriteCommit(async (context) => {
+        await mkdir(dirname(patchPath), { recursive: true, mode: 0o700 })
+        await atomicWriteFile(patchPath, patch, { signal: context.signal })
+        try {
+          await git(record.repositoryRoot, ['apply', '--check', patchPath])
+          await graphCommitGit(record.repositoryRoot, ['apply', '--index', patchPath])
+          record.state = 'accepted'
+          record.updatedAt = this.nowIso()
+          await this.persist(state)
+          return { outcome: 'applied' as const, record }
+        } catch (error) {
+          record.state = 'conflict'
+          record.lastError = boundedError(error)
+          record.updatedAt = this.nowIso()
+          await this.persist(state)
+          return { outcome: 'conflict' as const, record, reason: record.lastError }
+        } finally {
+          await rm(patchPath, { force: true }).catch(() => undefined)
+        }
+      })
     })
   }
 
@@ -522,7 +541,8 @@ export class FileGraphWriteCoordinator {
     const worktreeId = this.nextId('graph_worktree')
     const worktreePath = join(this.worktreeRoot(), safeId(worktreeId))
     await mkdir(this.worktreeRoot(), { recursive: true, mode: 0o700 })
-    await git(canonicalRepositoryRoot, [
+    await assertGraphWriteFence()
+    await graphCommitGit(canonicalRepositoryRoot, [
       'worktree',
       'add',
       '--detach',
@@ -581,14 +601,16 @@ export class FileGraphWriteCoordinator {
     if (!isGraphPhysicalPathContained(root, candidate)) {
       throw new Error('refusing to clean worktree outside graph root')
     }
-    await git(record.repositoryRoot, ['worktree', 'remove', '--force', candidate])
+    await assertGraphWriteFence()
+    await graphCommitGit(record.repositoryRoot, ['worktree', 'remove', '--force', candidate])
     record.state = 'cleaned'
     record.updatedAt = this.nowIso()
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const run = this.queue.catch(() => undefined).then(() =>
-      withManagerDataMutex('graph-write-coordinator', operation))
+      withManagerDataMutex('graph-write-coordinator', (context) =>
+        graphWriteMutexContext.run(context, operation)))
     this.queue = run.then(() => undefined, () => undefined)
     return run
   }
@@ -598,7 +620,14 @@ export class FileGraphWriteCoordinator {
   }
 
   private async persist(state: WriteState): Promise<void> {
-    await this.stateFile.write(WriteStateSchema.parse(state))
+    const context = graphWriteMutexContext.getStore()
+    context?.signal.throwIfAborted()
+    await context?.assertCurrent()
+    context?.signal.throwIfAborted()
+    await this.stateFile.write(WriteStateSchema.parse(state), {
+      signal: context?.signal,
+      fence: context?.fence
+    })
   }
 
   private statePath(): string {
@@ -628,72 +657,4 @@ function writeClaimsConflict(
   if (mode === 'serialize') return true
   if (mode === 'worktree' && allowWorktrees) return false
   return scopesOverlap(left, right)
-}
-function normalizeScopes(scopes: readonly string[]): string[] {
-  return [...new Set(scopes.map((scope) => {
-    try {
-      return normalizeGraphRelativePath(scope)
-    } catch {
-      throw new Error(`invalid Graph write scope: ${scope}`)
-    }
-  }))].sort()
-}
-async function git(cwd: string, args: string[]): Promise<string> {
-  const result = await execFileAsync('git', ['-C', cwd, ...args], {
-    encoding: 'utf8',
-    timeout: 120_000,
-    maxBuffer: 64 * 1024 * 1024
-  })
-  return result.stdout
-}
-async function workspaceChangeSnapshot(
-  workspaceRoot: string
-): Promise<Record<string, string>> {
-  const output = await git(workspaceRoot, [
-    'status',
-    '--porcelain=v1',
-    '-z',
-    '--untracked-files=all',
-    '--no-renames'
-  ])
-  const snapshot: Record<string, string> = {}
-  for (const entry of output.split('\0').filter(Boolean)) {
-    if (entry.length < 4) continue
-    const status = entry.slice(0, 2)
-    const path = normalizeGraphRelativePath(entry.slice(3))
-    const signature = await readFile(resolve(workspaceRoot, path))
-      .then((content) => createHash('sha256').update(content).digest('hex'))
-      .catch((error) =>
-        String((error as { code?: unknown })?.code ?? '') === 'ENOENT'
-          ? 'missing'
-          : Promise.reject(error))
-    snapshot[path] = `${status}:${signature}`
-  }
-  return snapshot
-}
-
-async function workingTreeChangedFiles(repositoryRoot: string): Promise<string[]> {
-  const [tracked, untracked] = await Promise.all([
-    git(repositoryRoot, ['diff', '-z', '--name-only', '--no-renames', 'HEAD']),
-    git(repositoryRoot, ['ls-files', '-z', '--others', '--exclude-standard'])
-  ])
-  return normalizeScopes([
-    ...tracked.split('\0').filter(Boolean),
-    ...untracked.split('\0').filter(Boolean)
-  ])
-}
-
-async function canonicalPath(input: string): Promise<string> {
-  const absolute = resolve(input)
-  return realpath(absolute).catch(() => absolute)
-}
-
-function safeId(value: string): string {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) throw new Error('invalid resource id')
-  return value
-}
-
-function boundedError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.slice(0, 2_048)
 }

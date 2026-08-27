@@ -12,6 +12,7 @@ import { persistComposerModel } from '../store/chat-store-helpers'
 import { isKunRuntimeInsecure } from '@shared/app-settings-kun-migration'
 import { type ReactElement } from 'react'
 import { formatCompactNumber } from '../hooks/use-thread-usage'
+import { FastContextSettingsPanel } from './settings-section-assistant-fast-context'
 import {
   AdvancedSettingsDisclosure,
   ModelSelect,
@@ -22,7 +23,7 @@ import {
 } from './settings-controls'
 
 export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, openStorageSettings, form, kun, update, updateKun, showRuntimeToken, setShowRuntimeToken, portError, selectControlClass, compactHomePath, expandHomePath, agentsSectionRef, runtimeInfo, toolDiagnostics, productionManagedDataDir, windowsStorageManagement, tokenEconomy, tokenEconomySavingsState, activePanel, tokenEconomySavings, updateTokenEconomy, modelProviders, instructions, updateInstructions, activeProvider, activeProviderModels, promptOptimization, promptOptimizationModels, promptOptimizationDefaultModel, updatePromptOptimization, selectKunProvider } = view
+  const { t, openStorageSettings, form, kun, update, updateKun, showRuntimeToken, setShowRuntimeToken, portError, selectControlClass, compactHomePath, expandHomePath, agentsSectionRef, runtimeInfo, toolDiagnostics, productionManagedDataDir, windowsStorageManagement, tokenEconomy, tokenEconomySavingsState, activePanel, tokenEconomySavings, updateTokenEconomy, modelProviders, instructions, updateInstructions, activeProvider, activeProviderModels, promptOptimization, promptOptimizationModels, promptOptimizationDefaultModel, updatePromptOptimization, selectKunProvider, fastContext, updateFastContext } = view
   return (
     <>
               <div
@@ -324,6 +325,15 @@ export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, an
                         </div>
                       </div>
                     }
+                  />
+                  <FastContextSettingsPanel
+                    t={t}
+                    value={fastContext}
+                    modelProviders={modelProviders}
+                    leadProviderId={kun.providerId}
+                    leadModel={kun.model}
+                    selectControlClass={selectControlClass}
+                    onChange={updateFastContext}
                   />
                 </SettingsCard>
               </div>

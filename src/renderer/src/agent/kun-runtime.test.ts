@@ -1,81 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  defaultClawSettings,
-  defaultDesignSettings,
-  defaultKeyboardShortcuts,
-  defaultKunRuntimeSettings,
-  defaultModelProviderSettings,
-  defaultScheduleSettings,
-  defaultWorkflowSettings,
-  defaultWriteSettings,
-  defaultTerminalSettings,
-  type AppSettingsV1
-} from '@shared/app-settings'
 import { KunRuntimeProvider } from './kun-runtime'
-import { getProvider, resetProviderCacheForTests } from './registry'
+import { resetProviderCacheForTests } from './registry'
 import { rendererRuntimeClient } from './runtime-client'
-import type { ThreadEventSink } from './types'
-
-const DEFAULT_EXECUTION_SETTINGS = {
-  approvalPolicy: 'auto',
-  sandboxMode: 'danger-full-access',
-  approvalReviewer: 'user'
-} as const
-
-function settings(): AppSettingsV1 {
-  return {
-    version: 1,
-    locale: 'en',
-    theme: 'system',
-    uiFontScale: 0.82,
-    chatContentMaxWidthPx: 896,
-    composerSendKey: 'enter',
-    provider: defaultModelProviderSettings(),
-    agents: {
-      kun: defaultKunRuntimeSettings()
-    },
-    workspaceRoot: '/tmp/workspace',
-    conversationWorkspaceRoot: '~/Documents/Kun',
-    log: { enabled: false, retentionDays: 7 },
-    checkpointCleanup: { createEnabled: false, enabled: false, intervalDays: 3 },
-    notifications: { turnComplete: true },
-    appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
-    keyboardShortcuts: defaultKeyboardShortcuts(),
-    write: defaultWriteSettings(),
-    claw: defaultClawSettings(),
-    schedule: defaultScheduleSettings(),
-    workflow: defaultWorkflowSettings(),
-    design: defaultDesignSettings(),
-    terminal: defaultTerminalSettings(),
-    guiUpdate: { channel: 'stable' },
-    codePromptPrefix: '',
-    chatWelcomeMessage: '',
-    codeAgentPresets: [],
-    disabledSkillIds: []
-  }
-}
-
-function installDsGui(overrides: Partial<Window['kunGui']>): void {
-  vi.stubGlobal('window', {
-    kunGui: {
-      getSettings: vi.fn(async () => settings()),
-      runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: '{}' })),
-      resolveKunApproval: vi.fn(async () => ({
-        confirmed: true,
-        response: { ok: true, status: 200, body: '{}' }
-      })),
-      startSse: vi.fn(async (_threadId: string, _sinceSeq: number, streamId?: string) => ({
-        streamId: streamId ?? 'stream-1'
-      })),
-      stopSse: vi.fn(async () => true),
-      ackSse: vi.fn(async () => true),
-      onSseEvent: vi.fn(() => () => undefined),
-      onSseEnd: vi.fn(() => () => undefined),
-      onSseError: vi.fn(() => () => undefined),
-      ...overrides
-    }
-  })
-}
+import { installDsGui } from './kun-runtime-test-support'
 
 afterEach(() => {
   rendererRuntimeClient.invalidateSettings()
@@ -363,6 +290,66 @@ describe('KunRuntimeProvider', () => {
     expect(detail.latestTurnOrchestration).toBe(expected)
   })
 
+  it('restores unfinished latest-turn text as the live projection', async () => {
+    installDsGui({
+      runtimeRequest: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        body: JSON.stringify({
+          id: 'thr_running',
+          title: 'Running',
+          workspace: '/tmp',
+          model: 'deepseek-chat',
+          mode: 'agent',
+          status: 'running',
+          createdAt: 't0',
+          updatedAt: 't3',
+          latestSeq: 17,
+          turns: [{
+            id: 'turn_running',
+            threadId: 'thr_running',
+            status: 'running',
+            prompt: 'continue',
+            createdAt: 't0',
+            items: [
+              {
+                id: 'item_user', turnId: 'turn_running', threadId: 'thr_running',
+                role: 'user', status: 'completed', createdAt: 't0',
+                kind: 'user_message', text: 'continue'
+              },
+              {
+                id: 'item_reasoning', turnId: 'turn_running', threadId: 'thr_running',
+                role: 'assistant', status: 'running', createdAt: 't1',
+                kind: 'assistant_reasoning', text: 'still reasoning'
+              },
+              {
+                id: 'item_answer', turnId: 'turn_running', threadId: 'thr_running',
+                role: 'assistant', status: 'running', createdAt: 't2',
+                kind: 'assistant_text', text: 'partial answer'
+              }
+            ]
+          }]
+        })
+      }))
+    })
+
+    const detail = await new KunRuntimeProvider().getThreadDetail('thr_running')
+
+    expect(detail.blocks).toEqual([
+      expect.objectContaining({ kind: 'user', id: 'item_user', text: 'continue' })
+    ])
+    expect(detail.liveProjection).toEqual({
+      reasoning: {
+        text: 'still reasoning', itemId: 'item_reasoning',
+        turnId: 'turn_running', createdAt: 't1'
+      },
+      assistant: {
+        text: 'partial answer', itemId: 'item_answer',
+        turnId: 'turn_running', createdAt: 't2'
+      }
+    })
+  })
+
   it('loads lightweight thread state without requesting full detail', async () => {
     const runtimeRequest = vi.fn(async (path: string) => ({
       ok: true,
@@ -372,6 +359,7 @@ describe('KunRuntimeProvider', () => {
         status: 'running',
         updatedAt: '2026-08-07T00:00:00.000Z',
         latestSeq: 91,
+        pendingUserInputIds: ['input-state'],
         latestTurn: { id: 'turn_state', status: 'running', orchestration: 'direct' }
       })
     }))
@@ -381,11 +369,66 @@ describe('KunRuntimeProvider', () => {
       status: 'running',
       updatedAt: '2026-08-07T00:00:00.000Z',
       latestSeq: 91,
+      pendingUserInputIds: ['input-state'],
       latestTurnId: 'turn_state',
       latestTurnStatus: 'running',
       latestTurnOrchestration: 'direct'
     })
     expect(runtimeRequest).toHaveBeenCalledWith('/v1/threads/thr_state/state', 'GET')
+  })
+
+  it('maps batch thread states and keeps per-thread failures', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        results: [
+          {
+            id: 'thr_waiting',
+            ok: true,
+            state: {
+              id: 'thr_waiting',
+              status: 'running',
+              updatedAt: '2026-08-07T00:00:00.000Z',
+              latestSeq: 92,
+              pendingUserInputIds: ['input-waiting'],
+              latestTurn: null
+            }
+          },
+          {
+            id: 'thr_missing',
+            ok: false,
+            error: { code: 'not_found', message: 'thread not found: thr_missing' }
+          }
+        ]
+      })
+    }))
+    installDsGui({ runtimeRequest })
+
+    await expect(new KunRuntimeProvider().getThreadStates([
+      'thr_waiting', 'thr_missing'
+    ])).resolves.toEqual([
+      {
+        id: 'thr_waiting',
+        ok: true,
+        state: {
+          status: 'running',
+          updatedAt: '2026-08-07T00:00:00.000Z',
+          latestSeq: 92,
+          pendingUserInputIds: ['input-waiting']
+        }
+      },
+      {
+        id: 'thr_missing',
+        ok: false,
+        error: { code: 'not_found', message: 'thread not found: thr_missing' }
+      }
+    ])
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/states',
+      'POST',
+      JSON.stringify({ threadIds: ['thr_waiting', 'thr_missing'] })
+    )
   })
 
   it('falls back to legacy full detail only when the timeline route is unavailable', async () => {
@@ -483,11 +526,13 @@ describe('KunRuntimeProvider', () => {
     const detail = await new KunRuntimeProvider().getThreadDetail('thr_cursor')
 
     expect(detail.threadStatus).toBe('running')
-    expect(detail.blocks).toContainEqual(expect.objectContaining({
-      kind: 'assistant',
-      id: 'item_cursor_text',
+    expect(detail.blocks.some((block) => block.id === 'item_cursor_text')).toBe(false)
+    expect(detail.liveProjection?.assistant).toEqual({
+      itemId: 'item_cursor_text',
+      turnId: 'turn_cursor',
+      createdAt: 't1',
       text: 'partial Cursor response'
-    }))
+    })
   })
 
   it('flags user_input blocks live only when the runtime gate still awaits them (#606)', async () => {
@@ -543,119 +588,6 @@ describe('KunRuntimeProvider', () => {
     const staleDetail = await new KunRuntimeProvider().getThreadDetail('thr_1')
     const staleBlock = staleDetail.blocks.find((block) => block.kind === 'user_input')
     expect(staleBlock?.kind === 'user_input' && staleBlock.live).toBeFalsy()
-  })
-
-  it('expires a recovered approval when the runtime approval gate no longer awaits it', async () => {
-    const threadBody = (pendingApprovalIds: string[]): string =>
-      JSON.stringify({
-        id: 'thr_approval',
-        title: 'Demo',
-        workspace: '/tmp',
-        model: 'deepseek-chat',
-        mode: 'agent',
-        status: 'running',
-        createdAt: 't0',
-        updatedAt: 't1',
-        latestSeq: 12,
-        pendingApprovalIds,
-        turns: [{
-          id: 'turn_approval',
-          threadId: 'thr_approval',
-          status: 'running',
-          prompt: 'run command',
-          createdAt: 't0',
-          items: [{
-            id: 'item_approval',
-            turnId: 'turn_approval',
-            threadId: 'thr_approval',
-            role: 'tool',
-            status: 'pending',
-            createdAt: 't1',
-            kind: 'approval',
-            approvalId: 'approval_live',
-            toolName: 'bash',
-            summary: 'Run tests'
-          }]
-        }]
-      })
-
-    installDsGui({
-      runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: threadBody(['approval_live']) }))
-    })
-    const liveDetail = await new KunRuntimeProvider().getThreadDetail('thr_approval')
-    expect(liveDetail.blocks.find((block) => block.kind === 'approval'))
-      .toMatchObject({ status: 'pending' })
-
-    resetProviderCacheForTests()
-    installDsGui({
-      runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: threadBody([]) }))
-    })
-    const staleDetail = await new KunRuntimeProvider().getThreadDetail('thr_approval')
-    expect(staleDetail.blocks.find((block) => block.kind === 'approval'))
-      .toMatchObject({ status: 'expired' })
-  })
-
-  it('coalesces tool_call and tool_result pairs into one tool block on thread load', async () => {
-    installDsGui({
-      runtimeRequest: vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        body: JSON.stringify({
-          id: 'thr_1',
-          title: 'Demo',
-          workspace: '/tmp',
-          model: 'deepseek-chat',
-          mode: 'agent',
-          status: 'idle',
-          createdAt: 't0',
-          updatedAt: 't1',
-          latestSeq: 9,
-          turns: [
-            {
-              id: 'turn_1',
-              threadId: 'thr_1',
-              status: 'completed',
-              prompt: 'run echo',
-              createdAt: 't0',
-              items: [
-                {
-                  id: 'item_call',
-                  turnId: 'turn_1',
-                  threadId: 'thr_1',
-                  role: 'tool',
-                  status: 'pending',
-                  createdAt: 't0',
-                  kind: 'tool_call',
-                  toolName: 'echo',
-                  callId: 'call_1',
-                  arguments: { text: 'hi' }
-                },
-                {
-                  id: 'item_result',
-                  turnId: 'turn_1',
-                  threadId: 'thr_1',
-                  role: 'tool',
-                  status: 'completed',
-                  createdAt: 't1',
-                  kind: 'tool_result',
-                  toolName: 'echo',
-                  callId: 'call_1',
-                  output: { echoed: 'hi' }
-                }
-              ]
-            }
-          ]
-        })
-      }))
-    })
-    const provider = new KunRuntimeProvider()
-    const detail = await provider.getThreadDetail('thr_1')
-    expect(detail.blocks).toHaveLength(1)
-    expect(detail.blocks[0]).toMatchObject({
-      kind: 'tool',
-      id: 'tool_call_1',
-      status: 'success'
-    })
   })
 
 })

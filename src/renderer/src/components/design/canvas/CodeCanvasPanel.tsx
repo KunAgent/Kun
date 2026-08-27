@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Maximize2, Minimize2, PanelRightClose, Shapes } from 'lucide-react'
+import { Loader2, Maximize2, Minimize2, PanelLeft, PanelRightClose, Shapes } from 'lucide-react'
 import {
   useCanvasImageGenerationProgress,
   failedImageGenerationEntries,
@@ -71,6 +71,11 @@ type Props = Pick<
   presentation?: 'docked' | 'focused'
   onExitFocus?: () => void
   onCollapse: () => void
+  /** Left-sidebar toggle shown in the focused titlebar so it stays reachable. */
+  leftSidebarCollapsed?: boolean
+  onToggleLeftSidebar?: () => void
+  sidebarExpandLabel?: string
+  sidebarCollapseLabel?: string
   className?: string
 }
 
@@ -83,7 +88,19 @@ export function codeCanvasPanelShellClass(className?: string, presentation: 'doc
 }
 
 export function codeCanvasPanelTitlebarClass(): string {
-  return 'pointer-events-auto flex h-10 max-w-[calc(100%-72px)] min-w-0 items-center gap-1.5 rounded-full border border-ds-border bg-white/82 px-1.5 shadow-[0_16px_42px_rgba(20,47,95,0.13)] backdrop-blur-2xl dark:bg-ds-card/84 dark:shadow-none'
+  return 'pointer-events-auto inline-flex h-10 max-w-[calc(100%-72px)] min-w-0 items-center gap-1.5 rounded-full border border-ds-border bg-white/82 px-1.5 shadow-[0_16px_42px_rgba(20,47,95,0.13)] backdrop-blur-2xl dark:bg-ds-card/84 dark:shadow-none'
+}
+
+export function codeCanvasPanelTitlebarStyle(
+  presentation: 'docked' | 'focused'
+): CSSProperties | undefined {
+  return presentation === 'focused'
+    ? {
+        left: 'calc(0.75rem + var(--ds-window-controls-safe-inset))',
+        right: 'auto',
+        top: 'calc(0.75rem + var(--ds-window-controls-safe-block))'
+      }
+    : undefined
 }
 
 export function codeCanvasPanelDesignHostClass(): string {
@@ -164,6 +181,10 @@ export function CodeCanvasPanel({
   presentation = 'docked',
   onExitFocus,
   onCollapse,
+  leftSidebarCollapsed = false,
+  onToggleLeftSidebar,
+  sidebarExpandLabel,
+  sidebarCollapseLabel,
   className,
   busy,
   onOpenAgentSettings,
@@ -386,8 +407,29 @@ export function CodeCanvasPanel({
     const onToggleFocus = focusedPresentation && onExitFocus ? onExitFocus : requestCodeCanvasPanelFocus
     return (
       <aside className={codeCanvasPanelShellClass(className, presentation)}>
-        <div className="pointer-events-none absolute left-3 right-3 top-3 z-50 flex min-w-0 items-start">
+        <div
+          className={cx(
+            'pointer-events-none absolute right-3 z-50 flex min-w-0 items-start',
+            focusedPresentation ? '' : 'left-3 top-3'
+          )}
+          style={codeCanvasPanelTitlebarStyle(presentation)}
+        >
           <div className={codeCanvasPanelTitlebarClass()} data-code-canvas-titlebar="true">
+            {focusedPresentation && onToggleLeftSidebar ? (
+              <button
+                type="button"
+                onClick={onToggleLeftSidebar}
+                className="ds-sidebar-toggle-button shrink-0"
+                aria-label={leftSidebarCollapsed
+                  ? (sidebarExpandLabel ?? t('sidebarExpand'))
+                  : (sidebarCollapseLabel ?? t('sidebarCollapse'))}
+                title={leftSidebarCollapsed
+                  ? (sidebarExpandLabel ?? t('sidebarExpand'))
+                  : (sidebarCollapseLabel ?? t('sidebarCollapse'))}
+              >
+                <PanelLeft className="h-4 w-4" strokeWidth={1.85} />
+              </button>
+            ) : null}
             {!focusedPresentation ? (
               <button
                 type="button"

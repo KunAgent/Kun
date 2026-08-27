@@ -90,15 +90,29 @@ export type CoreThreadTimelineJson = CoreThreadJson & {
 }
 
 export type CoreThreadRuntimeStateJson = {
+  schemaVersion?: number
   id: string
   status: string
   updatedAt: string
   latestSeq: number
+  /** Omitted by legacy owners; do not confuse omission with a live empty gate. */
+  pendingUserInputIds?: string[]
   latestTurn: {
     id: string
     status: string
     orchestration: 'direct' | 'graph'
   } | null
+}
+
+export type CoreThreadRuntimeStateBatchResponseJson = {
+  results: Array<
+    | { id: string; ok: true; state: CoreThreadRuntimeStateJson }
+    | {
+        id: string
+        ok: false
+        error: { code: 'not_found' | 'unavailable'; message: string }
+      }
+  >
 }
 
 export type CoreAttachmentMetadataJson = {

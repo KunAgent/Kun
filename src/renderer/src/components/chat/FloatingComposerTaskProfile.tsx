@@ -75,10 +75,6 @@ function segmentClass(active: boolean, prominent: boolean): string {
   }`
 }
 
-function compactSelectClass(): string {
-  return 'h-8 max-w-40 cursor-pointer rounded-full border border-ds-border-muted bg-ds-card px-2.5 text-[12px] font-medium text-ds-muted outline-none transition hover:text-ds-ink focus-visible:ring-2 focus-visible:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-60'
-}
-
 const DESIGN_STYLE_MARKS: Record<DesignSystemPreset, { icon: LucideIcon; className: string }> = {
   none: { icon: Sparkles, className: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-400/15 dark:text-indigo-300' },
   shadcn: { icon: Braces, className: 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950' },
@@ -111,6 +107,181 @@ function DesignStyleMark({ preset }: { preset: DesignSystemPreset }): ReactEleme
 }
 
 type DesignStylePopupPlacement = 'top' | 'bottom'
+
+export function resolveDesignProfileSummaryPopupLayout(
+  trigger: Pick<DOMRect, 'top' | 'bottom'>,
+  viewportHeight: number
+): { placement: DesignStylePopupPlacement; maxHeight: number } {
+  const viewportMargin = 16
+  const popupGap = 8
+  const preferredHeight = 320
+  const spaceAbove = Math.max(0, trigger.top - viewportMargin - popupGap)
+  const spaceBelow = Math.max(0, viewportHeight - trigger.bottom - viewportMargin - popupGap)
+  const placement = spaceBelow >= preferredHeight || spaceBelow >= spaceAbove ? 'bottom' : 'top'
+  return {
+    placement,
+    maxHeight: Math.min(preferredHeight, placement === 'bottom' ? spaceBelow : spaceAbove)
+  }
+}
+
+type DesignProfileSummaryProps = {
+  disabled: boolean
+  locked: boolean
+  profileLocked: boolean
+  outputOptions: ReadonlyArray<ComposerProfileSelectOption<DesignTaskOutputMedium>>
+  effectiveOutputMedium: DesignTaskOutputMedium
+  outputLabel: string
+  targetLabel: string
+  presetLabel: string
+  profile: DesignTaskComposerProfile
+  imageGenerationStateKnown: boolean
+  imageGenerationAvailable: boolean
+  imageGenerationReason?: string
+  onProfileChange?: (patch: Partial<DesignTaskComposerProfile>) => void
+  onConfigureImageGeneration?: () => void
+}
+
+function DesignProfileSummary({
+  disabled,
+  locked,
+  profileLocked,
+  outputOptions,
+  effectiveOutputMedium,
+  outputLabel,
+  targetLabel,
+  presetLabel,
+  profile,
+  imageGenerationStateKnown,
+  imageGenerationAvailable,
+  imageGenerationReason,
+  onProfileChange,
+  onConfigureImageGeneration
+}: DesignProfileSummaryProps): ReactElement {
+  const { t } = useTranslation('common')
+  const profileControlsDisabled = disabled || profileLocked
+  const [popupLayout, setPopupLayout] = useState<{
+    placement: DesignStylePopupPlacement
+    maxHeight: number
+  }>({ placement: 'bottom', maxHeight: 320 })
+  const rootRef = useRef<HTMLDetailsElement>(null)
+  const summaryRef = useRef<HTMLElement>(null)
+
+  const handleToggle = (): void => {
+    if (!rootRef.current?.open) return
+    const trigger = summaryRef.current?.getBoundingClientRect()
+    if (!trigger) return
+    setPopupLayout(resolveDesignProfileSummaryPopupLayout(trigger, window.innerHeight))
+  }
+
+  return (
+    <details
+      ref={rootRef}
+      onToggle={handleToggle}
+      className="ds-design-profile-summary ds-no-drag group relative ml-auto shrink-0"
+      data-task-surface="design"
+      data-task-surface-locked={locked ? 'true' : 'false'}
+    >
+      <summary
+        ref={summaryRef}
+        className="flex h-9 max-w-[360px] cursor-pointer list-none items-center gap-2 rounded-full border border-ds-border-muted bg-white px-3 text-[12.5px] font-medium text-ds-muted transition hover:border-ds-border-strong hover:text-ds-ink dark:bg-ds-card [&::-webkit-details-marker]:hidden"
+      >
+        <Palette className="h-3.5 w-3.5 shrink-0 text-ds-ink" strokeWidth={1.9} />
+        <span className="shrink-0 font-semibold text-ds-ink">
+          {t('designConfiguration', { defaultValue: 'Design configuration' })}
+        </span>
+        <span className="min-w-0 truncate text-ds-faint">
+          {outputLabel} · {targetLabel} · {presetLabel}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" strokeWidth={1.8} />
+      </summary>
+      <div
+        className={`absolute right-0 z-40 w-[min(400px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-2xl border border-ds-border-muted bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.14)] dark:bg-ds-card ${
+          popupLayout.placement === 'top'
+            ? 'bottom-[calc(100%+8px)]'
+            : 'top-[calc(100%+8px)]'
+        }`}
+        style={{ maxHeight: popupLayout.maxHeight }}
+        data-placement={popupLayout.placement}
+      >
+        <div className="grid gap-2.5">
+          <FloatingComposerProfileSelect<DesignTaskOutputMedium>
+            pickerId="output"
+            label={t('designOutput', { defaultValue: 'Output' })}
+            value={effectiveOutputMedium}
+            options={outputOptions as [
+              ComposerProfileSelectOption<DesignTaskOutputMedium>,
+              ...Array<ComposerProfileSelectOption<DesignTaskOutputMedium>>
+            ]}
+            disabled={profileControlsDisabled}
+            onChange={onProfileChange
+              ? (outputMedium) => onProfileChange({ outputMedium })
+              : undefined}
+          />
+          <FloatingComposerProfileSelect<'web' | 'app'>
+            pickerId="target"
+            label={t('designTarget', { defaultValue: 'Target' })}
+            value={profile.target}
+            options={[
+              {
+                value: 'web',
+                label: t('designTargetWeb', { defaultValue: 'Web' }),
+                icon: Monitor,
+                iconClassName: 'bg-blue-50 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300'
+              },
+              {
+                value: 'app',
+                label: t('designTargetApp', { defaultValue: 'App' }),
+                icon: Smartphone,
+                iconClassName: 'bg-sky-50 text-sky-600 dark:bg-sky-400/15 dark:text-sky-300'
+              }
+            ]}
+            disabled={profileControlsDisabled}
+            onChange={onProfileChange
+              ? (target) => onProfileChange({ target })
+              : undefined}
+          />
+          <DesignStylePicker
+            value={profile.preset}
+            disabled={profileControlsDisabled}
+            onChange={onProfileChange
+              ? (preset) => onProfileChange({ preset })
+              : undefined}
+          />
+          {profile.presetSource === 'root-design-md' ? (
+            <div
+              className="flex min-w-0 items-center gap-1.5 rounded-xl border border-ds-border-muted bg-ds-surface-subtle px-2.5 py-1.5 text-[11.5px] font-medium text-ds-muted"
+              data-design-style-source="root-design-md"
+              title={profile.styleSourceHash
+                ? `${profile.styleSourceName || 'DESIGN.md'} · ${profile.styleSourceHash}`
+                : profile.styleSourceName || 'DESIGN.md'}
+            >
+              <Palette className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} aria-hidden />
+              <span className="truncate">
+                {t('designStyleProjectSource', {
+                  defaultValue: 'Project DESIGN.md: {{name}}',
+                  name: profile.styleSourceName || 'DESIGN.md'
+                })}
+              </span>
+            </div>
+          ) : null}
+          {effectiveOutputMedium === 'image' &&
+          imageGenerationStateKnown &&
+          !imageGenerationAvailable ? (
+            <button
+              type="button"
+              onClick={onConfigureImageGeneration}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-amber-500/10 px-2.5 text-[11.5px] font-medium text-amber-700 transition hover:bg-amber-500/15 dark:text-amber-200"
+              title={imageGenerationReason}
+            >
+              <Settings2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {t('designConfigureImageGeneration', { defaultValue: 'Configure image generation' })}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </details>
+  )
+}
 
 export function resolveDesignStylePopupLayout(
   trigger: Pick<DOMRect, 'top' | 'bottom'>,
@@ -446,95 +617,22 @@ export function FloatingComposerTaskProfile({
       disabled: imageUnavailable
     })
   }
-  const outputLabel = t(
-    effectiveOutputMedium === 'image' ? 'designOutputImage' : 'designOutputHtml',
-    { defaultValue: effectiveOutputMedium === 'image' ? 'AI image' : 'HTML design' }
-  )
-  const targetLabel = t(
+  const summaryOutputLabel = showImageGenerationOption
+    ? t(
+        profile.outputMedium === 'image' ? 'designOutputImage' : 'designOutputHtml',
+        { defaultValue: profile.outputMedium === 'image' ? 'AI image' : 'HTML design' }
+      )
+    : t('designOutputHtml', { defaultValue: 'HTML design' })
+  const summaryOptions = showImageGenerationOption
+    ? outputOptions
+    : [outputOptions[0]]
+  const summaryLabel = t(
     profile.target === 'app' ? 'designTargetApp' : 'designTargetWeb',
     { defaultValue: profile.target === 'app' ? 'App' : 'Web' }
   )
   const presetLabel = profile.preset === 'none'
     ? t('designStyleAuto', { defaultValue: 'Auto' })
     : DESIGN_SYSTEM_DISPLAY[profile.preset]
-
-  if (surface === 'design' && variant === 'summary') {
-    return (
-      <details
-        className="ds-design-profile-summary ds-no-drag group relative ml-auto shrink-0"
-        data-task-surface="design"
-        data-task-surface-locked={locked ? 'true' : 'false'}
-      >
-        <summary className="flex h-9 max-w-[360px] cursor-pointer list-none items-center gap-2 rounded-full border border-ds-border-muted bg-white px-3 text-[12px] font-medium text-ds-muted shadow-sm transition hover:border-ds-border-strong hover:text-ds-ink dark:bg-ds-card [&::-webkit-details-marker]:hidden">
-          <Palette className="h-3.5 w-3.5 shrink-0 text-ds-ink" strokeWidth={1.9} />
-          <span className="shrink-0 font-semibold text-ds-ink">
-            {t('designConfiguration', { defaultValue: 'Design configuration' })}
-          </span>
-          <span className="min-w-0 truncate text-ds-faint">
-            {outputLabel} · {targetLabel} · {presetLabel}
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" strokeWidth={1.8} />
-        </summary>
-        <div className="absolute right-0 top-[calc(100%+8px)] z-40 w-[min(400px,calc(100vw-32px))] rounded-2xl border border-ds-border-muted bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.14)] dark:bg-ds-card">
-          <div className="grid gap-2.5">
-            <FloatingComposerProfileSelect<DesignTaskOutputMedium>
-              pickerId="output"
-              label={t('designOutput', { defaultValue: 'Output' })}
-              value={effectiveOutputMedium}
-              options={outputOptions}
-              disabled={profileControlsDisabled}
-              onChange={onProfileChange
-                ? (outputMedium) => onProfileChange({ outputMedium })
-                : undefined}
-            />
-            <FloatingComposerProfileSelect<'web' | 'app'>
-              pickerId="target"
-              label={t('designTarget', { defaultValue: 'Target' })}
-              value={profile.target}
-              options={[
-                {
-                  value: 'web',
-                  label: t('designTargetWeb', { defaultValue: 'Web' }),
-                  icon: Monitor,
-                  iconClassName: 'bg-blue-50 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300'
-                },
-                {
-                  value: 'app',
-                  label: t('designTargetApp', { defaultValue: 'App' }),
-                  icon: Smartphone,
-                  iconClassName: 'bg-sky-50 text-sky-600 dark:bg-sky-400/15 dark:text-sky-300'
-                }
-              ]}
-              disabled={profileControlsDisabled}
-              onChange={onProfileChange
-                ? (target) => onProfileChange({ target })
-                : undefined}
-            />
-            <DesignStylePicker
-              value={profile.preset}
-              disabled={profileControlsDisabled}
-              onChange={onProfileChange
-                ? (preset) => onProfileChange({ preset })
-                : undefined}
-            />
-            {effectiveOutputMedium === 'image' &&
-            imageGenerationStateKnown &&
-            !imageGenerationAvailable ? (
-              <button
-                type="button"
-                onClick={onConfigureImageGeneration}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-amber-500/10 px-2.5 text-[11.5px] font-medium text-amber-700 transition hover:bg-amber-500/15 dark:text-amber-200"
-                title={imageGenerationReason}
-              >
-                <Settings2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                {t('designConfigureImageGeneration', { defaultValue: 'Configure image generation' })}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </details>
-    )
-  }
 
   return (
     <div
@@ -552,110 +650,22 @@ export function FloatingComposerTaskProfile({
       ) : null}
 
       {surface === 'design' ? (
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          <label className="relative inline-flex items-center">
-            <span className="sr-only">{t('designOutputHtml', { defaultValue: 'Design output' })}</span>
-            <select
-              value={effectiveOutputMedium}
-              disabled={profileControlsDisabled || !onProfileChange}
-              onChange={(event) => onProfileChange?.({
-                outputMedium: event.target.value as DesignTaskOutputMedium
-              })}
-              className={compactSelectClass()}
-              title={
-                effectiveOutputMedium === 'image' &&
-                imageGenerationStateKnown &&
-                !imageGenerationAvailable
-                  ? imageGenerationReason
-                  : undefined
-              }
-            >
-              <option value="html">{t('designOutputHtml', { defaultValue: 'HTML interface' })}</option>
-              {showImageGenerationOption ? (
-                <option value="image" disabled={imageUnavailable}>
-                  {t('designOutputImage', { defaultValue: 'AI image' })}
-                </option>
-              ) : null}
-            </select>
-          </label>
-          <span className="inline-flex h-8 items-center gap-1 rounded-full border border-ds-border-muted bg-ds-card px-2 text-ds-faint" aria-hidden>
-            {effectiveOutputMedium === 'html'
-              ? <PanelsTopLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
-              : <Image className="h-3.5 w-3.5" strokeWidth={1.8} />}
-          </span>
-          <label className="relative inline-flex items-center">
-            <span className="sr-only">{t('designTargetWeb', { defaultValue: 'Design target' })}</span>
-            <select
-              value={profile.target}
-              disabled={profileControlsDisabled || !onProfileChange}
-              onChange={(event) => onProfileChange?.({ target: event.target.value as 'web' | 'app' })}
-              className={compactSelectClass()}
-            >
-              <option value="web">{t('designTargetWeb', { defaultValue: 'Web' })}</option>
-              <option value="app">{t('designTargetApp', { defaultValue: 'App' })}</option>
-            </select>
-          </label>
-          {profile.target === 'web'
-            ? <Monitor className="h-3.5 w-3.5 shrink-0 text-ds-faint" aria-hidden />
-            : <Smartphone className="h-3.5 w-3.5 shrink-0 text-ds-faint" aria-hidden />}
-          <label className="relative inline-flex min-w-0 items-center">
-            <span className="sr-only">{t('designStyle', { defaultValue: 'Design style' })}</span>
-            <select
-              value={profile.preset}
-              disabled={profileControlsDisabled || !onProfileChange}
-              onChange={(event) => onProfileChange?.({ preset: event.target.value as DesignSystemPreset })}
-              className={compactSelectClass()}
-            >
-              {DESIGN_SYSTEM_PRESETS.map((preset) => (
-                <option key={preset} value={preset}>
-                  {preset === 'none'
-                    ? t('designStyleAuto', { defaultValue: 'Auto / follow project' })
-                    : DESIGN_SYSTEM_DISPLAY[preset]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {profile.presetSource === 'root-design-md' ? (
-            <span
-              className="inline-flex h-8 max-w-52 items-center gap-1.5 truncate rounded-full border border-ds-border-muted bg-ds-card px-2.5 text-[11.5px] font-medium text-ds-muted"
-              data-design-style-source="root-design-md"
-              title={profile.styleSourceHash
-                ? `${profile.styleSourceName || 'DESIGN.md'} · ${profile.styleSourceHash}`
-                : profile.styleSourceName || 'DESIGN.md'}
-            >
-              <Palette className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} aria-hidden />
-              <span className="truncate">
-                {t('designStyleProjectSource', {
-                  defaultValue: 'Project DESIGN.md: {{name}}',
-                  name: profile.styleSourceName || 'DESIGN.md'
-                })}
-              </span>
-            </span>
-          ) : null}
-          {effectiveOutputMedium === 'image' &&
-          imageGenerationStateKnown &&
-          !imageGenerationAvailable ? (
-            <button
-              type="button"
-              onClick={onConfigureImageGeneration}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 text-[11.5px] font-medium text-amber-700 transition hover:bg-amber-500/15 dark:text-amber-200"
-              title={imageGenerationReason}
-            >
-              <Settings2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-              {t('designConfigureImageGeneration', { defaultValue: 'Configure image generation' })}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {surface === 'design' && profileLocked ? (
-        <span
-          className="ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-ds-surface-subtle px-2 text-[11px] font-medium text-ds-faint"
-          title={t('designProfileLocked', { defaultValue: 'Design profile locked' })}
-        >
-          <LockKeyhole className="h-3 w-3" strokeWidth={1.9} />
-          {t('designProfileLocked', { defaultValue: 'Design profile locked' })}
-        </span>
+        <DesignProfileSummary
+          disabled={disabled}
+          locked={locked}
+          profileLocked={profileLocked}
+          outputOptions={summaryOptions}
+          effectiveOutputMedium={effectiveOutputMedium}
+          outputLabel={summaryOutputLabel}
+          targetLabel={summaryLabel}
+          presetLabel={presetLabel}
+          profile={profile}
+          imageGenerationStateKnown={imageGenerationStateKnown}
+          imageGenerationAvailable={imageGenerationAvailable}
+          imageGenerationReason={imageGenerationReason}
+          onProfileChange={onProfileChange}
+          onConfigureImageGeneration={onConfigureImageGeneration}
+        />
       ) : null}
     </div>
   )

@@ -94,7 +94,7 @@ describe('resolveUserInput', () => {
 
     // A turn abort racing after validation must not supersede the submission
     // whose event is already in flight.
-    expect(gate.resolve('input_1', { status: 'cancelled' })).toBe(false)
+    expect(gate.resolve('input_1', { status: 'cancelled' })).toBe('claimed')
     releaseRecord()
 
     await expect(responsePromise).resolves.toMatchObject({ status: 200 })
@@ -131,5 +131,48 @@ describe('resolveUserInput', () => {
 
     expect(response.status).toBe(200)
     await expect(pending).resolves.toEqual({ status: 'submitted', answers })
+  })
+
+  it('settles an expired request after the claimed submission event fails to persist', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-08-22T00:00:00.000Z'))
+      const gate = new InMemoryUserInputGate()
+      const pending = gate.request({
+        id: 'input_timeout_race',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        itemId: 'item_timeout_race',
+        prompt: 'Continue?',
+        questions: [],
+        timeoutSeconds: 1,
+        deadlineAtMs: Date.now() + 1_000
+      })
+      let rejectRecord!: (error: Error) => void
+      const recordStarted = new Promise<void>((_resolve, reject) => { rejectRecord = reject })
+      const events = {
+        record: vi.fn(async () => recordStarted)
+      } as unknown as RuntimeEventRecorder
+
+      const responsePromise = resolveUserInput({
+        inputId: 'input_timeout_race',
+        request: new Request('http://127.0.0.1/v1/user-inputs/input_timeout_race', {
+          method: 'POST',
+          body: JSON.stringify({ answers: [] })
+        }),
+        gate,
+        events
+      })
+      await vi.waitFor(() => expect(events.record).toHaveBeenCalledTimes(1))
+      vi.setSystemTime(new Date('2026-08-22T00:00:01.100Z'))
+      expect(gate.resolve('input_timeout_race', { status: 'timeout' })).toBe('claimed')
+
+      rejectRecord(new Error('disk full'))
+      await expect(responsePromise).rejects.toThrow('disk full')
+      await expect(pending).resolves.toEqual({ status: 'timeout' })
+      expect(gate.resolve('input_timeout_race', { status: 'submitted', answers: [] })).toBe('missing')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

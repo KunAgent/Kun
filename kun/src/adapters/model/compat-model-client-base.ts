@@ -308,7 +308,10 @@ export class CompatModelClientBase {
       usage,
       model,
       providerBaseUrl: this.config.baseUrl,
-      ...(this.config.billingKind ? { billingKind: this.config.billingKind } : {})
+      ...(this.config.billingKind ? { billingKind: this.config.billingKind } : {}),
+      ...(this.capabilitiesForModel(model).pricing
+        ? { catalogPricing: this.capabilitiesForModel(model).pricing }
+        : {})
     })
   }
 

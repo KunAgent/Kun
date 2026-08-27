@@ -8,6 +8,7 @@ import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
   activeClawChannel,
+  readThreadComposerSelection,
   rememberCodeWorkspaceRoots,
   rememberThreadComposerSelection,
   rememberTurnModel
@@ -43,6 +44,24 @@ import {
   withoutConsumedComposerContexts
 } from './chat-store-thread-actions-support'
 import type { PreparedThreadSend } from './chat-store-thread-send-direct-types'
+import { copyLiveProjection, emptyLiveProjection } from './chat-store-live-projection'
+
+/**
+ * A queued message freezes the model captured when it was enqueued. Draining
+ * that queue after the user already switched models must not write the stale
+ * capture back over the newer explicit user selection; only the user's own
+ * picker actions (or a non-queued send of the current selection) update it.
+ */
+function queuedModelWouldOverwriteUserSelection(
+  queued: PreparedThreadSend['queued'],
+  threadId: string,
+  sendingModel: string
+): boolean {
+  if (!queued?.model?.trim()) return false
+  const stored = readThreadComposerSelection(threadId)
+  return stored?.source === 'user' &&
+    stored.model.trim().toLowerCase() !== sendingModel.trim().toLowerCase()
+}
 
 export async function performPreparedThreadSend(input: PreparedThreadSend): Promise<boolean> {
   let {
@@ -94,8 +113,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     const previousCurrentTurnId = get().currentTurnId
     const previousCurrentTurnOrchestration = get().currentTurnOrchestration
     const previousCurrentTurnUserId = get().currentTurnUserId
-    const previousLiveReasoning = get().liveReasoning
-    const previousLiveAssistant = get().liveAssistant
+    const previousLiveProjection = copyLiveProjection(get())
     const previousTurnStartedAtByUserId = get().turnStartedAtByUserId
     const previousTurnDurationByUserId = get().turnDurationByUserId
     const previousTurnReasoningFirstAtByUserId = get().turnReasoningFirstAtByUserId
@@ -106,6 +124,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     runtime.threadSelectionGeneration += 1
     set((s) => ({
       busy: true,
+      busyUnconfirmed: false,
       blocks: [
         ...s.blocks,
         {
@@ -135,8 +154,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
             : {})
         }
       ],
-      liveReasoning: '',
-      liveAssistant: '',
+      ...emptyLiveProjection(s.lastSeq),
       error: null,
       currentTurnOrchestration: orchestration,
       currentTurnUserId: userBlockId,
@@ -156,6 +174,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           set({
             blocks: previousBlocks,
             busy: false,
+            busyUnconfirmed: false,
+            ...previousLiveProjection,
             currentTurnId: previousCurrentTurnId,
             currentTurnOrchestration: previousCurrentTurnOrchestration,
             currentTurnUserId: previousCurrentTurnUserId,
@@ -207,7 +227,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           throw new Error('Failed to resolve target thread id.')
         }
         activeThreadId = threadId
-        if (composerModel) {
+        if (composerModel && !queuedModelWouldOverwriteUserSelection(queued, threadId, composerModel)) {
           rememberThreadComposerSelection(threadId, composerModel, composerProviderId)
         }
         set((s) => ({
@@ -234,6 +254,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           blocks: previousBlocks,
           lastSeq: previousLastSeq,
           busy: false,
+          busyUnconfirmed: false,
+          ...previousLiveProjection,
           currentTurnId: previousCurrentTurnId,
           currentTurnOrchestration: previousCurrentTurnOrchestration,
           currentTurnUserId: previousCurrentTurnUserId,
@@ -258,7 +280,11 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     try {
       const seqAtSend = get().lastSeq
       const channel = get().route === 'claw' ? activeClawChannel(get()) : null
-      if (!channel && composerModel) {
+      if (
+        !channel &&
+        composerModel &&
+        !queuedModelWouldOverwriteUserSelection(queued, activeThreadId, composerModel)
+      ) {
         rememberThreadComposerSelection(activeThreadId, composerModel, composerProviderId)
       }
       await ensureRuntimeProviderForSend({
@@ -287,8 +313,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
             blocks: previousBlocks,
             lastSeq: previousLastSeq,
             busy: false,
-            liveReasoning: previousLiveReasoning,
-            liveAssistant: previousLiveAssistant,
+            busyUnconfirmed: false,
+            ...previousLiveProjection,
             currentTurnId: previousCurrentTurnId,
             currentTurnOrchestration: previousCurrentTurnOrchestration,
             currentTurnUserId: previousCurrentTurnUserId,
@@ -351,6 +377,16 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
       })
       runtimeTurnAccepted = true
       if (submittedMessageForQueue.waitForRuntimeAdmission) settleRuntimeTurnAdmission(clientRequestId, true)
+      if (currentTurnStartGeneration() !== sendGeneration) {
+        // A stop can race with admission; do not revive its projection.
+        try { await p.interruptTurn(activeThreadId, turnId, { discard: false }) } catch (error) {
+          console.warn('[kun-gui] failed to interrupt a turn accepted after stop:', error)
+        } finally {
+          set((state) => state.activeThreadId === activeThreadId ? { busy: false, busyUnconfirmed: false } : {})
+          void get().refreshThreads()
+        }
+        return true
+      }
       set((state) => ({
         threads: state.threads.map((thread) => thread.id === activeThreadId
           ? {
@@ -364,12 +400,6 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
             }
           : thread)
       }))
-      if (currentTurnStartGeneration() !== sendGeneration) {
-        // Stop was pressed while the POST was still pending. The accepted turn
-        // is real, but must not revive this renderer projection or its queue.
-        void p.interruptTurn(activeThreadId, turnId, { discard: false }).catch(() => undefined)
-        return true
-      }
       if (get().activeThreadId !== activeThreadId) {
         settleAcceptedTurnAfterNavigation({
           threadId: activeThreadId,
@@ -534,6 +564,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         set((state) => ({
           blocks: previousBlocks,
           busy: true,
+          busyUnconfirmed: false,
+          ...previousLiveProjection,
           currentTurnId: previousCurrentTurnId,
           currentTurnOrchestration: previousCurrentTurnOrchestration,
           currentTurnUserId: previousCurrentTurnUserId,
@@ -576,6 +608,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         set((state) => ({
           blocks: previousBlocks,
           busy: false,
+          busyUnconfirmed: false,
+          ...previousLiveProjection,
           currentTurnId: previousCurrentTurnId,
           currentTurnOrchestration: previousCurrentTurnOrchestration,
           currentTurnUserId: previousCurrentTurnUserId,
@@ -632,6 +666,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           : [...state.blocks, localConversationErrorBlock(e, `local_error_${userBlockId}`)],
         error: view.summary,
         busy: false,
+        busyUnconfirmed: false,
+        ...emptyLiveProjection(state.lastSeq),
         currentTurnId: null,
         currentTurnOrchestration: null,
         queuedMessages: failQueuedSubmission(

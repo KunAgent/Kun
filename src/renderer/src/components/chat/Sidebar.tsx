@@ -122,6 +122,7 @@ export function Sidebar({
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
+  const awaitingUserInputThreadIds = useChatStore((s) => s.awaitingUserInputThreadIds)
   const clawChannels = useChatStore((s) => s.clawChannels)
   const activeClawChannelId = useChatStore((s) => s.activeClawChannelId)
   const selectClawChannel = useChatStore((s) => s.selectClawChannel)
@@ -276,6 +277,7 @@ export function Sidebar({
           watchTurnCompletion={watchTurnCompletion}
           unreadThreadIds={unreadThreadIds}
           scheduledThreadActivities={scheduledThreadActivities}
+          awaitingUserInputThreadIds={awaitingUserInputThreadIds}
           locale={i18n.language}
           onPickWorkspace={() => void chooseWorkspace()}
           onRemoveWorkspace={deleteWorkspace}
@@ -310,6 +312,7 @@ export function Sidebar({
         watchTurnCompletion={watchTurnCompletion}
         unreadThreadIds={unreadThreadIds}
         scheduledThreadActivities={scheduledThreadActivities}
+        awaitingUserInputThreadIds={awaitingUserInputThreadIds}
         locale={i18n.language}
         onPickWorkspace={() => void chooseWorkspace()}
         onRemoveWorkspace={deleteWorkspace}

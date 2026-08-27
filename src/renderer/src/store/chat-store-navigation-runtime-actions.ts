@@ -6,6 +6,7 @@ import {
   applyChatContentMaxWidth,
   applyCursorSpotlight,
   applyCursorSpotlightColor,
+  applyDarkUiColors,
   applyTheme,
   applyUiFontScale,
   applyWriteTypography
@@ -253,6 +254,7 @@ export function createNavigationRuntimeActions(
         applyChatContentMaxWidth(settings.chatContentMaxWidthPx)
         applyCursorSpotlight(settings.cursorSpotlight !== false)
         applyCursorSpotlightColor(settings.cursorSpotlightColor)
+        applyDarkUiColors(settings.darkUiColors)
         if (settings.write?.typography) applyWriteTypography(settings.write.typography)
         await get().applyI18nFromSettings(settings.locale)
         if (!runtimeStatusUnsubscribe && typeof window.kunGui.onRuntimeStatus === 'function') {

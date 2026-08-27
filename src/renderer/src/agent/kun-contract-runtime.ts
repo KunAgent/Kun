@@ -273,6 +273,7 @@ export type CoreTurnItemJson = {
   decisionSource?: 'user' | 'agent'
   inputId?: string
   prompt?: string
+  timeoutSeconds?: number
   questions?: Array<{
     header?: string
     id: string
@@ -479,6 +480,8 @@ export type CoreUsageSnapshotJson = {
 export type CoreRuntimeEventJson = {
   kind?: string
   seq?: number
+  /** Transport-only replay_synchronized cursor; not a durable runtime event. */
+  cursor?: number
   /** UTF-16 offset of this incremental assistant delta within its item text. */
   deltaOffset?: number
   timestamp?: string
@@ -573,6 +576,7 @@ export type CoreRuntimeEventJson = {
   rationale?: string
   prompt?: string
   inputId?: string
+  timeoutSeconds?: number
   questions?: Array<{
     header?: string
     id: string

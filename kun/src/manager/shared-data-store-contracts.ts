@@ -93,14 +93,47 @@ export const AgentSessionSchema = z.object({
   closed: z.boolean()
 })
 
-export type ManagerThreadStoreOperation =
-  | 'list'
-  | 'listPage'
-  | 'get'
-  | 'getMetadata'
-  | 'touch'
-  | 'upsert'
-  | 'delete'
+export const SessionUsageQuerySchema = z.object({
+  threadId: ThreadIdSchema.optional(),
+  fromInclusive: z.string().datetime({ offset: true }).optional(),
+  toExclusive: z.string().datetime({ offset: true }).optional()
+}).strict().transform((input, context) => {
+  if (Boolean(input.fromInclusive) !== Boolean(input.toExclusive)) {
+    context.addIssue({ code: 'custom', message: 'usage range requires both boundaries' })
+    return z.NEVER
+  }
+  if (!input.fromInclusive || !input.toExclusive) return input
+  const fromMs = Date.parse(input.fromInclusive)
+  const toMs = Date.parse(input.toExclusive)
+  if (fromMs >= toMs) {
+    context.addIssue({ code: 'custom', message: 'usage range must be increasing' })
+    return z.NEVER
+  }
+  return {
+    ...input,
+    fromInclusive: new Date(fromMs).toISOString(),
+    toExclusive: new Date(toMs).toISOString()
+  }
+})
+
+/**
+ * Single source of truth for the manager thread data-plane protocol. Both the
+ * runtime URL allowlist (ThreadStoreOperationSchema) and this union type are
+ * derived from it so they cannot drift apart again.
+ */
+export const MANAGER_THREAD_STORE_OPERATIONS = [
+  'list',
+  'listPage',
+  'get',
+  'getMetadata',
+  'touch',
+  'upsert',
+  'upsertIfRevision',
+  'delete',
+  'deleteByWorkspace'
+] as const
+
+export type ManagerThreadStoreOperation = (typeof MANAGER_THREAD_STORE_OPERATIONS)[number]
 
 export type ManagerSessionStoreOperation =
   | 'appendEvent'
@@ -212,7 +245,7 @@ export function mutationThreadId(value: unknown): string | null {
 }
 
 export function isThreadMutation(operation: ManagerThreadStoreOperation): boolean {
-  return operation === 'touch' || operation === 'upsert' || operation === 'delete'
+  return operation === 'touch' || operation === 'upsert' || operation === 'upsertIfRevision' || operation === 'delete'
 }
 
 export function isSessionMutation(operation: ManagerSessionStoreOperation): boolean {

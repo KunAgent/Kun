@@ -40,6 +40,7 @@ function settings(workspaceRoot: string, nestedRoot = workspaceRoot): AppSetting
     uiFontScale: 1,
     chatContentMaxWidthPx: 896,
     composerSendKey: 'enter',
+    darkUiColors: { background: '#101010', border: '#202020', panel: '#303030' },
     provider: { ...defaultModelProviderSettings(), apiKey: 'must-not-export' },
     agents: { kun: { ...defaultKunRuntimeSettings(), runtimeToken: 'must-not-export' } },
     workspaceRoot,
@@ -136,6 +137,11 @@ describe('data migration export inventory', () => {
     const portable = portableSettingsForMigration(value)
     expect(portable).not.toHaveProperty('provider')
     expect(portable).not.toHaveProperty('agents')
+    expect(portable.darkUiColors).toEqual({
+      background: '#101010',
+      border: '#202020',
+      panel: '#303030'
+    })
     expect(JSON.stringify(portable)).not.toContain('must-not-export')
     const automations = sanitizedAutomationsForMigration(value) as { schedules: Array<Record<string, unknown>> }
     expect(automations.schedules[0]).toMatchObject({ enabled: false, clawChannelId: '', lastThreadId: '' })

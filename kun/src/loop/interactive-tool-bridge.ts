@@ -12,7 +12,11 @@ import type {
 } from '../ports/user-input-gate.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { TurnService } from '../services/turn-service.js'
-import { awaitAbortableGate } from '../services/interactive-gate.js'
+import {
+  armUserInputTimeout,
+  awaitAbortableGate,
+  userInputRequestWithDeadline
+} from '../services/interactive-gate.js'
 import { sessionEventExists } from '../adapters/session-event-query.js'
 
 export type InteractiveToolBridgeDeps = {
@@ -175,14 +179,17 @@ export class InteractiveToolBridge {
       threadId: input.threadId,
       turnId: input.turnId
     }
-    const pending = this.deps.userInputGate.request(request)
+    const pending = this.deps.userInputGate.request(userInputRequestWithDeadline(request))
     const item = makeUserInputItem({
       id: input.input.itemId,
       threadId: input.threadId,
       turnId: input.turnId,
       inputId: input.input.id,
       prompt: input.input.prompt,
-      questions: input.input.questions
+      questions: input.input.questions,
+      ...(input.input.timeoutSeconds !== undefined
+        ? { timeoutSeconds: input.input.timeoutSeconds }
+        : {})
     })
     try {
       await this.deps.turns.applyItem(input.threadId, item)
@@ -194,7 +201,10 @@ export class InteractiveToolBridge {
         inputId: input.input.id,
         status: 'pending',
         prompt: input.input.prompt,
-        questions: input.input.questions
+        questions: input.input.questions,
+        ...(input.input.timeoutSeconds !== undefined
+          ? { timeoutSeconds: input.input.timeoutSeconds }
+          : {})
       })
     } catch (error) {
       this.deps.userInputGate.resolve(input.input.id, { status: 'cancelled' })
@@ -202,12 +212,22 @@ export class InteractiveToolBridge {
       throw error
     }
 
-    const resolution = await awaitAbortableGate(
-      pending,
-      input.signal,
-      () => { this.deps.userInputGate.resolve(input.input.id, { status: 'cancelled' }) },
-      'cancelled while awaiting user input'
+    const disarmTimeout = armUserInputTimeout(
+      (resolution) => this.deps.userInputGate.resolve(input.input.id, resolution),
+      input.input.id,
+      input.input.timeoutSeconds
     )
+    let resolution: UserInputResolution
+    try {
+      resolution = await awaitAbortableGate(
+        pending,
+        input.signal,
+        () => { this.deps.userInputGate.resolve(input.input.id, { status: 'cancelled' }) },
+        'cancelled while awaiting user input'
+      )
+    } finally {
+      disarmTimeout()
+    }
     await this.deps.turns.updateItem(input.threadId, item.id, {
       status: resolution.status,
       finishedAt: this.deps.nowIso(),

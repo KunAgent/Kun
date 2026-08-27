@@ -17,10 +17,34 @@ import {
 } from '../shared/app-settings'
 import { runtimeErrorMessage } from './claw-runtime-helpers'
 
+export function runtimeErrorCode(result: { body: string }): string {
+  try {
+    const parsed = JSON.parse(result.body) as Record<string, unknown>
+    return typeof parsed.code === 'string' ? parsed.code.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
 export function isMissingThreadResult(result: { ok: boolean; status: number; body: string }): boolean {
-  if (result.ok) return false
+  if (result.ok || result.status !== 404) return false
+  const code = runtimeErrorCode(result)
+  if (code) return code === 'not_found'
   const message = runtimeErrorMessage(result, '').toLowerCase()
-  return result.status === 404 && message.includes('thread') && message.includes('not found')
+  return message.includes('thread') && message.includes('not found')
+}
+
+export function imRuntimeStartError(
+  settings: AppSettingsV1,
+  result: { ok: boolean; status: number; body: string },
+  fallback: string
+): string {
+  if (runtimeErrorCode(result) === 'thread_closing') {
+    return isChineseLocale(settings)
+      ? '当前会话正在关闭，请稍后重试。'
+      : 'This conversation is closing. Please try again shortly.'
+  }
+  return runtimeErrorMessage(result, fallback)
 }
 
 export function errorMessage(error: unknown): string {

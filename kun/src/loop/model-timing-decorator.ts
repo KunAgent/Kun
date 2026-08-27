@@ -31,18 +31,23 @@ function isContentChunk(chunk: ModelStreamChunk): boolean {
  * The wrapper never modifies the underlying provider parsing; it only
  * clones the usage snapshot to attach timing. Streams without a usage
  * chunk (or without any content chunk) pass through unchanged.
+ *
+ * The wrapper must preserve the wrapped client's prototype so callers keep
+ * seeing optional capability probes such as `selectsRouteTargetDuringStream`
+ * and accessors like `model`. Object spread would drop every prototype
+ * member and make route pools freeze their public alias as the acting route
+ * ("model route changed after the acting route was frozen").
  */
 export function withModelTiming(
   client: ModelClient,
   options: { now?: () => number } = {}
 ): ModelClient {
   const now = options.now ?? ((): number => performance.now())
-  return {
-    ...client,
-    stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
-      return timedStream(client.stream(request), now)
-    }
-  }
+  const wrapped = Object.create(Object.getPrototypeOf(client)) as ModelClient
+  Object.assign(wrapped, client)
+  wrapped.stream = (request: ModelRequest): AsyncIterable<ModelStreamChunk> =>
+    timedStream(client.stream(request), now)
+  return wrapped
 }
 
 async function* timedStream(

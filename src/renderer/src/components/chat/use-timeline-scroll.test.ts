@@ -97,7 +97,19 @@ describe('deriveTimelineVisibleTurnCount', () => {
     ).toBe(18)
   })
 
-  it('forces an expanded history back to the latest page before a busy render', () => {
+  it('allows a user-expanded history window during a busy render', () => {
+    expect(
+      deriveTimelineRenderedTurnCount({
+        visibleTurnCount: 23,
+        totalTurns: 24,
+        pageSize: 18,
+        busy: true,
+        historyExpansionRequested: true
+      })
+    ).toBe(23)
+  })
+
+  it('keeps an automatically growing busy history window collapsed', () => {
     expect(
       deriveTimelineRenderedTurnCount({
         visibleTurnCount: 23,

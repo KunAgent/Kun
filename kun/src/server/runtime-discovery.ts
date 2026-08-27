@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { RuntimeFlavorSchema, type RuntimeFlavor } from '../contracts/runtime-flavor.js'
+import { isLoopbackHost } from './loopback-host.js'
 import { KUN_VERSION } from '../version.js'
 
 export const RUNTIME_DISCOVERY_VERSION = 2 as const
@@ -37,7 +38,28 @@ export const RuntimeDiscoveryRecordSchema = z.object({
   logPath: z.string().min(1).max(4_096).optional()
 })
 
+/**
+ * Stable, handoff-only view of a discovery record. Normal Runtime attachment
+ * still requires RuntimeDiscoveryRecordSchema and the current info schema;
+ * this reader exists solely so a newer binary can identify and stop an older
+ * local owner without mistaking schema drift for a missing writer.
+ */
+export const RuntimeHandoffDiscoveryRecordSchema = z.object({
+  version: z.number().int().positive(),
+  instanceId: z.string().min(1).max(256),
+  pid: z.number().int().positive(),
+  startedAt: z.string().datetime(),
+  host: z.string().min(1).max(512),
+  port: z.number().int().min(1).max(65_535),
+  baseUrl: z.string().url().max(2_048),
+  runtimeToken: z.string().max(16_384),
+  flavor: RuntimeFlavorSchema.optional(),
+  buildId: RuntimeBuildIdSchema.optional(),
+  logPath: z.string().min(1).max(4_096).optional()
+}).passthrough()
+
 export type RuntimeDiscoveryRecord = z.infer<typeof RuntimeDiscoveryRecordSchema>
+export type RuntimeHandoffDiscoveryRecord = z.infer<typeof RuntimeHandoffDiscoveryRecordSchema>
 
 export type PublishRuntimeDiscoveryInput = Omit<
   RuntimeDiscoveryRecord,
@@ -74,24 +96,39 @@ export async function readRuntimeDiscovery(
   dataDir: string,
   flavor: RuntimeFlavor = 'production'
 ): Promise<RuntimeDiscoveryRecord | null> {
-  const path = runtimeDiscoveryPath(dataDir, flavor)
-  let details
+  const value = await readRuntimeDiscoveryValue(dataDir, flavor)
+  const parsed = RuntimeDiscoveryRecordSchema.safeParse(value)
+  return parsed.success ? parsed.data : null
+}
+
+export async function readRuntimeHandoffDiscovery(
+  dataDir: string,
+  flavor: RuntimeFlavor = 'production'
+): Promise<RuntimeHandoffDiscoveryRecord | null> {
+  const value = await readRuntimeDiscoveryValue(dataDir, flavor)
+  const parsed = RuntimeHandoffDiscoveryRecordSchema.safeParse(value)
+  if (!parsed.success || !handoffFlavorMatches(parsed.data, flavor)) return null
+  return isSafeRuntimeHandoffDiscovery(parsed.data) ? parsed.data : null
+}
+
+/**
+ * Replacement probes must distinguish an absent owner from an unreadable or
+ * unsafe discovery record. Normal attachment keeps the compatibility behavior
+ * above, while installed-build handoff fails closed on an existing invalid file.
+ */
+export async function readRuntimeHandoffDiscoveryStrict(
+  dataDir: string,
+  flavor: RuntimeFlavor = 'production'
+): Promise<RuntimeHandoffDiscoveryRecord | null> {
+  const record = await readRuntimeHandoffDiscovery(dataDir, flavor)
+  if (record) return record
   try {
-    details = await stat(path)
+    await stat(runtimeDiscoveryPath(dataDir, flavor))
   } catch (error) {
     if (errorCode(error) === 'ENOENT') return null
     throw error
   }
-  if (!details.isFile() || details.size > MAX_DISCOVERY_BYTES) return null
-  try {
-    const value = JSON.parse(await readFile(path, 'utf8')) as unknown
-    const parsed = RuntimeDiscoveryRecordSchema.safeParse(value)
-    return parsed.success ? parsed.data : null
-  } catch (error) {
-    if (errorCode(error) === 'ENOENT') return null
-    if (error instanceof SyntaxError) return null
-    throw error
-  }
+  throw new Error(`invalid Kun ${flavor} Runtime discovery record`)
 }
 
 export async function publishRuntimeDiscovery(
@@ -123,11 +160,58 @@ export async function removeRuntimeDiscovery(
   flavor: RuntimeFlavor = 'production'
 ): Promise<boolean> {
   return withDiscoveryLock(dataDir, instanceId, async () => {
-    const current = await readRuntimeDiscovery(dataDir, flavor)
+    const current = await readRuntimeHandoffDiscovery(dataDir, flavor)
     if (!current || current.instanceId !== instanceId) return false
     await rm(runtimeDiscoveryPath(dataDir, flavor), { force: true })
     return true
   })
+}
+
+async function readRuntimeDiscoveryValue(
+  dataDir: string,
+  flavor: RuntimeFlavor
+): Promise<unknown> {
+  const path = runtimeDiscoveryPath(dataDir, flavor)
+  let details
+  try {
+    details = await stat(path)
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') return null
+    throw error
+  }
+  if (!details.isFile() || details.size > MAX_DISCOVERY_BYTES) return null
+  try {
+    return JSON.parse(await readFile(path, 'utf8')) as unknown
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT' || error instanceof SyntaxError) return null
+    throw error
+  }
+}
+
+function handoffFlavorMatches(
+  record: RuntimeHandoffDiscoveryRecord,
+  expected: RuntimeFlavor
+): boolean {
+  return expected === 'production'
+    ? record.flavor === undefined || record.flavor === 'production'
+    : record.flavor === expected
+}
+
+export function isSafeRuntimeHandoffDiscovery(
+  record: RuntimeHandoffDiscoveryRecord
+): boolean {
+  try {
+    const url = new URL(record.baseUrl)
+    return url.protocol === 'http:' &&
+      isLoopbackHost(url.hostname) &&
+      isLoopbackHost(record.host) &&
+      (url.pathname === '/' || url.pathname === '') &&
+      Number(url.port || '80') === record.port &&
+      url.username === '' &&
+      url.password === ''
+  } catch {
+    return false
+  }
 }
 
 /** Serialize shared-runtime election for one data directory. */

@@ -107,7 +107,7 @@ import { rewriteItemHistoryWithRetry } from '../services/history-commit-coordina
 import { TurnToolCatalogFreezer } from './turn-tool-catalog.js'
 import { ModelStepPreparationService } from './model-step-preparation-service.js'
 import type { ModelStepServiceDeps } from './model-step-service-types.js'
-import { sameActingModelRoute } from './model-step-preparation-helpers.js'
+import { isPoolAliasActingRoute, sameActingModelRoute } from './model-step-preparation-helpers.js'
 import { composeForwardedModelRequest } from './forwarded-model-request.js'
 export type { ModelStepServiceDeps } from './model-step-service-types.js'
 export { buildExtensionProfileInstruction } from './model-step-preparation-helpers.js'
@@ -560,21 +560,26 @@ export class ModelStepService extends ModelStepPreparationService {
           providerId: route.providerId,
           ...(routeAccountId ? { accountId: routeAccountId } : {})
         }
-        if (!routeSelectionDeferred) {
-          if (!sameActingModelRoute(actingModelRoute, resolved)) {
+        if (!routeSelectionDeferred && !sameActingModelRoute(actingModelRoute, resolved)) {
+          // A frozen local-gateway alias can still resolve mid-stream to one
+          // of its pool targets (for example when a wrapper hid
+          // selectsRouteTargetDuringStream). Accept the late resolution and
+          // pin the concrete target instead of failing the whole turn.
+          if (!isPoolAliasActingRoute(actingModelRoute, route)) {
             throw new Error(
               'model route changed after the acting route was frozen: ' +
               `${actingModelRoute.providerId ?? 'default'}/${actingModelRoute.model} -> ` +
               `${resolved.providerId ?? 'default'}/${resolved.model}`
             )
           }
-          return
         }
-        effectiveActingModelRoute = resolved
-        streamRouteResolved = true
-        await this.deps.turns.updateTurnMetadata(threadId, turnId, {
-          actingModelRoute: resolved
-        })
+        if (routeSelectionDeferred || !sameActingModelRoute(actingModelRoute, resolved)) {
+          effectiveActingModelRoute = resolved
+          streamRouteResolved = true
+          await this.deps.turns.updateTurnMetadata(threadId, turnId, {
+            actingModelRoute: resolved
+          })
+        }
       },
       writeGeneratedImage: async ({ imageBase64 }) => {
         await this.ensureWorkspaceCheckpoint(

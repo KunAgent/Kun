@@ -657,6 +657,7 @@
   "designCanvasConversationNew": "新建设计会话",
   "designCanvasConversationDragHint": "拖动移动面板；双击恢复默认位置",
   "designCanvasConversationResetPosition": "恢复默认位置",
+  "designCanvasConversationResize": "拖动调整面板大小",
   "designCanvasConversationRunning": "会话正在运行",
   "designCanvasConversationPanelLabel": "设计会话：{{title}}"
 }

@@ -6,7 +6,12 @@ import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
 import { testGraphConfig, testGraphPlan } from '../graph/graph-test-fixtures.test-support.js'
 import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
+import { startNodeHttpServer } from '../server/node-http-server.js'
+import type { ServiceManagerConnection } from './manager-client.js'
+import { ManagerRemoteThreadStore } from './remote-data-stores.js'
+import { buildServiceManagerRouter, ServiceManagerState } from './service-manager.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
+import { requiresAtomicReplace } from './shared-data-store-core.js'
 
 const roots: string[] = []
 
@@ -19,6 +24,17 @@ async function dataStore(): Promise<ManagerSharedDataStore> {
   roots.push(root)
   return ManagerSharedDataStore.create(join(root, 'data'))
 }
+
+describe('manager atomic JSON policy', () => {
+  it('requires atomic replacement only for provider and credential registries', () => {
+    const dataDir = '/tmp/kun-data'
+    expect(requiresAtomicReplace(dataDir, join(dataDir, 'model-connections.v1.json'))).toBe(true)
+    expect(requiresAtomicReplace(dataDir, join(dataDir, 'credentials', 'credentials.enc.json'))).toBe(true)
+    expect(requiresAtomicReplace(dataDir, join(dataDir, 'extensions', 'accounts.json'))).toBe(true)
+    expect(requiresAtomicReplace(dataDir, join(dataDir, 'extensions', 'provider-bindings.json'))).toBe(true)
+    expect(requiresAtomicReplace(dataDir, join(dataDir, 'cache', 'models.json'))).toBe(false)
+  })
+})
 
 describe('manager shared data store', () => {
   it('proxies the lock-free item text search so palette deep search works in shared mode', async () => {
@@ -460,5 +476,67 @@ describe('manager shared data store', () => {
     }) as { dataBase64: string }
     expect(Buffer.from(resolved.dataBase64, 'base64').toString()).toBe('shared attachment')
     await store.close()
+  })
+
+  it('executes compare-and-swap thread writes through the manager HTTP data plane', async () => {
+    // Regression: pruneThread() commits retention through upsertIfRevision, but
+    // the router allowlist rejected the operation, so remote runtimes failed
+    // after the history had already been archived (partial success). This test
+    // drives the full path: remote client -> HTTP router -> shared data store.
+    const store = await dataStore()
+    const router = buildServiceManagerRouter({
+      managerToken: 'manager-secret',
+      instanceId: 'manager-a',
+      startedAt: '2026-08-01T00:00:00.000Z',
+      state: new ServiceManagerState(),
+      sharedData: store
+    })
+    const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
+    try {
+      const connection: ServiceManagerConnection = {
+        discovery: {
+          version: 1,
+          protocolVersion: 3,
+          instanceId: 'manager-a',
+          pid: process.pid,
+          startedAt: '2026-08-01T00:00:00.000Z',
+          host: '127.0.0.1',
+          port: server.port,
+          baseUrl: `http://127.0.0.1:${server.port}`,
+          managerToken: 'manager-secret',
+          serviceVersion: '0.1.0',
+          dataDir: '/tmp/kun-data',
+          settingsPath: '/tmp/kun-settings.json'
+        }
+      }
+      const remote = new ManagerRemoteThreadStore(connection)
+      const thread = createThreadRecord({
+        id: 'thread_remote_cas',
+        title: 'Before retention',
+        workspace: '/tmp/workspace',
+        model: 'test-model'
+      })
+      const created = await remote.upsert(thread)
+
+      const committed = await remote.upsertIfRevision(
+        { ...thread, title: 'Retention applied' },
+        created.revision ?? 0
+      )
+      expect(committed).toMatchObject({ applied: true })
+
+      const stale = await remote.upsertIfRevision(
+        { ...thread, title: 'Stale snapshot' },
+        created.revision ?? 0
+      )
+      expect(stale).toMatchObject({ applied: false, revision: committed.revision })
+
+      await expect(remote.get(thread.id)).resolves.toMatchObject({
+        title: 'Retention applied',
+        revision: committed.revision
+      })
+    } finally {
+      await server.close()
+      await store.close()
+    }
   })
 })

@@ -46,6 +46,14 @@ jobs:
           release_name="Kun Dev ${dev_version}"
           head_sha="$(git rev-parse HEAD)"
 
+          node -e '
+            const semver = require("semver")
+            const [appVersion, devVersion] = process.argv.slice(1)
+            if (!/^\d{8}\.\d{4}$/.test(devVersion)) throw new Error(`invalid daily dev version: ${devVersion}`)
+            if (!semver.valid(appVersion)) throw new Error(`invalid daily app SemVer: ${appVersion}`)
+            if (!semver.prerelease(appVersion)?.some((part) => String(part).startsWith("dev-"))) throw new Error(`daily app version is not a dev prerelease: ${appVersion}`)
+          ' "${app_version}" "${dev_version}"
+
           {
             echo "app_version=${app_version}"
             echo "dev_version=${dev_version}"
@@ -95,6 +103,18 @@ jobs:
       - name: Build macOS packages
         run: npm run dist:mac
 
+      - name: Smoke packaged update handoff (host-native macOS)
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(node -p 'process.arch')" == "arm64" ]]; then
+            resources="dist/mac-arm64/Kun.app/Contents/Resources"
+          else
+            resources="dist/mac/Kun.app/Contents/Resources"
+          fi
+          npm run smoke:packaged-update-handoff -- --resources "${resources}"
+
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -138,8 +158,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Test Windows update rollback failpoints
+        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
+
       - name: Build Windows installer
         run: npm run dist:win
+
+      - name: Smoke Windows installer migration
+        timeout-minutes: 25
+        run: npm run smoke:windows-installer-migration -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
+
+      - name: Smoke packaged update handoff (Windows)
+        timeout-minutes: 20
+        run: npm run smoke:packaged-update-handoff -- --resources dist/win-unpacked/resources
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -183,13 +214,17 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 xvfb xauth
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build Linux AppImage
         run: npm run dist:linux
+
+      - name: Smoke packaged update handoff (Linux x64)
+        timeout-minutes: 20
+        run: npm run smoke:packaged-update-handoff -- --resources dist/linux-unpacked/resources
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -234,7 +269,7 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 cmake file
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 cmake file xvfb xauth
 
       - name: Install dependencies
         run: npm ci
@@ -248,6 +283,10 @@ jobs:
           --version "${{ needs.prepare.outputs.dev_version }}"
           --arch arm64
           --dist dist
+
+      - name: Smoke packaged update handoff (Linux ARM64)
+        timeout-minutes: 20
+        run: npm run smoke:packaged-update-handoff -- --resources dist/linux-arm64-unpacked/resources
 
       - name: Upload Linux ARM64 artifacts
         uses: actions/upload-artifact@v4

@@ -13,6 +13,8 @@ import {
 } from '../../plan/plan-scheduled-task'
 import { PlanScheduledBuildDialog } from './PlanScheduledBuildDialog'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
+import { ensureGuiPlanLoadedFromMeta } from '../../plan/load-plan-from-meta'
+import { guiPlanMetaMatchesArtifact, type GuiPlanToolMeta } from '../../plan/plan-tool'
 import { useGuiPlanStore } from '../../plan/plan-store'
 import { usePlanWorktreePreferenceStore } from '../../plan/plan-worktree-preference-store'
 
@@ -30,6 +32,9 @@ type Props = {
   graphEnabled: boolean
   variant: 'panel' | 'card'
   planId?: string
+  /** Card variant: meta of the `create_plan` result this card belongs to,
+   * used to recover the plan when the plan store lost track of it. */
+  planMeta?: GuiPlanToolMeta
   onBuild: (orchestration: PlanBuildOrchestration) => void
   onScheduleStateChange?: (hasActiveSchedule: boolean) => void
 }
@@ -39,6 +44,7 @@ export function PlanBuildActions({
   graphEnabled,
   variant,
   planId,
+  planMeta,
   onBuild,
   onScheduleStateChange
 }: Props): ReactElement {
@@ -151,9 +157,21 @@ export function PlanBuildActions({
   }
 
   const submitSchedule = async (draft: ScheduleDraft): Promise<void> => {
+    // The card can outlive the plan store entry (app restart, another
+    // thread's plan taking over): reload the plan from its create_plan
+    // meta instead of silently dropping the submission.
+    if (planMeta) {
+      const current = useGuiPlanStore.getState().activePlan
+      if (!current || !guiPlanMetaMatchesArtifact(planMeta, current)) {
+        await ensureGuiPlanLoadedFromMeta(planMeta)
+      }
+    }
     const planState = useGuiPlanStore.getState()
     const plan = planState.activePlan
-    if (!plan || plan.id !== resolvedPlanId) return
+    if (!plan || (planMeta ? !guiPlanMetaMatchesArtifact(planMeta, plan) : plan.id !== resolvedPlanId)) {
+      setScheduleError(t('planLoadFailed'))
+      return
+    }
     setSubmitting(true)
     setScheduleError('')
     try {

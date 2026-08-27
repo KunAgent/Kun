@@ -12,7 +12,8 @@ import type {
   ToolEventPayload,
   UserInputAnswer,
   UserInputRequestPayload,
-  UserMessageEventPayload
+  UserMessageEventPayload,
+  TurnTerminalEvent
 } from './types'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 
@@ -172,11 +173,16 @@ function normalizeKunRuntimeEventPayload(
     }
     case 'user_input_resolved': {
       const answers = deps.userInputAnswers(event.answers)
+      const status = event.status === 'cancelled'
+        ? 'cancelled'
+        : event.status === 'timeout'
+          ? 'timeout'
+          : 'submitted'
       return [{
         type: 'user_input_status_changed',
         payload: {
           itemId: event.itemId ?? event.inputId ?? `input_${event.seq ?? 'unknown'}`,
-          status: event.status === 'cancelled' ? 'cancelled' : 'submitted',
+          status,
           ...(answers ? { answers } : {})
         }
       }]
@@ -222,13 +228,13 @@ function normalizeKunRuntimeEventPayload(
         const tool = deps.childTool(event)
         return tool ? [{ type: 'tool_updated', payload: tool }] : []
       }
-      return [{ type: 'turn_completed' }]
+      return [{ type: 'turn_completed', payload: turnTerminalPayload(event, 'completed') }]
     case 'turn_aborted':
       if (event.child) {
         const tool = deps.childTool(event)
         return tool ? [{ type: 'tool_updated', payload: tool }] : []
       }
-      return [{ type: 'turn_aborted' }]
+      return [{ type: 'turn_aborted', payload: turnTerminalPayload(event, 'aborted') }]
     case 'turn_failed': {
       if (event.child) {
         const tool = deps.childTool(event)
@@ -237,8 +243,13 @@ function normalizeKunRuntimeEventPayload(
       const payload = deps.runtimeError(event, 'Kun turn failed')
       const terminal: RuntimeProjectionAction = {
         type: 'turn_failed',
-        error: deps.errorFromRuntime(payload),
-        options: { terminal: true, scope: 'conversation' }
+        payload: {
+          ...(event.threadId ? { threadId: event.threadId } : {}),
+          ...(event.turnId ? { turnId: event.turnId } : {}),
+          ...(typeof event.seq === 'number' ? { seq: event.seq } : {}),
+          error: deps.errorFromRuntime(payload),
+          options: { terminal: true, scope: 'conversation' }
+        }
       }
       // A message-less terminal event normally follows a more useful
       // structured `error` event. Settle the turn without adding a generic
@@ -255,6 +266,18 @@ function normalizeKunRuntimeEventPayload(
       return [{ type: 'runtime_error_received', payload: deps.runtimeError(event, 'Runtime error') }]
     default:
       return []
+  }
+}
+
+function turnTerminalPayload(
+  event: CoreRuntimeEventJson,
+  status: TurnTerminalEvent['status']
+): TurnTerminalEvent {
+  return {
+    status,
+    ...(event.threadId ? { threadId: event.threadId } : {}),
+    ...(event.turnId ? { turnId: event.turnId } : {}),
+    ...(typeof event.seq === 'number' ? { seq: event.seq } : {})
   }
 }
 

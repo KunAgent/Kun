@@ -10,6 +10,7 @@ const settings = {
   ...mcpMigration,
   ...migrationSystem,
   ...codePersonas,
+  guiUpdateErrFeedUnavailable: 'No update source is reachable right now. Try again later or use the download page.',
 }
 
 export default settings

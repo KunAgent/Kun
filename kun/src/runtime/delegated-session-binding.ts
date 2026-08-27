@@ -69,11 +69,11 @@ export class FileDelegatedSessionBindingStore implements DelegatedSessionBinding
   async load(threadId: string): Promise<DelegatedSessionBinding | null> {
     const file = this.bindingFile(threadId)
     const binding = await file.read(() => null).catch(async () => {
-      await file.delete().catch(() => undefined)
+      await this.deleteBinding(threadId, file)
       return null
     })
     if (!binding || binding.threadId !== threadId) {
-      if (binding) await file.delete().catch(() => undefined)
+      if (binding) await this.deleteBinding(threadId, file)
       return null
     }
     return binding
@@ -82,15 +82,19 @@ export class FileDelegatedSessionBindingStore implements DelegatedSessionBinding
   async save(binding: DelegatedSessionBinding): Promise<void> {
     const parsed = parseBinding(binding)
     if (!parsed) throw new Error('invalid delegated session binding')
-    await withManagerDataMutex(`delegated-session:${binding.threadId}`, () =>
-      this.bindingFile(binding.threadId).write(parsed))
+    await withManagerDataMutex(this.resourceKey(binding.threadId), (context) =>
+      context.withCommit(() => this.bindingFile(binding.threadId).write(parsed)))
   }
 
   async delete(threadId: string): Promise<void> {
-    await Promise.allSettled([
-      this.bindingFile(threadId).delete(),
-      rm(this.providerStateRoot(threadId), { recursive: true, force: true })
-    ])
+    await withManagerDataMutex(this.resourceKey(threadId), async (context) => {
+      await context.withCommit(async () => {
+        await context.assertCurrent()
+        await this.bindingFile(threadId).delete()
+        await rm(this.providerStateRoot(threadId), { recursive: true, force: true })
+        await context.assertCurrent()
+      })
+    })
   }
 
   async clearProviderState(
@@ -98,12 +102,30 @@ export class FileDelegatedSessionBindingStore implements DelegatedSessionBinding
     threadId: string
   ): Promise<void> {
     const directory = this.providerStateDir(providerKind, threadId)
-    await rm(directory, { recursive: true, force: true })
-    await mkdir(directory, { recursive: true, mode: 0o700 })
+    await withManagerDataMutex(this.resourceKey(threadId), async (context) => {
+      await context.withCommit(async () => {
+        await context.assertCurrent()
+        await rm(directory, { recursive: true, force: true })
+        await mkdir(directory, { recursive: true, mode: 0o700 })
+        await context.assertCurrent()
+      })
+    })
   }
 
   providerStateDir(providerKind: DelegatedProviderKind, threadId: string): string {
     return join(this.providerStateRoot(threadId), providerKind)
+  }
+
+  private resourceKey(threadId: string): string {
+    return `delegated-session:${threadId}`
+  }
+
+  private async deleteBinding(
+    threadId: string,
+    file = this.bindingFile(threadId)
+  ): Promise<void> {
+    await withManagerDataMutex(this.resourceKey(threadId), (context) =>
+      context.withCommit(() => file.delete()))
   }
 
   private bindingPath(threadId: string): string {
@@ -194,11 +216,9 @@ export class DelegatedSessionCoordinator {
         binding.providerKind,
         input.route.providerKind
       ])
-      await Promise.all(
-        [...providerKinds].map((providerKind) =>
-          this.store.clearProviderState(providerKind, input.threadId)
-        )
-      )
+      for (const providerKind of providerKinds) {
+        await this.store.clearProviderState(providerKind, input.threadId)
+      }
     }
     return {
       threadId: input.threadId,
@@ -265,6 +285,8 @@ export class DelegatedSessionCoordinator {
   }
 
   async invalidate(threadId: string): Promise<void> {
+    // The local lease orders one Runtime's calls; store.delete() obtains the
+    // Manager resource fence required to coordinate separate Runtime instances.
     await this.runExclusive(threadId, () => this.store.delete(threadId))
   }
 }

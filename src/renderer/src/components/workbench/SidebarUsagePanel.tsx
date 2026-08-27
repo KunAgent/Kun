@@ -12,7 +12,9 @@ import {
   formatCost,
   formatPercent,
   primaryCacheHitRate,
-  useThreadUsageState
+  summarizeThreadMoney,
+  useThreadUsageState,
+  type MoneySummaryItem
 } from '../../hooks/use-thread-usage'
 import {
   type DailyUsageBucket,
@@ -100,7 +102,9 @@ export function SidebarUsagePanel({
     totals.totalTokens > 0 ||
     totals.turns > 0 ||
     totals.costUsd > 0 ||
-    (totals.costCny ?? 0) > 0
+    (totals.costCny ?? 0) > 0 ||
+    totals.valueEstimateUsd > 0 ||
+    (totals.valueEstimateCny ?? 0) > 0
   const modelBuckets = modelState.usage?.buckets ?? []
   // The usage API keeps zero-token model buckets in the response. Only models
   // with real usage in the selected range are worth listing, so derive both the
@@ -124,6 +128,17 @@ export function SidebarUsagePanel({
 
   const currentUsage = threadState.usage
   const currentCacheHitRate = currentUsage ? primaryCacheHitRate(currentUsage) : null
+  const locale = i18n.language
+  const sessionMoneyItems = currentUsage
+    ? summarizeThreadMoney({
+        costUsd: currentUsage.costUsd,
+        costCny: currentUsage.costCny,
+        valueEstimateUsd: currentUsage.valueEstimateUsd,
+        valueEstimateCny: currentUsage.valueEstimateCny,
+        valueEstimateCoverage: currentUsage.valueEstimateCoverage,
+        locale
+      })
+    : []
 
   return (
     <div
@@ -156,11 +171,11 @@ export function SidebarUsagePanel({
                 },
                 {
                   label: t('usageQuotaMetricCost'),
-                  value: formatRecordedCost(
+                  value: formatMoneySummary(sessionMoneyItems, formatRecordedCost(
                     currentUsage.costUsd,
                     currentUsage.costCny,
                     i18n.language
-                  )
+                  ))
                 },
                 ...(currentCacheHitRate != null
                   ? [{
@@ -204,7 +219,15 @@ export function SidebarUsagePanel({
               className="mx-4 mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10.5px] leading-4 text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/35 dark:text-amber-200"
             >
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-              <span>{t('usageHeatmapErrorTitle')}</span>
+              <span>
+                {t('usageHeatmapErrorTitle')}
+                <span
+                  title={dailyState.error}
+                  className="mt-1 block break-all text-[9.5px] text-amber-700/90 dark:text-amber-300/80"
+                >
+                  {dailyState.error}
+                </span>
+              </span>
             </div>
           ) : null}
 
@@ -224,7 +247,14 @@ export function SidebarUsagePanel({
                   },
                   {
                     label: t('usageQuotaMetricCost'),
-                    value: formatRecordedCost(totals.costUsd, totals.costCny, i18n.language)
+                    value: formatMoneySummary(summarizeThreadMoney({
+                      costUsd: totals.costUsd,
+                      costCny: totals.costCny,
+                      valueEstimateUsd: totals.valueEstimateUsd,
+                      valueEstimateCny: totals.valueEstimateCny,
+                      valueEstimateCoverage: totals.valueEstimateCoverage,
+                      locale
+                    }), formatRecordedCost(totals.costUsd, totals.costCny, i18n.language))
                   },
                   {
                     label: t('usageQuotaMetricCacheHit'),
@@ -288,8 +318,15 @@ export function SidebarUsagePanel({
               {t('usageHeatmapLoading')}
             </div>
           ) : modelState.error ? (
-            <p role="alert" className="mt-2 text-[10.5px] leading-4 text-amber-700 dark:text-amber-300">
+            <p
+              role="alert"
+              title={modelState.error}
+              className="mt-2 text-[10.5px] leading-4 text-amber-700 dark:text-amber-300"
+            >
               {t('usageHeatmapErrorTitle')}
+              <span className="mt-0.5 block break-all text-[9.5px] text-amber-700/90 dark:text-amber-300/80">
+                {modelState.error}
+              </span>
             </p>
           ) : visibleModelBuckets.length > 0 ? (
             <>
@@ -604,4 +641,16 @@ function formatRecordedCost(
   const chineseLocale = /^zh(?:-|$)/i.test(locale.trim())
   const hasRecordedCny = typeof costCny === 'number' && Number.isFinite(costCny) && costCny > 0
   return formatCost(costUsd, chineseLocale && !hasRecordedCny ? 'en' : locale, costCny)
+}
+
+/**
+ * Join recorded API cost with the subscription reference-price estimate using
+ * the same "Estimate ≈" convention as the composer footer. Falls back to the
+ * plain recorded-cost string when neither side produced a value.
+ */
+function formatMoneySummary(items: MoneySummaryItem[], fallback: string): string {
+  if (items.length === 0) return fallback
+  return items
+    .map((item) => item.kind === 'estimate' ? `≈${item.value}` : item.value)
+    .join(' · ')
 }

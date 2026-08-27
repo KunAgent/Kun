@@ -277,14 +277,8 @@ export const RolesConfigSchema = z
   .strict()
 export type RolesConfig = z.infer<typeof RolesConfigSchema>
 
-/**
- * Lab (experimental) features. `fastContext` turns the first-class
- * `fast_context` tool on/off and optionally overrides the child model route
- * (empty model+providerId = follow the main session). `fast` maps to the
- * Codex serviceTier `priority` and only takes effect for Codex models that
- * advertise priority support.
- */
-export const LabFastContextConfigSchema = z
+/** First-class `fast_context` tool settings. */
+export const FastContextConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
     model: z.string().min(1).optional(),
@@ -303,10 +297,10 @@ export const LabFastContextConfigSchema = z
       message: 'fastContext model and providerId must be configured together'
     })
   })
-export type LabFastContextConfig = z.infer<typeof LabFastContextConfigSchema>
+export type FastContextConfig = z.infer<typeof FastContextConfigSchema>
 
 /**
- * Lab `ppt_agent` tool: same shape as fastContext (enabled + optional child
+ * Lab `ppt_agent` tool: same shape as Fast Context (enabled + optional child
  * model route + fast). The PPT child also inherits the main session unless
  * model and providerId are configured as a pair.
  */
@@ -341,10 +335,6 @@ export type LabConversationVisualizationConfig = z.infer<
 
 export const LabConfigSchema = z
   .object({
-    fastContext: LabFastContextConfigSchema.default({
-      enabled: true,
-      fast: false
-    }),
     pptAgent: LabPptAgentConfigSchema.default({
       enabled: true,
       fast: false,
@@ -366,6 +356,7 @@ export const KunConfigSchema = z
     graph: GraphRuntimeConfigSchema.optional(),
     roles: RolesConfigSchema.optional(),
     capabilities: KunCapabilitiesConfig.default(DEFAULT_KUN_CAPABILITIES_CONFIG),
+    fastContext: FastContextConfigSchema.optional(),
     lab: LabConfigSchema.optional(),
     hooks: HooksConfigSchema.optional(),
     quality: QualityConfigSchema.optional()
@@ -399,7 +390,7 @@ export function readKunConfigFile(path: string): LoadedKunConfig {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to parse Kun config JSON at ${resolvedPath}: ${message}`)
   }
-  const normalized = normalizeLegacyProviderKinds(json)
+  const normalized = migrateLegacyFastContextConfig(normalizeLegacyProviderKinds(json))
   const parsed = KunConfigSchema.safeParse(normalized)
   if (!parsed.success) {
     const compatible = parseForwardCompatibleKunConfig(normalized)
@@ -411,6 +402,12 @@ export function readKunConfigFile(path: string): LoadedKunConfig {
     )
   }
   return { path: resolvedPath, config: parsed.data }
+}
+
+export function migrateLegacyFastContextConfig(json: unknown): unknown {
+  if (!isRecord(json) || !isRecord(json.lab) || json.fastContext !== undefined || json.lab.fastContext === undefined) return json
+  const { fastContext, ...lab } = json.lab
+  return { ...json, fastContext, lab }
 }
 
 /**
@@ -444,6 +441,7 @@ export const FORWARD_COMPATIBLE_TOP_LEVEL_SECTIONS = [
   ['contextCompaction', ContextCompactionConfigSchema],
   ['runtime', RuntimeTuningConfigSchema],
   ['roles', RolesConfigSchema],
+  ['fastContext', FastContextConfigSchema],
   ['hooks', HooksConfigSchema],
   ['quality', QualityConfigSchema]
 ] as const

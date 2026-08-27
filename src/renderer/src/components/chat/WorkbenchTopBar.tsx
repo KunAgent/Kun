@@ -153,14 +153,22 @@ export function WorkbenchTopActions({
 
   useEffect(() => {
     if (typeof window.kunGui?.onGuiUpdateState !== 'function') return
-    const applyState = (state: GuiUpdateState): void => {
+    let receivedEvent = false
+    let cancelled = false
+    const applyEvent = (state: GuiUpdateState): void => {
+      receivedEvent = true
       setGuiUpdateState(state)
     }
-    const unsubscribe = window.kunGui.onGuiUpdateState(applyState)
+    const unsubscribe = window.kunGui.onGuiUpdateState(applyEvent)
     if (typeof window.kunGui?.getGuiUpdateState === 'function') {
-      void window.kunGui.getGuiUpdateState().then(applyState).catch(() => undefined)
+      void window.kunGui.getGuiUpdateState().then((state) => {
+        if (!cancelled && !receivedEvent) setGuiUpdateState(state)
+      }).catch(() => undefined)
     }
-    return unsubscribe
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   const guiUpdateAction = useMemo(() => {

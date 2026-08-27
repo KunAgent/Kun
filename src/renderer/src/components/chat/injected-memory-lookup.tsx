@@ -6,14 +6,20 @@ const InjectedMemoryLookupContext = createContext<Map<string, string>>(new Map()
 
 export function InjectedMemoryLookupProvider({
   workspaceRoot,
+  enabled = true,
   children
 }: {
   workspaceRoot?: string
+  enabled?: boolean
   children: ReactNode
 }): ReactElement {
   const [lookup, setLookup] = useState<Map<string, string>>(() => new Map())
 
   useEffect(() => {
+    if (!enabled) {
+      setLookup(new Map())
+      return
+    }
     const provider = getProvider()
     if (typeof provider.listMemories !== 'function') {
       setLookup(new Map())
@@ -32,7 +38,7 @@ export function InjectedMemoryLookupProvider({
     return () => {
       cancelled = true
     }
-  }, [workspaceRoot])
+  }, [enabled, workspaceRoot])
 
   return (
     <InjectedMemoryLookupContext.Provider value={lookup}>

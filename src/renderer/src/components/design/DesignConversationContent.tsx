@@ -87,7 +87,8 @@ export function DesignConversationContent({
   onSwitchThread,
   onViewingChildThreadChange,
   historyClearing = false,
-  drawingCreationSubmitting: drawingCreationSubmittingOverride
+  drawingCreationSubmitting: drawingCreationSubmittingOverride,
+  showActiveThreadConversation = false
 }: {
   input: string
   setInput: (value: string) => void
@@ -131,6 +132,12 @@ export function DesignConversationContent({
   onViewingChildThreadChange?: (viewing: boolean) => void
   historyClearing?: boolean
   drawingCreationSubmitting?: boolean
+  /**
+   * Focused-canvas floating panel: always mirror the current active
+   * conversation instead of gating the timeline on registered design-history
+   * threads, so it shows the same conversation as the main chat.
+   */
+  showActiveThreadConversation?: boolean
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
@@ -204,7 +211,8 @@ export function DesignConversationContent({
   })
   const registeredHistoryThreadIds = historyMenuEntries.map((entry) => entry.id)
   const showingDocumentThread = Boolean(
-    activeThreadId && registeredHistoryThreadIds.includes(activeThreadId)
+    activeThreadId &&
+    (showActiveThreadConversation || registeredHistoryThreadIds.includes(activeThreadId))
   )
   const viewingChildThread = Boolean(childThreadId)
 

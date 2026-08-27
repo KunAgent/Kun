@@ -47,6 +47,8 @@ import { portableSettingsForMigration } from './export-inventory'
 import { reconstructStagedWorkspace } from './workspace-staging'
 import { sha256File } from './kunpack-zip'
 import type { DataMigrationControllerOptions } from './data-migration-controller'
+import { trustedRendererSenderIsCurrent } from '../renderer-trust-policy'
+import { trustedWorkbenchRendererUrl } from '../main-window'
 
 const operationIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/)
 const localPathSchema = z.string().min(1).max(32_767).refine((value) => !value.includes('\0'), 'path contains NUL')
@@ -135,18 +137,10 @@ export function assertTrustedDataMigrationSender(
   event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
   getMainWindow: () => BrowserWindow | null
 ): void {
-  const window = getMainWindow()
-  const senderFrame = event.senderFrame
-  const mainFrame = window?.webContents.mainFrame
-  if (
-    !window ||
-    window.isDestroyed() ||
-    event.sender.id !== window.webContents.id ||
-    !senderFrame ||
-    !mainFrame ||
-    senderFrame.processId !== mainFrame.processId ||
-    senderFrame.routingId !== mainFrame.routingId
-  ) {
+  if (!trustedRendererSenderIsCurrent(event, getMainWindow(), {
+    trustedRendererUrl: trustedWorkbenchRendererUrl(),
+    surface: 'workbench'
+  })) {
     throw new Error('Data migration IPC sender is not the trusted workbench frame')
   }
 }

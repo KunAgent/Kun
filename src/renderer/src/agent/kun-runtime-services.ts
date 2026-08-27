@@ -17,6 +17,7 @@ import {
   KUN_MODEL_CONNECTIONS_PATH,
   KUN_RUNTIME_INFO_PATH,
   KUN_RUNTIME_TOOLS_PATH,
+  KUN_THREAD_GUARDIAN_PATH,
   KUN_SKILLS_PATH,
   kunThreadCompactPath,
   kunThreadEventsPath,
@@ -117,6 +118,14 @@ export function readRuntimeJson<T>(body: string, fallback: string): T {
   }
 }
 
+export type CoreThreadGuardianResultJson = {
+  checkedAt: string
+  scannedThreads: number
+  inconsistentThreads: number
+  repairedThreads: number
+  remainingIssues: Array<{ code: string; message: string; severity: 'warning' | 'error' }>
+}
+
 export class KunRuntimeProviderServices {
   async getRuntimeInfo(): Promise<CoreRuntimeInfoJson> {
     const response = await rendererRuntimeClient.runtimeRequest(KUN_RUNTIME_INFO_PATH, 'GET')
@@ -137,6 +146,17 @@ export class KunRuntimeProviderServices {
     return readRuntimeJson<CoreRuntimeToolDiagnosticsJson>(
       response.body,
       'runtime returned an invalid runtime diagnostics response'
+    )
+  }
+
+  async runThreadGuardian(): Promise<CoreThreadGuardianResultJson> {
+    const response = await rendererRuntimeClient.runtimeRequest(KUN_THREAD_GUARDIAN_PATH, 'POST')
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to run thread guardian'))
+    }
+    return readRuntimeJson<CoreThreadGuardianResultJson>(
+      response.body,
+      'runtime returned an invalid thread guardian response'
     )
   }
 
@@ -446,6 +466,7 @@ export class KunRuntimeProviderServices {
       // event before normalization.  This keeps reducer work and side effects
       // behind the same monotonic gate instead of deduplicating text only.
       let projectionSeqHighWater = sinceSeq
+      let replaySynchronized = false
       const finish = (): void => {
         if (settled) return
         settled = true
@@ -483,11 +504,43 @@ export class KunRuntimeProviderServices {
         queuedDispatchBatches += 1
         const task = dispatchTail.then(async () => {
           if (signal.aborted || settled) return
-          const acceptedBatch: CoreRuntimeEventJson[] = []
+          let acceptedSegment: CoreRuntimeEventJson[] = []
           let acceptedMaxSeq: number | null = null
           let heartbeatSeq: number | null = null
+          let synchronizedSeq: number | null = null
           let candidateSeqHighWater = projectionSeqHighWater
+          const flushAcceptedSegment = async (): Promise<void> => {
+            if (acceptedSegment.length === 0) return
+            const segment = acceptedSegment
+            acceptedSegment = []
+            await dispatchKunRuntimeEvents(segment, sink, (runtimeEvent, eventSink) =>
+              this.handleApprovalRequest(runtimeEvent, eventSink)
+            )
+          }
           for (const event of batch) {
+            if (event.kind === 'replay_synchronized') {
+              const cursor = event.cursor
+              if (
+                replaySynchronized ||
+                event.threadId !== threadId ||
+                typeof cursor !== 'number' ||
+                !Number.isSafeInteger(cursor) ||
+                cursor < 0
+              ) {
+                continue
+              }
+              // The marker is an ordering barrier, not a projected runtime
+              // event. Apply every replay event before revealing the thread,
+              // then process any live events that followed it in this batch.
+              await flushAcceptedSegment()
+              if (signal.aborted || settled) return
+              candidateSeqHighWater = Math.max(candidateSeqHighWater, cursor)
+              sink.onSeq(cursor)
+              sink.onReplaySynchronized?.(cursor)
+              synchronizedSeq = cursor
+              replaySynchronized = true
+              continue
+            }
             if (typeof event.seq === 'number') {
               if (event.seq <= candidateSeqHighWater) {
                 // Heartbeats deliberately reuse the current event cursor. They
@@ -502,13 +555,9 @@ export class KunRuntimeProviderServices {
               candidateSeqHighWater = event.seq
               acceptedMaxSeq = event.seq
             }
-            acceptedBatch.push(event)
+            acceptedSegment.push(event)
           }
-          if (acceptedBatch.length > 0) {
-            await dispatchKunRuntimeEvents(acceptedBatch, sink, (runtimeEvent, eventSink) =>
-              this.handleApprovalRequest(runtimeEvent, eventSink)
-            )
-          }
+          await flushAcceptedSegment()
           if (signal.aborted || settled) return
           // Commit the local replay gate only after every accepted event was
           // projected. If a reducer/effect throws, the unadvanced cursor lets
@@ -518,7 +567,9 @@ export class KunRuntimeProviderServices {
           // been projected. ACK is flow control for the main process and must
           // never precede the renderer's durable in-memory projection.
           const observedSeq = acceptedMaxSeq ?? heartbeatSeq
-          if (observedSeq !== null) sink.onSeq(observedSeq)
+          if (observedSeq !== null && (synchronizedSeq === null || observedSeq > synchronizedSeq)) {
+            sink.onSeq(observedSeq)
+          }
           if (signal.aborted || settled) return
           if (payload.batchId) {
             await rendererRuntimeClient.ackSse(streamId, payload.batchId)

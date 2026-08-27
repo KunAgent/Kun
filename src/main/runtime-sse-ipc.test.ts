@@ -1,4 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp/kun-test' } }))
+vi.mock('./runtime/kun-adapter', () => ({
+  getRuntimeBaseUrlForSettings: (settings: {
+    agents: { kun: { baseUrl?: string; port?: number } }
+  }) => settings.agents.kun.baseUrl ?? `http://127.0.0.1:${settings.agents.kun.port}`,
+  runtimeAuthHeaders: (settings: { agents: { kun: { runtimeToken: string } } }) =>
+    new Map([['authorization', `Bearer ${settings.agents.kun.runtimeToken}`]])
+}))
+
 import { registerRuntimeSseIpc } from './runtime-sse-ipc'
 import type { IpcMain } from 'electron'
 
@@ -79,6 +89,7 @@ describe('runtime-sse-ipc', () => {
       ipcMain: mockIpcMain,
       store: mockStore,
       ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
       logError: mockLogError
     })
 
@@ -171,11 +182,125 @@ describe('runtime-sse-ipc', () => {
     expect(allEvents[2].text).toBe('bye')
   })
 
+  it('uses the replay synchronization cursor when reconnecting after an id-less marker', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    expect(startHandler).toBeDefined()
+    mockFetch.mockImplementation(async () => {
+      if (mockFetch.mock.calls.length === 1) {
+        return {
+          ok: true,
+          status: 200,
+          body: mockReadableStream([
+            'event: replay_synchronized\ndata: {"kind":"replay_synchronized","threadId":"thread-sync","cursor":42}\n\n',
+            '__ERROR__'
+          ])
+        }
+      }
+      return { ok: false, status: 400, body: null }
+    })
+
+    const started = await startHandler!(mockEvent, {
+      threadId: 'thread-sync',
+      sinceSeq: 7
+    })
+    await vi.advanceTimersByTimeAsync(750)
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(mockFetch.mock.calls[1][0].toString()).toContain('since_seq=42')
+    const marker = mockEvent.sender.send.mock.calls
+      .find((call: any) => call[0] === 'runtime:sse-event')?.[1]?.events?.[0]
+    expect(marker).toMatchObject({
+      kind: 'replay_synchronized',
+      threadId: 'thread-sync',
+      cursor: 42
+    })
+    await handlers.get('runtime:sse:stop')!(mockEvent, started.streamId)
+  })
+
+  it('retries a bounded number of times on 404 before surfacing the error', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    expect(startHandler).toBeDefined()
+
+    // 1 initial attempt + first 2 retries 404; the 3rd retry reaches a
+    // stream that ends cleanly (one event) so the loop stops without an
+    // endless immediate-reconnect spin against the mock reader.
+    let fetchCalls = 0
+    mockFetch.mockImplementation(async () => {
+      fetchCalls += 1
+      if (fetchCalls <= 3) return { ok: false, status: 404, body: null }
+      return { ok: false, status: 400, body: null }
+    })
+
+    const started = await startHandler!(mockEvent, {
+      threadId: 'thread-404-race',
+      sinceSeq: 0
+    })
+
+    // Retries use 750ms → 1.5s → 3s backoff; one large advance covers all
+    // pending sleeps plus the terminal 400 that follows.
+    await vi.advanceTimersByTimeAsync(6_000)
+
+    expect(mockFetch).toHaveBeenCalledTimes(4)
+    // The 404s retried instead of terminating on the first response.
+    expect(mockLogError).toHaveBeenCalledWith(
+      'sse',
+      expect.stringContaining('SSE 404 for thread thread-404-race; retry 1/3'),
+      expect.objectContaining({ streamId: started.streamId })
+    )
+  })
+
+  it('reports a terminal error after exhausting 404 retries', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    expect(startHandler).toBeDefined()
+
+    mockFetch.mockImplementation(async () => ({ ok: false, status: 404, body: null }))
+
+    const started = await startHandler!(mockEvent, {
+      threadId: 'thread-404-final',
+      sinceSeq: 0
+    })
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(mockFetch).toHaveBeenCalledTimes(4)
+    expect(mockEvent.sender.send).toHaveBeenCalledWith(
+      'runtime:sse-error',
+      expect.objectContaining({ streamId: started.streamId, status: 404, threadMissing: true })
+    )
+    expect(mockLogError).toHaveBeenCalledWith(
+      'sse',
+      expect.stringContaining('SSE 404'),
+      expect.objectContaining({ streamId: started.streamId })
+    )
+  })
+
   it('treats terminated stream reads as reconnectable SSE disconnects', async () => {
     registerRuntimeSseIpc({
       ipcMain: mockIpcMain,
       store: mockStore,
       ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
       logError: mockLogError
     })
 
@@ -235,6 +360,7 @@ describe('runtime-sse-ipc', () => {
       ipcMain: mockIpcMain,
       store: mockStore,
       ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
       logError: mockLogError
     })
     const startHandler = handlers.get('runtime:sse:start')
@@ -289,6 +415,7 @@ describe('runtime-sse-ipc', () => {
       ipcMain: mockIpcMain,
       store: mockStore,
       ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
       logError: mockLogError
     })
     const startHandler = handlers.get('runtime:sse:start')
@@ -334,6 +461,7 @@ describe('runtime-sse-ipc', () => {
       ipcMain: mockIpcMain,
       store: mockStore,
       ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
       logError: mockLogError
     })
     const startHandler = handlers.get('runtime:sse:start')
@@ -352,5 +480,25 @@ describe('runtime-sse-ipc', () => {
       'runtime:sse-error',
       expect.objectContaining({ streamId: started.streamId, message: 'oversized replay record' })
     )
+  })
+
+  it('rejects SSE attach while the desktop startup gate is not ready', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => {
+        throw new Error('Kun desktop startup is not ready (phase: runtime_starting).')
+      },
+      logError: mockLogError
+    })
+
+    await expect(handlers.get('runtime:sse:start')!(mockEvent, {
+      threadId: 'thread-startup-gated',
+      sinceSeq: 0
+    })).rejects.toThrow(/startup is not ready/)
+    expect(mockStore.load).not.toHaveBeenCalled()
+    expect(mockEnsureRuntime).not.toHaveBeenCalled()
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 })

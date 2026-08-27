@@ -57,7 +57,6 @@ import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import {
   buildModelClientRouterInput,
   hydrateLegacyCredentialOptions,
-  modelConnectionSeedsForOptions,
   modelContextProfilesByProvider
 } from './runtime-factory-model.js'
 import {
@@ -444,7 +443,7 @@ export function createRuntimeConfigController(
 	      ...buildDelegationToolProviders(nextDelegationRuntime, subagentRouter),
 	      ...buildFastContextToolProvider(
 	        nextDelegationRuntime,
-	        () => activeOptions.lab?.fastContext
+	        () => activeOptions.fastContext
 	      ),
 	      ...buildPptAgentToolProvider(
 	        nextDelegationRuntime,
@@ -466,19 +465,12 @@ export function createRuntimeConfigController(
 	      )
 	    ])
 
-	    // Import provider catalogs for rolling GUI compatibility, but preserve
-	    // the registry-owned default. Current GUI/TUI clients use revisioned
-	    // registry writes directly; this path only adds/reconciles catalogs.
-	    const registryBeforeApply = await modelConnections.snapshot()
-	    await modelConnections.initialize(modelConnectionSeedsForOptions(nextOptions), {
-	      proxy: { enabled: Boolean(nextOptions.modelProxyUrl), url: nextOptions.modelProxyUrl ?? '' },
-	      routePools: nextOptions.routePools ?? [],
-	      localModelGateway: nextOptions.localModelGateway ?? { enabled: false }
-	    })
-	    if (registryBeforeApply.providers.length === 0 && request.modelSelection) {
-	      await modelConnections.synchronizeDefaultSelection(request.modelSelection)
-	    }
-	    const materializedConnections = await modelConnections.materialize()
+	    // GUI/TUI own the live Registry through revisioned writes. Hot apply is
+	    // a read-only Registry consumer: startup composition or explicit
+	    // model-connection APIs perform initialization and selection mutations.
+	    // Keeping this path read-only guarantees failed preflight cannot leave a
+	    // partially applied provider catalog/default behind.
+	    const materializedConnections = await modelConnections.materializeReadOnly()
 	    if (materializedConnections.providers.size > 0) {
 	      const selected = materializedConnections.selected
 	      nextOptions = {

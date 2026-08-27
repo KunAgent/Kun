@@ -49,12 +49,81 @@ function settings(apiKey: string): AppSettingsV1 {
   }
 }
 
+function deferredValue<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done
+    reject = fail
+  })
+  return { promise, resolve, reject }
+}
+
 afterEach(() => {
   rendererRuntimeClient.invalidateSettings()
   vi.unstubAllGlobals()
 })
 
 describe('rendererRuntimeClient', () => {
+  it('returns the same in-flight settings promise to concurrent callers', async () => {
+    const pending = deferredValue<AppSettingsV1>()
+    const getSettings = vi.fn(() => pending.promise)
+    vi.stubGlobal('window', { kunGui: { getSettings } })
+
+    const first = rendererRuntimeClient.getSettings()
+    const second = rendererRuntimeClient.getSettings()
+
+    expect(second).toBe(first)
+    expect(getSettings).toHaveBeenCalledTimes(1)
+    pending.resolve(settings('sk-shared'))
+    await expect(first).resolves.toMatchObject({ agents: { kun: { apiKey: 'sk-shared' } } })
+  })
+
+  it('retries settings after a shared in-flight read rejects', async () => {
+    const pending = deferredValue<AppSettingsV1>()
+    const getSettings = vi.fn()
+      .mockImplementationOnce(() => pending.promise)
+      .mockResolvedValueOnce(settings('sk-retried'))
+    vi.stubGlobal('window', { kunGui: { getSettings } })
+
+    const first = rendererRuntimeClient.getSettings()
+    const shared = rendererRuntimeClient.getSettings()
+    pending.reject(new Error('settings unavailable'))
+
+    await expect(first).rejects.toThrow('settings unavailable')
+    await expect(shared).rejects.toThrow('settings unavailable')
+    await expect(rendererRuntimeClient.getSettings()).resolves.toMatchObject({
+      agents: { kun: { apiKey: 'sk-retried' } }
+    })
+    expect(getSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an older request clear or overwrite a forced refresh', async () => {
+    const first = deferredValue<AppSettingsV1>()
+    const second = deferredValue<AppSettingsV1>()
+    const getSettings = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+    vi.stubGlobal('window', { kunGui: { getSettings } })
+
+    const older = rendererRuntimeClient.getSettings()
+    const newer = rendererRuntimeClient.getSettings({ forceRefresh: true })
+    first.resolve(settings('sk-old'))
+    await expect(older).resolves.toMatchObject({ agents: { kun: { apiKey: 'sk-old' } } })
+
+    expect(rendererRuntimeClient.getSettings()).toBe(newer)
+    second.resolve(settings('sk-new'))
+    await expect(newer).resolves.toMatchObject({ agents: { kun: { apiKey: 'sk-new' } } })
+    await expect(rendererRuntimeClient.getSettings()).resolves.toMatchObject({
+      agents: { kun: { apiKey: 'sk-new' } }
+    })
+    expect(getSettings).toHaveBeenCalledTimes(2)
+  })
+
   it('caches settings reads until invalidated', async () => {
     const getSettings = vi.fn(async () => settings('sk-1'))
     vi.stubGlobal('window', {

@@ -102,6 +102,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
 
   ipcMain.handle('provider:quota:list', async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
+    options.assertRendererRuntimeReady()
     return requestRuntimeProviderQuotas(runtimeRequest)
   })
 
@@ -128,6 +129,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   )
 
   ipcMain.handle('claw:task:run', async (_, taskId: unknown): Promise<ScheduleRunResult> => {
+    options.assertRendererRuntimeReady()
     const normalizedTaskId = parseIpcPayload('claw:task:run', streamIdSchema, taskId)
     const scheduleRuntime = getScheduleRuntime()
     if (!scheduleRuntime) return { ok: false, message: 'Schedule runtime is not initialized.' }
@@ -188,6 +190,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   })
 
   ipcMain.handle('schedule:task:run', async (_, taskId: unknown): Promise<ScheduleRunResult> => {
+    options.assertRendererRuntimeReady()
     const normalizedTaskId = parseIpcPayload('schedule:task:run', streamIdSchema, taskId)
     const scheduleRuntime = getScheduleRuntime()
     if (!scheduleRuntime) return { ok: false, message: 'Schedule runtime is not initialized.' }
@@ -202,6 +205,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   )
 
   ipcMain.handle('daemon:restart', async (_, payload: unknown): Promise<DaemonActionResult> => {
+    options.assertRendererRuntimeReady()
     const daemonId = parseIpcPayload('daemon:restart', streamIdSchema, payload)
     const daemonRuntime = getDaemonRuntime()
     if (!daemonRuntime) return { ok: false, message: 'Daemon runtime is not initialized.' }
@@ -226,6 +230,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   )
 
   ipcMain.handle('workflow:run', async (_, workflowId: unknown, input?: unknown): Promise<WorkflowRunResult> => {
+    options.assertRendererRuntimeReady()
     const normalizedId = parseIpcPayload('workflow:run', streamIdSchema, workflowId)
     const workflowRuntime = getWorkflowRuntime()
     if (!workflowRuntime) return { ok: false, message: 'Workflow runtime is not initialized.' }
@@ -241,6 +246,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   })
 
   ipcMain.handle('workflow:node:run', async (_, payload: unknown): Promise<WorkflowRunResult> => {
+    options.assertRendererRuntimeReady()
     const request = parseIpcPayload('workflow:node:run', workflowRunNodePayloadSchema, payload)
     const workflowRuntime = getWorkflowRuntime()
     if (!workflowRuntime) return { ok: false, message: 'Workflow runtime is not initialized.' }
@@ -255,6 +261,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   })
 
   ipcMain.handle('workflow:approval:resolve', async (_, payload: unknown): Promise<{ ok: boolean }> => {
+    options.assertRendererRuntimeReady()
     const request = parseIpcPayload('workflow:approval:resolve', workflowResolveApprovalPayloadSchema, payload)
     const workflowRuntime = getWorkflowRuntime()
     if (!workflowRuntime) return { ok: false }

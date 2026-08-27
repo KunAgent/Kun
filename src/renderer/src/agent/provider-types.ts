@@ -50,6 +50,7 @@ import type {
   ThreadTodoStatus,
   ThreadUsageSnapshot,
   ToolEventPayload,
+  TurnTerminalEvent,
   UserFileReference,
   UserInputAnswer,
   UserInputRequestPayload,
@@ -77,9 +78,66 @@ export type ThreadListPage = {
   total?: number
 }
 
+export type ThreadRuntimeState = {
+  status: string
+  updatedAt: string
+  latestSeq: number
+  latestTurnId?: string
+  latestTurnStatus?: string
+  latestTurnOrchestration?: 'direct' | 'graph'
+  /** Undefined means an older provider did not expose live input state. */
+  pendingUserInputIds?: string[]
+}
+
+export type ThreadRuntimeStateBatchResult =
+  | { id: string; ok: true; state: ThreadRuntimeState }
+  | {
+      id: string
+      ok: false
+      error: { code: 'not_found' | 'unavailable'; message: string }
+    }
+
+export type ThreadLiveTextProjection = {
+  text: string
+  itemId: string
+  turnId: string
+  createdAt?: string
+}
+
+export type ThreadLiveProjection = {
+  reasoning?: ThreadLiveTextProjection
+  assistant?: ThreadLiveTextProjection
+}
+
+export type ThreadDetail = {
+  blocks: ChatBlock[]
+  latestSeq: number
+  /** Cumulative unfinished text restored separately from settled timeline blocks. */
+  liveProjection?: ThreadLiveProjection
+  threadStatus?: string
+  latestTurnId?: string
+  latestTurnStatus?: string
+  latestTurnOrchestration?: 'direct' | 'graph'
+  latestUserMessageId?: string
+  turnDurationByUserId?: Record<string, number>
+  usage?: ThreadUsageSnapshot
+  relation?: 'primary' | 'fork' | 'side'
+  parentThreadId?: string
+  model?: string
+  goal?: ThreadGoal | null
+  todos?: ThreadTodoList | null
+  /** Original detail response size, used only to bound renderer snapshots. */
+  payloadBytes?: number
+  historyCursor?: string
+  hasMoreHistory?: boolean
+  designProfile?: DesignTaskProfile
+}
+
 export type ThreadEventSink = {
   /** The HTTP/SSE stream is established, even when no replay or live event is pending. */
   onConnected?(): void
+  /** Persisted replay reached the server's fixed synchronization boundary. */
+  onReplaySynchronized?(cursor: number): void
   onSeq(seq: number): void
   onDeltas(deltas: ThreadDeltaEvent[]): void
   onAssistantItem?(item: AssistantItemSnapshotPayload): void
@@ -105,7 +163,8 @@ export type ThreadEventSink = {
     agentSurface?: 'code' | 'write' | 'design'
     designProfile?: DesignTaskProfile
   }): void
-  onTurnComplete(status?: 'completed' | 'aborted'): void
+  /** Parent turn reached a terminal state. Identity fields let the store reject stale or child-scoped completion. */
+  onTurnComplete(event?: TurnTerminalEvent): void
   onError(err: Error, options?: ThreadErrorOptions): void
   /** Optional: cumulative usage update for the thread. */
   onUsage?(usage: ThreadUsageSnapshot): void
@@ -135,35 +194,10 @@ export interface AgentProvider {
   /** Optional paginated listing used by the sidebar "show more" flow. */
   listThreadsPage?(options?: ThreadListOptions): Promise<ThreadListPage>
   createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string }): Promise<NormalizedThread>
-  getThreadDetail(threadId: string, options?: { before?: string }): Promise<{
-    blocks: ChatBlock[]
-    latestSeq: number
-    threadStatus?: string
-    latestTurnId?: string
-    latestTurnStatus?: string
-    latestTurnOrchestration?: 'direct' | 'graph'
-    latestUserMessageId?: string
-    turnDurationByUserId?: Record<string, number>
-    usage?: ThreadUsageSnapshot
-    relation?: 'primary' | 'fork' | 'side'
-    parentThreadId?: string
-    model?: string
-    goal?: ThreadGoal | null
-    todos?: ThreadTodoList | null
-    /** Original detail response size, used only to bound renderer snapshots. */
-    payloadBytes?: number
-    historyCursor?: string
-    hasMoreHistory?: boolean
-    designProfile?: DesignTaskProfile
-  }>
-  getThreadState(threadId: string): Promise<{
-    status: string
-    updatedAt: string
-    latestSeq: number
-    latestTurnId?: string
-    latestTurnStatus?: string
-    latestTurnOrchestration?: 'direct' | 'graph'
-  }>
+  getThreadDetail(threadId: string, options?: { before?: string }): Promise<ThreadDetail>
+  getThreadState(threadId: string): Promise<ThreadRuntimeState>
+  /** Optional bounded bulk capability for background observers. */
+  getThreadStates?(threadIds: string[]): Promise<ThreadRuntimeStateBatchResult[]>
   sendUserMessage(
     threadId: string,
     text: string,
@@ -294,6 +328,7 @@ export interface AgentProvider {
   updateThreadPinned?(threadId: string, pinned: boolean): Promise<void>
   archiveThread?(threadId: string, archived: boolean): Promise<void>
   deleteThread(threadId: string): Promise<void>
+  deleteThreadsByWorkspace?(workspace: string): Promise<string[]>
   compactThread?(threadId: string, reason?: string): Promise<{ replacedTokens: number } | void>
   archiveThreadHistory?(threadId: string, cutoffTurnId: string): Promise<{
     replacedTokens: number

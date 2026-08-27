@@ -52,7 +52,9 @@ export function buildThreadUsageResponse(records: readonly ThreadUsageRecord[]):
   const buckets = new Map<string, ThreadUsageAccumulator>()
   for (const record of records) {
     const bucket = buckets.get(record.threadId) ?? emptyThreadBucket(record.threadId)
-    const added = addUsageCounters(bucket, record.usage, record.model, record.completedAt)
+    const added = addUsageCounters(
+      bucket, record.usage, record.model, record.completedAt, record.providerId
+    )
     bucket.hasCacheTelemetry ||= added.hasCacheTelemetry
     if (record.completedAt >= bucket.lastCompletedAt) {
       bucket.lastCompletedAt = record.completedAt
@@ -90,7 +92,9 @@ export function buildDailyUsageResponse(records: readonly ThreadUsageRecord[], q
     const day = formatDateInTimezone(record.completedAt, query.timezone)
     const bucket = day ? buckets.get(day) : undefined
     if (!bucket) continue
-    const added = addUsageCounters(bucket, record.usage, record.model, record.completedAt)
+    const added = addUsageCounters(
+      bucket, record.usage, record.model, record.completedAt, record.providerId
+    )
     bucket.threadIds.add(record.threadId)
     bucket.thread_count = bucket.threadIds.size
     bucket.hasCacheTelemetry ||= added.hasCacheTelemetry
@@ -122,7 +126,9 @@ export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], q
     const model = record.model?.trim() || 'unknown'
     const modelBucket = modelBuckets.get(model) ?? emptyModelBucket(model)
     for (const bucket of [dayBucket, modelBucket]) {
-      const added = addUsageCounters(bucket, record.usage, record.model, record.completedAt)
+      const added = addUsageCounters(
+        bucket, record.usage, record.model, record.completedAt, record.providerId
+      )
       bucket.threadIds.add(record.threadId)
       bucket.thread_count = bucket.threadIds.size
       bucket.hasCacheTelemetry ||= added.hasCacheTelemetry

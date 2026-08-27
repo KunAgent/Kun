@@ -1,5 +1,7 @@
 import type { ActingTurnModelRoute, Turn } from '../contracts/turns.js'
 import type { TurnItem } from '../contracts/items.js'
+import type { ModelRouteTargetMetadata } from '../ports/model-client.js'
+import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type {
   KunTurnContextAuthority,
@@ -119,6 +121,23 @@ export function sameActingModelRoute(
   return a.model === b.model &&
     a.providerId === b.providerId &&
     a.accountId === b.accountId
+}
+
+/**
+ * True when the frozen acting route is still the public alias of a local
+ * model-route pool and the stream resolved one of that pool's concrete
+ * targets. The alias was frozen only because deferral was missed, so the
+ * resolution must be accepted instead of failing the turn.
+ */
+export function isPoolAliasActingRoute(
+  frozen: ActingTurnModelRoute,
+  route: ModelRouteTargetMetadata
+): boolean {
+  const frozenProvider = frozen.providerId?.trim().toLowerCase()
+  const aliasMatch = frozen.model.trim().toLowerCase() === route.requestedModelId.trim().toLowerCase()
+  const gatewayMatch = frozenProvider === LOCAL_MODEL_GATEWAY_PROVIDER_ID
+  const poolProviderMatch = frozenProvider === `route-pool:${route.routePoolId}`.toLowerCase()
+  return aliasMatch && (gatewayMatch || poolProviderMatch)
 }
 
 export function modelHistoryRoutesByTurnId(

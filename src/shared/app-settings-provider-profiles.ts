@@ -73,6 +73,7 @@ import {
   CHATGPT_SUBSCRIPTION_NAME,
   CHATGPT_SUBSCRIPTION_PROVIDER_ID,
   GEMINI_SUBSCRIPTION_MODEL_IDS,
+  OPENCODE_FREE_PROVIDER_ID,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
   getModelProviderPreset,
   modelProviderPresetProfile,
@@ -130,7 +131,9 @@ export function normalizeModelProviderProfile(
 ): ModelProviderProfileV1 | null {
   const id = normalizeModelProviderId(input?.id)
   if (!id) return null
-  const presetSource = normalizeModelProviderPresetSource(input, id)
+  const presetSource = id === OPENCODE_FREE_PROVIDER_ID
+    ? { presetId: OPENCODE_FREE_PROVIDER_ID, mode: 'api' as const }
+    : normalizeModelProviderPresetSource(input, id)
   const resolvedPresetSource = presetSource
     ? resolveModelProviderPresetSource({ id, presetSource })
     : null
@@ -186,7 +189,12 @@ export function normalizeModelProviderProfile(
           : '',
     baseUrl,
     endpointFormat,
-    retry: normalizeModelRequestRetrySettings(input?.retry),
+    retry: normalizeModelRequestRetrySettings(
+      input?.retry,
+      resolvedPresetSource?.mode === 'api'
+        ? resolvedPresetSource.preset.defaultRetryMaxAttempts
+        : undefined
+    ),
     ...(kind ? { kind } : {}),
     models,
     modelProfiles,
@@ -276,16 +284,30 @@ export function defaultModelRequestRetrySettings(): ModelRequestRetrySettingsV1 
 }
 
 export function normalizeModelRequestRetrySettings(
-  input: Partial<ModelRequestRetrySettingsV1> | undefined
+  input: Partial<ModelRequestRetrySettingsV1> | undefined,
+  defaultMaxAttempts?: number
 ): ModelRequestRetrySettingsV1 {
-  const defaults = defaultModelRequestRetrySettings()
+  const defaults = {
+    ...defaultModelRequestRetrySettings(),
+    ...(defaultMaxAttempts === undefined
+      ? {}
+      : { maxAttempts: boundedNonNegativeInteger(defaultMaxAttempts, DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS, 10) })
+  }
   const httpStatusCodes = normalizeRetryHttpStatusCodes(input?.httpStatusCodes, defaults.httpStatusCodes)
   const defaultsVersion = boundedNonNegativeInteger(input?.defaultsVersion, 0, 1_000)
+  const maxAttempts = boundedNonNegativeInteger(input?.maxAttempts, defaults.maxAttempts, 10)
+  const inheritedLegacyZeroRetryBudget =
+    defaultsVersion < MODEL_REQUEST_RETRY_DEFAULTS_VERSION && maxAttempts === 0
   const inheritedLegacyStatusList =
     defaultsVersion < MODEL_REQUEST_RETRY_DEFAULTS_VERSION &&
     sameRetryHttpStatusCodes(httpStatusCodes, [429, 503])
   return {
-    maxAttempts: boundedNonNegativeInteger(input?.maxAttempts, defaults.maxAttempts, 10),
+    // Retry settings originally shipped with a zero default. Re-enable the
+    // current five-retry default once for pre-v2 profiles; v2+ zero remains
+    // the user's explicit opt-out.
+    maxAttempts: inheritedLegacyZeroRetryBudget
+      ? DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS
+      : maxAttempts,
     initialDelayMs: boundedNonNegativeInteger(input?.initialDelayMs, defaults.initialDelayMs, 600_000),
     httpStatusCodes: inheritedLegacyStatusList ? [...defaults.httpStatusCodes] : httpStatusCodes,
     defaultsVersion: Math.max(defaultsVersion, MODEL_REQUEST_RETRY_DEFAULTS_VERSION)
@@ -375,6 +397,9 @@ export function withPresetModelProfiles(
       ...(presetProfile.serviceTiers?.length
         ? { serviceTiers: [...presetProfile.serviceTiers] }
         : {}),
+      // Catalog reference pricing is upstream metadata, not a user-editable
+      // profile choice; stored profiles inherit it from the preset catalog.
+      ...(presetProfile.pricing ? { pricing: { ...presetProfile.pricing } } : {}),
       // Responses Lite is a required transport contract for its matching
       // Codex models, not a user-editable profile choice. Older manually
       // added profiles should inherit it from the preset.

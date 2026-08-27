@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CANVAS_CONVERSATION_EDGE_MARGIN,
+  CANVAS_CONVERSATION_SAFE_INSET,
   canvasConversationLayoutKey,
   canvasConversationPanelSize,
   canvasConversationResponsiveMode,
@@ -27,13 +28,15 @@ describe('canvasConversationResponsiveMode', () => {
 })
 
 describe('defaultCanvasConversationLayout', () => {
-  it('places the panel on the right, clear of the canvas toolbar', () => {
+  it('places the panel left of center, clear of the canvas toolbar and window controls', () => {
     const layout = defaultCanvasConversationLayout({ width: 1600, height: 900 }, 'desktop')
     expect(layout.open).toBe(false)
     expect(layout.minimized).toBe(false)
-    // Right-aligned with a 24px edge margin plus toolbar (56px) + 16px gap.
-    expect(layout.x).toBe(1600 - 420 - 24 - 56 - 16)
-    expect(layout.y).toBeGreaterThanOrEqual(CANVAS_CONVERSATION_EDGE_MARGIN)
+    // The assistant launcher/panel is aligned to the left beside canvas properties,
+    // leaving the right toolbar and bottom zoom controls unobstructed. It also
+    // clears the macOS traffic-light window controls via the safe inset.
+    expect(layout.x).toBe(CANVAS_CONVERSATION_EDGE_MARGIN + CANVAS_CONVERSATION_SAFE_INSET)
+    expect(layout.y).toBeGreaterThan(CANVAS_CONVERSATION_EDGE_MARGIN)
   })
 
   it('pins the sheet to the bottom on mobile', () => {
@@ -41,12 +44,21 @@ describe('defaultCanvasConversationLayout', () => {
     expect(layout.x).toBe(0)
     expect(layout.y).toBeGreaterThan(0)
   })
+
+  it('drops below the focused titlebar when a window-controls top inset applies', () => {
+    // Height is small enough that the reserved top band shrinks the panel.
+    const bounds = { width: 1600, height: 760 }
+    const withoutInset = defaultCanvasConversationLayout(bounds, 'desktop')
+    const withInset = defaultCanvasConversationLayout(bounds, 'desktop', 42)
+    expect(withInset.y).toBe(withoutInset.y + 42)
+    expect(withInset.height).toBe(withoutInset.height - 42)
+  })
 })
 
 describe('clampCanvasConversationLayout', () => {
   it('keeps the panel inside the viewport with an edge margin', () => {
     const clamped = clampCanvasConversationLayout(
-      { open: true, minimized: false, x: -400, y: 9000 },
+      { open: true, minimized: false, x: -400, y: 9000, width: 420, height: 680 },
       { width: 1200, height: 800 },
       'desktop'
     )
@@ -55,9 +67,19 @@ describe('clampCanvasConversationLayout', () => {
     expect(clamped.y).toBeGreaterThanOrEqual(CANVAS_CONVERSATION_EDGE_MARGIN)
   })
 
+  it('keeps the panel clear of the focused titlebar band', () => {
+    const clamped = clampCanvasConversationLayout(
+      { open: true, minimized: false, x: 200, y: 4, width: 420, height: 680 },
+      { width: 1200, height: 800 },
+      'desktop',
+      42
+    )
+    expect(clamped.y).toBe(72 + 42)
+  })
+
   it('forces sheet mode geometry on mobile', () => {
     const clamped = clampCanvasConversationLayout(
-      { open: true, minimized: false, x: 300, y: 120 },
+      { open: true, minimized: false, x: 300, y: 120, width: 420, height: 680 },
       { width: 420, height: 700 },
       'sheet'
     )
@@ -71,6 +93,16 @@ describe('canvasConversationPanelSize', () => {
     const size = canvasConversationPanelSize({ width: 1600, height: 900 }, 'desktop')
     expect(size.width).toBe(420)
     expect(size.height).toBe(680)
+  })
+
+  it('clamps a user-resized panel to supported desktop bounds', () => {
+    const size = canvasConversationPanelSize(
+      { width: 1600, height: 900 },
+      'desktop',
+      { width: 900, height: 240 }
+    )
+    expect(size.width).toBe(720)
+    expect(size.height).toBe(320)
   })
 
   it('narrows the panel in compact mode', () => {
@@ -96,7 +128,7 @@ describe('canvasConversationLayoutKey', () => {
 describe('normalizeCanvasConversationLayout', () => {
   it('accepts finite coordinates and rounds them', () => {
     expect(normalizeCanvasConversationLayout({ open: true, minimized: false, x: 12.6, y: 40.2 }))
-      .toEqual({ open: true, minimized: false, x: 13, y: 40 })
+      .toEqual({ open: true, minimized: false, x: 13, y: 40, width: 420, height: 680 })
   })
 
   it('rejects missing or non-finite geometry', () => {

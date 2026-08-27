@@ -17,8 +17,11 @@ export async function startNodeHttpServer(input: {
   port: number
   faultInjection?: FaultInjectionController
 }): Promise<NodeHttpServerHandle> {
+  const activeRequests = new Set<Promise<void>>()
   const server = createServer((request, response) => {
-    void handleNodeRequest(input.router, request, response, input.faultInjection)
+    const active = handleNodeRequest(input.router, request, response, input.faultInjection)
+      .finally(() => activeRequests.delete(active))
+    activeRequests.add(active)
   })
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
@@ -41,6 +44,7 @@ export async function startNodeHttpServer(input: {
       // sockets during shutdown so they cannot hold the HTTP server open.
       server.closeAllConnections?.()
       await closed
+      await Promise.allSettled([...activeRequests])
     }
   }
 }
@@ -185,10 +189,11 @@ async function writeFetchResponse(
     return
   }
   const isSse = response.headers.get('content-type')?.toLowerCase().includes('text/event-stream') === true
+  if (isSse) outgoing.flushHeaders()
   const reader = response.body.getReader()
   try {
     while (true) {
-      const { done, value } = await reader.read()
+      const { done, value } = await readResponseChunk(reader, outgoing)
       if (done) break
       if (value && !outgoing.write(Buffer.from(value))) {
         await waitForDrain(outgoing)
@@ -203,6 +208,39 @@ async function writeFetchResponse(
     if (!outgoing.writableEnded && !outgoing.destroyed) outgoing.end()
     reader.releaseLock()
   }
+}
+
+function readResponseChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  outgoing: ServerResponse
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const cleanup = () => {
+      outgoing.off('close', onClose)
+      outgoing.off('error', onError)
+    }
+    const finish = (result: ReadableStreamReadResult<Uint8Array>) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(result)
+    }
+    const fail = (error: unknown) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    const onClose = () => {
+      void reader.cancel().catch(() => undefined)
+      finish({ done: true, value: undefined })
+    }
+    const onError = (error: Error) => fail(error)
+    outgoing.once('close', onClose)
+    outgoing.once('error', onError)
+    void reader.read().then(finish, fail)
+  })
 }
 
 function waitForDrain(outgoing: ServerResponse): Promise<void> {

@@ -21,6 +21,7 @@ import {
   McpCapabilityConfig,
   MemoryCapabilityConfig,
   ModelCapabilityMetadata,
+  ModelCatalogPricing,
   ModelInputModality,
   ModelMessagePartSupport,
   ModelReasoningCapabilityMetadata,
@@ -113,6 +114,7 @@ export const ModelContextProfileConfigSchema = z
     supportsToolCalling: z.boolean().optional(),
     messageParts: z.array(ModelMessagePartSupport).optional(),
     reasoning: ModelReasoningCapabilityMetadata.optional(),
+    pricing: ModelCatalogPricing.optional(),
     serviceTiers: z.array(z.enum(['priority', 'flex'])).min(1).optional(),
     // Per-model wire-format override. Omitted means "inherit the
     // provider/runtime endpointFormat"; no default coercion here, otherwise
@@ -161,6 +163,8 @@ export const ContextCompactionConfigSchema = z
     summaryInputMaxBytes: PositiveInt.optional(),
     summaryModel: z.string().min(1).optional(),
     summaryProviderId: z.string().min(1).optional(),
+    targetInputRatio: z.number().positive().max(1).optional(),
+    targetInputTokens: PositiveInt.optional(),
     modelProfiles: z.record(z.string().min(1), ModelContextProfileConfigSchema).optional()
   })
   .strict()

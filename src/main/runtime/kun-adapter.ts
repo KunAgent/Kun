@@ -34,6 +34,12 @@ import {
 import { sameCanonicalPath } from '../../../kun/src/manager/canonical-path.js'
 
 const KUN_RUNTIME_ID = 'kun' as const
+
+export type BundledBuildReplacementProbe =
+  | { state: 'matched'; ownership: 'none' | 'current' }
+  | { state: 'mismatched' }
+  | { state: 'unknown'; error: Error }
+
 let resolvedConnection: RuntimeDiscoveryRecord | null = null
 
 function appRoot(): string {
@@ -124,27 +130,37 @@ export const kunRuntimeAdapter = {
    * A packaged production app owns the bundled build after an install/update.
    * Custom binaries and development runtimes retain their normal attach policy.
    */
-  async requiresBundledBuildReplacement(settings: AppSettingsV1): Promise<boolean> {
+  async probeBundledBuildReplacement(settings: AppSettingsV1): Promise<BundledBuildReplacementProbe> {
     const runtime = getKunRuntimeSettings(settings)
-    const dataDir = expandDataDir(runtime.dataDir)
     const runtimeFlavor = resolveCliRuntimeFlavor({ env: process.env })
+    if (!app.isPackaged || runtime.binaryPath.trim() || runtimeFlavor !== 'production') {
+      return { state: 'matched', ownership: 'none' }
+    }
+    const dataDir = expandDataDir(runtime.dataDir)
     const expectedBuildId = expectedKunRuntimeBuildId(
       await resolveKunRuntimeBuildId(resolveKunExecutable(appRoot(), runtime.binaryPath)),
       runtimeFlavor
     )
-    const inspected = await inspectSharedRuntime(
-      dataDir,
-      fetch,
-      sharedRuntimeScope(dataDir, runtimeFlavor)
-    ).catch(() => null)
-    if (!inspected) return false
-    return bundledRuntimeBuildReplacementRequired({
-      isPackaged: app.isPackaged,
-      hasCustomBinary: Boolean(runtime.binaryPath.trim()),
-      runtimeFlavor,
-      expectedBuildId,
-      discoveredBuildId: inspected.discovery.buildId
-    })
+    if (!expectedBuildId) {
+      return { state: 'unknown', error: new Error('The packaged Kun Runtime build identity is missing.') }
+    }
+    let inspected: Awaited<ReturnType<typeof inspectSharedRuntime>>
+    try {
+      inspected = await inspectSharedRuntime(
+        dataDir,
+        fetch,
+        sharedRuntimeScope(dataDir, runtimeFlavor)
+      )
+    } catch (error) {
+      return {
+        state: 'unknown',
+        error: error instanceof Error ? error : new Error(String(error))
+      }
+    }
+    if (!inspected) return { state: 'matched', ownership: 'none' }
+    return inspected.discovery.buildId === expectedBuildId
+      ? { state: 'matched', ownership: 'current' }
+      : { state: 'mismatched' }
   },
 
   reclaimPort(port: number): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -305,6 +321,8 @@ const DEFAULT_RUNTIME_GET_TIMEOUT_MS = 15_000
 const DEFAULT_RUNTIME_POST_TIMEOUT_MS = 60_000
 const THREAD_TIMELINE_GET_TIMEOUT_MS = 120_000
 const THREAD_SUMMARIZE_POST_TIMEOUT_MS = 120_000
+const PROVIDER_QUOTA_GET_TIMEOUT_MS = 120_000
+const USAGE_HISTORY_GET_TIMEOUT_MS = 120_000
 const MODEL_CONNECTION_EVENTS_TIMEOUT_MARGIN_MS = 5_000
 const MAX_MODEL_CONNECTION_EVENTS_WAIT_MS = 120_000
 
@@ -320,6 +338,27 @@ function isThreadSummarizePath(pathNorm: string): boolean {
   return /^\/v1\/threads\/[^/]+\/summarize$/u.test(pathname)
 }
 
+function isProviderQuotaPath(pathNorm: string): boolean {
+  const queryIndex = pathNorm.indexOf('?')
+  const pathname = queryIndex >= 0 ? pathNorm.slice(0, queryIndex) : pathNorm
+  return pathname === '/v1/provider-quotas'
+}
+
+/**
+ * History aggregations replay every thread's usage records and hydrate full
+ * thread records for per-turn attribution, so they are not a cheap status
+ * route. The generic GET budget aborted them mid-aggregation and surfaced as
+ * the sidebar "cannot read usage" banner even though the renderer allowed 65s.
+ */
+function isUsageHistoryPath(pathNorm: string): boolean {
+  const queryIndex = pathNorm.indexOf('?')
+  const pathname = queryIndex >= 0 ? pathNorm.slice(0, queryIndex) : pathNorm
+  if (pathname !== '/v1/usage') return false
+  if (queryIndex < 0) return false
+  const groupBy = new URLSearchParams(pathNorm.slice(queryIndex + 1)).get('group_by')
+  return groupBy === 'day' || groupBy === 'model' || groupBy === 'thread' || groupBy === 'turn'
+}
+
 export function resolveRuntimeRequestTimeoutMs(
   pathNorm: string,
   method: string,
@@ -331,6 +370,12 @@ export function resolveRuntimeRequestTimeoutMs(
     : DEFAULT_RUNTIME_GET_TIMEOUT_MS
   if (method === 'GET' && isThreadTimelinePath(pathNorm)) {
     return THREAD_TIMELINE_GET_TIMEOUT_MS
+  }
+  if (method === 'GET' && isProviderQuotaPath(pathNorm)) {
+    return PROVIDER_QUOTA_GET_TIMEOUT_MS
+  }
+  if (method === 'GET' && isUsageHistoryPath(pathNorm)) {
+    return USAGE_HISTORY_GET_TIMEOUT_MS
   }
   // A whole-session summary is one blocking model call over the full
   // transcript. The generic POST budget cut it off before the runtime could

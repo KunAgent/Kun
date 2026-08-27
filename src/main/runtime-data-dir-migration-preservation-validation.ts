@@ -117,6 +117,10 @@ export function writePreservationReport(
     sqliteQuickCheck: journal.sqliteQuickCheck,
     completedAt: journal.completedAt,
     runtimeVerifiedAt: journal.runtimeVerifiedAt,
+    runtimeVerificationAttempts: journal.runtimeVerificationAttempts,
+    runtimeVerificationLastAttemptAt: journal.runtimeVerificationLastAttemptAt,
+    runtimeVerificationMissingThreadIds: journal.runtimeVerificationMissingThreadIds,
+    runtimeVerificationStoppedAt: journal.runtimeVerificationStoppedAt,
     ...extra
   })
   return reportPath

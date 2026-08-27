@@ -16,6 +16,7 @@ export type TimelineStores = {
   clawChannels: ClawImChannelV1[]
   activeClawChannel: ClawImChannelV1 | null
   busy: boolean
+  busyUnconfirmed: boolean
   threadHasMoreHistory: boolean
   threadHistoryLoading: boolean
   loadEarlierThreadHistory: () => Promise<boolean>
@@ -35,6 +36,7 @@ export function useTimelineStores(activeThreadId: string | null): TimelineStores
   const clawChannels = useChatStore((s) => s.clawChannels)
   const activeClawChannelId = useChatStore((s) => s.activeClawChannelId)
   const busy = useChatStore((s) => s.busy)
+  const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
   const threadHasMoreHistory = useChatStore((s) => s.threadHasMoreHistory)
   const threadHistoryLoading = useChatStore((s) => s.threadHistoryLoading)
   const loadEarlierThreadHistory = useChatStore((s) => s.loadEarlierThreadHistory)
@@ -59,6 +61,7 @@ export function useTimelineStores(activeThreadId: string | null): TimelineStores
     clawChannels,
     activeClawChannel,
     busy,
+    busyUnconfirmed,
     threadHasMoreHistory,
     threadHistoryLoading,
     loadEarlierThreadHistory,

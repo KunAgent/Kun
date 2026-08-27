@@ -13,6 +13,7 @@ import {
   DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS,
   DEFAULT_GIT_CHECKPOINT_CREATE_ENABLED,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  DEFAULT_DARK_UI_COLORS,
   DEFAULT_GIT_BRANCH_PREFIX,
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_WRITE_WORKSPACE_ROOT,
@@ -36,6 +37,7 @@ import {
   mergeWriteSettings,
   defaultTerminalSettings,
   mergeTerminalSettings,
+  mergeDarkUiColors,
   DEFAULT_CHAT_CONTENT_MAX_WIDTH_PX,
   DEFAULT_COMPOSER_SEND_KEY,
   DEFAULT_UI_FONT_SCALE,
@@ -267,6 +269,7 @@ export const defaultSettings = (): AppSettingsV1 => ({
   composerSendKey: DEFAULT_COMPOSER_SEND_KEY,
   cursorSpotlight: true,
   cursorSpotlightColor: DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  darkUiColors: { ...DEFAULT_DARK_UI_COLORS },
   provider: defaultModelProviderSettings(),
   agents: {
     kun: defaultKunRuntimeSettings()
@@ -448,10 +451,16 @@ export function applySettingsPatchToSnapshot(
   current: AppSettingsV1,
   partial: AppSettingsPatch
 ): AppSettingsV1 {
-  const { agents: agentsPatch, provider: providerPatch, ...restPatch } = partial
+  const {
+    agents: agentsPatch,
+    provider: providerPatch,
+    darkUiColors: darkUiColorsPatch,
+    ...restPatch
+  } = partial
   return normalizeStoredSettings({
     ...applyKunRuntimePatch(current, agentsPatch?.kun),
     ...restPatch,
+    darkUiColors: mergeDarkUiColors(current.darkUiColors, darkUiColorsPatch),
     provider: mergeModelProviderSettings(current.provider, providerPatch),
     log: { ...current.log, ...(partial.log ?? {}) },
     checkpointCleanup: normalizeCheckpointCleanupSettings({

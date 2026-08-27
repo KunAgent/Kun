@@ -82,7 +82,9 @@ async compact(this: TurnService, input: {
           throw new TurnConflictError('cutoffTurnId must identify a completed turn')
         }
         const archiveItems = this['deps'].sessionStore.archiveItems
-        if (!archiveItems) throw new Error('session archive is unavailable for this store')
+        if (input.request.archiveBeforePrune !== false && !archiveItems) {
+          throw new Error('session archive is unavailable for this store')
+        }
         const snapshot = await this['deps'].sessionStore.loadItemSnapshot(input.threadId)
         const cutoffIndex = snapshot.items.reduce(
           (last, item, index) => item.turnId === cutoffTurn.id ? index : last,
@@ -121,21 +123,23 @@ async compact(this: TurnService, input: {
           throw new TurnConflictError('cutoff does not contain compactable history')
         }
         const nextItems = buildArchivedActiveHistory(result.next, result.summaryItem, retainedTail)
-        const staged = await archiveItems.call(this['deps'].sessionStore, {
-          threadId: input.threadId,
-          cutoffTurnId: cutoffTurn.id,
-          createdAt: this['deps'].nowIso(),
-          items: archivedHead,
-          retainedItems: retainedTail.length,
-          replacedTokens: result.replacedTokens
-        })
+        const staged = input.request.archiveBeforePrune === false
+          ? undefined
+          : await archiveItems!.call(this['deps'].sessionStore, {
+              threadId: input.threadId,
+              cutoffTurnId: cutoffTurn.id,
+              createdAt: this['deps'].nowIso(),
+              items: archivedHead,
+              retainedItems: retainedTail.length,
+              replacedTokens: result.replacedTokens
+            })
         const commit = await this['deps'].sessionStore.rewriteItemsIfRevision(
           input.threadId,
           snapshot.revision,
           nextItems
         )
         if (!commit.applied) {
-          await staged.cleanup()
+          await staged?.cleanup()
           throw new TurnConflictError('history changed while archive was being committed')
         }
         await this['threadItems'].syncFromSession(input.threadId)
@@ -158,7 +162,7 @@ async compact(this: TurnService, input: {
           replacedTokens: result.replacedTokens,
           summary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
           pinnedConstraints: prefix.pinnedConstraints,
-          archivePath: staged.path,
+          ...(staged ? { archivePath: staged.path } : {}),
           archivedItems: archivedHead.length,
           retainedItems: retainedTail.length,
           contextEstimate: this['deps'].compactor.estimate(nextItems),
@@ -302,6 +306,8 @@ async compact(this: TurnService, input: {
                       threadId: input.threadId,
                       turnId,
                       model,
+                      ...(compactionModel.providerId ? { providerId: compactionModel.providerId } : {}),
+                      ...(compactionModel.accountId ? { accountId: compactionModel.accountId } : {}),
                       usage
                     })
                   },
@@ -329,7 +335,10 @@ async compact(this: TurnService, input: {
           items: insertCompactionIntoVisibleHistory({
             visibleItems: snapshot.items,
             compactedItems: result.next,
-            summaryItem: result.summaryItem
+            summaryItem: result.summaryItem,
+            threadId: input.threadId,
+            activeTurnId: turnId,
+            nowIso: this['deps'].nowIso
           }),
           value: result
         }

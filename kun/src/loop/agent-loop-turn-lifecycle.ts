@@ -9,6 +9,7 @@ import type {
   TurnRunOutcome
 } from './turn-execution-types.js'
 import { modelClientDiagnostics } from './model-client-diagnostics.js'
+import { rewriteStreamDisconnectFailure } from './stream-disconnection-failure.js'
 import { TurnFinalizer, type TurnFinalizationRequest } from './turn-finalizer.js'
 import { normalizeTurnLimits } from './turn-limits.js'
 import { ToolStormBreaker } from './tool-storm-breaker.js'
@@ -256,10 +257,22 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         return 'suspended'
       }
       if (wallTimeExceeded) return failWallTimeLimit()
+      // An aborted turn (user stop / tool cancel / host shutdown) must settle
+      // as `aborted` even when a racing provider disconnect error reached the
+      // loop first and classified the round as `failed`. The abort owns the
+      // terminal outcome; its raw transport message must not become a
+      // turn_failed error card.
+      if (status === 'failed' && signal.aborted && !isHostShutdownTurnSuspension(signal)) {
+        const settlement = await settle({ status: 'aborted' })
+        finalStatus = statusFromSettlement(settlement, 'aborted')
+        finalError = errorFromSettlement(settlement)
+        return finalStatus
+      }
       const failure = status === 'failed' ? this.turnFailures.get(turnId) : undefined
+      const disconnectRewrite = failure ? rewriteStreamDisconnectFailure(failure) : null
       const settlement = await settle({
         status,
-        ...(failure ?? {})
+        ...(disconnectRewrite ?? failure ?? {})
       })
       finalStatus = statusFromSettlement(settlement, status)
       finalError = errorFromSettlement(settlement)

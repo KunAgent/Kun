@@ -15,6 +15,8 @@ type Props = {
   onClearHistory: () => void | Promise<void>
   onNewConversation: () => void | Promise<void>
   onExitFocus: () => void
+  leftSidebarCollapsed?: boolean
+  onToggleLeftSidebar?: () => void
 }
 
 /**
@@ -28,7 +30,9 @@ export function FocusedCanvasWorkspace({
   conversation,
   onClearHistory,
   onNewConversation,
-  onExitFocus
+  onExitFocus,
+  leftSidebarCollapsed = false,
+  onToggleLeftSidebar
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -86,6 +90,10 @@ export function FocusedCanvasWorkspace({
         {...canvas}
         presentation="focused"
         onExitFocus={onExitFocus}
+        leftSidebarCollapsed={leftSidebarCollapsed}
+        onToggleLeftSidebar={onToggleLeftSidebar}
+        sidebarExpandLabel={t('sidebarExpand')}
+        sidebarCollapseLabel={t('sidebarCollapse')}
         className="h-full max-h-full w-full flex-1 border-l-0"
       />
       <DesignCanvasConversationOverlay

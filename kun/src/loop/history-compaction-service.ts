@@ -41,6 +41,8 @@ export type HistoryCompactionServiceDeps = {
   getHooks?: () => readonly ResolvedHook[] | undefined
   clearReadTracker?: (threadId?: string) => void
   rewriteThreadItemsFromSession: (threadId: string) => Promise<void>
+  /** Resolves the model context window used for ratio-based tail budgets. */
+  contextWindowTokens?: (model: string, providerId?: string) => number
 }
 
 export type HistoryCompactionOutcome = {
@@ -59,6 +61,25 @@ export type HistoryCompactionOutcome = {
  */
 export class HistoryCompactionService {
   constructor(private readonly deps: HistoryCompactionServiceDeps) {}
+
+  /**
+   * Resolve the verbatim-tail token budget from live config. An absolute
+   * target wins over the ratio; both are bounded to a sane fraction of the
+   * model's context window so the tail cannot re-pin the request near the
+   * compaction threshold.
+   */
+  private tailTokenBudget(model?: string, providerId?: string): number | undefined {
+    const config = this.deps.getContextCompaction?.()
+    if (config?.targetInputTokens !== undefined) {
+      return Math.max(1, Math.floor(config.targetInputTokens))
+    }
+    if (config?.targetInputRatio !== undefined) {
+      const window = this.deps.contextWindowTokens?.(model ?? '', providerId) ??
+        this.deps.compactor.hardCap(model, providerId)
+      return Math.max(1, Math.floor(window * Math.min(1, Math.max(0, config.targetInputRatio))))
+    }
+    return undefined
+  }
 
   async compactIfNeeded(input: {
     items: TurnItem[]
@@ -146,6 +167,9 @@ export class HistoryCompactionService {
       )
     }
     const summaryItemId = this.deps.ids.next('compaction')
+    // model_context deltas folded into a canonical baseline by the winning
+    // build attempt; surfaced on the completion event for diagnostics.
+    let squashed = 0
     const committed = await rewriteItemHistoryWithRetry<{
       history: TurnItem[]
       result: ReturnType<ContextCompactor['compact']> | null
@@ -191,7 +215,10 @@ export class HistoryCompactionService {
           reason: currentPlan.reason,
           mode: currentPlan.mode,
           keepRecent: currentPlan.keepRecent,
-          summaryItemId
+          summaryItemId,
+          ...(this.tailTokenBudget(input.model, input.providerId) !== undefined
+            ? { tailTokenBudget: this.tailTokenBudget(input.model, input.providerId) }
+            : {})
         })
         if (result.replacedTokens === 0) {
           return {
@@ -277,6 +304,8 @@ export class HistoryCompactionService {
                       threadId: input.threadId,
                       turnId: input.turnId,
                       model: compactionModel.model,
+                      ...(compactionModel.providerId ? { providerId: compactionModel.providerId } : {}),
+                      ...(compactionModel.accountId ? { accountId: compactionModel.accountId } : {}),
                       usage
                     })
                   },
@@ -306,13 +335,21 @@ export class HistoryCompactionService {
             })
           }
         }
+        const nextItems = insertCompactionIntoVisibleHistory({
+          visibleItems: snapshot.items,
+          compactedItems: result.next,
+          summaryItem: result.summaryItem,
+          threadId: input.threadId,
+          activeTurnId: input.turnId,
+          nowIso: () => new Date().toISOString()
+        })
+        squashed = nextItems.filter((item) => item.kind === 'model_context' && item.baseline).length > 0
+          ? Math.max(0, snapshot.items.filter((item) => item.kind === 'model_context').length -
+              nextItems.filter((item) => item.kind === 'model_context').length + 1)
+          : 0
         return {
           changed: true,
-          items: insertCompactionIntoVisibleHistory({
-            visibleItems: snapshot.items,
-            compactedItems: result.next,
-            summaryItem: result.summaryItem
-          }),
+          items: nextItems,
           value: { history: result.next, result }
         }
       }
@@ -330,6 +367,11 @@ export class HistoryCompactionService {
           summary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
           replacedTokens: result.replacedTokens,
           pinnedConstraints: this.deps.prefix.pinnedConstraints,
+          contextEstimate: this.deps.compactor.estimate(committed.value.history),
+          ...(this.tailTokenBudget(input.model, input.providerId) !== undefined
+            ? { tailTokenBudget: this.tailTokenBudget(input.model, input.providerId)! }
+            : {}),
+          ...(squashed > 0 ? { squashedContextItems: squashed } : {}),
           ...(result.summaryItem.kind === 'compaction' && result.summaryItem.sourceDigest
             ? { sourceDigest: result.summaryItem.sourceDigest }
             : {}),

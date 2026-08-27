@@ -310,6 +310,39 @@ describe('chat projection reducer', () => {
     expect(projected.busy).toBe(true)
   })
 
+  it('discards a foreign live buffer instead of materializing another thread turn', () => {
+    const projected = project({
+      ...state(),
+      busy: true,
+      currentTurnId: 'turn_b',
+      lastSeq: 20,
+      liveDeltaSeqFloor: 20,
+      liveAssistant: 'Stale answer from A',
+      liveAssistantItemId: 'assistant_a',
+      liveAssistantTurnId: 'turn_a',
+      liveAssistantCreatedAt: '2026-07-10T23:59:00.000Z',
+      blocks: [{ kind: 'user', id: 'user_b', turnId: 'turn_b', text: 'Continue B' }]
+    }, [{
+      type: 'deltas_received',
+      deltas: [{
+        seq: 21,
+        threadId: 'thread_1',
+        turnId: 'turn_b',
+        itemId: 'assistant_b',
+        kind: 'agent_message',
+        text: 'Fresh answer from B'
+      }]
+    }])
+
+    expect(projected.blocks).toEqual([
+      { kind: 'user', id: 'user_b', turnId: 'turn_b', text: 'Continue B' }
+    ])
+    expect(projected.liveAssistant).toBe('Fresh answer from B')
+    expect(projected.liveAssistantItemId).toBe('assistant_b')
+    expect(projected.liveAssistantTurnId).toBe('turn_b')
+    expect(projected.blocks.some((block) => block.turnId === 'turn_a')).toBe(false)
+  })
+
   it('does not settle a newer running turn when a terminal snapshot for an older turn is reconciled', () => {
     const projected = project({
       ...state(),

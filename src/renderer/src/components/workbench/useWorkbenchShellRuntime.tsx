@@ -27,6 +27,8 @@ export function useWorkbenchShellRuntime(context: Context): {
     canvasFocusMode,
     exitCanvasFocusMode,
     startNewDesignCanvasConversation,
+    leftSidebarCollapsed,
+    toggleLeftSidebar,
     input, setInput, composerMode, setComposerMode, composerOrchestration, graphEnabled,
     taskSurface, taskSurfaceLocked, taskSurfaceTransitioning, designTaskProfile, designProfileLocked,
     threadHasDesignDocument, lockedDesignProfile, onTaskSurfaceChange,
@@ -422,6 +424,8 @@ export function useWorkbenchShellRuntime(context: Context): {
       onClearHistory={clearActiveDrawingHistory}
       onNewConversation={() => void startNewDesignCanvasConversation()}
       onExitFocus={exitCanvasFocusMode}
+      leftSidebarCollapsed={leftSidebarCollapsed}
+      onToggleLeftSidebar={toggleLeftSidebar}
     />
   ) : null
 

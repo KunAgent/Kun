@@ -465,4 +465,78 @@ describe('workbench plan build orchestration', () => {
       error: 'disk full'
     })
   })
+
+  it('recovers the plan from card meta when the plan store lost it', async () => {
+    const readWorkspaceFile = vi.fn(async () => ({
+      ok: true as const,
+      path: '/Users/codex/app/.kunsdd/plan/checkout.md',
+      content: '# Recovered plan'
+    }))
+    const writeWorkspaceFile = vi.fn(async () => ({
+      ok: true as const,
+      path: '/Users/codex/app/.kunsdd/plan/checkout.md',
+      savedAt: '2026-08-22T00:00:00.000Z'
+    }))
+    vi.stubGlobal('window', { kunGui: { readWorkspaceFile, writeWorkspaceFile } })
+    // Simulate an app restart: the card is still in the timeline but the
+    // plan store is empty.
+    useGuiPlanStore.getState().clearActivePlan()
+    const sendMessage = vi.fn(async () => true)
+    const setError = vi.fn()
+    const controller = controllerHarness({ sendMessage, setError })
+
+    await act(async () => {
+      await controller.buildGuiPlan('direct', {
+        planId: '/Users/codex/app:.kunsdd/plan/checkout.md',
+        workspaceRoot: '/Users/codex/app',
+        relativePath: '.kunsdd/plan/checkout.md',
+        operation: 'draft',
+        title: 'Checkout plan'
+      })
+    })
+
+    expect(readWorkspaceFile).toHaveBeenCalledWith({
+      workspaceRoot: '/Users/codex/app',
+      path: '.kunsdd/plan/checkout.md'
+    })
+    expect(useGuiPlanStore.getState().activePlan?.relativePath).toBe('.kunsdd/plan/checkout.md')
+    expect(writeWorkspaceFile).toHaveBeenCalledWith({
+      workspaceRoot: '/Users/codex/app',
+      path: '.kunsdd/plan/checkout.md',
+      content: '# Recovered plan'
+    })
+    expect(sendMessage).toHaveBeenCalledOnce()
+    expect(setError).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an error instead of silently dropping the build when the plan cannot be loaded', async () => {
+    const readWorkspaceFile = vi.fn(async () => ({
+      ok: false as const,
+      message: 'file missing'
+    }))
+    vi.stubGlobal('window', { kunGui: { readWorkspaceFile } })
+    useGuiPlanStore.getState().clearActivePlan()
+    const sendMessage = vi.fn()
+    const setError = vi.fn()
+    const controller = controllerHarness({ sendMessage, setError })
+
+    await act(async () => {
+      await controller.buildGuiPlan('direct', {
+        planId: '/Users/codex/app:.kunsdd/plan/checkout.md',
+        workspaceRoot: '/Users/codex/app',
+        relativePath: '.kunsdd/plan/checkout.md',
+        operation: 'draft'
+      })
+    })
+
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(setError).toHaveBeenCalledWith('planLoadFailed')
+
+    // No plan anywhere and no card meta: still an explicit error.
+    setError.mockClear()
+    await act(async () => {
+      await controller.buildGuiPlan('direct')
+    })
+    expect(setError).toHaveBeenCalledWith('planLoadFailed')
+  })
 })

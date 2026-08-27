@@ -10,6 +10,7 @@ import type {
   ItemTextSearchOptions,
   SessionLatestUsageSnapshot,
   SessionStore,
+  SessionUsageQueryOptions,
   SessionUsageRecord
 } from '../../ports/session-store.js'
 import { FileSessionStore } from '../file/file-session-store.js'
@@ -136,12 +137,24 @@ export class HybridSessionStore implements SessionStore {
     return Math.max(indexed ?? 0, durable)
   }
 
-  async loadUsageRecords(options?: { threadId?: string }): Promise<SessionUsageRecord[]> {
-    return this.index.loadUsageRecords(options)
+  async loadUsageRecords(options?: SessionUsageQueryOptions): Promise<SessionUsageRecord[]> {
+    try {
+      return await this.index.loadUsageRecords(options)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[kun] sqlite usage index unavailable; using file usage index: ${message}`)
+      return this.delegate.loadUsageRecords(options)
+    }
   }
 
   async loadLatestUsageSnapshots(options?: { threadIds?: string[] }): Promise<SessionLatestUsageSnapshot[]> {
-    return this.index.loadLatestUsageSnapshots(options)
+    try {
+      return await this.index.loadLatestUsageSnapshots(options)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[kun] sqlite latest usage snapshots unavailable; using file usage index: ${message}`)
+      return this.delegate.loadLatestUsageSnapshots(options)
+    }
   }
 
   async resetMemory(): Promise<void> {

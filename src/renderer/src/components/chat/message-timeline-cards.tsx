@@ -13,6 +13,7 @@ import type {
 import { DiffView } from '../DiffView'
 import { formatDuration } from './message-timeline-tools'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
+import type { GuiPlanToolMeta } from '../../plan/plan-tool'
 import { PlanBuildActions } from '../plan/PlanBuildActions'
 import { WritePromptOfficeDocumentCard } from './WritePromptOfficeDocumentCard'
 
@@ -27,6 +28,7 @@ export function ReviewPlanCard({
   relativePath,
   busy,
   graphEnabled,
+  planMeta,
   onOpen,
   onBuild
 }: {
@@ -35,6 +37,7 @@ export function ReviewPlanCard({
   relativePath: string
   busy: boolean
   graphEnabled: boolean
+  planMeta?: GuiPlanToolMeta
   onOpen?: () => void
   onBuild?: (orchestration: PlanBuildOrchestration) => void
 }): ReactElement {
@@ -73,6 +76,7 @@ export function ReviewPlanCard({
           graphEnabled={graphEnabled}
           variant="card"
           planId={planId}
+          planMeta={planMeta}
           onBuild={onBuild}
         />
       ) : null}

@@ -151,15 +151,25 @@
 }
 
 [data-theme='dark'] {
-  /* Dark host theme keeps the same paper hierarchy in warm charcoal. */
-  --bg-app: #2a2828;
-  --bg-sidebar: #2a2828;
-  --bg-canvas: #2a2828;
-  --surface-1: #312f2f;
-  --surface-2: #312f2f;
-  --surface-3: #383636;
-  --border-soft: #434343;
-  --border-strong: #555353;
+  --kun-dark-ui-effective-background: var(--kun-dark-ui-background, #181818);
+  --kun-dark-ui-effective-border: var(--kun-dark-ui-border, #272727);
+  --kun-dark-ui-effective-panel: var(--kun-dark-ui-panel, #2c2c2c);
+  --kun-dark-ui-panel-subtle: color-mix(in srgb, var(--kun-dark-ui-effective-panel) 98%, white);
+  --kun-dark-ui-panel-hover: color-mix(in srgb, var(--kun-dark-ui-effective-panel) 96%, white);
+  --kun-dark-ui-border-muted: color-mix(
+    in srgb,
+    var(--kun-dark-ui-effective-border) 70%,
+    var(--kun-dark-ui-effective-background)
+  );
+  --kun-dark-ui-border-strong: color-mix(in srgb, var(--kun-dark-ui-effective-border) 90%, white);
+  --bg-app: var(--kun-dark-ui-effective-background);
+  --bg-sidebar: var(--kun-dark-ui-effective-background);
+  --bg-canvas: var(--kun-dark-ui-effective-background);
+  --surface-1: var(--kun-dark-ui-effective-panel);
+  --surface-2: var(--kun-dark-ui-effective-panel);
+  --surface-3: var(--kun-dark-ui-panel-hover);
+  --border-soft: var(--kun-dark-ui-effective-border);
+  --border-strong: var(--kun-dark-ui-border-strong);
   --text-primary: #d4d4d4;
   --text-secondary: #bfc1c4;
   --text-tertiary: #999ba0;
@@ -170,15 +180,15 @@
   --ds-bg-canvas: var(--bg-canvas);
   --ds-surface-card: var(--surface-1);
   --ds-surface-elevated: var(--surface-2);
-  --ds-surface-subtle: #353333;
-  --ds-surface-hover: #3a3838;
+  --ds-surface-subtle: var(--kun-dark-ui-panel-subtle);
+  --ds-surface-hover: var(--kun-dark-ui-panel-hover);
   --ds-border: var(--border-soft);
-  --ds-border-muted: #3b3939;
+  --ds-border-muted: var(--kun-dark-ui-border-muted);
   --ds-border-strong: var(--border-strong);
   --ds-text: var(--text-primary);
   --ds-text-muted: var(--text-secondary);
   --ds-text-faint: var(--text-tertiary);
-  --ds-bubble-user: #312f2f;
+  --ds-bubble-user: var(--kun-dark-ui-effective-panel);
   --ds-bubble-user-fg: #d4d4d4;
   --ds-accent: #78a3ea;
   --ds-accent-soft: #353b46;
@@ -207,35 +217,35 @@
   --ds-sidebar-haze: none;
   --ds-sidebar-border: var(--ds-border);
   --ds-sidebar-shadow: none;
-  --ds-sidebar-row-hover: #3a3838;
-  --ds-sidebar-row-active: #312f2f;
-  --ds-sidebar-row-ring: #434343;
-  --ds-sidebar-field-bg: #353333;
-  --ds-sidebar-field-focus: #312f2f;
-  --ds-sidebar-divider: #434343;
+  --ds-sidebar-row-hover: var(--kun-dark-ui-panel-hover);
+  --ds-sidebar-row-active: var(--kun-dark-ui-effective-panel);
+  --ds-sidebar-row-ring: var(--kun-dark-ui-effective-border);
+  --ds-sidebar-field-bg: var(--kun-dark-ui-panel-subtle);
+  --ds-sidebar-field-focus: var(--kun-dark-ui-effective-panel);
+  --ds-sidebar-divider: var(--kun-dark-ui-effective-border);
   --ds-sidebar-surface-bg: var(--ds-bg-sidebar);
   --ds-sidebar-surface-chrome-bg: color-mix(
     in srgb,
     var(--ds-bg-sidebar) 94%,
     var(--ds-surface-card) 6%
   );
-  --ds-card-soft: #312f2f;
-  --ds-card-strong: #312f2f;
-  --ds-card-muted: #353333;
-  --ds-card-ghost: #2a2828;
-  --ds-card-hover: #3a3838;
-  --ds-chip-bg: #312f2f;
-  --ds-chip-muted-bg: #353333;
-  --ds-chip-hover: #3a3838;
-  --ds-chip-border: #434343;
-  --ds-chip-active: #3a3838;
-  --ds-kbd-bg: #353333;
+  --ds-card-soft: var(--kun-dark-ui-effective-panel);
+  --ds-card-strong: var(--kun-dark-ui-effective-panel);
+  --ds-card-muted: var(--kun-dark-ui-panel-subtle);
+  --ds-card-ghost: var(--kun-dark-ui-effective-background);
+  --ds-card-hover: var(--kun-dark-ui-panel-hover);
+  --ds-chip-bg: var(--kun-dark-ui-effective-panel);
+  --ds-chip-muted-bg: var(--kun-dark-ui-panel-subtle);
+  --ds-chip-hover: var(--kun-dark-ui-panel-hover);
+  --ds-chip-border: var(--kun-dark-ui-effective-border);
+  --ds-chip-active: var(--kun-dark-ui-panel-hover);
+  --ds-kbd-bg: var(--kun-dark-ui-panel-subtle);
   --ds-code-bg: #353333;
   --ds-inline-code-bg: #3a3838;
   --ds-inline-code-hover-bg: #434141;
   --ds-pre-bg: #302e2e;
   --ds-code-block-bg: #252323;
-  --ds-table-head-bg: #353333;
+  --ds-table-head-bg: var(--kun-dark-ui-panel-subtle);
   --ds-scrollbar-thumb: rgba(212, 212, 212, 0.22);
   --ds-scrollbar-thumb-hover: rgba(212, 212, 212, 0.34);
   --ds-selection: rgba(120, 163, 234, 0.28);
@@ -244,6 +254,13 @@
   --ds-shadow-card-soft: none;
   --ds-shadow-card-strong: none;
   --ds-shadow-chip: none;
+}
+
+[data-theme='dark'][data-ui-plugin],
+[data-theme='dark'][data-ikun-mode='on'] {
+  --kun-dark-ui-effective-background: #181818;
+  --kun-dark-ui-effective-border: #272727;
+  --kun-dark-ui-effective-panel: #2c2c2c;
 }
 
 [data-theme='dark'] .ds-composer-shell::before {

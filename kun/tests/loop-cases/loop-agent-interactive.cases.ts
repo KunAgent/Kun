@@ -226,7 +226,7 @@ describe('AgentLoop', () => {
       immediatelyResolved = h.userInputGate.resolve(event.inputId, {
         status: 'submitted',
         answers: []
-      })
+      }) === 'settled'
     })
 
     const status = await h.loop.runTurn(h.threadId, h.turnId)

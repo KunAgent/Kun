@@ -196,12 +196,10 @@ export function hydrateThreadItemsFromSession(
 
 /** Defense in depth for every HTTP endpoint that returns a ThreadRecord. */
 export function projectPublicThreadRecord(thread: ThreadRecord): ThreadRecord {
-  let changed = false
-  const turns = thread.turns.map((turn): Turn => {
-    const items = turn.items.filter(isPublicTurnItem)
-    if (items.length === turn.items.length) return turn
-    changed = true
-    return { ...turn, items }
-  })
-  return changed ? { ...thread, turns } : thread
+  const { revision: _revision, ...publicThread } = thread
+  const turns = thread.turns.map((turn): Turn => ({
+    ...turn,
+    items: turn.items.filter(isPublicTurnItem)
+  }))
+  return { ...publicThread, turns }
 }

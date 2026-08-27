@@ -180,11 +180,23 @@ export function updateProjectedThreadStatus(
 export function settleProjectedThreadStatus(
   threads: ChatState['threads'],
   threadId: string,
-  latestTurnStatus: 'completed' | 'failed' | 'aborted'
+  latestTurnStatus: 'completed' | 'failed' | 'aborted',
+  turnId?: string
 ): ChatState['threads'] {
   const thread = threads.find((candidate) => candidate.id === threadId)
-  if (!thread || thread.status?.trim().toLowerCase() !== 'running') return threads
-  return updateProjectedThreadStatus(threads, threadId, 'idle', latestTurnStatus)
+  if (!thread) return threads
+  const currentStatus = thread.status?.trim().toLowerCase()
+  const latestTurnId = thread.latestTurnId?.trim()
+  // Without a terminal turnId, keep the historical behavior: only a running
+  // thread may be settled. With a terminal turnId, the event is authoritative
+  // for that turn; settle when the projection tracks the same turn or has no
+  // latestTurnId yet. Only a different latestTurnId means a newer turn has
+  // superseded this terminal event and must not be overwritten.
+  const maySettle = turnId
+    ? currentStatus === 'running' || !latestTurnId || latestTurnId === turnId
+    : currentStatus === 'running'
+  if (!maySettle) return threads
+  return updateProjectedThreadStatus(threads, threadId, 'idle', latestTurnStatus, turnId)
 }
 
 export function runtimeEventStartedAt(createdAt: string | undefined, now: number): number {
@@ -208,6 +220,25 @@ export function finalizeTurnTimingAt(state: ChatState, now: number): Partial<Cha
       [userId]: Math.max(0, now - startedAt)
     }
   }
+}
+
+export function upsertProjectedTimelineBlock(
+  state: Pick<ChatState, 'blocks' | 'currentTurnId'>,
+  incoming: ChatBlock
+): ChatBlock[] {
+  const incomingTurnId = incoming.turnId?.trim()
+  if (!incomingTurnId) return upsertTimelineBlock(state.blocks, incoming)
+  if (state.blocks.some((block) => block.id === incoming.id)) {
+    return upsertTimelineBlock(state.blocks, incoming)
+  }
+  if (state.blocks.some((block) => block.turnId?.trim() === incomingTurnId)) {
+    return upsertTimelineBlock(state.blocks, incoming)
+  }
+  if (state.blocks.length === 0) return upsertTimelineBlock(state.blocks, incoming)
+  if (state.currentTurnId === incomingTurnId) {
+    return upsertTimelineBlock(state.blocks, incoming)
+  }
+  return state.blocks
 }
 
 export function toolBlockChildId(block: ToolBlock): string | undefined {
@@ -421,7 +452,14 @@ export function isUserInputInterruptError(message: string | undefined): boolean 
 }
 
 export function upsertTimelineBlock(blocks: ChatBlock[], incoming: ChatBlock): ChatBlock[] {
-  const canonicalBlocks = dedupeTimelineTextBlocks(blocks)
+  return upsertTimelineBlockAtCanonicalPosition(incoming, blocks)
+}
+
+function upsertTimelineBlockAtCanonicalPosition(
+  incoming: ChatBlock,
+  canonicalBlocks: ChatBlock[]
+): ChatBlock[] {
+  const dedupedBlocks = dedupeTimelineTextBlocks(canonicalBlocks)
   const incomingKind = incoming.kind
   const incomingTurnId = incoming.turnId
   const incomingText = incoming.kind === 'assistant' || incoming.kind === 'reasoning'
@@ -429,28 +467,43 @@ export function upsertTimelineBlock(blocks: ChatBlock[], incoming: ChatBlock): C
     : ''
   const incomingIsTextBlock = incoming.kind === 'assistant' || incoming.kind === 'reasoning'
   const incomingIsSynthetic = isSyntheticTimelineTextBlock(incoming)
-  const index = canonicalBlocks.findIndex(
+  const index = dedupedBlocks.findIndex(
     (block) => block.kind === incomingKind && block.id === incoming.id
   )
   if (index < 0) {
     const syntheticIndex = !incomingIsTextBlock || incomingIsSynthetic
       ? -1
-      : canonicalBlocks.findIndex((block) => (
+      : dedupedBlocks.findIndex((block) => (
           isSyntheticTimelineTextBlock(block) &&
           block.kind === incomingKind &&
           block.turnId === incomingTurnId &&
           block.text === incomingText
         ))
-    if (syntheticIndex < 0) return [...canonicalBlocks, incoming]
-    const next = [...canonicalBlocks]
+    if (syntheticIndex < 0) {
+      const insertionIndex = timelineInsertionIndex(dedupedBlocks, incoming)
+      if (insertionIndex >= dedupedBlocks.length) return [...dedupedBlocks, incoming]
+      const next = [...dedupedBlocks]
+      next.splice(insertionIndex, 0, incoming)
+      return next
+    }
+    const next = [...dedupedBlocks]
     next[syntheticIndex] = incoming
     return next
   }
-  const current = canonicalBlocks[index]
-  if (sameStableTimelineBlock(current, incoming)) return canonicalBlocks
-  const next = [...canonicalBlocks]
+  const current = dedupedBlocks[index]
+  if (sameStableTimelineBlock(current, incoming)) return dedupedBlocks
+  const next = [...dedupedBlocks]
   next[index] = incoming
   return next
+}
+
+function timelineInsertionIndex(blocks: ChatBlock[], incoming: ChatBlock): number {
+  const incomingTurnId = incoming.turnId?.trim()
+  if (!incomingTurnId) return blocks.length
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    if (blocks[index]?.turnId?.trim() === incomingTurnId) return index + 1
+  }
+  return blocks.length
 }
 
 function sameStableTimelineBlock(left: ChatBlock, right: ChatBlock): boolean {

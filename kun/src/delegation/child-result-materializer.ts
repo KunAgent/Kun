@@ -109,7 +109,20 @@ export function childResultSource(
   const toolResult = [...turnItems]
     .reverse()
     .find((item): item is Extract<TurnItem, { kind: 'tool_result' }> => item.kind === 'tool_result')
-  if (toolResult) return stringifyResult(toolResult.output)
+  // Never inline a raw tool_result as the child summary: a single 512KB search
+  // payload would flood record.error/summary when the child produced no text
+  // (issue: Fast Context cards rendered as failed with a self-contradictory
+  // `status: completed` JSON blob). A bounded preview keeps the last signal
+  // without breaking the parent-context budget.
+  if (toolResult) {
+    const preview = stringifyResult(toolResult.output)
+    // Truncating mid-string would produce invalid JSON; mark the omission so
+    // downstream JSON.parse never sees a seemingly complete payload.
+    if (preview.length > CHILD_RESULT_PREVIEW_CHARS) {
+      return `${preview.slice(0, CHILD_RESULT_PREVIEW_CHARS - 1)}…`
+    }
+    if (preview) return preview
+  }
   return status === 'completed'
     ? 'Child agent completed without a text response.'
     : `Child agent ${status}.`

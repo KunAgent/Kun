@@ -41,4 +41,14 @@ describe('main paths', () => {
       join(distDir, '../preload/tray-quota.cjs')
     )
   })
+
+  it('resolves dedicated recovery preloads', () => {
+    const distDir = 'C:\\app\\out\\main'
+    expect(resolveNamedPreloadPath(distDir, 'storage-relocation-recovery', () => true)).toBe(
+      join(distDir, '../preload/storage-relocation-recovery.cjs')
+    )
+    expect(resolveNamedPreloadPath(distDir, 'runtime-data-recovery', () => false)).toBe(
+      join(distDir, '../preload/runtime-data-recovery.mjs')
+    )
+  })
 })

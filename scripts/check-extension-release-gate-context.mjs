@@ -240,9 +240,9 @@ export function requirePublishDependencies(document, workflowLabel) {
   for (const dependency of [
     'prepare',
     'build-macos',
-    'verify-macos-x64',
     'build-windows',
     'build-linux',
+    'build-linux-arm64',
     'build-tui'
   ]) {
     check(

@@ -32,6 +32,7 @@ export class LocalToolHost implements ToolHost {
     hooks: readonly ResolvedHook[]
     prepare?: (context?: ToolHostContext) => Promise<void> | void
     generation: number
+    preparations: Map<string, Promise<void>>
     touchedAt: number
   }>()
 
@@ -58,13 +59,7 @@ export class LocalToolHost implements ToolHost {
 
   listTools(context?: ToolHostContext) {
     const components = this.componentsFor(context)
-    const prepared = components.prepare?.(context)
-    if (prepared && typeof (prepared as PromiseLike<void>).then === 'function') {
-      return Promise.resolve(prepared).then(() => components.registry.listTools(context))
-    }
-    // Evaluate before Promise.resolve so existing callers retain synchronous
-    // catalog-drift validation when no lazy preparation is configured.
-    return Promise.resolve(components.registry.listTools(context))
+    return this.prepareCatalog(components, context).then(() => components.registry.listTools(context))
   }
 
   diagnostics() {
@@ -77,7 +72,7 @@ export class LocalToolHost implements ToolHost {
     onUpdate?: (item: TurnItem) => Promise<void> | void
   ): Promise<ToolHostResult> {
     const components = this.componentsFor(context)
-    await components.prepare?.(context)
+    await this.prepareCatalog(components, context)
     if (context.abortSignal.aborted) {
       throw new Error('tool call aborted before start')
     }
@@ -449,6 +444,7 @@ export class LocalToolHost implements ToolHost {
     hooks: readonly ResolvedHook[]
     prepare?: (context?: ToolHostContext) => Promise<void> | void
     generation: number
+    preparations: Map<string, Promise<void>>
     touchedAt: number
   } {
     const turnId = context?.turnId
@@ -459,6 +455,7 @@ export class LocalToolHost implements ToolHost {
         hooks: this.hooks,
         ...(this.prepare ? { prepare: this.prepare } : {}),
         generation: this.generation,
+        preparations: new Map(),
         touchedAt: now
       }
     }
@@ -472,11 +469,34 @@ export class LocalToolHost implements ToolHost {
       hooks: this.hooks,
       ...(this.prepare ? { prepare: this.prepare } : {}),
       generation: this.generation,
+      preparations: new Map(),
       touchedAt: now
     }
     this.turnComponents.set(turnId, pinned)
     this.pruneTurnComponents(now)
     return pinned
+  }
+
+  private prepareCatalog(
+    components: {
+      prepare?: (context?: ToolHostContext) => Promise<void> | void
+      generation: number
+      preparations: Map<string, Promise<void>>
+    },
+    context?: ToolHostContext
+  ): Promise<void> {
+    const key = [
+      components.generation,
+      context?.extensionToolCatalogEpoch?.fingerprint ?? '',
+      context?.workspace ?? ''
+    ].join(':')
+    const existing = components.preparations.get(key)
+    if (existing) return existing
+
+    const preparation = Promise.resolve().then(() => components.prepare?.(context))
+    components.preparations.set(key, preparation)
+    void preparation.catch(() => components.preparations.delete(key))
+    return preparation
   }
 
   private pruneTurnComponents(now = Date.now()): void {

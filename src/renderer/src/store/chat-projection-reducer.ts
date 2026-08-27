@@ -42,6 +42,7 @@ export type ChatProjectionReducerContext = {
   ) => boolean
 }
 import { reduceLateChatProjection } from './chat-projection-reducer-late'
+import { reduceEarlyChatProjection } from './chat-projection-reducer-early'
 import {
   flushLiveProjection,
   isDetachedSubagentToolEvent,
@@ -51,6 +52,7 @@ import {
   toolBlockChildId,
   toolEventChildId,
   unseenDeltaText,
+  upsertProjectedTimelineBlock,
   upsertTimelineBlock
 } from './chat-projection-reducer-support'
 
@@ -62,12 +64,32 @@ export {
   toolEventChildId
 } from './chat-projection-reducer-support'
 
+function liveBufferMatchesTurn(input: {
+  text?: string
+  itemId?: string
+  turnId?: string
+  targetTurnId?: string
+}): boolean {
+  const text = input.text ?? ''
+  const hasState = Boolean(text.trim() || input.itemId || input.turnId)
+  if (!hasState) return true
+  return Boolean(
+    text.trim() &&
+    input.itemId &&
+    input.turnId &&
+    input.targetTurnId &&
+    input.turnId === input.targetTurnId
+  )
+}
+
 /** Pure state projection for normalized actions; browser work is emitted elsewhere. */
 export function reduceChatProjection(
   state: ChatState,
   action: RuntimeProjectionAction,
   context: ChatProjectionReducerContext
 ): Partial<ChatState> {
+  const rejected = reduceEarlyChatProjection(state, action)
+  if (rejected) return rejected
   switch (action.type) {
     case 'user_message_received': {
       const event = action.payload
@@ -106,6 +128,9 @@ export function reduceChatProjection(
         ...flushed,
         blocks: upsertUserBlock(reconciledBlocks, event),
         busy: true,
+        // A live user_message event is direct runtime evidence; any pending
+        // unconfirmed flag from hydration is now resolved.
+        busyUnconfirmed: false,
         currentTurnId: event.turnId ?? state.currentTurnId,
         currentTurnUserId,
         turnStartedAtByUserId: backgroundNotice
@@ -149,6 +174,18 @@ export function reduceChatProjection(
           liveDeltaSeqFloor = delta.seq
         }
         if (delta.kind === 'agent_reasoning') {
+          const targetTurnId = delta.turnId ?? state.currentTurnId ?? undefined
+          if (!liveBufferMatchesTurn({
+            text: liveReasoning,
+            itemId: liveReasoningItemId,
+            turnId: liveReasoningTurnId,
+            targetTurnId
+          })) {
+            liveReasoning = ''
+            liveReasoningItemId = undefined
+            liveReasoningTurnId = undefined
+            liveReasoningCreatedAt = undefined
+          }
           const text = unseenDeltaText(
             delta,
             blocks,
@@ -167,6 +204,9 @@ export function reduceChatProjection(
               })
             }
             liveReasoning = ''
+            liveReasoningItemId = undefined
+            liveReasoningTurnId = undefined
+            liveReasoningCreatedAt = undefined
           }
           liveReasoningItemId = delta.itemId ?? liveReasoningItemId
           liveReasoningTurnId = delta.turnId ?? liveReasoningTurnId ?? state.currentTurnId ?? undefined
@@ -175,6 +215,18 @@ export function reduceChatProjection(
           sawReasoning = true
           sawUnseenDelta = true
         } else {
+          const targetTurnId = delta.turnId ?? state.currentTurnId ?? undefined
+          if (!liveBufferMatchesTurn({
+            text: liveAssistant,
+            itemId: liveAssistantItemId,
+            turnId: liveAssistantTurnId,
+            targetTurnId
+          })) {
+            liveAssistant = ''
+            liveAssistantItemId = undefined
+            liveAssistantTurnId = undefined
+            liveAssistantCreatedAt = undefined
+          }
           const text = unseenDeltaText(
             delta,
             blocks,
@@ -193,6 +245,9 @@ export function reduceChatProjection(
               })
             }
             liveAssistant = ''
+            liveAssistantItemId = undefined
+            liveAssistantTurnId = undefined
+            liveAssistantCreatedAt = undefined
           }
           liveAssistantItemId = delta.itemId ?? liveAssistantItemId
           liveAssistantTurnId = delta.turnId ?? liveAssistantTurnId ?? state.currentTurnId ?? undefined
@@ -248,7 +303,7 @@ export function reduceChatProjection(
             text: item.text
           }
       const patch: Partial<ChatState> = {
-        blocks: upsertTimelineBlock(state.blocks, block),
+        blocks: upsertProjectedTimelineBlock(state, block),
         error: context.clearRecoveringError(state.error)
       }
       if (
@@ -281,7 +336,7 @@ export function reduceChatProjection(
       const event = action.payload
       const base: Partial<ChatState> =
         !state.busy && !event.updateOnly && !isDetachedSubagentToolEvent(event)
-          ? { busy: true }
+          ? { busy: true, busyUnconfirmed: false }
           : {}
       const childId = toolEventChildId(event)
       const index = state.blocks.findIndex((block) =>
@@ -330,9 +385,11 @@ export function reduceChatProjection(
         filePath: event.filePath,
         meta: event.meta
       }
+      const blocks = upsertProjectedTimelineBlock(state, block)
+      if (blocks === state.blocks) return base
       return {
         ...base,
-        blocks: [...state.blocks, block],
+        blocks,
         error: context.clearRecoveringError(state.error)
       }
     }
@@ -341,18 +398,21 @@ export function reduceChatProjection(
       if (state.blocks.some(
         (block) => block.kind === 'approval' && block.approvalId === request.approvalId
       )) return {}
+      const block: Extract<ChatBlock, { kind: 'approval' }> = {
+        kind: 'approval',
+        id: `approval-${request.approvalId}`,
+        turnId: request.turnId,
+        createdAt: request.createdAt ?? new Date(context.now).toISOString(),
+        approvalId: request.approvalId,
+        summary: request.summary,
+        toolName: request.toolName,
+        status: 'pending',
+        ...(request.meta ? { meta: request.meta } : {})
+      }
+      const blocks = upsertProjectedTimelineBlock(state, block)
+      if (blocks === state.blocks) return {}
       return {
-        blocks: [...state.blocks, {
-          kind: 'approval',
-          id: `approval-${request.approvalId}`,
-          turnId: request.turnId,
-          createdAt: request.createdAt ?? new Date(context.now).toISOString(),
-          approvalId: request.approvalId,
-          summary: request.summary,
-          toolName: request.toolName,
-          status: 'pending',
-          ...(request.meta ? { meta: request.meta } : {})
-        }],
+        blocks,
         error: context.clearRecoveringError(state.error)
       }
     }
@@ -395,7 +455,7 @@ export function reduceChatProjection(
         rationale: event.rationale ?? current?.rationale
       }
       return {
-        blocks: upsertTimelineBlock(state.blocks, block),
+        blocks: upsertProjectedTimelineBlock(state, block),
         error: context.clearRecoveringError(state.error)
       }
     }
@@ -415,17 +475,21 @@ export function reduceChatProjection(
           )
         }
       }
+      const block: Extract<ChatBlock, { kind: 'user_input' }> = {
+        kind: 'user_input',
+        id: req.itemId,
+        turnId: req.turnId,
+        createdAt: req.createdAt ?? new Date(context.now).toISOString(),
+        requestId: req.requestId,
+        questions: req.questions,
+        ...(req.timeoutSeconds !== undefined ? { timeoutSeconds: req.timeoutSeconds } : {}),
+        status: 'pending',
+        live: true
+      }
+      const blocks = upsertProjectedTimelineBlock(state, block)
+      if (blocks === state.blocks) return {}
       return {
-        blocks: [...state.blocks, {
-          kind: 'user_input',
-          id: req.itemId,
-          turnId: req.turnId,
-          createdAt: req.createdAt ?? new Date(context.now).toISOString(),
-          requestId: req.requestId,
-          questions: req.questions,
-          status: 'pending',
-          live: true
-        }],
+        blocks,
         error: context.clearRecoveringError(state.error)
       }
     }

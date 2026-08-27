@@ -4,6 +4,25 @@ import type { ServerRuntime } from './server-runtime.js'
 import { usageJsonResponse } from './usage.js'
 
 describe('usageJsonResponse', () => {
+  it('validates day queries before loading history and forwards the UTC range', async () => {
+    const loadUsageRecords = vi.fn(async () => [])
+    const runtime = runtimeFixture({ list: vi.fn(async () => []), loadUsageRecords })
+
+    const invalid = await usageJsonResponse(
+      new Request('http://kun.local/v1/usage?group_by=day&from=bad&to=2026-08-09&timezone=UTC'),
+      runtime
+    )
+    expect(invalid.status).toBe(400)
+    expect(loadUsageRecords).not.toHaveBeenCalled()
+
+    const valid = await usageJsonResponse(request('day', '2026-08-01', '2026-08-09'), runtime)
+    expect(valid.status).toBe(200)
+    expect(loadUsageRecords).toHaveBeenCalledWith({
+      fromInclusive: '2026-08-01T00:00:00.000Z',
+      toExclusive: '2026-08-10T00:00:00.000Z'
+    })
+  })
+
   it('returns persisted latest cache telemetry when reopening a thread', async () => {
     const usage = {
       ...emptyUsageSnapshot(),
@@ -164,7 +183,7 @@ describe('usageJsonResponse', () => {
     expect(body.buckets.map((bucket) => bucket.model)).not.toContain('deleted-model')
   })
 
-  it('reuses thread summaries when the optional usage index is unavailable', async () => {
+  it('hydrates full threads for per-turn attribution when the usage index is unavailable', async () => {
     const get = vi.fn(async () => null)
     const list = vi.fn(async () => [{
       id: 'thread-1',
@@ -185,7 +204,10 @@ describe('usageJsonResponse', () => {
 
     expect(response.status).toBe(200)
     expect(list).toHaveBeenCalledTimes(1)
-    expect(get).not.toHaveBeenCalled()
+    // Summaries carry no turns, so the JSONL fallback hydrates each thread
+    // once to attribute usage to the provider that served each turn.
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(get).toHaveBeenCalledWith('thread-1')
   })
 
   it('bounds parallel JSONL reads when rebuilding usage without an index', async () => {
@@ -338,7 +360,7 @@ function runtimeFixture(overrides: {
   get?: (threadId: string) => Promise<unknown>
   list: (options?: unknown) => Promise<unknown[]>
   loadEventsSince?: (threadId: string, sinceSeq: number) => Promise<unknown[]>
-  loadUsageRecords: () => Promise<unknown[]>
+  loadUsageRecords: (options?: unknown) => Promise<unknown[]>
 }): ServerRuntime {
   return {
     threadService: {

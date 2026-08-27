@@ -269,7 +269,7 @@ describe('thread event sink binding', () => {
       getThreadDetail
     })
 
-    sink.onTurnComplete()
+    sink.onTurnComplete({ status: 'completed', turnId: 'turn-current' })
     await Promise.resolve()
     await Promise.resolve()
 
@@ -316,7 +316,7 @@ describe('thread event sink binding', () => {
       getThreadDetail
     })
 
-    sink.onTurnComplete()
+    sink.onTurnComplete({ status: 'completed', turnId: 'turn-current' })
     await Promise.resolve()
     await Promise.resolve()
 
@@ -352,9 +352,9 @@ describe('thread event sink binding', () => {
     })
     const sink = buildThreadEventSink(set, get, { threadId: 'thread-duplicate-completion' })
 
-    sink.onTurnComplete()
+    sink.onTurnComplete({ status: 'completed', turnId: 'turn-duplicate-completion' })
     const projectedOnce = getState()
-    sink.onTurnComplete()
+    sink.onTurnComplete({ status: 'completed', turnId: 'turn-duplicate-completion' })
 
     expect(getState()).toEqual(projectedOnce)
     expect(showTurnCompleteNotification).toHaveBeenCalledTimes(1)
@@ -377,10 +377,14 @@ describe('thread event sink binding', () => {
       activeThreadId: 'thread-visible',
       sideConversations: {},
       sidePanel: { open: false, activeSideId: null },
-      unreadThreadIds: { 'thread-visible': true }
+      unreadThreadIds: { 'thread-visible': true },
+      busy: true,
+      currentTurnId: 'turn-visible',
+      currentTurnUserId: 'user-visible'
     })
 
-    buildThreadEventSink(set, get, { threadId: 'thread-visible' }).onTurnComplete()
+    buildThreadEventSink(set, get, { threadId: 'thread-visible' })
+      .onTurnComplete({ status: 'completed', turnId: 'turn-visible' })
 
     expect(getState().unreadThreadIds).toEqual({})
     vi.unstubAllGlobals()
@@ -396,12 +400,14 @@ describe('thread event sink binding', () => {
       route: 'chat',
       activeThreadId: 'thread-hidden',
       sideConversations: {},
-      sidePanel: { open: false, activeSideId: null }
+      sidePanel: { open: false, activeSideId: null },
+      busy: true,
+      currentTurnId: 'turn-hidden',
+      currentTurnUserId: 'user-hidden'
     })
 
     const sink = buildThreadEventSink(set, get, { threadId: 'thread-hidden' })
-    sink.onTurnComplete()
-    sink.onTurnComplete()
+    sink.onTurnComplete({ status: 'completed', turnId: 'turn-hidden' })
 
     expect(getState().unreadThreadIds).toEqual({ 'thread-hidden': 'completed' })
     vi.unstubAllGlobals()

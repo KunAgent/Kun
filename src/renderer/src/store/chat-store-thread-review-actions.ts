@@ -82,6 +82,7 @@ import {
   threadSnapshotLooksRunning,
   threadBelongsToWorkspace
 } from './chat-store-runtime-helpers'
+import { emptyLiveProjection } from './chat-store-live-projection'
 import {
   WRITE_ASSISTANT_THREAD_TITLE,
   activeWriteThreadForWorkspace,
@@ -244,8 +245,8 @@ export function createThreadReviewActions(
       clearBusyWatchdog()
       set({
         busy: true,
-        liveReasoning: '',
-        liveAssistant: '',
+        busyUnconfirmed: false,
+        ...emptyLiveProjection(seqAtSend),
         error: null,
         currentTurnId: null,
         currentTurnOrchestration: 'direct',
@@ -270,7 +271,6 @@ export function createThreadReviewActions(
       // cannot make this thread look idle/completed while it streams.
       set((s) => ({
         currentTurnId: turnId,
-        liveDeltaSeqFloor: seqAtSend,
         threads: s.threads.map((thread) => thread.id === activeThreadId
           ? {
               ...thread,
@@ -292,6 +292,7 @@ export function createThreadReviewActions(
       set({
         error: formatRuntimeError(e),
         busy: false,
+        busyUnconfirmed: false,
         currentTurnId: null,
         currentTurnOrchestration: null,
         currentTurnUserId: null,

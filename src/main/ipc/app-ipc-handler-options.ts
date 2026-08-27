@@ -38,6 +38,7 @@ export type RegisterAppIpcHandlersOptions = {
     providerIds?: readonly string[]
   ) => Promise<AppSettingsV1>
   getMainWindow: () => BrowserWindow | null
+  assertRendererRuntimeReady: () => void
   applySettingsPatch: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsPatch: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   resetUnreadableCredentials: () => Promise<CredentialRecoveryResetResult>

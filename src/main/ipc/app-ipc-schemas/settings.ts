@@ -90,6 +90,12 @@ const notificationsPatchSchema = z.object({
   subagentTurnComplete: z.boolean().optional()
 }).strict()
 
+const darkUiColorsPatchSchema = z.object({
+  background: hexColorSchema.optional(),
+  border: hexColorSchema.optional(),
+  panel: hexColorSchema.optional()
+}).strict()
+
 const appBehaviorPatchSchema = z.object({
   openAtLogin: z.boolean().optional(),
   startMinimized: z.boolean().optional(),
@@ -491,6 +497,7 @@ const settingsPatchObjectSchema = z.object({
   composerSendKey: z.enum(['enter', 'shiftEnter']).optional(),
   cursorSpotlight: z.boolean().optional(),
   cursorSpotlightColor: hexColorSchema.optional(),
+  darkUiColors: darkUiColorsPatchSchema.optional(),
   provider: modelProviderPatchSchema.optional(),
   agents: z.object({
     kun: kunRuntimePatchSchema.optional()

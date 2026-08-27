@@ -12,15 +12,12 @@ import { join } from 'node:path'
 import {
   JsonSettingsStore
 } from './settings-store'
-import kunMacLogoPng from '../asset/img/kun_mac.png?url'
-import { createAppIcon } from './app-icon'
 import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import { registerTrayQuotaIpc } from './tray-quota-ipc'
-import { clearDevelopmentRendererHttpCache } from './dev-renderer-cache'
 import { syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath } from './main-paths'
-import { SETTINGS_FILE_NAME } from './settings-file-paths'
 import {
+  normalizeDarkUiColors,
   type AppSettingsV1
 } from '../shared/app-settings'
 import {
@@ -30,6 +27,7 @@ import {
 import {
   configureKunManagerDataPlaneForCurrentProcess,
   ensureKunServiceManager,
+  preparePackagedKunBuildHandoff,
   resolveKunManagerDataDirFromSettings,
   setKunUnexpectedExitHandler
 } from './kun-process'
@@ -41,7 +39,6 @@ import { createWorkflowRuntime } from './workflow-runtime'
 import { createDaemonRuntime } from './daemon-runtime'
 import { createDaemonPushText } from './daemon-push-service'
 import { createPowerSaveController } from './power-save-controller'
-import { inspectPackagedInstallHealth } from './packaged-install-health'
 import { registerKunExtensionProtocol } from './extensions/extension-resource-protocol'
 import { ExtensionMediaProtocolRegistry } from './extensions/extension-media-protocol'
 import { ExtensionDescriptorResolver } from './extensions/extension-descriptor-resolver'
@@ -72,11 +69,8 @@ import {
 import { webhookUrl } from './claw-runtime-helpers'
 import { syncClawScheduleMcpConfig } from './claw-schedule-mcp-config'
 import {
-  __dirname,
   appEnvironment,
-  appIcon,
   appIdentity,
-  developmentRendererUrl,
   extensionViewSessions,
   getClawScheduleMcpLaunchConfig,
   gotSingleInstanceLock,
@@ -84,8 +78,6 @@ import {
   nativeDialogCoordinator,
   parseSharedClientState,
   parseSharedClientStateWrite,
-  pendingStorageRelocationId,
-  storageRelocationRecoveryRequired,
   syncWeixinBridgeRuntime,
   traceStartup
 } from './main-app-context'
@@ -98,8 +90,7 @@ import {
 } from './main-lifecycle'
 import {
   runRuntimeDataRecoveryMaintenance,
-  runStartupLegacyMigrations,
-  runStorageRelocationMaintenance
+  runStartupLegacyMigrations
 } from './main-migrations'
 import { handleUnexpectedKunExit, runtimeSupervisor } from './main-runtime-health'
 import {
@@ -131,51 +122,50 @@ export interface MainServices {
   ownsDesktopBackgroundServices: () => boolean
 }
 
-export async function initializeMainServices(): Promise<MainServices | null> {
+/**
+ * Background service initialization. Runs after the workbench window shell
+ * exists so slow steps (build handoff, data migration, Service Manager start,
+ * background leases) never delay the first visible window. The shell pieces
+ * (install health, storage relocation maintenance, shell settings) already
+ * ran in initializeWindowShell().
+ */
+export async function initializeMainServices(input: {
+  productionSettingsPath: string
+  onPhase?: (
+    phase: 'services_starting' | 'data_migrating' | 'manager_starting',
+    detail?: string
+  ) => void
+}): Promise<MainServices | null> {
+    if (mainState.updateHealthProbeOnly) {
+      throw new Error('Update health probes must not initialize desktop services or migrate user data.')
+    }
     // A detached Runtime and its Service Manager are shared by GUI, TUI, and
     // other local clients. Desktop startup must attach through the Manager,
     // not terminate processes by name before their registrations can be
     // reconciled. Broad historical-process cleanup remains an explicit
     // replacement/update action only.
-    const installHealth = inspectPackagedInstallHealth({
-      isPackaged: app.isPackaged,
-      executablePath: process.execPath,
-      resourcesPath: process.resourcesPath
-    })
-    if (!installHealth.ok) {
-      throw new Error(
-        `Kun installation needs repair. The installed application is incomplete (${installHealth.missing.join(', ')}). Reinstall Kun and try again.`
-      )
-    }
-
-    try {
-      const cleared = await clearDevelopmentRendererHttpCache(
-        session.defaultSession,
-        developmentRendererUrl()
-      )
-      if (cleared) traceStartup('development renderer HTTP cache cleared')
-    } catch (error) {
-      console.warn('[kun-gui] failed to clear the development renderer HTTP cache:', error)
-    }
-
-    if (process.platform === 'darwin') {
-      const macDockIcon = createAppIcon(kunMacLogoPng)
-      app.dock?.setIcon(macDockIcon.isEmpty() ? appIcon : macDockIcon)
-    }
-
     const productionSettingsUserDataPath = appIdentity.flavor === 'production'
       ? app.getPath('userData')
       : join(app.getPath('appData'), 'Kun')
-    const productionSettingsPath = join(productionSettingsUserDataPath, SETTINGS_FILE_NAME)
-    if (storageRelocationRecoveryRequired) {
-      traceStartup('storage relocation maintenance:start', {
-        operationId: pendingStorageRelocationId ?? 'repair'
-      })
-      await runStorageRelocationMaintenance(productionSettingsPath)
-      return null
-    }
+    const productionSettingsPath = input.productionSettingsPath
     if (appIdentity.flavor === 'production') {
+      input.onPhase?.('services_starting', 'Checking the installed Kun runtime...')
+      const preMigrationDataDir = await resolveKunManagerDataDirFromSettings(productionSettingsPath)
+      if (await preparePackagedKunBuildHandoff({
+        dataDir: preMigrationDataDir,
+        settingsPath: productionSettingsPath,
+        onHandoffEvent: (event) => {
+          if (event.phase === 'quiesce-runtimes') {
+            input.onPhase?.('services_starting', 'Waiting for the previous Kun runtime to finish...')
+          } else if (event.phase === 'stop-runtimes') {
+            input.onPhase?.('services_starting', 'Switching to the installed Kun runtime...')
+          }
+        }
+      })) {
+        traceStartup('installed Runtime build handoff:done')
+      }
       traceStartup('runtime data migration:start')
+      input.onPhase?.('data_migrating', 'Migrating Kun data safely...')
       const migrationResult = await runStartupLegacyMigrations()
       traceStartup('runtime data migration:done', {
         status: migrationResult.status
@@ -189,9 +179,27 @@ export async function initializeMainServices(): Promise<MainServices | null> {
       }
     }
     const managerDataDir = await resolveKunManagerDataDirFromSettings(productionSettingsPath)
+    input.onPhase?.('manager_starting')
     const serviceManager = await ensureKunServiceManager({
       settingsPath: productionSettingsPath,
-      dataDir: managerDataDir
+      dataDir: managerDataDir,
+      onLegacyHandoverStatus: (status) => {
+        if (status.kind === 'waiting') {
+          input.onPhase?.(
+            'manager_starting',
+            `Waiting for the previous Kun runtime to finish ${status.activeTurnCount} active task(s)...`
+          )
+        } else if (status.kind === 'shutdown-requested') {
+          input.onPhase?.('manager_starting', 'Switching to the installed Kun runtime...')
+        }
+      },
+      onHandoffEvent: (event) => {
+        if (event.phase === 'quiesce-runtimes') {
+          input.onPhase?.('manager_starting', 'Waiting for the previous Kun runtime to finish...')
+        } else if (event.phase === 'stop-runtimes') {
+          input.onPhase?.('manager_starting', 'Switching to the installed Kun runtime...')
+        }
+      }
     })
     mainState.activeServiceManager = serviceManager
     // Main still hosts a handful of legacy model consumers. Point their
@@ -261,7 +269,8 @@ export async function initializeMainServices(): Promise<MainServices | null> {
           colorMode: settings.theme === 'dark' ||
             (settings.theme === 'system' && nativeTheme.shouldUseDarkColors)
             ? 'dark'
-            : 'light'
+            : 'light',
+          darkUiColors: normalizeDarkUiColors(settings.darkUiColors)
         }
       },
       action: (action) => {

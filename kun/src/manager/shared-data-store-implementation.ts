@@ -62,6 +62,7 @@ import { buildPublicItemHistoryPage } from '../services/item-history-page.js'
 import { ManagerSharedDataStoreCore } from './shared-data-store-core.js'
 import {
   AgentSessionSchema,
+  SessionUsageQuerySchema,
   ThreadIdSchema,
   ThreadStoreListOptionsSchema,
   attachmentScopeRequest,
@@ -130,11 +131,22 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
       }
       case 'upsert':
         return this.threadStore.upsert(ThreadSchema.parse(z.object({ thread: z.unknown() }).parse(value).thread))
+      case 'upsertIfRevision': {
+        const body = z.object({
+          thread: z.unknown(),
+          expectedRevision: z.number().int().nonnegative()
+        }).strict().parse(value)
+        return this.threadStore.upsertIfRevision!(ThreadSchema.parse(body.thread), body.expectedRevision)
+      }
       case 'delete': {
         const { threadId } = parseThreadId(value)
         this.seqFloors.delete(threadId)
         this.reservedSeqs.delete(threadId)
         return this.threadStore.delete(threadId)
+      }
+      case 'deleteByWorkspace': {
+        const body = z.object({ workspace: z.string().min(1) }).strict().parse(value)
+        return this.threadStore.deleteByWorkspace?.(body.workspace) ?? []
       }
     }
   }
@@ -536,7 +548,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         return this.allocateEventSeq(threadId)
       }
       case 'loadUsageRecords': {
-        const body = z.object({ threadId: ThreadIdSchema.optional() }).strict().parse(value ?? {})
+        const body = SessionUsageQuerySchema.parse(value ?? {})
         return this.sessionStore.loadUsageRecords?.(body) ?? []
       }
       case 'loadLatestUsageSnapshots': {

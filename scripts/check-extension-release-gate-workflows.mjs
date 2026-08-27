@@ -34,7 +34,9 @@ export const smokeMacX64ExtensionsCommand =
 export const smokeMacX64DesktopCommand =
   'npm run smoke:packaged-extension-desktop -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources'
 export const smokePackagedOcrCommand = 'node scripts/smoke-packaged-ocr.cjs'
-export const buildOnlyCi = !prWorkflow.includes('npm run smoke:') &&
+const updateHandoffSmokeCommand = 'npm run smoke:packaged-update-handoff'
+const buildOnlyProbe = prWorkflow.replaceAll(updateHandoffSmokeCommand, '')
+export const buildOnlyCi = !buildOnlyProbe.includes('npm run smoke:') &&
   !prWorkflow.includes('npm run test') &&
   prWorkflow.includes('npm run dist:linux')
 if (!buildOnlyCi) {
@@ -290,6 +292,15 @@ check(
   prWorkflow.includes('npm run smoke:packaged-extension-desktop'),
   'PR package checks must run the packaged desktop Chromium smoke'
 )
+for (const [label, source] of [
+  ['PR', prWorkflow],
+  ['Release', releaseWorkflow]
+]) {
+  check(
+    (source.match(/npm run smoke:packaged-update-handoff/g) ?? []).length >= 4,
+    `${label} workflow must run packaged update handoff acceptance on macOS, Windows, and both Linux architectures`
+  )
+}
 check(
   releaseWorkflow.includes(appImageDesktopCommand) && prWorkflow.includes(appImageDesktopCommand),
   'Release and PR Linux jobs must directly smoke the final AppImage artifact'
@@ -448,6 +459,10 @@ for (const marker of [
 
 const dailyWorkflow = await text('.github/workflows/daily-dev-prerelease.yml')
 const dailyWorkflowDocument = parseYaml(dailyWorkflow)
+check(
+  (dailyWorkflow.match(/npm run smoke:packaged-update-handoff/g) ?? []).length >= 4,
+  'Daily workflow must run packaged update handoff acceptance on macOS, Windows, and both Linux architectures'
+)
 requirePublishDependencies(dailyWorkflowDocument, 'Daily prerelease workflow')
 requireSharedExtensionReleaseGate(dailyWorkflowDocument, 'Daily prerelease', 'validate', [
   'build-macos',
@@ -618,6 +633,9 @@ if (buildOnlyCi) {
     ['Release', releaseWorkflow],
     ['Daily prerelease', dailyWorkflow]
   ]) {
+    check((source.match(/npm run smoke:packaged-update-handoff/g) ?? []).length >= 4,
+      `${label} workflow must run packaged update handoff acceptance on every packaged architecture`)
+    const buildOnlySource = source.replaceAll(updateHandoffSmokeCommand, '')
     check(source.includes('npm run dist:'), `${label} workflow must build distributable artifacts`)
     for (const forbidden of [
       'npm run typecheck',
@@ -629,7 +647,7 @@ if (buildOnlyCi) {
       'npm run evidence:',
       'npm run verify:packaged-'
     ]) {
-      check(!source.includes(forbidden), `${label} workflow must not invoke ${forbidden}`)
+      check(!buildOnlySource.includes(forbidden), `${label} workflow must not invoke ${forbidden}`)
     }
   }
   const release = parseYaml(releaseWorkflow)

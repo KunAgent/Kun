@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
+import { ComposerInlineError } from './ComposerInlineError'
 import { FloatingComposerFooterView } from './FloatingComposerFooterView'
 import { FloatingComposerContextChips } from './FloatingComposerContextChips'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
@@ -29,7 +30,7 @@ export function FloatingComposerSurfaceView({
     handlePromptOptimizationClick, hideModelPicker, input, isComposerDirectoryReference, mode,
     imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, modelControlVariant, modelPickerMode, onComposerFastModeChange, onComposerModelChange,
     onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange, onInterrupt,
-    onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onToggleWorktreeMode,
+    onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onDismissPromptOptimizationError, onToggleWorktreeMode,
     onWorktreeBranchChange, openSettings, orchestration, placeholder, primaryActionDisabled,
     primaryActionKind, primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError,
     promptOptimizationSettings, route, runningGraphTurn, runtimeReady, setGoalInputMode, showComposerMenuButton,
@@ -195,18 +196,18 @@ export function FloatingComposerSurfaceView({
             />
           ) : null}
           {dictation.error ? (
-            <div className="px-1">
-              <span className="min-w-0 break-words text-[12px] font-medium text-red-600 dark:text-red-300">
-                {dictation.error}
-              </span>
-            </div>
+            <ComposerInlineError
+              message={dictation.error}
+              onDismiss={dictation.clearError}
+              dismissLabel={t('composerDismissError')}
+            />
           ) : null}
-          {promptOptimizationError ? (
-            <div className="px-1">
-              <span className="min-w-0 break-words text-[12px] font-medium text-red-600 dark:text-red-300">
-                {promptOptimizationError}
-              </span>
-            </div>
+          {promptOptimizationError && onDismissPromptOptimizationError ? (
+            <ComposerInlineError
+              message={promptOptimizationError}
+              onDismiss={onDismissPromptOptimizationError}
+              dismissLabel={t('composerDismissError')}
+            />
           ) : null}
           <div
             className={`ds-composer-toolbar flex min-h-9 min-w-0 items-center gap-2 ${

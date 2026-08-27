@@ -1,5 +1,6 @@
 import type { ScheduleRuntimeStatus } from '@shared/app-settings'
 import { getProvider } from '../agent/registry'
+import { loadThreadStates } from '../agent/thread-state-loader'
 import type { NormalizedThread } from '../agent/types'
 import type {
   ChatState,
@@ -62,6 +63,20 @@ function checkpointChanged(
 function scheduleRunKey(task: ScheduleRuntimeStatus['boundThreadTasks'][number]): string {
   if (!task.lastRunAt.trim()) return ''
   return `${task.lastRunAt}|${task.status}`
+}
+
+function scheduledActivitiesEqual(
+  left: Record<string, ScheduledThreadActivity>,
+  right: Record<string, ScheduledThreadActivity>
+): boolean {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) => {
+    const a = left[key]
+    const b = right[key]
+    return Boolean(b) && a.state === b.state && a.taskCount === b.taskCount &&
+      a.nextRunAt === b.nextRunAt && a.queued === b.queued
+  })
 }
 
 export function scheduledThreadActivities(
@@ -136,17 +151,17 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
     const local = localById.get(thread.id)
     return !local || threadLooksRunning(thread) ||
       stateAtStart.watchTurnCompletion[thread.id] === true ||
+      stateAtStart.awaitingUserInputThreadIds[thread.id] === true ||
       (baselineEstablished && checkpointChanged(checkpoints.threads[thread.id], thread))
   })
   const runtimeStates = new Map<string, Awaited<ReturnType<typeof provider.getThreadState>>>()
+  const missingRuntimeStateIds = new Set<string>()
   const candidateIds = new Set(candidates.map((thread) => thread.id))
-  if (typeof provider.getThreadState === 'function' && candidates.length > 0) {
-    const settled = await Promise.allSettled(candidates.map(async (thread) => ({
-      id: thread.id,
-      state: await provider.getThreadState(thread.id)
-    })))
-    for (const result of settled) {
-      if (result.status === 'fulfilled') runtimeStates.set(result.value.id, result.value.state)
+  if (candidates.length > 0) {
+    const results = await loadThreadStates(provider, candidates.map((thread) => thread.id))
+    for (const result of results) {
+      if (result.ok) runtimeStates.set(result.id, result.state)
+      else if (result.error.code === 'not_found') missingRuntimeStateIds.add(result.id)
     }
   }
   if (generation !== syncGeneration) return
@@ -159,7 +174,6 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
   for (const thread of recentThreads) {
     if (
       candidateIds.has(thread.id) &&
-      typeof provider.getThreadState === 'function' &&
       !runtimeStates.has(thread.id)
     ) continue
     nextCheckpoints.threads[thread.id] = checkpointForThread(thread)
@@ -180,7 +194,19 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
       !shouldInspectThreadForSidebarVisibility(thread)
     )
     let unreadThreadIds = state.unreadThreadIds
-    const watchTurnCompletion = { ...state.watchTurnCompletion }
+    let watchTurnCompletion = state.watchTurnCompletion
+    let awaitingUserInputThreadIds = state.awaitingUserInputThreadIds
+    const setWatched = (id: string): void => {
+      if (watchTurnCompletion[id] === true) return
+      watchTurnCompletion = { ...watchTurnCompletion, [id]: true }
+    }
+    const clearWatched = (id: string): void => {
+      if (watchTurnCompletion[id] !== true) return
+      const next = { ...watchTurnCompletion }
+      delete next[id]
+      watchTurnCompletion = next
+    }
+    let threadsChanged = false
     const threads = state.threads.map((thread) => {
       const summary = recentById.get(thread.id)
       const runtimeState = runtimeStates.get(thread.id)
@@ -194,7 +220,7 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
       const running = runtimeState ? threadLooksRunning(runtimeState) : threadLooksRunning(summary)
       const latestTurnStatus = runtimeState?.latestTurnStatus
       if (running && thread.id !== state.activeThreadId && watchTurnCompletion[thread.id] !== true) {
-        watchTurnCompletion[thread.id] = true
+        setWatched(thread.id)
         watchTurnCompletionNotification(
           thread.id,
           Date.now(),
@@ -202,7 +228,7 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
         )
       }
       if (!running && runtimeState && changed) {
-        delete watchTurnCompletion[thread.id]
+        clearWatched(thread.id)
         clearWatchedCompletionNotification(thread.id)
         const outcome = completionOutcomeForTurnStatus(latestTurnStatus)
         if (outcome) {
@@ -211,15 +237,53 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
             : markUnreadCompletion(unreadThreadIds, thread.id, outcome)
         }
       }
+      const updatedAt = summary.updatedAt
+      const latestSeq = typeof summary.latestSeq === 'number'
+        ? summary.latestSeq
+        : thread.latestSeq
+      const status = thread.archived ? thread.status : running ? 'running' : 'idle'
+      const latestTurnId = runtimeState?.latestTurnId ?? thread.latestTurnId
+      const nextLatestTurnStatus = latestTurnStatus ?? thread.latestTurnStatus
+      if (
+        thread.updatedAt === updatedAt &&
+        thread.latestSeq === latestSeq &&
+        thread.status === status &&
+        thread.latestTurnId === latestTurnId &&
+        thread.latestTurnStatus === nextLatestTurnStatus
+      ) return thread
+      threadsChanged = true
       return {
         ...thread,
-        updatedAt: summary.updatedAt,
-        ...(typeof summary.latestSeq === 'number' ? { latestSeq: summary.latestSeq } : {}),
-        status: thread.archived ? thread.status : running ? 'running' : 'idle',
-        ...(runtimeState?.latestTurnId ? { latestTurnId: runtimeState.latestTurnId } : {}),
-        ...(latestTurnStatus ? { latestTurnStatus } : {})
+        updatedAt,
+        ...(typeof latestSeq === 'number' ? { latestSeq } : {}),
+        status,
+        ...(latestTurnId ? { latestTurnId } : {}),
+        ...(nextLatestTurnStatus ? { latestTurnStatus: nextLatestTurnStatus } : {})
       }
     })
+
+    for (const [id, runtimeState] of runtimeStates) {
+      if (runtimeState.pendingUserInputIds === undefined) continue
+      const awaiting = runtimeState.pendingUserInputIds.length > 0
+      if (awaiting === (awaitingUserInputThreadIds[id] === true)) continue
+      const next = { ...awaitingUserInputThreadIds }
+      if (awaiting) next[id] = true
+      else delete next[id]
+      awaitingUserInputThreadIds = next
+    }
+    for (const id of missingRuntimeStateIds) {
+      clearWatched(id)
+      if (awaitingUserInputThreadIds[id]) {
+        const next = { ...awaitingUserInputThreadIds }
+        delete next[id]
+        awaitingUserInputThreadIds = next
+      }
+      if (unreadThreadIds[id]) {
+        const next = { ...unreadThreadIds }
+        delete next[id]
+        unreadThreadIds = next
+      }
+    }
 
     for (const task of boundTasks) {
       if (!knownIds.has(task.threadId)) continue
@@ -238,16 +302,32 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
       watchLimit: MAX_WATCHED_COMPLETION_NOTIFICATIONS
     })
     for (const id of addedWatchIds) {
-      watchTurnCompletion[id] = true
+      setWatched(id)
       watchTurnCompletionNotification(id, Date.now(), turnCompleteNotificationSource(id, state))
     }
+    const nextScheduledActivities = scheduleStatus
+      ? scheduledThreadActivities(boundTasks)
+      : state.scheduledThreadActivities
+    const stableScheduledActivities = scheduledActivitiesEqual(
+      state.scheduledThreadActivities,
+      nextScheduledActivities
+    )
+      ? state.scheduledThreadActivities
+      : nextScheduledActivities
+    const stableThreads = threadsChanged ? threads : state.threads
+    if (
+      stableThreads === state.threads &&
+      watchTurnCompletion === state.watchTurnCompletion &&
+      unreadThreadIds === state.unreadThreadIds &&
+      awaitingUserInputThreadIds === state.awaitingUserInputThreadIds &&
+      stableScheduledActivities === state.scheduledThreadActivities
+    ) return state
     return {
-      threads,
+      threads: stableThreads,
       watchTurnCompletion,
       unreadThreadIds,
-      scheduledThreadActivities: scheduleStatus
-        ? scheduledThreadActivities(boundTasks)
-        : state.scheduledThreadActivities
+      awaitingUserInputThreadIds,
+      scheduledThreadActivities: stableScheduledActivities
     }
   })
 

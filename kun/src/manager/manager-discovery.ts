@@ -5,8 +5,9 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
+import { isLoopbackHost } from '../server/loopback-host.js'
 
-export const KUN_MANAGER_PROTOCOL_VERSION = 1 as const
+export const KUN_MANAGER_PROTOCOL_VERSION = 3 as const
 export const KUN_MANAGER_DISCOVERY_VERSION = 1 as const
 export const KUN_MANAGER_DISCOVERY_FILENAME = 'manager.json'
 const MANAGER_START_LOCK_FILENAME = '.manager-start.lock'
@@ -33,7 +34,25 @@ export const ManagerDiscoveryRecordSchema = z.object({
   logPath: z.string().min(1).max(4_096).optional()
 })
 
+/** Minimal cross-version identity used only to drain an installed owner. */
+export const ManagerHandoffDiscoveryRecordSchema = z.object({
+  version: z.number().int().positive().optional(),
+  protocolVersion: z.number().int().positive().optional(),
+  instanceId: z.string().min(1).max(256),
+  pid: z.number().int().positive(),
+  startedAt: z.string().datetime(),
+  host: z.string().min(1).max(512),
+  port: z.number().int().min(1).max(65_535),
+  baseUrl: z.string().url().max(2_048),
+  managerToken: z.string().min(1).max(16_384),
+  buildId: RuntimeBuildIdSchema.optional(),
+  dataDir: z.string().min(1).max(4_096),
+  settingsPath: z.string().min(1).max(4_096),
+  logPath: z.string().min(1).max(4_096).optional()
+}).passthrough()
+
 export type ManagerDiscoveryRecord = z.infer<typeof ManagerDiscoveryRecordSchema>
+export type ManagerHandoffDiscoveryRecord = z.infer<typeof ManagerHandoffDiscoveryRecordSchema>
 export type PublishManagerDiscoveryInput = Omit<
   ManagerDiscoveryRecord,
   'version' | 'protocolVersion' | 'instanceId'
@@ -73,16 +92,35 @@ export function createManagerDiscoveryRecord(
 export async function readManagerDiscovery(
   controlDir: string
 ): Promise<ManagerDiscoveryRecord | null> {
-  const path = managerDiscoveryPath(controlDir)
+  const parsed = ManagerDiscoveryRecordSchema.safeParse(
+    await readManagerDiscoveryValue(controlDir)
+  )
+  return parsed.success ? parsed.data : null
+}
+
+export async function readManagerHandoffDiscovery(
+  controlDir: string
+): Promise<ManagerHandoffDiscoveryRecord | null> {
+  const parsed = ManagerHandoffDiscoveryRecordSchema.safeParse(
+    await readManagerDiscoveryValue(controlDir)
+  )
+  if (!parsed.success) return null
+  return safeHandoffManagerUrl(parsed.data) ? parsed.data : null
+}
+
+/** Strict installed-build probe; an existing invalid record is not "no owner". */
+export async function readManagerHandoffDiscoveryStrict(
+  controlDir: string
+): Promise<ManagerHandoffDiscoveryRecord | null> {
+  const record = await readManagerHandoffDiscovery(controlDir)
+  if (record) return record
   try {
-    const details = await stat(path)
-    if (!details.isFile() || details.size > MAX_DISCOVERY_BYTES) return null
-    const parsed = ManagerDiscoveryRecordSchema.safeParse(JSON.parse(await readFile(path, 'utf8')))
-    return parsed.success ? parsed.data : null
+    await stat(managerDiscoveryPath(controlDir))
   } catch (error) {
-    if (errorCode(error) === 'ENOENT' || error instanceof SyntaxError) return null
+    if (errorCode(error) === 'ENOENT') return null
     throw error
   }
+  throw new Error('invalid Kun Service Manager discovery record')
 }
 
 export async function publishManagerDiscovery(
@@ -106,10 +144,37 @@ export async function removeManagerDiscovery(
   controlDir: string,
   instanceId: string
 ): Promise<boolean> {
-  const current = await readManagerDiscovery(controlDir)
+  const current = await readManagerHandoffDiscovery(controlDir)
   if (!current || current.instanceId !== instanceId) return false
   await rm(managerDiscoveryPath(controlDir), { force: true })
   return true
+}
+
+async function readManagerDiscoveryValue(controlDir: string): Promise<unknown> {
+  const path = managerDiscoveryPath(controlDir)
+  try {
+    const details = await stat(path)
+    if (!details.isFile() || details.size > MAX_DISCOVERY_BYTES) return null
+    return JSON.parse(await readFile(path, 'utf8')) as unknown
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT' || error instanceof SyntaxError) return null
+    throw error
+  }
+}
+
+function safeHandoffManagerUrl(record: ManagerHandoffDiscoveryRecord): boolean {
+  try {
+    const url = new URL(record.baseUrl)
+    return url.protocol === 'http:' &&
+      isLoopbackHost(url.hostname) &&
+      isLoopbackHost(record.host) &&
+      (url.pathname === '/' || url.pathname === '') &&
+      Number(url.port || '80') === record.port &&
+      url.username === '' &&
+      url.password === ''
+  } catch {
+    return false
+  }
 }
 
 export async function withManagerStartLock<T>(

@@ -546,7 +546,7 @@ function QuotaMetric({
       ) : null}
       {metric.resetsAt ? (
         <p className="provider-quota-reset">
-          {t('providerQuotaResetsAt', { time: formatQuotaDate(metric.resetsAt, locale) })}
+          {t(metric.id === 'reset-credits' ? 'providerQuotaEarliestExpiry' : 'providerQuotaResetsAt', { time: formatQuotaDate(metric.resetsAt, locale) })}
         </p>
       ) : null}
     </div>

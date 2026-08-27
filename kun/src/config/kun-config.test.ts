@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
-import { expandHomePath, LabConfigSchema, LabPptAgentConfigSchema, readKunConfigFile, RuntimeTuningConfigSchema } from './kun-config.js'
+import { expandHomePath, FastContextConfigSchema, LabConfigSchema, LabPptAgentConfigSchema, readKunConfigFile, RuntimeTuningConfigSchema } from './kun-config.js'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
@@ -177,6 +177,9 @@ describe('LabPptAgentConfigSchema', () => {
   it('defaults pptAgent inside LabConfigSchema', () => {
     const lab = LabConfigSchema.parse({})
     expect(lab.pptAgent).toEqual({ enabled: true, fast: false, imageFirst: true })
-    expect(lab.fastContext).toEqual({ enabled: true, fast: false })
+  })
+
+  it('defaults Fast Context at the config root', () => {
+    expect(FastContextConfigSchema.parse({})).toEqual({ enabled: true, fast: false })
   })
 })

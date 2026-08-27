@@ -102,6 +102,7 @@ function buildHarness(fetchModelsResult: FetchModelsResult): {
     applyChatContentMaxWidth: () => undefined,
     applyCursorSpotlight: () => undefined,
     applyCursorSpotlightColor: () => undefined,
+    applyDarkUiColors: () => undefined,
     applyWriteTypography: () => undefined,
     applyDocumentLocale: () => undefined,
     workspaceLabelFromPath: (workspaceRoot) => workspaceRoot,
@@ -390,6 +391,62 @@ describe('chat-store app actions composer model loading', () => {
 
     expect(state.composerModel).toBe('deepseek-v4-pro')
     expect(localStorage.getItem(COMPOSER_MODEL_STORAGE_KEY)).toBe('MiniMax-M2')
+  })
+
+  it('does not downgrade a user-selected per-thread model when the catalog refresh lacks it', async () => {
+    // The user explicitly picked k3 on thread-a; a catalog refresh that
+    // temporarily lacks k3 (partial load / upstream hiccup) must show the
+    // fallback transiently without overwriting the stored user selection.
+    localStorage.setItem(THREAD_COMPOSER_SELECTION_STORAGE_KEY, JSON.stringify({
+      'thread-a': { model: 'k3', providerId: 'test-provider', source: 'user' }
+    }))
+    const { actions, state } = buildHarness({
+      ok: true,
+      modelIds: ['terra'],
+      defaultModelId: 'terra',
+      modelGroups: []
+    })
+    state.route = 'chat'
+    state.activeThreadId = 'thread-a'
+    state.threads = [{
+      id: 'thread-a',
+      title: 'Thread A',
+      workspace: '/tmp/project',
+      model: 'terra',
+      status: 'idle',
+      mode: 'agent',
+      updatedAt: '2026-06-01T00:00:00.000Z'
+    }]
+    state.blocks = [{ kind: 'user', id: 'user-1', text: 'first message on terra' }] as ChatState['blocks']
+
+    await actions.loadComposerModels()
+
+    // Fallback shows transiently in state...
+    expect(state.composerModel).toBe('terra')
+    // ...but the stored user selection survives untouched.
+    expect(JSON.parse(localStorage.getItem(THREAD_COMPOSER_SELECTION_STORAGE_KEY) ?? '{}')).toEqual({
+      'thread-a': { model: 'k3', providerId: 'test-provider', source: 'user' }
+    })
+
+    // Once the catalog recovers k3, the user selection wins again.
+    const second = buildHarness({
+      ok: true,
+      modelIds: ['terra', 'k3'],
+      defaultModelId: 'terra',
+      modelGroups: [{
+        providerId: 'test-provider',
+        label: 'Test',
+        modelIds: ['terra', 'k3']
+      }]
+    })
+    second.state.route = 'chat'
+    second.state.activeThreadId = 'thread-a'
+    second.state.threads = [state.threads[0]]
+    second.state.blocks = [{ kind: 'user', id: 'user-1', text: 'first message on terra' }] as ChatState['blocks']
+
+    await second.actions.loadComposerModels()
+
+    expect(second.state.composerModel).toBe('k3')
   })
 
   it('records the return route only on first entry into settings', () => {

@@ -11,19 +11,21 @@ class RendererRuntimeClient {
   private cachedSettings: AppSettingsV1 | null = null
   private settingsPromise: Promise<AppSettingsV1> | null = null
 
-  async getSettings(options?: { forceRefresh?: boolean }): Promise<AppSettingsV1> {
+  getSettings(options?: { forceRefresh?: boolean }): Promise<AppSettingsV1> {
     if (options?.forceRefresh) {
       this.invalidateSettings()
     }
-    if (this.cachedSettings) return this.cachedSettings
+    if (this.cachedSettings) return Promise.resolve(this.cachedSettings)
     if (this.settingsPromise) return this.settingsPromise
-    const task = window.kunGui.getSettings().then((settings) => {
-      this.cachedSettings = settings
-      return settings
-    })
-    this.settingsPromise = task.finally(() => {
+    const task = window.kunGui.getSettings()
+      .then((settings) => {
+        if (this.settingsPromise === task) this.cachedSettings = settings
+        return settings
+      })
+    this.settingsPromise = task
+    void task.finally(() => {
       if (this.settingsPromise === task) this.settingsPromise = null
-    })
+    }).catch(() => undefined)
     return task
   }
 

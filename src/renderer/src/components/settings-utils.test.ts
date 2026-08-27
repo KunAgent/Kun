@@ -11,6 +11,20 @@ function settings(kunPatch: Partial<KunRuntimeSettingsV1> = {}): AppSettingsV1 {
 }
 
 describe('coerceRendererSettings', () => {
+  it('normalizes dark colors and merges one-field edits without resetting siblings', () => {
+    const base = coerceRendererSettings({
+      darkUiColors: { background: '#101010', border: '#202020', panel: '#303030' }
+    } as AppSettingsV1)
+
+    expect(mergeSettings(base, { darkUiColors: { border: '#AABBCC' } }).darkUiColors).toEqual({
+      background: '#101010',
+      border: '#aabbcc',
+      panel: '#303030'
+    })
+    expect(coerceRendererSettings({ darkUiColors: { panel: 'bad' } } as AppSettingsV1).darkUiColors)
+      .toEqual({ background: '#181818', border: '#272727', panel: '#2c2c2c' })
+  })
+
   it('preserves the persisted initial setup completion flag', () => {
     expect(coerceRendererSettings({
       initialSetupCompleted: true

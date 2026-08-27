@@ -46,11 +46,6 @@ import { useCodeCanvasDesignSurface } from '../design/code-canvas-design-surface
 import { useWorkbenchPptWhiteboardRouter } from './workbench/useWorkbenchPptWhiteboardRouter'
 import { designDocumentComposerFileReferences } from '../design/design-document-file-reference'
 import {
-  readBrowserStorageItem,
-  removeBrowserStorageItem,
-  writeBrowserStorageItem
-} from '../lib/browser-storage'
-import {
   BUILTIN_RIGHT_PANEL_IDS,
   isExtensionContributionId,
   type RightPanelContributionId
@@ -97,12 +92,6 @@ import type { DevPreviewContextDraft } from './DevBrowserPanel'
 import { createDevPreviewComposerContextAttachment } from '../lib/dev-preview-composer-context'
 import { useWorkbenchFocusedCanvasController } from './workbench/useWorkbenchFocusedCanvasController'
 import { useWorkbenchGraphRuntimeState } from './workbench/useWorkbenchGraphRuntimeState'
-
-const extensionSurfaceLayoutStorage = {
-  getItem: readBrowserStorageItem,
-  setItem: writeBrowserStorageItem,
-  removeItem: removeBrowserStorageItem
-}
 
 export function Workbench(): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -590,6 +579,8 @@ export function Workbench(): ReactElement {
     canvasFocusMode,
     exitCanvasFocusMode,
     startNewDesignCanvasConversation,
+    leftSidebarCollapsed,
+    toggleLeftSidebar,
     input, setInput, composerMode, setComposerMode, composerOrchestration, graphEnabled,
     taskSurface, taskSurfaceLocked, taskSurfaceTransitioning, designTaskProfile, designProfileLocked,
     threadHasDesignDocument, lockedDesignProfile, onTaskSurfaceChange, onDesignTaskProfileChange,

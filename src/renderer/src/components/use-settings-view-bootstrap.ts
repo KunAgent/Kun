@@ -7,6 +7,7 @@ import {
   applyChatContentMaxWidth,
   applyCursorSpotlight,
   applyCursorSpotlightColor,
+  applyDarkUiColors,
   applyTheme,
   applyUiFontScale,
   applyWriteTypography
@@ -17,7 +18,7 @@ import {
 } from './settings-utils'
 
 export function useSettingsViewBootstrap(scope: Record<string, any>): { loadWriteDebugEntries: () => Promise<void> } {
-  const { category, setCategory, form, setForm, setLoadError, setLogPath, setWriteCompletionDebugEntries, setWriteCompletionDebugSelectedId, setWriteDebugLoading, setWriteDebugError, extensionContributionSnapshotReady, extensionSettingsAvailable, settingsScrollerRef, persistedSettingsRef, formTheme, formUiFontScale, formChatContentMaxWidthPx, writeTypography, formCursorSpotlight, formCursorSpotlightColor } = scope
+  const { category, setCategory, form, setForm, setLoadError, setLogPath, setWriteCompletionDebugEntries, setWriteCompletionDebugSelectedId, setWriteDebugLoading, setWriteDebugError, extensionContributionSnapshotReady, extensionSettingsAvailable, settingsScrollerRef, persistedSettingsRef, formTheme, formUiFontScale, formChatContentMaxWidthPx, writeTypography, formCursorSpotlight, formCursorSpotlightColor, formDarkUiColors } = scope
   useEffect(() => {
     if (
       category === 'extensions' &&
@@ -62,6 +63,10 @@ export function useSettingsViewBootstrap(scope: Record<string, any>): { loadWrit
     }
     applyCursorSpotlightColor(formCursorSpotlightColor)
   }, [formCursorSpotlight, formCursorSpotlightColor])
+
+  useEffect(() => {
+    applyDarkUiColors(formDarkUiColors)
+  }, [formDarkUiColors])
 
   // Live-preview the Write editor typography as the form changes, mirroring the
   // theme/scale preview above.

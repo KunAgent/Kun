@@ -165,13 +165,6 @@ function CanvasToolbarInner({
     )
   }, [onRequestCanvasCritique, t])
 
-  const requestAssistant = useCallback((): void => {
-    onRequestCanvasCritique?.(t(
-      'canvasAssistantPrompt',
-      'Help me improve the current canvas. Ask what outcome I want if the intent is unclear, then use focused canvas operations.'
-    ))
-  }, [onRequestCanvasCritique, t])
-
   const importImage = useCallback((): void => {
     if (imageImportBusy) return
     setImageImportBusy(true)
@@ -363,17 +356,6 @@ function CanvasToolbarInner({
               aria-label={t('canvasToolCritique')}
             >
               <ShieldCheck className="h-4 w-4" strokeWidth={1.9} />
-            </button>
-
-            <button
-              type="button"
-              className={`${iconBtnBase} ${btnInactive}`}
-              onClick={requestAssistant}
-              disabled={!onRequestCanvasCritique}
-              title={t('canvasToolAssistant')}
-              aria-label={t('canvasToolAssistant')}
-            >
-              <Sparkles className="h-4 w-4" strokeWidth={1.9} />
             </button>
 
             <button

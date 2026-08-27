@@ -8,7 +8,12 @@ import type {
   SessionLatestUsageSnapshot,
   SessionUsageRecord
 } from '../ports/session-store.js'
-import type { ThreadStore, ThreadStoreListOptions, ThreadStoreListPage } from '../ports/thread-store.js'
+import type {
+  ThreadStore,
+  ThreadStoreConditionalWrite,
+  ThreadStoreListOptions,
+  ThreadStoreListPage
+} from '../ports/thread-store.js'
 import type { ThreadRecord, ThreadSummary } from '../contracts/threads.js'
 
 /**
@@ -133,6 +138,7 @@ export class ThreadLifecycleFence {
 export class LifecycleFencedThreadStore implements ThreadStore {
   readonly getMetadata?: (threadId: string) => Promise<ThreadRecord | null>
   readonly touch?: (threadId: string, updatedAt: string) => Promise<boolean>
+  readonly deleteByWorkspace?: (workspace: string) => Promise<string[]>
 
   constructor(
     readonly raw: ThreadStore,
@@ -144,6 +150,9 @@ export class LifecycleFencedThreadStore implements ThreadStore {
     if (raw.touch) {
       this.touch = (threadId, updatedAt) =>
         this.write(threadId, false, () => raw.touch!(threadId, updatedAt))
+    }
+    if (raw.deleteByWorkspace) {
+      this.deleteByWorkspace = (workspace) => raw.deleteByWorkspace!(workspace)
     }
   }
 
@@ -181,6 +190,14 @@ export class LifecycleFencedThreadStore implements ThreadStore {
     } finally {
       lease.release()
     }
+  }
+
+  async upsertIfRevision(
+    thread: ThreadRecord,
+    expectedRevision: number
+  ): Promise<ThreadStoreConditionalWrite> {
+    return this.write(thread.id, { applied: false, revision: expectedRevision }, () =>
+      this.raw.upsertIfRevision!(thread, expectedRevision))
   }
 
   /**
@@ -226,6 +243,7 @@ export class LifecycleFencedSessionStore implements SessionStore {
   readonly flushScheduledCompaction?: SessionStore['flushScheduledCompaction']
   readonly loadItemPage?: SessionStore['loadItemPage']
   readonly searchItemText?: SessionStore['searchItemText']
+  readonly trimEventsFromSeq?: SessionStore['trimEventsFromSeq']
 
   constructor(
     readonly raw: SessionStore,
@@ -279,6 +297,10 @@ export class LifecycleFencedSessionStore implements SessionStore {
     }
     if (raw.loadItemPage) {
       this.loadItemPage = (threadId, options) => raw.loadItemPage!(threadId, options)
+    }
+    if (raw.trimEventsFromSeq) {
+      this.trimEventsFromSeq = (threadId, fromSeqInclusive) =>
+        this.write(threadId, { afterBytes: 0 }, () => raw.trimEventsFromSeq!(threadId, fromSeqInclusive))
     }
   }
 

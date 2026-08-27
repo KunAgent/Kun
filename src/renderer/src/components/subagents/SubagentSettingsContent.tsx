@@ -44,8 +44,8 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
     setProfileReasoning, toggleSurface, toggleEnabled, removeProfile, compactionSlot,
     persistCompactionSlot, codeReviewSlot, codeReviewReasoning, persistRoleSlot,
     persistRoleReasoning, planSlot, titleSlot, titleReasoning, summarySlot, summaryReasoning,
-    smallModel, saveDialog, isBuiltin, extensionAgentsEnabled, setExtensionAgentsEnabled,
-    delegatable, panelSurface, configuredCount, extensionAgentIds, systemRolesOpen,
+    smallModel, saveDialog, isBuiltin, extensionAgentsStatus, enabledExtensionAgentCount,
+    setExtensionAgentsEnabled, delegatable, panelSurface, configuredCount, extensionAgentIds, systemRolesOpen,
     setSystemRolesOpen
   } = context
   if (variant === 'settings') {
@@ -405,7 +405,8 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
           />
         </div>
         <ExtensionAgentsControl
-          enabled={extensionAgentsEnabled}
+          status={extensionAgentsStatus}
+          enabledCount={enabledExtensionAgentCount}
           count={extensionAgentIds.size}
           onToggle={setExtensionAgentsEnabled}
           t={t}

@@ -5,16 +5,9 @@ import {
 } from '../shared/app-settings'
 
 /**
- * Renderer settings projections intentionally redact provider secrets to `''`
- * (`settings:get` / shared-connection projection). Those empty strings must not
- * be treated as "user cleared the API key" during `settings:set`, or Main's
- * legacy credential migration will `forgetSources` and wipe OAuth/API bindings.
- *
- * Intentional disconnects go through the protected Registry credential DELETE
- * path and do not rely on redacted empty apiKey patches.
- *
- * Read `prev.provider` directly (not via normalize helpers) so per-provider
- * hydrated secrets are not collapsed onto the legacy top-level apiKey field.
+ * Renderer settings projections intentionally redact all API secrets to `''`.
+ * Empty fields must not be treated as "user cleared the API key" during
+ * `settings:set`, or protected credential bindings would be wiped.
  */
 export function preserveRedactedProviderCredentials(
   prev: AppSettingsV1,
@@ -65,22 +58,27 @@ export function preserveRedactedProviderCredentials(
     }
   }
 
+  const previousKun = getKunRuntimeSettings(prev)
   const incomingKun = next.agents?.kun
-  const previousKunApiKey = getKunRuntimeSettings(prev).apiKey
-  if (
-    incomingKun &&
-    typeof incomingKun.apiKey === 'string' &&
-    !incomingKun.apiKey.trim() &&
-    previousKunApiKey.trim()
-  ) {
+  if (incomingKun) {
+    const media = ['imageGeneration', 'speechToText', 'textToSpeech', 'musicGeneration', 'videoGeneration'] as const
+    const preservedMedia = Object.fromEntries(media.map((service) => {
+      const incoming = incomingKun[service]
+      const previous = previousKun[service]
+      const incomingApiKey = typeof incoming?.apiKey === 'string' ? incoming.apiKey : ''
+      return [service, incoming && !incomingApiKey.trim() && previous.apiKey.trim()
+        ? { ...incoming, apiKey: previous.apiKey }
+        : incoming]
+    }))
+    const apiKey = typeof incomingKun.apiKey === 'string' &&
+      !incomingKun.apiKey.trim() && previousKun.apiKey.trim()
+      ? previousKun.apiKey
+      : incomingKun.apiKey
     next = {
       ...next,
       agents: {
         ...next.agents,
-        kun: {
-          ...incomingKun,
-          apiKey: previousKunApiKey
-        }
+        kun: { ...incomingKun, ...(apiKey !== undefined ? { apiKey } : {}), ...preservedMedia }
       }
     }
   }

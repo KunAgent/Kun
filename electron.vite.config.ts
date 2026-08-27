@@ -22,6 +22,8 @@ export default defineConfig({
           index: resolve('src/preload/index.ts'),
           'extension-view': resolve('src/preload/extension-view.ts'),
           'extension-protected-surface': resolve('src/preload/extension-protected-surface.ts'),
+          'storage-relocation-recovery': resolve('src/preload/storage-relocation-recovery.ts'),
+          'runtime-data-recovery': resolve('src/preload/runtime-data-recovery.ts'),
           'tray-quota': resolve('src/preload/tray-quota.ts')
         },
         output: {

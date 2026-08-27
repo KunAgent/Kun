@@ -20,7 +20,8 @@ const helperModulePaths = [
   'windows-installer-migration-paths.ps1',
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
-  'windows-installer-migration-actions.ps1'
+  'windows-installer-migration-actions.ps1',
+  'windows-installer-migration-transaction.ps1'
 ].map((fileName) => join(process.cwd(), 'build', fileName))
 const smokePath = join(process.cwd(), 'scripts/smoke-windows-installer-migration.ps1')
 const windowsOnly = process.platform === 'win32' ? describe : describe.skip
@@ -39,7 +40,7 @@ function makeTempRoot(): string {
 }
 
 function runHelper(input: {
-  action: 'ResolvePath' | 'ResolveSource' | 'ResolveUpdateScope' | 'ResolveUninstaller' | 'StopProcesses' | 'Recover' | 'Prepare' | 'FallbackCleanup' | 'Restore' | 'ValidatePayload' | 'CleanupInPlaceLeftovers' | 'CleanupJournal'
+  action: 'ResolvePath' | 'ResolveSource' | 'ResolveUpdateScope' | 'ResolveUninstaller' | 'ResolveRecoveryExecutable' | 'PrepareUpdateTransaction' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'ResolveHealthToken' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'StopProcesses' | 'Recover' | 'Prepare' | 'FallbackCleanup' | 'Restore' | 'ValidatePayload' | 'BackupPayload' | 'RestorePayloadBackup' | 'CleanupInPlaceLeftovers' | 'CleanupJournal'
   source?: string
   secondary?: string
   currentUserSource?: string
@@ -65,6 +66,16 @@ function runHelper(input: {
   productName?: string
   appRoot?: string
   diagnosticPath?: string
+  automaticUpdate?: boolean
+  backupPath?: string
+  transactionPath?: string
+  stagePath?: string
+  healthResultPath?: string
+  installRegistryKey?: string
+  uninstallRegistryKey?: string
+  desktopPath?: string
+  programsPath?: string
+  faultPoint?: string
 }) {
   const systemRoot = process.env.SystemRoot ?? 'C:\\Windows'
   const powershell = join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
@@ -109,7 +120,20 @@ function runHelper(input: {
         KUN_INSTALLER_PRODUCT_NAME: input.productName ?? 'Kun',
         KUN_INSTALLER_SELF_PID: String(process.pid),
         KUN_INSTALLER_APP_ROOT: input.appRoot ?? '',
-        KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnosticPath ?? ''
+        KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnosticPath ?? '',
+        KUN_INSTALLER_AUTOMATIC_UPDATE: input.automaticUpdate ? '1' : '0',
+        KUN_INSTALLER_PAYLOAD_BACKUP: input.backupPath ?? '',
+        KUN_INSTALLER_TRANSACTION: input.transactionPath ?? '',
+        KUN_INSTALLER_STAGE: input.stagePath ?? '',
+        KUN_INSTALLER_HEALTH_RESULT: input.healthResultPath ?? '',
+        KUN_INSTALLER_INSTALL_REGISTRY_KEY: input.installRegistryKey ?? 'Software\\KunTest\\Install',
+        KUN_INSTALLER_UNINSTALL_REGISTRY_KEY: input.uninstallRegistryKey ?? 'Software\\KunTest\\Uninstall',
+        KUN_INSTALLER_CURRENT_DESKTOP: input.desktopPath ?? '',
+        KUN_INSTALLER_CURRENT_PROGRAMS: input.programsPath ?? '',
+        KUN_INSTALLER_COMMON_DESKTOP: input.desktopPath ?? '',
+        KUN_INSTALLER_COMMON_PROGRAMS: input.programsPath ?? '',
+        KUN_INSTALLER_FAULT_INJECTION: input.faultPoint ? '1' : '0',
+        KUN_INSTALLER_FAULT_POINT: input.faultPoint ?? ''
       }
     }
   )
@@ -233,21 +257,49 @@ describe('Windows installer migration ACL contract', () => {
     expect(script).toContain('retrying once after 2 seconds')
   })
 
-  it('keeps same-directory automatic updates from pre-deleting the application payload', () => {
+  it('aborts an ambiguous dual-scope automatic update without a source marker', () => {
+    const installerScript = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
+    const selectionStart = installerScript.indexOf('Function KunSelectAutomaticUpdateMode')
+    const scopeAbort = installerScript.indexOf(
+      '!insertmacro KunAbortAutomaticUpdate scope_ambiguous scope'
+    )
+    const scopeResolution = installerScript.indexOf('!insertmacro kunRunMigrationHelper ResolveUpdateScope')
+
+    expect(selectionStart).toBeGreaterThanOrEqual(0)
+    expect(scopeAbort).toBeGreaterThan(selectionStart)
+    expect(scopeAbort).toBeLessThan(scopeResolution)
+    expect(installerScript).toContain(
+      'Automatic update source marker is unavailable with registrations in both scopes; aborting the update.'
+    )
+    expect(installerScript).not.toContain(
+      'Automatic update source marker is unavailable with registrations in both scopes; keeping the requested install mode.'
+    )
+  })
+
+  it('keeps every automatic update recoverable before it can remove the old payload', () => {
     const installerScript = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
     const migrationScript = readHelperSources()
+    const automaticUpdateScript = readFileSync(
+      join(process.cwd(), 'build/installer-automatic-update.nsh'),
+      'utf8'
+    )
 
     expect(installerScript).toContain('Function KunMarkInPlaceAutomaticUpdate')
-    expect(installerScript).toContain('${if} $KunInstallerInPlaceUpdate == 1')
-    expect(installerScript).toContain('skipping pre-install removal of $KunInstallerPrimarySourceDir')
-    expect(installerScript).toContain(
-      'suppressed the selected-scope uninstaller until the new payload is installed'
-    )
+    expect(installerScript).toContain('# Automatic updates retain the old payload through candidate health validation.')
+    expect(installerScript).toContain('Automatic update; deferring removal of $KunInstallerPrimarySourceDir until commit.')
+    expect(installerScript).toContain('KUN_INSTALLER_AUTOMATIC_UPDATE')
+    expect(installerScript).toContain('Automatic update; suppressed the selected-scope uninstaller until commit.')
     expect(installerScript.indexOf('!insertmacro kunRunMigrationHelper ValidatePayload')).toBeLessThan(
       installerScript.indexOf('!insertmacro kunRunMigrationHelper CleanupInPlaceLeftovers')
     )
-    expect(migrationScript).toContain('function Invoke-CleanupInPlaceLeftovers')
-    expect(migrationScript).toContain('function Test-RetainedInPlaceKnownEntry')
+    expect(migrationScript).toContain('function Test-AutomaticUpdateRequested')
+    expect(migrationScript).toContain('function Resolve-RecoveryPayloadExecutable')
+    expect(migrationScript).toContain("'ResolveRecoveryExecutable'")
+    expect(migrationScript).toContain("'DeepSeek GUI.exe'")
+    expect(automaticUpdateScript).toContain('!insertmacro kunRunMigrationHelper RollbackUpdateTransaction')
+    expect(automaticUpdateScript).toContain('!insertmacro kunRunMigrationHelper ResolveRecoveryExecutable')
+    expect(automaticUpdateScript).toContain('!insertmacro kunRunMigrationHelper CommitUpdateTransaction')
+    expect(automaticUpdateScript).not.toContain('KUN_INSTALLER_UPDATE_SOURCE')
     expect(smokePath.length).toBeGreaterThan(0)
     expect(readFileSync(smokePath, 'utf8')).toContain('in-app all-users automatic update scope')
   })

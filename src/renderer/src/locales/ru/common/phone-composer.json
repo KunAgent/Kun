@@ -342,6 +342,7 @@
   "composerVoiceMicDenied": "Доступ к микрофону был запрещен. Разрешите это в настройках системы и повторите попытку.",
   "composerVoiceTooShort": "Запись была слишком короткой. Подожди еще немного.",
   "composerVoiceFailed": "Не удалось транскрибировать голос: {{message}}",
+  "composerDismissError": "Скрыть ошибку",
   "composerImageUnavailable": "Ввод изображения недоступен для этой среды выполнения.",
   "composerAttachmentUnavailable": "Загрузка вложений недоступна.",
   "composerDropFilesHere": "Отпустите, чтобы добавить файлы в этот разговор",

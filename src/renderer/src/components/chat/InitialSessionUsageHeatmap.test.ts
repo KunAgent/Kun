@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create as createRenderer } from 'react-test-renderer'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import type { DailyUsageState, DailyUsageSummary } from '../../hooks/use-daily-usage'
 import type { ModelUsageState } from '../../hooks/use-model-usage'
@@ -9,7 +9,8 @@ import {
   buildUsageCalendarWeeks,
   InitialSessionUsageHeatmapView,
   USAGE_HEATMAP_CONTRAST_COLORS,
-  usageHeatmapIntensityLevel
+  usageHeatmapIntensityLevel,
+  usageTotalsFromBuckets
 } from './InitialSessionUsageHeatmap'
 
 function bucket(date: string, totalTokens: number, turns = 1) {
@@ -23,6 +24,10 @@ function bucket(date: string, totalTokens: number, turns = 1) {
     totalTokens,
     costUsd: totalTokens / 1_000_000,
     costCny: (totalTokens / 1_000_000) * 7.2,
+    valueEstimateUsd: 0,
+    valueEstimateCny: null,
+    valueEstimateCoverage: 'unavailable' as const,
+    valueEstimateUnpricedRequests: 0,
     tokenEconomySavingsTokens: 0,
     turns,
     threadCount: turns > 0 ? 1 : 0,
@@ -48,6 +53,10 @@ function usage(buckets = [bucket('2026-05-01', 1200), bucket('2026-05-02', 10000
       totalTokens,
       costUsd: totalTokens / 1_000_000,
       costCny: (totalTokens / 1_000_000) * 7.2,
+      valueEstimateUsd: 0,
+      valueEstimateCny: null,
+      valueEstimateCoverage: 'unavailable' as const,
+      valueEstimateUnpricedRequests: 0,
       tokenEconomySavingsTokens: 0,
       turns,
       threadCount: buckets.filter((item) => item.turns > 0).length,
@@ -161,6 +170,10 @@ describe('InitialSessionUsageHeatmap', () => {
       totalTokens: 2410045,
       costUsd: 2.41,
       costCny: 17.35,
+      valueEstimateUsd: 0,
+      valueEstimateCny: null,
+      valueEstimateCoverage: 'unavailable' as const,
+      valueEstimateUnpricedRequests: 0,
       tokenEconomySavingsTokens: 0,
       turns: 3,
       threadCount: 1,
@@ -252,6 +265,26 @@ describe('InitialSessionUsageHeatmap', () => {
     renderer.unmount()
   })
 
+  it('notifies the owner before loading the models tab', async () => {
+    const onActiveTabChange = vi.fn()
+    let renderer!: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(InitialSessionUsageHeatmapView, {
+        state: state({ usage: usage(), loaded: true }),
+        onActiveTabChange
+      }))
+    })
+
+    await act(async () => {
+      renderer.root.findAllByType('button')
+        .find((button) => button.children.includes('Models'))!
+        .props.onClick()
+    })
+
+    expect(onActiveTabChange).toHaveBeenCalledWith('models')
+    renderer.unmount()
+  })
+
   it('keeps complete calendar ranges in the model chart, including zero-usage days', () => {
     const days = Array.from({ length: 30 }, (_, index) =>
       bucket(`2026-06-${String(index + 1).padStart(2, '0')}`, index % 6 === 0 ? 1_000 : 0, index % 6 === 0 ? 1 : 0)
@@ -327,6 +360,52 @@ describe('InitialSessionUsageHeatmap', () => {
     expect(html).toContain('ds-kun-state-sleep')
     expect(html).not.toContain('Keep the canvas clear')
     expect(html).not.toContain('Daily Kun usage calendar')
+  })
+
+  it('sums subscription value estimates and derives slice-level coverage', () => {
+    const apiBilled = {
+      ...bucket('2026-08-20', 1_000),
+      costUsd: 0.31,
+      costCny: 2.26,
+      valueEstimateUsd: 0,
+      valueEstimateCny: null,
+      valueEstimateCoverage: 'unavailable' as const,
+      valueEstimateUnpricedRequests: 0
+    }
+    const subscriptionPriced = {
+      ...bucket('2026-08-21', 800_000),
+      costUsd: 0,
+      costCny: 0,
+      valueEstimateUsd: 22.5,
+      valueEstimateCny: 162,
+      valueEstimateCoverage: 'complete' as const,
+      valueEstimateUnpricedRequests: 0
+    }
+    const subscriptionUnpriced = {
+      ...bucket('2026-08-22', 600_000),
+      costUsd: 0,
+      costCny: 0,
+      valueEstimateUsd: 0,
+      valueEstimateCny: null,
+      valueEstimateCoverage: 'unavailable' as const,
+      valueEstimateUnpricedRequests: 12
+    }
+
+    const totals = usageTotalsFromBuckets([apiBilled, subscriptionPriced, subscriptionUnpriced])
+
+    expect(totals.costUsd).toBeCloseTo(0.31)
+    expect(totals.costCny).toBeCloseTo(2.26)
+    expect(totals.valueEstimateUsd).toBeCloseTo(22.5)
+    expect(totals.valueEstimateCny).toBeCloseTo(162)
+    expect(totals.valueEstimateCoverage).toBe('partial')
+    expect(totals.valueEstimateUnpricedRequests).toBe(12)
+
+    const pricedOnly = usageTotalsFromBuckets([apiBilled, subscriptionPriced])
+    expect(pricedOnly.valueEstimateCoverage).toBe('complete')
+
+    const estimateFree = usageTotalsFromBuckets([apiBilled, subscriptionUnpriced])
+    expect(estimateFree.valueEstimateCoverage).toBe('unavailable')
+    expect(estimateFree.valueEstimateCny).toBeNull()
   })
 
   it('uses turns as the intensity fallback when token totals are unavailable', () => {

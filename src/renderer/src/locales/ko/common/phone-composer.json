@@ -342,6 +342,7 @@
   "composerVoiceMicDenied": "마이크 액세스가 거부되었습니다. 시스템 설정에서 허용하고 다시 시도해 보세요.",
   "composerVoiceTooShort": "녹음 시간이 너무 짧았습니다. 조금만 더 참으세요.",
   "composerVoiceFailed": "음성 녹음 실패: {{message}}",
+  "composerDismissError": "오류 닫기",
   "composerImageUnavailable": "이 런타임에는 이미지 입력을 사용할 수 없습니다.",
   "composerAttachmentUnavailable": "첨부파일을 업로드할 수 없습니다.",
   "composerDropFilesHere": "놓아서 이 대화에 파일 추가",

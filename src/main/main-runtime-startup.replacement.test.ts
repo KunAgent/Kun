@@ -12,7 +12,11 @@ const harness = vi.hoisted(() => {
   const ensureRunning = vi.fn(async () => undefined)
   const ensureReplacementRunning = vi.fn(async () => undefined)
   const resolveConnection = vi.fn(async () => false)
-  const requiresBundledBuildReplacement = vi.fn(async () => false)
+  const probeBundledBuildReplacement = vi.fn<() => Promise<
+    | { state: 'matched'; ownership: 'none' | 'current' }
+    | { state: 'mismatched' }
+    | { state: 'unknown'; error: Error }
+  >>(async () => ({ state: 'matched', ownership: 'none' }))
   const waitForHealthy = vi.fn(async () => true)
   const probeRuntimeApi = vi.fn(async () => ({ ok: true as const }))
   const noteRuntimeHealthy = vi.fn()
@@ -47,7 +51,7 @@ const harness = vi.hoisted(() => {
     mainState,
     noteRuntimeHealthy,
     probeRuntimeApi,
-    requiresBundledBuildReplacement,
+    probeBundledBuildReplacement,
     runtimeSupervisor,
     setLatest: (settings: unknown): void => { latest = settings },
     stopSharedAndWait,
@@ -62,7 +66,7 @@ vi.mock('./runtime/kun-adapter', () => ({
     ensureRunning: harness.ensureRunning,
     ensureReplacementRunning: harness.ensureReplacementRunning,
     isChildRunning: () => false,
-    requiresBundledBuildReplacement: harness.requiresBundledBuildReplacement,
+    probeBundledBuildReplacement: harness.probeBundledBuildReplacement,
     resolveConnection: harness.resolveConnection,
     stopSharedAndWait: harness.stopSharedAndWait,
     stopSharedForReplacementAndWait: harness.stopSharedForReplacementAndWait
@@ -120,8 +124,8 @@ beforeEach(() => {
   harness.ensureReplacementRunning.mockClear()
   harness.resolveConnection.mockReset()
   harness.resolveConnection.mockResolvedValue(false)
-  harness.requiresBundledBuildReplacement.mockReset()
-  harness.requiresBundledBuildReplacement.mockResolvedValue(false)
+  harness.probeBundledBuildReplacement.mockReset()
+  harness.probeBundledBuildReplacement.mockResolvedValue({ state: 'matched', ownership: 'none' })
   harness.waitForHealthy.mockClear()
   harness.probeRuntimeApi.mockClear()
   harness.noteRuntimeHealthy.mockClear()
@@ -159,15 +163,27 @@ describe('explicit Kun serve replacement', () => {
 
   it('hands a packaged build mismatch to the same explicit replacement path before startup attach', async () => {
     const current = settings()
-    harness.requiresBundledBuildReplacement.mockResolvedValue(true)
+    harness.probeBundledBuildReplacement.mockResolvedValue({ state: 'mismatched' })
 
     await expect(reconcileBundledRuntimeAfterInstall(current)).resolves.toBeUndefined()
 
-    expect(harness.requiresBundledBuildReplacement).toHaveBeenCalledWith(current)
+    expect(harness.probeBundledBuildReplacement).toHaveBeenCalledWith(current)
     expect(harness.runtimeSupervisor.replace).toHaveBeenCalledOnce()
     expect(harness.stopSharedForReplacementAndWait).toHaveBeenCalledWith(current)
     expect(harness.ensureReplacementRunning).toHaveBeenCalledWith(current)
     expect(harness.ensureRunning).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the bundled replacement probe is unknown', async () => {
+    const current = settings()
+    const probeError = new Error('manager status unavailable')
+    harness.probeBundledBuildReplacement.mockResolvedValue({ state: 'unknown', error: probeError })
+
+    await expect(reconcileBundledRuntimeAfterInstall(current)).rejects.toBe(probeError)
+
+    expect(harness.runtimeSupervisor.replace).not.toHaveBeenCalled()
+    expect(harness.stopSharedForReplacementAndWait).not.toHaveBeenCalled()
+    expect(harness.ensureReplacementRunning).not.toHaveBeenCalled()
   })
 
   it('clears all historical serves after stopping the current owner and before launching', async () => {
@@ -224,7 +240,7 @@ describe('startup Kun serve restart', () => {
     expect(harness.stopSharedForReplacementAndWait).not.toHaveBeenCalled()
     expect(harness.ensureReplacementRunning).not.toHaveBeenCalled()
     expect(harness.ensureRunning).not.toHaveBeenCalled()
-    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 2_000)
+    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 5_000)
     expect(harness.probeRuntimeApi).toHaveBeenCalledWith(current)
   })
 

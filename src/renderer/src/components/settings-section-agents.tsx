@@ -262,6 +262,12 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     sqlitePath: ''
   }
   const contextCompaction = kun.contextCompaction ?? defaultKunContextCompactionSettings()
+  const fastContext = kun.fastContext ?? {
+    enabled: true,
+    model: '',
+    providerId: '',
+    fast: false
+  }
   const graph = kun.graph ?? defaultKunGraphSettings()
   const modelContext = modelContextProfileSummary({
     model: kun.model,
@@ -322,6 +328,14 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     updateKun({
       contextCompaction: {
         ...contextCompaction,
+        ...patch
+      }
+    })
+  }
+  const updateFastContext = (patch: Record<string, unknown>): void => {
+    updateKun({
+      fastContext: {
+        ...fastContext,
         ...patch
       }
     })
@@ -454,8 +468,8 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     productionManagedDataDir, windowsStorageManagement, mcpSearch, tokenEconomy,
     tokenEconomySavingsState, mcpRawMode, setMcpRawMode, activePanel, setActivePanel,
     activePermissionsPanel, setActivePermissionsPanel, skillPermissionSummary, mcpPermissionSummary,
-    tokenEconomySavings, storage, contextCompaction, modelContext, runtimeTuning, toolOutputLimits,
-    updateMcpSearch, updateTokenEconomy, updateHistoryHygiene, updateStorage, updateContextCompaction,
+    tokenEconomySavings, storage, contextCompaction, fastContext, modelContext, runtimeTuning, toolOutputLimits,
+    updateMcpSearch, updateTokenEconomy, updateHistoryHygiene, updateStorage, updateContextCompaction, updateFastContext,
     updateRuntimeTuning, updateToolOutputLimits, updateToolStorm, updateToolArgumentRepair, provider,
     modelProviders, instructions, updateInstructions, quality, updateQuality, activeProvider,
     activeProviderModels, promptOptimization, promptOptimizationModels, promptOptimizationDefaultModel,

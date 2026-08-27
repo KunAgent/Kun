@@ -127,11 +127,11 @@ describe('model provider retry settings', () => {
     })
   })
 
-  it('upgrades a disabled legacy provider without enabling retries', () => {
+  it('upgrades a stale zero retry budget to the current default', () => {
     const settings = normalizeModelProviderSettings({
       providers: [{
-        id: 'disabled',
-        name: 'Disabled',
+        id: 'legacy-zero',
+        name: 'Legacy Zero',
         apiKey: 'k',
         baseUrl: 'https://example.com/v1',
         endpointFormat: 'chat_completions',
@@ -141,9 +141,34 @@ describe('model provider retry settings', () => {
       }]
     })
 
+    expect(settings.providers.find((provider) => provider.id === 'legacy-zero')?.retry).toMatchObject({
+      maxAttempts: 5,
+      httpStatusCodes: [429, 500, 502, 503, 504],
+      defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
+    })
+  })
+
+  it('preserves a current-version explicit retry opt-out', () => {
+    const settings = normalizeModelProviderSettings({
+      providers: [{
+        id: 'disabled',
+        name: 'Disabled',
+        apiKey: 'k',
+        baseUrl: 'https://example.com/v1',
+        endpointFormat: 'chat_completions',
+        retry: {
+          maxAttempts: 0,
+          initialDelayMs: 3_000,
+          httpStatusCodes: [429, 500, 502, 503, 504],
+          defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
+        },
+        models: ['m'],
+        modelProfiles: {}
+      }]
+    })
+
     expect(settings.providers.find((provider) => provider.id === 'disabled')?.retry).toMatchObject({
       maxAttempts: 0,
-      httpStatusCodes: [429, 500, 502, 503, 504],
       defaultsVersion: MODEL_REQUEST_RETRY_DEFAULTS_VERSION
     })
   })

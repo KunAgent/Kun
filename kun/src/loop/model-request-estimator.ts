@@ -38,14 +38,16 @@ export function estimateModelRequestInputTokenBreakdown(
     options?.skillContextInstructions
   )
   const contextInstructions = estimateText(request.contextInstructions?.join('\n'))
-  const skills = Math.min(contextInstructions, estimateText(skill.join('\n')))
-  const nonSkillContext = contextInstructions - skills
+  const requestSkillTokens = Math.min(contextInstructions, estimateText(skill.join('\n')))
+  const skillContextItemTokens = estimateActiveSkillContextItems(request.history)
+  const skills = requestSkillTokens + skillContextItemTokens
+  const nonSkillContext = contextInstructions - requestSkillTokens
   const system =
     estimateText(request.systemPrompt) +
     estimateText(request.threadProfileInstruction) +
     estimateText(request.modeInstruction) +
     nonSkillContext
-  const messages = estimateItems(request.prefix) + estimateItems(request.history)
+  const messages = Math.max(0, estimateItems(request.prefix) + estimateItems(request.history) - skillContextItemTokens)
   const tools = estimateTools(request.tools)
   const other =
     estimateTextFallbacks(request.attachmentTextFallbacks) +
@@ -101,6 +103,33 @@ export function estimateRequestOverheadTokens(input: {
   tokens += estimateItems(input.prefix)
   tokens += estimateTools(input.tools)
   return Math.max(0, tokens)
+}
+
+function estimateActiveSkillContextItems(items?: TurnItem[]): number {
+  if (!items?.length) return 0
+  return items.reduce((total, item) => {
+    if (item.kind !== 'model_context') return total
+    const skillTokens = activeSkillContextSections(item.text).reduce(
+      (sectionTotal, section) => sectionTotal + estimateText(section),
+      0
+    )
+    return total + Math.min(estimateItems([item]), skillTokens)
+  }, 0)
+}
+
+function activeSkillContextSections(text: string): string[] {
+  const sections: string[] = []
+  const pattern = /<kun_context_update\b([^>]*)>[\s\S]*?<\/kun_context_update>/g
+  for (const match of text.matchAll(pattern)) {
+    const attributes = match[1] ?? ''
+    if (
+      /\bauthority="skill"/.test(attributes) &&
+      /\bstate="active"/.test(attributes)
+    ) {
+      sections.push(match[0])
+    }
+  }
+  return sections
 }
 
 function estimateItems(items?: TurnItem[]): number {

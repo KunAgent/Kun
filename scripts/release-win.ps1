@@ -232,6 +232,13 @@ if ($LASTEXITCODE -ne 0) {
   exit 1
 }
 
+Write-Info 'Smoking packaged old-build update handoff...'
+& npm run smoke:packaged-update-handoff -- --resources dist/win-unpacked/resources
+if ($LASTEXITCODE -ne 0) {
+  Write-Err 'Windows packaged update handoff smoke failed.'
+  exit 1
+}
+
 Write-Info 'Smoking host-native FFmpeg broker...'
 $env:KUN_RUN_MEDIA_SMOKE = '1'
 & npm run smoke:extension-native-media

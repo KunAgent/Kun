@@ -49,14 +49,20 @@ export function deriveTimelineRenderedTurnCount({
   visibleTurnCount,
   totalTurns,
   pageSize,
-  busy
+  busy,
+  historyExpansionRequested = false
 }: {
   visibleTurnCount: number
   totalTurns: number
   pageSize: number
   busy: boolean
+  historyExpansionRequested?: boolean
 }): number {
-  if (busy && shouldCollapseTimelineHistory(totalTurns, pageSize)) {
+  if (
+    busy &&
+    !historyExpansionRequested &&
+    shouldCollapseTimelineHistory(totalTurns, pageSize)
+  ) {
     return Math.min(pageSize, totalTurns)
   }
   return Math.min(visibleTurnCount, totalTurns)
@@ -112,6 +118,8 @@ export function useTimelineScroll({
       historyExpansionRequested: false
     })
   )
+  const historyExpansionRequestedRef = useRef(false)
+  const busyStateRef = useRef({ threadId: activeThreadId, busy: false })
   // Sending from an expanded long thread used to render the whole history for
   // one frame before the effect below collapsed it. That transient Markdown
   // mount can be enough to exhaust Chromium's renderer on very large threads.
@@ -119,14 +127,16 @@ export function useTimelineScroll({
     visibleTurnCount,
     totalTurns,
     pageSize,
-    busy
+    busy,
+    historyExpansionRequested: historyExpansionRequestedRef.current &&
+      busyStateRef.current.threadId === activeThreadId &&
+      busyStateRef.current.busy
   })
   const hiddenTurnCount = Math.max(0, totalTurns - renderedVisibleTurnCount)
   const hasEarlierTurns = hiddenTurnCount > 0 || hasRemoteHistory
 
   const stickToBottomRef = useRef(true)
   const lastUserTurnKeyRef = useRef(userTurnKey)
-  const historyExpansionRequestedRef = useRef(false)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const prependInFlightRef = useRef(false)
   const remoteLoadStartTotalRef = useRef<number | null>(null)
@@ -137,7 +147,7 @@ export function useTimelineScroll({
 
   const loadEarlierTurns = useCallback(
     (options?: { userInitiated?: boolean }): void => {
-      if (busy || prependInFlightRef.current) return
+      if ((busy && !options?.userInitiated) || prependInFlightRef.current) return
       if (hiddenTurnCount === 0 && (!hasRemoteHistory || !loadRemoteHistory || remoteHistoryLoading)) return
       if (options?.userInitiated) {
         historyExpansionRequestedRef.current = true
@@ -280,15 +290,16 @@ export function useTimelineScroll({
     setVisibleTurnCount((count) => Math.min(totalTurns, count + addedTurns))
   }, [totalTurns])
 
-  // While a turn is running, keep the latest page visible without
-  // mounting every historical turn. Expanding all history during SSE
-  // streaming can repaint long conversations and make the viewport look
-  // like it scrolled through the whole thread.
+  // While a turn is running, keep the latest page visible by default without
+  // mounting every historical turn. A user who explicitly expands history keeps
+  // that bounded window while the active turn streams.
   useEffect(() => {
-    if (!busy) return
+    const wasBusy = busyStateRef.current.threadId === activeThreadId && busyStateRef.current.busy
+    busyStateRef.current = { threadId: activeThreadId, busy }
+    if (!busy || wasBusy) return
     historyExpansionRequestedRef.current = false
     setVisibleTurnCount(Math.min(pageSize, totalTurns))
-  }, [busy, pageSize, totalTurns])
+  }, [activeThreadId, busy, pageSize, totalTurns])
 
   // After a prepend, restore scroll position so the user's viewport
   // doesn't jump.
@@ -333,7 +344,7 @@ export function useTimelineScroll({
   useEffect(() => {
     const el = containerRef.current
     if (!el || !hasEarlierTurns || prependInFlightRef.current) return
-    if (!historyExpansionRequestedRef.current) return
+    if (!historyExpansionRequestedRef.current || busy) return
     if (el.scrollHeight <= el.clientHeight + TOP_LOAD_TRIGGER_PX) {
       loadEarlierTurns()
     }

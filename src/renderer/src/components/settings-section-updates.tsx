@@ -20,6 +20,7 @@ export function UpdatesSettingsSection({ ctx }: { ctx: Record<string, any> }): R
     downloadGuiUpdate,
     installGuiUpdate
   } = ctx
+  const channelBusy = checkingGuiUpdate || downloadingGuiUpdate || installingGuiUpdate
 
   return (
     <SettingsCard title={t('sectionUpdates')}>
@@ -30,6 +31,8 @@ export function UpdatesSettingsSection({ ctx }: { ctx: Record<string, any> }): R
           <select
             className={selectControlClass}
             value={form.guiUpdate.channel}
+            disabled={channelBusy}
+            aria-busy={channelBusy}
             onChange={(e) =>
               update({
                 guiUpdate: { channel: e.target.value as GuiUpdateChannel }

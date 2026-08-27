@@ -106,7 +106,7 @@ export function normalizeDaemonSettings(value: unknown): SessionDaemonSettingsV1
   const source = isRecord(value) ? value : {}
   const now = new Date().toISOString()
   return {
-    enabled: normalizeBoolean(source.enabled, false),
+    enabled: normalizeBoolean(source.enabled, true),
     items: Array.isArray(source.items)
       ? source.items
         .filter(isRecord)
@@ -135,7 +135,7 @@ export function defaultScheduleSettings(): ScheduleSettingsV1 {
     },
     tasks: [],
     daemons: {
-      enabled: false,
+      enabled: true,
       items: []
     }
   }

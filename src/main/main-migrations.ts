@@ -29,20 +29,28 @@ import {
   kunRuntimeAdapter,
   runtimeAuthHeaders
 } from './runtime/kun-adapter'
-import { ensureKunServiceManager } from './kun-process'
+import {
+  ensureKunServiceManager,
+  resolveKunManagerDataDirFromSettings
+} from './kun-process'
 import {
   ManagerRevisionedDocumentClient,
   readManagerRuntime,
   requestManagerJson,
-  resolveServiceManagerForMigration,
   type ServiceManagerConnection
 } from '../../kun/src/manager/manager-client.js'
 import {
   defaultKunControlDir,
   readManagerDiscovery
 } from '../../kun/src/manager/manager-discovery.js'
-import { stopSharedRuntime } from '../../kun/src/cli/shared-runtime.js'
 import { listServiceManagerRuntimeActiveWork } from './runtime/service-manager-runtime-active-work'
+import {
+  drainKunOwnersForHandoff,
+  KunHandoffError,
+  withDrainedKunOwners
+} from './runtime/kun-installed-build-handoff'
+import { logKunHandoffEvent } from './runtime/kun-handoff-logging'
+import { SETTINGS_FILE_NAME } from './settings-file-paths'
 import { StorageRelocationController } from './storage-relocation/controller'
 import { StorageRelocationEngine } from './storage-relocation/engine'
 import type {
@@ -145,8 +153,41 @@ export async function shutdownServiceManagerAndWait(manager: ServiceManagerConne
 export async function shutdownActiveServiceManagerForUpdate(): Promise<void> {
   const manager = mainState.activeServiceManager
   if (!manager) return
-  await shutdownServiceManagerAndWait(manager)
+  await drainKunOwnersForHandoff({
+    reason: 'in-app-update',
+    dataDirs: [manager.discovery.dataDir],
+    settingsPath: manager.discovery.settingsPath,
+    controlDir: defaultKunControlDir(),
+    fetch,
+    onEvent: logKunHandoffEvent
+  })
   if (mainState.activeServiceManager === manager) mainState.activeServiceManager = null
+}
+
+export function createStartupKunHandoffRecovery(
+  error: unknown
+): (() => Promise<void>) | undefined {
+  if (!(error instanceof KunHandoffError) || !error.retryable) return undefined
+
+  return async () => {
+    const userDataPath = app.getPath('userData')
+    const settingsPath = join(userDataPath, SETTINGS_FILE_NAME)
+    const dataDirs = error.reason === 'exclusive-data-migration'
+      ? [
+          canonicalLegacyKunDataDir(homedir(), process.platform),
+          canonicalCurrentKunDataDir(homedir(), process.platform)
+        ]
+      : [await resolveKunManagerDataDirFromSettings(settingsPath)]
+
+    await drainKunOwnersForHandoff({
+      reason: error.reason,
+      dataDirs,
+      settingsPath,
+      controlDir: defaultKunControlDir(),
+      fetch,
+      onEvent: logKunHandoffEvent
+    })
+  }
 }
 
 function managerProcessIsAlive(pid: number): boolean {
@@ -163,34 +204,21 @@ function managerProcessIsAlive(pid: number): boolean {
   }
 }
 
-async function drainCanonicalRuntimeMigrationWriters(): Promise<void> {
-  const controlDir = defaultKunControlDir()
-  const manager = await resolveServiceManagerForMigration(controlDir, fetch)
-  if (manager) {
-    await interruptStorageRelocationWork(manager)
-    await Promise.all((['production', 'development'] as const).map((runtimeFlavor) =>
-      stopSharedRuntime(manager.discovery.dataDir, fetch, { runtimeFlavor, manager })
-    ))
-    await shutdownServiceManagerAndWait(manager)
-  } else {
-    const unresolved = await readManagerDiscovery(controlDir).catch(() => null)
-    if (unresolved && managerProcessIsAlive(unresolved.pid)) {
-      throw new Error(
-        `active_writer: Kun Service Manager ${unresolved.pid} is alive but could not be ` +
-        'authenticated for a safe shutdown.'
-      )
-    }
-  }
-
+async function withCanonicalRuntimeMigrationWritersDrained<T>(
+  afterDrain: () => T | Promise<T>
+): Promise<T> {
   const canonicalDirs = [
     canonicalLegacyKunDataDir(homedir(), process.platform),
     canonicalCurrentKunDataDir(homedir(), process.platform)
   ]
-  for (const dataDir of canonicalDirs) {
-    for (const runtimeFlavor of ['production', 'development'] as const) {
-      await stopSharedRuntime(dataDir, fetch, { runtimeFlavor })
-    }
-  }
+  const { value } = await withDrainedKunOwners({
+    reason: 'exclusive-data-migration',
+    dataDirs: canonicalDirs,
+    controlDir: defaultKunControlDir(),
+    fetch,
+    onEvent: logKunHandoffEvent
+  }, afterDrain)
+  return value
 }
 
 async function assertCanonicalRuntimeMigrationWritersStopped(dataDir: string): Promise<void> {
@@ -204,6 +232,9 @@ async function assertCanonicalRuntimeMigrationWritersStopped(dataDir: string): P
 }
 
 export async function runStartupLegacyMigrations(): Promise<RuntimeDataDirMigrationResult> {
+  if (mainState.updateHealthProbeOnly) {
+    throw new Error('Update health probes must not run user-data migrations.')
+  }
   const userDataPath = app.getPath('userData')
   const homeDir = homedir()
   const sourcePath = canonicalLegacyKunDataDir(homeDir, process.platform)
@@ -223,8 +254,9 @@ export async function runStartupLegacyMigrations(): Promise<RuntimeDataDirMigrat
   let lock: ReturnType<typeof acquireCanonicalRuntimeMigrationLock> | undefined
   try {
     if (requiresExclusiveAccess) {
-      await drainCanonicalRuntimeMigrationWriters()
-      lock = acquireCanonicalRuntimeMigrationLock([sourcePath, targetPath])
+      lock = await withCanonicalRuntimeMigrationWritersDrained(() =>
+        acquireCanonicalRuntimeMigrationLock([sourcePath, targetPath])
+      )
       await assertCanonicalRuntimeMigrationWritersStopped(sourcePath)
       await assertCanonicalRuntimeMigrationWritersStopped(targetPath)
     }
@@ -335,11 +367,10 @@ export async function runRuntimeDataRecoveryMaintenance(): Promise<void> {
   const userDataPath = app.getPath('userData')
   const sourcePath = canonicalLegacyKunDataDir(homeDir, process.platform)
   const targetPath = canonicalCurrentKunDataDir(homeDir, process.platform)
-  await drainCanonicalRuntimeMigrationWriters()
-  mainState.runtimeDataRecoveryMigrationLock = acquireCanonicalRuntimeMigrationLock([
-    sourcePath,
-    targetPath
-  ])
+  mainState.runtimeDataRecoveryMigrationLock =
+    await withCanonicalRuntimeMigrationWritersDrained(() =>
+      acquireCanonicalRuntimeMigrationLock([sourcePath, targetPath])
+    )
   try {
     await assertCanonicalRuntimeMigrationWritersStopped(sourcePath)
     await assertCanonicalRuntimeMigrationWritersStopped(targetPath)
@@ -393,6 +424,8 @@ export async function runRuntimeDataRecoveryMaintenance(): Promise<void> {
       return
     }
 
+    const workbench = mainState.mainWindow
+    if (workbench && !workbench.isDestroyed()) workbench.destroy()
     const window = createRuntimeDataRecoveryWindow()
     window.on('closed', () => {
       try {

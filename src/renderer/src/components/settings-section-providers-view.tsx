@@ -1,5 +1,6 @@
 import {
   DEFAULT_MODEL_PROVIDER_ID,
+  OPENCODE_FREE_PROVIDER_ID,
   isLocalModelProxyPort,
   localModelProxyPort,
   localModelProxyUrl,
@@ -57,8 +58,10 @@ import { ProviderConnectionAdvancedPanels } from './settings-section-providers-c
 import { ProviderModelsCapabilitiesPanels } from './settings-section-providers-model-panels'
 
 export function ProvidersSettingsView({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, removeModelProvider, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = view
+  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, removeModelProvider, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = view
   const activeProvider = view.activeProvider as ModelProviderProfileV1 | undefined
+  const freeProviders = (view.freeProviders as ModelProviderProfileV1[] | undefined) ?? []
+  const freeAddEntries = (view.freeAddEntries as any[] | undefined) ?? []
   const planProviders = view.planProviders as ModelProviderProfileV1[]
   const apiProviders = view.apiProviders as ModelProviderProfileV1[]
   const providerProxyPort = localModelProxyPort(providerProxy.url)
@@ -170,6 +173,11 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               </label>
               {grouped ? (
                 <>
+                  {freeProviders.length > 0 ? (
+                    <ProviderListGroup label={t('modelProviderGroupFree')} count={freeProviders.length}>
+                      {freeProviders.map(renderProviderButton)}
+                    </ProviderListGroup>
+                  ) : null}
                   {planProviders.length > 0 ? (
                     <ProviderListGroup label={t('modelProviderGroupPlans')} count={planProviders.length}>
                       {planProviders.map(renderProviderButton)}
@@ -290,7 +298,8 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 <ProviderModelsCapabilitiesPanels view={view} />
                 {!isDraftActive &&
                 activeTab === 'advanced' &&
-                activeProvider.id !== DEFAULT_MODEL_PROVIDER_ID ? (
+                activeProvider.id !== DEFAULT_MODEL_PROVIDER_ID &&
+                activeProvider.id !== OPENCODE_FREE_PROVIDER_ID ? (
                   <DetailSection title={t('modelProviderSectionDanger')}>
                     <div className="flex flex-wrap items-center gap-3">
                       <button
@@ -469,6 +478,15 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 </span>
                 <Plus className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
               </button>
+              {freeAddEntries.length > 0 ? (
+                <div className="mb-5 grid gap-2">
+                  <div className="flex items-center gap-2 px-1">
+                    <h3 className="text-[12px] font-semibold text-ds-muted">{t('modelProviderGroupFree')}</h3>
+                    <span className="text-[11px] text-ds-faint">{freeAddEntries.length}</span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">{freeAddEntries.map(renderAddEntry)}</div>
+                </div>
+              ) : null}
               {showPlanAddGroup ? (
                 <div className="mb-5 grid gap-2">
                   <div className="flex flex-wrap items-center gap-2 px-1">
@@ -518,7 +536,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                   <div className="grid gap-2 sm:grid-cols-2">{apiAddEntries.map(renderAddEntry)}</div>
                 </div>
               ) : null}
-              {planAddEntries.length === 0 && apiAddEntries.length === 0 ? (
+              {freeAddEntries.length === 0 && planAddEntries.length === 0 && apiAddEntries.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-ds-border-muted px-4 py-8 text-center text-[12.5px] text-ds-faint">
                   {t('modelProviderAddDialogEmpty', { query: addProviderQuery.trim() })}
                 </p>

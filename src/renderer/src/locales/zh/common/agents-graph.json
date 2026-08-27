@@ -44,11 +44,13 @@
     "extensionAgents": {
       "title": "扩展代理",
       "description": "基础代理以外的角色 · {{count}}",
-      "enabled": "已启用",
-      "disabled": "已关闭",
+      "enabled": "全部启用",
+      "partial": "部分启用（{{enabled}}/{{count}}）",
+      "disabled": "未启用",
       "toggle": "开关扩展代理",
       "keepBaseOnly": "仅保留基础代理",
       "enableExtensions": "启用扩展代理",
+      "enableAllExtensions": "启用全部扩展代理",
       "baseAlwaysAvailable": "基础代理始终可用"
     },
     "category": {

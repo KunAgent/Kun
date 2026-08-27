@@ -362,6 +362,7 @@ export const kunEventNormalizerDeps: KunEventNormalizerDeps = {
     createdAt: event.timestamp,
     prompt: event.prompt,
     questions: event.questions,
+    timeoutSeconds: event.timeoutSeconds,
     seq: event.seq
   }),
   userInputAnswers: userInputAnswersFromCore,
@@ -429,9 +430,21 @@ export async function applyRuntimeProjectionAction(
     case 'context_snapshot_received': sink.onContextSnapshot?.(action.payload); return
     case 'delegated_runtime_received': sink.onDelegatedRuntimeState?.(action.payload); return
     case 'usage_received': sink.onUsage?.(action.payload); return
-    case 'turn_completed': sink.onTurnComplete('completed'); return
-    case 'turn_aborted': sink.onTurnComplete('aborted'); return
-    case 'turn_failed': sink.onError(action.error, action.options); return
+    case 'turn_completed': sink.onTurnComplete(action.payload); return
+    case 'turn_aborted': sink.onTurnComplete(action.payload); return
+    case 'turn_failed': {
+      const { error, options, threadId, turnId, seq } = action.payload
+      // Keep terminal identity on the error options so the store can reject a
+      // replayed/out-of-order failure from an older turn, matching how
+      // turn_completed/turn_aborted carry theirs through TurnTerminalEvent.
+      sink.onError(error, {
+        ...(options ?? {}),
+        ...(threadId ? { threadId } : {}),
+        ...(turnId ? { turnId } : {}),
+        ...(typeof seq === 'number' ? { seq } : {})
+      })
+      return
+    }
   }
 }
 

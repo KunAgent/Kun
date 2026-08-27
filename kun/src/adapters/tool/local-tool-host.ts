@@ -41,7 +41,11 @@ function createUserInputTool(name: string): LocalTool {
   }
   return LocalToolHost.defineTool({
     name,
-    description: 'Ask the user a structured question through the current interactive client and wait for the answer.',
+    description: [
+      'Ask the user a structured question only when an unanswered material choice blocks safe or correct progress, or when an active workflow explicitly requires structured confirmation.',
+      'Do not use this tool for greetings, status updates, optional follow-ups, offers of more help, information already available in context, or unnecessary repetitions or rephrasings of the same question.',
+      'Ask one concise round, then act on the answer. Ask again only when a material workflow state change explicitly requires a new confirmation.'
+    ].join(' '),
     toolKind: 'tool_call',
     inputSchema: {
       type: 'object',
@@ -68,6 +72,13 @@ function createUserInputTool(name: string): LocalTool {
           type: 'integer',
           minimum: 1,
           description: 'Maximum allowed selections for a multiple-choice question.'
+        },
+        timeoutSeconds: {
+          type: 'integer',
+          minimum: 5,
+          maximum: 3600,
+          description:
+            'Optional. If the user does not answer within this many seconds, the request auto-resolves with status "timeout"; you must then proceed with your own best judgment instead of waiting or asking again.'
         },
         questions: {
           type: 'array',
@@ -130,7 +141,24 @@ function createUserInputTool(name: string): LocalTool {
         }
       }
       const prompt = explicitPrompt ?? questions[0]!.question
-      const resolution = await context.awaitUserInput({ id: inputId, itemId, prompt, questions })
+      const timeoutSeconds = normalizeTimeoutSeconds(args.timeoutSeconds)
+      const resolution = await context.awaitUserInput({
+        id: inputId,
+        itemId,
+        prompt,
+        questions,
+        ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {})
+      })
+      if (resolution.status === 'timeout') {
+        return {
+          output: {
+            ...resolution,
+            message:
+              'No answer within the timeout. Do NOT call user_input again for the same question; proceed with your own best judgment based on the conversation so far.'
+          },
+          isError: false
+        }
+      }
       return {
         output: resolution,
         isError: resolution.status === 'cancelled'
@@ -140,6 +168,7 @@ function createUserInputTool(name: string): LocalTool {
 }
 
 export const userInputTool: LocalTool = createUserInputTool('user_input')
+/** Legacy executable alias; capability discovery prefers `user_input` when both exist. */
 export const requestUserInputTool: LocalTool = createUserInputTool('request_user_input')
 
 export const defaultLocalTools: LocalTool[] = [
@@ -148,6 +177,13 @@ export const defaultLocalTools: LocalTool[] = [
   userInputTool,
   requestUserInputTool
 ]
+
+function normalizeTimeoutSeconds(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  const normalized = Math.floor(value)
+  if (normalized < 5 || normalized > 3600) return undefined
+  return normalized
+}
 
 function normalizeUserInputQuestions(
   args: Record<string, unknown>,

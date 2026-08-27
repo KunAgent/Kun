@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HybridThreadStore } from './hybrid-thread-store.js'
@@ -23,6 +23,16 @@ async function createStore(): Promise<{ root: string; store: HybridThreadStore }
   const root = await mkdtemp(join(tmpdir(), 'kun-hybrid-usage-'))
   roots.push(root)
   return { root, store: new HybridThreadStore({ dataDir: root }) }
+}
+
+function backfillInternals(store: HybridThreadStore): {
+  db: { prepare(sql: string): { get(...args: unknown[]): unknown } } | null
+  backfill: { wait(): Promise<void> } | null
+} {
+  return store as unknown as {
+    db: { prepare(sql: string): { get(...args: unknown[]): unknown } } | null
+    backfill: { wait(): Promise<void> } | null
+  }
 }
 
 function usageEvent(seq: number, usage: UsageSnapshot): UsageEvent {
@@ -135,6 +145,39 @@ describe('HybridThreadStore usage timing persistence', () => {
     }
   })
 
+  it('keeps the pre-range cumulative snapshot as the differential baseline', async () => {
+    const { store } = await createStore()
+    try {
+      await store.noteEvent(usageEvent(1, {
+        promptTokens: 100,
+        completionTokens: 10,
+        totalTokens: 110,
+        cacheHitRate: null,
+        turns: 1
+      }))
+      await store.noteEvent(usageEvent(2, {
+        promptTokens: 140,
+        completionTokens: 15,
+        totalTokens: 155,
+        cacheHitRate: null,
+        turns: 2
+      }))
+
+      const records = await store.loadUsageRecords({
+        fromInclusive: '2026-08-08T00:00:02.000Z',
+        toExclusive: '2026-08-08T00:00:03.000Z'
+      })
+
+      expect(records).toHaveLength(1)
+      expect(records[0]).toMatchObject({
+        turnId: 'turn-2',
+        usage: { promptTokens: 40, completionTokens: 5, totalTokens: 45, turns: 1 }
+      })
+    } finally {
+      store.close()
+    }
+  })
+
   it('defaults timing aggregates to null when snapshots omit them', async () => {
     const { store } = await createStore()
     try {
@@ -184,6 +227,31 @@ describe('HybridThreadStore filesystem surface fallback', () => {
       store.close()
     }
   })
+
+  it('reuses one filesystem scan across cursor pages', async () => {
+    const { root, store } = await createStore()
+    const records = [
+      legacyWorkThread('thread_cache_c', 'Cache C'),
+      legacyWorkThread('thread_cache_b', 'Cache B')
+    ]
+    await Promise.all(records.map((record) => writeThreadDocument(root, record)))
+    await store.ready()
+    store.close()
+    const source = store as unknown as { threadIdsFromFilesystem(): Promise<string[]> }
+    const scan = vi.spyOn(source, 'threadIdsFromFilesystem')
+
+    const first = await store.listPage({ includeArchived: true, limit: 1 })
+    const second = await store.listPage({
+      includeArchived: true,
+      limit: 1,
+      cursor: first.nextCursor
+    })
+
+    expect(first).toMatchObject({ hasMore: true, total: 2 })
+    expect(second).toMatchObject({ hasMore: false })
+    expect([...first.threads, ...second.threads]).toHaveLength(2)
+    expect(scan).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('HybridThreadStore SQLite pagination', () => {
@@ -216,6 +284,45 @@ describe('HybridThreadStore SQLite pagination', () => {
       expect(filesystemScan).not.toHaveBeenCalled()
     } finally {
       filesystemScan.mockRestore()
+      store.close()
+    }
+  })
+})
+
+describe('HybridThreadStore usage backfill scan failures', () => {
+  it('leaves the thread eligible for a later backfill when events.jsonl is unreadable', async () => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) return
+    const { root, store } = await createStore()
+    const thread = createThreadRecord({
+      id: 'thread_unreadable_events',
+      title: 'Unreadable events',
+      workspace: '/tmp/workspace',
+      model: 'test-model'
+    })
+    await writeThreadDocument(root, thread)
+    const eventsPath = join(root, 'threads', thread.id, 'events.jsonl')
+    await writeFile(eventsPath, `${JSON.stringify(usageEvent(1, {
+      promptTokens: 10,
+      completionTokens: 5,
+      totalTokens: 15,
+      cacheHitRate: null,
+      turns: 1
+    }))}\n`)
+    await chmod(eventsPath, 0o000)
+
+    try {
+      await store.ready()
+      const internals = backfillInternals(store)
+      if (!internals.db || !internals.backfill) return
+      await internals.backfill.wait()
+      const row = internals.db.prepare(
+        'SELECT usage_backfilled, event_seq_high_water FROM threads WHERE id = ?'
+      ).get(thread.id) as { usage_backfilled: number; event_seq_high_water: number } | undefined
+      expect(row?.usage_backfilled ?? 0).toBe(0)
+      expect(row?.event_seq_high_water ?? 0).toBe(0)
+      expect(await store.loadUsageRecords({ threadId: thread.id })).toHaveLength(0)
+    } finally {
+      await chmod(eventsPath, 0o600).catch(() => undefined)
       store.close()
     }
   })

@@ -74,6 +74,10 @@ export async function startKunServe(
         }
       })
       registeredWithManager = true
+      // Manager startup has already settled leases from a verified forced
+      // predecessor. Finish orphan/subagent/turn recovery before publishing
+      // discovery, so clients never attach to a current build with stuck work.
+      await reconcileRuntimeAfterRestart(runtime)
     }
     discovery = await publishRuntimeDiscovery(options.discoveryDir ?? options.dataDir, {
       pid: process.pid,

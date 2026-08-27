@@ -56,7 +56,7 @@ import {
   goalContextInstruction,
   goalContextKey
 } from '../loop/continuation-instructions.js'
-import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
+import { type TurnService, type TurnServiceDeps, TurnConflictError, ThreadClosingError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 import { resolveDesignTurnAdmission } from './turn-service-design-admission.js'
 import {
   InternalTurnRuntimeContext,
@@ -104,7 +104,7 @@ async startTurn(this: TurnService, input: {
       const started = await withManagerDataMutex(`thread:${input.threadId}`, () =>
         this['withThreadMutation'](input.threadId, async () => {
         if (this['deps'].lifecycleFence?.isClosing(input.threadId)) {
-          throw new TurnConflictError(`thread is being deleted: ${input.threadId}`)
+          throw new ThreadClosingError(input.threadId)
         }
         const thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
@@ -516,7 +516,7 @@ async rewindThread(this: TurnService, input: {
         }
       })
       if (history.status === 'closed') {
-        throw new TurnConflictError(`thread is being deleted: ${input.threadId}`)
+        throw new ThreadClosingError(input.threadId)
       }
       if (history.status === 'conflict') {
         throw new TurnConflictError(`history changed while rewinding: ${input.threadId}`)

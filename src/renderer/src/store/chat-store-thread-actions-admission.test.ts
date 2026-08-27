@@ -17,6 +17,7 @@ import {
   getThreadSnapshot,
   snapshotThreadProjection
 } from './thread-snapshot-cache'
+import { invalidatePendingTurnStarts } from './turn-start-fence'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -317,12 +318,31 @@ describe('chat-store-thread-actions queued messages', () => {
     )
   })
 
+  it('does not project a late stopped admission as running when interrupt fails', async () => {
+    const pendingSend = deferredValue<{ threadId: string, turnId: string, userMessageItemId: string }>()
+    const interruptTurn = vi.fn(async () => { throw new Error('interrupt unavailable') })
+    const sendUserMessage = vi.fn(() => pendingSend.promise)
+    registryMock.getProvider.mockReturnValue({ sendUserMessage, interruptTurn })
+    vi.stubGlobal('window', { kunGui: {
+      getSettings: vi.fn(async () => ({ agents: { kun: { providerId: 'deepseek', model: 'deepseek-v4-pro' } }, codePromptPrefix: '', chatWelcomeMessage: '' })),
+      logError: vi.fn(async () => undefined)
+    } })
+    const { actions, state } = buildHarness()
+    state.busy = false
+    state.threads = [{ ...thread('thr_existing'), status: 'idle', latestTurnStatus: 'idle' }]
+    const sending = actions.sendMessage('stop this admission', 'agent')
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalledOnce())
+    invalidatePendingTurnStarts()
+    pendingSend.resolve({ threadId: 'thr_existing', turnId: 'turn_late', userMessageItemId: 'user_late' })
+    await expect(sending).resolves.toBe(true)
+    expect(interruptTurn).toHaveBeenCalledWith('thr_existing', 'turn_late', { discard: false })
+    expect(state.refreshThreads).toHaveBeenCalledOnce()
+    expect(state.threads[0]).toMatchObject({ latestTurnStatus: 'idle' })
+    expect(state.busy).toBe(false)
+  })
+
   it('keeps a late Code admission out of Work and invalidates the parked Code snapshot', async () => {
-    const pendingSend = deferredValue<{
-      threadId: string
-      turnId: string
-      userMessageItemId: string
-    }>()
+    const pendingSend = deferredValue<{ threadId: string, turnId: string, userMessageItemId: string }>()
     const subscribeThreadEvents = vi.fn(async () => undefined)
     const sendUserMessage = vi.fn(() => pendingSend.promise)
     const getThreadDetail = vi.fn(async () => ({

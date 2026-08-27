@@ -17,6 +17,8 @@ export const ERRORS = {
     errorResponse({ code: 'forbidden', message }, 403),
   notFound: (message = 'not found') =>
     errorResponse({ code: 'not_found', message }, 404),
+  threadClosing: (message = 'thread is closing') =>
+    errorResponse({ code: 'thread_closing', message }, 409),
   validation: (message: string, issues?: unknown) =>
     errorResponse({ code: 'validation_error', message, details: issues }, 400),
   attachmentValidation: (message: string, issues?: unknown) =>

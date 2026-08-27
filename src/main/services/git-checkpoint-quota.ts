@@ -1,6 +1,6 @@
-import { readdir, rm, stat } from 'node:fs/promises'
+import { readdir, rm, stat, statfs } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   DEFAULT_CHECKPOINT_MIN_FREE_DISK_BYTES,
   DEFAULT_CHECKPOINT_MAX_TOTAL_BYTES
@@ -64,7 +64,7 @@ async function listCheckpointsOldestFirst(root: string): Promise<Array<{ id: str
   }
   const listed: Array<{ id: string, createdAtMs: number }> = []
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue
+    if (!entry.isDirectory() || entry.name.startsWith('.staging-')) continue
     const metadata = await readMetadata(root, entry.name)
     const createdMs = metadata ? Date.parse(metadata.createdAt) : NaN
     const byName = Number(entry.name.match(/^gcp_(\d+)_/)?.[1] ?? 0)
@@ -163,24 +163,19 @@ export async function ensureQuotaForCreate(params: {
   return { allowed: true }
 }
 
-/** Best-effort free-disk probe via `df -k` (POSIX); null when unavailable. */
+/** Cross-platform free disk probe using the nearest existing parent. */
 export async function freeDiskBytes(path: string): Promise<number | null> {
-  const { execFile } = await import('node:child_process')
-  return new Promise((resolveProbe) => {
-    execFile('df', ['-k', path], { timeout: 5_000 }, (error, stdout) => {
-      if (error) {
-        resolveProbe(null)
-        return
-      }
-      const lines = stdout.trim().split('\n')
-      const dataLine = lines.length > 1 ? lines[lines.length - 1] : null
-      if (!dataLine) {
-        resolveProbe(null)
-        return
-      }
-      const columns = dataLine.trim().split(/\s+/)
-      const availableKb = Number(columns[columns.length - 3])
-      resolveProbe(Number.isFinite(availableKb) && availableKb >= 0 ? availableKb * 1024 : null)
-    })
-  })
+  let target = path
+  while (true) {
+    try {
+      const info = await statfs(target, { bigint: true })
+      const bytes = info.bavail * info.bsize
+      return bytes > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(bytes)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return null
+      const parent = dirname(target)
+      if (parent === target) return null
+      target = parent
+    }
+  }
 }

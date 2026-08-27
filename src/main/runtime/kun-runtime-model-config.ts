@@ -126,6 +126,7 @@ function modelCapabilitiesForProviderConfig(
             }
           }
         : {}),
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
       ...(profile.serviceTiers ? { serviceTiers: [...profile.serviceTiers] } : {}),
       ...(profile.endpointFormat ? { endpointFormat: profile.endpointFormat } : {}),
       ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {})
@@ -248,6 +249,7 @@ function modelConfigProfilesFromProviderProfiles(
       supportsToolCalling: profile.supportsToolCalling,
       messageParts: profile.messageParts,
       ...(profile.reasoning ? { reasoning: profile.reasoning } : {}),
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
       ...(profile.serviceTiers ? { serviceTiers: profile.serviceTiers } : {}),
       ...(profile.endpointFormat ? { endpointFormat: profile.endpointFormat } : {}),
       ...(profile.responsesMode ? { responsesMode: profile.responsesMode } : {})

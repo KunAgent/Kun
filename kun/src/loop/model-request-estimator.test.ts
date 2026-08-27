@@ -3,7 +3,7 @@ import {
   estimateModelRequestInputTokenBreakdown,
   estimateModelRequestInputTokens
 } from './model-request-estimator.js'
-import { makeUserItem } from '../domain/item.js'
+import { makeModelContextItem, makeUserItem } from '../domain/item.js'
 import type { ModelRequest } from '../ports/model-client.js'
 
 describe('estimateModelRequestInputTokens', () => {
@@ -117,5 +117,99 @@ describe('estimateModelRequestInputTokens', () => {
       breakdown.other
     )
     expect(estimateModelRequestInputTokens(request)).toBe(breakdown.total)
+  })
+  it('moves active skill context updates from messages to skills without changing the total', () => {
+    const activeSkillContext = makeModelContextItem({
+      id: 'context_active_skill',
+      turnId: 'turn_context_skill',
+      threadId: 'thr_context_skill',
+      stepIndex: 0,
+      contentDigest: 'active_skill',
+      blocks: [{
+        key: 'skill-instruction:skill:0',
+        kind: 'skill-instruction',
+        authority: 'skill',
+        state: 'active',
+        digest: 'skill'
+      }],
+      text: [
+        'Kun append-only model context update (format 1).',
+        '<kun_context_update key="skill-instruction:skill:0" kind="skill-instruction" authority="skill" state="active">',
+        's'.repeat(400),
+        '</kun_context_update>'
+      ].join('\n')
+    })
+    const inactiveSkillContext = makeModelContextItem({
+      id: 'context_inactive_skill',
+      turnId: 'turn_context_skill',
+      threadId: 'thr_context_skill',
+      stepIndex: 0,
+      contentDigest: 'inactive_skill',
+      blocks: [{
+        key: 'skill-instruction:skill:0',
+        kind: 'skill-instruction',
+        authority: 'skill',
+        state: 'inactive'
+      }],
+      text: [
+        'Kun append-only model context update (format 1).',
+        '<kun_context_update key="skill-instruction:skill:0" kind="skill-instruction" authority="skill" state="inactive">',
+        's'.repeat(400),
+        '</kun_context_update>'
+      ].join('\n')
+    })
+    const request: ModelRequest = {
+      threadId: 'thr_context_skill',
+      turnId: 'turn_context_skill',
+      model: 'model',
+      systemPrompt: 'system',
+      prefix: [],
+      history: [activeSkillContext],
+      tools: [],
+      abortSignal: new AbortController().signal
+    }
+
+    const active = estimateModelRequestInputTokenBreakdown(request)
+    const inactive = estimateModelRequestInputTokenBreakdown({
+      ...request,
+      history: [inactiveSkillContext]
+    })
+
+    expect(active.skills).toBeGreaterThan(0)
+    expect(inactive.skills).toBe(0)
+    expect(active.messages).toBeLessThan(inactive.messages)
+    expect(active.total).toBe(inactive.total)
+  })
+
+  it('keeps model context without active skills in the messages category', () => {
+    const request: ModelRequest = {
+      threadId: 'thr_context_runtime',
+      turnId: 'turn_context_runtime',
+      model: 'model',
+      systemPrompt: 'system',
+      prefix: [],
+      history: [makeModelContextItem({
+        id: 'context_runtime',
+        turnId: 'turn_context_runtime',
+        threadId: 'thr_context_runtime',
+        stepIndex: 0,
+        contentDigest: 'runtime',
+        blocks: [{
+          key: 'runtime:runtime:0',
+          kind: 'runtime',
+          authority: 'runtime',
+          state: 'active',
+          digest: 'runtime'
+        }],
+        text: '<kun_context_update authority="runtime" state="active">runtime</kun_context_update>'
+      })],
+      tools: [],
+      abortSignal: new AbortController().signal
+    }
+
+    const breakdown = estimateModelRequestInputTokenBreakdown(request)
+
+    expect(breakdown.skills).toBe(0)
+    expect(breakdown.messages).toBeGreaterThan(0)
   })
 })

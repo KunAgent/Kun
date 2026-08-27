@@ -47,7 +47,7 @@ function AttachmentImagePreview({
         <img
           src={previewUrl}
           alt={title}
-          className="h-full w-full object-cover"
+          className="h-full w-full bg-ds-subtle object-contain"
         />
       </button>
       {onRemoveAttachment ? (

@@ -175,6 +175,7 @@ export function SettingsView(): ReactElement {
   const formGuiUpdateChannel = form?.guiUpdate?.channel
   const formCursorSpotlight = form?.cursorSpotlight
   const formCursorSpotlightColor = form?.cursorSpotlightColor
+  const formDarkUiColors = form?.darkUiColors
   const markAgentsSectionReady = useCallback(() => setAgentsSectionReady(true), [])
   const settingsPlatform = typeof window !== 'undefined' ? window.kunGui?.platform ?? '' : ''
   const settingsHomeDir = typeof window !== 'undefined' ? window.kunGui?.homeDir ?? '' : ''
@@ -220,7 +221,8 @@ export function SettingsView(): ReactElement {
     setWriteCompletionDebugEntries, setWriteCompletionDebugSelectedId, setWriteDebugLoading,
     setWriteDebugError, extensionContributionSnapshotReady, extensionSettingsAvailable,
     settingsScrollerRef, persistedSettingsRef, formTheme, formUiFontScale,
-    formChatContentMaxWidthPx, writeTypography, formCursorSpotlight, formCursorSpotlightColor
+    formChatContentMaxWidthPx, writeTypography, formCursorSpotlight, formCursorSpotlightColor,
+    formDarkUiColors
   })
 
   useSettingsRouteSynchronization({

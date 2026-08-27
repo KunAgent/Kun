@@ -162,9 +162,16 @@ describe('compactUsageEventsJsonlFile', () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-usage-compact-conflict-'))
     roots.push(root)
     const path = join(root, 'events.jsonl')
+    const usage = (seq: number) => ({
+      promptTokens: seq,
+      completionTokens: 0,
+      totalTokens: seq,
+      cacheHitRate: null,
+      turns: seq
+    })
     const lines = [
-      { kind: 'usage', seq: 1, timestamp: '2024-01-01T00:00:00.000Z', threadId: 'thr' },
-      { kind: 'usage', seq: 2, timestamp: '2024-01-02T00:00:00.000Z', threadId: 'thr' },
+      { kind: 'usage', seq: 1, timestamp: '2024-01-01T00:00:00.000Z', threadId: 'thr', usage: usage(1) },
+      { kind: 'usage', seq: 2, timestamp: '2024-01-02T00:00:00.000Z', threadId: 'thr', usage: usage(2) },
       { kind: 'heartbeat', seq: 3, timestamp: '2026-01-01T00:00:00.000Z', threadId: 'thr' }
     ]
     await writeFile(path, `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`, 'utf8')

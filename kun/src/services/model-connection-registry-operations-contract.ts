@@ -76,4 +76,5 @@ export interface ModelConnectionRegistryOperations {
     apiKey: string
   ): Promise<boolean>;
   materialize(): Promise<MaterializedModelConnections>;
+  materializeReadOnly(): Promise<MaterializedModelConnections>;
 }

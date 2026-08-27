@@ -1,6 +1,8 @@
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import {
+  Check,
   ClipboardList,
+  Copy,
   ExternalLink,
   Loader2,
   PanelRightClose,
@@ -241,6 +243,39 @@ export function PlanPanel({
     )
   }
 
+  const [copyPathStatus, setCopyPathStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const copyPathResetRef = useRef<number | null>(null)
+
+  useEffect(
+    () => () => {
+      if (copyPathResetRef.current !== null) window.clearTimeout(copyPathResetRef.current)
+    },
+    []
+  )
+
+  const handleCopyPath = async (): Promise<void> => {
+    if (!activePlan) return
+    try {
+      if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(activePlan.relativePath)
+      setCopyPathStatus('success')
+    } catch {
+      setCopyPathStatus('error')
+    }
+    if (copyPathResetRef.current !== null) window.clearTimeout(copyPathResetRef.current)
+    copyPathResetRef.current = window.setTimeout(() => {
+      setCopyPathStatus('idle')
+      copyPathResetRef.current = null
+    }, 1600)
+  }
+
+  const copyPathLabel =
+    copyPathStatus === 'success'
+      ? t('copySuccess')
+      : copyPathStatus === 'error'
+        ? t('copyFailed')
+        : t('planCopyPath')
+
   return (
     <aside
       className={`ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted ${className}`}
@@ -274,8 +309,31 @@ export function PlanPanel({
           </button>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2 px-4 pb-3">
-          <div className="min-w-0 flex-1 truncate rounded-full border border-ds-border-muted bg-ds-surface-subtle px-3 py-1.5 text-[11.5px] font-medium text-ds-muted dark:bg-white/6">
-            {activePlan?.relativePath ?? t('planNoActiveFile')}
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-surface-subtle px-3 py-1.5 text-[11.5px] font-medium text-ds-muted dark:bg-white/6">
+            <span className="min-w-0 flex-1 truncate">
+              {activePlan?.relativePath ?? t('planNoActiveFile')}
+            </span>
+            {activePlan ? (
+              <button
+                type="button"
+                onClick={() => void handleCopyPath()}
+                className={`shrink-0 rounded-full p-0.5 transition hover:text-accent ${
+                  copyPathStatus === 'success'
+                    ? 'text-emerald-500'
+                    : copyPathStatus === 'error'
+                      ? 'text-rose-400'
+                      : 'text-ds-faint'
+                }`}
+                aria-label={copyPathLabel}
+                title={copyPathLabel}
+              >
+                {copyPathStatus === 'success' ? (
+                  <Check className="h-3 w-3" strokeWidth={2} />
+                ) : (
+                  <Copy className="h-3 w-3" strokeWidth={1.8} />
+                )}
+              </button>
+            ) : null}
           </div>
           <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-card px-2.5 py-1.5 text-[11.5px] font-medium text-ds-muted">
             {saveStatus === 'saving' || operationStatus === 'drafting' || operationStatus === 'refining' || operationStatus === 'building' ? (

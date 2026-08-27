@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type MockUpdater = EventEmitter & {
@@ -25,6 +24,7 @@ let showMessageBox: ReturnType<typeof vi.fn>
 let openExternal: ReturnType<typeof vi.fn>
 let relaunchApp: ReturnType<typeof vi.fn>
 let exitApp: ReturnType<typeof vi.fn>
+let appListeners: Map<string, () => void>
 
 function createUpdater(): MockUpdater {
   return Object.assign(new EventEmitter(), {
@@ -54,6 +54,7 @@ beforeEach(() => {
   openExternal = vi.fn().mockResolvedValue(undefined)
   relaunchApp = vi.fn()
   exitApp = vi.fn()
+  appListeners = new Map()
   vi.doMock('node:fs/promises', () => ({
     mkdir: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn(async (path: string) => {
@@ -63,6 +64,15 @@ beforeEach(() => {
     }),
     writeFile: vi.fn(async (path: string, value: string) => {
       mockedFiles.set(String(path), String(value))
+    }),
+    rename: vi.fn(async (from: string, to: string) => {
+      const value = mockedFiles.get(String(from))
+      if (value === undefined) throw Object.assign(new Error('not found'), { code: 'ENOENT' })
+      mockedFiles.delete(String(from))
+      mockedFiles.set(String(to), value)
+    }),
+    rm: vi.fn(async (path: string) => {
+      mockedFiles.delete(String(path))
     })
   }))
   vi.doMock('electron', () => ({
@@ -75,7 +85,8 @@ beforeEach(() => {
       getVersion: () => appVersion,
       getLocale: () => 'en-US',
       relaunch: relaunchApp,
-      exit: exitApp
+      exit: exitApp,
+      on: (event: string, listener: () => void) => appListeners.set(event, listener)
     },
     autoUpdater: nativeUpdater,
     BrowserWindow: class {},
@@ -103,6 +114,22 @@ function platformManifestName(): string {
   if (process.platform === 'darwin') return 'latest-mac.yml'
   if (process.platform === 'linux') return 'latest-linux.yml'
   return 'latest.yml'
+}
+
+async function downloadInstallEligibleUpdate(
+  module: typeof import('./gui-updater'),
+  channel: 'stable' | 'frontier' = 'stable'
+): Promise<void> {
+  process.env.KUN_UPDATE_URL = `https://updates.example.test/${channel}/`
+  process.env.DEEPSEEK_GUI_ALLOW_UNSIGNED_UPDATES = '1'
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+  updater.checkForUpdates.mockResolvedValue({
+    updateInfo: { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' },
+    isUpdateAvailable: true
+  })
+  updater.downloadUpdate.mockResolvedValue(['C:\\Temp\\Kun-0.2.0.exe'])
+  await expect(module.checkGuiUpdate(channel)).resolves.toMatchObject({ ok: true, hasUpdate: true })
+  await expect(module.downloadGuiUpdate(channel)).resolves.toMatchObject({ ok: true })
 }
 
 describe('checkGuiUpdate feed URL', () => {
@@ -244,10 +271,7 @@ describe('installGuiUpdate', () => {
         expect(process.env.KUN_INSTALLER_UPDATE_SOURCE).toBe('D:\\Apps\\Kun')
       })
       module.initializeGuiUpdater(() => null, () => 'stable')
-      updater.emit('update-downloaded', {
-        version: '0.2.0',
-        releaseDate: '2026-06-06T00:00:00.000Z'
-      })
+      await downloadInstallEligibleUpdate(module)
 
       await expect(module.installGuiUpdate()).resolves.toEqual({ ok: true })
       expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true)
@@ -300,10 +324,10 @@ describe('installGuiUpdate', () => {
       undefined,
       setUpdateInstallQuitting
     )
-    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    await downloadInstallEligibleUpdate(module)
 
     const installing = module.installGuiUpdate()
-    await Promise.resolve()
+    for (let index = 0; index < 3; index += 1) await Promise.resolve()
 
     expect(beforeInstall).toHaveBeenCalledTimes(1)
     expect(setUpdateInstallQuitting).toHaveBeenCalledWith(true)
@@ -320,6 +344,29 @@ describe('installGuiUpdate', () => {
       updater.quitAndInstall.mock.invocationCallOrder[0]
     )
     expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true)
+  })
+
+  it('rejects installation when the channel changes during cleanup', async () => {
+    const module = await import('./gui-updater')
+    let finishCleanup = (): void => undefined
+    module.initializeGuiUpdater(
+      () => null,
+      () => 'stable',
+      () => new Promise<void>((resolve) => { finishCleanup = resolve })
+    )
+    await downloadInstallEligibleUpdate(module)
+
+    const installing = module.installGuiUpdate()
+    for (let index = 0; index < 3; index += 1) await Promise.resolve()
+    module.setGuiUpdateChannel('frontier')
+    finishCleanup()
+
+    await expect(installing).resolves.toMatchObject({
+      ok: false,
+      code: 'install_failed',
+      message: 'The selected update is no longer eligible for installation.'
+    })
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
   })
 
   it('reuses the same cleanup when the native updater emits before-quit-for-update', async () => {
@@ -339,7 +386,7 @@ describe('installGuiUpdate', () => {
       undefined,
       setUpdateInstallQuitting
     )
-    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    await downloadInstallEligibleUpdate(module)
 
     nativeUpdater.emit('before-quit-for-update')
     expect(setUpdateInstallQuitting).toHaveBeenCalledTimes(1)
@@ -373,7 +420,7 @@ describe('installGuiUpdate', () => {
       undefined,
       setUpdateInstallQuitting
     )
-    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    await downloadInstallEligibleUpdate(module)
 
     await expect(module.installGuiUpdate()).resolves.toMatchObject({
       ok: false,
@@ -398,7 +445,7 @@ describe('installGuiUpdate', () => {
       undefined,
       setUpdateInstallQuitting
     )
-    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    await downloadInstallEligibleUpdate(module)
 
     await expect(module.installGuiUpdate()).resolves.toMatchObject({
       ok: false,
@@ -423,7 +470,7 @@ describe('installGuiUpdate', () => {
       undefined,
       setUpdateInstallQuitting
     )
-    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    await downloadInstallEligibleUpdate(module)
 
     await expect(module.installGuiUpdate()).resolves.toEqual({ ok: true })
     await Promise.resolve()
@@ -450,7 +497,7 @@ describe('installGuiUpdate', () => {
       undefined,
       setUpdateInstallQuitting
     )
-    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    await downloadInstallEligibleUpdate(module)
 
     await expect(module.installGuiUpdate()).resolves.toMatchObject({
       ok: false,
@@ -464,6 +511,32 @@ describe('installGuiUpdate', () => {
     expect(exitApp).toHaveBeenCalledWith(0)
   })
 
+  it('writes pending installer state before handing off to NSIS', async () => {
+    const module = await import('./gui-updater')
+    module.initializeGuiUpdater(() => null, () => 'stable')
+    await downloadInstallEligibleUpdate(module)
+
+    await expect(module.installGuiUpdate()).resolves.toEqual({ ok: true })
+    const stored = [...mockedFiles.entries()].find(([path]) => path.endsWith('pending-update.json'))
+    expect(stored?.[1]).toContain('"oldVersion": "0.1.0"')
+    expect(stored?.[1]).toContain('"newVersion": "0.2.0"')
+    expect(stored?.[1]).toContain('Kun-0.2.0.exe')
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true)
+  })
+
+  it('defers installation during Windows session end without discarding the download', async () => {
+    const module = await import('./gui-updater')
+    module.initializeGuiUpdater(() => null, () => 'stable')
+    await downloadInstallEligibleUpdate(module)
+    appListeners.get('session-end')?.()
+
+    await expect(module.installGuiUpdate()).resolves.toMatchObject({
+      ok: false,
+      code: 'install_deferred'
+    })
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
   it('shares one install operation when the action is triggered twice', async () => {
     const module = await import('./gui-updater')
     let finishCleanup = (): void => {
@@ -474,13 +547,13 @@ describe('installGuiUpdate', () => {
       () => 'stable',
       () => new Promise<void>((resolve) => { finishCleanup = resolve })
     )
-    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    await downloadInstallEligibleUpdate(module)
 
     const first = module.installGuiUpdate()
     const second = module.installGuiUpdate()
     expect(second).toBe(first)
 
-    await Promise.resolve()
+    for (let index = 0; index < 3; index += 1) await Promise.resolve()
     finishCleanup()
     await expect(first).resolves.toEqual({ ok: true })
     expect(updater.quitAndInstall).toHaveBeenCalledTimes(1)
@@ -494,7 +567,11 @@ describe('downloadGuiUpdate recovery', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
     const module = await import('./gui-updater')
     module.initializeGuiUpdater(() => null, () => 'stable')
-    updater.emit('update-available', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    updater.checkForUpdates.mockResolvedValue({
+      updateInfo: { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' },
+      isUpdateAvailable: true
+    })
+    await expect(module.checkGuiUpdate()).resolves.toMatchObject({ ok: true, hasUpdate: true })
     updater.downloadUpdate
       .mockRejectedValueOnce(new Error('connection reset'))
       .mockResolvedValueOnce(['C:\\Temp\\Kun-0.2.0.exe'])
@@ -514,107 +591,56 @@ describe('downloadGuiUpdate recovery', () => {
     })
     expect(updater.downloadUpdate).toHaveBeenCalledTimes(2)
   })
-})
 
-describe('showPostUpdateReleaseNotes', () => {
-  const versionStatePath = join(
-    '/tmp/deepseek-gui-updater-test-user-data',
-    'gui-version-state.json'
-  )
+  it('ignores a stale download completion after switching from stable to frontier', async () => {
+    process.env.KUN_UPDATE_URL_STABLE = 'https://updates.example.test/stable/'
+    process.env.KUN_UPDATE_URL_FRONTIER = 'https://updates.example.test/frontier/'
+    process.env.DEEPSEEK_GUI_ALLOW_UNSIGNED_UPDATES = '1'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+    let finishDownload = (): void => undefined
+    updater.downloadUpdate.mockImplementation(() => new Promise<string[]>((resolve) => {
+      finishDownload = () => resolve(['C:\\Temp\\Kun-0.2.0.exe'])
+    }))
+    const module = await import('./gui-updater')
+    module.initializeGuiUpdater(() => null, () => 'stable')
+    updater.checkForUpdates.mockResolvedValue({
+      updateInfo: { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' },
+      isUpdateAvailable: true
+    })
+    await expect(module.checkGuiUpdate('stable')).resolves.toMatchObject({ ok: true, hasUpdate: true })
 
-  it('records the first launched version without showing a notice', async () => {
+    const downloading = module.downloadGuiUpdate('stable')
+    await vi.waitFor(() => expect(updater.downloadUpdate).toHaveBeenCalledOnce())
+    module.setGuiUpdateChannel('frontier')
+    updater.emit('download-progress', { percent: 100 })
+    updater.emit('update-downloaded', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    finishDownload()
+
+    await expect(downloading).resolves.toMatchObject({ ok: false, code: 'download_failed' })
+    expect(module.getGuiUpdateState()).toEqual({ status: 'idle' })
+    await expect(module.installGuiUpdate()).resolves.toMatchObject({ ok: false, code: 'install_failed' })
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('ignores a stale check result after switching from stable to frontier', async () => {
+    process.env.KUN_UPDATE_URL_STABLE = 'https://updates.example.test/stable/'
+    process.env.KUN_UPDATE_URL_FRONTIER = 'https://updates.example.test/frontier/'
+    process.env.DEEPSEEK_GUI_ALLOW_UNSIGNED_UPDATES = '1'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+    let finishCheck = (_value: unknown): void => undefined
+    updater.checkForUpdates.mockImplementation(() => new Promise((resolve) => {
+      finishCheck = resolve
+    }))
     const module = await import('./gui-updater')
     module.initializeGuiUpdater(() => null, () => 'stable')
 
-    await module.showPostUpdateReleaseNotes()
+    const checking = module.checkGuiUpdate('stable')
+    await vi.waitFor(() => expect(updater.checkForUpdates).toHaveBeenCalledOnce())
+    module.setGuiUpdateChannel('frontier')
+    updater.emit('update-available', { version: '0.2.0', releaseDate: '2026-06-06T00:00:00.000Z' })
+    finishCheck({ updateInfo: { version: '0.2.0' }, isUpdateAvailable: true })
 
-    expect(showMessageBox).not.toHaveBeenCalled()
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({
-      lastSeenVersion: '0.1.0'
-    })
-  })
-
-  it('does not show or overwrite release-note state in development', async () => {
-    appIsPackaged = false
-    appVersion = '0.1.0'
-    mockedFiles.set(versionStatePath, JSON.stringify({ lastSeenVersion: '0.2.0' }))
-    const module = await import('./gui-updater')
-    module.initializeGuiUpdater(() => null, () => 'stable')
-
-    await module.showPostUpdateReleaseNotes()
-
-    expect(showMessageBox).not.toHaveBeenCalled()
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({
-      lastSeenVersion: '0.2.0'
-    })
-  })
-
-  it('does not show release notes when launching an older version', async () => {
-    appVersion = '0.1.0'
-    mockedFiles.set(versionStatePath, JSON.stringify({ lastSeenVersion: '0.2.0' }))
-    const module = await import('./gui-updater')
-    module.initializeGuiUpdater(() => null, () => 'stable')
-
-    await module.showPostUpdateReleaseNotes()
-
-    expect(showMessageBox).not.toHaveBeenCalled()
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({
-      lastSeenVersion: '0.2.0'
-    })
-  })
-
-  it('shows downloaded release notes once after the version changes', async () => {
-    appVersion = '0.2.0'
-    mockedFiles.set(
-      versionStatePath,
-      JSON.stringify({
-        lastSeenVersion: '0.1.0',
-        pendingUpdate: {
-          version: '0.2.0',
-          releaseNotes: '修复更新流程并改进启动体验。'
-        }
-      })
-    )
-    showMessageBox.mockResolvedValue({ response: 0 })
-    const module = await import('./gui-updater')
-    module.initializeGuiUpdater(() => null, () => 'stable', undefined, () => 'zh')
-
-    await module.showPostUpdateReleaseNotes()
-    await module.showPostUpdateReleaseNotes()
-
-    expect(showMessageBox).toHaveBeenCalledTimes(1)
-    expect(showMessageBox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Kun 已更新',
-        message: '已更新到 Kun 0.2.0',
-        detail: '修复更新流程并改进启动体验。',
-        buttons: ['查看更新日志', '稍后']
-      })
-    )
-    expect(openExternal).toHaveBeenCalledWith(
-      'https://github.com/KunAgent/Kun/blob/master/release/release-v0.2.0.md'
-    )
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({
-      lastSeenVersion: '0.2.0'
-    })
-  })
-
-  it('substitutes the version in a configured changelog URL', async () => {
-    process.env.KUN_CHANGELOG_URL = 'https://example.com/release/release-{version}.md'
-    appVersion = '0.2.1'
-    mockedFiles.set(
-      versionStatePath,
-      JSON.stringify({
-        lastSeenVersion: '0.2.0',
-        pendingUpdate: { version: '0.2.1' }
-      })
-    )
-    showMessageBox.mockResolvedValue({ response: 0 })
-    const module = await import('./gui-updater')
-    module.initializeGuiUpdater(() => null, () => 'stable')
-
-    await module.showPostUpdateReleaseNotes()
-
-    expect(openExternal).toHaveBeenCalledWith('https://example.com/release/release-v0.2.1.md')
+    await expect(checking).resolves.toMatchObject({ ok: false, channel: 'stable' })
+    expect(module.getGuiUpdateState()).toEqual({ status: 'idle' })
   })
 })

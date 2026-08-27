@@ -1,32 +1,57 @@
 import { resolve } from 'node:path'
 import type { RuntimeFlavor } from '../../../kun/src/contracts/runtime-flavor.js'
+import type { RuntimeHandoffDiscoveryRecord } from '../../../kun/src/server/runtime-discovery.js'
+import { readRuntimeHandoffDiscovery } from '../../../kun/src/server/runtime-discovery.js'
 import {
   inspectSharedRuntime,
-  type SharedRuntimeInspection,
+  type SharedRuntimeConnection,
   type SharedRuntimeScope
 } from '../../../kun/src/cli/shared-runtime.js'
-import { runtimeDiscoveryDirectory } from '../../../kun/src/cli/shared-runtime-support.js'
+import { requestExactRuntimeShutdown } from '../../../kun/src/cli/runtime-shutdown-client.js'
+import {
+  processAlive,
+  runtimeDiscoveryDirectory
+} from '../../../kun/src/cli/shared-runtime-support.js'
 import { removeRuntimeDiscovery } from '../../../kun/src/server/runtime-discovery.js'
 import { withRuntimeDataDirAncillaryWriter } from '../../../kun/src/server/runtime-data-dir-lease.js'
 import { unregisterRuntimeWithManager } from '../../../kun/src/manager/manager-client.js'
 import {
+  identityMatchesExpectedRuntime,
+  sameRuntimeOwner as sameDiscoveryRuntimeOwner
+} from '../kun-process-identity'
+import {
   listListeningPidsOnPort,
   processCommandLine,
+  processIdentity,
   terminateVerifiedPid,
   waitForPidExit
 } from '../kun-process-ports'
+import { KunOwnerVerificationError } from './kun-replacement-error'
 
 export type KunServeReplacementReport = {
   stopped: boolean
   forced: boolean
 }
 
+export type SharedRuntimeReplacementInspection = {
+  discovery: RuntimeHandoffDiscoveryRecord
+  connection: SharedRuntimeConnection | null
+}
+
 export type KunServeReplacementDependencies = {
-  inspect: typeof inspectSharedRuntime
-  requestShutdown: (target: SharedRuntimeInspection, fetchImpl: typeof fetch) => Promise<void>
+  inspect: (
+    dataDir: string,
+    fetchImpl: typeof fetch,
+    scope: SharedRuntimeScope
+  ) => Promise<SharedRuntimeReplacementInspection | null>
+  requestShutdown: (
+    target: SharedRuntimeReplacementInspection,
+    fetchImpl: typeof fetch
+  ) => Promise<void>
   waitForExit: typeof waitForPidExit
   commandLine: typeof processCommandLine
   listenerPids: typeof listListeningPidsOnPort
+  processIdentity: typeof processIdentity
   terminate: typeof terminateVerifiedPid
   removeDiscovery: typeof removeRuntimeDiscovery
   withAncillaryWriter: typeof withRuntimeDataDirAncillaryWriter
@@ -34,11 +59,13 @@ export type KunServeReplacementDependencies = {
 }
 
 const defaultDependencies: KunServeReplacementDependencies = {
-  inspect: inspectSharedRuntime,
-  requestShutdown: requestExactRuntimeShutdown,
+  inspect: inspectSharedRuntimeForReplacement,
+  requestShutdown: (target, fetchImpl) =>
+    requestExactRuntimeShutdown(target.discovery, fetchImpl),
   waitForExit: waitForPidExit,
   commandLine: processCommandLine,
   listenerPids: listListeningPidsOnPort,
+  processIdentity,
   terminate: terminateVerifiedPid,
   removeDiscovery: removeRuntimeDiscovery,
   withAncillaryWriter: withRuntimeDataDirAncillaryWriter,
@@ -60,15 +87,45 @@ export async function stopSharedRuntimeForReplacement(
   const deps = { ...defaultDependencies, ...overrides }
   const target = await deps.inspect(dataDir, fetchImpl, scope)
   if (!target) return { stopped: false, forced: false }
+  return stopExactSharedRuntimeForReplacementWithDependencies(
+    dataDir,
+    target,
+    fetchImpl,
+    scope,
+    deps
+  )
+}
 
+export async function stopExactSharedRuntimeForReplacement(
+  dataDir: string,
+  target: SharedRuntimeReplacementInspection,
+  fetchImpl: typeof fetch = fetch,
+  scope: SharedRuntimeScope = {},
+  overrides: Partial<KunServeReplacementDependencies> = {}
+): Promise<KunServeReplacementReport> {
+  return stopExactSharedRuntimeForReplacementWithDependencies(
+    dataDir,
+    target,
+    fetchImpl,
+    scope,
+    { ...defaultDependencies, ...overrides }
+  )
+}
+
+async function stopExactSharedRuntimeForReplacementWithDependencies(
+  dataDir: string,
+  target: SharedRuntimeReplacementInspection,
+  fetchImpl: typeof fetch,
+  scope: SharedRuntimeScope,
+  deps: KunServeReplacementDependencies
+): Promise<KunServeReplacementReport> {
   try {
     const currentBeforeShutdown = await inspectTarget(dataDir, fetchImpl, scope, deps)
     if (!currentBeforeShutdown.ok) {
       throw new Error('could not re-verify the recorded runtime owner before shutdown')
     }
     if (!sameRuntimeOwner(target, currentBeforeShutdown.value)) {
-      await removeExactOwnership(dataDir, target, scope, deps)
-      return { stopped: true, forced: false }
+      return settleChangedRuntimeOwner(dataDir, target, scope, deps)
     }
     await deps.requestShutdown(target, fetchImpl)
     if (await deps.waitForExit(target.discovery.pid, 15_000)) {
@@ -90,7 +147,7 @@ export async function stopSharedRuntimeForReplacement(
 
 async function forceVerifiedReplacement(
   dataDir: string,
-  target: SharedRuntimeInspection,
+  target: SharedRuntimeReplacementInspection,
   fetchImpl: typeof fetch,
   scope: SharedRuntimeScope,
   deps: KunServeReplacementDependencies,
@@ -102,8 +159,7 @@ async function forceVerifiedReplacement(
   // it is no longer safe or necessary to signal the old PID.
   if (!current.ok) throw replacementFailure(runtimeFlavorFor(target, scope), target.discovery.pid, originalError)
   if (!sameRuntimeOwner(target, current.value)) {
-    await removeExactOwnership(dataDir, target, scope, deps)
-    return { stopped: true, forced: false }
+    return settleChangedRuntimeOwner(dataDir, target, scope, deps, originalError)
   }
 
   const flavor = runtimeFlavorFor(target, scope)
@@ -120,28 +176,15 @@ async function forceVerifiedReplacement(
   return { stopped: true, forced: true }
 }
 
-async function requestExactRuntimeShutdown(
-  target: SharedRuntimeInspection,
-  fetchImpl: typeof fetch
-): Promise<void> {
-  const response = await fetchImpl(`${target.discovery.baseUrl.replace(/\/$/u, '')}/v1/runtime/shutdown`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${target.discovery.runtimeToken}`,
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify({ instanceId: target.discovery.instanceId }),
-    signal: AbortSignal.timeout(5_000)
-  })
-  if (!response.ok) throw new Error(`runtime shutdown failed with HTTP ${response.status}`)
-}
-
 async function inspectTarget(
   dataDir: string,
   fetchImpl: typeof fetch,
   scope: SharedRuntimeScope,
   deps: KunServeReplacementDependencies
-): Promise<{ ok: true; value: SharedRuntimeInspection | null } | { ok: false }> {
+): Promise<
+  { ok: true; value: SharedRuntimeReplacementInspection | null } |
+  { ok: false }
+> {
   try {
     return { ok: true, value: await deps.inspect(dataDir, fetchImpl, scope) }
   } catch {
@@ -153,37 +196,50 @@ async function inspectTarget(
 
 async function targetStillMatches(
   dataDir: string,
-  target: SharedRuntimeInspection,
+  target: SharedRuntimeReplacementInspection,
   fetchImpl: typeof fetch,
   scope: SharedRuntimeScope,
   deps: KunServeReplacementDependencies
 ): Promise<boolean> {
   const current = await inspectTarget(dataDir, fetchImpl, scope, deps)
-  if (!current.ok || !sameRuntimeOwner(target, current.value)) return false
+  if (!current.ok || !current.value || !sameRuntimeOwner(target, current.value)) return false
   if (target.discovery.pid === process.pid) return false
-  const [command, listeners] = await Promise.all([
-    deps.commandLine(target.discovery.pid).catch(() => ''),
-    deps.listenerPids(target.discovery.port)
-  ])
-  return commandLooksLikeExpectedServe(
-    command,
+  const identity = await deps.processIdentity(target.discovery.pid).catch(() => null)
+  return identityMatchesExpectedRuntime(
+    identity,
+    target.discovery,
     dataDir,
     runtimeFlavorFor(target, scope)
-  ) && listeners.includes(target.discovery.pid)
+  )
 }
 
 function sameRuntimeOwner(
-  expected: SharedRuntimeInspection,
-  current: SharedRuntimeInspection | null
+  expected: SharedRuntimeReplacementInspection,
+  current: SharedRuntimeReplacementInspection | null
 ): boolean {
-  if (!current) return false
-  return current.discovery.instanceId === expected.discovery.instanceId &&
-    current.discovery.pid === expected.discovery.pid &&
-    current.discovery.startedAt === expected.discovery.startedAt
+  return Boolean(current && sameDiscoveryRuntimeOwner(expected.discovery, current.discovery))
+}
+
+async function settleChangedRuntimeOwner(
+  dataDir: string,
+  target: SharedRuntimeReplacementInspection,
+  scope: SharedRuntimeScope,
+  deps: KunServeReplacementDependencies,
+  originalError: unknown = new Error('Runtime ownership changed before shutdown')
+): Promise<KunServeReplacementReport> {
+  if (!(await deps.waitForExit(target.discovery.pid, 0))) {
+    throw replacementFailure(
+      runtimeFlavorFor(target, scope),
+      target.discovery.pid,
+      originalError
+    )
+  }
+  await removeExactOwnership(dataDir, target, scope, deps)
+  return { stopped: true, forced: false }
 }
 
 function runtimeFlavorFor(
-  target: SharedRuntimeInspection,
+  target: SharedRuntimeReplacementInspection,
   scope: SharedRuntimeScope
 ): RuntimeFlavor {
   return scope.runtimeFlavor ?? target.discovery.flavor ?? 'production'
@@ -211,7 +267,7 @@ function normalizeCommandPath(value: string): string {
 
 async function removeExactOwnership(
   dataDir: string,
-  target: SharedRuntimeInspection,
+  target: SharedRuntimeReplacementInspection,
   scope: SharedRuntimeScope,
   deps: KunServeReplacementDependencies
 ): Promise<void> {
@@ -235,7 +291,19 @@ async function removeExactOwnership(
 
 function replacementFailure(flavor: RuntimeFlavor, pid: number, error: unknown): Error {
   const detail = error instanceof Error ? error.message : String(error)
-  return new Error(
-    `Kun ${flavor} serve ${pid} could not be safely replaced after graceful shutdown failed: ${detail}`
-  )
+  return new KunOwnerVerificationError('runtime', pid, `${flavor}: ${detail}`)
+}
+
+async function inspectSharedRuntimeForReplacement(
+  dataDir: string,
+  fetchImpl: typeof fetch,
+  scope: SharedRuntimeScope
+): Promise<SharedRuntimeReplacementInspection | null> {
+  const strict = await inspectSharedRuntime(dataDir, fetchImpl, scope)
+  if (strict) return strict
+  const flavor = scope.runtimeFlavor ?? 'production'
+  const discoveryDir = runtimeDiscoveryDirectory(dataDir, flavor, scope.controlDir)
+  const compatible = await readRuntimeHandoffDiscovery(discoveryDir, flavor)
+  if (!compatible || !processAlive(compatible.pid)) return null
+  return { discovery: compatible, connection: null }
 }

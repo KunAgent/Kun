@@ -3,7 +3,7 @@ import {
   APP_LOCALE_OPTIONS,
   CHAT_CONTENT_MAX_WIDTH_MAX,
   CHAT_CONTENT_MAX_WIDTH_MIN,
-  DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  normalizeDarkUiColors,
   normalizeChatContentMaxWidth,
   normalizeUiFontScale,
   UI_FONT_SCALE_MAX,
@@ -17,7 +17,7 @@ import {
   MessageSquareText,
   Monitor
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import {
   SettingRow,
   SettingsCard,
@@ -30,158 +30,12 @@ import { GeneralConversationSettingsPanel } from './settings-section-general-con
 import { GeneralDesktopSettingsPanel } from './settings-section-general-desktop'
 import { LegacySessionImportCard } from './settings-section-general-legacy-import'
 import { CheckpointSettingsPanel } from './settings-section-general-checkpoints'
+import { SpotlightColorControl } from './settings-color-controls'
+import { DarkUiColorsSettingsCard } from './settings-dark-ui-colors'
 
-type Rgb = { r: number; g: number; b: number }
 type GeneralSettingsTab = 'appearance' | 'conversation' | 'directories' | 'desktop'
 type DirectorySettingsSubTab = 'workspace' | 'migration' | 'checkpoints'
 type DesktopSettingsSubTab = 'command' | 'behavior' | 'logs'
-
-
-function normalizeHexColor(value: unknown): string {
-  if (typeof value !== 'string') return DEFAULT_CURSOR_SPOTLIGHT_COLOR
-  const color = value.trim().toLowerCase()
-  return /^#[0-9a-f]{6}$/.test(color) ? color : DEFAULT_CURSOR_SPOTLIGHT_COLOR
-}
-
-function hexToRgb(color: string): Rgb {
-  return {
-    r: Number.parseInt(color.slice(1, 3), 16),
-    g: Number.parseInt(color.slice(3, 5), 16),
-    b: Number.parseInt(color.slice(5, 7), 16)
-  }
-}
-
-function rgbToHex(rgb: Rgb): string {
-  const part = (value: number): string =>
-    Math.max(0, Math.min(255, value)).toString(16).padStart(2, '0')
-  return `#${part(rgb.r)}${part(rgb.g)}${part(rgb.b)}`
-}
-
-function mixRgb(from: Rgb, to: Rgb, amount: number): Rgb {
-  return {
-    r: Math.round(from.r + (to.r - from.r) * amount),
-    g: Math.round(from.g + (to.g - from.g) * amount),
-    b: Math.round(from.b + (to.b - from.b) * amount)
-  }
-}
-
-function spotlightColorScale(color: string): string[] {
-  const rgb = hexToRgb(normalizeHexColor(color))
-  return [
-    rgbToHex(mixRgb(rgb, { r: 0, g: 0, b: 0 }, 0.46)),
-    rgbToHex(mixRgb(rgb, { r: 0, g: 0, b: 0 }, 0.28)),
-    rgbToHex(mixRgb(rgb, { r: 0, g: 0, b: 0 }, 0.12)),
-    rgbToHex(rgb),
-    rgbToHex(mixRgb(rgb, { r: 255, g: 255, b: 255 }, 0.18)),
-    rgbToHex(mixRgb(rgb, { r: 255, g: 255, b: 255 }, 0.36)),
-    rgbToHex(mixRgb(rgb, { r: 255, g: 255, b: 255 }, 0.54))
-  ]
-}
-
-function SpotlightColorControl({
-  color,
-  disabled,
-  t,
-  onChange
-}: {
-  color: string
-  disabled: boolean
-  t: (key: string, values?: Record<string, unknown>) => string
-  onChange: (color: string) => void
-}): ReactElement {
-  const normalized = normalizeHexColor(color)
-  const [baseColor, setBaseColor] = useState(normalized)
-  const [toneIndex, setToneIndex] = useState(3)
-  const [draftColor, setDraftColor] = useState(normalized)
-  const scale = useMemo(() => spotlightColorScale(baseColor), [baseColor])
-  const gradient = `linear-gradient(90deg, ${scale.join(', ')})`
-  useEffect(() => {
-    setDraftColor(normalized)
-    const nextIndex = scale.indexOf(normalized)
-    if (nextIndex >= 0) {
-      setToneIndex(nextIndex)
-      return
-    }
-    setBaseColor(normalized)
-    setToneIndex(3)
-  }, [normalized, scale])
-  const selectColor = (nextColor: string): void => {
-    const next = normalizeHexColor(nextColor)
-    setBaseColor(next)
-    setToneIndex(3)
-    onChange(next)
-  }
-  const selectTone = (index: number): void => {
-    const nextIndex = Math.max(0, Math.min(scale.length - 1, index))
-    setToneIndex(nextIndex)
-    onChange(scale[nextIndex] ?? normalized)
-  }
-  return (
-    <div className="grid w-full min-w-0 gap-2 rounded-xl border border-ds-border-muted bg-ds-main/35 p-3">
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={normalized}
-          aria-label={t('cursorSpotlightColor')}
-          disabled={disabled}
-          className="h-9 w-11 shrink-0 cursor-pointer rounded-lg border border-ds-border bg-transparent p-1 disabled:cursor-not-allowed disabled:opacity-50"
-          onChange={(event) => selectColor(event.target.value)}
-        />
-        <input
-          className="min-w-0 flex-1 rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30 disabled:opacity-60"
-          value={draftColor}
-          disabled={disabled}
-          spellCheck={false}
-          onChange={(event) => {
-            const next = event.target.value.trim()
-            setDraftColor(event.target.value)
-            if (/^#[0-9a-fA-F]{6}$/.test(next)) selectColor(next)
-          }}
-          onBlur={() => {
-            if (!/^#[0-9a-fA-F]{6}$/.test(draftColor.trim())) setDraftColor(normalized)
-          }}
-        />
-        <button
-          type="button"
-          disabled={disabled || normalized === DEFAULT_CURSOR_SPOTLIGHT_COLOR}
-          onClick={() => selectColor(DEFAULT_CURSOR_SPOTLIGHT_COLOR)}
-          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {t('cursorSpotlightColorReset')}
-        </button>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={scale.length - 1}
-        step={1}
-        value={toneIndex}
-        aria-label={t('cursorSpotlightColorTone')}
-        disabled={disabled}
-        className="h-2 w-full cursor-pointer rounded-full accent-accent disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ background: gradient }}
-        onChange={(event) => selectTone(Number(event.target.value))}
-      />
-      <div className="flex gap-1.5">
-        {scale.map((shade, index) => (
-          <button
-            key={`${shade}-${index}`}
-            type="button"
-            disabled={disabled}
-            aria-label={t('cursorSpotlightColorShade', { index: index + 1 })}
-            title={shade}
-            className={`h-6 min-w-0 flex-1 rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-50 ${
-              shade === normalized ? 'border-ds-ink ring-1 ring-ds-ink/25' : 'border-ds-border hover:scale-[1.02]'
-            }`}
-            style={{ backgroundColor: shade }}
-            onClick={() => selectTone(index)}
-          />
-        ))}
-      </div>
-      <p className="text-[12px] leading-5 text-ds-faint">{t('cursorSpotlightColorDesc')}</p>
-    </div>
-  )
-}
 
 export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const {
@@ -260,7 +114,8 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
   const chatContentMaxWidthPx = normalizeChatContentMaxWidth(form.chatContentMaxWidthPx)
   const setChatContentMaxWidthPx = (value: number): void =>
     update({ chatContentMaxWidthPx: normalizeChatContentMaxWidth(value) })
-  const cursorSpotlightColor = normalizeHexColor(form.cursorSpotlightColor)
+  const cursorSpotlightColor = form.cursorSpotlightColor
+  const darkUiColors = normalizeDarkUiColors(form.darkUiColors)
   const tabs = [
     { id: 'appearance' as const, label: t('generalTabAppearance'), icon: Monitor },
     { id: 'conversation' as const, label: t('generalTabConversation'), icon: MessageSquareText },
@@ -450,6 +305,11 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
             }
           />
         </SettingsCard>
+        <DarkUiColorsSettingsCard
+          colors={darkUiColors}
+          t={t}
+          onChange={(darkUiColors) => update({ darkUiColors })}
+        />
       </SettingsTabPanel>
 
       <GeneralConversationSettingsPanel view={{ t, form, update, selectControlClass, openOnboardingPreview, activeTab }} />

@@ -467,6 +467,14 @@ try {
   $otherUserInstallRegistryPath = $script:installRegistryPath
   $otherUserUninstallRegistryPath = $script:uninstallRegistryPath
   $otherUserUninstallString = Get-ItemPropertyValue -LiteralPath $otherUserUninstallRegistryPath -Name UninstallString
+  $machineHashBeforeAmbiguousUpdate = (Get-FileHash -LiteralPath (Join-Path $machineTarget 'Kun.exe') -Algorithm SHA256).Hash
+  $otherUserHashBeforeAmbiguousUpdate = (Get-FileHash -LiteralPath (Join-Path $otherUserTarget 'Kun.exe') -Algorithm SHA256).Hash
+  [Environment]::SetEnvironmentVariable('KUN_INSTALLER_UPDATE_SOURCE', '', 'Process')
+  Invoke-Installer 'ambiguous automatic update scope rejection' @('--updated', '/S') 2
+  Assert-True (Test-PathEqual (Get-ItemPropertyValue -LiteralPath $machineInstallRegistryPath -Name InstallLocation) $machineTarget) 'Ambiguous scope rejection changed the all-users registration.'
+  Assert-True (Test-PathEqual (Get-ItemPropertyValue -LiteralPath $otherUserInstallRegistryPath -Name InstallLocation) $otherUserTarget) 'Ambiguous scope rejection changed the current-user registration.'
+  Assert-True ((Get-FileHash -LiteralPath (Join-Path $machineTarget 'Kun.exe') -Algorithm SHA256).Hash -eq $machineHashBeforeAmbiguousUpdate) 'Ambiguous scope rejection changed the all-users payload.'
+  Assert-True ((Get-FileHash -LiteralPath (Join-Path $otherUserTarget 'Kun.exe') -Algorithm SHA256).Hash -eq $otherUserHashBeforeAmbiguousUpdate) 'Ambiguous scope rejection changed the current-user payload.'
 
   $attackerPath = Join-Path $root 'tampered-uninstaller.exe'
   $attackerMarker = Join-Path $root 'tampered-uninstaller-ran.txt'
@@ -488,6 +496,20 @@ try {
   Assert-True (Test-PathEqual $otherUserLocationAfterUpdate $otherUserTarget) 'The automatic update changed the unrelated current-user registration.'
   $otherUserUninstallAfterUpdate = Get-ItemPropertyValue -LiteralPath $otherUserUninstallRegistryPath -Name UninstallString
   Assert-True ($otherUserUninstallAfterUpdate -eq $otherUserUninstallString) 'The automatic update did not restore the unrelated current-user uninstall registration.'
+  $machinePathBeforeAmbiguousUpdate = Get-ItemPropertyValue -LiteralPath $machineInstallRegistryPath -Name InstallLocation
+  $otherUserPathBeforeAmbiguousUpdate = Get-ItemPropertyValue -LiteralPath $otherUserInstallRegistryPath -Name InstallLocation
+  $userPathBeforeAmbiguousUpdate = [Environment]::GetEnvironmentVariable('Path', 'User')
+  [Environment]::SetEnvironmentVariable('KUN_INSTALLER_UPDATE_SOURCE', $null, 'Process')
+  Invoke-Installer 'dual-scope update without source marker' @('--updated', '/S', '--force-run') 2
+  [Environment]::SetEnvironmentVariable('KUN_INSTALLER_UPDATE_SOURCE', $machineTarget, 'Process')
+  Assert-True ((Get-ItemPropertyValue -LiteralPath $machineInstallRegistryPath -Name InstallLocation) -eq $machinePathBeforeAmbiguousUpdate) 'The ambiguous update changed the all-users registration.'
+  Assert-True ((Get-ItemPropertyValue -LiteralPath $otherUserInstallRegistryPath -Name InstallLocation) -eq $otherUserPathBeforeAmbiguousUpdate) 'The ambiguous update changed the current-user registration.'
+  Assert-True (Test-Path -LiteralPath (Join-Path $machineTarget 'Kun.exe')) 'The ambiguous update removed the all-users application executable.'
+  Assert-True (Test-Path -LiteralPath (Join-Path $machineTarget 'resources\\app.asar')) 'The ambiguous update removed the all-users application payload.'
+  Assert-True (Test-Path -LiteralPath (Join-Path $otherUserTarget 'Kun.exe')) 'The ambiguous update removed the current-user application executable.'
+  Assert-True (Test-Path -LiteralPath (Join-Path $otherUserTarget 'resources\\app.asar')) 'The ambiguous update removed the current-user application payload.'
+  Assert-True ((Get-ItemPropertyValue -LiteralPath $otherUserUninstallRegistryPath -Name UninstallString) -eq $otherUserUninstallString) 'The ambiguous update changed the current-user uninstall registration.'
+  Assert-True ([Environment]::GetEnvironmentVariable('Path', 'User') -eq $userPathBeforeAmbiguousUpdate) 'The ambiguous update changed the user PATH.'
   $automaticUpdateDiagnostics = Get-Content -LiteralPath $diagnosticPath -Raw
   Assert-True ($automaticUpdateDiagnostics -match [regex]::Escape("source=$machineTarget")) 'The automatic update did not validate the running all-users source.'
   Assert-True ($automaticUpdateDiagnostics -match 'SUCCESS action=CleanupInPlaceLeftovers') 'The automatic update did not run post-validate in-place leftover cleanup.'

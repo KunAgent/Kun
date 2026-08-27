@@ -1,5 +1,13 @@
 import type { ThreadRecord, ThreadSummary } from '../contracts/threads.js'
 
+export type ThreadStoreConditionalWrite = {
+  applied: boolean
+  /** Durable record after a successful conditional write. */
+  thread?: ThreadRecord
+  /** Durable revision observed when the expected revision was stale. */
+  revision: number
+}
+
 export type ThreadStoreListOptions = {
   limit?: number
   search?: string
@@ -39,5 +47,8 @@ export interface ThreadStore {
   /** Update only rebuildable Thread metadata, without hydrating item history. */
   touch?(threadId: string, updatedAt: string): Promise<boolean>
   upsert(thread: ThreadRecord): Promise<ThreadRecord>
+  /** Atomically replace a record only when its durable revision still matches. */
+  upsertIfRevision?(thread: ThreadRecord, expectedRevision: number): Promise<ThreadStoreConditionalWrite>
   delete(threadId: string): Promise<boolean>
+  deleteByWorkspace?(workspace: string): Promise<string[]>
 }

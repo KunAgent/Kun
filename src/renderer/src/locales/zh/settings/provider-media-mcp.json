@@ -129,6 +129,8 @@
   "modelProviderCustomBadge": "自定义",
   "modelProviderTokenPlanBadge": "Token Plan",
   "modelProviderPlanBadge": "套餐",
+  "modelProviderFreeBadge": "免费",
+  "modelProviderGroupFree": "免费",
   "modelProviderGroupPlans": "套餐订阅",
   "modelProviderSubscriptionRegions": "套餐订阅地区",
   "modelProviderSubscriptionRegionAll": "全部",

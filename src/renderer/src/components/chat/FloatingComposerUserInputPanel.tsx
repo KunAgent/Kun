@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { UserInputOption } from '../../agent/types'
 import type { ComposerUserInputController } from './use-composer-user-input'
+import { UserInputTimeoutCountdownChip } from './floating-composer-user-input-timeout'
 import {
   isMultipleChoiceQuestion,
   shouldShowQuestionHeader
@@ -66,8 +67,11 @@ export function FloatingComposerUserInputPanel({
               </p>
             </div>
           </div>
-          <span className="shrink-0 pt-1 text-[12px] font-semibold tabular-nums text-ds-muted">
-            {index + 1} / {total}
+          <span className="flex shrink-0 items-center gap-2 pt-1">
+            <UserInputTimeoutCountdownChip block={controller.block} t={t} />
+            <span className="text-[12px] font-semibold tabular-nums text-ds-muted">
+              {index + 1} / {total}
+            </span>
           </span>
         </div>
 

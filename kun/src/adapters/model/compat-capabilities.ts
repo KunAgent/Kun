@@ -1,4 +1,5 @@
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
+import type { ModelCatalogPricing } from '../../contracts/capabilities-core.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   normalizeModelEndpointFormat,
@@ -17,6 +18,7 @@ export type CompatModelCapabilities = {
   supportsToolCalling: boolean
   maxOutputTokens?: number
   reasoning?: ModelCapabilityMetadata['reasoning']
+  pricing?: ModelCatalogPricing
   serviceTiers?: ModelCapabilityMetadata['serviceTiers']
   responsesMode?: ModelCapabilityMetadata['responsesMode']
 }
@@ -44,6 +46,7 @@ export function resolveCompatModelCapabilities(input: {
     supportsToolCalling: metadata?.supportsToolCalling ?? true,
     ...(metadata?.maxOutputTokens ? { maxOutputTokens: metadata.maxOutputTokens } : {}),
     ...(metadata?.reasoning ? { reasoning: metadata.reasoning } : {}),
+    ...(metadata?.pricing ? { pricing: metadata.pricing } : {}),
     ...(metadata?.serviceTiers ? { serviceTiers: metadata.serviceTiers } : {}),
     ...(metadata?.responsesMode ? { responsesMode: metadata.responsesMode } : {})
   }

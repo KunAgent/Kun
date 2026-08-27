@@ -16,6 +16,14 @@ describe('compat HTTP diagnostics', () => {
     })
   })
 
+  it('omits every auth header for an anonymous (empty-key) request', () => {
+    const headers = buildCompatRequestHeaders({
+      apiKey: '', stream: true, endpointFormat: 'chat_completions'
+    })
+    expect(headers).not.toHaveProperty('Authorization')
+    expect(headers).not.toHaveProperty('x-api-key')
+  })
+
   it('keeps provider guidance on 404 errors', async () => {
     await expect(classifyCompatHttpError({
       status: 404, text: 'not found', baseUrl: 'https://example.test', fetchImpl: vi.fn()

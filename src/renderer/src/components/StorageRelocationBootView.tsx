@@ -25,7 +25,7 @@ export function StorageRelocationBootView(): React.JSX.Element {
   const [error, setError] = useState('')
   const refresh = useCallback(async () => {
     try {
-      setStatus(await window.kunGui.storageRelocation.getStatus())
+      setStatus(await window.kunStorageRelocationRecovery.getStatus())
       setError('')
     } catch (cause) {
       setError(messageOf(cause))
@@ -35,7 +35,7 @@ export function StorageRelocationBootView(): React.JSX.Element {
   useEffect(() => {
     void refresh()
     const timer = window.setInterval(() => void refresh(), 3_000)
-    const unsubscribe = window.kunGui.storageRelocation.onProgress((progress) => {
+    const unsubscribe = window.kunStorageRelocationRecovery.onProgress((progress) => {
       setStatus((current) => current ? { ...current, pending: progress, state: 'pending' } : current)
     })
     return () => {
@@ -54,7 +54,7 @@ export function StorageRelocationBootView(): React.JSX.Element {
     setBusy(true)
     setError('')
     try {
-      setStatus(await window.kunGui.storageRelocation[action](operationId))
+      setStatus(await window.kunStorageRelocationRecovery[action](operationId))
     } catch (cause) {
       setError(messageOf(cause))
     } finally {

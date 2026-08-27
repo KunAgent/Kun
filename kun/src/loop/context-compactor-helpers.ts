@@ -181,9 +181,27 @@ export function buildCompactionSummary(input: {
   lines.push(
     `Summarized ${input.history.length} item(s); ${input.tail.length} recent item(s) are also kept verbatim for the current request.`
   )
+  // The previous canonical summary is carried forward as its own section
+  // rather than being re-summarized as an "Earlier compaction" transcript
+  // line. Re-summarizing the old summary nested state inside state and made
+  // consecutive compactions grow instead of shrink.
+  const previousSummary = latestCompactionSummary(input.history)
+  const outlineSource = input.history.filter((item) => item.kind !== 'compaction')
+  if (previousSummary) {
+    lines.push('Carried-forward conversation state (rewritten, not nested):')
+    const carried = fitLinesToBudget(
+      previousSummary
+        .split(/\r?\n/)
+        .filter((line) => line.trim().length > 0)
+        .filter((line) => !/^Compaction digest marker:/.test(line.trim())),
+      Math.floor(contentBudget * 0.45)
+    )
+    lines.push(...carried)
+    lines.push('')
+  }
   const durableOutlineLines = fitLinesToBudget(
-    extractDurableOutlineLines(input.history),
-    Math.floor(contentBudget * 0.75)
+    extractDurableOutlineLines(outlineSource),
+    Math.floor(contentBudget * (previousSummary ? 0.3 : 0.75))
   )
   if (durableOutlineLines.length > 0) {
     lines.push('Durable outline and open items:')
@@ -194,15 +212,23 @@ export function buildCompactionSummary(input: {
   const usedBudget = lines.join('\n').length
   const remainingBudget = Math.max(1_200, contentBudget - usedBudget)
   const summaryLines = fitLinesToBudget(
-    selectSummaryLines(input.history.map(summarizeItem).filter((line) => line.length > 0)),
+    selectSummaryLines(outlineSource.map(summarizeItem).filter((line) => line.length > 0)),
     remainingBudget
   )
-  if (summaryLines.length === 0) {
+  if (summaryLines.length === 0 && !previousSummary) {
     lines.push('- No user-visible content before compaction.')
   } else {
     lines.push(...summaryLines)
   }
   return lines.join('\n')
+}
+
+function latestCompactionSummary(history: readonly TurnItem[]): string | null {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index]
+    if (item.kind === 'compaction' && item.replacedTokens > 0) return item.summary
+  }
+  return null
 }
 
 export function extractSkillPins(history: readonly TurnItem[]): string[] {

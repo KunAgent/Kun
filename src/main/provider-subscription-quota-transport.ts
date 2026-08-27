@@ -55,20 +55,35 @@ export type SubscriptionRequestInput = {
   body?: BodyInit
 }
 
+const CODEX_BACKEND_API_BASE = 'https://chatgpt.com/backend-api'
+
+function codexBackendHeaders(credential: CodexQuotaCredential): Record<string, string> {
+  return {
+    Accept: 'application/json',
+    Authorization: `Bearer ${credential.accessToken}`,
+    'User-Agent': codexUserAgent(),
+    ...(credential.accountId ? { 'ChatGPT-Account-Id': credential.accountId } : {})
+  }
+}
+
 export function requestCodexSubscriptionQuota(
   credential: CodexQuotaCredential,
   context: SubscriptionProbeContext
 ): Promise<unknown> {
   return requestSubscriptionJson(
-    'https://chatgpt.com/backend-api/wham/usage',
-    {
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${credential.accessToken}`,
-        'User-Agent': codexUserAgent(),
-        ...(credential.accountId ? { 'ChatGPT-Account-Id': credential.accountId } : {})
-      }
-    },
+    `${CODEX_BACKEND_API_BASE}/wham/usage`,
+    { headers: codexBackendHeaders(credential) },
+    context
+  )
+}
+
+export function requestCodexRateLimitResetCredits(
+  credential: CodexQuotaCredential,
+  context: SubscriptionProbeContext
+): Promise<unknown> {
+  return requestSubscriptionJson(
+    `${CODEX_BACKEND_API_BASE}/wham/rate-limit-reset-credits`,
+    { headers: codexBackendHeaders(credential) },
     context
   )
 }

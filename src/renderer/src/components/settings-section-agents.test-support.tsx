@@ -6,6 +6,7 @@ import {
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
   modelProviderTokenPlanProfile,
+  type KunFastContextSettingsV1,
   type KunLabSettingsV1,
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1
@@ -33,7 +34,7 @@ import {
   LaboratorySettingsSection,
   modelProvidersSettingsPatch
 } from './settings-section-agents'
-import { FastContextSettingsPanel } from './settings-section-lab-fast-context'
+import { FastContextSettingsPanel } from './settings-section-assistant-fast-context'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { ProviderModelsManager } from './settings-section-provider-models'
 import {
@@ -55,27 +56,28 @@ const labels: Record<string, string> = {
   labComposerPersonaTitle: 'Personas',
   labComposerPersonaEnabled: 'Enable composer personas',
   labComposerPersonaEnabledDesc: 'Composer persona description',
+  labConversationVisualizationTitle: 'Conversation visualization',
   labPlanWorktreeTitle: 'Prompt-managed worktree',
   labPlanWorktreeDescription: 'Experimental Agent-managed Direct plan worktrees',
   labPlanWorktreeEnabled: 'Enable prompt-managed plan worktrees',
   labPlanWorktreeEnabledDesc: 'Disabled by default',
-  labExploreTitle: 'Fast Context',
-  labExploreDescription: 'Exploration tool description',
-  labExploreEnabled: 'Enable fast_context',
-  labExploreEnabledDesc: 'Enable description',
-  labExploreModelMode: 'Model policy',
-  labExploreModelModeDesc: 'Model policy description',
-  labExploreModelModeInherit: 'Follow main model',
-  labExploreModelModeFixed: 'Use fixed model',
-  labExploreModel: 'Explore model',
-  labExploreModelDesc: 'Explore model description',
-  labExploreProvider: 'Explore model provider',
-  labExploreReasoning: 'Explore reasoning effort',
-  labExploreReasoningDesc: 'Reasoning description',
-  labExploreReasoningInherit: 'Follow main reasoning',
-  labExploreFast: 'Codex Fast mode',
-  labExploreFastDesc: 'Fast description',
-  labExploreFastUnsupportedHint: 'Fast unsupported hint',
+  fastContextTitle: 'Fast Context',
+  fastContextDescription: 'Fast Context description',
+  fastContextEnabled: 'Enable Fast Context',
+  fastContextEnabledDesc: 'Enable description',
+  fastContextModelMode: 'Model policy',
+  fastContextModelModeDesc: 'Model policy description',
+  fastContextModelModeInherit: 'Follow main model',
+  fastContextModelModeFixed: 'Use fixed model',
+  fastContextModel: 'Fast Context model',
+  fastContextModelDesc: 'Fast Context model description',
+  fastContextProvider: 'Fast Context model provider',
+  fastContextReasoning: 'Fast Context reasoning effort',
+  fastContextReasoningDesc: 'Reasoning description',
+  fastContextReasoningInherit: 'Follow main reasoning',
+  fastContextFast: 'Codex Fast mode',
+  fastContextFastDesc: 'Fast description',
+  fastContextFastUnsupportedHint: 'Fast unsupported hint',
   labPptTitle: 'PPT agent',
   labPptDescription: 'PPT tool description',
   labPptEnabled: 'Enable ppt_agent',
@@ -116,6 +118,7 @@ const labels: Record<string, string> = {
   modelProviderSearchPlaceholder: 'Search configured providers…',
   modelProviderSearchEmpty: 'No providers match "{{query}}".',
   modelProviderGroupPlans: 'Subscription plans',
+  modelProviderGroupFree: 'Free',
   modelProviderSubscriptionRegions: 'Subscription plan regions',
   modelProviderSubscriptionRegionAll: 'All',
   modelProviderSubscriptionRegionChina: 'China',
@@ -692,4 +695,4 @@ export async function clickProviderTab(renderer: ReactTestRenderer, label: strin
 }
 
 export { AgentsSettingsSection, DEFAULT_MODEL_PROVIDER_ID, FastContextSettingsPanel, LaboratorySettingsSection, PptAgentSettingsPanel, ProviderModelsManager, ProvidersSettingsSection, act, afterEach, antigravityProviderCatalogPatch, beforeEach, createElement, createRenderer, defaultKunRuntimeSettings, defaultModelProviderSettings, describe, enqueueSharedModelMutation, expect, getModelProviderPreset, it, modelProviderPresetAccountProfile, modelProviderPresetProfile, modelProviderTokenPlanProfile, modelProvidersSettingsPatch, renderToStaticMarkup, resetSharedProviderMutationCoordinatorForTests, sharedProviderMutationCoordinator, useChatStore, vi }
-export type { AntigravitySubscriptionModelCatalog, ClaudeSubscriptionProbeResult, CursorSubscriptionModel, KunLabSettingsV1, ModelProviderModelGroup, ModelProviderModelProfileV1, ModelProviderProbeResult, ModelProviderProfileV1, ModelsDevCatalogResult, ReactTestInstance, ReactTestRenderer }
+export type { AntigravitySubscriptionModelCatalog, ClaudeSubscriptionProbeResult, CursorSubscriptionModel, KunFastContextSettingsV1, KunLabSettingsV1, ModelProviderModelGroup, ModelProviderModelProfileV1, ModelProviderProbeResult, ModelProviderProfileV1, ModelsDevCatalogResult, ReactTestInstance, ReactTestRenderer }

@@ -215,8 +215,9 @@ describe('schedule settings', () => {
     expect(daemon.enabled).toBe(true)
   })
 
-  it('defaults daemons to disabled and preserves them through merge', () => {
-    expect(normalizeScheduleSettings(undefined).daemons).toEqual({ enabled: false, items: [] })
+  it('defaults daemons to enabled and preserves explicit disable through merge', () => {
+    expect(normalizeScheduleSettings(undefined).daemons).toEqual({ enabled: true, items: [] })
+    expect(normalizeScheduleSettings({ daemons: { enabled: false, items: [] } }).daemons.enabled).toBe(false)
 
     const merged = mergeScheduleSettings(normalizeScheduleSettings(undefined), {
       daemons: {

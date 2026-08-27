@@ -14,6 +14,7 @@ import {
   X
 } from 'lucide-react'
 import { mergeScheduleSettings, type AppSettingsV1 } from '@shared/app-settings'
+import { KUN_THREAD_GUARDIAN_PATH } from '@shared/kun-endpoints'
 import type {
   ClawImChannelV1,
   DaemonProcessState,
@@ -27,6 +28,7 @@ import { compactHomePathForSettingsDisplay } from '../../lib/settings-home-paths
 import { useChatStore } from '../../store/chat-store'
 import { DaemonLogDrawer } from './DaemonLogDrawer'
 import { SessionDaemonDialog } from './SessionDaemonDialog'
+import { rendererRuntimeClient } from '../../agent/runtime-client'
 
 type DaemonDialogState = {
   mode: 'create' | 'edit'
@@ -100,6 +102,8 @@ export function SessionDaemonsView({
   const [masterPending, setMasterPending] = useState(false)
   const [masterError, setMasterError] = useState<string | null>(null)
   const [runtimeReachable, setRuntimeReachable] = useState(false)
+const [guardianPending, setGuardianPending] = useState(false)
+const [guardianMessage, setGuardianMessage] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DaemonDialogState | null>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
   const [logDrawer, setLogDrawer] = useState<{ id: string; name: string; logPath: string } | null>(null)
@@ -185,6 +189,27 @@ export function SessionDaemonsView({
 
   const restartDaemon = async (daemonId: string): Promise<void> => {
     await window.kunGui?.restartDaemon?.(daemonId)
+  }
+
+  const runGuardian = async (): Promise<void> => {
+    if (guardianPending) return
+    setGuardianPending(true)
+    setGuardianMessage(null)
+    try {
+      const response = await rendererRuntimeClient.runtimeRequest(KUN_THREAD_GUARDIAN_PATH, 'POST')
+      if (!response.ok) throw new Error(response.body || t('daemonGuardianFailed'))
+      const result = JSON.parse(response.body) as { repairedThreads?: number; remainingIssues?: unknown[] }
+      setGuardianMessage(t('daemonGuardianResult', {
+        repaired: result.repairedThreads ?? 0,
+        issues: result.remainingIssues?.length ?? 0
+      }))
+    } catch (error) {
+      setGuardianMessage(t('daemonGuardianFailedWithError', {
+        error: error instanceof Error ? error.message : String(error)
+      }))
+    } finally {
+      setGuardianPending(false)
+    }
   }
 
   const deleteDaemon = async (daemon: SessionDaemonV1): Promise<void> => {
@@ -302,15 +327,29 @@ export function SessionDaemonsView({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[14px] leading-6 text-ds-faint">{t('daemonSubtitle')}</p>
-        <button
-          type="button"
-          onClick={openCreateDialog}
-          className="inline-flex items-center gap-2 rounded-xl bg-ds-userbubble px-4 py-2 text-[13px] font-semibold text-ds-userbubbleFg shadow-sm transition hover:opacity-90"
-        >
-          <Plus className="h-4 w-4" strokeWidth={2} />
-          {t('daemonNew')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void runGuardian()}
+            disabled={guardianPending}
+            className="inline-flex items-center gap-2 rounded-xl border border-ds-border bg-ds-card px-4 py-2 text-[13px] font-semibold text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-wait disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${guardianPending ? 'animate-spin' : ''}`} strokeWidth={1.8} />
+            {guardianPending ? t('daemonGuardianRunning') : t('daemonGuardianRun')}
+          </button>
+          <button
+            type="button"
+            onClick={openCreateDialog}
+            className="inline-flex items-center gap-2 rounded-xl bg-ds-userbubble px-4 py-2 text-[13px] font-semibold text-ds-userbubbleFg shadow-sm transition hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            {t('daemonNew')}
+          </button>
+        </div>
       </div>
+      {guardianMessage ? (
+        <p role="status" className="-mt-4 text-[12px] text-ds-muted">{guardianMessage}</p>
+      ) : null}
 
       {daemons.length === 0 ? (
         <div className="flex min-h-[240px] items-center justify-center text-[13px] text-ds-faint">

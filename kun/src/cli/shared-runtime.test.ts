@@ -37,7 +37,7 @@ function managerConnection(dataDir: string): ServiceManagerConnection {
   return {
     discovery: {
       version: 1,
-      protocolVersion: 1,
+      protocolVersion: 3,
       instanceId: 'manager-a',
       pid: process.pid,
       startedAt: '2026-07-22T00:00:00.000Z',
@@ -196,6 +196,47 @@ describe('shared runtime discovery validation', () => {
         pid: discovery.pid
       })
     } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
+  it('gracefully stops an exact owner whose full info schema is incompatible', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-shared-runtime-old-info-'))
+    const discovery = record({ pid: 2_147_483_640, buildId: 'a'.repeat(64) })
+    const originalKill = process.kill.bind(process)
+    let alive = true
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(((pid, signal) => {
+      if (pid !== discovery.pid) return originalKill(pid, signal)
+      if (alive) return true
+      throw Object.assign(new Error('process is gone'), { code: 'ESRCH' })
+    }) as typeof process.kill)
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        alive = false
+        return Response.json({ accepted: true, instanceId: discovery.instanceId })
+      }
+      // Identity is correct, but this intentionally predates the current
+      // RuntimeInfoResponse capability schema.
+      return Response.json({
+        instanceId: discovery.instanceId,
+        pid: discovery.pid,
+        startedAt: discovery.startedAt
+      })
+    })
+    const fetchImpl = fetchMock as unknown as typeof fetch
+    try {
+      await writeFile(
+        join(dataDir, 'runtime.json'),
+        `${JSON.stringify(discovery, null, 2)}\n`,
+        'utf8'
+      )
+
+      await expect(stopSharedRuntime(dataDir, fetchImpl)).resolves.toBe(true)
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true)
+      await expect(readFile(join(dataDir, 'runtime.json'), 'utf8'))
+        .rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      killSpy.mockRestore()
       await rm(dataDir, { recursive: true, force: true })
     }
   })

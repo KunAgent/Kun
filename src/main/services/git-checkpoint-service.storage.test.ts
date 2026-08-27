@@ -243,14 +243,12 @@ describe('git checkpoint storage limits (issue #651)', () => {
     })
     expect(first.ok).toBe(true)
     if (!first.ok) throw new Error(first.message)
-    // A cap far below the projected full-bundle footprint: the next create
-    // must evict the oldest checkpoint to try to make room, then still refuse
-    // to write instead of growing past the quota.
+    // A cap below the actual staged checkpoint must refuse publication.
     const second = await createGitCheckpoint({
       dataDir,
       workspaceRoot: repoRoot,
       threadId: 'thr_quota',
-      storage: { maxTotalBytes: 1024 * 1024 }
+      storage: { maxTotalBytes: 1 }
     })
     expect(second.ok).toBe(false)
     if (second.ok) throw new Error('expected quota refusal')

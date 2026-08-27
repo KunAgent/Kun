@@ -25,6 +25,7 @@ export function applyPortableSettingsMigration(
   const write = asRecord(value.write)
   const design = asRecord(value.design)
   const notifications = asRecord(value.notifications)
+  const darkUiColors = asRecord(value.darkUiColors)
   return normalizeAppSettings({
     ...current,
     ...(isLocale(value.locale) ? { locale: value.locale } : {}),
@@ -38,6 +39,10 @@ export function applyPortableSettingsMigration(
       : {}),
     ...(typeof value.cursorSpotlight === 'boolean' ? { cursorSpotlight: value.cursorSpotlight } : {}),
     ...(typeof value.cursorSpotlightColor === 'string' ? { cursorSpotlightColor: value.cursorSpotlightColor } : {}),
+    darkUiColors: {
+      ...current.darkUiColors,
+      ...pickDefined(darkUiColors, ['background', 'border', 'panel'])
+    },
     notifications: {
       ...current.notifications,
       ...(typeof notifications.turnComplete === 'boolean'

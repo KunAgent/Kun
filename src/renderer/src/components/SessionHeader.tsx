@@ -1,8 +1,9 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronRight, FileText, Folder, GitBranch, GitFork } from 'lucide-react'
+import { ChevronRight, CircleHelp, FileText, Folder, GitBranch, GitFork } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../store/chat-store'
+import { hasLivePendingUserInput } from '../store/chat-store-runtime-helpers'
 import { formatRelativeTime } from '../lib/format-relative-time'
 import { GIT_BRANCH_STATUS_CHANGED_EVENT } from '../lib/git-branch-status-event'
 import { middleEllipsize } from '../lib/middle-ellipsize'
@@ -335,9 +336,16 @@ export function SessionHeader({
         </div>
       )}
       {busy ? (
-        <span className="ml-auto shrink-0 rounded-full bg-amber-500/18 px-3 py-1.5 text-[12.5px] font-semibold text-amber-950 dark:text-amber-100">
-          {t('running')}
-        </span>
+        hasLivePendingUserInput(blocks) ? (
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/25 px-3 py-1.5 text-[12.5px] font-semibold text-amber-950 motion-safe:animate-pulse dark:text-amber-100">
+            <CircleHelp className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
+            {t('awaitingYourInput')}
+          </span>
+        ) : (
+          <span className="ml-auto shrink-0 rounded-full bg-amber-500/18 px-3 py-1.5 text-[12.5px] font-semibold text-amber-950 dark:text-amber-100">
+            {t('running')}
+          </span>
+        )
       ) : null}
     </div>
   )
