@@ -108,10 +108,16 @@ manual refresh necessary, and both are fixed:
 Background polls are deliberately invisible: they do not set `status: 'loading'`
 (the refresh button would spin forever), a failed poll keeps the graph on screen
 instead of replacing it with an error, and an unchanged projection keeps its
-existing object identity — compared by a structural signature, since `builtAt`
-moves on every build — so nothing downstream recomputes and the force layout
-never twitches on a poll that found no edits. Workspace projections stay manual;
-they change through runtime activity, not the filesystem.
+existing object identity — compared whole minus `builtAt`, which moves on every
+build; labels, paths, timestamps and sizes are all part of the comparison, so a
+rename with identical topology still refreshes the inspector — and nothing
+downstream recomputes or twitches on a poll that found no edits. Polls also
+**coalesce**: only one folder scan is in flight at a time, a tick that lands
+mid-scan is dropped rather than queued, and a poll adopts the current load token
+instead of bumping it — so a scan slower than the 4s interval still applies its
+result, and a background poll can never discard a foreground load. Workspace
+projections stay manual; they change through runtime activity, not the
+filesystem.
 
 It reuses the same markdown scan rather than duplicating it:
 `KnowledgeBaseService.readyFolderIndex(root, mountId)` synthesizes a
@@ -138,11 +144,16 @@ so links can be written by picking a file instead of typing a path.
 wikilink-query.ts        detect the open `[[` at the caret
 wikilink-targets.ts      ranking + the link text a chosen target produces
 wikilink-scan.ts         bounded markdown walk of every Work workspace
-use-wikilink-targets.ts  lazy, cached scan wired to the workspace list
+wikilink-target-service.ts
+                         workspace-level cache shared by every editor
+use-wikilink-targets.ts  thin hook over the service
 wikilink-menu-view.ts    the menu DOM and placement maths, shared
 wikilink-codemirror.ts   CodeMirror plugin  (Live + Source modes)
 ../tiptap/extensions/wikilink-menu.ts
                          ProseMirror plugin (Rich text mode)
+../tiptap/extensions/wikilink-mark.ts
+                         schema mark: bare [[...]] serializes verbatim,
+                         deliberately escaped brackets stay escaped
 ```
 
 **Both editors, one implementation.** Write has two editors — CodeMirror for
@@ -168,11 +179,22 @@ name and an arrow badge. Same-workspace matches outrank equally-good external
 ones. The file being edited is never offered.
 
 The scan costs one `listWorkspaceDirectory` IPC call per folder, so it is
-deferred until the menu first opens, cached until the workspace list changes, and
-bounded on three axes (depth 6, 200 directories and 800 files per root) with
-`node_modules`, `.git`, `dist`, `build`, `out`, `target`, `vendor` and dotfolders
-skipped. The walk is breadth-first, so a cap trims deep files rather than the
-shallow ones most likely to be wanted.
+deferred until the menu first opens — mounting an editor requests nothing — and
+its cache lives in a module-level service (`wikilink-target-service.ts`) shared
+by every mounted editor, so any number of editor groups pay for one walk. The
+cache is invalidated by workspace-list changes, by file create/rename/delete
+actions, and by a 60s TTL that catches edits made outside the app. The walk is
+bounded per root (depth 6, 200 directories, 800 files) **and globally per scan**
+(800 directories, 3,200 files across all roots), with `node_modules`, `.git`,
+`dist`, `build`, `out`, `target`, `vendor` and dotfolders skipped. It is
+breadth-first, so a cap trims deep files rather than the shallow ones most
+likely to be wanted.
+
+Targets on a different volume (another Windows drive letter, a different UNC
+share) are withheld from the menu: no `..` walk can reach them, so the inserted
+link could never resolve. `buildWikilinkInsertion` guards the same case for any
+other caller by emitting the absolute path rather than an invalid
+`../../D:/...` walk.
 
 **Interaction.** Arrow keys move, **Enter, Tab, or Space** accepts, Escape
 closes, clicking a row inserts it, hovering moves the selection. Binding Space
@@ -256,10 +278,15 @@ is the only layer that performs I/O:
 - **Threads and memories** are cheap list reads.
 - **Knowledge indexes** are read from disk only when ready (above).
 - **Changed files** require reading whole Graph Mode run snapshots, because the
-  run index does not carry `changedFiles`. That scan is both **time-boxed**
-  (2.5s, then a diagnostic) and **count-capped** (40 most recently updated
-  runs). Callers can skip it entirely with `changed_files=false`, which the
-  Filters panel exposes as a toggle.
+  run index does not carry `changedFiles`. The projection's thread scope and its
+  run cap (40 most recently updated) are **pushed into the store query** —
+  `GraphRunListFilter.threadIds` and `.limit` filter the index entries before
+  any snapshot is loaded — so unrelated runs are never read, and a burst of
+  runs in another workspace cannot crowd this workspace's runs out of the cap.
+  The scan is also **time-boxed** (2.5s, then a diagnostic), and concurrent
+  projections of the same scope **share one in-flight scan**. Callers can skip
+  it entirely with `changed_files=false`, which the Filters panel exposes as a
+  toggle.
 - The finished projection is **cached for 10s** per `(workspace, changed-files)`
   pair. `refresh=true` bypasses it.
 - Node caps are applied by **priority tier** (`NODE_GRAPH_KIND_PRIORITY`), so a
@@ -280,11 +307,22 @@ GET /v1/node-graph
   &refresh=true            bypass the 10s projection cache
 
 GET /v1/node-graph/folder
-  ?root=<absolute path>    required, repeatable; the directories to project
+  ?root=<absolute path>    required, repeatable (65+ roots is a 400); the
+                           directories to project
   &refresh=true            bypass the 10s projection cache
 ```
 
 Both are `GET`-only in the main-process allowlist.
+
+A folder request's indexing work is bounded end to end. The route rejects more
+than 64 `root` parameters outright; the service then projects at most 12 roots
+(the rest are dropped with a diagnostic and `truncated: true`), indexes at most
+2 roots concurrently, and hands every root **one shared scan budget** (1,600
+files / 96MB per request) on top of the indexer's per-root caps. The budget is
+charged only when a root actually rebuilds — a fingerprint match reuses the
+stored index for free — and a root refused by the budget serves its last built
+index (state `stale`) with a `scan budget reached` diagnostic, instead of
+scheduling the same work in the background.
 
 Returns `NodeGraphProjection`: `nodes`, `edges`, per-kind `counts` (taken
 *before* truncation), `truncated`, `diagnostics`, `builtAt`.
