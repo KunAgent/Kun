@@ -15,6 +15,7 @@ import {
   richWikilinkMenuVisible,
   setRichWikilinkTargets
 } from './wikilink-menu'
+import { WriteWikilink } from './wikilink-mark'
 import type { WikilinkTarget } from '../../wikilink/wikilink-targets'
 
 const VAULT = '/vault'
@@ -67,6 +68,30 @@ function mount(options: {
   })
   editors.push(editor)
   setRichWikilinkTargets(editor.view, options.targets ?? TARGETS)
+  return editor
+}
+
+/** Like `mount`, but with the schema-level wikilink mark registered. */
+function mountWithWikilinkMark(): Editor {
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const editor = new Editor({
+    element,
+    extensions: [
+      Document,
+      Paragraph,
+      Text,
+      WriteWikilink,
+      WriteRichWikilinkMenu.configure({
+        workspaceRoot: () => VAULT,
+        activePath: () => 'notes/alpha.md',
+        isReadOnly: () => false
+      })
+    ],
+    content: ''
+  })
+  editors.push(editor)
+  setRichWikilinkTargets(editor.view, TARGETS)
   return editor
 }
 
@@ -129,6 +154,28 @@ describe('rich-text wikilink menu', () => {
     expect(acceptRichWikilinkMenu(editor.view)).toBe(true)
     expect(text(editor)).toBe('see [[beta]]')
     expect(richWikilinkMenuRows(editor.view)).toEqual([])
+  })
+
+  it('applies the wikilink mark to the whole inserted reference', () => {
+    const editor = mountWithWikilinkMark()
+    type(editor, 'see [[bet')
+    acceptRichWikilinkMenu(editor.view)
+    expect(text(editor)).toBe('see [[beta]]')
+    // `[[beta]]` — brackets included — carries the mark; the prose before it
+    // does not. Serialization is what depends on this: marked text is written
+    // verbatim, unmarked brackets get escaped.
+    const paragraph = editor.state.doc.child(0)
+    const pieces: { text: string; marked: boolean }[] = []
+    paragraph.forEach((node) => {
+      pieces.push({
+        text: node.text ?? '',
+        marked: node.marks.some((mark) => mark.type.name === 'wikilink')
+      })
+    })
+    expect(pieces).toEqual([
+      { text: 'see ', marked: false },
+      { text: '[[beta]]', marked: true }
+    ])
   })
 
   it('lands the caret after the closing brackets', () => {

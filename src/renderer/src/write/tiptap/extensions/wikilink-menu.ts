@@ -132,6 +132,14 @@ class RichWikilinkMenu {
     const { docFrom, docTo, closed } = this.query
     const text = closed ? insertion : `${insertion}]]`
     const transaction = this.view.state.tr.insertText(text, docFrom, docTo)
+    // The whole `[[...]]` gets the wikilink mark so serialization writes the
+    // brackets bare; `docFrom` sits just after the opener the user typed.
+    const markType = this.view.state.schema.marks.wikilink
+    if (markType && docFrom >= 2) {
+      transaction
+        .addMark(docFrom - 2, docFrom + insertion.length + 2, markType.create())
+        .removeStoredMark(markType)
+    }
     // Land the caret after `]]` either way, so typing continues outside the
     // reference instead of inside it.
     const caret = Math.min(docFrom + insertion.length + 2, transaction.doc.content.size)

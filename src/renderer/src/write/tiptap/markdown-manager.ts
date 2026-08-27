@@ -10,6 +10,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { WriteLocalImage } from './local-image'
+import { WriteWikilink } from './extensions/wikilink-mark'
 
 export type WriteRichFidelity =
   | { eligible: true; normalized: string }
@@ -122,7 +123,8 @@ export function buildWriteRichExtensions(): AnyExtension[] {
     TaskList,
     TaskItem.configure({ nested: true }),
     WriteCodeBlock,
-    WriteLocalImage
+    WriteLocalImage,
+    WriteWikilink
   ]
 }
 
@@ -142,23 +144,13 @@ export function parseWriteMarkdown(markdown: string): JSONContent {
   return getWriteMarkdownManager().parse(markdown)
 }
 
-/**
- * `@tiptap/markdown` escapes every `[` it writes as plain text, so a
- * `[[wikilink]]` typed through the rich editor's `[[` menu reaches disk with a
- * backslash before every bracket — a form the knowledge indexer never matches,
- * so the link is silently never drawn in the node graph. Restore the bare form
- * on the way out. The same pass runs inside the fidelity audit, so a note
- * that already contains wikilinks round-trips cleanly and stays rich-editable
- * instead of being pushed into CodeMirror as "unstable".
- */
-const ESCAPED_WIKILINK_PATTERN = /\\\[\\\[([^\]\n]*?)\\\]\\\]/g
-
-export function restoreWikilinkBrackets(markdown: string): string {
-  return markdown.replace(ESCAPED_WIKILINK_PATTERN, '[[$1]]')
-}
+// How `[[wikilinks]]` survive serialization without a global un-escaping pass:
+// the `WriteWikilink` mark (see `extensions/wikilink-mark.ts`) gives bare
+// `[[...]]` a schema identity whose covered text serializes verbatim, while
+// deliberately escaped `\[\[...\]\]` stays plain text and keeps its escapes.
 
 function serializeDocument(manager: MarkdownManager, doc: JSONContent): string {
-  return restoreWikilinkBrackets(manager.serialize(doc))
+  return manager.serialize(doc)
 }
 
 export function serializeWriteMarkdown(doc: JSONContent): string {
