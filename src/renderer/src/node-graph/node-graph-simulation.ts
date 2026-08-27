@@ -45,6 +45,8 @@ export class NodeGraphSimulation {
   private nodes: SimulationNode[] = []
   private byId = new Map<string, SimulationNode>()
   private links: SimulationLink[] = []
+  /** Canonical endpoint-pair signature of `links`, for change detection. */
+  private linkSignature = ''
   private forces: NodeGraphForces
   private currentAlpha = 1
 
@@ -122,7 +124,18 @@ export class NodeGraphSimulation {
         bias: sourceDegree / (sourceDegree + targetDegree)
       })
     }
-    const structureChanged = next.length !== previous.size || seeded > 0
+    // Edges count as structure too: adding or removing a wikilink changes no
+    // node, but a settled layout (alpha 0) would otherwise never feel the new
+    // spring and the edge would render at whatever distance it happened to be.
+    const nextSignature = this.links
+      .map((link) => (link.source.id < link.target.id
+        ? `${link.source.id}\u0000${link.target.id}`
+        : `${link.target.id}\u0000${link.source.id}`))
+      .sort()
+      .join('\n')
+    const structureChanged =
+      next.length !== previous.size || seeded > 0 || nextSignature !== this.linkSignature
+    this.linkSignature = nextSignature
     this.nodes = next
     this.byId = nextById
     if (structureChanged) this.reheat(1)

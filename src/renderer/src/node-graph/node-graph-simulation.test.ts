@@ -164,6 +164,46 @@ describe('NodeGraphSimulation', () => {
     expect(Number.isFinite(simulation.node('n0')!.x)).toBe(true)
   })
 
+  it('reheats a settled layout when an edge is added between existing nodes', () => {
+    const simulation = new NodeGraphSimulation(FORCES)
+    simulation.setGraph(nodes(3), [{ from: 'n0', to: 'n1' }])
+    simulation.run(5_000)
+    expect(simulation.settled).toBe(true)
+    const before = distance(simulation, 'n1', 'n2')
+
+    // Same nodes, one new edge: a wikilink was written between two notes.
+    simulation.setGraph(nodes(3), [
+      { from: 'n0', to: 'n1' },
+      { from: 'n1', to: 'n2' }
+    ])
+    expect(simulation.settled).toBe(false)
+    expect(simulation.tick()).toBe(true)
+    simulation.run(5_000)
+    expect(distance(simulation, 'n1', 'n2')).toBeLessThan(before)
+  })
+
+  it('reheats when an edge is removed or rewired', () => {
+    const simulation = new NodeGraphSimulation(FORCES)
+    simulation.setGraph(nodes(3), [{ from: 'n0', to: 'n1' }])
+    simulation.run(5_000)
+    simulation.setGraph(nodes(3), [{ from: 'n0', to: 'n2' }])
+    expect(simulation.settled).toBe(false)
+    simulation.run(5_000)
+    simulation.setGraph(nodes(3), [])
+    expect(simulation.settled).toBe(false)
+  })
+
+  it('does not reheat when the same edges are reapplied', () => {
+    const simulation = new NodeGraphSimulation(FORCES)
+    const edges = [{ from: 'n0', to: 'n1' }, { from: 'n1', to: 'n2' }]
+    simulation.setGraph(nodes(3), edges)
+    simulation.run(5_000)
+    expect(simulation.settled).toBe(true)
+    // The same topology arriving in a different order is still the same graph.
+    simulation.setGraph(nodes(3), [...edges].reverse())
+    expect(simulation.settled).toBe(true)
+  })
+
   it('keeps every coordinate finite on a dense graph', () => {
     const simulation = new NodeGraphSimulation(FORCES)
     const graph = nodes(120)
