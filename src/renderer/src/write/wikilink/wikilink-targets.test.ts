@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildWikilinkInsertion,
+  crossesVolumes,
+  pathVolumeRoot,
   rankWikilinkTargets,
   relativePathFrom,
   shortenMarkdownPath,
@@ -275,5 +277,64 @@ describe('WikilinkMenuView.placementFor', () => {
       3
     )
     expect(placement.left).toBe(4)
+  })
+})
+
+describe('pathVolumeRoot', () => {
+  it('identifies windows drive letters case-insensitively', () => {
+    expect(pathVolumeRoot('C:/work/current.md')).toBe('c:')
+    expect(pathVolumeRoot('c:\\work\\current.md')).toBe('c:')
+    expect(pathVolumeRoot('D:/notes')).toBe('d:')
+  })
+
+  it('identifies UNC shares by server and share', () => {
+    expect(pathVolumeRoot('//server/share/notes')).toBe('//server/share')
+    expect(pathVolumeRoot('\\\\server\\share\\notes')).toBe('//server/share')
+    expect(pathVolumeRoot('//server/other/notes')).toBe('//server/other')
+  })
+
+  it('treats every posix path as one volume', () => {
+    expect(pathVolumeRoot('/Users/me/vault')).toBe('')
+    expect(crossesVolumes('/Users/me/vault', '/opt/notes')).toBe(false)
+  })
+
+  it('reports different drives and shares as crossing volumes', () => {
+    expect(crossesVolumes('C:/work', 'D:/notes')).toBe(true)
+    expect(crossesVolumes('C:/work', 'c:/other')).toBe(false)
+    expect(crossesVolumes('//server/share', '//server/other')).toBe(true)
+    expect(crossesVolumes('C:/work', '//server/share')).toBe(true)
+  })
+})
+
+describe('cross-volume wikilinks', () => {
+  const onC = target('current.md', 'C:/work', 'work')
+  const onD = target('target.md', 'D:/notes', 'notes')
+
+  it('withholds targets on another drive from the menu', () => {
+    // `../../D:/notes/target` is not a valid Windows path, so a completion
+    // that would produce it must not be offered at all.
+    const ranked = rankWikilinkTargets([onC, onD], '', {
+      workspaceRoot: 'C:/work',
+      activePath: 'current.md'
+    })
+    expect(ranked).toEqual([])
+  })
+
+  it('still offers same-drive targets in other workspaces', () => {
+    const sameDrive = target('spec.md', 'C:/other', 'other')
+    const ranked = rankWikilinkTargets([onC, onD, sameDrive], '', {
+      workspaceRoot: 'C:/work',
+      activePath: 'current.md'
+    })
+    expect(ranked.map((item) => item.relativePath)).toEqual(['spec.md'])
+  })
+
+  it('never produces a ..-walk across drives from the insertion builder', () => {
+    const insertion = buildWikilinkInsertion(onD, {
+      workspaceRoot: 'C:/work',
+      activePath: 'current.md'
+    })
+    expect(insertion).toBe('D:/notes/target')
+    expect(insertion).not.toContain('..')
   })
 })

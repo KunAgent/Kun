@@ -77,6 +77,29 @@ export function relativePathFrom(fromDirectory: string, toPath: string): string 
   return joined || '.'
 }
 
+/**
+ * Volume root of an absolute path: the drive letter for Windows drive paths
+ * (`c:`), the server/share pair for UNC paths (`//server/share`), and `''`
+ * for POSIX paths, which all share one volume. Case-insensitive because
+ * Windows volumes are.
+ */
+export function pathVolumeRoot(path: string): string {
+  const normalized = toPosix(path)
+  const drive = /^([A-Za-z]):/.exec(normalized)
+  if (drive) return `${drive[1]!.toLocaleLowerCase()}:`
+  const unc = /^\/\/([^/]+)\/([^/]+)/.exec(normalized)
+  if (unc) return `//${unc[1]}/${unc[2]}`.toLocaleLowerCase()
+  return ''
+}
+
+/**
+ * True when two absolute paths live on different volumes, where no `..` walk
+ * can reach from one to the other (`../../D:/notes` is not a real path).
+ */
+export function crossesVolumes(left: string, right: string): boolean {
+  return pathVolumeRoot(left) !== pathVolumeRoot(right)
+}
+
 export type WikilinkInsertionContext = {
   /** Workspace root of the file being edited. */
   workspaceRoot: string
@@ -103,10 +126,17 @@ export function buildWikilinkInsertion(
   if (target.workspaceRoot === context.workspaceRoot) {
     return shortenMarkdownPath(relativePathFrom(activeDirectory, target.relativePath))
   }
-  const fromAbsolute = [toPosix(context.workspaceRoot).replace(/\/+$/, ''), activeDirectory]
+  const toAbsolute = [toPosix(target.workspaceRoot).replace(/\/+$/, ''), target.relativePath]
     .filter(Boolean)
     .join('/')
-  const toAbsolute = [toPosix(target.workspaceRoot).replace(/\/+$/, ''), target.relativePath]
+  // Different volumes (Windows drives, UNC shares): no `..` walk exists, so
+  // the absolute path is the only representation that still names the file.
+  // Ranking already withholds such targets from the menu; this is the guard
+  // for any other caller.
+  if (crossesVolumes(context.workspaceRoot, target.workspaceRoot)) {
+    return shortenMarkdownPath(toAbsolute)
+  }
+  const fromAbsolute = [toPosix(context.workspaceRoot).replace(/\/+$/, ''), activeDirectory]
     .filter(Boolean)
     .join('/')
   return shortenMarkdownPath(relativePathFrom(fromAbsolute, toAbsolute))
@@ -144,7 +174,9 @@ export type RankWikilinkOptions = {
 
 /**
  * Ranks targets for a query. The file being edited is never offered — a note
- * linking to itself is never what the caret is asking for.
+ * linking to itself is never what the caret is asking for — and neither is a
+ * note on another volume (Windows drive / UNC share), because no relative
+ * path can reach it and the link could never resolve.
  */
 export function rankWikilinkTargets(
   targets: readonly WikilinkTarget[],
@@ -153,10 +185,12 @@ export function rankWikilinkTargets(
 ): RankedWikilinkTarget[] {
   const normalized = query.trim().toLocaleLowerCase()
   const activePath = workspaceRelativePath(options.workspaceRoot, options.activePath)
+  const activeVolume = pathVolumeRoot(options.workspaceRoot)
   const ranked: RankedWikilinkTarget[] = []
   for (const target of targets) {
     const external = target.workspaceRoot !== options.workspaceRoot
     if (!external && toPosix(target.relativePath) === activePath) continue
+    if (external && pathVolumeRoot(target.workspaceRoot) !== activeVolume) continue
     const score = scoreTarget(target, normalized)
     if (score <= 0) continue
     // Same-workspace results outrank equally-good external ones.
