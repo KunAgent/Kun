@@ -115,23 +115,23 @@ function withGroupMembership(
 }
 
 /**
- * Cheap structural comparison: node ids with their degree, plus edge ids.
- * `builtAt` changes on every build, so comparing whole projections would always
- * report a difference and defeat the purpose.
+ * Whole-projection comparison, minus `builtAt` (which changes on every build
+ * and would always report a difference). Everything else — labels, subtitles,
+ * paths, timestamps, sizes, states, counts, truncation, diagnostics — is
+ * user-visible somewhere (canvas, inspector, insights), so a content-only
+ * change with identical topology must still count as a new projection.
+ * Comparing serialized forms is safe because the runtime builder is
+ * deterministic for a given input.
  */
-function projectionSignature(projection: NodeGraphProjection): string {
-  const nodes = projection.nodes.map((node) => `${node.id}:${node.degree}`).join('|')
-  const edges = projection.edges.map((edge) => edge.id).join('|')
-  return `${nodes}#${edges}#${projection.truncated}#${projection.diagnostics.join('~')}`
-}
-
 function sameProjection(left: NodeGraphProjection, right: NodeGraphProjection): boolean {
   if (left.nodes.length !== right.nodes.length) return false
   if (left.edges.length !== right.edges.length) return false
-  return projectionSignature(left) === projectionSignature(right)
+  return JSON.stringify({ ...left, builtAt: '' }) === JSON.stringify({ ...right, builtAt: '' })
 }
 
 let loadToken = 0
+/** True while a background folder poll is in flight, so polls coalesce. */
+let folderPollInFlight = false
 
 export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
   projection: EMPTY_NODE_GRAPH_PROJECTION,
@@ -189,8 +189,18 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
   },
 
   loadFolder: async (roots, options = {}) => {
-    const token = ++loadToken
     const background = options.background === true
+    // Polls coalesce: while one scan is still running, the next tick is
+    // dropped instead of queued. Combined with the token rule below, a scan
+    // slower than the poll interval still lands — before, every new poll
+    // invalidated the previous one and a large workspace could refresh forever
+    // without ever applying a result.
+    if (background && folderPollInFlight) return
+    // Only a user-visible load supersedes older requests. A background poll
+    // adopts the current token, so it can never discard a foreground load —
+    // but a foreground load started mid-poll does discard the poll's result.
+    const token = background ? loadToken : ++loadToken
+    if (background) folderPollInFlight = true
     // A background poll must not flip the UI into its loading state, or the
     // refresh button would spin every few seconds for no user-visible reason.
     set(background
@@ -226,6 +236,8 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
       // is allowed to replace it with an error state.
       if (background) return
       set({ status: 'error', error: error instanceof Error ? error.message : String(error) })
+    } finally {
+      if (background) folderPollInFlight = false
     }
   },
 
