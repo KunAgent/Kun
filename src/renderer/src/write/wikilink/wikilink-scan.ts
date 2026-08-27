@@ -24,12 +24,27 @@ export type WikilinkScanLimits = {
   maxDepth: number
   maxDirectoriesPerRoot: number
   maxFilesPerRoot: number
+  /**
+   * Across every root of one scan. The per-root caps bound each workspace,
+   * but with many saved workspaces their sum was unbounded — thousands of
+   * directory-list IPC calls from one scan.
+   */
+  maxDirectoriesTotal: number
+  maxFilesTotal: number
 }
 
 export const DEFAULT_WIKILINK_SCAN_LIMITS: WikilinkScanLimits = {
   maxDepth: 6,
   maxDirectoriesPerRoot: 200,
-  maxFilesPerRoot: 800
+  maxFilesPerRoot: 800,
+  maxDirectoriesTotal: 800,
+  maxFilesTotal: 3_200
+}
+
+/** Mutable remaining allowance shared by every root of one scan. */
+type WikilinkScanBudget = {
+  directories: number
+  files: number
 }
 
 const SKIPPED_DIRECTORIES = new Set([
@@ -58,7 +73,8 @@ function skipDirectory(name: string): boolean {
 export async function scanWorkspaceMarkdown(
   scanRoot: WikilinkScanRoot,
   list: WikilinkDirectoryLister,
-  limits: WikilinkScanLimits = DEFAULT_WIKILINK_SCAN_LIMITS
+  limits: WikilinkScanLimits = DEFAULT_WIKILINK_SCAN_LIMITS,
+  budget?: WikilinkScanBudget
 ): Promise<WikilinkTarget[]> {
   const targets: WikilinkTarget[] = []
   const queue: { path: string; depth: number }[] = [{ path: '', depth: 0 }]
@@ -68,7 +84,9 @@ export async function scanWorkspaceMarkdown(
     const current = queue.shift()!
     if (directories >= limits.maxDirectoriesPerRoot) break
     if (targets.length >= limits.maxFilesPerRoot) break
+    if (budget && (budget.directories <= 0 || budget.files <= 0)) break
     directories += 1
+    if (budget) budget.directories -= 1
     let result: Awaited<ReturnType<WikilinkDirectoryLister>>
     try {
       result = await list(
@@ -91,6 +109,8 @@ export async function scanWorkspaceMarkdown(
       }
       if (!isWikilinkMarkdownName(entry.name)) continue
       if (targets.length >= limits.maxFilesPerRoot) break
+      if (budget && budget.files <= 0) break
+      if (budget) budget.files -= 1
       targets.push({
         workspaceRoot: scanRoot.root,
         workspaceName: scanRoot.name,
@@ -108,7 +128,9 @@ function joinRelative(parent: string, name: string): string {
 
 /**
  * Scans every workspace. Roots are walked sequentially rather than in parallel
- * to keep a burst of directory IPC from competing with the editor's own reads.
+ * to keep a burst of directory IPC from competing with the editor's own reads,
+ * and all of them share one directory/file allowance so the total is bounded
+ * no matter how many workspaces are saved.
  */
 export async function scanAllWorkspaceMarkdown(
   roots: readonly WikilinkScanRoot[],
@@ -117,11 +139,16 @@ export async function scanAllWorkspaceMarkdown(
 ): Promise<WikilinkTarget[]> {
   const collected: WikilinkTarget[] = []
   const seenRoots = new Set<string>()
+  const budget: WikilinkScanBudget = {
+    directories: limits.maxDirectoriesTotal,
+    files: limits.maxFilesTotal
+  }
   for (const scanRoot of roots) {
+    if (budget.directories <= 0 || budget.files <= 0) break
     const key = toPosix(scanRoot.root).replace(/\/+$/, '')
     if (!key || seenRoots.has(key)) continue
     seenRoots.add(key)
-    collected.push(...await scanWorkspaceMarkdown(scanRoot, list, limits))
+    collected.push(...await scanWorkspaceMarkdown(scanRoot, list, limits, budget))
   }
   return collected
 }
