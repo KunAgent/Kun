@@ -169,9 +169,13 @@ function runtimeProcessConfigFingerprint(settings: AppSettingsV1): string {
     storage: runtime.storage,
     insecure: runtime.insecure,
     defaultProviderKind: activeProvider.kind ?? 'http',
-    ...(process.platform === 'darwin'
-      ? { computerUseEnabled: runtime.computerUse.enabled }
-      : {})
+    // The GUI bridge URL and token are injected when the Kun process starts.
+    // Restart whenever bridge availability or capture sizing changes so the
+    // child never keeps a missing or stale bridge binding.
+    computerUseEnabled: runtime.computerUse.enabled,
+    computerUseMaxImageDimension: runtime.computerUse.enabled
+      ? runtime.computerUse.maxImageDimension
+      : null
   })
 }
 

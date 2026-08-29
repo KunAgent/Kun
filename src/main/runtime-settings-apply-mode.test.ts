@@ -180,6 +180,21 @@ function updateProvider(
   }
 }
 
+function updateComputerUse(
+  value: AppSettingsV1,
+  patch: Partial<AppSettingsV1['agents']['kun']['computerUse']>
+): AppSettingsV1 {
+  return {
+    ...value,
+    agents: {
+      kun: {
+        ...value.agents.kun,
+        computerUse: { ...value.agents.kun.computerUse, ...patch }
+      }
+    }
+  }
+}
+
 describe('runtimeSettingsApplyMode', () => {
   it('ignores UI-only settings', () => {
     const prev = settings()
@@ -509,6 +524,37 @@ describe('runtimeSettingsApplyMode', () => {
         }
       }
     })).toBe('restart')
+  })
+
+  it('requires restart when Computer Use is enabled', () => {
+    const prev = settings()
+    const next = updateComputerUse(prev, { enabled: true })
+
+    expect(runtimeSettingsApplyMode(prev, next)).toBe('restart')
+  })
+
+  it('requires restart when the Computer Use bridge image limit changes', () => {
+    const prev = updateComputerUse(settings(), { enabled: true })
+    const next = updateComputerUse(prev, {
+      maxImageDimension: prev.agents.kun.computerUse.maxImageDimension + 1
+    })
+
+    expect(runtimeSettingsApplyMode(prev, next)).toBe('restart')
+  })
+
+  it('keeps Computer Use policy-only changes on the hot path', () => {
+    const defaults = settings()
+    const enabled = updateComputerUse(defaults, { enabled: true })
+    const withPolicyChanges = updateComputerUse(enabled, {
+      mode: 'always',
+      maxActionsPerTurn: enabled.agents.kun.computerUse.maxActionsPerTurn + 1
+    })
+    const withDisabledImageLimit = updateComputerUse(defaults, {
+      maxImageDimension: defaults.agents.kun.computerUse.maxImageDimension + 1
+    })
+
+    expect(runtimeSettingsApplyMode(enabled, withPolicyChanges)).toBe('hot')
+    expect(runtimeSettingsApplyMode(defaults, withDisabledImageLimit)).toBe('hot')
   })
 
   it('requires restart when the active default provider switches between http and agent-sdk', () => {
