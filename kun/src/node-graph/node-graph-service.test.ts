@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { NodeGraphService, type NodeGraphRunSource } from './node-graph-service.js'
 import type { ThreadSummary } from '../contracts/threads.js'
@@ -262,7 +265,7 @@ function folderService(
 }
 
 describe('NodeGraphService.projectFolder', () => {
-  it('caps the number of roots and says which were dropped', async () => {
+  it('caps roots in request order, so the active root always survives', async () => {
     const indexed: string[] = []
     const projection = await folderService(
       async (root) => {
@@ -271,7 +274,9 @@ describe('NodeGraphService.projectFolder', () => {
       },
       { maxFolderRoots: 2 }
     ).projectFolder(['/c', '/a', '/b'])
-    expect(indexed.sort()).toEqual(['/a', '/b'])
+    // Callers put the active workspace first; sorting before the cap could
+    // drop exactly the root the user is looking at.
+    expect(indexed).toEqual(['/c', '/a'])
     expect(projection.truncated).toBe(true)
     expect(projection.diagnostics.join(' ')).toContain('projecting 2 of 3 requested roots')
   })
@@ -313,5 +318,156 @@ describe('NodeGraphService.projectFolder', () => {
     }).projectFolder(['/a', '/b'])
     expect(projection.truncated).toBe(true)
     expect(projection.diagnostics.join(' ')).toContain('scan budget reached: "/b" was skipped')
+  })
+
+  it('collapses lexical spellings of the same directory into one root', async () => {
+    const indexed: string[] = []
+    await folderService(async (root) => {
+      indexed.push(root)
+      return { index: null, state: 'pending' }
+    }).projectFolder(['/vault', '/vault/', '/vault/.', '/vault/notes/..'])
+    expect(indexed).toEqual(['/vault'])
+  })
+
+  it('collapses a symlinked root into its physical directory', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kun-node-graph-roots-'))
+    const physical = join(base, 'vault')
+    const linked = join(base, 'linked')
+    await mkdir(physical)
+    await symlink(physical, linked)
+    const indexed: string[] = []
+    await folderService(async (root) => {
+      indexed.push(root)
+      return { index: null, state: 'pending' }
+    }).projectFolder([linked, physical])
+    expect(indexed).toHaveLength(1)
+  })
+
+  it('merges a root nested inside another requested root into its ancestor', async () => {
+    const indexed: string[] = []
+    const projection = await folderService(async (root) => {
+      indexed.push(root)
+      return { index: null, state: 'pending' }
+    }).projectFolder(['/vault/sub', '/vault'])
+    expect(indexed).toEqual(['/vault'])
+    expect(projection.diagnostics.join(' ')).toContain(
+      'folder root "/vault/sub" is inside "/vault"'
+    )
+  })
+})
+
+describe('NodeGraphService knowledge-base loading', () => {
+  function mount(id: string): { id: string; root: string; name: string; source: string; access: string } {
+    return { id, root: `/kb/${id}`, name: id, source: 'manual', access: 'read-only' }
+  }
+
+  it('loads knowledge bases with bounded concurrency and one shared budget', async () => {
+    let inFlight = 0
+    let peak = 0
+    const budgets: unknown[] = []
+    const instance = new NodeGraphService({
+      threads: {
+        list: async () => ['a', 'b', 'c', 'd', 'e'].map((id) =>
+          thread({ id, knowledgeBases: [mount(`kb-${id}`)] } as never))
+      },
+      knowledgeBaseService: {
+        readyIndex: async (_mount: unknown, options?: { budget?: unknown }) => {
+          budgets.push(options?.budget)
+          inFlight += 1
+          peak = Math.max(peak, inFlight)
+          await new Promise((resolve) => setTimeout(resolve, 5))
+          inFlight -= 1
+          return { index: null, state: 'pending' as const }
+        },
+        readyFolderIndex: async () => ({ index: null, state: 'pending' as const })
+      } as never,
+      nowIso: () => BUILT_AT,
+      folderConcurrency: 2
+    })
+    await instance.project()
+    expect(peak).toBeLessThanOrEqual(2)
+    expect(budgets).toHaveLength(5)
+    expect(budgets[0]).toBeDefined()
+    expect(budgets.every((budget) => budget === budgets[0])).toBe(true)
+  })
+
+  it('caps the number of mounts and reports the drop', async () => {
+    const loaded: string[] = []
+    const instance = new NodeGraphService({
+      threads: {
+        list: async () => ['a', 'b', 'c'].map((id) =>
+          thread({ id, knowledgeBases: [mount(`kb-${id}`)] } as never))
+      },
+      knowledgeBaseService: {
+        readyIndex: async (requested: { id: string }) => {
+          loaded.push(requested.id)
+          return { index: null, state: 'pending' as const }
+        },
+        readyFolderIndex: async () => ({ index: null, state: 'pending' as const })
+      } as never,
+      nowIso: () => BUILT_AT,
+      maxKnowledgeBases: 2
+    })
+    const projection = await instance.project()
+    expect(loaded).toHaveLength(2)
+    expect(projection.truncated).toBe(true)
+    expect(projection.diagnostics.join(' ')).toContain('loading 2 of 3 mounted bases')
+  })
+
+  it('surfaces a spent budget as a diagnostic and truncation', async () => {
+    const instance = new NodeGraphService({
+      threads: { list: async () => [thread({ id: 'a', knowledgeBases: [mount('kb-a')] } as never)] },
+      knowledgeBaseService: {
+        readyIndex: async () => ({ index: null, state: 'pending' as const, budgetExhausted: true }),
+        readyFolderIndex: async () => ({ index: null, state: 'pending' as const })
+      } as never,
+      nowIso: () => BUILT_AT
+    })
+    const projection = await instance.project()
+    expect(projection.truncated).toBe(true)
+    expect(projection.diagnostics.join(' ')).toContain('scan budget reached: knowledge base "kb-a" was skipped')
+  })
+})
+
+describe('NodeGraphService changed-file scan lifecycle', () => {
+  it('evicts a timed-out scan so the next refresh starts fresh', async () => {
+    let calls = 0
+    const runs: NodeGraphRunSource = {
+      list: () => {
+        calls += 1
+        return new Promise(() => undefined) // never settles
+      }
+    }
+    const instance = service({
+      threads: [thread({ id: 'a' })],
+      runs,
+      changedFilesTimeoutMs: 5,
+      cacheTtlMs: 0
+    })
+    const first = await instance.project({ refresh: true })
+    expect(first.diagnostics.join(' ')).toContain('exceeded 5ms')
+    // Before the eviction fix this reused the hung promise forever: every
+    // later refresh timed out against the same never-settling scan.
+    await instance.project({ refresh: true })
+    expect(calls).toBe(2)
+  })
+
+  it('treats an omitted includeChangedFiles exactly like an explicit true', async () => {
+    let threadCalls = 0
+    const instance = new NodeGraphService({
+      threads: {
+        list: async () => {
+          threadCalls += 1
+          return [thread({ id: 'a' })]
+        }
+      },
+      nowIso: () => BUILT_AT
+    })
+    await instance.project()
+    await instance.project({ includeChangedFiles: true })
+    // One cache entry: the omitted and explicit spellings share a key.
+    expect(threadCalls).toBe(1)
+    await instance.project({ includeChangedFiles: false })
+    expect(threadCalls).toBe(2)
   })
 })

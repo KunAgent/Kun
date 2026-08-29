@@ -374,3 +374,99 @@ describe('multi-root folder projections', () => {
     expect(JSON.stringify(multi())).toBe(JSON.stringify(multi()))
   })
 })
+
+describe('Windows path semantics', () => {
+  const WIN_WORK = 'C:/work'
+  const WIN_NOTES = 'D:/notes'
+
+  function winIndex(root: string, relativePath: string, references: StoredKnowledgeIndex['externalReferences'] = []): StoredKnowledgeIndex {
+    const docId = `doc:${relativePath}`
+    return {
+      version: 3,
+      root,
+      fingerprint: 'fp-win',
+      builtAt: BUILT_AT,
+      rootNodeId: 'root:.',
+      documents: [],
+      nodes: {
+        'root:.': node('root:.', 'root', { childIds: [docId] }),
+        [docId]: node(docId, 'document', { parentId: 'root:.', relativePath })
+      },
+      references: [],
+      externalReferences: references,
+      diagnostics: []
+    }
+  }
+
+  it('resolves a drive-letter absolute link instead of discarding it as a URL', () => {
+    // `C:` matches the generic URI-scheme expression; the drive check must win.
+    const projection = buildNodeGraphFolderProjection({
+      builtAt: BUILT_AT,
+      roots: [
+        {
+          root: WIN_WORK,
+          index: winIndex(WIN_WORK, 'current.md', [
+            { fromId: 'doc:current.md', sourcePath: 'current.md', target: 'D:/notes/target.md', label: 'target' }
+          ])
+        },
+        { root: WIN_NOTES, index: winIndex(WIN_NOTES, 'target.md') }
+      ]
+    })
+    expect(edge(
+      projection,
+      'link',
+      `kn:${folderMountId(WIN_WORK)}:doc:current.md`,
+      `kn:${folderMountId(WIN_NOTES)}:doc:target.md`
+    )).toBe(true)
+  })
+
+  it('matches Windows targets case-insensitively and across separator styles', () => {
+    const projection = buildNodeGraphFolderProjection({
+      builtAt: BUILT_AT,
+      roots: [
+        {
+          root: WIN_WORK,
+          index: winIndex(WIN_WORK, 'current.md', [
+            { fromId: 'doc:current.md', sourcePath: 'current.md', target: 'd:\\Notes\\Target.md', label: 'target' }
+          ])
+        },
+        { root: WIN_NOTES, index: winIndex(WIN_NOTES, 'target.md') }
+      ]
+    })
+    expect(edge(
+      projection,
+      'link',
+      `kn:${folderMountId(WIN_WORK)}:doc:current.md`,
+      `kn:${folderMountId(WIN_NOTES)}:doc:target.md`
+    )).toBe(true)
+  })
+
+  it('still discards real URL targets', () => {
+    const projection = buildNodeGraphFolderProjection({
+      builtAt: BUILT_AT,
+      roots: [
+        {
+          root: WIN_WORK,
+          index: winIndex(WIN_WORK, 'current.md', [
+            { fromId: 'doc:current.md', sourcePath: 'current.md', target: 'https://example.com/x.md', label: 'web' }
+          ])
+        }
+      ]
+    })
+    expect(projection.edges.filter((item) => item.kind === 'link')).toHaveLength(0)
+  })
+})
+
+describe('folderMountId', () => {
+  it('does not collide on suffixes that broke the old 32-bit hash', () => {
+    // 'Aa' and 'BB' share a 31-polynomial hash; a digest must keep them apart.
+    expect(folderMountId('/vault/Aa')).not.toBe(folderMountId('/vault/BB'))
+  })
+
+  it('is stable and normalizes spelling of the same directory', () => {
+    expect(folderMountId('/vault')).toBe(folderMountId('/vault/'))
+    expect(folderMountId('C:/Vault')).toBe(folderMountId('c:/vault'))
+    expect(folderMountId('C:\\Vault')).toBe(folderMountId('c:/vault'))
+    expect(folderMountId('/vault')).not.toBe(folderMountId('/Vault'))
+  })
+})
