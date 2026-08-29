@@ -18,6 +18,12 @@ type Props = {
   settings: NodeGraphSettings
   counts: NodeGraphProjection['counts']
   focusedLabel: string | null
+  /**
+   * True for the Work (folder) graph, which has no threads, workspaces, or
+   * changed files — the controls for those layers are withheld so a toggle
+   * cannot trigger a pointless rescan or flip a Code-graph preference.
+   */
+  folderMode?: boolean
   onPatch: (patch: Partial<NodeGraphSettings>) => void
   onToggleKind: (kind: NodeGraphNodeKind) => void
   onAddGroup: () => void
@@ -43,6 +49,7 @@ export function NodeGraphControls({
   settings,
   counts,
   focusedLabel,
+  folderMode = false,
   onPatch,
   onToggleKind,
   onAddGroup,
@@ -78,20 +85,24 @@ export function NodeGraphControls({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <ControlSection title={t('nodeGraphFilters')} defaultOpen>
-          <ToggleRow
-            label={t('nodeGraphKindWorkspace')}
-            icon={<Layers className="h-3.5 w-3.5" strokeWidth={1.8} />}
-            checked={settings.kinds.workspace !== false}
-            onChange={() => onToggleKind('workspace')}
-            count={counts.workspace ?? 0}
-          />
-          <ToggleRow
-            label={t('nodeGraphKindThread')}
-            icon={<MessageSquare className="h-3.5 w-3.5" strokeWidth={1.8} />}
-            checked={settings.kinds.thread !== false}
-            onChange={() => onToggleKind('thread')}
-            count={counts.thread ?? 0}
-          />
+          {folderMode ? null : (
+            <>
+              <ToggleRow
+                label={t('nodeGraphKindWorkspace')}
+                icon={<Layers className="h-3.5 w-3.5" strokeWidth={1.8} />}
+                checked={settings.kinds.workspace !== false}
+                onChange={() => onToggleKind('workspace')}
+                count={counts.workspace ?? 0}
+              />
+              <ToggleRow
+                label={t('nodeGraphKindThread')}
+                icon={<MessageSquare className="h-3.5 w-3.5" strokeWidth={1.8} />}
+                checked={settings.kinds.thread !== false}
+                onChange={() => onToggleKind('thread')}
+                count={counts.thread ?? 0}
+              />
+            </>
+          )}
           <SliderRow
             label={t('nodeGraphMinDegree')}
             value={settings.minDegree}
@@ -104,12 +115,14 @@ export function NodeGraphControls({
             checked={settings.showOrphans}
             onChange={(value) => onPatch({ showOrphans: value })}
           />
-          <ToggleRow
-            label={t('nodeGraphIncludeChangedFiles')}
-            hint={t('nodeGraphIncludeChangedFilesHint')}
-            checked={settings.includeChangedFiles}
-            onChange={(value) => onPatch({ includeChangedFiles: value })}
-          />
+          {folderMode ? null : (
+            <ToggleRow
+              label={t('nodeGraphIncludeChangedFiles')}
+              hint={t('nodeGraphIncludeChangedFilesHint')}
+              checked={settings.includeChangedFiles}
+              onChange={(value) => onPatch({ includeChangedFiles: value })}
+            />
+          )}
           <p className="text-[10.5px] leading-4 text-ds-faint">{t('nodeGraphSearchHint')}</p>
         </ControlSection>
 

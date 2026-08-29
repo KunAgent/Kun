@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { Network, Route, TriangleAlert, X } from 'lucide-react'
 import {
@@ -116,9 +124,20 @@ export function NodeGraphView({
   }, [reload])
   useNodeGraphAutoRefresh({ enabled: folderMode, onRefresh: autoRefresh })
 
+  // The visible subgraph — and the PageRank/cluster analysis hanging off it —
+  // depends only on the filter settings. Depending on the whole settings
+  // object recomputed all of it for every display or physics slider tick.
+  // Search is deferred so typing stays responsive on large graphs: keystrokes
+  // land immediately, the heavy recompute follows at deferred priority.
+  const search = useDeferredValue(settings.search)
+  const { kinds, minDegree, showOrphans, localDepth, groups } = settings
   const view = useMemo(
-    () => buildNodeGraphView({ projection, settings, focusNodeId }),
-    [focusNodeId, projection, settings]
+    () => buildNodeGraphView({
+      projection,
+      settings: { search, kinds, minDegree, showOrphans, localDepth, groups },
+      focusNodeId
+    }),
+    [focusNodeId, groups, kinds, localDepth, minDegree, projection, search, showOrphans]
   )
   const nodesById = useMemo(
     () => new Map(view.nodes.map((node) => [node.id, node])),
@@ -284,6 +303,7 @@ export function NodeGraphView({
             settings={settings}
             counts={projection.counts}
             focusedLabel={focusedLabel}
+            folderMode={folderMode}
             onPatch={patchSettings}
             onToggleKind={toggleKind}
             onAddGroup={() => void addGroup()}

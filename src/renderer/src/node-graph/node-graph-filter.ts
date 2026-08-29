@@ -13,9 +13,19 @@ export type NodeGraphView = {
   hiddenCount: number
 }
 
+/**
+ * The subset of settings the filter pipeline reads. Typed narrowly so callers
+ * can memoize on exactly these fields — display and physics changes must not
+ * rebuild the view (and the analysis derived from it).
+ */
+export type NodeGraphFilterSettings = Pick<
+  NodeGraphSettings,
+  'search' | 'kinds' | 'minDegree' | 'showOrphans' | 'localDepth' | 'groups'
+>
+
 export type NodeGraphViewInput = {
   projection: NodeGraphProjection
-  settings: NodeGraphSettings
+  settings: NodeGraphFilterSettings
   /** When set, only nodes within `localDepth` hops of this node are shown. */
   focusNodeId?: string | null
 }

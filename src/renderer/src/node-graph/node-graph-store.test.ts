@@ -119,6 +119,17 @@ describe('useNodeGraphStore settings', () => {
     expect(useNodeGraphStore.getState().settings.nodeSize).toBe(2)
   })
 
+  it('does not rescan a folder projection when the changed-file layer is toggled', async () => {
+    // Folder projections have no changed-file layer: refetching would pay for
+    // a full directory rescan and change nothing on screen.
+    useNodeGraphStore.setState({ source: { kind: 'folder', roots: ['/vault'] } })
+    useNodeGraphStore.getState().patchSettings({ includeChangedFiles: false })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(client.fetchNodeGraph).not.toHaveBeenCalled()
+    expect(client.fetchNodeGraphFolder).not.toHaveBeenCalled()
+  })
+
   it('adds, updates, and removes groups', () => {
     useNodeGraphStore.getState().addGroup({ query: 'kind:document', name: 'Docs' })
     const created = useNodeGraphStore.getState().settings.groups[0]!
