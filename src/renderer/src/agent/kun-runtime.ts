@@ -96,7 +96,7 @@ import type {
   DesignTaskProfile,
   DesignTaskProfileInput
 } from './design-task-profile'
-import { buildTurnDurationByUserId } from './thread-timing'
+import { buildTurnDurationByUserId, resolveRunningTurnStartedAtMs } from './thread-timing'
 
 function normalizeApprovalPolicy(value: string | undefined): NormalizedThread['approvalPolicy'] {
   switch (value) {
@@ -390,6 +390,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         skillInjectionBytes: turn.skillInjectionBytes,
         injectedInstructionSources: turn.injectedInstructionSources,
         instructionInjectionBytes: turn.instructionInjectionBytes,
+        mode: turn.mode === 'plan' || turn.mode === 'agent' ? turn.mode : undefined,
         guiDesignCanvas: turn.guiDesignCanvas,
         guiDesignMode: turn.guiDesignMode,
         designProfile: item.designProfile ?? turn.designProfile,
@@ -463,6 +464,12 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         : undefined,
       latestUserMessageId: resolvedLatestUserMessageId,
       turnDurationByUserId: buildTurnDurationByUserId(turns),
+      ...(latestTurn
+        ? (() => {
+            const startedAtMs = resolveRunningTurnStartedAtMs([latestTurn])
+            return startedAtMs !== undefined ? { latestTurnStartedAtMs: startedAtMs } : {}
+          })()
+        : {}),
       relation: thread.relation,
       ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
       ...(typeof thread.model === 'string' && thread.model.trim() ? { model: thread.model.trim() } : {}),

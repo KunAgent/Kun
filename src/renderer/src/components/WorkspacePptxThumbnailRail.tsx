@@ -6,6 +6,7 @@ import {
   type ReactElement
 } from 'react'
 import { secureWorkspaceOfficeLinks } from './workspace-office-external-link'
+import i18n from '../i18n'
 
 export type PptxPreviewer = ReturnType<typeof import('pptx-preview')['init']>
 
@@ -112,7 +113,7 @@ export function WorkspacePptxThumbnailRail({
   return (
     <aside
       ref={railRef}
-      aria-label="Slide thumbnails"
+      aria-label={i18n.t('officeSlideThumbnails')}
       className="w-[164px] shrink-0 overflow-y-auto border-r border-ds-border-muted bg-ds-card/55 p-2"
     >
       <div className="flex flex-col gap-2">
@@ -128,7 +129,7 @@ export function WorkspacePptxThumbnailRail({
                 else slideButtonRefs.current.delete(slide)
               }}
               type="button"
-              aria-label={`Go to slide ${slide}`}
+              aria-label={i18n.t('officeGoToSlide', { slide })}
               aria-current={active ? 'page' : undefined}
               data-pptx-thumbnail-index={index}
               data-thumbnail-state={thumbnail ? 'ready' : 'placeholder'}

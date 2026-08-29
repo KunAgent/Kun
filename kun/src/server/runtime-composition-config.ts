@@ -15,7 +15,9 @@ import {
   buildSkillToolProviders,
   buildDelegationToolProviders,
   buildComponentDesignToolProviders,
+  buildDiagramVisualizationToolProvider,
   buildConversationVisualizationToolProvider,
+  buildChartToolProvider,
   buildWebToolProviders,
   buildImageGenToolProviders,
   protocolSupportsImageEdit,
@@ -54,15 +56,8 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
-import {
-  buildModelClientRouterInput,
-  hydrateLegacyCredentialOptions,
-  modelContextProfilesByProvider
-} from './runtime-factory-model.js'
-import {
-  createPersistentAttachmentStore,
-  createPersistentMemoryStore
-} from './runtime-factory-storage.js'
+import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { createPersistentAttachmentStore, createPersistentMemoryStore } from './runtime-factory-storage.js'
 
 type DelegationConfig = ReturnType<typeof mergeBuiltinSubagentProfiles>
 
@@ -121,6 +116,7 @@ export function createRuntimeConfigController(
     antigravityProviderIds,
     cursorSdkProviderIds,
     resolveCapabilityProviderCredential,
+    gatewayCredentials,
     oauthEncryptor
   } = model
   const {
@@ -283,11 +279,18 @@ export function createRuntimeConfigController(
 	      mergedOptions,
 	      legacyCredentialMigration
 	    )
+	    if (nextOptions.localModelGateway?.enabled && !gatewayCredentials.hasKey()) {
+	      return {
+	        ok: false,
+	        code: 'invalid_config',
+	        message: 'local model gateway requires an independent API key; ensure a key before enabling it'
+	      }
+	    }
 	    if (nextOptions.localModelGateway?.enabled && !isLoopbackHost(nextOptions.host)) {
 	      return {
 	        ok: false,
 	        code: 'invalid_config',
-	        message: 'unauthenticated local model gateway requires a loopback serve host'
+	        message: 'local model gateway requires a loopback serve host'
 	      }
 	    }
 	    const nextSubagentsEnabled = nextOptions.capabilities?.subagents.enabled === true
@@ -460,9 +463,14 @@ export function createRuntimeConfigController(
 	        turnService
 	      ),
 	      ...buildComponentDesignToolProviders(delegationRuntime),
+	      ...buildDiagramVisualizationToolProvider(
+	        () => activeOptions.lab?.conversationVisualization,
+	        delegationRuntime
+	      ),
 	      ...buildConversationVisualizationToolProvider(
 	        () => activeOptions.lab?.conversationVisualization
-	      )
+	      ),
+	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization)
 	    ])
 
 	    // GUI/TUI own the live Registry through revisioned writes. Hot apply is

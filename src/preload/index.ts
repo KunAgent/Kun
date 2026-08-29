@@ -140,6 +140,7 @@ const api = {
     ipcRenderer.invoke('settings:save-silent', partial),
   runtimeRequest: (path, method, body) =>
     ipcRenderer.invoke('runtime:request', { path, method, body }),
+  gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),
   uploadRuntimeImageAttachment: (request) =>

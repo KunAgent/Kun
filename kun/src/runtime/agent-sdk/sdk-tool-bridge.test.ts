@@ -49,7 +49,8 @@ describe('selectBridgeableTools', () => {
       tool('generate_image'),
       tool('memory_create'),
       tool('delegate_task'),
-      tool('web_search')
+      tool('web_search'),
+      tool('render_chart')
     ]
     // overlap (read/bash/edit) and excluded (echo) are dropped; user_input is
     // now bridged so kun's GUI input panel handles interactive questions.
@@ -59,7 +60,8 @@ describe('selectBridgeableTools', () => {
       'generate_image',
       'memory_create',
       'delegate_task',
-      'web_search'
+      'web_search',
+      'render_chart'
     ])
   })
 

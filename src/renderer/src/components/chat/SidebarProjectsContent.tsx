@@ -41,6 +41,7 @@ import {
   setSidebarWorkspaceCollapsed,
   type SidebarCollapseRegistry
 } from './sidebar-collapse'
+import { SidebarProjectExpansionControl } from './SidebarProjectExpansionControl'
 import {
   sidebarChildFolders,
   sidebarFolderDescendantThreadIds,
@@ -72,12 +73,7 @@ export type SidebarProjectsContentProps = {
   threadListStatus: SidebarThreadListStatus; threadListError: string | null
   onRetryThreads: () => void
   onLoadMoreThreads: (workspacePath: string) => void
-  threadListCursorByWorkspace: Record<string, {
-    workspaceKey: string
-    nextCursor?: string
-    hasMore: boolean
-    total?: number
-  }>
+  threadListCursorByWorkspace: Record<string, import('../../store/chat-store-thread-pagination').WorkspaceThreadPageMeta>
   activeView: 'chat' | 'write' | 'claw'; activeThreadId: string | null; locale: string
   displayGroups: SidebarWorkspaceGroup[]
   sidebarCollapse: SidebarCollapseRegistry; sidebarOrder: SidebarOrderRegistry; sidebarFolders: SidebarFolderRegistry
@@ -321,12 +317,20 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
           const visibleThreads = visibleSelection.items
           const hiddenThreadCount = visibleSelection.hiddenCount
           const workspaceCursor = threadListCursorByWorkspace[workspaceRootIdentityKey(workspacePath)]
-          const hasWorkspaceRemoteMore = workspaceCursor?.hasMore === true
-          const knownWorkspaceRemoteCount = Math.max(
-            0,
-            (workspaceCursor?.total ?? rootThreads.length) - rootThreads.length
-          )
-          const hasMoreProjectThreads = hiddenThreadCount > 0 || hasWorkspaceRemoteMore
+          const workspacePageLoading = workspaceCursor?.status === 'loading'
+          const canLoadWorkspacePage = workspaceCursor?.status === 'unknown'
+            || (workspaceCursor?.status === 'ready' && workspaceCursor.hasMore)
+          const showExpansionControl = hiddenThreadCount > 0
+            || canLoadWorkspacePage
+            || workspacePageLoading
+            || expansionStage > 0
+          const collapseExpansion = (): void => {
+            setExpandedWorkspaces((current) =>
+              current[workspacePath]
+                ? { ...current, [workspacePath]: 0 }
+                : current
+            )
+          }
           return (
             <div
               key={workspacePath}
@@ -341,11 +345,12 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
               <SidebarTreeRow
                 title={workspacePath}
                 ariaLabel={workspacePath}
-                onClick={() =>
+                onClick={() => {
+                  if (!isCollapsed) collapseExpansion()
                   persistSidebarCollapse((current) =>
                     setSidebarWorkspaceCollapsed(current, workspacePath, !isCollapsed)
                   )
-                }
+                }}
                 onContextMenu={(event) => openWorkspaceContextMenu(event, workspacePath)}
                 draggable
                 onDragStart={(event) => handleWorkspaceDragStart(event, workspacePath)}
@@ -516,7 +521,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                     return renderFolder(folder)
                   })}
                   {rootThreads.length === 0 && rootFolders.length === 0 ? (
-                    threadListStatus === 'ready' ? (
+                    threadListStatus === 'ready' || threadListStatus === 'refreshing' ? (
                       <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
                         <div className="text-[12.5px] leading-5 text-ds-faint">
                           {searchQuery.trim()
@@ -552,15 +557,13 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                       <SidebarThreadSkeleton />
                     )
                   ) : visibleThreads.map((thread) => renderThreadRow(thread, workspacePath, null))}
-                  {hasMoreProjectThreads || rootThreads.length > 5 ? (
-                    <button
-                      type="button"
-                      data-cursor-spotlight-target
-                      onClick={() => {
-                        if (workspaceCursor?.hasMore === true) {
-                          onLoadMoreThreads(workspacePath)
-                          return
-                        }
+                  {showExpansionControl ? (
+                    <SidebarProjectExpansionControl
+                      hiddenThreadCount={hiddenThreadCount}
+                      canLoadMore={canLoadWorkspacePage}
+                      loading={workspacePageLoading}
+                      canCollapse={expansionStage > 0}
+                      onShowMore={() => {
                         setExpandedWorkspaces((current) => ({
                           ...current,
                           [workspacePath]: nextSidebarProjectExpansionStage(
@@ -569,17 +572,10 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                           )
                         }))
                       }}
-                      className="ml-1 mt-1 rounded-md px-2.5 py-1.5 text-[12.5px] text-ds-faint transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-ink"
-                    >
-                      {hasMoreProjectThreads
-                        ? t('sidebarWorkspaceShowMore', {
-                            count: Math.max(
-                              hiddenThreadCount,
-                              knownWorkspaceRemoteCount
-                            )
-                          })
-                        : t('sidebarWorkspaceShowLess')}
-                    </button>
+                      onLoadMore={() => onLoadMoreThreads(workspacePath)}
+                      onCollapse={collapseExpansion}
+                      t={t}
+                    />
                   ) : null}
                 </div>
               ) : null}

@@ -221,6 +221,7 @@ export type CoreTurnJson = {
   providerId?: string
   clientSurface?: 'gui' | 'tui' | 'cli' | 'api' | 'im' | 'extension'
   orchestration?: 'direct' | 'graph'
+  mode?: 'agent' | 'plan'
   createdAt: string
   startedAt?: string
   finishedAt?: string
@@ -254,6 +255,7 @@ export type CoreTurnItemJson = {
   kind: string
   text?: string
   displayText?: string
+  mode?: 'agent' | 'plan'
   guiDesignCanvas?: boolean
   guiDesignMode?: boolean
   agentSurface?: 'code' | 'write' | 'design'

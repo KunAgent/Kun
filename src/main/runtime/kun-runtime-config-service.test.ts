@@ -29,7 +29,14 @@ import {
 } from './kun-runtime-capability-config'
 
 describe('Kun runtime config service', () => {
-  it('projects canonical runtime fields into a hot-apply body without restart-only config', async () => {
+  it('projects Fast Context without registry-owned gateway state in the hot-apply body', async () => {
+    const fixedFastContext = {
+      enabled: true,
+      model: 'deepseek-v4-flash',
+      providerId: 'opencode-go-2',
+      reasoningEffort: 'max' as const,
+      fast: false
+    }
     const runtime = {
       ...defaultKunRuntimeSettings(),
       apiKey: 'sk-test',
@@ -42,12 +49,16 @@ describe('Kun runtime config service', () => {
         ...defaultKunRuntimeSettings().runtimeTuning,
         maxConcurrentTurns: 32
       },
-      llmDebug: { defaultThreadCaptureEnabled: true }
+      llmDebug: { defaultThreadCaptureEnabled: true },
+      fastContext: fixedFastContext
     }
     const base = normalizeAppSettings({} as AppSettingsV1)
     const settings = normalizeAppSettings({
       ...base,
-      provider: defaultModelProviderSettings(),
+      provider: {
+        ...defaultModelProviderSettings(),
+        localGateway: { enabled: true, name: 'Kun API' }
+      },
       agents: { kun: runtime }
     })
     const body = buildManagedRuntimeHotApplyBody(settings, KunConfigSchema.parse({
@@ -58,8 +69,10 @@ describe('Kun runtime config service', () => {
         runtimeToken: 'runtime-token',
         insecure: false,
         storage: { backend: 'hybrid' },
-        providers: {}
+        providers: {},
+        localModelGateway: { enabled: true }
       },
+      fastContext: fixedFastContext,
       runtime: {
         turnLimits: {
           maxConcurrentTurns: runtime.runtimeTuning.maxConcurrentTurns
@@ -91,8 +104,8 @@ describe('Kun runtime config service', () => {
     expect(body.serve).not.toHaveProperty('runtimeToken')
     expect(body.serve).not.toHaveProperty('insecure')
     expect(body.serve).not.toHaveProperty('storage')
-    expect(body.serve?.localModelGateway).toEqual({ enabled: false })
-    expect(body.serve?.localModelGateway).not.toHaveProperty('name')
+    expect(body.serve).not.toHaveProperty('localModelGateway')
+    expect(body.fastContext).toEqual(fixedFastContext)
     expect(body.runtime?.turnLimits?.maxConcurrentTurns).toBe(32)
     expect(body.runtime?.llmDebug).toEqual({
       enabled: false,
@@ -134,6 +147,8 @@ describe('Kun runtime config service', () => {
     expect(applied.serve).not.toHaveProperty('runtimeToken')
     expect(applied.serve).not.toHaveProperty('insecure')
     expect(applied.serve).not.toHaveProperty('storage')
+    expect(applied.serve).not.toHaveProperty('localModelGateway')
+    expect(applied.fastContext).toEqual(fixedFastContext)
     expect(applied.browserUseHostBinding).toEqual(body.browserUseHostBinding)
   })
 

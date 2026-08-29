@@ -250,7 +250,8 @@ export function createThreadReviewActions(
         error: null,
         currentTurnId: null,
         currentTurnOrchestration: 'direct',
-        currentTurnUserId: null
+        currentTurnUserId: null,
+        currentTurnStartedAtMs: null
       })
       await ensureRuntimeProviderForSend({
         providerId: composerProviderId,
@@ -296,6 +297,7 @@ export function createThreadReviewActions(
         currentTurnId: null,
         currentTurnOrchestration: null,
         currentTurnUserId: null,
+        currentTurnStartedAtMs: null,
         ...(shouldOpenSettingsForError(e)
           ? { route: 'settings' as const, settingsSection: 'agents' as const }
           : {})

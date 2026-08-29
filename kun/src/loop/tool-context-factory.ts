@@ -17,6 +17,7 @@ export type ToolExecutionContextFactoryDeps = {
   runtimeDataDir?: string
   artifactStore?: ArtifactStore
   fastContext?: boolean
+  fastContextScopeId?: string
   fastContextTaskCount?: number
   interactiveToolBridge: Pick<InteractiveToolBridge, 'awaitApproval' | 'awaitUserInput'>
 }
@@ -82,6 +83,7 @@ export function createToolExecutionContext(
     ...(deps.runtimeDataDir ? { runtimeDataDir: deps.runtimeDataDir } : {}),
     ...(deps.artifactStore ? { artifactStore: deps.artifactStore } : {}),
     ...(deps.fastContext ? { fastContext: true } : {}),
+    ...(deps.fastContextScopeId ? { fastContextScopeId: deps.fastContextScopeId } : {}),
     ...(deps.fastContextTaskCount ? { fastContextTaskCount: deps.fastContextTaskCount } : {}),
     abortSignal: input.signal,
     awaitApproval: (approval) => deps.interactiveToolBridge.awaitApproval({

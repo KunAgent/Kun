@@ -1,0 +1,11 @@
+{
+  "threadRefreshing": "กำลังรีเฟรช…",
+  "sidebarWorkspaceLoading": "กำลังโหลดเธรด…",
+  "sidebarWorkspaceLoadMore": "โหลดเพิ่มเติม",
+  "sidebarWorkspaceLoadError": "โหลดเธรดไม่สำเร็จ",
+  "threadHydrationLoadingTitle": "กำลังโหลดบทสนทนา…",
+  "threadHydrationLoadingDescription": "กำลังอ่านข้อความและกู้คืนสถานะบทสนทนาล่าสุด",
+  "threadHydrationTakingLongTitle": "การกู้คืนบทสนทนาใช้เวลานานกว่าปกติ",
+  "threadHydrationTakingLongDescription": "สตรีมเหตุการณ์ยังตามไม่ทัน คุณสามารถลองเชื่อมต่อใหม่ได้",
+  "threadHydrationRetry": "ลองเชื่อมต่อใหม่"
+}

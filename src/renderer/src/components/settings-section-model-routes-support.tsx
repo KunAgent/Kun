@@ -179,6 +179,7 @@ function gatewayApiGuide(tab: GatewayApiTab, baseUrl: string, modelId: string, t
 
 export function buildGatewayCurlExample(baseUrl: string, modelId: string, t: TFunction): string {
   return `curl --request POST ${baseUrl}/chat/completions \\
+  --header 'Authorization: Bearer <LOCAL_GATEWAY_API_KEY>' \\
   --header 'Content-Type: application/json' \\
   --data '{
     "model": "${modelId}",
@@ -191,6 +192,7 @@ export function buildGatewayCurlExample(baseUrl: string, modelId: string, t: TFu
 
 function buildGatewayResponsesCurlExample(baseUrl: string, modelId: string, t: TFunction): string {
   return `curl --request POST ${baseUrl}/responses \\
+  --header 'Authorization: Bearer <LOCAL_GATEWAY_API_KEY>' \\
   --header 'Content-Type: application/json' \\
   --data '{
     "model": "${modelId}",

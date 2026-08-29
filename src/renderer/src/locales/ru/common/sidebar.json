@@ -1,0 +1,11 @@
+{
+  "threadRefreshing": "Обновление…",
+  "sidebarWorkspaceLoading": "Загрузка чатов…",
+  "sidebarWorkspaceLoadMore": "Загрузить ещё",
+  "sidebarWorkspaceLoadError": "Не удалось загрузить чаты.",
+  "threadHydrationLoadingTitle": "Загрузка разговора…",
+  "threadHydrationLoadingDescription": "Чтение сообщений и восстановление последнего состояния разговора.",
+  "threadHydrationTakingLongTitle": "Восстановление разговора занимает больше времени",
+  "threadHydrationTakingLongDescription": "Поток событий ещё не синхронизирован. Можно повторить подключение.",
+  "threadHydrationRetry": "Повторить подключение"
+}

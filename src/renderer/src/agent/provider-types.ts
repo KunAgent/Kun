@@ -119,6 +119,8 @@ export type ThreadDetail = {
   latestTurnStatus?: string
   latestTurnOrchestration?: 'direct' | 'graph'
   latestUserMessageId?: string
+  /** Persisted start time of the currently running turn (ms epoch), when known. */
+  latestTurnStartedAtMs?: number
   turnDurationByUserId?: Record<string, number>
   usage?: ThreadUsageSnapshot
   relation?: 'primary' | 'fork' | 'side'

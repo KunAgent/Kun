@@ -39,7 +39,6 @@ export function queuedMessageGuidancePayload(
     message.attachments?.some((attachment) => !isImageAttachmentReference(attachment)) ||
     message.fileReferences?.length ||
     message.composerContexts?.length ||
-    message.guiPlan ||
     message.guiDesignArtifact ||
     message.writeContext
   ) {
@@ -99,6 +98,9 @@ export function queuedMessageMatchesRunningTurn(
 ): boolean {
   const surface = effectiveSurface(message)
   if (!running || surface !== effectiveSurface(running)) return false
+  const queuedIsPlan = message.mode === 'plan' || Boolean(message.guiPlan)
+  const runningIsPlan = running.mode === 'plan'
+  if (queuedIsPlan !== runningIsPlan) return false
   if (surface !== 'design') return true
   return sameSnapshot(message.designProfile, running.designProfile) &&
     sameSnapshot(message.designDocumentTarget, running.designDocumentTarget) &&

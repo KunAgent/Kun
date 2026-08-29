@@ -211,6 +211,7 @@ describe('KunRuntimeProvider', () => {
               createdAt: '2026-05-25T09:00:00.000Z',
               startedAt: '2026-05-25T09:00:01.000Z',
               finishedAt: '2026-05-25T09:01:42.000Z',
+              mode: 'plan',
               guiDesignCanvas: true,
               items: [
                 {
@@ -245,12 +246,38 @@ describe('KunRuntimeProvider', () => {
     expect(detail.blocks.map((block) => block.kind)).toEqual(['user', 'assistant'])
     expect(detail.blocks[0]).toMatchObject({
       kind: 'user',
-      meta: { guiDesignCanvas: true }
+      meta: { guiDesignCanvas: true, mode: 'plan' }
     })
     expect(detail.latestSeq).toBe(9)
     expect(detail.latestTurnId).toBe('turn_1')
     expect(detail.latestUserMessageId).toBe('item_user')
     expect(detail.turnDurationByUserId).toEqual({ item_user: 101_000 })
+  })
+
+  it('does not infer a missing turn mode from a Plan thread', async () => {
+    installDsGui({
+      runtimeRequest: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        body: JSON.stringify({
+          id: 'thr_legacy_plan', title: 'Legacy Plan', workspace: '/tmp',
+          model: 'deepseek-chat', mode: 'plan', status: 'running',
+          createdAt: 't0', updatedAt: 't1', latestSeq: 1,
+          turns: [{
+            id: 'turn_unknown', threadId: 'thr_legacy_plan', status: 'running',
+            prompt: 'continue', createdAt: 't0', items: [{
+              id: 'item_unknown', turnId: 'turn_unknown', threadId: 'thr_legacy_plan',
+              role: 'user', status: 'completed', createdAt: 't0',
+              kind: 'user_message', text: 'continue'
+            }]
+          }]
+        })
+      }))
+    })
+
+    const detail = await new KunRuntimeProvider().getThreadDetail('thr_legacy_plan')
+    expect(detail.blocks[0]).toMatchObject({ kind: 'user' })
+    expect(detail.blocks[0]).not.toMatchObject({ meta: { mode: 'plan' } })
   })
 
   it.each([

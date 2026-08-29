@@ -35,11 +35,14 @@ const KUN_RUNTIME_REQUIRED_PATHS = [
   'kun/dist/tui/graph-mode.js',
   'kun/package.json',
   'kun/package-lock.json',
-  'kun/node_modules/zod/package.json',
-  'kun/node_modules/diff/package.json',
-  'kun/node_modules/semver/package.json',
-  'kun/node_modules/yauzl/package.json',
-  'kun/node_modules/yazl/package.json',
+  // zod/diff/semver/yauzl/yazl were hoisted to the shared root node_modules
+  // (KUN_ROOT_HOISTED_DEPENDENCY_PATHS); kun resolves them upward at runtime,
+  // so only the root copies are asserted here.
+  'node_modules/zod/package.json',
+  'node_modules/diff/package.json',
+  'node_modules/semver/package.json',
+  'node_modules/yauzl/package.json',
+  'node_modules/yazl/package.json',
   'kun/node_modules/typescript/package.json',
   'kun/node_modules/typescript/lib/typescript.js',
   'kun/node_modules/typescript-language-server/package.json',
@@ -114,12 +117,21 @@ const BETTER_SQLITE_BUILD_PATHS = [
 const KUN_ROOT_HOISTED_DEPENDENCY_PATHS = [
   '@computer-use',
   '@napi-rs',
-  'quickjs-wasi'
+  'quickjs-wasi',
+  ...require('./after-pack-hoisted-dependencies.cjs').KUN_ROOT_HOISTED_SHARED_JS_PACKAGES
 ]
+const {
+  assertNoPackedKunBinOwnerCollisions,
+  pathEntryExists,
+  prunePackedKunBinLaunchers,
+  validatePackedKunBinLinks,
+  validateRootHoistedDependencyClosure
+} = require('./after-pack-hoisted-dependencies.cjs')
 const KUN_ROOT_HOISTED_VERSION_ANCHORS = [
   '@computer-use/nut-js',
   '@napi-rs/canvas',
-  'quickjs-wasi'
+  'quickjs-wasi',
+  ...require('./after-pack-hoisted-dependencies.cjs').KUN_ROOT_HOISTED_SHARED_JS_PACKAGES
 ]
 const REQUIRED_BUNDLED_EXTENSION_IDS = [
   'kun-examples.social-media-sidebar'
@@ -276,6 +288,10 @@ function prunePackedHoistedKunDependencies(context) {
   const root = unpackedAppRoot(context)
   const modules = join(root, 'node_modules')
   const kunModules = join(root, 'kun', 'node_modules')
+  assertNoPackedKunBinOwnerCollisions(
+    kunModules,
+    KUN_ROOT_HOISTED_DEPENDENCY_PATHS.map((relativePath) => join(kunModules, relativePath))
+  )
   for (const packageName of KUN_ROOT_HOISTED_VERSION_ANCHORS) {
     const relativeManifest = join(...packageName.split('/'), 'package.json')
     const rootManifest = join(modules, relativeManifest)
@@ -295,6 +311,7 @@ function prunePackedHoistedKunDependencies(context) {
     const duplicate = join(kunModules, relativePath)
     assertExists(rootDependency, `root-hoisted runtime dependency ${relativePath}`)
     if (!existsSync(duplicate)) continue
+    prunePackedKunBinLaunchers(kunModules, duplicate)
     rmSync(duplicate, { recursive: true, force: true })
     console.log(`[after-pack] Removed root-hoisted Kun dependency duplicate: ${relativePath}`)
   }
@@ -308,7 +325,7 @@ function prunePackedApplicationPayload(context) {
 }
 
 function assertMissing(path, label) {
-  if (existsSync(path)) {
+  if (pathEntryExists(path)) {
     throw new Error(`[after-pack] Unexpected packaged ${label}: ${path}`)
   }
 }
@@ -369,6 +386,8 @@ function validatePackedApplicationPayload(context) {
     assertExists(join(modules, relativePath), `root-hoisted runtime dependency ${relativePath}`)
     assertMissing(join(kunModules, relativePath), `duplicate Kun dependency ${relativePath}`)
   }
+  validatePackedKunBinLinks(kunModules)
+  validateRootHoistedDependencyClosure(root)
 }
 
 function validateBundledKunRuntime(context) {
@@ -646,6 +665,7 @@ exports._internals = {
   prunePackedClaudeCodeBinary,
   prunePackedBetterSqliteBuildFiles,
   prunePackedTesseractResources,
+  prunePackedKunBinLaunchers,
   prunePackedHoistedKunDependencies,
   prunePackedApplicationPayload,
   validatePackedApplicationPayload,
@@ -666,6 +686,8 @@ exports._internals = {
   TESSERACT_LSTM_CORE_FILES,
   BETTER_SQLITE_BUILD_PATHS,
   KUN_ROOT_HOISTED_DEPENDENCY_PATHS,
-  KUN_ROOT_HOISTED_VERSION_ANCHORS
+  KUN_ROOT_HOISTED_VERSION_ANCHORS,
+  validatePackedKunBinLinks,
+  validateRootHoistedDependencyClosure
 }
 exports.default = afterPack

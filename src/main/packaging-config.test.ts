@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url)
 const builderConfig = require('../../electron-builder.config.cjs')
 const rootPackage = require('../../package.json')
 const afterPack = require('../../scripts/after-pack.cjs')
+const hoistedDependencies = require('../../scripts/after-pack-hoisted-dependencies.cjs')
 const nativeBuildEnv = require('../../scripts/electron-native-build-env.cjs')
 const macNotarize = require('../../scripts/mac-notarize.cjs')
 const officeCliPrepare = require('../../scripts/prepare-officecli.cjs')
@@ -239,6 +240,17 @@ describe('electron-builder Kun packaging', () => {
     )
   })
 
+  it('avoids the upstream NSIS per-user System::Store crash', () => {
+    const multiUserTemplate = readFileSync(
+      require.resolve('app-builder-lib/templates/nsis/multiUser.nsh'),
+      'utf8'
+    )
+
+    expect(rootPackage.devDependencies?.['electron-builder']).toBe('26.15.7')
+    expect(multiUserTemplate).not.toContain('System::Store')
+    expect(multiUserTemplate).toContain('KERNEL32::lstrcpynW')
+  })
+
   it('includes Kun runtime dependencies in the packaged app', () => {
     expect(builderConfig.files).toEqual(expect.arrayContaining([
       'kun/dist/**/*',
@@ -260,6 +272,9 @@ describe('electron-builder Kun packaging', () => {
       '**/node_modules/openclaw/**/*',
       '**/node_modules/@tencent-weixin/openclaw-weixin/**/*'
     ]))
+    for (const packageName of hoistedDependencies.KUN_ROOT_UNPACKED_SHARED_JS_PACKAGES) {
+      expect(builderConfig.asarUnpack).toContain(`**/node_modules/${packageName}/**/*`)
+    }
     // The openclaw shim (vendor/openclaw-shim) must ship: the WeChat bridge
     // imports the bundled plugin's dist at runtime to send media, and that
     // import chain resolves openclaw/plugin-sdk/*.

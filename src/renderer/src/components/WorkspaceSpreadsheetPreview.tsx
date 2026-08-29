@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import i18n from '../i18n'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import type { WorkBook } from 'xlsx'
 import type { WorkspaceOfficePreviewSuccess, WorkspaceOfficeSelection } from '@shared/office-document'
@@ -217,7 +218,7 @@ export function WorkspaceSpreadsheetPreview({
       >
         {parsed ? (
           <select
-            aria-label="Worksheet"
+            aria-label={i18n.t('officeWorksheet')}
             className="max-w-44 rounded border border-ds-border-muted bg-ds-card px-1 py-0.5 text-[11px] text-ds-ink"
             value={sheetIndex}
             onChange={(event) => selectSheet(Number.parseInt(event.target.value, 10))}
@@ -307,7 +308,7 @@ export function WorkspaceSpreadsheetPreview({
             </table>
           </div>
         ) : !error ? (
-          <div className="flex h-full items-center justify-center text-[12px] text-ds-muted">Loading workbook…</div>
+          <div className="flex h-full items-center justify-center text-[12px] text-ds-muted">{i18n.t('officeWorkbookLoading')}</div>
         ) : null}
       </div>
     </div>

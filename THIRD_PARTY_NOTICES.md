@@ -1,5 +1,14 @@
 # Third-Party Notices
 
+## diagram-design adapted Skill
+
+Kun includes a compact, DESIGN.md-integrated adaptation of the MIT-licensed
+`diagram-design` version 2.6 project supplied with this integration. The
+selection grammar, connector rules, HTML/SVG output contract, and selected
+MIT-licensed icon primitives are adapted for Kun's progressive Skill loading
+and existing HTML/canvas/SVG artifact pipeline. The complete license is shipped
+at `resources/bundled-skills/diagram-design/LICENSE`.
+
 ## agent-skills adapted subagent instructions
 
 Kun includes standalone subagent instructions adapted from the `agents/` and

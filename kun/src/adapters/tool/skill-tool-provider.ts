@@ -66,6 +66,46 @@ export function buildSkillToolProviders(
           if ('error' in result) return { output: result, isError: true }
           return { output: result }
         }
+      }),
+      LocalToolHost.defineTool({
+        name: 'load_skill_asset',
+        description: [
+          'Load one declared reference, template, or icon asset from an available skill.',
+          'Use this after load_skill selects a specific reference; do not load every asset.',
+          'The runtime enforces manifest declaration, package containment, permissions, and bounded pagination.'
+        ].join(' '),
+        inputSchema: {
+          type: 'object',
+          properties: {
+            skill_id: { type: 'string', description: 'Available skill id.' },
+            path: { type: 'string', description: 'Manifest-declared package-relative asset path.' },
+            offset: { type: 'integer', minimum: 0, description: 'Optional zero-based line offset.' },
+            limit: { type: 'integer', minimum: 1, maximum: 400, description: 'Optional maximum lines, default 160.' }
+          },
+          required: ['skill_id', 'path'],
+          additionalProperties: false
+        },
+        policy: 'auto',
+        execute: async (args, context) => {
+          const skillId = typeof args.skill_id === 'string' ? args.skill_id : ''
+          const path = typeof args.path === 'string' ? args.path : ''
+          if (!skillId.trim() || !path.trim()) {
+            return { output: { error: 'skill_id and path are required' }, isError: true }
+          }
+          const result = await skillRuntime.loadSkillAsset(
+            skillId,
+            path,
+            context.workspace,
+            {
+              ...(typeof args.offset === 'number' ? { offset: args.offset } : {}),
+              ...(typeof args.limit === 'number' ? { limit: args.limit } : {})
+            },
+            context.blockedSkillIds,
+            context.allowedSkillIds
+          )
+          if ('error' in result) return { output: result, isError: true }
+          return { output: result }
+        }
       })
     ]
   }]

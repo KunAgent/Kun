@@ -141,6 +141,8 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     fastContext?: boolean
     /** Original task grouping retained in the child record and evidence pack. */
     fastContextTasks?: readonly import('./fast-context-evidence.js').FastContextTask[]
+    /** Optional maximum time to wait for an execution slot before failing this child. */
+    queueTimeoutMs?: number
     /**
      * When true, runChild returns the queued ChildRunRecord immediately and
      * continues execution in the background. The detached run gets its own
@@ -395,6 +397,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         returnFormat,
         fastContext: input.fastContext === true,
         fastContextTasks: input.fastContextTasks,
+        queueTimeoutMs: input.queueTimeoutMs,
         workspace,
         security,
         onRunning: input.onRunning,
@@ -466,6 +469,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       returnFormat,
       fastContext: input.fastContext === true,
       fastContextTasks: input.fastContextTasks,
+      queueTimeoutMs: input.queueTimeoutMs,
       workspace,
       security,
       onRunning: input.onRunning,

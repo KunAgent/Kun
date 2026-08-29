@@ -38,8 +38,13 @@ import {
   resolveCliRuntimeFlavor,
   runtimeBuildIdForFlavor
 } from './runtime-flavor.js'
+import { settleCleanupBeforeDeadline } from '../server/runtime-factory-cleanup.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
+// Replacement clients wait 15 seconds before escalating to a hard kill. Keep
+// the in-process deadline shorter so serve mode can still exit on its own when
+// an adapter's graceful cleanup never settles.
+const SERVE_SHUTDOWN_TIMEOUT_MS = 10_000
 
 /**
  * Serve-mode command. Kept separate from the dispatcher so GUI startup
@@ -279,11 +284,20 @@ async function serveMain(argv: readonly string[]): Promise<number> {
       // Keep the manager slot owned until the server has closed its stores and
       // released filesystem handles. A concurrent client must not elect a
       // replacement in the gap between unregister and process teardown.
-      void server.close().finally(() => unregisterRuntimeWithManager({
-        manager,
-        flavor: runtimeFlavor,
-        instanceId: server.instanceId
-      })).catch((error) => {
+      void settleCleanupBeforeDeadline(
+        () => server.close().finally(() => unregisterRuntimeWithManager({
+          manager,
+          flavor: runtimeFlavor,
+          instanceId: server.instanceId
+        })),
+        SERVE_SHUTDOWN_TIMEOUT_MS
+      ).then((closed) => {
+        if (!closed) {
+          process.stderr.write(
+            `kun serve: graceful shutdown exceeded ${SERVE_SHUTDOWN_TIMEOUT_MS}ms; forcing process exit\n`
+          )
+        }
+      }).catch((error) => {
         process.stderr.write(
           `kun serve: failed to close runtime cleanly: ${error instanceof Error ? error.message : String(error)}\n`
         )

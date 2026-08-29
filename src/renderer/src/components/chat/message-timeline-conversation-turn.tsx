@@ -10,7 +10,9 @@ import { presentationFileArtifactsForTurn } from './presentation-file-artifacts'
 import { ReviewPlanCard, ReviewSummaryCard, TurnChangeSummary, WorkMetaRow } from './message-timeline-cards'
 import { ProcessSectionRow, groupProcessSections, summarizeToolBlock } from './message-timeline-process'
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
+import { DiagramPrototypeCard } from './DiagramPrototypeCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
+import { ChartRenderer } from './ChartRenderer'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
 import {
   AnimatedWorkLogo,
@@ -118,9 +120,11 @@ export function ConversationTurn({
     runtimeErrorsBeforeFinalContent,
     runtimeErrorsAfterFinalContent,
     componentPrototypeBlocks,
+    diagramPrototypeBlocks,
     conversationVisualizationBlocks,
     generatedFileBlocks,
-    turnFileChanges
+    turnFileChanges,
+    chartBlocks
   } = useMemo(
     () =>
       deriveTurnSections({
@@ -299,8 +303,20 @@ export function ConversationTurn({
         />
       ))}
 
+      {diagramPrototypeBlocks.map((block) => (
+        <DiagramPrototypeCard
+          key={block.id}
+          block={block}
+          workspaceRoot={filePreviewWorkspaceRoot}
+        />
+      ))}
+
       {conversationVisualizationBlocks.map((block) => (
         <ConversationVisualizationCard key={block.id} block={block} />
+      ))}
+
+      {chartBlocks.map((block) => (
+        <ChartRenderer key={block.id} spec={block.spec} />
       ))}
 
       {assistantContentBlocks.map((block) => (
@@ -336,7 +352,7 @@ export function ConversationTurn({
       ) : null}
 
       {allowMainThreadActions && !isProcessing && forkTurnId ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-6">
           <button
             type="button"
             disabled={archiving}

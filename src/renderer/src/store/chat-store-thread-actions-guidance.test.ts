@@ -634,6 +634,8 @@ describe('chat-store-thread-actions queued messages', () => {
     const { actions, state } = buildHarness()
     state.currentTurnId = 'turn_active'
     state.currentTurnUserId = 'user-original'
+    state.blocks = [{ kind: 'user', id: 'user-original', turnId: 'turn_active',
+      text: 'Draft the plan', meta: { agentSurface: 'code', mode: 'plan' } }]
     state.queuedMessages = [{
       id: 'q-guide',
       text: 'use the compact logo instead',

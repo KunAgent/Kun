@@ -235,7 +235,16 @@ try {
     [Console]::Error.WriteLine('KUN_INSTALLER_STOP_RESULT=inspection-failed')
     exit 1
   }
-  Write-InstallerDiagnostic "FAIL action=$Action error=$($_.Exception.Message)"
+  $errorCategory = [string]$_.CategoryInfo.Category
+  $scriptStackTrace = [string]$_.ScriptStackTrace
+  Write-InstallerDiagnostic (
+    "FAIL action=$Action category=$errorCategory error=$($_.Exception.Message) " +
+    "ScriptStackTrace=$scriptStackTrace"
+  )
+  [Console]::Error.WriteLine("category=$errorCategory")
   [Console]::Error.WriteLine($_.Exception.Message)
+  if (-not [string]::IsNullOrWhiteSpace($scriptStackTrace)) {
+    [Console]::Error.WriteLine("ScriptStackTrace=$scriptStackTrace")
+  }
   exit 1
 }

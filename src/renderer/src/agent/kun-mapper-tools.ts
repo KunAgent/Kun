@@ -4,6 +4,7 @@ import type {
   ChatBlock,
   CompactionEventPayload,
   ComponentPrototypeMetadata,
+  DiagramPrototypeMetadata,
   DelegatedRuntimeState,
   GeneratedFileReference,
   NormalizedThread,
@@ -143,6 +144,55 @@ export function extractComponentPrototype(item: CoreTurnItemJson): ComponentProt
     producer,
     ...(producer === 'component-designer' ? { profile: 'component-designer' as const } : {}),
     ...(childId ? { childId } : {}),
+    ...(byteSize !== undefined ? { byteSize } : {}),
+    ...(contentHash ? { contentHash } : {}),
+    ...(summary ? { summary } : {}),
+    ...(error ? { error } : {})
+  }
+}
+
+export function extractDiagramPrototype(item: CoreTurnItemJson): DiagramPrototypeMetadata | undefined {
+  if (item.toolName !== 'show_diagram') return undefined
+  const raw = payloadFor(item).diagramPrototype
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const candidate = raw as Record<string, unknown>
+  const status = candidate.status
+  if (candidate.version !== 1 || (
+    status !== 'preparing' && status !== 'running' && status !== 'completed' && status !== 'failed'
+  )) return undefined
+  const artifactId = typeof candidate.artifactId === 'string' ? candidate.artifactId.trim() : ''
+  const title = typeof candidate.title === 'string' ? candidate.title.trim().slice(0, 120) : ''
+  const relativePath = typeof candidate.relativePath === 'string'
+    ? candidate.relativePath.trim().replaceAll('\\', '/')
+    : ''
+  if (!artifactId || !title || !/^\.kun-design\/diagram-prototypes\/[^/]+\/diagram\.html$/i.test(relativePath)) {
+    return undefined
+  }
+  if (relativePath.split('/').includes('..')) return undefined
+  const viewport = candidate.viewport && typeof candidate.viewport === 'object' && !Array.isArray(candidate.viewport)
+    ? candidate.viewport as Record<string, unknown>
+    : null
+  const width = viewport?.width
+  const height = viewport?.height
+  if (
+    typeof width !== 'number' || !Number.isInteger(width) || width < 280 || width > 1_200 ||
+    typeof height !== 'number' || !Number.isInteger(height) || height < 240 || height > 900
+  ) return undefined
+  const byteSize = typeof candidate.byteSize === 'number' && Number.isInteger(candidate.byteSize) && candidate.byteSize >= 0
+    ? candidate.byteSize : undefined
+  const contentHash = typeof candidate.contentHash === 'string' && /^[a-f0-9]{64}$/i.test(candidate.contentHash)
+    ? candidate.contentHash.toLowerCase() : undefined
+  const summary = typeof candidate.summary === 'string' && candidate.summary.trim()
+    ? candidate.summary.trim().slice(0, 2_000) : undefined
+  const error = typeof candidate.error === 'string' && candidate.error.trim()
+    ? candidate.error.trim().slice(0, 2_000) : undefined
+  return {
+    version: 1,
+    status,
+    artifactId,
+    title,
+    relativePath,
+    viewport: { width, height },
     ...(byteSize !== undefined ? { byteSize } : {}),
     ...(contentHash ? { contentHash } : {}),
     ...(summary ? { summary } : {}),
@@ -296,6 +346,8 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   if (generatedFiles) meta.generatedFiles = generatedFiles
   const componentPrototype = extractComponentPrototype(item)
   if (componentPrototype) meta.componentPrototype = componentPrototype
+  const diagramPrototype = extractDiagramPrototype(item)
+  if (diagramPrototype) meta.diagramPrototype = diagramPrototype
   if (item.toolName === 'show_visualization' && !item.isError) {
     const visualization = visualizationFromToolPayload(
       item.kind === 'tool_result' ? item.output : item.arguments
@@ -330,7 +382,7 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     turnId: item.turnId,
     createdAt: itemCreatedAt(item),
     summary,
-    status: componentDesignStatusOverride(item, componentPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item),
+    status: componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item),
     toolKind: presentation.toolKind,
     ...(presentation.filePath ? { filePath: presentation.filePath } : {}),
     ...(detail ? { detail } : {}),
@@ -343,6 +395,16 @@ export function componentDesignStatusOverride(
   prototype: ComponentPrototypeMetadata | undefined
 ): ToolBlock['status'] | undefined {
   if (item.toolName !== 'design_component' || !prototype) return undefined
+  if (prototype.status === 'preparing' || prototype.status === 'running') return 'running'
+  if (prototype.status === 'failed') return 'error'
+  return 'success'
+}
+
+export function diagramStatusOverride(
+  item: CoreTurnItemJson,
+  prototype: DiagramPrototypeMetadata | undefined
+): ToolBlock['status'] | undefined {
+  if (item.toolName !== 'show_diagram' || !prototype) return undefined
   if (prototype.status === 'preparing' || prototype.status === 'running') return 'running'
   if (prototype.status === 'failed') return 'error'
   return 'success'

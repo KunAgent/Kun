@@ -1,7 +1,7 @@
 {
   "name": "kun-gui",
   "productName": "Kun",
-  "version": "0.3.0",
+  "version": "0.3.7",
   "description": "Electron workbench for the Kun runtime (HTTP/SSE)",
   "engines": {
     "node": ">=22.19.0"
@@ -129,6 +129,7 @@
     "semver": "^7.8.5",
     "sharp": "^0.35.3",
     "ssh2": "^1.17.0",
+    "tar-stream": "3.2.1",
     "tesseract.js": "^7.0.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yaml": "2.9.0",
@@ -164,6 +165,7 @@
     "@types/react-test-renderer": "19.0.0",
     "@types/semver": "^7.8.0",
     "@types/ssh2": "^1.15.5",
+    "@types/tar-stream": "3.1.4",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
     "@univerjs/preset-sheets-core": "0.25.1",
@@ -176,7 +178,7 @@
     "autoprefixer": "^10.4.21",
     "docx-preview": "0.4.0",
     "electron": "43.1.0",
-    "electron-builder": "26.8.1",
+    "electron-builder": "26.15.7",
     "electron-vite": "^3.1.0",
     "eslint": "^10.4.0",
     "eslint-plugin-react-hooks": "^7.1.1",

@@ -125,9 +125,12 @@ import {
   watchTurnCompletionNotification
 } from './chat-store-runtime'
 import {
+  clearedTurnTimingPatch,
   getThreadSnapshotForSelection,
+  hydratedTurnTimingPatch,
   invalidateThreadSnapshot,
-  snapshotThreadProjection
+  snapshotThreadProjection,
+  turnTimingSnapshotPatch
 } from './thread-snapshot-cache'
 import { copyLiveProjection, emptyLiveProjection, restoredLiveProjection } from './chat-store-live-projection'
 import { getThreadPrewarmHandle, threadPrewarmHandleIsCurrent } from './thread-detail-prewarm'
@@ -263,13 +266,7 @@ export function createThreadSelectionActions(
         error: null,
         busy: cached.busy,
         busyUnconfirmed: cached.busyUnconfirmed,
-        currentTurnId: cached.currentTurnId,
-        currentTurnOrchestration: cached.currentTurnOrchestration,
-        currentTurnUserId: cached.currentTurnUserId,
-        turnStartedAtByUserId: cached.turnStartedAtByUserId,
-        turnDurationByUserId: cached.turnDurationByUserId,
-        turnReasoningFirstAtByUserId: cached.turnReasoningFirstAtByUserId,
-        turnReasoningLastAtByUserId: cached.turnReasoningLastAtByUserId,
+        ...turnTimingSnapshotPatch(cached),
         inspectorSelectedId: null,
         queuedMessages,
         ...composerState,
@@ -359,6 +356,7 @@ export function createThreadSelectionActions(
         latestTurnStatus,
         latestTurnOrchestration,
         latestUserMessageId,
+        latestTurnStartedAtMs,
         turnDurationByUserId = {},
         usage: threadUsage,
         relation: threadRelation,
@@ -451,13 +449,14 @@ export function createThreadSelectionActions(
         busy,
         // Replay synchronization confirms the restored running claim.
         busyUnconfirmed: busy,
-        currentTurnId: busy ? latestTurnId ?? null : null,
-        currentTurnOrchestration: busy ? latestTurnOrchestration ?? 'direct' : null,
-        currentTurnUserId,
-        turnStartedAtByUserId: {},
-        turnDurationByUserId,
-        turnReasoningFirstAtByUserId: {},
-        turnReasoningLastAtByUserId: {},
+        ...hydratedTurnTimingPatch({
+          busy,
+          latestTurnId,
+          latestTurnOrchestration,
+          currentTurnUserId,
+          latestTurnStartedAtMs,
+          turnDurationByUserId
+        }),
         inspectorSelectedId: null,
         queuedMessages,
         ...composerState,
@@ -586,18 +585,9 @@ export function createThreadSelectionActions(
       unreadThreadIds: { ...prevState.unreadThreadIds, [targetThreadId]: false },
       busy: true,
       busyUnconfirmed: keepExistingBlocks ? prevState.busyUnconfirmed : true,
-      currentTurnId:
-        keepExistingBlocks && prevState.busy ? prevState.currentTurnId : null,
-      currentTurnOrchestration:
-        keepExistingBlocks && prevState.busy ? prevState.currentTurnOrchestration : null,
-      currentTurnUserId:
-        keepExistingBlocks && prevState.busy ? prevState.currentTurnUserId : null,
-      turnStartedAtByUserId: keepExistingBlocks ? prevState.turnStartedAtByUserId : {},
-      turnDurationByUserId: keepExistingBlocks ? prevState.turnDurationByUserId : {},
-      turnReasoningFirstAtByUserId:
-        keepExistingBlocks ? prevState.turnReasoningFirstAtByUserId : {},
-      turnReasoningLastAtByUserId:
-        keepExistingBlocks ? prevState.turnReasoningLastAtByUserId : {},
+      ...(keepExistingBlocks && prevState.busy
+        ? turnTimingSnapshotPatch(prevState)
+        : clearedTurnTimingPatch({ keepExistingBlocks, previous: prevState })),
       inspectorSelectedId: null,
       queuedMessages: keepExistingBlocks
         ? prevState.queuedMessages
@@ -624,6 +614,7 @@ export function createThreadSelectionActions(
         latestTurnStatus,
         latestTurnOrchestration,
         latestUserMessageId,
+        latestTurnStartedAtMs,
         turnDurationByUserId = {},
         goal,
         todos,
@@ -661,6 +652,7 @@ export function createThreadSelectionActions(
         currentTurnId: busy ? latestTurnId ?? null : null,
         currentTurnOrchestration: busy ? latestTurnOrchestration ?? 'direct' : null,
         currentTurnUserId,
+        currentTurnStartedAtMs: busy ? latestTurnStartedAtMs ?? null : null,
         turnDurationByUserId,
         queuedMessages,
         threads: get().threads.map((thread) => thread.id === targetThreadId

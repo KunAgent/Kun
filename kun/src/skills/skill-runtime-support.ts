@@ -361,7 +361,9 @@ export function formatSkillInstruction(skill: LoadedSkill, reason: string): stri
     `Activation: ${reason}`,
     skill.description ? `Description: ${skill.description}` : '',
     skill.allowedTools.length ? `Allowed tools: ${skill.allowedTools.join(', ')}` : '',
-    skill.assets.length ? `Assets:\n${skill.assets.map((asset) => `- ${asset}`).join('\n')}` : '',
+    skill.assets.length
+      ? `Assets: ${skill.assets.length} declared. Load only the selected reference with load_skill_asset; do not read the whole package.`
+      : '',
     skill.entry
   ].filter(Boolean).join('\n\n')
 }

@@ -3,6 +3,7 @@ import type { ComponentPrototypeMetadata } from '../agent/types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useDesignWorkspaceStore } from './design-workspace-store'
 import { importComponentPrototypeToDesignCanvas } from './component-prototype-canvas-import'
+import { importConversationHtmlToDesignCanvas } from './conversation-html-canvas-import'
 
 const prototype: ComponentPrototypeMetadata = {
   version: 1,
@@ -165,6 +166,55 @@ describe('importComponentPrototypeToDesignCanvas', () => {
     expect(state.artifacts).toHaveLength(0)
     expect(writeWorkspaceFile.mock.calls.filter(([request]) => request.path.endsWith('/v1.html')))
       .toHaveLength(0)
+  })
+
+  it('imports diagram HTML durably and deduplicates by source path', async () => {
+    const source = {
+      status: 'completed',
+      title: 'System diagram',
+      relativePath: '.kun-design/diagram-prototypes/system/diagram.html',
+      viewport: { width: 960, height: 640 }
+    }
+    readWorkspaceFile.mockImplementation(async ({ path }: ReadRequest) => (
+      path === source.relativePath
+        ? { ok: true as const, content: PROTOTYPE_HTML }
+        : { ok: false as const, message: 'missing' }
+    ))
+    const options = {
+      workspaceRoot: '/workspace',
+      source,
+      allowedPath: /^\.kun-design\/diagram-prototypes\/[^/]+\/diagram\.html$/i
+    }
+
+    const first = await importConversationHtmlToDesignCanvas(options)
+    const second = await importConversationHtmlToDesignCanvas(options)
+
+    expect(first).toMatchObject({ reused: false })
+    expect(second).toMatchObject({ artifactId: first!.artifactId, reused: true })
+    expect(useDesignWorkspaceStore.getState().artifacts).toHaveLength(1)
+    expect(useDesignWorkspaceStore.getState().artifacts[0]).toMatchObject({
+      title: 'System diagram',
+      importedFromPath: source.relativePath,
+      node: { width: 960, height: 640, sizeMode: 'manual' }
+    })
+  })
+
+  it('leaves workspace state unchanged when generic HTML cannot be read', async () => {
+    const before = useDesignWorkspaceStore.getState()
+    const result = await importConversationHtmlToDesignCanvas({
+      workspaceRoot: '/workspace',
+      source: {
+        status: 'completed',
+        title: 'Missing',
+        relativePath: '.kun-design/diagram-prototypes/missing/diagram.html',
+        viewport: { width: 800, height: 600 }
+      },
+      allowedPath: /^\.kun-design\/diagram-prototypes\/[^/]+\/diagram\.html$/i
+    })
+
+    expect(result).toBeNull()
+    expect(useDesignWorkspaceStore.getState().workspaceRoot).toBe(before.workspaceRoot)
+    expect(useDesignWorkspaceStore.getState().documents).toEqual(before.documents)
   })
 
   it('leaves the workspace untouched when writing the imported HTML fails', async () => {

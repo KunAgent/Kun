@@ -1,6 +1,8 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
 const test = require('node:test')
 const {
   NEGATIVE_SCENARIOS,
@@ -15,6 +17,9 @@ const {
   READY_PREFIX,
   positiveIntegerArgument
 } = require('./smoke-packaged-update-handoff.cjs')
+const {
+  platformDesktopArguments
+} = require('./smoke-packaged-extension-desktop-runtime.cjs')
 
 test('release matrix covers both update paths, active work, and auto-start off', () => {
   assert.deepEqual(POSITIVE_SCENARIOS.map((scenario) => scenario.name), [
@@ -81,5 +86,72 @@ test('timeout parser rejects invalid release gate values', () => {
     assert.equal(positiveIntegerArgument('--timeout-ms', 100), 100)
   } finally {
     process.argv = original
+  }
+})
+
+test('handoff child early exit writes buffered output to stderr immediately', () => {
+  const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
+  assert.match(source, /child\.once\('exit'/u)
+  assert.match(source, /process\.stderr\.write\([\s\S]*desktop\.output\(\)/u)
+})
+
+test('positive handoff uses a normal GUI quit before probing shared owners', () => {
+  const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
+  const positiveScenario = source.slice(
+    source.indexOf('async function runPositiveScenario'),
+    source.indexOf('async function runNegativeScenario')
+  )
+  assert.match(positiveScenario, /await quitDesktopNormally\(candidateDesktop,/u)
+  assert.doesNotMatch(positiveScenario, /terminateProcessTree/u)
+  assert.match(source, /await sendToWorkbenchSession\(\{/u)
+  assert.match(source, /window\.kunGui\.runDesktopCommand\('quit'\)/u)
+  assert.match(source, /finally \{\s*processExit\.dispose\(\)\s*\}/u)
+  assert.match(source, /managerJson\(current\.manager, '\/v1\/manager\/status'\)/u)
+  assert.match(source, /runtimeJson\(current\.runtime, '\/v1\/runtime\/info'\)/u)
+})
+
+test('Linux release handoff gates exercise the Chromium sandbox', () => {
+  for (const workflow of [
+    '.github/workflows/release.yml',
+    '.github/workflows/pr-checks.yml',
+    '.github/workflows/daily-dev-prerelease.yml'
+  ]) {
+    const source = readFileSync(join(process.cwd(), workflow), 'utf8')
+    assert.match(source, /KUN_CI_ALLOW_NO_SANDBOX/u)
+    assert.doesNotMatch(source, /KUN_CI_NO_SANDBOX_ACTIVE:\s*['"]?1|--no-sandbox/u)
+    assert.match(source, /configure-linux-chrome-sandbox\.cjs/u)
+    assert.match(source, /kernel\.apparmor_restrict_unprivileged_userns=0/u)
+  }
+})
+
+test('linux desktop smoke keeps the sandbox on unless CI explicitly opts out', () => {
+  assert.deepEqual(platformDesktopArguments('linux'), ['--disable-gpu', '--disable-dev-shm-usage'])
+  assert.deepEqual(platformDesktopArguments('darwin'), [])
+  assert.deepEqual(platformDesktopArguments('win32'), [])
+
+  const previousCi = process.env.CI
+  const previousAuthorization = process.env.KUN_CI_ALLOW_NO_SANDBOX
+  const previousActive = process.env.KUN_CI_NO_SANDBOX_ACTIVE
+  try {
+    process.env.KUN_CI_ALLOW_NO_SANDBOX = '1'
+    delete process.env.KUN_CI_NO_SANDBOX_ACTIVE
+    delete process.env.CI
+    assert.deepEqual(platformDesktopArguments('linux'), ['--disable-gpu', '--disable-dev-shm-usage'])
+    process.env.CI = 'true'
+    assert.deepEqual(platformDesktopArguments('linux'), ['--disable-gpu', '--disable-dev-shm-usage'])
+    process.env.KUN_CI_NO_SANDBOX_ACTIVE = '1'
+    assert.deepEqual(platformDesktopArguments('linux'), [
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--no-sandbox'
+    ])
+    assert.deepEqual(platformDesktopArguments('darwin'), [])
+  } finally {
+    if (previousCi === undefined) delete process.env.CI
+    else process.env.CI = previousCi
+    if (previousAuthorization === undefined) delete process.env.KUN_CI_ALLOW_NO_SANDBOX
+    else process.env.KUN_CI_ALLOW_NO_SANDBOX = previousAuthorization
+    if (previousActive === undefined) delete process.env.KUN_CI_NO_SANDBOX_ACTIVE
+    else process.env.KUN_CI_NO_SANDBOX_ACTIVE = previousActive
   }
 })

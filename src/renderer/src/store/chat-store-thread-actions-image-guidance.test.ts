@@ -123,6 +123,50 @@ describe('chat store image guidance', () => {
     expect(state.queuedMessages).toEqual([failedImage])
   })
 
+  it('guides a GUI plan image only into an active Plan turn', async () => {
+    const steerUserMessage = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = harness()
+    const guiPlan = {
+      operation: 'refine' as const,
+      workspaceRoot: '/workspace',
+      relativePath: '.kunsdd/plan/mascot.md',
+      planId: '/workspace:.kunsdd/plan/mascot.md'
+    }
+    const planImage = {
+      ...queuedImage,
+      id: 'q-plan-image',
+      mode: 'plan',
+      guiPlan
+    }
+    state.blocks = [{
+      kind: 'user', id: 'user_original', turnId: 'turn_active', text: 'Draft the plan',
+      meta: { agentSurface: 'code', mode: 'plan' }
+    }]
+    state.queuedMessages = [planImage]
+
+    await expect(actions.guideQueuedMessage(planImage.id)).resolves.toBe(true)
+    expect(steerUserMessage).toHaveBeenCalledWith(
+      'thread_image_guidance',
+      'turn_active',
+      planImage.text,
+      { attachmentIds: planImage.attachmentIds }
+    )
+    expect(state.queuedMessages).toEqual([])
+
+    const blocked = { ...planImage, id: 'q-plan-image-agent-turn' }
+    state.blocks = [{
+      kind: 'user', id: 'user_original', turnId: 'turn_active', text: 'Implement now',
+      meta: { agentSurface: 'code', mode: 'agent' }
+    }]
+    state.queuedMessages = [blocked]
+    steerUserMessage.mockClear()
+
+    await expect(actions.guideQueuedMessage(blocked.id)).resolves.toBe(false)
+    expect(steerUserMessage).not.toHaveBeenCalled()
+    expect(state.queuedMessages).toEqual([blocked])
+  })
+
   it('bypasses the text-only Graph shortcut for image guidance', async () => {
     const steerUserMessage = vi.fn(async () => undefined)
     registryMock.getProvider.mockReturnValue({ steerUserMessage })

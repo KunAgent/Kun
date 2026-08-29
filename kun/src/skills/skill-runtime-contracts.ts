@@ -46,7 +46,7 @@ export const SkillManifest = z.object({
   entry: z.string().min(1).max(1_024).default('SKILL.md'),
   triggers: SkillTriggerManifest,
   allowedTools: z.array(z.string().min(1).max(128)).max(64).default([]),
-  assets: z.array(z.string().min(1).max(1_024)).max(32).default([]),
+  assets: z.array(z.string().min(1).max(1_024)).max(128).default([]),
   priority: z.number().int().default(0)
 }).strict()
 export type SkillManifest = z.infer<typeof SkillManifest>

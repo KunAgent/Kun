@@ -21,8 +21,13 @@ import {
   DESIGN_SHAPE_OP_TOOL_CONTRACT
 } from './design-shape-op-tool-contract.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
+import {
+  createDesignCreateDiagramTool,
+  DESIGN_CREATE_DIAGRAM_TOOL_NAME
+} from './design-diagram-tool.js'
 
 export { DESIGN_UPDATE_SHAPES_MAX_OPS } from './design-canvas-normalization.js'
+export { createDesignCreateDiagramTool, DESIGN_CREATE_DIAGRAM_TOOL_NAME } from './design-diagram-tool.js'
 
 export const DESIGN_CANVAS_TOOL_NAME = 'design_canvas'
 export const DESIGN_CREATE_SCREEN_TOOL_NAME = 'design_create_screen'
@@ -39,6 +44,7 @@ export const WORK_RENAME_WHITEBOARD_TOOL_NAME = 'work_rename_whiteboard'
 export const DESIGN_CANVAS_MUTATION_TOOL_NAMES = [
   DESIGN_CANVAS_TOOL_NAME,
   DESIGN_CREATE_SCREEN_TOOL_NAME,
+  DESIGN_CREATE_DIAGRAM_TOOL_NAME,
   DESIGN_UPDATE_SHAPES_TOOL_NAME,
   DESIGN_ARRANGE_TOOL_NAME,
   DESIGN_EXPORT_CANVAS_TOOL_NAME,
@@ -72,6 +78,7 @@ export function buildDesignCanvasLocalTools(): LocalTool[] {
   return [
     createDesignCanvasTool(),
     createDesignCreateScreenTool(),
+    createDesignCreateDiagramTool(),
     createDesignUpdateShapesTool(),
     createDesignArrangeTool(),
     createDesignExportCanvasTool(),

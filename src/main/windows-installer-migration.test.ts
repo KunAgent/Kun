@@ -253,8 +253,54 @@ describe('Windows installer migration ACL contract', () => {
 
     expect(script).toContain('$accessViolationExitCode = -1073741819')
     expect(script).toContain('$maximumAttempts = 2')
+    expect(script).toContain('$process.WaitForExit(600000)')
+    expect(script).not.toContain(
+      'Start-Process -FilePath $script:InstallerPath -ArgumentList $Arguments -Wait'
+    )
+    expect(script).toContain('Show-InstallerDiagnostics $Scenario')
     expect(script).toContain('$process.ExitCode -ne $accessViolationExitCode')
     expect(script).toContain('retrying once after 2 seconds')
+  })
+
+  it('runs automatic-update migration smoke scenarios through the production silent path', () => {
+    const script = readFileSync(smokePath, 'utf8')
+
+    expect(script).toContain(
+      "Invoke-Installer 'legacy uninstall-source recovery' @('--updated', '/S', '/currentuser')"
+    )
+    expect(script).not.toContain("@('--updated', '/currentuser')")
+  })
+
+  it('opens automatic-update transaction keys in the NSIS 64-bit registry view', () => {
+    const script = readFileSync(
+      join(process.cwd(), 'build/windows-installer-migration-transaction.ps1'),
+      'utf8'
+    )
+    const prepare = script.slice(
+      script.indexOf('function Initialize-UpdateTransaction'),
+      script.indexOf('function Invoke-SwitchUpdatePayload')
+    )
+    const validate = script.slice(
+      script.indexOf('function Assert-UpdateCutover'),
+      script.indexOf('function Restore-TransactionPayloadBackup')
+    )
+    const rollback = script.slice(script.indexOf('function Invoke-RollbackUpdateTransaction'))
+
+    expect(script).toContain('[Microsoft.Win32.RegistryKey]::OpenBaseKey')
+    expect(script).toContain('[Microsoft.Win32.RegistryView]::Registry64')
+    expect(script).not.toContain('[Microsoft.Win32.Registry]::LocalMachine')
+    expect(prepare).toContain('Open-TransactionRegistryHive $hiveName')
+    expect(prepare).toContain("Open-TransactionRegistryHive 'CurrentUser'")
+    expect(validate).toContain('$hive = Open-TransactionRegistryHive')
+    expect(rollback).toContain('Open-TransactionRegistryHive ([string]$record.Hive)')
+  })
+
+  it('hashes smoke payloads without relying on PowerShell module auto-loading', () => {
+    const script = readFileSync(smokePath, 'utf8')
+
+    expect(script).toContain('function Get-FileSha256')
+    expect(script).toContain('[Security.Cryptography.SHA256]::Create()')
+    expect(script).not.toContain('Get-FileHash')
   })
 
   it('aborts an ambiguous dual-scope automatic update without a source marker', () => {

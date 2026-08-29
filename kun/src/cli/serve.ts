@@ -234,6 +234,7 @@ export function parseServeOptions(
     runtime: loadedConfig?.config.runtime,
     graph: loadedConfig?.config.graph ?? DEFAULT_SERVE_OPTIONS.graph,
     roles: loadedConfig?.config.roles,
+    fastContext: loadedConfig?.config.fastContext,
     capabilities: loadedConfig?.config.capabilities ?? DEFAULT_SERVE_OPTIONS.capabilities,
     hooks: loadedConfig?.config.hooks,
     quality: loadedConfig?.config.quality,

@@ -5,7 +5,8 @@ import type { ToolDispatchInput } from './turn-execution-types.js'
 import { ToolCallDispatcher } from './tool-call-dispatcher.js'
 import {
   FastContextSourceSemaphore,
-  fastContextSourceToolSemaphoreSnapshot
+  fastContextSourceToolSemaphoreSnapshot,
+  withFastContextSourceToolSlot
 } from './fast-context-source-semaphore.js'
 
 const context = {
@@ -200,7 +201,7 @@ describe('ToolCallDispatcher', () => {
       persistSuppressed: async () => undefined
     }
     const dispatcher = new ToolCallDispatcher(toolExecution as never)
-    const fastContext = { ...context, fastContext: true }
+    const fastContext = { ...context, fastContext: true, fastContextScopeId: 'parent_a' }
     const first = dispatcher.dispatch({
       dispatch: dispatchInput(Array.from({ length: 8 }, (_, index) => call('read', `first_${index}`))), context: fastContext
     })
@@ -210,10 +211,81 @@ describe('ToolCallDispatcher', () => {
 
     await firstFour
     expect(maximum).toBe(4)
-    expect(fastContextSourceToolSemaphoreSnapshot()).toMatchObject({ active: 4, capacity: 4 })
+    expect(fastContextSourceToolSemaphoreSnapshot('parent_a')).toMatchObject({ active: 4, capacity: 4 })
     release()
     await expect(Promise.all([first, second])).resolves.toEqual(['continue', 'continue'])
-    expect(fastContextSourceToolSemaphoreSnapshot()).toMatchObject({ active: 0, waiting: 0 })
+    expect(fastContextSourceToolSemaphoreSnapshot('parent_a')).toMatchObject({
+      active: 0, waiting: 0, exists: false
+    })
+  })
+
+  it('gives different parent sessions independent four-slot source budgets', async () => {
+    let active = 0
+    let maximum = 0
+    let resolveEight: () => void = () => undefined
+    const eightStarted = new Promise<void>((resolve) => { resolveEight = resolve })
+    let release: () => void = () => undefined
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const toolExecution = {
+      executeSafely: async (input: { call: ToolCallLike }) => {
+        active += 1
+        maximum = Math.max(maximum, active)
+        if (active === 8) resolveEight()
+        try {
+          await held
+          return resultFor(input.call)
+        } finally {
+          active -= 1
+        }
+      },
+      persistResult: async () => undefined,
+      persistSuppressed: async () => undefined
+    }
+    const dispatcher = new ToolCallDispatcher(toolExecution as never)
+    const callsA = Array.from({ length: 4 }, (_, index) => call('read', `a_${index}`))
+    const callsB = Array.from({ length: 4 }, (_, index) => call('grep', `b_${index}`))
+    const first = dispatcher.dispatch({
+      dispatch: dispatchInput(callsA),
+      context: { ...context, threadId: 'child_a', fastContext: true, fastContextScopeId: 'parent_a' }
+    })
+    const second = dispatcher.dispatch({
+      dispatch: dispatchInput(callsB),
+      context: { ...context, threadId: 'child_b', fastContext: true, fastContextScopeId: 'parent_b' }
+    })
+
+    await eightStarted
+    expect(maximum).toBe(8)
+    expect(fastContextSourceToolSemaphoreSnapshot('parent_a')).toMatchObject({ active: 4, waiting: 0 })
+    expect(fastContextSourceToolSemaphoreSnapshot('parent_b')).toMatchObject({ active: 4, waiting: 0 })
+    release()
+    await expect(Promise.all([first, second])).resolves.toEqual(['continue', 'continue'])
+    expect(fastContextSourceToolSemaphoreSnapshot('parent_a')).toMatchObject({
+      active: 0, waiting: 0, exists: false
+    })
+    expect(fastContextSourceToolSemaphoreSnapshot('parent_b')).toMatchObject({
+      active: 0, waiting: 0, exists: false
+    })
+  })
+
+  it('removes a newly created source scope when its signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(withFastContextSourceToolSlot({
+      context: {
+        ...context,
+        threadId: 'aborted_child',
+        fastContext: true,
+        fastContextScopeId: 'aborted_parent',
+        abortSignal: controller.signal
+      },
+      toolName: 'read',
+      work: async () => resultFor(call('read', 'never'))
+    })).rejects.toThrow('aborted while queued')
+    expect(fastContextSourceToolSemaphoreSnapshot('aborted_parent')).toMatchObject({
+      active: 0,
+      waiting: 0,
+      exists: false
+    })
   })
 
   it('releases Fast Context source permits after errors and queued cancellation', async () => {

@@ -1,6 +1,7 @@
 export * from './accounts.js'
 export * from './agent.js'
 export * from './artifacts.js'
+export * from './chart.js'
 export * from './client.js'
 export * from './common.js'
 export * from './composer-context.js'

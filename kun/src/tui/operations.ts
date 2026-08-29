@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, resolve } from 'node:path'
+import { ChartSpecV1Schema, chartColumns, chartSpecTextSummary } from '@kun/extension-api'
 import { redactSecrets, redactSecretText } from '../config/secret-redaction.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { ThreadDetail } from './client.js'
@@ -153,9 +154,23 @@ function appendItem(lines: string[], item: TurnItem): void {
     case 'tool_call':
       lines.push(`> Tool call \`${markdownCode(item.toolName)}\` (${item.status}): ${markdownText(item.summary ?? compactJson(item.arguments))}`, '')
       break
-    case 'tool_result':
-      lines.push(`> Tool result \`${markdownCode(item.toolName)}\`${item.isError ? ' (error)' : ''}`, '', '```text', safeFence(outputText(item.output)), '```', '')
+    case 'tool_result': {
+      const chart = chartFromToolResult(item.toolName, item.output)
+      if (chart) {
+        lines.push(`> Chart \`${markdownCode(chart.type)}\`: ${markdownText(chartSpecTextSummary(chart))}`, '')
+        const fields = chart.columns?.length ? chart.columns.map((column) => column.field) : chartColumns(chart)
+        lines.push('| ' + fields.map(markdownTableCell).join(' | ') + ' |')
+        lines.push('| ' + fields.map(() => '---').join(' | ') + ' |')
+        for (const row of chart.data.slice(0, 50)) {
+          lines.push('| ' + fields.map((field) => markdownTableCell(row[field])).join(' | ') + ' |')
+        }
+        if (chart.data.length > 50) lines.push('', `_${chart.data.length - 50} more rows omitted._`)
+        lines.push('')
+      } else {
+        lines.push(`> Tool result \`${markdownCode(item.toolName)}\`${item.isError ? ' (error)' : ''}`, '', '```text', safeFence(outputText(item.output)), '```', '')
+      }
       break
+    }
     case 'approval':
       lines.push(`> Approval ${item.status}: ${markdownText(item.summary)}`, '')
       break
@@ -172,6 +187,25 @@ function appendItem(lines: string[], item: TurnItem): void {
       lines.push('### Error', '', markdownText(item.message), '')
       break
   }
+}
+
+function chartFromToolResult(toolName: string, output: unknown) {
+  if (toolName.replace(/^mcp__[^_]+__/, '') !== 'render_chart') return null
+  let value = output
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value) } catch { return null }
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'chart' in value) {
+    value = (value as { chart?: unknown }).chart
+  }
+  const parsed = ChartSpecV1Schema.safeParse(value)
+  return parsed.success ? parsed.data : null
+}
+
+function markdownTableCell(value: unknown): string {
+  return markdownText(value === null || value === undefined ? '' : String(value))
+    .replaceAll('|', '\\|')
+    .replaceAll('\n', ' ')
 }
 
 function markdownText(value: string): string {

@@ -43,6 +43,11 @@ export const KUN_MODEL_CONNECTION_PROBE_TEMPLATE = '/v1/model-connections/{id}/p
 
 export const KUN_MODEL_ROUTES_PATH = '/v1/model-routes'
 export const KUN_MODEL_ROUTES_TEMPLATE = '/v1/model-routes'
+export const KUN_GATEWAY_CREDENTIAL_STATUS_TEMPLATE = '/v1/model-gateway/credential/status'
+export const KUN_GATEWAY_CREDENTIAL_ENSURE_TEMPLATE = '/v1/model-gateway/credential/ensure'
+export const KUN_GATEWAY_CREDENTIAL_ROTATE_TEMPLATE = '/v1/model-gateway/credential/rotate'
+export const KUN_GATEWAY_CREDENTIAL_REVOKE_TEMPLATE = '/v1/model-gateway/credential'
+export const KUN_GATEWAY_CREDENTIAL_REVEAL_TEMPLATE = '/v1/model-gateway/credential/reveal'
 export const KUN_MODEL_ROUTE_TEST_TEMPLATE = '/v1/model-routes/{id}/test'
 export function kunModelRouteTestPath(poolId: string): string {
   return `/v1/model-routes/${encodeURIComponent(poolId)}/test`

@@ -75,7 +75,7 @@
     "dev": "tsc -p tsconfig.build.json --watch"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.220",
+    "@anthropic-ai/claude-agent-sdk": "0.3.220",
     "@computer-use/nut-js": "^4.2.0",
     "@cursor/sdk": "1.0.24",
     "@earendil-works/pi-tui": "0.81.1",
@@ -93,7 +93,7 @@
     "highlight.js": "^11.11.1",
     "ipaddr.js": "^2.4.0",
     "jimp": "^1.6.0",
-    "pdfjs-dist": "^5.4.394",
+    "pdfjs-dist": "5.4.394",
     "proxy-agent": "^8.0.2",
     "safe-regex2": "5.1.1",
     "semver": "^7.8.5",

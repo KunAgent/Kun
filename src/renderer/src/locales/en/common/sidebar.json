@@ -1,6 +1,7 @@
 {
   "threadRefreshing": "Refreshing…",
   "sidebarWorkspaceLoading": "Loading threads…",
+  "sidebarWorkspaceLoadMore": "Load more",
   "sidebarWorkspaceLoadError": "Failed to load threads.",
   "threadHydrationLoadingTitle": "Loading conversation…",
   "threadHydrationLoadingDescription": "Reading messages and restoring the latest conversation state.",

@@ -200,6 +200,8 @@ export type ToolHostContext = {
    * unchanged.
    */
   fastContext?: boolean
+  /** Stable parent chat thread that owns this retrieval child's source-tool budget. */
+  fastContextScopeId?: string
   /** Number of grouped Fast Context tasks; source calls carry task_indexes for durable attribution. */
   fastContextTaskCount?: number
   /** Active model provider id selected for this turn. Child agents inherit this routing unless a profile overrides it. */

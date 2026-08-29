@@ -1,4 +1,5 @@
 import { Bell, FileSearch2, X } from 'lucide-react'
+import i18n from '../i18n'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import {
   RESULT_PREVIEW_OPEN_CHANNEL,
@@ -93,7 +94,7 @@ export function DeclarativeViewContainers({
   onSelect: (contributionId: string) => void
 }): ReactElement {
   return (
-    <nav className="ds-extension-view-containers flex min-w-0 items-center gap-1" aria-label="Extension Views">
+    <nav className="ds-extension-view-containers flex min-w-0 items-center gap-1" aria-label={i18n.t('extensionViews')}>
       {contributions.map((contribution) => (
         <button
           key={contribution.id}
@@ -659,7 +660,7 @@ export function DeclarativeResultPreviews({
   return (
     <section
       className="mt-2 rounded-xl border border-ds-border-muted bg-ds-card/60 p-2"
-      aria-label="Extension result previews"
+      aria-label={i18n.t('extensionResultPreviews')}
       data-extension-attachment-context
     >
       <div className="flex flex-wrap items-center gap-1.5">

@@ -1,0 +1,11 @@
+{
+  "threadRefreshing": "새로고침 중…",
+  "sidebarWorkspaceLoading": "스레드 불러오는 중…",
+  "sidebarWorkspaceLoadMore": "더 불러오기",
+  "sidebarWorkspaceLoadError": "스레드를 불러오지 못했습니다.",
+  "threadHydrationLoadingTitle": "대화 불러오는 중…",
+  "threadHydrationLoadingDescription": "메시지를 읽고 최신 대화 상태를 복원하고 있습니다.",
+  "threadHydrationTakingLongTitle": "대화 복원에 시간이 걸리고 있습니다",
+  "threadHydrationTakingLongDescription": "이벤트 스트림이 아직 동기화되지 않았습니다. 연결을 다시 시도할 수 있습니다.",
+  "threadHydrationRetry": "연결 다시 시도"
+}

@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import i18n from '../i18n'
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import type { WorkspaceOfficePreviewSuccess, WorkspaceOfficeSelection } from '@shared/office-document'
 import { WorkspaceOfficePreviewToolbar } from './WorkspaceOfficePreviewToolbar'
@@ -195,11 +196,11 @@ export function WorkspaceDocxPreview({
         onResetZoom={resetZoom}
       >
         <div className="flex items-center gap-1 rounded border border-ds-border-muted px-1 py-0.5">
-          <button type="button" aria-label="Previous page" disabled={page <= 1} className="rounded p-0.5 hover:bg-ds-hover disabled:opacity-40" onClick={() => goToPage(page - 1)}>
+          <button type="button" aria-label={i18n.t('officePreviousPage')} disabled={page <= 1} className="rounded p-0.5 hover:bg-ds-hover disabled:opacity-40" onClick={() => goToPage(page - 1)}>
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span aria-label={`Page ${page} of ${pageCount}`}>Page {page} / {pageCount}</span>
-          <button type="button" aria-label="Next page" disabled={page >= pageCount} className="rounded p-0.5 hover:bg-ds-hover disabled:opacity-40" onClick={() => goToPage(page + 1)}>
+          <span aria-label={i18n.t('officePageSummary', { page, count: pageCount })}>{i18n.t('officePageSummary', { page, count: pageCount })}</span>
+          <button type="button" aria-label={i18n.t('officeNextPage')} disabled={page >= pageCount} className="rounded p-0.5 hover:bg-ds-hover disabled:opacity-40" onClick={() => goToPage(page + 1)}>
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>

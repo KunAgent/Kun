@@ -15,6 +15,7 @@ export type ToolDiscoveryContextFactoryDeps = {
   blockedSkillIds?: readonly string[]
   runtimeDataDir?: string
   fastContext?: boolean
+  fastContextScopeId?: string
   fastContextTaskCount?: number
   interactiveToolBridge: Pick<InteractiveToolBridge, 'awaitUserInput'>
 }
@@ -73,6 +74,7 @@ export function createToolDiscoveryContext(
     sandboxMode: input.sandboxMode,
     ...(deps.runtimeDataDir ? { runtimeDataDir: deps.runtimeDataDir } : {}),
     ...(deps.fastContext ? { fastContext: true } : {}),
+    ...(deps.fastContextScopeId ? { fastContextScopeId: deps.fastContextScopeId } : {}),
     ...(deps.fastContextTaskCount ? { fastContextTaskCount: deps.fastContextTaskCount } : {}),
     abortSignal: input.signal,
     // A tool schema lookup is not tool execution. Retain the existing inert

@@ -81,12 +81,12 @@ import {
   ChildResultExecutionError
 } from './child-result-materializer.js'
 
-export type SlotWaiter = {
-  resolve: () => void
-  reject: (error: unknown) => void
-  signal: AbortSignal
-  onAbort: () => void
-}
+import {
+  ChildQueueTimeoutError,
+  ScopedSlotScheduler,
+  SlotScheduler,
+  type SlotLease
+} from './delegation-slot-waiter.js'
 
 export type RunTurnFn = (threadId: string, turnId: string) => Promise<unknown>
 
@@ -106,12 +106,11 @@ export type ForegroundChildControl = {
 }
 
 export abstract class DelegationRuntimeBase {
-  protected active = 0
   private memoryPressureParallelLimit: number | undefined
+  private readonly ordinarySlots = new SlotScheduler(() => this.enabled() ? this.parallelLimit : 0)
+  private readonly fastContextSlots = new ScopedSlotScheduler(() => this.enabled() ? 1 : 0)
   protected childSeq = 0
   protected readonly childSeqById = new Map<string, number>()
-  /** Children waiting for a parallel slot, in FIFO order. */
-  protected readonly slotWaiters: SlotWaiter[] = []
   /**
    * Background (detached) child runs keyed by childId, exposing an
    * AbortController so the user can cancel a long-running task from the
@@ -157,12 +156,13 @@ export abstract class DelegationRuntimeBase {
       ...this.options,
       config
     }
-    this.drainSlotWaiters()
+    this.ordinarySlots.refresh()
+    this.fastContextSlots.refresh()
   }
 
   setMemoryPressureParallelLimit(limit?: number): void {
     this.memoryPressureParallelLimit = limit === undefined ? undefined : Math.max(1, Math.floor(limit))
-    this.drainSlotWaiters()
+    this.ordinarySlots.refresh()
   }
 
   enabled(): boolean {
@@ -176,50 +176,16 @@ export abstract class DelegationRuntimeBase {
     ))
   }
 
-  /** Acquire a parallel slot, queueing (FIFO) when the runtime is saturated. */
-  protected acquireSlot(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) return Promise.reject(new Error('aborted while queued'))
-    if (this.slotWaiters.length === 0 && this.active < this.parallelLimit) {
-      this.active += 1
-      return Promise.resolve()
-    }
-    return new Promise<void>((resolve, reject) => {
-      const waiter: SlotWaiter = {
-        resolve,
-        reject,
-        signal,
-        onAbort: () => {
-          const index = this.slotWaiters.indexOf(waiter)
-          if (index >= 0) this.slotWaiters.splice(index, 1)
-          reject(new Error('aborted while queued'))
-          this.drainSlotWaiters()
-        }
-      }
-      signal.addEventListener('abort', waiter.onAbort, { once: true })
-      this.slotWaiters.push(waiter)
-      this.drainSlotWaiters()
-    })
-  }
-
-  /** Free one occupied slot, then admit queued children under the current limit. */
-  protected releaseSlot(): void {
-    this.active = Math.max(0, this.active - 1)
-    this.drainSlotWaiters()
-  }
-
-  /** Fill newly available capacity from the existing FIFO before later arrivals. */
-  private drainSlotWaiters(): void {
-    while (this.enabled() && this.active < this.parallelLimit) {
-      const next = this.slotWaiters.shift()
-      if (!next) return
-      next.signal.removeEventListener('abort', next.onAbort)
-      if (next.signal.aborted) {
-        next.reject(new Error('aborted while queued'))
-        continue
-      }
-      this.active += 1
-      next.resolve()
-    }
+  /** Acquire the ordinary global lane or the Fast Context parent-session lane. */
+  protected acquireSlot(input: {
+    fastContext: boolean
+    parentThreadId: string
+    signal: AbortSignal
+    queueTimeoutMs?: number
+  }): Promise<SlotLease> {
+    return input.fastContext
+      ? this.fastContextSlots.acquire(input.parentThreadId, input.signal, input.queueTimeoutMs)
+      : this.ordinarySlots.acquire(input.signal, input.queueTimeoutMs)
   }
 
   /** Configured profiles, surfaced to the delegate_task tool schema/UI. */
@@ -336,7 +302,7 @@ export abstract class DelegationRuntimeBase {
     })
     return {
       enabled: this.options.config.enabled,
-      active: this.active,
+      active: this.ordinarySlots.activeCount + this.fastContextSlots.activeCount,
       childRuns,
       aggregates: aggregateChildRuns(childRuns)
     }
@@ -485,6 +451,7 @@ export abstract class DelegationRuntimeBase {
     returnFormat: ChildReturnFormat
     fastContext: boolean
     fastContextTasks: readonly import('./fast-context-evidence.js').FastContextTask[] | undefined
+    queueTimeoutMs: number | undefined
     workspace: string | undefined
     security: ChildSecuritySnapshot | undefined
     onRunning: ((childId: string, profile?: string, metadata?: ChildRunLifecycleMetadata) => Promise<void> | void) | undefined
@@ -499,9 +466,29 @@ export abstract class DelegationRuntimeBase {
     signal: AbortSignal
   }): Promise<ChildRunRecord> {
     let record = args.state.record
+    let releaseSlot: SlotLease | undefined
     try {
-      await this.acquireSlot(args.signal)
+      releaseSlot = await this.acquireSlot({
+        fastContext: args.fastContext,
+        parentThreadId: args.parentThreadId,
+        signal: args.signal,
+        queueTimeoutMs: args.queueTimeoutMs
+      })
     } catch (error) {
+      if (error instanceof ChildQueueTimeoutError) {
+        const finishedAt = this.now()
+        record = await this.commitChildState(args.state, (current) => ChildRunRecord.parse({
+          ...current,
+          status: 'failed',
+          terminationReason: 'child_error',
+          resumable: false,
+          failure: { source: 'runtime', code: error.code, category: 'timeout' },
+          queuedMs: elapsedMs(args.queuedAt, finishedAt),
+          error: error.message.slice(0, CHILD_RESULT_PREVIEW_CHARS),
+          updatedAt: finishedAt
+        }))
+        return record
+      }
       const abort = childAbortOutcome(args.signal, isHostShutdownTurnSuspension(args.signal), error)
       record = await this.commitChildState(args.state, (current) => ChildRunRecord.parse({
         ...current,
@@ -648,7 +635,7 @@ export abstract class DelegationRuntimeBase {
       } catch (error) {
         console.warn('[kun] child activity subscription cleanup failed:', error)
       } finally {
-        this.releaseSlot()
+        releaseSlot?.()
       }
     }
   }

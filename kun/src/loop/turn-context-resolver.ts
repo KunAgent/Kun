@@ -95,6 +95,7 @@ export type TurnContextResolverDeps = {
   blockedSkillIds?: readonly string[]
   runtimeDataDir?: string
   fastContext?: boolean
+  fastContextScopeId?: string
   fastContextTaskCount?: number
 }
 
@@ -211,6 +212,7 @@ export class TurnContextResolver {
       ...(this.deps.blockedSkillIds ? { blockedSkillIds: this.deps.blockedSkillIds } : {}),
       ...(this.deps.runtimeDataDir ? { runtimeDataDir: this.deps.runtimeDataDir } : {}),
       ...(this.deps.fastContext ? { fastContext: true } : {}),
+      ...(this.deps.fastContextScopeId ? { fastContextScopeId: this.deps.fastContextScopeId } : {}),
       ...(this.deps.fastContextTaskCount ? { fastContextTaskCount: this.deps.fastContextTaskCount } : {}),
       interactiveToolBridge: this.deps.interactiveToolBridge
     })

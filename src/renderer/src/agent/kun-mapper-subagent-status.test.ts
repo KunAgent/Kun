@@ -38,6 +38,8 @@ describe('subagent runtime event mapping', () => {
   )
 
   it.each([
+    ['queued', 'running'],
+    ['running', 'running'],
     ['completed', 'success'],
     ['failed', 'error'],
     ['aborted', 'error']
@@ -60,12 +62,14 @@ describe('subagent runtime event mapping', () => {
 })
 
 function childEvent(
-  childStatus: 'completed' | 'failed' | 'aborted'
+  childStatus: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
 ): CoreRuntimeEventJson {
   return {
     kind: childStatus === 'completed'
       ? 'turn_completed'
-      : childStatus === 'failed' ? 'turn_failed' : 'turn_aborted',
+      : childStatus === 'failed'
+        ? 'turn_failed'
+        : childStatus === 'aborted' ? 'turn_aborted' : 'turn_started',
     seq: 2,
     timestamp: '2026-08-20T00:00:01.000Z',
     threadId: 'thread_parent',

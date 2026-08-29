@@ -311,6 +311,7 @@ export function clearedThreadSelection(): Pick<
   | 'currentTurnId'
   | 'currentTurnOrchestration'
   | 'currentTurnUserId'
+  | 'currentTurnStartedAtMs'
   | 'turnStartedAtByUserId'
   | 'turnDurationByUserId'
   | 'turnReasoningFirstAtByUserId'
@@ -337,6 +338,7 @@ export function clearedThreadSelection(): Pick<
     currentTurnId: null,
     currentTurnOrchestration: null,
     currentTurnUserId: null,
+    currentTurnStartedAtMs: null,
     turnStartedAtByUserId: {},
     turnDurationByUserId: {},
     turnReasoningFirstAtByUserId: {},

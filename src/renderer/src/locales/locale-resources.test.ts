@@ -24,6 +24,16 @@ import zhSettings from './zh/settings'
 
 type LocaleTree = Record<string, unknown>
 
+const authoredCommon: Record<AppLocale, LocaleTree> = {
+  en: enCommon,
+  zh: zhCommon,
+  ru: ruCommon,
+  hi: hiCommon,
+  th: thCommon,
+  ja: jaCommon,
+  ko: koCommon
+}
+
 const authoredSettings: Record<AppLocale, LocaleTree> = {
   en: enSettings,
   zh: zhSettings,
@@ -152,6 +162,45 @@ describe('active locale resources', () => {
       }
     }
   )
+
+  it.each(APP_LOCALES)('resolves the thread refresh status in %s without exposing a key', async (locale) => {
+    await i18n.changeLanguage(locale)
+    const value = i18n.t('threadRefreshing', { ns: 'common' })
+    expect(i18n.exists('threadRefreshing', { ns: 'common' })).toBe(true)
+    expect(value.trim()).not.toBe('')
+    expect(value).not.toBe('threadRefreshing')
+  })
+
+  it('treats sidebar as a common resource fragment, not a namespace', () => {
+    expect(i18n.options.ns).toEqual(['common', 'settings'])
+    expect(i18n.exists('threadRefreshing', { ns: 'common' })).toBe(true)
+    expect(i18n.exists('threadRefreshing', { ns: 'sidebar' })).toBe(false)
+  })
+
+  it.each(['en', 'zh'] as const)('authors every reviewed common key for %s', (locale) => {
+    const reviewedKeys = [
+      'threadRefreshing',
+      'backgroundShells.title',
+      'backgroundShells.runningCount',
+      'backgroundShells.status.running',
+      'agentPicker.pickTitle',
+      'codeActionDownload',
+      'officePreviousPage',
+      'officeWorkbookLoading',
+      'officeSlideSummary',
+      'officeGoToSlide',
+      'officePptRenderError'
+    ]
+    const source = flattenStrings(authoredCommon.en)
+    const translated = flattenStrings(authoredCommon[locale])
+    for (const key of reviewedKeys) {
+      const sourceValue = source.get(key)
+      const translatedValue = translated.get(key)
+      expect(translatedValue, `common:${key}`).toBeTruthy()
+      expect(interpolationTokens(translatedValue ?? ''), `common:${key}`)
+        .toEqual(interpolationTokens(sourceValue ?? ''))
+    }
+  })
 
   it.each(APP_LOCALES)(
     'authors a complete model-routes resource for %s without fallback copy',

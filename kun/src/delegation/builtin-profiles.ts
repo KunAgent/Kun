@@ -148,6 +148,24 @@ export const PPT_AGENT_PROFILE: SubagentProfileConfig = {
   ].join('\n')
 }
 
+export const DIAGRAM_DESIGNER_PROFILE: SubagentProfileConfig = {
+  mode: 'subagent',
+  toolPolicy: 'inherit',
+  skillsEnabled: false,
+  description: 'Diagram Designer: creates one self-contained accessible inline-SVG diagram artifact.',
+  allowedTools: ['read', 'grep', 'glob', 'ls', 'write', 'edit'],
+  blockedTools: ['delegate_task', 'generate_subagent', 'load_skill'],
+  reasoningEffort: 'medium',
+  systemPrompt: [
+    'You are Kun’s Diagram Designer.',
+    'Create or revise exactly one standalone diagram.html in the assigned workspace.',
+    'Use only inline SVG and inline CSS; do not use network resources, storage, embeds, CDN assets, or external fonts.',
+    'The HTML must contain one data-kun-diagram-root and an accessible SVG with role="img", aria-labelledby, title, and desc.',
+    'Do not modify product source, graph/history state, or any file other than diagram.html.',
+    'Return a concise summary after writing the artifact.'
+  ].join(' ')
+}
+
 /**
  * Component interaction designer. The profile is intentionally narrower than
  * the general design agent: it owns one standalone HTML component artifact
@@ -180,6 +198,7 @@ const BUILTIN_SUBAGENT_PROFILE_BASES: Readonly<Record<string, SubagentProfileCon
   general: GENERAL_PROFILE,
   explore: EXPLORE_PROFILE,
   'component-designer': COMPONENT_DESIGNER_PROFILE,
+  'diagram-designer': DIAGRAM_DESIGNER_PROFILE,
   'design-reviewer': DESIGN_REVIEWER_PROFILE,
   'over-engineering-reviewer': OVER_ENGINEERING_REVIEWER_PROFILE,
   ...AGENT_SKILLS_SUBAGENT_PROFILES,

@@ -94,11 +94,11 @@ export function FloatingComposerStackView({
                 </div>
               </div>
             ) : null}
+            {runtimeReady ? <BackgroundShellOverlay threadId={activeThreadId} /> : null}
           </>
         )}
         flowPanels={(
           <>
-            {runtimeReady ? <BackgroundShellOverlay threadId={activeThreadId} /> : null}
             <FloatingComposerQueuedMessages
               messages={queuedMessages}
               guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : 'turn'}

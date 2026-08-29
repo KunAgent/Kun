@@ -28,6 +28,29 @@ function processingSections(input: {
 }
 
 describe('deriveTurnSections', () => {
+  it('surfaces show_diagram metadata in its dedicated timeline section', () => {
+    const result = sections([{
+      kind: 'tool',
+      id: 'diagram',
+      summary: 'show_diagram',
+      status: 'success',
+      toolKind: 'tool_call',
+      meta: {
+        toolName: 'show_diagram',
+        diagramPrototype: {
+          version: 1,
+          status: 'completed',
+          artifactId: 'system',
+          title: 'System',
+          relativePath: '.kun-design/diagram-prototypes/system/diagram.html',
+          viewport: { width: 800, height: 600 }
+        }
+      }
+    }])
+
+    expect(result.diagramPrototypeBlocks.map((block) => block.id)).toEqual(['diagram'])
+  })
+
   it('does not render internal Graph supervision prompts as user or process content', () => {
     const result = sections([
       {

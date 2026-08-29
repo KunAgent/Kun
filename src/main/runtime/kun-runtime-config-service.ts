@@ -346,6 +346,10 @@ export function buildManagedRuntimeHotApplyBody(
   delete hotServe.runtimeToken
   delete hotServe.insecure
   delete hotServe.storage
+  // Local Model Gateway is owned by the revisioned model-connections registry.
+  // Re-sending its persisted flag here can reject unrelated hot updates (for
+  // example Fast Context) when the registry has no independent gateway key.
+  delete hotServe.localModelGateway
   const defaultClientApiKey = resolveCodexOAuthApiKey(runtime.apiKey).apiKey
   return RuntimeConfigApplyRequest.parse({
     ...config,
@@ -364,8 +368,7 @@ export function buildManagedRuntimeHotApplyBody(
       tokenEconomy: runtime.tokenEconomy,
       toolOutputLimits: runtime.toolOutputLimits,
       providers: serve.providers ?? {},
-      routePools: routePoolsConfigForRuntime(settings),
-      localModelGateway: localModelGatewayConfigForRuntime(settings)
+      routePools: routePoolsConfigForRuntime(settings)
     }
   })
 }

@@ -178,6 +178,37 @@ describe('SkillRuntime project config', () => {
     await expect(runtime.availableSkillIdsForWorkspace(workspace)).resolves.toEqual(['project-only'])
   })
 
+  it('loads only declared Skill assets with bounded line pagination', async () => {
+    const skillRoot = join(workspace, '.kun', 'skills')
+    const skillDir = join(skillRoot, 'diagram')
+    await mkdir(join(skillDir, 'references'), { recursive: true })
+    await writeFile(join(skillDir, 'SKILL.md'), 'diagram instructions')
+    await writeFile(join(skillDir, 'references', 'flow.md'), 'one\ntwo\nthree\nfour')
+    await writeFile(join(skillDir, 'skill.json'), JSON.stringify({
+      id: 'diagram',
+      name: 'diagram',
+      assets: ['references/flow.md'],
+      triggers: { commands: ['/diagram'] }
+    }))
+    const runtime = await createRuntime()
+
+    await expect(runtime.loadSkillAsset('diagram', 'references/flow.md', workspace, { limit: 2 }))
+      .resolves.toEqual({
+        skillId: 'diagram',
+        path: 'references/flow.md',
+        content: 'one\ntwo',
+        offset: 0,
+        nextOffset: 2,
+        truncated: true
+      })
+    await expect(runtime.loadSkillAsset('diagram', 'references/missing.md', workspace))
+      .resolves.toMatchObject({ error: expect.stringContaining('not declared') })
+    await expect(runtime.loadSkillAsset('diagram', '../SKILL.md', workspace))
+      .resolves.toMatchObject({ error: expect.stringContaining('without traversal') })
+    await expect(runtime.loadSkillAsset('diagram', 'references/flow.md', workspace, {}, undefined, ['global']))
+      .resolves.toMatchObject({ error: expect.stringContaining('unknown skill') })
+  })
+
   it('enforces a delegated skill allow-list for discovery, activation, and load_skill', async () => {
     await writeSkill(join(workspace, '.kun', 'skills'), 'allowed', 'allowed instructions')
     await writeSkill(join(workspace, '.kun', 'skills'), 'later-added', 'must stay hidden')

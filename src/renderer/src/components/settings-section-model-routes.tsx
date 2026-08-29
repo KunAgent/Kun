@@ -6,7 +6,7 @@ import {
   resolveModelRouteTargetReference
 } from '@shared/app-settings-provider-core'
 import { KUN_MODEL_ROUTES_PATH, kunModelRouteTestPath } from '@shared/kun-endpoints'
-import type { KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
+import type { GatewayCredentialStatus, KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
 import type { TFunction } from 'i18next'
 import { Activity, AlertTriangle, Boxes, Check, ChevronDown, Clipboard, Code2, Loader2, Play, Plus, Route, Server, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
@@ -35,9 +35,10 @@ import {
   validCodes
 } from './settings-section-model-routes-support'
 import { ModelRouteTargets } from './settings-section-model-routes-targets'
+import { useGatewayCredentialControls } from './use-gateway-credential-controls'
 
 export type RouteStatus = {
-  localGateway?: { enabled: boolean }
+  localGateway?: { enabled: boolean; credential?: GatewayCredentialStatus }
   pools?: ModelRoutePoolV1[]
   configuredPools?: ModelRoutePoolV1[]
   metrics?: Record<string, { successes: number; failures: number; ewmaLatencyMs?: number; lastError?: string }>
@@ -137,6 +138,9 @@ export function ModelRoutesSettings({
   const [apiDocsOpen, setApiDocsOpen] = useState(false)
   const [copiedValue, setCopiedValue] = useState<'base-url' | 'curl' | 'api-example' | null>(null)
   const [activeSettingsTab, setActiveSettingsTab] = useState<ModelRouteSettingsTab>('gateway')
+  const gatewayCredential = useGatewayCredentialControls(settings, onChange, setStartError)
+  const credential = gatewayCredential.credential
+  const credentialPending = gatewayCredential.pending
   const selected = settings.routePools.find((pool) => pool.id === selectedId) ?? settings.routePools[0]
   const executablePools = useMemo(() => projectExecutableModelRoutePools(settings), [settings])
   const executableSelected = executablePools.find((pool) => pool.id === selected?.id)
@@ -152,7 +156,8 @@ export function ModelRoutesSettings({
     try {
       const response = await window.kunGui.runtimeRequest(KUN_MODEL_ROUTES_PATH, 'GET')
       if (!response.ok) throw new Error(routeStatusError(response.body, response.status, t))
-      setStatus(JSON.parse(response.body) as RouteStatus)
+      const next = JSON.parse(response.body) as RouteStatus
+      setStatus(next)
       setStatusError('')
     } catch (error) {
       // Local settings remain durable while Runtime is stopped or unavailable.
@@ -390,18 +395,23 @@ export function ModelRoutesSettings({
         <div className="flex items-center gap-3 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5">
           <div>
             <div className="text-[12px] font-medium text-ds-ink">{t('modelRoutes.enableLocalApi')}</div>
-            <div className="mt-0.5 text-[10.5px] text-ds-faint">{t('modelRoutes.localOnlyNoAuth')}</div>
+            <div className="mt-0.5 text-[10.5px] text-ds-faint">Bearer key required; loopback only</div>
           </div>
           <Toggle
             checked={settings.localGateway.enabled}
-            onChange={(enabled) => onChange({
-              ...settings,
-              localGateway: { ...settings.localGateway, enabled }
-            })}
+            disabled={credentialPending}
+            onChange={(enabled) => { void gatewayCredential.setEnabled(enabled) }}
             ariaLabel={t('modelRoutes.enableLocalApi')}
           />
         </div>
         <div className="flex basis-full flex-wrap items-center gap-2 border-t border-ds-border-muted pt-3">
+          <span className={credential.configured ? 'text-[11px] font-medium text-emerald-700' : 'text-[11px] font-medium text-amber-700'}>
+            API key: {credential.configured ? 'configured' : 'not configured'}
+          </span>
+          <button type="button" disabled={credentialPending} onClick={() => void gatewayCredential.update('ensure')} className="rounded-full border border-ds-border px-2.5 py-1 text-[11px]">Create</button>
+          <button type="button" disabled={credentialPending || !credential.configured} onClick={() => void gatewayCredential.update('copy')} className="rounded-full border border-ds-border px-2.5 py-1 text-[11px]">Copy</button>
+          <button type="button" disabled={credentialPending} onClick={() => void gatewayCredential.update('rotate')} className="rounded-full border border-ds-border px-2.5 py-1 text-[11px]">Rotate</button>
+          <button type="button" disabled={credentialPending || !credential.configured} onClick={() => void gatewayCredential.update('revoke')} className="rounded-full border border-red-200 px-2.5 py-1 text-[11px] text-red-700">Revoke</button>
           <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
             saveStatus === 'error'
               ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-200'

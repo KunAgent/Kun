@@ -266,6 +266,9 @@ export class DelegationRuntime extends DelegationRuntimeRun {
         ? { pptWorkflow: childPptWorkflowSnapshot(input.pptWorkflowScope) }
         : {}),
       summary: undefined,
+      summaryTruncated: undefined,
+      resultRef: undefined,
+      resultUnavailableReason: undefined,
       evidence: undefined,
       error: undefined,
       activity: undefined,
@@ -315,6 +318,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       returnFormat: record.returnFormat,
       fastContext: record.fastContext === true,
       fastContextTasks: record.fastContextTasks,
+      queueTimeoutMs: undefined,
       workspace,
       security,
       onRunning: input.onRunning,

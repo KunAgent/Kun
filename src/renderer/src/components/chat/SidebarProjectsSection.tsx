@@ -128,6 +128,7 @@ import {
   type WorkspaceOrderDropTarget
 } from './sidebar-project-drag-actions'
 import { createSidebarProjectWorkspaceActions } from './sidebar-project-workspace-actions'
+import { useSidebarWorkspaceAutoLoad } from './sidebar-project-auto-load'
 import type { SidebarProjectExpansionStage } from './sidebar-project-expansion'
 import { SidebarProjectsContent, type SidebarThreadListStatus } from './SidebarProjectsContent'
 import { discoverSidebarWorktrees } from './sidebar-worktree-discovery'
@@ -390,6 +391,8 @@ export function SidebarProjectsSection({
     isSidebarWorkspaceCollapsed(sidebarCollapse, workspacePath)
   )
   const projectWorkspaceGroups = displayGroups.filter(([workspacePath]) => isSidebarProjectWorkspacePath(workspacePath))
+
+  useSidebarWorkspaceAutoLoad({ displayGroups, sidebarCollapse, showArchived, searchQuery, runtimeReady, threadListStatus, threadListCursorByWorkspace, onLoadMoreThreads })
 
   useEffect(() => {
     if (!threadContextMenu && !workspaceContextMenu && !folderContextMenu) return

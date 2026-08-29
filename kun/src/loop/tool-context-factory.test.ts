@@ -41,6 +41,7 @@ describe('createToolExecutionContext', () => {
       blockedSkillIds: ['blocked_skill'],
       runtimeDataDir: '/runtime',
       fastContext: true,
+      fastContextScopeId: 'parent_thread_1',
       fastContextTaskCount: 2,
       interactiveToolBridge: { awaitApproval, awaitUserInput }
     })
@@ -67,6 +68,7 @@ describe('createToolExecutionContext', () => {
       blockedToolNames: ['blocked_tool'],
       blockedSkillIds: ['blocked_skill'],
       fastContext: true,
+      fastContextScopeId: 'parent_thread_1',
       fastContextTaskCount: 2
     })
     expect(awaitApproval).toHaveBeenCalledWith(expect.objectContaining({

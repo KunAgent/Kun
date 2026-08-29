@@ -47,6 +47,7 @@ import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import type { BackgroundShellRuntime } from '../../services/background-shell-runtime.js'
 import type { ModelClient } from '../../ports/model-client.js'
 import type { ModelRoutePoolConfig } from '../../contracts/model-route-pool.js'
+import type { GatewayCredentialService } from '../../services/gateway-credential-service.js'
 import type { RoutePoolHealthStore } from '../../adapters/model/route-pool-model-client.js'
 import type { RoutePoolTestService } from '../../services/route-pool-test-service.js'
 import type { GraphRuntimeConfig, RolesConfig } from '../../config/kun-config.js'
@@ -94,7 +95,10 @@ import type { RuntimeMigrationImportService } from '../../services/runtime-migra
 import type { ArtifactStore } from '../../artifacts/artifact-store.js'
 import type { ModelConnectionRegistry } from '../../services/model-connection-registry.js'
 import type { ModelConnectionOAuthService } from '../../services/model-connection-oauth.js'
-import type { OfficialProviderAuthService } from '../../services/official-provider-cli.js'
+import type {
+  OfficialProviderAuthService,
+  OfficialProviderCliService
+} from '../../services/official-provider-cli.js'
 import type { ProviderQuotaService } from '../../services/provider-quota-service.js'
 import type { ToolCancellationService } from '../../services/tool-cancellation-service.js'
 import type { KnowledgeBaseService } from '../../knowledge/knowledge-base-service.js'
@@ -228,6 +232,7 @@ export type ServerRuntime = {
   modelConnections?: ModelConnectionRegistry
   modelConnectionOAuth?: ModelConnectionOAuthService
   officialProviderAuth?: OfficialProviderAuthService
+  officialProviderCli?: OfficialProviderCliService
   providerQuotaService?: Pick<ProviderQuotaService, 'list'>
   modelGateway?: {
     enabled(): boolean
@@ -235,6 +240,7 @@ export type ServerRuntime = {
     configuredPools(): ModelRoutePoolConfig[]
     health: RoutePoolHealthStore
     tests: RoutePoolTestService
+    credentials: GatewayCredentialService
   }
   defaultModel?: string
   /**

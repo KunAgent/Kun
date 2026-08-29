@@ -5,6 +5,7 @@ const { execFileSync } = require('node:child_process')
 const {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -35,9 +36,15 @@ const {
     TESSERACT_LSTM_CORE_FILES,
     BETTER_SQLITE_BUILD_PATHS,
     KUN_ROOT_HOISTED_DEPENDENCY_PATHS,
-    KUN_ROOT_HOISTED_VERSION_ANCHORS
+    KUN_ROOT_HOISTED_VERSION_ANCHORS,
+    validatePackedKunBinLinks,
+    validateRootHoistedDependencyClosure
   }
 } = require('./after-pack.cjs')
+const {
+  assertNoPackedKunBinOwnerCollisions,
+  KUN_ROOT_HOISTED_SHARED_JS_PACKAGES
+} = require('./after-pack-hoisted-dependencies.cjs')
 
 test('requires the shared provider catalog in the packaged Kun runtime', () => {
   assert.equal(
@@ -183,6 +190,42 @@ test('removes only regenerable or on-demand payload from packaged applications',
     writeFixture(join(modules, relativeManifest), JSON.stringify({ version: '1.0.0' }))
     writeFixture(join(kunModules, relativeManifest), JSON.stringify({ version: '1.0.0' }))
   }
+  const binPackageFixtures = [
+    {
+      name: 'escodegen',
+      bin: { escodegen: 'bin/escodegen.js', esgenerate: 'bin/esgenerate.js' }
+    },
+    { name: 'yaml', bin: 'bin.mjs' }
+  ]
+  const binRoot = join(kunModules, '.bin')
+  for (const packageFixture of binPackageFixtures) {
+    const packageRoot = join(kunModules, packageFixture.name)
+    const manifest = JSON.stringify({ ...packageFixture, version: '1.0.0' })
+    writeFixture(join(modules, packageFixture.name, 'package.json'), manifest)
+    writeFixture(join(packageRoot, 'package.json'), manifest)
+    const bins = typeof packageFixture.bin === 'string'
+      ? { [packageFixture.name]: packageFixture.bin }
+      : packageFixture.bin
+    for (const [binName, target] of Object.entries(bins)) {
+      writeFixture(join(packageRoot, target))
+      mkdirSync(binRoot, { recursive: true })
+      if (process.platform === 'win32') {
+        writeFixture(join(binRoot, binName), 'launcher')
+      } else {
+        symlinkSync(join('..', packageFixture.name, target), join(binRoot, binName))
+      }
+      writeFixture(join(binRoot, `${binName}.cmd`), 'launcher')
+      writeFixture(join(binRoot, `${binName}.ps1`), 'launcher')
+    }
+  }
+  writeFixture(join(kunModules, 'typescript', 'bin', 'tsc'))
+  if (process.platform === 'win32') {
+    writeFixture(join(binRoot, 'tsc'), 'launcher')
+  } else {
+    symlinkSync(join('..', 'typescript', 'bin', 'tsc'), join(binRoot, 'tsc'))
+  }
+  writeFixture(join(binRoot, 'tsc.cmd'), 'launcher')
+  writeFixture(join(binRoot, 'tsc.ps1'), 'launcher')
 
   prunePackedApplicationPayload(context)
   assert.doesNotThrow(() => validatePackedApplicationPayload(context))
@@ -200,11 +243,106 @@ test('removes only regenerable or on-demand payload from packaged applications',
     assert.equal(existsSync(join(modules, relativePath)), true)
     assert.equal(existsSync(join(kunModules, relativePath)), false)
   }
+  for (const binName of ['escodegen', 'esgenerate', 'yaml']) {
+    for (const suffix of ['', '.cmd', '.ps1']) {
+      assert.throws(
+        () => lstatSync(join(binRoot, `${binName}${suffix}`)),
+        { code: 'ENOENT' }
+      )
+    }
+  }
+  for (const suffix of ['', '.cmd', '.ps1']) {
+    assert.doesNotThrow(() => lstatSync(join(binRoot, `tsc${suffix}`)))
+  }
 
   writeFixture(join(claudePlatformRoot, 'claude'))
   assert.throws(
     () => validatePackedApplicationPayload(context),
     /on-demand Claude Code binary package/
+  )
+})
+
+test('rejects dangling packaged Kun binary launchers before signing', {
+  skip: process.platform === 'win32' && 'requires POSIX symbolic links'
+}, (t) => {
+  const { root } = payloadFixture(t)
+  const kunModules = join(root, 'kun', 'node_modules')
+  const binRoot = join(kunModules, '.bin')
+  mkdirSync(binRoot, { recursive: true })
+  symlinkSync(join('..', 'missing-package', 'bin', 'missing'), join(binRoot, 'missing'))
+
+  assert.throws(
+    () => validatePackedKunBinLinks(kunModules),
+    /Dangling packaged Kun binary launcher: missing/
+  )
+})
+
+test('rejects a hoisted binary name owned by a retained Kun package', (t) => {
+  const { root } = payloadFixture(t)
+  const kunModules = join(root, 'kun', 'node_modules')
+  const escodegenRoot = join(kunModules, 'escodegen')
+  writeFixture(
+    join(escodegenRoot, 'package.json'),
+    JSON.stringify({ name: 'escodegen', bin: { escodegen: 'bin/escodegen.js' } })
+  )
+  writeFixture(
+    join(kunModules, 'retained-cli', 'package.json'),
+    JSON.stringify({ name: 'retained-cli', bin: { escodegen: 'cli.js' } })
+  )
+
+  assert.throws(
+    () => assertNoPackedKunBinOwnerCollisions(kunModules, [escodegenRoot]),
+    /Kun binary launcher collision for escodegen: retained by retained-cli/
+  )
+})
+
+test('rejects hoisting when a shared dependency version diverges between root and Kun', (t) => {
+  const { context, root } = payloadFixture(t)
+  const modules = join(root, 'node_modules')
+  const kunModules = join(root, 'kun', 'node_modules')
+  for (const packageName of KUN_ROOT_HOISTED_VERSION_ANCHORS) {
+    const relativeManifest = join(...packageName.split('/'), 'package.json')
+    writeFixture(join(modules, relativeManifest), JSON.stringify({ version: '1.0.0' }))
+    writeFixture(join(kunModules, relativeManifest), JSON.stringify({ version: '1.0.0' }))
+  }
+  const diverged = join(modules, 'pdfjs-dist', 'package.json')
+  writeFileSync(diverged, JSON.stringify({ version: '9.9.9' }))
+
+  assert.throws(
+    () => prunePackedApplicationPayload(context),
+    /Cannot hoist pdfjs-dist: root=9\.9\.9, Kun=1\.0\.0/
+  )
+})
+
+test('requires every root-hoisted runtime dependency to exist outside the asar', (t) => {
+  const { root } = payloadFixture(t)
+  const modules = join(root, 'node_modules')
+  for (const packageName of KUN_ROOT_HOISTED_SHARED_JS_PACKAGES) {
+    const manifest = join(modules, ...packageName.split('/'), 'package.json')
+    writeFixture(manifest, JSON.stringify({ name: packageName, version: '1.0.0' }))
+  }
+  writeFixture(
+    join(modules, 'proxy-agent', 'package.json'),
+    JSON.stringify({
+      name: 'proxy-agent',
+      version: '8.0.2',
+      dependencies: { 'lru-cache': '^7.14.1' }
+    })
+  )
+  const lruManifest = join(
+    modules,
+    'proxy-agent',
+    'node_modules',
+    'lru-cache',
+    'package.json'
+  )
+  writeFixture(lruManifest, JSON.stringify({ name: 'lru-cache', version: '7.18.3' }))
+
+  assert.doesNotThrow(() => validateRootHoistedDependencyClosure(root))
+  rmSync(lruManifest)
+  assert.throws(
+    () => validateRootHoistedDependencyClosure(root),
+    /proxy-agent@8\.0\.2 -> lru-cache/
   )
 })
 

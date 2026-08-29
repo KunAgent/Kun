@@ -1,0 +1,24 @@
+{
+  "id": "diagram-design",
+  "name": "Diagram design",
+  "version": "2.6.0-kun.1",
+  "description": "Create branded flowcharts, architecture, sequence, data-flow, ER, timeline, swimlane, quantitative charts, and other diagrams as HTML with inline SVG, native editable canvas shapes, or standalone SVG using the project's DESIGN.md.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": ["/diagram", "/flowchart"],
+    "promptPatterns": ["diagram", "flowchart", "architecture diagram", "sequence diagram", "data flow diagram", "流程图", "架构图", "时序图", "数据流图", "白板图"],
+    "fileTypes": [".drawio", ".mmd", ".mermaid"]
+  },
+  "allowedTools": [],
+  "assets": [
+    "references/type-routing.md",
+    "references/semantic-patterns.md",
+    "references/connector-rules.md",
+    "references/output-spec.md",
+    "references/importing.md",
+    "assets/template.html",
+    "assets/icons-infrastructure.md",
+    "assets/icons-data-people.md"
+  ],
+  "priority": 20
+}

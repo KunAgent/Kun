@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createDesignCanvasTool,
+  createDesignCreateDiagramTool,
   createDesignCreateScreenTool,
   createDesignExportCanvasTool,
   createDesignSvgCreateTool,
@@ -9,6 +10,7 @@ import {
   createDesignValidateTool,
   createWorkRenameWhiteboardTool,
   DESIGN_CANVAS_TOOL_NAME,
+  DESIGN_CREATE_DIAGRAM_TOOL_NAME,
   DESIGN_CREATE_SCREEN_TOOL_NAME,
   DESIGN_EXPORT_CANVAS_TOOL_NAME,
   DESIGN_SVG_CREATE_TOOL_NAME,
@@ -99,6 +101,37 @@ describe('design_canvas tool', () => {
 })
 
 describe('dedicated design tools', () => {
+  it('creates an HTML-first diagram through the existing screen follow-up protocol', async () => {
+    const tool = createDesignCreateDiagramTool()
+    const designContext = { ...context(true), guiDesignMode: true }
+    expect(tool.name).toBe(DESIGN_CREATE_DIAGRAM_TOOL_NAME)
+    expect(tool.shouldAdvertise?.(designContext)).toBe(true)
+    expect(tool.shouldAdvertise?.(context(true))).toBe(false)
+
+    const result = await tool.execute({
+      name: 'Checkout flow',
+      brief: 'Show client, gateway, checkout service, queue, and database.',
+      diagramType: 'data-flow',
+      semanticPattern: 'fan-in queue',
+      sizePreset: 'doc-wide',
+      detailLevel: 'balanced',
+      audience: 'engineer'
+    }, designContext)
+    expect(result.output).toMatchObject({
+      ok: true,
+      tool: DESIGN_CREATE_DIAGRAM_TOOL_NAME,
+      action: 'create_diagram',
+      diagramType: 'data-flow',
+      ops: [{
+        op: 'add-screen',
+        name: 'Checkout flow',
+        devicePreset: 'desktop',
+        brief: expect.stringContaining('Diagram type: data-flow')
+      }]
+    })
+    expect(JSON.stringify(result.output)).toContain('root DESIGN.md snapshot')
+  })
+
   it('advertises a first-class whiteboard rename only on Work canvas turns', async () => {
     const tool = createWorkRenameWhiteboardTool()
     const workContext = { ...context(true), agentSurface: 'write' as const }

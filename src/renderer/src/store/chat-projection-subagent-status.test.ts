@@ -3,6 +3,20 @@ import type { ToolEventPayload } from '../agent/types'
 import { mergeToolProjectionEvents } from './chat-projection-reducer'
 
 describe('detached subagent tool projection', () => {
+  it('replaces hydrated queued child metadata with authoritative running state', () => {
+    const hydrated = childEvent('running', 'queued', false)
+    const running = childEvent('running', 'running', false)
+    running.updateOnly = true
+
+    const projected = mergeToolProjectionEvents(hydrated, running)
+
+    expect(projected.status).toBe('running')
+    expect(projected.meta?.child).toMatchObject({
+      childId: 'child_dynamic', childStatus: 'running', detached: false
+    })
+    expect(JSON.parse(projected.detail ?? '{}')).toMatchObject({ status: 'running' })
+  })
+
   it('keeps a dynamically detached child running when the wrapper succeeds', () => {
     const foreground = childEvent('running', 'running', false)
     const detached = childEvent('running', 'running', true)

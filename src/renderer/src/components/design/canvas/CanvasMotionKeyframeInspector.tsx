@@ -61,7 +61,7 @@ export function CanvasMotionKeyframeInspector({
       {keyframe ? (
         <div className="mt-2 space-y-1.5">
           <label className="grid grid-cols-[42px_1fr] items-center gap-1 text-[9.5px] text-ds-faint">
-            <span>Time</span>
+            <span>{t('motionTime')}</span>
             <input
               key={`${keyframe.id}:time:${keyframe.timeMs}`}
               type="number"
@@ -72,7 +72,7 @@ export function CanvasMotionKeyframeInspector({
             />
           </label>
           <label className="grid grid-cols-[42px_1fr] items-center gap-1 text-[9.5px] text-ds-faint">
-            <span>Value</span>
+            <span>{t('motionValue')}</span>
             <input
               key={`${keyframe.id}:value:${keyframe.value}`}
               type="number"
@@ -83,7 +83,7 @@ export function CanvasMotionKeyframeInspector({
             />
           </label>
           <label className="grid grid-cols-[42px_1fr] items-center gap-1 text-[9.5px] text-ds-faint">
-            <span>Ease</span>
+            <span>{t('motionEase')}</span>
             <select
               value={keyframe.easing.type}
               onChange={(event) => onUpdateKeyframe({ easing: easingFromType(event.target.value) })}
@@ -99,7 +99,7 @@ export function CanvasMotionKeyframeInspector({
             </select>
           </label>
           {easing?.type === 'cubic-bezier' ? (
-            <div className="grid grid-cols-4 gap-1" aria-label="Cubic bezier controls">
+            <div className="grid grid-cols-4 gap-1" aria-label={t('motionBezierControls')}>
               {(['x1', 'y1', 'x2', 'y2'] as const).map((field) => (
                 <label key={field} className="min-w-0 text-[8.5px] text-ds-faint">
                   {field}
@@ -118,7 +118,7 @@ export function CanvasMotionKeyframeInspector({
             </div>
           ) : null}
           {easing?.type === 'spring' ? (
-            <div className="grid grid-cols-4 gap-1" aria-label="Spring controls">
+            <div className="grid grid-cols-4 gap-1" aria-label={t('motionSpringControls')}>
               {([
                 ['mass', 'M'],
                 ['stiffness', 'K'],

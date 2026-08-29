@@ -4,7 +4,18 @@ import { installIssue781DocumentUsability } from './lib/issue-781-document-usabi
 import { useChatStore } from './store/chat-store'
 import { KUN_MODEL_CONNECTIONS_PATH } from '@shared/kun-endpoints'
 
-const AppShell = lazy(() => import('./AppShell'))
+type AppShellModule = typeof import('./AppShell')
+let preparedAppShell: AppShellModule['default'] | null = null
+const loadAppShellModule = (): Promise<AppShellModule> => import('./AppShell').then((module) => {
+  preparedAppShell = module.default
+  return module
+})
+const LazyAppShell = lazy(loadAppShellModule)
+
+export async function prepareWorkbenchApp(): Promise<void> {
+  const appShell = await loadAppShellModule()
+  await appShell.prepareInitialWorkbench()
+}
 
 function DocumentUsabilityLifecycle(): null {
   useEffect(() => installIssue781DocumentUsability(), [])
@@ -102,6 +113,7 @@ function StartupShell(): React.ReactElement {
 }
 
 export default function App(): React.ReactElement {
+  const AppShell = preparedAppShell ?? LazyAppShell
   return (
     <AppErrorBoundary>
       <DocumentUsabilityLifecycle />

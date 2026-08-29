@@ -8,6 +8,10 @@ import type {
 } from '@shared/desktop-startup-state'
 import { StartupGate, STARTUP_STATE_TIMEOUT_MS } from './StartupGate'
 
+const appMock = vi.hoisted(() => ({
+  prepareWorkbenchApp: vi.fn<() => Promise<void>>(async () => undefined)
+}))
+
 vi.mock('./components/StorageRelocationBootView', () => ({
   StorageRelocationBootView: () => createElement('div', { 'data-testid': 'storage-relocation-view' })
 }))
@@ -15,7 +19,8 @@ vi.mock('./components/RuntimeMigrationRecoveryView', () => ({
   RuntimeMigrationRecoveryView: () => createElement('div', { 'data-testid': 'runtime-recovery-view' })
 }))
 vi.mock('./App', () => ({
-  default: () => createElement('div', { 'data-testid': 'workbench-app' })
+  default: () => createElement('div', { 'data-testid': 'workbench-app' }),
+  prepareWorkbenchApp: appMock.prepareWorkbenchApp
 }))
 vi.mock('./lib/shared-business-storage', () => ({
   installSharedBusinessStorage: vi.fn(async () => undefined)
@@ -71,6 +76,7 @@ describe('StartupGate', () => {
   let root: Root
 
   beforeEach(() => {
+    appMock.prepareWorkbenchApp.mockReset().mockResolvedValue(undefined)
     setReactActEnvironment(true)
     container = document.createElement('div')
     document.body.append(container)
@@ -204,8 +210,14 @@ describe('StartupGate', () => {
     const api = installStartupApi('bootstrapping')
     renderGate({})
     await act(async () => undefined)
-    expect(api.onState).toHaveBeenCalled()
     expect(container.textContent).toContain('Preparing Kun desktop...')
+    expect(container.textContent).toContain('Kun and Chick are preparing your workspace.')
+    const status = container.querySelector('[role="status"]')
+    expect(status?.getAttribute('aria-live')).toBe('polite')
+    expect(status?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector('[data-testid="kun-startup-companions"]')).not.toBeNull()
+    const progress = container.querySelector('[role="progressbar"]')
+    expect(progress?.hasAttribute('aria-valuenow')).toBe(false)
     expect(container.querySelector('[data-testid="workbench-app"]')).toBeNull()
   })
 
@@ -233,6 +245,7 @@ describe('StartupGate', () => {
     renderGate({})
     await act(async () => undefined)
     expect(installSharedBusinessStorage).toHaveBeenCalledTimes(1)
+    expect(appMock.prepareWorkbenchApp).toHaveBeenCalledTimes(1)
   })
 
   it('shows an error view with retry when shared storage install fails', async () => {
@@ -247,9 +260,9 @@ describe('StartupGate', () => {
     expect(container.querySelector('button')?.textContent).toBe('Retry')
   })
 
-  it('shows an error view when the App chunk fails to load', async () => {
+  it('shows an error view when initial workbench preparation fails', async () => {
     const installSharedBusinessStorage = await mockedInstallSharedBusinessStorage()
-    installSharedBusinessStorage.mockRejectedValueOnce(new Error('App chunk load failed'))
+    appMock.prepareWorkbenchApp.mockRejectedValueOnce(new Error('App chunk load failed'))
     const api = installStartupApi('bootstrapping')
     renderGate({})
     await flushAsync()
@@ -299,19 +312,24 @@ describe('StartupGate', () => {
     expect(container.textContent).toContain('Failed to start Kun workbench')
   })
 
-  it('keeps the shell visible while the App chunk is still loading', async () => {
+  it('keeps the branded shell visible until initial workbench preparation completes', async () => {
+    const preparation = deferredValue<void>()
+    appMock.prepareWorkbenchApp.mockReturnValueOnce(preparation.promise)
     const api = installStartupApi('bootstrapping')
     renderGate({})
     await act(async () => undefined)
     act(() => {
       api.listeners.forEach((listener) => listener(phasePayload('ready')))
     })
-    // Before the async bootstrap (storage install + App import) resolves, the
-    // shell must stay mounted showing the ready label instead of a blank page.
-    expect(container.textContent).toContain('Kun is ready.')
+    // Desktop startup is ready, but the shell remains until store boot and the
+    // initial route chunk are both prepared.
+    expect(container.textContent).toContain('Opening your workspace...')
+    expect(container.querySelector('[data-testid="kun-startup-companions"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="workbench-app"]')).toBeNull()
-    await act(async () => undefined)
+    await act(async () => preparation.resolve())
+    await flushAsync()
     expect(container.querySelector('[data-testid="workbench-app"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('Loading Kun...')
   })
 
   it('renders only the storage relocation view and never subscribes to startup state', async () => {
@@ -333,7 +351,7 @@ describe('StartupGate', () => {
     expect(api.onState).not.toHaveBeenCalled()
   })
 
-  it('shows the recovery_required styling on the shell', async () => {
+  it('announces recovery_required as a terminal state with a reload action', async () => {
     const api = installStartupApi('bootstrapping')
     renderGate({})
     await act(async () => undefined)
@@ -341,6 +359,12 @@ describe('StartupGate', () => {
       api.listeners.forEach((listener) => listener(phasePayload('recovery_required')))
     })
     expect(container.textContent).toContain('Kun startup requires recovery.')
-    expect(container.querySelector('.bg-red-500')).not.toBeNull()
+    expect(container.querySelector('.kun-startup')?.getAttribute('data-recovery')).toBe('true')
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert).not.toBeNull()
+    expect(alert?.getAttribute('aria-busy')).toBeNull()
+    expect(container.querySelector('[role="progressbar"]')).toBeNull()
+    expect([...container.querySelectorAll('button')]
+      .some((button) => button.textContent === 'Reload Kun')).toBe(true)
   })
 })

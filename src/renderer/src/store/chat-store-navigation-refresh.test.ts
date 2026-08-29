@@ -227,13 +227,11 @@ describe('chat-store navigation workspace selection', () => {
     })
   })
 
-  it('ignores an older refresh after a newer refresh committed', async () => {
-    const oldList = deferred<NormalizedThread[]>()
-    const newList = deferred<NormalizedThread[]>()
+  it('coalesces concurrent refreshes into one request', async () => {
+    const firstList = deferred<NormalizedThread[]>()
     const provider = {
       listThreads: vi.fn()
-        .mockImplementationOnce(() => oldList.promise)
-        .mockImplementationOnce(() => newList.promise),
+        .mockImplementationOnce(() => firstList.promise),
       getThreadDetail: vi.fn(async () => ({ blocks: [{ kind: 'user', id: 'u', text: 'work' }] })),
       getThreadState: vi.fn(async () => ({
         status: 'idle',
@@ -255,14 +253,14 @@ describe('chat-store navigation workspace selection', () => {
     harness.state.threads = []
     harness.state.watchTurnCompletion = {}
 
-    const olderRefresh = harness.actions.refreshThreads()
-    const newerRefresh = harness.actions.refreshThreads()
-    newList.resolve([thread({ id: 'thr_new', workspace: '/Users/zxy/project', status: 'idle' })])
-    await newerRefresh
-    oldList.resolve([thread({ id: 'thr_old', workspace: '/Users/zxy/project', status: 'running' })])
-    await olderRefresh
+    const firstRefresh = harness.actions.refreshThreads()
+    const coalescedRefresh = harness.actions.refreshThreads()
+    expect(provider.listThreads).toHaveBeenCalledTimes(1)
+    firstList.resolve([thread({ id: 'thr_old', workspace: '/Users/zxy/project', status: 'running' })])
+    await Promise.all([firstRefresh, coalescedRefresh])
 
-    expect(harness.state.threads.map((item) => item.id)).toEqual(['thr_new'])
+    expect(provider.listThreads).toHaveBeenCalledTimes(1)
+    expect(harness.state.threads.map((item) => item.id)).toEqual(['thr_old'])
   })
 
   it('keeps a newer running turn when a stale terminal state resolves after it started', async () => {

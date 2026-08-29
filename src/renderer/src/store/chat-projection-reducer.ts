@@ -7,6 +7,7 @@ import type {
   ToolEventPayload
 } from '../agent/types'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
+import { parseRendererChartSpec } from '../agent/chart-spec-adapter'
 import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
 import type { ChatState } from './chat-store-types'
 import {
@@ -133,6 +134,10 @@ export function reduceChatProjection(
         busyUnconfirmed: false,
         currentTurnId: event.turnId ?? state.currentTurnId,
         currentTurnUserId,
+        currentTurnStartedAtMs:
+          backgroundNotice || (event.turnId != null && event.turnId === state.currentTurnId)
+            ? state.currentTurnStartedAtMs
+            : startedAt,
         turnStartedAtByUserId: backgroundNotice
           ? state.turnStartedAtByUserId
           : {
@@ -339,6 +344,20 @@ export function reduceChatProjection(
           ? { busy: true, busyUnconfirmed: false }
           : {}
       const childId = toolEventChildId(event)
+      const chartSpec = parseRendererChartSpec(event.meta?.chartSpec)
+      const chartIndex = state.blocks.findIndex((block) => block.id === event.itemId)
+      if (chartSpec) {
+        const chartBlock: ChatBlock = {
+          kind: 'chart', id: event.itemId, turnId: event.turnId,
+          createdAt: event.createdAt ?? new Date(context.now).toISOString(), spec: chartSpec
+        }
+        if (chartIndex >= 0) {
+          const blocks = [...state.blocks]
+          blocks[chartIndex] = chartBlock
+          return { ...base, blocks, error: context.clearRecoveringError(state.error) }
+        }
+        return { ...base, blocks: upsertProjectedTimelineBlock(state, chartBlock), error: context.clearRecoveringError(state.error) }
+      }
       const index = state.blocks.findIndex((block) =>
         block.kind === 'tool' && (
           block.id === event.itemId || Boolean(childId && toolBlockChildId(block) === childId)

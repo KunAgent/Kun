@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createWriteStream, existsSync } from 'node:fs'
+import { constants, createWriteStream, existsSync } from 'node:fs'
 import {
   chmod,
   copyFile,
+  lstat,
   mkdir,
   mkdtemp,
   rm,
@@ -15,7 +16,11 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import * as yauzl from 'yauzl'
-import { getProviderCatalogPreset } from '@kun/provider-catalog'
+import {
+  getProviderCatalogPreset,
+  parseAntigravityModelCatalog,
+  type AntigravityModelCatalog
+} from '@kun/provider-catalog'
 import {
   ModelConnectionCliAuthRequestSchema,
   type ModelConnectionCliAuthRequest,
@@ -230,11 +235,137 @@ export async function verifyOfficialProviderLogin(options: {
     60_000,
     options.spawnFn
   )
-  const models = parseModelLines(output.stdout)
+  const catalog = parseAntigravityModelCatalog(output.stdout)
+  const models: string[] = catalog.models.map((model) => model.id)
   if (models.length === 0) {
     throw new Error(output.stderr.trim() || 'Antigravity CLI login could not be verified')
   }
   return models
+}
+
+export type OfficialProviderCliStatus = {
+  installed: boolean
+  version: string
+  directory: string
+  path?: string
+  download: OfficialProviderCliDownloadState | null
+}
+
+export type OfficialProviderCliDownloadState = {
+  status: 'downloading' | 'done' | 'error'
+  receivedBytes: number
+  totalBytes: number
+  message?: string
+}
+
+export class OfficialProviderCliService {
+  private download: OfficialProviderCliDownloadState | null = null
+  private installPromise: Promise<OfficialProviderCliDownloadState> | undefined
+
+  constructor(private readonly options: {
+    dataDir: string
+    fetchImpl?: typeof fetch
+    legacyBinaryPaths?: readonly string[]
+  }) {}
+
+  async status(): Promise<OfficialProviderCliStatus> {
+    await this.importLegacyInstall()
+    const command = resolveAntigravityCliCommand(this.options.dataDir)
+    return {
+      installed: Boolean(command),
+      version: ANTIGRAVITY_CLI_VERSION,
+      directory: dirname(antigravityCliBinaryPath(this.options.dataDir)),
+      ...(command ? { path: command.command } : {}),
+      download: this.download
+    }
+  }
+
+  install(): Promise<OfficialProviderCliDownloadState> {
+    if (this.installPromise) return this.installPromise
+    this.download = { status: 'downloading', receivedBytes: 0, totalBytes: 0 }
+    this.installPromise = installAntigravityCli({
+      dataDir: this.options.dataDir,
+      ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
+      onProgress: (receivedBytes, totalBytes) => {
+        this.download = { status: 'downloading', receivedBytes, totalBytes }
+      }
+    }).then(() => {
+      const previous = this.download
+      return this.download = {
+        status: 'done',
+        receivedBytes: previous?.receivedBytes ?? 0,
+        totalBytes: previous?.totalBytes ?? 0
+      }
+    }, (error: unknown) => {
+      const previous = this.download
+      return this.download = {
+        status: 'error',
+        receivedBytes: previous?.receivedBytes ?? 0,
+        totalBytes: previous?.totalBytes ?? 0,
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }).finally(() => {
+      this.installPromise = undefined
+    })
+    return this.installPromise
+  }
+
+  async models(spawnFn?: typeof spawn): Promise<AntigravityModelCatalog> {
+    await this.importLegacyInstall()
+    const command = resolveAntigravityCliCommand(this.options.dataDir)
+    if (!command) throw new Error('Antigravity CLI is not installed')
+    const output = await captureProcess(command.command, [...command.args, 'models'], 60_000, spawnFn)
+    const catalog = parseAntigravityModelCatalog(output.stdout)
+    if (catalog.models.length === 0) {
+      throw new Error(output.stderr.trim() || 'Antigravity CLI returned no subscription models')
+    }
+    return catalog
+  }
+
+  private async importLegacyInstall(): Promise<void> {
+    const destination = antigravityCliBinaryPath(this.options.dataDir)
+    if (existsSync(destination)) return
+    for (const source of this.options.legacyBinaryPaths ?? legacyAntigravityBinaryPaths()) {
+      if (!await trustedLegacyBinary(source)) continue
+      try {
+        await mkdir(dirname(destination), { recursive: true, mode: 0o700 })
+        await copyFile(source, destination, constants.COPYFILE_EXCL)
+        if (process.platform !== 'win32') await chmod(destination, 0o755)
+        return
+      } catch {
+        if (existsSync(destination)) return
+      }
+    }
+  }
+}
+
+function legacyAntigravityBinaryPaths(): string[] {
+  const binary = antigravityCliBinaryName()
+  const home = homedir()
+  return process.platform === 'darwin'
+    ? [join(home, 'Library', 'Application Support', 'Kun', 'antigravity-cli', binary)]
+    : process.platform === 'win32'
+      ? [join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Kun', 'antigravity-cli', binary)]
+      : [join(process.env.XDG_CONFIG_HOME ?? join(home, '.config'), 'Kun', 'antigravity-cli', binary)]
+}
+
+async function trustedLegacyBinary(path: string): Promise<boolean> {
+  try {
+    const parent = await lstat(dirname(path))
+    const file = await lstat(path)
+    const owned = typeof process.getuid !== 'function'
+      || (parent.uid === process.getuid() && file.uid === process.getuid())
+    return owned
+      && parent.isDirectory()
+      && !parent.isSymbolicLink()
+      && file.isFile()
+      && !file.isSymbolicLink()
+      && file.nlink === 1
+      && file.size > 0
+      && file.size <= 100 * 1024 * 1024
+  } catch {
+    return false
+  }
 }
 
 export class OfficialProviderAuthService {
@@ -413,11 +544,4 @@ function captureProcess(
       code === 0 ? undefined : new Error(stderr.trim() || `${command} exited with code ${code ?? 'unknown'}`)
     ))
   })
-}
-
-function parseModelLines(stdout: string): string[] {
-  const pattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/iu
-  return [...new Set(stdout.split(/\r?\n/u)
-    .map((line) => line.trim().replace(/-(?:low|medium|high)$/iu, ''))
-    .filter((line) => line.length <= 128 && pattern.test(line)))]
 }

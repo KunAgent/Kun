@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { MousePointer2, Pause, Play, RotateCcw } from 'lucide-react'
+import i18n from '../../../i18n'
 import {
   embeddedArtifactOf,
   type CanvasDocument,
@@ -398,7 +399,7 @@ function SvgArtifactFrame({
               <button
                 type="button"
                 className="grid h-6 w-6 place-items-center rounded hover:bg-slate-100 dark:hover:bg-white/10 dark:hover:text-white"
-                title="Restart SVG animation"
+                title={i18n.t('svgRestartAnimation')}
                 onClick={() => {
                   seek(0)
                   setPlaying(true)
@@ -413,7 +414,7 @@ function SvgArtifactFrame({
                 step={10}
                 value={loopsIndefinitely ? currentMs % durationMs : Math.min(currentMs, durationMs)}
                 className="h-1 w-28 accent-[#6557ff]"
-                aria-label="SVG animation timeline"
+                aria-label={i18n.t('svgAnimationTimeline')}
                 onChange={(event) => {
                   setPlaying(false)
                   seek(Number(event.target.value))
@@ -422,7 +423,7 @@ function SvgArtifactFrame({
               <button
                 type="button"
                 className="h-6 min-w-9 rounded px-1 text-[10px] font-semibold hover:bg-slate-100 dark:hover:bg-white/10 dark:hover:text-white"
-                title="Change playback speed"
+                title={i18n.t('svgPlaybackSpeed')}
                 onClick={() => setRate((value) => value === 0.5 ? 1 : value === 1 ? 2 : 0.5)}
               >
                 {rate}x
@@ -440,13 +441,13 @@ function SvgArtifactFrame({
                   : 'linear-gradient(135deg,#e5e7eb 25%,#fff 25% 50%,#e5e7eb 50% 75%,#fff 75%)',
               backgroundSize: background === 'transparent' ? '8px 8px' : undefined
             }}
-            title="Change SVG preview background"
+            title={i18n.t('svgPreviewBackground')}
             onClick={() => setBackground((value) => nextBackground(value))}
           />
           <button
             type="button"
             className={`grid h-6 w-6 shrink-0 place-items-center rounded ${interactive ? 'bg-violet-100 text-violet-700 dark:bg-violet-400/20 dark:text-violet-200' : 'hover:bg-slate-100 dark:hover:bg-white/10 dark:hover:text-white'}`}
-            title="Toggle SVG pointer interaction"
+            title={i18n.t('svgPointerInteraction')}
             onClick={() => setInteractive((value) => !value)}
           >
             <MousePointer2 className="h-3.5 w-3.5" />

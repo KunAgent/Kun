@@ -88,6 +88,7 @@ export const ChildRunLauncher = z.preprocess(
     'fast_context',
     'ppt_agent',
     'component_design',
+    'diagram_design',
     'graph'
   ])
 )

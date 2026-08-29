@@ -1,4 +1,5 @@
 import { Minus, Plus, RotateCcw } from 'lucide-react'
+import i18n from '../i18n'
 import type { ReactElement, ReactNode } from 'react'
 import type { WorkspaceOfficePreviewSuccess } from '@shared/office-document'
 
@@ -46,7 +47,7 @@ export function WorkspaceOfficePreviewToolbar({
       </span>
       {children}
       {loading ? (
-        <span data-office-preview-state="refreshing">Agent is updating this preview…</span>
+        <span data-office-preview-state="refreshing">{i18n.t('officePreviewUpdating')}</span>
       ) : null}
       {refreshError || viewerError ? (
         <span className="text-red-700 dark:text-red-300">{viewerError || refreshError}</span>
@@ -54,7 +55,7 @@ export function WorkspaceOfficePreviewToolbar({
       <div className="ml-auto flex items-center gap-1">
         <button
           type="button"
-          aria-label="Zoom out"
+          aria-label={i18n.t('officeZoomOut')}
           className="rounded p-1 hover:bg-ds-hover disabled:opacity-40"
           disabled={zoom <= minZoom}
           onClick={() => onZoomChange(nextOfficePreviewZoom(zoom, -OFFICE_PREVIEW_ZOOM_STEP, minZoom))}
@@ -63,7 +64,7 @@ export function WorkspaceOfficePreviewToolbar({
         </button>
         <button
           type="button"
-          aria-label="Reset zoom"
+          aria-label={i18n.t('officeResetZoom')}
           className="min-w-10 rounded px-1 py-0.5 hover:bg-ds-hover"
           onClick={() => onResetZoom ? onResetZoom() : onZoomChange(1)}
         >
@@ -71,14 +72,14 @@ export function WorkspaceOfficePreviewToolbar({
         </button>
         <button
           type="button"
-          aria-label="Zoom in"
+          aria-label={i18n.t('officeZoomIn')}
           className="rounded p-1 hover:bg-ds-hover disabled:opacity-40"
           disabled={zoom >= OFFICE_PREVIEW_MAX_ZOOM}
           onClick={() => onZoomChange(nextOfficePreviewZoom(zoom, OFFICE_PREVIEW_ZOOM_STEP, minZoom))}
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
-        <RotateCcw className="ml-1 h-3.5 w-3.5 text-ds-faint" aria-label="Read-only preview" />
+        <RotateCcw className="ml-1 h-3.5 w-3.5 text-ds-faint" aria-label={i18n.t('officeReadOnly')} />
       </div>
     </div>
   )

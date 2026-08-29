@@ -27,6 +27,13 @@ const tools: CursorBridgeTool[] = [{
   providerId: 'extension:render',
   providerKind: 'extension'
 }, {
+  name: 'render_chart',
+  description: 'Render a governed chart',
+  toolKind: 'tool_call',
+  inputSchema: { type: 'object' },
+  providerId: 'chart',
+  providerKind: 'gui'
+}, {
   name: 'read',
   description: 'Overlaps Cursor built-in read',
   toolKind: 'tool_call',
@@ -127,6 +134,7 @@ describe('Cursor SDK Kun custom-tool bridge', () => {
     ])).toEqual([
       ['mcp_call_tool', 'tool_call', 'mcp:facade', 'mcp'],
       ['extension_render', 'tool_call', 'extension:render', 'extension'],
+      ['render_chart', 'tool_call', 'chart', 'gui'],
       ['  padded_tool  ', 'command_execution', 'builtin', 'built-in']
     ])
   })
@@ -151,6 +159,7 @@ describe('Cursor SDK Kun custom-tool bridge', () => {
     }
     expect(customTools.mcp_call_tool).toBeDefined()
     expect(customTools.extension_render).toBeDefined()
+    expect(customTools.render_chart).toBeDefined()
   })
 
   test('maps Cursor callbacks to Kun execution and preserves call identity and provenance', async () => {

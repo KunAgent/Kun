@@ -225,8 +225,8 @@
   "uninstallConfirmButton": "确认卸载",
   "uninstallConfirmCancel": "取消",
   "uninstallRunning": "正在卸载…Kun 即将关闭。",
-  "labConversationVisualizationTitle": "会话可视化",
-  "labConversationVisualizationDescription": "用于流程、分组说明和重要约束的实验性结构化可视化。仅当空间结构比纯文本更清晰时，Agent 才会使用。",
+  "labConversationVisualizationTitle": "会话可视化与图表",
+  "labConversationVisualizationDescription": "面向流程说明和数据分析的实验性受控可视化，支持趋势、排行、对比、占比、指标和表格。Agent 只提交经过校验的数据意图，Kun 统一负责安全渲染。",
   "labConversationVisualizationEnabled": "允许 Agent 展示可视化",
-  "labConversationVisualizationEnabledDesc": "开启后，后续桌面会话请求会获得 show_visualization 工具。关闭会移除工具，但保留历史会话中已有的可视化。"
+  "labConversationVisualizationEnabledDesc": "开启后，后续桌面会话请求会获得 show_visualization、show_diagram 和 render_chart 工具。关闭会移除这些工具，但保留历史会话中已有的可视化。"
 }

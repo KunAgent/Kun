@@ -47,7 +47,8 @@ const electronMock = vi.hoisted(() => ({
   showItemInFolder: vi.fn(),
   appLocale: 'en-US',
   userDataPath: '/tmp/kun-user-data',
-  setBadgeCount: vi.fn(() => true)
+  setBadgeCount: vi.fn(() => true),
+  writeText: vi.fn()
 }))
 const uiPluginMocks = vi.hoisted(() => ({
   ensureBundledUiPlugins: vi.fn(async () => undefined),
@@ -85,6 +86,7 @@ vi.mock('electron', () => ({
     setBadgeCount: electronMock.setBadgeCount
   },
   dialog: { showMessageBox: electronMock.showMessageBox },
+  clipboard: { writeText: electronMock.writeText },
   shell: {
     openPath: electronMock.openPath,
     showItemInFolder: electronMock.showItemInFolder
@@ -324,6 +326,7 @@ export function resetAppIpcHandlerTestState(): void {
     electronMock.openPath.mockClear()
     electronMock.showItemInFolder.mockClear()
     electronMock.setBadgeCount.mockClear()
+    electronMock.writeText.mockClear()
     uiPluginMocks.ensureBundledUiPlugins.mockClear()
     uiPluginMocks.installUiPluginFromDirectory.mockReset()
     uiPluginMocks.listUiPlugins.mockReset()

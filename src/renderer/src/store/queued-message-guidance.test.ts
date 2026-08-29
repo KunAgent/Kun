@@ -44,17 +44,46 @@ describe('canGuideQueuedMessage', () => {
     })).toBe(true)
   })
 
-  it('keeps a queued plan message with its own GUI plan context out of text-only guidance', () => {
-    expect(canGuideQueuedMessage({
+  it('allows a GUI plan image payload only for a running Plan turn', () => {
+    const guiPlan = {
+      operation: 'refine' as const,
+      workspaceRoot: '/workspace',
+      relativePath: '.kunsdd/plan/auth.md',
+      planId: '/workspace:.kunsdd/plan/auth.md'
+    }
+    const message = {
       id: 'q-plan-context',
-      text: 'Refine the saved plan',
+      text: 'Use this image in the saved plan',
+      displayText: 'Use this image in the saved plan',
       mode: 'plan',
-      guiPlan: {
-        operation: 'refine',
-        workspaceRoot: '/workspace',
-        relativePath: '.kunsdd/plan/auth.md',
-        planId: '/workspace:.kunsdd/plan/auth.md'
-      }
+      guiPlan,
+      attachmentIds: ['att_image'],
+      attachments: [{ id: 'att_image', kind: 'image' as const }]
+    }
+
+    expect(queuedMessageGuidancePayload(message)).toEqual({
+      text: 'Use this image in the saved plan',
+      displayText: 'Use this image in the saved plan',
+      attachmentIds: ['att_image']
+    })
+    expect(queuedMessageMatchesRunningTurn(message, {
+      agentSurface: 'code', mode: 'plan'
+    })).toBe(true)
+    expect(queuedMessageMatchesRunningTurn(message, {
+      agentSurface: 'code', mode: 'agent'
+    })).toBe(false)
+    expect(queuedMessageMatchesRunningTurn(message, {
+      agentSurface: 'code'
+    })).toBe(false)
+    expect(queuedMessageMatchesRunningTurn({
+      id: 'q-agent', text: 'Implement after planning', mode: 'agent'
+    }, {
+      agentSurface: 'code', mode: 'plan'
+    })).toBe(false)
+    expect(queuedMessageMatchesRunningTurn({
+      id: 'q-legacy', text: 'Unknown queued mode'
+    }, {
+      agentSurface: 'code', mode: 'plan'
     })).toBe(false)
   })
 

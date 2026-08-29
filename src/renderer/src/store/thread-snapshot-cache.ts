@@ -43,6 +43,7 @@ export type ThreadSnapshot = {
   currentTurnId: string | null
   currentTurnOrchestration: 'direct' | 'graph' | null
   currentTurnUserId: string | null
+  currentTurnStartedAtMs: number | null
   turnStartedAtByUserId: Record<string, number>
   turnDurationByUserId: Record<string, number>
   turnReasoningFirstAtByUserId: Record<string, number>
@@ -54,6 +55,89 @@ export type ThreadSnapshot = {
   queuedMessages: QueuedUserMessage[]
   payloadBytes: number
 } & LiveProjectionState
+
+export type ThreadTurnTimingSnapshot = Pick<
+  ThreadSnapshot,
+  | 'currentTurnId'
+  | 'currentTurnOrchestration'
+  | 'currentTurnUserId'
+  | 'currentTurnStartedAtMs'
+  | 'turnStartedAtByUserId'
+  | 'turnDurationByUserId'
+  | 'turnReasoningFirstAtByUserId'
+  | 'turnReasoningLastAtByUserId'
+>
+
+/** Turn-timing fields restored verbatim when a parked snapshot is reselected. */
+export function turnTimingSnapshotPatch(snapshot: ThreadTurnTimingSnapshot): ThreadTurnTimingSnapshot {
+  const {
+    currentTurnId,
+    currentTurnOrchestration,
+    currentTurnUserId,
+    currentTurnStartedAtMs,
+    turnStartedAtByUserId,
+    turnDurationByUserId,
+    turnReasoningFirstAtByUserId,
+    turnReasoningLastAtByUserId
+  } = snapshot
+  return {
+    currentTurnId,
+    currentTurnOrchestration,
+    currentTurnUserId,
+    currentTurnStartedAtMs,
+    turnStartedAtByUserId,
+    turnDurationByUserId,
+    turnReasoningFirstAtByUserId,
+    turnReasoningLastAtByUserId
+  }
+}
+
+/**
+ * Turn-timing patch for a freshly hydrated thread detail: the persisted turn
+ * record is authoritative, so live per-user starts reset and the recovered
+ * running turn's start time anchors elapsed-time displays.
+ */
+export function hydratedTurnTimingPatch(input: {
+  busy: boolean
+  latestTurnId?: string
+  latestTurnOrchestration?: 'direct' | 'graph'
+  currentTurnUserId: string | null
+  latestTurnStartedAtMs?: number
+  turnDurationByUserId: Record<string, number>
+}): ThreadTurnTimingSnapshot {
+  return {
+    currentTurnId: input.busy ? input.latestTurnId ?? null : null,
+    currentTurnOrchestration: input.busy ? input.latestTurnOrchestration ?? 'direct' : null,
+    currentTurnUserId: input.currentTurnUserId,
+    currentTurnStartedAtMs: input.busy ? input.latestTurnStartedAtMs ?? null : null,
+    turnStartedAtByUserId: {},
+    turnDurationByUserId: input.turnDurationByUserId,
+    turnReasoningFirstAtByUserId: {},
+    turnReasoningLastAtByUserId: {}
+  }
+}
+
+/**
+ * Turn-timing patch for a cleared active-turn projection: ids and recovered
+ * anchors reset, while previously recorded per-user timing maps are kept
+ * only when the caller keeps existing blocks.
+ */
+export function clearedTurnTimingPatch(input: {
+  keepExistingBlocks: boolean
+  previous: ThreadTurnTimingSnapshot
+}): ThreadTurnTimingSnapshot {
+  const keep = input.keepExistingBlocks
+  return {
+    currentTurnId: null,
+    currentTurnOrchestration: null,
+    currentTurnUserId: null,
+    currentTurnStartedAtMs: null,
+    turnStartedAtByUserId: keep ? input.previous.turnStartedAtByUserId : {},
+    turnDurationByUserId: keep ? input.previous.turnDurationByUserId : {},
+    turnReasoningFirstAtByUserId: keep ? input.previous.turnReasoningFirstAtByUserId : {},
+    turnReasoningLastAtByUserId: keep ? input.previous.turnReasoningLastAtByUserId : {}
+  }
+}
 
 const snapshots = new Map<string, ThreadSnapshot>()
 let totalBytes = 0
@@ -245,6 +329,7 @@ export function snapshotThreadProjection(state: ChatState, payloadBytes?: number
     currentTurnId: state.currentTurnId,
     currentTurnOrchestration: state.currentTurnOrchestration,
     currentTurnUserId: state.currentTurnUserId,
+    currentTurnStartedAtMs: state.currentTurnStartedAtMs,
     turnStartedAtByUserId: state.turnStartedAtByUserId,
     turnDurationByUserId: state.turnDurationByUserId,
     turnReasoningFirstAtByUserId: state.turnReasoningFirstAtByUserId,
@@ -351,6 +436,7 @@ export function buildPrefetchedThreadSnapshot(
     currentTurnId: null,
     currentTurnOrchestration: null,
     currentTurnUserId: null,
+    currentTurnStartedAtMs: null,
     turnStartedAtByUserId: {},
     turnDurationByUserId: detail.turnDurationByUserId ?? {},
     turnReasoningFirstAtByUserId: {},

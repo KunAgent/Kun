@@ -46,6 +46,7 @@ describe('createToolDiscoveryContext', () => {
       blockedSkillIds: ['blocked_skill'],
       runtimeDataDir: '/runtime',
       fastContext: true,
+      fastContextScopeId: 'parent_thread_1',
       fastContextTaskCount: 2,
       interactiveToolBridge: { awaitUserInput }
     })
@@ -73,6 +74,7 @@ describe('createToolDiscoveryContext', () => {
       blockedToolNames: ['blocked_tool'],
       blockedSkillIds: ['blocked_skill'],
       fastContext: true,
+      fastContextScopeId: 'parent_thread_1',
       fastContextTaskCount: 2
     })
     // Discovery intentionally does not inherit execution-only routing or

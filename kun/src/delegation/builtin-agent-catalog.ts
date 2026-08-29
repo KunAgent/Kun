@@ -48,6 +48,11 @@ const BUILTIN_AGENT_CATALOG_BASE = [
     routingTerms: ['component', 'prototype', 'ui', 'interaction', '组件', '原型', '交互']
   },
   {
+    id: 'diagram-designer', name: 'Diagram Designer', color: '#1d9e75', toolPolicy: 'inherit', category: 'development',
+    description: 'Builds one self-contained accessible inline-SVG diagram artifact.',
+    routingTerms: ['diagram', 'chart', 'flowchart', 'architecture', '图表', '流程图', '架构']
+  },
+  {
     id: 'design-reviewer', name: 'Design Reviewer', color: '#7f77dd', toolPolicy: 'readOnly', category: 'review',
     description: 'Reviews visual hierarchy, typography, spacing, motion, accessibility, and interaction quality.',
     routingTerms: ['design review', 'visual', 'ux', 'accessibility', '设计审查', '视觉', '可访问性']

@@ -69,6 +69,8 @@ export type AgentLoopOptions = {
   turnLimits?: TurnLimitsConfig
   /** Internal retrieval-child marker propagated into discovery and execution contexts. */
   fastContext?: boolean
+  /** Parent chat thread used to isolate Fast Context scheduling and source-tool slots. */
+  fastContextScopeId?: string
   /** Grouped Fast Context task count used to require explicit source attribution. */
   fastContextTaskCount?: number
   /**

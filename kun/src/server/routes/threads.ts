@@ -38,12 +38,15 @@ import {
   type TurnItem
 } from '../../contracts/items.js'
 import { buildPublicItemHistoryPage } from '../../services/item-history-page.js'
+import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import {
+  hasChildBackedToolResult,
   healSessionItemsForFinishedTurns,
   hydrateThreadItemsFromSession,
   loadThreadMetadata,
   mergePendingApprovalItems,
   omitTurnItems,
+  overlayChildRunsOnToolResults,
   projectPublicThreadRecord,
   projectTimelineThread,
   projectTimelineTurn
@@ -311,7 +314,8 @@ export async function getThreadTimeline(
   request: Request,
   sessionStore: SessionStore,
   userInputGate?: UserInputGate,
-  approvalGate?: ApprovalGate
+  approvalGate?: ApprovalGate,
+  delegationRuntime?: DelegationRuntime
 ): Promise<JsonResponse> {
   const url = new URL(request.url)
   const parsedQuery = z.object({
@@ -331,6 +335,7 @@ export async function getThreadTimeline(
   // Freeze the replay floor before reading the item projection. Any event
   // appended afterwards is replayed by SSE from this sequence.
   const latestSeq = await sessionStore.highestSeq(threadId)
+  let replayFloor = latestSeq
   const thread = await loadThreadMetadata(service, threadId)
   if (!thread) {
     return jsonResponse(
@@ -363,6 +368,21 @@ export async function getThreadTimeline(
   if (!parsedQuery.data.before) {
     sessionItems = mergePendingApprovalItems(sessionItems, pendingApprovals)
   }
+  // Persisted child-backed tool progress can lag the child store because only
+  // the first queued update is durable. Reconcile every lifecycle state before
+  // returning the snapshot whose latestSeq becomes the renderer's SSE floor.
+  if (delegationRuntime && hasChildBackedToolResult(sessionItems)) {
+    try {
+      const { childRuns } = await delegationRuntime.diagnostics(threadId)
+      const overlay = overlayChildRunsOnToolResults(sessionItems, childRuns)
+      sessionItems = overlay.items
+      if (overlay.unresolved) replayFloor = 0
+    } catch {
+      // Replaying from zero is safer than pairing stale queued progress with a
+      // cursor that has already consumed its authoritative lifecycle event.
+      replayFloor = 0
+    }
+  }
   // Re-apply the anchor after healing/merging so a newly materialized gate
   // item cannot push the active turn's user message back off the page.
   const bounded = buildPublicItemHistoryPage(sessionItems, {
@@ -393,7 +413,7 @@ export async function getThreadTimeline(
 
   return jsonResponse(ThreadTimelineResponseSchema.parse({
     ...ThreadSchemaReadable.parse(projectTimelineThread(pageThread)),
-    latestSeq,
+    latestSeq: replayFloor,
     latestTurn: latestTurnMetadata,
     pendingUserInputIds,
     ...(pendingApprovalIds ? { pendingApprovalIds } : {}),

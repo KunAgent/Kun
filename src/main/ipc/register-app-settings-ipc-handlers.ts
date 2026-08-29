@@ -1,5 +1,6 @@
 import {
   app,
+  clipboard,
   dialog,
   ipcMain,
   shell,
@@ -62,11 +63,11 @@ import {
   startAgentSdkInstall
 } from '../agent-sdk-installer'
 import {
-  antigravityCliDownloadState,
-  fetchAntigravityModels,
-  resolveAntigravityCliBinary,
-  startAntigravityCliInstall
-} from '../antigravity-cli'
+  requestOfficialProviderCliInstall,
+  requestOfficialProviderCliModels,
+  requestOfficialProviderCliStatus,
+  startOfficialProviderCliProgress
+} from '../runtime-official-provider-cli'
 import {
   discoverCursorSubscription
 } from '../cursor-subscription-models'
@@ -315,26 +316,23 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       binaryPath: claudeSubBinary()
     })
   )
-  const antigravityBinary = (): string | undefined =>
-    resolveAntigravityCliBinary(app.getPath('userData'))
-  ipcMain.handle('gemini-subscription:cli-status', async () => ({
-    installed: Boolean(antigravityBinary()),
-    ...(antigravityBinary() ? { path: antigravityBinary() } : {}),
-    download: antigravityCliDownloadState()
-  }))
-  ipcMain.handle('gemini-subscription:cli-install', async () =>
-    startAntigravityCliInstall(
-      { userDataDir: app.getPath('userData'), proxyUrl: resolveModelProviderProxyUrl(await store.load()) },
-      (state) => getMainWindow()?.webContents.send('gemini-subscription:cli-progress', state)
-    )
+  ipcMain.handle('gemini-subscription:cli-status', async () =>
+    requestOfficialProviderCliStatus(runtimeRequest)
   )
-  ipcMain.handle('gemini-subscription:models', async () => {
-    const binaryPath = antigravityBinary()
-    if (!binaryPath) {
-      throw new Error('Antigravity CLI is not installed. Install it from the Gemini subscription settings first.')
+  let stopOfficialProviderCliProgress: (() => void) | undefined
+  ipcMain.handle('gemini-subscription:cli-install', async () => {
+    const state = await requestOfficialProviderCliInstall(runtimeRequest)
+    if (!stopOfficialProviderCliProgress) {
+      stopOfficialProviderCliProgress = startOfficialProviderCliProgress(
+        runtimeRequest,
+        (progress) => getMainWindow()?.webContents.send('gemini-subscription:cli-progress', progress)
+      )
     }
-    return fetchAntigravityModels({ binaryPath })
+    return state
   })
+  ipcMain.handle('gemini-subscription:models', async () =>
+    requestOfficialProviderCliModels(runtimeRequest)
+  )
   ipcMain.handle('gemini-cli-subscription:status', async () =>
     geminiCliSubscriptionStatus()
   )
@@ -385,6 +383,44 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     options.assertRendererRuntimeReady()
     const request = parseIpcPayload('runtime:request', runtimeRequestPayloadSchema, payload)
     return runtimeRequest(request.path, request.method, request.body)
+  })
+
+  ipcMain.handle('gateway:credential', async (event, action: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    options.assertRendererRuntimeReady()
+    if (!['status', 'ensure', 'copy', 'rotate', 'revoke'].includes(String(action))) {
+      throw new Error('gateway:credential received an invalid action')
+    }
+    const paths = {
+      status: ['/v1/model-gateway/credential/status', 'GET'],
+      ensure: ['/v1/model-gateway/credential/ensure', 'POST'],
+      copy: ['/v1/model-gateway/credential/reveal', 'POST'],
+      rotate: ['/v1/model-gateway/credential/rotate', 'POST'],
+      revoke: ['/v1/model-gateway/credential', 'DELETE']
+    } as const
+    const [path, method] = paths[action as keyof typeof paths]
+    const response = await runtimeRequest(path, method)
+    const parsed = JSON.parse(response.body) as {
+      key?: string
+      credential?: { configured?: boolean; createdAt?: string; rotatedAt?: string }
+    }
+    if (action === 'copy') {
+      if (!response.ok || typeof parsed.key !== 'string') {
+        return { ok: false, status: response.status, credential: { configured: false } }
+      }
+      clipboard.writeText(parsed.key)
+      return { ok: true, status: response.status, copied: true, credential: { configured: true } }
+    }
+    const credential = parsed.credential ?? { configured: false }
+    return {
+      ok: response.ok,
+      status: response.status,
+      credential: {
+        configured: credential.configured === true,
+        ...(credential.createdAt ? { createdAt: credential.createdAt } : {}),
+        ...(credential.rotatedAt ? { rotatedAt: credential.rotatedAt } : {})
+      }
+    }
   })
 
   ipcMain.handle('runtime:attachment:upload-image', async (event, payload: unknown) => {

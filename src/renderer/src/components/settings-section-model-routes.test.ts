@@ -127,7 +127,7 @@ describe('ModelRoutesSettings', () => {
     expect(html).toContain('Add model')
     expect(html).toContain('Stability-first adaptive')
     expect(html).toContain('After streaming output begins')
-    expect(html).toContain('Local access only · No authentication')
+    expect(html).toContain('Bearer key required; loopback only')
     expect(html).toContain('http://127.0.0.1:18899/v1')
     expect(html).toContain('GET /models')
     expect(html).toContain('POST /chat/completions')
@@ -249,7 +249,8 @@ describe('ModelRoutesSettings', () => {
     const onChange = vi.fn()
     vi.stubGlobal('window', {
       kunGui: {
-        runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: '{"pools":[],"metrics":{},"events":[]}' }))
+        runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: '{"pools":[],"metrics":{},"events":[]}' })),
+        gatewayCredential: vi.fn(async () => ({ ok: true, status: 200, credential: { configured: true } }))
       }
     })
     let renderer: ReactTestRenderer

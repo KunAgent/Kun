@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactElement } from 'react'
 import { Check, Copy } from 'lucide-react'
+import i18n from '../i18n'
 
 type Props = {
   patch: string
@@ -236,8 +237,8 @@ function DiffHeader({
         type="button"
         onClick={onCopy}
         className="ds-chip-muted shrink-0 rounded-md p-1 text-ds-faint transition hover:text-ds-ink"
-        aria-label="Copy diff"
-        title="Copy diff"
+        aria-label={i18n.t('copyDiff')}
+        title={i18n.t('copyDiff')}
       >
         {copied ? (
           <Check className="h-3.5 w-3.5 text-ds-diff-added" strokeWidth={2} />

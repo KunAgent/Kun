@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 
-const { existsSync, lstatSync, readdirSync, statSync } = require('node:fs')
+const { existsSync, lstatSync, readFileSync, readdirSync, statSync } = require('node:fs')
 const { extname, join, resolve } = require('node:path')
 
 const MIB = 1024 * 1024
@@ -16,12 +16,18 @@ function parseArgs(argv) {
     platform: process.platform,
     arch: process.arch,
     enforce: false,
+    json: false,
+    baseline: undefined,
     distDir: process.env.KUN_DIST_DIR || process.env.DEEPSEEK_GUI_DIST_DIR || 'dist'
   }
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index]
     if (argument === '--enforce') {
       options.enforce = true
+    } else if (argument === '--json') {
+      options.json = true
+    } else if (argument === '--baseline') {
+      options.baseline = resolve(argv[++index])
     } else if (argument === '--platform') {
       options.platform = argv[++index]
     } else if (argument === '--arch') {
@@ -130,7 +136,11 @@ function buildReport(options) {
     { name: 'extra-resources', paths: extraResourcePaths },
     { name: 'officecli', path: join(resources, 'officecli') },
     { name: 'whisper', path: join(resources, 'whisper') },
-    { name: 'bundled-extensions', path: join(resources, 'bundled-extensions') }
+    { name: 'bundled-extensions', path: join(resources, 'bundled-extensions') },
+    { name: 'bundled-skills', path: join(resources, 'bundled-skills') },
+    { name: 'ppt-toolchain', path: join(resources, 'ppt-toolchain') },
+    { name: 'installer-recovery', path: join(resources, 'installer-recovery') },
+    { name: 'bin', path: join(resources, 'bin') }
   ].map((component) => ({
     ...component,
     bytes: component.paths
@@ -175,6 +185,65 @@ function formatBytes(bytes) {
   return `${(bytes / MIB).toFixed(1)} MiB`
 }
 
+function reportToJson(report) {
+  return JSON.stringify(
+    {
+      platform: report.platform,
+      arch: report.arch,
+      appBytes: report.appBytes,
+      components: report.components.map(({ name, bytes }) => ({ name, bytes })),
+      artifacts: report.artifacts.map(({ name, bytes }) => ({ name, bytes })),
+      largestFiles: report.largestFiles.map(({ path, bytes }) => ({ path, bytes }))
+    },
+    null,
+    2
+  )
+}
+
+function compareWithBaseline(report, baseline) {
+  const parsed = typeof baseline === 'string' ? JSON.parse(baseline) : baseline
+  const baselineComponents = new Map(
+    (parsed.components || []).map(({ name, bytes }) => [name, bytes])
+  )
+  const baselineArtifacts = new Map(
+    (parsed.artifacts || []).map(({ name, bytes }) => [name, bytes])
+  )
+  const entries = []
+  for (const component of report.components) {
+    const before = baselineComponents.get(component.name)
+    if (before === undefined) continue
+    entries.push({
+      kind: 'component',
+      name: component.name,
+      before: before,
+      after: component.bytes,
+      delta: component.bytes - before
+    })
+  }
+  for (const artifact of report.artifacts) {
+    const before = baselineArtifacts.get(artifact.name)
+    if (before === undefined) continue
+    entries.push({
+      kind: 'artifact',
+      name: artifact.name,
+      before: before,
+      after: artifact.bytes,
+      delta: artifact.bytes - before
+    })
+  }
+  return entries.sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+}
+
+function printBaselineComparison(entries) {
+  console.log('Baseline comparison (largest changes first):')
+  for (const entry of entries) {
+    const percent = entry.before > 0 ? ` (${((entry.delta / entry.before) * 100).toFixed(1)}%)` : ''
+    console.log(
+      `  ${entry.kind.padEnd(10)} ${entry.name.padEnd(36)} ${entry.delta >= 0 ? '+' : ''}${formatBytes(entry.delta)}${percent}`
+    )
+  }
+}
+
 function printReport(report) {
   console.log(`[package-size] ${report.platform}-${report.arch}`)
   console.log('Components:')
@@ -194,7 +263,15 @@ function printReport(report) {
 function main() {
   const options = parseArgs(process.argv.slice(2))
   const report = buildReport(options)
+  if (options.json) {
+    console.log(reportToJson(report))
+    return
+  }
   printReport(report)
+  if (options.baseline) {
+    const baseline = readFileSync(options.baseline, 'utf8')
+    printBaselineComparison(compareWithBaseline(report, baseline))
+  }
   if (!options.enforce) return
   const failures = budgetFailures(report)
   if (failures.length > 0) {
@@ -223,5 +300,7 @@ module.exports = {
   packagedArtifacts,
   buildReport,
   budgetFailures,
-  formatBytes
+  formatBytes,
+  reportToJson,
+  compareWithBaseline
 }

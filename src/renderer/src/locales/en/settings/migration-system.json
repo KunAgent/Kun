@@ -225,8 +225,8 @@
   "uninstallConfirmButton": "Confirm uninstall",
   "uninstallConfirmCancel": "Cancel",
   "uninstallRunning": "Uninstalling… Kun will close in a moment.",
-  "labConversationVisualizationTitle": "Conversation visualization",
-  "labConversationVisualizationDescription": "Experimental structured visuals for flows, grouped explanations, and important constraints. The agent uses them only when spatial structure is clearer than prose.",
+  "labConversationVisualizationTitle": "Conversation visualizations and charts",
+  "labConversationVisualizationDescription": "Experimental structured visuals and governed data charts for analysis, trends, rankings, comparisons, proportions, metrics, and tables. Agents provide validated data intent while Kun controls rendering and safety.",
   "labConversationVisualizationEnabled": "Allow agent visualizations",
-  "labConversationVisualizationEnabledDesc": "Adds show_visualization to future desktop agent requests. Turning it off removes the tool while preserving visualizations already stored in conversation history."
+  "labConversationVisualizationEnabledDesc": "Adds show_visualization, show_diagram, and render_chart to future desktop agent requests. Turning it off removes the tools while preserving visualizations already stored in conversation history."
 }

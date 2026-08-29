@@ -1,0 +1,11 @@
+{
+  "threadRefreshing": "रिफ़्रेश हो रहा है…",
+  "sidebarWorkspaceLoading": "थ्रेड लोड हो रहे हैं…",
+  "sidebarWorkspaceLoadMore": "और लोड करें",
+  "sidebarWorkspaceLoadError": "थ्रेड लोड नहीं किए जा सके।",
+  "threadHydrationLoadingTitle": "वार्तालाप लोड हो रहा है…",
+  "threadHydrationLoadingDescription": "संदेश पढ़े जा रहे हैं और नवीनतम वार्तालाप स्थिति पुनर्स्थापित की जा रही है।",
+  "threadHydrationTakingLongTitle": "वार्तालाप पुनर्प्राप्ति में अधिक समय लग रहा है",
+  "threadHydrationTakingLongDescription": "इवेंट स्ट्रीम अभी तक समन्वित नहीं हुई है। आप कनेक्शन का पुनः प्रयास कर सकते हैं।",
+  "threadHydrationRetry": "कनेक्शन का पुनः प्रयास करें"
+}

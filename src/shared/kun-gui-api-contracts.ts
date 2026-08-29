@@ -204,9 +204,9 @@ export type KunRuntimeSettingsSyncStatusPayload = {
   message?: string
   at: string
 }
-
 export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
-
+export type GatewayCredentialStatus = { configured: boolean; createdAt?: string; rotatedAt?: string }
+export type GatewayCredentialResult = { ok: boolean; status: number; credential: GatewayCredentialStatus; copied?: boolean }
 export type WorkspacePickResult = { canceled: boolean; path: string | null }
 
 export type LocalFilesPickResult = { canceled: boolean; paths: string[] }

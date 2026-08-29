@@ -1,6 +1,6 @@
 import { constants, type Dirent } from 'node:fs'
 import { open, readdir, realpath, stat, type FileHandle } from 'node:fs/promises'
-import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, extname, isAbsolute, join, resolve } from 'node:path'
 import { z } from 'zod'
 import type { SkillsCapabilityConfig } from '../contracts/capabilities.js'
 import {
@@ -35,6 +35,7 @@ import {
   formatSkillInstruction,
   isConventionalWorkspaceSkillRoot,
   isSameOrInside,
+  readSkillText,
   normalizeFileType,
   normalizeRoot,
   renderCatalogInstruction,
@@ -240,6 +241,56 @@ export class SkillRuntime {
       instruction,
       allowedTools: [...skill.allowedTools],
       truncated
+    }
+  }
+
+  async loadSkillAsset(
+    skillId: string,
+    assetPath: string,
+    workspace = '',
+    options: { offset?: number; limit?: number } = {},
+    blockedIds?: readonly string[],
+    allowedIds?: readonly string[]
+  ): Promise<{
+    skillId: string
+    path: string
+    content: string
+    offset: number
+    nextOffset?: number
+    truncated: boolean
+  } | { error: string }> {
+    if (!skillsRuntimeEnabled(this.config)) return { error: 'skills are disabled' }
+    const skills = filterSkills(await this.skillsForWorkspace(workspace), allowedIds, blockedIds)
+    const normalized = slug(skillId.trim().replace(/^[$@]/, '').replace(/^skill:/i, ''))
+    const skill = skills.find((candidate) => candidate.id === normalized) ??
+      skills.find((candidate) => slug(candidate.name) === normalized)
+    if (!skill) return { error: `unknown skill id "${skillId}"` }
+    const requested = assetPath.trim().replaceAll('\\', '/').replace(/^\.\//, '')
+    if (!requested || requested.startsWith('/') || requested.split('/').includes('..')) {
+      return { error: 'asset path must be a declared relative path without traversal' }
+    }
+    const asset = skill.assets.find((candidate) => {
+      const normalizedCandidate = candidate.replaceAll('\\', '/')
+      return normalizedCandidate.endsWith(`/${requested}`)
+    })
+    if (!asset) return { error: `asset is not declared by skill "${skill.id}": ${requested}` }
+    const offset = Math.max(0, Math.floor(options.offset ?? 0))
+    const limit = Math.max(1, Math.min(400, Math.floor(options.limit ?? 160)))
+    try {
+      const text = await readSkillText(asset, 256 * 1024, 'skill asset')
+      const lines = text.split(/\r?\n/)
+      const content = lines.slice(offset, offset + limit).join('\n')
+      const nextOffset = offset + limit < lines.length ? offset + limit : undefined
+      return {
+        skillId: skill.id,
+        path: requested,
+        content,
+        offset,
+        ...(nextOffset !== undefined ? { nextOffset } : {}),
+        truncated: nextOffset !== undefined
+      }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
     }
   }
 

@@ -135,6 +135,9 @@
   Function KunFinishAutomaticUpdateTransaction
     StrCpy $KunInstallerTargetDir $KunInstallerFinalTargetDir
     Call KunSetMigrationEnvironment
+    ; File extraction leaves NSIS inside the staging directory. Move the
+    ; installer and helper working directory out before renaming that tree.
+    SetOutPath "$PLUGINSDIR"
     !insertmacro kunRunMigrationHelper SwitchUpdatePayload
     ${if} $KunInstallerHelperExitCode != 0
       !insertmacro KunAbortAutomaticUpdate payload_switch_failed switch "The candidate payload could not be activated safely."

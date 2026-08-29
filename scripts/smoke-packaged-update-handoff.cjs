@@ -13,7 +13,17 @@ const {
   resolveDesktopLaunchSelection,
   terminateProcessTree
 } = require('./smoke-packaged-extension-desktop.cjs')
-const { availablePort } = require('./smoke-packaged-extension-desktop-process.cjs')
+const {
+  CdpConnection,
+  isWorkbenchTarget,
+  sendToWorkbenchSession,
+  waitForCdpEndpoint,
+  waitForTarget
+} = require('./smoke-packaged-extension-desktop-cdp.cjs')
+const {
+  availablePort,
+  processState
+} = require('./smoke-packaged-extension-desktop-process.cjs')
 const {
   makeTreeWritable,
   resolvePackagedRuntimeExecutable
@@ -164,7 +174,11 @@ async function runPositiveScenario(input) {
       }
     }
 
-    const candidateDesktop = launchCandidate(input.desktop, profile, { timeoutMs: input.timeoutMs })
+    const debuggingPort = await availablePort()
+    const candidateDesktop = launchCandidate(input.desktop, profile, {
+      debuggingPort,
+      timeoutMs: input.timeoutMs
+    })
     tracked.push(candidateDesktop)
     const current = await waitForCurrentOwners({
       profile,
@@ -206,13 +220,19 @@ async function runPositiveScenario(input) {
       }
     }
 
-    await terminateProcessTree(candidateDesktop.child, process.platform, { timeoutMs: 15_000 })
+    await quitDesktopNormally(candidateDesktop, debuggingPort, input.timeoutMs)
     tracked.splice(tracked.indexOf(candidateDesktop), 1)
-    if (!processIsAlive(current.manager.pid)) {
+    const managerStatus = await managerJson(current.manager, '/v1/manager/status')
+    if (managerStatus.instanceId !== current.manager.instanceId ||
+      managerStatus.pid !== current.manager.pid) {
       throw new Error('Ordinary GUI quit unexpectedly stopped the current Service Manager')
     }
-    if (current.runtime && !processIsAlive(current.runtime.pid)) {
-      throw new Error('Ordinary GUI quit unexpectedly stopped the shared Runtime')
+    if (current.runtime) {
+      const runtimeInfo = await runtimeJson(current.runtime, '/v1/runtime/info')
+      if (runtimeInfo.instanceId !== current.runtime.instanceId ||
+        runtimeInfo.pid !== current.runtime.pid) {
+        throw new Error('Ordinary GUI quit unexpectedly stopped the shared Runtime')
+      }
     }
     await stopCurrentOwners(current, input.timeoutMs)
   } catch (error) {
@@ -245,12 +265,15 @@ async function runNegativeScenario(input) {
       '--build-id', 'a'.repeat(64)
     ], { cwd: profile.workspaceRoot, env: profile.environment })
     tracked.push(fixture)
-    const owner = await waitForJson(
-      join(profile.dataDir, 'runtime.json'),
-      (value) => value?.pid === fixture.child.pid,
-      input.timeoutMs,
-      () => childState(fixture.child, fixture.output())
-    )
+    const owner = await Promise.race([
+      waitForJson(
+        join(profile.dataDir, 'runtime.json'),
+        (value) => value?.pid === fixture.child.pid,
+        input.timeoutMs,
+        () => childState(fixture.child, fixture.output())
+      ),
+      desktopExitGuard(fixture.child)
+    ])
     const preflight = launchCandidate(input.desktop, profile, {
       preflight: true,
       denyInspection: input.scenario === 'inspection-denied',
@@ -358,6 +381,11 @@ function launchCandidate(desktop, profile, options = {}) {
   const applicationArguments = [
     ...(desktop.applicationEntry ? [desktop.applicationEntry] : []),
     ...(options.preflight ? ['--kun-packaged-update-handoff-smoke'] : []),
+    ...(options.debuggingPort ? [
+      `--remote-debugging-port=${options.debuggingPort}`,
+      '--remote-debugging-address=127.0.0.1',
+      '--remote-allow-origins=*'
+    ] : []),
     `--user-data-dir=${profile.explicitUserData}`,
     '--no-first-run',
     '--disable-background-networking',
@@ -384,36 +412,146 @@ function launchCandidate(desktop, profile, options = {}) {
   })
 }
 
-async function waitForCurrentOwners(input) {
-  const manager = await waitForJson(
-    join(input.profile.controlDir, 'manager.json'),
-    (value) => value?.buildId === input.candidateBuildId &&
-      value?.pid !== input.oldOwners.manager.discovery.pid,
-    input.timeoutMs,
-    () => childState(input.desktop.child, input.desktop.output())
+async function quitDesktopNormally(desktop, debuggingPort, timeoutMs) {
+  const readProcessState = () => processState(desktop.child)
+  const endpoint = await waitForCdpEndpoint({
+    port: debuggingPort,
+    timeoutMs,
+    processState: readProcessState
+  })
+  const cdp = await CdpConnection.connect(
+    endpoint.webSocketDebuggerUrl,
+    globalThis.WebSocket,
+    Math.min(timeoutMs, 15_000)
   )
-  let runtime
-  if (input.autoStart) {
-    runtime = await waitForJson(
-      join(input.profile.dataDir, 'runtime.json'),
-      (value) => value?.buildId === runtimeBuildIdForFlavor(input.candidateBuildId, 'production'),
-      input.timeoutMs,
-      () => childState(input.desktop.child, input.desktop.output())
+  try {
+    await cdp.send('Target.setDiscoverTargets', { discover: true })
+    const workbench = await waitForTarget(
+      cdp,
+      isWorkbenchTarget,
+      'packaged Kun workbench for normal quit',
+      timeoutMs,
+      readProcessState
     )
-    await runtimeJson(runtime, '/v1/runtime/info')
-  } else {
-    await poll(
-      () => input.oldOwners.runtimes.every((entry) => !processIsAlive(entry.discovery.pid)),
-      input.timeoutMs,
-      'all predecessor Runtimes to exit with autoStart disabled'
-    )
+    const evaluated = await sendToWorkbenchSession({
+      cdp,
+      session: { targetId: workbench.targetId, sessionId: undefined },
+      method: 'Runtime.evaluate',
+      params: {
+        expression: `(() => {
+          if (typeof window.kunGui?.runDesktopCommand !== 'function') return false
+          setTimeout(() => void window.kunGui.runDesktopCommand('quit'), 0)
+          return true
+        })()`,
+        returnByValue: true
+      },
+      timeoutMs,
+      processState: readProcessState,
+      operation: 'requesting an ordinary GUI quit'
+    })
+    if (evaluated.exceptionDetails || evaluated.result?.value !== true) {
+      throw new Error('Packaged workbench could not request an ordinary GUI quit')
+    }
+  } finally {
+    cdp.close()
   }
-  await poll(
-    () => !processIsAlive(input.oldOwners.manager.discovery.pid),
-    input.timeoutMs,
-    'the predecessor Manager to exit'
-  )
-  return { manager, runtime }
+  if (!await waitForProcessExit(desktop.child.pid, Math.min(timeoutMs, 30_000))) {
+    throw new Error(`Packaged GUI PID ${desktop.child.pid} did not exit after its ordinary quit request`)
+  }
+}
+
+async function managerJson(discovery, path) {
+  const response = await fetch(`${discovery.baseUrl}${path}`, {
+    headers: { authorization: `Bearer ${discovery.managerToken}` },
+    signal: AbortSignal.timeout(10_000)
+  })
+  const body = await response.text()
+  if (!response.ok) throw new Error(`GET ${path} failed (${response.status}): ${body}`)
+  return body ? JSON.parse(body) : undefined
+}
+
+function desktopExitGuard(child) {
+  return new Promise((_, reject) => {
+    child.once('error', reject)
+    child.once('exit', (code, signal) => {
+      reject(new Error(
+        `Tracked smoke process exited before its discovery completed: ` +
+        `code=${code}, signal=${signal}`
+      ))
+    })
+  })
+}
+
+function handoffExitGuard(desktop) {
+  let onError
+  let onExit
+  const promise = new Promise((_, reject) => {
+    onError = (error) => {
+      reject(new Error(`Tracked smoke process failed before discovery: ${error.message}\n${desktop.output()}`))
+    }
+    onExit = (code, signal) => {
+      const output = desktop.output()
+      process.stderr.write(
+        `Tracked smoke process exited before discovery: code=${code}, signal=${signal}\n${output}\n`
+      )
+      reject(new Error(
+        `Tracked smoke process exited before its discovery completed: ` +
+        `code=${code}, signal=${signal}\n${output}`
+      ))
+    }
+    desktop.child.once('error', onError)
+    desktop.child.once('exit', onExit)
+  })
+  return {
+    promise,
+    dispose: () => {
+      desktop.child.off('error', onError)
+      desktop.child.off('exit', onExit)
+    }
+  }
+}
+
+async function waitForCurrentOwners(input) {
+  const processExit = handoffExitGuard(input.desktop)
+  try {
+    const manager = await Promise.race([
+      waitForJson(
+        join(input.profile.controlDir, 'manager.json'),
+        (value) => value?.buildId === input.candidateBuildId &&
+          value?.pid !== input.oldOwners.manager.discovery.pid,
+        input.timeoutMs,
+        () => childState(input.desktop.child, input.desktop.output())
+      ),
+      processExit.promise
+    ])
+    let runtime
+    if (input.autoStart) {
+      runtime = await Promise.race([
+        waitForJson(
+          join(input.profile.dataDir, 'runtime.json'),
+          (value) => value?.buildId === runtimeBuildIdForFlavor(input.candidateBuildId, 'production'),
+          input.timeoutMs,
+          () => childState(input.desktop.child, input.desktop.output())
+        ),
+        processExit.promise
+      ])
+      await runtimeJson(runtime, '/v1/runtime/info')
+    } else {
+      await poll(
+        () => input.oldOwners.runtimes.every((entry) => !processIsAlive(entry.discovery.pid)),
+        input.timeoutMs,
+        'all predecessor Runtimes to exit with autoStart disabled'
+      )
+    }
+    await poll(
+      () => !processIsAlive(input.oldOwners.manager.discovery.pid),
+      input.timeoutMs,
+      'the predecessor Manager to exit'
+    )
+    return { manager, runtime }
+  } finally {
+    processExit.dispose()
+  }
 }
 
 async function assertChatRoundTrip(runtime, workspaceRoot, timeoutMs) {

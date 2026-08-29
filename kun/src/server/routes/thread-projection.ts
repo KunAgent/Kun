@@ -3,9 +3,11 @@ import type { Turn } from '../../contracts/turns.js'
 import {
   isPublicTurnItem,
   type ApprovalTurnItem,
-  type TurnItem
+  type TurnItem,
+  type ToolResultTurnItem
 } from '../../contracts/items.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
+import type { ChildRunRecord } from '../../delegation/delegation-runtime-contracts.js'
 import {
   type FinishedTurnStatus,
   finalizeOpenTurnItem
@@ -202,4 +204,134 @@ export function projectPublicThreadRecord(thread: ThreadRecord): ThreadRecord {
     items: turn.items.filter(isPublicTurnItem)
   }))
   return { ...publicThread, turns }
+}
+
+const CHILD_BACKED_TOOL_NAMES = new Set(['delegate_task', 'fast_context'])
+
+/** True when the page contains a child-backed tool result linked to a child run. */
+export function hasChildBackedToolResult(items: readonly TurnItem[]): boolean {
+  return items.some(
+    (item) => item.kind === 'tool_result' &&
+      CHILD_BACKED_TOOL_NAMES.has(item.toolName) &&
+      childBackedProgressNeedsOverlay(item)
+  )
+}
+
+/**
+ * Overlay authoritative child-run records onto persisted child-backed tool
+ * progress. The first queued update is durable while later running updates can
+ * be transient, so a timeline snapshot must reconcile every lifecycle state.
+ * This projection is read-only: canonical model history remains unchanged.
+ */
+export function overlayChildRunsOnToolResults(
+  items: TurnItem[],
+  childRuns: readonly ChildRunRecord[]
+): { items: TurnItem[]; unresolved: boolean } {
+  const runsById = new Map(childRuns.map((run) => [run.id, run]))
+  let changed = false
+  let unresolved = false
+  const next = items.map((item): TurnItem => {
+    if (item.kind !== 'tool_result' || !CHILD_BACKED_TOOL_NAMES.has(item.toolName)) return item
+    const attempt = childBackedAttempt(item)
+    if (!attempt) {
+      if (childBackedProgressNeedsOverlay(item)) unresolved = true
+      return item
+    }
+    const run = runsById.get(attempt.childId)
+    if (
+      !run ||
+      run.parentTurnId !== item.turnId ||
+      (run.resumeCount ?? 0) !== attempt.resumeCount
+    ) {
+      unresolved = true
+      return item
+    }
+    changed = true
+    return overlayChildRunOnToolResult(item, run)
+  })
+  return { items: changed ? next : items, unresolved }
+}
+
+function childBackedProgressNeedsOverlay(item: ToolResultTurnItem): boolean {
+  if (childBackedAttempt(item)) return true
+  const output = item.output
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return false
+  const status = (output as Record<string, unknown>).status
+  return status === 'queued' || status === 'running'
+}
+
+function childBackedAttempt(
+  item: ToolResultTurnItem
+): { childId: string; resumeCount: number } | undefined {
+  const output = item.output
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return undefined
+  const record = output as Record<string, unknown>
+  const childId = record.childId
+  if (typeof childId !== 'string' || !childId.trim()) return undefined
+  const resumeCount = typeof record.resumeCount === 'number' &&
+    Number.isSafeInteger(record.resumeCount) && record.resumeCount >= 0
+    ? record.resumeCount
+    : 0
+  return { childId: childId.trim(), resumeCount }
+}
+
+function overlayChildRunOnToolResult(
+  item: ToolResultTurnItem,
+  run: ChildRunRecord
+): ToolResultTurnItem {
+  const persistedOutput = (item.output && typeof item.output === 'object' && !Array.isArray(item.output))
+    ? item.output as Record<string, unknown>
+    : {}
+  const persistedChild = persistedOutput.child &&
+    typeof persistedOutput.child === 'object' &&
+    !Array.isArray(persistedOutput.child)
+    ? persistedOutput.child as Record<string, unknown>
+    : undefined
+  const launcher = run.launcher ?? persistedOutput.launcher
+  const output: Record<string, unknown> = {
+    ...persistedOutput,
+    childId: run.id,
+    parentThreadId: run.parentThreadId,
+    parentTurnId: run.parentTurnId,
+    status: run.status,
+    detached: run.detached === true,
+    ...(launcher ? { launcher } : {}),
+    ...(run.model ? { model: run.model } : {}),
+    terminationReason: run.terminationReason,
+    resumable: run.resumable === true,
+    resumeCount: run.resumeCount ?? 0,
+    failure: run.failure,
+    summary: run.summary,
+    evidence: run.evidence,
+    evidencePack: run.evidencePack ?? persistedOutput.evidencePack,
+    usage: run.usage,
+    summaryTruncated: run.summaryTruncated,
+    resultRef: run.resultRef,
+    resultUnavailableReason: run.resultUnavailableReason,
+    error: run.error,
+    toolInvocations: run.toolInvocations,
+    durationMs: run.durationMs,
+    queuedMs: run.queuedMs
+  }
+  if (item.toolName === 'fast_context' || persistedChild) {
+    output.child = {
+      ...(persistedChild ?? {}),
+      childId: run.id,
+      parentThreadId: run.parentThreadId,
+      parentTurnId: run.parentTurnId,
+      status: run.status,
+      detached: run.detached === true,
+      ...(launcher ? { launcher } : {}),
+      ...(run.model ? { model: run.model } : {}),
+      terminationReason: run.terminationReason,
+      resumable: run.resumable === true,
+      resumeCount: run.resumeCount ?? 0,
+      failure: run.failure
+    }
+  }
+  return {
+    ...item,
+    output,
+    isError: run.status === 'failed' || run.status === 'aborted'
+  }
 }

@@ -162,6 +162,41 @@ describe('FloatingComposer queued guidance', () => {
     }
   })
 
+  it('enables GUI plan image guidance while keeping Edit disabled', async () => {
+    const previousLanguage = i18n.language
+    await i18n.changeLanguage('en')
+    try {
+      const message = {
+        id: 'q-plan-image',
+        text: 'use the Kun mascot',
+        mode: 'plan',
+        guiPlan: {
+          operation: 'refine' as const,
+          workspaceRoot: '/workspace',
+          relativePath: '.kunsdd/plan/mascot.md',
+          planId: '/workspace:.kunsdd/plan/mascot.md'
+        },
+        attachmentIds: ['att_image'],
+        attachments: [{ id: 'att_image', kind: 'image' as const, name: 'kun.png' }],
+        guidanceEligible: true
+      }
+      const html = renderToStaticMarkup(createElement(FloatingComposerQueuedMessages, {
+        messages: [message],
+        onGuide: () => undefined,
+        onRemove: () => undefined,
+        onEdit: () => undefined
+      }))
+
+      expect(html).toContain('data-queued-message-images="1"')
+      expect(html).toContain('kun.png')
+      expect(html).not.toContain('disabled=""')
+      expect(canEditQueuedComposerMessage(message)).toBe(false)
+      expect(html).not.toContain('More queued message actions')
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+
   it('labels active Graph input as queued work with an explicit Graph guidance action', async () => {
     const previousLanguage = i18n.language
     await i18n.changeLanguage('en')

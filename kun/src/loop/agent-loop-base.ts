@@ -210,6 +210,7 @@ export abstract class AgentLoopBase {
       ...(opts.blockedSkillIds ? { blockedSkillIds: opts.blockedSkillIds } : {}),
       ...(opts.runtimeDataDir ? { runtimeDataDir: opts.runtimeDataDir } : {}),
       ...(opts.fastContext ? { fastContext: true } : {}),
+      ...(opts.fastContextScopeId ? { fastContextScopeId: opts.fastContextScopeId } : {}),
       ...(opts.fastContextTaskCount ? { fastContextTaskCount: opts.fastContextTaskCount } : {})
     })
     const modelStepDeps: ModelStepServiceDeps = {
@@ -371,6 +372,7 @@ export abstract class AgentLoopBase {
       ...(this.opts.runtimeDataDir ? { runtimeDataDir: this.opts.runtimeDataDir } : {}),
       ...(this.opts.artifactStore ? { artifactStore: this.opts.artifactStore } : {}),
       ...(this.opts.fastContext ? { fastContext: true } : {}),
+      ...(this.opts.fastContextScopeId ? { fastContextScopeId: this.opts.fastContextScopeId } : {}),
       ...(this.opts.fastContextTaskCount ? { fastContextTaskCount: this.opts.fastContextTaskCount } : {}),
       interactiveToolBridge: this.interactiveToolBridge
     })

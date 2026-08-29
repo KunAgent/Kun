@@ -202,6 +202,7 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
       currentTurnId: null,
       currentTurnOrchestration: null,
       currentTurnUserId: null,
+      currentTurnStartedAtMs: null,
       error: null
     })
     const watchTurnCompletion = { ...s.watchTurnCompletion }
@@ -484,6 +485,7 @@ export function createMaintenanceRecoveryActions(
         currentTurnId: null,
         currentTurnOrchestration: null,
         currentTurnUserId: null,
+        currentTurnStartedAtMs: null,
         turnStartedAtByUserId,
         turnDurationByUserId,
         turnReasoningFirstAtByUserId,

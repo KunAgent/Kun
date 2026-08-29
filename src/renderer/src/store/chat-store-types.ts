@@ -400,6 +400,13 @@ export type ChatState = {
   currentTurnId: string | null
   currentTurnOrchestration: 'direct' | 'graph' | null
   currentTurnUserId: string | null
+  /**
+   * Start time of the currently running turn (ms epoch), recovered from the
+   * runtime's persisted turn record on hydration/reconciliation. Unlike the
+   * live `turnStartedAtByUserId`, this survives a thread switch or renderer
+   * restart so elapsed-time displays anchored to it do not reset mid-turn.
+   */
+  currentTurnStartedAtMs: number | null
   turnStartedAtByUserId: Record<string, number>
   turnDurationByUserId: Record<string, number>
   turnReasoningFirstAtByUserId: Record<string, number>

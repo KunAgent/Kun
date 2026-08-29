@@ -263,8 +263,16 @@ export function useWorkbenchChatComposerProps({
       ...(message.deliveryState ? { deliveryState: message.deliveryState } : {}),
       ...(message.deliveryTurnId ? { deliveryTurnId: message.deliveryTurnId } : {}),
       ...(message.displayText ? { displayText: message.displayText } : {}),
+      ...(message.mode ? { mode: message.mode } : {}),
+      ...(message.guiPlan ? { guiPlan: message.guiPlan } : {}),
       ...(message.attachmentIds?.length ? { attachmentIds: message.attachmentIds } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+      ...(message.fileReferences?.length ? { fileReferences: message.fileReferences } : {}),
+      ...(message.composerContexts?.length ? { composerContexts: message.composerContexts } : {}),
+      ...(message.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(message.guiDesignMode ? { guiDesignMode: true } : {}),
+      ...(message.guiDesignArtifact ? { guiDesignArtifact: message.guiDesignArtifact } : {}),
+      ...(message.writeContext ? { writeContext: message.writeContext } : {}),
       guidanceEligible: canGuideQueuedMessage(message) &&
         queuedMessageMatchesRunningTurn(message, runningTurnMeta)
     })),

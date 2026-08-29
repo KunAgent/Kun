@@ -63,6 +63,7 @@ type RuntimeProjectionActionPayload =
         threadStatus?: string
         latestTurnId?: string
         latestTurnStatus?: string
+        latestTurnStartedAtMs?: number
         goal?: ThreadGoal | null
         todos?: ThreadTodoList | null
         turnId?: string | null

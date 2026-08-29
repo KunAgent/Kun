@@ -4,6 +4,7 @@ import type {
   DesktopStartupStatePayload
 } from '@shared/desktop-startup-state'
 import { requestApplicationReload } from './lib/application-reload'
+import startupCompanionsUrl from './assets/startup/kun-startup-companions.png'
 import {
   mergeStartupPhase,
   startupPhaseLabel,
@@ -19,8 +20,13 @@ const RuntimeMigrationRecoveryView = lazy(async () => {
   return { default: view }
 })
 type AppModule = typeof import('./App')
-const WorkbenchApp = lazy(async () => {
-  const mod: AppModule = await import('./App')
+let preparedWorkbenchApp: AppModule['default'] | null = null
+const loadAppModule = (): Promise<AppModule> => import('./App').then((module) => {
+  preparedWorkbenchApp = module.default
+  return module
+})
+const LazyWorkbenchApp = lazy(async () => {
+  const mod = await loadAppModule()
   return { default: mod.default }
 })
 
@@ -189,7 +195,8 @@ export function StartupGate({
     void (async () => {
       try {
         await installSharedBusinessStorageForWorkbench()
-        await import('./App')
+        const app = await loadAppModule()
+        await app.prepareWorkbenchApp()
         if (bootRunRef.current === run) setBoot({ status: 'ready' })
       } catch (error) {
         if (bootRunRef.current === run) {
@@ -243,6 +250,7 @@ export function StartupGate({
     )
   }
   if (boot.status === 'ready') {
+    const WorkbenchApp = preparedWorkbenchApp ?? LazyWorkbenchApp
     return (
       <React.Suspense fallback={fallback}>
         <WorkbenchApp />
@@ -261,25 +269,66 @@ export function StartupGate({
       />
     )
   }
+  const recovering = phase === 'recovery_required'
+  if (recovering) {
+    return (
+      <main className="kun-startup" data-recovery="true">
+        <section className="kun-startup__content" role="alert" aria-live="assertive">
+          <div className="kun-startup__artwork" aria-hidden="true">
+            <img
+              className="kun-startup__companions"
+              src={startupCompanionsUrl}
+              alt=""
+              data-testid="kun-startup-companions"
+            />
+          </div>
+          <div className="kun-startup__copy">
+            <h1 className="kun-startup__title">{startupPhaseLabel(phase)}</h1>
+            {phaseDetail ? <p className="kun-startup__detail">{phaseDetail}</p> : null}
+          </div>
+          <p className="kun-startup__hint">
+            Startup stopped before Kun could finish preparing the workspace.
+          </p>
+          <button type="button" className="secondary-button" onClick={() => requestApplicationReload()}>
+            Reload Kun
+          </button>
+        </section>
+      </main>
+    )
+  }
+  const statusTitle = phase === 'ready'
+    ? 'Opening your workspace...'
+    : startupPhaseLabel(phase)
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ds-canvas p-8 text-ds-ink">
-      <section className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-ds-border bg-ds-surface px-8 py-8 text-center shadow-sm">
-        <span
-          className={`h-2.5 w-2.5 rounded-full ${phase === 'recovery_required' ? 'bg-red-500' : 'animate-pulse bg-blue-500'}`}
-          aria-hidden="true"
-        />
-        <h1 className="text-base font-semibold">{startupPhaseLabel(phase)}</h1>
-        {phaseDetail ? (
-          <p className="text-sm text-ds-faint" role="status">{phaseDetail}</p>
-        ) : null}
-        <div
-          className="h-1 w-48 overflow-hidden rounded-full bg-ds-border motion-reduce:hidden"
-          aria-hidden="true"
-        >
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-500" />
+    <main className="kun-startup" data-recovery="false">
+      <section
+        className="kun-startup__content"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div className="kun-startup__artwork" aria-hidden="true">
+          <span className="kun-startup__data-spark" />
+          <img
+            className="kun-startup__companions"
+            src={startupCompanionsUrl}
+            alt=""
+            data-testid="kun-startup-companions"
+          />
         </div>
-        <p className="text-xs text-ds-faint">
-          The window opened early; Kun keeps preparing in the background.
+        <div className="kun-startup__copy">
+          <h1 className="kun-startup__title">{statusTitle}</h1>
+          {phaseDetail ? <p className="kun-startup__detail">{phaseDetail}</p> : null}
+        </div>
+        <div
+          className="kun-startup__progress"
+          role="progressbar"
+          aria-label="Kun startup progress"
+        >
+          <span className="kun-startup__progress-indicator" />
+        </div>
+        <p className="kun-startup__hint">
+          Kun and Chick are preparing your workspace.
         </p>
       </section>
     </main>

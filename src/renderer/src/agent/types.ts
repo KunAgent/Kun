@@ -11,6 +11,7 @@ import type {
   ThreadUsageSnapshot
 } from './thread-runtime-types'
 import type { ComposerContextAttachment } from '@kun/extension-api'
+import type { RendererChartSpec } from './chart-spec-adapter'
 
 export type ToolItemKind = 'tool_call' | 'command_execution' | 'file_change'
 export type RuntimeErrorSeverity = 'info' | 'warning' | 'error'
@@ -62,6 +63,21 @@ export type GeneratedFileReference = {
 
 export type ComponentPrototypeStatus = 'preparing' | 'running' | 'completed' | 'failed'
 export type ComponentPrototypeProducer = 'main-agent' | 'component-designer'
+export type DiagramPrototypeStatus = ComponentPrototypeStatus
+
+/** Durable `show_diagram` HTML result rendered as an inline conversation card. */
+export type DiagramPrototypeMetadata = {
+  version: 1
+  status: DiagramPrototypeStatus
+  artifactId: string
+  title: string
+  relativePath: string
+  viewport: { width: number; height: number }
+  byteSize?: number
+  contentHash?: string
+  summary?: string
+  error?: string
+}
 
 /** Durable `design_component` result rendered as an inline conversation card. */
 export type ComponentPrototypeMetadata = {
@@ -163,6 +179,8 @@ export type WebCitationSource = {
 }
 export type RuntimeDisclosureMetadata = {
   displayText?: string
+  /** Effective per-turn mode used to gate live guidance after hydration. */
+  mode?: 'agent' | 'plan'
   /** Durable per-turn intent used by mixed Code/Design timeline consumers. */
   agentSurface?: 'code' | 'write' | 'design'
   /** Persisted turn routing hint so edit/resend can rebuild live canvas context. */
@@ -399,6 +417,14 @@ export type ReviewBlock = {
   output?: ReviewOutput
 }
 
+export type ChartBlock = {
+  kind: 'chart'
+  id: string
+  turnId?: string
+  createdAt?: string
+  spec: RendererChartSpec
+}
+
 export type ChatBlock =
   | {
       kind: 'user'
@@ -415,6 +441,7 @@ export type ChatBlock =
   | ToolBlock
   | CompactionBlock
   | ReviewBlock
+  | ChartBlock
   | {
       kind: 'system'
       id: string

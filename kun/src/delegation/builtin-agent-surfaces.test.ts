@@ -8,9 +8,9 @@ import { BUILTIN_SUBAGENT_PROFILES, mergeBuiltinSubagentProfiles } from './built
 import { DelegationRuntime, FileDelegationStore } from './delegation-runtime.js'
 
 describe('built-in subagent surfaces', () => {
-  it('publishes exactly 45 complete built-in profiles', () => {
-    expect(BUILTIN_AGENT_CATALOG).toHaveLength(45)
-    expect(Object.keys(BUILTIN_SUBAGENT_PROFILES)).toHaveLength(45)
+  it('publishes exactly 46 complete built-in profiles', () => {
+    expect(BUILTIN_AGENT_CATALOG).toHaveLength(46)
+    expect(Object.keys(BUILTIN_SUBAGENT_PROFILES)).toHaveLength(46)
     for (const entry of BUILTIN_AGENT_CATALOG) {
       expect(BUILTIN_SUBAGENT_PROFILES[entry.id], entry.id).toBeDefined()
       expect(entry.routingTerms.length, entry.id).toBeGreaterThan(0)
@@ -19,7 +19,7 @@ describe('built-in subagent surfaces', () => {
     }
     expect(BUILTIN_SUBAGENT_PROFILES.general?.surfaces).toEqual(['shared'])
     expect(BUILTIN_AGENT_CATALOG.filter((entry) => entry.family === 'base')).toHaveLength(8)
-    expect(BUILTIN_AGENT_CATALOG.filter((entry) => entry.family === 'skill')).toHaveLength(25)
+    expect(BUILTIN_AGENT_CATALOG.filter((entry) => entry.family === 'skill')).toHaveLength(26)
     expect(BUILTIN_AGENT_CATALOG.filter((entry) => entry.family === 'write')).toHaveLength(6)
     expect(BUILTIN_AGENT_CATALOG.filter((entry) => entry.family === 'design')).toHaveLength(6)
     expect(BUILTIN_AGENT_CATALOG.filter((entry) => entry.family === 'base').map((entry) => entry.id)).toEqual([

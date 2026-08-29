@@ -84,6 +84,29 @@ describe('TUI local operations', () => {
     }
   })
 
+  it('exports chart results as a bounded Markdown table', () => {
+    const thread = detail()
+    const turn = thread.turns[0]!
+    turn.items.push({
+      id: 'item_chart', turnId: turn.id, threadId: thread.id, role: 'tool',
+      createdAt: turn.createdAt, kind: 'tool_result', status: 'completed',
+      toolName: 'mcp__kun__render_chart', callId: 'call_chart', toolKind: 'tool_call', isError: false,
+      output: JSON.stringify({
+        status: 'completed',
+        chart: {
+          version: 1, type: 'line', title: 'Errors',
+          data: [{ day: 'Mon', count: 2 }, { day: 'Tue', count: 5 }],
+          x: { field: 'day' }, series: [{ field: 'count' }]
+        }
+      })
+    })
+    const markdown = renderThreadMarkdown(thread)
+    expect(markdown).toContain('> Chart `line`: Errors')
+    expect(markdown).toContain('| day | count |')
+    expect(markdown).toContain('| Tue | 5 |')
+    expect(markdown).not.toContain('"status": "completed"')
+  })
+
   it('uses an argv-based external editor and cleans up its temporary file', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'kun-tui-editor-test-'))
     const script = join(directory, 'editor.mjs')

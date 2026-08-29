@@ -353,6 +353,7 @@ describe('Fast Context child executor', () => {
     })).resolves.toMatchObject({ evidencePack: { version: 1 } })
     expect(sourceContext).toMatchObject({
       fastContext: true,
+      fastContextScopeId: 'parent',
       fastContextTaskCount: 1,
       sandboxMode: 'danger-full-access',
       allowedReadPaths: ['.']

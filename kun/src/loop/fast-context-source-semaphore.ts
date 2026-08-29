@@ -10,15 +10,21 @@ type Waiter = {
   onAbort: () => void
 }
 
-/** Process-wide budget shared by every Fast Context child, not every turn. */
+/** One parent-session source-tool budget. */
 export class FastContextSourceSemaphore {
   private active = 0
   private readonly waiters: Waiter[] = []
 
-  constructor(private readonly capacity = FAST_CONTEXT_SOURCE_TOOL_CAPACITY) {}
+  constructor(
+    private readonly capacity = FAST_CONTEXT_SOURCE_TOOL_CAPACITY,
+    private readonly onIdle?: () => void
+  ) {}
 
   acquire(signal: AbortSignal): Promise<() => void> {
-    if (signal.aborted) return Promise.reject(new Error('Fast Context source tool aborted while queued'))
+    if (signal.aborted) {
+      this.notifyIdle()
+      return Promise.reject(new Error('Fast Context source tool aborted while queued'))
+    }
     if (this.active < this.capacity && this.waiters.length === 0) {
       this.active += 1
       return Promise.resolve(this.releaseOnce())
@@ -31,7 +37,9 @@ export class FastContextSourceSemaphore {
         onAbort: () => {
           const index = this.waiters.indexOf(waiter)
           if (index >= 0) this.waiters.splice(index, 1)
+          signal.removeEventListener('abort', waiter.onAbort)
           reject(new Error('Fast Context source tool aborted while queued'))
+          this.notifyIdle()
         }
       }
       signal.addEventListener('abort', waiter.onAbort, { once: true })
@@ -60,6 +68,7 @@ export class FastContextSourceSemaphore {
       released = true
       this.active = Math.max(0, this.active - 1)
       this.drain()
+      this.notifyIdle()
     }
   }
 
@@ -75,10 +84,15 @@ export class FastContextSourceSemaphore {
       this.active += 1
       waiter.resolve(this.releaseOnce())
     }
+    this.notifyIdle()
+  }
+
+  private notifyIdle(): void {
+    if (this.active === 0 && this.waiters.length === 0) this.onIdle?.()
   }
 }
 
-const sharedSemaphore = new FastContextSourceSemaphore()
+const scopedSemaphores = new Map<string, FastContextSourceSemaphore>()
 
 export function withFastContextSourceToolSlot<T>(input: {
   context: ToolHostContext
@@ -88,10 +102,28 @@ export function withFastContextSourceToolSlot<T>(input: {
   if (input.context.fastContext !== true || !FAST_CONTEXT_SOURCE_TOOL_NAMES.has(input.toolName)) {
     return input.work()
   }
-  return sharedSemaphore.run(input.context.abortSignal, input.work)
+  const scopeId = input.context.fastContextScopeId?.trim() || input.context.threadId
+  let semaphore = scopedSemaphores.get(scopeId)
+  if (!semaphore) {
+    semaphore = new FastContextSourceSemaphore(FAST_CONTEXT_SOURCE_TOOL_CAPACITY, () => {
+      if (scopedSemaphores.get(scopeId) === semaphore) scopedSemaphores.delete(scopeId)
+    })
+    scopedSemaphores.set(scopeId, semaphore)
+  }
+  return semaphore.run(input.context.abortSignal, input.work)
 }
 
-/** Test-only observability without exposing a mutable singleton. */
-export function fastContextSourceToolSemaphoreSnapshot(): { active: number; waiting: number; capacity: number } {
-  return sharedSemaphore.snapshot()
+/** Test-only observability for one parent-session lane. */
+export function fastContextSourceToolSemaphoreSnapshot(
+  scopeId: string
+): { active: number; waiting: number; capacity: number; exists: boolean } {
+  const semaphore = scopedSemaphores.get(scopeId)
+  return semaphore
+    ? { ...semaphore.snapshot(), exists: true }
+    : {
+        active: 0,
+        waiting: 0,
+        capacity: FAST_CONTEXT_SOURCE_TOOL_CAPACITY,
+        exists: false
+      }
 }

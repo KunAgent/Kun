@@ -216,6 +216,21 @@ function Remove-KnownApplicationEntry([IO.FileSystemInfo]$Entry) {
   }
 }
 
+function Remove-RetiredApplicationPayload([string]$Source) {
+  Assert-SafeInstallRoot $Source 'Retired application directory'
+  if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
+  $cleanupCount = 0
+  foreach ($entry in @(Get-ChildItem -LiteralPath $Source -Force | Where-Object { Test-KnownApplicationEntry $_ })) {
+    if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Retired application directory' }
+    Remove-KnownApplicationEntry $entry
+    $cleanupCount += 1
+    if ($cleanupCount -eq 1) { Invoke-InstallerFaultPoint 'finalize.after_first_cleanup' }
+  }
+  if (@(Get-ChildItem -LiteralPath $Source -Force).Count -eq 0) {
+    Remove-Item -LiteralPath $Source -Force
+  }
+}
+
 function Test-AppOwnedProcessPath([string]$ExecutablePath, [string[]]$Roots) {
   if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
     return $false

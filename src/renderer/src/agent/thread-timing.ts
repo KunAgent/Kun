@@ -14,7 +14,7 @@ export type RuntimeTurnItem = {
   finishedAt?: string | null
 }
 
-const TERMINAL_TURN_STATUSES = new Set(['completed', 'failed', 'aborted'])
+export const TERMINAL_TURN_STATUSES = new Set(['completed', 'failed', 'aborted'])
 
 function parseTimestampMs(value: string | null | undefined): number | undefined {
   if (!value) return undefined
@@ -34,6 +34,23 @@ function durationFromRange(startedAt: number | undefined, endedAt: number | unde
   if (typeof startedAt !== 'number' || typeof endedAt !== 'number') return undefined
   const duration = endedAt - startedAt
   return duration >= 0 && Number.isFinite(duration) ? duration : undefined
+}
+
+/**
+ * Resolve the persisted start time of the turn currently running on a thread,
+ * from the turns array of a thread detail response. Unlike the live
+ * `turnStartedAtByUserId` (seeded from the user_message event), this survives
+ * a thread switch or renderer restart, so elapsed-time displays anchored to it
+ * do not reset when the conversation is re-opened mid-turn.
+ */
+export function resolveRunningTurnStartedAtMs(
+  turns: readonly RuntimeTurnRecord[] | undefined
+): number | undefined {
+  if (!turns?.length) return undefined
+  const running = turns.filter((turn) => !TERMINAL_TURN_STATUSES.has(turn.status ?? ''))
+  const latest = running[running.length - 1]
+  if (!latest) return undefined
+  return parseTimestampMs(latest.startedAt) ?? parseTimestampMs(latest.createdAt)
 }
 
 export function buildTurnDurationByUserId(

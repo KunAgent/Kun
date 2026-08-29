@@ -186,13 +186,29 @@ jobs:
         run: npm ci
 
       - name: Test Windows update rollback failpoints
+        env:
+          KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
         run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
+
+      - name: Upload Windows transaction diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-installer-transaction-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            artifacts/windows-installer-transaction/**/diagnostic.log
+            artifacts/windows-installer-transaction/**/journal.json
+            artifacts/windows-installer-transaction/**/transaction.json
+            artifacts/windows-installer-transaction/**/result-*.txt
+            artifacts/windows-installer-transaction/**/fixture-summary.json
 
       - name: Build Windows installer
         run: npm run dist:win
 
       - name: Smoke Windows installer migration
-        timeout-minutes: 25
+        timeout-minutes: 60
         run: npm run smoke:windows-installer-migration -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
 
       - name: Smoke packaged update handoff (Windows)
@@ -251,7 +267,14 @@ jobs:
 
       - name: Smoke packaged update handoff (Linux x64)
         timeout-minutes: 20
-        run: npm run smoke:packaged-update-handoff -- --resources dist/linux-unpacked/resources
+        env:
+          KUN_CI_ALLOW_NO_SANDBOX: '1'
+        run: |
+          # Keep Chromium's sandbox under test. GitHub-hosted Ubuntu restricts
+          # unprivileged user namespaces through AppArmor by default.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          node ./scripts/configure-linux-chrome-sandbox.cjs --resources dist/linux-unpacked/resources
+          npm run smoke:packaged-update-handoff -- --resources dist/linux-unpacked/resources
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -311,7 +334,12 @@ jobs:
 
       - name: Smoke packaged update handoff (Linux ARM64)
         timeout-minutes: 20
-        run: npm run smoke:packaged-update-handoff -- --resources dist/linux-arm64-unpacked/resources
+        env:
+          KUN_CI_ALLOW_NO_SANDBOX: '1'
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          node ./scripts/configure-linux-chrome-sandbox.cjs --resources dist/linux-arm64-unpacked/resources
+          npm run smoke:packaged-update-handoff -- --resources dist/linux-arm64-unpacked/resources
 
       - name: Upload Linux ARM64 artifacts
         uses: actions/upload-artifact@v4

@@ -1,0 +1,11 @@
+{
+  "threadRefreshing": "更新中…",
+  "sidebarWorkspaceLoading": "スレッドを読み込み中…",
+  "sidebarWorkspaceLoadMore": "さらに読み込む",
+  "sidebarWorkspaceLoadError": "スレッドを読み込めませんでした。",
+  "threadHydrationLoadingTitle": "会話を読み込み中…",
+  "threadHydrationLoadingDescription": "メッセージを読み込み、最新の会話状態を復元しています。",
+  "threadHydrationTakingLongTitle": "会話の復元に時間がかかっています",
+  "threadHydrationTakingLongDescription": "イベントストリームがまだ追いついていません。接続を再試行できます。",
+  "threadHydrationRetry": "接続を再試行"
+}

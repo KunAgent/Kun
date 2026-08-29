@@ -301,6 +301,11 @@ export function reduceLateChatProjection(
               liveAssistantCreatedAt: undefined
             }
           : {}),
+        currentTurnStartedAtMs: snapshotTurnIsCurrent
+          ? busy
+            ? snapshot.latestTurnStartedAtMs ?? state.currentTurnStartedAtMs
+            : null
+          : state.currentTurnStartedAtMs,
         ...(state.lastTurnUsage && state.lastTurnUsage.threadId !== snapshot.threadId
           ? { turnTimingMetrics: new Map() }
           : {}),
@@ -326,6 +331,7 @@ export function reduceLateChatProjection(
         ...finalizeTurnTimingAt(state, context.now),
         error: null,
         currentTurnId: null,
+        currentTurnStartedAtMs: null,
         currentTurnOrchestration: null,
         ...(aborted ? {
           currentTurnUserId: null,

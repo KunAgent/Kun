@@ -27,21 +27,26 @@ function Convert-RegistryValueForJson($Value) {
 
 function Convert-RegistryValueFromJson($Record) {
   if ([string]::Equals([string]$Record.Encoding, 'base64', [StringComparison]::Ordinal)) {
-    return [Convert]::FromBase64String([string]$Record.Value)
+    # PowerShell enumerates arrays returned from functions. Preserve the typed
+    # array object required by RegistryKey.SetValue for binary registry data.
+    return ,([Convert]::FromBase64String([string]$Record.Value))
   }
   if ([string]$Record.Kind -eq 'MultiString') {
-    return [string[]]@($Record.Value)
+    # REG_MULTI_SZ requires String[], not the Object[] PowerShell would build
+    # after enumerating a normal function return value.
+    return ,([string[]]@($Record.Value))
   }
   if ([string]$Record.Kind -eq 'DWord') { return [int]$Record.Value }
   if ([string]$Record.Kind -eq 'QWord') { return [long]$Record.Value }
   return $Record.Value
 }
 
-function Get-TransactionRegistryHive {
-  if ((Get-NormalizedInstallMode) -eq 'all') {
-    return [Microsoft.Win32.Registry]::LocalMachine
+function Open-TransactionRegistryHive([string]$HiveName = '') {
+  if ([string]::IsNullOrWhiteSpace($HiveName)) {
+    $HiveName = if ((Get-NormalizedInstallMode) -eq 'all') { 'LocalMachine' } else { 'CurrentUser' }
   }
-  return [Microsoft.Win32.Registry]::CurrentUser
+  $hive = [Microsoft.Win32.RegistryHive]([Enum]::Parse([Microsoft.Win32.RegistryHive], $HiveName))
+  return [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive, [Microsoft.Win32.RegistryView]::Registry64)
 }
 
 function Get-TransactionRegistryKeyNames {
@@ -196,6 +201,7 @@ function Assert-ShortcutPathAuthorized([string]$PathValue) {
 function Restore-ShortcutSnapshot($Records) {
   Remove-TransactionShortcuts
   foreach ($record in @($Records)) {
+    if (@($record.PSObject.Properties).Count -eq 0) { continue }
     $path = Normalize-FullPath ([string]$record.Path)
     Assert-ShortcutPathAuthorized $path
     $backup = Normalize-FullPath ([string]$record.Backup)
@@ -240,6 +246,53 @@ function Write-UpdateTransaction([hashtable]$Transaction) {
   Set-SecureJournalFileAcl $path (Get-NormalizedInstallMode)
 }
 
+function Assert-UpdateTransactionPaths($Transaction) {
+  $target = Get-JournalTarget
+  $transactionPath = Get-UpdateTransactionPath
+  $expected = @{
+    Source = Get-RecoveryPayloadSource
+    Target = $target
+    BackupRoot = Get-InPlacePayloadBackupPath
+    AssetsRoot = "$transactionPath.assets"
+    HealthResult = Get-UpdateHealthResultPath
+  }
+  foreach ($name in $expected.Keys) {
+    $actualPath = Normalize-FullPath ([string]$Transaction.$name)
+    $expectedPath = Normalize-FullPath ([string]$expected[$name])
+    if ([string]::IsNullOrWhiteSpace($actualPath) -or -not (Test-PathEqual $actualPath $expectedPath)) {
+      throw "The automatic update transaction $name path is not authorized: $actualPath"
+    }
+  }
+  $stage = Normalize-FullPath ([string]$Transaction.StageRoot)
+  if (-not (Test-PathEqual $stage (Get-UpdateStageRoot))) {
+    throw "The automatic update transaction StageRoot path is not authorized: $stage"
+  }
+  $targetParent = Split-Path -Parent $target
+  $targetLeaf = Split-Path -Leaf $target
+  foreach ($name in @('OldPayloadRoot', 'FailedPayloadRoot')) {
+    $actualPath = Normalize-FullPath ([string]$Transaction.$name)
+    $actualLeaf = Split-Path -Leaf $actualPath
+    $expectedLeaf = switch ($name) {
+      'OldPayloadRoot' { '^' + [Regex]::Escape($targetLeaf + '.kun-old-') + '[0-9]+$' }
+      'FailedPayloadRoot' { '^' + [Regex]::Escape($targetLeaf + '.kun-failed') + '$' }
+    }
+    $isAuthorized = (Test-PathEqual (Split-Path -Parent $actualPath) $targetParent) -and
+      $actualLeaf -match $expectedLeaf
+    if ([string]::IsNullOrWhiteSpace($actualPath) -or -not $isAuthorized) {
+      throw "The automatic update transaction $name path is not authorized: $actualPath"
+    }
+  }
+  foreach ($record in @($Transaction.Shortcuts)) {
+    if (@($record.PSObject.Properties).Count -eq 0) { continue }
+    $backup = Normalize-FullPath ([string]$record.Backup)
+    if (-not (Test-PathWithin $backup ([string]$expected.AssetsRoot)) -or
+        (Test-PathEqual $backup ([string]$expected.AssetsRoot))) {
+      throw "The shortcut recovery file is outside the transaction assets directory: $backup"
+    }
+    Assert-ShortcutPathAuthorized (Normalize-FullPath ([string]$record.Path))
+  }
+}
+
 function Read-UpdateTransaction {
   $path = Get-UpdateTransactionPath
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
@@ -253,13 +306,14 @@ function Read-UpdateTransaction {
   if (-not [string]::Equals([string]$transaction.InstallMode, (Get-NormalizedInstallMode), [StringComparison]::Ordinal)) {
     throw 'The automatic update transaction installation mode does not match.'
   }
+  Assert-UpdateTransactionPaths $transaction
   return $transaction
 }
 
 function Recover-PendingUpdateTransaction {
   $transaction = Read-UpdateTransaction
   if ($null -eq $transaction) { return }
-  if ([string]$transaction.Phase -eq 'rolled_back') {
+  if (@('rolled_back', 'finalizing') -contains [string]$transaction.Phase) {
     Finalize-TerminalUpdateTransaction
     return
   }
@@ -298,26 +352,34 @@ function Initialize-UpdateTransaction {
   if (-not [string]::Equals([IO.Path]::GetPathRoot($stage), [IO.Path]::GetPathRoot($target), [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The automatic update stage must be on the target volume.'
   }
-  $assets = Get-UpdateTransactionPath + '.assets'
+  $transactionPath = Get-UpdateTransactionPath
+  $assets = "$transactionPath.assets"
   foreach ($path in @($stage, ($target + '.kun-failed'), $assets)) {
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
   }
   [IO.Directory]::CreateDirectory($assets) | Out-Null
 
-  Backup-InPlacePayload
-  $registry = @()
-  $hive = Get-TransactionRegistryHive
-  $hiveName = if ((Get-NormalizedInstallMode) -eq 'all') { 'LocalMachine' } else { 'CurrentUser' }
-  foreach ($keyName in @(Get-TransactionRegistryKeyNames)) {
-    $registry += @{ Hive = $hiveName; Snapshot = Export-RegistryTree $hive $keyName }
+  $inPlace = [bool](Test-PathEqual $source $target)
+  $recoveryRoot = $source
+  if ($inPlace) {
+    Backup-InPlacePayload
+    $recoveryRoot = $backup
   }
+  $registry = @()
+  $hiveName = if ((Get-NormalizedInstallMode) -eq 'all') { 'LocalMachine' } else { 'CurrentUser' }
+  $hive = Open-TransactionRegistryHive $hiveName
+  try {
+    foreach ($keyName in @(Get-TransactionRegistryKeyNames)) {
+      $registry += @{ Hive = $hiveName; Snapshot = Export-RegistryTree $hive $keyName }
+    }
+  } finally { $hive.Dispose() }
   if ((Get-NormalizedInstallMode) -eq 'all' -and
       [string]::Equals((Get-EnvironmentValue 'KUN_INSTALLER_PRESERVE_OTHER_SCOPE'), '1', [StringComparison]::Ordinal)) {
     $uninstallKey = (Get-TransactionRegistryKeyNames)[1]
-    $registry += @{
-      Hive = 'CurrentUser'
-      Snapshot = Export-RegistryTree ([Microsoft.Win32.Registry]::CurrentUser) $uninstallKey
-    }
+    $hive = Open-TransactionRegistryHive 'CurrentUser'
+    try {
+      $registry += @{ Hive = 'CurrentUser'; Snapshot = Export-RegistryTree $hive $uninstallKey }
+    } finally { $hive.Dispose() }
   }
   $transaction = @{
     TransactionId = [Guid]::NewGuid().ToString('N')
@@ -331,12 +393,12 @@ function Initialize-UpdateTransaction {
     FailedPayloadRoot = $target + '.kun-failed'
     BackupRoot = $backup
     AssetsRoot = $assets
-    InPlace = [bool](Test-PathEqual $source $target)
-    RecoveryExecutable = Find-RecoveryPayloadExecutable $backup
-    RecoveryAppAsar = Join-Path $backup 'resources\app.asar'
+    InPlace = $inPlace
+    RecoveryExecutable = Find-RecoveryPayloadExecutable $recoveryRoot
+    RecoveryAppAsar = Join-Path $recoveryRoot 'resources\app.asar'
     Registry = $registry
     UserPath = Get-UserPathSnapshot
-    Shortcuts = Get-ShortcutSnapshot $assets
+    Shortcuts = @(Get-ShortcutSnapshot $assets)
     HealthResult = Get-UpdateHealthResultPath
     HealthToken = [Guid]::NewGuid().ToString('N')
     CompletedMutations = @()
@@ -415,28 +477,30 @@ function Assert-UpdateCutover {
   $target = Normalize-FullPath ([string]$transaction.Target)
   $stage = Normalize-FullPath ([string]$transaction.StageRoot)
   Assert-PackagedInstallPayloadAt $target
-  $hive = Get-TransactionRegistryHive
-  foreach ($keyName in @(Get-TransactionRegistryKeyNames)) {
-    Assert-RegistryTreeNoStage $hive $keyName $stage
-  }
-  foreach ($keyName in @(Get-TransactionRegistryKeyNames)) {
-    $key = $hive.OpenSubKey($keyName, $false)
-    if ($null -eq $key) { throw "The committed installer registry key is missing: $keyName" }
-    try {
-      foreach ($name in @($key.GetValueNames())) {
-        $value = [string]$key.GetValue($name, '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-        if (-not [string]::IsNullOrWhiteSpace($stage) -and $value.IndexOf($stage, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-          throw "The committed registry value references the staging directory: $keyName/$name"
-        }
-      }
-    } finally { $key.Dispose() }
-  }
-  $installKey = $hive.OpenSubKey((Get-TransactionRegistryKeyNames)[0], $false)
+  $hive = Open-TransactionRegistryHive
   try {
-    if ($null -eq $installKey -or -not (Test-PathEqual ([string]$installKey.GetValue('InstallLocation')) $target)) {
-      throw 'The committed InstallLocation does not reference the final target.'
+    foreach ($keyName in @(Get-TransactionRegistryKeyNames)) {
+      Assert-RegistryTreeNoStage $hive $keyName $stage
     }
-  } finally { if ($null -ne $installKey) { $installKey.Dispose() } }
+    foreach ($keyName in @(Get-TransactionRegistryKeyNames)) {
+      $key = $hive.OpenSubKey($keyName, $false)
+      if ($null -eq $key) { throw "The committed installer registry key is missing: $keyName" }
+      try {
+        foreach ($name in @($key.GetValueNames())) {
+          $value = [string]$key.GetValue($name, '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+          if (-not [string]::IsNullOrWhiteSpace($stage) -and $value.IndexOf($stage, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            throw "The committed registry value references the staging directory: $keyName/$name"
+          }
+        }
+      } finally { $key.Dispose() }
+    }
+    $installKey = $hive.OpenSubKey((Get-TransactionRegistryKeyNames)[0], $false)
+    try {
+      if ($null -eq $installKey -or -not (Test-PathEqual ([string]$installKey.GetValue('InstallLocation')) $target)) {
+        throw 'The committed InstallLocation does not reference the final target.'
+      }
+    } finally { if ($null -ne $installKey) { $installKey.Dispose() } }
+  } finally { $hive.Dispose() }
   $expectedExecutable = Join-Path $target (Get-ExpectedApplicationExecutable)
   $shortcutCount = 0
   foreach ($root in @(Get-ShortcutRoots)) {
@@ -493,19 +557,27 @@ function Invoke-RollbackUpdateTransaction {
     if ([bool]$transaction.InPlace -and (Test-Path -LiteralPath $old)) {
       Move-Item -LiteralPath $old -Destination $target
     }
-    Restore-TransactionPayloadBackup $transaction
+    if ([bool]$transaction.InPlace) {
+      Restore-TransactionPayloadBackup $transaction
+    } else {
+      Assert-RecoveryPayload (Normalize-FullPath ([string]$transaction.Source))
+    }
     $previousTarget = Get-EnvironmentValue 'KUN_INSTALLER_TARGET'
     [Environment]::SetEnvironmentVariable('KUN_INSTALLER_TARGET', [string]$transaction.Target, 'Process')
     try {
-      $unknownJournal = Read-Journal
-      if ($null -ne $unknownJournal) {
-        foreach ($record in @(Get-JournalRecords $unknownJournal)) {
-          $validated = Get-ValidatedJournalRecord $record
-          if (Test-Path -LiteralPath $validated.Stash) {
-            Remove-Item -LiteralPath $validated.Stash -Recurse -Force
+      if ([bool]$transaction.InPlace) {
+        $unknownJournal = Read-Journal
+        if ($null -ne $unknownJournal) {
+          foreach ($record in @(Get-JournalRecords $unknownJournal)) {
+            $validated = Get-ValidatedJournalRecord $record
+            if (Test-Path -LiteralPath $validated.Stash) {
+              Remove-Item -LiteralPath $validated.Stash -Recurse -Force
+            }
           }
+          Remove-Journal
         }
-        Remove-Journal
+      } else {
+        Invoke-RestoreJournal
       }
     } finally {
       [Environment]::SetEnvironmentVariable('KUN_INSTALLER_TARGET', $previousTarget, 'Process')
@@ -518,12 +590,8 @@ function Invoke-RollbackUpdateTransaction {
       })) {
         throw "The registry recovery root is not authorized: $recordPath"
       }
-      $hive = if ([string]$record.Hive -eq 'LocalMachine') {
-        [Microsoft.Win32.Registry]::LocalMachine
-      } else {
-        [Microsoft.Win32.Registry]::CurrentUser
-      }
-      Restore-RegistryTree $hive $record.Snapshot $recordPath
+      $hive = Open-TransactionRegistryHive ([string]$record.Hive)
+      try { Restore-RegistryTree $hive $record.Snapshot $recordPath } finally { $hive.Dispose() }
     }
     Restore-ShortcutSnapshot $transaction.Shortcuts
     Restore-UserPathSnapshot $transaction.UserPath
@@ -561,22 +629,6 @@ function Resolve-UpdateHealthToken {
   Write-InstallerResult ([string]$transaction.HealthToken)
 }
 
-function Assert-UpdateHealthResult {
-  $transaction = Read-UpdateTransaction
-  if ($null -eq $transaction) { throw 'The automatic update transaction is unavailable.' }
-  $path = Normalize-FullPath ([string]$transaction.HealthResult)
-  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'The candidate application did not report update health.' }
-  $result = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-  $versionMismatch = -not [string]::IsNullOrWhiteSpace([string]$transaction.NewVersion) -and
-    -not [string]::Equals([string]$result.version, [string]$transaction.NewVersion, [StringComparison]::OrdinalIgnoreCase)
-  if (-not [bool]$result.ok -or
-      $versionMismatch -or
-      -not [string]::Equals([string]$result.token, [string]$transaction.HealthToken, [StringComparison]::Ordinal) -or
-      -not (Test-PathEqual ([string]$result.installDir) ([string]$transaction.Target))) {
-    throw 'The candidate application failed the update health handshake.'
-  }
-}
-
 function Remove-LegacyTransactionShortcuts {
   foreach ($root in @(Get-ShortcutRoots)) {
     if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
@@ -594,22 +646,6 @@ function Invoke-CommitUpdateTransaction {
     $transaction = Set-UpdateTransactionPhase $transaction 'cleanup_pending'
     Invoke-InstallerFaultPoint 'commit.after_journal'
   }
-  $source = Normalize-FullPath ([string]$transaction.Source)
-  $target = Normalize-FullPath ([string]$transaction.Target)
-  if (-not (Test-PathEqual $source $target) -and (Test-Path -LiteralPath $source -PathType Container)) {
-    $cleanupCount = 0
-    foreach ($entry in @(Get-ChildItem -LiteralPath $source -Force | Where-Object { Test-KnownApplicationEntry $_ })) {
-      if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Retired application directory' }
-      Remove-KnownApplicationEntry $entry
-      $cleanupCount += 1
-      if ($cleanupCount -eq 1) {
-        Invoke-InstallerFaultPoint 'commit.after_first_cleanup'
-      }
-    }
-    if (@(Get-ChildItem -LiteralPath $source -Force).Count -eq 0) {
-      Remove-Item -LiteralPath $source -Force
-    }
-  }
   Remove-LegacyTransactionShortcuts
   # Retain payload, registry/PATH, shortcut and journal recovery artifacts
   # through the first complete application startup. FinalizeUpdateTransaction
@@ -620,8 +656,14 @@ function Invoke-CommitUpdateTransaction {
 function Finalize-TerminalUpdateTransaction {
   $transaction = Read-UpdateTransaction
   if ($null -eq $transaction) { return }
-  if (@('committed', 'rolled_back') -notcontains [string]$transaction.Phase) {
+  if (@('committed', 'finalizing', 'rolled_back') -notcontains [string]$transaction.Phase) {
     throw 'The automatic update transaction is not terminal.'
+  }
+  if ([string]$transaction.Phase -eq 'committed') {
+    $transaction = Set-UpdateTransactionPhase $transaction 'finalizing'
+  }
+  if ([string]$transaction.Phase -eq 'finalizing' -and -not [bool]$transaction.InPlace) {
+    Remove-RetiredApplicationPayload (Normalize-FullPath ([string]$transaction.Source))
   }
   foreach ($path in @(
     ([string]$transaction.OldPayloadRoot),

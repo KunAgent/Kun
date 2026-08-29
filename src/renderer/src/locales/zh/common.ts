@@ -9,6 +9,7 @@ import agentsGraph from './common/agents-graph.json'
 import codePersonas from './common/code-personas.json'
 import workWhiteboard from './common/work-whiteboard.json'
 import sidebar from './common/sidebar.json'
+import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
 import nodeGraph from './common/node-graph.json'
 
@@ -24,6 +25,7 @@ const common = {
   ...codePersonas,
   ...workWhiteboard,
   ...sidebar,
+  ...i18nReview,
   ...commandPalette,
   ...nodeGraph,
 }

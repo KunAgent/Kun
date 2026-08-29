@@ -1,6 +1,7 @@
 {
   "threadRefreshing": "正在刷新…",
   "sidebarWorkspaceLoading": "正在加载会话…",
+  "sidebarWorkspaceLoadMore": "加载更多",
   "sidebarWorkspaceLoadError": "会话加载失败。",
   "threadHydrationLoadingTitle": "正在加载会话…",
   "threadHydrationLoadingDescription": "正在读取消息并恢复最新会话状态，请稍候。",

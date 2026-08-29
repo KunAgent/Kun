@@ -1,3 +1,5 @@
+export * from './antigravity-model-catalog.js'
+
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
 export type ProviderCatalogCategory = 'api' | 'subscription'

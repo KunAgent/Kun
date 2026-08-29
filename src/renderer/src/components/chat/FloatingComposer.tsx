@@ -129,7 +129,6 @@ import {
   codeExecutionControlsAvailable,
   resolveComposerPrimaryActionKind,
   returnQueuedMessageToComposer,
-  formatGoalElapsedSeconds,
   shouldShowGoalFloater,
   shouldShowUsageHistory,
   shouldShowVoiceDictation,
@@ -138,6 +137,7 @@ import {
   type FloatingComposerProps
 } from './floating-composer-policy'
 import { useFloatingComposerActions } from './use-floating-composer-actions'
+import { useGoalElapsedLabel } from './use-goal-elapsed'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { FloatingComposerStackView } from './FloatingComposerStackView'
 import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
@@ -407,7 +407,6 @@ export function FloatingComposer({
   const [composerMenuOpen, setComposerMenuOpen] = useState(false)
   const [goalPanelOpen, setGoalPanelOpen] = useState(false)
   const [goalInputMode, setGoalInputMode] = useState(false)
-  const [goalRuntimeNowMs, setGoalRuntimeNowMs] = useState(() => Date.now())
   const [promptOptimizationBusy, setPromptOptimizationBusy] = useState(false)
   const [promptOptimizationError, setPromptOptimizationError] = useState<string | null>(null)
   const onDismissPromptOptimizationError = useCallback((): void => {
@@ -461,7 +460,6 @@ export function FloatingComposer({
   const composerMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const composerMenuPanelRef = useRef<HTMLDivElement | null>(null)
   const goalPanelRef = useRef<HTMLDivElement | null>(null)
-  const goalRuntimeStartedAtRef = useRef<number | null>(null)
   const placeholder = disabled && disabledReason
     ? disabledReason
     : !runtimeReady
@@ -560,14 +558,7 @@ export function FloatingComposer({
     input.trim().length > 0 &&
     typeof window !== 'undefined' &&
     typeof window.kunGui?.optimizePrompt === 'function'
-  const goalRuntimeStartedAtMs = goalRuntimeStartedAtRef.current
-  const liveGoalElapsedSeconds =
-    busy && activeThreadGoal?.status === 'active' && goalRuntimeStartedAtMs != null
-      ? Math.max(0, Math.floor((goalRuntimeNowMs - goalRuntimeStartedAtMs) / 1000))
-      : 0
-  const goalElapsedLabel = activeThreadGoal
-    ? formatGoalElapsedSeconds((activeThreadGoal.timeUsedSeconds ?? 0) + liveGoalElapsedSeconds)
-    : ''
+  const goalElapsedLabel = useGoalElapsedLabel({ busy, goal: activeThreadGoal })
   const goalBannerLabel = activeThreadGoal
     ? activeThreadGoal.status === 'active'
       ? t('goalActiveHeading')
@@ -612,26 +603,6 @@ export function FloatingComposer({
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [composerMenuOpen, goalPanelOpen])
-
-  useEffect(() => {
-    const shouldTimeGoal = busy && activeThreadGoal?.status === 'active'
-    if (!shouldTimeGoal) {
-      goalRuntimeStartedAtRef.current = null
-      setGoalRuntimeNowMs(Date.now())
-      return
-    }
-
-    if (goalRuntimeStartedAtRef.current == null) {
-      const startedAt = Date.now()
-      goalRuntimeStartedAtRef.current = startedAt
-      setGoalRuntimeNowMs(startedAt)
-    }
-
-    const interval = window.setInterval(() => {
-      setGoalRuntimeNowMs(Date.now())
-    }, 1000)
-    return () => window.clearInterval(interval)
-  }, [busy, activeThreadGoal?.createdAt, activeThreadGoal?.objective, activeThreadGoal?.status])
 
   const actionContext: FloatingComposerRenderContext = {
     activeThreadId, archiveThread, buildResearchPrompt, canAcceptComposerFileDrop,

@@ -56,7 +56,6 @@ import {
 } from './claw-schedule-mcp-config'
 import { defaultKunDataDir } from './runtime/kun-adapter'
 import { resolveClaudeBinary } from './agent-sdk-installer'
-import { resolveAntigravityCliBinary } from './antigravity-cli'
 import type { KunUnexpectedExitInfo } from './runtime/kun-process-controller'
 import {
   waitForKunStartup
@@ -513,7 +512,6 @@ async function prepareKunLaunch(
     (provider) => provider.id?.trim() === getKunRuntimeSettings(settings).providerId.trim()
   )?.kind
   const claudeBinary = resolveClaudeBinary(app.getPath('userData'), [join(appRoot(), 'kun')])
-  const antigravityBinary = resolveAntigravityCliBinary(app.getPath('userData'))
   const officeCliBinary = resolveOfficeCliBinary({
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
@@ -533,7 +531,6 @@ async function prepareKunLaunch(
     KUN_PPT_TOOLCHAIN_DIR: pptToolchainDirectory,
     ...(activeProviderKind ? { KUN_RUNTIME_PROVIDER_KIND: activeProviderKind } : {}),
     ...(claudeBinary ? { KUN_CLAUDE_BINARY: claudeBinary } : {}),
-    ...(antigravityBinary ? { KUN_ANTIGRAVITY_BINARY: antigravityBinary } : {}),
     ...(officeCliBinary ? { KUN_OFFICECLI_BINARY: officeCliBinary } : {}),
     ...(browserUseBridge
       ? {

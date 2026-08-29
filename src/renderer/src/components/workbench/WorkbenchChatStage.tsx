@@ -230,10 +230,10 @@ export function WorkbenchChatStage({
                 <span
                   className="inline-flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground"
                   role="status"
-                  aria-label={t('sidebar:threadRefreshing')}
+                  aria-label={t('threadRefreshing')}
                 >
                   <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden="true" />
-                  {t('sidebar:threadRefreshing')}
+                  {t('threadRefreshing')}
                 </span>
               ) : null}
               {busy ? (

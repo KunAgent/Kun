@@ -14,7 +14,8 @@ describe('FloatingComposerAboveInputStack', () => {
       floatingStatuses: createElement(Fragment, null,
         createElement('div', { 'data-composer-stack-item': 'todo' }),
         createElement('div', { 'data-composer-stack-item': 'graph' }),
-        createElement('div', { 'data-composer-stack-item': 'goal' })
+        createElement('div', { 'data-composer-stack-item': 'goal' }),
+        createElement('div', { 'data-composer-stack-item': 'background-shell' })
       ),
       flowPanels: createElement(Fragment, null,
         createElement('div', { 'data-composer-queue': true }),
@@ -26,6 +27,7 @@ describe('FloatingComposerAboveInputStack', () => {
     const todoIndex = html.indexOf('data-composer-stack-item="todo"')
     const graphIndex = html.indexOf('data-composer-stack-item="graph"')
     const goalIndex = html.indexOf('data-composer-stack-item="goal"')
+    const shellIndex = html.indexOf('data-composer-stack-item="background-shell"')
     const flowIndex = html.indexOf('data-composer-flow-panel-stack')
     const queueIndex = html.indexOf('data-composer-queue')
     const userInputIndex = html.indexOf('data-composer-stack-item="user-input"')
@@ -34,7 +36,8 @@ describe('FloatingComposerAboveInputStack', () => {
     expect(todoIndex).toBeGreaterThan(floatingIndex)
     expect(graphIndex).toBeGreaterThan(todoIndex)
     expect(goalIndex).toBeGreaterThan(graphIndex)
-    expect(flowIndex).toBeGreaterThan(goalIndex)
+    expect(shellIndex).toBeGreaterThan(goalIndex)
+    expect(flowIndex).toBeGreaterThan(shellIndex)
     expect(queueIndex).toBeGreaterThan(flowIndex)
     expect(userInputIndex).toBeGreaterThan(queueIndex)
     expect(html).toContain('pointer-events-none absolute inset-x-0 bottom-full')

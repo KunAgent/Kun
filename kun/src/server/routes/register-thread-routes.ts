@@ -113,7 +113,8 @@ export function registerThreadRoutes(
       request,
       runtime.sessionStore,
       runtime.userInputGate,
-      runtime.approvalGate
+      runtime.approvalGate,
+      runtime.delegationRuntime
     )
   })
   router.add('GET', '/v1/threads/:id/knowledge-bases', async (request, ctx) => {

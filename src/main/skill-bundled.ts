@@ -1,4 +1,4 @@
-import { mkdir, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**
@@ -10,6 +10,7 @@ import { join } from 'node:path'
  */
 
 const BUNDLED_SEED_MARKER = '.bundled-skills-seed-v2'
+const DIAGRAM_SEED_MARKER = '.bundled-diagram-design-seed-v1'
 const SKILL_ID = 'design-system'
 
 const SKILL_MANIFEST = {
@@ -69,35 +70,61 @@ These read as "AI made this" — do not ship them:
 
 let seedPromise: Promise<void> | null = null
 
-export function ensureBundledSkills(kunHomeDir: string): Promise<void> {
+export function ensureBundledSkills(kunHomeDir: string, bundledResourcesRoot?: string): Promise<void> {
   seedPromise ??= (async () => {
     const skillsRoot = join(kunHomeDir, 'skills')
-    const markerPath = join(skillsRoot, BUNDLED_SEED_MARKER)
-    try {
-      await stat(markerPath)
-      return
-    } catch {
-      // not seeded yet
-    }
-    let seeded = false
-    try {
-      const skillDir = join(skillsRoot, SKILL_ID)
-      await mkdir(skillDir, { recursive: true })
-      await writeFile(join(skillDir, 'skill.json'), `${JSON.stringify(SKILL_MANIFEST, null, 2)}\n`, 'utf8')
-      await writeFile(join(skillDir, 'SKILL.md'), SKILL_INSTRUCTIONS, 'utf8')
-      seeded = true
-    } catch (error) {
-      console.error('[skill] failed to seed bundled design skill:', error)
-    }
-    // Only stamp the marker on success so a failed seed retries next launch.
-    if (seeded) {
-      try {
-        await mkdir(skillsRoot, { recursive: true })
-        await writeFile(markerPath, `${SKILL_ID}\n`, 'utf8')
-      } catch {
-        // marker write failure is acceptable; seed retries next launch
-      }
-    }
+    await seedDesignSystemSkill(skillsRoot)
+    await seedDiagramSkill(skillsRoot, bundledResourcesRoot)
   })()
   return seedPromise
+}
+
+async function seedDesignSystemSkill(skillsRoot: string): Promise<void> {
+  const markerPath = join(skillsRoot, BUNDLED_SEED_MARKER)
+  try {
+    await stat(markerPath)
+    return
+  } catch {
+    // not seeded yet
+  }
+  let seeded = false
+  try {
+    const skillDir = join(skillsRoot, SKILL_ID)
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(join(skillDir, 'skill.json'), `${JSON.stringify(SKILL_MANIFEST, null, 2)}\n`, 'utf8')
+    await writeFile(join(skillDir, 'SKILL.md'), SKILL_INSTRUCTIONS, 'utf8')
+    seeded = true
+  } catch (error) {
+    console.error('[skill] failed to seed bundled design skill:', error)
+  }
+  if (seeded) {
+    await mkdir(skillsRoot, { recursive: true })
+    await writeFile(markerPath, `${SKILL_ID}\n`, 'utf8').catch(() => undefined)
+  }
+}
+
+async function seedDiagramSkill(skillsRoot: string, bundledResourcesRoot?: string): Promise<void> {
+  const markerPath = join(skillsRoot, DIAGRAM_SEED_MARKER)
+  try {
+    await stat(markerPath)
+    return
+  } catch {
+    // not seeded yet
+  }
+  const resourceRoot = bundledResourcesRoot?.trim()
+  if (!resourceRoot) return
+  const source = join(resourceRoot, 'bundled-skills', 'diagram-design')
+  try {
+    const sourceInfo = await stat(source)
+    if (!sourceInfo.isDirectory()) return
+    await mkdir(skillsRoot, { recursive: true })
+    await cp(source, join(skillsRoot, 'diagram-design'), {
+      recursive: true,
+      errorOnExist: true,
+      force: false
+    })
+    await writeFile(markerPath, 'diagram-design\n', 'utf8')
+  } catch (error) {
+    console.error('[skill] failed to seed bundled diagram skill:', error)
+  }
 }

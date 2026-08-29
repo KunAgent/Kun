@@ -4,6 +4,7 @@ import {
   Maximize2,
   Minimize2
 } from 'lucide-react'
+import i18n from '../i18n'
 import {
   useCallback,
   useEffect,
@@ -392,7 +393,7 @@ export function WorkspacePptxPreview({
           ) : null}
           <button
             type="button"
-            aria-label="Enter fullscreen"
+            aria-label={i18n.t('officeEnterFullscreen')}
             className="rounded p-1 hover:bg-ds-hover"
             onClick={() => void toggleFullscreen()}
           >
@@ -452,7 +453,7 @@ export function WorkspacePptxPreview({
             {viewerError ? <span className="max-w-80 truncate text-red-200">{viewerError}</span> : null}
             <button
               type="button"
-              aria-label="Exit fullscreen"
+              aria-label={i18n.t('officeExitFullscreen')}
               className="rounded p-1 hover:bg-white/15"
               onClick={() => void toggleFullscreen()}
             >
@@ -487,17 +488,17 @@ function PptxSlideControls({
     <div className={`flex items-center gap-1 rounded border px-1 py-0.5 ${dark ? 'border-white/20' : 'border-ds-border-muted'}`}>
       <button
         type="button"
-        aria-label="Previous slide"
+        aria-label={i18n.t('officePreviousSlide')}
         disabled={slide <= 1}
         className={`rounded p-0.5 disabled:opacity-40 ${hoverClass}`}
         onClick={() => onSelectSlide(slide - 1)}
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
-      <span aria-label={`Slide ${slide} of ${slideCount}`}>Slide {slide} / {slideCount}</span>
+      <span aria-label={i18n.t('officeSlideSummary', { slide, count: slideCount })}>{i18n.t('officeSlideSummary', { slide, count: slideCount })}</span>
       <button
         type="button"
-        aria-label="Next slide"
+        aria-label={i18n.t('officeNextSlide')}
         disabled={slide >= slideCount}
         className={`rounded p-0.5 disabled:opacity-40 ${hoverClass}`}
         onClick={() => onSelectSlide(slide + 1)}
@@ -562,7 +563,7 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 
 function errorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
-  return message || 'This PowerPoint presentation could not be rendered.'
+  return message || i18n.t('officePptRenderError')
 }
 
 export function fittedPptxPreviewZoom(viewportWidth: number, viewportHeight: number): number {

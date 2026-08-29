@@ -10,6 +10,7 @@ import { ExtensionWorkbenchLifecycle } from './extensions/ExtensionWorkbenchLife
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
 import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-settings-service'
+import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 import {
   clearCurrentlyVisibleUnreadCompletions,
@@ -19,17 +20,42 @@ import {
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
-const Workbench = lazy(() =>
-  import('./components/Workbench').then((module) => ({ default: module.Workbench }))
-)
-const SettingsView = lazy(() =>
-  import('./components/SettingsView').then((module) => ({ default: module.SettingsView }))
-)
-const InitialSetupDialog = lazy(() =>
-  import('./components/InitialSetupDialog').then((module) => ({
-    default: module.InitialSetupDialog
-  }))
-)
+type WorkbenchComponent = (typeof import('./components/Workbench'))['Workbench']
+type SettingsViewComponent = (typeof import('./components/SettingsView'))['SettingsView']
+type InitialSetupDialogComponent = (
+  typeof import('./components/InitialSetupDialog')
+)['InitialSetupDialog']
+
+let preparedWorkbench: WorkbenchComponent | null = null
+let preparedSettingsView: SettingsViewComponent | null = null
+let preparedInitialSetupDialog: InitialSetupDialogComponent | null = null
+
+const loadWorkbench = () =>
+  import('./components/Workbench').then((module) => {
+    preparedWorkbench = module.Workbench
+    return { default: module.Workbench }
+  })
+const loadSettingsView = () =>
+  import('./components/SettingsView').then((module) => {
+    preparedSettingsView = module.SettingsView
+    return { default: module.SettingsView }
+  })
+const loadInitialSetupDialog = () => import('./components/InitialSetupDialog').then((module) => {
+  preparedInitialSetupDialog = module.InitialSetupDialog
+  return { default: module.InitialSetupDialog }
+})
+
+const Workbench = lazy(loadWorkbench)
+const SettingsView = lazy(loadSettingsView)
+const InitialSetupDialog = lazy(loadInitialSetupDialog)
+
+export const prepareInitialWorkbench = createInitialWorkbenchPreparer({
+  boot: () => useChatStore.getState().boot(),
+  getSnapshot: () => useChatStore.getState(),
+  loadWorkbench,
+  loadSettingsView,
+  loadInitialSetupDialog
+})
 
 function RouteFallback(): React.ReactElement {
   return (
@@ -48,7 +74,6 @@ function RouteFallback(): React.ReactElement {
 
 export default function AppShell(): React.ReactElement {
   const route = useChatStore((s) => s.route)
-  const boot = useChatStore((s) => s.boot)
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)
   const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? 'unknown' : 'unknown'
   const appEnvironment = typeof window !== 'undefined' ? window.kunGui?.appEnvironment : undefined
@@ -56,19 +81,9 @@ export default function AppShell(): React.ReactElement {
     ? window.kunGui?.desktopTitleBarMode ?? resolveDesktopTitleBarMode(platform, false)
     : resolveDesktopTitleBarMode(platform, false)
   const hasDesktopTitleBar = supportsDesktopTitleBar(platform, desktopTitleBarMode)
-
-  useEffect(() => {
-    let frame = 0
-    const timer = window.setTimeout(() => {
-      frame = window.requestAnimationFrame(() => {
-        void boot()
-      })
-    }, 0)
-    return () => {
-      window.clearTimeout(timer)
-      if (frame) window.cancelAnimationFrame(frame)
-    }
-  }, [boot])
+  const WorkbenchView = preparedWorkbench ?? Workbench
+  const SettingsRouteView = preparedSettingsView ?? SettingsView
+  const InitialSetupView = preparedInitialSetupDialog ?? InitialSetupDialog
 
   useEffect(() => {
     let disposed = false
@@ -164,9 +179,9 @@ export default function AppShell(): React.ReactElement {
                 restoreTarget="settings"
                 fallback={<RouteFallback />}
               >
-                <SettingsView />
+                <SettingsRouteView />
               </ProtectedRendererSurface>
-            ) : <Workbench />}
+            ) : <WorkbenchView />}
           </Suspense>
         </div>
         <ExtensionWorkbenchLifecycle />
@@ -177,7 +192,7 @@ export default function AppShell(): React.ReactElement {
             fallback={null}
           >
             <Suspense fallback={null}>
-              <InitialSetupDialog />
+              <InitialSetupView />
             </Suspense>
           </ProtectedRendererSurface>
         ) : null}

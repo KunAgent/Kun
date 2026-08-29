@@ -5,6 +5,7 @@ import commandsSdd from './common/commands-sdd.json'
 import sddFrameworks from './common/sdd-frameworks.json'
 import sddMcp from './common/sdd-mcp.json'
 import agentsGraph from './common/agents-graph.json'
+import sidebar from './common/sidebar.json'
 import commandPalette from './common/command-palette.json'
 
 const common = {
@@ -15,6 +16,7 @@ const common = {
   ...sddFrameworks,
   ...sddMcp,
   ...agentsGraph,
+  ...sidebar,
   ...commandPalette,
 }
 

@@ -1,5 +1,47 @@
 import { describe, expect, it } from 'vitest'
-import { buildTurnDurationByUserId } from './thread-timing'
+import { buildTurnDurationByUserId, resolveRunningTurnStartedAtMs } from './thread-timing'
+
+describe('resolveRunningTurnStartedAtMs', () => {
+  it('returns the startedAt of a running turn', () => {
+    expect(resolveRunningTurnStartedAtMs([
+      {
+        id: 'turn-running',
+        status: 'running',
+        createdAt: '2026-05-25T09:00:00.000Z',
+        startedAt: '2026-05-25T09:00:01.000Z'
+      }
+    ])).toBe(Date.parse('2026-05-25T09:00:01.000Z'))
+  })
+
+  it('falls back to createdAt when startedAt is missing', () => {
+    expect(resolveRunningTurnStartedAtMs([
+      { id: 'turn-running', status: 'running', createdAt: '2026-05-25T09:00:00.000Z' }
+    ])).toBe(Date.parse('2026-05-25T09:00:00.000Z'))
+  })
+
+  it('returns undefined for empty or fully terminal turns', () => {
+    expect(resolveRunningTurnStartedAtMs(undefined)).toBeUndefined()
+    expect(resolveRunningTurnStartedAtMs([])).toBeUndefined()
+    expect(resolveRunningTurnStartedAtMs([
+      { id: 'turn-done', status: 'completed', startedAt: '2026-05-25T09:00:00.000Z' },
+      { id: 'turn-failed', status: 'failed', startedAt: '2026-05-25T09:01:00.000Z' }
+    ])).toBeUndefined()
+  })
+
+  it('picks the latest running turn across mixed statuses', () => {
+    expect(resolveRunningTurnStartedAtMs([
+      { id: 'turn-old', status: 'running', startedAt: '2026-05-25T09:00:00.000Z' },
+      { id: 'turn-done', status: 'completed', startedAt: '2026-05-25T09:05:00.000Z' },
+      { id: 'turn-new', status: 'running', startedAt: '2026-05-25T09:10:00.000Z' }
+    ])).toBe(Date.parse('2026-05-25T09:10:00.000Z'))
+  })
+
+  it('returns undefined when the running turn has no parseable timestamp', () => {
+    expect(resolveRunningTurnStartedAtMs([
+      { id: 'turn-running', status: 'running', startedAt: 'not-a-date' }
+    ])).toBeUndefined()
+  })
+})
 
 describe('buildTurnDurationByUserId', () => {
   it.each(['completed', 'failed', 'aborted'])(

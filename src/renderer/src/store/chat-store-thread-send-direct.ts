@@ -133,11 +133,12 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           createdAt: new Date(now).toISOString(),
           text: displayText,
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
-          ...((requestedAgentSurface || writeContext || guiDesignMode) || userDisplayText || messageSource || guiDesignCanvas || designProfile || designDocumentTarget || designImagePlacementTarget || attachmentIds.length || attachments.length || fileReferences.length || composerContexts.length
+          ...((requestedAgentSurface || writeContext || guiDesignMode) || mode || userDisplayText || messageSource || guiDesignCanvas || designProfile || designDocumentTarget || designImagePlacementTarget || attachmentIds.length || attachments.length || fileReferences.length || composerContexts.length
             ? {
                 meta: {
                   agentSurface: requestedAgentSurface ??
                     (writeContext ? 'write' : guiDesignMode ? 'design' : 'code'),
+                  ...(mode === 'agent' || mode === 'plan' ? { mode } : {}),
                   ...(userDisplayText ? { displayText: userDisplayText } : {}),
                   ...(messageSource ? { messageSource } : {}),
                   ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
@@ -669,6 +670,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         busyUnconfirmed: false,
         ...emptyLiveProjection(state.lastSeq),
         currentTurnId: null,
+        currentTurnStartedAtMs: null,
         currentTurnOrchestration: null,
         queuedMessages: failQueuedSubmission(
           previousQueuedMessages,

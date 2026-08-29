@@ -439,4 +439,25 @@ describe('registerAppIpcHandlers security and provider', () => {
     expect(runtimeRequest).not.toHaveBeenCalled()
   })
 
+  it('copies gateway plaintext in Main without returning it to renderer', async () => {
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
+    const contents = { id: 7, mainFrame }
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ key: 'kun_local_secret-value' })
+    }))
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => ({ isDestroyed: () => false, webContents: contents }) as never,
+      runtimeRequest,
+      assertRendererRuntimeReady: vi.fn()
+    }))
+
+    const result = await handlers.get('gateway:credential')?.({ sender: contents, senderFrame: mainFrame }, 'copy')
+    expect(runtimeRequest).toHaveBeenCalledWith('/v1/model-gateway/credential/reveal', 'POST')
+    expect(electronMock.writeText).toHaveBeenCalledWith('kun_local_secret-value')
+    expect(JSON.stringify(result)).not.toContain('kun_local_secret-value')
+    expect(result).toEqual({ ok: true, status: 200, copied: true, credential: { configured: true } })
+  })
+
 })

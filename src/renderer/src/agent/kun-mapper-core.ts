@@ -457,6 +457,9 @@ export function applyRuntimeDisclosureMeta(
   if (displayText && displayText !== item.text?.trim()) {
     meta.displayText = displayText
   }
+  if (item.role === 'user' && (item.mode === 'agent' || item.mode === 'plan')) {
+    meta.mode = item.mode
+  }
   if (item.role === 'user' && item.guiDesignCanvas === true) meta.guiDesignCanvas = true
   if (item.role === 'user' && item.guiDesignMode === true) meta.guiDesignMode = true
   if (item.role === 'user' && item.agentSurface) meta.agentSurface = item.agentSurface

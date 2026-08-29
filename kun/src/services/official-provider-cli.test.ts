@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,7 @@ import { ExtensionCredentialStore } from './extension-credential-store.js'
 import { ModelConnectionRegistry } from './model-connection-registry.js'
 import {
   OfficialProviderAuthService,
+  OfficialProviderCliService,
   antigravityCliBinaryPath,
   installAntigravityCli,
   resolveGeminiCliCommand
@@ -43,6 +44,51 @@ describe('official provider CLI authentication', () => {
     await expect(readFile(antigravityCliBinaryPath(dataDir))).rejects.toMatchObject({
       code: 'ENOENT'
     })
+  })
+
+  it('imports only a trusted fixed legacy binary and fails closed for a symlink', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-antigravity-legacy-'))
+    roots.push(root)
+    const dataDir = join(root, 'data')
+    const legacyDir = join(root, 'legacy')
+    const legacyBinary = join(legacyDir, 'agy')
+    await mkdir(legacyDir)
+    await writeFile(legacyBinary, 'trusted-binary')
+    const service = new OfficialProviderCliService({ dataDir, legacyBinaryPaths: [legacyBinary] })
+
+    await expect(service.status()).resolves.toMatchObject({
+      installed: true,
+      path: antigravityCliBinaryPath(dataDir)
+    })
+    await expect(readFile(antigravityCliBinaryPath(dataDir), 'utf8')).resolves.toBe('trusted-binary')
+
+    const rejectedDataDir = join(root, 'rejected')
+    const link = join(legacyDir, 'agy-link')
+    await symlink(legacyBinary, link)
+    const rejected = new OfficialProviderCliService({
+      dataDir: rejectedDataDir,
+      legacyBinaryPaths: [link]
+    })
+    await expect(rejected.status()).resolves.toMatchObject({ installed: false })
+    await expect(readFile(antigravityCliBinaryPath(rejectedDataDir))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('coalesces concurrent install requests into one download', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-antigravity-singleton-'))
+    roots.push(dataDir)
+    let releaseResponse: ((value: Response) => void) | undefined
+    const fetchImpl = vi.fn(() => new Promise<Response>((resolve) => {
+      releaseResponse = resolve
+    })) as unknown as typeof fetch
+    const service = new OfficialProviderCliService({ dataDir, fetchImpl })
+
+    const first = service.install()
+    const second = service.install()
+    expect(first).toBe(second)
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1))
+    releaseResponse?.(new Response('invalid', { status: 200 }))
+    await expect(first).resolves.toMatchObject({ status: 'error' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
   it('verifies Gemini CLI login before creating and selecting the native route', async () => {

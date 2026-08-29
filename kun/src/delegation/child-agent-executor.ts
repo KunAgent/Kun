@@ -332,6 +332,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(input.fastContext
         ? {
             fastContext: true,
+            fastContextScopeId: input.parentThreadId,
             fastContextTaskCount,
             turnLimits: { maxSteps: 4, maxToolCallsPerStep: 8 }
           }

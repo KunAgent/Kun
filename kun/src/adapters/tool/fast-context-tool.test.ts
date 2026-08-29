@@ -21,6 +21,7 @@ import { SubagentsCapabilityConfig } from '../../contracts/capabilities.js'
 import {
   FAST_CONTEXT_ALLOWED_TOOLS,
   FAST_CONTEXT_PROVIDER_ID,
+  FAST_CONTEXT_QUEUE_TIMEOUT_MS,
   FAST_CONTEXT_TOOL_NAME,
   buildFastContextToolProvider
 } from './fast-context-tool-provider.js'
@@ -123,6 +124,11 @@ describe('fast_context Fast Context provider', () => {
     expect(result.output as Record<string, unknown>).not.toHaveProperty('summary')
     expect(result.output as Record<string, unknown>).not.toHaveProperty('evidence')
     expect(typeof (result.output as { childId?: string }).childId).toBe('string')
+    expect(updates[0]).toMatchObject({
+      status: 'queued',
+      childId: expect.any(String),
+      child: { status: 'queued', childId: expect.any(String) }
+    })
     expect(updates.map((update) => update.status)).toContain('queued')
     expect(updates.map((update) => update.status)).toContain('running')
     // ChildRunExecutor receives the resolved child boundary rather than the
@@ -187,6 +193,48 @@ describe('fast_context Fast Context provider', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect(result.output).toMatchObject({ status: 'aborted', evidencePack: { version: 1, tasks: [{ index: 0 }, { index: 1 }, { index: 2 }] } })
+  })
+
+  it('settles a queue timeout as a failed tool result with the stable runtime failure', async () => {
+    let receivedTimeout: number | undefined
+    const runtime = {
+      enabled: () => true,
+      runChild: async (input: Parameters<DelegationRuntime['runChild']>[0]) => {
+        receivedTimeout = input.queueTimeoutMs
+        await input.onQueued?.('child_timeout', 'explore', { profileName: 'Repository Explorer' })
+        return {
+          id: 'child_timeout',
+          status: 'failed' as const,
+          model: 'main-model',
+          parentThreadId: input.parentThreadId,
+          parentTurnId: input.parentTurnId,
+          failure: { source: 'runtime' as const, code: 'child_queue_timeout', category: 'timeout' as const },
+          queuedMs: FAST_CONTEXT_QUEUE_TIMEOUT_MS,
+          error: `Child run could not start within ${FAST_CONTEXT_QUEUE_TIMEOUT_MS}ms because all execution slots remained occupied.`
+        } as Awaited<ReturnType<DelegationRuntime['runChild']>>
+      }
+    } as unknown as DelegationRuntime
+    const tool = buildFastContextToolProvider(runtime, () => ({ enabled: true }))[0]!.tools[0]!
+    const updates: Record<string, unknown>[] = []
+
+    const result = await tool.execute({ tasks: tasks(1) }, baseContext, async (update) => {
+      updates.push(update.output as Record<string, unknown>)
+    })
+
+    expect(receivedTimeout).toBe(30_000)
+    expect(result.isError).toBe(true)
+    expect(result.output).toMatchObject({
+      status: 'failed',
+      childId: 'child_timeout',
+      failure: { source: 'runtime', code: 'child_queue_timeout', category: 'timeout' },
+      queuedMs: 30_000,
+      evidencePack: {
+        version: 1,
+        tasks: [{ index: 0, title: 'Scope 1' }],
+        uncertainties: expect.arrayContaining([expect.stringContaining('could not start within 30000ms')])
+      }
+    })
+    expect(updates.at(-1)).toMatchObject({ status: 'failed', childId: 'child_timeout' })
   })
 
   it('keeps mutation, shell, web, map, and delegation tools outside the child boundary', () => {

@@ -58,9 +58,11 @@ import {
   goalFromCore,
   itemCreatedAt,
   normalizeChildMetadata,
-  todosFromCore
+  todosFromCore,
+  toolBlockId
 } from './kun-mapper-core'
 import { toolBlockFromItem } from './kun-mapper-tools'
+import { chartSpecFromToolItem } from './chart-spec-adapter'
 import {
   approvalBlockFromItem,
   approvalReviewFromEvent,
@@ -98,8 +100,19 @@ export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     case 'assistant_reasoning':
       return reasoningBlockFromItem(item)
     case 'tool_call':
-    case 'tool_result':
+    case 'tool_result': {
+      const spec = chartSpecFromToolItem(item)
+      if (spec) {
+        return {
+          kind: 'chart',
+          id: toolBlockId(item),
+          turnId: item.turnId,
+          createdAt: itemCreatedAt(item),
+          spec
+        }
+      }
       return toolBlockFromItem(item, child)
+    }
     case 'approval':
       return item.decisionSource === 'agent' || item.approvalReviewer === 'agent'
         ? null
@@ -121,6 +134,7 @@ export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
 
 export function toolEventFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ToolEventPayload {
   const block = toolBlockFromItem(item, child)
+  const chartSpec = chartSpecFromToolItem(item)
   return {
     itemId: block.id,
     turnId: item.turnId,
@@ -130,7 +144,7 @@ export function toolEventFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     toolKind: block.toolKind,
     detail: block.detail,
     filePath: block.filePath,
-    meta: block.meta
+    meta: chartSpec ? { ...block.meta, chartSpec } : block.meta
   }
 }
 
