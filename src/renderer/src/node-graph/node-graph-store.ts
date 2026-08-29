@@ -256,8 +256,12 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
     set({ settings })
     writeStoredNodeGraphSettings(settings)
     // The changed-file layer is produced upstream, so toggling it needs a
-    // fresh projection rather than a client-side filter pass.
-    if (patch.includeChangedFiles !== undefined) void get().reload({ refresh: true })
+    // fresh projection rather than a client-side filter pass — but only the
+    // workspace projection has that layer at all. A folder projection would
+    // pay for a full rescan and change nothing.
+    if (patch.includeChangedFiles !== undefined && get().source.kind === 'workspace') {
+      void get().reload({ refresh: true })
+    }
   },
 
   toggleKind: (kind) => {
