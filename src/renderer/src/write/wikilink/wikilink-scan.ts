@@ -69,22 +69,40 @@ function skipDirectory(name: string): boolean {
   return name.startsWith('.') || SKIPPED_DIRECTORIES.has(name.toLocaleLowerCase())
 }
 
+export type WikilinkScanOutcome = {
+  targets: WikilinkTarget[]
+  /** True when a limit, budget, or unreadable folder made the walk incomplete. */
+  truncated: boolean
+  /** Directories the walk could not read. */
+  failedDirectories: number
+}
+
 /** Walks one workspace breadth-first, so shallow files are always included. */
 export async function scanWorkspaceMarkdown(
   scanRoot: WikilinkScanRoot,
   list: WikilinkDirectoryLister,
   limits: WikilinkScanLimits = DEFAULT_WIKILINK_SCAN_LIMITS,
   budget?: WikilinkScanBudget
-): Promise<WikilinkTarget[]> {
+): Promise<WikilinkScanOutcome> {
   const targets: WikilinkTarget[] = []
   const queue: { path: string; depth: number }[] = [{ path: '', depth: 0 }]
   const seen = new Set<string>()
   let directories = 0
+  let truncated = false
+  let failedDirectories = 0
   while (queue.length > 0) {
     const current = queue.shift()!
-    if (directories >= limits.maxDirectoriesPerRoot) break
-    if (targets.length >= limits.maxFilesPerRoot) break
-    if (budget && (budget.directories <= 0 || budget.files <= 0)) break
+    if (
+      directories >= limits.maxDirectoriesPerRoot ||
+      targets.length >= limits.maxFilesPerRoot ||
+      (budget && (budget.directories <= 0 || budget.files <= 0))
+    ) {
+      // Work remained when the walk stopped: the result is a partial view,
+      // which the menu must be able to say instead of looking like an empty
+      // or fully scanned vault.
+      truncated = true
+      break
+    }
     directories += 1
     if (budget) budget.directories -= 1
     let result: Awaited<ReturnType<WikilinkDirectoryLister>>
@@ -95,9 +113,15 @@ export async function scanWorkspaceMarkdown(
           : { workspaceRoot: scanRoot.root }
       )
     } catch {
+      failedDirectories += 1
+      truncated = true
       continue
     }
-    if (!result.ok) continue
+    if (!result.ok) {
+      failedDirectories += 1
+      truncated = true
+      continue
+    }
     for (const entry of result.entries) {
       if (entry.type === 'directory') {
         if (current.depth + 1 > limits.maxDepth || skipDirectory(entry.name)) continue
@@ -108,8 +132,10 @@ export async function scanWorkspaceMarkdown(
         continue
       }
       if (!isWikilinkMarkdownName(entry.name)) continue
-      if (targets.length >= limits.maxFilesPerRoot) break
-      if (budget && budget.files <= 0) break
+      if (targets.length >= limits.maxFilesPerRoot || (budget && budget.files <= 0)) {
+        truncated = true
+        break
+      }
       if (budget) budget.files -= 1
       targets.push({
         workspaceRoot: scanRoot.root,
@@ -119,7 +145,7 @@ export async function scanWorkspaceMarkdown(
       })
     }
   }
-  return targets
+  return { targets, truncated, failedDirectories }
 }
 
 function joinRelative(parent: string, name: string): string {
@@ -136,19 +162,28 @@ export async function scanAllWorkspaceMarkdown(
   roots: readonly WikilinkScanRoot[],
   list: WikilinkDirectoryLister,
   limits: WikilinkScanLimits = DEFAULT_WIKILINK_SCAN_LIMITS
-): Promise<WikilinkTarget[]> {
+): Promise<WikilinkScanOutcome> {
   const collected: WikilinkTarget[] = []
   const seenRoots = new Set<string>()
+  let truncated = false
+  let failedDirectories = 0
   const budget: WikilinkScanBudget = {
     directories: limits.maxDirectoriesTotal,
     files: limits.maxFilesTotal
   }
   for (const scanRoot of roots) {
-    if (budget.directories <= 0 || budget.files <= 0) break
+    if (budget.directories <= 0 || budget.files <= 0) {
+      // Later roots never started: the combined result is partial.
+      truncated = true
+      break
+    }
     const key = toPosix(scanRoot.root).replace(/\/+$/, '')
     if (!key || seenRoots.has(key)) continue
     seenRoots.add(key)
-    collected.push(...await scanWorkspaceMarkdown(scanRoot, list, limits, budget))
+    const outcome = await scanWorkspaceMarkdown(scanRoot, list, limits, budget)
+    collected.push(...outcome.targets)
+    truncated ||= outcome.truncated
+    failedDirectories += outcome.failedDirectories
   }
-  return collected
+  return { targets: collected, truncated, failedDirectories }
 }

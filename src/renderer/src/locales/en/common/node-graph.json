@@ -110,6 +110,7 @@
   "nodeGraphWorkClose": "Back to editor",
   "writeWikilinkScanning": "Scanning your workspaces…",
   "writeWikilinkNoMatch": "No markdown file matches",
+  "writeWikilinkPartial": "No match in the scanned files — the scan was partial, so unscanned folders may still hold it",
   "writeWikilinkError": "Could not list files: {{message}}",
   "nodeGraphScopeAllWork": "All work spaces",
   "nodeGraphEdgeContainedBy": "inside",

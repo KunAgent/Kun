@@ -110,6 +110,7 @@
   "nodeGraphWorkClose": "返回编辑器",
   "writeWikilinkScanning": "正在扫描工作区…",
   "writeWikilinkNoMatch": "没有匹配的 Markdown 文件",
+  "writeWikilinkPartial": "已扫描的文件中没有匹配项——本次扫描不完整，未扫描的文件夹中可能仍有该文件",
   "writeWikilinkError": "无法列出文件：{{message}}",
   "nodeGraphScopeAllWork": "全部工作区",
   "nodeGraphEdgeContainedBy": "位于",
