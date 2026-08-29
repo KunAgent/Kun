@@ -285,6 +285,14 @@ rebuild on their own without a schema bump.
 filter pipeline already guarantees that, but a dangling id would otherwise enter
 the adjacency and receive PageRank as though it were a node.
 
+**Analysis recomputes only when the visible subgraph can change.** The view —
+and the adjacency, PageRank, and clustering derived from it — is memoized on
+the filter fields alone (`NodeGraphFilterSettings`: search, kinds, min degree,
+orphans, local depth, groups), so a display or physics slider tick costs
+nothing. The search term feeds the memo through `useDeferredValue`, so typing
+into a large graph stays responsive: the keystroke lands immediately and the
+heavy recompute follows at deferred priority.
+
 ### Reading an edge's direction
 
 `link`, `parent`, `fork`, `mount`, `agent`, `memoryOf`, `tagged` and `touches`

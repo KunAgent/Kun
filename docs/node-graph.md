@@ -83,8 +83,11 @@ rejects a target that leaves its own root, so `[[../other-workspace/note]]` used
 to vanish. The indexer now keeps those as `externalReferences` (raw target plus
 source path, schema **v3**), and the folder projection resolves them against the
 absolute filesystem and matches them to a document in *any* projected root,
-trying `.md` / `.markdown` / `.mdx` for an extensionless target. Same-root links
-still resolve through the index as before.
+trying `.md` / `.markdown` / `.mdx` for an extensionless target. Windows
+absolute targets are recognized before the URI-scheme filter (`C:/notes/a.md`
+matches the generic scheme expression because of `C:`), and lookup keys fold
+case for drive-letter and UNC paths, because those filesystems do. Same-root
+links still resolve through the index as before.
 
 Bumping the index schema to v3 invalidates persisted indexes, so the first load
 after upgrading reports "no ready index yet" and fills in on the next refresh —
@@ -123,8 +126,10 @@ It reuses the same markdown scan rather than duplicating it:
 `KnowledgeBaseService.readyFolderIndex(root, mountId)` synthesizes a
 `write-workspace` mount for a bare directory and defers to `readyIndex`, so
 folder graphs inherit index caching, background rebuilds, and persistence.
-`folderMountId(root)` is a stable hash of the path — node ids embed it, so it
-must not drift between loads or every node would look new to the layout.
+`folderMountId(root)` is a truncated SHA-256 of the root's canonical identity —
+node ids embed it, so it must not drift between loads (or every node would look
+new to the layout) and must never collide between directories (or their
+same-named files would silently merge).
 
 The store carries a `source` discriminator (`{kind:'workspace'}` /
 `{kind:'folder'}`), and `reload()` refetches whichever one is on screen. The
@@ -189,6 +194,18 @@ bounded per root (depth 6, 200 directories, 800 files) **and globally per scan**
 `dist`, `build`, `out`, `target`, `vendor` and dotfolders skipped. It is
 breadth-first, so a cap trims deep files rather than the shallow ones most
 likely to be wanted.
+
+The service is race-safe around its single in-flight scan. A completing scan
+publishes only for the roots it was started with, and re-checks the **latest
+requested key** when it finishes: a request for workspace set B issued while
+set A is scanning is remembered and followed up, not silently dropped. An
+invalidation that lands mid-scan survives it — that scan started from the
+pre-edit tree, so its completion keeps the stale flag and triggers one more
+scan — where previously the completion cleared the flag and the invalidation
+was lost. Scans also report **truncation**: a cap, budget, or unreadable
+directory marks the snapshot `truncated` (with a failed-directory count), and
+both editors show a distinct "the scan was partial" empty state instead of
+letting a partial walk read as an empty or exhaustively searched vault.
 
 Targets on a different volume (another Windows drive letter, a different UNC
 share) are withheld from the menu: no `..` walk can reach them, so the inserted
@@ -276,7 +293,13 @@ The projection is assembled by `NodeGraphService` (`kun/src/node-graph/`), which
 is the only layer that performs I/O:
 
 - **Threads and memories** are cheap list reads.
-- **Knowledge indexes** are read from disk only when ready (above).
+- **Knowledge indexes** are read from disk only when ready (above). Loading
+  them is bounded the same three ways as folder roots: at most 24 mounts per
+  projection (the rest are dropped with a diagnostic and `truncated: true`), at
+  most 2 loaded concurrently, and **one shared scan budget** across the request
+  — the status inspection's stat pass and any background rebuild it triggers
+  both charge it, so a global Code graph over many threads cannot fan out into
+  an unbounded burst of scans and rebuilds.
 - **Changed files** require reading whole Graph Mode run snapshots, because the
   run index does not carry `changedFiles`. The projection's thread scope and its
   run cap (40 most recently updated) are **pushed into the store query** —
@@ -284,11 +307,16 @@ is the only layer that performs I/O:
   any snapshot is loaded — so unrelated runs are never read, and a burst of
   runs in another workspace cannot crowd this workspace's runs out of the cap.
   The scan is also **time-boxed** (2.5s, then a diagnostic), and concurrent
-  projections of the same scope **share one in-flight scan**. Callers can skip
-  it entirely with `changed_files=false`, which the Filters panel exposes as a
-  toggle.
+  projections of the same scope **share one in-flight scan**. A scan that times
+  out is **evicted** from the in-flight map, so a run source that never settles
+  cannot be reused by every later refresh until the runtime restarts. Callers
+  can skip the layer entirely with `changed_files=false`, which the Filters
+  panel exposes as a toggle (Code graph only — a folder projection has no
+  changed-file layer, so the Work graph neither shows the toggle nor rescans
+  when it changes).
 - The finished projection is **cached for 10s** per `(workspace, changed-files)`
-  pair. `refresh=true` bypasses it.
+  pair; an omitted `changed_files` normalizes to the same key as an explicit
+  `true`. `refresh=true` bypasses it.
 - Node caps are applied by **priority tier** (`NODE_GRAPH_KIND_PRIORITY`), so a
   vault large enough to hit the 4,000-node cap still renders a navigable
   skeleton of workspaces, threads, bases, and documents instead of an arbitrary
@@ -317,12 +345,27 @@ Both are `GET`-only in the main-process allowlist.
 A folder request's indexing work is bounded end to end. The route rejects more
 than 64 `root` parameters outright; the service then projects at most 12 roots
 (the rest are dropped with a diagnostic and `truncated: true`), indexes at most
-2 roots concurrently, and hands every root **one shared scan budget** (1,600
-files / 96MB per request) on top of the indexer's per-root caps. The budget is
-charged only when a root actually rebuilds — a fingerprint match reuses the
-stored index for free — and a root refused by the budget serves its last built
-index (state `stale`) with a `scan budget reached` diagnostic, instead of
-scheduling the same work in the background.
+2 roots concurrently, and hands every root **one shared scan budget** on top of
+the indexer's per-root caps. The budget bounds the walk itself, not only the
+rebuild that may follow: its traversal fields (1,600 directories / 40,000
+entries / 6,400 stat+realpath ops / 1,600 discovered files per request) are
+charged by `scanKnowledgeSources` as it walks, and its byte allowance (96MB) is
+charged when a rebuild actually reads content. Once the allowance is spent,
+later roots are **not scanned at all**; a root refused mid-request serves its
+last built index (state `stale`) with a `scan budget reached` diagnostic,
+instead of scheduling the same work in the background. A walk the budget stops
+early is discarded rather than trusted — a partial file list would produce a
+wrong fingerprint and a wrong index.
+
+Root identity is **canonical and physical**: each requested root is resolved
+through `realpath`, so `/vault`, `/vault/.`, and a symlink to `/vault` are one
+root, and Windows-style paths compare case-insensitively. A root nested inside
+another requested root is merged into its ancestor with a diagnostic. The root
+cap keeps **request order** — callers put the active workspace first, so
+truncation drops the tail, never the root on screen. `folderMountId` digests
+the canonical identity with SHA-256 (the previous 32-bit polynomial hash
+collided on inputs as short as `Aa`/`BB`, silently merging same-named files
+from different roots).
 
 Returns `NodeGraphProjection`: `nodes`, `edges`, per-kind `counts` (taken
 *before* truncation), `truncated`, `diagnostics`, `builtAt`.
