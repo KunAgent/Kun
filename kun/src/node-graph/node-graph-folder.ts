@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import {
   NODE_GRAPH_CONTRACT_VERSION,
@@ -63,11 +64,25 @@ export type NodeGraphFolderInput = {
 
 /** Absolute POSIX path of a document, used to match links across roots. */
 function absoluteKey(root: string, relativePath: string): string {
-  return posix(join(root, relativePath))
+  return pathLookupKey(join(root, relativePath))
 }
 
 function posix(value: string): string {
   return value.replace(/\\/g, '/')
+}
+
+/** Drive-letter (`C:/`) or UNC (`//server/share`) absolute path. */
+function isWindowsStylePath(posixPath: string): boolean {
+  return /^[a-z]:(\/|$)/i.test(posixPath) || /^\/\/[^/]/.test(posixPath)
+}
+
+/**
+ * Comparison key for an absolute path. Windows filesystems are
+ * case-insensitive, so Windows-style paths fold case; POSIX paths keep it.
+ */
+function pathLookupKey(value: string): string {
+  const normalized = posix(value)
+  return isWindowsStylePath(normalized) ? normalized.toLocaleLowerCase() : normalized
 }
 
 export function buildNodeGraphFolderProjection(
@@ -208,11 +223,16 @@ function resolveAcrossRoots(
   documentsByAbsolutePath: Map<string, string>
 ): string | null {
   const raw = reference.target.split('#', 1)[0]!.split('?', 1)[0]!.trim()
-  if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return null
-  const base = isAbsolute(raw)
+  if (!raw) return null
+  // Windows absolute paths must be recognized before the URI-scheme filter:
+  // `C:/notes/a.md` matches the generic scheme expression because of `C:`,
+  // and would otherwise be discarded as a URL.
+  const windowsAbsolute = isWindowsStylePath(posix(raw))
+  if (!windowsAbsolute && /^[a-z][a-z0-9+.-]*:/i.test(raw)) return null
+  const base = windowsAbsolute || isAbsolute(raw)
     ? raw
     : join(root, dirname(reference.sourcePath), raw)
-  const normalized = posix(base)
+  const normalized = pathLookupKey(base)
   const candidates = /\.[^/]+$/.test(normalized)
     ? [normalized]
     : [`${normalized}.md`, `${normalized}.markdown`, `${normalized}.mdx`]
@@ -259,13 +279,24 @@ function ownerDocumentId(
 }
 
 /**
+ * Identity key for a folder root: POSIX separators, no trailing slash, and
+ * case-folded for Windows-style paths (drive letters and UNC shares name the
+ * same directory in any case). Callers canonicalize symlinks and `.` segments
+ * with `realpath` before this, so equal keys mean the same physical tree.
+ */
+export function folderIdentityKey(root: string): string {
+  const normalized = posix(root.trim()).replace(/\/+$/, '') || '/'
+  return isWindowsStylePath(normalized) ? normalized.toLocaleLowerCase() : normalized
+}
+
+/**
  * Stable, filesystem-safe mount id for a directory. Node ids embed it, so it
- * must not change between loads or every node would look new to the layout.
+ * must not change between loads — and two directories must never share one,
+ * or their same-named files would silently merge in the accumulator. A
+ * truncated SHA-256 keeps collisions out of practical reach (the previous
+ * 32-bit polynomial hash collided on inputs as short as `Aa`/`BB`).
  */
 export function folderMountId(root: string): string {
-  let hash = 0
-  for (let index = 0; index < root.length; index += 1) {
-    hash = (hash * 31 + root.charCodeAt(index)) | 0
-  }
-  return `folder-${(hash >>> 0).toString(36)}`
+  const digest = createHash('sha256').update(folderIdentityKey(root)).digest('hex')
+  return `folder-${digest.slice(0, 16)}`
 }

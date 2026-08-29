@@ -1,10 +1,14 @@
+import { realpath } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { NodeGraphProjection } from '../contracts/node-graph.js'
 import type { KnowledgeBaseMount, ThreadSummary } from '../contracts/threads.js'
 import type { KnowledgeBaseService, KnowledgeScanBudget } from '../knowledge/knowledge-base-service.js'
+import { scanBudgetExhausted } from '../knowledge/knowledge-indexer.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import { buildNodeGraphProjection } from './node-graph-builder.js'
 import {
   buildNodeGraphFolderProjection,
+  folderIdentityKey,
   folderMountId,
   type NodeGraphFolderRoot
 } from './node-graph-folder.js'
@@ -45,8 +49,19 @@ export type NodeGraphServiceOptions = {
   maxRuns?: number
   /** Most roots one folder projection will index; the rest are dropped. */
   maxFolderRoots?: number
-  /** Shared file/byte allowance across every root of one folder projection. */
-  folderScanBudget?: { files: number; bytes: number }
+  /** Most knowledge-base mounts one workspace projection will load. */
+  maxKnowledgeBases?: number
+  /**
+   * Shared scan allowance across every root of one request. Traversal fields
+   * are charged during the walk itself; bytes are charged by rebuilds.
+   */
+  folderScanBudget?: {
+    files: number
+    bytes: number
+    directories: number
+    entries: number
+    metadataOps: number
+  }
   /** Roots indexed at once. Bounds the CPU/I/O spike of a many-root load. */
   folderConcurrency?: number
 }
@@ -64,7 +79,14 @@ const DEFAULT_CACHE_TTL_MS = 10_000
 const DEFAULT_CHANGED_FILES_TIMEOUT_MS = 2_500
 const DEFAULT_MAX_RUNS = 40
 export const DEFAULT_MAX_FOLDER_ROOTS = 12
-export const DEFAULT_FOLDER_SCAN_BUDGET = { files: 1_600, bytes: 96 * 1024 * 1024 }
+export const DEFAULT_MAX_KNOWLEDGE_BASES = 24
+export const DEFAULT_FOLDER_SCAN_BUDGET = {
+  files: 1_600,
+  bytes: 96 * 1024 * 1024,
+  directories: 1_600,
+  entries: 40_000,
+  metadataOps: 6_400
+}
 const DEFAULT_FOLDER_CONCURRENCY = 2
 
 export class NodeGraphService {
@@ -78,28 +100,34 @@ export class NodeGraphService {
   }
 
   async project(request: NodeGraphRequest = {}): Promise<NodeGraphProjection> {
-    const key = `${request.workspace ?? '*'}|${request.includeChangedFiles ? 'files' : 'nofiles'}`
+    // Normalized once so the cache key and the load below cannot disagree:
+    // an omitted flag means "include", exactly like an explicit `true`.
+    const includeChangedFiles = request.includeChangedFiles !== false
+    const key = `${request.workspace ?? '*'}|${includeChangedFiles ? 'files' : 'nofiles'}`
     const ttl = this.options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
     const cached = this.cache.get(key)
     if (!request.refresh && cached && Date.now() - cached.at < ttl) return cached.projection
     const diagnostics: string[] = []
     const threads = await this.loadThreads(request.workspace, diagnostics)
-    const [memories, knowledgeBases, changedFiles] = await Promise.all([
+    const [memories, knowledge, changedFiles] = await Promise.all([
       this.loadMemories(request.workspace, diagnostics),
       this.loadKnowledgeBases(threads, diagnostics),
-      request.includeChangedFiles === false
-        ? Promise.resolve([])
-        : this.loadChangedFiles(threads, diagnostics)
+      includeChangedFiles
+        ? this.loadChangedFiles(threads, diagnostics)
+        : Promise.resolve([])
     ])
-    const projection = buildNodeGraphProjection({
-      builtAt: this.nowIso(),
-      ...(request.workspace ? { workspace: request.workspace } : {}),
-      threads: threads.map(toThreadInput),
-      memories,
-      knowledgeBases,
-      changedFiles,
-      diagnostics
-    })
+    const projection = {
+      ...buildNodeGraphProjection({
+        builtAt: this.nowIso(),
+        ...(request.workspace ? { workspace: request.workspace } : {}),
+        threads: threads.map(toThreadInput),
+        memories,
+        knowledgeBases: knowledge.bases,
+        changedFiles,
+        diagnostics
+      }),
+      ...(knowledge.truncated ? { truncated: true } : {})
+    }
     this.cache.set(key, { at: Date.now(), projection })
     return projection
   }
@@ -115,13 +143,32 @@ export class NodeGraphService {
     roots: readonly string[],
     options: { refresh?: boolean } = {}
   ): Promise<NodeGraphProjection> {
-    const unique = [...new Set(roots.map((root) => root.trim()).filter(Boolean))].sort()
-    const key = `folder|${unique.join('|')}`
-    const ttl = this.options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
-    const cached = this.cache.get(key)
-    if (!options.refresh && cached && Date.now() - cached.at < ttl) return cached.projection
-    const service = this.options.knowledgeBaseService
     const diagnostics: string[] = []
+    // Identity is the canonical physical path: `/vault`, `/vault/.`, and a
+    // symlink to `/vault` are one root, and Windows-style paths compare
+    // case-insensitively. Request order is preserved — callers put the active
+    // workspace first, so truncation below drops the tail, never the root on
+    // screen.
+    const canonical: string[] = []
+    const seen = new Set<string>()
+    for (const requested of roots) {
+      const trimmed = requested.trim()
+      if (!trimmed) continue
+      const root = await canonicalFolderRoot(trimmed)
+      const identity = folderIdentityKey(root)
+      if (seen.has(identity)) continue
+      seen.add(identity)
+      canonical.push(root)
+    }
+    // A root nested inside another requested root would index the same files
+    // twice under two mount ids, so it defers to its ancestor.
+    const unique = canonical.filter((root, index) => {
+      const ancestor = canonical.find((candidate, other) =>
+        other !== index && isFolderInside(candidate, root))
+      if (!ancestor) return true
+      diagnostics.push(`folder root "${root}" is inside "${ancestor}" and was merged into it`)
+      return false
+    })
     const maxRoots = this.options.maxFolderRoots ?? DEFAULT_MAX_FOLDER_ROOTS
     const kept = unique.slice(0, maxRoots)
     if (kept.length < unique.length) {
@@ -129,21 +176,31 @@ export class NodeGraphService {
         `folder root limit reached: projecting ${kept.length} of ${unique.length} requested roots`
       )
     }
+    // Keyed on the full requested identity set: the kept roots, drops, and
+    // their diagnostics all derive deterministically from it.
+    const key = `folder|${[...seen].sort().join('|')}`
+    const ttl = this.options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
+    const cached = this.cache.get(key)
+    if (!options.refresh && cached && Date.now() - cached.at < ttl) return cached.projection
+    const service = this.options.knowledgeBaseService
     let budgetHit = false
     let loaded: NodeGraphFolderRoot[] = []
     if (!service) {
       diagnostics.push('folder indexing is not available in this runtime')
     } else {
-      // One allowance for the whole request. The indexer's per-root caps bound
-      // each tree, but with many roots their sum was unbounded — which is what
-      // let a default "all workspaces" load scan thousands of files at once.
-      const allowance = this.options.folderScanBudget ?? DEFAULT_FOLDER_SCAN_BUDGET
-      const budget: KnowledgeScanBudget = {
-        remainingFiles: allowance.files,
-        remainingBytes: allowance.bytes
-      }
+      // One allowance for the whole request, charged by the walk itself. The
+      // indexer's per-root caps bound each tree, but with many roots their sum
+      // was unbounded — which is what let a default "all workspaces" load scan
+      // thousands of files at once.
+      const budget = this.requestScanBudget()
       const concurrency = Math.max(1, this.options.folderConcurrency ?? DEFAULT_FOLDER_CONCURRENCY)
       loaded = await mapWithConcurrency(kept, concurrency, async (root) => {
+        // A spent budget stops later roots before they touch the filesystem.
+        if (scanBudgetExhausted(budget)) {
+          budgetHit = true
+          diagnostics.push(`scan budget reached: "${root}" was not scanned`)
+          return { root, index: null, state: 'pending' }
+        }
         try {
           // Folder projections always verify freshness: this view exists to
           // reflect files on disk, and the projection cache above already keeps
@@ -226,14 +283,17 @@ export class NodeGraphService {
 
   /**
    * Collapses the same mount referenced by several threads into one node, so a
-   * shared base is a single hub rather than one copy per conversation.
+   * shared base is a single hub rather than one copy per conversation. Loads
+   * are bounded on three axes — a mount cap, bounded concurrency, and one
+   * shared scan budget — so a global Code graph over many threads cannot fan
+   * out into an unbounded burst of filesystem scans and background rebuilds.
    */
   private async loadKnowledgeBases(
     threads: readonly ThreadSummary[],
     diagnostics: string[]
-  ): Promise<NodeGraphKnowledgeInput[]> {
+  ): Promise<{ bases: NodeGraphKnowledgeInput[]; truncated: boolean }> {
     const service = this.options.knowledgeBaseService
-    if (!service) return []
+    if (!service) return { bases: [], truncated: false }
     const mounts = new Map<string, { mount: KnowledgeBaseMount; threadIds: string[] }>()
     for (const thread of threads) {
       for (const mount of thread.knowledgeBases ?? []) {
@@ -242,15 +302,44 @@ export class NodeGraphService {
         else mounts.set(mount.id, { mount, threadIds: [thread.id] })
       }
     }
-    return Promise.all([...mounts.values()].map(async ({ mount, threadIds }) => {
+    const maxMounts = this.options.maxKnowledgeBases ?? DEFAULT_MAX_KNOWLEDGE_BASES
+    const kept = [...mounts.values()].slice(0, maxMounts)
+    let truncated = kept.length < mounts.size
+    if (truncated) {
+      diagnostics.push(
+        `knowledge base limit reached: loading ${kept.length} of ${mounts.size} mounted bases`
+      )
+    }
+    const budget = this.requestScanBudget()
+    const concurrency = Math.max(1, this.options.folderConcurrency ?? DEFAULT_FOLDER_CONCURRENCY)
+    const bases = await mapWithConcurrency(kept, concurrency, async ({ mount, threadIds }) => {
       try {
-        const { index, state } = await service.readyIndex(mount)
+        const { index, state, budgetExhausted } = await service.readyIndex(mount, { budget })
+        if (budgetExhausted) {
+          truncated = true
+          diagnostics.push(index
+            ? `scan budget reached: knowledge base "${mount.name}" shows its last built index`
+            : `scan budget reached: knowledge base "${mount.name}" was skipped`)
+        }
         return { mountId: mount.id, mountName: mount.name, state, index, threadIds }
       } catch (error) {
         diagnostics.push(`knowledge base "${mount.name}" failed to load: ${errorText(error)}`)
         return { mountId: mount.id, mountName: mount.name, index: null, threadIds }
       }
-    }))
+    })
+    return { bases, truncated }
+  }
+
+  /** Fresh shared allowance for one projection request. */
+  private requestScanBudget(): KnowledgeScanBudget {
+    const allowance = this.options.folderScanBudget ?? DEFAULT_FOLDER_SCAN_BUDGET
+    return {
+      remainingFiles: allowance.files,
+      remainingBytes: allowance.bytes,
+      remainingDirectories: allowance.directories,
+      remainingEntries: allowance.entries,
+      remainingMetadataOps: allowance.metadataOps
+    }
   }
 
   /**
@@ -291,6 +380,12 @@ export class NodeGraphService {
         })
       ])
       if (listed === null) {
+        // Evict the hung scan so the next refresh starts fresh. Without this a
+        // run source that never settles would be reused by every later request
+        // and time out forever until the runtime restarts.
+        if (this.changedFilesScans.get(scanKey) === scan) {
+          this.changedFilesScans.delete(scanKey)
+        }
         diagnostics.push(`changed-file scan exceeded ${timeoutMs}ms and was skipped`)
         return []
       }
@@ -337,6 +432,28 @@ async function mapWithConcurrency<T, R>(
   )
   await Promise.all(workers)
   return results
+}
+
+/**
+ * Physical identity of a folder root. Falls back to the resolved lexical path
+ * when the directory cannot be resolved (yet); the projection will then report
+ * that root's index failure on its own.
+ */
+async function canonicalFolderRoot(root: string): Promise<string> {
+  const resolved = resolve(root)
+  try {
+    return await realpath(resolved)
+  } catch {
+    return resolved
+  }
+}
+
+/** True when `child` lives strictly inside `parent`. */
+function isFolderInside(parent: string, child: string): boolean {
+  const parentKey = folderIdentityKey(parent)
+  const childKey = folderIdentityKey(child)
+  if (childKey === parentKey) return false
+  return childKey.startsWith(parentKey.endsWith('/') ? parentKey : `${parentKey}/`)
 }
 
 function toThreadInput(thread: ThreadSummary): NodeGraphThreadInput {
