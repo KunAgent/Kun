@@ -47,11 +47,10 @@ jobs:
           head_sha="$(git rev-parse HEAD)"
 
           node -e '
-            const semver = require("semver")
             const [appVersion, devVersion] = process.argv.slice(1)
             if (!/^\d{8}\.\d{4}$/.test(devVersion)) throw new Error(`invalid daily dev version: ${devVersion}`)
-            if (!semver.valid(appVersion)) throw new Error(`invalid daily app SemVer: ${appVersion}`)
-            if (!semver.prerelease(appVersion)?.some((part) => String(part).startsWith("dev-"))) throw new Error(`daily app version is not a dev prerelease: ${appVersion}`)
+            const expectedAppVersion = `0.0.0-dev-${devVersion.replace(".", "-")}`
+            if (appVersion !== expectedAppVersion) throw new Error(`invalid daily app version: ${appVersion}`)
           ' "${app_version}" "${dev_version}"
 
           {
