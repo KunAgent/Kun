@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import '../../i18n'
 import { StreamdownCode } from './StreamdownCode'
 
 describe('StreamdownCode plain text fences', () => {

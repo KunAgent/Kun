@@ -8,7 +8,7 @@ import type {
 import type { ExtensionProviderBinding } from '../contracts/extension-providers.js'
 import type { ModelReasoningEffort } from '../contracts/capabilities.js'
 import { TurnConflictError } from './turn-service.js'
-import { bufferEvent, compareBufferedEvents, enqueueBufferedEvent, ExtensionBrokerError, iterateSessionEventsSince, ManifestExtensionAgentAuthorizer, summarizeRunEvents } from './extension-agent-service-event-usage.js'
+import { bufferEvent, compareBufferedEvents, enqueueBufferedEvent, ExtensionBrokerError, iterateSessionEventsSince, loadLatestUsageTokens, ManifestExtensionAgentAuthorizer, summarizeRunEvents } from './extension-agent-service-event-usage.js'
 import { listExtensionRunEvents, pageExtensionOwnedThreads } from './extension-agent-service-listing.js'
 import { ManagedSubscription } from './extension-agent-service-subscription.js'
 import { clampBudget, completeBudget, decodeCursor, narrowToolScopes, normalizeOwnedWorkspace, opaqueNotFound, projectThread, runStatus, titleFromInput, validateBinding } from './extension-agent-service-projection.js'
@@ -200,7 +200,7 @@ export class ExtensionAgentService {
         thread.turns.at(-1)?.model ?? thread.model,
         usesHostConnection
       )
-      const tokenBaseline = await this.latestUsageTokens(thread.id)
+      const tokenBaseline = await loadLatestUsageTokens(this.options.sessions, thread.id)
       const started = await this.options.turns.startTurn({
         threadId: thread.id,
         request: {
@@ -648,16 +648,4 @@ export class ExtensionAgentService {
     }
   }
 
-  private async latestUsageTokens(threadId: string): Promise<number> {
-    if (this.options.sessions.loadLatestUsageSnapshots) {
-      const snapshots = await this.options.sessions.loadLatestUsageSnapshots({ threadIds: [threadId] })
-      const snapshot = snapshots.find((candidate) => candidate.threadId === threadId)
-      if (snapshot) return snapshot.usage.totalTokens
-    }
-    let totalTokens = 0
-    for await (const event of iterateSessionEventsSince(this.options.sessions, threadId, -1)) {
-      if (event.kind === 'usage') totalTokens = event.usage.totalTokens
-    }
-    return totalTokens
-  }
 }

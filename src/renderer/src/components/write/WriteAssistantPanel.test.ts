@@ -82,7 +82,7 @@ describe('WriteAssistantPanel', () => {
     expect(html).toContain('Current file')
   })
 
-  it('offers guidance for queued plain-text messages', () => {
+  it('exposes queued plain-text messages from the collapsed queue', () => {
     useChatStore.setState({
       activeThreadId: 'thr_write',
       activeThreadGoal: null,
@@ -125,7 +125,7 @@ describe('WriteAssistantPanel', () => {
       onCollapse: () => undefined
     }))
 
-    expect(html).toContain('aria-label="Guide"')
+    expect(html).toContain('aria-label="1 queued"')
   })
 
   it('shows separate reasoning and Fast controls for Codex models', () => {

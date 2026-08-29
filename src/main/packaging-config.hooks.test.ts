@@ -439,6 +439,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(installerScript).toContain('windows-installer-migration-journal.ps1')
     expect(installerScript).toContain('windows-installer-migration-filesystem.ps1')
     expect(installerScript).toContain('windows-installer-migration-actions.ps1')
+    expect(installerScript).toContain('windows-installer-migration-recovery-env.ps1')
     expect(installerScript).toContain('!ifdef BUILD_UNINSTALLER')
     expect(installerScript).toContain('${ifNot} ${isUpdated}')
     expect(installerScript).toContain('MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)"')

@@ -437,9 +437,10 @@ describe('ClawRuntime', () => {
       { markdown?: string },
       Record<string, unknown>
     ]
-    expect(modelListCall[1]).toMatchObject({ markdown: expect.stringContaining('3. `MiniMax-M3` · provider `minimax-a`') })
-    expect(modelListCall[1]).toMatchObject({ markdown: expect.stringContaining('5. `MiniMax-M3` · provider `minimax`') })
-    expect(modelListCall[1]).toMatchObject({ markdown: expect.stringContaining('provider `minimax`') })
+    const modelList = modelListCall[1].markdown ?? ''
+    expect(modelList).toContain('`MiniMax-M3` · provider `minimax-a`')
+    const minimaxEntry = modelList.match(/(\d+)\.\s+`MiniMax-M3`[^\n]*provider `minimax`/)
+    expect(minimaxEntry).not.toBeNull()
 
     await handleFeishuMessage('/model MiniMax-M3', 'om_model_name_switch')
     expect(current().claw.channels[0]).toMatchObject({
@@ -452,7 +453,7 @@ describe('ClawRuntime', () => {
       { replyTo: 'om_model_name_switch', replyInThread: false }
     )
 
-    await handleFeishuMessage('/model 5', 'om_model_switch')
+    await handleFeishuMessage(`/model ${minimaxEntry![1]}`, 'om_model_switch')
     expect(current().claw.channels[0]).toMatchObject({
       providerId: 'minimax',
       model: 'MiniMax-M2.7'

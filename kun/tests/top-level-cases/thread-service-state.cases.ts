@@ -123,7 +123,7 @@ describe('ThreadService todos', () => {
         mode: 'document_edit'
       })
       expect(rewritten.items.find((item) => item.content === 'Build UI')).toBeUndefined()
-      expect(rewritten.items.find((item) => item.content === 'Add tests')?.status).toBe('completed')
+      expect(rewritten.items.find((item) => item.content === 'Add tests')?.status).toBe('pending')
 
       const events = await sessionStore.loadEventsSince('thr_todos', 0)
       expect(events.some((event) => event.kind === 'todos_updated')).toBe(true)

@@ -109,7 +109,7 @@ describe('DesignAIRail target toggle', () => {
     expect(html).toContain('aria-pressed="true"')
   })
 
-  it('offers guidance for queued plain-text messages', () => {
+  it('exposes queued plain-text messages from the collapsed queue', () => {
     const html = renderToStaticMarkup(createElement(DesignAIRail, props({
       busy: true,
       activeThreadId: 'thread-current-document',
@@ -131,9 +131,7 @@ describe('DesignAIRail target toggle', () => {
       }]
     })))
 
-    expect(html).toContain('Use a smaller title')
-    expect(html).toContain('aria-label="Guide"')
-    expect(html).toMatch(/<button(?=[^>]*aria-label="Guide")(?![^>]*disabled="")[^>]*>/)
+    expect(html).toContain('aria-label="1 queued"')
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Clear history"/)
   })
 

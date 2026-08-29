@@ -68,6 +68,7 @@ function buildHarness(): {
     threadHistoryCursor: null,
     threadHistoryLoading: false,
     threadLoadingId: null,
+    threadRefreshingId: null,
     turnDurationByUserId: {},
     turnReasoningFirstAtByUserId: {},
     turnReasoningLastAtByUserId: {},
@@ -109,7 +110,8 @@ describe('same-thread detail refresh', () => {
     state.blocks = previous
 
     const refreshing = actions.selectThread('thr_existing')
-    expect(state.threadLoadingId).toBe('thr_existing')
+    expect(state.threadLoadingId).toBeNull()
+    expect(state.threadRefreshingId).toBe('thr_existing')
     expect(state.blocks).toBe(previous)
     expect(activeStream.signal.aborted).toBe(false)
 
@@ -121,6 +123,7 @@ describe('same-thread detail refresh', () => {
     await refreshing
 
     expect(state.threadLoadingId).toBeNull()
+    expect(state.threadRefreshingId).toBeNull()
     expect(activeStream.signal.aborted).toBe(true)
     expect(state.blocks).toEqual([
       expect.objectContaining({ id: 'new-answer', text: 'new answer' })

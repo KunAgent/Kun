@@ -118,7 +118,7 @@ describe('CanvasToolbar prototype playback', () => {
         })
       )
     })
-    await act(async () => renderer.root.findByProps({ 'aria-label': 'Open design assistant' }).props.onClick())
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'Critique canvas' }).props.onClick())
     expect(onRequestCanvasCritique).toHaveBeenCalledWith(expect.stringContaining('current canvas'))
     await act(async () => renderer.unmount())
   })

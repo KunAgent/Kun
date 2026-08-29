@@ -75,6 +75,7 @@ function options(overrides: Partial<TuiOptions> = {}): TuiOptions {
 function modelSnapshot(revision = 1) {
   return {
     schemaVersion: 1 as const,
+    proxyRoutingVersion: 1 as const,
     revision,
     providers: [{
       id: 'provider-a', accountId: 'account:provider-a', name: 'Provider A',

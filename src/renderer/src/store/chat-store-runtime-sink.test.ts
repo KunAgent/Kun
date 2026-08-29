@@ -42,6 +42,7 @@ function makeSinkHarness(overrides: Partial<ChatState> = {}): {
     blocks: [],
     liveReasoning: '',
     liveAssistant: '',
+    liveDeltaSeqFloor: 0,
     lastSeq: 0,
     usageRefreshKey: 0,
     busy: true,
@@ -183,9 +184,9 @@ describe('thread event sink binding', () => {
     const { getState, set, get } = makeSinkHarness({ activeThreadId: 'thread-current' })
     const sink = buildThreadEventSink(set, get, { threadId: 'thread-current' })
 
-    sink.onDeltas([{ kind: 'agent_message', text: 'hello', seq: 11 }])
-    sink.onDeltas([{ kind: 'agent_message', text: 'hello', seq: 11 }])
-    sink.onDeltas([{ kind: 'agent_message', text: ' world', seq: 12 }])
+    sink.onDeltas([{ kind: 'agent_message', text: 'hello', seq: 11, itemId: 'assistant-current', turnId: 'turn-current' }])
+    sink.onDeltas([{ kind: 'agent_message', text: 'hello', seq: 11, itemId: 'assistant-current', turnId: 'turn-current' }])
+    sink.onDeltas([{ kind: 'agent_message', text: ' world', seq: 12, itemId: 'assistant-current', turnId: 'turn-current' }])
 
     expect(getState().liveAssistant).toBe('hello world')
   })
@@ -204,14 +205,14 @@ describe('thread event sink binding', () => {
     const sinkB = buildThreadEventSink(set, get, { threadId: 'thread-current', sinceSeq: 100 })
 
     sinkA.onDeltas([
-      { kind: 'agent_message', text: 'alpha', seq: 101 },
-      { kind: 'agent_message', text: 'beta', seq: 102 }
+      { kind: 'agent_message', text: 'alpha', seq: 101, itemId: 'assistant-current', turnId: 'turn-current' },
+      { kind: 'agent_message', text: 'beta', seq: 102, itemId: 'assistant-current', turnId: 'turn-current' }
     ])
     // sinkB replays the very same persisted deltas. Its own closure floor is
     // back at 100, so without the shared floor it would re-append them.
     sinkB.onDeltas([
-      { kind: 'agent_message', text: 'alpha', seq: 101 },
-      { kind: 'agent_message', text: 'beta', seq: 102 }
+      { kind: 'agent_message', text: 'alpha', seq: 101, itemId: 'assistant-current', turnId: 'turn-current' },
+      { kind: 'agent_message', text: 'beta', seq: 102, itemId: 'assistant-current', turnId: 'turn-current' }
     ])
 
     expect(getState().liveAssistant).toBe('alphabeta')
@@ -229,8 +230,8 @@ describe('thread event sink binding', () => {
     const sink = buildThreadEventSink(set, get, { threadId: 'thread-current', sinceSeq: 0 })
 
     sink.onDeltas([
-      { kind: 'agent_message', text: 'first', seq: 1 },
-      { kind: 'agent_message', text: ' second', seq: 2 }
+      { kind: 'agent_message', text: 'first', seq: 1, itemId: 'assistant-current', turnId: 'turn-current' },
+      { kind: 'agent_message', text: ' second', seq: 2, itemId: 'assistant-current', turnId: 'turn-current' }
     ])
 
     expect(getState().liveAssistant).toBe('first second')

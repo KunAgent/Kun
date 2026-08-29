@@ -482,8 +482,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         }
       })
       expect(update.mock.calls.some(([patch]) => JSON.stringify(patch).includes(
-        `\"id\":\"${zenmux.id}\",\"name\"`
-      ) && JSON.stringify(patch).includes('\"useProxy\":true'))).toBe(true)
+        `"id":"${zenmux.id}","name"`
+      ) && JSON.stringify(patch).includes('"useProxy":true'))).toBe(true)
     })
 
     it('saves the Provider proxy switch while retaining an inactive selection', async () => {
@@ -511,8 +511,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
       await act(async () => toggle.props.onClick())
       expect(update.mock.calls.some(([patch]) => JSON.stringify(patch).includes(
-        `\"id\":\"${zenmux.id}\",\"name\"`
-      ) && JSON.stringify(patch).includes('\"useProxy\":false'))).toBe(true)
+        `"id":"${zenmux.id}","name"`
+      ) && JSON.stringify(patch).includes('"useProxy":false'))).toBe(true)
     })
 
     it('imports Cursor mixed-vendor context, vision, and SDK aliases', async () => {

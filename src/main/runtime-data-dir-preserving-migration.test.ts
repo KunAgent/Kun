@@ -607,8 +607,8 @@ describe('history-preserving Kun Runtime migration', () => {
     const sourceLicense = join(sourcePackage, 'LICENSE')
     const targetLicense = join(targetPackage, 'LICENSE')
     await writeFile(sourceLicense, 'immutable package', 'utf8')
-    await chmod(sourceLicense, 0o444)
-    await chmod(sourcePackage, 0o555)
+    if (process.platform !== 'win32') await chmod(sourceLicense, 0o444)
+    if (process.platform !== 'win32') await chmod(sourcePackage, 0o555)
 
     const result = runCanonicalKunRuntimeDataMigration({
       userDataPath: test.userData,
@@ -624,8 +624,8 @@ describe('history-preserving Kun Runtime migration', () => {
       expect((await stat(sourceLicense)).mode & 0o777).toBe(0o444)
       expect((await stat(targetLicense)).mode & 0o777).toBe(0o444)
     }
-    await chmod(sourcePackage, 0o755)
-    await chmod(targetPackage, 0o755)
+    if (process.platform !== 'win32') await chmod(sourcePackage, 0o755)
+    if (process.platform !== 'win32') await chmod(targetPackage, 0o755)
   })
 
   it('rebases only the candidate extension registry', async () => {

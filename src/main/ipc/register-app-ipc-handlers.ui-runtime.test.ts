@@ -26,11 +26,28 @@ import {
   tmpdir
 } from 'node:os'
 import {
+  createHash
+} from 'node:crypto'
+import {
+  dirname,
   join
 } from 'node:path'
 import {
   registerAppIpcHandlers
 } from './register-app-ipc-handlers'
+import {
+  AGENT_SDK_INTEGRITY_BY_PACKAGE,
+  AGENT_SDK_VERSION,
+  claudeBinaryName,
+  platformBinaryPackage
+} from '../agent-sdk-installer'
+import {
+  agentSdkRoot,
+  manifestRelativePath,
+  serializeActivePointer,
+  serializeManifest,
+  type AgentSdkInstallManifest
+} from '../agent-sdk-installer-storage'
 
 vi.mock('../main-window', () => ({
   trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
@@ -462,12 +479,33 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
 
   it('restarts Kun after an already-downloaded Claude SDK is provisioned through IPC', async () => {
     const userDataDir = mkdtempSync(join(tmpdir(), 'kun-agent-sdk-ipc-'))
-    const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude'
-    const binaryPath = join(userDataDir, 'agent-sdk', binaryName)
+    const binaryName = claudeBinaryName()
+    const packageName = platformBinaryPackage()!
+    const binary = Buffer.from('authenticated claude binary')
+    const manifest: AgentSdkInstallManifest = {
+      schemaVersion: 1,
+      sdkVersion: AGENT_SDK_VERSION,
+      packageName,
+      platform: process.platform,
+      arch: process.arch,
+      binaryName,
+      binarySize: binary.length,
+      binarySha256: createHash('sha256').update(binary).digest('hex'),
+      cliVersion: 'test Claude Code',
+      helpProbe: 'Usage: claude [options]',
+      integrity: AGENT_SDK_INTEGRITY_BY_PACKAGE[packageName]!,
+      installedAt: new Date().toISOString()
+    }
+    const sdkRoot = agentSdkRoot(userDataDir)
+    const manifestPath = join(sdkRoot, manifestRelativePath(manifest))
+    const manifestBytes = serializeManifest(manifest)
+    const binaryPath = join(dirname(manifestPath), binaryName)
     const restartKunServe = vi.fn(async () => undefined)
     electronMock.userDataPath = userDataDir
-    mkdirSync(join(userDataDir, 'agent-sdk'), { recursive: true })
-    writeFileSync(binaryPath, 'claude binary')
+    mkdirSync(dirname(manifestPath), { recursive: true })
+    writeFileSync(binaryPath, binary)
+    writeFileSync(manifestPath, manifestBytes)
+    writeFileSync(join(sdkRoot, 'active.json'), serializeActivePointer(manifest, manifestBytes))
 
     try {
       registerAppIpcHandlers(registerOptions({ restartKunServe }))

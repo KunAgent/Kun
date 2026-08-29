@@ -20,6 +20,7 @@ import {
   providerCatalogEntries,
   type ProviderCatalogAuthFlow,
   type ProviderCatalogAuthType,
+  type ProviderCatalogCredentialRequirement,
   type ProviderCatalogKind
 } from '@kun/provider-catalog'
 import { spawn } from 'node:child_process'
@@ -137,10 +138,11 @@ export type ConnectionPreset = {
   id: string
   presetSource?: string
   name: string
-  category: 'Subscription' | 'API'
+  category: 'Free' | 'Subscription' | 'API'
   kind: ProviderCatalogKind
   authFlow: ProviderCatalogAuthFlow
   authType: ProviderCatalogAuthType
+  credentialRequirement: ProviderCatalogCredentialRequirement
   baseUrl?: string
   endpointFormat: 'chat_completions' | 'responses' | 'messages' | 'custom_endpoint'
   models: string[]
@@ -151,17 +153,20 @@ export type ConnectionPreset = {
 export const connectionPresets: ConnectionPreset[] = [
   {
     id: 'custom', name: 'Custom provider', category: 'API', kind: 'http',
-    authFlow: 'api-key', authType: 'api-key',
+    authFlow: 'api-key', authType: 'api-key', credentialRequirement: 'required',
     endpointFormat: 'chat_completions', models: []
   },
   ...providerCatalogEntries().map((entry): ConnectionPreset => ({
     id: entry.profileId,
     presetSource: entry.presetSource,
     name: entry.label,
-    category: entry.category === 'subscription' ? 'Subscription' : 'API',
+    category: entry.category === 'free'
+      ? 'Free'
+      : entry.category === 'subscription' ? 'Subscription' : 'API',
     kind: entry.kind,
     authFlow: entry.authFlow,
     authType: entry.authType,
+    credentialRequirement: entry.credentialRequirement,
     ...(entry.baseUrl ? { baseUrl: entry.baseUrl } : {}),
     endpointFormat: entry.endpointFormat,
     models: [...entry.models],
@@ -193,6 +198,11 @@ export function credentialAvailabilityLabel(
 export const CONNECT_ENDPOINT_FORMATS = ['chat_completions', 'responses', 'messages', 'custom_endpoint'] as const
 
 export type ConnectField = 'id' | 'name' | 'baseUrl' | 'endpointFormat' | 'credential' | 'models'
+
+export function connectionRequiresCredential(preset: ConnectionPreset): boolean {
+  return preset.credentialRequirement === 'required'
+}
+
 export type ManagementAction = {
   kind: 'rename' | 'reconnect' | 'credential' | 'probe' | 'disconnect' | 'back'
   label: string

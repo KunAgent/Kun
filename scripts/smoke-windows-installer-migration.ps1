@@ -621,6 +621,26 @@ try {
       })) {
         Copy-Item -LiteralPath $evidence.FullName -Destination $artifactRoot -Force
       }
+      $appLogDirectory = Join-Path $env:APPDATA 'Kun\logs'
+      if (Test-Path -LiteralPath $appLogDirectory -PathType Container) {
+        Copy-Item -LiteralPath $appLogDirectory `
+          -Destination (Join-Path $artifactRoot 'app-logs') -Recurse -Force
+      }
+      foreach ($healthArtifact in @(Get-ChildItem -LiteralPath $env:TEMP `
+        -Filter 'Kun-update-health-*' -File -ErrorAction SilentlyContinue)) {
+        Copy-Item -LiteralPath $healthArtifact.FullName -Destination $artifactRoot -Force
+      }
+      @(Get-CimInstance Win32_Process -Filter "Name = 'Kun.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
+        $redactedCommandLine = ([string]$_.CommandLine `
+          -replace '--kun-update-health-token=(?:"[^"]*"|\S+)', '--kun-update-health-token=<redacted>') `
+          -replace '--runtime-token(?:=|\s+)(?:"[^"]*"|\S+)', '--runtime-token=<redacted>'
+        [ordered]@{
+          processId = $_.ProcessId
+          parentProcessId = $_.ParentProcessId
+          commandLine = $redactedCommandLine
+        }
+      }) | ConvertTo-Json | Set-Content `
+        -LiteralPath (Join-Path $artifactRoot 'kun-processes.json') -Encoding UTF8
       [ordered]@{
         scenario = $currentScenario
         message = $failureRecord.Exception.Message

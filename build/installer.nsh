@@ -86,6 +86,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
   File /oname=$PLUGINSDIR\windows-installer-migration-journal.ps1 "${PROJECT_DIR}\build\windows-installer-migration-journal.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-filesystem.ps1 "${PROJECT_DIR}\build\windows-installer-migration-filesystem.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-actions.ps1 "${PROJECT_DIR}\build\windows-installer-migration-actions.ps1"
+  File /oname=$PLUGINSDIR\windows-installer-migration-recovery-env.ps1 "${PROJECT_DIR}\build\windows-installer-migration-recovery-env.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-transaction.ps1 "${PROJECT_DIR}\build\windows-installer-migration-transaction.ps1"
   StrCpy $KunInstallerHelperPath "$PLUGINSDIR\kun-windows-installer-migration.ps1"
   StrCpy $KunInstallerResultPath "$PLUGINSDIR\kun-windows-installer-result.txt"

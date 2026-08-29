@@ -232,6 +232,7 @@ describe('Windows installer migration ACL contract', () => {
   it('migrates trusted schema-2 journals and cleans stale journals during uninstall', () => {
     const script = readHelperSources()
     const installerScript = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
+      .replace(/\r\n/g, '\n')
 
     expect(script).toContain('function Convert-LegacyJournal')
     expect(script).toContain("if ($schemaVersion -ne 2)")

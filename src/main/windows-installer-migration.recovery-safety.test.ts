@@ -254,7 +254,7 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
       .toBe('personal')
   })
 
-  it('rejects an existing journal under a cross-user-writable directory', () => {
+  it('quarantines an existing journal under a cross-user-writable directory', () => {
     const root = makeTempRoot()
     const source = join(root, 'Kun')
     const recoveryDirectory = join(root, 'recovery')
@@ -280,8 +280,11 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
 
     const recovery = runHelper({ action: 'Recover', source, target: source, journal })
 
-    expect(recovery.status).not.toBe(0)
-    expect(processError(recovery)).toContain('untrusted ACL')
+    expect(recovery.status, processError(recovery)).toBe(0)
+    expect(existsSync(journal)).toBe(false)
+    expect(readdirSync(recoveryDirectory).filter((name) =>
+      /^journal\.json\.untrusted-[a-f0-9]{32}$/u.test(name)
+    )).toHaveLength(1)
     expect(readFileSync(join(source, 'personal.txt'), 'utf8')).toBe('do not move')
   })
 

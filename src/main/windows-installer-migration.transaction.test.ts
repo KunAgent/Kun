@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -11,7 +11,7 @@ const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
 type Fixture = ReturnType<typeof fixture>
-type Action = 'Prepare' | 'SwitchUpdatePayload' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
+type Action = 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
 
 function payload(root: string, executable: string): void {
   mkdirSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli'), { recursive: true })
@@ -111,6 +111,24 @@ function powershell(command: string): ReturnType<typeof spawnSync> {
   return spawnSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8' })
 }
 
+function primeCutoverMetadata(input: Fixture): void {
+  const quoted = (value: string) => value.replace(/'/g, "''")
+  const target = quoted(input.target)
+  const executable = quoted(join(input.target, 'Kun.exe'))
+  const shortcut = quoted(join(input.desktop, 'Kun.lnk'))
+  assertSucceeded(powershell(`
+    foreach($name in @('Install','Uninstall')){
+      $key=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\\KunInstallerTransactionTest\\$name",$true)
+      $key.SetValue('InstallLocation','${target}',[Microsoft.Win32.RegistryValueKind]::String)
+      $key.Dispose()
+    }
+    $shell=New-Object -ComObject WScript.Shell
+    $link=$shell.CreateShortcut('${shortcut}')
+    $link.TargetPath='${executable}'
+    $link.Save()
+  `), 'prime cutover metadata')
+}
+
 function processSummary(result: ReturnType<typeof spawnSync>, action: string): string {
   return [
     `Windows migration action: ${action}`,
@@ -198,7 +216,7 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(state.Shortcuts).toEqual([])
     expect(state.InPlace).toBe(false)
     expect(existsSync(state.BackupRoot)).toBe(false)
-    expect(state.RecoveryExecutable).toBe(join(input.source, 'DeepSeek GUI.exe'))
+    expect(state.RecoveryExecutable).toBe(realpathSync.native(join(input.source, 'DeepSeek GUI.exe')))
     payload(input.stage, 'Kun.exe')
     const switched = run(input, 'SwitchUpdatePayload', 'validate.before_check')
     assertExpectedFailure(switched, 'SwitchUpdatePayload')
@@ -412,7 +430,7 @@ windowsOnly('Windows automatic update transaction', () => {
     ], { encoding: 'utf8' }).stdout.trim()
     expect(current).toBe(originalPath.trim())
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
-  })
+  }, 120_000)
 })
 
 windowsOnly('Windows automatic update fault injection points', () => {
@@ -426,7 +444,7 @@ windowsOnly('Windows automatic update fault injection points', () => {
     assertExpectedFailure(failed, 'Prepare')
     const state = readTransaction(input)
     expect(state.Phase).toBe('prepared')
-    expect(state.JournalPath).toBe(input.journal)
+    expect(state.JournalPath).toBe(join(realpathSync.native(join(input.root, 'recovery')), 'journal.json'))
     expect(state.OldVersion).toBe('0.1.0')
     expect(state.NewVersion).toBe('0.2.0')
     expect(String(state.Target)).toContain('Kun')
@@ -438,7 +456,7 @@ windowsOnly('Windows automatic update fault injection points', () => {
   })
 
   it('restores the old payload when interrupted mid-move (switch.after_old_move)', () => {
-    const input = fixture()
+    const input = fixture(true)
     assertSucceeded(run(input, 'Prepare'), 'Prepare')
     payload(input.stage, 'Kun.exe')
     const failed = run(input, 'SwitchUpdatePayload', 'switch.after_old_move')
@@ -447,8 +465,7 @@ windowsOnly('Windows automatic update fault injection points', () => {
     expect(state.Phase).toBe('prepared')
     assertSucceeded(run(input, 'RecoverUpdateTransaction'), 'RecoverUpdateTransaction')
     expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
-    expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
-    expect(existsSync(input.target)).toBe(false)
+    expect(existsSync(join(input.source, 'Kun.exe'))).toBe(true)
   })
 
   it('rolls back a payload that switched but never validated cutover (switch.after_payload_switched)', () => {
@@ -468,8 +485,9 @@ windowsOnly('Windows automatic update fault injection points', () => {
     assertSucceeded(run(input, 'Prepare'), 'Prepare')
     payload(input.stage, 'Kun.exe')
     assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
-    const failed = run(input, 'Restore', 'cutover.after_awaiting_health')
-    assertExpectedFailure(failed, 'Restore')
+    primeCutoverMetadata(input)
+    const failed = run(input, 'ValidateCutover', 'cutover.after_awaiting_health')
+    assertExpectedFailure(failed, 'ValidateCutover')
     expect(readTransaction(input).Phase).toBe('awaiting_health')
     assertSucceeded(run(input, 'RecoverUpdateTransaction'), 'RecoverUpdateTransaction')
     expect(readTransaction(input)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })

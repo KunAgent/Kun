@@ -47,6 +47,15 @@ test('recycled PID release matrix proves exact stale coordination cleanup', () =
   ])
 })
 
+test('recycled PID helper does not advertise itself as a Runtime data-dir owner', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'scripts/smoke-packaged-update-handoff-recycled.cjs'),
+    'utf8'
+  )
+  assert.match(source, /'--fixture-data-dir', profile\.dataDir/u)
+  assert.doesNotMatch(source, /'--data-dir', profile\.dataDir/u)
+})
+
 test('synthetic predecessor and development flavor use distinct stable build IDs', () => {
   const candidate = 'b'.repeat(64)
   const predecessor = predecessorBuildId(candidate)

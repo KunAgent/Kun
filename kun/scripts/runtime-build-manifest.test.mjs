@@ -11,6 +11,9 @@ import {
 test('runtime build identity is stable for identical output and changes with emitted JavaScript', async () => {
   const root = await mkdtemp(join(tmpdir(), 'kun-runtime-build-manifest-'))
   try {
+    const packageVersion = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8')
+    ).version
     await writeFile(join(root, 'a.js'), 'export const a = 1\n', 'utf8')
     await writeFile(join(root, 'b.js'), 'export const b = 2\n', 'utf8')
     const first = await computeRuntimeBuildId(root)
@@ -31,7 +34,7 @@ test('runtime build identity is stable for identical output and changes with emi
     assert.equal(manifest.buildId, await computeRuntimeBuildId(root))
     assert.equal(
       manifest.serviceVersion,
-      process.env.KUN_APP_VERSION || process.env.KUN_RELEASE_VERSION || '0.3.8'
+      process.env.KUN_APP_VERSION || process.env.KUN_RELEASE_VERSION || packageVersion
     )
     assert.equal(
       manifest.channel,

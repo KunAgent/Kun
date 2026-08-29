@@ -308,6 +308,9 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
     }
     if (!transition) return { status: 'aborted' }
 
+    // Wake the local loop before publishing the terminal event. Event
+    // persistence may be queued behind the in-flight operation being aborted.
+    this.abortTurnExecution(input.turnId)
     try {
       await this['deps'].events.record({
         kind: 'turn_aborted',

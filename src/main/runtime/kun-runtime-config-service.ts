@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import {
   ContextCompactionConfigSchema,
   GraphRuntimeConfigSchema,
@@ -254,8 +255,19 @@ export async function syncGuiManagedKunConfig(
       `Refusing to write invalid GUI-managed Kun config at ${configPath}: ${JSON.stringify(parsed.error.issues, null, 2)}`
     )
   }
+  if (existing) {
+    const parsedExisting = KunConfigSchema.safeParse(existing)
+    if (
+      parsedExisting.success &&
+      isDeepStrictEqual(
+        JSON.parse(JSON.stringify(parsed.data)),
+        JSON.parse(JSON.stringify(parsedExisting.data))
+      )
+    ) {
+      return parsed.data
+    }
+  }
   const nextText = `${JSON.stringify(next, null, 2)}\n`
-  if (existing && nextText === `${JSON.stringify(existing, null, 2)}\n`) return parsed.data
   try {
     await atomicWriteFile(configPath, nextText, {
       beforeCommit: () => {

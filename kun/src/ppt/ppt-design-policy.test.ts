@@ -56,6 +56,21 @@ describe('PPT core design policy binding', () => {
     await writeFile(rulesPath, `${JSON.stringify(rules, null, 2)}\n`)
     await expect(loadPptCoreDesignPolicy(root)).rejects.toThrow()
   })
+
+  it('keeps policy identity stable across LF and CRLF checkouts', async () => {
+    const expected = await loadPptCoreDesignPolicy(toolchain)
+    const root = await copiedToolchain()
+    await Promise.all([PPT_CORE_DESIGN_POLICY_PATH, PPT_CORE_DESIGN_POLICY_RULES_PATH].map(async (path) => {
+      const filePath = join(root, 'reference', path)
+      const content = await readFile(filePath, 'utf8')
+      await writeFile(filePath, content.replace(/\r?\n/g, '\r\n'))
+    }))
+
+    const actual = await loadPptCoreDesignPolicy(root)
+    expect(actual.sha256).toBe(expected.sha256)
+    expect(actual.markdownSha256).toBe(expected.markdownSha256)
+    expect(actual.rulesSha256).toBe(expected.rulesSha256)
+  })
 })
 
 async function copiedToolchain(): Promise<string> {

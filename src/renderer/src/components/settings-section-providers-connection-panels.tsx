@@ -7,7 +7,8 @@ import {
   MODEL_ENDPOINT_FORMATS,
   modelProviderSupportsAppProxy,
   normalizeProxyUrl,
-  modelProviderRequiresApiKey
+  modelProviderRequiresApiKey,
+  resolveModelProviderPresetSource
 } from '@shared/app-settings'
 import type {
   ModelProviderTokenPlanRegion
@@ -62,8 +63,10 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, showApiKey, selectControlClass, zh, sharedConnectionsError, credentialRevealError, activeTab, expandedCapabilities, activeProvider, activeRetry, isDraftActive, canEditActiveProviderId, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderId, activeProbe, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeMissingCredential, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, providerProxy, setGlobalNetworkOpen } = view
+  const { t, showApiKey, selectControlClass, zh, sharedConnectionsError, credentialRevealError, activeTab, expandedCapabilities, activeProvider, activeRetry, canEditActiveProviderId, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderId, activeProbe, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeMissingCredential, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, providerProxy, setGlobalNetworkOpen } = view
   const activeProviderNeedsApiKey = modelProviderRequiresApiKey(activeProvider)
+  const activeProviderAcceptsApiKey = activeProviderNeedsApiKey ||
+    !resolveModelProviderPresetSource(activeProvider)
   const proxySupported = modelProviderSupportsAppProxy(activeProvider)
   const proxyUrlValid = Boolean(normalizeProxyUrl(providerProxy.url))
   const proxyState = !proxySupported
@@ -223,7 +226,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                     />
                   ) : (
                     <>
-                      {activeProviderNeedsApiKey ? (
+                      {activeProviderAcceptsApiKey ? (
                       <label className={fieldLabelClass}>
                         {t('modelProviderApiKey')}
                         <SecretInput

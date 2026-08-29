@@ -421,9 +421,9 @@ function resolveImageUrl(
   const absolute = resolve(projectDir, src)
   if (workspaceRoot) {
     const rel = relative(workspaceRoot, absolute)
-    return rel.startsWith('..') ? absolute : rel
+    return rel.startsWith('..') ? absolute : rel.replaceAll('\\', '/')
   }
-  return relative(projectDir, absolute)
+  return relative(projectDir, absolute).replaceAll('\\', '/')
 }
 
 function mapTable(

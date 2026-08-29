@@ -8,7 +8,7 @@ describe('worktree settings', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps the experimental plan-isolation switch out of worktree management', async () => {
+  it('manages the default plan-isolation setting alongside worktrees', async () => {
     const updateKun = vi.fn()
     vi.stubGlobal('window', {
       kunGui: {
@@ -38,8 +38,12 @@ describe('worktree settings', () => {
       }))
     })
 
-    expect(renderer!.root.findAllByProps({ role: 'switch' })).toHaveLength(0)
-    expect(updateKun).not.toHaveBeenCalled()
+    const toggle = renderer!.root.findByProps({ role: 'switch' })
+    expect(toggle.props['aria-checked']).toBe(true)
+    act(() => toggle.props.onClick())
+    expect(updateKun).toHaveBeenCalledWith({
+      planExecution: { useWorktreeByDefault: false }
+    })
     act(() => renderer!.unmount())
   })
 })

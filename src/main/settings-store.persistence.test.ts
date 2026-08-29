@@ -191,14 +191,16 @@ it('ignores null entries in persisted Claw channels and schedule tasks', async (
       startMinimized: true,
       useSystemTitleBar: true,
       closeAction: 'tray',
-      closeToTray: true
+      closeToTray: true,
+      keepAwake: false
     })
     expect(disabled.appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,
       useSystemTitleBar: true,
       closeAction: 'quit',
-      closeToTray: false
+      closeToTray: false,
+      keepAwake: false
     })
   })
 

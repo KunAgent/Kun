@@ -83,8 +83,11 @@ async function main() {
   const candidate = await readPackagedBuild(resourcesDir)
   const selection = argumentValue('--cases') ?? 'all'
   const runPositive = selection === 'all' || selection === 'positive'
+  const runRecycled = runPositive || selection === 'recycled'
   const runNegative = selection === 'all' || selection === 'negative'
-  if (!runPositive && !runNegative) throw new Error('--cases must be all, positive, or negative')
+  if (!runPositive && !runRecycled && !runNegative) {
+    throw new Error('--cases must be all, positive, recycled, or negative')
+  }
 
   for (const scenario of runPositive ? POSITIVE_SCENARIOS : []) {
     await runPositiveScenario({
@@ -97,7 +100,7 @@ async function main() {
       timeoutMs
     })
   }
-  for (const scenario of runPositive ? RECYCLED_PID_SCENARIOS : []) {
+  for (const scenario of runRecycled ? RECYCLED_PID_SCENARIOS : []) {
     await runRecycledPidScenario({
       scenario,
       resourcesDir,
@@ -128,7 +131,7 @@ async function main() {
   }
   process.stdout.write(
     `Packaged update handoff smoke OK (${process.platform}/${process.arch}): ` +
-    `${runPositive ? POSITIVE_SCENARIOS.length + RECYCLED_PID_SCENARIOS.length : 0} update paths and ` +
+    `${(runPositive ? POSITIVE_SCENARIOS.length : 0) + (runRecycled ? RECYCLED_PID_SCENARIOS.length : 0)} update paths and ` +
     `${runNegative ? NEGATIVE_SCENARIOS.length : 0} fail-closed owner cases passed.\n`
   )
 }

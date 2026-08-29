@@ -116,6 +116,7 @@ function expectUsageRange(
 }
 describe('UsageQuotaPanel', () => {
   beforeEach(async () => {
+    resetUsageRequestCacheForTests()
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     await i18n.changeLanguage('en')
   })

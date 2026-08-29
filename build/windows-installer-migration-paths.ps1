@@ -1,5 +1,9 @@
 function Get-EnvironmentValue([string]$Name) {
-  return [Environment]::GetEnvironmentVariable($Name, 'Process')
+  $value = [Environment]::GetEnvironmentVariable($Name, 'Process')
+  if ($null -eq $value) {
+    return ''
+  }
+  return [string]$value
 }
 
 function Get-CanonicalLeaf {

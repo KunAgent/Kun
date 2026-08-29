@@ -12,6 +12,7 @@ const settings = {
   ...mcpMigration,
   ...migrationSystem,
   ...codePersonas,
+  guiUpdateErrFeedUnavailable: 'अभी कोई अपडेट स्रोत उपलब्ध नहीं है। बाद में फिर कोशिश करें या डाउनलोड पृष्ठ का उपयोग करें।',
 }
 
 export default settings

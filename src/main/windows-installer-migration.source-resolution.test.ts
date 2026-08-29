@@ -21,7 +21,8 @@ const helperModulePaths = [
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
   'windows-installer-migration-actions.ps1',
-  'windows-installer-migration-recovery-env.ps1'
+  'windows-installer-migration-recovery-env.ps1',
+  'windows-installer-migration-transaction.ps1'
 ].map((fileName) => join(process.cwd(), 'build', fileName))
 const smokePath = join(process.cwd(), 'scripts/smoke-windows-installer-migration.ps1')
 const windowsOnly = process.platform === 'win32' ? describe : describe.skip
@@ -276,6 +277,9 @@ it('lets an explicit target override a registered legacy branded source', () => 
     const resultPath = join(root, 'kun-windows-installer-result.txt')
     mkdirSync(source, { recursive: true })
     copyFileSync(helperPath, copiedHelper)
+    for (const modulePath of helperModulePaths) {
+      copyFileSync(modulePath, join(root, parse(modulePath).base))
+    }
     const canonicalSource = realpathSync.native(source)
 
     const result = runHelper({

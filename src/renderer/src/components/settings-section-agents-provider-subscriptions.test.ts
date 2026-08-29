@@ -555,13 +555,13 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         provider: {
           providers: expect.arrayContaining([
             expect.objectContaining({
-              id: 'custom-provider-3',
+              id: 'custom-provider-4',
               apiKey: ''
             })
           ])
         },
         agents: {
-          kun: expect.objectContaining({ providerId: 'custom-provider-3' })
+          kun: expect.objectContaining({ providerId: 'custom-provider-4' })
         }
       })
       expect(runtimeRequest.mock.calls.some(([path, method, body]) =>

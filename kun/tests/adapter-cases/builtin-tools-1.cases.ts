@@ -51,6 +51,11 @@ import {
 
 import { createBackgroundShellTool } from '../../src/adapters/tool/background-shell-tool.js'
 
+import {
+  listBashSessionRecords,
+  stopBashSessionById
+} from '../../src/adapters/tool/builtin-bash-tool.js'
+
 import { createReadTool as createReadToolFromModule } from '../../src/adapters/tool/read.js'
 
 import { createBashTool as createBashToolFromModule } from '../../src/adapters/tool/bash.js'
@@ -143,8 +148,10 @@ beforeEach(async () => {
   })
 
 afterEach(async () => {
-    await rm(workspace, { recursive: true, force: true })
-    await rm(backgroundShellDataDir, { recursive: true, force: true })
+    const sessions = await listBashSessionRecords()
+    await Promise.all(sessions.map((session) => stopBashSessionById(session.id, session.threadId)))
+    await rm(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await rm(backgroundShellDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
 it('advertises the pi-style built-in tool family by default', async () => {
@@ -363,7 +370,7 @@ it('advertises structured GUI input choices and normalizes single-question optio
     const tools = await host.listTools(
       buildContext(workspace, { awaitUserInput: async () => ({ status: 'cancelled' }) })
     )
-    const requestInputTool = tools.find((tool) => tool.name === 'request_user_input')
+    const requestInputTool = tools.find((tool) => tool.name === 'user_input')
     expect(requestInputTool?.inputSchema).toMatchObject({
       properties: {
         options: { type: 'array' },
@@ -405,11 +412,11 @@ it('advertises structured GUI input choices and normalizes single-question optio
     })
   })
 
-it('keeps GUI input tools in the stable catalog without a user-input gate', async () => {
+it('keeps the canonical GUI input tool in the stable catalog without a user-input gate', async () => {
     const tools = await host.listTools(buildContext(workspace))
     const names = tools.map((tool) => tool.name)
     expect(names).toContain('user_input')
-    expect(names).toContain('request_user_input')
+    expect(names).not.toContain('request_user_input')
   })
 
 it('exposes pi-style coding and read-only tool groups', () => {

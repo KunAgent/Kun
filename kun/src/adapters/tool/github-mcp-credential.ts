@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { constants, accessSync, realpathSync, statSync } from 'node:fs'
-import { delimiter, posix, win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
 import type { McpServerConfig } from '../../contracts/capabilities.js'
 import {
   KUN_GITHUB_PAT_ENV_VAR,
@@ -207,11 +207,16 @@ function githubCliExecutableCandidates(platform: NodeJS.Platform, env: NodeJS.Pr
 }
 
 function githubCliPathCandidates(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string[] {
-  if (!env.PATH) return []
+  const pathValue = env.PATH
+  if (!pathValue) return []
   const pathApi = platform === 'win32' ? win32 : posix
   const executable = platform === 'win32' ? 'gh.exe' : 'gh'
-  return [...new Set(env.PATH.split(platform === 'win32' ? win32.delimiter : delimiter).map((item) => item.trim()).filter(Boolean))]
-    .map((directory) => pathApi.join(directory, executable))
+  const pathDelimiter = platform === 'win32' ? win32.delimiter : posix.delimiter
+  const directories = pathValue
+    .split(pathDelimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  return [...new Set(directories)].map((directory) => pathApi.join(directory, executable))
 }
 
 function windowsGitHubCliFallbackCandidates(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string[] {

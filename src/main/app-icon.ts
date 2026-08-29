@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve, sep, win32 } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { isAbsolute, relative, resolve, sep, win32 } from 'node:path'
 import { nativeImage } from 'electron'
+import { mainBundleDirectory } from './main-bundle-path'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+const __dirname = mainBundleDirectory(import.meta.url)
 
 function usesWin32PathRules(baseDir: string): boolean {
   return (win32.isAbsolute(baseDir) && !baseDir.startsWith('/')) ||

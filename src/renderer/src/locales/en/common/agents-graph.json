@@ -81,6 +81,10 @@
         "name": "Component Designer",
         "desc": "Focused interactive component prototype"
       },
+      "diagram-designer": {
+        "name": "Diagram Designer",
+        "desc": "Accessible inline-SVG diagrams"
+      },
       "design-reviewer": {
         "name": "Design review",
         "desc": "Visual hierarchy and accessibility · read-only"

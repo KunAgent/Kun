@@ -41,7 +41,8 @@ const applyThemeLibMock = vi.hoisted(() => ({
   applyTheme: vi.fn(),
   applyUiFontScale: vi.fn(),
   applyChatContentMaxWidth: vi.fn(),
-  applyDocumentLocale: vi.fn()
+  applyDocumentLocale: vi.fn(),
+  applyWriteTypography: vi.fn()
 }))
 
 vi.mock('../lib/apply-theme', () => applyThemeLibMock)

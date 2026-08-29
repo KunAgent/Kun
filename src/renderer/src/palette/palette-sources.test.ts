@@ -180,7 +180,7 @@ describe('collectPaletteSources', () => {
       .map((entry) => entry.activation.kind === 'route' ? entry.activation.route : null)
       .filter((route): route is AppRoute => Boolean(route))
     expect(routes.sort()).toEqual([
-      'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'workflow', 'write'
+      'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'workflow', 'write'
     ])
     expect(entries.find((entry) => entry.id === 'route:workflow')?.title).toBe('workflowCreate')
   })

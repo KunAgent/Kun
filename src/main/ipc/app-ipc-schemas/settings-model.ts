@@ -337,6 +337,20 @@ export const kunRuntimePatchSchema = z.object({
     topKMax: z.number().int().positive().optional(),
     minScore: z.number().nonnegative().optional()
   }).strict().optional(),
+  githubMcp: z.object({
+    enabled: z.boolean().optional(),
+    githubHost: trimmedString(253).optional(),
+    allowedHosts: z.array(trimmedString(253)).max(64).optional(),
+    allowedOrganizations: z.array(trimmedString(64)).max(128).optional(),
+    allowedRepositories: z.array(trimmedString(256)).max(256).optional(),
+    authorization: z.object({
+      source: z.enum(['GITHUB_PAT_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'github-cli']),
+      host: trimmedString(253),
+      login: trimmedString(256),
+      scopes: z.array(trimmedString(256)).max(256),
+      fingerprint: z.string().trim().regex(/^[0-9a-fA-F]{64}$/)
+    }).strict().nullable().optional()
+  }).strict().optional(),
   projectConfig: z.object({
     grants: z.array(z.object({
       workspaceRoot: trimmedString(MAX_PATH_LENGTH),

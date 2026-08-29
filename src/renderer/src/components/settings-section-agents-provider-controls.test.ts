@@ -328,7 +328,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(activePanelText(renderer)).toContain('Provider connection')
       expect(activePanelText(renderer)).not.toContain('Provider models')
       expect(renderer.root.findAllByType('select').some((select) => select.props.value === 'messages')).toBe(true)
-      expect(rendererText(renderer)).not.toContain('Enter provider API key')
+      expect(rendererText(renderer)).toContain('Enter provider API key')
       expect(rendererText(renderer)).not.toContain('Inherit API key')
 
       const preventDefault = vi.fn()

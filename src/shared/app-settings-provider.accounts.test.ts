@@ -62,7 +62,6 @@ describe('multi-account provider presets', () => {
       subscriptionRegion: 'united-states',
       baseUrl: 'https://ollama.com/v1',
       endpointFormat: 'chat_completions',
-      useProxy: false,
       models: [...OLLAMA_CLOUD_MODEL_IDS],
       docsUrl: 'https://docs.ollama.com/cloud',
       apiKeyUrl: 'https://ollama.com/settings/keys'

@@ -14,7 +14,9 @@ function argument(name) {
 }
 
 async function main() {
-  const dataDir = argument('--data-dir')
+  const dataDir = argument(process.argv.includes('--fixture-data-dir')
+    ? '--fixture-data-dir'
+    : '--data-dir')
   const scenario = argument('--scenario')
   const buildId = argument('--build-id')
   const discoveryPath = join(dataDir, 'runtime.json')

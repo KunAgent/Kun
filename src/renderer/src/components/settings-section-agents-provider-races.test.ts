@@ -292,7 +292,13 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       const update = vi.fn()
       const initialCtx = {
         ...baseCtx(),
-        provider: { ...settings, providers: [...settings.providers, target] },
+        provider: {
+          ...settings,
+          providers: [
+            ...settings.providers.filter((provider) => provider.id !== 'opencode-free'),
+            target
+          ]
+        },
         kun: {
           ...defaultKunRuntimeSettings(),
           providerId: target.id,

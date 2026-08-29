@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SUPPORTED_EXTENSION_API_VERSIONS } from '@kun/extension-api'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -113,7 +114,7 @@ describe('runtime factory usage carryover', () => {
       expect(runtime.extensionPlatform).toBeDefined()
       expect(runtime.info().extensions).toMatchObject({
         enabled: true,
-        apiVersions: ['1.2.0', '1.1.0', '1.0.0'],
+        apiVersions: [...SUPPORTED_EXTENSION_API_VERSIONS],
         manifestVersions: [1]
       })
       expect(runtime.info().capabilities.instructions.enabled).toBe(true)

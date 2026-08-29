@@ -150,7 +150,11 @@ it('surfaces Seedance task failure details and obeys its timeout', async () => {
         headers: { 'content-type': 'application/json' }
       })
     }))
-    await expect(client.generate({
+    const timeoutClient = new VolcengineArkVideoClient(
+      'https://ark.cn-beijing.volces.com/api/v3',
+      'ark-key'
+    )
+    await expect(timeoutClient.generate({
       ...baseRequest,
       timeoutMs: 20
     })).rejects.toThrow(
@@ -204,7 +208,11 @@ it('rejects a successful Seedance task without an output URL and stops on caller
       })
     }))
     const controller = new AbortController()
-    const generation = client.generate({
+    const abortClient = new VolcengineArkVideoClient(
+      'https://ark.cn-beijing.volces.com/api/v3',
+      'ark-key'
+    )
+    const generation = abortClient.generate({
       ...request,
       pollIntervalMs: 1_000,
       signal: controller.signal

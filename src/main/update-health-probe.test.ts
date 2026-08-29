@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runMinimalUpdateProbe } from './update-health-probe'
+import { join } from 'node:path'
+import {
+  isolatedUpdateHealthRuntimeEnvironment,
+  registerUpdateHealthRendererIpc,
+  runMinimalUpdateProbe,
+  updateHealthRuntimeEnvironment
+} from './update-health-probe'
 
 vi.mock('electron', () => ({
   app: {
@@ -27,6 +33,50 @@ describe('runMinimalUpdateProbe', () => {
     }
   }
 
+  it('runs the bundled runtime entry through Electron\'s Node mode', () => {
+    expect(updateHealthRuntimeEnvironment('node-script', { EXISTING: 'value' })).toEqual({
+      EXISTING: 'value',
+      ELECTRON_RUN_AS_NODE: '1'
+    })
+    expect(updateHealthRuntimeEnvironment('custom', { EXISTING: 'value' })).toEqual({
+      EXISTING: 'value'
+    })
+  })
+
+  it('isolates the health runtime from the user Service Manager', () => {
+    const dataDir = join('/tmp', 'health-data')
+    const managerControlDir = join(dataDir, 'manager', 'control')
+    const managerSettingsPath = join(dataDir, 'manager', 'settings.json')
+    expect(isolatedUpdateHealthRuntimeEnvironment({
+      dataDir,
+      managerControlDir,
+      managerSettingsPath,
+      resolutionKind: 'node-script',
+      runtimeToken: 'runtime-token'
+    }, { KUN_MANAGER_BASE_URL: 'http://inherited.invalid' })).toMatchObject({
+      ELECTRON_RUN_AS_NODE: '1',
+      KUN_MANAGER_BASE_URL: '',
+      KUN_MANAGER_CONTROL_DIR: managerControlDir,
+      KUN_MANAGER_DATA_DIR: '',
+      KUN_MANAGER_SETTINGS_PATH: managerSettingsPath,
+      KUN_MANAGER_TOKEN: '',
+      KUN_RUNTIME_DISCOVERY_DIR: join(dataDir, 'runtime-discovery'),
+      KUN_RUNTIME_TOKEN: 'runtime-token'
+    })
+  })
+
+  it('registers the preload startup channel used by the hidden renderer', () => {
+    const handle = vi.fn()
+
+    registerUpdateHealthRendererIpc({ handle } as never)
+
+    expect(handle).toHaveBeenCalledWith('startup:state:get', expect.any(Function))
+    expect(handle.mock.calls[0]?.[1]()).toEqual({
+      phase: 'bootstrapping',
+      detail: 'update-health-probe'
+    })
+  })
+
   it('loads the packaged runtime module without starting persistent services', async () => {
     const d = deps()
 
@@ -36,6 +86,43 @@ describe('runMinimalUpdateProbe', () => {
     expect(d.probeRendererWindow).toHaveBeenCalledOnce()
     expect(d.probeRuntimeServices).toHaveBeenCalledOnce()
     expect(d.removeTempDir).toHaveBeenCalledWith('/tmp/kun-update-health-1')
+  })
+
+  it('reports bounded progress through renderer and runtime services', async () => {
+    const d = deps()
+    const reportProgress = vi.fn()
+    const context = {
+      deadlineAt: Date.now() + 10_000,
+      diagnosticBasePath: '/tmp/health',
+      reportProgress
+    }
+
+    await runMinimalUpdateProbe(d, context)
+
+    expect(d.probeRendererWindow).toHaveBeenCalledWith(context)
+    expect(d.probeRuntimeServices).toHaveBeenCalledWith('/tmp/kun-update-health-1', context)
+    expect(reportProgress.mock.calls.map(([phase]) => phase)).toEqual([
+      'electron_waiting',
+      'electron_ready',
+      'payload_checking',
+      'payload_ready',
+      'runtime_module_loading',
+      'runtime_module_ready',
+      'renderer_loading',
+      'runtime_services_starting'
+    ])
+  })
+
+  it('rejects immediately after the shared deadline expires', async () => {
+    const d = deps()
+
+    await expect(runMinimalUpdateProbe(d, {
+      deadlineAt: Date.now() - 1,
+      diagnosticBasePath: '/tmp/health',
+      reportProgress: vi.fn()
+    })).rejects.toThrow('deadline expired')
+
+    expect(d.loadRuntimeAdapter).not.toHaveBeenCalled()
   })
 
   it('rejects an incomplete candidate payload before loading runtime modules', async () => {

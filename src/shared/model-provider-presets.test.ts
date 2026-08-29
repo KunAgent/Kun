@@ -25,7 +25,6 @@ describe('shared model provider preset catalog', () => {
         name: source.name,
         baseUrl: source.baseUrl,
         endpointFormat: source.endpointFormat,
-        useProxy: false,
         models: [...source.models],
         docsUrl: source.docsUrl,
         apiKeyUrl: source.credentialUrl
@@ -36,7 +35,6 @@ describe('shared model provider preset catalog', () => {
         expect(gui?.tokenPlan).toMatchObject({
           baseUrl: source.tokenPlan.baseUrl,
           endpointFormat: source.tokenPlan.endpointFormat,
-          useProxy: false,
           models: [...source.tokenPlan.models],
           apiKeyUrl: source.tokenPlan.credentialUrl
         })

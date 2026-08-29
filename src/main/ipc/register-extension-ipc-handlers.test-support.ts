@@ -23,6 +23,9 @@ const electronMock = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  protocol: {
+    registerSchemesAsPrivileged: vi.fn()
+  },
   dialog: {
     showOpenDialog: electronMock.showOpenDialog,
     showSaveDialog: electronMock.showSaveDialog,

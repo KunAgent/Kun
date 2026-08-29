@@ -447,12 +447,12 @@ export function terminateSpawnTree(
     signal?: NodeJS.Signals
     spawnImpl?: SpawnLike
   } = {}
-): void {
+): ChildProcess | undefined {
   const signal = options.signal ?? 'SIGTERM'
   const pid = child.pid
   if (!pid) {
     child.kill(signal)
-    return
+    return undefined
   }
 
   if ((options.platform ?? process.platform) === 'win32') {
@@ -465,18 +465,19 @@ export function terminateSpawnTree(
         child.kill(signal)
       })
       taskkill.unref?.()
-      return
+      return taskkill
     } catch {
       child.kill(signal)
-      return
+      return undefined
     }
   }
 
   try {
     process.kill(-pid, signal)
-    return
+    return undefined
   } catch {
     child.kill(signal)
+    return undefined
   }
 }
 

@@ -9,10 +9,27 @@ import {
 describe('provider catalog', () => {
   it('publishes every GUI base preset and Token Plan as stable entries', () => {
     const entries = providerCatalogEntries()
-    expect(PROVIDER_CATALOG).toHaveLength(24)
-    expect(entries).toHaveLength(29)
+    expect(PROVIDER_CATALOG).toHaveLength(25)
+    expect(entries).toHaveLength(30)
     expect(entries.filter((entry) => entry.category === 'subscription')).toHaveLength(18)
     expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(11)
+    expect(entries.filter((entry) => entry.category === 'free')).toEqual([
+      expect.objectContaining({
+        profileId: 'opencode-free',
+        authType: 'api-key',
+        credentialRequirement: 'optional',
+        endpointFormat: 'chat_completions',
+        models: [
+          'big-pickle',
+          'mimo-v2.5-free',
+          'ling-3.0-flash-fin-free',
+          'nemotron-3-ultra-free',
+          'nemotron-3.5-lightning-free'
+        ]
+      })
+    ])
+    expect(entries.find((entry) => entry.profileId === 'zenmux'))
+      .toMatchObject({ credentialRequirement: 'required' })
     expect(entries.map((entry) => entry.profileId)).toEqual(expect.arrayContaining([
       'gemini-subscription',
       'gemini-cli-subscription',

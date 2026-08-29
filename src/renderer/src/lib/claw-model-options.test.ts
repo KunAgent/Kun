@@ -53,11 +53,15 @@ function buildSettings(models: string[]): AppSettingsV1 {
 }
 
 describe('claw model options', () => {
-  it('uses configured text models instead of provider preset catalogs', () => {
-    expect(clawModelSelectOptions(buildSettings(['team-chat-model']))).toEqual([
+  it('includes configured text models alongside the always-available free catalog', () => {
+    const options = clawModelSelectOptions(buildSettings(['team-chat-model']))
+    expect(options).toEqual(expect.arrayContaining([
       'auto',
+      'big-pickle',
       'team-chat-model'
-    ])
+    ]))
+    expect(options).not.toContain('gpt-5-nano')
+    expect(options).not.toContain('deepseek-chat')
   })
 
   it('keeps the current channel model when editing older settings', () => {

@@ -364,9 +364,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         await Promise.resolve()
       })
       expect(probeModelProvider).toHaveBeenCalledWith({
+        providerId: probeProvider.id,
         baseUrl: 'https://api.example.com/v1',
         apiKey: 'sk-probe',
-        endpointFormat: 'chat_completions'
+        endpointFormat: 'chat_completions',
+        useProxy: false
       })
       expect(fetchModelsDevCatalog).not.toHaveBeenCalled()
       expect(rendererText(renderer)).toContain('Connected · 18ms · 2 models')
@@ -421,9 +423,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       })
 
       expect(probeModelProvider).toHaveBeenCalledWith({
+        providerId: target.id,
         baseUrl: target.baseUrl,
         apiKey: target.apiKey,
-        endpointFormat: target.endpointFormat
+        endpointFormat: target.endpointFormat,
+        useProxy: target.useProxy
       })
       expect(fetchModelsDevCatalog).toHaveBeenCalledWith({
         providerId: target.id,

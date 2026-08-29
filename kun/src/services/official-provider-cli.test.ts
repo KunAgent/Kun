@@ -22,7 +22,9 @@ afterEach(async () => {
 
 describe('official provider CLI authentication', () => {
   it('does not return a bundled Gemini CLI command', () => {
-    expect(resolveGeminiCliCommand({ PATH: '' })?.args).toEqual([])
+    const command = resolveGeminiCliCommand({ PATH: '' })
+    expect(command?.args ?? []).toEqual([])
+    if (command) expect(command.command).not.toBe(process.execPath)
   })
 
   it('rejects an Antigravity download before extraction when its checksum is invalid', async () => {

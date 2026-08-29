@@ -2,10 +2,13 @@ import { app } from 'electron'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, win32 as win32Path } from 'node:path'
 import { runMinimalUpdateProbe } from './update-health-probe'
-
-const HEALTH_PATH_ARG = '--kun-update-health-check='
-const HEALTH_TOKEN_ARG = '--kun-update-health-token='
-const HEALTH_TARGET_ARG = '--kun-update-target='
+import type { UpdateHealthProbeProgress } from './update-health-probe'
+import {
+  UPDATE_HEALTH_PATH_ARG,
+  UPDATE_HEALTH_TARGET_ARG,
+  UPDATE_HEALTH_TOKEN_ARG,
+  updateHealthArgumentValue
+} from './update-health-argv'
 
 type UpdateHealthRequest = {
   resultPath: string
@@ -13,16 +16,11 @@ type UpdateHealthRequest = {
   target: string
 }
 
-function argumentValue(prefix: string, argv = process.argv): string {
-  const argument = argv.find((value) => value.startsWith(prefix))
-  return argument ? argument.slice(prefix.length).trim() : ''
-}
-
 export function readUpdateHealthRequest(argv = process.argv): UpdateHealthRequest | null {
-  const resultPath = argumentValue(HEALTH_PATH_ARG, argv)
+  const resultPath = updateHealthArgumentValue(UPDATE_HEALTH_PATH_ARG, argv)
   if (!resultPath) return null
-  const token = argumentValue(HEALTH_TOKEN_ARG, argv)
-  const target = argumentValue(HEALTH_TARGET_ARG, argv)
+  const token = updateHealthArgumentValue(UPDATE_HEALTH_TOKEN_ARG, argv)
+  const target = updateHealthArgumentValue(UPDATE_HEALTH_TARGET_ARG, argv)
   if (!token || !target) throw new Error('The update health request is incomplete.')
   return { resultPath, token, target }
 }
@@ -46,18 +44,32 @@ async function writeHealthResult(
   await rename(temporary, request.resultPath)
 }
 
-export async function runUpdateHealthCheck(request: UpdateHealthRequest): Promise<void> {
+export async function runUpdateHealthCheck(
+  request: UpdateHealthRequest,
+  options: {
+    deadlineAt?: number
+    diagnosticBasePath?: string
+    reportProgress?: UpdateHealthProbeProgress
+  } = {}
+): Promise<void> {
+  const reportProgress = options.reportProgress ?? (() => undefined)
   try {
     if (process.platform !== 'win32') throw new Error('Update health checks require Windows.')
     const installDir = win32Path.dirname(process.execPath)
     if (win32Path.resolve(installDir).toLowerCase() !== win32Path.resolve(request.target).toLowerCase()) {
       throw new Error('The candidate executable is outside the committed install target.')
     }
-    await runMinimalUpdateProbe()
+    await runMinimalUpdateProbe(undefined, {
+      deadlineAt: options.deadlineAt ?? Date.now() + 120_000,
+      diagnosticBasePath: options.diagnosticBasePath ?? request.resultPath.replace(/\.json$/iu, ''),
+      reportProgress
+    })
     await writeHealthResult(request, true, 'Candidate application payload is healthy.')
+    reportProgress('complete')
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await writeHealthResult(request, false, message)
+    reportProgress('failed', { message })
     throw error
   }
 }

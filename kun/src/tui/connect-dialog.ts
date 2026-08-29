@@ -132,7 +132,7 @@ import {
 } from './clipboard-image.js'
 import { WorkspaceFileAutocompleteProvider } from './file-mentions.js'
 import { bold, dim, blue, cyan, green, yellow, red, magenta, italic, isCancelInput, EXIT_CONFIRM_WINDOW_MS, UNDO_ESCAPE_WINDOW_MS, TOTAL_ELAPSED_MIN_START_GAP_MS, BRACKETED_PASTE_START, BRACKETED_PASTE_END, ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING, DIRECT_SEMANTIC_ACTIONS, sanitizeTerminalText, selectTheme, editorTheme, markdownTheme, parseSgrMouseEvent, writeLocalShareSnapshot, removeLocalShareSnapshot, type SgrMouseEvent, type ExclusiveRouteHandle } from './pi-common.js'
-import { authenticationStrategy, connectionPresetForProfile, credentialAvailabilityLabel, connectionPresets, managementActions, type ConnectionPreset, type ConnectField, type ManagementAction } from './connect-common.js'
+import { authenticationStrategy, connectionPresetForProfile, connectionRequiresCredential, credentialAvailabilityLabel, connectionPresets, managementActions, type ConnectionPreset, type ConnectField, type ManagementAction } from './connect-common.js'
 import { ConnectDialogManagement } from './connect-dialog-management.js'
 import { endpointFormat, fieldLabel, isModelProbeFailure, normalizeConnectionProviderId, openBrowser } from './model-dialog.js'
 import { printableInput } from './render-utils.js'
@@ -158,7 +158,8 @@ export class ConnectDialog extends ConnectDialogManagement {
     const customId = preset.id === 'custom' ? this.suggestCustomProviderId() : undefined
     this.fields = [
       ...(preset.id === 'custom' ? ['id', 'name', 'baseUrl', 'endpointFormat'] as ConnectField[] : []),
-      ...(preset.kind === 'http' || preset.kind === 'cursor-sdk'
+      ...((preset.kind === 'http' || preset.kind === 'cursor-sdk') &&
+          preset.credentialRequirement !== 'none'
         ? ['credential'] as ConnectField[]
         : []),
       'models'
@@ -348,7 +349,7 @@ export class ConnectDialog extends ConnectDialogManagement {
     if (
       field === 'credential' &&
       !trimmed &&
-      (this.preset!.kind === 'http' || this.preset!.kind === 'cursor-sdk')
+      connectionRequiresCredential(this.preset!)
     ) {
       this.error = 'Credential is required and is never echoed or logged.'
       this.tui.requestRender()

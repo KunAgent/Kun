@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { accessSync, constants, readdirSync } from 'node:fs'
 import { access, copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { join, win32 } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -360,7 +360,7 @@ export function listChromiumCookieDatabaseCandidates(
   const environment = options.environment ?? process.env
   const userHome = options.homeDirectory ?? homedir()
   const browsers = options.browsers ?? OPENCODE_GO_CHROMIUM_BROWSERS
-  const joinPath = platform === 'win32' ? win32.join : join
+  const joinPath = platform === 'win32' ? win32.join : posix.join
   const roots: Array<{ browser: ChromiumBrowserCookieSource; root: string }> = []
 
   for (const browser of browsers) {

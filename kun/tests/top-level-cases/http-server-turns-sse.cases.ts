@@ -371,7 +371,9 @@ describe('HTTP server', () => {
     )
     const events = await readSseEvents(eventStream)
 
-    expect(events).toEqual([])
+    expect(events).toHaveLength(1)
+    expect(events[0]).toContain('event: replay_synchronized')
+    expect(events[0]).toContain(`"cursor":${latestSeq}`)
     expect(loadEventsSince).not.toHaveBeenCalled()
   })
 })

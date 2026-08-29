@@ -63,6 +63,19 @@ export async function* iterateSessionEventsSince(
   yield* sessions.iterateEventsSince(threadId, afterSeq, { maxRecordBytes: MAX_REPLAY_RECORD_BYTES })
 }
 
+export async function loadLatestUsageTokens(sessions: SessionStore, threadId: string): Promise<number> {
+  if (sessions.loadLatestUsageSnapshots) {
+    const snapshots = await sessions.loadLatestUsageSnapshots({ threadIds: [threadId] })
+    const snapshot = snapshots.find((candidate) => candidate.threadId === threadId)
+    if (snapshot) return snapshot.usage.totalTokens
+  }
+  let totalTokens = 0
+  for await (const event of iterateSessionEventsSince(sessions, threadId, -1)) {
+    if (event.kind === 'usage') totalTokens = event.usage.totalTokens
+  }
+  return totalTokens
+}
+
 export async function summarizeRunEvents(
   sessions: SessionStore,
   threadId: string,

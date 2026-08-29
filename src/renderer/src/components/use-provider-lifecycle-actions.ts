@@ -5,6 +5,7 @@ import type {
 } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
+  OPENCODE_FREE_MODEL_IDS,
   OPENCODE_FREE_PROVIDER_ID,
   defaultModelRequestRetrySettings,
   isMultiAccountProviderPreset,
@@ -63,12 +64,19 @@ function isOpenCodeFreeProvider(provider: ModelProviderProfileV1): boolean {
   return resolveModelProviderPresetSource(provider)?.preset.id === OPENCODE_FREE_PROVIDER_ID
 }
 
+const OPEN_CODE_ANONYMOUS_CHAT_MODELS = new Set<string>(OPENCODE_FREE_MODEL_IDS)
+
 export function catalogResultForProviderImport(
   provider: ModelProviderProfileV1,
   catalogResult: ModelsDevCatalogResult
 ): ModelsDevCatalogResult {
   return isOpenCodeFreeProvider(provider) && catalogResult.status === 'ok'
-    ? { ...catalogResult, models: catalogResult.models.filter((model) => model.free === true) }
+    ? {
+        ...catalogResult,
+        models: catalogResult.models.filter((model) =>
+          model.free === true && OPEN_CODE_ANONYMOUS_CHAT_MODELS.has(model.id)
+        )
+      }
     : catalogResult
 }
 

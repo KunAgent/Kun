@@ -39,7 +39,7 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
-  it('does not impose a hidden limit when listing the full thread inventory', async () => {
+  it('paginates the full thread inventory with the maximum page size', async () => {
     const runtimeRequest = vi.fn(async () => ({
       ok: true,
       status: 200,
@@ -51,7 +51,7 @@ describe('KunRuntimeProvider', () => {
     await provider.listThreads({ includeArchived: true })
 
     expect(runtimeRequest).toHaveBeenCalledWith(
-      '/v1/threads?include_archived=true',
+      '/v1/threads?limit=500&include_archived=true',
       'GET'
     )
   })

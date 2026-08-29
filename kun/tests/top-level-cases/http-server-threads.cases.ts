@@ -248,7 +248,7 @@ describe('HTTP server', () => {
     expect(limitedBody.threads).toHaveLength(1)
   })
 
-  it('returns the complete history when the caller omits a limit', async () => {
+  it('returns the default first page when the caller omits a limit', async () => {
     const h = buildHarness()
     await Promise.all(Array.from({ length: 501 }, (_, index) =>
       h.threadService.create(
@@ -264,9 +264,16 @@ describe('HTTP server', () => {
       })
     )
     expect(response.status).toBe(200)
-    const body = (await readJson(response)) as { threads: Array<{ id: string }> }
-    expect(body.threads).toHaveLength(501)
-    expect(new Set(body.threads.map((thread) => thread.id)).size).toBe(501)
+    const body = (await readJson(response)) as {
+      threads: Array<{ id: string }>
+      hasMore?: boolean
+      total?: number
+      nextCursor?: string
+    }
+    expect(body.threads).toHaveLength(100)
+    expect(new Set(body.threads.map((thread) => thread.id)).size).toBe(100)
+    expect(body).toMatchObject({ hasMore: true, total: 501 })
+    expect(body.nextCursor).toBeTruthy()
   })
 
   it('deletes threads through the HTTP layer', async () => {

@@ -174,7 +174,7 @@ describe('shared model connection API-key setup status', () => {
   })
 
   it('requests setup only after the shared registry confirms no credential', () => {
-    const providers = defaultModelProviderSettings().providers
+    const providers = defaultModelProviderSettings().providers.filter((provider) => provider.id === 'deepseek')
 
     expect(sharedProviderSetupNeedsApiKey(providers, null)).toBe(false)
     expect(sharedProviderSetupNeedsApiKey(providers, {
@@ -197,7 +197,7 @@ describe('shared model connection API-key setup status', () => {
   })
 
   it('requests setup when a legacy credential binding is unreadable', () => {
-    const providers = defaultModelProviderSettings().providers
+    const providers = defaultModelProviderSettings().providers.filter((provider) => provider.id === 'deepseek')
 
     expect(sharedProviderSetupNeedsApiKey(providers, {
       schemaVersion: 1,

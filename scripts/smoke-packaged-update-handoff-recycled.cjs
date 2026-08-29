@@ -48,7 +48,10 @@ async function runRecycledPidScenario(input, deps) {
 
     const helper = spawnTracked(process.execPath, [
       join(__dirname, 'fixtures', 'update-handoff-owner.cjs'),
-      '--data-dir', profile.dataDir,
+      // This is an unrelated process that deliberately reuses the old PID.
+      // Do not advertise the Runtime's real --data-dir flag in its command;
+      // legacy ownership inventory correctly treats that flag as an owner.
+      '--fixture-data-dir', profile.dataDir,
       '--scenario', 'pid-port-reuse',
       '--build-id', predecessor.buildId
     ], { cwd: profile.workspaceRoot, env: profile.environment })
@@ -109,7 +112,10 @@ async function runRecycledPidScenario(input, deps) {
     cleanupErrors = await deps.cleanupTracked(tracked)
     await deps.cleanupProfile(root).catch((error) => cleanupErrors.push(error.message ?? String(error)))
   }
-  if (primaryError) throw primaryError
+  if (primaryError) {
+    const detail = tracked.map((entry) => entry.output?.() ?? '').filter(Boolean).join('\n')
+    throw new Error(`${primaryError.stack ?? primaryError}${detail ? `\nProcess output:\n${detail}` : ''}`)
+  }
   if (cleanupErrors.length > 0) {
     throw new Error(`Recycled PID handoff cleanup failed: ${cleanupErrors.join('; ')}`)
   }

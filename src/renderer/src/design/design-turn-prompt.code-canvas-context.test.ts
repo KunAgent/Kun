@@ -308,10 +308,10 @@ describe("design turn prompt code canvas and context guidance", () => {
     })
     it('canvas turn prompt qualifies the selected-image-holder rule to empty holders only', () => {
       const prompt = buildCodeCanvasTurnPrompt({ workspaceRoot: '/ws' })
-      expect(prompt).toContain('selected EMPTY `image` holder (no `imageUrl` field in the snapshot)')
+      expect(prompt).toContain('selected EMPTY `image` holder:')
       expect(prompt).toContain('selected EMPTY `frame` or `rect` holder')
-      expect(prompt).toContain('Do NOT add a child image')
-      expect(prompt).toContain('STOP — this is an EDIT, not a fill')
+      expect(prompt).toContain('without adding a child')
+      expect(prompt).toContain('Selected `image` shapes with `imageUrl` are the primary target')
       expect(prompt).not.toContain(
         'selected `image` (or an `image` holder): `generate_image` with `aspect_ratio`'
       )
@@ -319,14 +319,14 @@ describe("design turn prompt code canvas and context guidance", () => {
     it('canvas turn prompt routes frame/group containing one image child to the edit path', () => {
       const prompt = buildCodeCanvasTurnPrompt({ workspaceRoot: '/ws' })
       expect(prompt).toContain('Implicit target via container')
-      expect(prompt).toContain('EXACTLY ONE `image` child with an `imageUrl`')
-      expect(prompt).toContain('do NOT add a new image')
+      expect(prompt).toContain('exactly one filled image child')
+      expect(prompt).toContain('update that child without changing the parent')
     })
     it('canvas turn prompt drops the unenforceable selection-order claim for multi-reference composition', () => {
       const prompt = buildCodeCanvasTurnPrompt({ workspaceRoot: '/ws' })
       expect(prompt).not.toContain('in selection order, capped at 4')
-      expect(prompt).toContain('treated symmetrically')
-      expect(prompt).toContain('order in the array is not load-bearing')
+      expect(prompt).toContain('pass up to four imageUrls')
+      expect(prompt).toContain('update the primary target shape with the result')
     })
     it('canvas turn prompt includes the verbatim-copy verification line for reference_image_paths', () => {
       const prompt = buildCodeCanvasTurnPrompt({ workspaceRoot: '/ws' })

@@ -536,9 +536,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       })
 
       expect(probeModelProvider).toHaveBeenCalledWith({
+        providerId: 'ollama',
         baseUrl: 'https://ollama.com/v1',
         apiKey: 'ollama-secret',
-        endpointFormat: 'chat_completions'
+        endpointFormat: 'chat_completions',
+        useProxy: false
       })
       expect(fetchModelsDevCatalog).toHaveBeenCalledWith({
         providerId: 'ollama',

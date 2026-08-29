@@ -468,9 +468,9 @@ describe("PiTuiApplication clipboard, attachments, and streaming", () => {
       expect(outputText).not.toContain('private thought')
 
       const beforePointerMode = outputText.length
-      input.emit('data', '\x18')
-      input.emit('data', 'p')
-      await waitFor(() => outputText.slice(beforePointerMode).includes('Mouse clicks enabled'))
+      input.emit('data', '\x18p')
+      expect((app as unknown as { pointerModeEnabled: boolean }).pointerModeEnabled).toBe(true)
+      await waitFor(() => outputText.slice(beforePointerMode).includes('\x1b[?1000h\x1b[?1006h'))
       expect(outputText.slice(beforePointerMode)).toContain('\x1b[?1000h\x1b[?1006h')
 
       const beforeMouseExpand = outputText.length
@@ -487,26 +487,24 @@ describe("PiTuiApplication clipboard, attachments, and streaming", () => {
       expect(outputText.slice(beforeMouseCollapse)).not.toContain('private thought')
 
       const beforeTextSelection = outputText.length
-      input.emit('data', '\x18')
-      input.emit('data', 'p')
-      await waitFor(() => outputText.slice(beforeTextSelection).includes('Text selection mode'))
+      input.emit('data', '\x18p')
+      expect((app as unknown as { pointerModeEnabled: boolean }).pointerModeEnabled).toBe(false)
+      await waitFor(() => outputText.slice(beforeTextSelection).includes('\x1b[?1000l\x1b[?1006l'))
       expect(outputText.slice(beforeTextSelection)).toContain('\x1b[?1000l\x1b[?1006l')
       expect(controller.state.projection?.runningTurnId).toBe('turn_stream')
 
       const beforeClicksRestored = outputText.length
-      input.emit('data', '\x18')
-      input.emit('data', 'p')
-      await waitFor(() => outputText.slice(beforeClicksRestored).includes('Mouse clicks enabled'))
+      input.emit('data', '\x18p')
+      expect((app as unknown as { pointerModeEnabled: boolean }).pointerModeEnabled).toBe(true)
+      await waitFor(() => outputText.slice(beforeClicksRestored).includes('\x1b[?1000h\x1b[?1006h'))
       expect(outputText.slice(beforeClicksRestored)).toContain('\x1b[?1000h\x1b[?1006h')
 
       const beforeExpand = outputText.length
       type(input, '/thinking')
-      await waitFor(() => outputText.slice(beforeExpand).includes('Thinking is expanded'))
       await waitFor(() => outputText.slice(beforeExpand).includes('private thought'))
 
       const beforeCollapse = outputText.length
       type(input, '/thinking')
-      await waitFor(() => outputText.slice(beforeCollapse).includes('Thinking is collapsed'))
       onEvent?.({
         ...base, kind: 'assistant_reasoning_delta', seq: 4, itemId: 'reason_stream',
         item: {

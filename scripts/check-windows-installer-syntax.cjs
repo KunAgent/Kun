@@ -16,6 +16,7 @@ const installerHelperPaths = [
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
   'windows-installer-migration-actions.ps1',
+  'windows-installer-migration-recovery-env.ps1',
   'windows-installer-migration-transaction.ps1'
 ].map((path) => path === installerHelperPath ? path : join(__dirname, '..', 'build', path))
 

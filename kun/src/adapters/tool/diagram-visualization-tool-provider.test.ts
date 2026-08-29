@@ -81,7 +81,7 @@ describe('show_diagram provider', () => {
       launcher: 'diagram_design', profile: 'diagram-designer', agentSurface: 'design',
       sandboxMode: 'workspace-write', security: { memoryEnabled: false }
     })
-    expect(calls[0]?.workspace).toEqual(expect.stringContaining('/.kun-design/diagram-prototypes/'))
+    expect(calls[0]?.workspace).toEqual(expect.stringContaining(join('.kun-design', 'diagram-prototypes')))
     expect(result).toMatchObject({ output: { status: 'completed', diagramPrototype: {
       producer: 'diagram-designer', profile: 'diagram-designer', childId: 'child-diagram',
       summary: 'Generated the release diagram.'

@@ -2,12 +2,13 @@ import type { ModelRoundOutcome, TurnRunOutcome } from './turn-execution-types.j
 import { makeErrorItem } from '../domain/item.js'
 import { normalizeTurnLimits } from './turn-limits.js'
 import { AgentLoopTurnLifecycle } from './agent-loop-turn-lifecycle.js'
+import { STREAM_DISCONNECTED_CODE } from './stream-disconnection-failure.js'
 
 const RECOVERABLE_GRAPH_LEAD_MODEL_FAILURE_CODES = new Set([
-  'stream_disconnected',
   'stream_idle_timeout',
   'stream_read_error',
-  'stream_truncated'
+  'stream_truncated',
+  STREAM_DISCONNECTED_CODE
 ])
 
 // A GraphRun may live for hours, but one process-local Lead wake-up must not.
@@ -229,14 +230,6 @@ export class AgentLoopExecution extends AgentLoopTurnLifecycle {
         ) {
           const activeTurn = await this.opts.turns.getTurn(threadId, turnId)
           if (activeTurn?.status === 'running' && activeTurn.orchestration === 'graph') {
-            const rawCode = typeof failure.details === 'object' && failure.details !== null &&
-              typeof (failure.details as { rawCode?: unknown }).rawCode === 'string'
-              ? (failure.details as { rawCode: string }).rawCode
-              : failure.code
-            const rawMessage = typeof failure.details === 'object' && failure.details !== null &&
-              typeof (failure.details as { rawMessage?: unknown }).rawMessage === 'string'
-              ? (failure.details as { rawMessage: string }).rawMessage
-              : failure.error
             // The stream error event is durable, but thread rehydration is
             // item-based. Persist before releasing the execution lease so a
             // concurrent Graph wake-up cannot reuse this runner while it is
@@ -247,8 +240,8 @@ export class AgentLoopExecution extends AgentLoopTurnLifecycle {
                 id: `item_${turnId}_error`,
                 turnId,
                 threadId,
-                message: rawMessage,
-                code: rawCode,
+                message: failure.error,
+                code: failure.code,
                 ...(failure.details !== undefined ? { details: failure.details } : {}),
                 ...(failure.modelRequestFailure
                   ? { modelRequestFailure: failure.modelRequestFailure }

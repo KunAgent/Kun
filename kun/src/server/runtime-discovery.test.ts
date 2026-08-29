@@ -12,6 +12,7 @@ import {
   runtimeDiscoveryPath,
   withRuntimeStartLock
 } from './runtime-discovery.js'
+import { KUN_VERSION } from '../version.js'
 
 const roots: string[] = []
 
@@ -51,7 +52,7 @@ describe('runtime discovery', () => {
       baseUrl: 'http://127.0.0.1:18899',
       runtimeToken: 'secret-token',
       insecure: false,
-      serviceVersion: '0.1.0',
+      serviceVersion: KUN_VERSION,
       buildId,
       launchMode: 'foreground'
     })

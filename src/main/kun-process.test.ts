@@ -217,7 +217,18 @@ describe('Manager-owned Main data plane', () => {
         return Response.json({ snapshot: { revision: 2, value: null } })
       }
       if (url.endsWith('/release')) return Response.json({ released: true })
-      return Response.json({ acquired: true })
+      const now = Date.now()
+      return Response.json({
+        acquired: true,
+        lease: {
+          resource: 'main-registry',
+          ownerFlavor: 'production',
+          ownerInstanceId: 'main-one',
+          fencingToken: 1,
+          acquiredAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + 10_000).toISOString()
+        }
+      })
     }))
 
     await expect(existingClient.read()).resolves.toEqual({ revision: 2, value: null })

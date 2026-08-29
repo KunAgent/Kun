@@ -48,7 +48,10 @@ function installFakeAtomicJsonManager(dataDir: string) {
       return Response.json({ snapshot: structuredClone(current) })
     }
     if (body.expectedRevision !== current.revision) {
-      return Response.json({ currentRevision: current.revision }, { status: 409 })
+      return Response.json({
+        code: 'revision_conflict',
+        currentRevision: current.revision
+      }, { status: 409 })
     }
     const next = {
       revision: current.revision + 1,

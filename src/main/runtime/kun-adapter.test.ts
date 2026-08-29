@@ -31,6 +31,7 @@ import {
 import { buildRuntimeCapabilityManifest } from '../../../kun/src/contracts/capabilities.js'
 import { modelCapabilitiesForModel } from '../../../kun/src/loop/model-context-profile.js'
 import { publishRuntimeDiscovery } from '../../../kun/src/server/runtime-discovery.js'
+import { KUN_VERSION } from '../../../kun/src/version.js'
 
 let server: Server | null = null
 
@@ -489,7 +490,7 @@ describe('kunRuntimeAdapter.resolveConnection', () => {
         res.setHeader('x-kun-active-turn-count', String(activeTurnCount))
         res.end(JSON.stringify({
           instanceId,
-          serviceVersion: '0.1.0',
+          serviceVersion: KUN_VERSION,
           ...(liveBuildId ? { buildId: liveBuildId } : {}),
           launchMode: 'shared',
           host: '127.0.0.1',

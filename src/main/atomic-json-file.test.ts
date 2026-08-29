@@ -12,7 +12,9 @@ describe('atomicWriteFile', () => {
       await atomicWriteFile(target, '{"next":true}\n')
 
       expect(await readFile(target, 'utf8')).toBe('{"next":true}\n')
-      expect((await stat(target)).mode & 0o777).toBe(0o600)
+      if (process.platform !== 'win32') {
+        expect((await stat(target)).mode & 0o777).toBe(0o600)
+      }
       expect((await readdir(directory)).filter((name) => name.endsWith('.tmp'))).toEqual([])
     } finally {
       await rm(directory, { recursive: true, force: true })

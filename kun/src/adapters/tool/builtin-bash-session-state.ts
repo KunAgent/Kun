@@ -17,9 +17,9 @@ export const DEFAULT_MAX_RUNNING_BACKGROUND_BASH_SESSIONS = 32
 export const DEFAULT_MAX_RUNNING_BACKGROUND_BASH_SESSIONS_PER_THREAD = 4
 export const DEFAULT_MAX_BACKGROUND_BASH_TIMEOUT_SECONDS = DEFAULT_BACKGROUND_BASH_TIMEOUT_SECONDS
 
-export function terminateBashProcessTree(child: ChildProcess): Promise<void> {
-  terminateSpawnTree(child)
-  return new Promise((resolve, reject) => {
+export async function terminateBashProcessTree(child: ChildProcess): Promise<void> {
+  const treeTerminator = terminateSpawnTree(child)
+  await new Promise<void>((resolve, reject) => {
     const startedAt = Date.now()
     let forced = false
     const waitOrForce = () => {
@@ -40,6 +40,19 @@ export function terminateBashProcessTree(child: ChildProcess): Promise<void> {
     }
     setTimeout(waitOrForce, 25)
   })
+  if (treeTerminator && treeTerminator.exitCode === null && treeTerminator.signalCode === null) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, STOP_GRACE_MS)
+      treeTerminator.once('close', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      treeTerminator.once('error', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+  }
 }
 
 export function bashProcessTreeIsAlive(child: ChildProcess): boolean {

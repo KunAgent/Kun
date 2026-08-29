@@ -103,10 +103,12 @@ export type PptCoreDesignPolicy = {
 /** Load and verify the canonical policy bundled with the PPT toolchain. */
 export async function loadPptCoreDesignPolicy(toolchainDirectory: string): Promise<PptCoreDesignPolicy> {
   const referenceDirectory = resolve(toolchainDirectory, 'reference')
-  const [content, rulesContent] = await Promise.all([
+  const [rawContent, rawRulesContent] = await Promise.all([
     readFile(resolve(referenceDirectory, PPT_CORE_DESIGN_POLICY_PATH), 'utf8'),
     readFile(resolve(referenceDirectory, PPT_CORE_DESIGN_POLICY_RULES_PATH), 'utf8')
   ])
+  const content = canonicalText(rawContent)
+  const rulesContent = canonicalText(rawRulesContent)
   const declaredVersion = /^Policy-Version:\s*(\S+)\s*$/m.exec(content)?.[1]
   if (declaredVersion !== PPT_CORE_DESIGN_POLICY_VERSION) {
     throw new Error(
@@ -160,6 +162,10 @@ export function formatPptCoreDesignPolicyControl(policy: PptCoreDesignPolicy): s
 
 function sha256(content: string): string {
   return createHash('sha256').update(content).digest('hex')
+}
+
+function canonicalText(content: string): string {
+  return content.replace(/\r\n?/g, '\n')
 }
 
 function errorMessage(error: unknown): string {

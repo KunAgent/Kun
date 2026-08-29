@@ -37,7 +37,7 @@ describe('agent loop: disableUserInput turns (IM bridges)', () => {
     for (const request of seenRequests) {
       const advertised = request.tools.map((tool) => tool.name)
       expect(advertised).toContain('user_input')
-      expect(advertised).toContain('request_user_input')
+      expect(advertised).not.toContain('request_user_input')
       expect(modelRequestContextText(request)).toMatch(/Do not call either tool/)
     }
 
@@ -69,7 +69,7 @@ describe('agent loop: disableUserInput turns (IM bridges)', () => {
     expect(status).toBe('completed')
     const advertised = seenRequests[0]?.tools.map((tool) => tool.name) ?? []
     expect(advertised).toContain('user_input')
-    expect(advertised).toContain('request_user_input')
+    expect(advertised).not.toContain('request_user_input')
     expect(modelRequestContextText(seenRequests[0]!)).not.toMatch(
       /Do not call either tool/
     )

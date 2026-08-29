@@ -26,8 +26,10 @@ describe('GatewayCredentialService', () => {
     const { key, created } = await service.ensure()
     expect(created).toBe(true)
     expect(key).toMatch(/^kun_local_[A-Za-z0-9_-]{43}$/)
-    expect((await stat(service.directory)).mode & 0o777).toBe(0o700)
-    expect((await stat(service.path)).mode & 0o777).toBe(0o600)
+    if (process.platform !== 'win32') {
+      expect((await stat(service.directory)).mode & 0o777).toBe(0o700)
+      expect((await stat(service.path)).mode & 0o777).toBe(0o600)
+    }
     expect(await readFile(service.path, 'utf8')).not.toContain(key)
   })
 

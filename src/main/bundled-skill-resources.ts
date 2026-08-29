@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { join, resolve } from 'node:path'
+import { posix, win32 } from 'node:path'
 
 export function bundledSkillsDirectory(options?: {
   isPackaged?: boolean
@@ -8,7 +8,13 @@ export function bundledSkillsDirectory(options?: {
 }): string {
   const isPackaged = options?.isPackaged ?? app.isPackaged
   if (isPackaged) {
-    return join(options?.resourcesPath ?? process.resourcesPath, 'bundled-skills')
+    const root = options?.resourcesPath ?? process.resourcesPath
+    return pathApiFor(root).join(root, 'bundled-skills')
   }
-  return resolve(options?.appRoot ?? app.getAppPath(), 'resources', 'bundled-skills')
+  const root = options?.appRoot ?? app.getAppPath()
+  return pathApiFor(root).resolve(root, 'resources', 'bundled-skills')
+}
+
+function pathApiFor(root: string): typeof posix | typeof win32 {
+  return /^[A-Za-z]:[\\/]/u.test(root) || root.startsWith('\\\\') ? win32 : posix
 }

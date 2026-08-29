@@ -244,8 +244,9 @@ describe("PiTuiApplication shared provider authentication", () => {
     const current = detail()
     const initial = modelSnapshot()
     const catalog = providerCatalogEntries()
-    const subscriptionCount = catalog.filter((entry) => entry.authType !== 'api-key').length
-    const apiCount = catalog.filter((entry) => entry.authType === 'api-key').length
+    const freeCount = catalog.filter((entry) => entry.category === 'free').length
+    const subscriptionCount = catalog.filter((entry) => entry.category === 'subscription').length
+    const apiCount = catalog.filter((entry) => entry.category === 'api').length
     const grokProfile = {
       id: 'grok-subscription',
       accountId: 'account:grok-subscription',
@@ -322,6 +323,7 @@ describe("PiTuiApplication shared provider authentication", () => {
       await waitFor(() => sanitizeTerminalText(outputText).includes('KUN / Connect'))
       input.emit('data', '\r')
       await waitFor(() =>
+        outputText.includes(`${freeCount} free`) &&
         outputText.includes(`${subscriptionCount} subscriptions`) &&
         outputText.includes(`${apiCount} APIs`) &&
         outputText.includes('Google Antigravity 订阅') &&
@@ -423,7 +425,7 @@ describe("PiTuiApplication shared provider authentication", () => {
       expect(completeModelCliAuth).toHaveBeenCalledWith({
         expectedRevision: initial.revision,
         provider: 'gemini-cli',
-        model: 'gemini-3.1-pro-preview',
+        model: 'gemini-3.7-pro-preview',
         select: true
       })
       await waitFor(() =>

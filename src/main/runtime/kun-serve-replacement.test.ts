@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { resolve } from 'node:path'
 import type { RuntimeDiscoveryRecord } from '../../../kun/src/server/runtime-discovery.js'
 import type { ServiceManagerConnection } from '../../../kun/src/manager/manager-client.js'
 import type { SharedRuntimeInspection } from '../../../kun/src/cli/shared-runtime.js'
 import { stopSharedRuntimeForReplacement } from './kun-serve-replacement'
 
-const dataDir = '/tmp/kun-replacement-data'
+const dataDir = resolve('tmp', 'kun-replacement-data')
+const runtimeExecutablePath = process.platform === 'win32'
+  ? 'C:\\Program Files\\nodejs\\node.exe'
+  : null
 
 const manager: ServiceManagerConnection = {
   discovery: {
@@ -63,7 +67,7 @@ describe('stopSharedRuntimeForReplacement', () => {
       processIdentity: vi.fn(async () => ({
         pid: target.discovery.pid,
         commandLine: 'kun-runtime',
-        executablePath: null,
+        executablePath: runtimeExecutablePath,
         startedAtMs: Date.parse(target.discovery.startedAt)
       })),
       terminate: vi.fn(),
@@ -107,7 +111,7 @@ describe('stopSharedRuntimeForReplacement', () => {
       processIdentity: vi.fn(async () => ({
         pid: target.discovery.pid,
         commandLine: 'kun-runtime',
-        executablePath: null,
+        executablePath: runtimeExecutablePath,
         startedAtMs: Date.parse(target.discovery.startedAt)
       })),
       terminate,
@@ -154,7 +158,7 @@ describe('stopSharedRuntimeForReplacement', () => {
       processIdentity: vi.fn(async () => ({
         pid: target.discovery.pid,
         commandLine: 'kun-runtime',
-        executablePath: null,
+        executablePath: runtimeExecutablePath,
         startedAtMs: Date.parse(target.discovery.startedAt)
       })),
       terminate,
@@ -198,7 +202,7 @@ describe('stopSharedRuntimeForReplacement', () => {
       processIdentity: vi.fn(async () => ({
         pid: target.discovery.pid,
         commandLine: `node serve-entry.js --data-dir ${dataDir}`,
-        executablePath: null,
+        executablePath: runtimeExecutablePath,
         startedAtMs: Date.parse(target.discovery.startedAt)
       })),
       terminate,
@@ -236,7 +240,7 @@ describe('stopSharedRuntimeForReplacement', () => {
       processIdentity: vi.fn(async () => startedAtMs === null ? null : ({
         pid: target.discovery.pid,
         commandLine: command,
-        executablePath: null,
+        executablePath: runtimeExecutablePath,
         startedAtMs
       })),
       terminate,
@@ -276,7 +280,7 @@ describe('stopSharedRuntimeForReplacement', () => {
       processIdentity: vi.fn(async () => ({
         pid: target.discovery.pid,
         commandLine: 'kun-runtime',
-        executablePath: null,
+        executablePath: runtimeExecutablePath,
         startedAtMs: Date.parse(target.discovery.startedAt)
       })),
       terminate,

@@ -407,7 +407,10 @@ export function fieldLabel(field: ConnectField | undefined, preset: ConnectionPr
     case 'name': return 'Provider name'
     case 'baseUrl': return 'Base URL'
     case 'endpointFormat': return 'Endpoint format'
-    case 'credential': return preset.authType === 'oauth' ? 'OAuth credential' : 'API key / token plan key'
+    case 'credential': {
+      const label = preset.authType === 'oauth' ? 'OAuth credential' : 'API key / token plan key'
+      return preset.credentialRequirement === 'optional' ? `${label} (optional)` : label
+    }
     case 'models': return 'Models (comma separated)'
     default: return ''
   }

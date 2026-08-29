@@ -180,6 +180,13 @@ describe('chat-store-thread-actions guidance with thread switching', () => {
     state.threads = [thread('thr_existing'), thread('thr_other')]
     state.currentTurnId = 'turn_active'
     state.currentTurnUserId = 'user-original'
+    state.blocks = [{
+      id: 'user-original',
+      kind: 'user',
+      turnId: 'turn_active',
+      text: 'Draft the logo treatment',
+      meta: { mode: 'plan', agentSurface: 'code' }
+    }]
     state.queuedMessages = [{
       id: 'q-guide',
       text: 'use the compact logo instead',

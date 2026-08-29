@@ -62,7 +62,7 @@ describe('provider mutation lifecycle across settings remounts', () => {
   } => {
     const settings = defaultModelProviderSettings()
     const provider = {
-      ...settings.providers[0]!,
+      ...settings.providers.find((item) => item.id === 'deepseek')!,
       id,
       name: 'Remount Provider',
       apiKey: '',

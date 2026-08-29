@@ -77,6 +77,9 @@ const telegramMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  protocol: {
+    registerSchemesAsPrivileged: vi.fn()
+  },
   app: {
     quit: vi.fn(),
     getPath: vi.fn(() => electronMock.userDataPath),

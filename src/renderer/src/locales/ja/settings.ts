@@ -12,6 +12,7 @@ const settings = {
   ...mcpMigration,
   ...migrationSystem,
   ...codePersonas,
+  guiUpdateErrFeedUnavailable: '現在、利用できる更新元がありません。後でもう一度試すか、ダウンロードページを利用してください。',
 }
 
 export default settings

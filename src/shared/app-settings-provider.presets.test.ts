@@ -291,9 +291,9 @@ describe('provider presets', () => {
 
     const profile = modelProviderPresetProfile(preset!)
     expect(profile.retry?.maxAttempts).toBe(10)
-    expect(profile.modelProfiles['kimi-k2.5-free']).toMatchObject({
-      contextWindowTokens: 262_144,
-      maxOutputTokens: 262_144,
+    expect(profile.modelProfiles['mimo-v2.5-free']).toMatchObject({
+      contextWindowTokens: 200_000,
+      maxOutputTokens: 32_000,
       inputModalities: ['text', 'image']
     })
     expect(modelProviderRequiresApiKey(profile)).toBe(false)

@@ -14,7 +14,12 @@ import { FileSessionStore, readLatestItemsFromJsonl } from './file-session-store
 const roots: string[] = []
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map((root) => rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === 'win32' ? 5 : 0,
+    retryDelay: 50
+  })))
 })
 
 describe('FileSessionStore item ordering', () => {

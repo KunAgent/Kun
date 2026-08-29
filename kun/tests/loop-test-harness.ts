@@ -27,6 +27,7 @@ import type { ContextCompactionConfig } from '../src/loop/model-context-profile.
 import type { ResolvedHook } from '../src/hooks/hook-engine.js'
 import type { AgentSdkRuntime } from '../src/runtime/agent-sdk/agent-sdk-runtime.js'
 import type { ApprovalReviewPort } from '../src/ports/approval-review.js'
+import { COMPACTION_SYSTEM_PROMPT } from '../src/loop/compaction-summary.js'
 
 export type Harness = {
   threadId: string
@@ -67,6 +68,7 @@ export function makeSilentModel(): ModelClient {
     provider: 'silent',
     model: 'silent',
     async *stream(): AsyncIterable<ModelStreamChunk> {
+      yield { kind: 'assistant_reasoning_delta', text: 'internal test reasoning' }
       yield { kind: 'completed', stopReason: 'stop' }
     }
   }
@@ -135,7 +137,7 @@ export function makeHarness(
     sessionStore,
     approvalGate,
     userInputGate,
-    model,
+    model: withValidTerminalResponse(model),
     toolHost,
     usage,
     events,
@@ -185,6 +187,38 @@ export function makeHarness(
     events,
     ids
   }
+}
+
+function withValidTerminalResponse(model: ModelClient): ModelClient {
+  const stream = async function* (request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    let hasOutput = false
+    for await (const chunk of model.stream(request)) {
+      if (
+        chunk.kind === 'assistant_text_delta' ||
+        chunk.kind === 'assistant_reasoning_delta' ||
+        chunk.kind === 'tool_call_complete' ||
+        chunk.kind === 'image_generation_complete'
+      ) {
+        hasOutput = true
+      }
+      if (
+        chunk.kind === 'completed' &&
+        chunk.stopReason === 'stop' &&
+        !hasOutput &&
+        request.systemPrompt !== COMPACTION_SYSTEM_PROMPT
+      ) {
+        yield { kind: 'assistant_reasoning_delta', text: 'internal test completion' }
+        hasOutput = true
+      }
+      yield chunk
+    }
+  }
+
+  return new Proxy(model, {
+    get(target, property, receiver) {
+      return property === 'stream' ? stream : Reflect.get(target, property, receiver)
+    }
+  })
 }
 
 export async function bootstrapThread(

@@ -505,7 +505,7 @@ describe('AgentSdkRuntime.runTurn', () => {
     }))
     expect(finished.at(-1)?.error).toBe('turn exceeded 3 model steps')
     expect(debugSink.snapshot()[0]?.exchanges[0]).toMatchObject({
-      status: 'completed',
+      status: 'failed',
       decoded: {
         error: 'error_max_turns',
         stopReason: 'error'

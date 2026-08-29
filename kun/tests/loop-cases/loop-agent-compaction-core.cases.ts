@@ -135,7 +135,7 @@ describe('AgentLoop', () => {
 
       expect(status).toBe('completed')
       expect(observedRequiredToolNames).toEqual([undefined, undefined, undefined])
-      await expect(readFile(join(workspace, '.kunsdd/plan/auth.md'), 'utf8')).resolves.toBe(
+      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).resolves.toBe(
         '## Plan\nImplement auth after checking context.'
       )
     } finally {
