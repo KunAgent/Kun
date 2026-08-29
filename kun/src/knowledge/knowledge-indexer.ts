@@ -38,17 +38,52 @@ const SKIP_DIRECTORIES = new Set([
   'build', 'coverage', 'dist', 'node_modules', 'out', 'target', 'temp', 'tmp', 'vendor', 'venv'
 ])
 
-export async function scanKnowledgeSources(rootInput: string): Promise<KnowledgeSourceScan> {
+/**
+ * Shared allowance for one request that scans several roots. Traversal fields
+ * (`remainingDirectories`, `remainingEntries`, `remainingMetadataOps`,
+ * `remainingFiles`) are charged during the walk itself — directory listing,
+ * entry iteration, and per-file stat/realpath are real I/O, so a request-wide
+ * budget must bound them, not just the rebuild that may follow.
+ * `remainingBytes` is charged only when a rebuild actually reads file
+ * contents, since the walk never does.
+ */
+export type KnowledgeScanBudget = {
+  remainingFiles: number
+  remainingBytes: number
+  remainingDirectories: number
+  remainingEntries: number
+  remainingMetadataOps: number
+}
+
+/** True when the walk-time portion of the budget has nothing left to spend. */
+export function scanBudgetExhausted(budget: KnowledgeScanBudget): boolean {
+  return budget.remainingFiles <= 0 ||
+    budget.remainingDirectories <= 0 ||
+    budget.remainingEntries <= 0 ||
+    budget.remainingMetadataOps <= 0
+}
+
+export async function scanKnowledgeSources(
+  rootInput: string,
+  budget?: KnowledgeScanBudget
+): Promise<KnowledgeSourceScan> {
   const lexicalRoot = resolve(rootInput)
+  if (budget) budget.remainingMetadataOps -= 1
   const physicalRoot = await realpath(lexicalRoot)
   const files: KnowledgeSourceFile[] = []
   const diagnostics: string[] = []
   const stack = [lexicalRoot]
   let entriesSeen = 0
   let bytesSeen = 0
+  let budgetExhausted = budget ? scanBudgetExhausted(budget) : false
 
   while (stack.length > 0 && files.length < MAX_FILES && entriesSeen < MAX_SCAN_ENTRIES) {
+    if (budget && scanBudgetExhausted(budget)) {
+      budgetExhausted = true
+      break
+    }
     const directory = stack.pop()!
+    if (budget) budget.remainingDirectories -= 1
     let entries
     try {
       entries = await readdir(directory, { withFileTypes: true })
@@ -59,7 +94,12 @@ export async function scanKnowledgeSources(rootInput: string): Promise<Knowledge
     entries.sort((left, right) => left.name.localeCompare(right.name))
     for (const entry of entries) {
       entriesSeen += 1
+      if (budget) budget.remainingEntries -= 1
       if (entriesSeen > MAX_SCAN_ENTRIES || files.length >= MAX_FILES) break
+      if (budget && scanBudgetExhausted(budget)) {
+        budgetExhausted = true
+        break
+      }
       if (entry.name === '.DS_Store' || entry.isSymbolicLink() || isTemporaryOfficeSource(entry.name)) continue
       const path = join(directory, entry.name)
       if (entry.isDirectory()) {
@@ -70,6 +110,7 @@ export async function scanKnowledgeSources(rootInput: string): Promise<Knowledge
       let info
       let physicalPath
       try {
+        if (budget) budget.remainingMetadataOps -= 2
         ;[info, physicalPath] = await Promise.all([stat(path), realpath(path)])
       } catch {
         continue
@@ -107,9 +148,14 @@ export async function scanKnowledgeSources(rootInput: string): Promise<Knowledge
         }
       }
       bytesSeen += info.size
+      if (budget) budget.remainingFiles -= 1
       files.push(empty ? { ...source, empty: true } : source)
     }
   }
+  // Only an actual early stop counts: a tree whose walk completed exactly as
+  // the allowance reached zero still produced a full, trustworthy scan.
+  if (budget && scanBudgetExhausted(budget) && stack.length > 0) budgetExhausted = true
+  if (budgetExhausted) pushDiagnostic(diagnostics, 'Scan budget exhausted; the walk stopped early')
   if (files.length >= MAX_FILES) pushDiagnostic(diagnostics, `Index file limit reached (${MAX_FILES})`)
   if (entriesSeen >= MAX_SCAN_ENTRIES) pushDiagnostic(diagnostics, `Index scan-entry limit reached (${MAX_SCAN_ENTRIES})`)
   files.sort((left, right) => left.relativePath.localeCompare(right.relativePath))
@@ -117,7 +163,8 @@ export async function scanKnowledgeSources(rootInput: string): Promise<Knowledge
     root: lexicalRoot,
     files,
     diagnostics,
-    fingerprint: hash(files.map((file) => `${file.relativePath}\0${file.size}\0${file.mtimeMs}`).join('\n'))
+    fingerprint: hash(files.map((file) => `${file.relativePath}\0${file.size}\0${file.mtimeMs}`).join('\n')),
+    ...(budgetExhausted ? { budgetExhausted: true } : {})
   }
 }
 
