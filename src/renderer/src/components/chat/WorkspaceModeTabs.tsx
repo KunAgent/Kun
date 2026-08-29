@@ -10,7 +10,7 @@ import { Briefcase, Check, ChevronDown, Code2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 type Props = {
-  activeView: 'chat' | 'write' | 'design' | 'claw' | 'schedule' | 'workflow' | 'subagents'
+  activeView: 'chat' | 'write' | 'design' | 'claw' | 'schedule' | 'workflow' | 'nodeGraph' | 'subagents'
   onCodeOpen: () => void
   onWriteOpen: () => void
   disabled?: boolean

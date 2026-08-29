@@ -7,9 +7,6 @@ import {
   type ReactNode
 } from 'react'
 import { Editor, Extension, type AnyExtension } from '@tiptap/core'
-import { StarterKit } from '@tiptap/starter-kit'
-import { TableKit } from '@tiptap/extension-table'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -25,10 +22,10 @@ import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
 import {
-  WriteCodeBlock,
   auditWriteMarkdownFidelity,
-  getWriteMarkdownManager,
+  buildWriteRichExtensions,
   parseWriteMarkdown,
+  serializeWriteMarkdown,
   type WriteRichFidelity
 } from './markdown-manager'
 import {
@@ -39,7 +36,6 @@ import {
 import { recentEditsFromRichTransaction } from './recent-edits-pm'
 import { replaceRangeWithMarkdown } from './markdown-insert'
 import { applyExternalMarkdownToEditor } from './markdown-sync'
-import { WriteLocalImage } from './local-image'
 import { WritePasteImage } from './paste-image'
 import { WriteRichInlineCompletion } from './extensions/inline-completion'
 import {
@@ -47,6 +43,12 @@ import {
   writeRichExternalSyncMeta
 } from './extensions/term-propagation'
 import { WriteRichTemplateShortcuts } from './extensions/template-shortcuts'
+import {
+  WriteRichWikilinkMenu,
+  setRichWikilinkTargets
+} from './extensions/wikilink-menu'
+import { useWikilinkTargets } from '../wikilink/use-wikilink-targets'
+import i18n from '../../i18n'
 import { SddRequirementBadges } from './extensions/sdd-requirement-badges'
 
 /**
@@ -276,6 +278,9 @@ export function WriteRichEditor({
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const wikilink = useWikilinkTargets()
+  const wikilinkRef = useRef(wikilink)
+  wikilinkRef.current = wikilink
   const editorRef = useRef<Editor | null>(null)
   const workspaceRootRef = useRef(workspaceRoot ?? '')
   const filePathRef = useRef(filePath ?? '')
@@ -302,6 +307,14 @@ export function WriteRichEditor({
 
   workspaceRootRef.current = workspaceRoot ?? ''
   filePathRef.current = filePath ?? ''
+
+  // The scan resolves after the menu has already opened, so results are pushed
+  // into the live editor rather than passed at construction time.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    setRichWikilinkTargets(editor.view, wikilink.targets)
+  }, [wikilink.targets])
   documentEpochRef.current = documentEpoch ?? 0
   imageDirectoryRef.current = imageDirectory ?? ''
   readOnlyRef.current = readOnly
@@ -352,7 +365,6 @@ export function WriteRichEditor({
   useEffect(() => {
     if (eligible !== true || !hostRef.current || editorRef.current) return
 
-    const manager = getWriteMarkdownManager()
     const saveShortcut = Extension.create({
       name: 'writeSaveShortcut',
       addKeyboardShortcuts() {
@@ -365,19 +377,16 @@ export function WriteRichEditor({
       }
     })
 
+    // The schema-bearing base comes from the same builder the markdown
+    // manager uses. Listing them separately let the two schemas drift: the
+    // manager parsed `[[wikilinks]]` into a mark this editor did not know,
+    // and every document containing one opened blank.
     const extensions: AnyExtension[] = [
-      StarterKit.configure({
-        link: { openOnClick: false },
-        codeBlock: false,
-        undoRedo: { depth: 200 }
-      }),
-      TableKit.configure({ table: { resizable: false } }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      WriteCodeBlock,
-      WriteLocalImage.configure({
-        getFilePath: () => filePathRef.current,
-        getWorkspaceRoot: () => workspaceRootRef.current
+      ...buildWriteRichExtensions({
+        localImage: {
+          getFilePath: () => filePathRef.current,
+          getWorkspaceRoot: () => workspaceRootRef.current
+        }
       }),
       WritePasteImage.configure({
         getWorkspaceRoot: () => workspaceRootRef.current,
@@ -415,6 +424,21 @@ export function WriteRichEditor({
           return { text: completionText, action: result.action, mode }
         }
       }),
+      WriteRichWikilinkMenu.configure({
+        workspaceRoot: () => workspaceRootRef.current,
+        activePath: () => filePathRef.current,
+        isReadOnly: () => readOnlyRef.current,
+        onRequestTargets: () => wikilinkRef.current.request(),
+        emptyStateText: (hasTargets) => {
+          const state = wikilinkRef.current
+          if (state.error) return i18n.t('writeWikilinkError', { message: state.error })
+          if (state.scanning || (!hasTargets && !state.truncated)) return i18n.t('writeWikilinkScanning')
+          // A truncated walk must not read as an empty or exhaustively
+          // searched vault: the file may live in a folder it never reached.
+          if (state.truncated) return i18n.t('writeWikilinkPartial')
+          return i18n.t('writeWikilinkNoMatch')
+        }
+      }),
       WriteRichTermPropagation,
       WriteRichTemplateShortcuts.configure({
         isReadOnly: () => readOnlyRef.current
@@ -444,7 +468,7 @@ export function WriteRichEditor({
           return
         }
         try {
-          const markdown = manager.serialize(instance.state.doc.toJSON())
+          const markdown = serializeWriteMarkdown(instance.state.doc.toJSON())
           lastEmittedValueRef.current = markdown
           onChangeRef.current(markdown)
         } catch (error) {

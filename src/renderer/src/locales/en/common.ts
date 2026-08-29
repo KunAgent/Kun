@@ -11,6 +11,7 @@ import workWhiteboard from './common/work-whiteboard.json'
 import sidebar from './common/sidebar.json'
 import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
+import nodeGraph from './common/node-graph.json'
 
 const common = {
   ...shellWorkflow,
@@ -26,6 +27,7 @@ const common = {
   ...sidebar,
   ...i18nReview,
   ...commandPalette,
+  ...nodeGraph,
 }
 
 export default common

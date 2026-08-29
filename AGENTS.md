@@ -26,6 +26,7 @@ This guide is for AI agents working in this repository. It collects the project 
   - `src/renderer/src/agent/kun-mapper.ts`
   - `kun/src/server/runtime-factory.ts`
   - `kun/src/server/routes/`
+- `Graph` is two unrelated features. Graph Mode (`kun/src/graph`, `src/renderer/src/graph`, `src/renderer/src/components/graph`, `docs/graph-mode.md`) is multi-agent orchestration and writes runtime state. Node Graph (`kun/src/node-graph`, `src/renderer/src/node-graph`, `src/renderer/src/components/node-graph`, `docs/node-graph.md`, `docs/node-graph-renderer.md`) is the read-only Obsidian-style knowledge map on the `nodeGraph` route. Do not merge their vocabularies, contracts, or routes.
 - Do not recreate old runtime paths, provider switchers, runtime diagnostics panels, CodeWhale/Reasonix adapters, process managers, or RPC bridges. Legacy provider fields should only be read during settings migration and folded into `agents.kun`.
 - Connect phone code may still use the internal `claw` name for compatibility. That name does not mean there should be a separate Claw runtime.
 

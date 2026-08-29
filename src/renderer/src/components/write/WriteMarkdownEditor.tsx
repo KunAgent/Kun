@@ -15,6 +15,11 @@ import {
 } from '../../write/block-type'
 import { buildInlineCompletionExtension, buildInlineCompletionPayload } from '../../write/inline-completion'
 import { writeMarkdownLivePreviewExtensions } from '../../write/markdown-live-preview'
+import {
+  buildWikilinkMenuExtension,
+  setWikilinkTargets
+} from '../../write/wikilink/wikilink-codemirror'
+import { useWikilinkTargets } from '../../write/wikilink/use-wikilink-targets'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../../write/recent-edits'
 import { isSelectableRasterImageSrc, parseImageMarkdownLine } from '../../write/selected-image'
 import { buildWriteTemplateShortcutExpansion } from '../../write/template-shortcuts'
@@ -118,6 +123,9 @@ export function WriteMarkdownEditor({
   const livePreviewCompartmentRef = useRef<Compartment | null>(null)
   const editableCompartmentRef = useRef<Compartment | null>(null)
   const displayCompartmentRef = useRef<Compartment | null>(null)
+  const wikilink = useWikilinkTargets()
+  const wikilinkRef = useRef(wikilink)
+  wikilinkRef.current = wikilink
   const workspaceRootRef = useRef(workspaceRoot ?? '')
   const filePathRef = useRef(filePath ?? '')
   const documentEpochRef = useRef(documentEpoch ?? 0)
@@ -169,6 +177,14 @@ export function WriteMarkdownEditor({
   onImagePasteErrorRef.current = onImagePasteError
   onReviewStateChangeRef.current = onReviewStateChange
   valueRef.current = value
+
+  // The scan resolves after the menu has already opened, so the results are
+  // pushed into the running editor state rather than passed at creation time.
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({ effects: setWikilinkTargets.of(wikilink.targets) })
+  }, [wikilink.targets])
 
   useEffect(() => {
     if (!hostRef.current) return
@@ -305,6 +321,21 @@ export function WriteMarkdownEditor({
       }
     })
 
+    const wikilinkMenuExtension = buildWikilinkMenuExtension({
+      workspaceRoot: () => workspaceRootRef.current,
+      activePath: () => filePathRef.current,
+      onRequestTargets: () => wikilinkRef.current.request(),
+      emptyStateText: (hasTargets) => {
+        const state = wikilinkRef.current
+        if (state.error) return i18n.t('writeWikilinkError', { message: state.error })
+        if (state.scanning || (!hasTargets && !state.truncated)) return i18n.t('writeWikilinkScanning')
+        // A truncated walk must not read as an empty or exhaustively searched
+        // vault: the file may exist in a folder the scan never reached.
+        if (state.truncated) return i18n.t('writeWikilinkPartial')
+        return i18n.t('writeWikilinkNoMatch')
+      }
+    })
+
     const state = EditorState.create({
       doc: valueRef.current,
       extensions: [
@@ -318,6 +349,7 @@ export function WriteMarkdownEditor({
         displayCompartment.of(writeEditorDisplayExtensions(displayPreferences)),
         mergeCompartment.of([]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
+        wikilinkMenuExtension,
         history(),
         drawSelection(),
         highlightActiveLine(),

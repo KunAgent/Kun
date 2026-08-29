@@ -26,7 +26,7 @@ import {
   DEFAULT_WORKBENCH_DESIGN_PROFILE
 } from './workbench-task-intent'
 
-export type WorkbenchSidebarView = 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'subagents'
+export type WorkbenchSidebarView = 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'nodeGraph' | 'subagents'
 
 export type UseWorkbenchNavigationControllerParams = {
   activeSddDraft: boolean
@@ -56,6 +56,7 @@ export type UseWorkbenchNavigationControllerParams = {
   openPlugins: ChatState['openPlugins']
   openSchedule: ChatState['openSchedule']
   openWorkflow: ChatState['openWorkflow']
+  openNodeGraph: ChatState['openNodeGraph']
   openWrite: ChatState['openWrite']
   selectThread: ChatState['selectThread']
   setConnectPhoneSidebarOpen: Dispatch<SetStateAction<boolean>>
@@ -77,6 +78,7 @@ export type WorkbenchNavigationController = {
   openScheduleView: () => void
   openThread: (id: string) => void
   openWorkflowView: () => void
+  openNodeGraphView: () => void
   openWriteMode: () => void
   pickWriteAssistantWorkspace: () => Promise<void>
   sidebarView: WorkbenchSidebarView
@@ -148,6 +150,7 @@ export function useWorkbenchNavigationController({
   openPlugins,
   openSchedule,
   openWorkflow,
+  openNodeGraph,
   openWrite,
   selectThread,
   setConnectPhoneSidebarOpen,
@@ -177,6 +180,7 @@ export function useWorkbenchNavigationController({
     if (route === 'claw' || (route === 'plugins' && pluginHostRoute === 'claw')) return 'claw'
     if (route === 'schedule') return 'schedule'
     if (route === 'workflow') return 'workflow'
+    if (route === 'nodeGraph') return 'nodeGraph'
     if (route === 'write') return 'write'
     return 'chat'
   }, [pluginHostRoute, route])
@@ -451,6 +455,12 @@ export function useWorkbenchNavigationController({
     openWorkflow()
   }, [beginNavigation, openWorkflow, setConnectPhoneSidebarOpen])
 
+  const openNodeGraphView = useCallback((): void => {
+    beginNavigation()
+    setConnectPhoneSidebarOpen(false)
+    openNodeGraph()
+  }, [beginNavigation, openNodeGraph, setConnectPhoneSidebarOpen])
+
   const toggleConnectPhone = useCallback((): void => {
     const requestId = beginNavigation()
     // 打开 Connect Phone 不清空需求草稿:草稿内容与保存状态留在本地 store,
@@ -574,6 +584,7 @@ export function useWorkbenchNavigationController({
     openScheduleView,
     openThread,
     openWorkflowView,
+    openNodeGraphView,
     openWriteMode,
     pickWriteAssistantWorkspace,
     sidebarView,

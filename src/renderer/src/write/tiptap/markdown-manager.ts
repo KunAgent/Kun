@@ -10,6 +10,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { WriteLocalImage } from './local-image'
+import { WriteWikilink } from './extensions/wikilink-mark'
 
 export type WriteRichFidelity =
   | { eligible: true; normalized: string }
@@ -108,7 +109,15 @@ export const WriteCodeBlock = CodeBlock.extend({
   }
 })
 
-export function buildWriteRichExtensions(): AnyExtension[] {
+/**
+ * The schema-bearing extension roster, shared verbatim by the markdown
+ * manager and the mounted editor. It must be one list: a node or mark the
+ * manager parses but the editor schema lacks makes `setContent` reject the
+ * whole document, and the file opens blank.
+ */
+export function buildWriteRichExtensions(options: {
+  localImage?: Parameters<typeof WriteLocalImage.configure>[0]
+} = {}): AnyExtension[] {
   return [
     StarterKit.configure({
       link: { openOnClick: false },
@@ -122,7 +131,8 @@ export function buildWriteRichExtensions(): AnyExtension[] {
     TaskList,
     TaskItem.configure({ nested: true }),
     WriteCodeBlock,
-    WriteLocalImage
+    options.localImage ? WriteLocalImage.configure(options.localImage) : WriteLocalImage,
+    WriteWikilink
   ]
 }
 
@@ -142,8 +152,17 @@ export function parseWriteMarkdown(markdown: string): JSONContent {
   return getWriteMarkdownManager().parse(markdown)
 }
 
+// How `[[wikilinks]]` survive serialization without a global un-escaping pass:
+// the `WriteWikilink` mark (see `extensions/wikilink-mark.ts`) gives bare
+// `[[...]]` a schema identity whose covered text serializes verbatim, while
+// deliberately escaped `\[\[...\]\]` stays plain text and keeps its escapes.
+
+function serializeDocument(manager: MarkdownManager, doc: JSONContent): string {
+  return manager.serialize(doc)
+}
+
 export function serializeWriteMarkdown(doc: JSONContent): string {
-  return getWriteMarkdownManager().serialize(doc)
+  return serializeDocument(getWriteMarkdownManager(), doc)
 }
 
 function collectPlainText(node: JSONContent | undefined, acc: string[]): string[] {
@@ -177,9 +196,9 @@ export function auditWriteMarkdownFidelity(markdown: string): WriteRichFidelity 
   let secondDoc: JSONContent
   try {
     firstDoc = manager.parse(markdown)
-    firstPass = manager.serialize(firstDoc)
+    firstPass = serializeDocument(manager, firstDoc)
     secondDoc = manager.parse(firstPass)
-    secondPass = manager.serialize(secondDoc)
+    secondPass = serializeDocument(manager, secondDoc)
   } catch (error) {
     return {
       eligible: false,

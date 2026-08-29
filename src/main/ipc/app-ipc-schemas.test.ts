@@ -302,6 +302,31 @@ describe('app-ipc-schemas runtime', () => {
     }).path).toBe('/v1/memory/mem_1')
   })
 
+  it('accepts the read-only node graph endpoint and rejects writes to it', () => {
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/node-graph',
+      method: 'GET'
+    }).path).toBe('/v1/node-graph')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/node-graph?workspace=%2Frepo&changed_files=false&refresh=true',
+      method: 'GET'
+    }).path).toBe('/v1/node-graph?workspace=%2Frepo&changed_files=false&refresh=true')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/node-graph/folder?root=%2FUsers%2Fme%2Fvault',
+      method: 'GET'
+    }).path).toBe('/v1/node-graph/folder?root=%2FUsers%2Fme%2Fvault')
+    // Node Graph is a projection; no method other than GET may reach it.
+    for (const path of ['/v1/node-graph', '/v1/node-graph/folder']) {
+      for (const method of ['POST', 'PATCH', 'DELETE'] as const) {
+        expect(() => runtimeRequestPayloadSchema.parse({
+          path,
+          method,
+          body: '{}'
+        })).toThrow(/runtime request path is not allowed/)
+      }
+    }
+  })
+
   it('accepts https GitHub skill import URLs and rejects other schemes', () => {
     expect(skillGithubImportPayloadSchema.parse({
       rootPath: '/tmp/skills',

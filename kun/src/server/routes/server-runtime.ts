@@ -102,6 +102,7 @@ import type {
 import type { ProviderQuotaService } from '../../services/provider-quota-service.js'
 import type { ToolCancellationService } from '../../services/tool-cancellation-service.js'
 import type { KnowledgeBaseService } from '../../knowledge/knowledge-base-service.js'
+import type { NodeGraphService } from '../../node-graph/index.js'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -194,6 +195,8 @@ export type ServerRuntime = {
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
   knowledgeBaseService?: KnowledgeBaseService
+  /** Read-only Node Graph projection (threads, knowledge links, memories). */
+  nodeGraphService?: NodeGraphService
   migrationService?: RuntimeMigrationService
   migrationImportService?: RuntimeMigrationImportService
   /**

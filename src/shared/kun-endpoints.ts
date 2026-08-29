@@ -90,6 +90,11 @@ export function kunMemoryRecordPath(memoryId: string): string {
   return `/v1/memory/${encodeURIComponent(memoryId)}`
 }
 
+export const KUN_NODE_GRAPH_PATH = '/v1/node-graph'
+export const KUN_NODE_GRAPH_TEMPLATE = '/v1/node-graph'
+export const KUN_NODE_GRAPH_FOLDER_PATH = '/v1/node-graph/folder'
+export const KUN_NODE_GRAPH_FOLDER_TEMPLATE = '/v1/node-graph/folder'
+
 export const KUN_DELEGATION_PROFILES_PATH = '/v1/delegation/profiles'
 export const KUN_DELEGATION_PROFILES_TEMPLATE = '/v1/delegation/profiles'
 export const KUN_DELEGATION_DIAGNOSTICS_PATH = '/v1/delegation/diagnostics'

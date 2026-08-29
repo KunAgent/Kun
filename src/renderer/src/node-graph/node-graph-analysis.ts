@@ -1,0 +1,260 @@
+import type { NodeGraphEdge, NodeGraphNode } from './node-graph-types'
+
+/**
+ * Graph analysis over the *visible* subgraph.
+ *
+ * Everything here is deterministic. Label propagation is normally seeded by a
+ * random node order, which makes its clusters differ between runs; that is
+ * unacceptable when the result becomes user-visible colored groups, so nodes
+ * are always processed in sorted id order and ties break on the smallest label.
+ * The same reasoning applies to path finding, where neighbour lists are sorted
+ * so "the" shortest path is a stable choice among equals.
+ */
+
+export type NodeGraphAdjacency = ReadonlyMap<string, readonly string[]>
+
+/** Sorted, deduplicated undirected adjacency. */
+export function buildAdjacency(
+  nodes: readonly NodeGraphNode[],
+  edges: readonly NodeGraphEdge[]
+): NodeGraphAdjacency {
+  const neighbors = new Map<string, Set<string>>()
+  for (const node of nodes) neighbors.set(node.id, new Set())
+  for (const edge of edges) {
+    // Both endpoints must be real nodes. A dangling id would otherwise enter
+    // the adjacency and receive rank as if it were a node.
+    if (edge.from === edge.to) continue
+    if (!neighbors.has(edge.from) || !neighbors.has(edge.to)) continue
+    neighbors.get(edge.from)!.add(edge.to)
+    neighbors.get(edge.to)!.add(edge.from)
+  }
+  const adjacency = new Map<string, readonly string[]>()
+  for (const [id, set] of neighbors) adjacency.set(id, [...set].sort())
+  return adjacency
+}
+
+export type NodeGraphCentrality = {
+  /** Nodes ordered by descending rank, then ascending id. */
+  ranked: { id: string; score: number; degree: number }[]
+  scores: ReadonlyMap<string, number>
+}
+
+const PAGERANK_DAMPING = 0.85
+const PAGERANK_ITERATIONS = 60
+const PAGERANK_EPSILON = 1e-7
+
+/**
+ * Undirected PageRank.
+ *
+ * On an undirected graph this tracks degree closely — the stationary
+ * distribution of a random walk *is* degree-proportional — but the teleport
+ * term smooths rank across the network, so two nodes with identical degree can
+ * score differently based on the shape of their neighbourhood. That is the
+ * value over raw degree: a tie in link count is broken by structure rather than
+ * by node id. It is not a claim that hubs of dead ends score low; they do not.
+ */
+export function computeCentrality(adjacency: NodeGraphAdjacency): NodeGraphCentrality {
+  const ids = [...adjacency.keys()].sort()
+  const count = ids.length
+  if (count === 0) return { ranked: [], scores: new Map() }
+  const initial = 1 / count
+  let scores = new Map(ids.map((id) => [id, initial]))
+  for (let iteration = 0; iteration < PAGERANK_ITERATIONS; iteration += 1) {
+    const next = new Map<string, number>()
+    // Rank held by nodes with no neighbours would vanish each pass, so it is
+    // redistributed evenly and the scores stay a comparable distribution.
+    let dangling = 0
+    for (const id of ids) {
+      if ((adjacency.get(id)?.length ?? 0) === 0) dangling += scores.get(id) ?? 0
+    }
+    const base = (1 - PAGERANK_DAMPING) / count + (PAGERANK_DAMPING * dangling) / count
+    for (const id of ids) next.set(id, base)
+    for (const id of ids) {
+      const neighbors = adjacency.get(id) ?? []
+      if (neighbors.length === 0) continue
+      const share = (PAGERANK_DAMPING * (scores.get(id) ?? 0)) / neighbors.length
+      for (const neighbor of neighbors) {
+        next.set(neighbor, (next.get(neighbor) ?? 0) + share)
+      }
+    }
+    let delta = 0
+    for (const id of ids) delta += Math.abs((next.get(id) ?? 0) - (scores.get(id) ?? 0))
+    scores = next
+    if (delta < PAGERANK_EPSILON) break
+  }
+  const ranked = ids
+    .map((id) => ({
+      id,
+      score: scores.get(id) ?? 0,
+      degree: adjacency.get(id)?.length ?? 0
+    }))
+    .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
+  return { ranked, scores }
+}
+
+export type NodeGraphClusters = {
+  /** Cluster index per node; cluster 0 is always the largest. */
+  labels: ReadonlyMap<string, number>
+  /** Member ids per cluster, each sorted. */
+  clusters: string[][]
+}
+
+const LABEL_PROPAGATION_PASSES = 24
+
+/**
+ * Deterministic label propagation. Clusters come back ordered by descending
+ * size, so the numbering is stable for a given graph — which is what lets the
+ * colors derived from it be stable too. An isolated node forms its own cluster.
+ */
+export function computeClusters(adjacency: NodeGraphAdjacency): NodeGraphClusters {
+  const ids = [...adjacency.keys()].sort()
+  const labels = new Map(ids.map((id) => [id, id]))
+  for (let pass = 0; pass < LABEL_PROPAGATION_PASSES; pass += 1) {
+    let changed = false
+    for (const id of ids) {
+      const neighbors = adjacency.get(id) ?? []
+      if (neighbors.length === 0) continue
+      const counts = new Map<string, number>()
+      for (const neighbor of neighbors) {
+        const label = labels.get(neighbor)
+        if (label === undefined) continue
+        counts.set(label, (counts.get(label) ?? 0) + 1)
+      }
+      const current = labels.get(id)!
+      let best = current
+      let bestCount = counts.get(current) ?? 0
+      // Sorted iteration plus a strict comparison makes the tie-break the
+      // smallest label, removing the usual run-to-run instability.
+      const ordered = [...counts.entries()].sort((left, right) =>
+        left[0].localeCompare(right[0])
+      )
+      for (const [label, occurrences] of ordered) {
+        if (occurrences > bestCount) {
+          best = label
+          bestCount = occurrences
+        }
+      }
+      if (best !== current) {
+        labels.set(id, best)
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+  const byLabel = new Map<string, string[]>()
+  for (const id of ids) {
+    const label = labels.get(id)!
+    const bucket = byLabel.get(label)
+    if (bucket) bucket.push(id)
+    else byLabel.set(label, [id])
+  }
+  const clusters = [...byLabel.values()]
+    .map((members) => members.sort())
+    .sort((left, right) => right.length - left.length || left[0]!.localeCompare(right[0]!))
+  const indexed = new Map<string, number>()
+  clusters.forEach((members, index) => {
+    for (const id of members) indexed.set(id, index)
+  })
+  return { labels: indexed, clusters }
+}
+
+export type NodeGraphPath = {
+  /** Node ids from source to target inclusive. Empty when unreachable. */
+  nodeIds: string[]
+  /** Edge ids along the path, for highlighting. */
+  edgeIds: string[]
+  /** Hop count, or null when unreachable. */
+  hops: number | null
+}
+
+export const EMPTY_NODE_GRAPH_PATH: NodeGraphPath = { nodeIds: [], edgeIds: [], hops: null }
+
+/**
+ * Shortest path by breadth-first search over the undirected graph. Neighbour
+ * lists are sorted, so when several paths tie at the same length the same one
+ * comes back every time.
+ */
+export function findShortestPath(
+  adjacency: NodeGraphAdjacency,
+  edges: readonly NodeGraphEdge[],
+  from: string,
+  to: string
+): NodeGraphPath {
+  if (!adjacency.has(from) || !adjacency.has(to)) return EMPTY_NODE_GRAPH_PATH
+  if (from === to) return { nodeIds: [from], edgeIds: [], hops: 0 }
+  const previous = new Map<string, string>()
+  const visited = new Set([from])
+  const queue = [from]
+  let head = 0
+  while (head < queue.length) {
+    const current = queue[head]!
+    head += 1
+    for (const neighbor of adjacency.get(current) ?? []) {
+      if (visited.has(neighbor)) continue
+      visited.add(neighbor)
+      previous.set(neighbor, current)
+      if (neighbor === to) {
+        const nodeIds = [to]
+        let cursor = to
+        while (cursor !== from) {
+          cursor = previous.get(cursor)!
+          nodeIds.push(cursor)
+        }
+        nodeIds.reverse()
+        return { nodeIds, edgeIds: pathEdgeIds(edges, nodeIds), hops: nodeIds.length - 1 }
+      }
+      queue.push(neighbor)
+    }
+  }
+  return EMPTY_NODE_GRAPH_PATH
+}
+
+function pairKey(from: string, to: string): string {
+  return from < to ? `${from}\u0000${to}` : `${to}\u0000${from}`
+}
+
+function pathEdgeIds(edges: readonly NodeGraphEdge[], nodeIds: readonly string[]): string[] {
+  const wanted = new Set<string>()
+  for (let index = 0; index + 1 < nodeIds.length; index += 1) {
+    wanted.add(pairKey(nodeIds[index]!, nodeIds[index + 1]!))
+  }
+  const found: string[] = []
+  const covered = new Set<string>()
+  for (const edge of edges) {
+    const key = pairKey(edge.from, edge.to)
+    if (!wanted.has(key) || covered.has(key)) continue
+    covered.add(key)
+    found.push(edge.id)
+  }
+  return found
+}
+
+export type NodeGraphSummary = {
+  nodeCount: number
+  edgeCount: number
+  orphanIds: string[]
+  clusterCount: number
+  largestClusterSize: number
+  /** Mean degree: a one-number read on how connected the graph is. */
+  averageDegree: number
+}
+
+export function summarizeGraph(
+  nodes: readonly NodeGraphNode[],
+  edges: readonly NodeGraphEdge[],
+  adjacency: NodeGraphAdjacency,
+  clusters: NodeGraphClusters
+): NodeGraphSummary {
+  const orphanIds = nodes
+    .filter((node) => (adjacency.get(node.id)?.length ?? 0) === 0)
+    .map((node) => node.id)
+    .sort()
+  return {
+    nodeCount: nodes.length,
+    edgeCount: edges.length,
+    orphanIds,
+    clusterCount: clusters.clusters.length,
+    largestClusterSize: clusters.clusters[0]?.length ?? 0,
+    averageDegree: nodes.length === 0 ? 0 : (edges.length * 2) / nodes.length
+  }
+}
