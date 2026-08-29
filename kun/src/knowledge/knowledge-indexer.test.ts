@@ -162,3 +162,54 @@ describe('empty markdown sources', () => {
     expect(after).not.toBe(before)
   })
 })
+
+describe('scan budget', () => {
+  it('stops the walk when the traversal allowance runs out and flags the scan', async () => {
+    const root = await tempRoot('kun-kb-walk-budget-')
+    for (const name of ['a', 'b', 'c', 'd']) {
+      await mkdir(join(root, name))
+      await writeFile(join(root, name, `${name}.md`), `# ${name}\n`)
+    }
+    const budget = {
+      remainingFiles: 100,
+      remainingBytes: 1024 * 1024,
+      remainingDirectories: 2,
+      remainingEntries: 100,
+      remainingMetadataOps: 100
+    }
+    const scan = await scanKnowledgeSources(root, budget)
+    expect(scan.budgetExhausted).toBe(true)
+    expect(scan.files.length).toBeLessThan(4)
+    expect(scan.diagnostics.join(' ')).toContain('Scan budget exhausted')
+    expect(budget.remainingDirectories).toBeLessThanOrEqual(0)
+  })
+
+  it('charges the walk without flagging a scan that completed', async () => {
+    const root = await tempRoot('kun-kb-walk-complete-')
+    await writeFile(join(root, 'a.md'), '# A\n')
+    const budget = {
+      remainingFiles: 10,
+      remainingBytes: 1024,
+      remainingDirectories: 10,
+      remainingEntries: 10,
+      remainingMetadataOps: 10
+    }
+    const scan = await scanKnowledgeSources(root, budget)
+    expect(scan.budgetExhausted).toBeUndefined()
+    expect(scan.files).toHaveLength(1)
+    expect(budget.remainingFiles).toBe(9)
+    expect(budget.remainingDirectories).toBe(9)
+    expect(budget.remainingEntries).toBe(9)
+    expect(budget.remainingMetadataOps).toBe(7)
+    // Bytes are the rebuild's charge, never the walk's.
+    expect(budget.remainingBytes).toBe(1024)
+  })
+
+  it('behaves exactly as before when no budget is supplied', async () => {
+    const root = await tempRoot('kun-kb-walk-unbudgeted-')
+    await writeFile(join(root, 'a.md'), '# A\n')
+    const scan = await scanKnowledgeSources(root)
+    expect(scan.budgetExhausted).toBeUndefined()
+    expect(scan.files).toHaveLength(1)
+  })
+})

@@ -148,6 +148,11 @@ export type KnowledgeSourceScan = {
   fingerprint: string
   files: KnowledgeSourceFile[]
   diagnostics: string[]
+  /**
+   * True when a caller-supplied scan budget stopped the walk early. The file
+   * list and fingerprint describe a partial tree and must not be persisted.
+   */
+  budgetExhausted?: boolean
 }
 
 export type KnowledgeOfficeEvidenceChunk = {
