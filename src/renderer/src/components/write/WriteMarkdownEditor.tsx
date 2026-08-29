@@ -328,7 +328,10 @@ export function WriteMarkdownEditor({
       emptyStateText: (hasTargets) => {
         const state = wikilinkRef.current
         if (state.error) return i18n.t('writeWikilinkError', { message: state.error })
-        if (state.scanning || !hasTargets) return i18n.t('writeWikilinkScanning')
+        if (state.scanning || (!hasTargets && !state.truncated)) return i18n.t('writeWikilinkScanning')
+        // A truncated walk must not read as an empty or exhaustively searched
+        // vault: the file may exist in a folder the scan never reached.
+        if (state.truncated) return i18n.t('writeWikilinkPartial')
         return i18n.t('writeWikilinkNoMatch')
       }
     })

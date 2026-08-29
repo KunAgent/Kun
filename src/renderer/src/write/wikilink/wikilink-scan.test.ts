@@ -43,7 +43,7 @@ describe('isWikilinkMarkdownName', () => {
 
 describe('scanWorkspaceMarkdown', () => {
   it('collects markdown across nested directories with relative paths', async () => {
-    const found = await scanWorkspaceMarkdown(ROOT, lister({
+    const { targets: found } = await scanWorkspaceMarkdown(ROOT, lister({
       '': [file('index.md'), file('logo.png'), directory('notes')],
       notes: [file('alpha.md'), directory('deep')],
       'notes/deep': [file('gamma.md')]
@@ -55,7 +55,7 @@ describe('scanWorkspaceMarkdown', () => {
   })
 
   it('skips machine-generated and hidden directories', async () => {
-    const found = await scanWorkspaceMarkdown(ROOT, lister({
+    const { targets: found } = await scanWorkspaceMarkdown(ROOT, lister({
       '': [directory('node_modules'), directory('.git'), directory('dist'), directory('ok')],
       node_modules: [file('bad.md')],
       '.git': [file('bad.md')],
@@ -66,7 +66,7 @@ describe('scanWorkspaceMarkdown', () => {
   })
 
   it('honours the depth limit', async () => {
-    const found = await scanWorkspaceMarkdown(
+    const { targets: found } = await scanWorkspaceMarkdown(
       ROOT,
       lister({
         '': [directory('a')],
@@ -79,7 +79,7 @@ describe('scanWorkspaceMarkdown', () => {
   })
 
   it('honours the file cap', async () => {
-    const found = await scanWorkspaceMarkdown(
+    const { targets: found } = await scanWorkspaceMarkdown(
       ROOT,
       lister({ '': Array.from({ length: 10 }, (_, index) => file(`n${index}.md`)) }),
       limits({ maxFilesPerRoot: 3 })
@@ -99,7 +99,7 @@ describe('scanWorkspaceMarkdown', () => {
   })
 
   it('is breadth-first, so shallow files survive a cap', async () => {
-    const found = await scanWorkspaceMarkdown(
+    const { targets: found } = await scanWorkspaceMarkdown(
       ROOT,
       lister({
         '': [directory('deep'), file('root.md')],
@@ -111,7 +111,7 @@ describe('scanWorkspaceMarkdown', () => {
   })
 
   it('keeps going when one directory fails to list', async () => {
-    const found = await scanWorkspaceMarkdown(ROOT, lister({
+    const { targets: found } = await scanWorkspaceMarkdown(ROOT, lister({
       '': [directory('broken'), directory('ok')],
       ok: [file('good.md')]
     }))
@@ -119,7 +119,7 @@ describe('scanWorkspaceMarkdown', () => {
   })
 
   it('survives a lister that throws', async () => {
-    const found = await scanWorkspaceMarkdown(ROOT, async ({ path }) => {
+    const { targets: found } = await scanWorkspaceMarkdown(ROOT, async ({ path }) => {
       if (path === 'boom') throw new Error('io')
       return path === undefined
         ? { ok: true, entries: [directory('boom'), file('root.md')] }
@@ -131,7 +131,7 @@ describe('scanWorkspaceMarkdown', () => {
 
 describe('scanAllWorkspaceMarkdown', () => {
   it('walks every workspace and tags each file with its root', async () => {
-    const found = await scanAllWorkspaceMarkdown(
+    const { targets: found } = await scanAllWorkspaceMarkdown(
       [{ root: '/vault', name: 'vault' }, { root: '/wp', name: 'wp' }],
       async ({ workspaceRoot, path }) => {
         if (path) return { ok: true, entries: [] }
@@ -160,7 +160,7 @@ describe('scanAllWorkspaceMarkdown', () => {
 
   it('returns nothing for no roots', async () => {
     const list = vi.fn(async () => ({ ok: true as const, entries: [] }))
-    expect(await scanAllWorkspaceMarkdown([], list)).toEqual([])
+    expect((await scanAllWorkspaceMarkdown([], list)).targets).toEqual([])
     expect(list).not.toHaveBeenCalled()
   })
 
@@ -171,7 +171,7 @@ describe('scanAllWorkspaceMarkdown', () => {
       ok: true as const,
       entries: [file('a.md'), file('b.md'), file('c.md')]
     })
-    const found = await scanAllWorkspaceMarkdown(
+    const { targets: found } = await scanAllWorkspaceMarkdown(
       [
         { root: '/one', name: 'one' },
         { root: '/two', name: 'two' },
@@ -202,5 +202,46 @@ describe('scanAllWorkspaceMarkdown', () => {
       limits({ maxDirectoriesTotal: 4 })
     )
     expect(list).toHaveBeenCalledTimes(4)
+  })
+
+  it('flags a complete scan as neither truncated nor failed', async () => {
+    const outcome = await scanAllWorkspaceMarkdown(
+      [ROOT],
+      lister({ '': [file('a.md')] })
+    )
+    expect(outcome.truncated).toBe(false)
+    expect(outcome.failedDirectories).toBe(0)
+  })
+
+  it('flags truncation when a cap stops the walk early', async () => {
+    const outcome = await scanAllWorkspaceMarkdown(
+      [ROOT],
+      lister({ '': Array.from({ length: 10 }, (_, index) => file(`n${index}.md`)) }),
+      limits({ maxFilesPerRoot: 3 })
+    )
+    expect(outcome.targets).toHaveLength(3)
+    expect(outcome.truncated).toBe(true)
+  })
+
+  it('flags truncation when later roots never start', async () => {
+    const outcome = await scanAllWorkspaceMarkdown(
+      [{ root: '/one', name: 'one' }, { root: '/two', name: 'two' }],
+      async () => ({ ok: true as const, entries: [file('a.md'), file('b.md')] }),
+      limits({ maxFilesTotal: 2 })
+    )
+    expect(outcome.truncated).toBe(true)
+  })
+
+  it('counts unreadable directories instead of swallowing them', async () => {
+    const outcome = await scanAllWorkspaceMarkdown(
+      [ROOT],
+      lister({
+        '': [directory('broken'), directory('ok')],
+        ok: [file('good.md')]
+      })
+    )
+    expect(outcome.targets.map((item) => item.relativePath)).toEqual(['ok/good.md'])
+    expect(outcome.failedDirectories).toBe(1)
+    expect(outcome.truncated).toBe(true)
   })
 })

@@ -110,4 +110,58 @@ describe('wikilink target service', () => {
     requestWikilinkTargets([], lister([]))
     expect(getWikilinkTargetsSnapshot().error).toBe('no Work workspace is open')
   })
+
+  it('follows up with a scan for roots requested while another scan was in flight', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const slowA: WikilinkDirectoryLister = async (input) => {
+      await gate
+      return lister(['a.md'])(input)
+    }
+    const listB = vi.fn(lister(['b.md']))
+    requestWikilinkTargets(ROOTS, slowA)
+    // Workspace set B arrives while A is still scanning. Before the generation
+    // fix this request was silently discarded: A's result was published for
+    // the wrong set and no scan for B ever ran.
+    requestWikilinkTargets([{ root: '/other', name: 'other' }], listB)
+    release()
+    await settled()
+    expect(listB).toHaveBeenCalled()
+    expect(getWikilinkTargetsSnapshot().targets.map((target) => target.name)).toEqual(['b.md'])
+    expect(getWikilinkTargetsSnapshot().scanning).toBe(false)
+  })
+
+  it('keeps an invalidation that lands during a scan and rescans for it', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let scans = 0
+    const slow: WikilinkDirectoryLister = async (input) => {
+      scans += 1
+      await gate
+      return lister([`pass-${scans}.md`])(input)
+    }
+    requestWikilinkTargets(ROOTS, slow)
+    // The file tree changes mid-scan: the in-flight result describes the
+    // pre-edit tree. Before the fix the completing scan cleared the stale
+    // flag and the invalidation was lost.
+    invalidateWikilinkTargets()
+    release()
+    await settled()
+    expect(scans).toBe(2)
+    expect(getWikilinkTargetsSnapshot().targets.map((target) => target.name)).toEqual(['pass-2.md'])
+  })
+
+  it('surfaces a truncated scan on the snapshot', async () => {
+    // More files than the total budget allows: the walk stops early and must
+    // say so, or an empty result reads as an empty vault.
+    const many = Array.from({ length: 3_300 }, (_, index) => `note-${index}.md`)
+    requestWikilinkTargets(ROOTS, lister(many))
+    await settled()
+    expect(getWikilinkTargetsSnapshot().truncated).toBe(true)
+    expect(getWikilinkTargetsSnapshot().targets.length).toBeGreaterThan(0)
+  })
 })

@@ -15,6 +15,8 @@ export type WikilinkTargetsHandle = {
   scanning: boolean
   /** Last scan failure. Surfaced rather than swallowed. */
   error: string | null
+  /** True when limits or unreadable folders made the last scan incomplete. */
+  truncated: boolean
   /** Scans on first use; repeat calls while a scan is in flight are ignored. */
   request: () => void
   /** Discards the cache so the next request rescans. */
@@ -61,6 +63,7 @@ export function useWikilinkTargets(): WikilinkTargetsHandle {
     targets: snapshot.targets,
     scanning: snapshot.scanning,
     error: snapshot.error,
+    truncated: snapshot.truncated,
     request,
     invalidate
   }
