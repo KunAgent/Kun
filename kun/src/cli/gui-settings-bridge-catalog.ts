@@ -59,7 +59,10 @@ import {
   legacyAuthType,
   uniqueModels
 } from './gui-settings-bridge-sync.js'
-import { assertSupportedGuiSettingsVersion } from './gui-settings-schema.js'
+import {
+  assertSupportedGuiSettingsVersion,
+  NewerGuiSettingsSchemaError
+} from './gui-settings-schema.js'
 
 export const MAX_GUI_SETTINGS_BYTES = 32 * 1024 * 1024
 export const LEGACY_PROVIDER_SOURCE_PREFIX = 'settings:provider:'
@@ -182,7 +185,10 @@ export async function readGuiSharedSettings(input: {
     }
     try {
       assertSupportedGuiSettingsVersion(json, settingsPath)
-    } catch {
+    } catch (error) {
+      // A newer primary schema must fail closed. Falling through to a legacy
+      // candidate could silently resurrect stale settings and overwrite data.
+      if (error instanceof NewerGuiSettingsSchemaError) return null
       continue
     }
     const parsed = GuiSharedSettingsSchema.safeParse(json)
