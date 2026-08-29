@@ -5,6 +5,7 @@ import Document from '@tiptap/extension-document'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import { WriteWikilink } from './wikilink-mark'
+import { buildWriteRichExtensions, parseWriteMarkdown } from '../markdown-manager'
 
 let editors: Editor[] = []
 
@@ -65,5 +66,25 @@ describe('WriteWikilink input rule', () => {
     paragraph.forEach((node) => {
       expect(node.marks).toEqual([])
     })
+  })
+})
+
+describe('editor schema and markdown manager stay in lockstep', () => {
+  it('an editor built from the shared roster accepts a manager-parsed wikilink doc', () => {
+    // Regression: the mounted editor once listed its schema extensions
+    // separately from the markdown manager's. The manager parsed
+    // `[[wikilinks]]` into a mark the editor schema lacked, `setContent`
+    // rejected the whole document, and every note containing a wikilink
+    // opened blank in Rich mode.
+    const element = document.createElement('div')
+    document.body.appendChild(element)
+    const editor = new Editor({
+      element,
+      extensions: buildWriteRichExtensions(),
+      content: parseWriteMarkdown('# Beta\n\nBack to [[alpha]].\n')
+    })
+    editors.push(editor)
+    expect(editor.getText()).toContain('Back to [[alpha]].')
+    expect(editor.schema.marks.wikilink).toBeDefined()
   })
 })

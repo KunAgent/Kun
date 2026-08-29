@@ -7,9 +7,6 @@ import {
   type ReactNode
 } from 'react'
 import { Editor, Extension, type AnyExtension } from '@tiptap/core'
-import { StarterKit } from '@tiptap/starter-kit'
-import { TableKit } from '@tiptap/extension-table'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -25,8 +22,8 @@ import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
 import {
-  WriteCodeBlock,
   auditWriteMarkdownFidelity,
+  buildWriteRichExtensions,
   parseWriteMarkdown,
   serializeWriteMarkdown,
   type WriteRichFidelity
@@ -39,7 +36,6 @@ import {
 import { recentEditsFromRichTransaction } from './recent-edits-pm'
 import { replaceRangeWithMarkdown } from './markdown-insert'
 import { applyExternalMarkdownToEditor } from './markdown-sync'
-import { WriteLocalImage } from './local-image'
 import { WritePasteImage } from './paste-image'
 import { WriteRichInlineCompletion } from './extensions/inline-completion'
 import {
@@ -381,19 +377,16 @@ export function WriteRichEditor({
       }
     })
 
+    // The schema-bearing base comes from the same builder the markdown
+    // manager uses. Listing them separately let the two schemas drift: the
+    // manager parsed `[[wikilinks]]` into a mark this editor did not know,
+    // and every document containing one opened blank.
     const extensions: AnyExtension[] = [
-      StarterKit.configure({
-        link: { openOnClick: false },
-        codeBlock: false,
-        undoRedo: { depth: 200 }
-      }),
-      TableKit.configure({ table: { resizable: false } }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      WriteCodeBlock,
-      WriteLocalImage.configure({
-        getFilePath: () => filePathRef.current,
-        getWorkspaceRoot: () => workspaceRootRef.current
+      ...buildWriteRichExtensions({
+        localImage: {
+          getFilePath: () => filePathRef.current,
+          getWorkspaceRoot: () => workspaceRootRef.current
+        }
       }),
       WritePasteImage.configure({
         getWorkspaceRoot: () => workspaceRootRef.current,
