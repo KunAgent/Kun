@@ -174,7 +174,7 @@ describe('collectPaletteSources', () => {
   })
 
   it('lists every top-level route with its localized label key', () => {
-    const entries = collectPaletteSources(baseInput({ projectBoardEnabled: true }))
+    const entries = collectPaletteSources(baseInput({ projectBoardEnabled: true, nodeGraphEnabled: true }))
     const routes = entries
       .filter((entry) => entry.source === 'route')
       .map((entry) => entry.activation.kind === 'route' ? entry.activation.route : null)
@@ -184,6 +184,13 @@ describe('collectPaletteSources', () => {
       'workflow', 'write'
     ])
     expect(entries.find((entry) => entry.id === 'route:workflow')?.title).toBe('workflowCreate')
+  })
+
+  it('hides Node Graph unless explicitly enabled in Laboratory', () => {
+    for (const nodeGraphEnabled of [undefined, false]) {
+      const entries = collectPaletteSources(baseInput({ nodeGraphEnabled }))
+      expect(entries.some((entry) => entry.id === 'route:nodeGraph')).toBe(false)
+    }
   })
 
   it('hides the board route while the Laboratory project board switch is off', () => {

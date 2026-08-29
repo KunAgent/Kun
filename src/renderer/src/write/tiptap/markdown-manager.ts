@@ -109,7 +109,15 @@ export const WriteCodeBlock = CodeBlock.extend({
   }
 })
 
-export function buildWriteRichExtensions(): AnyExtension[] {
+/**
+ * The schema-bearing extension roster, shared verbatim by the markdown
+ * manager and the mounted editor. It must be one list: a node or mark the
+ * manager parses but the editor schema lacks makes `setContent` reject the
+ * whole document, and the file opens blank.
+ */
+export function buildWriteRichExtensions(options: {
+  localImage?: Parameters<typeof WriteLocalImage.configure>[0]
+} = {}): AnyExtension[] {
   return [
     StarterKit.configure({
       link: { openOnClick: false },
@@ -123,7 +131,7 @@ export function buildWriteRichExtensions(): AnyExtension[] {
     TaskList,
     TaskItem.configure({ nested: true }),
     WriteCodeBlock,
-    WriteLocalImage,
+    options.localImage ? WriteLocalImage.configure(options.localImage) : WriteLocalImage,
     WriteWikilink
   ]
 }

@@ -20,6 +20,7 @@ import { buildNodeGraphView, neighborIds } from '../../node-graph/node-graph-fil
 import { useNodeGraphStore } from '../../node-graph/node-graph-store'
 import { useNodeGraphAutoRefresh } from '../../node-graph/use-node-graph-auto-refresh'
 import type { NodeGraphEdgeKind, NodeGraphNodeKind } from '../../node-graph/node-graph-types'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
 import { NodeGraphCanvas, type NodeGraphCanvasHandle } from './NodeGraphCanvas'
 import { NodeGraphContextMenu, type NodeGraphContextMenuState } from './NodeGraphContextMenu'
 import { NodeGraphControls } from './NodeGraphControls'
@@ -55,7 +56,18 @@ const EDGE_LABEL_KEYS: Record<NodeGraphEdgeKind, string> = {
   touches: 'nodeGraphEdgeTouches'
 }
 
-export function NodeGraphView({
+export function NodeGraphView(props: Props): ReactElement {
+  const enabled = useNodeGraphEnabled()
+  const { t } = useTranslation('settings')
+  // Do not mount data loading, folder polling, or the canvas while disabled.
+  return enabled ? <EnabledNodeGraphView {...props} /> : (
+    <div className="flex h-full items-center justify-center p-6 text-sm text-ds-muted">
+      {t('labNodeGraphDescription')}
+    </div>
+  )
+}
+
+function EnabledNodeGraphView({
   leftSidebarCollapsed,
   onToggleLeftSidebar,
   workspaceRoot,

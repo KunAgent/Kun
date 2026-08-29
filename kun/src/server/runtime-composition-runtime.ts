@@ -164,7 +164,9 @@ export function createServerRuntimeComposition(
 	    migrationService,
 	    migrationImportService,
 	    knowledgeBaseService,
-	    nodeGraphService,
+	    get nodeGraphService() {
+	      return config.activeOptions.lab?.nodeGraph?.enabled === true ? nodeGraphService : undefined
+	    },
 	    get delegationRuntime() {
 	      return delegationRuntime
 	    },

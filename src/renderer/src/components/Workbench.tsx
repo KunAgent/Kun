@@ -86,9 +86,6 @@ import {
   workbenchContributionRegistry,
   type ExtensionRightRailViewEntry
 } from '../extensions/contribution-registry'
-import { graphNodeLiveness } from '../graph/graph-liveness'
-import { openGraphChildThread } from '../graph/graph-child-navigation'
-import { formatSubagentElapsed } from './subagents/SubagentLiveness'
 import { MAX_COMPOSER_CONTEXT_ATTACHMENTS } from '@kun/extension-api'
 import type { DevPreviewContextDraft } from './DevBrowserPanel'
 import { createDevPreviewComposerContextAttachment } from '../lib/dev-preview-composer-context'

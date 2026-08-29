@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { resolveKeyboardShortcutBindings } from '@shared/keyboard-shortcuts'
 import type { AppRoute, SettingsRouteSection } from '../../store/chat-store-types'
 import type { ExtensionRightRailViewEntry } from '../../extensions/contribution-registry'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
 import { useKeyboardShortcutSettings } from '../../lib/keyboard-shortcut-settings'
 import { CommandPaletteOverlay } from '../../palette/CommandPaletteOverlay'
 import type { PaletteSourcesInput } from '../../palette/palette-sources'
@@ -58,6 +59,7 @@ export function WorkbenchCommandPaletteRuntime({
 }: WorkbenchCommandPaletteRuntimeProps): ReactElement {
   const { t } = useTranslation('common')
   const { t: tSettings } = useTranslation('settings')
+  const nodeGraphEnabled = useNodeGraphEnabled()
   const keyboardShortcuts = useKeyboardShortcutSettings()
   const shortcutPlatform = typeof window === 'undefined' ? undefined : window.kunGui?.platform
   const shortcutBindings = useMemo(
@@ -75,12 +77,15 @@ export function WorkbenchCommandPaletteRuntime({
 
   const commandPalette = useWorkbenchCommandPalette({
     ...sources,
+    nodeGraphEnabled,
     t,
     tSettings,
     shortcutBindings,
     hasComposerDraft: input.trim().length > 0,
     handlers: {
-      route: (target) => { void actions.routes[target]() },
+      route: (target) => {
+        if (target !== 'nodeGraph' || nodeGraphEnabled) void actions.routes[target]()
+      },
       settings: (section) => { void actions.openSettings(section) },
       thread: (threadId) => { void actions.openThread(threadId) },
       workspace: (root) => { void actions.selectWorkspaceRoot(root) },

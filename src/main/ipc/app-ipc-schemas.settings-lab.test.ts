@@ -21,6 +21,21 @@ describe('app-ipc-schemas Laboratory settings', () => {
     })).toThrow()
   })
 
+  it.each([true, false])('accepts the Node Graph toggle: %s', (enabled) => {
+    const payload = settingsPatchSchema.parse({
+      agents: { kun: { lab: { nodeGraph: { enabled } } } }
+    })
+    expect(payload.agents?.kun?.lab?.nodeGraph).toEqual({ enabled })
+  })
+
+  it('rejects non-boolean and unknown Node Graph settings', () => {
+    for (const nodeGraph of [{ enabled: 'true' }, { unknown: true }]) {
+      expect(() => settingsPatchSchema.parse({
+        agents: { kun: { lab: { nodeGraph } } }
+      })).toThrow()
+    }
+  })
+
   it('rejects the retired isolated plan-build experiment switch', () => {
     expect(() => settingsPatchSchema.parse({
       agents: { kun: { lab: { planWorktree: { enabled: false } } } }

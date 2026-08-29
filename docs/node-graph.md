@@ -6,6 +6,17 @@ and the `[[wikilinks]]` between their documents, durable memories and their
 tags, and the workspace files a run changed. It is a **read-only projection**
 drawn on a canvas — it schedules nothing and mutates nothing.
 
+## Availability
+
+Node Graph is an opt-in **Laboratory** feature, **off by default**, including
+for existing settings without the new flag. Enable **Settings > Laboratory >
+Node Graph** to show the sidebar and Work graph entries and `[[wikilink]]`
+suggestions. Turning it off unmounts graph loading/polling and hides the entries;
+existing notes and their wikilink serialization remain intact.
+The GUI persists `agents.kun.lab.nodeGraph.enabled` and synchronizes it to runtime
+`lab.nodeGraph.enabled`. Both HTTP projection endpoints return unavailable while
+the runtime flag is absent or false, including after live configuration changes.
+
 ## 1. Not Graph Mode
 
 Kun already has a feature called Graph: **Graph Mode** (`kun/src/graph/`,

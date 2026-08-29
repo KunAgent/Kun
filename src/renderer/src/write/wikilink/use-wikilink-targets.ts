@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import type { WikilinkScanRoot } from './wikilink-scan'
 import {
@@ -10,6 +11,7 @@ import {
 import { toPosix, type WikilinkTarget } from './wikilink-targets'
 
 export type WikilinkTargetsHandle = {
+  enabled: boolean
   targets: readonly WikilinkTarget[]
   /** True while a scan is in flight, so the menu can say so. */
   scanning: boolean
@@ -22,6 +24,8 @@ export type WikilinkTargetsHandle = {
   /** Discards the cache so the next request rescans. */
   invalidate: () => void
 }
+
+const EMPTY_TARGETS: readonly WikilinkTarget[] = []
 
 function workspaceName(root: string): string {
   const normalized = toPosix(root).replace(/\/+$/, '')
@@ -37,6 +41,7 @@ function workspaceName(root: string): string {
  * of mounted editors share one walk.
  */
 export function useWikilinkTargets(): WikilinkTargetsHandle {
+  const enabled = useNodeGraphEnabled()
   const workspaceRoots = useWriteWorkspaceStore((state) => state.workspaceRoots)
   const snapshot = useSyncExternalStore(subscribeWikilinkTargets, getWikilinkTargetsSnapshot)
 
@@ -46,6 +51,7 @@ export function useWikilinkTargets(): WikilinkTargetsHandle {
   )
 
   const request = useCallback(() => {
+    if (!enabled) return
     const api = window.kunGui
     requestWikilinkTargets(
       roots,
@@ -53,17 +59,18 @@ export function useWikilinkTargets(): WikilinkTargetsHandle {
         ? (input) => api.listWorkspaceDirectory(input)
         : undefined
     )
-  }, [roots])
+  }, [enabled, roots])
 
   const invalidate = useCallback(() => {
     invalidateWikilinkTargets()
   }, [])
 
   return {
-    targets: snapshot.targets,
-    scanning: snapshot.scanning,
-    error: snapshot.error,
-    truncated: snapshot.truncated,
+    enabled,
+    targets: enabled ? snapshot.targets : EMPTY_TARGETS,
+    scanning: enabled && snapshot.scanning,
+    error: enabled ? snapshot.error : null,
+    truncated: enabled && snapshot.truncated,
     request,
     invalidate
   }

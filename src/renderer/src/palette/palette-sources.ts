@@ -86,7 +86,8 @@ export type PaletteSourcesInput = {
   /** Configured provider groups; the palette lists every model they expose. */
   composerModelGroups: readonly ModelProviderModelGroup[]
   activeThreadPinned: boolean
-  /** Laboratory project board gate; the board route entry is hidden while off. */
+  /** Laboratory gates; experimental route entries are hidden while off. */
+  nodeGraphEnabled?: boolean
   projectBoardEnabled?: boolean
 }
 
@@ -250,6 +251,7 @@ function shortcutCommandEntries(input: PaletteSourcesInput): PaletteEntry[] {
 function routeEntries(input: PaletteSourcesInput): PaletteEntry[] {
   const { t } = input
   return (Object.keys(ROUTE_LABEL_KEYS) as AppRoute[])
+    .filter((route) => route !== 'nodeGraph' || input.nodeGraphEnabled === true)
     .filter((route) => route !== 'board' || input.projectBoardEnabled === true)
     .map((route) => {
       const title = t(ROUTE_LABEL_KEYS[route])

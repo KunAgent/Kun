@@ -50,6 +50,7 @@ import { createWriteWorkspaceFileActions } from './write-workspace-file-actions'
 import { useWriteWorkspaceViewEffects } from './use-write-workspace-view-effects'
 import { WriteEditorGroups } from './WriteEditorGroups'
 import { WriteNodeGraphSurface } from './WriteNodeGraphSurface'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
 import { useNodeGraphStore } from '../../node-graph/node-graph-store'
 import { useWriteEditorGroupFileWatches } from './use-write-editor-group-file-watches'
 import { shouldShowWriteInlineAgent } from './write-inline-agent-visibility'
@@ -70,7 +71,8 @@ export function WriteWorkspaceView({
   onOpenAgentSettings
 }: Props): ReactElement {
   const { t } = useTranslation('common')
-  const workGraphOpen = useNodeGraphStore((s) => s.workGraphOpen)
+  const nodeGraphEnabled = useNodeGraphEnabled()
+  const workGraphOpen = useNodeGraphStore((s) => nodeGraphEnabled && s.workGraphOpen)
   const toggleWorkGraph = useNodeGraphStore((s) => s.toggleWorkGraph)
   const ensureWriteThreadForWorkspace = useChatStore((s) => s.ensureWriteThreadForWorkspace)
   const runtimeConnection = useChatStore((s) => s.runtimeConnection)

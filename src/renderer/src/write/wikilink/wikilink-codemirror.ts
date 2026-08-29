@@ -41,6 +41,7 @@ export const wikilinkMenuConfig = Facet.define<WikilinkMenuContext, WikilinkMenu
 })
 
 export type WikilinkMenuContext = {
+  enabled?: () => boolean
   /** Workspace root of the file being edited. */
   workspaceRoot: () => string
   /** Workspace-relative path of the file being edited. */
@@ -169,7 +170,7 @@ class WikilinkMenu implements PluginValue {
     // Deliberately not gated on `view.hasFocus`: an editor that is receiving
     // typed text is focused by definition, and reading focus here made the menu
     // fail silently whenever that check disagreed.
-    const next = context ? activeQuery(this.view) : null
+    const next = context && context.enabled?.() !== false ? activeQuery(this.view) : null
     const targets = this.view.state.field(wikilinkTargets)
     if (next) context?.onRequestTargets?.()
     const queryChanged = next?.query !== this.query?.query

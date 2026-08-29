@@ -29,6 +29,7 @@ import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
 import { SidebarProjectBoardsSection } from './SidebarProjectBoardsSection'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
 import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import {
@@ -112,6 +113,7 @@ export function Sidebar({
   onNodeGraphOpen,
   onNewConversation
 }: Props): ReactElement {
+  const nodeGraphEnabled = useNodeGraphEnabled()
   const { t, i18n } = useTranslation('common')
   const [isDarkMode, setIsDarkMode] = useState(
     () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
@@ -250,12 +252,14 @@ export function Sidebar({
           onClick={onWorkflowOpen}
           active={activeView === 'workflow'}
         />
-        <SidebarCommandRow
-          icon={<Network className="h-4 w-4" strokeWidth={1.75} />}
-          label={t('nodeGraph')}
-          onClick={onNodeGraphOpen}
-          active={activeView === 'nodeGraph'}
-        />
+        {nodeGraphEnabled ? (
+          <SidebarCommandRow
+            icon={<Network className="h-4 w-4" strokeWidth={1.75} />}
+            label={t('nodeGraph')}
+            onClick={onNodeGraphOpen}
+            active={activeView === 'nodeGraph'}
+          />
+        ) : null}
       </div>
 
       <div className="ds-no-drag mx-1 my-1" />

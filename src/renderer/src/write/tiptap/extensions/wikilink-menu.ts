@@ -25,6 +25,7 @@ import {
 export const wikilinkMenuKey = new PluginKey<readonly WikilinkTarget[]>('writeWikilinkMenu')
 
 export type WikilinkMenuExtensionOptions = {
+  enabled?: () => boolean
   workspaceRoot: () => string
   activePath: () => string
   onRequestTargets?: () => void
@@ -161,7 +162,8 @@ class RichWikilinkMenu {
 
   private refresh(): void {
     const readOnly = this.options.isReadOnly?.() ?? false
-    const next = readOnly ? null : findRichWikilinkQuery(this.view.state)
+    const next = readOnly || this.options.enabled?.() === false
+      ? null : findRichWikilinkQuery(this.view.state)
     const targets = wikilinkMenuKey.getState(this.view.state) ?? []
     if (next) this.options.onRequestTargets?.()
     const queryChanged = next?.query !== this.query?.query

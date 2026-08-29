@@ -350,6 +350,9 @@ export const LabConfigSchema = z
     conversationVisualization: LabConversationVisualizationConfigSchema.default({
       enabled: false
     }),
+    nodeGraph: z.object({
+      enabled: z.boolean().default(false)
+    }).strict().default({ enabled: false }),
     projectBoard: LabProjectBoardConfigSchema.default({
       enabled: false
     })

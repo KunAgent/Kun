@@ -322,6 +322,7 @@ export function WriteMarkdownEditor({
     })
 
     const wikilinkMenuExtension = buildWikilinkMenuExtension({
+      enabled: () => wikilinkRef.current.enabled,
       workspaceRoot: () => workspaceRootRef.current,
       activePath: () => filePathRef.current,
       onRequestTargets: () => wikilinkRef.current.request(),
