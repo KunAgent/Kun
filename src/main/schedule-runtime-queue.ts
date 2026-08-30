@@ -565,8 +565,7 @@ export class ScheduleExecutionQueue {
       const finishedAt = new Date()
       await this.updateTask(taskId, (current) => ({
         ...current,
-        ...(current.schedule.kind === 'at' ? { enabled: false } : {}),
-        nextRunAt: current.schedule.kind === 'at' ? '' : computeScheduleNextRunAt(current, finishedAt),
+        ...(current.schedule.kind === 'at' || !current.enabled ? { enabled: false, nextRunAt: '' } : { nextRunAt: computeScheduleNextRunAt(current, finishedAt) }),
         lastStatus: 'success',
         lastMessage: summarizeTaskResult(text),
         lastThreadId: threadId,
@@ -578,8 +577,7 @@ export class ScheduleExecutionQueue {
       const finishedAt = new Date()
       await this.updateTask(taskId, (current) => ({
         ...current,
-        ...(current.schedule.kind === 'at' ? { enabled: false } : {}),
-        nextRunAt: current.schedule.kind === 'at' ? '' : computeScheduleNextRunAt(current, finishedAt),
+        ...(current.schedule.kind === 'at' || !current.enabled ? { enabled: false, nextRunAt: '' } : { nextRunAt: computeScheduleNextRunAt(current, finishedAt) }),
         lastStatus: 'error',
         lastMessage: message,
         lastThreadId: threadId || current.lastThreadId,
