@@ -15,7 +15,9 @@ import {
   DEFAULT_SCHEDULE_MODEL,
   DEFAULT_SCHEDULE_REASONING_EFFORT,
   buildClawRuntimePrompt,
-  buildScheduleRuntimePrompt
+  buildScheduleRuntimePrompt,
+  getModelProviderSettings,
+  normalizeScheduleReasoningEffort
 } from '../shared/app-settings'
 import {
   buildScheduledTaskFromDetectedRequest,
@@ -61,6 +63,24 @@ export {
   hasTaskDependencyCycle,
   scheduledThreadTitle
 } from './schedule-runtime-queue'
+
+function resolveExactScheduledSendModelConfig(
+  settings: AppSettingsV1,
+  providerId: string,
+  model: string,
+  reasoningEffort: ScheduleReasoningEffort | undefined
+): ScheduleModelConfig {
+  const provider = getModelProviderSettings(settings).providers.find((candidate) => candidate.id === providerId)
+  if (!provider) throw new Error(`Selected provider is no longer available: ${providerId || '(empty)'}`)
+  const exactModel = provider.models.find((candidate) => candidate.trim().toLowerCase() === model.trim().toLowerCase())
+  if (!exactModel) throw new Error(`Selected model is no longer available for ${providerId}: ${model || '(empty)'}`)
+  return {
+    providerId: provider.id,
+    model: exactModel,
+    reasoningEffort: normalizeScheduleReasoningEffort(reasoningEffort)
+  }
+}
+
 export class ScheduleRuntime {
   private readonly deps: ScheduleRuntimeDeps
   private scheduler: ReturnType<typeof setInterval> | null = null
@@ -261,6 +281,8 @@ export class ScheduleRuntime {
     sourcePlanId?: string
     sourceThreadId?: string
     providerId?: string
+    accountId?: string
+    attachmentIds?: string[]
     model?: string
     reasoningEffort?: ScheduleReasoningEffort
     mode?: ScheduleRunMode
@@ -271,22 +293,41 @@ export class ScheduleRuntime {
   }): Promise<ScheduledTaskV1> {
     const settings = await this.loadSettings()
     const clawChannel = this.queue.resolveClawChannel(settings, input.clawChannelId)
-    const modelConfig = this.resolveScheduleModelConfig(settings, {
-      providerId: input.providerId ?? settings.schedule.providerId,
-      model: input.model?.trim() || clawChannel?.model.trim() || settings.schedule.model || DEFAULT_SCHEDULE_MODEL,
-      reasoningEffort: input.reasoningEffort ?? DEFAULT_SCHEDULE_REASONING_EFFORT
-    })
+    const requestedProviderId = input.providerId?.trim() || settings.schedule.providerId?.trim() || ''
+    const requestedModel = input.model?.trim() || clawChannel?.model.trim() || settings.schedule.model || DEFAULT_SCHEDULE_MODEL
+    const modelConfig = input.sourceThreadId?.trim() && !input.sourcePlanId?.trim()
+      ? resolveExactScheduledSendModelConfig(settings, requestedProviderId, requestedModel, input.reasoningEffort)
+      : this.resolveScheduleModelConfig(settings, {
+          providerId: requestedProviderId,
+          model: requestedModel,
+          reasoningEffort: input.reasoningEffort ?? DEFAULT_SCHEDULE_REASONING_EFFORT
+        })
     const now = new Date().toISOString()
+    const taskId = randomUUID()
+    const sourcePlanId = input.sourcePlanId?.trim() || ''
+    const sourceThreadId = input.sourceThreadId?.trim() || ''
     const task: ScheduledTaskV1 = {
-      id: randomUUID(),
+      id: taskId,
       title: input.title.trim() || 'New scheduled task',
       enabled: input.enabled !== false,
       prompt: input.prompt,
       workspaceRoot:
         input.workspaceRoot?.trim() ||
         (clawChannel ? this.queue.resolveClawChannelWorkspaceRoot(settings, clawChannel) : this.queue.resolveDefaultWorkspaceRoot(settings)),
-      sourcePlanId: input.sourcePlanId?.trim() || '',
-      sourceThreadId: input.sourceThreadId?.trim() || '',
+      sourcePlanId,
+      sourceThreadId,
+      ...(!sourcePlanId && sourceThreadId
+        ? {
+            scheduledSend: {
+              kind: 'thread-send' as const,
+              clientRequestId: `scheduled-send:${taskId}`,
+              accountId: input.accountId?.trim() || '',
+              attachmentIds: [...new Set(input.attachmentIds ?? [])].slice(0, 8),
+              attemptCount: 0,
+              maxAttempts: 3
+            }
+          }
+        : {}),
       clawChannelId: clawChannel?.id ?? '',
       providerId: modelConfig.providerId,
       model: modelConfig.model,
@@ -320,38 +361,56 @@ export class ScheduleRuntime {
     taskId: string,
     patch: Omit<Partial<ScheduledTaskV1>, 'schedule'> & { schedule?: Partial<ScheduledTaskV1['schedule']> }
   ): Promise<ScheduledTaskV1 | null> {
-    const settings = await this.loadSettings()
-    const task = settings.schedule.tasks.find((item) => item.id === taskId)
-    if (!task) return null
     const now = new Date().toISOString()
     const shouldRecomputeNextRun =
       Object.prototype.hasOwnProperty.call(patch, 'enabled') || patch.schedule !== undefined
-    const nextTask: ScheduledTaskV1 = {
-      ...task,
-      ...patch,
-      schedule: patch.schedule ? { ...task.schedule, ...patch.schedule } : task.schedule,
-      ...(shouldRecomputeNextRun ? { nextRunAt: '' } : {}),
-      updatedAt: now
-    }
-    const saved = await this.deps.store.patch({
+    let nextTask: ScheduledTaskV1 | null = null
+    const saved = await this.deps.store.update((current) => ({
+      ...current,
       schedule: {
-        tasks: settings.schedule.tasks.map((item) => (item.id === taskId ? nextTask : item))
+        ...current.schedule,
+        tasks: current.schedule.tasks.map((item) => {
+          if (item.id !== taskId) return item
+          nextTask = {
+            ...item,
+            ...patch,
+            schedule: patch.schedule ? { ...item.schedule, ...patch.schedule } : item.schedule,
+            ...(shouldRecomputeNextRun ? { nextRunAt: '' } : {}),
+            updatedAt: now
+          }
+          return nextTask
+        })
       }
-    })
+    }))
+    if (!nextTask) return null
+    const updatedTask = nextTask as ScheduledTaskV1
+    if (updatedTask.scheduledSend?.kind === 'thread-send' && patch.schedule) {
+      this.queue.markQueuedScheduled(taskId)
+    }
     this.sync(saved)
     if (shouldRecomputeNextRun) await this.queue.ensureNextRuns(await this.loadSettings())
     const latest = await this.loadSettings()
-    return latest.schedule.tasks.find((item) => item.id === taskId) ?? nextTask
+    return latest.schedule.tasks.find((item) => item.id === taskId) ?? updatedTask
   }
 
   async deleteTaskById(taskId: string): Promise<boolean> {
-    const settings = await this.loadSettings()
-    if (!settings.schedule.tasks.some((item) => item.id === taskId)) return false
-    const saved = await this.deps.store.patch({
-      schedule: {
-        tasks: settings.schedule.tasks.filter((item) => item.id !== taskId)
+    if (this.queue.hasRunning(taskId) && this.queue.hasAdmitted(taskId)) {
+      throw new Error('A running scheduled task cannot be deleted after admission. Stop the turn first.')
+    }
+    this.queue.cancelTask(taskId)
+    let found = false
+    const saved = await this.deps.store.update((current) => {
+      found = current.schedule.tasks.some((item) => item.id === taskId)
+      if (!found) return current
+      return {
+        ...current,
+        schedule: {
+          ...current.schedule,
+          tasks: current.schedule.tasks.filter((item) => item.id !== taskId)
+        }
       }
     })
+    if (!found) return false
     this.sync(saved)
     return saved.schedule.tasks.every((item) => item.id !== taskId)
   }

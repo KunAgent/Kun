@@ -37,14 +37,34 @@ export function normalizeScheduledTask(
 ): ScheduledTaskV1 {
   const schedule = task.schedule
   const model = normalizeScheduleModel(task.model)
+  const sourceThreadId = typeof task.sourceThreadId === 'string' ? task.sourceThreadId.trim() : ''
+  const scheduledSend = isRecord(task.scheduledSend) && task.scheduledSend.kind === 'thread-send'
+    ? {
+        kind: 'thread-send' as const,
+        clientRequestId: typeof task.scheduledSend.clientRequestId === 'string'
+          ? task.scheduledSend.clientRequestId.trim()
+          : '',
+        accountId: typeof task.scheduledSend.accountId === 'string'
+          ? task.scheduledSend.accountId.trim()
+          : '',
+        attachmentIds: compactStrings(task.scheduledSend.attachmentIds).slice(0, 8),
+        attemptCount: normalizePositiveInteger(task.scheduledSend.attemptCount, 0, 0, 3),
+        maxAttempts: normalizePositiveInteger(task.scheduledSend.maxAttempts, 3, 1, 3),
+        reconciliationPending: normalizeBoolean(task.scheduledSend.reconciliationPending, false)
+      }
+    : undefined
+  const invalidScheduledSend = Boolean(
+    scheduledSend && (!sourceThreadId || !scheduledSend.clientRequestId)
+  )
   return {
     id: typeof task.id === 'string' && task.id.trim() ? task.id.trim() : `task-${index + 1}`,
     title: typeof task.title === 'string' && task.title.trim() ? task.title.trim() : `Task ${index + 1}`,
-    enabled: normalizeBoolean(task.enabled, true),
+    enabled: invalidScheduledSend ? false : normalizeBoolean(task.enabled, true),
     prompt: typeof task.prompt === 'string' ? task.prompt : '',
     workspaceRoot: typeof task.workspaceRoot === 'string' ? task.workspaceRoot.trim() : '',
     sourcePlanId: typeof task.sourcePlanId === 'string' ? task.sourcePlanId.trim() : '',
-    sourceThreadId: typeof task.sourceThreadId === 'string' ? task.sourceThreadId.trim() : '',
+    sourceThreadId,
+    ...(scheduledSend ? { scheduledSend } : {}),
     clawChannelId: typeof task.clawChannelId === 'string' ? task.clawChannelId.trim() : '',
     providerId: typeof task.providerId === 'string' ? task.providerId.trim() : '',
     model,
@@ -67,8 +87,10 @@ export function normalizeScheduledTask(
     updatedAt: typeof task.updatedAt === 'string' && task.updatedAt ? task.updatedAt : now,
     lastRunAt: typeof task.lastRunAt === 'string' ? task.lastRunAt : '',
     nextRunAt: typeof task.nextRunAt === 'string' ? task.nextRunAt : '',
-    lastStatus: normalizeStatus(task.lastStatus),
-    lastMessage: typeof task.lastMessage === 'string' ? task.lastMessage : '',
+    lastStatus: invalidScheduledSend ? 'error' : normalizeStatus(task.lastStatus),
+    lastMessage: invalidScheduledSend
+      ? 'Scheduled send snapshot is invalid; it has been disabled.'
+      : typeof task.lastMessage === 'string' ? task.lastMessage : '',
     lastThreadId: typeof task.lastThreadId === 'string' ? task.lastThreadId : ''
   }
 }

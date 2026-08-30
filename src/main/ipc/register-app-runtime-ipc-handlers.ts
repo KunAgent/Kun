@@ -147,8 +147,9 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     }
   )
 
-  ipcMain.handle('schedule:task:create', async (_, payload: unknown): Promise<ScheduleTaskMutationResult> => {
+  ipcMain.handle('schedule:task:create', async (event, payload: unknown): Promise<ScheduleTaskMutationResult> => {
     try {
+      assertTrustedWorkbenchSender(event, getMainWindow)
       const input = parseIpcPayload('schedule:task:create', scheduleTaskCreatePayloadSchema, payload) as ScheduleTaskCreateInput
       const scheduleRuntime = getScheduleRuntime()
       if (!scheduleRuntime) return { ok: false, message: 'Schedule runtime is not initialized.' }
@@ -159,25 +160,23 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     }
   })
 
-  ipcMain.handle('schedule:task:update', async (_, payload: unknown): Promise<ScheduleTaskMutationResult> => {
+  ipcMain.handle('schedule:task:update', async (event, payload: unknown): Promise<ScheduleTaskMutationResult> => {
     try {
+      assertTrustedWorkbenchSender(event, getMainWindow)
       const input = parseIpcPayload('schedule:task:update', scheduleTaskUpdatePayloadSchema, payload) as ScheduleTaskUpdateInput
       const scheduleRuntime = getScheduleRuntime()
       if (!scheduleRuntime) return { ok: false, message: 'Schedule runtime is not initialized.' }
-      const task = await scheduleRuntime.updateTaskById(input.taskId, {
-        providerId: input.providerId,
-        model: input.model,
-        reasoningEffort: input.reasoningEffort,
-        schedule: input.schedule
-      })
+      const { taskId, ...patch } = input
+      const task = await scheduleRuntime.updateTaskById(input.taskId, patch)
       return task ? { ok: true, task } : { ok: false, message: 'Scheduled task was not found.' }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
   })
 
-  ipcMain.handle('schedule:task:delete', async (_, taskId: unknown): Promise<ScheduleTaskDeleteResult> => {
+  ipcMain.handle('schedule:task:delete', async (event, taskId: unknown): Promise<ScheduleTaskDeleteResult> => {
     try {
+      assertTrustedWorkbenchSender(event, getMainWindow)
       const normalizedTaskId = parseIpcPayload('schedule:task:delete', streamIdSchema, taskId)
       const scheduleRuntime = getScheduleRuntime()
       if (!scheduleRuntime) return { ok: false, message: 'Schedule runtime is not initialized.' }

@@ -18,6 +18,7 @@ import type {
   ScheduledTaskV1
 } from '../shared/app-settings'
 import type { JsonSettingsStore } from './settings-store'
+import { parseRuntimeErrorBody } from '../shared/runtime-error'
 
 export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
 
@@ -80,6 +81,8 @@ export type ThreadDetailJson = {
 
 export type RunPromptOptions = {
   prompt: string
+  /** Existing-thread scheduled sends must preserve the exact user draft. */
+  preservePrompt?: boolean
   title: string
   workspaceRoot: string
   /** Existing thread that should receive the scheduled turn instead of creating a new one. */
@@ -88,6 +91,9 @@ export type RunPromptOptions = {
   /** Optional provider id; routed via Kun's MultiProviderModelClient. */
   providerId?: string
   reasoningEffort: ScheduleReasoningEffort
+  accountId?: string
+  attachmentIds?: string[]
+  clientRequestId?: string
   mode: ScheduleRunMode
   orchestration?: 'direct' | 'graph'
   clawChannel?: ClawImChannelV1 | null
@@ -124,6 +130,21 @@ export function runtimeErrorMessage(result: RuntimeRequestResult, fallback: stri
     }
   }
   return result.body.trim() || fallback
+}
+
+function runtimeErrorResult(
+  result: RuntimeRequestResult,
+  fallback: string
+): Extract<ScheduleRunResult, { ok: false }> {
+  const parsed = parseRuntimeErrorBody(result.body, fallback)
+  return {
+    ok: false,
+    message: parsed.message,
+    status: result.status,
+    ...(parsed.code !== 'unknown'
+      ? { code: parsed.code }
+      : result.status === 0 ? { code: 'fetch_failed' } : {})
+  }
 }
 
 export function isRunningStatus(status: string | undefined): boolean {
@@ -363,6 +384,9 @@ export type RunPromptViaRuntimeOptions = {
    */
   providerId?: string
   reasoningEffort: ScheduleReasoningEffort | ''
+  accountId?: string
+  attachmentIds?: string[]
+  clientRequestId?: string
   mode: ScheduleRunMode
   orchestration?: 'direct' | 'graph'
   waitForResult: boolean
@@ -402,7 +426,7 @@ export async function runPromptViaRuntime(
         ...(options.title.trim() ? { title: options.title.trim() } : {})
       })
     })
-    if (!create.ok) return { ok: false, message: runtimeErrorMessage(create, 'Failed to create thread.') }
+    if (!create.ok) return runtimeErrorResult(create, 'Failed to create thread.')
     const thread = JSON.parse(create.body) as ThreadRecordJson
     threadId = thread.id
   }
@@ -419,6 +443,9 @@ export async function runPromptViaRuntime(
   if (model) turnBody.model = model
   if (providerId) turnBody.providerId = providerId
   if (options.reasoningEffort) turnBody.reasoningEffort = options.reasoningEffort
+  if (options.accountId?.trim()) turnBody.accountId = options.accountId.trim()
+  if (options.attachmentIds?.length) turnBody.attachmentIds = options.attachmentIds
+  if (options.clientRequestId?.trim()) turnBody.clientRequestId = options.clientRequestId.trim()
   const turn = await deps.runtimeRequest(
     settings,
     `/v1/threads/${encodeURIComponent(threadId)}/turns`,
@@ -428,7 +455,9 @@ export async function runPromptViaRuntime(
       ...(options.signal ? { signal: options.signal } : {})
     }
   )
-  if (!turn.ok) return { ok: false, message: runtimeErrorMessage(turn, 'Failed to start turn.') }
+  if (!turn.ok) {
+    return runtimeErrorResult(turn, 'Failed to start turn.')
+  }
 
   const parsedTurn = parseJsonObject(turn.body)
   const turnId = asString(nestedRecord(parsedTurn?.turn).id) || asString(parsedTurn?.turnId)

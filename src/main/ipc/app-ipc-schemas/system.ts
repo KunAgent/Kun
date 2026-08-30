@@ -106,37 +106,72 @@ export const clawTaskFromTextPayloadSchema = z
   })
   .strict()
 
+const scheduleDefinitionSchema = z.object({
+  kind: z.enum(['manual', 'interval', 'daily', 'at']),
+  everyMinutes: z.number().int().min(1).max(10_080).optional(),
+  timeOfDay: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  atTime: z.string().datetime().optional(),
+  timeZone: z.string().trim().min(1).max(128).refine(isValidTimeZone, 'Invalid IANA time zone.').optional()
+}).strict()
+
 export const scheduleTaskCreatePayloadSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
     prompt: z.string().min(1).max(500_000),
     workspaceRoot: defaultPathSchema,
-    sourcePlanId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+    sourcePlanId: z.string().trim().min(1).max(MAX_ID_LENGTH).optional(),
     sourceThreadId: z.string().trim().min(1).max(MAX_ID_LENGTH).optional(),
     providerId: z.string().trim().min(1).max(128),
+    accountId: z.string().trim().min(1).max(MAX_ID_LENGTH).optional(),
+    attachmentIds: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(8)
+      .refine((ids) => new Set(ids).size === ids.length, 'attachmentIds must not contain duplicates')
+      .optional(),
+    enabled: z.boolean().optional(),
+    clawChannelId: z.string().trim().max(MAX_ID_LENGTH).optional(),
+    priority: z.number().int().min(0).max(100).optional(),
+    dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(100).optional(),
+    useWorktree: z.boolean().optional(),
     model: modelIdSchema,
     reasoningEffort: scheduleReasoningEffortSchema,
     mode: z.enum(['agent', 'plan']),
     orchestration: z.enum(['direct', 'graph']),
-    schedule: z.object({
-      kind: z.literal('at'),
-      atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),
-      timeZone: z.string().trim().min(1).max(128).refine(isValidTimeZone, 'Invalid IANA time zone.')
-    }).strict()
+    schedule: scheduleDefinitionSchema
+  })
+  .superRefine((value, context) => {
+    if (!value.sourcePlanId && !value.sourceThreadId) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: 'sourcePlanId or sourceThreadId is required' })
+    }
+    if (value.schedule.kind === 'at' && (!value.schedule.atTime || Date.parse(value.schedule.atTime) <= Date.now())) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule', 'atTime'], message: 'Execution time must be in the future.' })
+    }
+    if (value.sourceThreadId && !value.sourcePlanId && value.mode !== 'agent') {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'Scheduled sends use agent mode' })
+    }
   })
   .strict()
 
 export const scheduleTaskUpdatePayloadSchema = z
   .object({
     taskId: z.string().trim().min(1).max(MAX_ID_LENGTH),
-    providerId: z.string().trim().min(1).max(128),
-    model: modelIdSchema,
-    reasoningEffort: scheduleReasoningEffortSchema,
-    schedule: z.object({
-      kind: z.literal('at'),
-      atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),
-      timeZone: z.string().trim().min(1).max(128).refine(isValidTimeZone, 'Invalid IANA time zone.')
-    }).strict()
+    title: z.string().trim().min(1).max(200).optional(),
+    prompt: z.string().min(1).max(500_000).optional(),
+    workspaceRoot: defaultPathSchema.optional(),
+    enabled: z.boolean().optional(),
+    clawChannelId: z.string().trim().max(MAX_ID_LENGTH).optional(),
+    providerId: z.string().trim().min(1).max(128).optional(),
+    model: modelIdSchema.optional(),
+    reasoningEffort: scheduleReasoningEffortSchema.optional(),
+    mode: z.enum(['agent', 'plan']).optional(),
+    orchestration: z.enum(['direct', 'graph']).optional(),
+    priority: z.number().int().min(0).max(100).optional(),
+    dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(100).optional(),
+    useWorktree: z.boolean().optional(),
+    schedule: scheduleDefinitionSchema.partial().optional()
+  })
+  .superRefine((value, context) => {
+    if (value.schedule?.kind === 'at' && value.schedule.atTime && Date.parse(value.schedule.atTime) <= Date.now()) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule', 'atTime'], message: 'Execution time must be in the future.' })
+    }
   })
   .strict()
 
