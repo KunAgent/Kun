@@ -373,6 +373,16 @@ describe('ScheduleRuntime existing-thread scheduled send', () => {
     expect(persisted[0]).toMatchObject({ prompt: task.prompt, providerId: task.providerId, model: task.model, scheduledSend: task.scheduledSend })
     await runtime.stop()
   })
+  it('rejects recurring sends and persists retry exhaustion as terminal', async () => {
+    const recurring = scheduledSendTask({ schedule: { kind: 'interval', everyMinutes: 5, timeOfDay: '09:00', atTime: '' } })
+    const runtime = new ScheduleRuntime({ store: createStore(settingsWith(recurring)) as never, runtimeRequest: vi.fn() as never, logError: vi.fn() })
+    await expect(runtime.createTask(recurring)).rejects.toThrow('must use a one-time at schedule')
+    const exhausted = scheduledSendTask({ id: 'exhausted', scheduledSend: { ...recurring.scheduledSend!, attemptCount: 3 }, schedule: { kind: 'at', everyMinutes: 60, timeOfDay: '09:00', atTime: '2026-08-30T00:00:00.000Z' } })
+    const terminal = new ScheduleRuntime({ store: createStore(settingsWith(exhausted)) as never, runtimeRequest: vi.fn() as never, logError: vi.fn() })
+    await expect(terminal.runTask(exhausted.id)).resolves.toMatchObject({ ok: false })
+    expect((await terminal.listTasks())[0]).toMatchObject({ enabled: false, nextRunAt: '', lastStatus: 'error' })
+    await runtime.stop(); await terminal.stop()
+  })
   it('removes a cancelled same-thread queued send without a ghost admission', async () => {
     const first = scheduledSendTask({ id: 'send-active', prompt: 'active' })
     const queued = scheduledSendTask({
