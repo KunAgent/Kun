@@ -4,7 +4,7 @@ import {
   projectExecutableModelRoutePools,
   resolveKunRuntimeSettings,
   resolveModelProviderPresetSource,
-  resolveModelProviderProxyUrl,
+  resolveModelProviderProxyUrlForProvider,
   type AppSettingsV1,
   type KunRuntimeSettingsV1,
   type ModelProviderModelProfileV1,
@@ -59,7 +59,6 @@ export function providersConfigForRuntime(
   settings: AppSettingsV1
 ): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {}
-  const proxyUrl = resolveModelProviderProxyUrl(settings)
   const runtime = resolveKunRuntimeSettings(settings)
   for (const provider of getModelProviderSettings(settings).providers as ModelProviderProfileV1[]) {
     const id = provider.id?.trim()
@@ -94,7 +93,7 @@ export function providersConfigForRuntime(
       ...(selectedModel ? { selectedModel } : {}),
       retry: provider.retry,
       modelProfiles: modelConfigProfilesFromProviderProfiles(provider.modelProfiles),
-      ...(proxyUrl ? { modelProxyUrl: proxyUrl } : {}),
+      ...((resolveModelProviderProxyUrlForProvider(settings, id)) ? { modelProxyUrl: resolveModelProviderProxyUrlForProvider(settings, id) } : {}),
       // Credential-derived transport headers are reconstructed in Kun from
       // the protected binding and are never persisted in config.json.
     }

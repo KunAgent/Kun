@@ -93,6 +93,7 @@ import {
   normalizeModelProviderSpeechCapability,
   normalizeModelProviderTextToSpeechCapability,
   normalizeModelProviderVideoCapability,
+  normalizeNetworkProxySettings,
   normalizeProviderModels,
   presetModelProfilesForProvider
 } from './app-settings-provider-capabilities'
@@ -189,6 +190,7 @@ export function normalizeModelProviderProfile(
           : '',
     baseUrl,
     endpointFormat,
+    proxy: input?.proxy ? normalizeNetworkProxySettings(input.proxy) : undefined,
     retry: normalizeModelRequestRetrySettings(
       input?.retry,
       resolvedPresetSource?.mode === 'api'

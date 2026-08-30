@@ -322,6 +322,33 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                       ))}
                     </select>
                   </label>
+                  <div className="grid gap-3 rounded-xl border border-ds-border-muted bg-ds-main/20 p-3">
+                    <label className="flex items-center justify-between gap-3 text-[13px] text-ds-muted">
+                      <span>{t('proxyEnabled')}</span>
+                      <Toggle
+                        ariaLabel={t('proxyEnabled')}
+                        checked={activeProvider.proxy?.enabled === true}
+                        onChange={(enabled) => updateModelProvider(activeProvider.id, {
+                          proxy: { enabled, url: activeProvider.proxy?.url ?? '' }
+                        })}
+                      />
+                    </label>
+                    <input
+                      className={textInputClass}
+                      placeholder={t('proxyUrlPlaceholder')}
+                      value={activeProvider.proxy?.url ?? ''}
+                      spellCheck={false}
+                      aria-label={t('proxyUrl')}
+                      onChange={(e) => updateModelProvider(activeProvider.id, {
+                        proxy: { enabled: activeProvider.proxy?.enabled === true, url: e.target.value }
+                      })}
+                    />
+                    <p className="text-[12px] leading-5 text-ds-muted">
+                      {zh
+                        ? '仅此 Provider 的模型请求使用该代理；留空则回退到全局代理设置。'
+                        : 'Only this provider uses this proxy for model requests; leave it unset to use the legacy global proxy.'}
+                    </p>
+                  </div>
                   {isCodexProvider(activeProvider) ? (
                     <p className="text-[12px] leading-5 text-ds-muted">
                       {t('codexEndpointLocked')}

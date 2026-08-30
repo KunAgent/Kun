@@ -40,6 +40,7 @@ export {
   resolveModelProviderApiKey,
   resolveModelProviderBaseUrl,
   resolveModelProviderProxyUrl,
+  resolveModelProviderProxyUrlForProvider,
   resolveModelRouteTargetReference
 } from './app-settings-provider-core'
 export {

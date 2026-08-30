@@ -44,6 +44,7 @@ import {
   resolveKunMusicGenerationSettings,
   resolveModelProviderBaseUrl,
   resolveModelProviderProxyUrl,
+  resolveModelProviderProxyUrlForProvider,
   resolveKunRuntimeSettings,
   resolveKunSpeechToTextSettings,
   resolveKunTextToSpeechSettings,
@@ -51,6 +52,22 @@ import {
   type AppSettingsV1,
   type ModelProviderModelProfileV1
 } from './app-settings'
+
+describe('provider-scoped proxy', () => {
+  it('uses each provider proxy and lets explicit disable override global', () => {
+    const settings = normalizeModelProviderSettings({
+      proxy: { enabled: true, url: 'http://global.proxy:8080' },
+      providers: [
+        { id: 'alpha', name: 'Alpha', baseUrl: 'https://alpha.test', proxy: { enabled: true, url: 'socks5://alpha.proxy:1080' } },
+        { id: 'beta', name: 'Beta', baseUrl: 'https://beta.test', proxy: { enabled: false, url: 'http://unused.proxy:1' } }
+      ]
+    })
+    const appSettings = { provider: settings } as AppSettingsV1
+    expect(resolveModelProviderProxyUrlForProvider(appSettings, 'alpha')).toBe('socks5://alpha.proxy:1080')
+    expect(resolveModelProviderProxyUrlForProvider(appSettings, 'beta')).toBe('')
+    expect(resolveModelProviderProxyUrlForProvider(appSettings, 'missing')).toBe('http://global.proxy:8080/')
+  })
+})
 
 describe('model provider retry settings', () => {
   it('adds default retry settings to default providers', () => {

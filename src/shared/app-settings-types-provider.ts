@@ -437,6 +437,7 @@ export type ModelProviderProfileV1 = {
   apiKey: string
   baseUrl: string
   endpointFormat: ModelEndpointFormat
+  proxy?: NetworkProxySettingsV1
   /** 模型请求遇到临时失败或限流响应时使用的 HTTP 重试策略。 */
   retry?: ModelRequestRetrySettingsV1
   /**

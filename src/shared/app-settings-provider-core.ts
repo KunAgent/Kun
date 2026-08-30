@@ -354,6 +354,12 @@ export function resolveModelProviderProxyUrl(settings: AppSettingsV1): string {
   // means "no proxy" for outbound requests instead of wiping the saved value.
   return normalizeProxyUrl(proxy.url)
 }
+export function resolveModelProviderProxyUrlForProvider(settings: AppSettingsV1, providerId?: string): string {
+  const provider = providerId ? getModelProviderProfile(settings, providerId) : undefined
+  return provider?.proxy !== undefined
+    ? (provider.proxy.enabled ? normalizeProxyUrl(provider.proxy.url) : '')
+    : resolveModelProviderProxyUrl(settings)
+}
 
 export function getDefaultModelProviderProfile(settings: AppSettingsV1): ModelProviderProfileV1 {
   return getModelProviderProfile(settings, DEFAULT_MODEL_PROVIDER_ID)
