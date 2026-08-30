@@ -15,7 +15,8 @@ import type {
   MusicGenerationProtocol,
   SpeechToTextProtocol,
   TextToSpeechProtocol,
-  VideoGenerationProtocol
+  VideoGenerationProtocol,
+  WriteInlineCompletionSettingsV1
 } from '@shared/app-settings'
 import {
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
@@ -190,6 +191,133 @@ export function kunProviderSelectionPatch(input: {
   return {
     providerId: input.providerId,
     ...(model ? { model } : {})
+  }
+}
+
+type KunRoleModelKey =
+  | 'smallModel'
+  | 'titleModel'
+  | 'summaryModel'
+  | 'codeReviewModel'
+  | 'planModel'
+type KunRoleProviderKey =
+  | 'smallModelProviderId'
+  | 'titleProviderId'
+  | 'summaryProviderId'
+  | 'codeReviewProviderId'
+  | 'planProviderId'
+type KunRoleAccountKey =
+  | 'smallModelAccountId'
+  | 'titleAccountId'
+  | 'summaryAccountId'
+  | 'codeReviewAccountId'
+  | 'planAccountId'
+
+function clearDeletedProviderRoleSlot(
+  patch: KunRuntimeSettingsPatchV1,
+  current: KunRuntimeSettingsV1,
+  deletedProviderIds: ReadonlySet<string>,
+  modelKey: KunRoleModelKey,
+  providerKey: KunRoleProviderKey,
+  accountKey: KunRoleAccountKey
+): void {
+  if (!deletedProviderIds.has((current[providerKey] ?? '').trim())) return
+  Object.assign(patch, { [modelKey]: '', [providerKey]: '', [accountKey]: '' })
+}
+
+/** Clear every Kun model route that still points at a deleted provider. */
+export function modelProviderDeletionKunPatch(input: {
+  currentKun: KunRuntimeSettingsV1
+  deletedProviderIds: ReadonlySet<string>
+  fallbackProvider?: ModelProviderProfileV1
+}): KunRuntimeSettingsPatchV1 {
+  const { currentKun, deletedProviderIds, fallbackProvider } = input
+  const patch: KunRuntimeSettingsPatchV1 = {}
+  const matches = (value: string | undefined): boolean =>
+    typeof value === 'string' && deletedProviderIds.has(value.trim())
+
+  if (matches(currentKun.providerId) && fallbackProvider) {
+    Object.assign(patch, kunProviderSelectionPatch({
+      providerId: fallbackProvider.id,
+      model: nonEmptyModelId(fallbackProvider.models[0])
+    }))
+  }
+  for (const key of [
+    'imageGeneration',
+    'speechToText',
+    'textToSpeech',
+    'promptOptimization',
+    'musicGeneration',
+    'videoGeneration'
+  ] as const) {
+    if (matches(currentKun[key]?.providerId)) patch[key] = { providerId: '', model: '' }
+  }
+  clearDeletedProviderRoleSlot(
+    patch, currentKun, deletedProviderIds,
+    'smallModel', 'smallModelProviderId', 'smallModelAccountId'
+  )
+  clearDeletedProviderRoleSlot(
+    patch, currentKun, deletedProviderIds,
+    'titleModel', 'titleProviderId', 'titleAccountId'
+  )
+  clearDeletedProviderRoleSlot(
+    patch, currentKun, deletedProviderIds,
+    'summaryModel', 'summaryProviderId', 'summaryAccountId'
+  )
+  clearDeletedProviderRoleSlot(
+    patch, currentKun, deletedProviderIds,
+    'codeReviewModel', 'codeReviewProviderId', 'codeReviewAccountId'
+  )
+  clearDeletedProviderRoleSlot(
+    patch, currentKun, deletedProviderIds,
+    'planModel', 'planProviderId', 'planAccountId'
+  )
+  if (matches(currentKun.contextCompaction?.summaryProviderId)) {
+    patch.contextCompaction = { summaryProviderId: '', summaryModel: '' }
+  }
+  if (matches(currentKun.fastContext?.providerId)) {
+    patch.fastContext = { providerId: '', model: '' }
+  }
+  if (matches(currentKun.lab?.pptAgent?.providerId)) {
+    patch.lab = { pptAgent: { providerId: '', model: '' } }
+  }
+  if (
+    currentKun.graph?.workerModel.mode === 'fixed' &&
+    matches(currentKun.graph.workerModel.providerId)
+  ) {
+    patch.graph = { workerModel: { mode: 'inherit' } }
+  }
+  const profiles = currentKun.subagents?.profiles
+  if (profiles?.some((profile) => matches(profile.providerId))) {
+    patch.subagents = {
+      profiles: profiles.map((profile) => {
+        if (!matches(profile.providerId)) return profile
+        const { model: _model, providerId: _providerId, ...inherited } = profile
+        return inherited
+      })
+    }
+  }
+  return patch
+}
+
+export function modelProviderDeletionWritePatch(
+  inlineCompletion: WriteInlineCompletionSettingsV1 | undefined,
+  deletedProviderIds: ReadonlySet<string>
+): Pick<AppSettingsPatch, 'write'> | undefined {
+  if (
+    !inlineCompletion ||
+    inlineCompletion.inheritProvider ||
+    !deletedProviderIds.has(inlineCompletion.providerId.trim())
+  ) return undefined
+  return {
+    write: {
+      inlineCompletion: {
+        inheritProvider: true,
+        providerId: '',
+        inheritModel: true,
+        model: ''
+      }
+    }
   }
 }
 

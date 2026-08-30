@@ -13,7 +13,9 @@ import {
 } from 'react'
 import { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 import {
-  isSubscriptionProvider
+  isSubscriptionProvider,
+  modelProviderDeletionKunPatch,
+  modelProviderDeletionWritePatch
 } from './settings-section-providers-profile'
 import {
   SharedModelConnectionConflictError,
@@ -118,33 +120,23 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
                 .map(([providerId]) => providerId)
             )
             const kunPatch: KunRuntimeSettingsPatchV1 = { ...projected.kun }
-            if (committedDeletedProviderIds.has((current.kun.imageGeneration?.providerId ?? '').trim())) {
-              kunPatch.imageGeneration = { providerId: '' }
-            }
-            if (committedDeletedProviderIds.has((current.kun.speechToText?.providerId ?? '').trim())) {
-              kunPatch.speechToText = { providerId: '' }
-            }
-            if (committedDeletedProviderIds.has((current.kun.textToSpeech?.providerId ?? '').trim())) {
-              kunPatch.textToSpeech = { providerId: '' }
-            }
-            if (committedDeletedProviderIds.has((current.kun.musicGeneration?.providerId ?? '').trim())) {
-              kunPatch.musicGeneration = { providerId: '' }
-            }
-            if (committedDeletedProviderIds.has((current.kun.videoGeneration?.providerId ?? '').trim())) {
-              kunPatch.videoGeneration = { providerId: '' }
-            }
+            const fallbackProvider = projected.provider.providers.find(
+              (item) => item.id === DEFAULT_MODEL_PROVIDER_ID
+            ) ?? projected.provider.providers[0]
+            Object.assign(kunPatch, modelProviderDeletionKunPatch({
+              currentKun: current.kun,
+              deletedProviderIds: committedDeletedProviderIds,
+              fallbackProvider
+            }))
+            const writePatch = modelProviderDeletionWritePatch(
+              current.form?.write?.inlineCompletion,
+              committedDeletedProviderIds
+            )
             const settingsPatch: AppSettingsPatch = {
               provider: projected.provider,
               agents: { kun: kunPatch }
             }
-            const writeInline = current.form?.write?.inlineCompletion
-            if (
-              writeInline &&
-              !writeInline.inheritProvider &&
-              committedDeletedProviderIds.has(writeInline.providerId)
-            ) {
-              settingsPatch.write = { inlineCompletion: { inheritProvider: true, providerId: '' } }
-            }
+            if (writePatch?.write) settingsPatch.write = writePatch.write
             current.update(settingsPatch)
           }
         }

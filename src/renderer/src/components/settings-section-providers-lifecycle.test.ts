@@ -565,7 +565,7 @@ describe('provider mutation lifecycle across settings remounts', () => {
     expect(update).not.toHaveBeenCalled()
   })
 
-  it('removes a deleted provider from local settings after the registry commit', async () => {
+  it('removes a deleted provider with the latest settings updater after the registry commit', async () => {
     const { settings, provider } = providerFixture()
     const deleteRequest = deferred<RuntimeResult>()
     const deleteStarted = deferred<void>()
@@ -581,13 +581,17 @@ describe('provider mutation lifecycle across settings remounts', () => {
       throw new Error(`Unexpected runtime request: ${method} ${path}`)
     })
     Object.assign(window.kunGui, { runtimeRequest })
-    const update = vi.fn()
-    const renderer = await mount(contextFor(settings, provider, update))
+    const staleUpdate = vi.fn()
+    const latestUpdate = vi.fn()
+    const renderer = await mount(contextFor(settings, provider, staleUpdate))
     await flush()
-    update.mockClear()
+    staleUpdate.mockClear()
     await clickTab(renderer, 'modelProviderTabAdvanced')
     await act(async () => findButton(renderer, 'modelProviderRemove').props.onClick())
     await deleteStarted.promise
+    await act(async () => renderer.update(createElement(ProvidersSettingsSection, {
+      ctx: contextFor(settings, provider, latestUpdate)
+    })))
 
     deleteRequest.resolve({
       ok: true,
@@ -597,7 +601,8 @@ describe('provider mutation lifecycle across settings remounts', () => {
     await enqueueSharedModelMutation(async () => undefined)
     await flush()
 
-    const patch = update.mock.calls.at(-1)?.[0] as {
+    expect(staleUpdate).not.toHaveBeenCalled()
+    const patch = latestUpdate.mock.calls.at(-1)?.[0] as {
       provider?: { providers?: ModelProviderProfileV1[] }
       agents?: { kun?: { providerId?: string; model?: string } }
     }

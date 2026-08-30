@@ -1,5 +1,4 @@
 import type {
-  KunRuntimeSettingsPatchV1,
   ModelProviderModelProfileV1,
   ModelProviderPresetMode,
   ModelProviderProfileV1
@@ -34,6 +33,8 @@ import {
 import {
   cursorProviderNeedsMetadataRepair,
   kunProviderSelectionPatch,
+  modelProviderDeletionKunPatch,
+  modelProviderDeletionWritePatch,
   nonEmptyModelId,
   type ProbeState
 } from './settings-section-providers-profile'
@@ -310,44 +311,21 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       const remainingProviders = latestProviders.filter((item) => item.id !== id)
       const fallbackProvider = remainingProviders.find((item) => item.id === DEFAULT_MODEL_PROVIDER_ID) ??
         remainingProviders[0]
-      const kunPatch: KunRuntimeSettingsPatchV1 = {}
-      if (latestKun.providerId?.trim() === id && fallbackProvider) {
-        Object.assign(kunPatch, kunProviderSelectionPatch({
-          providerId: fallbackProvider.id,
-          model: nonEmptyModelId(fallbackProvider.models[0])
-        }))
-      }
-      if ((latestKun.imageGeneration?.providerId ?? '').trim() === id) {
-        kunPatch.imageGeneration = { providerId: '' }
-      }
-      if ((latestKun.speechToText?.providerId ?? '').trim() === id) {
-        kunPatch.speechToText = { providerId: '' }
-      }
-      if ((latestKun.textToSpeech?.providerId ?? '').trim() === id) {
-        kunPatch.textToSpeech = { providerId: '' }
-      }
-      if ((latestKun.musicGeneration?.providerId ?? '').trim() === id) {
-        kunPatch.musicGeneration = { providerId: '' }
-      }
-      if ((latestKun.videoGeneration?.providerId ?? '').trim() === id) {
-        kunPatch.videoGeneration = { providerId: '' }
-      }
-
+      const kunPatch = modelProviderDeletionKunPatch({
+        currentKun: latestKun,
+        deletedProviderIds: new Set([id]),
+        fallbackProvider
+      })
       const latestWriteInline = latest.form?.write?.inlineCompletion
-      const latestUsedByWrite = Boolean(
-        latestWriteInline && !latestWriteInline.inheritProvider && latestWriteInline.providerId === id
-      )
-      const writePatch = latestUsedByWrite
-        ? { write: { inlineCompletion: { inheritProvider: true, providerId: '' } } }
-        : undefined
+      const writePatch = modelProviderDeletionWritePatch(latestWriteInline, new Set([id]))
       updateModelProviders(
         remainingProviders,
         Object.keys(kunPatch).length > 0 ? kunPatch : undefined,
         writePatch
       )
-      if (selectedProviderId === id) {
-        setSelectedProviderId(fallbackProvider?.id ?? DEFAULT_MODEL_PROVIDER_ID)
-      }
+      setSelectedProviderId((currentId: string) => currentId === id
+        ? fallbackProvider?.id ?? DEFAULT_MODEL_PROVIDER_ID
+        : currentId)
     } catch (error) {
       if (pendingSharedProviderDeletions.current.get(id)?.generation === generation) {
         pendingSharedProviderDeletions.current.delete(id)

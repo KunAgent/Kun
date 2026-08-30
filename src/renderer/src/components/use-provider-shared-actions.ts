@@ -169,7 +169,7 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
     additionalPatch?: Pick<AppSettingsPatch, 'write'>
   ): void => {
     const current = sharedProjectionInput.current
-    update({
+    current.update({
       ...modelProvidersSettingsPatch({
         provider: current.provider,
         providers,

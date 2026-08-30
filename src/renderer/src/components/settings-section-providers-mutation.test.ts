@@ -1,9 +1,15 @@
 import {
+  defaultKunRuntimeSettings,
   defaultModelProviderSettings,
+  defaultWriteSettings,
   type ModelProviderModelProfileV1
 } from '@shared/app-settings'
 import { describe, expect, it, vi } from 'vitest'
 import type { SharedModelConnection } from './settings-section-providers-shared-api'
+import {
+  modelProviderDeletionKunPatch,
+  modelProviderDeletionWritePatch
+} from './settings-section-providers-profile'
 import {
   clearPendingSharedProviderDeletionForExplicitAdd,
   createSharedModelMutationQueue,
@@ -550,5 +556,84 @@ describe('shared model connection settings projection', () => {
 
     expect(projected.provider.providers.map((provider) => provider.id)).toEqual(['deepseek'])
     expect(projected.kun).toEqual({ providerId: '' })
+  })
+
+  it('clears every Kun and Write route that belongs to a deleted provider', () => {
+    const deletedProviderId = 'removed-provider'
+    const currentKun = defaultKunRuntimeSettings()
+    Object.assign(currentKun, {
+      providerId: deletedProviderId,
+      model: 'removed-main',
+      smallModel: 'removed-small', smallModelProviderId: deletedProviderId, smallModelAccountId: 'small-account',
+      titleModel: 'removed-title', titleProviderId: deletedProviderId, titleAccountId: 'title-account',
+      summaryModel: 'removed-summary', summaryProviderId: deletedProviderId, summaryAccountId: 'summary-account',
+      codeReviewModel: 'removed-review', codeReviewProviderId: deletedProviderId, codeReviewAccountId: 'review-account',
+      planModel: 'removed-plan', planProviderId: deletedProviderId, planAccountId: 'plan-account'
+    })
+    currentKun.imageGeneration = { ...currentKun.imageGeneration, providerId: deletedProviderId, model: 'removed-image' }
+    currentKun.speechToText = { ...currentKun.speechToText, providerId: deletedProviderId, model: 'removed-speech' }
+    currentKun.textToSpeech = { ...currentKun.textToSpeech, providerId: deletedProviderId, model: 'removed-tts' }
+    currentKun.promptOptimization = { ...currentKun.promptOptimization, providerId: deletedProviderId, model: 'removed-prompt' }
+    currentKun.musicGeneration = { ...currentKun.musicGeneration, providerId: deletedProviderId, model: 'removed-music' }
+    currentKun.videoGeneration = { ...currentKun.videoGeneration, providerId: deletedProviderId, model: 'removed-video' }
+    currentKun.contextCompaction = {
+      ...currentKun.contextCompaction,
+      summaryProviderId: deletedProviderId,
+      summaryModel: 'removed-compaction'
+    }
+    currentKun.fastContext = { ...currentKun.fastContext, providerId: deletedProviderId, model: 'removed-fast' }
+    currentKun.lab = {
+      ...currentKun.lab,
+      pptAgent: { ...currentKun.lab.pptAgent, providerId: deletedProviderId, model: 'removed-ppt' }
+    }
+    currentKun.graph = {
+      ...currentKun.graph,
+      workerModel: { mode: 'fixed', providerId: deletedProviderId, model: 'removed-worker' }
+    }
+    currentKun.subagents = {
+      enabled: true,
+      profiles: [{
+        id: 'routed', enabled: true, name: 'Routed', mode: 'all', toolPolicy: 'inherit',
+        providerId: deletedProviderId, model: 'removed-subagent'
+      }]
+    }
+    const fallbackProvider = defaultModelProviderSettings().providers[0]!
+
+    const patch = modelProviderDeletionKunPatch({
+      currentKun,
+      deletedProviderIds: new Set([deletedProviderId]),
+      fallbackProvider
+    })
+
+    expect(patch).toMatchObject({
+      providerId: fallbackProvider.id,
+      model: fallbackProvider.models[0],
+      imageGeneration: { providerId: '', model: '' },
+      speechToText: { providerId: '', model: '' },
+      textToSpeech: { providerId: '', model: '' },
+      promptOptimization: { providerId: '', model: '' },
+      musicGeneration: { providerId: '', model: '' },
+      videoGeneration: { providerId: '', model: '' },
+      contextCompaction: { summaryProviderId: '', summaryModel: '' },
+      fastContext: { providerId: '', model: '' },
+      lab: { pptAgent: { providerId: '', model: '' } },
+      graph: { workerModel: { mode: 'inherit' } },
+      smallModel: '', smallModelProviderId: '', smallModelAccountId: '',
+      titleModel: '', titleProviderId: '', titleAccountId: '',
+      summaryModel: '', summaryProviderId: '', summaryAccountId: '',
+      codeReviewModel: '', codeReviewProviderId: '', codeReviewAccountId: '',
+      planModel: '', planProviderId: '', planAccountId: ''
+    })
+    expect(patch.subagents?.profiles?.[0]).not.toHaveProperty('providerId')
+    expect(patch.subagents?.profiles?.[0]).not.toHaveProperty('model')
+    expect(modelProviderDeletionWritePatch({
+      ...defaultWriteSettings().inlineCompletion,
+      inheritProvider: false,
+      providerId: deletedProviderId,
+      inheritModel: false,
+      model: 'removed-write'
+    }, new Set([deletedProviderId]))).toMatchObject({
+      write: { inlineCompletion: { inheritProvider: true, providerId: '', inheritModel: true, model: '' } }
+    })
   })
 })
