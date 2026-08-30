@@ -363,32 +363,14 @@ describe('ScheduleRuntime existing-thread scheduled send', () => {
 
   it('keeps the existing-thread send snapshot immutable when a generic editor changes payload fields', async () => {
     const task = scheduledSendTask()
-    const runtime = new ScheduleRuntime({
-      store: createStore(settingsWith(task)) as never,
-      runtimeRequest: vi.fn() as never,
-      logError: vi.fn()
-    })
-
-    await expect(runtime.updateTaskById(task.id, { prompt: 'mutated after scheduling' })).rejects.toThrow(
-      'Scheduled send snapshot fields are immutable'
-    )
-    await expect(runtime.updateTaskById(task.id, { providerId: 'other-provider' })).rejects.toThrow(
-      'Scheduled send snapshot fields are immutable'
-    )
-    await expect(runtime.updateTaskById(task.id, { model: 'other-model' })).rejects.toThrow(
-      'Scheduled send snapshot fields are immutable'
-    )
-    await expect(runtime.updateTaskById(task.id, {
-      scheduledSend: { ...task.scheduledSend!, attachmentIds: ['different-attachment'] }
-    })).rejects.toThrow('Scheduled send snapshot fields are immutable')
-
+    const runtime = new ScheduleRuntime({ store: createStore(settingsWith(task)) as never, runtimeRequest: vi.fn() as never, logError: vi.fn() })
+    const immutable = 'Scheduled send snapshot fields are immutable'
+    await expect(runtime.updateTaskById(task.id, { prompt: 'mutated after scheduling' })).rejects.toThrow(immutable)
+    await expect(runtime.updateTaskById(task.id, { providerId: 'other-provider' })).rejects.toThrow(immutable)
+    await expect(runtime.updateTaskById(task.id, { model: 'other-model' })).rejects.toThrow(immutable)
+    await expect(runtime.updateTaskById(task.id, { scheduledSend: { ...task.scheduledSend!, attachmentIds: ['different-attachment'] } })).rejects.toThrow(immutable)
     const persisted = await runtime.listTasks()
-    expect(persisted[0]).toMatchObject({
-      prompt: task.prompt,
-      providerId: task.providerId,
-      model: task.model,
-      scheduledSend: task.scheduledSend
-    })
+    expect(persisted[0]).toMatchObject({ prompt: task.prompt, providerId: task.providerId, model: task.model, scheduledSend: task.scheduledSend })
     await runtime.stop()
   })
   it('removes a cancelled same-thread queued send without a ghost admission', async () => {
