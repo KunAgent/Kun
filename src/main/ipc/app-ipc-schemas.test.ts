@@ -17,6 +17,17 @@ import {
   skillListPayloadSchema
 } from './app-ipc-schemas'
 
+describe('runtime endpoint allow-list', () => {
+  it('allows specific utility routes and generalized placeholders', () => {
+    expect(runtimeRequestPayloadSchema.parse({ path: '/v1/threads/bulk-delete', method: 'POST', body: '{}' }).path).toBe('/v1/threads/bulk-delete')
+    expect(runtimeRequestPayloadSchema.parse({ path: '/v1/threads/content-search', method: 'GET' }).path).toBe('/v1/threads/content-search')
+    expect(() => runtimeRequestPayloadSchema.parse({ path: '/v1/threads/bulk-delete', method: 'GET' })).toThrow()
+    expect(runtimeRequestPayloadSchema.parse({ path: '/v1/background-shells/session-1', method: 'GET' }).path).toBe('/v1/background-shells/session-1')
+    expect(runtimeRequestPayloadSchema.parse({ path: '/v1/background-shells/session-1/stop', method: 'POST' }).path).toBe('/v1/background-shells/session-1/stop')
+    expect(runtimeRequestPayloadSchema.parse({ path: '/v1/sessions/session-1/resume-metadata', method: 'GET' }).path).toBe('/v1/sessions/session-1/resume-metadata')
+  })
+})
+
 describe('schedule task IPC schemas', () => {
   const future = '2099-01-01T10:00:00.000Z'
 

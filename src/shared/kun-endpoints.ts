@@ -216,6 +216,8 @@ export function kunGraphProjectConsolidatePath(projectId: string): string {
 
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
+export const KUN_THREADS_BULK_DELETE_TEMPLATE = '/v1/threads/bulk-delete'
+export const KUN_THREADS_CONTENT_SEARCH_TEMPLATE = '/v1/threads/content-search'
 
 export const KUN_THREAD_STATES_PATH = '/v1/threads/states'
 export const KUN_THREAD_STATES_TEMPLATE = '/v1/threads/states'
@@ -346,7 +348,6 @@ export const KUN_SESSION_RESUME_TEMPLATE = '/v1/sessions/{id}/resume-thread'
 export function kunSessionResumePath(sessionId: string): string {
   return `/v1/sessions/${encodeURIComponent(sessionId)}/resume-thread`
 }
-
 export const KUN_SESSION_RESUME_METADATA_TEMPLATE = '/v1/sessions/{id}/resume-metadata'
 export function kunSessionResumeMetadataPath(sessionId: string): string {
   return `/v1/sessions/${encodeURIComponent(sessionId)}/resume-metadata`

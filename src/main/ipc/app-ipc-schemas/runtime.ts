@@ -36,8 +36,11 @@ import {
   KUN_SUPPLY_CHAIN_AUDIT_TEMPLATE,
   KUN_SUPPLY_CHAIN_UPDATE_CHECK_TEMPLATE,
   KUN_SESSION_RESUME_TEMPLATE,
+  KUN_SESSION_RESUME_METADATA_TEMPLATE,
   KUN_SKILLS_TEMPLATE,
   KUN_THREADS_TEMPLATE,
+  KUN_THREADS_BULK_DELETE_TEMPLATE,
+  KUN_THREADS_CONTENT_SEARCH_TEMPLATE,
   KUN_THREAD_COMPACT_TEMPLATE,
   KUN_THREAD_PRUNE_TEMPLATE,
   KUN_THREAD_FORK_TEMPLATE,
@@ -150,7 +153,7 @@ function compileEndpoint(
   // substituting the `{id}` / `{turn}` placeholders with `[^/]+`. The
   // template fragments are URL-encoded by the path helpers, so they
   // contain only characters that are safe to escape directly.
-  const pattern = template.replace(/[.+*?^$()|[\]\\]/g, '\\$&').replace(/\{(?:id|turn)\}/g, '[^/]+')
+  const pattern = template.replace(/[.+*?^$()|[\]\\]/g, '\\$&').replace(/\{[^/{}]+\}/g, '[^/]+')
   const regex = new RegExp(`^${pattern}$`)
   return {
     match: (path: string) => regex.test(path),
@@ -195,6 +198,8 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_MEMORY_RECORD_TEMPLATE, ['PATCH', 'DELETE']),
   compileEndpoint(KUN_MCP_OAUTH_TEMPLATE, ['GET', 'DELETE']),
   compileEndpoint(KUN_MCP_OAUTH_SERVER_TEMPLATE, ['DELETE']),
+  compileEndpoint(KUN_THREADS_BULK_DELETE_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_THREADS_CONTENT_SEARCH_TEMPLATE, ['GET']),
   compileEndpoint(KUN_THREADS_TEMPLATE, ['GET', 'POST']),
   compileEndpoint(KUN_THREAD_STATES_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_STATE_TEMPLATE, ['GET']),
@@ -218,6 +223,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_THREAD_MODEL_REQUESTS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_USER_INPUT_TEMPLATE, ['POST']),
   compileEndpoint(KUN_SESSION_RESUME_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_SESSION_RESUME_METADATA_TEMPLATE, ['GET']),
   compileEndpoint(KUN_USAGE_TEMPLATE, ['GET']),
   compileEndpoint(KUN_DEBUG_LLM_ROUNDS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_BACKGROUND_SHELLS_TEMPLATE, ['GET']),
