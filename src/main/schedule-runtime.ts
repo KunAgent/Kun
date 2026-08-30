@@ -294,6 +294,9 @@ export class ScheduleRuntime {
     enabled?: boolean
     schedule: Partial<ScheduledTaskV1['schedule']> & { kind: ScheduledTaskV1['schedule']['kind'] }
   }): Promise<ScheduledTaskV1> {
+    if (input.schedule.kind === 'at' && !input.schedule.atTime?.trim()) {
+      throw new Error('An at schedule requires atTime.')
+    }
     const settings = await this.loadSettings()
     const clawChannel = this.queue.resolveClawChannel(settings, input.clawChannelId)
     const requestedProviderId = input.providerId?.trim() || settings.schedule.providerId?.trim() || ''
@@ -367,6 +370,9 @@ export class ScheduleRuntime {
     taskId: string,
     patch: Omit<Partial<ScheduledTaskV1>, 'schedule'> & { schedule?: Partial<ScheduledTaskV1['schedule']> }
   ): Promise<ScheduledTaskV1 | null> {
+    if (patch.schedule?.kind === 'at' && !patch.schedule.atTime?.trim()) {
+      throw new Error('An at schedule requires atTime.')
+    }
     const now = new Date().toISOString()
     const shouldRecomputeNextRun =
       Object.prototype.hasOwnProperty.call(patch, 'enabled') || patch.schedule !== undefined
@@ -389,6 +395,11 @@ export class ScheduleRuntime {
               (Object.prototype.hasOwnProperty.call(patch, 'providerId') && patch.providerId !== item.providerId) ||
               (Object.prototype.hasOwnProperty.call(patch, 'model') && patch.model !== item.model) ||
               (Object.prototype.hasOwnProperty.call(patch, 'reasoningEffort') && patch.reasoningEffort !== item.reasoningEffort) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'mode') && patch.mode !== item.mode) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'orchestration') && patch.orchestration !== item.orchestration) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'useWorktree') && patch.useWorktree !== item.useWorktree) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'dependsOn') && JSON.stringify(patch.dependsOn) !== JSON.stringify(item.dependsOn)) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'clawChannelId') && patch.clawChannelId !== item.clawChannelId) ||
               (Object.prototype.hasOwnProperty.call(patch, 'scheduledSend') &&
                 JSON.stringify(patch.scheduledSend) !== JSON.stringify(item.scheduledSend))
             if (immutableChanged) {
