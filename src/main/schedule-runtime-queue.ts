@@ -453,6 +453,13 @@ export class ScheduleExecutionQueue {
             model: task.model,
             reasoningEffort: task.reasoningEffort
           })
+      const beforeAdmission = await this.loadSettings()
+      const latestTask = beforeAdmission.schedule.tasks.find((candidate) => candidate.id === task.id)
+      if (!latestTask || this.cancelledTaskIds.has(task.id) || (task.scheduledSend?.kind === 'thread-send' && !latestTask.enabled)) {
+        this.runningTaskIds.delete(task.id)
+        await this.releaseTaskWorktree(task.id)
+        return { ok: false, message: 'Scheduled send was cancelled before admission.' }
+      }
       const result = await this.runPrompt(settings, {
         prompt: task.prompt,
         preservePrompt: task.scheduledSend?.kind === 'thread-send',
