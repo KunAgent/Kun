@@ -378,19 +378,9 @@ export class ScheduleExecutionQueue {
     const scheduledSendAttempt = task.scheduledSend?.kind === 'thread-send'
       ? task.scheduledSend.attemptCount + 1
       : 0
-    if (
-      task.scheduledSend?.kind === 'thread-send' &&
-      scheduledSendAttempt > task.scheduledSend.maxAttempts
-    ) {
+    if (task.scheduledSend?.kind === 'thread-send' && scheduledSendAttempt > task.scheduledSend.maxAttempts) {
       if (slotReserved) this.runningTaskIds.delete(task.id)
-      await this.updateTask(task.id, (current) => ({
-        ...current,
-        enabled: current.schedule.kind === 'at' ? false : current.enabled,
-        nextRunAt: current.schedule.kind === 'at' ? '' : current.nextRunAt,
-        lastStatus: 'error',
-        lastMessage: 'Scheduled send retry limit reached.',
-        updatedAt: new Date().toISOString()
-      }))
+      await this.updateTask(task.id, (current) => ({ ...current, enabled: current.schedule.kind === 'at' ? false : current.enabled, nextRunAt: current.schedule.kind === 'at' ? '' : current.nextRunAt, lastStatus: 'error', lastMessage: 'Scheduled send retry limit reached.', updatedAt: new Date().toISOString() }))
       return { ok: false, message: 'Scheduled send retry limit reached.' }
     }
     await this.updateTask(task.id, (current) => ({
@@ -407,11 +397,7 @@ export class ScheduleExecutionQueue {
       const settings = await this.loadSettings()
       const persistedTask = settings.schedule.tasks.find((candidate) => candidate.id === task.id)
       if (!persistedTask || this.cancelledTaskIds.has(task.id)) { this.runningTaskIds.delete(task.id); return { ok: false, message: 'Scheduled task was removed before admission.' } }
-      if (task.scheduledSend?.kind === 'thread-send' && !persistedTask.enabled) {
-        this.runningTaskIds.delete(task.id)
-        await this.updateTask(task.id, (current) => ({ ...current, lastStatus: 'idle', lastMessage: 'Scheduled send was paused before admission.', updatedAt: new Date().toISOString() }))
-        return { ok: false, message: 'Scheduled send was paused before admission.' }
-      }
+      if (task.scheduledSend?.kind === 'thread-send' && !persistedTask.enabled) { this.runningTaskIds.delete(task.id); await this.updateTask(task.id, (current) => ({ ...current, lastStatus: 'idle', lastMessage: 'Scheduled send was paused before admission.', updatedAt: new Date().toISOString() })); return { ok: false, message: 'Scheduled send was paused before admission.' } }
       if (task.scheduledSend?.kind === 'thread-send' && (!task.sourceThreadId?.trim() || !task.scheduledSend.clientRequestId.trim() || !task.providerId?.trim() || !task.model.trim())) {
         this.runningTaskIds.delete(task.id)
         await this.updateTask(task.id, (current) => ({ ...current, enabled: false, lastStatus: 'error', lastMessage: 'Scheduled send snapshot is invalid; no message was sent.', updatedAt: new Date().toISOString() }))
@@ -453,13 +439,8 @@ export class ScheduleExecutionQueue {
             model: task.model,
             reasoningEffort: task.reasoningEffort
           })
-      const beforeAdmission = await this.loadSettings()
-      const latestTask = beforeAdmission.schedule.tasks.find((candidate) => candidate.id === task.id)
-      if (!latestTask || this.cancelledTaskIds.has(task.id) || (task.scheduledSend?.kind === 'thread-send' && !latestTask.enabled)) {
-        this.runningTaskIds.delete(task.id)
-        await this.releaseTaskWorktree(task.id)
-        return { ok: false, message: 'Scheduled send was cancelled before admission.' }
-      }
+      const latestTask = (await this.loadSettings()).schedule.tasks.find((candidate) => candidate.id === task.id)
+      if (!latestTask || this.cancelledTaskIds.has(task.id) || (task.scheduledSend?.kind === 'thread-send' && !latestTask.enabled)) { this.runningTaskIds.delete(task.id); await this.releaseTaskWorktree(task.id); return { ok: false, message: 'Scheduled send was cancelled before admission.' } }
       const result = await this.runPrompt(settings, {
         prompt: task.prompt,
         preservePrompt: task.scheduledSend?.kind === 'thread-send',
@@ -542,9 +523,7 @@ export class ScheduleExecutionQueue {
         ...current,
         lastRunAt: finishedAt.toISOString(),
         ...(current.scheduledSend?.kind === 'thread-send' ? { scheduledSend: { ...current.scheduledSend, reconciliationPending: false } } : {}),
-        ...(current.schedule.kind === 'at'
-          ? { enabled: false, nextRunAt: '' }
-          : { nextRunAt: computeScheduleNextRunAt(current, finishedAt) }),
+        ...(current.schedule.kind === 'at' ? { enabled: false, nextRunAt: '' } : { nextRunAt: computeScheduleNextRunAt(current, finishedAt) }),
         lastStatus: 'error',
         lastMessage: message,
         updatedAt: finishedAt.toISOString()
