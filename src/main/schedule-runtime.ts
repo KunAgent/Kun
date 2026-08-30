@@ -371,6 +371,24 @@ export class ScheduleRuntime {
         ...current.schedule,
         tasks: current.schedule.tasks.map((item) => {
           if (item.id !== taskId) return item
+          // A send bound to an existing thread is a durable snapshot.  Keep
+          // its delivery target and request payload immutable after admission
+          // so editing a generic scheduled-task form cannot silently change
+          // what will be sent later.
+          if (item.scheduledSend?.kind === 'thread-send') {
+            const immutableChanged =
+              (Object.prototype.hasOwnProperty.call(patch, 'prompt') && patch.prompt !== item.prompt) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'workspaceRoot') && patch.workspaceRoot !== item.workspaceRoot) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'sourceThreadId') && patch.sourceThreadId !== item.sourceThreadId) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'providerId') && patch.providerId !== item.providerId) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'model') && patch.model !== item.model) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'reasoningEffort') && patch.reasoningEffort !== item.reasoningEffort) ||
+              (Object.prototype.hasOwnProperty.call(patch, 'scheduledSend') &&
+                JSON.stringify(patch.scheduledSend) !== JSON.stringify(item.scheduledSend))
+            if (immutableChanged) {
+              throw new Error('Scheduled send snapshot fields are immutable; cancel it and create a new send.')
+            }
+          }
           nextTask = {
             ...item,
             ...patch,
