@@ -469,7 +469,7 @@ export type ClawRunResult =
       /** The task was accepted by the background queue but has not started. */
       queued?: boolean
     }
-  | { ok: false; message: string }
+  | { ok: false; message: string; status?: number; code?: string }
 
 export type ScheduleRunResult = ClawRunResult
 

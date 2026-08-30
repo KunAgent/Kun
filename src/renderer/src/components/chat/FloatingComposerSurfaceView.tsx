@@ -16,10 +16,10 @@ export function FloatingComposerSurfaceView({
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
     FloatingComposerContextCapacity, FloatingComposerExecutionPicker, FloatingComposerModelPicker,
     FloatingComposerTaskProfile,
-    Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
+    Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles, CalendarClock,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
     activeThreadId, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
-    canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
+    canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt, canScheduleSend, onOpenScheduledSend,
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
     composerReasoningEffort, contextChips, designTaskProfile, designProfileLocked, dictation, draft, effectiveWorkspaceRoot,
@@ -434,6 +434,18 @@ export function FloatingComposerSurfaceView({
                       ) : (
                         <Sparkles className="h-4 w-4" strokeWidth={2} />
                       )}
+                    </button>
+                  ) : null}
+                  {!side ? (
+                    <button
+                      type="button"
+                      disabled={!canScheduleSend}
+                      onClick={onOpenScheduledSend}
+                      className="ds-composer-optional-action ds-composer-scheduled-send-action ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={t('planScheduleBuildSet')}
+                      title={t('planScheduleBuildSet')}
+                    >
+                      <CalendarClock className="h-4 w-4" strokeWidth={2} />
                     </button>
                   ) : null}
                   <button

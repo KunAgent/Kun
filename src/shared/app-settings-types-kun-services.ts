@@ -415,31 +415,59 @@ export type ScheduleTaskCreateInput = {
   prompt: string
   workspaceRoot: string
   /** Plan artifact that owns this scheduled build. */
-  sourcePlanId: string
+  sourcePlanId?: string
   /** Existing GUI thread that should receive this scheduled turn. */
   sourceThreadId?: string
   providerId: string
+  /** Account and attachments are opaque snapshots for existing-thread sends. */
+  accountId?: string
+  attachmentIds?: string[]
+  enabled?: boolean
+  clawChannelId?: string
+  priority?: number
+  dependsOn?: string[]
+  useWorktree?: boolean
   model: string
   reasoningEffort: ScheduleReasoningEffort
   mode: ScheduleRunMode
   orchestration: ScheduleTaskOrchestration
   schedule: {
-    kind: 'at'
-    atTime: string
-    timeZone: string
+    kind: ScheduleKind
+    everyMinutes?: number
+    timeOfDay?: string
+    atTime?: string
+    timeZone?: string
   }
+}
+
+export type ScheduledThreadSendV1 = {
+  kind: 'thread-send'
+  /** Stable admission key reused after transport failures and restarts. */
+  clientRequestId: string
+  accountId: string
+  attachmentIds: string[]
+  attemptCount: number
+  maxAttempts: number
+  /** Set before admission and cleared after a response is classified. */
+  reconciliationPending?: boolean
 }
 
 export type ScheduleTaskUpdateInput = {
   taskId: string
-  providerId: string
-  model: string
-  reasoningEffort: ScheduleReasoningEffort
-  schedule: {
-    kind: 'at'
-    atTime: string
-    timeZone: string
-  }
+  title?: string
+  prompt?: string
+  workspaceRoot?: string
+  enabled?: boolean
+  clawChannelId?: string
+  providerId?: string
+  model?: string
+  reasoningEffort?: ScheduleReasoningEffort
+  mode?: ScheduleRunMode
+  orchestration?: ScheduleTaskOrchestration
+  priority?: number
+  dependsOn?: string[]
+  useWorktree?: boolean
+  schedule?: Partial<ScheduledTaskScheduleV1> & { kind?: ScheduleKind }
 }
 
 export type ScheduleTaskDeleteResult =
@@ -460,6 +488,8 @@ export type ScheduledTaskV1 = {
   sourcePlanId?: string
   /** Existing GUI thread reused by plan-scheduled builds. */
   sourceThreadId?: string
+  /** Frozen delivery metadata for ordinary sends on an existing Thread. */
+  scheduledSend?: ScheduledThreadSendV1
   /** Optional Claw IM channel whose persona/defaults should drive this scheduled task. */
   clawChannelId: string
   /** Selected model provider for this scheduled task. Empty means the current/default runtime provider. */

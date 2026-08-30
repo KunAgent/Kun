@@ -51,14 +51,12 @@ import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { ScheduleDefaultsDialog } from './ScheduleDefaultsDialog'
 import { createScheduleRefreshCoordinator } from './schedule-refresh-coordinator'
 import { SessionDaemonsView } from './SessionDaemonsView'
-
 type Props = {
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
   onOpenThread?: (threadId: string) => void
   onConnectWeixin?: () => void
 }
-
 export {
   dateTimeLocalValueFromIso,
   filterScheduledTasks,
@@ -131,7 +129,6 @@ export function ScheduleTasksView({
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [expandedResultTaskIds, setExpandedResultTaskIds] = useState<Set<string>>(() => new Set())
   const refreshCoordinator = useRef(createScheduleRefreshCoordinator()).current
-
   const load = useCallback(async (): Promise<void> => {
     const ticket = refreshCoordinator.beginRefresh()
     if (ticket === null) return
@@ -153,7 +150,6 @@ export function ScheduleTasksView({
       if (refreshCoordinator.isCurrent(ticket)) setLoading(false)
     }
   }, [refreshCoordinator])
-
   useEffect(() => {
     void load()
     const id = window.setInterval(() => void load(), 5_000)
@@ -162,7 +158,6 @@ export function ScheduleTasksView({
       refreshCoordinator.invalidate()
     }
   }, [load, refreshCoordinator])
-
   const schedule = settings ? normalizeScheduleSettings(settings.schedule) : null
   const tasks = schedule?.tasks ?? EMPTY_SCHEDULE_TASKS
   const clawChannels = settings?.claw.channels ?? []
@@ -173,7 +168,6 @@ export function ScheduleTasksView({
   const runningTaskIds = useMemo(() => new Set(status?.runningTaskIds ?? []), [status])
   const queuedTaskIds = useMemo(() => new Set(status?.queuedTaskIds ?? []), [status])
   const visibleTasks = useMemo(() => filterScheduledTasks(tasks, filter), [filter, tasks])
-
   const persistSchedule = async (
     patch: Parameters<typeof mergeScheduleSettings>[1]
   ): Promise<ScheduleSettingsV1> => {
@@ -198,13 +192,11 @@ export function ScheduleTasksView({
       refreshCoordinator.endMutation()
     }
   }
-
   const resolveDialogWorkspaceRoot = useCallback((workspaceRoot?: string): string => {
     const explicit = workspaceRoot?.trim() || ''
     if (explicit) return explicit
     return schedule?.defaultWorkspaceRoot.trim() || settings?.workspaceRoot.trim() || ''
   }, [schedule?.defaultWorkspaceRoot, settings?.workspaceRoot])
-
   const openCreateDialog = (): void => {
     const workspaceRoot = resolveDialogWorkspaceRoot()
     const selection = settings
@@ -223,7 +215,6 @@ export function ScheduleTasksView({
     }) })
     setDialogError(null)
   }
-
   const openEditDialog = (task: ScheduledTaskV1): void => {
     const selection = resolveScheduleModelSelection(modelProviders, task.providerId, task.model)
     const selectedProvider = modelProviders.find((provider) => provider.providerId === selection.providerId) ?? null
@@ -242,7 +233,6 @@ export function ScheduleTasksView({
     })
     setDialogError(null)
   }
-
   const pickDialogWorkspace = async (): Promise<void> => {
     if (!dialog) return
     try {
@@ -259,11 +249,9 @@ export function ScheduleTasksView({
       setDialogError(formatWorkspacePickerError(error))
     }
   }
-
   const onDraftChangeInDialog = (patch: Partial<ScheduledTaskV1>): void => {
     setDialog((current) => current ? { ...current, draft: { ...current.draft, ...patch } } : current)
   }
-
   const saveDialog = async (): Promise<void> => {
     if (!dialog || !schedule || !settings) return
     const validation = validateScheduledTaskDraft(dialog.draft, t)
@@ -300,21 +288,60 @@ export function ScheduleTasksView({
       nextRunAt: ''
     }
     if (dialog.mode === 'create') {
-      await persistSchedule({
-        enabled: true,
-        tasks: [...schedule.tasks, { ...task, createdAt: now }]
+      if (typeof window.kunGui?.createScheduleTask !== 'function') throw new Error('Schedule task creation is unavailable.')
+      const result = await window.kunGui.createScheduleTask({
+        title: task.title,
+        prompt: task.prompt,
+        workspaceRoot: task.workspaceRoot,
+        ...(task.sourcePlanId ? { sourcePlanId: task.sourcePlanId } : {}),
+        ...(task.sourceThreadId ? { sourceThreadId: task.sourceThreadId } : {}),
+        providerId: task.providerId ?? '',
+        model: task.model,
+        reasoningEffort: task.reasoningEffort,
+        mode: task.mode,
+        orchestration: task.orchestration ?? 'direct',
+        clawChannelId: task.clawChannelId,
+        enabled: task.enabled,
+        priority: task.priority,
+        dependsOn: task.dependsOn,
+        useWorktree: task.useWorktree,
+        schedule: task.schedule
       })
+      if (!result.ok) throw new Error(result.message)
+      await load()
     } else {
-      await persistSchedule({
-        tasks: schedule.tasks.map((item) => item.id === dialog.taskId ? task : item)
+      if (typeof window.kunGui?.updateScheduleTask !== 'function') throw new Error('Schedule task updates are unavailable.')
+      const result = await window.kunGui.updateScheduleTask({
+        taskId: dialog.taskId,
+        title: task.title,
+        prompt: task.prompt,
+        workspaceRoot: task.workspaceRoot,
+        enabled: task.enabled,
+        clawChannelId: task.clawChannelId,
+        providerId: task.providerId,
+        model: task.model,
+        reasoningEffort: task.reasoningEffort,
+        mode: task.mode,
+        orchestration: task.orchestration,
+        priority: task.priority,
+        dependsOn: task.dependsOn,
+        useWorktree: task.useWorktree,
+        schedule: task.schedule
       })
+      if (!result.ok) throw new Error(result.message)
+      await load()
     }
     setDialog(null)
     setDialogError(null)
   }
-
   const updateTask = async (taskId: string, patch: Partial<ScheduledTaskV1>): Promise<void> => {
     if (!schedule) return
+    if (typeof window.kunGui?.updateScheduleTask === 'function') {
+      const result = await window.kunGui.updateScheduleTask({ taskId, ...patch })
+      if (!result.ok) throw new Error(result.message)
+      await load()
+      return
+    }
     const now = nowIso()
     await persistSchedule({
       tasks: schedule.tasks.map((task) =>
@@ -330,13 +357,14 @@ export function ScheduleTasksView({
       )
     })
   }
-
   const deleteTask = async (taskId: string): Promise<void> => {
     if (!schedule) return
     if (!(await confirmDialog(t('scheduleDeleteConfirm')))) return
-    await persistSchedule({ tasks: schedule.tasks.filter((task) => task.id !== taskId) })
+    if (typeof window.kunGui?.deleteScheduleTask !== 'function') throw new Error('Schedule task deletion is unavailable.')
+    const result = await window.kunGui.deleteScheduleTask(taskId)
+    if (!result.ok) throw new Error(result.message)
+    await load()
   }
-
   const runTask = async (taskId: string): Promise<void> => {
     if (typeof window.kunGui?.runScheduleTask !== 'function') return
     const result = await window.kunGui.runScheduleTask(taskId)
@@ -346,11 +374,9 @@ export function ScheduleTasksView({
     }
     await load()
   }
-
   const toggleKeepAwake = async (value: boolean): Promise<void> => {
     await persistSchedule({ keepAwake: value })
   }
-
   const toggleResultPreview = (taskId: string): void => {
     setExpandedResultTaskIds((current) => {
       const next = new Set(current)
@@ -362,7 +388,6 @@ export function ScheduleTasksView({
       return next
     })
   }
-
   return (
     <div className="ds-drag flex h-full min-h-0 flex-col bg-ds-main">
       <div className="ds-stage-inset shrink-0">
@@ -385,7 +410,6 @@ export function ScheduleTasksView({
           </div>
         </header>
       </div>
-
       <main ref={mainRef} className="ds-no-drag min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-8">
         <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8">
           <nav className="flex items-center gap-1 border-b border-ds-border-muted" aria-label={t('schedule')}>
@@ -460,7 +484,6 @@ export function ScheduleTasksView({
               </button>
             </div>
           </div>
-
           <div className="flex items-center justify-between gap-3 rounded-xl border border-ds-border bg-ds-card px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <Clock3 className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.75} />
@@ -481,7 +504,6 @@ export function ScheduleTasksView({
               </span>
             </label>
           </div>
-
           {loading ? (
             <div className="py-20 text-center text-[14px] text-ds-faint">{t('loading')}</div>
           ) : error ? (
@@ -629,7 +651,6 @@ export function ScheduleTasksView({
           )}
         </div>
       </main>
-
       {dialog ? (
         <ScheduleTaskDialog
           dialog={dialog}
@@ -646,7 +667,6 @@ export function ScheduleTasksView({
           t={t}
         />
       ) : null}
-
       {settingsDialogOpen && schedule ? (
         <ScheduleDefaultsDialog
           schedule={schedule}

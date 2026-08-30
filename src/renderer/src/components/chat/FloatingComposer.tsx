@@ -13,6 +13,7 @@ import {
 } from 'react'
 import {
   BarChart3,
+  CalendarClock,
   FileText,
   Folder,
   ImagePlus,
@@ -141,9 +142,10 @@ import { useGoalElapsedLabel } from './use-goal-elapsed'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { FloatingComposerStackView } from './FloatingComposerStackView'
 import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
+import { ScheduledSendDialog } from './ScheduledSendDialog'
+import { useScheduledSend } from './use-scheduled-send'
 import { FloatingComposerTaskProfile } from './FloatingComposerTaskProfile'
 export * from './floating-composer-public'
-
 export function FloatingComposer({
   variant = 'default',
   workspaceRootOverride,
@@ -345,7 +347,6 @@ export function FloatingComposer({
     activeClawChannel?.conversations.length ||
     activeClawChannel?.remoteSession?.chatId?.trim()
   )
-
   const canEditComposer = !disabled && !hydratingActiveThread && (route === 'claw' ? clawHasInboundConversation : true)
   const canCompose = !disabled && !hydratingActiveThread && runtimeReady && (
     route === 'claw'
@@ -360,6 +361,7 @@ export function FloatingComposer({
     (attachmentUploadEnabled && attachments.length > 0) ||
     (fileReferenceEnabled && fileReferences.length > 0)
   )
+  const canScheduleSend = canSend && fileReferences.length === 0 && route === 'chat' && Boolean(activeThreadId) && Boolean(effectiveWorkspaceRoot) && !pendingUserInputBlock
   const canPickAttachment = canCompose && attachmentUploadEnabled && !attachmentUploadBusy
   const canPickFileReference = canCompose && fileReferenceEnabled && Boolean(effectiveWorkspaceRoot) && Boolean(onOpenFileReferencePicker)
   const canPickDesignReference = canCompose && fileReferenceEnabled && Boolean(onOpenDesignReferencePicker)
@@ -409,6 +411,7 @@ export function FloatingComposer({
   const [goalInputMode, setGoalInputMode] = useState(false)
   const [promptOptimizationBusy, setPromptOptimizationBusy] = useState(false)
   const [promptOptimizationError, setPromptOptimizationError] = useState<string | null>(null)
+  const scheduledSend = useScheduledSend({ canScheduleSend, activeThreadId, activeThreadTitle: activeThread?.title, input, workspaceRoot: effectiveWorkspaceRoot, composerProviderId, composerModel, composerModelGroups, composerReasoningEffort, orchestration, attachmentIds: attachments.map((attachment) => attachment.id), setInput, onRemoveAttachment })
   const onDismissPromptOptimizationError = useCallback((): void => {
     setPromptOptimizationError(null)
   }, [])
@@ -518,7 +521,6 @@ export function FloatingComposer({
     && !composerMenuOpen
     && !goalPanelOpen
     && !pendingUserInputBlock
-
   const parsedGoalCommand = parseGoalCommand(input)
   const goalPanelDraftObjective = getGoalPanelDraftObjective(input, goalPanelOpen)
   const canSetGoalPanelDraft =
@@ -572,14 +574,11 @@ export function FloatingComposer({
     goalPanelOpen,
     composerMenuOpen
   })
-
   useEffect(() => {
     if (slashQuery != null || goalPanelOpen) setComposerMenuOpen(false)
   }, [goalPanelOpen, slashQuery])
-
   useEffect(() => {
     if (!composerMenuOpen && !goalPanelOpen) return
-
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target
       if (!(target instanceof Node)) return
@@ -589,13 +588,11 @@ export function FloatingComposer({
       setComposerMenuOpen(false)
       setGoalPanelOpen(false)
     }
-
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       setComposerMenuOpen(false)
       setGoalPanelOpen(false)
     }
-
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
     return () => {
@@ -603,7 +600,6 @@ export function FloatingComposer({
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [composerMenuOpen, goalPanelOpen])
-
   const actionContext: FloatingComposerRenderContext = {
     activeThreadId, archiveThread, buildResearchPrompt, canAcceptComposerFileDrop,
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
@@ -621,10 +617,9 @@ export function FloatingComposer({
     route, routeComposerFileDrop, runtimeReady, setActiveThreadGoal, setActiveThreadGoalStatus,
     setComposerMenuOpen, setGoalInputMode, setGoalPanelOpen, setInput, setMode,
     setPromptOptimizationBusy, setPromptOptimizationError, slashCommandMenu, slashCommands,
-    t, userInput
+    t, userInput, canScheduleSend, onOpenScheduledSend: scheduledSend.openScheduledSend
   }
   const composerActions = useFloatingComposerActions(actionContext)
-
   const renderContext: FloatingComposerRenderContext = {
     ...actionContext,
     ...composerActions,
@@ -633,7 +628,7 @@ export function FloatingComposer({
     FloatingComposerActionMenu,
     Folder, GitBranchPicker, ImagePlus, ListTodo, Loader2, Mic, Monitor, Paperclip,
     PauseCircle, Pencil, PlayCircle, Plus, Puzzle, Send, Share2, Sparkles,
-    Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
+    Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, CalendarClock, activeThreadGoal,
     activeThreadId, activeThreadTodos, attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
     canCompose, canEditComposer, canOpenComposerMenu, canOpenGoalPanel, canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleGraphMode, canTogglePlanMode, canToggleWorktreeMode, clearActiveThreadGoal, compact, composerFastMode,
@@ -650,9 +645,9 @@ export function FloatingComposer({
     route, runningGraphTurn, runtimeReady, setActiveThreadGoalStatus, setGoalInputMode, setGoalPanelOpen, setInput, showComposerMenuButton,
     showCodeExecutionControls, showExecutionSettingsPicker, showGoalFloater, showGoalMenuOption, showGraphMenuOption, showGraphProgress, showPlanMenuOption, showProviderInModelLabel, showTodoProgress, showToolbarStartControls, showUsageHistoryFooter,
     showVoiceDictation, showWorkspaceControls, side, slashCommandMenu, slashQuery, stretchModelPicker, t, threadUsage, primaryActionKind,
-    taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement, threadUsageState, timingThreadUsage, useWorktreePool, userInput, worktreeBranch
+    taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement, threadUsageState, timingThreadUsage, useWorktreePool, userInput, worktreeBranch,
+    canScheduleSend, onOpenScheduledSend: scheduledSend.openScheduledSend
   }
-
   return (
     <div
       ref={composerRootRef}
@@ -664,6 +659,14 @@ export function FloatingComposer({
       <div className="relative" data-composer-stack>
         <FloatingComposerStackView context={renderContext} />
         <FloatingComposerSurfaceView context={renderContext} />
+        {scheduledSend.open ? (
+          <ScheduledSendDialog
+            submitting={scheduledSend.submitting}
+            error={scheduledSend.error}
+            onClose={scheduledSend.close}
+            onSubmit={scheduledSend.submit}
+          />
+        ) : null}
       </div>
     </div>
   )

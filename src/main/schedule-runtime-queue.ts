@@ -25,17 +25,15 @@ import {
   findAvailablePoolIndex,
   releaseWorktree
 } from './services/worktree-service'
-
 const MAX_CONCURRENT_BACKGROUND_TASKS = 3
-
+const DEFAULT_SCHEDULED_SEND_MAX_ATTEMPTS = 3
+const SCHEDULED_SEND_RETRY_DELAY_MS = 1_000
 export function scheduledThreadTitle(title: string): string {
   const trimmed = title.trim()
   const prefix = '[Scheduled task]'
   const suffix = Array.from(trimmed).slice(0, 4).join('')
   return suffix ? `${prefix} ${suffix}` : prefix
 }
-
-
 export class ScheduleExecutionQueue {
   private runningTaskIds = new Set<string>()
   private queuedTaskIds = new Set<string>()
@@ -48,20 +46,21 @@ export class ScheduleExecutionQueue {
   private drainingQueue = false
   private readonly stopController = new AbortController()
   private readonly activeTasks = new Set<Promise<unknown>>()
+  private wakeTimer: ReturnType<typeof setTimeout> | null = null
+  private wakeAt = 0
+  private readonly cancelledTaskIds = new Set<string>()
+  private readonly admittedTaskIds = new Set<string>()
   private stopped = false
-
   constructor(
     private readonly deps: ScheduleRuntimeDeps,
     private readonly onSettingsUpdated: (settings: AppSettingsV1) => void
   ) {}
-
   private async loadSettings(): Promise<AppSettingsV1> {
     const settings = await this.deps.store.load()
     return this.deps.withModelCredentials
       ? this.deps.withModelCredentials(settings)
       : settings
   }
-
   private resolveScheduleModelConfig(
     settings: AppSettingsV1,
     input: {
@@ -72,32 +71,43 @@ export class ScheduleExecutionQueue {
   ): ScheduleModelConfig {
     return resolveScheduleModelConfig(settings, input, settings.schedule.providerId?.trim() || '')
   }
-
   runningIds(): string[] {
     return [...this.runningTaskIds]
   }
-
   /** @internal Preserves the runtime's legacy characterization seam. */
   runningSet(): Set<string> {
     return this.runningTaskIds
   }
-
   queuedIds(): string[] {
     return [...this.queuedTaskIds]
   }
-
   hasRunning(taskId: string): boolean {
     return this.runningTaskIds.has(taskId)
   }
-
   hasQueued(taskId: string): boolean {
     return this.queuedTaskIds.has(taskId)
   }
-
+  hasAdmitted(taskId: string): boolean {
+    return this.admittedTaskIds.has(taskId)
+  }
+  markQueuedScheduled(taskId: string): void {
+    if (this.queuedTaskIds.has(taskId)) this.queuedTaskModes.set(taskId, true)
+  }
+  cancelTask(taskId: string): void {
+    this.cancelledTaskIds.add(taskId)
+    const wasQueued = this.queuedTaskIds.delete(taskId)
+    this.queuedTaskModes.delete(taskId)
+    if (wasQueued) {
+      this.resolveTaskCompletion(taskId, { ok: false, message: 'Scheduled task was cancelled.' })
+      void this.drainQueue()
+    }
+  }
   async stop(): Promise<void> {
     if (this.stopped) return
     this.stopped = true
     this.stopController.abort()
+    if (this.wakeTimer) clearTimeout(this.wakeTimer)
+    this.wakeTimer = null
     this.queuedTaskIds.clear()
     this.queuedTaskModes.clear()
     for (const taskId of [...this.taskCompletions.keys()]) {
@@ -106,8 +116,8 @@ export class ScheduleExecutionQueue {
     await Promise.allSettled([...this.activeTasks])
     await Promise.allSettled([...this.worktreeLeases.keys()].map((taskId) => this.releaseTaskWorktree(taskId)))
     this.runningTaskIds.clear()
+    this.admittedTaskIds.clear()
   }
-
   async runTask(taskId: string): Promise<ScheduleRunResult> {
     if (this.stopped) return { ok: false, message: 'Schedule runtime stopped.' }
     const settings = await this.loadSettings()
@@ -125,27 +135,15 @@ export class ScheduleExecutionQueue {
     if (hasTaskDependencyCycle(task.id, settings.schedule.tasks)) {
       return { ok: false, message: 'Task dependencies contain a cycle.' }
     }
-    // Always go through the queue+drain path. The earlier two-step check —
-    // `size < MAX` followed by an awaited store.load() — let two concurrent
-    // IPC callers both pass the cap check before either of them had
-    // incremented runningTaskIds, briefly running 4+ tasks at once. drainQueue
-    // owns the cap synchronously (it is serialized via drainingQueue), so
-    // routing every immediate-run through it eliminates the race.
     const dependenciesReady = dependencies.every((dependency) => dependency?.lastStatus === 'success')
     const completion = this.createTaskCompletion(task.id)
     await this.enqueueTask(task, false)
     if (!dependenciesReady) {
-      // Dependency tasks have not all finished yet — the queue will pick this
-      // task up later when they complete. Return the queued ack now; the
-      // completion deferred stays parked.
       return { ok: true, threadId: '', queued: true, message: 'Task queued.' }
     }
     return completion
   }
-
   private createTaskCompletion(taskId: string): Promise<ScheduleRunResult> {
-    // If a completion is already parked for this task (e.g. someone else is
-    // about to run it), return that one. Otherwise create a fresh deferred.
     const existing = this.taskCompletions.get(taskId)
     if (existing) {
       return new Promise<ScheduleRunResult>((resolve, reject) => {
@@ -170,15 +168,12 @@ export class ScheduleExecutionQueue {
     this.taskCompletions.set(taskId, { resolve: resolveFn, reject: rejectFn })
     return promise
   }
-
   private resolveTaskCompletion(taskId: string, value: ScheduleRunResult): void {
     const deferred = this.taskCompletions.get(taskId)
     if (!deferred) return
     this.taskCompletions.delete(taskId)
     deferred.resolve(value)
   }
-
-
   async ensureNextRuns(_settings: AppSettingsV1): Promise<void> {
     if (this.stopped) return
     const now = new Date()
@@ -194,6 +189,10 @@ export class ScheduleExecutionQueue {
           return task
         }
         const wasInterrupted = wasRunning || wasQueued
+        if (wasInterrupted && task.scheduledSend?.kind === 'thread-send' && task.enabled && task.schedule.kind !== 'manual' && task.scheduledSend.attemptCount < task.scheduledSend.maxAttempts) {
+          changed = true; this.queuedTaskIds.add(task.id); this.queuedTaskModes.set(task.id, true)
+          return { ...task, lastStatus: 'queued' as const, lastMessage: 'Resuming scheduled send after interruption.', nextRunAt: now.toISOString(), updatedAt: now.toISOString() }
+        }
         if (!task.enabled || task.schedule.kind === 'manual' || this.runningTaskIds.has(task.id)) {
           if (!wasInterrupted) return task
           changed = true
@@ -225,7 +224,6 @@ export class ScheduleExecutionQueue {
     })
     this.onSettingsUpdated(saved)
   }
-
   private async updateTask(
     taskId: string,
     updater: (task: ScheduledTaskV1, settings: AppSettingsV1) => ScheduledTaskV1
@@ -239,7 +237,6 @@ export class ScheduleExecutionQueue {
     this.onSettingsUpdated(saved)
     return saved
   }
-
   async enqueueTask(task: ScheduledTaskV1, scheduled: boolean): Promise<void> {
     if (this.stopped) return
     this.queuedTaskIds.add(task.id)
@@ -252,7 +249,6 @@ export class ScheduleExecutionQueue {
     }))
     void this.drainQueue()
   }
-
   async drainQueue(): Promise<void> {
     if (this.drainingQueue || this.stopped) return
     this.drainingQueue = true
@@ -267,7 +263,17 @@ export class ScheduleExecutionQueue {
           .filter((task) => this.queuedTaskIds.has(task.id))
           .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0) || left.createdAt.localeCompare(right.createdAt))
         let next: ScheduledTaskV1 | undefined
+        const claimedThreadIds = new Set<string>()
         for (const task of queued) {
+          const scheduledSendThreadId = task.scheduledSend?.kind === 'thread-send' ? task.sourceThreadId?.trim() || '' : ''
+          if (scheduledSendThreadId) {
+            const hasEarlierQueuedTask = queued.some((candidate) => candidate.id !== task.id && this.queuedTaskIds.has(candidate.id) && candidate.scheduledSend?.kind === 'thread-send' && candidate.sourceThreadId?.trim() === scheduledSendThreadId && (candidate.createdAt < task.createdAt || (candidate.createdAt === task.createdAt && candidate.id < task.id)))
+            if (hasEarlierQueuedTask) continue
+          }
+          if (task.scheduledSend?.kind === 'thread-send' && task.sourceThreadId) {
+            const threadHasRunningSend = settings.schedule.tasks.some((candidate) => candidate.id !== task.id && this.runningTaskIds.has(candidate.id) && candidate.scheduledSend?.kind === 'thread-send' && candidate.sourceThreadId === task.sourceThreadId)
+            if (threadHasRunningSend) continue
+          }
           if (!task.enabled) {
             this.queuedTaskIds.delete(task.id)
             this.queuedTaskModes.delete(task.id)
@@ -312,21 +318,25 @@ export class ScheduleExecutionQueue {
             this.resolveTaskCompletion(task.id, { ok: false, message: cycleMessage })
             continue
           }
+          if (scheduledSendThreadId) {
+            if (claimedThreadIds.has(scheduledSendThreadId)) continue
+            claimedThreadIds.add(scheduledSendThreadId)
+          }
+          if (task.scheduledSend?.kind === 'thread-send' && (this.queuedTaskModes.get(task.id) === true || task.scheduledSend.attemptCount > 0) && task.nextRunAt && Date.parse(task.nextRunAt) > Date.now()) continue
           if (dependencies.every((dependency) => dependency?.lastStatus === 'success')) {
             next = task
             break
           }
         }
-        if (!next) break
+        if (!next) {
+          const nextWakeAt = queued.filter((task) => task.scheduledSend?.kind === 'thread-send' && task.nextRunAt).map((task) => Date.parse(task.nextRunAt)).filter((at) => Number.isFinite(at) && at > Date.now()).sort((left, right) => left - right)[0]
+          if (nextWakeAt) this.scheduleDrainAt(nextWakeAt)
+          break
+        }
         const scheduled = this.queuedTaskModes.get(next.id) ?? false
         const dequeued = next
         this.queuedTaskIds.delete(dequeued.id)
         this.queuedTaskModes.delete(dequeued.id)
-        // Synchronously reserve the running slot BEFORE awaiting anything so
-        // the next iteration of this drain loop (and a re-entrant drainQueue
-        // call) sees the updated size. runTaskInternal also defends against
-        // double-running, but reserving here is what makes the size check at
-        // the top of the loop correct under back-to-back drains.
         this.runningTaskIds.add(dequeued.id)
         const task = this.runTaskInternal(dequeued, scheduled, { slotReserved: true })
         this.trackTask(task)
@@ -346,7 +356,6 @@ export class ScheduleExecutionQueue {
       this.drainingQueue = false
     }
   }
-
   async runTaskInternal(
     task: ScheduledTaskV1,
     scheduled: boolean,
@@ -365,31 +374,41 @@ export class ScheduleExecutionQueue {
       if (slotReserved) this.runningTaskIds.delete(task.id)
       return { ok: false, message: 'Task prompt is empty.' }
     }
-
     if (!slotReserved) this.runningTaskIds.add(task.id)
+    const scheduledSendAttempt = task.scheduledSend?.kind === 'thread-send'
+      ? task.scheduledSend.attemptCount + 1
+      : 0
+    if (task.scheduledSend?.kind === 'thread-send' && scheduledSendAttempt > task.scheduledSend.maxAttempts) {
+      if (slotReserved) this.runningTaskIds.delete(task.id)
+      await this.updateTask(task.id, (current) => ({ ...current, enabled: current.schedule.kind === 'at' ? false : current.enabled, nextRunAt: current.schedule.kind === 'at' ? '' : current.nextRunAt, lastStatus: 'error', lastMessage: 'Scheduled send retry limit reached.', updatedAt: new Date().toISOString() }))
+      return { ok: false, message: 'Scheduled send retry limit reached.' }
+    }
     await this.updateTask(task.id, (current) => ({
       ...current,
       lastStatus: 'running',
       lastMessage: 'Running',
       nextRunAt: '',
+      ...(current.scheduledSend?.kind === 'thread-send'
+        ? { scheduledSend: { ...current.scheduledSend, attemptCount: scheduledSendAttempt, reconciliationPending: true } }
+        : {}),
       updatedAt: new Date().toISOString()
     }))
-
     try {
       const settings = await this.loadSettings()
+      const persistedTask = settings.schedule.tasks.find((candidate) => candidate.id === task.id)
+      if (!persistedTask || this.cancelledTaskIds.has(task.id)) { this.runningTaskIds.delete(task.id); return { ok: false, message: 'Scheduled task was removed before admission.' } }
+      if (task.scheduledSend?.kind === 'thread-send' && !persistedTask.enabled) { this.runningTaskIds.delete(task.id); await this.updateTask(task.id, (current) => ({ ...current, lastStatus: 'idle', lastMessage: 'Scheduled send was paused before admission.', updatedAt: new Date().toISOString() })); return { ok: false, message: 'Scheduled send was paused before admission.' } }
+      if (task.scheduledSend?.kind === 'thread-send' && (!task.sourceThreadId?.trim() || !task.scheduledSend.clientRequestId.trim() || !task.providerId?.trim() || !task.model.trim())) {
+        this.runningTaskIds.delete(task.id)
+        await this.updateTask(task.id, (current) => ({ ...current, enabled: false, lastStatus: 'error', lastMessage: 'Scheduled send snapshot is invalid; no message was sent.', updatedAt: new Date().toISOString() }))
+        return { ok: false, message: 'Scheduled send snapshot is invalid.' }
+      }
       const clawChannel = this.resolveTaskClawChannel(settings, task)
       let workspaceRoot = this.resolveTaskWorkspaceRoot(settings, task, clawChannel)
       if (task.useWorktree) {
         const projectPath = workspaceRoot
         const poolIndex = await findAvailablePoolIndex({ projectPath })
         if (poolIndex === null) {
-          // No slot is currently available. If other worktree tasks are
-          // running, one of them will release a slot soon — re-enqueue this
-          // task so drainQueue picks it up once a slot frees. If nothing else
-          // is running, every slot is permanently in a state findAvailable...
-          // can't recover from (e.g. dirty from a non-scheduled lease); fall
-          // through to the existing error path so the user sees a clear
-          // failure instead of an unbounded re-queue loop.
           const hasOtherWorktreeTasks = [...this.runningTaskIds].some((id) => {
             if (id === task.id) return false
             return this.worktreeLeases.has(id)
@@ -404,8 +423,6 @@ export class ScheduleExecutionQueue {
             }))
             this.queuedTaskIds.add(task.id)
             this.queuedTaskModes.set(task.id, scheduled)
-            // Defer the drain so the currently-running worktree task gets a
-            // chance to release before this one is re-picked.
             setTimeout(() => { void this.drainQueue() }, 250).unref?.()
             return { ok: true, threadId: '', queued: true, message: 'Task re-queued: no worktree slot available.' }
           }
@@ -415,19 +432,31 @@ export class ScheduleExecutionQueue {
         workspaceRoot = worktree.path
         this.worktreeLeases.set(task.id, { projectPath, poolIndex })
       }
-      const modelConfig = this.resolveScheduleModelConfig(settings, {
-        providerId: task.providerId,
-        model: task.model,
-        reasoningEffort: task.reasoningEffort
-      })
+      const modelConfig = task.scheduledSend?.kind === 'thread-send'
+        ? { providerId: task.providerId?.trim() ?? '', model: task.model, reasoningEffort: task.reasoningEffort }
+        : this.resolveScheduleModelConfig(settings, {
+            providerId: task.providerId,
+            model: task.model,
+            reasoningEffort: task.reasoningEffort
+          })
+      const latestTask = (await this.loadSettings()).schedule.tasks.find((candidate) => candidate.id === task.id)
+      if (!latestTask || this.cancelledTaskIds.has(task.id) || (task.scheduledSend?.kind === 'thread-send' && !latestTask.enabled)) { this.runningTaskIds.delete(task.id); await this.releaseTaskWorktree(task.id); return { ok: false, message: 'Scheduled send was cancelled before admission.' } }
       const result = await this.runPrompt(settings, {
         prompt: task.prompt,
+        preservePrompt: task.scheduledSend?.kind === 'thread-send',
         title: scheduledThreadTitle(task.title),
         workspaceRoot,
         ...(task.sourceThreadId ? { threadId: task.sourceThreadId } : {}),
         model: modelConfig.model,
         ...(modelConfig.providerId ? { providerId: modelConfig.providerId } : {}),
         reasoningEffort: modelConfig.reasoningEffort,
+        ...(task.scheduledSend?.kind === 'thread-send'
+          ? {
+              accountId: task.scheduledSend.accountId,
+              attachmentIds: task.scheduledSend.attachmentIds,
+              clientRequestId: task.scheduledSend.clientRequestId
+            }
+          : {}),
         mode: task.mode,
         orchestration: task.orchestration ?? 'direct',
         clawChannel,
@@ -437,10 +466,20 @@ export class ScheduleExecutionQueue {
       })
       if (this.stopped) return { ok: false, message: 'Schedule runtime stopped.' }
       if (!result.ok) {
+        if (task.scheduledSend?.kind === 'thread-send' && isRetryableScheduledSendResult(result, scheduledSendAttempt, task.scheduledSend.maxAttempts)) {
+          const retryAt = new Date(Date.now() + retryDelayMs(scheduledSendAttempt))
+          this.runningTaskIds.delete(task.id)
+          await this.updateTask(task.id, (current) => ({ ...current, lastStatus: 'queued', lastMessage: `Retrying scheduled send (${scheduledSendAttempt}/${current.scheduledSend?.maxAttempts ?? DEFAULT_SCHEDULED_SEND_MAX_ATTEMPTS}).`, nextRunAt: retryAt.toISOString(), updatedAt: new Date().toISOString() }))
+          this.queuedTaskIds.add(task.id)
+          this.queuedTaskModes.set(task.id, scheduled)
+          this.scheduleDrainAt(retryAt.getTime())
+          return { ok: true, threadId: '', queued: true, message: 'Scheduled send queued for retry.' }
+        }
         const finishedAt = new Date()
         await this.updateTask(task.id, (current) => ({
           ...current,
           ...(current.schedule.kind === 'at' ? { enabled: false } : {}),
+          ...(current.scheduledSend?.kind === 'thread-send' ? { scheduledSend: { ...current.scheduledSend, reconciliationPending: false } } : {}),
           lastRunAt: finishedAt.toISOString(),
           nextRunAt: current.schedule.kind === 'at' ? '' : computeScheduleNextRunAt(current, finishedAt),
           lastStatus: 'error',
@@ -448,12 +487,13 @@ export class ScheduleExecutionQueue {
           updatedAt: finishedAt.toISOString()
         }))
         this.runningTaskIds.delete(task.id)
+        this.admittedTaskIds.delete(task.id)
         await this.releaseTaskWorktree(task.id)
         void this.drainQueue()
         return result
       }
-
       const startedAt = new Date()
+      this.admittedTaskIds.add(task.id)
       await this.updateTask(task.id, (current) => ({
         ...current,
         lastRunAt: startedAt.toISOString(),
@@ -461,6 +501,7 @@ export class ScheduleExecutionQueue {
         lastStatus: 'running',
         lastMessage: result.message ?? 'Started',
         lastThreadId: result.threadId,
+        ...(current.scheduledSend?.kind === 'thread-send' ? { scheduledSend: { ...current.scheduledSend, reconciliationPending: false } } : {}),
         updatedAt: startedAt.toISOString()
       }))
       this.trackTask(Promise.resolve(this.monitorTaskTurn(task.id, result.threadId, result.turnId ?? '')))
@@ -468,22 +509,32 @@ export class ScheduleExecutionQueue {
     } catch (error) {
       if (this.stopped) return { ok: false, message: 'Schedule runtime stopped.' }
       const message = error instanceof Error ? error.message : String(error)
+      if (task.scheduledSend?.kind === 'thread-send' && scheduledSendAttempt < task.scheduledSend.maxAttempts && isRetryableScheduledSendError(error)) {
+        const delay = retryDelayMs(scheduledSendAttempt)
+        this.runningTaskIds.delete(task.id)
+        await this.updateTask(task.id, (current) => ({ ...current, lastStatus: 'queued', lastMessage: `Retrying scheduled send (${scheduledSendAttempt}/${current.scheduledSend?.maxAttempts ?? DEFAULT_SCHEDULED_SEND_MAX_ATTEMPTS}).`, nextRunAt: new Date(Date.now() + delay).toISOString(), updatedAt: new Date().toISOString() }))
+        this.queuedTaskIds.add(task.id)
+        this.queuedTaskModes.set(task.id, scheduled)
+        this.scheduleDrainAt(Date.now() + delay)
+        return { ok: true, threadId: '', queued: true, message: 'Scheduled send queued for retry.' }
+      }
       const finishedAt = new Date()
       await this.updateTask(task.id, (current) => ({
         ...current,
         lastRunAt: finishedAt.toISOString(),
-        nextRunAt: computeScheduleNextRunAt(current, finishedAt),
+        ...(current.scheduledSend?.kind === 'thread-send' ? { scheduledSend: { ...current.scheduledSend, reconciliationPending: false } } : {}),
+        ...(current.schedule.kind === 'at' ? { enabled: false, nextRunAt: '' } : { nextRunAt: computeScheduleNextRunAt(current, finishedAt) }),
         lastStatus: 'error',
         lastMessage: message,
         updatedAt: finishedAt.toISOString()
       }))
       this.runningTaskIds.delete(task.id)
+      this.admittedTaskIds.delete(task.id)
       await this.releaseTaskWorktree(task.id)
       void this.drainQueue()
       return { ok: false, message }
     }
   }
-
   async monitorTaskTurn(taskId: string, threadId: string, turnId: string): Promise<void> {
     try {
       const settings = await this.loadSettings()
@@ -500,8 +551,7 @@ export class ScheduleExecutionQueue {
       const finishedAt = new Date()
       await this.updateTask(taskId, (current) => ({
         ...current,
-        ...(current.schedule.kind === 'at' ? { enabled: false } : {}),
-        nextRunAt: current.schedule.kind === 'at' ? '' : computeScheduleNextRunAt(current, finishedAt),
+        ...(current.schedule.kind === 'at' || !current.enabled ? { enabled: false, nextRunAt: '' } : { nextRunAt: computeScheduleNextRunAt(current, finishedAt) }),
         lastStatus: 'success',
         lastMessage: summarizeTaskResult(text),
         lastThreadId: threadId,
@@ -513,8 +563,7 @@ export class ScheduleExecutionQueue {
       const finishedAt = new Date()
       await this.updateTask(taskId, (current) => ({
         ...current,
-        ...(current.schedule.kind === 'at' ? { enabled: false } : {}),
-        nextRunAt: current.schedule.kind === 'at' ? '' : computeScheduleNextRunAt(current, finishedAt),
+        ...(current.schedule.kind === 'at' || !current.enabled ? { enabled: false, nextRunAt: '' } : { nextRunAt: computeScheduleNextRunAt(current, finishedAt) }),
         lastStatus: 'error',
         lastMessage: message,
         lastThreadId: threadId || current.lastThreadId,
@@ -523,11 +572,11 @@ export class ScheduleExecutionQueue {
       this.deps.logError('schedule-task', 'Scheduled task failed', { message, taskId, threadId })
     } finally {
       this.runningTaskIds.delete(taskId)
+      this.admittedTaskIds.delete(taskId)
       await this.releaseTaskWorktree(taskId)
       void this.drainQueue()
     }
   }
-
   private async releaseTaskWorktree(taskId: string): Promise<void> {
     const lease = this.worktreeLeases.get(taskId)
     if (!lease) return
@@ -539,9 +588,10 @@ export class ScheduleExecutionQueue {
       })
     })
   }
-
   runPrompt(settings: AppSettingsV1, options: RunPromptOptions): Promise<ScheduleRunResult> {
-    const prompt = options.clawChannel
+    const prompt = options.preservePrompt
+      ? options.prompt
+      : options.clawChannel
       ? buildClawRuntimePrompt(settings, options.prompt, { channel: options.clawChannel })
       : buildScheduleRuntimePrompt(settings, options.prompt)
     return runPromptViaRuntime(this.deps, settings, {
@@ -552,6 +602,9 @@ export class ScheduleExecutionQueue {
       model: options.model,
       ...(options.providerId ? { providerId: options.providerId } : {}),
       reasoningEffort: options.reasoningEffort,
+      ...(options.accountId ? { accountId: options.accountId } : {}),
+      ...(options.attachmentIds?.length ? { attachmentIds: options.attachmentIds } : {}),
+      ...(options.clientRequestId ? { clientRequestId: options.clientRequestId } : {}),
       mode: options.mode,
       orchestration: options.orchestration ?? 'direct',
       waitForResult: options.waitForResult,
@@ -559,7 +612,6 @@ export class ScheduleExecutionQueue {
       ...(options.signal ? { signal: options.signal } : {})
     })
   }
-
   waitForAssistantText(
     settings: AppSettingsV1,
     threadId: string,
@@ -571,7 +623,6 @@ export class ScheduleExecutionQueue {
     void workspaceRoot
     return waitForAssistantTextViaRuntime(this.deps, settings, threadId, turnId, timeoutMs, signal)
   }
-
   private trackTask<T>(task: Promise<T>): Promise<T> {
     this.activeTasks.add(task)
     void task.then(
@@ -580,25 +631,32 @@ export class ScheduleExecutionQueue {
     )
     return task
   }
-
+  private scheduleDrainAt(at: number): void {
+    if (this.stopped) return
+    if (this.wakeTimer && this.wakeAt <= at) return
+    if (this.wakeTimer) clearTimeout(this.wakeTimer)
+    this.wakeAt = at
+    this.wakeTimer = setTimeout(() => {
+      this.wakeTimer = null
+      this.wakeAt = 0
+      void this.drainQueue()
+    }, Math.max(0, at - Date.now()))
+    this.wakeTimer.unref?.()
+  }
   resolveDefaultWorkspaceRoot(settings: AppSettingsV1): string {
     return settings.schedule.defaultWorkspaceRoot.trim() || settings.workspaceRoot
   }
-
   resolveClawChannel(settings: AppSettingsV1, channelId: string | null | undefined): ClawImChannelV1 | null {
     const id = channelId?.trim()
     if (!id) return null
     return settings.claw.channels.find((channel) => channel.id === id) ?? null
   }
-
   private resolveTaskClawChannel(settings: AppSettingsV1, task: ScheduledTaskV1): ClawImChannelV1 | null {
     return this.resolveClawChannel(settings, task.clawChannelId)
   }
-
   resolveClawChannelWorkspaceRoot(settings: AppSettingsV1, channel: ClawImChannelV1): string {
     return channel.workspaceRoot.trim() || settings.claw.im.workspaceRoot.trim() || this.resolveDefaultWorkspaceRoot(settings)
   }
-
   private resolveTaskWorkspaceRoot(
     settings: AppSettingsV1,
     task: ScheduledTaskV1,
@@ -607,9 +665,23 @@ export class ScheduleExecutionQueue {
     return task.workspaceRoot.trim() ||
       (channel ? this.resolveClawChannelWorkspaceRoot(settings, channel) : this.resolveDefaultWorkspaceRoot(settings))
   }
-
 }
-
+function retryDelayMs(attempt: number): number { return Math.min(SCHEDULED_SEND_RETRY_DELAY_MS * 2 ** Math.max(0, attempt - 1), 30_000) }
+function isRetryableScheduledSendResult(
+  result: Extract<ScheduleRunResult, { ok: false }>,
+  attempt: number,
+  maxAttempts: number
+): boolean {
+  if (attempt >= maxAttempts) return false
+  if (result.status === 409 && /thread_busy|active turn|thread already/i.test(result.message)) return true
+  if (result.status === 408 || result.status === 425 || result.status === 429) return true
+  if (result.status === 0 && (result.code === 'fetch_failed' || result.code === 'runtime_offline' || result.code === 'runtime_request_failed')) return true
+  return typeof result.status === 'number' && result.status >= 500
+}
+function isRetryableScheduledSendError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return /fetch failed|econnrefused|econnreset|socket|timed out|timeout|network|connect/.test(`${error.name} ${error.message}`.toLowerCase())
+}
 export function hasTaskDependencyCycle(taskId: string, tasks: readonly ScheduledTaskV1[]): boolean {
   const dependencies = new Map(tasks.map((task) => [task.id, task.dependsOn ?? []]))
   const visiting = new Set<string>()
@@ -621,9 +693,7 @@ export function hasTaskDependencyCycle(taskId: string, tasks: readonly Scheduled
     for (const dependency of dependencies.get(id) ?? []) {
       if (visit(dependency)) return true
     }
-    visiting.delete(id)
-    visited.add(id)
+    visiting.delete(id); visited.add(id)
     return false
   }
-  return visit(taskId)
-}
+  return visit(taskId) }
