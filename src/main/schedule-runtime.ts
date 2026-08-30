@@ -261,6 +261,9 @@ export class ScheduleRuntime {
   }
 
   async createTask(task: ScheduledTaskV1): Promise<ScheduledTaskV1> {
+    if (task.scheduledSend?.kind === 'thread-send' && task.schedule.kind !== 'at') {
+      throw new Error('Scheduled sends to an existing thread must use a one-time at schedule.')
+    }
     const saved = await this.deps.store.update((current) => ({
       ...current,
       schedule: {
@@ -306,6 +309,9 @@ export class ScheduleRuntime {
     const taskId = randomUUID()
     const sourcePlanId = input.sourcePlanId?.trim() || ''
     const sourceThreadId = input.sourceThreadId?.trim() || ''
+    if (sourceThreadId && !sourcePlanId && input.schedule.kind !== 'at') {
+      throw new Error('Scheduled sends to an existing thread must use a one-time at schedule.')
+    }
     const task: ScheduledTaskV1 = {
       id: taskId,
       title: input.title.trim() || 'New scheduled task',
