@@ -131,7 +131,7 @@ describe('gui updater pending state', () => {
     expect(environment).toEqual({ KUN_PENDING_UPDATE_PATH: 'old-path' })
   })
 
-  it('round-trips complete recovery fields and rejects incomplete transactions', async () => {
+  it('round-trips BOM-prefixed recovery fields and rejects incomplete transactions', async () => {
     const pending = await import('./gui-updater-pending')
     const root = 'C:\\Users\\test\\AppData\\Roaming\\KunInstallerRecovery'
     const path = join(root, 'abc-update.json')
@@ -148,7 +148,7 @@ describe('gui updater pending state', () => {
     }
     const options = {
       platform: 'win32' as const, recoveryRoot: root, readdirApi: async () => ['abc-update.json'],
-      readApi: async () => JSON.stringify(record)
+      readApi: async () => `\uFEFF${JSON.stringify(record)}`
     }
     const transaction = await pending.readInstallerUpdateTransaction({ oldVersion: '0.1.0', newVersion: '0.2.0' }, options)
     expect(transaction?.recoveryEnvironment).toEqual({

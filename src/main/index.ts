@@ -34,6 +34,10 @@ const bootstrapHealthRequest = {
 }
 
 if (bootstrapHealthRequest.resultPath) {
+  app.on('window-all-closed', () => {
+    // The probe destroys its hidden renderer before checking the Runtime.
+    // Keep this short-lived process alive until the explicit app.exit below.
+  })
   const healthStartedAt = new Date().toISOString()
   const healthDeadlineAt = Date.now() + UPDATE_HEALTH_INTERNAL_TIMEOUT_MS
   const reportProgress = (

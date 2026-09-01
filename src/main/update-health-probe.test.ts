@@ -4,6 +4,7 @@ import {
   isolatedUpdateHealthRuntimeEnvironment,
   registerUpdateHealthRendererIpc,
   runMinimalUpdateProbe,
+  UPDATE_HEALTH_RENDERER_LOAD_TIMEOUT_MS,
   updateHealthRuntimeEnvironment
 } from './update-health-probe'
 
@@ -17,6 +18,10 @@ vi.mock('electron', () => ({
 
 describe('runMinimalUpdateProbe', () => {
   const healthyInstall = { ok: true } as const
+
+  it('allows a bounded Windows CI cold start for the production renderer', () => {
+    expect(UPDATE_HEALTH_RENDERER_LOAD_TIMEOUT_MS).toBe(60_000)
+  })
 
   function deps(overrides: Partial<Parameters<typeof runMinimalUpdateProbe>[0]> = {}) {
     return {

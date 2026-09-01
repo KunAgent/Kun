@@ -7,7 +7,14 @@ describe('main entry routing', () => {
 
     expect(source).toContain("import('./main-desktop-entry')")
     expect(source).toContain("import('./update-health-check')")
+    expect(source).toContain("app.on('window-all-closed'")
     expect(source).not.toContain("from './main-app-context'")
+    expect(source.indexOf("app.on('window-all-closed'")).toBeGreaterThan(
+      source.indexOf('if (bootstrapHealthRequest.resultPath)')
+    )
+    expect(source.indexOf("app.on('window-all-closed'")).toBeLessThan(
+      source.indexOf("import('./update-health-check')")
+    )
     expect(source.indexOf('bootstrapHealthRequest.resultPath')).toBeLessThan(
       source.indexOf("import('./main-desktop-entry')")
     )

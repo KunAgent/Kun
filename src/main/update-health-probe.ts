@@ -111,6 +111,7 @@ const defaultDeps: UpdateHealthProbeDeps = {
 
 let rendererProbeRegistered = false
 const HEALTH_BUNDLE_DIR = mainBundleDirectory(import.meta.url)
+export const UPDATE_HEALTH_RENDERER_LOAD_TIMEOUT_MS = 60_000
 
 export function registerUpdateHealthRendererIpc(
   main: Pick<typeof import('electron').ipcMain, 'handle'>
@@ -143,7 +144,8 @@ async function defaultProbeRendererWindow(context: UpdateHealthProbeContext): Pr
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
-      sandbox: true
+      sandbox: true,
+      backgroundThrottling: false
     }
   })
   try {
@@ -151,7 +153,7 @@ async function defaultProbeRendererWindow(context: UpdateHealthProbeContext): Pr
       window.loadFile(join(HEALTH_BUNDLE_DIR, '../renderer/index.html')),
       context,
       'Renderer file load',
-      30_000
+      UPDATE_HEALTH_RENDERER_LOAD_TIMEOUT_MS
     )
     context.reportProgress('renderer_loaded')
     context.reportProgress('renderer_ipc_checking')

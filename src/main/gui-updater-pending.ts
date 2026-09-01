@@ -360,7 +360,7 @@ export async function readInstallerUpdateTransaction(
     const transactionPath = join(root, entry)
     let value: unknown
     try {
-      value = JSON.parse(await readFileBound(transactionPath)) as unknown
+      value = JSON.parse((await readFileBound(transactionPath)).replace(/^\uFEFF/u, '')) as unknown
     } catch {
       continue
     }

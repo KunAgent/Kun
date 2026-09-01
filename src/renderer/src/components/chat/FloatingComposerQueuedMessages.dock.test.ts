@@ -118,7 +118,8 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
     expect(header?.getAttribute('aria-expanded')).toBe('false')
     const listId = header?.getAttribute('aria-controls')
     expect(listId).toBeTruthy()
-    expect(document.getElementById(listId!)).not.toBeNull()
+    expect(document.getElementById(listId!)?.getAttribute('aria-label'))
+      .toBe('queuedMessagesTitle:2')
     expect(container.querySelector('[data-queued-message-id="q-1"]')).toBeNull()
 
     await act(async () => header?.click())

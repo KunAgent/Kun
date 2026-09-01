@@ -194,7 +194,12 @@ export function FloatingComposerQueuedMessages({
           </button>
         ) : null}
 
-        <ul id={listId} className={css.list} hidden={!expanded}>
+        <ul
+          id={listId}
+          className={css.list}
+          aria-label={t('queuedMessagesTitle', { count: queue.length })}
+          hidden={!expanded}
+        >
           {expanded ? queue.map((message) => {
             const isEditing = editing?.id === message.id
             const isBusy = busy?.id === message.id
