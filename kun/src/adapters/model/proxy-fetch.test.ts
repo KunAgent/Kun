@@ -114,7 +114,7 @@ describe('proxy fetch streaming bodies', () => {
         method: 'POST',
         body: bodyStream,
         duplex: 'half'
-      })).text()
+      } as RequestInit & { duplex: 'half' })).text()
 
       expect(requests).toHaveLength(1)
       const captured = requests[0]
@@ -144,7 +144,7 @@ describe('proxy fetch streaming bodies', () => {
         body: bodyStream,
         duplex: 'half',
         headers: { 'content-length': String(bytes.length) }
-      })).text()
+      } as RequestInit & { duplex: 'half' })).text()
 
       expect(requests).toHaveLength(1)
       expect(requests[0].headers['content-length']).toBe(String(bytes.length))
@@ -173,7 +173,7 @@ describe('proxy fetch streaming bodies', () => {
         body: bodyStream,
         duplex: 'half',
         signal: controller.signal
-      })
+      } as RequestInit & { duplex: 'half' })
       await new Promise((resolve) => setTimeout(resolve, 20))
       controller.abort()
       await expect(pending).rejects.toThrow('The operation was aborted.')
