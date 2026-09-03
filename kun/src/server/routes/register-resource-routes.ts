@@ -17,6 +17,10 @@ import {
   updateMemory
 } from './memory.js'
 import {
+  decideMemoryDistillationCandidate,
+  listMemoryDistillationCandidates
+} from './memory-distillation.js'
+import {
   delegationAbort,
   delegationDetach,
   delegationDiagnostics,
@@ -84,6 +88,18 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
   router.add('GET', '/v1/memory/diagnostics', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return memoryDiagnostics(runtime.memoryStore)
+  })
+  router.add('GET', '/v1/memory/distillation', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return listMemoryDistillationCandidates(runtime.memoryDistillation, request)
+  })
+  router.add('POST', '/v1/memory/distillation/:id/decision', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return decideMemoryDistillationCandidate(
+      runtime.memoryDistillation,
+      ctx.params.id,
+      request
+    )
   })
   router.add('PATCH', '/v1/memory/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

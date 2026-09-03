@@ -89,6 +89,13 @@ export const KUN_MEMORY_RECORD_TEMPLATE = '/v1/memory/{id}'
 export function kunMemoryRecordPath(memoryId: string): string {
   return `/v1/memory/${encodeURIComponent(memoryId)}`
 }
+export const KUN_MEMORY_DISTILLATION_PATH = '/v1/memory/distillation'
+export const KUN_MEMORY_DISTILLATION_TEMPLATE = '/v1/memory/distillation'
+export const KUN_MEMORY_DISTILLATION_DECISION_TEMPLATE =
+  '/v1/memory/distillation/{id}/decision'
+export function kunMemoryDistillationDecisionPath(candidateId: string): string {
+  return `${KUN_MEMORY_DISTILLATION_PATH}/${encodeURIComponent(candidateId)}/decision`
+}
 
 export const KUN_DELEGATION_PROFILES_PATH = '/v1/delegation/profiles'
 export const KUN_DELEGATION_PROFILES_TEMPLATE = '/v1/delegation/profiles'

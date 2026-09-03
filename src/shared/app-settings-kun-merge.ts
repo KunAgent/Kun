@@ -389,6 +389,8 @@ export function mergeKunRuntimeSettings(
     videoGeneration: nextVideoGeneration,
     modelProfiles: nextModelProfiles,
     memoryEnabled: patch?.memoryEnabled ?? current.memoryEnabled ?? false,
+    memoryDistillationEnabled:
+      patch?.memoryDistillationEnabled ?? current.memoryDistillationEnabled ?? false,
     instructions: nextInstructions,
     computerUse: nextComputerUse,
     browserUse: nextBrowserUse,

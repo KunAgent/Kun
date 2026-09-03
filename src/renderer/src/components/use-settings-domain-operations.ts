@@ -9,6 +9,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useRef } from 'react'
 import type {
   CoreMemoryRecordJson,
+  CorePendingMemoryCandidateJson,
   CoreRuntimeInfoJson
 } from '../agent/kun-contract'
 import { getProvider } from '../agent/registry'
@@ -40,6 +41,9 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   const setSkillRoots = scope.setSkillRoots as Dispatch<SetStateAction<SkillRootListItem[]>>
   const memoryRecords = scope.memoryRecords as CoreMemoryRecordJson[]
   const setMemoryRecords = scope.setMemoryRecords as Dispatch<SetStateAction<CoreMemoryRecordJson[]>>
+  const setMemoryCandidates = scope.setMemoryCandidates as Dispatch<
+    SetStateAction<CorePendingMemoryCandidateJson[]>
+  >
   const diagnosticsRequestSequence = useRef(0)
   const refreshSkillRoots = useCallback(async (): Promise<void> => {
     if (typeof window.kunGui?.listSkillRoots !== 'function') return
@@ -251,11 +255,15 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     setRuntimeDiagnosticsBusy(true)
     setRuntimeDiagnosticsNotice(null)
     try {
-      const loaded = await loadKunDiagnostics(provider, { listAllMemories: true })
+      const loaded = await loadKunDiagnostics(provider, {
+        listAllMemories: true,
+        workspace: activeProjectWorkspaceRoot
+      })
       if (requestSequence !== diagnosticsRequestSequence.current) return
       if (loaded.runtimeInfo !== undefined) setRuntimeInfo(loaded.runtimeInfo)
       if (loaded.toolDiagnostics !== undefined) setToolDiagnostics(loaded.toolDiagnostics)
       if (loaded.memoryRecords !== undefined) setMemoryRecords(loaded.memoryRecords)
+      if (loaded.memoryCandidates !== undefined) setMemoryCandidates(loaded.memoryCandidates)
       if (loaded.errors.length > 0) {
         setRuntimeDiagnosticsNotice({
           tone: 'error',
@@ -273,7 +281,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
         setRuntimeDiagnosticsBusy(false)
       }
     }
-  }, [])
+  }, [activeProjectWorkspaceRoot])
 
   useEffect(() => {
     if (category !== 'agents' && category !== 'laboratory' && category !== 'memory') return
@@ -474,6 +482,33 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     }
   }
 
+  const decideMemoryCandidate = async (
+    candidateId: string,
+    decision: 'allow' | 'deny'
+  ): Promise<boolean> => {
+    const provider = getProvider()
+    if (!activeProjectWorkspaceRoot ||
+      typeof provider.decideMemoryDistillationCandidate !== 'function') return false
+    try {
+      await provider.decideMemoryDistillationCandidate(
+        candidateId,
+        decision,
+        activeProjectWorkspaceRoot
+      )
+      setMemoryCandidates((candidates) =>
+        candidates.filter((candidate) => candidate.id !== candidateId)
+      )
+      if (decision === 'allow') await refreshKunDiagnostics()
+      return true
+    } catch (error) {
+      setRuntimeDiagnosticsNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+      return false
+    }
+  }
+
   const scrollToAgentSection = (target: 'agents' | 'skill' | 'mcp' | 'permissions'): void => {
     const refs = {
       agents: agentsSectionRef.current,
@@ -483,5 +518,5 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     }
     refs[target]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
-  return { loadMcpConfig, openSkillRoot, toggleSkillRoot, saveMcpConfig, openMcpConfigDir, loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir, refreshKunDiagnostics, createMemoryRecord, updateMemoryRecord, disableMemoryRecord, restoreMemoryRecord, deleteMemoryRecord, scrollToAgentSection }
+  return { loadMcpConfig, openSkillRoot, toggleSkillRoot, saveMcpConfig, openMcpConfigDir, loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir, refreshKunDiagnostics, createMemoryRecord, updateMemoryRecord, disableMemoryRecord, restoreMemoryRecord, deleteMemoryRecord, decideMemoryCandidate, scrollToAgentSection }
 }

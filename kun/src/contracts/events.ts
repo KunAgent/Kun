@@ -518,7 +518,7 @@ export const UsageEvent = RuntimeEventBase.extend({
   model: z.string().optional(),
   providerId: z.string().min(1).optional(),
   accountId: z.string().min(1).optional(),
-  attribution: z.enum(['agent-turn', 'approval-review']).optional(),
+  attribution: z.enum(['agent-turn', 'approval-review', 'memory-distillation']).optional(),
   usage: UsageSnapshotSchema
 })
 export type UsageEvent = z.infer<typeof UsageEvent>

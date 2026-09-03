@@ -216,6 +216,7 @@ export function defaultKunRuntimeSettings(
     videoGeneration: defaultKunVideoGenerationSettings(),
     modelProfiles: {},
     memoryEnabled: false,
+    memoryDistillationEnabled: false,
     instructions: defaultKunInstructionSettings(),
     computerUse: defaultKunComputerUseSettings(),
     browserUse: defaultKunBrowserUseSettings(),

@@ -97,7 +97,7 @@ The host SHALL choose the candidate target scope and observation time from the c
 
 ### Requirement: Production distillation runs only after durable turn completion
 
-When enabled in the later runtime delivery, the coordinator SHALL asynchronously consider only a durably persisted `completed` turn containing non-empty user and assistant text. Failed, aborted, interrupted, or empty turns SHALL NOT trigger distillation. The feature SHALL be disabled by default and a distillation failure SHALL NOT delay, fail, or reverse the completed turn.
+When enabled, the coordinator SHALL asynchronously consider only a durably persisted `completed` turn containing non-empty user and assistant text. Failed, aborted, interrupted, or empty turns SHALL NOT trigger distillation. The feature SHALL be disabled by default and a distillation failure SHALL NOT delay, fail, or reverse the completed turn.
 
 #### Scenario: A completed turn is eligible
 
@@ -132,7 +132,7 @@ The runtime coordinator SHALL reuse the initiating turn's resolved Kun provider 
 
 ### Requirement: Every candidate has an independent durable approval outcome
 
-The runtime delivery SHALL persist pending candidates across restart using a fingerprint derived from the thread id, turn id, and normalized candidate. Approval SHALL be recorded per candidate even when the UI offers a bulk action. Allow SHALL be the only outcome that can invoke MemoryStore; deny, expiry, timeout, or withdrawal before persistence SHALL produce a terminal non-writing outcome that replay does not reopen. Withdrawal after an approved Memory write SHALL use normal Memory lifecycle operations rather than rewriting approval history.
+The runtime SHALL persist pending candidates across restart using a fingerprint derived from the thread id, turn id, and normalized candidate. The first UI SHALL present candidates in a list with independent allow and deny controls and SHALL NOT offer bulk approval. Pending candidates SHALL expire after seven days when the store is opened, listed, or mutated. Allow SHALL be the only outcome that can invoke MemoryStore; deny, expiry, timeout, or withdrawal before persistence SHALL produce a terminal non-writing outcome that replay does not reopen. Withdrawal after an approved Memory write SHALL use normal Memory lifecycle operations rather than rewriting approval history.
 
 #### Scenario: A pending candidate survives restart
 

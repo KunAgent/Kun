@@ -75,4 +75,22 @@ describe('loadKunDiagnostics', () => {
     expect(loaded.memoryRecords).toBeUndefined()
     expect(loaded.errors).toEqual(['Memory: memory store is unavailable'])
   })
+
+  it('loads pending candidates only for an explicit workspace', async () => {
+    const candidates = [{ id: 'mdc_1', status: 'pending' }] as any
+    const provider = {
+      getRuntimeInfo: async () => null as any,
+      getToolDiagnostics: async () => null as any,
+      listMemories: async () => [],
+      listMemoryDistillationCandidates: async (workspace: string) => {
+        expect(workspace).toBe('D:/workspace-a')
+        return candidates
+      }
+    }
+
+    const loaded = await loadKunDiagnostics(provider, { workspace: 'D:/workspace-a' })
+
+    expect(loaded.memoryCandidates).toBe(candidates)
+    expect(loaded.errors).toEqual([])
+  })
 })

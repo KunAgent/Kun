@@ -106,6 +106,11 @@ export function resolveKunMemoryEnabled(settings: AppSettingsV1): boolean {
   return runtime.memoryEnabled ?? false
 }
 
+export function resolveKunMemoryDistillationEnabled(settings: AppSettingsV1): boolean {
+  const runtime = getKunRuntimeSettings(settings)
+  return runtime.memoryDistillationEnabled ?? false
+}
+
 export function resolveProviderCapabilityModel(configuredModel: string, providerModels: readonly string[]): string {
   const model = configuredModel.trim()
   if (!model) return providerModels[0] ?? ''
@@ -233,6 +238,7 @@ export function resolveKunRuntimeSettings(settings: AppSettingsV1): KunRuntimeSe
     musicGeneration: resolveKunMusicGenerationSettings(settings),
     videoGeneration: resolveKunVideoGenerationSettings(settings),
     modelProfiles: modelProviderModelProfilesForProvider(settings, provider.id),
-    memoryEnabled: resolveKunMemoryEnabled(settings)
+    memoryEnabled: resolveKunMemoryEnabled(settings),
+    memoryDistillationEnabled: resolveKunMemoryDistillationEnabled(settings)
   }
 }

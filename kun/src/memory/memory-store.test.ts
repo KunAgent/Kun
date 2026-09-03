@@ -20,7 +20,7 @@ describe('FileMemoryStore', () => {
   it('creates portable imports with exact expiry and disabled lifecycle state', async () => {
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['user'], maxInjectedRecords: 8 },
+      config: { enabled: true, scopes: ['user'], maxInjectedRecords: 8, distillation: { enabled: false } },
       idGenerator: () => 'mem_portable',
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })
@@ -44,7 +44,7 @@ describe('FileMemoryStore', () => {
     let tick = 0
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 },
+      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8, distillation: { enabled: false } },
       idGenerator: () => 'mem_toggle',
       nowIso: () => `2026-06-21T00:00:0${tick++}.000Z`
     })
@@ -75,7 +75,12 @@ describe('FileMemoryStore', () => {
   it('reads a record by id without a full directory scan', async () => {
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 },
+      config: {
+        enabled: true,
+        scopes: ['workspace'],
+        maxInjectedRecords: 8,
+        distillation: { enabled: false }
+      },
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })
 
@@ -95,7 +100,12 @@ describe('FileMemoryStore', () => {
     const rootDir = await makeTempDir()
     const store = new FileMemoryStore({
       rootDir,
-      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 }
+      config: {
+        enabled: true,
+        scopes: ['workspace'],
+        maxInjectedRecords: 8,
+        distillation: { enabled: false }
+      }
     })
     await writeFile(join(rootDir, 'mem_bad.json'), '{broken')
     await expect(store.get('mem_bad')).resolves.toBeUndefined()
@@ -104,7 +114,12 @@ describe('FileMemoryStore', () => {
   it('createWithId is idempotent and does not rewrite an existing record', async () => {
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 },
+      config: {
+        enabled: true,
+        scopes: ['workspace'],
+        maxInjectedRecords: 8,
+        distillation: { enabled: false }
+      },
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })
     const first = await store.createWithId('mem_idem', {
@@ -120,7 +135,12 @@ describe('FileMemoryStore', () => {
   it('create and createWithId never trigger a full canonical list scan', async () => {
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 },
+      config: {
+        enabled: true,
+        scopes: ['workspace'],
+        maxInjectedRecords: 8,
+        distillation: { enabled: false }
+      },
       idGenerator: () => 'mem_new',
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })

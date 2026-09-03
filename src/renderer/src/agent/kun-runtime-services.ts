@@ -56,6 +56,7 @@ import type {
   CoreAttachmentTextFallbackJson,
   CoreAttachmentUploadResponseJson,
   CoreMemoryDiagnosticsJson,
+  CorePendingMemoryCandidateJson,
   CoreMemoryListResponseJson,
   CoreMemoryRecordJson,
   CoreMcpOAuthClearResponseJson,
@@ -82,6 +83,10 @@ import type {
   CoreThreadSummaryJson,
   CoreThreadTodosResponseJson
 } from './kun-contract'
+import {
+  decideRuntimeMemoryCandidate,
+  listRuntimeMemoryCandidates
+} from './kun-runtime-memory-distillation'
 import {
   buildQuery,
   chatBlockFromItem,
@@ -369,6 +374,20 @@ export class KunRuntimeProviderServices {
       response.body,
       'runtime returned an invalid memory diagnostics response'
     )
+  }
+
+  async listMemoryDistillationCandidates(
+    workspace: string
+  ): Promise<CorePendingMemoryCandidateJson[]> {
+    return listRuntimeMemoryCandidates(workspace)
+  }
+
+  async decideMemoryDistillationCandidate(
+    candidateId: string,
+    decision: 'allow' | 'deny' | 'withdraw',
+    workspace: string
+  ): Promise<CorePendingMemoryCandidateJson> {
+    return decideRuntimeMemoryCandidate(candidateId, decision, workspace)
   }
 
   async forkThread(

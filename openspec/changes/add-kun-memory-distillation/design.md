@@ -30,7 +30,7 @@ The core cannot reliably infer arbitrary semantic contradiction from lexical ove
 
 ### 1. Deliver one OpenSpec change as two sequential PRs
 
-P1-A contains this complete proposal/design/spec plus candidate contracts, pure normalization/decision code, fixtures, and evaluation. It changes no production execution path. P1-B starts from develop after P1-A merges and adds runtime coordination, settings, pending approvals, UI, persistence, and end-to-end acceptance.
+P1-A contains this complete proposal/design/spec plus candidate contracts, pure normalization/decision code, fixtures, and evaluation. It changes no production execution path. P1-B adds runtime coordination, settings, pending approvals, UI, persistence, and end-to-end acceptance. Local P1-B development may proceed on a branch stacked on P1-A while unrelated upstream CI is blocked, but delivery remains sequential: P1-A merges first, then P1-B is rebased onto the resulting `develop` before its PR is created.
 
 This keeps the architecture coherent in one change while preserving a small first review boundary. Tasks are grouped and checked by delivery slice; the change is archived only after P1-B is merged and accepted.
 
@@ -69,7 +69,7 @@ The call is scheduled only after the turn is durably persisted as completed. It 
 
 ### 6. Persist pending approvals and terminal rejections independently
 
-P1-B will store pending candidate envelopes outside canonical Memory records. The idempotency key is a SHA-256 fingerprint over thread id, turn id, and the normalized candidate. Pending entries survive restart. Each candidate has its own state even if the UI offers allow-all or deny-all controls.
+P1-B will store pending candidate envelopes outside canonical Memory records. The idempotency key is a SHA-256 fingerprint over thread id, turn id, and the normalized candidate. Pending entries survive restart. Each candidate has its own state. The first UI presents a list with per-candidate allow and deny controls only; it intentionally has no bulk approval controls so one action cannot silently authorize unrelated memories.
 
 Only `allow` may call MemoryStore. Deny, timeout, expiry, or withdrawal before persistence writes a terminal non-writing outcome so replay cannot reopen it. Approval history is append-only. If an already-approved Memory must be withdrawn later, the user uses existing disable/delete/supersede lifecycle operations; the prior approval is not rewritten.
 
@@ -95,7 +95,10 @@ P1-A fixtures cover English and Chinese facts, preferences, decisions, transient
 
 P1-A adds unused exported pure modules and tests, so it requires no data or settings migration and can be reverted without changing runtime state. P1-B will add an opt-in setting defaulting to false and a versioned pending-candidate store. Existing Memory V2 JSON and SQLite projection remain unchanged. Removing P1-B disables new extraction while leaving approved Memory records manageable through existing lifecycle operations.
 
+### 9. Expire unattended candidates after seven days
+
+Pending approvals expire seven days after creation. Expiry is applied when the pending store is opened, listed, or mutated, so the first version needs no background cleanup timer. Expired candidates remain as terminal audit records and can never be reopened or written; a later retention policy may compact old terminal history without changing that behavior.
+
 ## Open Questions
 
-- Whether the first UI should present approvals individually or in a list with bulk controls; storage and audit semantics remain per-candidate either way.
-- The final pending-approval expiry duration and cleanup cadence; timeout/expiry must remain terminal and non-writing regardless of the selected duration.
+None for P1-B implementation. Bulk approval and terminal-history compaction remain possible follow-up work, not part of this change.
