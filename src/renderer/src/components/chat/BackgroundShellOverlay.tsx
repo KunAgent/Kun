@@ -19,7 +19,10 @@ const SHELL_POPOVER_WIDTH = 736
 const SHELL_POPOVER_MAX_HEIGHT = 620
 const SHELL_POPOVER_ESTIMATED_HEIGHT = 560
 
-const ANSI_ESCAPE_SEQUENCE = /\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
+const ANSI_ESCAPE_SEQUENCE = new RegExp(
+  `${String.fromCharCode(27)}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`,
+  'g'
+)
 
 export function stripAnsiSequences(value: string): string {
   return value.replace(ANSI_ESCAPE_SEQUENCE, '')

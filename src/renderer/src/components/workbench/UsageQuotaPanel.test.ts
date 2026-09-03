@@ -156,7 +156,7 @@ describe('UsageQuotaPanel', () => {
     expect(renderer.root.findByProps({ 'data-usage-range': '30d' }).props['aria-pressed']).toBe(false)
     expect(renderer.root.findByProps({ 'data-usage-range': '90d' }).props['aria-pressed']).toBe(false)
     expect(renderer.root.findByProps({ 'data-usage-range': 'all' }).props['aria-pressed']).toBe(false)
-    expectUsageRange(runtimeRequest, 'day', 7)
+    expectUsageRange(runtimeRequest, 'day', 84)
     expectUsageRange(runtimeRequest, 'model', 7)
     expect(listProviderQuotas).not.toHaveBeenCalled()
     const output = JSON.stringify(renderer.toJSON())
@@ -191,19 +191,19 @@ describe('UsageQuotaPanel', () => {
     await act(async () => {
       renderer.root.findByProps({ 'data-usage-range': '30d' }).props.onClick()
     })
-    expectUsageRange(runtimeRequest, 'day', 30)
+    expectUsageRange(runtimeRequest, 'day', 84)
     expectUsageRange(runtimeRequest, 'model', 30)
 
     await act(async () => {
       renderer.root.findByProps({ 'data-usage-range': '90d' }).props.onClick()
     })
-    expectUsageRange(runtimeRequest, 'day', 90)
+    expectUsageRange(runtimeRequest, 'day', 84)
     expectUsageRange(runtimeRequest, 'model', 90)
 
     await act(async () => {
       renderer.root.findByProps({ 'data-usage-range': 'all' }).props.onClick()
     })
-    expectUsageRange(runtimeRequest, 'day', 365)
+    expectUsageRange(runtimeRequest, 'day', 84)
     expectUsageRange(runtimeRequest, 'model', 365)
 
     const resetPage = JSON.stringify(renderer.toJSON())
