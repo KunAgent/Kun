@@ -1,4 +1,5 @@
 import { MemoryDistillationDecisionRequest } from '../../contracts/memory-distillation-runtime.js'
+import { MemoryDistillationConflictError } from '../../memory/memory-distillation-apply.js'
 import type { MemoryDistillationCoordinator } from '../../memory/memory-distillation-coordinator.js'
 import { readJsonBody } from '../read-json-body.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
@@ -32,7 +33,9 @@ export async function decideMemoryDistillationCandidate(
     return jsonResponse({ candidate: await coordinator.decide(id, parsed.data, workspace) })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (message.includes('already ')) return ERRORS.conflict(message)
+    if (error instanceof MemoryDistillationConflictError || message.includes('already ')) {
+      return ERRORS.conflict(message)
+    }
     if (message.includes('not found') || message.includes('not active')) {
       return ERRORS.notFound(message)
     }

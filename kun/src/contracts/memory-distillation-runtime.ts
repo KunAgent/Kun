@@ -37,8 +37,16 @@ export type MemoryDistillationTarget = z.infer<typeof MemoryDistillationTarget>
 
 export const MemoryDistillationProposedAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create') }).strict(),
-  z.object({ action: z.literal('update'), memoryId: z.string().min(1) }).strict(),
-  z.object({ action: z.literal('supersede'), memoryId: z.string().min(1) }).strict()
+  z.object({
+    action: z.literal('update'),
+    memoryId: z.string().min(1),
+    targetUpdatedAt: z.string().min(1).max(128)
+  }).strict(),
+  z.object({
+    action: z.literal('supersede'),
+    memoryId: z.string().min(1),
+    targetUpdatedAt: z.string().min(1).max(128)
+  }).strict()
 ])
 export type MemoryDistillationProposedAction = z.infer<
   typeof MemoryDistillationProposedAction
@@ -52,6 +60,7 @@ export const MemoryDistillationCandidateStatus = z.enum([
   'timed-out',
   'expired',
   'withdrawn',
+  'conflicted',
   'failed'
 ])
 export type MemoryDistillationCandidateStatus = z.infer<
@@ -63,6 +72,15 @@ export const MemoryDistillationHistoryEntry = z.object({
   at: z.string().datetime(),
   reason: z.string().min(1).max(512).optional()
 }).strict()
+
+export const MemoryDistillationApplyReceipt = z.object({
+  operationId: z.string().min(1).max(128),
+  expectedMemoryId: z.string().min(1).max(256),
+  targetUpdatedAt: z.string().min(1).max(128).optional()
+}).strict()
+export type MemoryDistillationApplyReceipt = z.infer<
+  typeof MemoryDistillationApplyReceipt
+>
 
 export const PendingMemoryCandidate = z.object({
   schemaVersion: z.literal(MEMORY_DISTILLATION_STORE_VERSION),
@@ -77,6 +95,7 @@ export const PendingMemoryCandidate = z.object({
   createdAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
   history: z.array(MemoryDistillationHistoryEntry).min(1),
+  applyReceipt: MemoryDistillationApplyReceipt.optional(),
   memoryId: z.string().min(1).optional()
 }).strict()
 export type PendingMemoryCandidate = z.infer<typeof PendingMemoryCandidate>

@@ -99,6 +99,18 @@ P1-A adds unused exported pure modules and tests, so it requires no data or sett
 
 Pending approvals expire seven days after creation. Expiry is applied when the pending store is opened, listed, or mutated, so the first version needs no background cleanup timer. Expired candidates remain as terminal audit records and can never be reopened or written; a later retention policy may compact old terminal history without changing that behavior.
 
+### 10. Revalidate approval intent and recover interrupted applies
+
+An approval may arrive days after extraction. Update and supersede proposals therefore capture the authorized target's `updatedAt`, and allow revalidates that version plus current scope/lifecycle immediately before mutation. Every action also rechecks exact normalized content against active scoped Memory records. A changed target or newly created duplicate becomes a terminal `conflicted` outcome with no write; P1 does not claim that lexical similarity alone can block a near-duplicate.
+
+Before MemoryStore mutation, the ledger persists an apply receipt containing a stable operation id and expected Memory id. Create and supersede keep their deterministic candidate-derived ids; update uses the authorized target id. On restart, an `applying` candidate is reconciled against canonical Memory: a matching applied result is committed as allowed, a still-valid unapplied intent is retried, and a changed or ambiguous result fails closed as conflicted. This closes the write-before-ledger crash window without introducing a second transaction store.
+
+### 11. Keep provenance and runtime lifecycle host-owned
+
+Only completed turns without an internal `messageSource` are eligible for P1 distillation. Current internal shell, subagent, Graph, resume, and design-continuation turns are skipped rather than being mislabeled as explicit-user evidence. Host source ids bind thread id, turn id, source kind, and content hash so repeated text from independent turns remains independently auditable.
+
+The coordinator tracks accepted background work and its abort controllers. Once shutdown starts it accepts no new work, aborts model extraction, and waits for tracked tasks to settle before shared stores close. Unexpectedly interrupted extraction remains a bounded failed run in P1; a persistent retry queue, model-role routing, batching, and hourly/daily budgets remain follow-up work.
+
 ## Open Questions
 
-None for P1-B implementation. Bulk approval and terminal-history compaction remain possible follow-up work, not part of this change.
+None for P1-B implementation. Bulk approval, citation offsets, persistent extraction retries, model-role routing, batching/budgets, and terminal-history compaction remain possible follow-up work, not part of this change.

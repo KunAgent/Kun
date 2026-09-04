@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { MemoryDistillationConflictError } from '../../memory/memory-distillation-apply.js'
 import type { MemoryDistillationCoordinator } from '../../memory/memory-distillation-coordinator.js'
 import {
   decideMemoryDistillationCandidate,
@@ -50,5 +51,22 @@ describe('memory distillation routes', () => {
     if (response instanceof Response) throw new Error('expected JSON response')
     expect(response.status).toBe(200)
     expect(decide).toHaveBeenCalledWith('mdc_1', { decision: 'allow' }, 'D:/workspace-a')
+  })
+
+  it('returns a conflict when an approval became stale', async () => {
+    const decide = vi.fn(async () => {
+      throw new MemoryDistillationConflictError('the proposed Memory target changed')
+    })
+    const response = await decideMemoryDistillationCandidate(
+      { decide } as unknown as MemoryDistillationCoordinator,
+      'mdc_1',
+      new Request(
+        'http://kun.local/v1/memory/distillation/mdc_1/decision?workspace=D%3A%2Fworkspace-a',
+        { method: 'POST', body: JSON.stringify({ decision: 'allow' }) }
+      )
+    )
+    expect(response).not.toBeInstanceOf(Response)
+    if (response instanceof Response) throw new Error('expected JSON response')
+    expect(response.status).toBe(409)
   })
 })

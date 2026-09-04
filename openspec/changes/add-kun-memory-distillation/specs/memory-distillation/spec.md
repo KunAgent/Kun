@@ -77,7 +77,7 @@ The system SHALL expose a deterministic, side-effect-free decision operation tha
 
 ### Requirement: Scope, evidence, and authority remain host-owned
 
-The host SHALL choose the candidate target scope and observation time from the current runtime context, construct authoritative source evidence from the completed turn, and retrieve comparison records through the existing scope- and lifecycle-filtered Memory path. Model output SHALL be limited to source ids from that host-provided set and SHALL NOT supply source kind, trust, thread/turn ids, locators, excerpts, observation time, or broaden user, workspace, or project access. Every approved result SHALL remain `authority=reference`, including results backed by inference sources.
+The host SHALL choose the candidate target scope and observation time from the current runtime context, construct authoritative source evidence from the completed turn, and retrieve comparison records through the existing scope- and lifecycle-filtered Memory path. Model output SHALL be limited to source ids from that host-provided set and SHALL NOT supply source kind, trust, thread/turn ids, locators, excerpts, observation time, or broaden user, workspace, or project access. Host source identity SHALL bind the originating thread, turn, source kind, and content hash so equal text from independent turns remains independently auditable. Every approved result SHALL remain `authority=reference`, including results backed by inference sources.
 
 #### Scenario: A model proposes an arbitrary target
 
@@ -97,7 +97,7 @@ The host SHALL choose the candidate target scope and observation time from the c
 
 ### Requirement: Production distillation runs only after durable turn completion
 
-When enabled, the coordinator SHALL asynchronously consider only a durably persisted `completed` turn containing non-empty user and assistant text. Failed, aborted, interrupted, or empty turns SHALL NOT trigger distillation. The feature SHALL be disabled by default and a distillation failure SHALL NOT delay, fail, or reverse the completed turn.
+When enabled, the coordinator SHALL asynchronously consider only a durably persisted `completed` turn containing non-empty user and assistant text and no internal `messageSource`. Failed, aborted, interrupted, empty, background-shell, background-subagent, Graph-runtime, subagent-resume, and design-continuation turns SHALL NOT trigger distillation. The feature SHALL be disabled by default and a distillation failure SHALL NOT delay, fail, or reverse the completed turn.
 
 #### Scenario: A completed turn is eligible
 
@@ -108,6 +108,12 @@ When enabled, the coordinator SHALL asynchronously consider only a durably persi
 
 - **WHEN** a turn is failed, aborted, interrupted, missing persisted completion, or missing non-empty user or assistant text
 - **THEN** no distillation request or pending candidate is created
+
+#### Scenario: An internal turn is ignored
+
+- **WHEN** a completed turn carries an internal `messageSource`
+- **THEN** no distillation request or pending candidate is created
+- **AND** its prompt is never represented as explicit-user evidence
 
 #### Scenario: Distillation fails after completion
 
@@ -132,7 +138,7 @@ The runtime coordinator SHALL reuse the initiating turn's resolved Kun provider 
 
 ### Requirement: Every candidate has an independent durable approval outcome
 
-The runtime SHALL persist pending candidates across restart using a fingerprint derived from the thread id, turn id, and normalized candidate. The first UI SHALL present candidates in a list with independent allow and deny controls and SHALL NOT offer bulk approval. Pending candidates SHALL expire after seven days when the store is opened, listed, or mutated. Allow SHALL be the only outcome that can invoke MemoryStore; deny, expiry, timeout, or withdrawal before persistence SHALL produce a terminal non-writing outcome that replay does not reopen. Withdrawal after an approved Memory write SHALL use normal Memory lifecycle operations rather than rewriting approval history.
+The runtime SHALL persist pending candidates across restart using a fingerprint derived from the thread id, turn id, and normalized candidate. The first UI SHALL present candidates in a list with independent allow and deny controls and SHALL NOT offer bulk approval. Pending candidates SHALL expire after seven days when the store is opened, listed, or mutated. Allow SHALL be the only outcome that can invoke MemoryStore; deny, expiry, timeout, withdrawal before persistence, stale target versions, and newly detected exact duplicates SHALL produce terminal non-writing outcomes that replay does not reopen. Update and supersede proposals SHALL record the authorized target version and revalidate it at allow time. Withdrawal after an approved Memory write SHALL use normal Memory lifecycle operations rather than rewriting approval history.
 
 #### Scenario: A pending candidate survives restart
 
@@ -150,6 +156,33 @@ The runtime SHALL persist pending candidates across restart using a fingerprint 
 - **WHEN** a UI action allows one candidate and denies another candidate from the same turn
 - **THEN** only the allowed candidate can mutate MemoryStore
 - **AND** both independent outcomes remain auditable
+
+#### Scenario: Approval becomes stale
+
+- **WHEN** a proposal target changes or an exact active duplicate appears after extraction but before allow
+- **THEN** the candidate becomes conflicted without mutating MemoryStore
+- **AND** the bounded conflict reason remains auditable
+
+### Requirement: Candidate state changes are crash-consistent and shutdown-aware
+
+The pending store SHALL publish a state mutation to its in-memory cache only after the validated next state is durably written. Before an approved MemoryStore mutation, the ledger SHALL persist a stable apply receipt. On restart, an interrupted apply SHALL reconcile the receipt with canonical Memory and SHALL either commit an already applied matching result, safely retry a still-valid unapplied intent, or fail closed as conflicted. The runtime SHALL stop accepting distillation work during shutdown, abort bounded model requests, and wait for tracked distillation work before closing shared stores.
+
+#### Scenario: Pending-state persistence fails
+
+- **WHEN** an atomic candidate-ledger write fails
+- **THEN** neither the in-memory state nor the durable state advances
+- **AND** a later retry observes and applies the original transition exactly once
+
+#### Scenario: Runtime restarts after MemoryStore write
+
+- **WHEN** canonical Memory reflects a persisted apply receipt but the allowed transition was interrupted
+- **THEN** startup reconciliation marks that candidate allowed without writing a duplicate
+
+#### Scenario: Runtime shuts down during extraction
+
+- **WHEN** shutdown begins while a bounded extraction request is in flight
+- **THEN** the request is aborted and its tracked task settles before shared stores close
+- **AND** no new distillation task is accepted after shutdown begins
 
 ### Requirement: Distillation quality is reproducible
 

@@ -217,12 +217,13 @@ export type CorePendingMemoryCandidateJson = {
   }
   proposedAction:
     | { action: 'create' }
-    | { action: 'update' | 'supersede'; memoryId: string }
+    | { action: 'update' | 'supersede'; memoryId: string; targetUpdatedAt: string }
   status: 'pending' | 'applying' | 'allowed' | 'denied' | 'timed-out' |
-    'expired' | 'withdrawn' | 'failed'
+    'expired' | 'withdrawn' | 'conflicted' | 'failed'
   createdAt: string
   expiresAt: string
   history: Array<{ status: string; at: string; reason?: string }>
+  applyReceipt?: { operationId: string; expectedMemoryId: string; targetUpdatedAt?: string }
   memoryId?: string
 }
 

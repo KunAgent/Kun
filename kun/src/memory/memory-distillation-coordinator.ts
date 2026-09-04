@@ -13,10 +13,17 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { UsageService } from '../services/usage-service.js'
 import { decideMemoryCandidate, MemoryDistillationDecisionError } from './memory-distillation.js'
 import {
+  applyMemoryDistillationCandidate,
+  buildMemoryDistillationApplyReceipt,
+  MemoryDistillationConflictError,
+  memoryRecordMatchesDistillationCandidate,
+  validateMemoryDistillationApplyIntent
+} from './memory-distillation-apply.js'
+import {
   MemoryDistillationPendingStore,
   type PendingMemoryCandidateInsert
 } from './memory-distillation-pending-store.js'
-import { isMemoryActive, type MemoryStore } from './memory-store.js'
+import type { MemoryStore } from './memory-store.js'
 
 export const MEMORY_DISTILLATION_MAX_INPUT_CHARS = 24_000
 export const MEMORY_DISTILLATION_MAX_OUTPUT_TOKENS = 2_048
@@ -44,26 +51,44 @@ export type MemoryDistillationCoordinatorOptions = {
 }
 
 export class MemoryDistillationCoordinator {
+  private approvalMutation = Promise.resolve()
+  private readonly activeRuns = new Set<Promise<unknown>>()
+  private readonly extractionControllers = new Set<AbortController>()
+  private shuttingDown = false
+
   constructor(private readonly options: MemoryDistillationCoordinatorOptions) {}
+
+  async ready(): Promise<void> {
+    await this.options.pending.ready()
+    if (!this.options.memoryStore()) return
+    const applying = await this.options.pending.list({ status: 'applying' })
+    for (const candidate of applying) {
+      await this.withApprovalMutation(() => this.reconcileApplying(candidate)).catch((error) => {
+        this.diagnose(candidate.threadId, candidate.turnId, error)
+      })
+    }
+  }
 
   schedule(input: {
     threadId: string
     turnId: string
     status: 'completed' | 'failed' | 'aborted'
   }): void {
-    if (input.status !== 'completed' || !this.options.enabled()) return
-    void this.distill(input.threadId, input.turnId).catch((error) => {
+    if (this.shuttingDown || input.status !== 'completed' || !this.options.enabled()) return
+    const run = this.distill(input.threadId, input.turnId).catch((error) => {
       this.diagnose(input.threadId, input.turnId, error)
     })
+    this.activeRuns.add(run)
+    void run.finally(() => this.activeRuns.delete(run))
   }
 
   async distill(threadId: string, turnId: string): Promise<PendingMemoryCandidate[]> {
-    if (!this.options.enabled()) return []
+    if (this.shuttingDown || !this.options.enabled()) return []
     const memoryStore = this.options.memoryStore()
     if (!memoryStore) return []
     const thread = await this.options.threads.get(threadId)
     const turn = thread?.turns.find((entry) => entry.id === turnId)
-    if (!thread?.workspace || !turn || turn.status !== 'completed') return []
+    if (!thread?.workspace || !turn || turn.status !== 'completed' || turn.messageSource) return []
     const userText = turn.prompt.trim()
     const assistantText = turn.items
       .flatMap((item) => item.kind === 'assistant_text' && item.status === 'completed' ? [item.text] : [])
@@ -122,14 +147,19 @@ export class MemoryDistillationCoordinator {
             Date.parse(observedAt)
           )
           if (decision.action === 'skip') continue
+          const proposedAction = decision.action === 'create'
+            ? { action: 'create' as const }
+            : {
+                action: decision.action,
+                memoryId: decision.memoryId,
+                targetUpdatedAt: authorizedTarget(authorized, decision.memoryId).updatedAt
+              }
           inserts.push({
             threadId,
             turnId,
             target: { scope: 'workspace', workspace: thread.workspace },
             candidate: decision.candidate,
-            proposedAction: decision.action === 'create'
-              ? { action: 'create' }
-              : { action: decision.action, memoryId: decision.memoryId }
+            proposedAction
           })
         } catch (error) {
           if (!(error instanceof MemoryDistillationDecisionError)) throw error
@@ -154,74 +184,47 @@ export class MemoryDistillationCoordinator {
     request: MemoryDistillationDecisionRequest,
     workspace: string
   ): Promise<PendingMemoryCandidate> {
-    const current = await this.options.pending.get(id)
-    if (!current || current.target.workspace !== workspace) {
-      throw new Error(`memory distillation candidate not found: ${id}`)
-    }
-    if (request.decision === 'deny') {
-      return this.options.pending.transition(id, ['pending'], 'denied')
-    }
-    if (request.decision === 'withdraw') {
-      return this.options.pending.transition(id, ['pending'], 'withdrawn')
-    }
-    return this.allow(current)
+    return this.withApprovalMutation(async () => {
+      const current = await this.options.pending.get(id)
+      if (!current || current.target.workspace !== workspace) {
+        throw new Error(`memory distillation candidate not found: ${id}`)
+      }
+      if (request.decision === 'deny') {
+        return this.options.pending.transition(id, ['pending'], 'denied')
+      }
+      if (request.decision === 'withdraw') {
+        return this.options.pending.transition(id, ['pending'], 'withdrawn')
+      }
+      if (current.status === 'applying') return this.reconcileApplying(current)
+      if (current.status !== 'pending') {
+        throw new Error(`memory distillation candidate is already ${current.status}`)
+      }
+      return this.allow(current)
+    })
   }
 
   async markTimedOut(id: string): Promise<PendingMemoryCandidate> {
-    return this.options.pending.transition(id, ['pending'], 'timed-out')
+    return this.withApprovalMutation(() =>
+      this.options.pending.transition(id, ['pending'], 'timed-out')
+    )
   }
 
   private async allow(current: PendingMemoryCandidate): Promise<PendingMemoryCandidate> {
     const memoryStore = this.options.memoryStore()
     if (!memoryStore) throw new Error('memory store is unavailable')
-    await this.options.pending.transition(current.id, ['pending'], 'applying')
     try {
-      const input = {
-        content: current.candidate.content,
-        scope: 'workspace' as const,
-        workspace: current.target.workspace,
-        sourceThreadId: current.threadId,
-        sourceTurnId: current.turnId,
-        provenance: { kind: 'inference' as const, turnId: current.turnId },
-        tags: current.candidate.tags,
-        confidence: current.candidate.confidence,
-        type: current.candidate.type,
-        importance: current.candidate.importance,
-        observedAt: current.candidate.observedAt,
-        sources: current.candidate.sources
-      }
-      let record: MemoryRecord
-      if (current.proposedAction.action === 'update') {
-        const target = await activeTarget(
-          memoryStore,
-          current.proposedAction.memoryId,
-          current.target.workspace,
-          Date.parse(this.now())
-        )
-        record = await memoryStore.update(target.id, {
-          content: input.content,
-          tags: input.tags,
-          confidence: input.confidence,
-          type: input.type,
-          importance: input.importance,
-          observedAt: input.observedAt,
-          sources: mergeSources(input.sources, target.sources)
-        }, { workspace: current.target.workspace })
-      } else {
-        const supersedes = current.proposedAction.action === 'supersede'
-          ? (await activeTarget(
-              memoryStore,
-              current.proposedAction.memoryId,
-              current.target.workspace,
-              Date.parse(this.now())
-            )).id
-          : undefined
-        const createInput = { ...input, ...(supersedes ? { supersedes } : {}) }
-        const memoryId = `mem_distilled_${current.fingerprint.slice(0, 20)}`
-        record = memoryStore.createWithId
-          ? await memoryStore.createWithId(memoryId, createInput)
-          : await memoryStore.create(createInput)
-      }
+      const target = await validateMemoryDistillationApplyIntent(
+        memoryStore,
+        current,
+        Date.parse(this.now())
+      )
+      const applying = await this.options.pending.transition(
+        current.id,
+        ['pending'],
+        'applying',
+        { applyReceipt: buildMemoryDistillationApplyReceipt(current) }
+      )
+      const record = await applyMemoryDistillationCandidate(memoryStore, applying, target)
       return await this.options.pending.transition(
         current.id,
         ['applying'],
@@ -229,12 +232,92 @@ export class MemoryDistillationCoordinator {
         { memoryId: record.id }
       )
     } catch (error) {
-      const diagnostic = sanitizeMemoryDistillationDiagnostic(error)
-      await this.options.pending.transition(current.id, ['applying'], 'failed', {
-        reason: diagnostic
-      })
+      await this.recordApplyFailure(current.id, error).catch(() => undefined)
       throw error
     }
+  }
+
+  async shutdown(): Promise<void> {
+    this.shuttingDown = true
+    const reason = new Error('runtime is shutting down during memory distillation')
+    for (const controller of this.extractionControllers) controller.abort(reason)
+    await Promise.allSettled([...this.activeRuns])
+  }
+
+  private async reconcileApplying(
+    current: PendingMemoryCandidate
+  ): Promise<PendingMemoryCandidate> {
+    const memoryStore = this.options.memoryStore()
+    if (!memoryStore) throw new Error('memory store is unavailable')
+    try {
+      if (!current.applyReceipt) {
+        throw new MemoryDistillationConflictError('apply receipt is missing')
+      }
+      const records = await memoryStore.list({
+        workspace: current.target.workspace,
+        includeDeleted: true
+      })
+      const expected = records.find((record) =>
+        record.id === current.applyReceipt!.expectedMemoryId
+      )
+      if (expected && memoryRecordMatchesDistillationCandidate(expected, current)) {
+        const action = current.proposedAction
+        if (action.action === 'supersede') {
+          const target = records.find((record) =>
+            record.id === action.memoryId
+          )
+          if (!target) {
+            throw new MemoryDistillationConflictError('the supersede target is unavailable')
+          }
+          if (!target.supersededAt) {
+            await applyMemoryDistillationCandidate(memoryStore, current, target)
+          }
+        }
+        return this.options.pending.transition(
+          current.id,
+          ['applying'],
+          'allowed',
+          { memoryId: expected.id }
+        )
+      }
+      if (expected && current.proposedAction.action !== 'update') {
+        throw new MemoryDistillationConflictError('the expected Memory record changed')
+      }
+
+      const target = await validateMemoryDistillationApplyIntent(
+        memoryStore,
+        current,
+        Date.parse(this.now())
+      )
+      const record = await applyMemoryDistillationCandidate(memoryStore, current, target)
+      return this.options.pending.transition(
+        current.id,
+        ['applying'],
+        'allowed',
+        { memoryId: record.id }
+      )
+    } catch (error) {
+      await this.recordApplyFailure(current.id, error).catch(() => undefined)
+      throw error
+    }
+  }
+
+  private async recordApplyFailure(id: string, error: unknown): Promise<void> {
+    const current = await this.options.pending.get(id)
+    if (!current || (current.status !== 'pending' && current.status !== 'applying')) return
+    const diagnostic = sanitizeMemoryDistillationDiagnostic(error)
+    await this.options.pending.transition(
+      id,
+      [current.status],
+      error instanceof MemoryDistillationConflictError ? 'conflicted' : current.status,
+      { reason: diagnostic }
+    )
+  }
+
+  private withApprovalMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.approvalMutation.then(operation, operation)
+    this.approvalMutation = run.then(() => undefined, () => undefined)
+    return run
   }
 
   private async extract(input: {
@@ -261,6 +344,10 @@ export class MemoryDistillationCoordinator {
       })
     }
     const controller = new AbortController()
+    this.extractionControllers.add(controller)
+    if (this.shuttingDown) {
+      controller.abort(new Error('runtime is shutting down during memory distillation'))
+    }
     const timeout = setTimeout(
       () => controller.abort(new Error('memory distillation timed out')),
       this.options.timeoutMs ?? MEMORY_DISTILLATION_TIMEOUT_MS
@@ -320,6 +407,7 @@ export class MemoryDistillationCoordinator {
       return MemoryDistillationExtractionResponse.parse(JSON.parse(output))
     } finally {
       clearTimeout(timeout)
+      this.extractionControllers.delete(controller)
     }
   }
 
@@ -383,39 +471,29 @@ function source(
   threadId: string,
   turnId: string
 ): MemorySourceEvidence {
-  const hash = createHash('sha256').update(text, 'utf8').digest('hex')
+  const contentHash = createHash('sha256').update(text, 'utf8').digest('hex')
+  const identityHash = createHash('sha256')
+    .update([threadId, turnId, kind, contentHash].join('\0'), 'utf8')
+    .digest('hex')
   return {
-    id: `src_${kind}_${hash.slice(0, 20)}`,
+    id: `src_${identityHash.slice(0, 24)}`,
     kind,
     threadId,
     turnId,
     excerpt: text.slice(0, 512),
-    contentHash: hash,
+    contentHash,
     trust
   }
 }
 
-async function activeTarget(
-  store: MemoryStore,
-  id: string,
-  workspace: string,
-  nowMs: number
-): Promise<MemoryRecord> {
-  const target = (await store.list({ workspace })).find((record) => record.id === id)
-  if (!target || target.scope !== 'workspace' || !isMemoryActive(target, nowMs)) {
-    throw new Error(`memory distillation target is not active: ${id}`)
+function authorizedTarget(records: readonly MemoryRecord[], id: string): MemoryRecord {
+  const target = records.find((record) => record.id === id)
+  if (!target) {
+    throw new MemoryDistillationDecisionError(
+      `comparison target is not an authorized active memory: ${id}`
+    )
   }
   return target
-}
-
-function mergeSources(
-  candidate: readonly MemorySourceEvidence[],
-  existing: readonly MemorySourceEvidence[]
-): MemorySourceEvidence[] {
-  const seen = new Set<string>()
-  return [...candidate, ...existing]
-    .filter((source) => !seen.has(source.id) && Boolean(seen.add(source.id)))
-    .slice(0, 8)
 }
 
 function buildExtractionPayload(

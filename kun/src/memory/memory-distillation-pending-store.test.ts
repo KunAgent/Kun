@@ -2,6 +2,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { MemoryDistillationPendingStore } from './memory-distillation-pending-store.js'
 
 const candidate = {
@@ -90,7 +91,7 @@ describe('MemoryDistillationPendingStore', () => {
     expect(await store.list({ workspace: 'D:/workspace-c' })).toHaveLength(0)
   })
 
-  it('closes interrupted processing and applying states on restart', async () => {
+  it('closes interrupted extraction but preserves applying state for reconciliation', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-memory-distillation-'))
     const store = new MemoryDistillationPendingStore({ dataDir, nowIso: () => candidate.observedAt })
     await store.beginRun('thread_1', 'turn_1')
@@ -103,8 +104,34 @@ describe('MemoryDistillationPendingStore', () => {
       nowIso: () => '2026-09-03T02:00:00.000Z'
     })
     await restarted.ready()
-    expect((await restarted.get(entry!.id))?.status).toBe('failed')
+    expect((await restarted.get(entry!.id))?.status).toBe('applying')
     expect(await restarted.beginRun('thread_1', 'turn_2')).toBe(false)
+  })
+
+  it('does not advance cached state when a durable write fails', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-memory-distillation-'))
+    let failNextWrite = true
+    const store = new MemoryDistillationPendingStore({
+      dataDir,
+      writeState: async (path, contents) => {
+        if (failNextWrite) {
+          failNextWrite = false
+          throw new Error('simulated durable write failure')
+        }
+        await atomicWriteFile(path, contents, {
+          durable: true,
+          allowDirectWriteFallback: false
+        })
+      }
+    })
+
+    await expect(store.beginRun('thread_1', 'turn_1')).rejects.toThrow(
+      /simulated durable write failure/u
+    )
+    expect(await store.beginRun('thread_1', 'turn_1')).toBe(true)
+
+    const restarted = new MemoryDistillationPendingStore({ dataDir })
+    expect(await restarted.beginRun('thread_1', 'turn_1')).toBe(false)
   })
 })
 

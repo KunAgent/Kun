@@ -10,6 +10,7 @@ import {
   MemoryDistillationStoreState,
   MemoryDistillationTarget,
   PendingMemoryCandidate,
+  type MemoryDistillationApplyReceipt,
   type MemoryDistillationCandidateStatus,
   type MemoryDistillationRun,
   type MemoryDistillationStoreState as MemoryDistillationStoreStateValue,
@@ -35,6 +36,7 @@ export class MemoryDistillationPendingStore {
     dataDir: string
     nowIso?: () => string
     pendingTtlMs?: number
+    writeState?: (path: string, contents: string) => Promise<void>
   }) {}
 
   async ready(): Promise<void> {
@@ -47,7 +49,7 @@ export class MemoryDistillationPendingStore {
 
   async beginRun(threadId: string, turnId: string): Promise<boolean> {
     return this.withMutation(async () => {
-      const state = await this.load()
+      const state = copyState(await this.load())
       if (state.runs.some((run) => run.threadId === threadId && run.turnId === turnId)) {
         return false
       }
@@ -71,7 +73,7 @@ export class MemoryDistillationPendingStore {
     inserts: readonly PendingMemoryCandidateInsert[]
   ): Promise<PendingMemoryCandidateValue[]> {
     return this.withMutation(async () => {
-      const state = await this.load()
+      const state = copyState(await this.load())
       const run = mustFindRun(state, threadId, turnId)
       if (run.status !== 'processing') return candidatesForTurn(state, threadId, turnId)
       const createdAt = this.now()
@@ -107,7 +109,7 @@ export class MemoryDistillationPendingStore {
 
   async failRun(threadId: string, turnId: string, diagnostic: string): Promise<void> {
     await this.withMutation(async () => {
-      const state = await this.load()
+      const state = copyState(await this.load())
       const run = mustFindRun(state, threadId, turnId)
       if (run.status !== 'processing') return
       const completedAt = this.now()
@@ -126,8 +128,9 @@ export class MemoryDistillationPendingStore {
     status?: MemoryDistillationCandidateStatus
   } = {}): Promise<PendingMemoryCandidateValue[]> {
     return this.withMutation(async () => {
-      const state = await this.load()
+      await this.load()
       await this.expireDueLocked()
+      const state = await this.load()
       return state.candidates
         .filter((candidate) => !input.workspace || candidate.target.workspace === input.workspace)
         .filter((candidate) => !input.status || candidate.status === input.status)
@@ -139,8 +142,9 @@ export class MemoryDistillationPendingStore {
 
   async get(id: string): Promise<PendingMemoryCandidateValue | null> {
     return this.withMutation(async () => {
-      const state = await this.load()
+      await this.load()
       await this.expireDueLocked()
+      const state = await this.load()
       const candidate = state.candidates.find((entry) => entry.id === id)
       return candidate ? PendingMemoryCandidate.parse(candidate) : null
     })
@@ -150,11 +154,15 @@ export class MemoryDistillationPendingStore {
     id: string,
     from: readonly MemoryDistillationCandidateStatus[],
     to: MemoryDistillationCandidateStatus,
-    options: { reason?: string; memoryId?: string } = {}
+    options: {
+      reason?: string
+      memoryId?: string
+      applyReceipt?: MemoryDistillationApplyReceipt
+    } = {}
   ): Promise<PendingMemoryCandidateValue> {
     return this.withMutation(async () => {
-      const state = await this.load()
       await this.expireDueLocked()
+      const state = copyState(await this.load())
       const index = state.candidates.findIndex((candidate) => candidate.id === id)
       if (index < 0) throw new Error(`memory distillation candidate not found: ${id}`)
       const current = state.candidates[index]!
@@ -170,6 +178,7 @@ export class MemoryDistillationPendingStore {
           at,
           ...(options.reason ? { reason: options.reason.slice(0, 512) } : {})
         }],
+        ...(options.applyReceipt ? { applyReceipt: options.applyReceipt } : {}),
         ...(options.memoryId ? { memoryId: options.memoryId } : {})
       })
       state.candidates[index] = next
@@ -183,8 +192,13 @@ export class MemoryDistillationPendingStore {
   }
 
   private async expireDueLocked(): Promise<number> {
-    const state = await this.load()
+    const current = await this.load()
     const now = this.now()
+    const hasDue = current.candidates.some((candidate) =>
+      candidate.status === 'pending' && candidate.expiresAt <= now
+    )
+    if (!hasDue) return 0
+    const state = copyState(current)
     let count = 0
     state.candidates = state.candidates.map((candidate) => {
       if (candidate.status !== 'pending' || candidate.expiresAt > now) return candidate
@@ -200,12 +214,12 @@ export class MemoryDistillationPendingStore {
   }
 
   private async recoverInterruptedLocked(): Promise<void> {
-    const state = await this.load()
+    const current = await this.load()
+    if (!current.runs.some((run) => run.status === 'processing')) return
+    const state = copyState(current)
     const at = this.now()
-    let changed = false
     state.runs = state.runs.map((run) => {
       if (run.status !== 'processing') return run
-      changed = true
       return {
         ...run,
         status: 'failed',
@@ -213,20 +227,7 @@ export class MemoryDistillationPendingStore {
         diagnostic: 'runtime restarted during memory distillation'
       }
     })
-    state.candidates = state.candidates.map((candidate) => {
-      if (candidate.status !== 'applying') return candidate
-      changed = true
-      return PendingMemoryCandidate.parse({
-        ...candidate,
-        status: 'failed',
-        history: [...candidate.history, {
-          status: 'failed',
-          at,
-          reason: 'runtime restarted while applying the candidate'
-        }]
-      })
-    })
-    if (changed) await this.persist(state)
+    await this.persist(state)
   }
 
   private async load(): Promise<MemoryDistillationStoreStateValue> {
@@ -247,10 +248,15 @@ export class MemoryDistillationPendingStore {
 
   private async persist(state: MemoryDistillationStoreStateValue): Promise<void> {
     const parsed = MemoryDistillationStoreState.parse(state)
-    await atomicWriteFile(this.path(), `${JSON.stringify(parsed, null, 2)}\n`, {
-      durable: true,
-      allowDirectWriteFallback: false
-    })
+    const contents = `${JSON.stringify(parsed, null, 2)}\n`
+    if (this.options.writeState) {
+      await this.options.writeState(this.path(), contents)
+    } else {
+      await atomicWriteFile(this.path(), contents, {
+        durable: true,
+        allowDirectWriteFallback: false
+      })
+    }
     this.state = parsed
   }
 
@@ -267,6 +273,10 @@ export class MemoryDistillationPendingStore {
     this.mutation = run.then(() => undefined, () => undefined)
     return run
   }
+}
+
+function copyState(state: MemoryDistillationStoreStateValue): MemoryDistillationStoreStateValue {
+  return MemoryDistillationStoreState.parse(structuredClone(state))
 }
 
 function stableId(prefix: string, ...parts: string[]): string {

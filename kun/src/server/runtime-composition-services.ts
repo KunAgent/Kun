@@ -290,7 +290,6 @@ export async function createRuntimeServices(
     dataDir: core.activeOptions.dataDir,
     nowIso
   })
-  await memoryDistillationPending.ready()
   const memoryDistillation = new MemoryDistillationCoordinator({
     threads: threadStore,
     model: timedModelClient,
@@ -305,6 +304,7 @@ export async function createRuntimeServices(
       console.warn('[kun] memory distillation failed', { threadId, turnId, message })
     }
   })
+  await memoryDistillation.ready()
   const officeCliRunner = createConfiguredOfficeCliRunner({
     binaryPath: process.env.KUN_OFFICECLI_BINARY,
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile')

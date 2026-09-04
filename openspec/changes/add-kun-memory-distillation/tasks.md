@@ -39,10 +39,16 @@
 - [x] 5.3 Permit MemoryStore create/update/supersede only after allow; deny, timeout, expiry, and pre-write withdrawal remain terminal non-writing outcomes
 - [x] 5.4 Preserve sources and `authority=reference` for every approved mutation, including inference-backed candidates
 - [x] 5.5 Prevent replay or restart from duplicating pending candidates or reopening terminal outcomes
+- [x] 5.6 Skip every internal `messageSource` and bind source ids to thread/turn identity
+- [x] 5.7 Revalidate target versions and exact duplicates at allow time with a terminal conflicted outcome
+- [x] 5.8 Persist an apply receipt and reconcile interrupted writes against canonical Memory on restart
+- [x] 5.9 Make pending-state mutations copy-on-write and cover failed durable writes
+- [x] 5.10 Track in-flight distillation, reject work during shutdown, and settle it before stores close
 
 ## 6. P1-B acceptance and delivery
 
 - [x] 6.1 Test completed/failed/aborted/empty turns, extractor timeout/error/invalid output, and turn-status isolation
+- [x] 6.1.1 Make P1-B workspace fixtures platform-neutral and verify them on Linux-compatible paths
 - [x] 6.2 Test allow, deny, timeout, expiry, withdrawal, update, supersede, scope isolation, restart, and replay flows
 - [x] 6.3 Verify zero pre-approval writes, post-rejection writes, scope leaks, transient writes, authority elevations, replay duplicates, and distillation-caused turn failures
 - [ ] 6.4 Run focused and full tests, typecheck, build, lint, file-lines, OpenSpec strict, and UI acceptance

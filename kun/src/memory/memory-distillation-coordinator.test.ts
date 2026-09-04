@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { UserMessageSource } from '../contracts/items.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
 import type { ThreadStore } from '../ports/thread-store.js'
@@ -16,6 +17,10 @@ import { MemoryDistillationPendingStore } from './memory-distillation-pending-st
 import { FileMemoryStore } from './memory-store.js'
 
 const now = '2026-09-03T01:00:00.000Z'
+const workspace = join(tmpdir(), 'kun-memory-distillation-workspace')
+const normalizedWorkspace = process.platform === 'win32'
+  ? resolve(workspace).toLowerCase()
+  : resolve(workspace)
 
 describe('MemoryDistillationCoordinator', () => {
   it('extracts after a completed non-empty turn without writing before approval', async () => {
@@ -41,12 +46,13 @@ describe('MemoryDistillationCoordinator', () => {
     expect((harness.requests[0]!.history[0] as { text: string }).text.length)
       .toBeLessThanOrEqual(MEMORY_DISTILLATION_MAX_INPUT_CHARS)
     expect(pending[0]).toMatchObject({
-      target: { scope: 'workspace', workspace: 'D:/workspace-a' },
+      target: { scope: 'workspace', workspace },
       proposedAction: { action: 'create' },
       status: 'pending'
     })
-    expect(pending[0]!.candidate.sources.map((source) => source.trust))
-      .toEqual(['inferred', 'explicit-user'])
+    const sourceTrust = pending[0]!.candidate.sources.map((source) => source.trust)
+    expect(sourceTrust).toHaveLength(2)
+    expect(sourceTrust).toEqual(expect.arrayContaining(['inferred', 'explicit-user']))
   })
 
   it('writes an authority-reference Memory only after allow and replays idempotently', async () => {
@@ -55,7 +61,7 @@ describe('MemoryDistillationCoordinator', () => {
     const allowed = await harness.coordinator.decide(
       pending!.id,
       { decision: 'allow' },
-      'D:/workspace-a'
+      workspace
     )
     expect(allowed.status).toBe('allowed')
     const records = await harness.memory.list({ all: true })
@@ -63,7 +69,7 @@ describe('MemoryDistillationCoordinator', () => {
     expect(records[0]).toMatchObject({
       id: `mem_distilled_${pending!.fingerprint.slice(0, 20)}`,
       scope: 'workspace',
-      workspace: 'd:\\workspace-a',
+      workspace: normalizedWorkspace,
       authority: 'reference',
       sourceThreadId: 'thread_1',
       sourceTurnId: 'turn_1'
@@ -75,7 +81,7 @@ describe('MemoryDistillationCoordinator', () => {
     await expect(harness.coordinator.decide(
       pending!.id,
       { decision: 'allow' },
-      'D:/workspace-a'
+      workspace
     )).rejects.toThrow(/already allowed/u)
     expect(await harness.memory.list({ all: true })).toHaveLength(1)
   })
@@ -87,7 +93,7 @@ describe('MemoryDistillationCoordinator', () => {
       const result = await harness.coordinator.decide(
         pending!.id,
         { decision: terminal },
-        'D:/workspace-a'
+        workspace
       )
       expect(result.status).toBe(terminal === 'deny' ? 'denied' : 'withdrawn')
       expect(await harness.memory.list({ all: true })).toHaveLength(0)
@@ -114,6 +120,31 @@ describe('MemoryDistillationCoordinator', () => {
     await vi.waitFor(() => expect(disabled.requests).toHaveLength(0))
   })
 
+  it.each([
+    'background_shell',
+    'background_subagent',
+    'graph_runtime',
+    'subagent_resume',
+    'design_continuation'
+  ] satisfies UserMessageSource[])('does not extract internal %s turns', async (messageSource) => {
+    const harness = await createHarness({ messageSource })
+    expect(await harness.coordinator.distill('thread_1', 'turn_1')).toEqual([])
+    expect(harness.requests).toHaveLength(0)
+    expect(await harness.pending.list({ workspace })).toEqual([])
+  })
+
+  it('keeps identical evidence independently auditable across turns', async () => {
+    const first = await createHarness({ turnId: 'turn_1' })
+    const second = await createHarness({ turnId: 'turn_2' })
+    const [firstCandidate] = await first.coordinator.distill('thread_1', 'turn_1')
+    const [secondCandidate] = await second.coordinator.distill('thread_1', 'turn_2')
+
+    expect(firstCandidate!.candidate.sources.map((source) => source.contentHash))
+      .toEqual(secondCandidate!.candidate.sources.map((source) => source.contentHash))
+    expect(firstCandidate!.candidate.sources.map((source) => source.id))
+      .not.toEqual(secondCandidate!.candidate.sources.map((source) => source.id))
+  })
+
   it('schedules only completed turns and never propagates background failures', async () => {
     const harness = await createHarness({ output: '{invalid' })
     expect(harness.coordinator.schedule({
@@ -133,6 +164,27 @@ describe('MemoryDistillationCoordinator', () => {
     })).toBeUndefined()
     await vi.waitFor(() => expect(harness.requests).toHaveLength(1))
     await vi.waitFor(() => expect(harness.diagnostics).toHaveLength(1))
+  })
+
+  it('aborts tracked extraction and accepts no new work during shutdown', async () => {
+    const harness = await createHarness({ timeout: true, timeoutMs: 60_000 })
+    harness.coordinator.schedule({
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      status: 'completed'
+    })
+    await vi.waitFor(() => expect(harness.requests).toHaveLength(1))
+
+    await harness.coordinator.shutdown()
+    expect(harness.requests[0]?.abortSignal.aborted).toBe(true)
+    expect(harness.diagnostics[0]).toContain('shutting down')
+
+    harness.coordinator.schedule({
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      status: 'completed'
+    })
+    expect(harness.requests).toHaveLength(1)
   })
 
   it('bounds extractor time and records a sanitized terminal failure', async () => {
@@ -196,7 +248,7 @@ describe('MemoryDistillationCoordinator', () => {
       await harness.memory.createWithId('existing', {
         content: 'The user prefers long release notes.',
         scope: 'workspace',
-        workspace: 'D:/workspace-a',
+        workspace,
         sources: [{
           id: 'old-source',
           kind: 'user',
@@ -206,7 +258,7 @@ describe('MemoryDistillationCoordinator', () => {
       })
       const [pending] = await harness.coordinator.distill('thread_1', 'turn_1')
       expect(pending?.proposedAction.action).toBe(action)
-      await harness.coordinator.decide(pending!.id, { decision: 'allow' }, 'D:/workspace-a')
+      await harness.coordinator.decide(pending!.id, { decision: 'allow' }, workspace)
       const records = await harness.memory.list({ all: true })
       const current = action === 'update'
         ? records.find((record) => record.id === 'existing')
@@ -219,6 +271,76 @@ describe('MemoryDistillationCoordinator', () => {
         .toEqual(expect.arrayContaining(['explicit-user', 'inferred']))
       expect(current?.authority).toBe('reference')
     }
+  })
+
+  it('fails closed when an approved target changed after extraction', async () => {
+    let clock = '2026-09-03T01:00:00.000Z'
+    const harness = await createHarness({
+      nowIso: () => clock,
+      output: extraction({ comparisons: [{ memoryId: 'existing', relation: 'update' }] })
+    })
+    await harness.memory.createWithId('existing', {
+      content: 'The user prefers long release notes.',
+      scope: 'workspace',
+      workspace
+    })
+    const [pending] = await harness.coordinator.distill('thread_1', 'turn_1')
+    clock = '2026-09-03T02:00:00.000Z'
+    await harness.memory.update('existing', { tags: ['changed-elsewhere'] }, { workspace })
+
+    await expect(harness.coordinator.decide(
+      pending!.id,
+      { decision: 'allow' },
+      workspace
+    )).rejects.toThrow(/changed after extraction/u)
+    expect((await harness.pending.get(pending!.id))?.status).toBe('conflicted')
+    expect((await harness.memory.list({ workspace }))[0]?.content)
+      .toBe('The user prefers long release notes.')
+  })
+
+  it('fails closed when an equivalent Memory appears before approval', async () => {
+    const harness = await createHarness()
+    const [pending] = await harness.coordinator.distill('thread_1', 'turn_1')
+    await harness.memory.createWithId('created-elsewhere', {
+      content: 'The user prefers concise release notes.',
+      scope: 'workspace',
+      workspace
+    })
+
+    await expect(harness.coordinator.decide(
+      pending!.id,
+      { decision: 'allow' },
+      workspace
+    )).rejects.toThrow(/equivalent active Memory/u)
+    expect((await harness.pending.get(pending!.id))?.status).toBe('conflicted')
+    expect(await harness.memory.list({ workspace })).toHaveLength(1)
+  })
+
+  it('reconciles a Memory write that completed before the apply receipt was committed', async () => {
+    const harness = await createHarness()
+    const [pending] = await harness.coordinator.distill('thread_1', 'turn_1')
+    const createWithId = harness.memory.createWithId.bind(harness.memory)
+    let failAfterWrite = true
+    harness.memory.createWithId = async (id, input) => {
+      const record = await createWithId(id, input)
+      if (failAfterWrite) {
+        failAfterWrite = false
+        throw new Error('simulated crash after canonical write')
+      }
+      return record
+    }
+
+    await expect(harness.coordinator.decide(
+      pending!.id,
+      { decision: 'allow' },
+      workspace
+    )).rejects.toThrow(/simulated crash/u)
+    expect((await harness.pending.get(pending!.id))?.status).toBe('applying')
+    expect(await harness.memory.list({ workspace })).toHaveLength(1)
+
+    await harness.coordinator.ready()
+    expect((await harness.pending.get(pending!.id))?.status).toBe('allowed')
+    expect(await harness.memory.list({ workspace })).toHaveLength(1)
   })
 
   it('sanitizes paths and credentials while retaining useful ABI context', () => {
@@ -238,8 +360,13 @@ async function createHarness(options: {
   output?: string
   enabled?: boolean
   timeout?: boolean
+  timeoutMs?: number
+  messageSource?: UserMessageSource
+  turnId?: string
+  nowIso?: () => string
 } = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'kun-memory-distillation-'))
+  const nowIso = options.nowIso ?? (() => now)
   const memory = new FileMemoryStore({
     rootDir: join(dataDir, 'memory'),
     config: {
@@ -248,7 +375,7 @@ async function createHarness(options: {
       maxInjectedRecords: 8,
       distillation: { enabled: false }
     },
-    nowIso: () => now
+    nowIso
   })
   const requests: ModelRequest[] = []
   const model: ModelClient = {
@@ -265,14 +392,14 @@ async function createHarness(options: {
       }
       yield {
         kind: 'assistant_text_delta',
-        text: options.output ?? extraction()
+        text: options.output ?? extraction({ turnId: options.turnId })
       } satisfies ModelStreamChunk
       yield { kind: 'completed', stopReason: 'stop' } satisfies ModelStreamChunk
     }
   }
   const thread = makeThread(options)
   const threads = { get: async () => thread } as unknown as ThreadStore
-  const pending = new MemoryDistillationPendingStore({ dataDir, nowIso: () => now })
+  const pending = new MemoryDistillationPendingStore({ dataDir, nowIso })
   const diagnostics: string[] = []
   const coordinator = new MemoryDistillationCoordinator({
     threads,
@@ -280,8 +407,8 @@ async function createHarness(options: {
     pending,
     memoryStore: () => memory,
     enabled: () => options.enabled !== false,
-    nowIso: () => now,
-    ...(options.timeout ? { timeoutMs: 5 } : {}),
+    nowIso,
+    ...(options.timeout ? { timeoutMs: options.timeoutMs ?? 5 } : {}),
     onDiagnostic: ({ message }) => diagnostics.push(message)
   })
   return { coordinator, memory, pending, requests, diagnostics }
@@ -291,19 +418,23 @@ function makeThread(options: {
   status?: 'completed' | 'failed' | 'aborted'
   prompt?: string
   assistant?: string
+  messageSource?: UserMessageSource
+  turnId?: string
 }): ThreadRecord {
+  const turnId = options.turnId ?? 'turn_1'
   return {
     id: 'thread_1',
     title: 'Test',
-    workspace: 'D:/workspace-a',
+    workspace,
     model: 'thread-fallback',
     status: 'idle',
     createdAt: now,
     updatedAt: now,
     turns: [{
-      id: 'turn_1',
+      id: turnId,
       threadId: 'thread_1',
       status: options.status ?? 'completed',
+      ...(options.messageSource ? { messageSource: options.messageSource } : {}),
       prompt: options.prompt ?? 'I prefer concise release notes.',
       model: 'old-model',
       actingModelRoute: {
@@ -323,7 +454,7 @@ function makeThread(options: {
       items: [{
         id: 'assistant_1',
         threadId: 'thread_1',
-        turnId: 'turn_1',
+        turnId,
         role: 'assistant',
         status: 'completed',
         kind: 'assistant_text',
@@ -340,6 +471,7 @@ function extraction(overrides: {
   durability?: 'durable' | 'transient'
   confidence?: number
   sourceIds?: string[]
+  turnId?: string
 } = {}): string {
   return JSON.stringify({
     candidates: [{
@@ -349,8 +481,13 @@ function extraction(overrides: {
       importance: 0.7,
       tags: ['release'],
       sourceIds: overrides.sourceIds ?? [
-        sourceId('user', 'I prefer concise release notes.'),
-        sourceId('inference', 'Understood. I will keep release notes concise.')
+        sourceId('user', 'I prefer concise release notes.', 'thread_1', overrides.turnId),
+        sourceId(
+          'inference',
+          'Understood. I will keep release notes concise.',
+          'thread_1',
+          overrides.turnId
+        )
       ],
       durability: overrides.durability ?? 'durable',
       comparisons: overrides.comparisons ?? []
@@ -358,7 +495,15 @@ function extraction(overrides: {
   })
 }
 
-function sourceId(kind: 'user' | 'inference', text: string): string {
-  const hash = createHash('sha256').update(text, 'utf8').digest('hex')
-  return `src_${kind}_${hash.slice(0, 20)}`
+function sourceId(
+  kind: 'user' | 'inference',
+  text: string,
+  threadId = 'thread_1',
+  turnId = 'turn_1'
+): string {
+  const contentHash = createHash('sha256').update(text, 'utf8').digest('hex')
+  const identityHash = createHash('sha256')
+    .update([threadId, turnId, kind, contentHash].join('\0'), 'utf8')
+    .digest('hex')
+  return `src_${identityHash.slice(0, 24)}`
 }

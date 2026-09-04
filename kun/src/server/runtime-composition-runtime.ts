@@ -403,6 +403,7 @@ export function createServerRuntimeComposition(
             shutdownLeases: async () => { await executionLeases?.shutdown() }
           })
         },
+        async () => { await services.memoryDistillation.shutdown() },
         async () => {
           try {
             await backgroundShellRuntime.shutdown()
