@@ -3,6 +3,7 @@
 // Executes released GUI binaries. Run only on disposable native CI accounts.
 const assert = require('node:assert/strict')
 const { execFile } = require('node:child_process')
+const { writeFileSync } = require('node:fs')
 const { promisify } = require('node:util')
 const { mkdir, mkdtemp, readFile, writeFile, copyFile, appendFile, rename } = require('node:fs/promises')
 const { tmpdir, homedir } = require('node:os')
@@ -11,7 +12,9 @@ const { _electron: electron } = require('playwright-core')
 const { parse } = require('yaml')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
-const { attachGuiDiagnostics, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
+const { attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
+const { createScenarioJournal, cleanupScenario, recordScenario } = require('./gui-upgrade-journal.cjs')
+const { inspectSignedBundle, verifyMacCandidate, waitForBundleReplacement, waitForMacRelaunch } = require('./mac-upgrade-observation.cjs')
 const {
   buildSmokeSettings, startModelFixture, MODEL_NAME, poll, processIsAlive
 } = require('./smoke-packaged-update-handoff-support.cjs')
@@ -45,16 +48,6 @@ async function stopInstalledGui(executable) {
   }
 }
 
-async function signedTeam(bundle) {
-  await run('codesign', ['--verify', '--deep', '--strict', bundle])
-  const details = await run('codesign', ['--display', '--verbose=4', bundle])
-  const identity = details.stdout + details.stderr
-  assert.match(identity, /Authority=Developer ID Application:/, 'ad-hoc packages cannot pass automatic update acceptance')
-  const team = identity.match(/TeamIdentifier=([A-Z0-9]{10})\b/)
-  assert.ok(team, 'Missing Developer ID team')
-  return team[1]
-}
-
 async function request(page, path, method = 'GET', body) {
   return page.evaluate(async ({ path, method, body }) => {
     const result = await window.kunGui.runtimeRequest(path, method, body === undefined ? undefined : JSON.stringify(body))
@@ -63,23 +56,24 @@ async function request(page, path, method = 'GET', body) {
   }, { path, method, body })
 }
 
-async function startGui(executable, env, userData, launch = electron.launch.bind(electron)) {
+async function startGui(executable, env, userData, launch = electron.launch.bind(electron), observation) {
   const app = await launch({ executablePath: executable, env,
     args: [], timeout: TIMEOUT })
   try {
+    const processInfo = observation ? await attachGuiDiagnostics(app, observation.journal, observation.label) : undefined
     assert.equal(resolve(await app.evaluate(({ app }) => app.getPath('userData'))), resolve(userData),
       'GUI must use the same default profile as the installer relaunch')
+    const page = await poll(async () => {
+      for (const candidate of app.windows()) {
+        if (await candidate.evaluate(() => Boolean(window.kunGui?.getAppVersion)).catch(() => false)) return candidate
+      }
+      return undefined
+    }, TIMEOUT, 'GUI workbench bridge')
+    return { app, page, processInfo }
   } catch (error) {
-    await app.close()
+    await app.close().catch(() => undefined)
     throw error
   }
-  const page = await poll(async () => {
-    for (const candidate of app.windows()) {
-      if (await candidate.evaluate(() => Boolean(window.kunGui?.getAppVersion)).catch(() => false)) return candidate
-    }
-    return undefined
-  }, TIMEOUT, 'GUI workbench bridge')
-  return { app, page }
 }
 
 async function chat(page, workspace, title) {
@@ -101,12 +95,15 @@ async function settle(page, saved) {
   }, TIMEOUT, 'test dialogue completion')
 }
 
-async function scenario(input, name) {
+async function scenario(input, name, record, persistReport) {
+  record.targetVersion = input.version
   // NSIS resolves its recovery journal through Windows Known Folders, not the
   // child's APPDATA override. Keep both payload and journal beneath the actual
   // disposable account's AppData for the installer's restricted fault injection.
   const temporaryParent = process.platform === 'win32' ? process.env.APPDATA : tmpdir()
   const root = await mkdtemp(join(temporaryParent, `kun-gui-upgrade-${name}-`))
+  const journal = createScenarioJournal(record, root, persistReport)
+  journal.phase('setup')
   // The real updater relaunches without custom CLI arguments. Use the clean
   // CI account's default profile, never a --user-data-dir-only test profile.
   const home = homedir()
@@ -119,6 +116,7 @@ async function scenario(input, name) {
   const bundle = join(installParent, 'Kun.app')
   const executable = process.platform === 'win32'
     ? join(installParent, 'Kun', 'Kun.exe') : join(bundle, 'Contents', 'MacOS', 'Kun')
+  record.executable = executable
   // Exclusive mkdir fails closed if this account already has any Kun profile.
   // The owned directory is moved into evidence after testing, not deleted.
   await mkdir(userData)
@@ -143,16 +141,21 @@ async function scenario(input, name) {
   settings.guiUpdate = { channel: 'stable' }
   await writeFile(join(userData, 'kun-settings.json'), JSON.stringify(settings))
   let gui
-  let baselineTeam
+  let failure
   try {
+    journal.phase('baseline_installation')
     if (process.platform === 'win32') await install(input.baseline, installParent, environment)
     else {
       await run('ditto', ['-x', '-k', input.baseline, installParent])
-      baselineTeam = await signedTeam(bundle)
+      journal.phase('signature_preflight')
+      record.signatures = await verifyMacCandidate(bundle, input.candidate, input.version, root)
+      journal.phase('signatures_verified', record.signatures)
     }
-    gui = await startGui(executable, environment, userData)
-    attachGuiDiagnostics(gui, root)
+    gui = await startGui(executable, environment, userData, undefined, { journal, label: 'baseline' })
+    record.baselinePid = gui.processInfo.pid
+    record.baselineLauncherPid = gui.app.process().pid
     assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), '0.3.7')
+    journal.phase('baseline_started', gui.processInfo)
     const saved = await chat(gui.page, workspace, `upgrade-history-${name}`)
     await settle(gui.page, saved)
     const before = await gui.page.evaluate(() => window.kunGui.getSettings())
@@ -166,9 +169,11 @@ async function scenario(input, name) {
     }
     await gui.page.screenshot({ path: join(root, 'before.png') })
     const oldRuntime = JSON.parse(await readFile(join(dataDir, 'runtime.json'), 'utf8'))
-    const oldPid = gui.app.process().pid
-    await writeFile(join(root, 'upgrade-source.json'), JSON.stringify({ oldPid, oldRuntime, executable }, null, 2))
+    const oldPid = record.baselinePid
+    const oldManager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(JSON.parse).catch(() => null)
+    await writeFile(join(root, 'upgrade-source.json'), JSON.stringify({ oldPid, oldRuntime, oldManager, executable }, null, 2))
     if (name === 'manual') {
+      journal.phase('manual_installation')
       await gui.app.close()
       gui = undefined
       await install(input.candidate, installParent, environment)
@@ -178,11 +183,13 @@ async function scenario(input, name) {
       assert.equal(checked.latestVersion, input.version)
       assert.equal(checked.hasUpdate, true)
       assert.notEqual(checked.manualOnly, true)
+      journal.phase('update_checked', { version: checked.latestVersion, hasUpdate: checked.hasUpdate })
       const downloaded = await gui.page.evaluate(() => window.kunGui.downloadGuiUpdate('stable'))
       assert.equal(downloaded.ok, true, JSON.stringify(downloaded))
       const expectedDigest = await digest(input.candidate)
       const downloadedDigests = await Promise.all(downloaded.paths.map((path) => digest(path)))
       assert.ok(downloadedDigests.includes(expectedDigest), 'GUI downloaded bytes differ from the verified candidate')
+      journal.phase('candidate_downloaded', { paths: downloaded.paths, sha512: expectedDigest })
       if (name === 'rollback') {
         await gui.app.evaluate(({ app }) => {
           process.env.KUN_INSTALLER_FAULT_INJECTION = '1'
@@ -190,12 +197,31 @@ async function scenario(input, name) {
           return app.getVersion()
         })
       }
+      await captureMacProcesses(root, 'before-install')
+      await gui.page.exposeFunction('__kunRecordUpgradeResult', (result) => {
+        record.installResult = result
+        journal.event('install_result', { result })
+      })
+      journal.phase('install_requested', { pid: oldPid, version: '0.3.7', executable })
       await gui.page.evaluate(() => {
-        void window.kunGui.installGuiUpdate().then((result) => { window.__upgradeResult = result })
+        void window.kunGui.installGuiUpdate().then((result) => {
+          window.__upgradeResult = result
+          return window.__kunRecordUpgradeResult(result)
+        }).catch(error => window.__kunRecordUpgradeResult({ ok: false, error: error.message }).catch(() => undefined))
       })
       await poll(() => !processIsAlive(oldPid), TIMEOUT, 'old GUI exit after update')
+      await captureMacProcesses(root, 'after-gui-exit')
+      if (process.platform === 'darwin') {
+        const exit = await poll(() => record.baselineLauncherExit, TIMEOUT, 'old GUI exit status')
+        assert.equal(exit.pid, oldPid)
+        assert.equal(exit.exitCode, 0, 'Old GUI exited abnormally during update handoff')
+        assert.equal(exit.signal, null, 'Old GUI was killed during update handoff')
+      }
+      journal.phase('old_gui_exited', { pid: oldPid, launcherExit: record.baselineLauncherExit,
+        nativeExit: journal.readEvents().findLast(event => event.event === 'gui_exited' && event.pid === oldPid) })
       gui = undefined
       if (process.platform === 'win32') {
+        journal.phase('installer_result')
         const result = await poll(async () => {
           const value = JSON.parse(await readFile(join(userData, 'pending-update-result.json'), 'utf8'))
           return value.outcome ? value : undefined
@@ -211,25 +237,39 @@ async function scenario(input, name) {
           assert.equal(result.transactionState, 'committed')
         }
       }
-      // Wait for the installer to relaunch the real installed app before the
-      // harness reopens it with inspection enabled for data/UI assertions.
+      // Observe a real GUI window before the harness is allowed to reopen
+      // anything. A background Runtime with the same executable is insufficient.
       if (process.platform === 'win32') {
-        await poll(async () => {
-          const result = await ps(`@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq ${q(executable)} }).Count`)
-          return Number(result.stdout.trim()) > 0
-        }, 10 * 60_000, 'installer relaunch')
+        journal.phase('automatic_relaunch')
+        const relaunched = await poll(async () => {
+          const result = await ps(`$rows=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq ${q(executable)} } | ` +
+            'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
+            'if($p -and $p.MainWindowHandle -ne 0){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle}} }); ' +
+            'ConvertTo-Json -Compress -InputObject $rows')
+          return JSON.parse(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.mainWindowHandle > 0)
+        }, 10 * 60_000, 'installer relaunch with a real GUI window')
+        record.automaticRelaunch = { ...relaunched, source: 'CIM/MainWindowHandle', guiWindowObserved: true,
+          observedAt: new Date().toISOString(), beforeHarnessLaunch: true }
+        journal.phase('new_gui_started', record.automaticRelaunch)
       } else {
-        await poll(async () => {
+        await waitForBundleReplacement(async () => {
           const result = await run('/usr/libexec/PlistBuddy', ['-c', 'Print CFBundleShortVersionString', join(bundle, 'Contents', 'Info.plist')])
-          return result.stdout.trim() === input.version
-        }, 10 * 60_000, 'signed macOS application replacement')
+          return result.stdout.trim()
+        }, input.version, poll, journal)
+        journal.phase('replacement_signature_verification')
+        record.replacedSignature = await inspectSignedBundle(bundle)
+        assert.equal(record.replacedSignature.version, input.version)
+        assert.equal(record.replacedSignature.teamId, record.signatures.baseline.teamId)
+        assert.equal(record.replacedSignature.bundleId, record.signatures.baseline.bundleId)
+        assert.equal(record.replacedSignature.cdHash, record.signatures.candidate.cdHash)
+        await waitForMacRelaunch(bundle, executable, oldPid, record.signatures.baseline.bundleId, poll, journal)
       }
     }
     model.state.mode = 'complete'
-    if (process.platform === 'darwin') assert.equal(await signedTeam(bundle), baselineTeam)
+    record.inspectionStartedAt = new Date().toISOString()
+    journal.phase('inspection_started')
     await stopInstalledGui(executable)
-    gui = await startGui(executable, environment, userData)
-    attachGuiDiagnostics(gui, root)
+    gui = await startGui(executable, environment, userData, undefined, { journal, label: 'inspection' })
     const expectedVersion = name === 'rollback' ? '0.3.7' : input.version
     assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), expectedVersion)
     const after = await gui.page.evaluate(() => window.kunGui.getSettings())
@@ -249,51 +289,65 @@ async function scenario(input, name) {
     }
     if (process.platform === 'win32') assert.equal(processIsAlive(oldRuntime.pid), false)
     await gui.page.screenshot({ path: join(root, 'after.png') })
+    record.version = expectedVersion
+    journal.phase('post_upgrade_verified', { version: expectedVersion, pid: gui.processInfo.pid })
     await gui.app.close()
     gui = undefined
-    return { name, status: 'passed', version: expectedVersion, evidence: root }
   } catch (error) {
-    await captureMacUpdateDiagnostics(root, bundle).catch(async (diagnosticError) => {
-      await writeFile(join(root, 'diagnostic-error.txt'), diagnosticError.stack || String(diagnosticError))
+    failure = error
+    journal.fail(error)
+    await captureMacUpdateDiagnostics(root, bundle).catch((diagnosticError) => {
+      record.diagnosticErrors ??= []
+      record.diagnosticErrors.push(diagnosticError.message)
+      journal.event('diagnostic_capture_failed', { error: diagnosticError.message })
     })
     await gui?.page.screenshot({ path: join(root, 'failure.png') }).catch(() => undefined)
-    await writeFile(join(root, 'failure.txt'), error.stack ?? String(error))
-    throw new Error(`${name}: ${error.message}; evidence: ${root}`)
+    await writeFile(join(root, 'failure.txt'), error.stack ?? String(error)).catch(() => undefined)
   } finally {
-    await gui?.app.close().catch(() => undefined)
-    await stopInstalledGui(executable).catch(() => undefined)
-    const managerPath = join(controlDir, 'manager.json')
-    const manager = await readFile(managerPath, 'utf8').then(JSON.parse).catch(() => null)
-    if (manager) {
-      assert.equal(resolve(manager.dataDir), resolve(dataDir), 'Manager must belong to this scenario')
-      await fetch(`${manager.baseUrl}/v1/manager/shutdown`, {
-        method: 'POST', headers: { authorization: `Bearer ${manager.managerToken}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ instanceId: manager.instanceId }), signal: AbortSignal.timeout(10_000)
-      }).catch(() => undefined)
-      await poll(() => !processIsAlive(manager.pid), TIMEOUT, 'isolated manager shutdown')
-    }
-    if (process.platform === 'win32') {
-      const uninstaller = join(installParent, 'Kun', 'Uninstall Kun.exe')
-      const copy = join(root, 'uninstall.exe')
-      try {
+    await cleanupScenario(journal, [
+      ['close-gui', async () => gui?.app.close()],
+      ['stop-installed-gui', () => stopInstalledGui(executable)],
+      ['stop-owned-manager', async () => {
+        const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(JSON.parse).catch(() => null)
+        if (!manager) return
+        assert.equal(resolve(manager.dataDir), resolve(dataDir), 'Manager must belong to this scenario')
+        await fetch(`${manager.baseUrl}/v1/manager/shutdown`, {
+          method: 'POST', headers: { authorization: `Bearer ${manager.managerToken}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ instanceId: manager.instanceId }), signal: AbortSignal.timeout(10_000)
+        }).catch(() => undefined)
+        await poll(() => !processIsAlive(manager.pid), TIMEOUT, 'isolated manager shutdown')
+      }],
+      ['uninstall-windows-fixture', async () => {
+        if (process.platform !== 'win32') return
+        const uninstaller = join(installParent, 'Kun', 'Uninstall Kun.exe')
+        const copy = join(root, 'uninstall.exe')
         await copyFile(uninstaller, copy)
         await ps(`$p=Start-Process -FilePath ${q(copy)} -ArgumentList @('/S','/currentuser',${q(`_?=${join(installParent, 'Kun')}`)}) -PassThru; ` +
           '$p.WaitForExit(); $p.Refresh(); if ($p.ExitCode -ne 0) { throw "Uninstall failed" }', environment)
-      } catch (error) {
-        await writeFile(join(root, 'cleanup-error.txt'), error.stack ?? String(error))
-        process.exitCode = 1
-      }
+      }],
+      ['close-model-fixture', () => model.close()],
+      ['preserve-owned-profile', async () => {
+        assert.equal(await readFile(join(userData, '.upgrade-acceptance-owner'), 'utf8'), root,
+          'Refusing to move a profile not owned by this acceptance scenario')
+        await rename(userData, join(root, 'desktop-profile'))
+      }],
+      ['preserve-owned-control', async () => {
+        assert.equal(await readFile(join(controlDir, '.upgrade-acceptance-owner'), 'utf8'), root,
+          'Refusing to move a manager directory not owned by this acceptance scenario')
+        await rename(controlDir, join(root, 'control'))
+      }]
+    ])
+    if (!failure && record.cleanupErrors.length) {
+      failure = new Error('Scenario cleanup failed')
+      journal.phase('cleanup')
+      journal.fail(failure)
     }
-    await model.close()
-    assert.equal(await readFile(join(userData, '.upgrade-acceptance-owner'), 'utf8'), root,
-      'Refusing to move a profile not owned by this acceptance scenario')
-    await rename(userData, join(root, 'desktop-profile'))
-    assert.equal(await readFile(join(controlDir, '.upgrade-acceptance-owner'), 'utf8'), root,
-      'Refusing to move a manager directory not owned by this acceptance scenario')
-    await rename(controlDir, join(root, 'control'))
-    // Keep the isolated profile and installer diagnostics for CI artifact collection.
+    if (!failure) record.status = 'passed'
+    journal.persist()
     process.stdout.write(`GUI upgrade evidence: ${root}\n`)
   }
+  if (failure) throw new Error(`${name}: ${failure.message}; evidence: ${root}`, { cause: failure })
+  return record
 }
 
 async function main() {
@@ -319,27 +373,54 @@ async function main() {
   assert.ok(metadata.files.some((file) => file.url === candidateName))
   const downloads = await mkdtemp(join(tmpdir(), 'kun-upgrade-baseline-'))
   const baselineName = process.platform === 'win32' ? 'Kun-0.3.7-win-x64.exe' : `Kun-0.3.7-mac-${process.arch}.zip`
-  await run('gh', ['release', 'download', 'v0.3.7', '-R', 'KunAgent/Kun',
-    '-p', baselineName, '-p', manifestName, '-D', downloads], { timeout: 10 * 60_000 })
-  const baselineMetadata = parse(await readFile(join(downloads, manifestName), 'utf8'))
-  const baselineFile = baselineMetadata.files.find((file) => file.url === baselineName)
-  assert.ok(baselineFile)
-  assert.equal(await digest(join(downloads, baselineName)), baselineFile.sha512)
-  const feed = flags.has('--feed-url') ? null : await startCandidateFeed(directory, manifestName, version)
   const report = { version, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
-    artifact: candidateName, sha512: await digest(join(directory, candidateName)), scenarios: [] }
+    artifact: candidateName, sha512: await digest(join(directory, candidateName)), scenarios: [],
+    status: 'running', phase: 'baseline_download', cleanupErrors: [] }
+  const output = resolve(flags.get('--report') || `gui-upgrade-${process.platform}.json`)
+  const persist = () => writeFileSync(output, JSON.stringify(report, null, 2))
+  persist()
+  let feed
+  let failure
   try {
+    await run('gh', ['release', 'download', 'v0.3.7', '-R', 'KunAgent/Kun',
+      '-p', baselineName, '-p', manifestName, '-D', downloads], { timeout: 10 * 60_000 })
+    const baselineMetadata = parse(await readFile(join(downloads, manifestName), 'utf8'))
+    const baselineFile = baselineMetadata.files.find((file) => file.url === baselineName)
+    assert.ok(baselineFile)
+    assert.equal(await digest(join(downloads, baselineName)), baselineFile.sha512)
+    report.baseline = { version: '0.3.7', artifact: baselineName, sha512: baselineFile.sha512 }
+    report.phase = 'scenarios'
+    persist()
+    feed = flags.has('--feed-url') ? null : await startCandidateFeed(directory, manifestName, version)
     for (const name of process.platform === 'win32' ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']) {
-      report.scenarios.push(await scenario({ version, candidate: join(directory, candidateName),
-        baseline: join(downloads, baselineName), feedUrl: flags.get('--feed-url') || feed.url }, name))
+      await recordScenario(report, name, record => scenario({ version, candidate: join(directory, candidateName),
+        baseline: join(downloads, baselineName), feedUrl: flags.get('--feed-url') || feed.url }, name, record, persist), persist)
     }
     report.status = 'passed'
+    report.phase = 'completed'
+  } catch (error) {
+    failure = error
+    report.status = 'failed'
+    report.error ??= error.message
+    report.phase = report.scenarios.at(-1)?.phase || report.phase
   } finally {
-    await feed?.close()
-    const output = resolve(flags.get('--report') || `gui-upgrade-${process.platform}.json`)
-    await writeFile(output, JSON.stringify(report, null, 2))
-    await copyFile(join(downloads, manifestName), `${output}.previous.yml`)
+    await cleanupScenario({ record: report, event: persist }, [
+      ['close-candidate-feed', async () => feed?.close()],
+      ['save-baseline-manifest', async () => {
+        await copyFile(join(downloads, manifestName), `${output}.previous.yml`).catch(error => {
+          if (!failure || error.code !== 'ENOENT') throw error
+        })
+      }]
+    ])
+    if (report.cleanupErrors.length) {
+      report.status = 'failed'
+      failure ??= new Error('Acceptance harness cleanup failed')
+      report.error ??= failure.message
+    }
+    report.completedAt = new Date().toISOString()
+    persist()
   }
+  if (failure) throw failure
 }
 
 if (require.main === module) main().catch((error) => { console.error(error); process.exitCode = 1 })

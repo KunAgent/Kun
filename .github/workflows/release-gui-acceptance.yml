@@ -58,20 +58,21 @@ jobs:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - name: Test candidate acceptance helpers
-        run: node --test scripts/gui-upgrade-diagnostics.test.cjs scripts/release-candidate-source.test.cjs scripts/smoke-gui-upgrade.test.cjs scripts/gui-upgrade-feed.test.cjs scripts/verify-public-release.test.mjs
+        run: node --test scripts/gui-upgrade-diagnostics.test.cjs scripts/gui-upgrade-journal.test.cjs scripts/mac-upgrade-observation.test.cjs scripts/release-candidate-source.test.cjs scripts/smoke-gui-upgrade.test.cjs scripts/gui-upgrade-feed.test.cjs scripts/verify-public-release.test.mjs
       - name: Download final uploaded GUI artifacts
         shell: bash
         run: |
           set -euo pipefail
           gh release download "$CANDIDATE_TAG" -R "$GITHUB_REPOSITORY" -p '${{ matrix.pattern }}' -p '${{ matrix.manifest }}' -D candidate
       - name: Exercise the released GUI against the isolated version feed
+        timeout-minutes: 60
         shell: bash
         run: |
           set -euo pipefail
           base="${R2_PUBLIC_BASE_URL:-https://www.kun-agent.com/api/r2}"
           feed="${base%/}/${R2_RELEASE_PREFIX:-deepseek-gui}/channels/stable/releases/${CANDIDATE_TAG}/"
           node scripts/smoke-gui-upgrade.cjs --directory candidate --version "$CANDIDATE_VERSION" --feed-url "$feed" --report gui-upgrade-${{ matrix.target }}.json
-      - name: Archive GUI upgrade diagnostics
+      - name: Collect GUI upgrade diagnostics
         if: always()
         run: node scripts/gui-upgrade-diagnostics.cjs
       - uses: actions/upload-artifact@v4
@@ -80,7 +81,7 @@ jobs:
           name: gui-upgrade-${{ matrix.target }}
           path: |
             gui-upgrade-*.json*
-            gui-upgrade-evidence.tar.gz*
+            gui-upgrade-evidence/**
           if-no-files-found: error
           retention-days: 14
   promote:

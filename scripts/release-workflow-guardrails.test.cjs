@@ -112,14 +112,16 @@ test('an existing candidate can be revalidated without rebuilding or moving its 
   assert.ok(binding >= 0 && binding < verify)
 })
 
-test('GUI evidence is archived before upload so dangling profile links cannot lose diagnostics', () => {
+test('GUI evidence is collected before upload so special profile files cannot lose diagnostics', () => {
   const steps = readWorkflow('release-gui-acceptance.yml').jobs.accept.steps
-  const archive = steps.findIndex(step => step.name === 'Archive GUI upgrade diagnostics')
+  const archive = steps.findIndex(step => step.name === 'Collect GUI upgrade diagnostics')
   const upload = steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
   assert.ok(archive >= 0 && archive < upload)
   assert.equal(steps[archive].if, 'always()')
-  assert.match(steps[upload].with.path, /gui-upgrade-evidence\.tar\.gz/)
+  assert.ok(steps[upload].with.path.includes('gui-upgrade-evidence/**'))
   assert.doesNotMatch(steps[upload].with.path, /kun-gui-upgrade-\*\/\*\*/)
+  assert.ok(stepByName(readWorkflow('release-gui-acceptance.yml').jobs.accept,
+    'Exercise the released GUI against the isolated version feed')['timeout-minutes'] < 90)
 })
 
 test('standalone TUI distribution is removed while GUI upgrade gates stay required', () => {

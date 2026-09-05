@@ -43,10 +43,28 @@ async function fixture(options, action) {
       const path = join(root, 'upgrade-evidence', `gui-upgrade-${target}`, `gui-upgrade-${target}.json`)
       await mkdir(dirname(path), { recursive: true })
       const scenarios = platform === 'win32' ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']
+      const baselineName = platform === 'win32' ? 'Kun-0.3.7-win-x64.exe' : `Kun-0.3.7-mac-${arch}.zip`
+      const signatures = {
+        baseline: { version: '0.3.7', bundleId: 'app.kun', teamId: 'ABCDEFGHIJ', cdHash: 'b'.repeat(40) },
+        candidate: { version, bundleId: 'app.kun', teamId: 'ABCDEFGHIJ', cdHash: 'c'.repeat(40) },
+        designatedRequirementAccepted: true
+      }
       await writeFile(path, JSON.stringify({ version, commit: options.stale ? 'b'.repeat(40) : commit,
         platform, arch, sha512, status: options.skipped ? 'skipped' : 'passed',
+        baseline: { version: '0.3.7', artifact: baselineName, sha512 },
         artifact: platform === 'win32' ? 'Kun-0.3.8-win-x64.exe' : `Kun-0.3.8-mac-${arch}.zip`,
-        scenarios: scenarios.map((name) => ({ name, status: 'passed' })) }))
+        scenarios: scenarios.map((name) => ({ name, status: 'passed', baselinePid: 100,
+          signatures, replacedSignature: signatures.candidate, bundleObservation: { lastVersion: version },
+          inspectionStartedAt: '2026-09-05T00:00:02.000Z',
+          automaticRelaunch: options.noRelaunch ? undefined : {
+            pid: 101, guiWindowObserved: !options.backgroundOnly, beforeHarnessLaunch: !options.harnessOnly,
+            observedAt: '2026-09-05T00:00:01.000Z',
+            source: platform === 'win32' ? 'CIM/MainWindowHandle' : 'NSWorkspace/CGWindowList',
+            mainWindowHandle: 42, finishedLaunching: true
+          }
+        })) }))
+      await writeFile(`${path}.previous.yml`, stringify({ version: '0.3.7',
+        files: [{ url: baselineName, sha512 }] }))
     }
     const execute = (mode) => run(process.execPath, [script, mode], { cwd: root, timeout: 20_000,
       env: { ...process.env, RELEASE_VERSION: version, TAG_NAME: `v${version}`, CANDIDATE_COMMIT: commit,
@@ -74,7 +92,9 @@ test('public candidate verification hashes downloads and saves previous feeds wi
 })
 
 for (const [name, options] of [['altered artifact bytes', { tamper: true }],
-  ['another commit', { stale: true }], ['skipped native acceptance', { skipped: true }]]) {
+  ['another commit', { stale: true }], ['skipped native acceptance', { skipped: true }],
+  ['missing automatic relaunch', { noRelaunch: true }], ['a background process only', { backgroundOnly: true }],
+  ['a harness-started application', { harnessOnly: true }]]) {
   test(`public candidate rejects ${name}`, async () => {
     await fixture(options, async ({ execute }) => {
       await assert.rejects(execute('candidate'))

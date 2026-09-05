@@ -2,26 +2,58 @@
 
 const { execFile } = require('node:child_process')
 const { createWriteStream } = require('node:fs')
-const { copyFile, mkdir, readdir, writeFile } = require('node:fs/promises')
+const { copyFile, lstat, mkdir, readdir, writeFile } = require('node:fs/promises')
 const { homedir, tmpdir } = require('node:os')
-const { join, resolve } = require('node:path')
+const { dirname, join, resolve } = require('node:path')
 const { promisify } = require('node:util')
 
 const run = promisify(execFile)
 
-function attachGuiDiagnostics(gui, root) {
-  const output = createWriteStream(join(root, 'gui-process.log'), { flags: 'a' })
-  output.on('error', (error) => console.warn('GUI log capture:', error.message))
-  const sources = [gui.app.process().stdout, gui.app.process().stderr].filter(Boolean)
-  const onData = (chunk) => output.write(chunk)
-  for (const source of sources) source.on('data', onData)
-  const onConsole = (message) => output.write(`[renderer ${message.type()}] ${message.text()}\n`)
-  gui.page.on('console', onConsole)
-  gui.app.once('close', () => {
-    for (const source of sources) source.removeListener('data', onData)
-    gui.page.removeListener('console', onConsole)
-    output.end()
+async function attachGuiDiagnostics(app, journal, label) {
+  const child = app.process()
+  const streams = []
+  for (const name of ['stdout', 'stderr']) {
+    if (!child[name]) continue
+    const output = createWriteStream(join(journal.record.evidence, `gui.${name}.log`), { flags: 'a' })
+    output.on('error', error => journal.event('log_capture_error', { stream: name, error: error.message }))
+    const onData = chunk => output.write(chunk)
+    child[name].on('data', onData)
+    streams.push({ source: child[name], output, onData })
+  }
+  child.once('exit', (exitCode, signal) => {
+    journal.record[`${label}LauncherExit`] = { pid: child.pid, exitCode, signal }
+    journal.event('launcher_exited', { label, pid: child.pid, exitCode, signal })
   })
+  app.once('close', () => {
+    for (const { source, output, onData } of streams) {
+      source.removeListener('data', onData)
+      output.end()
+    }
+  })
+  return app.evaluate(({ app, autoUpdater }, { eventPath, label }) => {
+    const fs = process.getBuiltinModule('fs')
+    const metadata = { pid: process.pid, version: app.getVersion(), executable: process.execPath }
+    const write = (event, details = {}) => {
+      try {
+        fs.appendFileSync(eventPath, JSON.stringify({ time: new Date().toISOString(), event, label,
+          ...metadata, ...details }) + '\n')
+      } catch (error) { console.error('Upgrade event log:', error.message) }
+    }
+    app.on('before-quit', () => write('app_before_quit'))
+    app.on('will-quit', () => write('app_will_quit'))
+    autoUpdater.on('before-quit-for-update', () => write('before_quit_for_update'))
+    autoUpdater.on('update-downloaded', () => write('native_update_downloaded'))
+    autoUpdater.on('error', error => write('native_updater_error', { error: error.message }))
+    process.once('exit', exitCode => write('gui_exited', { exitCode }))
+    return metadata
+  }, { eventPath: journal.eventPath, label })
+}
+
+async function captureMacProcesses(root, stage) {
+  if (process.platform !== 'darwin') return
+  const result = await run('ps', ['-axo', 'pid,ppid,pgid,command'], { timeout: 10_000 })
+  await writeFile(join(root, `processes-${stage}.txt`), result.stdout.split('\n')
+    .filter(line => /Kun\.app|ShipIt|kun.*(?:serve|manager)/i.test(line)).join('\n'))
 }
 
 async function captureMacUpdateDiagnostics(root, bundle) {
@@ -52,16 +84,38 @@ async function captureMacUpdateDiagnostics(root, bundle) {
   }
 }
 
-async function archiveGuiUpgradeEvidence(parent, output) {
-  const roots = (await readdir(parent, { withFileTypes: true }))
-    .filter(entry => entry.isDirectory() && entry.name.startsWith('kun-gui-upgrade-'))
+async function collectGuiUpgradeEvidence(parent, output, operations = {}) {
+  const copy = operations.copyFile || copyFile
+  const warnings = []
+  const skipped = []
+  const warning = (path, error) => warnings.push({ path, code: error.code, error: error.message })
+  await mkdir(output, { recursive: true })
+  const entries = await readdir(parent, { withFileTypes: true }).catch(error => { warning(parent, error); return [] })
+  const roots = entries.filter(entry => entry.isDirectory() && entry.name.startsWith('kun-gui-upgrade-'))
     .map(entry => entry.name).sort()
-  await writeFile(`${output}.json`, JSON.stringify({ parent, roots }, null, 2))
-  if (!roots.length) return
-  // tar stores links without following them. Chromium leaves dangling
-  // SingletonSocket links after exit, which break upload-artifact's glob walk.
-  await run('tar', ['-czf', output, '--exclude=*/installed', '--exclude=*.exe',
-    '--exclude=Singleton*', '-C', parent, ...roots], { timeout: 120_000 })
+  const collect = async (source, destination) => {
+    try {
+      const info = await lstat(source)
+      if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) {
+        skipped.push({ path: source, reason: 'special file or symbolic link' })
+        return
+      }
+      if (info.isDirectory()) {
+        await mkdir(destination, { recursive: true })
+        for (const entry of await readdir(source)) {
+          if (entry === 'installed' || entry.endsWith('.exe')) continue
+          await collect(join(source, entry), join(destination, entry))
+        }
+      } else {
+        await mkdir(dirname(destination), { recursive: true })
+        await copy(source, destination)
+      }
+    } catch (error) { warning(source, error) }
+  }
+  for (const root of roots) await collect(join(parent, root), join(output, root))
+  const index = { parent, roots, warnings, skipped }
+  await writeFile(join(output, 'index.json'), JSON.stringify(index, null, 2))
+  return index
 }
 
 if (require.main === module) {
@@ -70,8 +124,8 @@ if (require.main === module) {
   }
   const parent = process.env.GUI_UPGRADE_EVIDENCE ||
     (process.platform === 'win32' ? process.env.APPDATA : tmpdir())
-  archiveGuiUpgradeEvidence(parent, resolve('gui-upgrade-evidence.tar.gz'))
+  collectGuiUpgradeEvidence(parent, resolve('gui-upgrade-evidence'))
     .catch(error => { console.error(error); process.exitCode = 1 })
 }
 
-module.exports = { attachGuiDiagnostics, captureMacUpdateDiagnostics, archiveGuiUpgradeEvidence }
+module.exports = { attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics, collectGuiUpgradeEvidence }

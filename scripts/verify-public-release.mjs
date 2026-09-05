@@ -59,6 +59,41 @@ if (mode === 'candidate') {
     const expectedScenarios = target.startsWith('win32') ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']
     assert.deepEqual(report.scenarios.map((scenario) => scenario.name).sort(), expectedScenarios.sort())
     assert.ok(report.scenarios.every((scenario) => scenario.status === 'passed'))
+    assert.equal(report.baseline?.version, '0.3.7', `${target}: baseline must be the original published release`)
+    const previous = parse(await readFile(join('upgrade-evidence', `gui-upgrade-${target}`,
+      `gui-upgrade-${target}.json.previous.yml`), 'utf8'))
+    assert.equal(previous.version, '0.3.7')
+    const baselineName = target.startsWith('win32') ? 'Kun-0.3.7-win-x64.exe' : `Kun-0.3.7-mac-${report.arch}.zip`
+    assert.equal(report.baseline.artifact, baselineName)
+    assert.equal(previous.files.find(entry => entry.url === baselineName)?.sha512, report.baseline.sha512)
+    for (const scenario of report.scenarios.filter(entry => entry.name !== 'manual')) {
+      const proof = scenario.automaticRelaunch
+      assert.ok(Number.isInteger(scenario.baselinePid) && scenario.baselinePid > 0)
+      assert.ok(Number.isInteger(proof?.pid) && proof.pid > 0, `${target}: missing automatic GUI relaunch`)
+      assert.notEqual(proof.pid, scenario.baselinePid, `${target}: old GUI cannot prove a relaunch`)
+      assert.equal(proof.guiWindowObserved, true, `${target}: background processes cannot prove GUI relaunch`)
+      assert.equal(proof.beforeHarnessLaunch, true, `${target}: harness startup cannot prove automatic relaunch`)
+      const observed = Date.parse(proof.observedAt)
+      const inspected = Date.parse(scenario.inspectionStartedAt)
+      assert.ok(Number.isFinite(observed) && Number.isFinite(inspected) && observed <= inspected,
+        `${target}: relaunch must be observed before harness inspection`)
+      if (target.startsWith('darwin')) {
+        assert.equal(proof.source, 'NSWorkspace/CGWindowList')
+        assert.equal(proof.finishedLaunching, true)
+        assert.equal(scenario.signatures?.designatedRequirementAccepted, true)
+        assert.equal(scenario.signatures.baseline.version, '0.3.7')
+        assert.equal(scenario.signatures.candidate.version, version)
+        assert.equal(scenario.signatures.candidate.teamId, scenario.signatures.baseline.teamId)
+        assert.equal(scenario.signatures.candidate.bundleId, scenario.signatures.baseline.bundleId)
+        assert.equal(scenario.replacedSignature?.version, version)
+        assert.match(scenario.signatures.candidate.cdHash ?? '', /^[a-f0-9]{40}$/)
+        assert.equal(scenario.replacedSignature?.cdHash, scenario.signatures.candidate.cdHash)
+        assert.equal(scenario.bundleObservation?.lastVersion, version)
+      } else {
+        assert.equal(proof.source, 'CIM/MainWindowHandle')
+        assert.ok(proof.mainWindowHandle > 0)
+      }
+    }
     const file = [...downloads.values()].find((entry) => entry.url.endsWith(report.artifact))
     assert.equal(file?.sha512, report.sha512, `${target}: tested artifact differs from public candidate`)
   }
