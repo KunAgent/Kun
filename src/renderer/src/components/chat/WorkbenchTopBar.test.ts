@@ -30,10 +30,10 @@ describe('WorkbenchTopActions', () => {
     )
 
     expect(html).toContain(
-      'data-tooltip="Restart all Kun service processes owned by the current user. Running tasks will be interrupted; saved conversations, memory, archives, settings, and workspace files will not be deleted. You will be asked to confirm."'
+      'data-tooltip="Restart only the Runtime owned by this desktop app. Running tasks will be interrupted; TUI processes and Kun Service Manager are left untouched. You will be asked to confirm."'
     )
     expect(html).toContain('data-tooltip-wrap="true"')
-    expect(html).toContain(`aria-label="Restart all Kun services"`)
+    expect(html).toContain(`aria-label="Restart desktop Runtime"`)
     expect(html).not.toContain('rounded-full bg-amber-500')
     expect(html).toContain(`data-tooltip="Choose default editor"`)
     expect(html).toContain(`aria-label="Choose default editor"`)
@@ -50,7 +50,7 @@ describe('WorkbenchTopActions', () => {
       html.indexOf('data-tooltip="Toggle right workspace"')
     )
     expect(html.indexOf('data-tooltip="Toggle right workspace"')).toBeLessThan(
-      html.indexOf('aria-label="Restart all Kun services"')
+      html.indexOf('aria-label="Restart desktop Runtime"')
     )
   })
 
@@ -58,9 +58,9 @@ describe('WorkbenchTopActions', () => {
     await i18n.changeLanguage('zh')
     const html = renderToStaticMarkup(createElement(WorkbenchTopActions, {}))
 
-    expect(html).toContain('aria-label="重启所有 Kun 服务"')
+    expect(html).toContain('aria-label="重启桌面 Runtime"')
     expect(html).toContain(
-      'data-tooltip="重启当前用户的所有 Kun 服务进程。运行中的任务会中断；不会删除已保存的对话、记忆、归档、设置或工作区文件。点击后会再次确认。"'
+      'data-tooltip="只重启当前桌面应用拥有的 Runtime。运行中的任务会中断；不会影响 TUI 进程或 Kun Service Manager。点击后会再次确认。"'
     )
     expect(html).toContain('data-tooltip-wrap="true"')
   })
@@ -91,7 +91,7 @@ describe('WorkbenchTopActions', () => {
     await act(async () => {
       renderer = createRenderer(createElement(WorkbenchTopActions, {}))
     })
-    const button = renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' })
+    const button = renderer.root.findByProps({ 'aria-label': 'Restart desktop Runtime' })
     await act(async () => {
       button.props.onClick()
       await Promise.resolve()
@@ -108,7 +108,7 @@ describe('WorkbenchTopActions', () => {
       renderer = createRenderer(createElement(WorkbenchTopActions, {}))
     })
 
-    const button = renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' })
+    const button = renderer.root.findByProps({ 'aria-label': 'Restart desktop Runtime' })
     expect(button.props.className).toContain('h-8 w-8')
     expect(button.findAllByType('span')).toHaveLength(0)
     expect(button.findAllByType('svg')).toHaveLength(1)
@@ -127,7 +127,7 @@ describe('WorkbenchTopActions', () => {
     })
 
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' }).props.onClick()
+      renderer.root.findByProps({ 'aria-label': 'Restart desktop Runtime' }).props.onClick()
       await Promise.resolve()
     })
     const busyButton = renderer.root.findByProps({ 'aria-label': 'Restarting…' })
@@ -153,11 +153,11 @@ describe('WorkbenchTopActions', () => {
       renderer = createRenderer(createElement(WorkbenchTopActions, {}))
     })
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' }).props.onClick()
+      renderer.root.findByProps({ 'aria-label': 'Restart desktop Runtime' }).props.onClick()
       await Promise.resolve()
     })
 
-    const button = renderer.root.findByProps({ 'aria-label': 'Restart all Kun services' })
+    const button = renderer.root.findByProps({ 'aria-label': 'Restart desktop Runtime' })
     expect(button.props['data-tooltip']).toBe('cleanup failed')
     expect(button.findAllByType('span')).toHaveLength(0)
     act(() => renderer.unmount())
@@ -238,7 +238,6 @@ describe('WorkbenchSideRail', () => {
 
     for (const label of [
       'Open branch conversation',
-      'Agent Perspective',
       'Plan',
       'Changes',
       'Preview',
@@ -307,18 +306,12 @@ describe('WorkbenchSideRail', () => {
     expect(enabledHtml).toContain('data-tooltip="Graph"')
   })
 
-  it('disables Agent Perspective until a Code conversation is selected', () => {
-    let renderer!: ReturnType<typeof createRenderer>
-    act(() => {
-      renderer = createRenderer(createElement(WorkbenchSideRail, {
-        rightPanelMode: null,
-        onToggleRightPanelMode: vi.fn(),
-        agentPerspectiveEnabled: false
-      }))
-    })
-    const button = renderer.root.findByProps({ 'aria-label': 'Agent Perspective' })
-    expect(button.props.disabled).toBe(true)
-    act(() => renderer.unmount())
+  it('does not expose the migrated Agent Perspective right-rail entry', () => {
+    const html = renderToStaticMarkup(createElement(WorkbenchSideRail, {
+      rightPanelMode: null,
+      onToggleRightPanelMode: vi.fn()
+    }))
+    expect(html).not.toContain('Agent Perspective')
   })
 
   it('keeps the branch rail launcher free of a numeric count badge', () => {

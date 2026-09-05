@@ -73,7 +73,7 @@ function windowCloseLabels(locale: AppSettingsV1['locale']): {
     return {
       title: '关闭窗口',
       message: '关闭窗口时要怎么处理？',
-      detail: '最小化到托盘会让 Kun 继续在后台运行，不会影响当前任务。退出应用会关闭桌面端及仅桌面服务；共享 Kun 运行时会继续等待审批，可在下次打开桌面端或 TUI 中处理。若运行时重启或所属任务被取消，待审批操作会被取消。',
+      detail: '最小化到托盘会让 Kun 和当前 Runtime 继续在后台运行，不会影响当前任务。退出应用会停止桌面端拥有的 Runtime，运行中的 Agent 任务和待审批操作会中断；已保存的对话、设置和工作区文件不会被删除。',
       minimizeToTray: '最小化到托盘',
       quit: '退出应用',
       cancel: '取消',
@@ -84,7 +84,7 @@ function windowCloseLabels(locale: AppSettingsV1['locale']): {
   return {
     title: 'Close window',
     message: 'What should Kun do when this window closes?',
-    detail: 'Minimize to tray keeps Kun running in the background and does not interrupt the current task. Quitting closes the desktop app and desktop-only services, while the shared Kun runtime continues waiting for approvals that can be handled when the desktop app or TUI is opened again. Pending approvals are cancelled if the runtime restarts or their turn is cancelled.',
+    detail: 'Minimize to tray keeps Kun and its current Runtime running in the background without interrupting the current task. Quitting stops the Runtime owned by this desktop app, interrupting running Agent work and pending approvals. Saved conversations, settings, and workspace files are not deleted.',
     minimizeToTray: 'Minimize to tray',
     quit: 'Quit app',
     cancel: 'Cancel',
@@ -333,16 +333,6 @@ function showTrayMenu(): void {
 
 export function syncTray(settings: AppSettingsV1): void {
   mainState.appBehavior = settings.appBehavior
-  if (mainState.appBehavior.closeAction === 'quit') {
-    destroyTrayQuotaPopover()
-    if (mainState.tray) {
-      mainState.tray.destroy()
-      mainState.tray = null
-      mainState.trayMenu = null
-    }
-    mainState.trayAvailable = false
-    return
-  }
 
   try {
     if (!mainState.tray) {
@@ -457,6 +447,11 @@ export function handleMainWindowClose(window: BrowserWindow, event: Electron.Eve
   event.preventDefault()
   if (decision === 'hide-to-tray') {
     window.hide()
+    return
+  }
+  if (decision === 'quit-app') {
+    runtimeShutdown.requestQuit()
+    app.quit()
     return
   }
   void promptWindowCloseAction(window)

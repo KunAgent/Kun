@@ -22,7 +22,7 @@ export type OpenEditorPathOptions = {
   line?: number
   column?: number
   /** Main-owned validation policy for generated artifact actions. */
-  openPolicy?: 'presentation-artifact'
+  openPolicy?: 'presentation-artifact' | 'generated-document-artifact'
   /** Trusted write-time digest required before system-opening a Kun HTML deck. */
   expectedSha256?: string
 }

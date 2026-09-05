@@ -31,9 +31,8 @@ import {
 import { type CaptureState, DEBUG_TEXT_BLOCK_FRAGMENT_WINDOW, type LlmDebugOutput, type LlmDebugOutputTruncation, type LlmDebugRound, type LlmDebugRoundMeta, type LlmDebugSink, type StringBlockAccumulator } from './llm-debug-recorder-contracts.js'
 
 /**
- * Fail-closed trace preflight shared by every model transport. The policy is
- * checked exactly once at request start so a mid-stream toggle cannot produce
- * a partial record.
+ * Metadata is always retained. The policy is checked exactly once to decide
+ * whether optional prompt/wire content may be captured for this round.
  */
 export async function startLlmDebugRoundIfEnabled(
   sink: LlmDebugSink | undefined,
@@ -42,8 +41,10 @@ export async function startLlmDebugRoundIfEnabled(
 ): Promise<LlmDebugRound | undefined> {
   if (!sink) return undefined
   try {
-    if (sink.shouldCapture && !(await sink.shouldCapture(meta.threadId))) return undefined
-    return sink.start(meta)
+    const captureContent = sink.shouldCapture
+      ? await sink.shouldCapture(meta.threadId)
+      : true
+    return sink.start({ ...meta, captureContent })
   } catch {
     onError?.()
     return undefined
@@ -61,7 +62,8 @@ export function createCaptureState(
     redactedRequestValues: normalizeRedactedRequestValues(redactedRequestValues),
     text: { blocks: [], parts: [] },
     reasoning: { blocks: [], parts: [] },
-    pendingCaptures: []
+    pendingCaptures: [],
+    lastCheckpointAt: 0
   }
 }
 

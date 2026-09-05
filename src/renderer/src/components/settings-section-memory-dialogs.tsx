@@ -1,6 +1,5 @@
 import {
-  MEMORY_IMPORT_PROFILE_PROMPT,
-  type MemoryImportEntry
+  MEMORY_IMPORT_PROFILE_PROMPT
 } from '@shared/memory-import-export'
 import { Clipboard, Pencil, X } from 'lucide-react'
 import { useState, type ReactElement } from 'react'
@@ -8,6 +7,19 @@ import type { CoreMemoryRecordJson } from '../agent/kun-contract'
 import type { MemoryDialogState, MemoryDraft } from './settings-section-memory'
 
 type MemoryScope = MemoryDraft['scope']
+const MEMORY_TYPES: MemoryDraft['type'][] = [
+  'fact',
+  'preference',
+  'decision',
+  'episode',
+  'relationship',
+  'insight'
+]
+
+export function clampMemoryUnitValue(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(1, Math.max(0, value))
+}
 
 function projectForMemory(memory: CoreMemoryRecordJson): string | null {
   if (memory.scope === 'user') return null
@@ -19,6 +31,8 @@ export function MemoryImportDialog({
   t,
   text,
   entries,
+  portable,
+  invalid,
   busy,
   notice,
   scope,
@@ -31,7 +45,9 @@ export function MemoryImportDialog({
 }: {
   t: (key: string) => string
   text: string
-  entries: MemoryImportEntry[]
+  entries: string[]
+  portable: boolean
+  invalid: boolean
   busy: boolean
   notice: string | null
   scope: MemoryScope
@@ -112,28 +128,32 @@ export function MemoryImportDialog({
                   {t('memoryImportParsedPrefix')}{entries.length}{t('memoryImportParsedSuffix')}
                 </div>
               </div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <select
-                  value={scope}
-                  onChange={(event) => onScopeChange(event.target.value as MemoryScope)}
-                  className="rounded-lg border border-ds-border-muted bg-ds-main px-2 py-1.5 text-[12px] text-ds-ink outline-none"
-                >
-                  <option value="user">{t('memoryScope_user')}</option>
-                  <option value="workspace">{t('memoryScope_workspace')}</option>
-                  <option value="project">{t('memoryScope_project')}</option>
-                </select>
-                {scope !== 'user' ? (
-                  <input
-                    type="text"
-                    value={targetPath}
-                    onChange={(event) => onTargetPathChange(event.target.value)}
-                    placeholder={t('memoryImportTargetPathPlaceholder')}
-                    className="min-w-[240px] flex-1 rounded-lg border border-ds-border-muted bg-ds-main px-2 py-1.5 text-[12px] text-ds-ink outline-none focus:border-ds-ink/40"
-                  />
-                ) : (
-                  <div className="text-[12px] text-ds-faint">{t('memoryImportUserScopeHint')}</div>
-                )}
-              </div>
+              {portable ? (
+                <div className="mb-3 text-[12px] text-ds-faint">{t('memoryImportPortableScopeHint')}</div>
+              ) : (
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <select
+                    value={scope}
+                    onChange={(event) => onScopeChange(event.target.value as MemoryScope)}
+                    className="rounded-lg border border-ds-border-muted bg-ds-main px-2 py-1.5 text-[12px] text-ds-ink outline-none"
+                  >
+                    <option value="user">{t('memoryScope_user')}</option>
+                    <option value="workspace">{t('memoryScope_workspace')}</option>
+                    <option value="project">{t('memoryScope_project')}</option>
+                  </select>
+                  {scope !== 'user' ? (
+                    <input
+                      type="text"
+                      value={targetPath}
+                      onChange={(event) => onTargetPathChange(event.target.value)}
+                      placeholder={t('memoryImportTargetPathPlaceholder')}
+                      className="min-w-[240px] flex-1 rounded-lg border border-ds-border-muted bg-ds-main px-2 py-1.5 text-[12px] text-ds-ink outline-none focus:border-ds-ink/40"
+                    />
+                  ) : (
+                    <div className="text-[12px] text-ds-faint">{t('memoryImportUserScopeHint')}</div>
+                  )}
+                </div>
+              )}
               <textarea
                 value={text}
                 onChange={(event) => onTextChange(event.target.value)}
@@ -143,8 +163,8 @@ export function MemoryImportDialog({
               {entries.length > 0 ? (
                 <div className="mt-3 max-h-28 overflow-y-auto rounded-lg border border-ds-border-muted bg-ds-main/60 px-3 py-2 text-[12px] text-ds-muted">
                   {entries.slice(0, 5).map((entry, index) => (
-                    <div key={`${entry.date}-${entry.category}-${index}`} className="truncate">
-                      [{entry.date}] {entry.category}: {entry.content}
+                    <div key={`${entry}-${index}`} className="truncate">
+                      {entry}
                     </div>
                   ))}
                   {entries.length > 5 ? (
@@ -172,7 +192,7 @@ export function MemoryImportDialog({
           <button
             type="button"
             onClick={onImport}
-            disabled={busy || entries.length === 0 || (scope !== 'user' && !targetPath.trim())}
+            disabled={busy || invalid || entries.length === 0 || (!portable && scope !== 'user' && !targetPath.trim())}
             className="rounded-lg bg-ds-ink px-4 py-2 text-[13px] font-semibold text-ds-main transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busy ? t('memoryImporting') : t('memoryImportAdd')}
@@ -287,6 +307,19 @@ export function MemoryRecordDialog({
                   className="min-w-[160px] flex-1 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-2 py-1 text-[12px] text-ds-ink outline-none"
                 />
                 <div className="flex items-center gap-1 text-[12px] text-ds-faint">
+                  <span>{t('memoryType')}</span>
+                  <select
+                    value={draft.type}
+                    onChange={(e) => onDraftChange((prev) => ({
+                      ...prev,
+                      type: e.target.value as MemoryDraft['type']
+                    }))}
+                    className="rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-1.5 py-1 text-[12px] text-ds-ink outline-none"
+                  >
+                    {MEMORY_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1 text-[12px] text-ds-faint">
                   <span>{t('memoryConfidence')}</span>
                   <input
                     type="number"
@@ -296,7 +329,22 @@ export function MemoryRecordDialog({
                     value={draft.confidence}
                     onChange={(e) => onDraftChange((prev) => ({
                       ...prev,
-                      confidence: Number(e.target.value) || 0
+                      confidence: clampMemoryUnitValue(Number(e.target.value))
+                    }))}
+                    className="w-14 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-1.5 py-1 text-[12px] text-ds-ink outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-1 text-[12px] text-ds-faint">
+                  <span>{t('memoryImportance')}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={draft.importance}
+                    onChange={(e) => onDraftChange((prev) => ({
+                      ...prev,
+                      importance: clampMemoryUnitValue(Number(e.target.value))
                     }))}
                     className="w-14 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-1.5 py-1 text-[12px] text-ds-ink outline-none"
                   />
@@ -309,8 +357,29 @@ export function MemoryRecordDialog({
               ) : null}
             </div>
           ) : memory ? (
-            <div className="whitespace-pre-wrap break-words rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-3 py-3 text-[13px] leading-6 text-ds-ink">
-              {memory.content}
+            <div className="space-y-3">
+              <div className="whitespace-pre-wrap break-words rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-3 py-3 text-[13px] leading-6 text-ds-ink">
+                {memory.content}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-ds-faint sm:grid-cols-4">
+                <div>{t('memoryType')}: <span className="text-ds-ink">{memory.type ?? 'fact'}</span></div>
+                <div>{t('memoryAuthority')}: <span className="text-ds-ink">{memory.authority ?? 'reference'}</span></div>
+                <div>{t('memoryConfidence')}: <span className="font-mono text-ds-ink">{(memory.confidence ?? 1).toFixed(2)}</span></div>
+                <div>{t('memoryImportance')}: <span className="font-mono text-ds-ink">{(memory.importance ?? 0.5).toFixed(2)}</span></div>
+              </div>
+              {memory.sources?.length ? (
+                <div className="rounded-lg border border-ds-border-muted bg-ds-main/30 px-3 py-2">
+                  <div className="mb-1.5 text-[11px] font-semibold text-ds-ink">{t('memorySources')}</div>
+                  <div className="space-y-1 text-[11px] text-ds-faint">
+                    {memory.sources.map((source) => (
+                      <div key={source.id} className="break-all">
+                        <span className="text-ds-ink">{source.kind}/{source.trust}</span>
+                        {source.locator ? ` · ${source.locator}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

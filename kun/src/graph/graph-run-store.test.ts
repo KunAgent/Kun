@@ -505,6 +505,67 @@ describe('FileGraphRunStore', () => {
       truncated: true
     })
   })
+
+  it('compacts active journals and preserves replay plus compacted command idempotency', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-graph-active-compaction-'))
+    roots.push(root)
+    const options = {
+      rootDir: join(root, 'graphs'),
+      config: () => testGraphConfig({
+        retention: { snapshotEveryEvents: 2, compactAfterEvents: 4 }
+      })
+    }
+    const store = new FileGraphRunStore(options)
+    await createRun(store)
+    const transitions = [
+      ['draft', 'validating'],
+      ['validating', 'ready'],
+      ['ready', 'running']
+    ] as const
+    for (const [from, to] of transitions) {
+      const current = await store.get('run_1')
+      await store.append('run_1', {
+        expectedSeq: current!.lastEventSeq,
+        graphRevision: 1,
+        commandId: `command_${to}`,
+        idempotencyKey: `transition_${to}`,
+        event: { type: 'run_status_changed', payload: { from, to } }
+      })
+    }
+
+    const journalPath = join(root, 'graphs', 'run_1', 'events.jsonl')
+    const lines = (await readFile(journalPath, 'utf8')).trim().split('\n')
+    expect(lines).toHaveLength(2)
+    expect(JSON.parse(lines[0]!).envelope.graphSeq).toBe(3)
+
+    const reloaded = new FileGraphRunStore(options)
+    await expect(reloaded.get('run_1')).resolves.toMatchObject({
+      status: 'running',
+      lastEventSeq: 4
+    })
+    const duplicate = await reloaded.append('run_1', {
+      expectedSeq: 1,
+      graphRevision: 1,
+      commandId: 'command_validating',
+      idempotencyKey: 'transition_validating',
+      event: {
+        type: 'run_status_changed',
+        payload: { from: 'draft', to: 'validating' }
+      }
+    })
+    expect(duplicate.duplicate).toBe(true)
+    expect(duplicate.envelope.graphSeq).toBe(2)
+    await expect(reloaded.eventReplay('run_1', 0)).resolves.toMatchObject({
+      replayFloorSeq: 3,
+      currentSeq: 4,
+      snapshotSeq: 4,
+      truncated: true,
+      events: [
+        expect.objectContaining({ graphSeq: 3 }),
+        expect.objectContaining({ graphSeq: 4 })
+      ]
+    })
+  })
 })
 
 function checksumJsonForTest(value: unknown): string {

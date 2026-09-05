@@ -1,0 +1,188 @@
+.tree {
+  min-width: 0;
+  color: var(--trajectory-label-2);
+  font: 12px/16px var(--ds-font-family-code, monospace);
+  user-select: text;
+}
+
+.row {
+  position: relative;
+  display: grid;
+  min-width: max-content;
+  min-height: 20px;
+  grid-template-columns: max-content 8px minmax(40px, 1fr) max-content;
+  align-items: start;
+  padding: 2px 4px 2px calc(4px + var(--tree-depth) * 16px);
+  border-radius: 3px;
+  outline: none;
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--trajectory-hover);
+}
+
+.row:focus-visible {
+  box-shadow: inset 2px 0 var(--trajectory-accent);
+}
+
+.guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(11px + var(--tree-depth) * 16px);
+  width: 1px;
+  background: var(--trajectory-border-1);
+  pointer-events: none;
+}
+
+.nodeButton,
+.nodeLabel {
+  display: inline-flex;
+  min-width: 0;
+  height: 16px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.nodeButton {
+  cursor: pointer;
+}
+
+.nodeButton:hover .key {
+  color: var(--trajectory-label-1);
+  text-decoration: underline;
+  text-decoration-color: var(--trajectory-border-2);
+  text-underline-offset: 2px;
+}
+
+.chevron,
+.chevronOpen,
+.spacer {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin-right: 2px;
+}
+
+.chevron,
+.chevronOpen {
+  color: var(--trajectory-label-caption);
+  transition: transform 100ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.key {
+  color: var(--trajectory-label-3);
+  white-space: pre;
+}
+
+.separator {
+  color: var(--trajectory-label-caption);
+  text-align: center;
+}
+
+.value {
+  max-width: min(62ch, 100%);
+  overflow-wrap: anywhere;
+  color: var(--trajectory-label-1);
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.value[data-value-type='object'],
+.value[data-value-type='array'] {
+  color: var(--trajectory-label-caption);
+  font-style: italic;
+}
+
+.value[data-value-type='string'] {
+  color: var(--trajectory-success);
+}
+
+.value[data-value-type='number'],
+.value[data-value-type='bigint'] {
+  color: var(--trajectory-accent);
+}
+
+.value[data-value-type='boolean'] {
+  color: var(--trajectory-assistant-span);
+}
+
+.value[data-value-type='null'],
+.value[data-value-type='undefined'] {
+  color: var(--trajectory-label-caption);
+  font-style: italic;
+}
+
+.actions {
+  position: sticky;
+  right: 2px;
+  display: inline-flex;
+  height: 16px;
+  align-items: center;
+  margin-left: 6px;
+  gap: 1px;
+  border-radius: 3px;
+  opacity: 0;
+  background: var(--trajectory-bg-1);
+  pointer-events: none;
+}
+
+.row:hover .actions,
+.row:focus-within .actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.copyButton {
+  display: inline-flex;
+  width: 18px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  color: var(--trajectory-label-caption);
+  background: transparent;
+  cursor: pointer;
+  font: 10px/1 var(--ds-font-family-code, monospace);
+}
+
+.copyButton:hover,
+.copyButton:focus-visible {
+  color: var(--trajectory-label-1);
+  background: var(--trajectory-hover);
+  outline: none;
+}
+
+.copyButton svg {
+  width: 11px;
+  height: 11px;
+}
+
+.valueGlyph {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.copyFailed {
+  color: var(--trajectory-error);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .chevronOpen {
+    transition: none;
+  }
+}

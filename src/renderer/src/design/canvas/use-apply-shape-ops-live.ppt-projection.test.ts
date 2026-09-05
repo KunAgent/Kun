@@ -58,6 +58,11 @@ function FilteredDirectionReplayHarness({
     childId: string
     workflowId: string
     phase: 'direction' | 'review'
+    pptState: {
+      phase: 'directions' | 'review' | 'complete'
+      revision: number
+      outputPath?: string
+    }
   }) => void
 }): null {
   useApplyShapeOpsLive(
@@ -131,7 +136,8 @@ describe('PPT canvas projection replay', () => {
     expect(cards).toHaveLength(3)
     expect(cards.every((shape) => shape.pptDirectionRef?.workflowId === 'workflow-a')).toBe(true)
     expect(onOpenRequested).toHaveBeenCalledWith({
-      blockId: 'direction-target', childId: 'child-a', workflowId: 'workflow-a', phase: 'direction'
+      blockId: 'direction-target', childId: 'child-a', workflowId: 'workflow-a', phase: 'direction',
+      pptState: { phase: 'directions', revision: 1 }
     })
     await restoreAfterReplay(renderer, previous)
   })

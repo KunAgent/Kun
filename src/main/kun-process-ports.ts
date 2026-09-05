@@ -240,7 +240,7 @@ async function windowsProcessIdentity(pid: number): Promise<ProcessIdentity | nu
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      `$process = Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}'; if ($process) { [pscustomobject]@{ ProcessId = $process.ProcessId; ExecutablePath = $process.ExecutablePath; CommandLine = $process.CommandLine; CreationDate = $process.CreationDate } | ConvertTo-Json -Compress }`
+      `$process = Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}'; if ($process) { $creationDate = if ($process.CreationDate) { $process.CreationDate.ToUniversalTime().ToString('o') } else { $null }; [pscustomobject]@{ ProcessId = $process.ProcessId; ExecutablePath = $process.ExecutablePath; CommandLine = $process.CommandLine; CreationDate = $creationDate } | ConvertTo-Json -Compress }`
     ],
     { windowsHide: true, timeout: 5_000 }
   )

@@ -69,6 +69,7 @@ function installDsGui(overrides: Partial<Window['kunGui']>): void {
       })),
       stopSse: vi.fn(async () => true),
       ackSse: vi.fn(async () => true),
+      onSseOpen: vi.fn(() => () => undefined),
       onSseEvent: vi.fn(() => () => undefined),
       onSseEnd: vi.fn(() => () => undefined),
       onSseError: vi.fn(() => () => undefined),
@@ -85,6 +86,7 @@ afterEach(() => {
 describe('KunRuntimeProvider', () => {
   it('maps Kun SSE deltas into the thread event sink', async () => {
     let onData: ((payload: { streamId: string; events: unknown[] }) => void) | null = null
+    let onOpen: ((payload: { streamId: string }) => void) | null = null
     const ac = new AbortController()
     const sink: ThreadEventSink = {
       onConnected: vi.fn(),
@@ -102,12 +104,17 @@ describe('KunRuntimeProvider', () => {
       onError: vi.fn()
     }
     installDsGui({
+      onSseOpen: vi.fn((handler) => {
+        onOpen = handler
+        return () => undefined
+      }),
       onSseEvent: vi.fn((handler) => {
         onData = handler
         return () => undefined
       }),
       startSse: vi.fn(async (_threadId, _sinceSeq, streamId) => {
         queueMicrotask(() => {
+          onOpen?.({ streamId: streamId ?? 'stream-1' })
           onData?.({
             streamId: streamId ?? 'stream-1',
             events: [
@@ -144,6 +151,34 @@ describe('KunRuntimeProvider', () => {
       itemId: 'item_text',
       createdAt: 't1'
     }])
+  })
+
+  it('does not report connected when startSse resolves without an open event', async () => {
+    const ac = new AbortController()
+    const sink: ThreadEventSink = {
+      onConnected: vi.fn(),
+      onSeq: vi.fn(),
+      onDeltas: vi.fn(),
+      onUserMessage: vi.fn(),
+      onTool: vi.fn(),
+      onCompaction: vi.fn(),
+      onApproval: vi.fn(),
+      onUserInput: vi.fn(),
+      onUserInputStatus: vi.fn(),
+      onGoal: vi.fn(),
+      onTodos: vi.fn(),
+      onTurnComplete: vi.fn(),
+      onError: vi.fn()
+    }
+    installDsGui({
+      startSse: vi.fn(async (_threadId, _sinceSeq, streamId) => {
+        queueMicrotask(() => ac.abort())
+        return { streamId: streamId ?? 'stream-1' }
+      })
+    })
+    const provider = new KunRuntimeProvider()
+    await provider.subscribeThreadEvents('thr_1', 2, sink, ac.signal)
+    expect(sink.onConnected).not.toHaveBeenCalled()
   })
 
   it('projects replay before synchronization and same-batch live events after it', async () => {

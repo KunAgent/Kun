@@ -220,10 +220,34 @@ describe('InteractiveToolBridge', () => {
     await expect(bridge.awaitUserInput({
       threadId: 'thread_1',
       turnId: 'turn_1',
-      input: { id: 'input_1', itemId: 'item_input_1', prompt: 'Continue?', questions: [] },
+      input: {
+        id: 'input_1',
+        itemId: 'item_input_1',
+        prompt: 'Continue?',
+        questions: [{
+          header: 'Decision',
+          id: 'decision',
+          question: 'Continue?',
+          options: [{ label: 'Yes', description: 'Proceed', recommended: true }]
+        }]
+      },
       signal: new AbortController().signal
     })).resolves.toEqual({ status: 'submitted', answers: [] })
 
+    expect(turns.applyItem).toHaveBeenCalledWith(
+      'thread_1',
+      expect.objectContaining({
+        questions: [expect.objectContaining({
+          options: [{ label: 'Yes', description: 'Proceed', recommended: true }]
+        })]
+      })
+    )
+    expect(events.record).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'user_input_requested',
+      questions: [expect.objectContaining({
+        options: [{ label: 'Yes', description: 'Proceed', recommended: true }]
+      })]
+    }))
     expect(order).toEqual([
       'item_created',
       'user_input_requested',

@@ -16,16 +16,15 @@ import {
   getKunServiceManagerBinding,
   reclaimKunPort,
   resolveAvailableKunPort,
-  startKunSharedRuntime,
+  startKunChild,
   stopKunChildAndWait
 } from '../kun-process'
 import { getKunBaseUrl } from '../kun-base-url'
-import type { RuntimeDiscoveryRecord } from '../../../kun/src/server/runtime-discovery.js'
 import {
-  inspectSharedRuntime,
-  runtimeMatchesExpectedBuild,
-  stopSharedRuntime
+  inspectSharedRuntime
 } from '../../../kun/src/cli/shared-runtime.js'
+import type { RuntimeClientOwnerKind } from '../../../kun/src/contracts/runtime-owner.js'
+import type { RuntimeDiscoveryRecord } from '../../../kun/src/server/runtime-discovery.js'
 import { stopSharedRuntimeForReplacement } from './kun-serve-replacement'
 import {
   resolveCliRuntimeFlavor,
@@ -38,9 +37,24 @@ const KUN_RUNTIME_ID = 'kun' as const
 export type BundledBuildReplacementProbe =
   | { state: 'matched'; ownership: 'none' | 'current' }
   | { state: 'mismatched' }
+  | { state: 'foreign-owned'; ownerKind: RuntimeClientOwnerKind; buildMatches: boolean }
   | { state: 'unknown'; error: Error }
 
-let resolvedConnection: RuntimeDiscoveryRecord | null = null
+export function classifyBundledBuildReplacement(
+  discovery: Pick<RuntimeDiscoveryRecord, 'buildId' | 'clientOwnerKind'>,
+  expectedBuildId: string
+): BundledBuildReplacementProbe {
+  if (discovery.clientOwnerKind) {
+    return {
+      state: 'foreign-owned',
+      ownerKind: discovery.clientOwnerKind,
+      buildMatches: discovery.buildId === expectedBuildId
+    }
+  }
+  return discovery.buildId === expectedBuildId
+    ? { state: 'matched', ownership: 'current' }
+    : { state: 'mismatched' }
+}
 
 function appRoot(): string {
   return app.isPackaged
@@ -76,29 +90,16 @@ export const kunRuntimeAdapter = {
     return ensureReplacementKunRuntime(settings)
   },
 
-  /**
-   * Release GUI-local runtime state only. The detached shared daemon belongs
-   * to the data directory, not to this Electron process, so ordinary client
-   * shutdown must never stop it.
-   */
+  /** Stop only the Runtime child owned by this Electron process. */
   async stopAndWait(): Promise<void> {
-    resolvedConnection = null
     await stopKunChildAndWait()
   },
 
   isChildRunning(): boolean {
-    if (resolvedConnection) {
-      // Shared runtimes are detached; a cached discovery record can outlive the
-      // process. Treat a dead PID as "not running" so watchdog recovery takes the
-      // missing/ensure fast path instead of waiting out unresponsive retries (#1116).
-      if (processIsAlive(resolvedConnection.pid)) return true
-      resolvedConnection = null
-    }
     return isKunChildRunning()
   },
 
   getBaseUrl(settings: AppSettingsV1): string {
-    if (resolvedConnection) return resolvedConnection.baseUrl
     const runtime = getKunRuntimeSettings(settings)
     return getKunBaseUrl(runtime.port)
   },
@@ -108,9 +109,7 @@ export const kunRuntimeAdapter = {
   },
 
   async stopSharedAndWait(settings: AppSettingsV1): Promise<void> {
-    const dataDir = expandDataDir(getKunRuntimeSettings(settings).dataDir)
-    await stopSharedRuntime(dataDir, fetch, sharedRuntimeScope(dataDir))
-    resolvedConnection = null
+    void settings
     await stopKunChildAndWait()
   },
 
@@ -122,7 +121,6 @@ export const kunRuntimeAdapter = {
   async stopSharedForReplacementAndWait(settings: AppSettingsV1): Promise<void> {
     const dataDir = expandDataDir(getKunRuntimeSettings(settings).dataDir)
     await stopSharedRuntimeForReplacement(dataDir, fetch, sharedRuntimeScope(dataDir))
-    resolvedConnection = null
     await stopKunChildAndWait()
   },
 
@@ -158,9 +156,7 @@ export const kunRuntimeAdapter = {
       }
     }
     if (!inspected) return { state: 'matched', ownership: 'none' }
-    return inspected.discovery.buildId === expectedBuildId
-      ? { state: 'matched', ownership: 'current' }
-      : { state: 'mismatched' }
+    return classifyBundledBuildReplacement(inspected.discovery, expectedBuildId)
   },
 
   reclaimPort(port: number): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -179,7 +175,7 @@ export function getRuntimeBaseUrlForSettings(settings: AppSettingsV1): string {
 /** Resolve the bearer token for the active Kun connection. */
 export function getRuntimeAuthToken(settings: AppSettingsV1): string {
   const runtime = getKunRuntimeSettings(settings)
-  return resolvedConnection?.runtimeToken ?? runtime.runtimeToken.trim()
+  return runtime.runtimeToken.trim()
 }
 
 /** Build the bearer-token authorization header for Kun requests. */
@@ -193,14 +189,12 @@ export function runtimeAuthHeaders(settings: AppSettingsV1): Headers {
 }
 
 async function ensureResolvedKunRuntime(settings: AppSettingsV1): Promise<void> {
-  if (await refreshResolvedKunRuntime(settings)) return
-  const connection = await startKunSharedRuntime(settings)
-  resolvedConnection = connection?.discovery ?? null
+  if (isKunChildRunning()) return
+  await startKunChild(settings)
 }
 
 async function ensureReplacementKunRuntime(settings: AppSettingsV1): Promise<void> {
-  const connection = await startKunSharedRuntime(settings, { forceReplace: true })
-  resolvedConnection = connection?.discovery ?? null
+  await startKunChild(settings)
 }
 
 export function expectedKunRuntimeBuildId(
@@ -225,39 +219,8 @@ export function bundledRuntimeBuildReplacementRequired(input: {
 }
 
 async function refreshResolvedKunRuntime(settings: AppSettingsV1): Promise<boolean> {
-  const runtime = getKunRuntimeSettings(settings)
-  const dataDir = expandDataDir(runtime.dataDir)
-  const runtimeFlavor = resolveCliRuntimeFlavor({ env: process.env })
-  const sourceBuildId = await resolveKunRuntimeBuildId(
-    resolveKunExecutable(runtime.binaryPath.trim() ? '' : appRoot(), runtime.binaryPath)
-  )
-  // Shared runtimes namespace development build identities by flavor. Compare
-  // against the same identity that `ensureSharedRuntime` publishes.
-  const expectedBuildId = expectedKunRuntimeBuildId(sourceBuildId, runtimeFlavor)
-  const inspected = await inspectSharedRuntime(
-    dataDir,
-    fetch,
-    sharedRuntimeScope(dataDir, runtimeFlavor)
-  )
-    .catch(() => null)
-  if (!inspected) {
-    resolvedConnection = null
-    return false
-  }
-  const connection = inspected.connection
-  if (
-    connection &&
-    !runtimeMatchesExpectedBuild(connection, expectedBuildId) &&
-    (connection.activeTurnCount ?? 0) === 0
-  ) {
-    resolvedConnection = null
-    return false
-  }
-  // Preserve the real endpoint while a live runtime is temporarily
-  // unresponsive. Health recovery must probe this process, not the legacy
-  // configured port, and must never elect a second writer for the data dir.
-  resolvedConnection = inspected.discovery
-  return true
+  void settings
+  return isKunChildRunning()
 }
 
 function sharedRuntimeScope(
@@ -276,23 +239,6 @@ function sharedRuntimeScope(
 
 function expandDataDir(value: string): string {
   return value.replace(/^~(?=$|[\\/])/, homedir())
-}
-
-function processIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    // EPERM means the process exists but we cannot signal it.
-    return (error as NodeJS.ErrnoException)?.code === 'EPERM'
-  }
-}
-
-/** Test-only: inject a cached discovery record for dead-PID recovery coverage. */
-export function setResolvedKunRuntimeConnectionForTests(
-  connection: RuntimeDiscoveryRecord | null
-): void {
-  resolvedConnection = connection
 }
 
 export type RuntimeRequestInit = {
@@ -323,8 +269,8 @@ const THREAD_TIMELINE_GET_TIMEOUT_MS = 120_000
 const THREAD_SUMMARIZE_POST_TIMEOUT_MS = 120_000
 const PROVIDER_QUOTA_GET_TIMEOUT_MS = 120_000
 const USAGE_HISTORY_GET_TIMEOUT_MS = 120_000
-const MODEL_CONNECTION_EVENTS_TIMEOUT_MARGIN_MS = 5_000
-const MAX_MODEL_CONNECTION_EVENTS_WAIT_MS = 120_000
+const RUNTIME_EVENTS_TIMEOUT_MARGIN_MS = 5_000
+const MAX_RUNTIME_EVENTS_WAIT_MS = 120_000
 
 function isThreadTimelinePath(pathNorm: string): boolean {
   const queryIndex = pathNorm.indexOf('?')
@@ -344,11 +290,21 @@ function isProviderQuotaPath(pathNorm: string): boolean {
   return pathname === '/v1/provider-quotas'
 }
 
+function runtimeEventsWaitMs(pathNorm: string): number | null {
+  if (
+    !pathNorm.startsWith('/v1/model-connections/events?') &&
+    !pathNorm.startsWith('/v1/thread-activity/events?')
+  ) return null
+  const query = pathNorm.slice(pathNorm.indexOf('?') + 1)
+  const waitMs = Number(new URLSearchParams(query).get('wait_ms'))
+  return Number.isSafeInteger(waitMs) && waitMs > 0 ? waitMs : null
+}
+
 /**
  * History aggregations replay every thread's usage records and hydrate full
  * thread records for per-turn attribution, so they are not a cheap status
- * route. The generic GET budget aborted them mid-aggregation and surfaced as
- * the sidebar "cannot read usage" banner even though the renderer allowed 65s.
+ * route. Main owns the cancellable 120-second budget so renderer callers do
+ * not report a timeout while the underlying aggregation is still running.
  */
 function isUsageHistoryPath(pathNorm: string): boolean {
   const queryIndex = pathNorm.indexOf('?')
@@ -383,16 +339,13 @@ export function resolveRuntimeRequestTimeoutMs(
   if (method === 'POST' && isThreadSummarizePath(pathNorm)) {
     return THREAD_SUMMARIZE_POST_TIMEOUT_MS
   }
-  if (method !== 'GET' || !pathNorm.startsWith('/v1/model-connections/events?')) {
-    return fallback
-  }
-  const query = pathNorm.slice(pathNorm.indexOf('?') + 1)
-  const waitMs = Number(new URLSearchParams(query).get('wait_ms'))
-  if (!Number.isSafeInteger(waitMs) || waitMs <= 0) return fallback
+  if (method !== 'GET') return fallback
+  const waitMs = runtimeEventsWaitMs(pathNorm)
+  if (waitMs === null) return fallback
   return Math.max(
     fallback,
-    Math.min(waitMs, MAX_MODEL_CONNECTION_EVENTS_WAIT_MS) +
-      MODEL_CONNECTION_EVENTS_TIMEOUT_MARGIN_MS
+    Math.min(waitMs, MAX_RUNTIME_EVENTS_WAIT_MS) +
+      RUNTIME_EVENTS_TIMEOUT_MARGIN_MS
   )
 }
 
@@ -456,11 +409,9 @@ export function runtimeRequestViaLease(
 }
 
 function snapshotRuntimeRequestLease(settings: AppSettingsV1): RuntimeRequestLease {
-  const connection = resolvedConnection
   return Object.freeze({
-    baseUrl: connection?.baseUrl ?? getRuntimeBaseUrlForSettings(settings),
-    runtimeToken: connection?.runtimeToken ?? getKunRuntimeSettings(settings).runtimeToken.trim(),
-    ...(connection?.instanceId ? { runtimeInstanceId: connection.instanceId } : {})
+    baseUrl: getRuntimeBaseUrlForSettings(settings),
+    runtimeToken: getKunRuntimeSettings(settings).runtimeToken.trim()
   })
 }
 

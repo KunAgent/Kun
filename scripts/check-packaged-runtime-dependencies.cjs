@@ -10,6 +10,7 @@ const BUILTIN_MODULES = new Set(
 const ELECTRON_PROVIDED_PACKAGES = new Set(['electron'])
 const KNOWN_DYNAMIC_RUNTIME_SPECIFIERS = [
   '@computer-use/node-mac-permissions',
+  '@trycua/cua-driver',
   '@tesseract.js-data/eng',
   'html-to-docx'
 ]

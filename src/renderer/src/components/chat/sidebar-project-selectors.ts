@@ -145,6 +145,29 @@ function sortWorkspacePathsByActive(workspacePaths: string[], selectedWorkspace:
   return [...workspacePaths].sort((a, b) => compareWorkspacePathsByActive(a, b, selectedWorkspace))
 }
 
+/** First-seen time in ms keyed by workspaceRootIdentityKey. */
+export type SidebarWorkspaceCreationTimes = Record<string, number>
+
+/**
+ * Projects sort newest-first by folder creation time. Rows whose creation
+ * time is not loaded yet (or unavailable on the filesystem) sink below dated
+ * rows and keep the legacy active-first/name order relative to each other.
+ */
+function compareWorkspacePathsByCreation(
+  a: string,
+  b: string,
+  selectedWorkspace: string,
+  workspaceCreatedAt: SidebarWorkspaceCreationTimes | undefined
+): number {
+  const aTime = workspaceCreatedAt?.[workspaceRootIdentityKey(a)] ?? 0
+  const bTime = workspaceCreatedAt?.[workspaceRootIdentityKey(b)] ?? 0
+  const aKnown = Number.isFinite(aTime) && aTime > 0
+  const bKnown = Number.isFinite(bTime) && bTime > 0
+  if (aKnown && bKnown && aTime !== bTime) return bTime - aTime
+  if (aKnown !== bKnown) return aKnown ? -1 : 1
+  return compareWorkspacePathsByActive(a, b, selectedWorkspace)
+}
+
 export function sidebarWorkspaceResolutionCandidates(options: {
   workspaceRoot: string
   workspaceRoots: string[]
@@ -238,6 +261,9 @@ export function buildSidebarWorkspaceGroups(options: {
   workspaceRoots: string[]
   conversationRoot: string
   threadWorktrees?: SidebarThreadWorktrees
+  /** Projects the user removed from the sidebar; hidden by identity key. */
+  removedProjectKeys?: ReadonlySet<string>
+  workspaceCreatedAt?: SidebarWorkspaceCreationTimes
 }): SidebarWorkspaceGroup[] {
   const map = new Map<string, { workspacePath: string; threads: NormalizedThread[] }>()
   const query = options.searchQuery.trim().toLowerCase()
@@ -308,9 +334,16 @@ export function buildSidebarWorkspaceGroups(options: {
     }
   }
 
+  // Removed projects are filtered at the end by final display identity, so a
+  // project removed via its main path also hides its worktree-thread group
+  // (and vice versa) regardless of which alias produced the group.
+  const removedKeys = options.removedProjectKeys
   return Array.from(map.values())
+    .filter(({ workspacePath }) =>
+      !removedKeys || !removedKeys.has(workspaceRootIdentityKey(workspacePath))
+    )
     .map(({ workspacePath, threads }): SidebarWorkspaceGroup => [workspacePath, threads])
-    .sort(([a], [b]) => compareWorkspacePathsByActive(a, b, selectedWorkspace))
+    .sort(([a], [b]) => compareWorkspacePathsByCreation(a, b, selectedWorkspace, options.workspaceCreatedAt))
 }
 
 export function buildSidebarDraftWorkspacePaths(options: {

@@ -165,6 +165,7 @@ export function withoutRendererPlaintextCredentials(settings: AppSettingsV1): Ap
       kun: {
         ...runtime,
         apiKey: '',
+        runtimeToken: '',
         imageGeneration: redactMedia(runtime.imageGeneration),
         speechToText: redactMedia(runtime.speechToText),
         textToSpeech: redactMedia(runtime.textToSpeech),

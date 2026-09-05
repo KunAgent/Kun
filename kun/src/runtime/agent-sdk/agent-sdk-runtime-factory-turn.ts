@@ -43,6 +43,7 @@ import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { SkillRuntime } from '../../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
+import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
 import {
   PLAN_MODE_INSTRUCTION,
   todoContinuationInstruction,
@@ -362,7 +363,7 @@ export function createAgentSdkTurnRuntimeDeps(
         const memories = await deps.memoryStore.retrieve({
           query: userText,
           workspace: thread.workspace,
-          limit: 8
+          limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
         })
         deps.memoryStore.setLastInjected(memories.map((memory) => memory.id))
         memoryBlocks = memoryInstructions(memories)

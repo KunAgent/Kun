@@ -24,6 +24,7 @@ import { materializeLegacyProviderCredential } from './legacy-provider-credentia
 import type { ExtensionCredentialStore } from './extension-credential-store.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import { type ModelConnectionRegistry, StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, type RegistryDocument, type StoredProfile, type CredentialTransaction, type PreparedCredentialSecret, type ModelConnectionSeed, type AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, type MaterializedModelConnections, type ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
+import { resolveRegistryProfileProxyUrl } from './model-connection-registry-proxy.js'
 
 export const modelConnectionRegistryMaterializationOperations = {
 async materialize(this: ModelConnectionRegistry): Promise<MaterializedModelConnections> {
@@ -78,6 +79,7 @@ async materializeDocument(this: ModelConnectionRegistry,
         Boolean(profile.credentialSourceId)
       const apiKey = usesRequestTimeCredential ? '' : material.apiKey
       const materialHeaders = usesRequestTimeCredential ? undefined : material.headers
+      const modelProxyUrl = resolveRegistryProfileProxyUrl(document, profile)
       const config: ServeProviderConfig =
         profile.kind === 'agent-sdk' ||
         profile.kind === 'antigravity-cli' ||
@@ -90,6 +92,8 @@ async materializeDocument(this: ModelConnectionRegistry,
             ...(profile.presetSource ? { presetSource: profile.presetSource } : {}),
             ...(profile.presetMode ? { presetMode: profile.presetMode } : {}),
             authType: profile.authType,
+            useProxy: profile.useProxy,
+            modelProxyUrl,
             models: [...profile.models],
             ...(profile.modelCapabilities ? { modelCapabilities: profile.modelCapabilities } : {}),
             ...(profile.selectedModel ? { selectedModel: profile.selectedModel } : {})
@@ -104,6 +108,8 @@ async materializeDocument(this: ModelConnectionRegistry,
               authType: profile.authType,
               baseUrl: profile.baseUrl!,
               endpointFormat: profile.endpointFormat,
+              useProxy: profile.useProxy,
+              modelProxyUrl,
               models: [...profile.models],
               ...(profile.modelCapabilities ? { modelCapabilities: profile.modelCapabilities } : {}),
               ...(profile.selectedModel ? { selectedModel: profile.selectedModel } : {}),
@@ -118,6 +124,8 @@ async materializeDocument(this: ModelConnectionRegistry,
               authType: profile.authType,
               baseUrl: profile.baseUrl!,
               endpointFormat: profile.endpointFormat,
+              useProxy: profile.useProxy,
+              modelProxyUrl,
               models: [...profile.models],
               ...(profile.modelCapabilities ? { modelCapabilities: profile.modelCapabilities } : {}),
               ...(profile.selectedModel ? { selectedModel: profile.selectedModel } : {}),
@@ -146,7 +154,10 @@ async probeInput(this: ModelConnectionRegistry, input: ModelConnectionConnectReq
       endpointFormat: input.endpointFormat,
       apiKey: input.credential?.trim() ?? '',
       fallbackModels: input.models,
-      proxyUrl: ''
+      proxyUrl: resolveRegistryProfileProxyUrl(
+        { proxy: (await this['file'].read(emptyDocument)).proxy },
+        { id: input.id ?? input.name, kind: input.kind, useProxy: input.useProxy }
+      )
     })
   },
 

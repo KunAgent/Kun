@@ -19,6 +19,7 @@ import type {
   QualityConfig,
   RolesConfig,
   RuntimeFlavor,
+  RuntimeClientOwnerKind,
   RuntimeTuningConfig,
   SandboxMode,
   ServerRuntime,
@@ -38,6 +39,8 @@ export type KunServeRuntimeOptions = {
   bundledExtensionsDir?: string
   runtimeToken: string
   apiKey: string
+  /** Selected model-connection identity, including anonymous providers. */
+  activeProviderId?: string
   credentialSourceId?: string
   geminiAuth?: GeminiCodeAssistCredential
   baseUrl: string
@@ -72,6 +75,7 @@ export type KunServeRuntimeOptions = {
   instanceId?: string
   buildId?: string
   launchMode?: 'foreground' | 'shared' | 'gui'
+  clientOwnerKind?: RuntimeClientOwnerKind
   runtimeFlavor?: RuntimeFlavor
   discoveryDir?: string
   serviceManager?: ServiceManagerConnection

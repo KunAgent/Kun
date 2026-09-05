@@ -10,6 +10,7 @@ import {
 } from './manager-discovery.js'
 import { startServiceManager } from './service-manager.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
+import { installLiveProcessLog } from '../cli/live-process-log.js'
 
 export const KUN_MANAGER_READY_PREFIX = 'KUN_MANAGER_READY '
 
@@ -66,7 +67,10 @@ export async function main(): Promise<number> {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then(
+  const liveLog = process.env.KUN_MANAGER_LOG_PATH?.trim()
+    ? installLiveProcessLog({ logPath: process.env.KUN_MANAGER_LOG_PATH.trim() })
+    : undefined
+  main().finally(() => liveLog?.close()).then(
     (code) => process.exit(code),
     (error) => {
       process.stderr.write(`kun service manager: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`)

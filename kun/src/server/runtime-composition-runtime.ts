@@ -17,8 +17,8 @@ import {
   persistSharedMcpConfig
 } from './runtime-factory-config.js'
 import { settleCleanupSteps } from './runtime-factory-cleanup.js'
-import { shutdownGraphExecutionForHost } from './runtime-graph-lifecycle.js'
-import { waitForActiveRuns } from './runtime-graph-lifecycle.js'
+import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
+import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
 
 export function createServerRuntimeComposition(
@@ -45,8 +45,10 @@ export function createServerRuntimeComposition(
     llmDebug,
     agentObservability,
     events,
+    threadActivity,
     prefix,
     threadService,
+    projectBoardService,
     artifactStore,
     graphConfig,
     graphRuntime
@@ -79,6 +81,7 @@ export function createServerRuntimeComposition(
     supplyChainTrust,
     reviewService,
     backgroundMaintenance,
+    prepareUsageCarryover,
     migrationService,
     migrationImportService,
     knowledgeBaseService
@@ -117,6 +120,7 @@ export function createServerRuntimeComposition(
   const { startedAt, rebuildCapabilities, applyConfig } = config
   return {
     threadService,
+    projectBoardService,
     turnService,
     threadStore: stores.threadStore,
     toolCancellationService,
@@ -125,6 +129,7 @@ export function createServerRuntimeComposition(
     eventBus,
     sessionStore,
     events,
+    threadActivity,
     eventStreamRegistry,
     llmDebug,
     canvasReceipts,
@@ -133,6 +138,7 @@ export function createServerRuntimeComposition(
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
     }),
     startBackgroundMaintenance: () => backgroundMaintenance.start(),
+    prepareForRequests: prepareUsageCarryover,
     inspectThreadStore: () => services.threadStoreGuardian.run(),
     sessionGuardian: services.sessionGuardian,
     threadSnapshots: services.threadSnapshots,
@@ -216,11 +222,12 @@ export function createServerRuntimeComposition(
     runTurn(threadId, turnId) {
       return runAgentTurn(threadId, turnId)
     },
-    resumeInterruptedGoals(threadIds) {
-      return agent.loop.resumeInterruptedGoals(threadIds)
+    queuedTurnDispatcher: agent.queuedTurnDispatcher,
+    resumeInterruptedGoals(sources) {
+      return agent.loop.resumeInterruptedGoals(sources)
     },
-    resumeInterruptedTurns(threadIds, childRecoveryCandidates) {
-      return agent.loop.resumeInterruptedTurns(threadIds, childRecoveryCandidates)
+    resumeInterruptedTurns(sources, childRecoveryCandidates) {
+      return agent.loop.resumeInterruptedTurns(sources, childRecoveryCandidates)
     },
     runReview(input) {
       return runReview(input)
@@ -379,37 +386,42 @@ export function createServerRuntimeComposition(
     shutdown: async () => {
       await settleCleanupSteps([
         async () => {
+          await shutdownRuntimeExecutionForHost({
+            prepare: async () => {
+              agent.shuttingDown = true
+              backgroundMaintenance.stop()
+              modelConnectionOAuth.close()
+              eventStreamRegistry.closeAll()
+              agent.loop.shutdownGoalResume()
+              agent.loop.shutdownInterruptedResume()
+              await turnService.closeAdmissionForShutdown()
+            },
+            graphRuntime,
+            turnService,
+            activeRuntimeRuns,
+            shutdownLeases: async () => { await executionLeases?.shutdown() }
+          })
+        },
+        async () => {
           try {
-            agent.shuttingDown = true
-            executionLeases?.shutdown()
-	        backgroundMaintenance.stop()
-	          await shutdownGraphExecutionForHost({
-	            graphRuntime,
-	            turnService
-	          })
-            modelConnectionOAuth.close()
-            eventStreamRegistry.closeAll()
-            agent.loop.shutdownGoalResume()
-            agent.loop.shutdownInterruptedResume()
-	          await backgroundShellRuntime.shutdown()
-	          await extensionJobs.handleRuntimeShutdown()
-	          extensionMediaJobs.dispose()
-	          extensionAudioAnalysisJobs.dispose()
-	          extensionMediaArchiveJobs.dispose()
-            await waitForActiveRuns(activeRuntimeRuns)
-	          stopExtensionModelListener()
-	          extensionViewSessions.disposeAll()
-	          await extensionManager.shutdown()
-	          await extensionBroker.dispose()
-	          extensionSecretReveals.dispose()
-	          await extensionAccountAudit.flush()
-	          extensionTools.disposeAll()
-	          await extensionModelProviders.disposeAll()
-	          shutdownAllLspSessions()
-	          await services.mcpProviders.close()
-	          await migrationService.shutdown()
-	          await migrationImportService.shutdown()
-	          await routeHealth.flush()
+            await backgroundShellRuntime.shutdown()
+            await extensionJobs.handleRuntimeShutdown()
+            extensionMediaJobs.dispose()
+            extensionAudioAnalysisJobs.dispose()
+            extensionMediaArchiveJobs.dispose()
+            stopExtensionModelListener()
+            extensionViewSessions.disposeAll()
+            await extensionManager.shutdown()
+            await extensionBroker.dispose()
+            extensionSecretReveals.dispose()
+            await extensionAccountAudit.flush()
+            extensionTools.disposeAll()
+            await extensionModelProviders.disposeAll()
+            shutdownAllLspSessions()
+            await services.mcpProviders.close()
+            await migrationService.shutdown()
+            await migrationImportService.shutdown()
+            await routeHealth.flush()
           } finally {
             try {
               await llmDebug?.shutdown()
@@ -419,7 +431,8 @@ export function createServerRuntimeComposition(
             }
           }
         },
-        async () => { await dataDirLease?.release() }
+        async () => { await dataDirLease?.release() },
+        () => { disposeProxyAgents() }
       ])
     }
   }

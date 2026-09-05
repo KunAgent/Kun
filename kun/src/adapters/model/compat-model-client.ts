@@ -44,6 +44,13 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       turnId: request.turnId,
       provider: this.provider,
       model: request.model?.trim() || this.config.model,
+      ...(request.trace
+        ? {
+            roundId: request.trace.roundId,
+            step: request.trace.step,
+            purpose: request.trace.purpose
+          }
+        : {}),
       toolCatalog: request.tools.map((tool) => ({
         name: tool.name,
         ...(tool.providerKind ? { providerKind: tool.providerKind } : {}),

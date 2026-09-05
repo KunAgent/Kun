@@ -10,6 +10,7 @@ import {
   DesignImagePlacementTargetSchema,
   DesignTaskProfileSchema
 } from './design-task-profile.js'
+import { ModelRequestFailureContextSchema } from './model-request-failure.js'
 
 /**
  * Conversation items returned as part of a thread or turn.
@@ -42,7 +43,8 @@ export const TurnItemBase = z.object({
 
 export const UserInputOptionSchema = z.object({
   label: z.string().min(1),
-  description: z.string()
+  description: z.string(),
+  recommended: z.boolean().optional()
 })
 
 export const UserInputQuestionSchema = z.object({
@@ -316,6 +318,7 @@ export const ErrorTurnItem = TurnItemBase.extend({
   message: z.string(),
   code: z.string().optional(),
   details: z.unknown().optional(),
+  modelRequestFailure: ModelRequestFailureContextSchema.optional(),
   severity: RuntimeErrorSeverity.optional()
 })
 export type ErrorTurnItem = z.infer<typeof ErrorTurnItem>

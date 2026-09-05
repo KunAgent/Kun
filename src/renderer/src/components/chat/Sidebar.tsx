@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Clock3,
+  Columns3,
   LayoutGrid,
   Moon,
   Plus,
@@ -24,7 +25,10 @@ import type { ClawImDialogMode, ClawInstallTarget } from './SidebarClawDialogHel
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
+import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
+import { SidebarProjectBoardsSection } from './SidebarProjectBoardsSection'
+import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import {
   SidebarCommandRow,
@@ -36,7 +40,7 @@ import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
 type Props = {
   threads: NormalizedThread[]
   activeThreadId: string | null
-  activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'subagents'
+  activeView: 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
   connectPhoneSidebarOpen: boolean
   connectPhoneInitialTarget: ClawInstallTarget
   pluginsActive: boolean
@@ -66,6 +70,7 @@ type Props = {
   onCodeOpen: () => void
   onWriteOpen: () => void
   onScheduleOpen: () => void
+  onBoardOpen?: () => void
   onWorkflowOpen: () => void
   onNewConversation: () => void
 }
@@ -100,6 +105,7 @@ export function Sidebar({
   onCodeOpen,
   onWriteOpen,
   onScheduleOpen,
+  onBoardOpen,
   onWorkflowOpen,
   onNewConversation
 }: Props): ReactElement {
@@ -116,6 +122,10 @@ export function Sidebar({
     return () => observer.disconnect()
   }, [])
 
+  // HTML5 drag does not scroll containers; without this, dragged sidebar rows
+  // cannot reach projects above or below the visible window.
+  useEffect(() => registerSidebarDragAutoScroll(document), [])
+
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const codeWorkspaceRoots = useChatStore((s) => s.codeWorkspaceRoots)
@@ -125,7 +135,8 @@ export function Sidebar({
   const refreshThreads = useChatStore((s) => s.refreshThreads)
   const loadMoreThreads = useChatStore((s) => s.loadMoreThreads)
   const chooseWorkspace = useChatStore((s) => s.chooseWorkspace)
-  const deleteWorkspace = useChatStore((s) => s.deleteWorkspace)
+  const removeWorkspace = useChatStore((s) => s.removeWorkspace)
+  const removedCodeWorkspaces = useChatStore((s) => s.removedCodeWorkspaces)
   const busy = useChatStore((s) => s.busy)
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
@@ -138,6 +149,7 @@ export function Sidebar({
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const resetClawChannelSession = useChatStore((s) => s.resetClawChannelSession)
   const [imDialogMode, setImDialogMode] = useState<ClawImDialogMode | null>(null)
+  const { enabled: projectBoardEnabled } = useProjectBoardEnabled()
 
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? clawChannels[0] ?? null,
@@ -215,6 +227,14 @@ export function Sidebar({
           onClick={onOpenExtensions}
           active={extensionsActive}
         />
+        {projectBoardEnabled ? (
+          <SidebarCommandRow
+            icon={<Columns3 className="h-4 w-4" strokeWidth={1.75} />}
+            label={t('projectBoardNav')}
+            onClick={onBoardOpen}
+            active={activeView === 'board'}
+          />
+        ) : null}
         <SidebarCommandRow
           icon={<Clock3 className="h-4 w-4" strokeWidth={1.75} />}
           label={t('schedule')}
@@ -254,6 +274,20 @@ export function Sidebar({
           onOpenSettings={() => setImDialogMode('edit')}
           t={t}
         />
+      ) : projectBoardEnabled && activeView === 'board' ? (
+        <SidebarProjectBoardsSection
+          threads={threads}
+          workspaceRoot={workspaceRoot}
+          workspaceRoots={codeWorkspaceRoots}
+          conversationRoot={conversationWorkspaceRoot}
+          removedCodeWorkspaces={removedCodeWorkspaces}
+          runtimeReady={runtimeReady}
+          onAddProject={() => void chooseWorkspace({
+            createThreadAfter: false,
+            selectThreadAfter: false
+          })}
+          t={t}
+        />
       ) : activeView === 'workflow' ? (
         <div className="ds-no-drag flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
           <Workflow className="h-7 w-7 text-ds-faint" strokeWidth={1.5} />
@@ -282,7 +316,7 @@ export function Sidebar({
           awaitingUserInputThreadIds={awaitingUserInputThreadIds}
           locale={i18n.language}
           onPickWorkspace={() => void chooseWorkspace()}
-          onRemoveWorkspace={deleteWorkspace}
+          onRemoveWorkspace={removeWorkspace}
           onCreateThreadInWorkspace={onNewChatInWorkspace}
           onSelectThread={onSelectThread}
           onRenameThread={onRenameThread}
@@ -317,7 +351,7 @@ export function Sidebar({
         awaitingUserInputThreadIds={awaitingUserInputThreadIds}
         locale={i18n.language}
         onPickWorkspace={() => void chooseWorkspace()}
-        onRemoveWorkspace={deleteWorkspace}
+        onRemoveWorkspace={removeWorkspace}
         onCreateThreadInWorkspace={onNewChatInWorkspace}
         onSelectThread={onSelectThread}
         onRenameThread={onRenameThread}

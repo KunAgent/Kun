@@ -1,12 +1,19 @@
 import {
+  defaultKunRuntimeSettings,
   defaultModelProviderSettings,
+  defaultWriteSettings,
   type ModelProviderModelProfileV1
 } from '@shared/app-settings'
 import { describe, expect, it, vi } from 'vitest'
 import type { SharedModelConnection } from './settings-section-providers-shared-api'
 import {
+  modelProviderDeletionKunPatch,
+  modelProviderDeletionWritePatch
+} from './settings-section-providers-profile'
+import {
   clearPendingSharedProviderDeletionForExplicitAdd,
   createSharedModelMutationQueue,
+  mergeProviderDraftForDisplay,
   projectSharedModelConnections,
   reconcilePendingSharedProviderCatalogs,
   selectSharedModelConnection,
@@ -29,6 +36,18 @@ const textModelProfile: ModelProviderModelProfileV1 = {
   messageParts: ['text']
 }
 
+describe('provider draft projection', () => {
+  it('replaces a committed same-id row instead of rendering a duplicate draft', () => {
+    const providers = defaultModelProviderSettings().providers
+    const draft = { ...providers[0]!, name: 'Draft provider', apiKey: 'pending-secret' }
+    const displayed = mergeProviderDraftForDisplay(providers, draft)
+
+    expect(displayed).toHaveLength(providers.length)
+    expect(displayed.filter((provider) => provider.id === draft.id)).toEqual([draft])
+    expect(new Set(displayed.map((provider) => provider.id)).size).toBe(displayed.length)
+  })
+})
+
 describe('credential retry policy', () => {
   it('uses capped exponential backoff with bounded jitter', () => {
     expect(credentialRetryDelayMs(1, () => 0)).toBe(800)
@@ -50,6 +69,7 @@ describe('pending provider profile metadata', () => {
       id: 'custom-provider-2', accountId: 'account:custom-provider-2',
       name: 'Custom Provider', kind: 'http' as const, authType: 'api-key' as const,
       baseUrl: 'https://old.example.com/v1', endpointFormat: 'chat_completions' as const,
+      useProxy: false,
       configured: true, models: ['model-a'], modelCapabilities: { 'model-a': { id: 'model-a', ...textModelProfile } }
     } satisfies SharedModelConnection
     const pending = {
@@ -59,7 +79,7 @@ describe('pending provider profile metadata', () => {
       baseModels: ['model-a'], baseModelProfiles: { 'model-a': textModelProfile },
       localModels: ['model-a'], localModelProfiles: { 'model-a': textModelProfile }, committedRevision: 5
     }
-    const snapshot = (provider: SharedModelConnection) => ({ schemaVersion: 1 as const, revision: 5, providers: [provider] })
+    const snapshot = (provider: SharedModelConnection) => ({ schemaVersion: 1 as const, proxyRoutingVersion: 1 as const, revision: 5, providers: [provider] })
 
     expect(reconcilePendingSharedProviderCatalogs(snapshot(connection), new Map([[connection.id, pending]]))
       .has(connection.id)).toBe(true)
@@ -216,6 +236,7 @@ describe('shared model connection mutation ordering', () => {
     }
     const snapshot = (revision: number) => ({
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision,
       providers: [provider]
     })
@@ -281,6 +302,7 @@ describe('shared model connection settings projection', () => {
 
     const projected = projectSharedModelConnections(current, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 4,
       providers: [{
         id: 'codex',
@@ -290,6 +312,7 @@ describe('shared model connection settings projection', () => {
         authType: 'subscription',
         baseUrl: 'https://example.test/codex',
         endpointFormat: 'responses',
+        useProxy: false,
         configured: true,
         models: ['gpt-live'],
         selectedModel: 'gpt-live'
@@ -323,6 +346,7 @@ describe('shared model connection settings projection', () => {
       current,
       {
         schemaVersion: 1,
+        proxyRoutingVersion: 1 as const,
         revision: 7,
         providers: [{
           id: current.providers[0]!.id,
@@ -332,6 +356,7 @@ describe('shared model connection settings projection', () => {
           authType: 'api-key',
           baseUrl: 'https://old.example/v1',
           endpointFormat: 'chat_completions',
+          useProxy: false,
           configured: true,
           models: [...current.providers[0]!.models]
         }]
@@ -369,6 +394,7 @@ describe('shared model connection settings projection', () => {
 
     const projected = projectSharedModelConnections(current, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 7,
       providers: [{
         id: 'custom',
@@ -378,6 +404,7 @@ describe('shared model connection settings projection', () => {
         authType: 'api-key',
         baseUrl: 'https://new.example/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         configured: true,
         models: ['new-model']
       }]
@@ -402,6 +429,7 @@ describe('shared model connection settings projection', () => {
 
     const projected = projectSharedModelConnections(current, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 3,
       providers: []
     })
@@ -422,6 +450,7 @@ describe('shared model connection settings projection', () => {
 
     const projected = projectSharedModelConnections(current, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 4,
       providers: []
     })
@@ -442,6 +471,7 @@ describe('shared model connection settings projection', () => {
 
     const projected = projectSharedModelConnections(current, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 5,
       providers: []
     })
@@ -453,6 +483,7 @@ describe('shared model connection settings projection', () => {
   it('clears the GUI provider without emitting an invalid empty model', () => {
     const projected = projectSharedModelConnections(defaultModelProviderSettings(), {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 5,
       providers: [],
       proxy: { enabled: false, url: '' },
@@ -479,6 +510,7 @@ describe('shared model connection settings projection', () => {
 
     const projected = projectSharedModelConnections(current, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 9,
       providers: [],
       routePools: [],
@@ -492,6 +524,7 @@ describe('shared model connection settings projection', () => {
   it('drops invalid shared capability limits before projecting AppSettings', () => {
     const projected = projectSharedModelConnections(defaultModelProviderSettings(), {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 6,
       providers: [{
         id: 'zenmux',
@@ -501,6 +534,7 @@ describe('shared model connection settings projection', () => {
         authType: 'api-key',
         baseUrl: 'https://zenmux.ai/api/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         configured: true,
         models: ['qwen/qwen3.5-flash'],
         modelCapabilities: {
@@ -530,6 +564,7 @@ describe('shared model connection settings projection', () => {
     const current = defaultModelProviderSettings()
     const projected = projectSharedModelConnections(current, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 8,
       providers: [{
         id: 'custom-provider-2',
@@ -539,6 +574,7 @@ describe('shared model connection settings projection', () => {
         authType: 'api-key',
         baseUrl: 'https://api.example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         configured: true,
         models: ['custom-model'],
         selectedModel: 'custom-model'
@@ -550,5 +586,84 @@ describe('shared model connection settings projection', () => {
 
     expect(projected.provider.providers.map((provider) => provider.id)).toEqual(['deepseek'])
     expect(projected.kun).toEqual({ providerId: '' })
+  })
+
+  it('clears every Kun and Write route that belongs to a deleted provider', () => {
+    const deletedProviderId = 'removed-provider'
+    const currentKun = defaultKunRuntimeSettings()
+    Object.assign(currentKun, {
+      providerId: deletedProviderId,
+      model: 'removed-main',
+      smallModel: 'removed-small', smallModelProviderId: deletedProviderId, smallModelAccountId: 'small-account',
+      titleModel: 'removed-title', titleProviderId: deletedProviderId, titleAccountId: 'title-account',
+      summaryModel: 'removed-summary', summaryProviderId: deletedProviderId, summaryAccountId: 'summary-account',
+      codeReviewModel: 'removed-review', codeReviewProviderId: deletedProviderId, codeReviewAccountId: 'review-account',
+      planModel: 'removed-plan', planProviderId: deletedProviderId, planAccountId: 'plan-account'
+    })
+    currentKun.imageGeneration = { ...currentKun.imageGeneration, providerId: deletedProviderId, model: 'removed-image' }
+    currentKun.speechToText = { ...currentKun.speechToText, providerId: deletedProviderId, model: 'removed-speech' }
+    currentKun.textToSpeech = { ...currentKun.textToSpeech, providerId: deletedProviderId, model: 'removed-tts' }
+    currentKun.promptOptimization = { ...currentKun.promptOptimization, providerId: deletedProviderId, model: 'removed-prompt' }
+    currentKun.musicGeneration = { ...currentKun.musicGeneration, providerId: deletedProviderId, model: 'removed-music' }
+    currentKun.videoGeneration = { ...currentKun.videoGeneration, providerId: deletedProviderId, model: 'removed-video' }
+    currentKun.contextCompaction = {
+      ...currentKun.contextCompaction,
+      summaryProviderId: deletedProviderId,
+      summaryModel: 'removed-compaction'
+    }
+    currentKun.fastContext = { ...currentKun.fastContext, providerId: deletedProviderId, model: 'removed-fast' }
+    currentKun.lab = {
+      ...currentKun.lab,
+      pptAgent: { ...currentKun.lab.pptAgent, providerId: deletedProviderId, model: 'removed-ppt' }
+    }
+    currentKun.graph = {
+      ...currentKun.graph,
+      workerModel: { mode: 'fixed', providerId: deletedProviderId, model: 'removed-worker' }
+    }
+    currentKun.subagents = {
+      enabled: true,
+      profiles: [{
+        id: 'routed', enabled: true, name: 'Routed', mode: 'all', toolPolicy: 'inherit',
+        providerId: deletedProviderId, model: 'removed-subagent'
+      }]
+    }
+    const fallbackProvider = defaultModelProviderSettings().providers[0]!
+
+    const patch = modelProviderDeletionKunPatch({
+      currentKun,
+      deletedProviderIds: new Set([deletedProviderId]),
+      fallbackProvider
+    })
+
+    expect(patch).toMatchObject({
+      providerId: fallbackProvider.id,
+      model: fallbackProvider.models[0],
+      imageGeneration: { providerId: '', model: '' },
+      speechToText: { providerId: '', model: '' },
+      textToSpeech: { providerId: '', model: '' },
+      promptOptimization: { providerId: '', model: '' },
+      musicGeneration: { providerId: '', model: '' },
+      videoGeneration: { providerId: '', model: '' },
+      contextCompaction: { summaryProviderId: '', summaryModel: '' },
+      fastContext: { providerId: '', model: '' },
+      lab: { pptAgent: { providerId: '', model: '' } },
+      graph: { workerModel: { mode: 'inherit' } },
+      smallModel: '', smallModelProviderId: '', smallModelAccountId: '',
+      titleModel: '', titleProviderId: '', titleAccountId: '',
+      summaryModel: '', summaryProviderId: '', summaryAccountId: '',
+      codeReviewModel: '', codeReviewProviderId: '', codeReviewAccountId: '',
+      planModel: '', planProviderId: '', planAccountId: ''
+    })
+    expect(patch.subagents?.profiles?.[0]).not.toHaveProperty('providerId')
+    expect(patch.subagents?.profiles?.[0]).not.toHaveProperty('model')
+    expect(modelProviderDeletionWritePatch({
+      ...defaultWriteSettings().inlineCompletion,
+      inheritProvider: false,
+      providerId: deletedProviderId,
+      inheritModel: false,
+      model: 'removed-write'
+    }, new Set([deletedProviderId]))).toMatchObject({
+      write: { inlineCompletion: { inheritProvider: true, providerId: '', inheritModel: true, model: '' } }
+    })
   })
 })

@@ -20,7 +20,9 @@ import type {
 } from '@shared/model-provider-presets'
 import {
   AlertCircle,
-  Image as ImageIcon
+  Download,
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react'
 import {
   type ReactElement
@@ -62,14 +64,14 @@ export function isOpenCodeFreeProvider(provider: Pick<ModelProviderProfileV1, 'i
 }
 
 export function buildProvidersViewModel(scope: Record<string, any>): Record<string, any> {
-  const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, updateProviderProxy, setGlobalNetworkOpen } = scope
+  const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe } = scope
   const modelProviders = scope.modelProviders as ModelProviderProfileV1[]
   const displayProviders = scope.displayProviders as ModelProviderProfileV1[]
   const activeProbe = activeProvider ? probeStates[activeProvider.id] : undefined
   const activeProbeFresh = Boolean(
     activeProvider &&
     activeProbe &&
-    activeProbe.fingerprint === providerConnectionFingerprint(activeProvider)
+    activeProbe.fingerprint === providerConnectionFingerprint(activeProvider, providerProxy)
   )
   const probeBusy = Boolean(activeProbeFresh && activeProbe?.status === 'busy')
   const probeNotice: InlineNotice | null = (() => {
@@ -95,6 +97,7 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
               label: t('modelProviderUseDetectedProxy'),
               onClick: () => {
                 updateProviderProxy({ enabled: true, url: suggestedProxyUrl })
+                updateModelProvider(activeProvider.id, { useProxy: true })
                 setGlobalNetworkOpen(true)
               }
             }
@@ -200,20 +203,36 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
     const inUse = !isDraft && activeKunProviderId === item.id
     const configuredCredential = hasConfiguredCredential(item)
     const missingKey = modelProviderRequiresApiKey(item) && !configuredCredential
+    const itemProbe = probeStates[item.id]
+    const itemFetchBusy = Boolean(
+      itemProbe &&
+      itemProbe.status === 'busy' &&
+      itemProbe.mode === 'fetch' &&
+      itemProbe.fingerprint === providerConnectionFingerprint(item, providerProxy)
+    )
+    const itemUrlInvalid = !isAcceptableHttpUrl(item.baseUrl)
+    const itemFetchBlocked = itemUrlInvalid || missingKey
+    const itemFetchTitle = missingKey
+      ? t('modelProviderPresetMissingKeyForProbe')
+      : itemUrlInvalid
+        ? t('modelProviderInvalidUrl')
+        : t('modelProviderFetchModels')
     return (
-      <button
+      <div
         key={item.id}
-        type="button"
-        aria-pressed={selected}
-        onClick={() => setSelectedProviderId(item.id)}
-        className={`group relative min-h-[58px] w-full min-w-0 overflow-hidden rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
+        className={`group relative flex min-h-[58px] w-full min-w-0 items-center overflow-hidden rounded-lg border px-3 py-2.5 transition ${
           selected
             ? 'border-accent/20 bg-accent/[0.08]'
             : 'border-transparent hover:border-ds-border-muted hover:bg-ds-hover'
         }`}
       >
         {selected ? <span aria-hidden="true" className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-accent" /> : null}
-        <div className="flex min-w-0 items-center gap-2.5">
+        <button
+          type="button"
+          aria-pressed={selected}
+          onClick={() => setSelectedProviderId(item.id)}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+        >
           <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${
             selected
               ? 'border-accent/20 bg-ds-card text-accent'
@@ -243,15 +262,33 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
               ) ? <ImageIcon className="h-3 w-3 shrink-0" strokeWidth={1.9} /> : null}
             </span>
           </span>
-          {isDraft ? <ProviderBadge tone="warning">{t('modelProviderDraftBadge')}</ProviderBadge> : null}
-          {!isDraft && missingKey ? (
-            <span className="inline-flex shrink-0 items-center text-amber-500" title={t('modelProviderMissingKey')}>
-              <AlertCircle className="h-4 w-4" />
-              <span className="sr-only">{t('modelProviderMissingKey')}</span>
-            </span>
-          ) : null}
-        </div>
-      </button>
+        </button>
+        {isDraft ? <ProviderBadge tone="warning">{t('modelProviderDraftBadge')}</ProviderBadge> : null}
+        {!isDraft && missingKey ? (
+          <span className="inline-flex shrink-0 items-center text-amber-500" title={t('modelProviderMissingKey')}>
+            <AlertCircle className="h-4 w-4" />
+            <span className="sr-only">{t('modelProviderMissingKey')}</span>
+          </span>
+        ) : null}
+        {!isDraft ? (
+          <button
+            type="button"
+            data-testid={`provider-list-fetch-${item.id}`}
+            aria-label={t('modelProviderFetchModels')}
+            title={itemFetchTitle}
+            disabled={itemFetchBusy || itemFetchBlocked}
+            onClick={(event) => {
+              event.stopPropagation()
+              void runProbe(item, 'fetch')
+            }}
+            className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-card hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {itemFetchBusy
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
+              : <Download className="h-3.5 w-3.5" strokeWidth={1.9} />}
+          </button>
+        ) : null}
+      </div>
     )
   }
 

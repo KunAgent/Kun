@@ -125,6 +125,7 @@ import {
   type ModelProvidersApi,
   type NetworkApi,
   type ScopedStorageApi,
+  type SecretStorageApi,
   type StorageApi,
   type ThreadsApi,
   type ToolsApi,
@@ -146,6 +147,7 @@ export interface ExtensionContext extends ActivationContextData {
   readonly onDidError: Event<ExtensionApiError>
   readonly commands: CommandsApi
   readonly storage: StorageApi
+  readonly secrets: SecretStorageApi
   readonly configuration: ConfigurationApi
   readonly network: NetworkApi
   readonly ui: UiApi
@@ -174,6 +176,7 @@ export function createExtensionContext(
     onDidError: client.onDidError,
     commands: client.commands,
     storage: client.storage,
+    secrets: client.secrets,
     configuration: client.configuration,
     network: client.network,
     ui: client.ui,

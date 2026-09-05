@@ -9,7 +9,6 @@ import {
   type ServeProviderConfig,
   type ModelClient,
   LlmDebugRecorder,
-  type ModelConnectionConnectRequest,
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   type ModelEndpointFormat,
   LegacyProviderCredentialMigrationService,
@@ -91,6 +90,10 @@ export function buildModelClientRouterInput(
       : {}
   const activeProviderId = activeModelConnectionProviderId(options)
   const activeProvider = options.providers?.[activeProviderId]
+  const defaultModelProxyUrl = activeProvider &&
+    Object.prototype.hasOwnProperty.call(activeProvider, 'modelProxyUrl')
+    ? activeProvider.modelProxyUrl
+    : options.modelProxyUrl
   const defaultModelCapabilities = providerScopedModelCapabilities(
     activeProviderId,
     activeProvider,
@@ -113,14 +116,14 @@ export function buildModelClientRouterInput(
                   (await credentialResolver(options.credentialSourceId!)).geminiAuth ?? null
               }
             : {}),
-          modelProxyUrl: options.modelProxyUrl,
+          modelProxyUrl: defaultModelProxyUrl,
           model: options.model,
           modelCapabilities: defaultModelCapabilities
         })
       : process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-cli-api'
       ? new GeminiCliApiModelClient({
           model: options.model,
-          modelProxyUrl: options.modelProxyUrl,
+          modelProxyUrl: defaultModelProxyUrl,
           retry: options.retry,
           ...(llmDebug ? { debugSink: llmDebug } : {})
         })
@@ -128,7 +131,7 @@ export function buildModelClientRouterInput(
           providerId: activeProviderId,
           baseUrl: options.baseUrl,
           apiKey: options.apiKey,
-          modelProxyUrl: options.modelProxyUrl,
+          modelProxyUrl: defaultModelProxyUrl,
           endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
           retry: options.retry,
           model: options.model,
@@ -171,14 +174,18 @@ export function buildModelClientRouterInput(
                   (await credentialResolver(provider.credentialSourceId!)).geminiAuth ?? null
               }
             : {}),
-          modelProxyUrl: provider.modelProxyUrl ?? options.modelProxyUrl,
+          modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl')
+            ? provider.modelProxyUrl
+            : options.modelProxyUrl,
           model: options.model,
           modelCapabilities: scopedModelCapabilities
         })
       : kind === 'gemini-cli-api'
       ? new GeminiCliApiModelClient({
           model: options.model,
-          modelProxyUrl: provider.modelProxyUrl ?? options.modelProxyUrl,
+          modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl')
+            ? provider.modelProxyUrl
+            : options.modelProxyUrl,
           retry: provider.retry ?? options.retry,
           ...(llmDebug ? { debugSink: llmDebug } : {})
         })
@@ -186,7 +193,9 @@ export function buildModelClientRouterInput(
           providerId: trimmedId,
           baseUrl: provider.baseUrl ?? options.baseUrl ?? '',
           apiKey: provider.apiKey,
-          modelProxyUrl: provider.modelProxyUrl ?? options.modelProxyUrl,
+          modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl')
+            ? provider.modelProxyUrl
+            : options.modelProxyUrl,
           endpointFormat: provider.endpointFormat ?? options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
           retry: provider.retry ?? options.retry,
           model: options.model,
@@ -336,14 +345,51 @@ export function approvalReviewNativeProviderKind(
 }
 
 export function activeModelConnectionProviderId(
-  options: Pick<KunServeRuntimeOptions, 'credentialSourceId' | 'providers'>
+  options: Pick<KunServeRuntimeOptions, 'activeProviderId' | 'credentialSourceId' | 'providers'>
 ): string {
+  const explicit = options.activeProviderId?.trim() ?? ''
+  if (explicit && options.providers?.[explicit]) return explicit
   const prefix = 'settings:provider:'
   const source = options.credentialSourceId?.trim() ?? ''
   const candidate = source.startsWith(prefix)
     ? source.slice(prefix.length).trim()
     : providerIdFromCredentialSource(source)?.trim() ?? ''
   return candidate && options.providers?.[candidate] ? candidate : 'default'
+}
+
+/**
+ * Secret-free model choices exposed to extension-owned Agent runs. The list is
+ * deliberately scoped to the active Kun connection: selecting a model never
+ * grants an extension access to another provider or account.
+ */
+export function extensionAgentRunOptionsForOptions(options: KunServeRuntimeOptions) {
+  const providerId = activeModelConnectionProviderId(options)
+  const provider = providerId === 'default' ? undefined : options.providers?.[providerId]
+  const models = uniqueModelCatalog([
+    ...(provider?.models ?? []),
+    provider?.selectedModel,
+    options.model
+  ])
+  return {
+    defaultModel: options.model,
+    models: models.map((model) => {
+      const capabilities = provider?.modelCapabilities?.[model] ?? modelCapabilitiesForProviderModel({
+        providerId,
+        presetSource: provider?.presetSource,
+        baseUrl: provider?.baseUrl ?? options.baseUrl,
+        kind: provider?.kind,
+        model
+      })
+      const reasoning = capabilities.reasoning
+      return {
+        id: model,
+        displayName: model,
+        selected: model === options.model,
+        reasoningEfforts: reasoning ? [...reasoning.supportedEfforts] : [],
+        ...(reasoning ? { defaultReasoningEffort: reasoning.defaultEffort } : {})
+      }
+    })
+  }
 }
 
 export function modelConnectionSeedsForOptions(
@@ -376,6 +422,7 @@ export function modelConnectionSeedsForOptions(
           ? { baseUrl: options.baseUrl }
           : {}),
       endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+      ...(activeProvider?.useProxy === undefined ? {} : { useProxy: activeProvider.useProxy }),
       ...(options.credentialSourceId
         ? { credentialSourceId: options.credentialSourceId }
         : {}),
@@ -394,7 +441,7 @@ export function modelConnectionSeedsForOptions(
     },
     ...Object.entries(options.providers ?? {})
       .filter(([providerId]) => providerId !== activeConnectionId)
-      .map(([providerId, provider]): ModelConnectionConnectRequest => ({
+      .map(([providerId, provider]): ModelConnectionSeed => ({
         expectedRevision: 0,
         id: providerId,
         name: providerId,
@@ -406,6 +453,7 @@ export function modelConnectionSeedsForOptions(
           : {}),
         kind: provider.kind ?? 'http',
         authType: provider.authType ?? modelConnectionAuthType(provider.kind ?? 'http', provider.apiKey),
+        ...(provider.useProxy === undefined ? {} : { useProxy: provider.useProxy }),
         ...((provider.kind ?? 'http') === 'http'
           ? { baseUrl: provider.baseUrl || options.baseUrl || 'https://api.deepseek.com' }
           : (provider.kind ?? 'http') === 'gemini-code-assist' && provider.baseUrl

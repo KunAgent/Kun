@@ -1,6 +1,7 @@
 import { readFile, rm } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { TurnMutationFenceSchema } from '../contracts/runtime-flavor.js'
 import { HybridSessionStore } from '../adapters/hybrid/hybrid-session-store.js'
 import { HybridThreadStore } from '../adapters/hybrid/hybrid-thread-store.js'
 import {
@@ -138,12 +139,18 @@ export type ManagerThreadStoreOperation = (typeof MANAGER_THREAD_STORE_OPERATION
 export type ManagerSessionStoreOperation =
   | 'appendEvent'
   | 'appendItem'
+  | 'checkpointLiveItem'
+  | 'finalizeLiveItem'
   | 'rewriteItems'
   | 'loadItemSnapshot'
   | 'rewriteItemsIfRevision'
   | 'updateItem'
   | 'compactItems'
+  | 'scheduleItemHistoryCompaction'
   | 'loadEventsSince'
+  | 'loadEventPage'
+  | 'trimEventsFromSeq'
+  | 'eventReplayFloorSeq'
   | 'loadItems'
   | 'searchItemText'
   | 'loadItemPage'
@@ -152,9 +159,15 @@ export type ManagerSessionStoreOperation =
   | 'highestSeq'
   | 'allocateEventSeq'
   | 'loadUsageRecords'
+  | 'aggregateUsage'
   | 'loadLatestUsageSnapshots'
   | 'resetMemory'
   | 'clearThreadMemory'
+
+export const ManagerDataRequestEnvelopeSchema = z.object({
+  value: z.unknown(),
+  turnFence: TurnMutationFenceSchema.optional()
+}).strict()
 
 export type ManagerArtifactStoreOperation =
   | 'put'
@@ -244,6 +257,18 @@ export function mutationThreadId(value: unknown): string | null {
   return thread.success ? thread.data.thread.id : null
 }
 
+export function mutationTurnId(value: unknown): string | null {
+  const parsed = z.object({ turnId: z.string().min(1) }).passthrough().safeParse(value)
+  if (parsed.success) return parsed.data.turnId
+  for (const key of ['event', 'item', 'session'] as const) {
+    const nested = z.object({
+      [key]: z.object({ turnId: z.string().min(1) }).passthrough()
+    }).passthrough().safeParse(value)
+    if (nested.success) return nested.data[key].turnId
+  }
+  return null
+}
+
 export function isThreadMutation(operation: ManagerThreadStoreOperation): boolean {
   return operation === 'touch' || operation === 'upsert' || operation === 'upsertIfRevision' || operation === 'delete'
 }
@@ -251,10 +276,13 @@ export function isThreadMutation(operation: ManagerThreadStoreOperation): boolea
 export function isSessionMutation(operation: ManagerSessionStoreOperation): boolean {
   return operation === 'appendEvent' ||
     operation === 'appendItem' ||
+    operation === 'checkpointLiveItem' ||
+    operation === 'finalizeLiveItem' ||
     operation === 'rewriteItems' ||
     operation === 'rewriteItemsIfRevision' ||
     operation === 'updateItem' ||
     operation === 'compactItems' ||
+    operation === 'scheduleItemHistoryCompaction' ||
     operation === 'upsertSession' ||
     operation === 'clearThreadMemory'
 }

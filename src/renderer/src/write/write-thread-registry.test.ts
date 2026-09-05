@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NormalizedThread } from '../agent/types'
 import {
+  MAX_WRITE_THREAD_IDS_PER_RESOURCE,
   MAX_WRITE_THREAD_IDS_PER_WORKSPACE,
   MAX_WRITE_THREAD_REGISTRY_WORKSPACES,
   WRITE_ASSISTANT_THREAD_TITLE,
@@ -12,9 +13,11 @@ import {
   isWriteThreadId,
   markWriteThread,
   moveWriteFileThreads,
+  normalizeWriteThreadRegistry,
   pruneWriteThreadRegistry,
   readWriteThreadRegistry,
   saveWriteThreadRegistry,
+  writeThreadIdsForFile,
   writeWorkspaceForThreadId
 } from './write-thread-registry'
 
@@ -50,6 +53,25 @@ describe('write-thread-registry', () => {
     const restored = readWriteThreadRegistry(storage)
     expect(isWriteThreadId('thread-1', restored)).toBe(true)
     expect(activeWriteThreadForWorkspace('/Users/zxy/workspace', [thread('thread-1', '/Users/zxy/workspace')], restored)?.id).toBe('thread-1')
+  })
+
+  it('migrates the former single file binding into one history entry', () => {
+    const registry = normalizeWriteThreadRegistry({
+      version: 1,
+      workspaces: {
+        '/Users/zxy/workspace': {
+          activeThreadId: 'thread-1',
+          threadIds: ['thread-1'],
+          fileThreadIds: { '/Users/zxy/workspace/draft.md': 'thread-1' }
+        }
+      }
+    })
+
+    expect(writeThreadIdsForFile(
+      '/Users/zxy/workspace',
+      '/Users/zxy/workspace/draft.md',
+      registry
+    )).toEqual(['thread-1'])
   })
 
   it('keeps the newest marked write thread active', () => {
@@ -97,6 +119,41 @@ describe('write-thread-registry', () => {
       registry,
       `${workspace}/new-file.md`
     )).toBeNull()
+  })
+
+  it('keeps ordered conversation history for one file and promotes the next thread on delete', () => {
+    const workspace = '/Users/zxy/workspace'
+    const filePath = `${workspace}/draft.md`
+    let registry = emptyWriteThreadRegistry()
+    registry = markWriteThread(workspace, 'thread-1', registry, filePath)
+    registry = markWriteThread(workspace, 'thread-2', registry, filePath)
+    registry = markWriteThread(workspace, 'thread-3', registry, filePath)
+
+    expect(writeThreadIdsForFile(workspace, filePath, registry)).toEqual([
+      'thread-3',
+      'thread-2',
+      'thread-1'
+    ])
+
+    const deleted = forgetWriteThread('thread-3', registry)
+    expect(writeThreadIdsForFile(workspace, filePath, deleted)).toEqual(['thread-2', 'thread-1'])
+    expect(deleted.workspaces[workspace].fileThreadIds[filePath]).toBe('thread-2')
+  })
+
+  it('caps one file history without reducing the workspace-wide history cap', () => {
+    const workspace = '/Users/zxy/workspace'
+    const filePath = `${workspace}/draft.md`
+    let registry = emptyWriteThreadRegistry()
+    for (let index = 0; index < MAX_WRITE_THREAD_IDS_PER_RESOURCE + 3; index += 1) {
+      registry = markWriteThread(workspace, `thread-${index}`, registry, filePath)
+    }
+
+    const ids = writeThreadIdsForFile(workspace, filePath, registry)
+    expect(ids).toHaveLength(MAX_WRITE_THREAD_IDS_PER_RESOURCE)
+    expect(ids[0]).toBe(`thread-${MAX_WRITE_THREAD_IDS_PER_RESOURCE + 2}`)
+    expect(ids).not.toContain('thread-0')
+    expect(registry.workspaces[workspace].threadIds)
+      .toHaveLength(MAX_WRITE_THREAD_IDS_PER_RESOURCE + 3)
   })
 
   it('does not assign a legacy workspace conversation to an arbitrary file', () => {
@@ -219,7 +276,7 @@ describe('write-thread-registry', () => {
     )
   })
 
-  it('prunes missing runtime threads and forgets deleted threads', () => {
+  it('preserves associations across partial runtime pages and forgets explicitly deleted threads', () => {
     const workspace = '/Users/zxy/workspace'
     const registry = markWriteThread(
       workspace,
@@ -229,12 +286,16 @@ describe('write-thread-registry', () => {
     )
     const pruned = pruneWriteThreadRegistry([thread('thread-1', '/Users/zxy/workspace')], registry)
 
-    expect(isWriteThreadId('thread-2', pruned)).toBe(false)
-    expect(pruned.workspaces['/Users/zxy/workspace'].activeThreadId).toBe('thread-1')
+    expect(isWriteThreadId('thread-2', pruned)).toBe(true)
+    expect(pruned.workspaces['/Users/zxy/workspace'].activeThreadId).toBe('thread-2')
     expect(pruned.workspaces[workspace].fileThreadIds).toEqual({
-      '/Users/zxy/workspace/a.md': 'thread-1'
+      '/Users/zxy/workspace/a.md': 'thread-1',
+      '/Users/zxy/workspace/b.md': 'thread-2'
     })
-    expect(forgetWriteThread('thread-1', pruned).workspaces['/Users/zxy/workspace']).toBeUndefined()
+    const withoutThread2 = forgetWriteThread('thread-2', pruned)
+    expect(withoutThread2.workspaces[workspace].fileThreadIds)
+      .toEqual({ '/Users/zxy/workspace/a.md': 'thread-1' })
+    expect(forgetWriteThread('thread-1', withoutThread2).workspaces[workspace]).toBeUndefined()
   })
 
   it('hydrates leaked write assistant threads from configured write workspaces', () => {

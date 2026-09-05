@@ -8,6 +8,7 @@ import { createPptDirectionComposerContextAttachments } from '../../design/canva
 export type ActivePptComposerContextScope = {
   expectedDocumentKey?: string
   workflowId?: string
+  phase?: 'blank' | 'directions' | 'review' | 'complete'
 }
 
 export async function activePptReviewComposerContexts(
@@ -34,5 +35,7 @@ export async function activePptReviewComposerContexts(
     createPptReviewComposerContextAttachments({ workspaceRoot, threadId, workflows: reviews }),
     createPptDirectionComposerContextAttachments({ workspaceRoot, threadId, workflows: directions })
   ])
+  if (scope.phase === 'directions') return directionContexts
+  if (scope.phase === 'review' || scope.phase === 'complete') return reviewContexts
   return [...reviewContexts, ...directionContexts]
 }

@@ -1,0 +1,24 @@
+{
+  "id": "world-bank-data",
+  "name": "World Bank Data",
+  "version": "1.0.0",
+  "description": "Retrieve and analyze World Bank indicators, country metadata, and development time series.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/world-bank-data"
+    ],
+    "promptPatterns": [
+      "development indicators",
+      "WDI",
+      "World Bank",
+      "World Bank Data",
+      "world-bank-data",
+      "世界银行数据"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

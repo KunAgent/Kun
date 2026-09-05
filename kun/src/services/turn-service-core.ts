@@ -13,7 +13,9 @@ import type {
   TurnStatus
 } from '../contracts/turns.js'
 import type { TurnItem, UserMessageSource } from '../contracts/items.js'
+import type { WriteTurnContext } from '../contracts/write-turn-context.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
+import type { ThreadExecutionLease } from '../contracts/runtime-flavor.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { MigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
@@ -62,6 +64,7 @@ import { turnServiceCompactionOperations } from './turn-service-compaction-opera
 import { turnServicePruneOperations } from './turn-service-prune-operations.js'
 import type { ThreadSnapshotStore } from './thread-snapshot-store.js'
 import { turnServiceGraphOperations } from './turn-service-graph-operations.js'
+import { turnServiceQueueOperations } from './turn-service-queue-operations.js'
 import { turnServiceRuntimeStateOperations } from './turn-service-runtime-state-operations.js'
 import { turnServiceItemPersistenceOperations } from './turn-service-item-persistence-operations.js'
 import type { TurnServiceOperations } from './turn-service-operations-contract.js'
@@ -77,6 +80,8 @@ export type TurnServiceDeps = {
   usage?: UsageService
   prefix?: ImmutablePrefix
   attachmentStore?: () => AttachmentStore | undefined
+  /** Verify a durable Write document reference at promotion; null means valid. */
+  writeDocumentGuard?: (context: WriteTurnContext) => Promise<string | null>
   defaultModel?: string
   contextCompaction?: ContextCompactionConfig
   /** Maximum number of active turns this in-process runtime may admit. */
@@ -133,6 +138,13 @@ export type TurnServiceDeps = {
 }
 
 export class TurnConflictError extends Error {}
+
+export class TurnInProgressError extends TurnConflictError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TurnInProgressError'
+  }
+}
 
 export class ThreadClosingError extends TurnConflictError {
   constructor(readonly threadId: string) {
@@ -200,6 +212,13 @@ export type GraphLeadSuspensionResult =
 export type GraphLeadResumeResult = 'resumed' | 'already_running'
 
 export const HOST_SHUTDOWN_TURN_SUSPENSION_CODE = 'host_shutdown_turn_suspension'
+export const OWNER_LEASE_EXPIRED_TURN_ABORT_CODE = 'owner_lease_expired'
+
+export type OwnerLeaseExpiredTurnAbortReason = {
+  code: typeof OWNER_LEASE_EXPIRED_TURN_ABORT_CODE
+  ownerFlavor: string
+  ownerInstanceId: string
+}
 
 export function hostShutdownTurnSuspensionReason(): { code: string } {
   return { code: HOST_SHUTDOWN_TURN_SUSPENSION_CODE }
@@ -216,6 +235,36 @@ export function isHostShutdownTurnSuspension(signal: AbortSignal): boolean {
   )
 }
 
+export function ownerLeaseExpiredTurnAbortReason(input: {
+  ownerFlavor: string
+  ownerInstanceId: string
+}): OwnerLeaseExpiredTurnAbortReason {
+  return {
+    code: OWNER_LEASE_EXPIRED_TURN_ABORT_CODE,
+    ownerFlavor: input.ownerFlavor,
+    ownerInstanceId: input.ownerInstanceId
+  }
+}
+
+export function ownerLeaseExpiredTurnAbortFrom(
+  signal: AbortSignal
+): OwnerLeaseExpiredTurnAbortReason | null {
+  const reason = signal.reason
+  if (!reason || typeof reason !== 'object') return null
+  if (!('code' in reason) || reason.code !== OWNER_LEASE_EXPIRED_TURN_ABORT_CODE) return null
+  if (!('ownerFlavor' in reason) || typeof reason.ownerFlavor !== 'string') return null
+  if (!('ownerInstanceId' in reason) || typeof reason.ownerInstanceId !== 'string') return null
+  return {
+    code: OWNER_LEASE_EXPIRED_TURN_ABORT_CODE,
+    ownerFlavor: reason.ownerFlavor,
+    ownerInstanceId: reason.ownerInstanceId
+  }
+}
+
+export function ownerLeaseExpiredTurnMessage(reason: OwnerLeaseExpiredTurnAbortReason): string {
+  return `Turn owner ${reason.ownerFlavor}/${reason.ownerInstanceId} stopped heartbeating.`
+}
+
 /**
  * Keep a finite backstop for one serve process while allowing a desktop user
  * to work across effectively all of their active conversations by default.
@@ -229,6 +278,12 @@ export const DEFAULT_MAX_CONCURRENT_TURNS = 256
  * directly.
  */
 export class TurnService {
+  private deps: TurnServiceDeps
+  private readonly leasedTurns = new Map<string, ThreadExecutionLease>()
+  private readonly inflightTurns = new Map<string, AbortController>()
+  /** Turn ids that own one global admission slot. */
+  private readonly admittedTurnThreads = new Map<string, string>()
+
   declare private findIdempotentStart: (input: {
     threadId: string
     request: StartTurnRequest
@@ -251,6 +306,8 @@ export class TurnService {
   declare private appendItem: (threadId: string, item: TurnItem) => Promise<void>
   declare private upsertThread: (threadId: string, mutator: (current: ThreadRecord) => ThreadRecord) => Promise<void>
   declare private withThreadMutation: <T>(threadId: string, operation: () => Promise<T>) => Promise<T>
+  declare private withQueueDataMutation: <T>(threadId: string, operation: () => Promise<T>) => Promise<T>
+  declare private commitThreadRecordCAS: (next: ThreadRecord, expectedRevision: number) => Promise<{ applied: boolean }>
   declare private markTurnAdmissionCompleted: (
     threadId: string,
     turnId: string,
@@ -260,23 +317,80 @@ export class TurnService {
     >>
   ) => Promise<ThreadRecord>
   declare private rollbackPendingAdmission: (threadId: string, turnId: string) => Promise<boolean>
+  declare private persistQueuedTurnRecord: (
+    thread: ThreadRecord,
+    input: { threadId: string; request: StartTurnRequest }
+  ) => Promise<{ turnId: string; userItem: TurnItem }>
+  declare private completeQueuedTurnAdmission: (input: {
+    threadId: string
+    request: StartTurnRequest
+    attemptedTurnId: string
+    userItem: TurnItem
+  }) => Promise<StartTurnResponse>
   declare private tryAdmitTurn: (turnId: string, threadId: string) => boolean
-  declare private clearRuntimeTurnState: (threadId: string, turnId: string, options?: { abort?: boolean } ) => void
-  declare private releaseRuntimeTurnExecution: (threadId: string, turnId: string, options?: { abort?: boolean } ) => void
+  declare private clearRuntimeTurnState: (threadId: string, turnId: string, options?: { abort?: boolean; releaseLease?: boolean } ) => void
+  declare private releaseRuntimeTurnExecution: (threadId: string, turnId: string, options?: { abort?: boolean; releaseLease?: boolean } ) => void
   declare private finalizeOpenItems: (turn: Turn, status: Extract<TurnStatus, 'completed' | 'failed' | 'aborted'>) => Turn
   declare private discardTurnItems: (threadId: string, turnId: string) => Promise<void>
   declare private finalizePersistedOpenItems: (threadId: string, turnId: string, status: Extract<TurnStatus, 'completed' | 'failed' | 'aborted'>) => Promise<void>
   declare private keepUserItems: (items: TurnItem[]) => TurnItem[]
 
-  private deps: TurnServiceDeps
   private readonly threadItems: ThreadItemProjectionService
-  private readonly inflightTurns = new Map<string, AbortController>()
-  /** Turn ids that own one global admission slot. */
-  private readonly admittedTurnThreads = new Map<string, string>()
-  private readonly leasedTurns = new Set<string>()
   /** Steering requests that are restoring a parked Graph lease before enqueueing. */
   private readonly graphSteeringResumeFences = new Map<string, number>()
+  /** New turn/Graph execution admission is permanently closed once host shutdown starts. */
+  private executionAdmissionClosed = false
+  private activeExecutionAdmissions = 0
+  private readonly executionAdmissionIdleWaiters = new Set<() => void>()
   private maxConcurrentTurns: number
+  /** Late-bound queue drain trigger; the serve runtime installs it once its
+   * agent-loop dispatcher exists. Receives the terminal status so the
+   * dispatcher can distinguish capacity wake-ups from queue pauses. */
+  private onTurnSettledHook:
+    | ((threadId: string, status: TerminalTurnStatus) => void | Promise<void>)
+    | null = null
+  /** Late-bound hook fired after a queued turn record is durably committed;
+   * lets the dispatcher promote it (or start it directly when the thread went
+   * idle between the busy decision and the queue write). */
+  private onTurnQueuedHook: ((threadId: string) => void | Promise<void>) | null = null
+
+  /** Installed by the serve runtime; invoked after terminal settlement. */
+  setTurnSettledHook(
+    hook: (threadId: string, status: TerminalTurnStatus) => void | Promise<void>
+  ): void {
+    this.onTurnSettledHook = hook
+  }
+
+  notifyTurnSettled(threadId: string, status: TerminalTurnStatus): void {
+    const hook = this.onTurnSettledHook
+    if (!hook) return
+    Promise.resolve()
+      .then(() => hook(threadId, status))
+      .catch((error) => {
+        console.warn(
+          `[kun] queued-turn drain failed for ${threadId}: ` +
+          `${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+  }
+
+  /** Installed by the serve runtime; invoked after a durable queue commit. */
+  setTurnQueuedHook(hook: (threadId: string) => void | Promise<void>): void {
+    this.onTurnQueuedHook = hook
+  }
+
+  notifyTurnQueued(threadId: string): void {
+    const hook = this.onTurnQueuedHook
+    if (!hook) return
+    Promise.resolve()
+      .then(() => hook(threadId))
+      .catch((error) => {
+        console.warn(
+          `[kun] queued-turn promotion failed for ${threadId}: ` +
+          `${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+  }
 
   constructor(deps: TurnServiceDeps) {
     this.deps = deps
@@ -286,6 +400,30 @@ export class TurnService {
       nowIso: deps.nowIso
     })
     this.maxConcurrentTurns = normalizeMaxConcurrentTurns(deps.maxConcurrentTurns)
+  }
+
+  async closeAdmissionForShutdown(): Promise<void> {
+    this.executionAdmissionClosed = true
+    if (this.activeExecutionAdmissions === 0) return
+    await new Promise<void>((resolve) => {
+      this.executionAdmissionIdleWaiters.add(resolve)
+    })
+  }
+
+  private beginExecutionAdmission(): () => void {
+    if (this.executionAdmissionClosed) {
+      throw new TurnConflictError('runtime is shutting down')
+    }
+    this.activeExecutionAdmissions += 1
+    let finished = false
+    return () => {
+      if (finished) return
+      finished = true
+      this.activeExecutionAdmissions -= 1
+      if (this.activeExecutionAdmissions !== 0) return
+      for (const resolve of this.executionAdmissionIdleWaiters) resolve()
+      this.executionAdmissionIdleWaiters.clear()
+    }
   }
 
 }
@@ -299,6 +437,7 @@ installServiceOperations(
   turnServiceCompactionOperations,
   turnServicePruneOperations,
   turnServiceGraphOperations,
+  turnServiceQueueOperations,
   turnServiceRuntimeStateOperations,
   turnServiceItemPersistenceOperations
 )
@@ -324,6 +463,18 @@ export function canonicalizeFingerprintValue(value: unknown): unknown {
 
 export function isActiveTurn(turn: Turn): turn is Turn & { status: 'queued' | 'running' } {
   return turn.status === 'queued' || turn.status === 'running'
+}
+
+/**
+ * A queued turn still in its two-phase admission window: its metadata has
+ * been persisted but the session user item (the commit boundary) has not.
+ * Idempotency must not replay this half-written record as an already-accepted
+ * start, because restart reconciliation will either commit or roll it back.
+ */
+export function isPendingQueuedAdmission(
+  turn: Pick<Turn, 'status' | 'admissionPending'>
+): boolean {
+  return turn.status === 'queued' && turn.admissionPending === true
 }
 
 export function terminalStatus(status: TurnStatus): TerminalTurnStatus {

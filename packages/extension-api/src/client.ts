@@ -16,7 +16,10 @@ import {
   AgentCancelRequestSchema,
   AgentCreateRunRequestSchema,
   AgentCreateRunResponseSchema,
+  AgentListRunEventsRequestSchema,
+  AgentListRunEventsResponseSchema,
   AgentMutationResultSchema,
+  AgentRunOptionsSchema,
   AgentRunEventSchema,
   AgentRunSchema,
   AgentSteerRequestSchema,
@@ -125,6 +128,7 @@ import {
   type ModelProvidersApi,
   type NetworkApi,
   type ScopedStorageApi,
+  type SecretStorageApi,
   type StorageApi,
   type ThreadsApi,
   type ToolsApi,
@@ -162,6 +166,7 @@ import {
   createCommandsApi,
   createConfigurationApi,
   createNetworkApi,
+  createSecretStorageApi,
   createStorageApi,
   createUiApi
 } from './client-ui-apis.js'
@@ -182,6 +187,7 @@ export class ExtensionHostClient implements Disposable {
 
   readonly commands: CommandsApi
   readonly storage: StorageApi
+  readonly secrets: SecretStorageApi
   readonly configuration: ConfigurationApi
   readonly network: NetworkApi
   readonly ui: UiApi
@@ -210,6 +216,7 @@ export class ExtensionHostClient implements Disposable {
 
     this.commands = createCommandsApi(transport)
     this.storage = createStorageApi(transport)
+    this.secrets = createSecretStorageApi(transport)
     this.configuration = createConfigurationApi(transport, this.#configuration.event)
     this.network = createNetworkApi(transport)
     this.ui = createUiApi(transport, {
@@ -218,9 +225,8 @@ export class ExtensionHostClient implements Disposable {
       onDidReceiveMessage: this.#messages.event,
       onDidChangeProviderStatus: this.#providerStatus.event
     })
-
-
     this.agent = {
+      getRunOptions: () => requestParsed(transport, 'agent.getRunOptions', {}, AgentRunOptionsSchema),
       createRun: (request) =>
         requestParsed(
           transport,
@@ -229,6 +235,10 @@ export class ExtensionHostClient implements Disposable {
           AgentCreateRunResponseSchema
         ),
       getRun: (runId) => requestParsed(transport, 'agent.getRun', { runId }, AgentRunSchema),
+      listRunEvents: (request) => requestParsed(
+        transport, 'agent.listRunEvents', AgentListRunEventsRequestSchema.parse(request),
+        AgentListRunEventsResponseSchema
+      ),
       subscribe: async (request) => {
         const parsedRequest = AgentSubscribeRequestSchema.parse(request)
         const response = await requestParsed(

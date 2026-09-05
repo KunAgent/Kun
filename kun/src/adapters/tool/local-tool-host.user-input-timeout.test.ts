@@ -29,6 +29,89 @@ describe('user_input tool aliases', () => {
     expect(userInputTool.description).toContain('optional follow-ups')
     expect(userInputTool.description).toContain('unnecessary repetitions or rephrasings')
     expect(userInputTool.description).toContain('material workflow state change')
+    expect(userInputTool.description).toContain('exactly one recommended option for single choice')
+    expect(userInputTool.description).toContain('recommended combination for multiple choice')
+    expect(JSON.stringify(userInputTool.inputSchema)).toContain('recommended')
+  })
+})
+
+describe('user_input recommendations', () => {
+  it('preserves valid recommendations for shortcut and questions-array calls', async () => {
+    const captured: CapturedRequest[] = []
+    const submit = async (request: CapturedRequest) => {
+      captured.push(request)
+      return { status: 'submitted', answers: [] }
+    }
+    await executeWithAwaitUserInput({
+      prompt: 'Choose one',
+      options: [
+        { label: 'Safe', description: 'Small change', recommended: true },
+        { label: 'Broad', description: 'Large change' }
+      ]
+    }, submit)
+    await executeWithAwaitUserInput({
+      questions: [{
+        id: 'targets',
+        question: 'Choose targets',
+        selectionMode: 'multiple',
+        minSelections: 2,
+        maxSelections: 2,
+        options: [
+          { label: 'Web', description: '', recommended: true },
+          { label: 'CLI', description: '', recommended: true },
+          { label: 'API', description: '' }
+        ]
+      }]
+    }, submit)
+
+    expect(captured[0]!.questions).toEqual([
+      expect.objectContaining({
+        options: [
+          { label: 'Safe', description: 'Small change', recommended: true },
+          { label: 'Broad', description: 'Large change' }
+        ]
+      })
+    ])
+    expect(captured[1]!.questions).toEqual([
+      expect.objectContaining({
+        selectionMode: 'multiple',
+        options: [
+          { label: 'Web', description: '', recommended: true },
+          { label: 'CLI', description: '', recommended: true },
+          { label: 'API', description: '' }
+        ]
+      })
+    ])
+  })
+
+  it('drops conflicting or malformed recommendation metadata without blocking input', async () => {
+    const captured: CapturedRequest[] = []
+    const submit = async (request: CapturedRequest) => {
+      captured.push(request)
+      return { status: 'submitted', answers: [] }
+    }
+    await executeWithAwaitUserInput({
+      prompt: 'Choose one',
+      options: [
+        { label: 'A', description: '', recommended: true },
+        { label: 'B', description: '', recommended: true },
+        { label: 'C', description: '', recommended: 'yes' }
+      ]
+    }, submit)
+    await executeWithAwaitUserInput({
+      question: 'Choose two',
+      selectionMode: 'multiple',
+      minSelections: 2,
+      maxSelections: 2,
+      options: [
+        { label: 'A', description: '', recommended: true },
+        { label: 'B', description: '' }
+      ]
+    }, submit)
+
+    for (const request of captured) {
+      expect(JSON.stringify(request.questions)).not.toContain('recommended')
+    }
   })
 })
 

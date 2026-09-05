@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SUPPORTED_EXTENSION_API_VERSIONS } from '@kun/extension-api'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -113,7 +114,7 @@ describe('runtime factory usage carryover', () => {
       expect(runtime.extensionPlatform).toBeDefined()
       expect(runtime.info().extensions).toMatchObject({
         enabled: true,
-        apiVersions: ['1.2.0', '1.1.0', '1.0.0'],
+        apiVersions: [...SUPPORTED_EXTENSION_API_VERSIONS],
         manifestVersions: [1]
       })
       expect(runtime.info().capabilities.instructions.enabled).toBe(true)
@@ -290,7 +291,7 @@ describe('runtime factory usage carryover', () => {
       insecure: false,
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
-      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } },
+      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -358,7 +359,7 @@ describe('runtime factory usage carryover', () => {
       insecure: false,
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
-      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } },
+      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -396,12 +397,12 @@ describe('runtime factory usage carryover', () => {
       expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
-        lab: { pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
+        lab: { pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(false)
 
       expect(await runtime.applyConfig({
-        lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false } }
+        lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(true)
     } finally {
@@ -438,10 +439,6 @@ describe('runtime factory usage carryover', () => {
 
       try {
         const recorder = runtime.llmDebug
-        if (name === 'disabled') {
-          expect(recorder).toBeUndefined()
-          continue
-        }
         expect(recorder).toBeDefined()
         if (!recorder) throw new Error('expected Agent Perspective recorder')
         const thread = await runtime.threadService.create({
@@ -456,13 +453,9 @@ describe('runtime factory usage carryover', () => {
           provider: 'compat',
           model: 'model-before'
         })
-        if (!expectedCapture) {
-          expect(round).toBeUndefined()
-          await expect(recorder.listThread(thread.id)).resolves.toMatchObject({ records: [] })
-          continue
-        }
         expect(round).toBeDefined()
-        if (!round) throw new Error('expected enabled thread trace')
+        expect(round?.captureContent).toBe(expectedCapture)
+        if (!round) throw new Error('expected trajectory metadata round')
         recorder.beginHttpAttempt(round, {
           endpointFormat: 'chat_completions',
           attempt: 1,
@@ -477,7 +470,8 @@ describe('runtime factory usage carryover', () => {
             provider: 'compat',
             model: 'model-before',
             attempt: 1,
-            endpointFormat: 'chat_completions'
+            endpointFormat: 'chat_completions',
+            captureMode: expectedCapture ? 'full' : 'metadata'
           })]
         })
       } finally {

@@ -1,7 +1,7 @@
 import { arch, release, type as osType } from 'node:os'
 
-/** Pinned to current npm @openai/codex; bump when subscription checks require a newer CLI. */
-export const CODEX_CLI_VERSION = '0.145.0'
+/** Verified against the Codex model catalog; older versions can hide new models. */
+export const CODEX_CLI_VERSION = '0.153.3'
 /** Pinned to current npm @google/gemini-cli. */
 export const GEMINI_CLI_VERSION = '0.52.0'
 /** Pinned to current grok / Grok Build CLI. */

@@ -86,6 +86,20 @@ npm run test
 npm run dev
 ```
 
+### Required CI checks
+
+The `develop` branch is protected by a branch ruleset. A pull request cannot
+merge until every required check succeeds:
+
+- `Quality gates` (typecheck, lint, unit tests; the four package jobs depend on it)
+- `Build Linux package` (`package`)
+- `Build Linux package and TUI (ARM64)` (`package-linux-arm64`)
+- `Build ad-hoc macOS packages (PR)` (`package-macos`)
+- `Build Windows NSIS installer (PR)` (`package-windows`)
+
+At least one approving review is also required. Do not disable the ruleset
+enforcement or remove a check from the required list to unblock a merge.
+
 ## Coding Expectations
 
 - Keep changes focused and scoped

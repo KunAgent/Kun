@@ -45,6 +45,8 @@ export type WorkWhiteboard = {
   title: string
   workspaceRoot: string
   threadId: string | null
+  /** Ordered Work conversation history; absent on legacy whiteboards. */
+  threadIds?: string[]
   sourcePath?: string
   workflowId?: string
   childId?: string
@@ -208,6 +210,7 @@ export type WriteWorkspaceState = {
   renameWhiteboard: (boardId: string, title: string) => Promise<boolean>
   deleteWhiteboard: (boardId: string) => Promise<boolean>
   bindWhiteboardThread: (boardId: string, threadId: string) => Promise<boolean>
+  forgetWhiteboardThread: (threadId: string) => Promise<boolean>
   updateWhiteboardPptState: (boardId: string, patch: {
     phase?: WorkWhiteboardPhase
     outputPath?: string

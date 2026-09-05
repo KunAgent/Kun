@@ -556,7 +556,7 @@ export function WritePromptMetaDisclosure({
   )
 }
 
-function WritePromptQuoteCard({ quote }: { quote: WritePromptDisplayQuote }): ReactElement {
+export function WritePromptQuoteCard({ quote }: { quote: WritePromptDisplayQuote }): ReactElement {
   const { t } = useTranslation('common')
   const lineLabel =
     quote.lineStart != null && quote.lineEnd != null

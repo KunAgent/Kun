@@ -67,12 +67,16 @@ export class ManagerResourceLeaseRegistry {
     return registry
   }
 
-  acquire(input: Omit<ManagerResourceFence, 'fencingToken'>, now = new Date()): {
+  acquire(
+    input: Omit<ManagerResourceFence, 'fencingToken'>,
+    now = new Date(),
+    preserveExisting = false
+  ): {
     acquired: boolean
     lease: ManagerResourceLease
   } {
     const existing = this.leases.get(input.resource)
-    const expired = existing && Date.parse(existing.expiresAt) <= now.getTime()
+    const expired = !preserveExisting && existing && Date.parse(existing.expiresAt) <= now.getTime()
     const commitActive = Boolean(existing?.commitId && existing.commitExpiresAt &&
       Date.parse(existing.commitExpiresAt) > now.getTime())
     const sameOwner = existing?.ownerFlavor === input.ownerFlavor &&
@@ -97,8 +101,12 @@ export class ManagerResourceLeaseRegistry {
     return { acquired: true, lease }
   }
 
-  renew(fence: ManagerResourceFence, now = new Date()): ManagerResourceLease | null {
-    if (!this.validate(fence, now)) return null
+  renew(
+    fence: ManagerResourceFence,
+    now = new Date(),
+    ignoreExpiry = false
+  ): ManagerResourceLease | null {
+    if (!this.validate(fence, now, ignoreExpiry)) return null
     const existing = this.leases.get(fence.resource)!
     const lease = ManagerResourceLeaseSchema.parse({
       ...existing,
@@ -112,9 +120,10 @@ export class ManagerResourceLeaseRegistry {
     fence: ManagerResourceFence,
     commitId: string,
     commitExpiresAt: string,
-    now = new Date()
+    now = new Date(),
+    ignoreExpiry = false
   ): ManagerResourceLease | null {
-    if (!this.validate(fence, now)) return null
+    if (!this.validate(fence, now, ignoreExpiry)) return null
     const existing = this.leases.get(fence.resource)!
     if (existing.commitId && existing.commitId !== commitId && existing.commitExpiresAt &&
       Date.parse(existing.commitExpiresAt) > now.getTime()) return null
@@ -131,11 +140,12 @@ export class ManagerResourceLeaseRegistry {
     fence: ManagerResourceFence,
     commitId: string,
     commitExpiresAt: string,
-    now = new Date()
+    now = new Date(),
+    ignoreExpiry = false
   ): ManagerResourceLease | null {
     const existing = this.leases.get(fence.resource)
     if (!existing || existing.commitId !== commitId ||
-      !this.validateCommit(fence, commitId, now)) return null
+      !this.validateCommit(fence, commitId, now, ignoreExpiry)) return null
     const lease = ManagerResourceLeaseSchema.parse({ ...existing, commitExpiresAt })
     this.leases.set(fence.resource, lease)
     return lease
@@ -152,21 +162,26 @@ export class ManagerResourceLeaseRegistry {
     return true
   }
 
-  validate(fence: ManagerResourceFence, now = new Date()): boolean {
+  validate(fence: ManagerResourceFence, now = new Date(), ignoreExpiry = false): boolean {
     const existing = this.leases.get(fence.resource)
-    return Boolean(existing && Date.parse(existing.expiresAt) > now.getTime() &&
+    return Boolean(existing && (ignoreExpiry || Date.parse(existing.expiresAt) > now.getTime()) &&
       existing.ownerFlavor === fence.ownerFlavor &&
       existing.ownerInstanceId === fence.ownerInstanceId &&
       existing.fencingToken === fence.fencingToken)
   }
 
-  validateCommit(fence: ManagerResourceFence, commitId: string, now = new Date()): boolean {
+  validateCommit(
+    fence: ManagerResourceFence,
+    commitId: string,
+    now = new Date(),
+    ignoreExpiry = false
+  ): boolean {
     const existing = this.leases.get(fence.resource)
     return Boolean(existing && existing.ownerFlavor === fence.ownerFlavor &&
       existing.ownerInstanceId === fence.ownerInstanceId &&
       existing.fencingToken === fence.fencingToken &&
       existing.commitId === commitId && existing.commitExpiresAt &&
-      Date.parse(existing.commitExpiresAt) > now.getTime())
+      (ignoreExpiry || Date.parse(existing.commitExpiresAt) > now.getTime()))
   }
 
   release(fence: ManagerResourceFence): boolean {
@@ -196,6 +211,32 @@ export class ManagerResourceLeaseRegistry {
     for (const [resource, lease] of this.leases) {
       if (!ownerKeys.has(`${lease.ownerFlavor}:${lease.ownerInstanceId}`)) continue
       this.leases.delete(resource)
+      changed = true
+    }
+    return changed
+  }
+
+  extendLiveDeadlines(deltaMs: number, aliveAtMs: number): boolean {
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0) return false
+    let changed = false
+    for (const [resource, lease] of this.leases) {
+      const expiresAtMs = Date.parse(lease.expiresAt)
+      const commitExpiresAtMs = lease.commitExpiresAt
+        ? Date.parse(lease.commitExpiresAt)
+        : undefined
+      const leaseWasAlive = Number.isFinite(expiresAtMs) && expiresAtMs > aliveAtMs
+      const commitWasAlive = commitExpiresAtMs !== undefined &&
+        Number.isFinite(commitExpiresAtMs) && commitExpiresAtMs > aliveAtMs
+      if (!leaseWasAlive && !commitWasAlive) continue
+      this.leases.set(resource, ManagerResourceLeaseSchema.parse({
+        ...lease,
+        ...(leaseWasAlive
+          ? { expiresAt: new Date(expiresAtMs + deltaMs).toISOString() }
+          : {}),
+        ...(commitWasAlive
+          ? { commitExpiresAt: new Date(commitExpiresAtMs + deltaMs).toISOString() }
+          : {})
+      }))
       changed = true
     }
     return changed

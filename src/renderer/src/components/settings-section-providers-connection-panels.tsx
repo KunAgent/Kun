@@ -5,7 +5,10 @@ import type {
 import {
   DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
   MODEL_ENDPOINT_FORMATS,
-  modelProviderRequiresApiKey
+  modelProviderSupportsAppProxy,
+  normalizeProxyUrl,
+  modelProviderRequiresApiKey,
+  resolveModelProviderPresetSource
 } from '@shared/app-settings'
 import type {
   ModelProviderTokenPlanRegion
@@ -60,8 +63,21 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, showApiKey, selectControlClass, zh, sharedConnectionsError, credentialRevealError, activeTab, expandedCapabilities, activeProvider, activeRetry, isDraftActive, canEditActiveProviderId, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderId, activeProbe, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeMissingCredential, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy } = view
+  const { t, showApiKey, selectControlClass, zh, sharedConnectionsError, credentialRevealError, activeTab, expandedCapabilities, activeProvider, activeRetry, canEditActiveProviderId, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderId, activeProbe, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeMissingCredential, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, providerProxy, setGlobalNetworkOpen } = view
   const activeProviderNeedsApiKey = modelProviderRequiresApiKey(activeProvider)
+  const activeProviderAcceptsApiKey = activeProviderNeedsApiKey ||
+    !resolveModelProviderPresetSource(activeProvider)
+  const proxySupported = modelProviderSupportsAppProxy(activeProvider)
+  const proxyUrlValid = Boolean(normalizeProxyUrl(providerProxy.url))
+  const proxyState = !proxySupported
+    ? 'unsupported'
+    : !activeProvider.useProxy
+      ? 'direct'
+      : !providerProxy.enabled
+        ? 'inactive'
+        : proxyUrlValid
+          ? 'active'
+          : 'invalid'
   const activeTokenPlanRegions = view.activeTokenPlanRegions as ModelProviderTokenPlanRegion[]
   const sharedConnections = view.sharedConnections as SharedModelConnectionsSnapshot | null
   const credentialRetry = sharedProviderMutationCoordinator.credentialRetryStates.get(activeProvider.id)
@@ -210,7 +226,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                     />
                   ) : (
                     <>
-                      {activeProviderNeedsApiKey ? (
+                      {activeProviderAcceptsApiKey ? (
                       <label className={fieldLabelClass}>
                         {t('modelProviderApiKey')}
                         <SecretInput
@@ -322,6 +338,32 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                       ))}
                     </select>
                   </label>
+                  <div className="grid gap-2 rounded-xl border border-ds-border bg-ds-main/30 px-3 py-3">
+                    <label className="flex items-center justify-between gap-3 text-[13px] font-medium text-ds-ink">
+                      <span>{t('modelProviderUseAppProxy')}</span>
+                      <Toggle
+                        ariaLabel={t('modelProviderUseAppProxy')}
+                        checked={proxySupported && activeProvider.useProxy === true}
+                        disabled={!proxySupported}
+                        onChange={(useProxy) => updateModelProvider(activeProvider.id, { useProxy })}
+                      />
+                    </label>
+                    <div className={`text-[12px] leading-5 ${proxyState === 'invalid' ? 'text-red-600 dark:text-red-300' : 'text-ds-muted'}`}>
+                      {t(`modelProviderProxyState_${proxyState}`)}
+                    </div>
+                    {proxyState === 'inactive' || proxyState === 'invalid' ? (
+                      <button
+                        type="button"
+                        className="w-fit text-[12px] font-medium text-accent underline-offset-2 hover:underline"
+                        onClick={() => setGlobalNetworkOpen(true)}
+                      >
+                        {t('modelProviderOpenGlobalProxy')}
+                      </button>
+                    ) : null}
+                    <p className="text-[11.5px] leading-5 text-ds-faint">
+                      {t('modelProviderProxyScope')}
+                    </p>
+                  </div>
                   {isCodexProvider(activeProvider) ? (
                     <p className="text-[12px] leading-5 text-ds-muted">
                       {t('codexEndpointLocked')}

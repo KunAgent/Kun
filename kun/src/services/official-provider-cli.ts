@@ -14,7 +14,6 @@ import { homedir, tmpdir } from 'node:os'
 import { basename, delimiter, dirname, join } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { fileURLToPath } from 'node:url'
 import * as yauzl from 'yauzl'
 import {
   getProviderCatalogPreset,
@@ -125,22 +124,6 @@ export function resolveAntigravityCliCommand(
 export function resolveGeminiCliCommand(
   env: NodeJS.ProcessEnv = process.env
 ): OfficialProviderCliCommand | undefined {
-  const bundled = join(
-    dirname(dirname(dirname(fileURLToPath(import.meta.url)))),
-    'node_modules',
-    '@google',
-    'gemini-cli',
-    'bundle',
-    'gemini.js'
-  )
-  if (existsSync(bundled)) {
-    return {
-      provider: 'gemini-cli',
-      command: process.execPath,
-      args: [bundled],
-      displayName: 'Gemini CLI'
-    }
-  }
   const executable = process.platform === 'win32' ? 'gemini.cmd' : 'gemini'
   const command = executableCandidates(executable, env).find((candidate) => existsSync(candidate))
   if (command) {

@@ -539,6 +539,40 @@ describe('controlled workbench contribution rendering', () => {
     }
   })
 
+  it('retries a cancelled activation once and hides the internal lifecycle message', async () => {
+    const contribution = registryWithContributions().list('views.rightSidebar')
+      .find((item) => item.id === 'extension:acme.ui/dashboard')!
+    const lifecycleMessage = 'Extension activation was invalidated by a lifecycle or permission change'
+    const createSession = vi.spyOn(extensionWorkbenchClient, 'createViewSession')
+      .mockRejectedValueOnce(new Error(lifecycleMessage))
+      .mockRejectedValueOnce(new Error(lifecycleMessage))
+    vi.spyOn(extensionWorkbenchClient, 'disposeViewSession').mockResolvedValue(undefined)
+    vi.stubGlobal('HTMLElement', class {})
+    vi.stubGlobal('document', { activeElement: null })
+    vi.stubGlobal('window', { requestAnimationFrame: vi.fn() })
+    let renderer!: ReturnType<typeof createRenderer>
+    try {
+      await act(async () => {
+        renderer = createRenderer(createElement(ExtensionViewOutlet, {
+          contribution,
+          workspaceRoot: '/workspace'
+        }))
+      })
+
+      expect(createSession).toHaveBeenCalledTimes(2)
+      expect(createSession).toHaveBeenNthCalledWith(1, contribution.id, '/workspace')
+      expect(createSession).toHaveBeenNthCalledWith(2, contribution.id, '/workspace')
+      expect(renderer.root.findByProps({ role: 'alert' })).toBeDefined()
+      const alertText = JSON.stringify(renderer.toJSON())
+      expect(alertText).toContain('The extension View is unavailable')
+      expect(alertText).not.toContain(lifecycleMessage)
+    } finally {
+      if (renderer) act(() => renderer.unmount())
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('renders Host-owned extension View status in the active Kun language', async () => {
     const contribution = registryWithContributions().list('views.rightSidebar')
       .find((item) => item.id === 'extension:acme.ui/dashboard')!
@@ -549,6 +583,73 @@ describe('controlled workbench contribution rendering', () => {
       expect(html).toContain('Dashboard 扩展视图')
     } finally {
       await i18n.changeLanguage('en')
+    }
+  })
+
+  it('refreshes contributions and reopens a View after its lifecycle session is invalidated', async () => {
+    const contribution = registryWithContributions().list('views.rightSidebar')
+      .find((item) => item.id === 'extension:acme.ui/dashboard')!
+    const createSession = vi.spyOn(extensionWorkbenchClient, 'createViewSession')
+      .mockResolvedValueOnce({
+        sessionId: 'session-0123456789',
+        nonce: 'nonce-0123456789',
+        contributionId: contribution.id,
+        extensionId: 'acme.ui',
+        extensionVersion: '1.0.0',
+        src: 'kun-extension://acme.ui/dist/index.html',
+        partition: 'kun-extension-acme-ui-session'
+      })
+      .mockResolvedValueOnce({
+        sessionId: 'session-9876543210',
+        nonce: 'nonce-9876543210',
+        contributionId: contribution.id,
+        extensionId: 'acme.ui',
+        extensionVersion: '1.0.0',
+        src: 'kun-extension://acme.ui/dist/index.html',
+        partition: 'kun-extension-acme-ui-session-next'
+      })
+    vi.spyOn(extensionWorkbenchClient, 'disposeViewSession').mockResolvedValue(undefined)
+    let invalidate!: (event: { sessionId: string }) => void
+    const stopInvalidation = vi.fn()
+    vi.spyOn(extensionWorkbenchClient, 'onViewSessionInvalidated')
+      .mockImplementation((handler) => {
+        invalidate = handler
+        return stopInvalidation
+      })
+    const dispatchEvent = vi.fn()
+    vi.useFakeTimers()
+    vi.stubGlobal('HTMLElement', class {})
+    vi.stubGlobal('document', { activeElement: null })
+    vi.stubGlobal('window', { requestAnimationFrame: vi.fn(), dispatchEvent })
+    let renderer!: ReturnType<typeof createRenderer>
+    try {
+      await act(async () => {
+        renderer = createRenderer(createElement(ExtensionViewOutlet, {
+          contribution,
+          workspaceRoot: '/workspace'
+        }))
+      })
+
+      await act(async () => {
+        invalidate({ sessionId: 'session-0123456789' })
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
+
+      expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'kun:extensions-changed'
+      }))
+      expect(createSession).toHaveBeenCalledTimes(2)
+      expect(createSession).toHaveBeenNthCalledWith(2, contribution.id, '/workspace')
+      expect(renderer.root.findAllByProps({
+        'data-extension-view-session': 'session-9876543210'
+      })).toHaveLength(1)
+    } finally {
+      if (renderer) act(() => renderer.unmount())
+      vi.useRealTimers()
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
     }
   })
 })

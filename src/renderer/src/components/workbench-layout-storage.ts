@@ -31,6 +31,7 @@ export const TERMINAL_HEIGHT_KEY = 'kun.layout.terminalHeight'
 export const LEFT_PANEL_DEFAULT = 304
 export const RIGHT_PANEL_DEFAULT = 360
 export const CODE_PANEL_PREFERRED = 560
+export const PLAN_BOARD_PREFERRED = 720
 export const GRAPH_PANEL_PREFERRED = 720
 const LEFT_PANEL_MIN = 280
 const LEFT_PANEL_MAX = 480

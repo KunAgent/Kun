@@ -1,0 +1,115 @@
+[data-startup-variant='wave'] .kun-startup__progress-indicator {
+  background: linear-gradient(90deg, #818cf8, #38bdf8, #a78bfa);
+  animation-duration: 1.7s;
+}
+
+[data-startup-variant='dash'] .kun-startup__progress-indicator {
+  background: linear-gradient(90deg, #2dd4bf, #38bdf8, #3b82f6);
+  animation-duration: 1.05s;
+}
+
+[data-startup-variant='focus'] .kun-startup__progress-indicator {
+  background: linear-gradient(90deg, #60a5fa, #818cf8, #22d3ee);
+  animation-duration: 2.2s;
+}
+
+[data-startup-variant='cast'] .kun-startup__progress-indicator {
+  background: linear-gradient(90deg, #a855f7, #6366f1, #22d3ee);
+  animation-duration: 1.25s;
+}
+
+@keyframes kun-startup-stage-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -3px, 0); }
+}
+
+@keyframes kun-startup-variant-aura {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.72; }
+}
+
+@keyframes kun-startup-variant-drift {
+  0%, 100% { opacity: 0.16; transform: translate3d(-3px, 2px, 0) rotate(-1deg); }
+  50% { opacity: 0.42; transform: translate3d(4px, -3px, 0) rotate(1deg); }
+}
+
+@keyframes kun-startup-variant-dash-lines {
+  0%, 100% { opacity: 0.16; transform: translate3d(8px, 0, 0); }
+  50% { opacity: 0.42; transform: translate3d(-7px, 0, 0); }
+}
+
+@keyframes kun-startup-orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes kun-startup-hologram-pulse {
+  0%, 100% { opacity: 0.76; transform: translateY(2px); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
+@keyframes kun-startup-hologram-scan {
+  0%, 100% { opacity: 0.18; transform: translateY(-23px); }
+  50% { opacity: 0.72; transform: translateY(23px); }
+}
+
+@keyframes kun-startup-hologram-nodes {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 1; }
+}
+
+@keyframes kun-startup-bird-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-1deg); }
+  50% { transform: translate3d(0, -5px, 0) rotate(1deg); }
+}
+
+@keyframes kun-startup-bird-wave {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-2deg); }
+  50% { transform: translate3d(2px, -4px, 0) rotate(2deg); }
+}
+
+@keyframes kun-startup-bird-dash {
+  0%, 100% { transform: translate3d(0, 1px, 0) rotate(-3deg); }
+  50% { transform: translate3d(-3px, -3px, 0) rotate(2deg); }
+}
+
+@keyframes kun-startup-bird-focus {
+  0%, 100% { transform: translate3d(0, 1px, 0) rotate(-1deg); }
+  50% { transform: translate3d(0, -3px, 0) rotate(1deg); }
+}
+
+@keyframes kun-startup-bird-cast {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-2px, -5px, 0); }
+}
+
+@keyframes kun-startup-character-breathe {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -2px, 0); }
+}
+
+@keyframes kun-startup-character-wave {
+  0%, 100% { transform: rotate(-0.6deg); }
+  50% { transform: rotate(0.6deg); }
+}
+
+@keyframes kun-startup-character-dash {
+  0%, 100% { transform: translate3d(2px, 0, 0) rotate(0.25deg); }
+  50% { transform: translate3d(-3px, -1px, 0) rotate(-0.45deg); }
+}
+
+@keyframes kun-startup-character-focus {
+  0%, 100% { transform: translate3d(0, 1px, 0); }
+  50% { transform: translate3d(0, -3px, 0); }
+}
+
+@keyframes kun-startup-character-cast {
+  0%, 100% { transform: translate3d(1px, 1px, 0) rotate(0.2deg); }
+  50% { transform: translate3d(-2px, -3px, 0) rotate(-0.35deg); }
+}
+
+@keyframes kun-startup-progress {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(115%); }
+  100% { transform: translateX(250%); }
+}

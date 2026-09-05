@@ -11,6 +11,7 @@
     "node_modules",
     "tests",
     "**/*.test.ts",
+    "**/*.bench.ts",
     "vitest.config.ts"
   ]
 }

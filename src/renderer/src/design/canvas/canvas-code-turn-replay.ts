@@ -123,3 +123,36 @@ export function replayDurableCodeCanvasToolBlocks(options: {
     options.onTurnComplete(turn.turnId)
   }
 }
+
+/**
+ * Rechecks structured PPT results independently of the coarse renderer turn
+ * watermark. PPT projections have their own workflow/child/revision fence, so
+ * scanning the durable history is safe and repairs a review result that arrived
+ * after its turn watermark was persisted.
+ */
+export function replayDurablePptCanvasToolBlocks(options: {
+  threadId: string
+  blocks: readonly ChatBlock[]
+  onToolBlock: (
+    block: ToolBlock,
+    turnBlocks: readonly ChatBlock[],
+    replayKey: string,
+    turnId: string
+  ) => void
+}): void {
+  for (const turn of durableCodeCanvasTurns(options.blocks)) {
+    for (const block of turn.blocks) {
+      if (block.kind !== 'tool' || block.status !== 'success' || block.meta?.toolName !== 'ppt_agent') continue
+      options.onToolBlock(
+        block,
+        turn.blocks,
+        codeCanvasReplayKey({
+          threadId: options.threadId,
+          turnId: turn.turnId,
+          source: `ppt:${block.id}`
+        }),
+        turn.turnId
+      )
+    }
+  }
+}

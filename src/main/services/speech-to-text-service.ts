@@ -1,4 +1,5 @@
 import {
+  resolveProviderProxyUrl,
   resolveKunSpeechToTextSettings,
   type AppSettingsV1,
   type KunSpeechToTextSettingsV1
@@ -14,6 +15,7 @@ import {
   ensureFreshGrokCredentials,
   resolveGrokMediaOAuthApiKey
 } from '../grok-auth'
+import { fetchWithOptionalProxy } from '../proxy-fetch'
 import {
   speechTranscriptionPrompt,
   transcribeViaGeminiCliAudio
@@ -76,8 +78,17 @@ export async function requestSpeechTranscription(
     return { ok: false, message: 'audio payload is empty or too large' }
   }
 
-  const fetchImpl = options.fetchImpl ?? fetch
   try {
+    const proxyUrl = speechToText.protocol === 'local-whisper' ||
+      speechToText.protocol === 'gemini-cli-audio'
+      ? ''
+      : resolveProviderProxyUrl(settings, speechToText.providerId)
+    const fetchImpl = options.fetchImpl ?? ((input, init) =>
+      fetchWithOptionalProxy(
+        typeof input === 'string' || input instanceof URL ? input : input.url,
+        init,
+        proxyUrl
+      ))
     let text: string
     switch (speechToText.protocol) {
       case 'local-whisper':
@@ -87,7 +98,7 @@ export async function requestSpeechTranscription(
         text = await transcribeViaMimoAsr(speechToText, request, fetchImpl)
         break
       case 'xai-stt':
-        text = await transcribeViaXaiStt(speechToText, request, fetchImpl)
+        text = await transcribeViaXaiStt(speechToText, request, fetchImpl, proxyUrl)
         break
       case 'gemini-audio':
         text = await transcribeViaGeminiAudio(speechToText, request, fetchImpl)
@@ -190,9 +201,13 @@ async function transcribeViaMimoAsr(
 async function transcribeViaXaiStt(
   speechToText: KunSpeechToTextSettingsV1,
   request: SpeechTranscriptionRequest,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  proxyUrl: string
 ): Promise<string> {
-  const fresh = await ensureFreshGrokCredentials(speechToText.apiKey)
+  const fresh = await ensureFreshGrokCredentials(speechToText.apiKey, {
+    fetcher: (input, init) => fetchImpl(input, init),
+    proxyUrl
+  })
   const credential = resolveGrokMediaOAuthApiKey(fresh.apiKey)
   const url = joinSpeechApiUrl(speechToText.baseUrl, 'stt')
   const audio = Buffer.from(request.audioBase64, 'base64')

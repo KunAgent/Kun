@@ -8,8 +8,14 @@ import type {
   ThreadUsageSnapshot,
   UserInputAnswer
 } from './types'
+import type { WriteTurnContext } from './write-turn-context'
 import type { ThreadListOptions, ThreadListPage } from './provider-types'
 import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
+import type {
+  ApprovalPolicy as KunApprovalPolicy,
+  ApprovalReviewer as KunApprovalReviewer,
+  SandboxMode as KunSandboxMode
+} from '@shared/app-settings'
 import {
   KUN_ATTACHMENT_DIAGNOSTICS_PATH,
   KUN_ATTACHMENTS_PATH,
@@ -20,6 +26,7 @@ import {
   KUN_RUNTIME_INFO_PATH,
   KUN_RUNTIME_TOOLS_PATH,
   KUN_SKILLS_PATH,
+  KUN_THREADS_CONTENT_SEARCH_PATH,
   kunThreadCompactPath,
   kunThreadEventsPath,
   kunThreadForkPath,
@@ -225,7 +232,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       limit: String(options.limit ?? 12)
     })
     const response = await rendererRuntimeClient.runtimeRequest(
-      '/v1/threads/content-search?' + params.toString(),
+      KUN_THREADS_CONTENT_SEARCH_PATH + '?' + params.toString(),
       'GET'
     )
     if (!response.ok) {
@@ -273,6 +280,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       nextCursor?: string
       hasMore?: boolean
       total?: number
+      indexStatus?: { status: 'not_started' | 'running' | 'ready' | 'failed' | 'unavailable'; indexed: number; total: number }
     }>(
       response.body,
       'runtime returned an invalid thread list response'
@@ -281,7 +289,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       threads: body.threads.map(threadFromCore),
       nextCursor: body.nextCursor,
       hasMore: body.hasMore === true,
-      total: body.total
+      total: body.total,
+      ...(body.indexStatus ? { indexStatus: body.indexStatus } : {})
     }
   }
 
@@ -354,13 +363,19 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     ))
   }
 
-  async getThreadDetail(threadId: string, options: { before?: string } = {}): Promise<ThreadDetail> {
+  async getThreadDetail(threadId: string, options: {
+    before?: string
+    signal?: AbortSignal
+    priority?: 'foreground' | 'background'
+  } = {}): Promise<ThreadDetail> {
     let response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTimelinePath(threadId, {
         ...(options.before ? { before: options.before } : {}),
         limit: 300
       }),
-      'GET'
+      'GET',
+      undefined,
+      { signal: options.signal, priority: options.priority }
     )
     // A renderer can briefly outlive an older bundled runtime during a local
     // restart. Preserve initial hydration compatibility until that runtime is
@@ -370,10 +385,17 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       !options.before &&
       (response.status === 404 || response.status === 405)
     ) {
-      response = await rendererRuntimeClient.runtimeRequest(kunThreadPath(threadId), 'GET')
+      response = await rendererRuntimeClient.runtimeRequest(
+        kunThreadPath(threadId),
+        'GET',
+        undefined,
+        { signal: options.signal, priority: options.priority }
+      )
     }
     if (!response.ok) {
-      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread'))
+      const error = runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread'))
+      if (response.status === 503) Object.assign(error, { status: 503, retryable: true })
+      throw error
     }
     const thread = readRuntimeJson<CoreThreadTimelineJson>(
       response.body,
@@ -509,6 +531,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       guiDesignMode?: boolean
       persona?: string
       agentSurface?: 'code' | 'write' | 'design'
+      approvalPolicy?: KunApprovalPolicy
+      sandboxMode?: KunSandboxMode
+      approvalReviewer?: KunApprovalReviewer
       designProfile?: DesignTaskProfileInput
       designDocumentTarget?: DesignDocumentTarget
       designImagePlacementTarget?: DesignImagePlacementTarget
@@ -518,15 +543,20 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         relativePath: string
       }
       attachmentIds?: string[]
+      /** Queue this turn durably when the thread already has an active turn. */
+      enqueueIfBusy?: boolean
       workspaceCheckpointId?: string
       workspaceCheckpointRequestId?: string
       fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
       composerContexts?: ComposerContextAttachment[]
+      writeContext?: WriteTurnContext
     }
   ): Promise<{
     turnId: string
     threadId: string
     userMessageItemId?: string
+    status?: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
+    queuedPosition?: number
     agentSurface?: 'code' | 'write' | 'design'
     threadAgentSurface?: 'code' | 'write' | 'design'
     designProfile?: DesignTaskProfile
@@ -546,14 +576,15 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(options?.clientRequestId?.trim()
         ? { clientRequestId: options.clientRequestId.trim() }
         : {}),
+      ...(options?.enqueueIfBusy === true ? { enqueueIfBusy: true } : {}),
       ...(options?.orchestration === 'graph' ? { orchestration: 'graph' } : {}),
       clientSurface: 'gui',
       ...(selectedModel ? { model: selectedModel } : {}),
       ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
       ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
-      approvalPolicy: runtime.approvalPolicy,
-      sandboxMode: runtime.sandboxMode,
-      approvalReviewer: runtime.approvalReviewer
+      approvalPolicy: options?.approvalPolicy ?? runtime.approvalPolicy,
+      sandboxMode: options?.sandboxMode ?? runtime.sandboxMode,
+      approvalReviewer: options?.approvalReviewer ?? runtime.approvalReviewer
     }
     if (options?.subagentResume) {
       body.subagentResume = options.subagentResume
@@ -622,6 +653,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     if (options?.composerContexts?.length) {
       body.composerContexts = options.composerContexts
     }
+    if (options?.writeContext) {
+      body.writeContext = options.writeContext
+    }
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTurnsPath(threadId),
       'POST',
@@ -636,6 +670,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     )
     return {
       threadId: parsed.threadId,
+      ...(parsed.status ? { status: parsed.status } : {}),
+      ...(parsed.queuedPosition !== undefined ? { queuedPosition: parsed.queuedPosition } : {}),
       turnId: parsed.turnId,
       userMessageItemId: parsed.userMessageItemId,
       ...(parsed.agentSurface ? { agentSurface: parsed.agentSurface } : {}),

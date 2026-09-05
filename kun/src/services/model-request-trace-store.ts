@@ -8,6 +8,10 @@ import {
   ModelRequestTraceRecordSchema,
   type ModelRequestTraceRecord
 } from '../contracts/model-request-trace.js'
+import {
+  ModelRequestTraceRetention,
+  type ModelRequestTraceRetentionOptions
+} from './model-request-trace-retention.js'
 
 export const DEFAULT_MODEL_REQUEST_TRACE_PAGE_SIZE = 50
 export const MAX_MODEL_REQUEST_TRACE_PAGE_SIZE = 200
@@ -18,23 +22,39 @@ export type ModelRequestTraceStorePage = {
   warnings: string[]
 }
 
+export type ModelRequestTraceStoreOptions = ModelRequestTraceRetentionOptions & {
+  maxCachedThreads?: number
+}
+
+const DEFAULT_MAX_CACHED_TRACE_THREADS = 64
+
 /** Private, append-only, per-thread JSONL storage for completed model transports. */
 export class ModelRequestTraceStore {
   private readonly root: string
+  private readonly legacyRoot: string
   private readonly writes = new Map<string, Promise<void>>()
   private readonly recent = new Map<string, { records: ModelRequestTraceRecord[]; hasMore: boolean }>()
   private readonly recentLoads = new Map<string, Promise<void>>()
   private readonly pendingRecent = new Map<string, ModelRequestTraceRecord[]>()
+  private readonly cacheLru = new Map<string, true>()
   private readonly warningSet = new Set<string>()
+  private readonly retention?: ModelRequestTraceRetention
+  private readonly maxCachedThreads: number
+  private writeTail: Promise<void> = Promise.resolve()
   private ready: Promise<void> | undefined
 
-  constructor(dataDir: string) {
-    this.root = join(dataDir, 'observability', 'model-http')
+  constructor(dataDir: string, options: ModelRequestTraceStoreOptions = {}) {
+    this.root = join(dataDir, 'observability', 'trajectory', 'records')
+    this.legacyRoot = join(dataDir, 'observability', 'model-http')
+    if (hasExplicitRetention(options)) {
+      this.retention = new ModelRequestTraceRetention(this.root, options)
+    }
+    this.maxCachedThreads = normalizeCachedThreadLimit(options.maxCachedThreads)
   }
 
   append(record: ModelRequestTraceRecord): Promise<void> {
     const threadId = record.threadId
-    const previous = this.writes.get(threadId) ?? Promise.resolve()
+    const previous = this.writeTail
     const queued = previous
       .catch(() => undefined)
       .then(async () => {
@@ -44,10 +64,12 @@ export class ModelRequestTraceStore {
           await appendFile(path, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 })
           await applyPosixMode(path, 0o600)
           this.rememberRecent(threadId, record)
+          if (await this.retention?.afterAppend(path)) this.invalidateRecentCaches()
         } catch (error) {
           this.rememberWarning(classifyTracePersistenceError(error))
         }
       })
+    this.writeTail = queued
     this.writes.set(threadId, queued)
     void queued.finally(() => {
       if (this.writes.get(threadId) === queued) this.writes.delete(threadId)
@@ -82,9 +104,8 @@ export class ModelRequestTraceStore {
     options: { limit: number; cursor?: string }
   ): Promise<ModelRequestTraceStorePage> {
     const before = decodeCursor(options.cursor)
-    const retained: ModelRequestTraceRecord[] = []
-    const path = this.pathForThread(threadId)
-    try {
+    const retainedById = new Map<string, ModelRequestTraceRecord>()
+    for (const path of this.pathsForThread(threadId)) try {
       const input = createReadStream(path, { encoding: 'utf8' })
       const lines = createInterface({ input, crlfDelay: Infinity })
       for await (const line of lines) {
@@ -102,13 +123,14 @@ export class ModelRequestTraceStore {
           continue
         }
         if (before && compareTraceKey(traceKey(parsed.data), before) >= 0) continue
-        retained.push(parsed.data)
-        if (retained.length > options.limit + 1) retained.shift()
+        retainedById.set(parsed.data.id, parsed.data)
       }
     } catch (error) {
       if (!isMissingFileError(error)) this.rememberWarning(`trace read failed: ${safeError(error)}`)
     }
-    retained.sort((left, right) => compareTraceKey(traceKey(right), traceKey(left)))
+    const retained = [...retainedById.values()]
+      .sort((left, right) => compareTraceKey(traceKey(right), traceKey(left)))
+      .slice(0, options.limit + 1)
     const hasMore = retained.length > options.limit
     const records = retained.slice(0, options.limit)
     return {
@@ -123,8 +145,9 @@ export class ModelRequestTraceStore {
     this.recent.delete(threadId)
     this.recentLoads.delete(threadId)
     this.pendingRecent.delete(threadId)
+    this.cacheLru.delete(threadId)
     try {
-      await rm(this.pathForThread(threadId), { force: true })
+      await Promise.all(this.pathsForThread(threadId).map((path) => rm(path, { force: true })))
     } catch (error) {
       this.rememberWarning(`trace deletion failed: ${safeError(error)}`)
     }
@@ -145,10 +168,11 @@ export class ModelRequestTraceStore {
   }
 
   private async flushThread(threadId: string): Promise<void> {
-    await this.writes.get(threadId)?.catch(() => undefined)
+    await this.writeTail.catch(() => undefined)
   }
 
   private async ensureRecent(threadId: string): Promise<void> {
+    this.touchCacheThread(threadId)
     if (this.recent.has(threadId)) return
     let load = this.recentLoads.get(threadId)
     if (!load) {
@@ -160,6 +184,7 @@ export class ModelRequestTraceStore {
           const records = [...byId.values()]
             .sort((left, right) => compareTraceKey(traceKey(right), traceKey(left)))
             .slice(0, MAX_MODEL_REQUEST_TRACE_PAGE_SIZE)
+          this.touchCacheThread(threadId)
           this.recent.set(threadId, {
             records,
             hasMore: Boolean(page.nextCursor) ||
@@ -176,6 +201,7 @@ export class ModelRequestTraceStore {
   }
 
   private rememberRecent(threadId: string, record: ModelRequestTraceRecord): void {
+    this.touchCacheThread(threadId)
     const recent = this.recent.get(threadId)
     if (!recent) {
       const pending = this.pendingRecent.get(threadId) ?? []
@@ -194,8 +220,34 @@ export class ModelRequestTraceStore {
   }
 
   private pathForThread(threadId: string): string {
+    return this.pathInRoot(this.root, threadId)
+  }
+
+  private pathsForThread(threadId: string): string[] {
+    return [this.pathInRoot(this.legacyRoot, threadId), this.pathInRoot(this.root, threadId)]
+  }
+
+  private pathInRoot(root: string, threadId: string): string {
     const name = Buffer.from(threadId, 'utf8').toString('base64url') || 'empty'
-    return join(this.root, `${name}.jsonl`)
+    return join(root, `${name}.jsonl`)
+  }
+
+  private touchCacheThread(threadId: string): void {
+    this.cacheLru.delete(threadId)
+    this.cacheLru.set(threadId, true)
+    while (this.cacheLru.size > this.maxCachedThreads) {
+      const oldest = this.cacheLru.keys().next().value as string | undefined
+      if (!oldest) break
+      this.cacheLru.delete(oldest)
+      this.recent.delete(oldest)
+      this.pendingRecent.delete(oldest)
+    }
+  }
+
+  private invalidateRecentCaches(): void {
+    this.recent.clear()
+    this.pendingRecent.clear()
+    this.cacheLru.clear()
   }
 
   private rememberWarning(value: string): void {
@@ -240,6 +292,21 @@ function decodeCursor(value: string | undefined): TraceKey | undefined {
 function normalizePageSize(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined) return DEFAULT_MODEL_REQUEST_TRACE_PAGE_SIZE
   return Math.min(MAX_MODEL_REQUEST_TRACE_PAGE_SIZE, Math.max(1, Math.floor(value)))
+}
+
+function normalizeCachedThreadLimit(value: number | undefined): number {
+  if (!Number.isFinite(value) || value === undefined || value <= 0) {
+    return DEFAULT_MAX_CACHED_TRACE_THREADS
+  }
+  return Math.max(1, Math.floor(value))
+}
+
+function hasExplicitRetention(options: ModelRequestTraceStoreOptions): boolean {
+  return options.maxBytesPerThread !== undefined ||
+    options.maxTotalBytes !== undefined ||
+    options.maxAgeMs !== undefined ||
+    options.maintenanceIntervalMs !== undefined ||
+    options.now !== undefined
 }
 
 function isMissingFileError(error: unknown): boolean {

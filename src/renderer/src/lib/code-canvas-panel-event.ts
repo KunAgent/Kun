@@ -23,6 +23,8 @@ export type WorkCanvasOpenRequestDetail = {
   /** Canonical title for the whiteboard this workflow creates (payload.title > deckTitle > legacy fallback). */
   title: string
   sourcePath?: string
+  /** Direction/review bundles commit this state from the canvas after persistence. */
+  pptProjectionRequired?: boolean
   pptState?: {
     phase: 'directions' | 'review' | 'complete'
     revision: number

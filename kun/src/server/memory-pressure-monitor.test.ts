@@ -87,12 +87,13 @@ describe('startMemoryPressureMonitor', () => {
     vi.restoreAllMocks()
   })
 
-  it('temporarily reduces subagent concurrency and restores it after pressure clears', async () => {
+  it('temporarily clamps all runtime admission and restores it after hysteresis clears', async () => {
     const memoryUsage = vi.spyOn(process, 'memoryUsage')
       .mockReturnValueOnce({ rss: 150 } as never)
       .mockReturnValue({ rss: 50 } as never)
     const setSubagentParallelLimit = vi.fn()
-    const deps = makeDeps({ setSubagentParallelLimit })
+    const setAdmissionParallelLimit = vi.fn()
+    const deps = makeDeps({ setSubagentParallelLimit, setAdmissionParallelLimit })
     const monitor = startMemoryPressureMonitor(deps)
 
     await new Promise((resolve) => setTimeout(resolve, 40))
@@ -100,7 +101,49 @@ describe('startMemoryPressureMonitor', () => {
 
     expect(setSubagentParallelLimit).toHaveBeenCalledWith(2)
     expect(setSubagentParallelLimit).toHaveBeenCalledWith(undefined)
+    expect(setAdmissionParallelLimit).toHaveBeenCalledWith(2)
+    expect(setAdmissionParallelLimit).toHaveBeenCalledWith(undefined)
     memoryUsage.mockRestore()
+  })
+
+  it('derives safer defaults from a smaller host memory budget', async () => {
+    vi.spyOn(process, 'memoryUsage').mockReturnValue({ rss: 700 * 1024 ** 2 } as never)
+    const setAdmissionParallelLimit = vi.fn()
+    const deps = makeDeps({
+      config: { enabled: true, pollIntervalMs: 10, maxCompactionsPerSweep: 1 },
+      totalMemoryBytes: () => 1024 ** 3,
+      setAdmissionParallelLimit
+    })
+    const monitor = startMemoryPressureMonitor(deps)
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    monitor.stop()
+
+    expect(setAdmissionParallelLimit).toHaveBeenCalledWith(2)
+    vi.restoreAllMocks()
+  })
+
+  it('reclaims a different bounded idle batch on each sustained warning poll', async () => {
+    vi.spyOn(process, 'memoryUsage').mockReturnValue({ rss: 150 } as never)
+    const deps = makeDeps({
+      config: {
+        enabled: true, pollIntervalMs: 10, warnRssBytes: 100,
+        criticalRssBytes: 200, maxCompactionsPerSweep: 1
+      },
+      threadStore: {
+        list: async () => [1, 2, 3].map((index) => ({
+          id: `idle-${index}`, status: 'idle', relation: 'primary',
+          updatedAt: `2026-08-0${index}T00:00:00.000Z`
+        }))
+      } as never
+    })
+    const monitor = startMemoryPressureMonitor(deps)
+    await new Promise((resolve) => setTimeout(resolve, 45))
+    monitor.stop()
+
+    const compacted = (deps.turnService.compact as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0].threadId)
+    expect(new Set(compacted)).toEqual(new Set(['idle-1', 'idle-2', 'idle-3']))
+    vi.restoreAllMocks()
   })
 
   it('stops polling after stop()', async () => {

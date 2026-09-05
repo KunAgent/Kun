@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -8,12 +8,11 @@ import {
   isKunRuntimeInsecure,
   getKunRuntimeSettings,
   getModelProviderSettings,
-  resolveModelProviderProxyUrl,
+  resolveProviderProxyUrl,
   resolveKunRuntimeSettings,
   normalizeAppSettings,
   type ModelProviderProfileV1,
-  type KunRuntimeSettingsV1,
-  type AppSettingsV1
+  type KunRuntimeSettingsV1, type AppSettingsV1
 } from '../shared/app-settings'
 import {
   buildKunServeArgs,
@@ -97,6 +96,7 @@ import {
   skillCapabilityConfigForRuntime
 } from './runtime/kun-runtime-mcp-config'
 import { availableBundledExtensionsDirectory } from './bundled-extension-resources'
+import { bundledSkillsDirectory } from './bundled-skill-resources'
 import { resolveOfficeCliBinary } from './officecli-resources'
 import { subagentProfilesForRuntime } from './runtime/kun-runtime-subagent-config'
 import { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
@@ -106,10 +106,12 @@ import {
   resolveSharedRuntime,
   type SharedRuntimeConnection
 } from '../../kun/src/cli/shared-runtime.js'
+import { withClientOwnedRuntimeElection } from '../../kun/src/cli/client-owned-runtime.js'
 import {
   allowsDevelopmentManagerBootstrap,
   resolveCliRuntimeFlavor
 } from '../../kun/src/cli/runtime-flavor.js'
+import { KUN_RUNTIME_CLIENT_OWNER_KIND_ENV } from '../../kun/src/contracts/runtime-owner.js'
 import {
   ensureServiceManager,
   ensureServiceManagerWithStartLockHeld,
@@ -121,9 +123,9 @@ import {
   withManagerStartLock
 } from '../../kun/src/manager/manager-discovery.js'
 import { configureManagerAtomicJsonClient } from '../../kun/src/extensions/atomic-json.js'
+import { kunManagerLaunchEnvironment } from './runtime/kun-manager-launch-environment'
 import { handoffExistingKunServiceManagerForDataDir } from './runtime/service-manager-build-handoff'
 import {
-  drainKunOwnersForHandoff,
   drainKunOwnersForHandoffWithLock,
   installedBuildProbeError,
   probeInstalledBuildHandoff
@@ -132,6 +134,7 @@ import {
   createHandoffEventReporter,
   type HandoffEventListener
 } from './runtime/kun-handoff-events'
+import { assertSupportedSettingsVersion } from './settings-store-foundation'
 
 import {
   appendTail,
@@ -139,7 +142,8 @@ import {
   KUN_STOP_FORCE_MS,
   KUN_STOP_GRACE_MS,
   normalizeCapturedChunk,
-  processController
+  processController,
+  waitForKunChildExit
 } from './kun-process-state'
 
 export {
@@ -154,6 +158,7 @@ export { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
 export type { KunUnexpectedExitInfo } from './runtime/kun-process-controller'
 export { resolveKunStartupTimeoutMs } from './runtime/kun-runtime-health-monitor'
 export { handoffExistingKunServiceManagerForDataDir } from './runtime/service-manager-build-handoff'
+export { preparePackagedKunBuildHandoff } from './runtime/kun-packaged-build-handoff'
 
 let serviceManagerSettingsPath: string | undefined
 let mainManagerBinding: ServiceManagerConnection | undefined
@@ -165,6 +170,7 @@ export async function resolveKunManagerDataDirFromSettings(
   try {
     const parsed = JSON.parse(await readFile(settingsPath, 'utf8')) as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaultKunDataDir()
+    assertSupportedSettingsVersion(parsed, settingsPath)
     const settings = normalizeAppSettings(parsed as AppSettingsV1)
     return resolveKunDataDir(resolveKunRuntimeSettings(settings))
   } catch (error) {
@@ -244,30 +250,6 @@ export async function ensureKunServiceManager(input: {
     manager = await ensureServiceManager(managerInput)
   }
   return configureKunManagerDataPlaneForCurrentProcess(manager)
-}
-
-export async function preparePackagedKunBuildHandoff(input: {
-  dataDir: string
-  settingsPath: string
-  onHandoffEvent?: HandoffEventListener
-}): Promise<boolean> {
-  const flavor = resolveCliRuntimeFlavor({ env: process.env })
-  if (!app.isPackaged || flavor !== 'production') return false
-  const buildId = await resolveKunRuntimeBuildId(resolveKunExecutable(appRoot(), ''))
-  const handoffInput = {
-    reason: 'installed-build-change' as const,
-    dataDirs: [input.dataDir],
-    settingsPath: input.settingsPath,
-    controlDir: defaultKunControlDir(),
-    onEvent: createHandoffEventReporter(input.onHandoffEvent),
-    ...(buildId ? { targetBuildId: buildId } : {})
-  }
-  const probe = await probeInstalledBuildHandoff(handoffInput)
-  const probeError = installedBuildProbeError(handoffInput, probe)
-  if (probeError) throw probeError
-  if (probe === 'matched') return false
-  await drainKunOwnersForHandoff(handoffInput)
-  return true
 }
 
 /**
@@ -362,15 +344,24 @@ export function startKunChild(settings: AppSettingsV1): Promise<void> {
   return processController.start(async () => {
     const runtime = resolveKunRuntimeSettings(settings)
     if (isKunChildRunning() || !runtime.autoStart) return
-    await startKunChildOnce(settings, runtime)
+    const dataDir = resolveKunDataDir(runtime)
+    const runtimeFlavor = resolveCliRuntimeFlavor({ env: process.env })
+    await withClientOwnedRuntimeElection({
+      dataDir,
+      runtimeFlavor,
+      ownerKind: 'gui',
+      ...(mainManagerBinding ? { manager: mainManagerBinding } : {})
+    }, async (scope) => {
+      if (scope.manager) configureKunManagerDataPlaneForCurrentProcess(scope.manager)
+      await startKunChildOnce(settings, runtime)
+    })
   })
 }
 
 /**
- * Start (or attach to) the data-dir scoped runtime used by both the GUI and
- * terminal clients. Unlike the legacy child controller, this process is
- * detached and writes directly to its own log, so closing Electron does not
- * terminate active turns or disconnect other clients.
+ * Legacy detached-launch compatibility helper. Normal GUI and TUI lifecycle
+ * paths must use their client-owned launchers and must not attach through this
+ * function.
  */
 export async function startKunSharedRuntime(
   settings: AppSettingsV1,
@@ -486,7 +477,8 @@ async function prepareKunLaunch(
         execPath: process.execPath,
         isPackaged: app.isPackaged
       }
-    }
+    },
+    builtinSkillsRoot: bundledSkillsDirectory()
   })
   processController.lastResolvedBinary = resolution.command === process.execPath
     ? resolution.args.join(' ')
@@ -505,7 +497,7 @@ async function prepareKunLaunch(
   const command = resolveNodeScriptCommand(resolution.command)
   const runtimeApiKey = (await ensureFreshGrokCredentials(runtime.apiKey, {
     fetcher: fetchWithOptionalProxy,
-    proxyUrl: resolveModelProviderProxyUrl(settings)
+    proxyUrl: resolveProviderProxyUrl(settings, runtime.providerId)
   })).apiKey
   const defaultClientApiKey = resolveCodexOAuthApiKey(runtimeApiKey).apiKey
   const activeProviderKind = (getModelProviderSettings(settings).providers as ModelProviderProfileV1[]).find(
@@ -527,6 +519,11 @@ async function prepareKunLaunch(
     : undefined
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    ...kunManagerLaunchEnvironment({
+      manager: mainManagerBinding,
+      controlDir: defaultKunControlDir(),
+      settingsPath: serviceManagerSettingsPath
+    }),
     DEEPSEEK_API_KEY: defaultClientApiKey || process.env.DEEPSEEK_API_KEY || '',
     KUN_PPT_TOOLCHAIN_DIR: pptToolchainDirectory,
     ...(activeProviderKind ? { KUN_RUNTIME_PROVIDER_KIND: activeProviderKind } : {}),
@@ -586,12 +583,14 @@ async function startKunChildOnce(
     env: {
       ...launch.env,
       KUN_RUNTIME_TOKEN: runtime.runtimeToken,
-      KUN_RUNTIME_LAUNCH_MODE: 'gui'
+      KUN_RUNTIME_LAUNCH_MODE: 'gui',
+      [KUN_RUNTIME_CLIENT_OWNER_KIND_ENV]: 'gui'
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     detached: false
   })
   const startedChild = processController.child
+  startedChild.channel?.unref()
   processController.childPort = runtime.port
   const startedLogCapture = createKunChildLogCapture(startedChild.pid)
   processController.logCapture = startedLogCapture
@@ -660,38 +659,24 @@ export async function stopKunChildAndWait(): Promise<void> {
       /* already gone */
     }
   }
-  const exited = await waitForChildExit(stoppingChild, KUN_STOP_GRACE_MS)
+  const exited = await waitForKunChildExit(stoppingChild, KUN_STOP_GRACE_MS)
   if (!exited) {
     try {
       if (pid) process.kill(pid, 'SIGKILL')
     } catch {
       /* already gone */
     }
-    await waitForChildExit(stoppingChild, KUN_STOP_FORCE_MS)
+    const forcedExit = await waitForKunChildExit(stoppingChild, KUN_STOP_FORCE_MS)
+    if (!forcedExit) {
+      throw new Error(
+        `Kun runtime process ${pid ?? 'unknown'} remained alive after SIGKILL; ` +
+        'the exact child remains supervised and no replacement was started'
+      )
+    }
   }
   processController.clearChild(stoppingChild)
   if (capture) {
     processController.logCapture = null
     await capture.close()
   }
-}
-
-function waitForChildExit(process: ChildProcess, timeoutMs: number): Promise<boolean> {
-  if (process.exitCode !== null || process.signalCode !== null) return Promise.resolve(true)
-  return new Promise((resolve) => {
-    let settled = false
-    const timer = setTimeout(() => settle(false), timeoutMs)
-    const settle = (exited: boolean): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      process.removeListener('exit', onExit)
-      process.removeListener('error', onError)
-      resolve(exited)
-    }
-    const onExit = (): void => settle(true)
-    const onError = (): void => settle(true)
-    process.once('exit', onExit)
-    process.once('error', onError)
-  })
 }

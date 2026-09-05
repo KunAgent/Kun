@@ -1,5 +1,5 @@
 import type { PlanBuildOrchestration } from './plan-build'
-import { buildPlanBuildPrompt } from './plan-prompts'
+import { buildPlanBuildPrompt, type PromptPlanTodo } from './plan-prompts'
 import type { GuiPlanArtifact } from './plan-store'
 
 export type PreparedPlanBuild = {
@@ -19,6 +19,7 @@ export async function preparePlanBuild(input: {
   usePromptWorktree: boolean
   branchPrefix: string
   activeThreadId: string | null
+  getPlanTodos?: () => PromptPlanTodo[]
   save: (plan: GuiPlanArtifact, content: string) => Promise<boolean>
   currentPlanId: () => string | undefined
   currentThreadId: () => string | null
@@ -34,7 +35,13 @@ export async function preparePlanBuild(input: {
     throw new Error('The active plan or conversation changed while preparing the build.')
   }
 
-  let prompt = buildPlanBuildPrompt(input.plan.relativePath, input.content, input.orchestration)
+  let prompt = buildPlanBuildPrompt(
+    input.plan.relativePath,
+    input.content,
+    input.orchestration,
+    undefined,
+    input.getPlanTodos?.()
+  )
   let displayText = `${input.orchestration === 'graph' ? 'Graph build' : 'Direct build'}: ${input.plan.relativePath}`
   if (input.orchestration === 'direct' && input.usePromptWorktree) {
     const branch = await input.getGitBranches(input.plan.workspaceRoot)
@@ -50,7 +57,7 @@ export async function preparePlanBuild(input: {
       branchPrefix: input.branchPrefix,
       dirtyCount: branch.dirtyCount,
       planTitle: input.plan.featureName
-    })
+    }, input.getPlanTodos?.())
     displayText = `${input.plan.featureName} (${targetBranch})`
   }
 

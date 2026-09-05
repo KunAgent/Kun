@@ -13,7 +13,6 @@ import {
   projectSharedModelConnections,
   rebasePendingSharedProviderCatalog,
   reconcilePendingSharedProviderCatalogs,
-  reconcilePendingSharedProviderDeletions,
   reconcilePendingSharedProviderNames,
   replaceSharedModelConnectionCredential,
   sharedConnectionBaseUrlOptional
@@ -33,55 +32,6 @@ const textModelProfile: ModelProviderModelProfileV1 = {
   messageParts: ['text']
 }
 
-describe('pending shared model connection deletions', () => {
-  const connection = {
-    id: 'custom-provider-2',
-    accountId: 'account:custom-provider-2',
-    name: 'Custom Provider',
-    kind: 'http' as const,
-    authType: 'api-key' as const,
-    endpointFormat: 'chat_completions' as const,
-    configured: true,
-    models: ['custom-model']
-  }
-  const snapshot = (revision: number, providers = [connection]) => ({
-    schemaVersion: 1 as const,
-    revision,
-    providers
-  })
-
-  it('keeps tombstones through the deletion revision and releases newer snapshots', () => {
-    const pending = new Map([[connection.id, { generation: 1, committedRevision: 5 }]])
-
-    expect(reconcilePendingSharedProviderDeletions(snapshot(4), pending).has(connection.id)).toBe(true)
-    expect(reconcilePendingSharedProviderDeletions(snapshot(5), pending).has(connection.id)).toBe(true)
-    expect(reconcilePendingSharedProviderDeletions(snapshot(6), pending).has(connection.id)).toBe(false)
-    expect(pending.get(connection.id)?.committedRevision).toBe(5)
-  })
-
-  it('keeps an uncommitted tombstone even when a stale snapshot omits the provider', () => {
-    const pending = new Map([[connection.id, { generation: 1, committedRevision: null }]])
-
-    expect(reconcilePendingSharedProviderDeletions(snapshot(20), pending).has(connection.id)).toBe(true)
-    expect(reconcilePendingSharedProviderDeletions(snapshot(20, []), pending).has(connection.id)).toBe(true)
-  })
-
-  it('does not release a committed tombstone until local settings observe the deletion', () => {
-    const pending = new Map([[connection.id, { generation: 1, committedRevision: 5 }]])
-
-    expect(reconcilePendingSharedProviderDeletions(
-      snapshot(6, []),
-      pending,
-      new Set([connection.id])
-    ).has(connection.id)).toBe(true)
-    expect(reconcilePendingSharedProviderDeletions(
-      snapshot(6, []),
-      pending,
-      new Set()
-    ).has(connection.id)).toBe(false)
-  })
-})
-
 describe('pending shared model connection names', () => {
   const connection = (name: string) => ({
     id: 'custom-provider-2',
@@ -90,11 +40,13 @@ describe('pending shared model connection names', () => {
     kind: 'http' as const,
     authType: 'api-key' as const,
     endpointFormat: 'chat_completions' as const,
+    useProxy: false,
     configured: true,
     models: ['custom-model']
   })
   const snapshot = (revision: number, name: string) => ({
     schemaVersion: 1 as const,
+    proxyRoutingVersion: 1 as const,
     revision,
     providers: [connection(name)]
   })
@@ -155,6 +107,7 @@ describe('pending shared model connection catalogs', () => {
     authType: 'api-key' as const,
     baseUrl: 'https://api.example.com/v1',
     endpointFormat: 'chat_completions' as const,
+    useProxy: false,
     configured: true,
     models: revisionModels,
     modelCapabilities: Object.fromEntries(revisionModels.map((model) => [model, {
@@ -185,7 +138,7 @@ describe('pending shared model connection catalogs', () => {
     })
     const projected = projectSharedModelConnections(
       current,
-      { schemaVersion: 1, revision: 4, providers: [connection()] },
+      { schemaVersion: 1, proxyRoutingVersion: 1, revision: 4, providers: [connection()] },
       new Map(),
       new Map(),
       new Map([['custom-provider-2', pending]])
@@ -200,9 +153,10 @@ describe('pending shared model connection catalogs', () => {
 
   it('keeps a committed overlay until the event stream reaches its revision', () => {
     const committed = new Map([['custom-provider-2', { ...pending, committedRevision: 5 }]])
-    const stale = { schemaVersion: 1 as const, revision: 4, providers: [connection()] }
+    const stale = { schemaVersion: 1 as const, proxyRoutingVersion: 1 as const, revision: 4, providers: [connection()] }
     const observed = {
       schemaVersion: 1 as const,
+      proxyRoutingVersion: 1 as const,
       revision: 5,
       providers: [connection(['old-model', 'new-model'])]
     }
@@ -215,6 +169,7 @@ describe('pending shared model connection catalogs', () => {
     const remote = connection(['old-model', 'remote-model'])
     const snapshot = (revision: number) => ({
       schemaVersion: 1 as const,
+      proxyRoutingVersion: 1 as const,
       revision,
       providers: [remote]
     })
@@ -311,7 +266,7 @@ describe('pending shared model connection catalogs', () => {
 
     const projected = projectSharedModelConnections(
       current,
-      { schemaVersion: 1, revision: 2, providers: [] },
+      { schemaVersion: 1, proxyRoutingVersion: 1, revision: 2, providers: [] },
       new Map(),
       new Map(),
       new Map([[tokenPlan.id, pendingCatalog]])
@@ -335,9 +290,10 @@ describe('pending shared model connection catalogs', () => {
       localModelProfiles: Object.fromEntries(fetchedModels.map((model) => [model, textModelProfile])),
       committedRevision: null
     }
-    const emptySnapshot = { schemaVersion: 1 as const, revision: 3, providers: [] as [] }
+    const emptySnapshot = { schemaVersion: 1 as const, proxyRoutingVersion: 1 as const, revision: 3, providers: [] as [] }
     const connectedSnapshot = {
       schemaVersion: 1 as const,
+      proxyRoutingVersion: 1 as const,
       revision: 4,
       providers: [{
         id: tokenPlan.id,
@@ -347,6 +303,7 @@ describe('pending shared model connection catalogs', () => {
         authType: 'api-key' as const,
         baseUrl: tokenPlan.baseUrl,
         endpointFormat: tokenPlan.endpointFormat,
+        useProxy: false,
         configured: true,
         models: fetchedModels,
         modelCapabilities: Object.fromEntries(fetchedModels.map((model) => [model, {
@@ -391,7 +348,7 @@ describe('pending shared model connection catalogs', () => {
 
 describe('shared model connection credential replacement', () => {
   it('treats clearing an absent connection credential as already complete', async () => {
-    const snapshot = { schemaVersion: 1 as const, revision: 20, providers: [] }
+    const snapshot = { schemaVersion: 1 as const, proxyRoutingVersion: 1 as const, revision: 20, providers: [] }
     const runtimeRequest = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, body: JSON.stringify(snapshot) })
     vi.stubGlobal('window', { kunGui: { runtimeRequest } })
@@ -413,6 +370,7 @@ describe('shared model connection credential replacement', () => {
       authType: 'api-key' as const,
       baseUrl: 'https://api.deepseek.com',
       endpointFormat: 'chat_completions' as const,
+      useProxy: false,
       configured: true,
       credentialStatus: 'unreadable' as const,
       credentialErrorCode: 'credential_unreadable' as const,
@@ -420,6 +378,7 @@ describe('shared model connection credential replacement', () => {
     }
     const snapshot = (revision: number, ready = false) => ({
       schemaVersion: 1 as const,
+      proxyRoutingVersion: 1 as const,
       revision,
       providers: [{
         ...provider,
@@ -473,6 +432,7 @@ describe('shared model connection credential replacement', () => {
       authType: 'api-key' as const,
       baseUrl: 'https://api.deepseek.com',
       endpointFormat: 'chat_completions' as const,
+      useProxy: false,
       configured: true,
       models: ['deepseek-chat']
     }
@@ -485,7 +445,7 @@ describe('shared model connection credential replacement', () => {
     let releaseFirstCommit!: () => void
     const firstCommitRelease = new Promise<void>((resolve) => { releaseFirstCommit = resolve })
     let delayedCommit = true
-    const snapshot = () => ({ schemaVersion: 1 as const, revision, providers: [provider] })
+    const snapshot = () => ({ schemaVersion: 1 as const, proxyRoutingVersion: 1 as const, revision, providers: [provider] })
     const runtimeRequest = vi.fn(async (path: string, method: string, body?: string) => {
       const payload = body ? JSON.parse(body) as Record<string, unknown> : {}
       if (path === '/v1/model-connections' && method === 'GET') {
@@ -581,6 +541,7 @@ describe('keyless gemini-cli-api shared connections', () => {
     apiKey: '',
     baseUrl: '',
     endpointFormat: 'custom_endpoint' as const,
+    useProxy: false,
     kind: 'gemini-cli-api' as const,
     retry: defaultModelRequestRetrySettings(),
     models: ['gemini-3.7-pro-preview'],
@@ -598,6 +559,7 @@ describe('keyless gemini-cli-api shared connections', () => {
     const current = defaultModelProviderSettings()
     const snapshot: SharedModelConnectionsSnapshot = {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 3,
       providers: [{
         id: 'gemini-cli-subscription',
@@ -606,6 +568,7 @@ describe('keyless gemini-cli-api shared connections', () => {
         kind: 'gemini-cli-api',
         authType: 'subscription',
         endpointFormat: 'custom_endpoint',
+        useProxy: false,
         configured: true,
         models: ['gemini-3.7-pro-preview']
       }],
@@ -638,6 +601,7 @@ describe('keyless gemini-cli-api shared connections', () => {
     }
     const snapshot = (revision: number, includeConnection = false) => ({
       schemaVersion: 1 as const,
+      proxyRoutingVersion: 1 as const,
       revision,
       providers: includeConnection
         ? [{
@@ -647,6 +611,7 @@ describe('keyless gemini-cli-api shared connections', () => {
             kind: 'gemini-cli-api' as const,
             authType: 'subscription' as const,
             endpointFormat: 'custom_endpoint' as const,
+            useProxy: false,
             configured: true,
             models: [],
             selectedModel: 'gemini-3.7-pro-preview'

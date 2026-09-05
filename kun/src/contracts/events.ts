@@ -35,6 +35,8 @@ import {
   DesignDocumentTargetSchema,
   DesignTaskProfileSchema
 } from './design-task-profile.js'
+import { WriteTurnContextSchema } from './write-turn-context.js'
+import { ModelRequestFailureContextSchema } from './model-request-failure.js'
 
 /**
  * Persisted runtime events. Every event has a per-thread `seq` so the
@@ -46,6 +48,7 @@ export const RuntimeEventKind = z.enum([
   'thread_pruned',
   'thread_restored',
   'turn_started',
+  'turn_queued',
   'turn_completed',
   'turn_failed',
   'turn_aborted',
@@ -88,6 +91,7 @@ export const RuntimeEventKind = z.enum([
   'usage',
   'error',
   'canvas_receipt',
+  'cursor_checkpoint',
   'heartbeat'
 ])
 export type RuntimeEventKind = z.infer<typeof RuntimeEventKind>
@@ -158,6 +162,8 @@ const RuntimeEventBase = z.object({
     prefixReused: z.boolean().optional(),
     inheritedHistoryItems: z.number().int().nonnegative().optional(),
     toolInvocations: z.number().int().nonnegative().optional(),
+    attemptStartedAt: z.string().optional(),
+    attemptDurationMs: z.number().int().nonnegative().optional(),
     durationMs: z.number().int().nonnegative().optional(),
     queuedMs: z.number().int().nonnegative().optional(),
     summaryTruncated: z.boolean().optional(),
@@ -231,6 +237,7 @@ export type ThreadLifecycleEvent = z.infer<typeof ThreadLifecycleEvent>
 export const TurnLifecycleEvent = RuntimeEventBase.extend({
   kind: z.enum([
     'turn_started',
+    'turn_queued',
     'turn_completed',
     'turn_failed',
     'turn_aborted',
@@ -244,6 +251,7 @@ export const TurnLifecycleEvent = RuntimeEventBase.extend({
   message: z.string().optional(),
   code: z.string().optional(),
   details: z.unknown().optional(),
+  modelRequestFailure: ModelRequestFailureContextSchema.optional(),
   severity: RuntimeErrorSeverity.optional(),
   model: z.string().min(1).optional(),
   providerId: z.string().min(1).optional(),
@@ -259,7 +267,8 @@ export const TurnLifecycleEvent = RuntimeEventBase.extend({
   threadAgentSurface: ThreadAgentSurface.optional(),
   agentSurface: ThreadAgentSurface.optional(),
   designProfile: DesignTaskProfileSchema.optional(),
-  designDocumentTarget: DesignDocumentTargetSchema.optional()
+  designDocumentTarget: DesignDocumentTargetSchema.optional(),
+  writeContext: WriteTurnContextSchema.optional()
 })
 export type TurnLifecycleEvent = z.infer<typeof TurnLifecycleEvent>
 
@@ -527,6 +536,7 @@ export const ErrorEvent = RuntimeEventBase.extend({
   message: z.string(),
   code: z.string().optional(),
   details: z.unknown().optional(),
+  modelRequestFailure: ModelRequestFailureContextSchema.optional(),
   severity: RuntimeErrorSeverity.optional()
 })
 export type ErrorEvent = z.infer<typeof ErrorEvent>
@@ -535,6 +545,17 @@ export const HeartbeatEvent = RuntimeEventBase.extend({
   kind: z.literal('heartbeat')
 })
 export type HeartbeatEvent = z.infer<typeof HeartbeatEvent>
+
+/**
+ * Private durable cursor consumption for a live-only event. The payload that
+ * used this sequence is deliberately not stored, but replay still has to
+ * consume the sequence after a runtime restart.
+ */
+export const CursorCheckpointEvent = RuntimeEventBase.extend({
+  kind: z.literal('cursor_checkpoint'),
+  transientKind: RuntimeEventKind
+}).strict()
+export type CursorCheckpointEvent = z.infer<typeof CursorCheckpointEvent>
 
 export const CanvasReceiptEvent = RuntimeEventBase.extend({
   kind: z.literal('canvas_receipt'),
@@ -574,6 +595,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   UsageEvent,
   ErrorEvent,
   CanvasReceiptEvent,
+  CursorCheckpointEvent,
   HeartbeatEvent
 ])
 export type RuntimeEvent = z.infer<typeof RuntimeEvent>
@@ -584,6 +606,7 @@ export type RuntimeEvent = z.infer<typeof RuntimeEvent>
  * migration or a future producer accidentally persists an item event for one.
  */
 export function isPublicRuntimeEvent(event: RuntimeEvent): boolean {
+  if (event.kind === 'cursor_checkpoint') return false
   return !('item' in event) || isPublicTurnItem(event.item)
 }
 

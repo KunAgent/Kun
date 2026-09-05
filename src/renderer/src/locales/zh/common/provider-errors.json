@@ -1,0 +1,13 @@
+{
+  "modelErrorSourceProvider": "供应商返回",
+  "modelErrorSourceNoResponse": "未收到供应商响应",
+  "modelErrorSourceNotSent": "请求未发送",
+  "modelErrorProviderSummaryUnavailable": "供应商暂时无法处理本次请求",
+  "modelErrorProviderSummaryRateLimited": "供应商限制了本次请求",
+  "modelErrorProviderSummaryRejected": "供应商拒绝了本次请求",
+  "modelErrorProviderSummaryGeneric": "供应商返回了错误",
+  "modelErrorNoResponseSummary": "模型请求已发送，但没有收到供应商响应",
+  "modelErrorNotSentSummary": "模型请求在发送前失败",
+  "modelErrorProviderOriginalMessage": "供应商返回消息",
+  "modelErrorFailureMessage": "失败原因"
+}

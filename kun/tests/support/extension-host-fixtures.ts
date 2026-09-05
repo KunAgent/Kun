@@ -111,7 +111,7 @@ export async function writeResolvedExtension(
 export function fixturePackageManager(
   extensions: Map<string, ResolvedExtension>
 ): ExtensionPackageManager {
-  return {
+  return withFixtureActivation({
     async resolveForActivation(extensionId: string) {
       const extension = extensions.get(extensionId)
       if (extension === undefined) throw new Error(`missing extension: ${extensionId}`)
@@ -123,7 +123,29 @@ export function fixturePackageManager(
       const extension = extensions.get(extensionId)
       return extension === undefined ? undefined : admissionFor(extension)
     }
-  } as unknown as ExtensionPackageManager
+  }) as unknown as ExtensionPackageManager
+}
+
+export function withFixtureActivation<T extends {
+  resolveForActivation(extensionId: string, workspaceKey?: string): Promise<ResolvedExtension>
+}>(fixture: T): T & Pick<ExtensionPackageManager, 'resolveActivation'> {
+  return Object.assign(fixture, {
+    async resolveActivation<U>(
+      extensionId: string,
+      workspaceKeys: readonly string[],
+      captureFence: () => U
+    ): Promise<{ resolvedScopes: ResolvedExtension[]; fence: U }> {
+      const fence = captureFence()
+      const keys: readonly (string | undefined)[] = workspaceKeys.length > 0
+        ? workspaceKeys
+        : [undefined]
+      const resolvedScopes: ResolvedExtension[] = []
+      for (const workspaceKey of keys) {
+        resolvedScopes.push(await fixture.resolveForActivation(extensionId, workspaceKey))
+      }
+      return { resolvedScopes, fence }
+    }
+  })
 }
 
 export function admissionFor(extension: ResolvedExtension) {

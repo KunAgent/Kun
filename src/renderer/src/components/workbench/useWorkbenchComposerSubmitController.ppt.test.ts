@@ -32,6 +32,8 @@ function controllerParams(overrides: Partial<ControllerParams> = {}): Controller
     clearComposerAttachments: vi.fn(),
     removeComposerAttachments: vi.fn(),
     clearComposerFileReferences: vi.fn(),
+    restoreComposerAttachments: vi.fn(async () => undefined),
+    restoreComposerFileReferences: vi.fn(),
     composerAttachments: [],
     composerFileReferences: [],
     composerMode: 'agent',
@@ -44,6 +46,7 @@ function controllerParams(overrides: Partial<ControllerParams> = {}): Controller
     handleGuiPlanCommand: vi.fn(),
     input: 'keep this prompt',
     resetClawChannelSession: vi.fn(async () => undefined),
+    requestAutoPlanBuild: vi.fn(async () => 'rejected' as const),
     rightPanelMode: null,
     route: 'write',
     selectClawChannel: vi.fn(async () => undefined),
@@ -132,7 +135,10 @@ function activatePptDirectionCanvas(selectDirection = true): void {
   if (selectDirection) useCanvasSelectionStore.getState().select(['direction-signal'])
 }
 
-function activateWorkPptWhiteboard(workflowId = 'workflow-a'): void {
+function activateWorkPptWhiteboard(
+  workflowId = 'workflow-a',
+  phase: 'directions' | 'review' = 'review'
+): void {
   const boardId = 'board-ppt-review'
   const now = '2026-08-13T00:00:00.000Z'
   useWriteWorkspaceStore.setState({
@@ -147,7 +153,7 @@ function activateWorkPptWhiteboard(workflowId = 'workflow-a'): void {
         threadId: 'thr_mapped',
         workflowId,
         childId: 'child-a',
-        phase: 'review',
+        phase,
         revision: 3,
         createdAt: now,
         updatedAt: now
@@ -256,7 +262,7 @@ describe('useWorkbenchComposerSubmitController PPT context', () => {
 
   it('sends only the active Work whiteboard direction context', async () => {
     activatePptDirectionCanvas()
-    activateWorkPptWhiteboard()
+    activateWorkPptWhiteboard('workflow-a', 'directions')
     const sendMessage = vi.fn(async () => true)
     const controller = useWorkbenchComposerSubmitController(controllerParams({
       input: '采用这个方向', sendMessage
@@ -276,7 +282,7 @@ describe('useWorkbenchComposerSubmitController PPT context', () => {
 
   it('lets Work confirm a numbered direction in chat without selecting the whiteboard', async () => {
     activatePptDirectionCanvas(false)
-    activateWorkPptWhiteboard()
+    activateWorkPptWhiteboard('workflow-a', 'directions')
     const sendMessage = vi.fn(async () => true)
     const controller = useWorkbenchComposerSubmitController(controllerParams({
       input: '采用第 3 个方向，继续生成逐页预览。', sendMessage

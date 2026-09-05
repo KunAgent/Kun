@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create as createRenderer } from 'react-test-renderer'
+import { Bot, UserRound } from 'lucide-react'
 import {
   FloatingComposerActionMenu,
   calculateActionMenuPlacement,
@@ -114,6 +115,27 @@ afterEach(() => {
 })
 
 describe('FloatingComposerActionMenu persona controls', () => {
+  it('renders the gated Automatic mode as a mutually exclusive composer intent', async () => {
+    installMenuGlobals()
+    const handleAutoPlanBuildToolbarClick = vi.fn()
+    let renderer: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(FloatingComposerActionMenu, {
+        context: menuContext({
+          mode: 'auto',
+          showAutoPlanBuildMenuOption: true,
+          canToggleAutoPlanBuildMode: true,
+          handleAutoPlanBuildToolbarClick
+        })
+      }))
+    })
+    const item = renderer!.root.findByProps({ 'data-composer-auto-plan-build-menu-item': true })
+    expect(item.findByProps({ role: 'switch' }).props['aria-checked']).toBe(true)
+    await act(async () => item.props.onClick())
+    expect(handleAutoPlanBuildToolbarClick).toHaveBeenCalledOnce()
+    await act(async () => renderer!.unmount())
+  })
+
   it('opens personas in a separate panel, selects one, and closes both menus', async () => {
     installMenuGlobals()
     const onComposerPersonaChange = vi.fn()
@@ -212,6 +234,47 @@ describe('FloatingComposerActionMenu persona controls', () => {
 
     expect(setComposerMenuOpen).toHaveBeenCalledWith(false)
     expect(openSettings).toHaveBeenCalledWith('laboratory')
+    await act(async () => renderer!.unmount())
+  })
+})
+
+describe('FloatingComposerActionMenu icons', () => {
+  it('renders Automatic mode with the Bot icon', async () => {
+    installMenuGlobals()
+    let renderer: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(FloatingComposerActionMenu, {
+        context: menuContext({
+          showAutoPlanBuildMenuOption: true,
+          canToggleAutoPlanBuildMode: true
+        })
+      }))
+    })
+    const item = renderer!.root.findByProps({ 'data-composer-auto-plan-build-menu-item': true })
+    expect(item.findAllByType(Bot)).toHaveLength(1)
+    await act(async () => renderer!.unmount())
+  })
+
+  it('renders the persona entry with the fixed UserRound icon regardless of selection', async () => {
+    installMenuGlobals()
+    let renderer: ReturnType<typeof createRenderer>
+
+    await act(async () => {
+      renderer = createRenderer(createElement(FloatingComposerActionMenu, {
+        context: menuContext({ composerPersonaId: '' })
+      }))
+    })
+    let item = renderer!.root.findByProps({ 'data-composer-persona-menu-item': true })
+    expect(item.findAllByType(UserRound)).toHaveLength(1)
+
+    await act(async () => {
+      renderer!.update(createElement(FloatingComposerActionMenu, {
+        context: menuContext({ composerPersonaId: 'doubter' })
+      }))
+    })
+    item = renderer!.root.findByProps({ 'data-composer-persona-menu-item': true })
+    expect(item.findAllByType(UserRound)).toHaveLength(1)
+
     await act(async () => renderer!.unmount())
   })
 })

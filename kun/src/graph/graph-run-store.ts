@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
@@ -25,39 +25,15 @@ import { applyGraphEvent } from './graph-reducer.js'
 import { assertValidGraphPlan } from './graph-validator.js'
 import { FileGraphRunIndex } from './graph-run-index.js'
 import {
+  GraphRunJournal,
+  type GraphJournalRecord,
+  type GraphSnapshotRecord
+} from './graph-run-journal.js'
+import {
   checksumJson,
   diagnosticForStoreError,
   isTerminalRunStatus
 } from './graph-run-store-support.js'
-
-const GraphJournalRecordSchema = z.object({
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-  envelope: GraphEventEnvelopeV1Schema
-}).strict()
-type GraphJournalRecord = z.infer<typeof GraphJournalRecordSchema>
-
-const PersistedGraphJournalRecordSchema = z.object({
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-  envelope: z.unknown()
-}).strict()
-
-const GraphSnapshotRecordSchema = z.object({
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-  state: GraphRunV1Schema,
-  recentCommands: z.array(z.object({
-    commandId: z.string().optional(),
-    idempotencyKey: z.string().optional(),
-    resultDigest: z.string().regex(/^[a-f0-9]{64}$/),
-    envelope: GraphEventEnvelopeV1Schema
-  }).strict()).max(2_048).default([])
-}).strict()
-type GraphSnapshotRecord = z.infer<typeof GraphSnapshotRecordSchema>
-
-const PersistedGraphSnapshotRecordSchema = z.object({
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-  state: z.unknown(),
-  recentCommands: z.unknown().optional()
-}).strict()
 
 const GraphOutboxSchema = z.array(GraphEventEnvelopeV1Schema).max(10_000)
 
@@ -141,6 +117,12 @@ export class GraphStoreCorruptionError extends Error {
   }
 }
 
+type LoadedGraphRun = {
+  state: GraphRunV1
+  records: GraphJournalRecord[]
+  snapshot?: GraphSnapshotRecord
+}
+
 export type FileGraphRunStoreOptions = {
   rootDir: string
   config: () => GraphRuntimeConfig
@@ -154,6 +136,7 @@ export class FileGraphRunStore implements GraphRunStore {
   private readonly queues = new Map<string, Promise<unknown>>()
   private ready?: Promise<void>
   private readonly index: FileGraphRunIndex
+  private readonly journal: GraphRunJournal
   private readonly nowIso: () => string
   private readonly nextId: (prefix: string) => string
   private readonly issues = new Map<string, GraphStoreDiagnostic>()
@@ -162,27 +145,29 @@ export class FileGraphRunStore implements GraphRunStore {
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
     this.nextId = options.nextId ?? ((prefix) => `${prefix}_${randomUUID().replaceAll('-', '')}`)
     this.index = new FileGraphRunIndex(options.rootDir)
+    this.journal = new GraphRunJournal({ rootDir: options.rootDir, config: options.config })
   }
 
   async create(input: CreateGraphRunInput): Promise<GraphCommandResultV1> {
     const runId = GraphRunIdSchema.parse(input.runId)
     return this.enqueue(runId, async () => {
       await this.ensureRoot()
-      const existing = await this.loadRun(runId).catch((error) => {
+      const existing = await this.loadRunHistory(runId).catch((error) => {
         if (error instanceof GraphRunNotFoundError) return null
         throw error
       })
       if (existing) {
-        const duplicate = await this.findDuplicate(runId, input.commandId, input.idempotencyKey)
+        const duplicate = this.findDuplicate(existing, input.commandId, input.idempotencyKey)
         if (!duplicate) throw new GraphRunConflictError(`GraphRun already exists: ${runId}`)
-        await this.index.update(existing)
+        await this.maintainJournal(existing)
+        await this.index.update(existing.state)
         await this.flushRuntimeEventsBestEffort(runId)
         return GraphCommandResultV1Schema.parse({
           version: GRAPH_CONTRACT_VERSION,
           commandId: input.commandId,
           applied: true,
           duplicate: true,
-          run: existing
+          run: existing.state
         })
       }
 
@@ -215,8 +200,8 @@ export class FileGraphRunStore implements GraphRunStore {
         }
       })
       const state = applyGraphEvent(undefined, envelope)
-      await this.persistEnvelope(envelope)
-      await this.writeSnapshot(state)
+      const persisted = await this.persistEnvelope(envelope)
+      await this.journal.writeSnapshot(state, [journalRecord(persisted)])
       await this.index.update(state)
       await this.flushRuntimeEventsBestEffort(runId)
       return GraphCommandResultV1Schema.parse({
@@ -232,9 +217,11 @@ export class FileGraphRunStore implements GraphRunStore {
   async append(runIdInput: string, input: AppendGraphEventInput): Promise<AppendGraphEventResult> {
     const runId = GraphRunIdSchema.parse(runIdInput)
     return this.enqueue(runId, async () => {
-      const state = await this.loadRun(runId)
-      const duplicate = await this.findDuplicate(runId, input.commandId, input.idempotencyKey)
+      const loaded = await this.loadRunHistory(runId)
+      const state = loaded.state
+      const duplicate = this.findDuplicate(loaded, input.commandId, input.idempotencyKey)
       if (duplicate) {
+        await this.maintainJournal(loaded)
         await this.index.update(state)
         await this.flushRuntimeEventsBestEffort(runId)
         return { state, envelope: duplicate, duplicate: true }
@@ -258,18 +245,11 @@ export class FileGraphRunStore implements GraphRunStore {
       })
       const next = applyGraphEvent(state, envelope)
       const persisted = await this.persistEnvelope(envelope)
-      if (
-        next.lastEventSeq % this.options.config().retention.snapshotEveryEvents === 0 ||
-        isTerminalRunStatus(next.status)
-      ) {
-        await this.writeSnapshot(next)
-      }
-      if (
-        isTerminalRunStatus(next.status) &&
-        next.lastEventSeq >= this.options.config().retention.compactAfterEvents
-      ) {
-        await this.compactJournal(next)
-      }
+      await this.maintainJournal({
+        state: next,
+        records: [...loaded.records, journalRecord(persisted)],
+        snapshot: loaded.snapshot
+      })
       await this.index.update(next)
       await this.flushRuntimeEventsBestEffort(runId)
       return { state: next, envelope: persisted, duplicate: false }
@@ -312,12 +292,8 @@ export class FileGraphRunStore implements GraphRunStore {
   async eventReplay(runIdInput: string, sinceSeq = 0): Promise<GraphEventReplay> {
     const runId = GraphRunIdSchema.parse(runIdInput)
     return this.enqueue(runId, async () => {
-      const state = await this.loadRun(runId)
-      const records = await this.readJournal(runId)
-      const snapshot = await this.readSnapshot(
-        runId,
-        records.at(-1)?.envelope.graphSeq ?? Number.MAX_SAFE_INTEGER
-      )
+      const loaded = await this.loadRunHistory(runId)
+      const { state, records, snapshot } = loaded
       const replayFloorSeq = records.at(0)?.envelope.graphSeq ?? state.lastEventSeq + 1
       return {
         events: records
@@ -335,7 +311,8 @@ export class FileGraphRunStore implements GraphRunStore {
     const runId = GraphRunIdSchema.parse(runIdInput)
     return this.enqueue(runId, async () => {
       const state = await this.loadRun(runId)
-      await this.writeSnapshot(state)
+      const records = await this.journal.read(runId)
+      await this.journal.writeSnapshot(state, records)
       return state
     })
   }
@@ -358,6 +335,10 @@ export class FileGraphRunStore implements GraphRunStore {
   }
 
   private async loadRun(runId: string): Promise<GraphRunV1> {
+    return (await this.loadRunHistory(runId)).state
+  }
+
+  private async loadRunHistory(runId: string): Promise<LoadedGraphRun> {
     await this.ensureRoot()
     try {
       const info = await stat(this.runDir(runId))
@@ -370,9 +351,15 @@ export class FileGraphRunStore implements GraphRunStore {
       throw error
     }
 
-    const records = await this.readJournal(runId)
+    const records = await this.journal.read(runId).catch((error) => {
+      if (error instanceof Error && error.name === 'GraphStoreCorruptionError') {
+        throw new GraphStoreCorruptionError(error.message)
+      }
+      throw error
+    })
     const journalHighWater = records.at(-1)?.envelope.graphSeq ?? Number.MAX_SAFE_INTEGER
-    let state = (await this.readSnapshot(runId, journalHighWater))?.state
+    const snapshot = await this.journal.readSnapshot(runId, journalHighWater)
+    let state = snapshot?.state
     if (!state && records.length === 0) {
       throw new GraphStoreCorruptionError(`GraphRun ${runId} has no journal events or valid snapshot`)
     }
@@ -388,114 +375,27 @@ export class FileGraphRunStore implements GraphRunStore {
       state = applyGraphEvent(state, hydrated, { replayCompatibility: true })
     }
     if (!state) throw new GraphStoreCorruptionError(`GraphRun ${runId} could not be reconstructed`)
-    return state
+    return { state, records, ...(snapshot ? { snapshot } : {}) }
   }
 
-  private async readJournal(runId: string): Promise<GraphJournalRecord[]> {
-    let text: string
-    try {
-      text = await readFile(this.journalPath(runId), 'utf8')
-    } catch (error) {
-      if (String((error as { code?: unknown })?.code ?? '') === 'ENOENT') return []
-      throw error
-    }
-    const rawLines = text.split('\n')
-    const records: GraphJournalRecord[] = []
-    for (let index = 0; index < rawLines.length; index += 1) {
-      const line = rawLines[index]!.trim()
-      if (!line) continue
-      let raw: unknown
-      try {
-        raw = JSON.parse(line)
-      } catch {
-        if (index === rawLines.length - 1) break
-        throw new GraphStoreCorruptionError(`invalid journal JSON at ${runId}:${index + 1}`)
-      }
-      const persisted = PersistedGraphJournalRecordSchema.safeParse(raw)
-      if (!persisted.success) {
-        if (index === rawLines.length - 1) break
-        throw new GraphStoreCorruptionError(`invalid journal record at ${runId}:${index + 1}`)
-      }
-      // Hash the exact persisted JSON before Zod applies compatibility
-      // defaults or transforms. Schema evolution must not make an intact old
-      // record look corrupt merely because its normalized shape changed.
-      if (checksumJson(persisted.data.envelope) !== persisted.data.checksum) {
-        throw new GraphStoreCorruptionError(`journal checksum mismatch at ${runId}:${index + 1}`)
-      }
-      const parsed = GraphJournalRecordSchema.safeParse(raw)
-      if (!parsed.success) {
-        if (index === rawLines.length - 1) break
-        throw new GraphStoreCorruptionError(`invalid journal record at ${runId}:${index + 1}`)
-      }
-      const previousSeq = records.at(-1)?.envelope.graphSeq ??
-        parsed.data.envelope.graphSeq - 1
-      if (parsed.data.envelope.graphSeq !== previousSeq + 1) {
-        throw new GraphStoreCorruptionError(`journal sequence gap at ${runId}:${index + 1}`)
-      }
-      records.push(parsed.data)
-    }
-    return records
-  }
-
-  private async readSnapshot(
-    runId: string,
-    journalHighWater: number
-  ): Promise<GraphSnapshotRecord | undefined> {
-    try {
-      const raw = JSON.parse(await readFile(this.snapshotPath(runId), 'utf8')) as unknown
-      const persisted = PersistedGraphSnapshotRecordSchema.safeParse(raw)
-      if (!persisted.success) return undefined
-      const currentChecksum = checksumJson({
-        state: persisted.data.state,
-        recentCommands: persisted.data.recentCommands ?? []
-      })
-      const legacyChecksum = checksumJson(persisted.data.state)
-      if (
-        currentChecksum !== persisted.data.checksum &&
-        legacyChecksum !== persisted.data.checksum
-      ) {
-        return undefined
-      }
-      const parsed = GraphSnapshotRecordSchema.safeParse(raw)
-      if (!parsed.success) return undefined
-      if (parsed.data.state.lastEventSeq > journalHighWater) return undefined
-      return parsed.data
-    } catch {
-      return undefined
-    }
-  }
-
-  private async findDuplicate(
-    runId: string,
+  private findDuplicate(
+    loaded: LoadedGraphRun,
     commandId?: string,
     idempotencyKey?: string
-  ): Promise<GraphEventEnvelopeV1 | undefined> {
+  ): GraphEventEnvelopeV1 | undefined {
     if (!commandId && !idempotencyKey) return undefined
-    const records = await this.readJournal(runId)
-    const journalMatch = records.find(({ envelope }) =>
+    const journalMatch = loaded.records.find(({ envelope }) =>
       (idempotencyKey && envelope.idempotencyKey === idempotencyKey) ||
       (commandId && envelope.commandId === commandId))?.envelope
     if (journalMatch) return journalMatch
-    const highWater = records.at(-1)?.envelope.graphSeq ?? Number.MAX_SAFE_INTEGER
-    const snapshot = await this.readSnapshot(runId, highWater)
-    return snapshot?.recentCommands.find(({ envelope }) =>
+    return loaded.snapshot?.recentCommands.find(({ envelope }) =>
       (idempotencyKey && envelope.idempotencyKey === idempotencyKey) ||
       (commandId && envelope.commandId === commandId))?.envelope
   }
 
   private async persistEnvelope(envelope: GraphEventEnvelopeV1): Promise<GraphEventEnvelopeV1> {
     const publicEnvelope = await this.externalizeIfNeeded(envelope)
-    const record = GraphJournalRecordSchema.parse({
-      checksum: checksumJson(publicEnvelope),
-      envelope: publicEnvelope
-    })
-    const handle = await open(this.journalPath(envelope.runId), 'a', 0o600)
-    try {
-      await handle.writeFile(`${JSON.stringify(record)}\n`, 'utf8')
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
+    await this.journal.append(publicEnvelope)
     await this.queueRuntimeEvent(publicEnvelope)
     return publicEnvelope
   }
@@ -567,40 +467,16 @@ export class FileGraphRunStore implements GraphRunStore {
     })
   }
 
-  private async writeSnapshot(state: GraphRunV1): Promise<void> {
-    const parsed = GraphRunV1Schema.parse(state)
-    const records = await this.readJournal(state.id)
-    const previous = await this.readSnapshot(
-      state.id,
-      records.at(-1)?.envelope.graphSeq ?? Number.MAX_SAFE_INTEGER
-    )
-    const commands = [...(previous?.recentCommands ?? []), ...records.map(({ envelope }) => ({
-      ...(envelope.commandId ? { commandId: envelope.commandId } : {}),
-      ...(envelope.idempotencyKey ? { idempotencyKey: envelope.idempotencyKey } : {}),
-      resultDigest: checksumJson(envelope),
-      envelope
-    }))]
-    const recentCommands = [...new Map(commands.map((entry) => [
-      entry.envelope.eventId,
-      entry
-    ])).values()].slice(-2_048)
-    const record = GraphSnapshotRecordSchema.parse({
-      checksum: checksumJson({ state: parsed, recentCommands }),
-      state: parsed,
-      recentCommands
-    })
-    await atomicWriteFile(this.snapshotPath(state.id), `${JSON.stringify(record)}\n`)
-  }
-
-  private async compactJournal(state: GraphRunV1): Promise<void> {
-    const records = await this.readJournal(state.id)
-    const config = this.options.config().retention
-    if (records.length < config.compactAfterEvents) return
-    const retained = records.slice(-Math.max(1, config.snapshotEveryEvents))
-    await atomicWriteFile(
-      this.journalPath(state.id),
-      `${retained.map((record) => JSON.stringify(record)).join('\n')}\n`
-    )
+  private async maintainJournal(loaded: LoadedGraphRun): Promise<void> {
+    const retention = this.options.config().retention
+    const shouldSnapshot =
+      loaded.state.lastEventSeq % retention.snapshotEveryEvents === 0 ||
+      isTerminalRunStatus(loaded.state.status)
+    if (!shouldSnapshot) return
+    await this.journal.writeSnapshot(loaded.state, loaded.records)
+    if (loaded.state.lastEventSeq >= retention.compactAfterEvents) {
+      await this.journal.compact(loaded.state, loaded.records)
+    }
   }
 
   private async queueRuntimeEvent(envelope: GraphEventEnvelopeV1): Promise<void> {
@@ -674,14 +550,6 @@ export class FileGraphRunStore implements GraphRunStore {
     return join(this.options.rootDir, GraphRunIdSchema.parse(runId))
   }
 
-  private journalPath(runId: string): string {
-    return join(this.runDir(runId), 'events.jsonl')
-  }
-
-  private snapshotPath(runId: string): string {
-    return join(this.runDir(runId), 'snapshot.json')
-  }
-
   private outboxPath(runId: string): string {
     return join(this.runDir(runId), 'runtime-outbox.json')
   }
@@ -697,4 +565,8 @@ export class FileGraphRunStore implements GraphRunStore {
       if (this.queues.get(runId) === guard) this.queues.delete(runId)
     }
   }
+}
+
+function journalRecord(envelope: GraphEventEnvelopeV1): GraphJournalRecord {
+  return { checksum: checksumJson(envelope), envelope }
 }

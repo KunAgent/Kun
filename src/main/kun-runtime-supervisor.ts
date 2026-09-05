@@ -118,6 +118,8 @@ export class KunRuntimeSupervisor<Settings> {
   private recoveryInFlight = false
   private managedRuntimeExpected = false
   private currentStatus: KunRuntimeStatus | null = null
+  private hostLivenessPausedUntil = 0
+  private hostLivenessEpoch = 0
 
   constructor(options: {
     deps: KunRuntimeSupervisorDeps<Settings>
@@ -218,7 +220,21 @@ export class KunRuntimeSupervisor<Settings> {
     }
   }
 
+  noteHostSuspended(): void {
+    this.hostLivenessEpoch += 1
+    this.hostLivenessPausedUntil = Number.POSITIVE_INFINITY
+    this.watchdogFailures = 0
+  }
+
+  noteHostResumed(graceMs = 20_000): void {
+    this.hostLivenessEpoch += 1
+    this.hostLivenessPausedUntil = Date.now() + Math.max(0, graceMs)
+    this.watchdogFailures = 0
+    if (this.managedRuntimeExpected) this.startWatchdog()
+  }
+
   handleUnexpectedExit(info: { code: number | null; signal: NodeJS.Signals | null; stderrTail: string }): void {
+    if (this.isHostLivenessPaused()) return
     void this.recoverFromCrash(info).catch((error: unknown) => {
       this.deps.error('kun-supervisor', 'supervised restart crashed', {
         message: error instanceof Error ? error.message : String(error)
@@ -249,15 +265,19 @@ export class KunRuntimeSupervisor<Settings> {
 
   async watchdogTick(): Promise<void> {
     if (this.watchdogTickInFlight || this.deps.isStopped()) return
+    if (this.isHostLivenessPaused()) return
     if (!this.managedRuntimeExpected) return
     if (this.recoveryInFlight || this.operations.hasPendingOperation()) return
     this.watchdogTickInFlight = true
+    const hostEpoch = this.hostLivenessEpoch
     try {
       const settings = await this.deps.loadSettings()
+      if (!this.isHostEpochActive(hostEpoch)) return
       if (!this.managedRuntimeExpected || !this.deps.canAutoRestart(settings)) return
 
       let childRunning = this.deps.isChildRunning()
       if (childRunning && await this.deps.checkHealth(settings, 5_000)) {
+        if (!this.isHostEpochActive(hostEpoch)) return
         this.noteHealthy('watchdog')
         return
       }
@@ -266,8 +286,9 @@ export class KunRuntimeSupervisor<Settings> {
       // cleared from the adapter cache. Re-read before counting unresponsive
       // failures so recovery can take the missing/ensure path (#1116).
       childRunning = this.deps.isChildRunning()
+      if (!this.isHostEpochActive(hostEpoch)) return
       if (!childRunning) {
-        await this.recoverFromWatchdog('missing')
+        await this.recoverFromWatchdog('missing', hostEpoch)
         return
       }
 
@@ -278,28 +299,40 @@ export class KunRuntimeSupervisor<Settings> {
       )
       if (this.watchdogFailures < this.watchdogFailureThreshold) return
       this.watchdogFailures = 0
-      await this.recoverFromWatchdog('unresponsive')
+      await this.recoverFromWatchdog('unresponsive', hostEpoch)
     } finally {
       this.watchdogTickInFlight = false
     }
   }
 
+  private isHostLivenessPaused(): boolean {
+    return Date.now() < this.hostLivenessPausedUntil
+  }
+
+  private isHostEpochActive(epoch: number): boolean {
+    return epoch === this.hostLivenessEpoch && !this.isHostLivenessPaused()
+  }
+
   private async recoverFromWatchdog(
-    reason: 'missing' | 'unresponsive'
+    reason: 'missing' | 'unresponsive',
+    hostEpoch = this.hostLivenessEpoch
   ): Promise<void> {
+    if (!this.isHostEpochActive(hostEpoch)) return
     if (!this.managedRuntimeExpected || this.deps.isStopped()) return
     if (this.recoveryInFlight) return
     this.recoveryInFlight = true
     try {
-      await this.recoverFromWatchdogOnce(reason)
+      await this.recoverFromWatchdogOnce(reason, hostEpoch)
     } finally {
       this.recoveryInFlight = false
     }
   }
 
   private async recoverFromWatchdogOnce(
-    reason: 'missing' | 'unresponsive'
+    reason: 'missing' | 'unresponsive',
+    hostEpoch: number
   ): Promise<void> {
+    if (!this.isHostEpochActive(hostEpoch)) return
     const preview = this.restartBudget.preview()
     if (!preview.allowed) {
       this.publish({
@@ -313,21 +346,24 @@ export class KunRuntimeSupervisor<Settings> {
     }
 
     await (this.deps.sleep ?? defaultSleep)(preview.delayMs)
+    if (!this.isHostEpochActive(hostEpoch)) return
     if (!this.managedRuntimeExpected || this.deps.isStopped()) return
     if (this.operations.hasPendingOperation()) return
     let recoveryAttempt = preview.attempt
     try {
       const currentSettings = await this.deps.loadSettings()
+      if (!this.isHostEpochActive(hostEpoch)) return
       if (!this.managedRuntimeExpected || this.deps.isStopped() ||
           !this.deps.canAutoRestart(currentSettings)) return
 
       const childRunning = this.deps.isChildRunning()
       if (childRunning && await this.deps.checkHealth(currentSettings, 5_000)) {
+        if (!this.isHostEpochActive(hostEpoch)) return
         this.noteHealthy('watchdog')
         return
       }
       if (!this.managedRuntimeExpected || this.deps.isStopped() ||
-          this.operations.hasPendingOperation()) return
+          this.operations.hasPendingOperation() || !this.isHostEpochActive(hostEpoch)) return
 
       const verdict = this.restartBudget.note()
       if (!verdict.allowed) {
@@ -352,14 +388,18 @@ export class KunRuntimeSupervisor<Settings> {
       })
 
       if (childRunning) {
+        if (!this.isHostEpochActive(hostEpoch)) return
         await this.deps.restartRuntime(currentSettings)
       } else {
+        if (!this.isHostEpochActive(hostEpoch)) return
         await this.deps.ensureRuntime(currentSettings)
       }
+      if (!this.isHostEpochActive(hostEpoch)) return
       if (!this.managedRuntimeExpected || this.deps.isStopped()) return
       this.noteHealthy('watchdog')
     } catch (error) {
-      if (!this.managedRuntimeExpected || this.deps.isStopped()) return
+      if (!this.isHostEpochActive(hostEpoch) ||
+          !this.managedRuntimeExpected || this.deps.isStopped()) return
       this.publish({
         state: 'failed',
         source: 'watchdog',
@@ -377,6 +417,8 @@ export class KunRuntimeSupervisor<Settings> {
     signal: NodeJS.Signals | null
     stderrTail: string
   }): Promise<void> {
+    const hostEpoch = this.hostLivenessEpoch
+    if (!this.isHostEpochActive(hostEpoch)) return
     if (this.deps.isStopped() || !this.managedRuntimeExpected) return
     const exitLabel = info.signal ? `signal ${info.signal}` : `code ${info.code ?? 'unknown'}`
     this.publish({
@@ -389,6 +431,7 @@ export class KunRuntimeSupervisor<Settings> {
     this.recoveryInFlight = true
     try {
       const settings = await this.deps.loadSettings()
+      if (!this.isHostEpochActive(hostEpoch)) return
       if (!this.deps.canAutoRestart(settings)) {
         this.publish({
           state: 'stopped',
@@ -399,13 +442,14 @@ export class KunRuntimeSupervisor<Settings> {
       }
       let lastError = ''
       for (;;) {
-        if (this.deps.isStopped() || !this.managedRuntimeExpected) return
-        const verdict = this.restartBudget.note()
-        if (!verdict.allowed) {
+        if (this.deps.isStopped() || !this.managedRuntimeExpected ||
+            !this.isHostEpochActive(hostEpoch)) return
+        const preview = this.restartBudget.preview()
+        if (!preview.allowed) {
           this.publish({
             state: 'failed',
             source: 'supervisor',
-            attempt: verdict.attempt,
+            attempt: preview.attempt,
             maxAttempts: this.restartBudget.limit,
             message: lastError
               ? `Kun keeps crashing; automatic restarts are paused. Last error: ${lastError}`
@@ -414,25 +458,42 @@ export class KunRuntimeSupervisor<Settings> {
           })
           return
         }
-        this.publish({
-          state: 'restarting',
-          source: 'supervisor',
-          attempt: verdict.attempt,
-          maxAttempts: this.restartBudget.limit,
-          message: `Restarting Kun automatically (attempt ${verdict.attempt}/${this.restartBudget.limit}).`
-        })
-        await (this.deps.sleep ?? defaultSleep)(verdict.delayMs)
-        if (this.deps.isStopped() || !this.managedRuntimeExpected) return
+        await (this.deps.sleep ?? defaultSleep)(preview.delayMs)
+        if (this.deps.isStopped() || !this.managedRuntimeExpected ||
+            !this.isHostEpochActive(hostEpoch)) return
+        let recoveryAttempt = preview.attempt
+        let budgetNoted = false
         try {
-          await this.deps.ensureRuntime(await this.deps.loadSettings())
-          if (this.deps.isStopped() || !this.managedRuntimeExpected) return
+          const currentSettings = await this.deps.loadSettings()
+          if (!this.isHostEpochActive(hostEpoch)) return
+          const verdict = this.restartBudget.note()
+          if (!verdict.allowed) continue
+          recoveryAttempt = verdict.attempt
+          budgetNoted = true
+          this.publish({
+            state: 'restarting',
+            source: 'supervisor',
+            attempt: verdict.attempt,
+            maxAttempts: this.restartBudget.limit,
+            message: `Restarting Kun automatically (attempt ${verdict.attempt}/${this.restartBudget.limit}).`
+          })
+          await this.deps.ensureRuntime(currentSettings)
+          if (this.deps.isStopped() || !this.managedRuntimeExpected ||
+              !this.isHostEpochActive(hostEpoch)) return
           this.noteHealthy('supervisor')
           return
         } catch (error) {
+          if (!this.isHostEpochActive(hostEpoch) ||
+              this.deps.isStopped() || !this.managedRuntimeExpected) return
+          if (!budgetNoted) {
+            const verdict = this.restartBudget.note()
+            if (!verdict.allowed) continue
+            recoveryAttempt = verdict.attempt
+          }
           lastError = error instanceof Error ? error.message : String(error)
           this.deps.warn(
             'kun-supervisor',
-            `automatic restart attempt ${verdict.attempt} failed: ${lastError}`
+            `automatic restart attempt ${recoveryAttempt} failed: ${lastError}`
           )
         }
       }

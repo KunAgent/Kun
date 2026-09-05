@@ -1,0 +1,24 @@
+{
+  "id": "copywriting",
+  "name": "Copywriting",
+  "version": "1.0.0",
+  "description": "Write original product, landing-page, email, announcement, and campaign copy from a verified brief.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/copywriting"
+    ],
+    "promptPatterns": [
+      "Copywriting",
+      "copywriting",
+      "landing page",
+      "write copy",
+      "写文案",
+      "营销文案"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

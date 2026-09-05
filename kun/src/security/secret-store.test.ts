@@ -48,7 +48,10 @@ function installFakeAtomicJsonManager(dataDir: string) {
       return Response.json({ snapshot: structuredClone(current) })
     }
     if (body.expectedRevision !== current.revision) {
-      return Response.json({ currentRevision: current.revision }, { status: 409 })
+      return Response.json({
+        code: 'revision_conflict',
+        currentRevision: current.revision
+      }, { status: 409 })
     }
     const next = {
       revision: current.revision + 1,
@@ -402,6 +405,45 @@ describe('createSecretEncryptor', () => {
     }
   })
 
+  it('preserves conflicting keychain and fallback generations without overwriting either key', async () => {
+    const keychainKey = randomBytes(32)
+    const fallbackKey = randomBytes(32)
+    const run = vi.fn(async (_command: string, args: string[]) => {
+      if (args[0] === 'find-generic-password') {
+        return { code: 0, stdout: keychainKey.toString('base64'), stderr: '' }
+      }
+      if (args[0] === 'add-generic-password') {
+        throw new Error('an established keychain key must not be replaced')
+      }
+      return { code: 1, stdout: '', stderr: '' }
+    })
+    const dir = await mkdtemp(join(tmpdir(), 'kun-secret-conflict-'))
+    const keyPath = join(dir, 'secret.key')
+    const keychainBlob = createAesEncryptor(keychainKey).encrypt('keychain-token')
+    const fallbackBlob = createAesEncryptor(fallbackKey).encrypt('fallback-token')
+    try {
+      await writeFile(keyPath, fallbackKey.toString('base64'))
+      const result = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'darwin',
+        run,
+        ...explicitOsCredentialStore
+      })
+
+      expect(result.osKeychain).toBe(false)
+      expect(result.reason).toContain('different credential generations')
+      expect(result.encryptor.decrypt(keychainBlob)).toBe('keychain-token')
+      expect(result.encryptor.decrypt(fallbackBlob)).toBe('fallback-token')
+      expect(createAesEncryptor(keychainKey).decrypt(
+        result.encryptor.encrypt('new-token')
+      )).toBe('new-token')
+      expect(await readFile(keyPath, 'utf8')).toBe(fallbackKey.toString('base64'))
+      expect(run.mock.calls.some(([, args]) => args[0] === 'add-generic-password')).toBe(false)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('does not replace a macOS key when its keychain lookup fails transiently', async () => {
     const run = vi.fn(async (_command: string, args: string[]) => {
       if (args[0] === 'find-generic-password') {
@@ -563,6 +605,8 @@ describe('createSecretEncryptor', () => {
       })
       expect(Buffer.from(stored, 'base64')).toEqual(key)
       expect(migrated.encryptor.decrypt(blob)).toBe('existing-token')
+      expect(run.mock.calls.find(([, args]) => args[0] === 'add-generic-password')?.[1])
+        .not.toContain('-U')
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

@@ -287,51 +287,133 @@ it('fails a queued child at its deadline without leaking the slot or FIFO waiter
     await expect(second).resolves.toMatchObject({ status: 'completed' })
   })
 
-  it('isolates Fast Context child lanes by parent session and from ordinary global slots', async () => {
-const gates = {
-ordinary: deferred<void>(),
-fastA: deferred<void>(),
-fastB: deferred<void>(),
-fastASecond: deferred<void>()
-}
-const started: string[] = []
-const runtime = createRuntime({
-maxParallel: 1,
-executor: async ({ prompt }) => {
-started.push(prompt)
-await gates[prompt as keyof typeof gates].promise
-return { summary: prompt }
-}
-})
-const signal = new AbortController().signal
-const ordinary = run(runtime, 'ordinary', signal)
-await waitFor(() => started.includes('ordinary'))
+  it('lets nested Fast Context borrow an active parent slot at maxParallel one', async () => {
+    let runtime: DelegationRuntime
+    const started: string[] = []
+    runtime = createRuntime({
+      maxParallel: 1,
+      executor: async (input) => {
+        started.push(input.prompt)
+        if (input.prompt === 'outer') {
+          const nested = await runtime.runChild({
+            parentThreadId: input.childId,
+            parentTurnId: input.parentTurnId,
+            launcher: 'fast_context',
+            prompt: 'nested-fast-context',
+            fastContext: true,
+            queueTimeoutMs: 100,
+            signal: input.signal
+          })
+          expect(nested).toMatchObject({ status: 'completed' })
+        }
+        return { summary: input.prompt }
+      }
+    })
 
-const fastA = run(runtime, 'fastA', signal, undefined, { fastContext: true, parentThreadId: 'parent_a' })
-const fastB = run(runtime, 'fastB', signal, undefined, { fastContext: true, parentThreadId: 'parent_b' })
-await waitFor(() => started.includes('fastA') && started.includes('fastB'))
-expect((await runtime.diagnostics()).active).toBe(3)
+    await expect(run(runtime, 'outer', new AbortController().signal))
+      .resolves.toMatchObject({ status: 'completed' })
+    expect(started).toEqual(['outer', 'nested-fast-context'])
+    await expect(runtime.diagnostics()).resolves.toMatchObject({ active: 0 })
+  })
 
-const fastASecond = run(runtime, 'fastASecond', signal, undefined, {
-fastContext: true,
-parentThreadId: 'parent_a'
-})
-await waitFor(async () => (await runtime.diagnostics('parent_a')).childRuns.some(
-(child) => child.prompt === 'fastASecond' && child.status === 'queued'
-))
-expect(started).not.toContain('fastASecond')
+  it('does not let a Fast Context child recursively borrow its own slot', async () => {
+    let runtime: DelegationRuntime
+    runtime = createRuntime({
+      maxParallel: 1,
+      executor: async (input) => {
+        if (input.prompt === 'outer-fast') {
+          const nested = await runtime.runChild({
+            parentThreadId: input.childId,
+            parentTurnId: input.parentTurnId,
+            launcher: 'fast_context',
+            prompt: 'recursive-fast',
+            fastContext: true,
+            queueTimeoutMs: 25,
+            signal: input.signal
+          })
+          expect(nested).toMatchObject({
+            status: 'failed',
+            failure: { code: 'child_queue_timeout' }
+          })
+        }
+        return { summary: input.prompt }
+      }
+    })
 
-gates.fastA.resolve()
-await fastA
-await waitFor(() => started.includes('fastASecond'))
-gates.fastASecond.resolve()
-gates.fastB.resolve()
-gates.ordinary.resolve()
-await Promise.all([ordinary, fastB, fastASecond])
-expect(await runtime.diagnostics()).toMatchObject({ active: 0 })
-})
+    await expect(run(runtime, 'outer-fast', new AbortController().signal, undefined, {
+      fastContext: true,
+      parentThreadId: 'parent-fast'
+    })).resolves.toMatchObject({ status: 'completed' })
+    await expect(runtime.diagnostics()).resolves.toMatchObject({ active: 0 })
+  })
 
-it('times out only a competing Fast Context call in the same parent session', async () => {
+  it('enforces one global ceiling across ordinary and Fast Context lanes', async () => {
+    const gates = {
+      ordinary: deferred<void>(),
+      fastA: deferred<void>(),
+      fastB: deferred<void>(),
+      fastASecond: deferred<void>()
+    }
+    const started: string[] = []
+    const runtime = createRuntime({
+      maxParallel: 1,
+      executor: async ({ prompt }) => {
+        started.push(prompt)
+        await gates[prompt as keyof typeof gates].promise
+        return { summary: prompt }
+      }
+    })
+    const signal = new AbortController().signal
+    const ordinary = run(runtime, 'ordinary', signal)
+    await waitFor(() => started.includes('ordinary'))
+
+    const fastRuns = {
+      fastA: run(runtime, 'fastA', signal, undefined, {
+        fastContext: true,
+        parentThreadId: 'parent_a'
+      }),
+      fastB: run(runtime, 'fastB', signal, undefined, {
+        fastContext: true,
+        parentThreadId: 'parent_b'
+      })
+    }
+    await waitFor(async () => (await runtime.diagnostics()).childRuns.filter(
+      (child) => child.status === 'queued'
+    ).length === 2)
+    expect((await runtime.diagnostics()).active).toBe(1)
+    expect(started).toEqual(['ordinary'])
+
+    const fastASecond = run(runtime, 'fastASecond', signal, undefined, {
+      fastContext: true,
+      parentThreadId: 'parent_a'
+    })
+    await waitFor(async () => (await runtime.diagnostics('parent_a')).childRuns.some(
+      (child) => child.prompt === 'fastASecond' && child.status === 'queued'
+    ))
+    expect(started).not.toContain('fastASecond')
+
+    gates.ordinary.resolve()
+    await ordinary
+    await waitFor(() => started.length === 2)
+    const firstFast = started[1] as 'fastA' | 'fastB'
+    expect(['fastA', 'fastB']).toContain(firstFast)
+    expect((await runtime.diagnostics()).active).toBe(1)
+    gates[firstFast].resolve()
+    await fastRuns[firstFast]
+
+    await waitFor(() => started.length === 3)
+    const secondFast = firstFast === 'fastA' ? 'fastB' : 'fastA'
+    expect(started[2]).toBe(secondFast)
+    gates[secondFast].resolve()
+    await fastRuns[secondFast]
+
+    await waitFor(() => started.includes('fastASecond'))
+    gates.fastASecond.resolve()
+    await fastASecond
+    expect(await runtime.diagnostics()).toMatchObject({ active: 0 })
+  })
+
+it('applies queue deadlines across Fast Context parent sessions at the global ceiling', async () => {
 const gate = deferred<void>()
 const started: string[] = []
 const runtime = createRuntime({
@@ -353,12 +435,17 @@ const otherSession = run(runtime, 'other-session', signal, 50, {
 fastContext: true,
 parentThreadId: 'parent_b'
 })
-await expect(otherSession).resolves.toMatchObject({ status: 'completed' })
-await expect(timedOut).resolves.toMatchObject({
+await expect(Promise.all([timedOut, otherSession])).resolves.toEqual([
+expect.objectContaining({
+status: 'failed',
+failure: { source: 'runtime', code: 'child_queue_timeout', category: 'timeout' }
+}),
+expect.objectContaining({
 status: 'failed',
 failure: { source: 'runtime', code: 'child_queue_timeout', category: 'timeout' }
 })
-expect(started).toEqual(['holder', 'other-session'])
+])
+expect(started).toEqual(['holder'])
 gate.resolve()
 await holder
 })

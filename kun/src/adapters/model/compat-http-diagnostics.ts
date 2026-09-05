@@ -80,6 +80,7 @@ function failureForHttpStatus(status: number, providerCode?: string, retryAfterM
                 : 'unknown'
   return {
     category,
+    responseReceived: true,
     httpStatus: status,
     ...(providerCode ? { providerCode } : {}),
     ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),

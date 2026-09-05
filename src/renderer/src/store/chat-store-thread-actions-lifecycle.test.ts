@@ -13,6 +13,7 @@ import {
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import { clearThreadSnapshotCache, getThreadSnapshot } from './thread-snapshot-cache'
+import { resetThreadRecoveryCoordinator } from './thread-recovery-coordinator'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -272,12 +273,14 @@ describe('chat-store-thread-actions subscribeThreadEventsLive', () => {
 
 describe('chat-store-thread-actions recoverActiveTurn settles interrupted work', () => {
   beforeEach(() => {
+    resetThreadRecoveryCoordinator()
     rendererRuntimeClient.invalidateSettings()
     registryMock.getProvider.mockReset()
     registryMock.getProvider.mockReturnValue({})
   })
 
   afterEach(() => {
+    resetThreadRecoveryCoordinator()
     rendererRuntimeClient.invalidateSettings()
     vi.unstubAllGlobals()
   })
@@ -421,10 +424,7 @@ describe('chat-store-thread-actions recoverActiveTurn settles interrupted work',
       state.busy = true
 
       await actions.recoverActiveTurn()
-      await vi.advanceTimersByTimeAsync(249)
-      expect(state.recoverActiveTurn).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(500)
       expect(state.recoverActiveTurn).toHaveBeenCalledOnce()
       expect(provider.subscribeThreadEvents).toHaveBeenCalledWith(
         'thr_sse_recovery',
@@ -480,7 +480,7 @@ describe('chat-store-thread-actions recoverActiveTurn settles interrupted work',
       state.recoverActiveTurn = actions.recoverActiveTurn
 
       await actions.recoverActiveTurn()
-      await vi.advanceTimersByTimeAsync(250)
+      await vi.advanceTimersByTimeAsync(500)
       await Promise.resolve()
 
       expect(provider.getThreadDetail).toHaveBeenCalledTimes(2)

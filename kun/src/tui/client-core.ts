@@ -66,7 +66,12 @@ import { readRuntimeBuildIdForEntry } from '../server/runtime-build-identity.js'
 import type { TuiOptions } from './options.js'
 import { defaultKunControlDir } from '../manager/manager-discovery.js'
 import { ensureServiceManager } from '../manager/manager-client.js'
-import { IncrementalSseParser, parseRuntimeEventFrame } from './sse.js'
+import {
+  IncrementalSseParser,
+  parseReplayResetRequiredFrame,
+  parseRuntimeEventFrame,
+  type ReplayResetRequired
+} from './sse.js'
 import { TuiClientError, type ModelConnectionTransport } from './client-types.js'
 import { abortableDelay, responseError, safePath, segment } from './client-utils.js'
 
@@ -100,6 +105,7 @@ export class KunTuiClientCore {
     sinceSeq: number
     signal: AbortSignal
     onEvent: (event: RuntimeEventValue) => void | Promise<void>
+    onReplayResetRequired?: (reset: ReplayResetRequired) => number | Promise<number>
     onConnection?: (state: 'connecting' | 'connected' | 'reconnecting') => void
     onError?: (error: Error) => void
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>
@@ -128,27 +134,48 @@ export class KunTuiClientCore {
         failures = 0
         const parser = new IncrementalSseParser()
         const reader = response.body.getReader()
-        try {
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (done) break
-            for (const frame of parser.push(value)) {
-              const event = parseRuntimeEventFrame(frame)
-              if (!event || event.kind === 'heartbeat' || event.seq <= cursor) continue
-              cursor = event.seq
-              await input.onEvent(event)
+        let replayReset = false
+        const consumeFrames = async (frames: ReturnType<IncrementalSseParser['push']>): Promise<boolean> => {
+          for (const frame of frames) {
+            const reset = parseReplayResetRequiredFrame(frame)
+            if (reset) {
+              if (reset.threadId !== input.threadId) {
+                throw new Error('runtime replay reset targeted the wrong thread')
+              }
+              if (!input.onReplayResetRequired) {
+                throw new Error('runtime history was compacted; reopen the thread to continue')
+              }
+              const recovered = await input.onReplayResetRequired(reset)
+              if (!Number.isSafeInteger(recovered) || recovered < reset.floorSeq - 1) {
+                throw new Error('runtime replay reset recovery returned an invalid cursor')
+              }
+              cursor = recovered
+              return true
             }
-          }
-          for (const frame of parser.finish()) {
             const event = parseRuntimeEventFrame(frame)
             if (!event || event.kind === 'heartbeat' || event.seq <= cursor) continue
             cursor = event.seq
             await input.onEvent(event)
           }
+          return false
+        }
+        try {
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (await consumeFrames(parser.push(value))) {
+              replayReset = true
+              break
+            }
+          }
+          if (!replayReset) {
+            replayReset = await consumeFrames(parser.finish())
+          }
         } finally {
           await reader.cancel().catch(() => undefined)
           reader.releaseLock()
         }
+        if (replayReset) continue
       } catch (error) {
         if (input.signal.aborted) return
         const safe = error instanceof Error ? error : new Error(String(error))

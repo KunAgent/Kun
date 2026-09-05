@@ -50,24 +50,56 @@ describe('initial workbench preparation', () => {
     expect(deps.loadWorkbench).not.toHaveBeenCalled()
   })
 
-  it('preloads the final route and setup state after deferred imports', async () => {
+  it('retries until the third preload reaches a stable snapshot', async () => {
     let snapshot = { route: 'chat', initialSetupOpen: false }
     const pendingWorkbench = deferred()
+    const pendingSettings = deferred()
     const deps = createDeps()
     deps.getSnapshot.mockImplementation(() => snapshot)
-    deps.loadWorkbench.mockReturnValueOnce(pendingWorkbench.promise)
+    deps.loadWorkbench
+      .mockReturnValueOnce(pendingWorkbench.promise)
+      .mockResolvedValueOnce(undefined)
+    deps.loadSettingsView.mockReturnValueOnce(pendingSettings.promise)
     const prepare = createInitialWorkbenchPreparer(deps)
 
     const preparation = prepare()
     await Promise.resolve()
     expect(deps.loadWorkbench).toHaveBeenCalledTimes(1)
+
     snapshot = { route: 'settings', initialSetupOpen: true }
     pendingWorkbench.resolve()
+    await vi.waitFor(() => {
+      expect(deps.loadSettingsView).toHaveBeenCalledTimes(1)
+      expect(deps.loadInitialSetupDialog).toHaveBeenCalledTimes(1)
+    })
+
+    snapshot = { route: 'chat', initialSetupOpen: false }
+    pendingSettings.resolve()
     await preparation
 
+    expect(deps.loadWorkbench).toHaveBeenCalledTimes(2)
     expect(deps.loadSettingsView).toHaveBeenCalledTimes(1)
     expect(deps.loadInitialSetupDialog).toHaveBeenCalledTimes(1)
-    expect(deps.loadWorkbench).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops after three unstable preload attempts', async () => {
+    const snapshots = [
+      { route: 'chat', initialSetupOpen: false },
+      { route: 'settings', initialSetupOpen: false },
+      { route: 'settings', initialSetupOpen: false },
+      { route: 'chat', initialSetupOpen: false },
+      { route: 'chat', initialSetupOpen: false },
+      { route: 'settings', initialSetupOpen: false }
+    ]
+    const deps = createDeps()
+    deps.getSnapshot.mockImplementation(() => snapshots.shift()!)
+    const prepare = createInitialWorkbenchPreparer(deps)
+
+    await prepare()
+
+    expect(deps.getSnapshot).toHaveBeenCalledTimes(6)
+    expect(deps.loadWorkbench).toHaveBeenCalledTimes(2)
+    expect(deps.loadSettingsView).toHaveBeenCalledTimes(1)
   })
 
   it('allows retry after a failed preparation', async () => {

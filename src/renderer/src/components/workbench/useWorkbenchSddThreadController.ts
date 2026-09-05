@@ -98,7 +98,7 @@ type UseWorkbenchSddThreadControllerParams = {
   runtimeConnection: RuntimeConnectionStatus
   workspaceRoot: string
   selectThread: (id: string) => Promise<void>
-  setComposerMode: (mode: 'plan' | 'agent') => void
+  setComposerMode: (mode: 'plan' | 'agent' | 'auto') => void
   setError: (message: string | null) => void
   setInput: (value: string) => void
   setRightPanelMode: (mode: RightPanelMode) => void

@@ -5,6 +5,7 @@ import type {
   ThreadCompletionOutcome
 } from './chat-store-types'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
+import { isAutoPlanIntermediatePlanCompletion } from '../plan/auto-plan-build-intents'
 
 export const UNREAD_COMPLETIONS_STORAGE_KEY = 'kun.unreadCompletions.v2'
 export const LEGACY_UNREAD_COMPLETIONS_STORAGE_KEY = 'kun.unreadCompletions.v1'
@@ -178,4 +179,30 @@ export function completionOutcomeForTurnStatus(
   if (normalized === 'failed' || normalized === 'error') return 'failed'
   if (normalized === 'completed' || normalized === 'success') return 'completed'
   return null
+}
+
+/**
+ * Single policy for updating the unread-attention registry after a turn
+ * settles. It suppresses the "completed" attention state for the intermediate
+ * plan turn of an Automatic plan-and-build handoff, while ordinary, final
+ * build, and failed outcomes keep the existing visibility rules.
+ */
+export function resolveUnreadCompletionForTurn(
+  registry: CompletionAttentionRegistry,
+  state: CompletionVisibilityState,
+  threadId: string,
+  turnId: string | null | undefined,
+  outcome: ThreadCompletionOutcome | null
+): CompletionAttentionRegistry {
+  const normalized = normalizedThreadId(threadId)
+  if (!normalized || !outcome) return clearUnreadCompletion(registry, normalized)
+  if (
+    outcome === 'completed' &&
+    isAutoPlanIntermediatePlanCompletion(normalized, turnId)
+  ) {
+    return clearUnreadCompletion(registry, normalized)
+  }
+  return completionIsCurrentlyVisible(state, normalized)
+    ? clearUnreadCompletion(registry, normalized)
+    : markUnreadCompletion(registry, normalized, outcome)
 }

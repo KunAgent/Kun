@@ -8,6 +8,7 @@ import {
   runtimeDataDirOwnerPath
 } from './runtime-data-dir-migration-lock.js'
 import { runtimeDiscoveryPath } from './runtime-discovery.js'
+import { KUN_VERSION } from '../version.js'
 
 const roots: string[] = []
 const servers: KunServeHandle[] = []
@@ -83,7 +84,7 @@ describe('runtime lifecycle API', () => {
     const info = await infoResponse.json()
     expect(info).toMatchObject({
       instanceId: server.instanceId,
-      serviceVersion: '0.1.0',
+      serviceVersion: KUN_VERSION,
       buildId: 'b'.repeat(64),
       launchMode: 'shared'
     })

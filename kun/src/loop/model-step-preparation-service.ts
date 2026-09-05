@@ -461,12 +461,13 @@ export abstract class ModelStepPreparationService {
           tool.name === 'user_input' ||
           tool.sideEffect === 'read-only')
       : effectiveToolSpecs
-    // Fast Context reserves its fourth and final model step for synthesis so
-    // a retrieval loop cannot spend the whole four-step budget on tools.
-    const fastContextFinalSynthesis = toolContext.fastContext === true && stepIndex >= 3
+    // Bounded internal agents reserve a final model step for synthesis so
+    // they cannot spend their whole model-request budget on tools.
+    const boundedFinalSynthesis = (toolContext.fastContext === true && stepIndex >= 3) ||
+      stepIndex >= (this.deps.finalAnswerOnlyStep ?? Number.POSITIVE_INFINITY)
     const requestToolSpecs = hardRequiredToolName
       ? planningToolSpecs.filter((tool) => tool.name === hardRequiredToolName)
-      : forceFinalAnswerRecovery || fastContextFinalSynthesis
+      : forceFinalAnswerRecovery || boundedFinalSynthesis
         ? []
         : planningToolSpecs
     const promptCachePhase = resolvePromptCachePhase({
@@ -683,7 +684,7 @@ export abstract class ModelStepPreparationService {
       hardRequiredToolName,
       softRequiredToolName,
       forceToolSuppressionFinalAnswerRecovery,
-      fastContextFinalSynthesis,
+      boundedFinalSynthesis,
       requestToolSpecs,
       promptCachePhase,
       svgCompletion,

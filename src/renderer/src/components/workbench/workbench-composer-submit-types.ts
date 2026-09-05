@@ -11,12 +11,14 @@ import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicke
 import type { ComposerFileReference } from '../chat/FloatingComposer'
 import type { ComposerAttachmentScope } from '../workbench-composer-attachments'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
+import type { RequestAutoPlanBuild } from '../../plan/use-auto-plan-build-controller'
 
 export type PlanTurnOverrides = Pick<
   SendMessageOverrides,
   | 'attachmentIds'
   | 'agentSurface'
   | 'attachments'
+  | 'clientRequestId'
   | 'displayText'
   | 'fileReferences'
   | 'guiPlan'
@@ -24,6 +26,7 @@ export type PlanTurnOverrides = Pick<
   | 'providerId'
   | 'reasoningEffort'
   | 'serviceTier'
+  | 'waitForRuntimeAdmission'
 > & {
   workspaceRoot?: string
 }
@@ -40,9 +43,11 @@ export type UseWorkbenchComposerSubmitControllerParams = {
   clearComposerAttachments: (scope?: ComposerAttachmentScope) => void
   removeComposerAttachments: (ids: readonly string[], scope?: ComposerAttachmentScope) => void
   clearComposerFileReferences: () => void
+  restoreComposerAttachments: (attachments: readonly AttachmentReference[], scope?: ComposerAttachmentScope) => Promise<void>
+  restoreComposerFileReferences: (references: readonly ComposerFileReference[]) => void
   composerAttachments: AttachmentReference[]
   composerFileReferences: ComposerFileReference[]
-  composerMode: 'plan' | 'agent'
+  composerMode: 'plan' | 'agent' | 'auto'
   composerModel: string
   composerProviderId: string
   composerModelGroups: ModelProviderModelGroup[]
@@ -52,6 +57,7 @@ export type UseWorkbenchComposerSubmitControllerParams = {
   handleGuiPlanCommand: (request?: string) => void | Promise<void>
   input: string
   resetClawChannelSession: (channelId: string) => Promise<void>
+  requestAutoPlanBuild: RequestAutoPlanBuild
   rightPanelMode: RightPanelMode
   route: ChatState['route']
   selectClawChannel: (channelId: string) => Promise<void>

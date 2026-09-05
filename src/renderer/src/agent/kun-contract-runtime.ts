@@ -188,6 +188,8 @@ export type CoreChildRuntimeMetadataJson = {
   prefixReused?: boolean
   inheritedHistoryItems?: number
   toolInvocations?: number
+  attemptStartedAt?: string
+  attemptDurationMs?: number
   durationMs?: number
   queuedMs?: number
   summaryTruncated?: boolean
@@ -210,6 +212,16 @@ export type CoreWebSourceJson = {
   url?: string
   title?: string
   retrievedAt?: string
+}
+
+export type CoreModelRequestFailureJson = {
+  requestState: 'provider_responded' | 'sent_no_response' | 'not_sent'
+  providerId?: string
+  model?: string
+  httpStatus?: number
+  providerCode?: string
+  category?: 'network' | 'timeout' | 'authentication' | 'quota' | 'rate_limit' | 'unavailable' | 'model_not_found' | 'request' | 'capability' | 'unknown'
+  retryAfterMs?: number
 }
 
 export type CoreTurnJson = {
@@ -282,7 +294,7 @@ export type CoreTurnItemJson = {
     question?: string
     prompt?: string
     message?: string
-    options: Array<{ label: string; description: string }>
+    options: Array<{ label: string; description: string; recommended?: boolean }>
     selectionMode?: 'single' | 'multiple'
     minSelections?: number
     maxSelections?: number
@@ -304,6 +316,7 @@ export type CoreTurnItemJson = {
   message?: string
   code?: string
   details?: unknown
+  modelRequestFailure?: CoreModelRequestFailureJson
   severity?: 'info' | 'warning' | 'error'
   attachmentIds?: string[]
   composerContexts?: CoreComposerContextAttachmentJson[]
@@ -385,6 +398,10 @@ export type CoreStartTurnResponseJson = {
   threadId: string
   turnId: string
   userMessageItemId?: string
+  /** Present for enqueueIfBusy requests persisted as queued turns. */
+  status?: CoreTurnStatus
+  /** 1-based position among this thread's queued turns when status is queued. */
+  queuedPosition?: number
   agentSurface?: 'code' | 'write' | 'design'
   threadAgentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -461,6 +478,13 @@ export type CoreUsageSnapshotJson = {
   cacheHitTokens?: number
   cacheMissTokens?: number
   cacheHitRate?: number
+  reasoningTokens?: number
+  cacheableTokenHitRate?: number | null
+  totalInputTokenHitRate?: number | null
+  cacheMissReasons?: string[]
+  cacheSuggestions?: string[]
+  /** Hit rate of the single request that produced this live usage event. */
+  lastRequestCacheHitRate?: number | null
   turns?: number
   costUsd?: number
   costCny?: number
@@ -585,7 +609,7 @@ export type CoreRuntimeEventJson = {
     question?: string
     prompt?: string
     message?: string
-    options: Array<{ label: string; description: string }>
+    options: Array<{ label: string; description: string; recommended?: boolean }>
     selectionMode?: 'single' | 'multiple'
     minSelections?: number
     maxSelections?: number
@@ -608,6 +632,7 @@ export type CoreRuntimeEventJson = {
   todos?: CoreThreadTodoListJson | null
   cleared?: boolean
   message?: string
+  modelRequestFailure?: CoreModelRequestFailureJson
   severity?: 'info' | 'warning' | 'error'
   child?: CoreChildRuntimeMetadataJson
 }
@@ -618,4 +643,15 @@ export type RuntimeErrorJson = {
   message?: string
   details?: unknown
   severity?: 'info' | 'warning' | 'error'
+}
+
+export type CoreQueuedTurnJson = {
+  turnId: string
+  clientRequestId?: string
+  position: number
+  createdAt: string
+}
+
+export type CoreQueuedTurnsResponseJson = {
+  queuedTurns: CoreQueuedTurnJson[]
 }

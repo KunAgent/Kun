@@ -8,7 +8,10 @@ import { createThreadRecord } from '../domain/thread.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
 import { SequentialIdGenerator } from '../ports/id-generator.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
-import { TurnService } from '../services/turn-service.js'
+import {
+  TurnService,
+  ownerLeaseExpiredTurnAbortReason
+} from '../services/turn-service.js'
 import { UsageService } from '../services/usage-service.js'
 import { AgentLoop } from './agent-loop.js'
 import { ContextCompactor } from './context-compactor.js'
@@ -148,6 +151,43 @@ describe('AgentLoop stream disconnect during blocking tool call abort', () => {
 
     const events = harness.eventBus.snapshotSince('thr_abort_race', 0)
     expect(events.some((event) => event.kind === 'turn_failed')).toBe(false)
+  })
+
+  it('persists lease loss as one typed failure instead of a user abort', async () => {
+    const model = new DisconnectingModel()
+    const harness = createHarness(model)
+    const started = await startTurn(harness, 'thr_lease_loss', model)
+    const run = harness.loop.runTurn('thr_lease_loss', started.turnId)
+
+    expect(harness.turns.abortTurnExecution(
+      started.turnId,
+      ownerLeaseExpiredTurnAbortReason({
+        ownerFlavor: 'production',
+        ownerInstanceId: 'runtime-1'
+      })
+    )).toBe(true)
+
+    await expect(run).resolves.toBe('failed')
+
+    const events = harness.eventBus.snapshotSince('thr_lease_loss', 0)
+    const leaseFailures = events.filter(
+      (event) => event.kind === 'turn_failed' && event.code === 'owner_lease_expired'
+    )
+    expect(leaseFailures).toHaveLength(1)
+    expect(events.some((event) => event.kind === 'turn_aborted')).toBe(false)
+
+    const turn = await harness.turns.getTurn('thr_lease_loss', started.turnId)
+    expect(turn).toMatchObject({
+      status: 'failed',
+      error: 'Turn owner production/runtime-1 stopped heartbeating.'
+    })
+    const items = await harness.sessionStore.loadItems('thr_lease_loss')
+    expect(items.filter(
+      (item) => item.kind === 'error' && item.code === 'owner_lease_expired'
+    )).toMatchObject([{
+      id: `item_${started.turnId}_owner_lease_expired`,
+      status: 'failed'
+    }])
   })
 
   it('rewrites a real disconnect failure instead of blaming the provider', async () => {

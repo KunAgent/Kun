@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   AlertCircle,
@@ -634,7 +635,7 @@ export function ClawAddImDialog({
     submitDisabled, t, updateAgentProfile
   }
 
-  return (
+  const dialogContent = (
     <div className="ds-no-drag fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
       <div className="flex max-h-[min(860px,calc(100vh-32px))] w-full max-w-[1080px] flex-col overflow-hidden rounded-[28px] border border-ds-border bg-ds-elevated shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-ds-border-muted/60 px-5 py-4">
@@ -689,4 +690,10 @@ export function ClawAddImDialog({
       </div>
     </div>
   )
+
+  // Render in a body-level portal: the sidebar shell uses backdrop-filter, which
+  // creates a containing block that traps `position: fixed` descendants. Mounting
+  // the dialog on document.body keeps the overlay full-viewport and its buttons clickable.
+  if (typeof document === 'undefined') return dialogContent
+  return createPortal(dialogContent, document.body)
 }

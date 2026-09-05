@@ -178,6 +178,8 @@ export const ServeProviderConfigSchema = z
       .default(DEFAULT_MODEL_ENDPOINT_FORMAT)
       .optional(),
     retry: ModelRequestRetryConfigSchema.optional(),
+    /** Durable Provider intent; effective routing is materialized separately. */
+    useProxy: z.boolean().optional(),
     modelProxyUrl: z.string().optional(),
     modelProfiles: z.record(z.string().min(1), ModelContextProfileConfigSchema).optional(),
     headers: z.record(z.string(), z.string()).optional(),
@@ -333,6 +335,11 @@ export type LabConversationVisualizationConfig = z.infer<
   typeof LabConversationVisualizationConfigSchema
 >
 
+export const LabProjectBoardConfigSchema = z.object({
+  enabled: z.boolean().default(false)
+}).strict()
+export type LabProjectBoardConfig = z.infer<typeof LabProjectBoardConfigSchema>
+
 export const LabConfigSchema = z
   .object({
     pptAgent: LabPptAgentConfigSchema.default({
@@ -341,6 +348,9 @@ export const LabConfigSchema = z
       imageFirst: true
     }),
     conversationVisualization: LabConversationVisualizationConfigSchema.default({
+      enabled: false
+    }),
+    projectBoard: LabProjectBoardConfigSchema.default({
       enabled: false
     })
   })

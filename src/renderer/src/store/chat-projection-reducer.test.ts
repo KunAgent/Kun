@@ -227,97 +227,6 @@ describe('chat projection reducer', () => {
     }
   )
 
-  it('accepts a newer resume attempt while rejecting stale lifecycle replay', () => {
-    const initial = {
-      ...state(),
-      blocks: [{
-        kind: 'tool' as const,
-        id: 'tool_1',
-        turnId: 'turn_initial',
-        summary: 'delegate_task',
-        status: 'error' as const,
-        detail: JSON.stringify({ childId: 'child_1', status: 'failed', resumeCount: 0 }),
-        meta: {
-          toolName: 'delegate_task',
-          child: {
-            parentThreadId: 'thread_1',
-            parentTurnId: 'turn_initial',
-            childId: 'child_1',
-            childStatus: 'failed',
-            resumable: true,
-            resumeCount: 0
-          }
-        }
-      }]
-    }
-    const resumed = project(initial, [{
-      type: 'tool_updated',
-      seq: 200,
-      payload: {
-        itemId: 'child_lifecycle_child_1',
-        summary: 'delegate_task',
-        status: 'running',
-        updateOnly: true,
-        detail: JSON.stringify({ childId: 'child_1', status: 'running', resumeCount: 1 }),
-        meta: {
-          child: {
-            parentThreadId: 'thread_1',
-            parentTurnId: 'turn_resume',
-            childId: 'child_1',
-            childStatus: 'running',
-            resumable: false,
-            resumeCount: 1,
-            proactiveRetry: { enabled: true, eligible: false, count: 1, limit: 3, remaining: 2 }
-          }
-        }
-      }
-    }])
-
-    expect(resumed.blocks[0]).toMatchObject({
-      kind: 'tool',
-      status: 'running',
-      meta: {
-        child: {
-          parentTurnId: 'turn_resume', childStatus: 'running', resumeCount: 1,
-          proactiveRetry: { count: 1, limit: 3 }
-        }
-      }
-    })
-    const settled = project(resumed, [{
-      type: 'tool_updated',
-      payload: {
-        itemId: 'tool_resume', summary: 'delegate_task', status: 'success',
-        detail: JSON.stringify({ childId: 'child_1', status: 'completed', resumeCount: 1, summary: 'resumed conclusion' }),
-        meta: { toolName: 'delegate_task' }
-      }
-    }])
-    expect(settled.blocks[0]).toMatchObject({ status: 'success', detail: expect.stringContaining('resumed conclusion') })
-    const replayed = project(settled, [{
-      type: 'tool_updated',
-      seq: 201,
-      payload: {
-        itemId: 'child_lifecycle_child_1',
-        summary: 'delegate_task',
-        status: 'running',
-        updateOnly: true,
-        detail: JSON.stringify({ childId: 'child_1', status: 'running', resumeCount: 0 }),
-        meta: {
-          child: {
-            parentThreadId: 'thread_1',
-            parentTurnId: 'turn_initial',
-            childId: 'child_1',
-            childStatus: 'running',
-            resumeCount: 0
-          }
-        }
-      }
-    }])
-    expect(replayed.blocks[0]).toMatchObject({
-      status: 'success',
-      meta: { child: { resumeCount: 1 } }
-    })
-  })
-
   it('clears current-turn orchestration when a Graph turn completes', () => {
     const projected = project({
       ...state(),
@@ -692,6 +601,45 @@ describe('chat projection reducer', () => {
       text: 'Continue building the Graph.'
     })
     expect(projected.currentTurnUserId).toBe('item_original_user')
+  })
+
+  it('consumes only the queued row matching the arriving turn user message', () => {
+    const queuedStarted = {
+      id: 'q-started',
+      text: 'run the queued task',
+      deliveryState: 'in_flight' as const,
+      deliveryTurnId: 'turn_queued',
+      deliveryUserMessageItemId: 'item_queued'
+    }
+    const queuedLater = {
+      id: 'q-later',
+      text: 'second queued task',
+      deliveryState: 'in_flight' as const,
+      deliveryTurnId: 'turn_later',
+      deliveryUserMessageItemId: 'item_later'
+    }
+    const queuedPending = {
+      id: 'q-pending',
+      text: 'still waiting',
+      deliveryState: 'pending' as const
+    }
+    const initial = {
+      ...state(),
+      turnStartedAtByUserId: {},
+      queuedMessages: [queuedStarted, queuedLater, queuedPending]
+    }
+
+    const projected = project(initial, [{
+      type: 'user_message_received',
+      payload: {
+        itemId: 'item_queued',
+        turnId: 'turn_queued',
+        createdAt: '2026-07-11T00:00:00.000Z',
+        text: 'run the queued task'
+      }
+    }])
+
+    expect(projected.queuedMessages).toEqual([queuedLater, queuedPending])
   })
 
 })

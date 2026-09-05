@@ -1,0 +1,16 @@
+.root {
+  min-width: 0;
+  padding: 8px 14px 16px;
+}
+
+.heading {
+  height: 24px;
+  color: var(--trajectory-label-3);
+  font: 11px/16px var(--ds-font-family-code, monospace);
+}
+
+.empty {
+  padding: 18px 14px;
+  color: var(--trajectory-label-3);
+  font-size: 12px;
+}

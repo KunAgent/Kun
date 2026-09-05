@@ -4,9 +4,12 @@ import { createDefaultShape, createEmptyDocument, type CanvasShape } from '../..
 import { useCanvasSelectionStore } from '../../design/canvas/canvas-selection-store'
 import { activePptReviewComposerContexts } from './workbench-ppt-review-context'
 
-function reviewShape(workflowId: string, childId: string, slideId: string): CanvasShape {
-  return {
-    ...createDefaultShape('frame', 0, 0),
+function reviewShapes(workflowId: string, childId: string, slideId: string): CanvasShape[] {
+  const frame = createDefaultShape('frame', 0, 0)
+  const preview = createDefaultShape('image', 0, 0)
+  preview.imageUrl = `.kun/images/${slideId}.png`
+  return [{
+    ...frame,
     id: `${workflowId}-frame`,
     pptReviewRef: {
       workflowId,
@@ -16,19 +19,31 @@ function reviewShape(workflowId: string, childId: string, slideId: string): Canv
       parentThreadId: 'thread-a',
       role: 'slide-frame'
     }
-  }
+  } satisfies CanvasShape, {
+    ...preview,
+    id: `${workflowId}-preview`,
+    pptReviewRef: {
+      workflowId,
+      childId,
+      slideId,
+      revision: 2,
+      parentThreadId: 'thread-a',
+      role: 'preview-image'
+    }
+  } satisfies CanvasShape]
 }
 
 function loadReviewDocument(documentKey: string): void {
   const document = createEmptyDocument()
-  const workflowA = reviewShape('workflow-a', 'child-a', 'slide-a')
-  const workflowB = reviewShape('workflow-b', 'child-b', 'slide-b')
+  const shapes = [
+    ...reviewShapes('workflow-a', 'child-a', 'slide-a'),
+    ...reviewShapes('workflow-b', 'child-b', 'slide-b')
+  ]
   useCanvasShapeStore.getState().loadDocument({
     ...document,
     objects: {
       ...document.objects,
-      [workflowA.id]: workflowA,
-      [workflowB.id]: workflowB
+      ...Object.fromEntries(shapes.map((shape) => [shape.id, shape]))
     }
   }, documentKey)
 }
@@ -53,7 +68,8 @@ describe('active Work PPT composer contexts', () => {
 
     const contexts = await activePptReviewComposerContexts('/work', 'thread-a', {
       expectedDocumentKey: 'work-board-a',
-      workflowId: 'workflow-b'
+      workflowId: 'workflow-b',
+      phase: 'review'
     })
 
     expect(contexts).toHaveLength(1)
@@ -63,5 +79,25 @@ describe('active Work PPT composer contexts', () => {
       childId: 'child-b',
       slides: [{ slideId: 'slide-b', revision: 2 }]
     })
+  })
+
+  it('never submits stale direction context while the board is in review', async () => {
+    const document = createEmptyDocument()
+    const direction = createDefaultShape('frame', 0, 0)
+    direction.pptDirectionRef = {
+      workflowId: 'workflow-a', childId: 'child-a', directionId: 'direction-a',
+      revision: 1, parentThreadId: 'thread-a', role: 'direction-card'
+    }
+    useCanvasShapeStore.getState().loadDocument({
+      ...document,
+      objects: { ...document.objects, [direction.id]: direction }
+    }, 'work-board-a')
+    useCanvasSelectionStore.getState().select([direction.id])
+
+    await expect(activePptReviewComposerContexts('/work', 'thread-a', {
+      expectedDocumentKey: 'work-board-a',
+      workflowId: 'workflow-a',
+      phase: 'review'
+    })).resolves.toEqual([])
   })
 })

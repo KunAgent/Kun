@@ -1,0 +1,25 @@
+{
+  "id": "xlsx",
+  "name": "Spreadsheet Workbooks",
+  "version": "1.0.0",
+  "description": "Inspect, edit, validate, and preview existing Excel workbooks and supported ranges.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/xlsx"
+    ],
+    "promptPatterns": [
+      "CSV",
+      "Excel",
+      "spreadsheet",
+      "Spreadsheet Workbooks",
+      "XLSX",
+      "xlsx",
+      "表格"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

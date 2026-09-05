@@ -1,7 +1,9 @@
 import { readFile, rm } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import { HybridSessionStore } from '../adapters/hybrid/hybrid-session-store.js'
+import { HybridMemoryStore } from '../adapters/hybrid/hybrid-memory-store.js'
 import { HybridThreadStore } from '../adapters/hybrid/hybrid-thread-store.js'
 import {
   FileArtifactStore,
@@ -42,7 +44,7 @@ import {
   type FinishedTurnStatus,
   finalizeTurnItems
 } from '../domain/turn-item-finalization.js'
-import { FileMemoryStore, type MemoryStore } from '../memory/memory-store.js'
+import type { MemoryStore } from '../memory/memory-store.js'
 import { FileGraphRunStore, type GraphRunStore } from '../graph/graph-run-store.js'
 import type {
   ItemHistoryCommit,
@@ -76,7 +78,7 @@ export abstract class ManagerSharedDataStoreCore {
   protected readonly graphStore: GraphRunStore
   protected graphConfig: GraphRuntimeConfig = DEFAULT_GRAPH_RUNTIME_CONFIG
   protected graphQueue: Promise<unknown> = Promise.resolve()
-  protected readonly memoryStores = new Map<string, MemoryStore>()
+  protected memoryRepository: MemoryStore | undefined
   protected memoryQueue: Promise<unknown> = Promise.resolve()
   protected readonly seqFloors = new Map<string, number>()
   protected readonly reservedSeqs = new Map<string, Set<number>>()
@@ -130,6 +132,14 @@ export abstract class ManagerSharedDataStoreCore {
     const document = this.atomicJsonDocument(target)
     const run = document.queue.catch(() => undefined).then(async () => {
       await this.loadAtomicJson(target, document)
+      // Treat an already-satisfied JSON write as success even when the caller
+      // read an older Manager revision. Runtime initialization and GUI catalog
+      // reconciliation can independently converge on the same canonical
+      // document; rewriting that identical value only churns the Manager CAS
+      // revision and can starve a real startup mutation behind no-op writers.
+      if (isDeepStrictEqual(document.value, input.value)) {
+        return { revision: document.revision, value: input.value }
+      }
       if (document.revision !== input.expectedRevision) {
         throw new RevisionConflictError(document.revision)
       }
@@ -169,7 +179,15 @@ export abstract class ManagerSharedDataStoreCore {
   }
 
   async close(): Promise<void> {
-    await this.hybridThreadStore.shutdown()
+    try {
+      await (this.sessionStore as HybridSessionStore).close()
+    } finally {
+      try {
+        await this.memoryRepository?.shutdown?.()
+      } finally {
+        await this.hybridThreadStore.shutdown()
+      }
+    }
   }
 
   /**
@@ -191,7 +209,13 @@ export abstract class ManagerSharedDataStoreCore {
       // manufacture a new failure.
       if (!terminalStatus) return false
       const now = new Date().toISOString()
-      const sessionItems = await this.sessionStore.loadItems(lease.threadId)
+      const currentTurnIds = new Set(thread.turns.map((turn) => turn.id))
+      // A pre-fix rewind could leave a live-only running checkpoint whose turn
+      // no longer exists. Do not canonize that ghost while settling a different
+      // lease; the authoritative rewrite below retires its live checkpoint.
+      const sessionItems = (await this.sessionStore.loadItems(lease.threadId)).filter((item) =>
+        (item.status !== 'pending' && item.status !== 'running') || currentTurnIds.has(item.turnId)
+      )
       let nextItems = finalizeTurnItems(sessionItems, {
         turnId: lease.turnId,
         status: terminalStatus,
@@ -223,6 +247,14 @@ export abstract class ManagerSharedDataStoreCore {
       const turns = thread.turns.map((turn) => turn.id === lease.turnId
         ? {
             ...finishTurn(turn, 'failed', now),
+            terminalCode: 'owner_lease_expired',
+            managerLeaseSettlement: {
+              code: 'owner_lease_expired' as const,
+              ownerFlavor: lease.ownerFlavor,
+              ownerInstanceId: lease.ownerInstanceId,
+              fencingToken: lease.fencingToken,
+              settledAt: now
+            },
             error: ownerLeaseExpiredMessage(lease)
           }
         : turn)
@@ -254,8 +286,12 @@ export abstract class ManagerSharedDataStoreCore {
     })
   }
 
-  protected async allocateEventSeq(threadId: string): Promise<number> {
+  protected async allocateEventSeq(
+    threadId: string,
+    assertCurrent?: () => void
+  ): Promise<number> {
     return this.enqueueSeq(threadId, async () => {
+      assertCurrent?.()
       let floor = this.seqFloors.get(threadId)
       if (floor === undefined) floor = await this.sessionStore.highestSeq(threadId)
       const next = floor + 1
@@ -337,16 +373,13 @@ export abstract class ManagerSharedDataStoreCore {
   }
 
   protected memoryStore(config: z.infer<typeof MemoryCapabilityConfig>): MemoryStore {
-    const key = JSON.stringify(config)
-    let store = this.memoryStores.get(key)
-    if (!store) {
-      store = new FileMemoryStore({
-        rootDir: resolve(this.dataDir, 'memory'),
+    if (!this.memoryRepository) {
+      this.memoryRepository = new HybridMemoryStore({
+        dataDir: this.dataDir,
         config
       })
-      this.memoryStores.set(key, store)
     }
-    return store
+    return this.memoryRepository
   }
 
   protected attachmentStore(config: z.infer<typeof AttachmentsCapabilityConfig>): AttachmentStore {

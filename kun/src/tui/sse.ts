@@ -6,6 +6,11 @@ export type SseFrame = {
   data: string
 }
 
+export type ReplayResetRequired = {
+  threadId: string
+  floorSeq: number
+}
+
 export class IncrementalSseParser {
   private buffer = ''
   private readonly decoder = new TextDecoder()
@@ -60,6 +65,30 @@ export function parseRuntimeEventFrame(frame: SseFrame): RuntimeEventValue | nul
     return null
   }
   return parsed.data
+}
+
+export function parseReplayResetRequiredFrame(frame: SseFrame): ReplayResetRequired | null {
+  if (frame.event !== 'replay_reset_required') return null
+  let value: unknown
+  try {
+    value = JSON.parse(frame.data)
+  } catch {
+    throw new Error('runtime replay reset returned invalid JSON')
+  }
+  if (!value || typeof value !== 'object') {
+    throw new Error('runtime replay reset returned an invalid payload')
+  }
+  const reset = value as { threadId?: unknown; floorSeq?: unknown }
+  if (
+    typeof reset.threadId !== 'string' ||
+    !reset.threadId ||
+    typeof reset.floorSeq !== 'number' ||
+    !Number.isSafeInteger(reset.floorSeq) ||
+    reset.floorSeq < 0
+  ) {
+    throw new Error('runtime replay reset returned an invalid payload')
+  }
+  return { threadId: reset.threadId, floorSeq: reset.floorSeq }
 }
 
 function parseSseBlock(block: string): SseFrame | null {

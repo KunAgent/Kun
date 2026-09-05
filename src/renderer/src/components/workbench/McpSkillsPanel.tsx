@@ -368,7 +368,11 @@ export function McpSkillsPanel({ workspaceRoot = '', onOpenSettings }: Props): R
                 <div className="mt-0.5 truncate text-[10.5px] text-ds-faint">{entry.description || entry.id}</div>
               </div>
               <span className="shrink-0 rounded-md bg-ds-hover px-1.5 py-0.5 text-[10px] font-semibold text-ds-muted">
-                {entry.sourceScope === 'project' ? t('mcpSkillsPanel.projectBadge') : t('mcpSkillsPanel.globalBadge')}
+                {entry.builtin
+                  ? t('mcpSkillsPanel.builtinBadge', { defaultValue: 'Built-in' })
+                  : entry.sourceScope === 'project'
+                    ? t('mcpSkillsPanel.projectBadge')
+                    : t('mcpSkillsPanel.globalBadge')}
               </span>
               <button
                 type="button"

@@ -174,15 +174,20 @@ describe('collectPaletteSources', () => {
   })
 
   it('lists every top-level route with its localized label key', () => {
-    const entries = collectPaletteSources(baseInput())
+    const entries = collectPaletteSources(baseInput({ projectBoardEnabled: true }))
     const routes = entries
       .filter((entry) => entry.source === 'route')
       .map((entry) => entry.activation.kind === 'route' ? entry.activation.route : null)
       .filter((route): route is AppRoute => Boolean(route))
     expect(routes.sort()).toEqual([
-      'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'workflow', 'write'
+      'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'workflow', 'write'
     ])
     expect(entries.find((entry) => entry.id === 'route:workflow')?.title).toBe('workflowCreate')
+  })
+
+  it('hides the board route while the Laboratory project board switch is off', () => {
+    const entries = collectPaletteSources(baseInput())
+    expect(entries.some((entry) => entry.id === 'route:board')).toBe(false)
   })
 
   it('includes every shortcut command except the palette itself', () => {

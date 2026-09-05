@@ -26,6 +26,40 @@ export class HybridFilesystemSummaryCache {
     this.cache = null
   }
 
+  /**
+   * Read summaries for a specific set of thread ids. When a warm scan is
+   * available the result is filtered from it (no re-read); otherwise the ids
+   * are read directly with bounded concurrency. Used by the list-page
+   * transition path so a cold index only touches the not-yet-indexed threads.
+   */
+  async readByIds(ids: string[]): Promise<ThreadSummary[]> {
+    if (ids.length === 0) return []
+    const cached = this.cache
+    if (cached && cached.expiresAt > Date.now() && cached.generation === this.generation) {
+      const wanted = new Set(ids)
+      return cached.summaries.filter((summary) => wanted.has(summary.id))
+    }
+    const summaries: ThreadSummary[] = []
+    let nextIndex = 0
+    const workerCount = Math.min(this.concurrency, ids.length)
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+      while (nextIndex < ids.length) {
+        const threadId = ids[nextIndex]
+        nextIndex += 1
+        try {
+          const metadata = await this.source.readMetadata(threadId)
+          const thread = metadata && requiresLegacyWorkThreadHydration(metadata)
+            ? await this.source.readThread(threadId) ?? metadata
+            : metadata
+          if (thread) summaries.push(toThreadSummary(thread))
+        } catch (error) {
+          this.source.warn(threadId, error)
+        }
+      }
+    }))
+    return summaries
+  }
+
   async list(): Promise<ThreadSummary[]> {
     const cached = this.cache
     if (cached && cached.expiresAt > Date.now() && cached.generation === this.generation) {

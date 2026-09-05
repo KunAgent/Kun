@@ -95,7 +95,10 @@ export function GrokLoginSection({
     setPasteBusy(false)
     try {
       // Blocks until loopback callback OR paste completion (Path A + B race).
-      const result = await window.kunGui.startGrokBrowserAuth()
+      const result = await window.kunGui.startGrokBrowserAuth({
+        providerId: provider.id,
+        useProxy: provider.useProxy
+      })
       if (!isCurrentLoginRun(runId)) return
       if (result.ok) {
         setPasteCode('')

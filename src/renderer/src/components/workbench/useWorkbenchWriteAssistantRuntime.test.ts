@@ -66,7 +66,15 @@ describe('useWorkbenchWriteAssistantRuntime whiteboard binding', () => {
   it('creates and persists a missing board thread with a locked title', async () => {
     const createWriteThread = vi.fn(async () => 'thread-new')
     const bindWhiteboardThread = vi.fn(async () => true)
-    useWriteWorkspaceStore.setState({ bindWhiteboardThread })
+    useWriteWorkspaceStore.setState({
+      bindWhiteboardThread,
+      whiteboards: {
+        'board-1': {
+          id: 'board-1', title: 'Pitch', workspaceRoot: '/work', threadId: null,
+          phase: 'blank', revision: 0, createdAt: now, updatedAt: now
+        }
+      }
+    })
     useChatStore.setState({
       route: 'write', runtimeConnection: 'ready', activeThreadId: null, threads: [], createWriteThread
     })
@@ -77,6 +85,43 @@ describe('useWorkbenchWriteAssistantRuntime whiteboard binding', () => {
       title: 'Pitch',
       titleAuto: false
     })
+    await act(async () => renderer.unmount())
+  })
+
+  it('promotes the next available whiteboard conversation when the active one is archived', async () => {
+    const bindWhiteboardThread = vi.fn(async () => true)
+    const selectWriteThread = vi.fn(async () => undefined)
+    useWriteWorkspaceStore.setState({
+      bindWhiteboardThread,
+      whiteboards: {
+        'board-1': {
+          id: 'board-1', title: 'Pitch', workspaceRoot: '/work',
+          threadId: 'thread-archived', threadIds: ['thread-archived', 'thread-history'],
+          phase: 'blank', revision: 0, createdAt: now, updatedAt: now
+        }
+      }
+    })
+    useChatStore.setState({
+      route: 'write',
+      runtimeConnection: 'ready',
+      activeThreadId: null,
+      threads: [
+        {
+          id: 'thread-archived', title: 'Archived', updatedAt: now, model: 'deepseek-v4',
+          mode: 'agent', workspace: '/work', agentSurface: 'write', archived: true
+        },
+        {
+          id: 'thread-history', title: 'Earlier idea', updatedAt: now, model: 'deepseek-v4',
+          mode: 'agent', workspace: '/work', agentSurface: 'write'
+        }
+      ],
+      selectWriteThread
+    })
+    const renderer = await mount()
+
+    await vi.waitFor(() => expect(bindWhiteboardThread)
+      .toHaveBeenCalledWith('board-1', 'thread-history'))
+    expect(selectWriteThread).toHaveBeenCalledWith('thread-history', '/work')
     await act(async () => renderer.unmount())
   })
 

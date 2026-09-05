@@ -181,6 +181,28 @@ describe('workspace editor icons', () => {
     expect(electronMock.openPath).toHaveBeenCalledWith('presentations/brief.pptx')
   })
 
+  it.each([
+    ['reports/summary.docx', 'reports/summary.docx'],
+    ['reports/appendix.pdf', 'reports/appendix.pdf']
+  ])('opens an allowed generated document: %s', async (path, resolvedPath) => {
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true })
+    const { openEditorPath } = await import('./workspace-editors')
+    const result = await openEditorPath({
+      path,
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system',
+      openPolicy: 'generated-document-artifact'
+    })
+
+    expect(result).toMatchObject({ ok: true, path: resolvedPath, editorId: 'system' })
+    expect(workspacePathsMock.resolveOpenTargetPath).toHaveBeenCalledWith(
+      path,
+      '/tmp/workspace',
+      { allowBasenameFallback: false }
+    )
+    expect(electronMock.openPath).toHaveBeenCalledWith(resolvedPath)
+  })
+
   it('reveals a workspace file without launching an editor', async () => {
     fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true })
     const { openEditorPath } = await import('./workspace-editors')
@@ -233,6 +255,23 @@ describe('workspace editor icons', () => {
     expect(electronMock.openPath).not.toHaveBeenCalled()
   })
 
+  it('rejects a generated-document alias whose canonical target has another suffix', async () => {
+    workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/payload.exe')
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true })
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: '/tmp/workspace/report.docx',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system',
+      openPolicy: 'generated-document-artifact'
+    })).resolves.toEqual({
+      ok: false,
+      message: 'Resolved file type is not allowed for this action.'
+    })
+    expect(electronMock.openPath).not.toHaveBeenCalled()
+  })
+
   it('rejects presentation-looking directories before opening or revealing them', async () => {
     workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/folder.pptx')
     fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => false })
@@ -243,6 +282,23 @@ describe('workspace editor icons', () => {
       workspaceRoot: '/tmp/workspace',
       editorId: 'file-manager',
       openPolicy: 'presentation-artifact'
+    })).resolves.toEqual({
+      ok: false,
+      message: 'Path must point to a regular file.'
+    })
+    expect(electronMock.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('rejects generated-document-looking directories before opening or revealing them', async () => {
+    workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/folder.pdf')
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => false })
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: '/tmp/workspace/folder.pdf',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'file-manager',
+      openPolicy: 'generated-document-artifact'
     })).resolves.toEqual({
       ok: false,
       message: 'Path must point to a regular file.'
@@ -277,6 +333,24 @@ describe('workspace editor icons', () => {
       workspaceRoot: '/tmp/workspace',
       editorId: 'system',
       openPolicy: 'presentation-artifact',
+      expectedSha256: '0'.repeat(64)
+    })).resolves.toEqual({
+      ok: false,
+      message: 'Presentation changed after it was generated. Save it again in Kun PPT before opening.'
+    })
+    expect(electronMock.openPath).not.toHaveBeenCalled()
+  })
+
+  it('retains digest validation for Kun HTML under the generated-document policy', async () => {
+    workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/deck.kun-ppt.html')
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true, size: imageBytes.byteLength })
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: '/tmp/workspace/deck.kun-ppt.html',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system',
+      openPolicy: 'generated-document-artifact',
       expectedSha256: '0'.repeat(64)
     })).resolves.toEqual({
       ok: false,

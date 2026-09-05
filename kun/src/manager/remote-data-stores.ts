@@ -36,8 +36,10 @@ import {
   ThreadSummarySchema,
   type ThreadRecord
 } from '../contracts/threads.js'
+import { ThreadIndexStatusInfoSchema } from '../contracts/thread-index-status.js'
 import type { AgentSession } from '../domain/session.js'
-import type { MemoryAccess, MemoryStore } from '../memory/memory-store.js'
+import type { MemoryAccess, MemoryListFilter, MemoryStore } from '../memory/memory-store.js'
+import type { MemoryRetrieveRequest } from '../memory/memory-retrieval.js'
 import type {
   AppendGraphEventInput,
   AppendGraphEventResult,
@@ -48,6 +50,8 @@ import type {
   GraphStoreDiagnostic
 } from '../graph/graph-run-store.js'
 import type {
+  EventHistoryPage,
+  EventHistoryPageOptions,
   ItemHistoryCompactionResult,
   ItemHistoryCommit,
   ItemHistoryPage,
@@ -59,19 +63,24 @@ import type {
   SessionUsageQueryOptions,
   SessionUsageRecord
 } from '../ports/session-store.js'
+import {
+  SessionUsageAggregateResponseSchema,
+  type SessionUsageAggregateQuery,
+  type SessionUsageAggregateResponse
+} from '../contracts/usage-query.js'
 import type {
   ThreadStore,
   ThreadStoreListOptions,
   ThreadStoreListPage
 } from '../ports/thread-store.js'
-import { requestManagerJson, type ServiceManagerConnection } from './manager-client.js'
+import type { ServiceManagerConnection } from './manager-client.js'
+import { callManagerStore } from './remote-data-store-request.js'
+export { resolveManagerDataRequestTimeoutMs } from './remote-data-store-request.js'
 
-const ResultSchema = z.object({ result: z.unknown() }).strict()
-const MANAGER_DATA_REQUEST_TIMEOUT_MS = 30_000
-const MANAGER_TIMELINE_DATA_REQUEST_TIMEOUT_MS = 120_000
 const ItemSnapshotSchema = z.object({
   revision: z.number().int().nonnegative(),
-  items: z.array(TurnItem)
+  items: z.array(TurnItem),
+  replayAfterSeq: z.number().int().nonnegative().optional()
 })
 const ItemCommitSchema = z.discriminatedUnion('applied', [
   z.object({ applied: z.literal(true), revision: z.number().int().nonnegative() }),
@@ -87,17 +96,25 @@ const ItemCompactionSchema = z.object({
   afterBytes: z.number().int().nonnegative(),
   itemCount: z.number().int().nonnegative()
 })
+const EventPageSchema = z.object({
+  events: z.array(RuntimeEvent),
+  nextCursor: z.string().optional(),
+  hasMore: z.boolean(),
+  eventBytes: z.number().int().nonnegative()
+})
 const ItemPageSchema = z.object({
   items: z.array(TurnItem),
   nextCursor: z.string().optional(),
   hasMore: z.boolean(),
-  itemBytes: z.number().int().nonnegative()
+  itemBytes: z.number().int().nonnegative(),
+  replayAfterSeq: z.number().int().nonnegative().optional()
 })
 const ThreadStoreListPageSchema: z.ZodType<ThreadStoreListPage> = z.object({
   threads: z.array(ThreadSummarySchema),
   nextCursor: z.string().optional(),
   hasMore: z.boolean(),
-  total: z.number().int().nonnegative().optional()
+  total: z.number().int().nonnegative().optional(),
+  indexStatus: ThreadIndexStatusInfoSchema.optional()
 }).strict()
 const UsageRecordSchema = z.object({
   threadId: z.string(),
@@ -244,6 +261,18 @@ export class ManagerRemoteSessionStore implements SessionStore {
     await this.call('appendItem', { threadId, item })
   }
 
+  async checkpointLiveItem(
+    threadId: string,
+    item: TurnItemValue,
+    representedSeq: number
+  ): Promise<void> {
+    await this.call('checkpointLiveItem', { threadId, item, representedSeq })
+  }
+
+  async finalizeLiveItem(threadId: string, item: TurnItemValue): Promise<void> {
+    await this.call('finalizeLiveItem', { threadId, item })
+  }
+
   async rewriteItems(threadId: string, items: TurnItemValue[]): Promise<void> {
     await this.call('rewriteItems', { threadId, items })
   }
@@ -279,16 +308,57 @@ export class ManagerRemoteSessionStore implements SessionStore {
     return ItemCompactionSchema.parse(await this.call('compactItems', { threadId, options }))
   }
 
+  scheduleItemHistoryCompaction(threadId: string): void {
+    void this.call('scheduleItemHistoryCompaction', { threadId }).catch((error) => {
+      console.warn(`[kun] manager item history repair schedule failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`)
+    })
+  }
+
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEventValue[]> {
     return RuntimeEvent.array().parse(await this.call('loadEventsSince', { threadId, sinceSeq }))
+  }
+
+  async loadEventPage(threadId: string, options: EventHistoryPageOptions): Promise<EventHistoryPage> {
+    return EventPageSchema.parse(await this.call('loadEventPage', { threadId, options }))
   }
 
   async *iterateEventsSince(
     threadId: string,
     sinceSeq: number,
-    _options?: { maxRecordBytes?: number }
+    options?: { maxRecordBytes?: number }
   ): AsyncIterable<RuntimeEventValue> {
-    yield* await this.loadEventsSince(threadId, sinceSeq)
+    let cursor: string | undefined
+    let pageSinceSeq = sinceSeq
+    do {
+      const page = await this.loadEventPage(threadId, {
+        sinceSeq: pageSinceSeq,
+        ...(cursor ? { cursor } : {}),
+        maxEvents: 256,
+        maxBytes: 512 * 1024,
+        ...(options?.maxRecordBytes ? { maxRecordBytes: options.maxRecordBytes } : {})
+      })
+      for (const event of page.events) {
+        pageSinceSeq = Math.max(pageSinceSeq, event.seq)
+        yield event
+      }
+      if (!page.hasMore) return
+      if (page.events.length === 0 && !page.nextCursor) {
+        throw new Error('manager event replay page made no forward progress')
+      }
+      cursor = page.nextCursor
+    } while (true)
+  }
+
+  async trimEventsFromSeq(threadId: string, fromSeqInclusive: number): Promise<{ afterBytes: number }> {
+    return z.object({ afterBytes: z.number().int().nonnegative() }).parse(
+      await this.call('trimEventsFromSeq', { threadId, fromSeqInclusive })
+    )
+  }
+
+  async eventReplayFloorSeq(threadId: string): Promise<number> {
+    return z.number().int().nonnegative().parse(await this.call('eventReplayFloorSeq', { threadId }))
   }
 
   async *watchEventsSince(
@@ -298,11 +368,14 @@ export class ManagerRemoteSessionStore implements SessionStore {
   ): AsyncIterable<RuntimeEventValue> {
     let cursor = sinceSeq
     while (!signal.aborted) {
-      const events = await this.loadEventsSince(threadId, cursor)
-      for (const event of events) {
-        if (event.seq <= cursor) continue
-        cursor = event.seq
-        yield event
+      const highest = await this.highestSeq(threadId)
+      if (highest > cursor) {
+        const events = await this.loadEventsSince(threadId, cursor)
+        for (const event of events) {
+          if (event.seq <= cursor) continue
+          cursor = event.seq
+          yield event
+        }
       }
       await abortableDelay(250, signal)
     }
@@ -346,6 +419,15 @@ export class ManagerRemoteSessionStore implements SessionStore {
 
   async loadUsageRecords(options: SessionUsageQueryOptions = {}): Promise<SessionUsageRecord[]> {
     return UsageRecordSchema.array().parse(await this.call('loadUsageRecords', options)) as SessionUsageRecord[]
+  }
+
+  async aggregateUsage(
+    query: SessionUsageAggregateQuery,
+    liveRecords: SessionUsageRecord[] = []
+  ): Promise<SessionUsageAggregateResponse> {
+    return SessionUsageAggregateResponseSchema.parse(
+      await this.call('aggregateUsage', { query, liveRecords })
+    )
   }
 
   async loadLatestUsageSnapshots(
@@ -438,17 +520,19 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     await this.call('purge', { id })
   }
 
-  async list(filter: { workspace?: string; includeDeleted?: boolean; all?: boolean } = {}) {
+  async list(filter: MemoryListFilter = {}) {
     return MemoryRecord.array().parse(await this.call('list', filter))
   }
 
-  async retrieve(input: { query: string; workspace?: string; limit: number }) {
+  async retrieve(input: MemoryRetrieveRequest) {
     return MemoryRecord.array().parse(await this.call('retrieve', input))
   }
 
   async diagnostics() {
     const diagnostics = MemoryDiagnostics.parse(await this.call('diagnostics', {}))
-    return { ...diagnostics, lastInjectedIds: [...this.lastInjectedIds] }
+    return diagnostics.lastInjectedIds.length > 0 || this.lastInjectedIds.length === 0
+      ? diagnostics
+      : { ...diagnostics, lastInjectedIds: [...this.lastInjectedIds] }
   }
 
   setLastInjected(ids: string[]): void {
@@ -589,33 +673,6 @@ export class ManagerRemoteAttachmentStore implements AttachmentStore {
       value: value ?? {}
     })
   }
-}
-
-async function callManagerStore(
-  manager: ServiceManagerConnection,
-  store: 'thread' | 'session' | 'artifact' | 'memory' | 'graph' | 'attachment',
-  operation: string,
-  value?: unknown
-): Promise<unknown> {
-  const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
-    method: 'POST',
-    body: value ?? {},
-    timeoutMs: resolveManagerDataRequestTimeoutMs(store, operation)
-  })
-  return ResultSchema.parse(response).result
-}
-
-export function resolveManagerDataRequestTimeoutMs(
-  store: 'thread' | 'session' | 'artifact' | 'memory' | 'graph' | 'attachment',
-  operation: string
-): number {
-  if (
-    store === 'session' &&
-    (operation === 'loadItemPage' || operation === 'highestSeq')
-  ) {
-    return MANAGER_TIMELINE_DATA_REQUEST_TIMEOUT_MS
-  }
-  return MANAGER_DATA_REQUEST_TIMEOUT_MS
 }
 
 function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {

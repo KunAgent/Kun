@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { requestUsage } from './usage-request-cache'
 import { parseUsageResponse } from './usage-response'
 
 const TURN_USAGE_RETRY_DELAYS_MS = [250, 750] as const
@@ -58,16 +59,18 @@ export type TurnUsageState = {
 }
 
 export async function loadTurnUsage(
-  threadId: string
+  threadId: string,
+  generation?: string | number
 ): Promise<ReadonlyMap<string, TurnUsageSummary>> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return new Map()
   const params = new URLSearchParams({
     group_by: 'turn',
     thread_id: threadId
   })
-  const response = await window.kunGui.runtimeRequest(
+  const response = await requestUsage(
     `/v1/usage?${params.toString()}`,
-    'GET'
+    'turn usage',
+    generation
   )
   if (!response.ok) {
     throw new Error(`Turn usage request failed (HTTP ${response.status}).`)
@@ -185,7 +188,7 @@ export function useTurnUsageState(
       : { ...current, loading: true })
 
     const load = (attempt: number): void => {
-      void loadTurnUsage(threadId).then((byTurnId) => {
+      void loadTurnUsage(threadId, String(refreshKey)).then((byTurnId) => {
         if (cancelled) return
         setState({ byTurnId, loading: false, loaded: true, stale: false })
       }).catch(() => {

@@ -34,7 +34,7 @@ export type PowerSaveBlockerLike = {
 }
 
 export type PowerSaveControllerLike = {
-  acquire: () => void
+  acquire: () => boolean
   release: () => void
   isActive: () => boolean
   reset: () => void

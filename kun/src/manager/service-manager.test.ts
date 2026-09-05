@@ -11,29 +11,15 @@ import {
   type ServiceManagerConnection
 } from './manager-client.js'
 import { ManagerRemoteGraphRunStore } from './remote-data-stores.js'
-import { SessionUsageQuerySchema } from './shared-data-store-contracts.js'
 import type { ManagerSharedDataStore } from './shared-data-store.js'
 import {
   buildServiceManagerRouter,
+  RUNTIME_HEARTBEAT_TTL_MS,
   RuntimeSlotBusyError,
   ServiceManagerState,
+  THREAD_EXECUTION_LEASE_TTL_MS,
   ThreadLeaseBusyError
 } from './service-manager.js'
-
-describe('manager usage query contract', () => {
-  it('accepts complete UTC ranges and rejects partial ranges', () => {
-    expect(SessionUsageQuerySchema.parse({
-      fromInclusive: '2026-08-01T00:00:00.000Z',
-      toExclusive: '2026-08-02T00:00:00.000Z'
-    })).toEqual({
-      fromInclusive: '2026-08-01T00:00:00.000Z',
-      toExclusive: '2026-08-02T00:00:00.000Z'
-    })
-    expect(() => SessionUsageQuerySchema.parse({
-      fromInclusive: '2026-08-01T00:00:00.000Z'
-    })).toThrow('usage range requires both boundaries')
-  })
-})
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -78,7 +64,7 @@ describe('service manager control plane', () => {
     expect(JSON.parse(text)).toMatchObject({
       status: 'ok',
       service: 'kun-service-manager',
-      protocolVersion: 3,
+      protocolVersion: 5,
       instanceId: 'manager-a',
       buildId: 'b'.repeat(64),
       capabilities: expect.arrayContaining(['item-page-v1'])
@@ -120,7 +106,7 @@ describe('service manager control plane', () => {
     }
     const restored = ServiceManagerState.restore(v1)
     const migrated = restored.durableSnapshot()
-    expect(migrated.version).toBe(2)
+    expect(migrated.version).toBe(5)
     const next = restored.acquireResource({
       resource: 'data:legacy',
       ownerFlavor: 'development',
@@ -207,7 +193,7 @@ describe('service manager control plane', () => {
     const manager: ServiceManagerConnection = {
       discovery: {
         version: 1,
-        protocolVersion: 3,
+        protocolVersion: 5,
         instanceId: 'manager-a',
         pid: process.pid,
         startedAt: '2026-08-01T00:00:00.000Z',
@@ -257,7 +243,7 @@ describe('service manager control plane', () => {
     const manager: ServiceManagerConnection = {
       discovery: {
         version: 1,
-        protocolVersion: 3,
+        protocolVersion: 5,
         instanceId: 'manager-a',
         pid: process.pid,
         startedAt: '2026-08-01T00:00:00.000Z',
@@ -351,6 +337,129 @@ describe('service manager control plane', () => {
     expect(heartbeat.status).toBe(409)
   })
 
+  it('persists a new fencing token before the acquire response is returned', async () => {
+    const state = new ServiceManagerState()
+    state.register(registration('production'))
+    const flushState = vi.fn(async () => undefined)
+    const router = buildServiceManagerRouter({
+      managerToken: 'manager-secret',
+      instanceId: 'manager-a',
+      startedAt: '2026-08-01T00:00:00.000Z',
+      state,
+      flushState
+    })
+    const response = await dispatchRequest(router, request(
+      '/v1/leases/threads/thread-durable/acquire',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          turnId: 'turn-durable',
+          ownerFlavor: 'production',
+          ownerInstanceId: 'production-runtime'
+        })
+      }
+    ))
+
+    expect(response.status).toBe(200)
+    expect(flushState).toHaveBeenCalledOnce()
+  })
+
+  it('persists an accepted host power report before acknowledging it', async () => {
+    const state = new ServiceManagerState()
+    const flushState = vi.fn(async () => undefined)
+    const router = buildServiceManagerRouter({
+      managerToken: 'manager-secret',
+      instanceId: 'manager-a',
+      startedAt: '2026-08-01T00:00:00.000Z',
+      state,
+      flushState
+    })
+    const response = await dispatchRequest(router, request('/v1/manager/host-power', {
+      method: 'POST',
+      body: JSON.stringify({
+        phase: 'suspend',
+        sourceId: 'electron-main',
+        sequence: 1,
+        observedAt: '2026-08-01T00:00:01.000Z'
+      })
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ accepted: true })
+    expect(flushState).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a valid fence when it targets a different mutation thread', async () => {
+    const state = new ServiceManagerState()
+    const now = new Date()
+    state.register(registration('production'), now)
+    const fence = state.acquireLease({
+      threadId: 'thread-parent',
+      turnId: 'turn-parent',
+      ownerFlavor: 'production',
+      ownerInstanceId: 'production-runtime'
+    }, now)
+    const executeSession = vi.fn(async () => undefined)
+    const router = buildServiceManagerRouter({
+      managerToken: 'manager-secret',
+      instanceId: 'manager-a',
+      startedAt: now.toISOString(),
+      state,
+      sharedData: { executeSession } as unknown as ManagerSharedDataStore
+    })
+    const response = await dispatchRequest(router, request('/v1/data/session/appendEvent', {
+      method: 'POST',
+      body: JSON.stringify({
+        value: {
+          threadId: 'thread-side',
+          event: { threadId: 'thread-side', turnId: 'turn-side' }
+        },
+        turnFence: {
+          threadId: fence.threadId,
+          turnId: fence.turnId,
+          ownerFlavor: fence.ownerFlavor,
+          ownerInstanceId: fence.ownerInstanceId,
+          fencingToken: fence.fencingToken
+        }
+      })
+    }))
+
+    expect(response.status).toBe(409)
+    expect(executeSession).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unfenced write while a turn owns the thread', async () => {
+    const state = new ServiceManagerState()
+    const now = new Date()
+    state.register(registration('production'), now)
+    state.acquireLease({
+      threadId: 'thread-owned',
+      turnId: 'turn-owned',
+      ownerFlavor: 'production',
+      ownerInstanceId: 'production-runtime'
+    }, now)
+    const executeSession = vi.fn(async () => undefined)
+    const router = buildServiceManagerRouter({
+      managerToken: 'manager-secret',
+      instanceId: 'manager-a',
+      startedAt: now.toISOString(),
+      state,
+      sharedData: { executeSession } as unknown as ManagerSharedDataStore
+    })
+    const response = await dispatchRequest(router, request('/v1/data/session/appendItem', {
+      method: 'POST',
+      body: JSON.stringify({
+        value: {
+          threadId: 'thread-owned',
+          item: { threadId: 'thread-owned', turnId: 'turn-owned' }
+        }
+      })
+    }))
+
+    expect(response.status).toBe(409)
+    expect(executeSession).not.toHaveBeenCalled()
+  })
+
   it('accepts shutdown only for the current manager instance', async () => {
     const shutdown = vi.fn()
     const router = buildServiceManagerRouter({
@@ -393,7 +502,8 @@ describe('service manager control plane', () => {
       threadId: 'thread-shared',
       turnId: 'turn-production',
       ownerFlavor: 'production',
-      ownerInstanceId: 'production-runtime'
+      ownerInstanceId: 'production-runtime',
+      fencingToken: lease.fencingToken
     })).toBe(true)
     expect(state.acquireLease({
       threadId: 'thread-shared',
@@ -416,6 +526,37 @@ describe('service manager control plane', () => {
     const expired = state.expireStale(new Date('2026-08-01T00:00:21.000Z'))
     expect(expired).toMatchObject([{ threadId: 'thread-orphan', turnId: 'turn-orphan' }])
     expect(state.lease('thread-orphan', new Date('2026-08-01T00:00:21.000Z'))).toBeNull()
+  })
+
+  it('keeps a live owner lease past the former thread-only deadline', () => {
+    const state = new ServiceManagerState()
+    const started = new Date('2026-08-01T00:00:00.000Z')
+    state.register(registration('production'), started)
+    const lease = state.acquireLease({
+      threadId: 'thread-stalled',
+      turnId: 'turn-stalled',
+      ownerFlavor: 'production',
+      ownerInstanceId: 'production-runtime'
+    }, started)
+
+    const recoveredAt = new Date(started.getTime() + 16_000)
+    expect(state.lease('thread-stalled', recoveredAt)).not.toBeNull()
+    expect(state.heartbeat('production', 'production-runtime', recoveredAt)).toBe(true)
+    const renewed = state.renewLease({
+      threadId: 'thread-stalled',
+      turnId: 'turn-stalled',
+      ownerFlavor: 'production',
+      ownerInstanceId: 'production-runtime',
+      fencingToken: lease.fencingToken
+    }, recoveredAt)
+    expect(Date.parse(renewed!.expiresAt) - recoveredAt.getTime())
+      .toBe(THREAD_EXECUTION_LEASE_TTL_MS)
+
+    const ownerStaleAt = new Date(recoveredAt.getTime() + RUNTIME_HEARTBEAT_TTL_MS + 1)
+    expect(Date.parse(renewed!.expiresAt)).toBeGreaterThan(ownerStaleAt.getTime())
+    expect(state.expireStale(ownerStaleAt)).toMatchObject([{
+      threadId: 'thread-stalled', turnId: 'turn-stalled'
+    }])
   })
 
   it('expires only the exact Runtime owner recorded by verified forced handoff', () => {

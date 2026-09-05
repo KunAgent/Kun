@@ -1,6 +1,6 @@
 {
   "name": "kun",
-  "version": "0.1.0",
+  "version": "0.3.8",
   "description": "Kun local HTTP/SSE agent runtime",
   "engines": {
     "node": ">=22.19.0"
@@ -68,9 +68,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test ./scripts/runtime-build-manifest.test.mjs && node ./scripts/run-tests.mjs",
     "test:memory-growth": "node ./scripts/run-memory-growth-regression.mjs",
+    "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts --reporter=verbose",
     "test:watch": "vitest",
     "transcript:diff": "node ./scripts/transcript-diff.mjs",
     "benchmark:replay": "npm run build && node ./dist/cli/replay-entry.js",
+    "benchmark:item-index-pagination": "npm run build && node ./dist/cli/item-index-pagination-entry.js",
+    "benchmark:manager-lease-renewal": "npm run build && node ./dist/cli/manager-lease-renewal-entry.js",
+    "bench:cold-index": "KUN_BENCH=1 vitest run src/adapters/hybrid/hybrid-thread-store-cold-index.bench.ts --reporter=verbose",
+    "bench:event-append": "KUN_BENCH=1 vitest run src/adapters/file/file-session-store-append.bench.ts --reporter=verbose",
     "serve": "node ./dist/cli/serve-entry.js",
     "dev": "tsc -p tsconfig.build.json --watch"
   },
@@ -81,11 +86,10 @@
     "@earendil-works/pi-tui": "0.81.1",
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
-    "@google/gemini-cli": "0.53.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
     "@modelcontextprotocol/client": "^2.0.0",
-    "@xmldom/xmldom": "^0.9.10",
+    "@xmldom/xmldom": "^0.9.12",
     "ajv": "^8.20.0",
     "better-sqlite3": "^12.10.0",
     "create-kun-extension": "file:../packages/create-kun-extension",
@@ -115,9 +119,10 @@
   },
   "overrides": {
     "@hono/node-server": "2.0.11",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
     "hono": "4.13.0",
     "ip-address": "10.4.0",
+    "qs": "6.16.0",
     "@connectrpc/connect-node": {
       "undici": "6.28.0"
     }

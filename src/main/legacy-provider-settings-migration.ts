@@ -132,11 +132,29 @@ export class LegacyProviderSettingsMigrationCoordinator {
   ): Promise<string[]> {
     const dataDir = resolveSettingsDataDir(settings)
     assertManagedKunDataDirIsCurrent(dataDir)
-    const { service } = await this.runtime(dataDir)
+    const { service, modelConnections } = await this.runtime(dataDir)
+    let snapshot = await modelConnections.snapshot()
     const bindings = new Set((await service.listBindings()).map((entry) => entry.sourceId))
-    const repaired: string[] = []
+    const repaired = new Set<string>()
+
+    // A problem version could replace the shared Keychain key while leaving
+    // the pre-migration settings backup intact. When the Registry still owns
+    // an unreadable reference, the source was not explicitly disconnected:
+    // re-encrypt that backed-up value with the current key before settings are
+    // hydrated. This makes the fixed update self-healing for static API keys
+    // as well as refreshable OAuth credentials.
+    for (const source of collectBackedUpProviderCredentialSources(settings, backupSettings)) {
+      const profile = snapshot.providers.find((entry) => entry.id === source.providerId)
+      if (profile?.credentialStatus !== 'unreadable') continue
+      snapshot = await modelConnections.replaceCredential(source.providerId, {
+        expectedRevision: snapshot.revision,
+        credential: source.apiKey
+      })
+      repaired.add(source.sourceId)
+    }
 
     for (const source of collectRefreshableOAuthRecoverySources(settings, backupSettings)) {
+      if (repaired.has(source.sourceId)) continue
       if (!bindings.has(source.sourceId)) continue
       const current = await service.resolveApiKey(source.sourceId, {
         includeUnavailable: true
@@ -148,10 +166,10 @@ export class LegacyProviderSettingsMigrationCoordinator {
       const migrations = await service.migrate([source], { replaceCommitted: true })
       if (!migrations.some((entry) => entry.sourceId === source.sourceId)) continue
       await service.markSettingsCommitted([source.sourceId])
-      repaired.push(source.sourceId)
+      repaired.add(source.sourceId)
     }
 
-    return repaired.sort()
+    return [...repaired].sort()
   }
 
   private runtime(dataDir: string): Promise<MigrationRuntime> {
@@ -302,13 +320,21 @@ function collectRefreshableOAuthRecoverySources(
   settings: AppSettingsV1,
   backupSettings: AppSettingsV1
 ) {
+  return collectBackedUpProviderCredentialSources(settings, backupSettings)
+    .filter((source) => isRefreshableOAuthCredential(source.apiKey))
+}
+
+function collectBackedUpProviderCredentialSources(
+  settings: AppSettingsV1,
+  backupSettings: AppSettingsV1
+) {
   const currentProviders = new Map(
     getModelProviderSettings(settings).providers.map((provider) => [provider.id, provider])
   )
   const runtime = getKunRuntimeSettings(settings)
   return getModelProviderSettings(backupSettings).providers.flatMap((backupProvider) => {
     const current = currentProviders.get(backupProvider.id)
-    if (!current || !isRefreshableOAuthCredential(backupProvider.apiKey)) return []
+    if (!current || !backupProvider.apiKey.trim()) return []
     return [{
       sourceId: legacyProviderCredentialSourceId(current.id),
       providerId: current.id,

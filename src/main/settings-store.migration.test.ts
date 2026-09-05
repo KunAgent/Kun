@@ -42,6 +42,7 @@ describe('JsonSettingsStore', () => {
       apiKey: 'sk-kimi',
       baseUrl: 'https://api.kimi.com/coding/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: ['kimi-for-coding'],
       modelProfiles: {}
     }

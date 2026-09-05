@@ -371,9 +371,8 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
 
     expect(html).toContain('1m 14s')
     expect(html).toContain('Thinking… · Read 1 file')
-    expect(html.indexOf('1m 14s')).toBeLessThan(
-      html.indexOf('Thinking… · Read 1 file')
-    )
+    expect(html).not.toContain('data-work-meta-row="true"')
+    expect(html).toContain('data-turn-live-status-owner="generic"')
     expect(html).toContain('ds-shiny-text')
     expect(html).toContain('aria-expanded="false"')
     expect(html.match(/ds-work-logo-phase-trail/g) ?? []).toHaveLength(1)

@@ -1,0 +1,24 @@
+{
+  "id": "content-research-writer",
+  "name": "Research Writer",
+  "version": "1.0.0",
+  "description": "Research, outline, draft, cite, and revise evidence-based articles, briefs, and reports.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/content-research-writer"
+    ],
+    "promptPatterns": [
+      "citations",
+      "content-research-writer",
+      "research article",
+      "Research Writer",
+      "内容研究",
+      "写报告"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

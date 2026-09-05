@@ -11,6 +11,7 @@ import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { BrowserUseMode } from './browser-use'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
+import type { KunGitHubMcpSettingsPatchV1 } from './github-mcp-authorization'
 
 import {
   KunBrowserUseSettingsV1,
@@ -283,10 +284,11 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab'
+    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
+  githubMcp?: KunGitHubMcpSettingsPatchV1
   projectConfig?: Partial<KunProjectConfigSettingsV1>
   tokenEconomy?: KunTokenEconomySettingsPatchV1
   toolOutputLimits?: Partial<KunToolOutputLimitsSettingsV1>
@@ -382,6 +384,8 @@ export type WindowCloseAction = typeof WINDOW_CLOSE_ACTIONS[number]
 export type AppBehaviorConfigV1 = {
   openAtLogin: boolean
   startMinimized: boolean
+  /** Keep the computer from sleeping while the Kun desktop host is running. */
+  keepAwake?: boolean
   /** Linux only. Use the desktop environment/window manager title bar after restart. */
   useSystemTitleBar?: boolean
   closeAction?: WindowCloseAction

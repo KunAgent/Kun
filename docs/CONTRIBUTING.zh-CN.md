@@ -86,6 +86,18 @@ npm run test
 npm run dev
 ```
 
+### 必需 CI 检查
+
+`develop` 分支由 branch ruleset 保护。所有必需检查通过之前，PR 不能合并：
+
+- `Quality gates`（类型检查、lint、单元测试；四个打包 job 依赖它）
+- `Build Linux package`（`package`）
+- `Build Linux package and TUI (ARM64)`（`package-linux-arm64`）
+- `Build ad-hoc macOS packages (PR)`（`package-macos`）
+- `Build Windows NSIS installer (PR)`（`package-windows`）
+
+同时需要至少一个批准的 review。不要为了合并而关闭 ruleset 强制执行，或从必需检查列表中移除检查项。
+
 ## 代码要求
 
 - 改动尽量聚焦、范围清晰

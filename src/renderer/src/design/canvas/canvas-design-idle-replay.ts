@@ -18,7 +18,10 @@ import { useCanvasSelectionStore } from './canvas-selection-store'
 import { useCanvasShapeStore } from './canvas-shape-store'
 import type { ExecuteOpsOptions, OpError } from './shape-ops'
 import { isDesignMotionRendererToolName } from './motion-ops'
-import { replayDurableCodeCanvasToolBlocks } from './canvas-code-turn-replay'
+import {
+  replayDurableCodeCanvasToolBlocks,
+  replayDurablePptCanvasToolBlocks
+} from './canvas-code-turn-replay'
 import {
   canvasDurableTurnOutcome,
   canvasTurnAllowsContinuation
@@ -154,6 +157,12 @@ export function replayIdleCodeCanvas(options: {
   const { state, threadId } = options
   if (!threadId || !options.ready || state.activeThreadId !== threadId) return
   if (state.currentTurnId || state.busy || threadHasPendingRuntimeWork(state.blocks)) return
+  replayDurablePptCanvasToolBlocks({
+    threadId,
+    blocks: state.blocks,
+    onToolBlock: (block, blocks, replayKey, turnId) =>
+      options.applyToolBlock(block, { blocks, replayKey, turnId })
+  })
   replayDurableCodeCanvasToolBlocks({
     threadId,
     blocks: state.blocks,

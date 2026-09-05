@@ -1,6 +1,5 @@
 import {
   getModelProviderSettings,
-  resolveModelProviderProxyUrl,
   type AppSettingsV1,
   type ModelProviderProfileV1
 } from '../shared/app-settings'

@@ -44,7 +44,9 @@ export type GuiPlanState = {
   setContent: (content: string) => void
   setGeneratedContent: (planId: string, content: string) => void
   setSaveStatus: (status: GuiPlanSaveStatus, error?: string | null) => void
+  setSaveStatusForPlan: (planId: string, threadId: string | null, status: GuiPlanSaveStatus, error?: string | null) => void
   markSaved: (content: string) => void
+  markSavedForPlan: (planId: string, threadId: string | null, content: string) => void
   setOperationStatus: (status: GuiPlanOperationStatus, error?: string | null) => void
   setPreviewMode: (mode: GuiPlanPreviewMode) => void
   updateActivePlan: (planId: string, patch: Partial<Pick<GuiPlanArtifact, 'threadId' | 'absolutePath'>>) => void
@@ -62,6 +64,25 @@ function threadKey(workspaceRoot: string, threadId: string | null | undefined): 
   const workspace = normalizeWorkspaceRoot(workspaceRoot)
   const thread = threadId?.trim()
   return workspace && thread ? `${workspace}::${thread}` : ''
+}
+
+function planRegistryKey(plan: Pick<GuiPlanArtifact, 'workspaceRoot' | 'threadId' | 'relativePath'>): string {
+  const workspace = normalizeWorkspaceRoot(plan.workspaceRoot)
+  const thread = plan.threadId?.trim() || '__workspace__'
+  const path = plan.relativePath.replaceAll('\\', '/').replace(/^\.\//, '')
+  return `${workspace}::${thread}::${path}`
+}
+
+function planMatchesIdentity(
+  plan: GuiPlanArtifact | null,
+  planId: string,
+  threadId: string | null
+): boolean {
+  return Boolean(
+    plan &&
+    plan.id === planId &&
+    (plan.threadId?.trim() || null) === (threadId?.trim() || null)
+  )
 }
 
 function emptyRegistry(): PersistedPlanRegistry {
@@ -104,10 +125,15 @@ function normalizePlanArtifact(raw: unknown, fallbackId = ''): GuiPlanArtifact |
 function normalizePlanRegistry(raw: unknown): PersistedPlanRegistry {
   if (!isRecord(raw)) return emptyRegistry()
   const plans: PersistedPlanRegistry['plans'] = {}
+  const migratedKeys = new Map<string, string>()
   if (isRecord(raw.plans)) {
-    for (const [planId, value] of Object.entries(raw.plans)) {
-      const plan = normalizePlanArtifact(value, planId)
-      if (plan) plans[plan.id] = plan
+    for (const [storedKey, value] of Object.entries(raw.plans)) {
+      const plan = normalizePlanArtifact(value, storedKey)
+      if (plan) {
+        const key = planRegistryKey(plan)
+        plans[key] = plan
+        migratedKeys.set(storedKey, key)
+      }
     }
   }
 
@@ -115,10 +141,10 @@ function normalizePlanRegistry(raw: unknown): PersistedPlanRegistry {
   if (isRecord(raw.activeByWorkspace)) {
     for (const [workspaceRoot, value] of Object.entries(raw.activeByWorkspace)) {
       const workspace = normalizeWorkspaceRoot(workspaceRoot)
-      const planId = normalizeText(value)
-      const plan = plans[planId]
+      const storedKey = migratedKeys.get(normalizeText(value)) ?? normalizeText(value)
+      const plan = plans[storedKey]
       if (workspace && plan && normalizeWorkspaceRoot(plan.workspaceRoot) === workspace) {
-        activeByWorkspace[workspace] = plan.id
+        activeByWorkspace[workspace] = storedKey
       }
     }
   }
@@ -127,8 +153,8 @@ function normalizePlanRegistry(raw: unknown): PersistedPlanRegistry {
   if (isRecord(raw.activeByThread)) {
     for (const [key, value] of Object.entries(raw.activeByThread)) {
       const activeKey = normalizeText(key)
-      const planId = normalizeText(value)
-      if (activeKey && plans[planId]) activeByThread[activeKey] = plans[planId].id
+      const storedKey = migratedKeys.get(normalizeText(value)) ?? normalizeText(value)
+      if (activeKey && plans[storedKey]) activeByThread[activeKey] = storedKey
     }
   }
 
@@ -204,21 +230,27 @@ export function rememberGuiPlan(plan: GuiPlanArtifact): void {
   const registry = readRegistry()
   const workspace = normalizeWorkspaceRoot(normalizedPlan.workspaceRoot)
   const key = threadKey(workspace, normalizedPlan.threadId)
-  registry.plans[normalizedPlan.id] = normalizedPlan
-  if (workspace) registry.activeByWorkspace[workspace] = normalizedPlan.id
-  if (key) registry.activeByThread[key] = normalizedPlan.id
+  const storedKey = planRegistryKey(normalizedPlan)
+  registry.plans[storedKey] = normalizedPlan
+  if (workspace) registry.activeByWorkspace[workspace] = storedKey
+  if (key) registry.activeByThread[key] = storedKey
   writeRegistry(registry)
 }
 
 export function forgetGuiPlan(planOrId: GuiPlanArtifact | string): void {
   const registry = readRegistry()
   const planId = typeof planOrId === 'string' ? planOrId : planOrId.id
-  delete registry.plans[planId]
+  const storedKeys = typeof planOrId === 'string'
+    ? Object.entries(registry.plans)
+        .filter(([, plan]) => plan.id === planId)
+        .map(([key]) => key)
+    : [planRegistryKey(planOrId)]
+  for (const key of storedKeys) delete registry.plans[key]
   for (const [workspace, activePlanId] of Object.entries(registry.activeByWorkspace)) {
-    if (activePlanId === planId) delete registry.activeByWorkspace[workspace]
+    if (storedKeys.includes(activePlanId)) delete registry.activeByWorkspace[workspace]
   }
   for (const [key, activePlanId] of Object.entries(registry.activeByThread)) {
-    if (activePlanId === planId) delete registry.activeByThread[key]
+    if (storedKeys.includes(activePlanId)) delete registry.activeByThread[key]
   }
   writeRegistry(registry)
 }
@@ -282,12 +314,31 @@ export const useGuiPlanStore = create<GuiPlanState>((set) => ({
 
   setSaveStatus: (status, error = null) => set({ saveStatus: status, error }),
 
+  setSaveStatusForPlan: (planId, threadId, status, error = null) =>
+    set((state) => planMatchesIdentity(state.activePlan, planId, threadId)
+      ? { saveStatus: status, error }
+      : {}),
+
   markSaved: (content) =>
     set((state) => {
       const activePlan = state.activePlan
         ? { ...state.activePlan, updatedAt: new Date().toISOString() }
         : state.activePlan
       if (activePlan) rememberGuiPlan(activePlan)
+      return {
+        content,
+        lastSavedContent: content,
+        saveStatus: 'saved',
+        error: state.operationStatus === 'error' ? state.error : null,
+        activePlan
+      }
+    }),
+
+  markSavedForPlan: (planId, threadId, content) =>
+    set((state) => {
+      if (!planMatchesIdentity(state.activePlan, planId, threadId)) return {}
+      const activePlan = { ...state.activePlan!, updatedAt: new Date().toISOString() }
+      rememberGuiPlan(activePlan)
       return {
         content,
         lastSavedContent: content,

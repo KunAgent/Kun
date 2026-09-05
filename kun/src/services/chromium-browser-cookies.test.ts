@@ -50,8 +50,9 @@ describe('chromium-browser-cookies', () => {
       }]
     }).map((candidate) => candidate.databasePath)
 
-    expect(paths).toEqual([join(defaultProfile, 'Cookies')])
-    expect(paths.some((path) => path.includes(`${join('Network', 'Cookies')}`))).toBe(false)
+    const normalizedPaths = paths.map((path) => path.replaceAll('\\', '/'))
+    expect(normalizedPaths).toEqual([join(defaultProfile, 'Cookies').replaceAll('\\', '/')])
+    expect(normalizedPaths.some((path) => path.includes('/Network/Cookies'))).toBe(false)
   })
 
   it('decrypts v10 cookies with DB version >= 24 domain hash prefix', () => {

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
-import { chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -29,8 +29,8 @@ import {
   unregisterRuntimeWithManager,
   type ServiceManagerConnection
 } from '../manager/manager-client.js'
+import { maintainLiveProcessLog } from './live-process-log.js'
 
-const MAX_LOG_BYTES = 5 * 1024 * 1024
 import { sameCanonicalPath } from '../manager/canonical-path.js'
 import {
   resolveCliRuntimeFlavor,
@@ -54,6 +54,7 @@ export function discoveryFromManagerRegistration(
     port: registration.port,
     baseUrl: registration.baseUrl,
     runtimeToken: registration.runtimeToken,
+    ...(registration.clientOwnerKind ? { clientOwnerKind: registration.clientOwnerKind } : {}),
     insecure: info?.insecure ?? false,
     ...(info ? { serviceVersion: info.serviceVersion } : {}),
     flavor: registration.flavor,
@@ -96,12 +97,7 @@ export function processAlive(pid: number): boolean {
 }
 
 export async function rotateLog(logPath: string): Promise<void> {
-  try {
-    if ((await stat(logPath)).size < MAX_LOG_BYTES) return
-    await rename(logPath, `${logPath}.1`).catch(() => undefined)
-  } catch (error) {
-    if (String((error as { code?: unknown })?.code ?? '') !== 'ENOENT') throw error
-  }
+  maintainLiveProcessLog(logPath)
 }
 
 export function delay(ms: number): Promise<void> {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
-import type { MemoryRecord } from '../contracts/memory.js'
+import { MemoryRecord } from '../contracts/memory.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import {
@@ -76,11 +76,11 @@ describe('TurnContextResolver', () => {
     })
     const retrieve = vi.fn(async (): Promise<MemoryRecord[]> => {
       resolutionOrder.push('memories')
-      return [{
+      return [MemoryRecord.parse({
       id: 'memory_1', content: 'Prefer tests', scope: 'workspace',
       tags: [], confidence: 1,
       createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z'
-      }]
+      })]
     })
     const setLastInjected = vi.fn()
     const resolver = new TurnContextResolver({
@@ -309,7 +309,7 @@ describe('TurnContextResolver', () => {
     await expect(resolver.resolve(input)).resolves.toMatchObject({ memories: [] })
 
     currentMemoryStore = {
-      retrieve: vi.fn(async (): Promise<MemoryRecord[]> => [{
+      retrieve: vi.fn(async (): Promise<MemoryRecord[]> => [MemoryRecord.parse({
         id: 'memory_live',
         content: 'live memory',
         scope: 'workspace',
@@ -317,7 +317,7 @@ describe('TurnContextResolver', () => {
         updatedAt: '2026-01-01T00:00:00.000Z',
         tags: [],
         confidence: 1
-      }]),
+      })]),
       setLastInjected: vi.fn()
     }
     await expect(resolver.resolve(input)).resolves.toMatchObject({

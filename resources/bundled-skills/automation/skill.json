@@ -1,0 +1,24 @@
+{
+  "id": "automation",
+  "name": "Kun Automation",
+  "version": "1.0.0",
+  "description": "Create, inspect, update, delete, and run Kun scheduled tasks or saved workflows.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/automation"
+    ],
+    "promptPatterns": [
+      "automation",
+      "Kun Automation",
+      "schedule",
+      "workflow",
+      "定时任务",
+      "自动化"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

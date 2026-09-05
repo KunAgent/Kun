@@ -36,7 +36,7 @@ describe('FloatingComposerTaskProfile', () => {
     })
   })
 
-  it('keeps Code and Design accessible as one responsive task selector', () => {
+  it('keeps Design configuration separate from the task surface picker', () => {
     const html = renderToStaticMarkup(createElement(FloatingComposerTaskProfile, {
       surface: 'design',
       locked: false,
@@ -47,7 +47,7 @@ describe('FloatingComposerTaskProfile', () => {
       onProfileChange: vi.fn()
     }))
 
-    expect(html).toContain('role="radiogroup"')
+    expect(html).not.toContain('role="radiogroup"')
     expect(html).toContain('data-task-surface="design"')
     expect(html).toContain('ds-design-profile-summary')
     expect(html).toContain('designConfiguration')
@@ -60,7 +60,6 @@ describe('FloatingComposerTaskProfile', () => {
       surface: 'design',
       locked: true,
       profileLocked: true,
-      showSurfaceSelector: false,
       profile: { ...htmlProfile, outputMedium: 'image' },
       imageGenerationEnabled: false,
       imageGenerationAvailable: false,
@@ -109,8 +108,6 @@ describe('FloatingComposerTaskProfile', () => {
     const html = renderToStaticMarkup(createElement(FloatingComposerTaskProfile, {
       surface: 'design',
       locked: false,
-      showSurfaceSelector: false,
-      variant: 'summary',
       profile: { ...htmlProfile, outputMedium: 'image' },
       imageGenerationAvailable: false,
       onProfileChange: vi.fn()
@@ -125,8 +122,6 @@ describe('FloatingComposerTaskProfile', () => {
     const html = renderToStaticMarkup(createElement(FloatingComposerTaskProfile, {
       surface: 'design',
       locked: false,
-      showSurfaceSelector: false,
-      variant: 'summary',
       profile: { ...htmlProfile, outputMedium: 'image' },
       imageGenerationEnabled: false,
       imageGenerationAvailable: false,
@@ -157,7 +152,6 @@ describe('FloatingComposerTaskProfile', () => {
     const html = renderToStaticMarkup(createElement(FloatingComposerTaskProfile, {
       surface: 'design',
       locked: false,
-      showSurfaceSelector: false,
       profile: htmlProfile,
       imageGenerationEnabled: true,
       imageGenerationAvailable: true,
@@ -174,8 +168,6 @@ describe('FloatingComposerTaskProfile', () => {
     const html = renderToStaticMarkup(createElement(FloatingComposerTaskProfile, {
       surface: 'design',
       locked: false,
-      showSurfaceSelector: false,
-      variant: 'summary',
       profile: { outputMedium: 'image', target: 'web', preset: 'ios' },
       imageGenerationEnabled: true,
       imageGenerationAvailable: true,

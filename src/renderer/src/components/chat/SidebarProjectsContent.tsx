@@ -56,11 +56,16 @@ import type {
   WorkspaceOrderDropTarget
 } from './sidebar-project-drag-actions'
 import {
-  nextSidebarProjectExpansionStage,
-  sidebarProjectVisibleItems,
-  sidebarProjectVisibleThreadCount,
+  initialSidebarProjectExpansionStage,
   type SidebarProjectExpansionStage
 } from './sidebar-project-expansion'
+import {
+  isForceVisibleSidebarThread,
+  reserveLoadMoreStageFor,
+  resetExpansionStageFor,
+  showMoreStageFor,
+  sidebarExpansionWindowFor
+} from './sidebar-expansion-window'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
@@ -239,7 +244,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2 pt-0.5">
+      <div data-kun-drag-scroll className="min-h-0 flex-1 overflow-y-auto px-1 pb-2 pt-0.5">
         {displayGroups.length === 0 ? (
           threadListStatus === 'error' ? (
             <div className="mx-2 mt-2 rounded-lg px-2 py-2">
@@ -303,19 +308,15 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
             return sidebarChildFolders(workspaceFolders, folder.id).some(visibleFolder)
           }
           const rootFolders = sidebarChildFolders(workspaceFolders, null).filter(visibleFolder)
-          const expansionStage = expandedWorkspaces[workspacePath] ?? 0
-          const visibleThreadCount = sidebarProjectVisibleThreadCount(
-            rootThreads.length,
-            expansionStage
-          )
-          const visibleSelection = sidebarProjectVisibleItems(
+          const forceVisibleThread = (thread: NormalizedThread): boolean =>
+            isForceVisibleSidebarThread(thread, activeThreadId, sidebarThreadActivityContext)
+          const expansionWindow = sidebarExpansionWindowFor(
             rootThreads,
-            visibleThreadCount,
-            (thread) => thread.id === activeThreadId
-              || sidebarThreadActivity(thread, sidebarThreadActivityContext) === 'running'
+            expandedWorkspaces,
+            workspacePath,
+            forceVisibleThread
           )
-          const visibleThreads = visibleSelection.items
-          const hiddenThreadCount = visibleSelection.hiddenCount
+          const { stage: expansionStage, visibleThreads, hiddenCount: hiddenThreadCount, nextBatchCount } = expansionWindow
           const workspaceCursor = threadListCursorByWorkspace[workspaceRootIdentityKey(workspacePath)]
           const workspacePageLoading = workspaceCursor?.status === 'loading'
           const canLoadWorkspacePage = workspaceCursor?.status === 'unknown'
@@ -323,13 +324,9 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
           const showExpansionControl = hiddenThreadCount > 0
             || canLoadWorkspacePage
             || workspacePageLoading
-            || expansionStage > 0
+            || expansionStage > initialSidebarProjectExpansionStage()
           const collapseExpansion = (): void => {
-            setExpandedWorkspaces((current) =>
-              current[workspacePath]
-                ? { ...current, [workspacePath]: 0 }
-                : current
-            )
+            setExpandedWorkspaces((current) => resetExpansionStageFor(current, workspacePath))
           }
           return (
             <div
@@ -559,20 +556,26 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                   ) : visibleThreads.map((thread) => renderThreadRow(thread, workspacePath, null))}
                   {showExpansionControl ? (
                     <SidebarProjectExpansionControl
-                      hiddenThreadCount={hiddenThreadCount}
+                      nextThreadCount={nextBatchCount}
                       canLoadMore={canLoadWorkspacePage}
                       loading={workspacePageLoading}
-                      canCollapse={expansionStage > 0}
+                      canCollapse={expansionStage > initialSidebarProjectExpansionStage()}
                       onShowMore={() => {
                         setExpandedWorkspaces((current) => ({
                           ...current,
-                          [workspacePath]: nextSidebarProjectExpansionStage(
-                            rootThreads.length,
-                            current[workspacePath] ?? 0
+                          [workspacePath]: showMoreStageFor(
+                            current,
+                            workspacePath,
+                            rootThreads.length
                           )
                         }))
                       }}
-                      onLoadMore={() => onLoadMoreThreads(workspacePath)}
+                      onLoadMore={() => {
+                        setExpandedWorkspaces((current) =>
+                          reserveLoadMoreStageFor(current, workspacePath, rootThreads.length)
+                        )
+                        onLoadMoreThreads(workspacePath)
+                      }}
                       onCollapse={collapseExpansion}
                       t={t}
                     />

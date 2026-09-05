@@ -2,14 +2,20 @@ import { describe, expect, it } from 'vitest'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { LocalToolHost } from './local-tool-host.js'
 import { CapabilityRegistry } from './capability-registry.js'
+import { planModeToolBlock } from './plan-mode-tool-policy.js'
 
-function tool(name: string, sideEffect?: 'read-only' | 'unknown') {
+type ToolOptions = {
+  sideEffect?: 'read-only' | 'unknown'
+  toolKind?: 'tool_call' | 'command_execution' | 'file_change'
+}
+
+function tool(name: string, options: ToolOptions = {}) {
   return LocalToolHost.defineTool({
     name,
     description: name,
     inputSchema: { type: 'object', properties: {} },
     policy: 'auto',
-    ...(sideEffect ? { sideEffect } : {}),
+    ...options,
     execute: async () => ({ output: { ok: true } })
   })
 }
@@ -43,7 +49,7 @@ describe('CapabilityRegistry Graph orchestration policy', () => {
       enabled: true,
       available: true,
       tools: [
-        tool('read', 'read-only'),
+        tool('read', { sideEffect: 'read-only' }),
         tool('task_graph'),
         tool('design_component'),
         tool('graph_create_run'),
@@ -55,14 +61,14 @@ describe('CapabilityRegistry Graph orchestration policy', () => {
       kind: 'delegation' as const,
       enabled: true,
       available: true,
-      tools: [tool('delegate_task'), tool('list_subagent_profiles', 'read-only')]
+      tools: [tool('delegate_task'), tool('list_subagent_profiles', { sideEffect: 'read-only' })]
     },
     {
       id: 'fast-context',
       kind: 'delegation' as const,
       enabled: true,
       available: true,
-      tools: [tool('fast_context', 'read-only')]
+      tools: [tool('fast_context', { sideEffect: 'read-only' })]
     }
   ]
 
@@ -117,7 +123,7 @@ describe('CapabilityRegistry Plan mode policy', () => {
       kind: 'image',
       enabled: true,
       available: true,
-      tools: [tool('generate_image')]
+      tools: [tool('generate_image', { toolKind: 'file_change' })]
     }])
     const modes = [
       context([], 'agent', 'direct'),
@@ -133,63 +139,70 @@ describe('CapabilityRegistry Plan mode policy', () => {
     }
   })
 
-  it('allows host-classified read-only tools and blocks unknown external tools', () => {
+  it('allows host-classified read-only MCP commands and blocks MCP writes', () => {
     const registry = new CapabilityRegistry([{
       id: 'mcp:test',
       kind: 'mcp',
       enabled: true,
       available: true,
-      tools: [tool('mcp_test_lookup', 'read-only'), tool('mcp_test_mutate')]
+      tools: [
+        tool('mcp_test_lookup', { sideEffect: 'read-only', toolKind: 'command_execution' }),
+        tool('mcp_test_mutate', { toolKind: 'command_execution' })
+      ]
     }])
     const planContext = context([], 'plan')
 
     expect(registry.listTools(planContext).map((spec) => spec.name)).toEqual(['mcp_test_lookup'])
     expect(registry.listTools(planContext)[0]).toMatchObject({ sideEffect: 'read-only' })
+    expect(registry.resolveTool('mcp_test_lookup', planContext).tool.name).toBe('mcp_test_lookup')
     expect(() => registry.resolveTool('mcp_test_mutate', planContext))
       .toThrow('tool mcp_test_mutate is not advertised by active tool policy')
   })
 
-  it('hides generic file mutation tools while retaining create_plan and user input', () => {
+  it('fails closed when metadata is missing or conflicts with a read-only name', () => {
     const registry = CapabilityRegistry.fromLocalTools([
-      tool('read', 'read-only'),
-      tool('write'),
-      tool('edit'),
-      tool('generate_image'),
-      tool('create_plan'),
-      tool('user_input'),
-      tool('request_user_input')
+      tool('read', { sideEffect: 'unknown' }),
+      tool('missing_metadata'),
+      tool('bash', { toolKind: 'command_execution' }),
+      tool('future_tool', { toolKind: 'tool_call' }),
+      tool('lsp', { sideEffect: 'read-only', toolKind: 'command_execution' })
     ])
     const planContext = context([], 'plan')
 
-    expect(registry.listTools(planContext).map((spec) => spec.name)).toEqual([
-      'read',
-      'generate_image',
-      'create_plan',
-      'user_input'
-    ])
-    expect(registry.resolveTool('request_user_input', planContext).tool.name)
-      .toBe('request_user_input')
-    expect(registry.resolveTool('generate_image', planContext).provider.id).toBe('builtin')
-    for (const name of ['write', 'edit']) {
+    expect(registry.listTools(planContext).map((spec) => spec.name)).toEqual(['lsp'])
+    for (const name of ['read', 'missing_metadata', 'bash', 'future_tool']) {
       expect(() => registry.resolveTool(name, planContext))
         .toThrow(`tool ${name} is not advertised by active tool policy`)
     }
   })
 
-  it('advertises the legacy user-input name only when the canonical name is unavailable', () => {
-    const legacyOnly = CapabilityRegistry.fromLocalTools([tool('request_user_input')])
-    const onlyLegacyAllowed = CapabilityRegistry.fromLocalTools([
-      tool('user_input'),
-      tool('request_user_input')
+  it('retains only explicit exceptions and host-classified interactive tools', () => {
+    const registry = CapabilityRegistry.fromLocalTools([
+      tool('ls', { sideEffect: 'read-only' }),
+      tool('glob', { sideEffect: 'read-only' }),
+      tool('grep', { sideEffect: 'read-only' }),
+      tool('find', { sideEffect: 'read-only' }),
+      tool('create_plan', { toolKind: 'file_change' }),
+      tool('generate_image', { toolKind: 'file_change' }),
+      tool('user_input', { sideEffect: 'read-only' }),
+      tool('request_user_input', { sideEffect: 'read-only' }),
+      tool('write', { toolKind: 'file_change' })
     ])
-    const agentContext = context([], 'agent')
+    const planContext = context([], 'plan')
 
-    expect(legacyOnly.listTools(agentContext).map((spec) => spec.name))
-      .toEqual(['request_user_input'])
-    expect(onlyLegacyAllowed.listTools({
-      ...agentContext,
-      allowedToolNames: ['request_user_input']
-    }).map((spec) => spec.name)).toEqual(['request_user_input'])
+    expect(registry.listTools(planContext).map((spec) => spec.name)).toEqual([
+      'ls',
+      'glob',
+      'grep',
+      'find',
+      'create_plan',
+      'generate_image',
+      'user_input'
+    ])
+    expect(registry.resolveTool('request_user_input', planContext).tool.name)
+      .toBe('request_user_input')
+    expect(() => registry.resolveTool('write', planContext))
+      .toThrow('tool write is not advertised by active tool policy')
   })
 
   it('keeps read-only fast_context visible in plan mode while hiding delegate_task', () => {
@@ -199,14 +212,14 @@ describe('CapabilityRegistry Plan mode policy', () => {
         kind: 'delegation',
         enabled: true,
         available: true,
-        tools: [tool('delegate_task'), tool('list_subagent_profiles', 'read-only')]
+        tools: [tool('delegate_task'), tool('list_subagent_profiles', { sideEffect: 'read-only' })]
       },
       {
         id: 'fast-context',
         kind: 'delegation',
         enabled: true,
         available: true,
-        tools: [tool('fast_context', 'read-only')]
+        tools: [tool('fast_context', { sideEffect: 'read-only' })]
       }
     ])
     const planContext = context([], 'plan')
@@ -217,5 +230,24 @@ describe('CapabilityRegistry Plan mode policy', () => {
     ])
     expect(() => registry.resolveTool('delegate_task', planContext))
       .toThrow('tool delegate_task is not advertised by active tool policy')
+  })
+
+  it('agrees with the runtime Plan mode policy for each advertised classification', async () => {
+    const tools = [
+      tool('read_only', { sideEffect: 'read-only' }),
+      tool('bash', { toolKind: 'command_execution' }),
+      tool('mcp_call', { toolKind: 'command_execution' }),
+      tool('missing_metadata'),
+      tool('create_plan', { toolKind: 'file_change' }),
+      tool('generate_image', { toolKind: 'file_change' })
+    ]
+    const registry = CapabilityRegistry.fromLocalTools(tools)
+    const planContext = context([], 'plan')
+    const advertised = new Set(registry.listTools(planContext).map((spec) => spec.name))
+
+    for (const current of tools) {
+      const runtimeBlock = await planModeToolBlock(current, {}, planContext)
+      expect(advertised.has(current.name)).toBe(runtimeBlock === null)
+    }
   })
 })

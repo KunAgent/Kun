@@ -66,7 +66,12 @@ describe('extension public routes', () => {
       runId: 'run_goal',
       threadId: 'thread_goal',
       ownerExtensionId: 'acme.dashboard',
-      payload: { item: { kind: 'assistant_text', text: 'Visible response' } }
+      payload: {
+        role: 'assistant',
+        messageId: 'message:visible-response',
+        phase: 'delta',
+        content: 'Visible response'
+      }
     }
     const close = vi.fn()
     fixture.agent.subscribe.mockImplementation(async (
@@ -74,7 +79,7 @@ describe('extension public routes', () => {
       input: { runId: string; afterSeq: number },
       listener: (event: ExtensionAgentEvent) => Promise<void> | void
     ) => {
-      if (input.afterSeq === 0) {
+      if (input.afterSeq === -1) {
         await listener(hidden)
         return { lastDeliveredSeq: hidden.seq, closed: false, close }
       }
@@ -119,7 +124,7 @@ describe('extension public routes', () => {
     const router = buildExtensionPublicRouter(fixture.runtime)
     const session = await createSession(router)
     fixture.agent.subscribe.mockResolvedValue({
-      lastDeliveredSeq: 0,
+      lastDeliveredSeq: -1,
       closed: false,
       close: vi.fn()
     })
@@ -146,7 +151,12 @@ describe('extension public routes', () => {
       runId: 'run_page',
       threadId: 'thread_page',
       ownerExtensionId: 'acme.dashboard',
-      payload: { item: { kind: 'assistant_text', text: `Visible response ${seq}` } }
+      payload: {
+        role: 'assistant',
+        messageId: `message:visible-response-${seq}`,
+        phase: 'delta',
+        content: `Visible response ${seq}`
+      }
     }))
     fixture.agent.subscribe.mockImplementation(async (
       _principal: unknown,
@@ -213,7 +223,7 @@ describe('extension public routes', () => {
         input: { runId: string; afterSeq: number },
         listener: (event: ExtensionAgentEvent) => Promise<void> | void
       ) => {
-        expect(input).toEqual({ runId: 'run_goal', afterSeq: 0 })
+        expect(input).toEqual({ runId: 'run_goal', afterSeq: -1 })
         await listener(hidden)
         return { lastDeliveredSeq: hidden.seq, closed: false, close }
       })

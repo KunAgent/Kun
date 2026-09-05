@@ -10,6 +10,7 @@ export async function listMemories(store: MemoryStore | undefined, request: Requ
   return jsonResponse({
     memories: await store.list({
       workspace: url.searchParams.get('workspace') ?? undefined,
+      project: url.searchParams.get('project') ?? undefined,
       includeDeleted: url.searchParams.get('include_deleted') === 'true',
       all: url.searchParams.get('all') === 'true'
     })
@@ -32,8 +33,10 @@ export async function updateMemory(store: MemoryStore | undefined, id: string, r
   const parsed = MemoryUpdateRequest.safeParse(body.value)
   if (!parsed.success) return ERRORS.validation('invalid memory update body', parsed.error.issues)
   try {
-    const workspace = new URL(request.url).searchParams.get('workspace') ?? undefined
-    return jsonResponse({ memory: await store.update(id, parsed.data, { workspace }) })
+    const url = new URL(request.url)
+    const workspace = url.searchParams.get('workspace') ?? undefined
+    const project = url.searchParams.get('project') ?? undefined
+    return jsonResponse({ memory: await store.update(id, parsed.data, { workspace, project }) })
   } catch (error) {
     return ERRORS.notFound(errorMessage(error))
   }
@@ -42,8 +45,10 @@ export async function updateMemory(store: MemoryStore | undefined, id: string, r
 export async function deleteMemory(store: MemoryStore | undefined, id: string, request: Request): Promise<JsonResponse> {
   if (!store) return ERRORS.unavailable('memory store is unavailable')
   try {
-    const workspace = new URL(request.url).searchParams.get('workspace') ?? undefined
-    return jsonResponse({ memory: await store.delete(id, { workspace }) })
+    const url = new URL(request.url)
+    const workspace = url.searchParams.get('workspace') ?? undefined
+    const project = url.searchParams.get('project') ?? undefined
+    return jsonResponse({ memory: await store.delete(id, { workspace, project }) })
   } catch (error) {
     return ERRORS.notFound(errorMessage(error))
   }

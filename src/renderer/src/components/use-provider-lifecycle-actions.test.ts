@@ -14,8 +14,14 @@ const catalog: ModelsDevCatalogResult = {
   stale: false,
   models: [
     {
-      id: 'free-model',
+      id: 'big-pickle',
       inputModalities: ['text'],
+      outputModalities: ['text'],
+      free: true
+    },
+    {
+      id: 'muse-spark-1.2-contributor-free',
+      inputModalities: ['text', 'image'],
       outputModalities: ['text'],
       free: true
     },
@@ -33,7 +39,7 @@ describe('catalogResultForProviderImport', () => {
 
     expect(catalogResultForProviderImport(provider, catalog)).toMatchObject({
       status: 'ok',
-      models: [{ id: 'free-model', free: true }]
+      models: [{ id: 'big-pickle', free: true }]
     })
   })
 
@@ -42,7 +48,11 @@ describe('catalogResultForProviderImport', () => {
 
     expect(catalogResultForProviderImport(provider, catalog)).toMatchObject({
       status: 'ok',
-      models: [{ id: 'free-model' }, { id: 'paid-model' }]
+      models: [
+        { id: 'big-pickle' },
+        { id: 'muse-spark-1.2-contributor-free' },
+        { id: 'paid-model' }
+      ]
     })
   })
 })

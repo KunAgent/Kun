@@ -23,13 +23,19 @@ export type DevPreviewAutoOpenSignal = {
   url: string
 }
 
-function textFromBlock(block: ChatBlock): string {
+function textFromBlock(block: ChatBlock, mode?: DevPreviewExtractionMode): string {
   if (block.kind === 'tool') {
+    // Auto-open must only trust real command output (summary/detail). The meta
+    // JSON embeds the command string itself, which can combine a bare local IP
+    // with dev-server keywords and produce a false dev-server signal.
+    const includeMeta = mode !== 'auto_open'
     let meta = ''
-    try {
-      meta = block.meta ? JSON.stringify(block.meta) : ''
-    } catch {
-      meta = ''
+    if (includeMeta) {
+      try {
+        meta = block.meta ? JSON.stringify(block.meta) : ''
+      } catch {
+        meta = ''
+      }
     }
     return [block.summary, block.detail, meta].filter(Boolean).join('\n')
   }
@@ -39,6 +45,13 @@ function textFromBlock(block: ChatBlock): string {
 
 function trimUrlCandidate(candidate: string): string {
   return candidate.replace(/[`),.;]+$/g, '')
+}
+
+// Auto-open requires an explicit http(s) scheme or an explicit port so a bare
+// `127.0.0.1` / `localhost` mention (common in docs and API discussion) never
+// opens the browser panel against port 80.
+function autoOpenUrlCandidateIsExplicit(raw: string): boolean {
+  return /^https?:\/\//i.test(raw) || /:\d{2,5}(?:\/|$)/.test(raw)
 }
 
 function surroundingUrlContext(text: string, matchIndex: number, matchLength: number): string {
@@ -127,7 +140,7 @@ function collectDetectedDevPreviewUrls(
 
   for (let i = blocks.length - 1; i >= 0; i -= 1) {
     const block = blocks[i]!
-    const text = textFromBlock(block)
+    const text = textFromBlock(block, mode)
     if (!blockCanAdvertiseDevPreview(block, text, mode)) continue
     const outputLooksLikeDevServer = DEV_SERVER_OUTPUT_RE.test(text)
 
@@ -138,6 +151,7 @@ function collectDetectedDevPreviewUrls(
       ) {
         continue
       }
+      if (mode === 'auto_open' && !autoOpenUrlCandidateIsExplicit(match[0])) continue
       const normalized = normalizeDevPreviewUrlInput(trimUrlCandidate(match[0]))
       if (!normalized || !urlLooksLikePagePreview(normalized) || seen.has(normalized)) continue
       seen.add(normalized)

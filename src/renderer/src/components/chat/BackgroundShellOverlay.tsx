@@ -19,6 +19,15 @@ const SHELL_POPOVER_WIDTH = 736
 const SHELL_POPOVER_MAX_HEIGHT = 620
 const SHELL_POPOVER_ESTIMATED_HEIGHT = 560
 
+const ANSI_ESCAPE_SEQUENCE = new RegExp(
+  `${String.fromCharCode(27)}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`,
+  'g'
+)
+
+export function stripAnsiSequences(value: string): string {
+  return value.replace(ANSI_ESCAPE_SEQUENCE, '')
+}
+
 type BackgroundShellSession = {
   id: string
   threadId: string
@@ -96,6 +105,7 @@ export function BackgroundShellOverlay({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [placement, setPlacement] = useState<ComposerPopoverPlacement | null>(null)
   const requestIdRef = useRef(0)
+  const outputRef = useRef<HTMLPreElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
@@ -172,6 +182,13 @@ export function BackgroundShellOverlay({
   }, [open, scopedSessions, selectedId])
 
   useEffect(() => {
+    // latest shell output lands at the end, so keep the newest lines visible by default
+    const output = outputRef.current
+    if (!output) return
+    output.scrollTop = output.scrollHeight
+  }, [selected?.id])
+
+  useEffect(() => {
     if (!open || typeof window === 'undefined') return
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target
@@ -234,7 +251,9 @@ export function BackgroundShellOverlay({
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(8rem,1fr)] overflow-hidden">
+      {/* grid-cols-[minmax(0,1fr)] keeps the implicit track capped at the popover width
+          so nowrap command text cannot inflate the column and clip the detail pane */}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(8rem,1fr)] overflow-hidden">
         <div className="max-h-48 min-h-0 overflow-y-auto border-b border-ds-border-muted">
           {scopedSessions.length === 0 ? (
             <p className="px-4 py-5 text-[12px] text-ds-muted">{t('backgroundShells.empty')}</p>
@@ -253,7 +272,7 @@ export function BackgroundShellOverlay({
                     : <SquareTerminal className="h-3.5 w-3.5 text-ds-muted" />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-mono text-[11px] text-ds-ink">{session.command}</span>
+                  <span className="block truncate font-mono text-[11px] text-ds-ink" title={session.command}>{session.command}</span>
                   <span className="block truncate text-[10px] text-ds-muted">
                     {session.id} · {t(`backgroundShells.status.${session.status}`)}
                     {session.exitCode !== null ? ` · ${t('backgroundShells.exitCode', { code: session.exitCode })}` : ''}
@@ -265,8 +284,8 @@ export function BackgroundShellOverlay({
         </div>
         {selected ? (
           <div className="flex min-h-0 flex-col px-4 py-3">
-            <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-              <p className="truncate font-mono text-[11px] text-ds-muted">{selected.command}</p>
+            <div className="mb-2 flex shrink-0 items-start justify-between gap-2">
+              <p className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-4 text-ds-muted">{selected.command}</p>
               {selected.status === 'running' ? (
                 <button
                   type="button"
@@ -277,8 +296,11 @@ export function BackgroundShellOverlay({
                 </button>
               ) : null}
             </div>
-            <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-ds-main/80 p-3 font-mono text-[11px] leading-5 text-ds-ink">
-              {selected.output.trim() || t('backgroundShells.noOutput')}
+            <pre
+              ref={outputRef}
+              className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all rounded-xl bg-ds-main/80 p-3 font-mono text-[11px] leading-5 text-ds-ink"
+            >
+              {stripAnsiSequences(selected.output).trim() || t('backgroundShells.noOutput')}
             </pre>
             {selected.outputFilePath ? (
               <p className="mt-2 shrink-0 truncate font-mono text-[10px] text-ds-muted" title={selected.outputFilePath}>

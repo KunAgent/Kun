@@ -509,11 +509,18 @@ export async function unregisterRuntimeWithManager(input: {
   flavor: RuntimeFlavor
   instanceId: string
   fetch?: typeof fetch
-}): Promise<void> {
-  await requestManagerResponse(input.manager, `/v1/runtimes/${input.flavor}/${encodeURIComponent(input.instanceId)}`, {
-    method: 'DELETE',
-    fetch: input.fetch
-  }).catch(() => undefined)
+}): Promise<boolean> {
+  const response = await requestManagerResponse(
+    input.manager,
+    `/v1/runtimes/${input.flavor}/${encodeURIComponent(input.instanceId)}`,
+    {
+      method: 'DELETE',
+      fetch: input.fetch
+    }
+  )
+  return z.object({ removed: z.boolean() }).parse(
+    await requireManagerJson(response)
+  ).removed
 }
 
 export async function readManagerRuntime(

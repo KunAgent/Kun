@@ -3,7 +3,7 @@
  * full JSONL rewrite. Multiple schedule() calls within the debounce window
  * collapse into one run.
  */
-export type CompactionScheduleKind = 'items' | 'usage'
+export type CompactionScheduleKind = 'events' | 'items' | 'usage'
 
 export type SessionCompactionSchedulerOptions = {
   delayMs?: number
@@ -23,6 +23,7 @@ export class SessionCompactionScheduler {
   private readonly clearTimer: typeof clearTimeout
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly inflight = new Map<string, Promise<void>>()
+  private serialTail: Promise<void> = Promise.resolve()
   private closed = false
 
   constructor(options: SessionCompactionSchedulerOptions) {
@@ -50,24 +51,29 @@ export class SessionCompactionScheduler {
   }
 
   async flush(threadId?: string): Promise<void> {
-    const keys = threadId
-      ? [...this.timers.keys()].filter((key) => key.endsWith(`:${threadId}`))
-      : [...this.timers.keys()]
-    for (const key of keys) {
-      const timer = this.timers.get(key)
-      if (timer) this.clearTimer(timer)
-      this.timers.delete(key)
-      const sep = key.indexOf(':')
-      const kind = key.slice(0, sep) as CompactionScheduleKind
-      const id = key.slice(sep + 1)
-      await this.launch(id, kind)
-    }
-    const inflight = threadId
-      ? [...this.inflight.entries()]
-          .filter(([key]) => key.endsWith(`:${threadId}`))
-          .map(([, promise]) => promise)
-      : [...this.inflight.values()]
-    await Promise.all(inflight)
+    const matches = (key: string): boolean => !threadId || key.endsWith(`:${threadId}`)
+    // A revision conflict can schedule a retry while the first rewrite is in
+    // flight. Drain until no matching timer or run remains, rather than taking
+    // one snapshot that can strand that retry during shutdown/tests.
+    do {
+      const launches: Promise<void>[] = []
+      for (const key of [...this.timers.keys()].filter(matches)) {
+        const timer = this.timers.get(key)
+        if (timer) this.clearTimer(timer)
+        this.timers.delete(key)
+        const sep = key.indexOf(':')
+        launches.push(this.launch(
+          key.slice(sep + 1),
+          key.slice(0, sep) as CompactionScheduleKind
+        ))
+      }
+      await Promise.all(launches)
+      await Promise.all([...this.inflight.entries()]
+        .filter(([key]) => matches(key))
+        .map(([, promise]) => promise))
+    } while (
+      [...this.timers.keys()].some(matches) || [...this.inflight.keys()].some(matches)
+    )
   }
 
   /** Drop pending timers without running them; wait for in-flight work. */
@@ -84,7 +90,10 @@ export class SessionCompactionScheduler {
 
   private async launch(threadId: string, kind: CompactionScheduleKind): Promise<void> {
     const key = `${kind}:${threadId}`
-    const previous = this.inflight.get(key) ?? Promise.resolve()
+    // A profile can contain many oversized legacy threads. Keep all physical
+    // rewrites behind one tail so post-readiness repair cannot saturate disk or
+    // the shared Manager with concurrent multi-gigabyte scans.
+    const previous = this.serialTail
     const run = previous
       .catch(() => undefined)
       .then(async () => {
@@ -96,6 +105,7 @@ export class SessionCompactionScheduler {
         }
       })
     const guard = run.then(() => undefined, () => undefined)
+    this.serialTail = guard
     this.inflight.set(key, guard)
     try {
       await run

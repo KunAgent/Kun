@@ -11,6 +11,7 @@ const provider: ModelProviderProfileV1 = {
   baseUrl: '',
   endpointFormat: 'chat_completions',
   kind: 'agent-sdk',
+  useProxy: false,
   models: [],
   modelProfiles: {}
 }

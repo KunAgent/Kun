@@ -1,5 +1,6 @@
 import { z, type ZodType } from 'zod'
 import { randomUUID } from 'node:crypto'
+import type { ClientOwnedRuntimeHandle } from '../cli/client-owned-runtime.js'
 import {
   ApprovalDecisionResponse,
   AttachmentReleaseResponse,
@@ -75,6 +76,8 @@ export type TuiConnection = {
   discovered: boolean
   /** Verified pre-discovery GUI runtime with no shared model-connection API. */
   legacyGui?: boolean
+  /** Present only when this TUI invocation started and owns the Runtime. */
+  ownedRuntime?: ClientOwnedRuntimeHandle
 }
 
 /**

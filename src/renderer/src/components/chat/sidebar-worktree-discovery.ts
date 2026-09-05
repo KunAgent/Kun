@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { GitBranchesResult } from '@shared/git-branches'
 import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../../lib/workspace-path'
 import type { SidebarThreadWorktrees } from './sidebar-project-selectors'
@@ -49,4 +50,27 @@ export async function discoverSidebarWorktrees(
   return Object.fromEntries(
     results.flatMap((result) => result ? [[result.key, result.record] as const] : [])
   )
+}
+
+/** Discovers linked worktrees for the given serialized workspace path set. */
+export function useSidebarWorktreeDiscovery(worktreeDiscoveryKey: string): SidebarThreadWorktrees {
+  const [discovered, setDiscovered] = useState<SidebarThreadWorktrees>({})
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.kunGui?.getGitBranches !== 'function') return
+    let cancelled = false
+    setDiscovered({})
+    const workspacePaths = JSON.parse(worktreeDiscoveryKey) as string[]
+    void discoverSidebarWorktrees(
+      workspacePaths,
+      (workspacePath) => window.kunGui.getGitBranches(workspacePath)
+    ).then((records) => {
+      if (!cancelled) setDiscovered(records)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [worktreeDiscoveryKey])
+
+  return discovered
 }

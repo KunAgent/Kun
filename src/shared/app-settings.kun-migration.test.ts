@@ -341,6 +341,7 @@ describe('legacy Kun defaults migration', () => {
             apiKey: 'sk-custom',
             baseUrl: 'https://custom.example/v1',
             endpointFormat: 'responses',
+            useProxy: false,
             models: ['custom-model']
           }
         ]
@@ -362,6 +363,7 @@ describe('legacy Kun defaults migration', () => {
           apiKey: 'sk-custom',
           baseUrl: 'https://custom.example/v1',
           endpointFormat: 'responses',
+          useProxy: false,
           models: ['custom-model']
         })
       ])

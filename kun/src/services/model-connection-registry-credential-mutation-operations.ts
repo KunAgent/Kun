@@ -471,6 +471,7 @@ async clearCredential(this: ModelConnectionRegistry,
         : undefined
       return {
         schemaVersion: 1,
+        proxyRoutingVersion: 1,
         revision: current.revision + 1,
         profiles,
         tombstones: current.tombstones,
@@ -530,6 +531,7 @@ async delete(this: ModelConnectionRegistry, providerId: string, expectedRevision
       const fallback = configuredFallback(Object.values(profiles), fallbackHealth)
       return {
         schemaVersion: 1,
+        proxyRoutingVersion: 1,
         revision: current.revision + 1,
         profiles,
         tombstones: {

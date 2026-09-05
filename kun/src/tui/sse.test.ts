@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { IncrementalSseParser, parseRuntimeEventFrame } from './sse.js'
+import {
+  IncrementalSseParser,
+  parseReplayResetRequiredFrame,
+  parseRuntimeEventFrame
+} from './sse.js'
 
 const encoder = new TextEncoder()
 
@@ -33,5 +37,17 @@ describe('IncrementalSseParser', () => {
     expect(() => parseRuntimeEventFrame({ event: 'error', data: '<html>secret</html>' })).toThrow(
       'runtime event stream returned invalid JSON'
     )
+  })
+
+  it('strictly parses replay reset control frames', () => {
+    expect(parseReplayResetRequiredFrame({
+      event: 'replay_reset_required',
+      data: '{"threadId":"thr_1","floorSeq":42}'
+    })).toEqual({ threadId: 'thr_1', floorSeq: 42 })
+    expect(parseReplayResetRequiredFrame({ event: 'turn_started', data: '{}' })).toBeNull()
+    expect(() => parseReplayResetRequiredFrame({
+      event: 'replay_reset_required',
+      data: '{"threadId":"thr_1","floorSeq":-1}'
+    })).toThrow('invalid payload')
   })
 })

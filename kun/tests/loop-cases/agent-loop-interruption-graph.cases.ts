@@ -268,8 +268,11 @@ describe('AgentLoop interruption', () => {
     expect(parkedItems).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'error',
-        code: 'stream_read_error',
-        message: 'model stream read failed: terminated'
+        code: 'stream_disconnected',
+        details: expect.objectContaining({
+          rawCode: 'stream_read_error',
+          rawMessage: 'model stream read failed: terminated'
+        })
       })
     ]))
     expect(parkedItems.filter((item) =>

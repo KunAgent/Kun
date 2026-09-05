@@ -68,6 +68,8 @@ export type DelegateDetail = {
   model?: string
   toolPolicy?: string
   toolInvocations?: number
+  attemptStartedAt?: string
+  attemptDurationMs?: number
   durationMs?: number
   queuedMs?: number
   totalTokens?: number
@@ -199,6 +201,8 @@ export function parseDelegateDetail(detail: string | undefined): DelegateDetail 
     model: str(obj.model) ?? str(child?.model),
     toolPolicy: str(obj.toolPolicy) ?? str(child?.toolPolicy),
     toolInvocations: num(obj.toolInvocations) ?? num(child?.toolInvocations),
+    attemptStartedAt: str(obj.attemptStartedAt) ?? str(child?.attemptStartedAt),
+    attemptDurationMs: num(obj.attemptDurationMs) ?? num(child?.attemptDurationMs),
     durationMs: num(obj.durationMs) ?? num(child?.durationMs),
     queuedMs: num(obj.queuedMs) ?? num(child?.queuedMs),
     totalTokens: usage ? num(usage.totalTokens) : undefined,
@@ -378,6 +382,8 @@ export type ChildMeta = {
   parentThreadId?: string
   parentTurnId?: string
   toolInvocations?: number
+  attemptStartedAt?: string
+  attemptDurationMs?: number
   durationMs?: number
   queuedMs?: number
   totalTokens?: number
@@ -426,6 +432,8 @@ export function readChildMeta(block: ChatBlock): ChildMeta {
     parentThreadId: str(child.parentThreadId),
     parentTurnId: str(child.parentTurnId),
     toolInvocations: typeof child.toolInvocations === 'number' ? child.toolInvocations : undefined,
+    attemptStartedAt: str(child.attemptStartedAt),
+    attemptDurationMs: typeof child.attemptDurationMs === 'number' ? child.attemptDurationMs : undefined,
     durationMs: typeof child.durationMs === 'number' ? child.durationMs : undefined,
     queuedMs: typeof child.queuedMs === 'number' ? child.queuedMs : undefined,
     totalTokens: typeof child.totalTokens === 'number' ? child.totalTokens : undefined,

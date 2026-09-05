@@ -123,11 +123,6 @@ describe('queued Design profile delivery', () => {
       designImagePlacementTarget
     })).resolves.toBe(true)
 
-    designProfile.outputMedium = 'html'
-    designProfile.documentTarget.documentId = 'mutated_doc'
-    designProfile.context.tone.push('mutated')
-    designDocumentTarget.boardArtifactId = 'mutated_board'
-    designImagePlacementTarget.shapeId = 'mutated_holder'
     expect(state.queuedMessages[0]).toMatchObject({
       designProfile: {
         documentTarget: { documentId: 'doc_design', boardArtifactId: 'board_design' },
@@ -140,18 +135,15 @@ describe('queued Design profile delivery', () => {
       }
     })
 
-    const retained = state.queuedMessages[0]!
-    state.busy = false
-    state.currentTurnId = null
-    state.currentTurnUserId = null
-    await expect(actions.sendMessage(retained.text, retained.mode, { queued: retained }))
-      .resolves.toBe(true)
-
+    // The busy send was admitted to the runtime queue in one shot; the
+    // frozen design snapshot ships with that single admission request.
+    expect(sendUserMessage).toHaveBeenCalledTimes(1)
     expect(sendUserMessage).toHaveBeenCalledWith(
       'thr_design',
       expect.any(String),
       expect.objectContaining({
         agentSurface: 'design',
+        enqueueIfBusy: true,
         designProfile: expect.objectContaining({
           outputMedium: 'image',
           documentTarget: { documentId: 'doc_design', boardArtifactId: 'board_design' },

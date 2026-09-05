@@ -304,6 +304,8 @@ export type NetworkProxySettingsV1 = {
   url: string
 }
 
+export const PROVIDER_PROXY_ROUTING_VERSION = 1
+
 export type { ModelEndpointFormat }
 
 /** Number of retries after the initial model-provider request. */
@@ -437,6 +439,8 @@ export type ModelProviderProfileV1 = {
   apiKey: string
   baseUrl: string
   endpointFormat: ModelEndpointFormat
+  /** Whether Kun-owned HTTP requests for this Provider use the configured app proxy. */
+  useProxy: boolean
   /** 模型请求遇到临时失败或限流响应时使用的 HTTP 重试策略。 */
   retry?: ModelRequestRetrySettingsV1
   /**
@@ -520,6 +524,7 @@ export type ModelProviderSettingsV1 = {
   apiKey: string
   baseUrl: string
   proxy: NetworkProxySettingsV1
+  proxyRoutingVersion: number
   providers: ModelProviderProfileV1[]
   routePools: ModelRoutePoolV1[]
   localGateway: LocalModelGatewaySettingsV1

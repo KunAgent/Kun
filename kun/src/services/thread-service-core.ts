@@ -52,6 +52,7 @@ import {
   mergePlanTodos,
   normalizePlanRelativePath,
   normalizeTodoContent,
+  type PlanTodoSyncMode,
   patchPlanTodoStatus,
   todoContentHash
 } from '../shared/todos.js'
@@ -121,7 +122,7 @@ export type SyncPlanTodosOptions = {
   planId: string
   relativePath: string
   markdown: string
-  preserveCompleted?: boolean
+  mode: PlanTodoSyncMode
 }
 
 export class ThreadService {
@@ -217,6 +218,13 @@ export interface ThreadService {
   getTodos(threadId: string): Promise<ThreadTodoList | null>;
   setTodos(threadId: string, request: SetThreadTodosRequest): Promise<ThreadTodoList>;
   setTodosFromTool(threadId: string, request: SetThreadTodosRequest): Promise<ThreadTodoList>;
+  patchTodoStatus(threadId: string, todoId: string, status: ThreadTodoStatus): Promise<ThreadTodoList>;
+  patchTodoStatuses(
+    threadId: string,
+    todoIds: readonly string[],
+    fromStatus: ThreadTodoStatus,
+    status: ThreadTodoStatus
+  ): Promise<ThreadTodoList>;
   clearTodos(threadId: string): Promise<boolean>;
   syncTodosFromPlan(threadId: string, options: SyncPlanTodosOptions): Promise<ThreadTodoList>;
   delete(threadId: string): Promise<boolean>;

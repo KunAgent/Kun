@@ -11,9 +11,16 @@ import {
   normalizeUnreadCompletions,
   persistUnreadCompletions,
   readUnreadCompletions,
+  resolveUnreadCompletionForTurn,
   retainUnreadCompletions,
   unreadCompletionCount
 } from './unread-completions'
+import {
+  clearAutoPlanBuildIntents,
+  createAutoPlanBuildIntent,
+  patchAutoPlanBuildIntent,
+  saveAutoPlanBuildIntent
+} from '../plan/auto-plan-build-intents'
 
 function visibilityState(overrides: Partial<ChatState> = {}) {
   return {
@@ -115,5 +122,78 @@ describe('unread completions', () => {
       state,
       attention
     )).toEqual({ 'side-2': 'completed' })
+  })
+})
+
+describe('resolveUnreadCompletionForTurn', () => {
+  afterEach(() => {
+    clearAutoPlanBuildIntents()
+    vi.unstubAllGlobals()
+  })
+
+  it('suppresses unread attention for the intermediate auto-plan completion', () => {
+    const storage = storageFixture()
+    vi.stubGlobal('window', { localStorage: storage })
+    const intent = createAutoPlanBuildIntent({
+      planId: '/repo:.kunsdd/plan/a.md',
+      relativePath: '.kunsdd/plan/a.md',
+      workspaceRoot: '/repo',
+      threadId: 'thread-1',
+      selection: { buildMode: 'direct', useWorktree: false }
+    })
+    saveAutoPlanBuildIntent(intent)
+    patchAutoPlanBuildIntent(intent.id, { planTurnId: 'turn-plan', status: 'planning' })
+
+    expect(resolveUnreadCompletionForTurn(
+      {},
+      visibilityState({ activeThreadId: 'thread-1' }),
+      'thread-1',
+      'turn-plan',
+      'completed'
+    )).toEqual({})
+  })
+
+  it('keeps ordinary and final-build success producing unread when hidden', () => {
+    const storage = storageFixture()
+    vi.stubGlobal('window', { localStorage: storage })
+    const intent = createAutoPlanBuildIntent({
+      planId: '/repo:.kunsdd/plan/b.md',
+      relativePath: '.kunsdd/plan/b.md',
+      workspaceRoot: '/repo',
+      threadId: 'thread-1',
+      selection: { buildMode: 'direct', useWorktree: true }
+    })
+    saveAutoPlanBuildIntent(intent)
+    patchAutoPlanBuildIntent(intent.id, { planTurnId: 'turn-plan', status: 'planning' })
+
+    expect(resolveUnreadCompletionForTurn(
+      {},
+      visibilityState({ activeThreadId: 'thread-1' }),
+      'thread-1',
+      'turn-build',
+      'completed'
+    )).toEqual({ 'thread-1': 'completed' })
+  })
+
+  it('never hides a failed intermediate plan outcome', () => {
+    const storage = storageFixture()
+    vi.stubGlobal('window', { localStorage: storage })
+    const intent = createAutoPlanBuildIntent({
+      planId: '/repo:.kunsdd/plan/c.md',
+      relativePath: '.kunsdd/plan/c.md',
+      workspaceRoot: '/repo',
+      threadId: 'thread-1',
+      selection: { buildMode: 'direct', useWorktree: false }
+    })
+    saveAutoPlanBuildIntent(intent)
+    patchAutoPlanBuildIntent(intent.id, { planTurnId: 'turn-plan', status: 'planning' })
+
+    expect(resolveUnreadCompletionForTurn(
+      {},
+      visibilityState({ activeThreadId: 'thread-1' }),
+      'thread-1',
+      'turn-plan',
+      'failed'
+    )).toEqual({ 'thread-1': 'failed' })
   })
 })

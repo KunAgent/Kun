@@ -26,12 +26,22 @@ async function createStore(): Promise<{ root: string; store: HybridThreadStore }
 }
 
 function backfillInternals(store: HybridThreadStore): {
-  db: { prepare(sql: string): { get(...args: unknown[]): unknown } } | null
-  backfill: { wait(): Promise<void> } | null
+  db: {
+    prepare(sql: string): {
+      get(...args: unknown[]): unknown
+      all(...args: unknown[]): unknown[]
+    }
+  } | null
+  backfill: { wait(): Promise<void>; isIndexReady(): boolean } | null
 } {
   return store as unknown as {
-    db: { prepare(sql: string): { get(...args: unknown[]): unknown } } | null
-    backfill: { wait(): Promise<void> } | null
+    db: {
+      prepare(sql: string): {
+        get(...args: unknown[]): unknown
+        all(...args: unknown[]): unknown[]
+      }
+    } | null
+    backfill: { wait(): Promise<void>; isIndexReady(): boolean } | null
   }
 }
 
@@ -48,6 +58,22 @@ function usageEvent(seq: number, usage: UsageSnapshot): UsageEvent {
 }
 
 describe('HybridThreadStore usage timing persistence', () => {
+  it('creates the composite range-baseline usage index', async () => {
+    const { store } = await createStore()
+    try {
+      await store.list({ limit: 1 })
+      const db = backfillInternals(store).db
+      const indexes = db?.prepare(`PRAGMA index_list('usage_events')`).all() as
+        | Array<{ name?: string }>
+        | undefined
+      expect(indexes?.map((index) => index.name)).toContain(
+        'usage_events_thread_timestamp_seq_idx'
+      )
+    } finally {
+      store.close()
+    }
+  })
+
   it('keeps cumulative TTFT/TPS averages after the differential fold', async () => {
     const { store } = await createStore()
     try {
@@ -357,3 +383,110 @@ async function writeThreadDocument(root: string, thread: ThreadRecord): Promise<
       .map((item) => JSON.stringify(item)).join('\n').concat('\n'))
   ])
 }
+
+describe('HybridThreadStore index backfill failure fallback', () => {
+  it('falls back to the filesystem when startup index backfill fails mid-startup', async () => {
+    const { root, store: first } = await createStore()
+    const indexed = createThreadRecord({
+      id: 'thread_indexed',
+      title: 'Indexed',
+      workspace: '/tmp/workspace',
+      model: 'test-model'
+    })
+    await first.upsert(indexed)
+    await first.shutdown()
+
+    const diskOnly = legacyWorkThread('thread_on_disk_only', 'Disk only')
+    await writeThreadDocument(root, diskOnly)
+
+    const store = new HybridThreadStore({ dataDir: root })
+    const source = store as unknown as { threadIdsFromFilesystem(): Promise<string[]> }
+    const real = source.threadIdsFromFilesystem.bind(source)
+    let failNext = true
+    const enumeration = vi.spyOn(source, 'threadIdsFromFilesystem').mockImplementation(async () => {
+      if (failNext) { failNext = false; throw new Error('simulated enumeration failure') }
+      return real()
+    })
+
+    try {
+      await store.ready()
+      const internals = backfillInternals(store)
+      expect(internals.db).not.toBeNull()
+      expect(internals.backfill?.isIndexReady()).toBe(false)
+
+      const summaries = await store.list({ includeArchived: true })
+      expect(summaries.map((summary) => summary.id).sort()).toEqual(
+        ['thread_indexed', 'thread_on_disk_only'].sort()
+      )
+
+      const page = await store.listPage({ includeArchived: true })
+      expect(page.total).toBe(2)
+      expect(page.threads.map((summary) => summary.id).sort()).toEqual(
+        ['thread_indexed', 'thread_on_disk_only'].sort()
+      )
+    } finally {
+      enumeration.mockRestore()
+      store.close()
+    }
+  })
+})
+
+describe('HybridThreadStore cold-index transition', () => {
+  async function createColdStore(): Promise<{ root: string; store: HybridThreadStore }> {
+    const root = await mkdtemp(join(tmpdir(), 'kun-hybrid-cold-'))
+    roots.push(root)
+    return { root, store: new HybridThreadStore({ dataDir: root }) }
+  }
+
+  it('serves the first page from the transition merge without waiting for backfill', async () => {
+    const { root, store } = await createColdStore()
+    const records = [
+      legacyWorkThread('thread_cold_a', 'Cold A'),
+      legacyWorkThread('thread_cold_b', 'Cold B'),
+      legacyWorkThread('thread_cold_c', 'Cold C')
+    ]
+    await Promise.all(records.map((record) => writeThreadDocument(root, record)))
+
+    try {
+      const first = await store.listPage({ includeArchived: true, limit: 2 })
+      expect(first).toMatchObject({ hasMore: true, total: 3 })
+      expect(first.threads).toHaveLength(2)
+
+      const collected = [...first.threads.map((thread) => thread.id)]
+      let cursor = first.nextCursor
+      while (cursor) {
+        const next = await store.listPage({ includeArchived: true, limit: 2, cursor })
+        collected.push(...next.threads.map((thread) => thread.id))
+        cursor = next.hasMore ? next.nextCursor : undefined
+      }
+      expect(collected).toHaveLength(3)
+      expect(new Set(collected)).toEqual(new Set(['thread_cold_a', 'thread_cold_b', 'thread_cold_c']))
+
+      await store.waitForBackfill()
+      const ready = await store.listPage({ includeArchived: true })
+      expect(ready.total).toBe(3)
+    } finally {
+      store.close()
+    }
+  })
+
+  it('shows threads created through live upsert during a cold index', async () => {
+    const { root, store } = await createColdStore()
+    await writeThreadDocument(root, legacyWorkThread('thread_on_disk', 'On disk'))
+
+    try {
+      await store.upsert(createThreadRecord({
+        id: 'thread_live',
+        title: 'Live',
+        workspace: '/tmp/workspace',
+        model: 'test-model'
+      }))
+      const page = await store.listPage({ includeArchived: true })
+      expect(page.threads.map((thread) => thread.id).sort()).toEqual(
+        ['thread_live', 'thread_on_disk'].sort()
+      )
+    } finally {
+      store.close()
+    }
+  })
+})

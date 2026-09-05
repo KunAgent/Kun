@@ -23,7 +23,6 @@ import {
   PanelRight,
   Puzzle,
   RefreshCw,
-  ScanSearch,
   Search,
   Shapes,
   Terminal
@@ -54,6 +53,7 @@ type Props = {
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
+  /** @deprecated Agent Perspective moved to the center trajectory view. */
   agentPerspectiveEnabled?: boolean
   fileTreeOpen?: boolean
   fileTreeEnabled?: boolean
@@ -457,7 +457,6 @@ export function WorkbenchSideRail({
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
-  agentPerspectiveEnabled = true,
   fileTreeOpen = false,
   fileTreeEnabled = true,
   onToggleFileTree,
@@ -468,12 +467,6 @@ export function WorkbenchSideRail({
 }: Props): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
   const items = [
-    {
-      mode: BUILTIN_RIGHT_PANEL_IDS.agentPerspective,
-      label: t('rightPanelAgentPerspective'),
-      icon: ScanSearch,
-      disabled: !agentPerspectiveEnabled
-    },
     ...(planPanelEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.plan, label: t('rightPanelPlan'), icon: ClipboardList }] : []),
     { mode: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
     { mode: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowser'), icon: Globe2 },

@@ -39,6 +39,8 @@ import { releaseSddAssistantThread } from '../sdd/sdd-thread-registry'
 import { useWorkbenchLayout } from './workbench-layout'
 import { useWorkbenchPlanController } from './workbench-plan-controller'
 import { useGuiPlanStore } from '../plan/plan-store'
+import { useAutoPlanBuildController } from '../plan/use-auto-plan-build-controller'
+import { useProjectBoardEnabled } from '../project-board/use-project-board-enabled'
 import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../lib/workspace-path'
 import { relativeWorkspacePath } from '../lib/composer-file-references'
 import { useDesignWorkspaceStore } from '../design/design-workspace-store'
@@ -104,7 +106,7 @@ export function Workbench(): ReactElement {
     codeWorkspaceRoots, selectWorkspaceRoot,
     setRoute, openCode, openWrite, openDesign, ensureWriteThreadForWorkspace,
     ensureDesignThreadForWorkspace, createWriteThread, clearDesignHistory, openSettings,
-    openPlugins, openClaw, openSchedule, openWorkflow, chooseWorkspace, clawChannels,
+    openPlugins, openClaw, openBoard, openSchedule, openWorkflow, chooseWorkspace, clawChannels,
     activeClawChannelId, selectClawChannel, resetClawChannelSession, setClawChannelModel,
     appendLocalClawTurn, setError, sendMessage, reviewActiveThread, queuedMessages,
     extensionComposerContexts, attachExtensionComposerContext,
@@ -205,6 +207,7 @@ export function Workbench(): ReactElement {
     setInput
   })
   useDesignDrawingTitleBackfill({
+    enabled: route === 'design',
     workspaceRoot: designWorkspaceRoot,
     documents: designDocuments,
     threads,
@@ -220,13 +223,12 @@ export function Workbench(): ReactElement {
     busyRef.current = busy
   }, [busy])
 
+  const { enabled: projectBoardEnabled, loaded: projectBoardSettingsLoaded } = useProjectBoardEnabled()
   useEffect(() => {
     routeRef.current = route
-  }, [route])
-
-  useEffect(() => {
+    if (projectBoardSettingsLoaded && !projectBoardEnabled && route === 'board') setRoute('chat')
     runtimeConnectionRef.current = runtimeConnection
-  }, [runtimeConnection])
+  }, [projectBoardEnabled, projectBoardSettingsLoaded, route, runtimeConnection, setRoute])
 
   const stageInsetClass = 'ds-stage-inset'
   const prevThreadId = useRef<string | null>(null)
@@ -297,10 +299,12 @@ export function Workbench(): ReactElement {
     closeRightPanelTab
   })
   const {
-    composerFileReferences, fileTreeSidePanelOpen, fileTreeSidePanelView, openFilePreviewTargets,
+    composerFileReferences, fileTreeSidePanelOpen, fileTreeSidePanelView,
+    generatedDocumentCollection, openFilePreviewTargets,
     pinnedFilePreviewTargetKeys, preserveFilePreviewTargets, fileTreeWorkspaceRoot,
-    clearComposerFileReferences, addComposerFileReference, pickComposerFileReferences,
-    removeComposerFileReference, openWorkspaceFilePreviewTarget, previewWorkspaceFileFromSidebar,
+    clearComposerFileReferences, addComposerFileReference, pickComposerFileReferences, restoreComposerFileReferences,
+    removeComposerFileReference, openWorkspaceFilePreviewTarget, openGeneratedDocumentPreview,
+    openGeneratedDocuments, previewWorkspaceFileFromSidebar,
     closeWorkspaceFilePreviewTarget, togglePinnedFilePreviewTarget, closeOtherFilePreviewTargets,
     togglePreserveFilePreviewTargets, addWorkspaceReferenceFromSidebar,
     toggleFileTreeSidePanel, openFileTreeSidePanel, openDesignFileTreeSidePanel, setFileTreeSidePanelView,
@@ -386,7 +390,7 @@ export function Workbench(): ReactElement {
   } = useWorkbenchRightTools({
     input, inputRef, prevThreadId, activeThreadId,
     activeThreadDesignDocumentId: lockedDesignProfile?.documentTarget.documentId,
-    activeGuiPlan, sidePanel,
+    activeGuiPlan, rightPanelMode, sidePanel,
     currentSideConversations, designWorkspaceRoot, workspaceRoot, fileTreeWorkspaceRoot,
     filePreviewTarget, codeRightTabs, openSideConversationDraft, selectSideConversation,
     setSidePanelOpen, openFileTreeSidePanel, openDesignFileTreeSidePanel, openRightPanelTab,
@@ -418,7 +422,7 @@ export function Workbench(): ReactElement {
     handlePickAttachments,
     handlePasteClipboardImage,
     removeComposerAttachments,
-    removeComposerAttachment,
+    removeComposerAttachment, restoreComposerAttachments,
     setAttachmentUploadError,
     webAccessAvailable
   } = useWorkbenchAttachmentRuntime({
@@ -519,14 +523,16 @@ export function Workbench(): ReactElement {
     startNewSddAssistantConversation: startNewSddThreadConversation
   })
 
+  const { requestAutoPlanBuild, dialog: autoPlanBuildDialog, enabled: autoPlanBuildEnabled } =
+    useAutoPlanBuildController({ workspaceRoot, sendPlanTurn, setError })
   const { handleSend: handleCodeSend, sendWritePrompt } = useWorkbenchComposerSubmitController({
     activeClawChannelId, activeClawChannelModel: activeClawChannel?.model,
     activeClawChannelProviderId: activeClawChannel?.providerId,
     activeSddDraft: Boolean(activeSddDraft), activeThreadId, taskSurface, attachmentUploadEnabled,
-    buildCodeCanvasOutboundPrompt, clearComposerAttachments, removeComposerAttachments, clearComposerFileReferences,
+    buildCodeCanvasOutboundPrompt, clearComposerAttachments, removeComposerAttachments, clearComposerFileReferences, restoreComposerAttachments, restoreComposerFileReferences,
     composerAttachments, composerFileReferences, composerMode, composerModel, composerProviderId,
     composerModelGroups, composerReasoningEffort, composerFastMode, getAttachmentScope,
-    handleGuiPlanCommand, input, resetClawChannelSession, rightPanelMode, route,
+    handleGuiPlanCommand, input, resetClawChannelSession, requestAutoPlanBuild, rightPanelMode, route,
     selectClawChannel, sendMessage, sendPlanTurn, sendSddAssistantPrompt,
     setAttachmentUploadError, setClawChannelModel, setError, setInput, threads, workspaceRoot,
     appendLocalClawTurn
@@ -540,7 +546,7 @@ export function Workbench(): ReactElement {
   }, [activeSddDraft, handleCodeSend, input, route, sendDesignPrompt, taskSurface])
 
   const {
-    closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openPluginsView, openExtensionsView, openScheduleView,
+    closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openPluginsView, openExtensionsView, openBoardView, openScheduleView,
     openThread, openWorkflowView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
     startNewChat, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
     toggleConnectPhone
@@ -549,7 +555,7 @@ export function Workbench(): ReactElement {
     runtimeConnection, sddDraftContent, threads, useWorktreePool, workspaceRoot, worktreeBranch,
     clearFilePreviewTargets, createConversation, createThread, createWriteThread, dismissActiveSddDraft,
     ensureWriteThreadForWorkspace, findSddDraftForSidebarThread, openClaw, openCode,
-    openPlugins, openSchedule, openWorkflow, openWrite,
+    openPlugins, openBoard, openSchedule, openWorkflow, openWrite,
     selectThread, setConnectPhoneSidebarOpen, setDesignAssistantOpen, setFilePreviewTarget, setInput,
     setRightPanelMode, setRoute, setUseWorktreePool, setWriteAssistantOpen
   })
@@ -582,6 +588,7 @@ export function Workbench(): ReactElement {
     leftSidebarCollapsed,
     toggleLeftSidebar,
     input, setInput, composerMode, setComposerMode, composerOrchestration, graphEnabled,
+    autoPlanBuildEnabled,
     taskSurface, taskSurfaceLocked, taskSurfaceTransitioning, designTaskProfile, designProfileLocked,
     threadHasDesignDocument, lockedDesignProfile, onTaskSurfaceChange, onDesignTaskProfileChange,
     setComposerOrchestration, openComposerGraph, openComposerGraphChild, busy,
@@ -594,7 +601,7 @@ export function Workbench(): ReactElement {
     attachmentUploadBusy, attachmentUploadError, activeSddDraft, composerFileReferences,
     designDocumentFileMentionCandidates, webAccessAvailable, composerExecutionSettings,
     composerExecutionApplying, runtimeSkills, disabledSkillIds, handlePickAttachments,
-    handlePasteClipboardImage, removeComposerAttachment, addComposerFileReference,
+    handlePasteClipboardImage, removeComposerAttachment, restoreComposerAttachments, addComposerFileReference,
     pickComposerFileReferences, openWorkspaceFileTreeTab, openDesignFileTreeTab,
     removeComposerFileReference, queuedMessages, removeQueuedMessage, guideQueuedMessage,
     interrupt, handleGuiPlanCommand, useWorktreePool, worktreeBranch, setWorktreeBranch,
@@ -621,6 +628,7 @@ export function Workbench(): ReactElement {
     togglePinnedFilePreviewTarget, closeOtherFilePreviewTargets, togglePreserveFilePreviewTargets,
     activeExtensionRightPanel, codeRightTabs, currentSideConversations, currentSideRunningCount,
     runtimeInfo, fileTreeSidePanelOpen, fileTreeSidePanelView, fileTreeWorkspaceRoot,
+    generatedDocumentCollection, openGeneratedDocumentPreview,
     designWorkspaceRoot, designDocuments, designActiveDocumentId, setFileTreeSidePanelView,
     previewWorkspaceFileFromSidebar, addWorkspaceReferenceFromSidebar,
     openDesignDocumentInWhiteboard, extensionRightRailItems, extensionRightPanelItems,
@@ -630,6 +638,7 @@ export function Workbench(): ReactElement {
     handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest
   })
   return <>
+    {autoPlanBuildDialog}
     <WorkbenchContent context={{
     shellRef, extensionHostContextMenus, activeExtensionCenterView, route, setWorkspaceContextMenu,
     leftSidebarCollapsed, leftSidebarWidth, codeThreads, activeThreadId, sidebarView,
@@ -639,7 +648,7 @@ export function Workbench(): ReactElement {
     deleteThread, deleteDrawing, startNewChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone,
     openConnectWeixin: () => { setConnectPhoneInitialTarget('weixin'); openClaw(); setConnectPhoneSidebarOpen(true) },
-    openCodeMode, openWriteMode, openDesignMode, openScheduleView, openWorkflowView,
+    openCodeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy, implementDesignInCode,
     handleDesignHtmlElementAsContext, selectCanvasShape, sendDesignPrompt,
     handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest, rightPanelSharedProps,
@@ -663,7 +672,7 @@ export function Workbench(): ReactElement {
     openCodeRightTool, currentSideRunningCount, extensionRightRailItems, selectRightRailExtension,
     imageAnnotationHost, planOverlay, openManagedExtensionView, activeExtensionAuxiliaryPanel,
     workspaceContextMenu, activeGuiPlan,
-    focusedCanvasWorkspace,
+    focusedCanvasWorkspace, openGeneratedDocuments, openGeneratedDocumentPreview,
     onOpenCommandPalette: openWorkbenchCommandPalette
   }} />
     <WorkbenchCommandPaletteRuntime
@@ -675,13 +684,14 @@ export function Workbench(): ReactElement {
         hasPlanCommand: route !== 'claw', hasBtwCommand: route !== 'claw', hideBtwCommand: false,
         hasReviewCommand: route !== 'claw', skillCommands: runtimeSkills, disabledSkillIds,
         extensionRightRailItems, composerModel, composerModelGroups,
-        activeThreadPinned: threads.find((item) => item.id === activeThreadId)?.pinned === true }}
+        activeThreadPinned: threads.find((item) => item.id === activeThreadId)?.pinned === true,
+        projectBoardEnabled }}
       shortcutContext={{ composerMode, setComposerMode, handleGuiPlanCommand, createThread,
         chooseWorkspace, toggleTerminal, openSettings, useWorktreePool, setUseWorktreePool,
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
       actions={{ routes: { chat: openCodeMode, write: openWriteMode, design: openDesignMode,
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
-        claw: openClaw, schedule: openScheduleView, workflow: openWorkflowView },
+        claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,
         openCode, setInput, setError, setComposerModel, archiveThread, pinThread }}
       input={input}

@@ -5,7 +5,6 @@ import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { InMemoryUserInputGate } from '../adapters/in-memory-user-input-gate.js'
 import { setSystemPrompt, type ImmutablePrefix } from '../cache/immutable-prefix.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES, type ModelCapabilityMetadata } from '../contracts/capabilities.js'
-import type { TurnItem } from '../contracts/items.js'
 import { ChildRunFailureSchema, type ChildRunFailure } from '../contracts/subagent-retry.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
@@ -58,6 +57,13 @@ import {
 } from './child-result-materializer.js'
 import { buildFastContextEvidencePack } from './fast-context-evidence.js'
 import { createFastContextToolHost } from './fast-context-tool-host.js'
+import { resolveChildEpisodeLimits } from './child-episode-limits.js'
+import { withGlobalSubagentTools } from './subagent-global-tool-policy.js'
+import {
+  childResultUsedNoTextSummary,
+  childToolEvidence,
+  FAST_CONTEXT_RECOVERABLE_LOOP_ERROR_CODES
+} from './child-agent-result-support.js'
 
 export type ChildDelegatedRuntimeFactory = (input: {
   threads: ThreadService
@@ -68,6 +74,8 @@ export type ChildDelegatedRuntimeFactory = (input: {
   ids: { next(prefix: string): string }
   prefix: ImmutablePrefix
   toolPolicy: 'readOnly' | 'inherit'
+  allowedModelProviderIds?: readonly string[]
+  allowedModelIds?: readonly string[]
   allowedToolNames?: readonly string[]
   allowedProviderIds?: readonly string[]
   allowedSkillIds?: readonly string[]
@@ -198,10 +206,10 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ids,
       nowIso
     })
-    // Every allow-list is an upper bound. readOnly is host-defined and cannot
-    // be widened by a profile's allowedTools; the parent turn's allow-list is
-    // intersected last, so a child can only lose capabilities.
-    const forcedAllowedToolNames = intersectDefinedLists(
+    // Every ordinary allow-list is an upper bound. Global host-owned child
+    // capabilities are added only after that narrowing and remain subject to
+    // the parent snapshot plus explicit tool/provider deny-lists.
+    const ordinaryAllowedToolNames = intersectDefinedLists(
       input.toolPolicy === 'readOnly' ? SUBAGENT_READ_ONLY_TOOL_NAMES : undefined,
       input.fastContext ? ['grep', 'glob', 'read'] : undefined,
       input.allowedTools,
@@ -215,6 +223,14 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(input.security?.blockedProviderIds ?? []),
       ...(input.blockedMcpServers ?? []).map((serverId) => `mcp:${serverId}`)
     ])
+    const forcedAllowedToolNames = withGlobalSubagentTools({
+      allowedToolNames: ordinaryAllowedToolNames,
+      parentAllowedToolNames: input.security?.allowedToolNames,
+      blockedToolNames,
+      parentAllowedProviderIds: input.security?.allowedProviderIds,
+      parentBlockedProviderIds: blockedProviderIds,
+      fastContext: input.fastContext === true
+    })
     // A custom system prompt augments the base prefix (kun tool/safety
     // conventions stay) on a distinct fingerprint, so same-agent calls still
     // hit the prompt cache; cross-agent reuse is intentionally given up.
@@ -253,6 +269,12 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ids,
       prefix: childPrefix,
       toolPolicy: input.toolPolicy,
+      ...(input.security?.allowedModelProviderIds
+        ? { allowedModelProviderIds: input.security.allowedModelProviderIds }
+        : {}),
+      ...(input.security?.allowedModelIds
+        ? { allowedModelIds: input.security.allowedModelIds }
+        : {}),
       ...(forcedAllowedToolNames ? { allowedToolNames: forcedAllowedToolNames } : {}),
       ...(input.security?.allowedProviderIds
         ? { allowedProviderIds: input.security.allowedProviderIds }
@@ -296,6 +318,12 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ids,
       nowIso,
       ...(forcedAllowedToolNames ? { forcedAllowedToolNames } : {}),
+      ...(input.security?.allowedModelProviderIds
+        ? { allowedModelProviderIds: input.security.allowedModelProviderIds }
+        : {}),
+      ...(input.security?.allowedModelIds
+        ? { allowedModelIds: input.security.allowedModelIds }
+        : {}),
       ...(input.security?.allowedProviderIds ? { allowedProviderIds: input.security.allowedProviderIds } : {}),
       ...(input.security?.allowedSkillIds ? { allowedSkillIds: input.security.allowedSkillIds } : {}),
       ...(allowedReadPaths
@@ -325,16 +353,12 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {}),
       ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
       ...(options.tokenEconomy ? { tokenEconomy: options.tokenEconomy } : {}),
-      // A delegated child settles only when it completes or an explicit
-      // parent/user cancellation reaches its signal. Do not inherit the
-      // generic AgentLoop wall-clock deadline.
-      disableWallTimeLimit: true,
+      turnLimits: resolveChildEpisodeLimits(options.runtime?.turnLimits, input.fastContext === true),
       ...(input.fastContext
         ? {
             fastContext: true,
             fastContextScopeId: input.parentThreadId,
-            fastContextTaskCount,
-            turnLimits: { maxSteps: 4, maxToolCallsPerStep: 8 }
+            fastContextTaskCount
           }
         : {}),
       ...(options.runtime?.toolStorm ? { toolStorm: options.runtime.toolStorm } : {}),
@@ -579,66 +603,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
   }
 }
 
-/** Loop bookkeeping error codes that a completed Fast Context child may
- * outrank with its evidence pack (kun/src/loop/round-outcome-recovery-phase.ts).
- * Anything outside this set remains fatal and fails the run as before. */
-const FAST_CONTEXT_RECOVERABLE_LOOP_ERROR_CODES = new Set([
-  'model_empty_response',
-  'empty_post_tool_continuation',
-  'tool_loop_suppressed'
-])
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-/** True when childResultSource had no assistant text and fell back to a
- * tool_result stringification or loop error text — the fake-summary cases. */
-function childResultUsedNoTextSummary(items: readonly TurnItem[], turnId: string): boolean {
-  const turnItems = items.filter((item) => item.turnId === turnId)
-  const hasAssistantText = turnItems.some(
-    (item) => item.kind === 'assistant_text' && item.text.trim().length > 0
-  )
-  if (hasAssistantText) return false
-  return turnItems.some(
-    (item) => item.kind === 'tool_result' || item.kind === 'error'
-  )
-}
-
-function childToolEvidence(items: readonly TurnItem[], turnId: string): string[] {
-  const results = new Map(items
-    .filter((item): item is Extract<TurnItem, { kind: 'tool_result' }> =>
-      item.turnId === turnId && item.kind === 'tool_result')
-    .map((item) => [item.callId, item]))
-  return items
-    .filter((item): item is Extract<TurnItem, { kind: 'tool_call' }> =>
-      item.turnId === turnId && item.kind === 'tool_call')
-    .filter((item) => {
-      const result = results.get(item.callId)
-      return Boolean(result && !result.isError && result.status === 'completed')
-    })
-    .slice(0, 32)
-    .map((item) => {
-      const result = results.get(item.callId)!
-      const target = toolEvidenceTarget(item.arguments)
-      const digest = evidenceDigest(result.output)
-      return `${item.toolName}${target ? ` ${target}` : ''}: completed${digest ? ` — ${digest}` : ''}`
-    })
-}
-
-function evidenceDigest(output: unknown): string {
-  const serialized = typeof output === 'string' ? output : safeJson(output)
-  return serialized.replace(/\s+/g, ' ').trim().slice(0, 500)
-}
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
-  }
-}
-
 function intersectDefinedLists(...lists: Array<readonly string[] | undefined>): string[] | undefined {
   const defined = lists.filter((list): list is readonly string[] => Boolean(list))
   if (!defined.length) return undefined
@@ -652,14 +616,6 @@ function intersectDefinedLists(...lists: Array<readonly string[] | undefined>): 
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)]
-}
-
-function toolEvidenceTarget(args: Record<string, unknown>): string {
-  for (const key of ['path', 'filePath', 'file_path', 'query', 'command']) {
-    const value = args[key]
-    if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 300)
-  }
-  return ''
 }
 
 function childThreadTitle(childId: string, label?: string, profile?: string): string {

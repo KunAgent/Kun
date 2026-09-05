@@ -1,4 +1,5 @@
 export * from './thread-service.js'
+export * from './project-board-service.js'
 export * from './turn-service.js'
 export * from './usage-service.js'
 export * from './provider-quota-service.js'

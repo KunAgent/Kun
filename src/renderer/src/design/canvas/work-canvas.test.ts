@@ -9,6 +9,7 @@ import {
   resolveWorkCanvasIdentity,
   snapshotWorkCanvasForPrompt,
   workCanvasHasBlockingQaNotes,
+  workCanvasHasCompletePptReviewProjection,
   workCanvasPptSelectionState,
   workCanvasPptWorkflowGate
 } from './work-canvas'
@@ -125,5 +126,41 @@ describe('Work canvas writable lease and QA gate', () => {
     expect(workCanvasPptSelectionState(document, new Set([shape.id]), 'workflow-2')).toEqual({
       direction: false, slides: false
     })
+  })
+
+  it('requires persisted frame-and-preview pairs before review approval', () => {
+    const document = createEmptyDocument()
+    const frame = createDefaultShape('frame', 0, 0)
+    frame.pptReviewRef = {
+      workflowId: 'workflow-1', childId: 'child-1', slideId: 'slide-1',
+      revision: 2, role: 'slide-frame'
+    }
+    document.objects[frame.id] = { ...frame, parentId: document.rootId }
+    document.objects[document.rootId]!.children.push(frame.id)
+    expect(workCanvasHasCompletePptReviewProjection(
+      document, 'workflow-1', 'child-1'
+    )).toBe(false)
+
+    const preview = createDefaultShape('image', 0, 0)
+    preview.imageUrl = '.kun/images/slide-1.png'
+    preview.pptReviewRef = {
+      workflowId: 'workflow-1', childId: 'child-1', slideId: 'slide-1',
+      revision: 2, role: 'preview-image'
+    }
+    document.objects[preview.id] = { ...preview, parentId: document.rootId }
+    document.objects[document.rootId]!.children.push(preview.id)
+    expect(workCanvasHasCompletePptReviewProjection(
+      document, 'workflow-1', 'child-1'
+    )).toBe(true)
+
+    const direction = createDefaultShape('frame', 0, 0)
+    direction.pptDirectionRef = {
+      workflowId: 'workflow-1', childId: 'child-1', directionId: 'direction-1',
+      revision: 1, role: 'direction-card'
+    }
+    document.objects[direction.id] = { ...direction, parentId: document.rootId }
+    expect(workCanvasHasCompletePptReviewProjection(
+      document, 'workflow-1', 'child-1'
+    )).toBe(false)
   })
 })

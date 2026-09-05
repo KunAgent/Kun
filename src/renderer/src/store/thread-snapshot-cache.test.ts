@@ -8,6 +8,7 @@ import {
   clearThreadSnapshotCache,
   getThreadSnapshot,
   getThreadSnapshotForSelection,
+  hydratedTurnTimingPatch,
   invalidateThreadSnapshot,
   snapshotThreadProjection,
   THREAD_SNAPSHOT_CACHE_MAX_BYTES,
@@ -343,5 +344,78 @@ describe('thread snapshot cache', () => {
       payloadBytes: 42
     })
     expect(running).toBeNull()
+  })
+
+  it('does not revive summary goal state when detail explicitly clears it', () => {
+    const goal = {
+      threadId: 'thr_canonical_null', objective: 'Old goal', status: 'active' as const,
+      tokensUsed: 0, timeUsedSeconds: 1,
+      createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:01.000Z'
+    }
+    const todos = {
+      threadId: 'thr_canonical_null', items: [], updatedAt: '2026-08-30T00:00:01.000Z'
+    }
+    const target = thread('thr_canonical_null', { goal, todos })
+    const snapshot = buildPrefetchedThreadSnapshot(target, {
+      blocks: [], latestSeq: 2, threadStatus: 'idle', goal: null, todos: null
+    })
+
+    expect(snapshot?.activeThreadGoal).toBeNull()
+    expect(snapshot?.activeThreadTodos).toBeNull()
+  })
+
+  it('falls back to summary goal state only when detail omits it', () => {
+    const goal = {
+      threadId: 'thr_legacy_omission', objective: 'Legacy goal', status: 'active' as const,
+      tokensUsed: 0, timeUsedSeconds: 1,
+      createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:01.000Z'
+    }
+    const todos = {
+      threadId: 'thr_legacy_omission', items: [], updatedAt: '2026-08-30T00:00:01.000Z'
+    }
+    const target = thread('thr_legacy_omission', { goal, todos })
+    const snapshot = buildPrefetchedThreadSnapshot(target, {
+      blocks: [], latestSeq: 2, threadStatus: 'idle'
+    })
+
+    expect(snapshot?.activeThreadGoal).toBe(goal)
+    expect(snapshot?.activeThreadTodos).toBe(todos)
+  })
+})
+
+describe('hydratedTurnTimingPatch', () => {
+  const base = {
+    latestTurnId: 'turn_1',
+    latestTurnOrchestration: 'direct' as const,
+    currentTurnUserId: 'user_1',
+    latestTurnStartedAtMs: 42_000,
+    turnDurationByUserId: { user_old: 1_000 }
+  }
+
+  it('re-seeds the running turn start from the persisted record', () => {
+    const patch = hydratedTurnTimingPatch({ ...base, busy: true })
+
+    expect(patch.currentTurnUserId).toBe('user_1')
+    expect(patch.currentTurnStartedAtMs).toBe(42_000)
+    expect(patch.turnStartedAtByUserId).toEqual({ user_1: 42_000 })
+    expect(patch.turnDurationByUserId).toEqual({ user_old: 1_000 })
+  })
+
+  it('keeps per-user starts empty for settled threads', () => {
+    const patch = hydratedTurnTimingPatch({ ...base, busy: false })
+
+    expect(patch.currentTurnStartedAtMs).toBeNull()
+    expect(patch.turnStartedAtByUserId).toEqual({})
+  })
+
+  it('keeps per-user starts empty when the persisted turn start is unknown', () => {
+    const patch = hydratedTurnTimingPatch({
+      ...base,
+      busy: true,
+      latestTurnStartedAtMs: undefined
+    })
+
+    expect(patch.currentTurnStartedAtMs).toBeNull()
+    expect(patch.turnStartedAtByUserId).toEqual({})
   })
 })

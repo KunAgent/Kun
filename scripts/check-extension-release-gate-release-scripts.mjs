@@ -110,8 +110,7 @@ for (const marker of [
   '|| die "Windows packaged Extension desktop Chromium smoke failed"',
   'Downloading and verifying the complete three-platform release bundle',
   'verify:manual-extension-release',
-  'verify_tui_github_assets',
-  '--require-tui'
+  '--require-all-platforms'
 ]) {
   check(releaseWinScript.includes(marker), `scripts/release-win.sh does not fail closed: ${marker}`)
 }
@@ -152,8 +151,7 @@ for (const marker of [
   "Write-Err 'Windows packaged Extension desktop Chromium smoke failed.'",
   "Write-Err 'Complete three-platform release verification failed.'",
   'verify:manual-extension-release',
-  '$requiredTuiAssets',
-  '--require-tui'
+  '--require-all-platforms'
 ]) {
   check(releaseWinPowerShell.includes(marker), `scripts/release-win.ps1 does not fail closed: ${marker}`)
 }

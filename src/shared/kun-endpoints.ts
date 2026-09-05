@@ -214,15 +214,47 @@ export function kunGraphProjectConsolidatePath(projectId: string): string {
   return `${kunGraphProjectPath(projectId)}/consolidate`
 }
 
+export const KUN_THREAD_ACTIVITY_EVENTS_PATH = '/v1/thread-activity/events'
+export const KUN_THREAD_ACTIVITY_EVENTS_TEMPLATE = '/v1/thread-activity/events'
+
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
 
 export const KUN_THREAD_STATES_PATH = '/v1/threads/states'
 export const KUN_THREAD_STATES_TEMPLATE = '/v1/threads/states'
 
+export const KUN_THREADS_BULK_DELETE_PATH = '/v1/threads/bulk-delete'
+export const KUN_THREADS_BULK_DELETE_TEMPLATE = '/v1/threads/bulk-delete'
+
+export const KUN_THREADS_CONTENT_SEARCH_PATH = '/v1/threads/content-search'
+export const KUN_THREADS_CONTENT_SEARCH_TEMPLATE = '/v1/threads/content-search'
+
+export const KUN_PROJECT_BOARD_SNAPSHOT_PATH = '/v1/project-boards/snapshot'
+export const KUN_PROJECT_BOARD_SNAPSHOT_TEMPLATE = '/v1/project-boards/snapshot'
+export const KUN_PROJECT_BOARD_SUMMARIES_PATH = '/v1/project-boards/summaries'
+export const KUN_PROJECT_BOARD_SUMMARIES_TEMPLATE = '/v1/project-boards/summaries'
+export const KUN_PROJECT_BOARD_CARDS_PATH = '/v1/project-boards/cards'
+export const KUN_PROJECT_BOARD_CARDS_TEMPLATE = '/v1/project-boards/cards'
+export const KUN_PROJECT_BOARD_CARD_STATUS_PATH = '/v1/project-boards/cards/status'
+export const KUN_PROJECT_BOARD_CARD_STATUS_TEMPLATE = '/v1/project-boards/cards/status'
+export const KUN_PROJECT_BOARD_CARD_TEMPLATE = '/v1/project-boards/cards/{id}'
+export const KUN_PROJECT_BOARD_TODO_OVERLAY_TEMPLATE =
+  '/v1/project-boards/todo-overlays/{id}/{id}'
+export function kunProjectBoardCardPath(cardId: string): string {
+  return `${KUN_PROJECT_BOARD_CARDS_PATH}/${encodeURIComponent(cardId)}`
+}
+export function kunProjectBoardTodoOverlayPath(threadId: string, todoId: string): string {
+  return `/v1/project-boards/todo-overlays/${encodeURIComponent(threadId)}/${encodeURIComponent(todoId)}`
+}
+
 export const KUN_THREAD_TEMPLATE = '/v1/threads/{id}'
 export function kunThreadPath(threadId: string): string {
   return `/v1/threads/${encodeURIComponent(threadId)}`
+}
+
+export const KUN_THREAD_SUMMARY_TEMPLATE = '/v1/threads/{id}/summary'
+export function kunThreadSummaryPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/summary`
 }
 
 export const KUN_THREAD_STATE_TEMPLATE = '/v1/threads/{id}/state'
@@ -276,6 +308,16 @@ export function kunThreadTodosPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/todos`
 }
 
+export const KUN_THREAD_TODOS_SYNC_PLAN_TEMPLATE = '/v1/threads/{id}/todos/sync-plan'
+export function kunThreadTodosSyncPlanPath(threadId: string): string {
+  return `${kunThreadTodosPath(threadId)}/sync-plan`
+}
+
+export const KUN_THREAD_TODO_TEMPLATE = '/v1/threads/{id}/todos/{id}'
+export function kunThreadTodoPath(threadId: string, todoId: string): string {
+  return `${kunThreadTodosPath(threadId)}/${encodeURIComponent(todoId)}`
+}
+
 export const KUN_THREAD_COMPACT_TEMPLATE = '/v1/threads/{id}/compact'
 export function kunThreadCompactPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/compact`
@@ -307,6 +349,23 @@ export function kunThreadTurnPath(threadId: string, turnId: string): string {
 }
 
 export const KUN_THREAD_STEER_TEMPLATE = '/v1/threads/{id}/turns/{turn}/steer'
+export function kunThreadCancelQueuedPath(threadId: string, turnId: string): string {
+  return `/v1/threads/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}/cancel-queued`
+}
+
+export function kunThreadQueuePositionPath(threadId: string, turnId: string): string {
+  return `/v1/threads/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}/queue-position`
+}
+
+export function kunThreadQueueResumePath(threadId: string): string {
+  return `/v1/threads/${encodeURIComponent(threadId)}/queue/resume`
+}
+
+export const KUN_THREAD_QUEUED_TURNS_TEMPLATE = '/v1/threads/{id}/queued-turns'
+export function kunThreadQueuedTurnsPath(threadId: string): string {
+  return `/v1/threads/${encodeURIComponent(threadId)}/queued-turns`
+}
+
 export function kunThreadSteerPath(threadId: string, turnId: string): string {
   return `${kunThreadTurnPath(threadId, turnId)}/steer`
 }
@@ -330,6 +389,20 @@ export function kunThreadEventsPath(threadId: string): string {
 export const KUN_THREAD_MODEL_REQUESTS_TEMPLATE = '/v1/threads/{id}/model-requests'
 export function kunThreadModelRequestsPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/model-requests`
+}
+
+export const KUN_THREAD_TRAJECTORY_TEMPLATE = '/v1/threads/{id}/trajectory'
+export const KUN_THREAD_TRAJECTORY_SUMMARY_TEMPLATE = '/v1/threads/{id}/trajectory/summary'
+export const KUN_THREAD_TRAJECTORY_DETAIL_TEMPLATE =
+  '/v1/threads/{id}/trajectory/{id}/detail'
+export function kunThreadTrajectoryPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/trajectory`
+}
+export function kunThreadTrajectorySummaryPath(threadId: string): string {
+  return `${kunThreadTrajectoryPath(threadId)}/summary`
+}
+export function kunThreadTrajectoryDetailPath(threadId: string, recordId: string): string {
+  return `${kunThreadTrajectoryPath(threadId)}/${encodeURIComponent(recordId)}/detail`
 }
 
 export const KUN_APPROVAL_TEMPLATE = '/v1/approvals/{id}'

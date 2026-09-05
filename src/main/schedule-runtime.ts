@@ -71,10 +71,14 @@ export class ScheduleRuntime {
   private keepAwakeHeld = false
   private stopped = false
   private stopPromise: Promise<void> | null = null
+  private readonly statusListeners = new Set<(status: ScheduleRuntimeStatus) => void>()
 
   constructor(deps: ScheduleRuntimeDeps) {
     this.deps = deps
-    this.queue = new ScheduleExecutionQueue(deps, (settings) => this.syncPowerSaveBlocker(settings))
+    this.queue = new ScheduleExecutionQueue(deps, (settings) => {
+      this.syncPowerSaveBlocker(settings)
+      void this.emitStatus()
+    })
     this.powerSaveController =
       deps.powerSaveController ??
       (deps.powerSaveBlocker ? new PowerSaveController(deps.powerSaveBlocker) : null)
@@ -154,6 +158,18 @@ export class ScheduleRuntime {
     this.releasePowerSave()
     this.stopPromise = this.queue.stop()
     return this.stopPromise
+  }
+
+  subscribeStatus(listener: (status: ScheduleRuntimeStatus) => void): () => void {
+    this.statusListeners.add(listener)
+    void this.status().then(listener)
+    return () => this.statusListeners.delete(listener)
+  }
+
+  private async emitStatus(): Promise<void> {
+    if (this.statusListeners.size === 0) return
+    const status = await this.status()
+    for (const listener of this.statusListeners) listener(status)
   }
 
   async status(): Promise<ScheduleRuntimeStatus> {
@@ -535,8 +551,7 @@ export class ScheduleRuntime {
 
   private acquirePowerSave(): void {
     if (this.keepAwakeHeld || !this.powerSaveController) return
-    this.powerSaveController.acquire()
-    this.keepAwakeHeld = true
+    this.keepAwakeHeld = this.powerSaveController.acquire()
   }
 
   private releasePowerSave(): void {

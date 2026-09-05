@@ -77,7 +77,7 @@ describe('SidebarProjectRows thread prewarm intent', () => {
     await act(async () => {
       row?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     })
-    expect(prewarmMock.requestThreadPrewarm).toHaveBeenLastCalledWith(target)
+    expect(prewarmMock.requestThreadPrewarm).toHaveBeenLastCalledWith(target, { dwell: true })
 
     await act(async () => button?.focus())
     expect(prewarmMock.requestThreadPrewarm).toHaveBeenCalledTimes(2)

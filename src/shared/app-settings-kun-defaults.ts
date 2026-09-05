@@ -84,6 +84,10 @@ import {
   LOCAL_WHISPER_DEFAULT_DOWNLOAD_SOURCE_ID,
   isLocalWhisperDownloadSourceId
 } from './local-whisper'
+import {
+  DEFAULT_GITHUB_MCP_HOST,
+  normalizeGitHubMcpSettings
+} from './github-mcp-authorization'
 
 import {
   defaultKunFastContextSettings,
@@ -195,6 +199,10 @@ export function defaultKunRuntimeSettings(
     toolOutputLimits: defaultKunToolOutputLimitsSettings(),
     insecure: false,
     mcpSearch: defaultKunMcpSearchSettings(),
+    githubMcp: normalizeGitHubMcpSettings({
+      enabled: false,
+      githubHost: DEFAULT_GITHUB_MCP_HOST
+    }),
     projectConfig: defaultKunProjectConfigSettings(),
     storage: defaultKunStorageSettings(),
     contextCompaction: defaultKunContextCompactionSettings(),

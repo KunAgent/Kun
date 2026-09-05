@@ -236,14 +236,21 @@ export class LifecycleFencedSessionStore implements SessionStore {
     signal: AbortSignal
   ) => AsyncIterable<RuntimeEvent>
   readonly loadUsageRecords?: (options?: { threadId?: string }) => Promise<SessionUsageRecord[]>
+  readonly aggregateUsage?: SessionStore['aggregateUsage']
   readonly loadLatestUsageSnapshots?: (options?: { threadIds?: string[] }) => Promise<SessionLatestUsageSnapshot[]>
   readonly compactItems?: SessionStore['compactItems']
   readonly scheduleItemHistoryCompaction?: SessionStore['scheduleItemHistoryCompaction']
   readonly scheduleUsageEventCompaction?: SessionStore['scheduleUsageEventCompaction']
   readonly flushScheduledCompaction?: SessionStore['flushScheduledCompaction']
+  readonly runEventIndexRebuildSlice?: SessionStore['runEventIndexRebuildSlice']
+  readonly setEventIndexRebuildWake?: SessionStore['setEventIndexRebuildWake']
   readonly loadItemPage?: SessionStore['loadItemPage']
   readonly searchItemText?: SessionStore['searchItemText']
   readonly trimEventsFromSeq?: SessionStore['trimEventsFromSeq']
+  readonly eventReplayFloorSeq?: SessionStore['eventReplayFloorSeq']
+  readonly loadEventPage?: SessionStore['loadEventPage']
+  readonly checkpointLiveItem?: SessionStore['checkpointLiveItem']
+  readonly finalizeLiveItem?: SessionStore['finalizeLiveItem']
 
   constructor(
     readonly raw: SessionStore,
@@ -265,6 +272,9 @@ export class LifecycleFencedSessionStore implements SessionStore {
     }
     if (raw.loadUsageRecords) {
       this.loadUsageRecords = (options) => raw.loadUsageRecords!(options)
+    }
+    if (raw.aggregateUsage) {
+      this.aggregateUsage = (query, liveRecords) => raw.aggregateUsage!(query, liveRecords)
     }
     if (raw.loadLatestUsageSnapshots) {
       this.loadLatestUsageSnapshots = (options) => raw.loadLatestUsageSnapshots!(options)
@@ -295,12 +305,33 @@ export class LifecycleFencedSessionStore implements SessionStore {
       this.flushScheduledCompaction = (threadId) =>
         raw.flushScheduledCompaction!(threadId)
     }
+    if (raw.runEventIndexRebuildSlice) {
+      this.runEventIndexRebuildSlice = () => raw.runEventIndexRebuildSlice!()
+    }
+    if (raw.setEventIndexRebuildWake) {
+      this.setEventIndexRebuildWake = (wake) => raw.setEventIndexRebuildWake!(wake)
+    }
     if (raw.loadItemPage) {
       this.loadItemPage = (threadId, options) => raw.loadItemPage!(threadId, options)
     }
     if (raw.trimEventsFromSeq) {
       this.trimEventsFromSeq = (threadId, fromSeqInclusive) =>
         this.write(threadId, { afterBytes: 0 }, () => raw.trimEventsFromSeq!(threadId, fromSeqInclusive))
+    }
+    if (raw.eventReplayFloorSeq) {
+      this.eventReplayFloorSeq = (threadId) => raw.eventReplayFloorSeq!(threadId)
+    }
+    if (raw.loadEventPage) {
+      this.loadEventPage = (threadId, options) => raw.loadEventPage!(threadId, options)
+    }
+    if (raw.checkpointLiveItem) {
+      this.checkpointLiveItem = (threadId, item, representedSeq) =>
+        this.write(threadId, undefined, () =>
+          raw.checkpointLiveItem!(threadId, item, representedSeq))
+    }
+    if (raw.finalizeLiveItem) {
+      this.finalizeLiveItem = (threadId, item) =>
+        this.write(threadId, undefined, () => raw.finalizeLiveItem!(threadId, item))
     }
   }
 

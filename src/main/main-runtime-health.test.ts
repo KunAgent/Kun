@@ -39,7 +39,22 @@ vi.mock('./main-lifecycle', () => ({ isAppQuitInProgress: () => false, runtimeSh
 vi.mock('./browser-use/browser-use-host', () => ({ stopBrowserUseHost: vi.fn() }))
 vi.mock('./computer-use/computer-use-host', () => ({ stopComputerUseHost: vi.fn() }))
 
-import { noteRuntimeHealthy } from './main-runtime-health'
+import { noteRuntimeHealthy, probeRuntimeApi } from './main-runtime-health'
+
+describe('Runtime API readiness', () => {
+  it('normalizes every HTTP 401 into the desktop credential error', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ code: 'unauthorized', message: 'unauthorized' }), { status: 401 })
+    )
+
+    await expect(probeRuntimeApi({} as never)).resolves.toEqual({
+      ok: false,
+      error: 'runtime_auth_required',
+      message: 'The local Kun Runtime rejected the desktop access credential.'
+    })
+    fetchMock.mockRestore()
+  })
+})
 
 describe('runtime migration health verification', () => {
   it('stops future inventory checks and WARNs once verification is unresolved', async () => {

@@ -4,13 +4,15 @@ import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { WRITE_CONTEXT_HEADING } from './quoted-selection'
 
 export const WRITE_ASSISTANT_THREAD_TITLE = 'Write Assistant'
-export const MAX_WRITE_THREAD_IDS_PER_WORKSPACE = 20
+export const MAX_WRITE_THREAD_IDS_PER_RESOURCE = 20
+export const MAX_WRITE_THREAD_IDS_PER_WORKSPACE = 200
 export const MAX_WRITE_THREAD_REGISTRY_WORKSPACES = 80
 
 export type WriteThreadWorkspaceRecord = {
   activeThreadId: string
   threadIds: string[]
   fileThreadIds: Record<string, string>
+  fileThreadHistoryIds: Record<string, string[]>
 }
 
 export type WriteThreadRegistry = {
@@ -122,6 +124,34 @@ function normalizeFileThreadIds(
   return Object.fromEntries(entries.slice(-MAX_WRITE_THREAD_IDS_PER_WORKSPACE))
 }
 
+function normalizeFileThreadHistoryIds(
+  value: unknown,
+  threadIds: readonly string[],
+  fileThreadIds: Record<string, string>
+): Record<string, string[]> {
+  const knownThreadIds = new Set(threadIds)
+  const histories: Record<string, string[]> = {}
+  if (value && typeof value === 'object') {
+    for (const [filePath, rawIds] of Object.entries(value as Record<string, unknown>)) {
+      const key = writeFileKey(filePath)
+      if (!key || !Array.isArray(rawIds)) continue
+      const ids = [...new Set(rawIds.flatMap((candidate) => {
+        const id = typeof candidate === 'string' ? candidate.trim() : ''
+        return id && knownThreadIds.has(id) ? [id] : []
+      }))].slice(0, MAX_WRITE_THREAD_IDS_PER_RESOURCE)
+      if (ids.length > 0) histories[key] = ids
+    }
+  }
+  for (const [fileKey, activeThreadId] of Object.entries(fileThreadIds)) {
+    const current = histories[fileKey] ?? []
+    histories[fileKey] = [
+      activeThreadId,
+      ...current.filter((id) => id !== activeThreadId)
+    ].slice(0, MAX_WRITE_THREAD_IDS_PER_RESOURCE)
+  }
+  return histories
+}
+
 function trimRegistryWorkspaces(
   workspaces: WriteThreadRegistry['workspaces']
 ): WriteThreadRegistry['workspaces'] {
@@ -143,6 +173,7 @@ export function normalizeWriteThreadRegistry(raw: unknown): WriteThreadRegistry 
       activeThreadId?: unknown
       threadIds?: unknown
       fileThreadIds?: unknown
+      fileThreadHistoryIds?: unknown
     }
     const threadIds = normalizeThreadIds(record.threadIds)
     const activeThreadId =
@@ -154,10 +185,16 @@ export function normalizeWriteThreadRegistry(raw: unknown): WriteThreadRegistry 
       : threadIds
     const cappedIds = nextIds.slice(0, MAX_WRITE_THREAD_IDS_PER_WORKSPACE)
     if (cappedIds.length > 0) {
+      const fileThreadIds = normalizeFileThreadIds(record.fileThreadIds, cappedIds)
       workspaces[key] = {
         activeThreadId: cappedIds[0],
         threadIds: cappedIds,
-        fileThreadIds: normalizeFileThreadIds(record.fileThreadIds, cappedIds)
+        fileThreadIds,
+        fileThreadHistoryIds: normalizeFileThreadHistoryIds(
+          record.fileThreadHistoryIds,
+          cappedIds,
+          fileThreadIds
+        )
       }
     }
   }
@@ -286,7 +323,8 @@ export function hydrateWriteThreadRegistry(
           ? current.activeThreadId
           : threadIds[0],
       threadIds,
-      fileThreadIds: current?.fileThreadIds ?? {}
+      fileThreadIds: current?.fileThreadIds ?? {},
+      fileThreadHistoryIds: current?.fileThreadHistoryIds ?? {}
     }
   }
 
@@ -305,20 +343,30 @@ export function markWriteThread(
   const record = registry.workspaces[key] ?? {
     activeThreadId: '',
     threadIds: [],
-    fileThreadIds: {}
+    fileThreadIds: {},
+    fileThreadHistoryIds: {}
   }
   const threadIds = [id, ...record.threadIds.filter((item) => item !== id)]
   const fileKey = writeFileKey(filePath)
   const fileThreadIds = fileKey
     ? { ...record.fileThreadIds, [fileKey]: id }
     : record.fileThreadIds
+  const fileThreadHistoryIds = fileKey
+    ? {
+        ...record.fileThreadHistoryIds,
+        [fileKey]: [
+          id,
+          ...(record.fileThreadHistoryIds[fileKey] ?? []).filter((item) => item !== id)
+        ].slice(0, MAX_WRITE_THREAD_IDS_PER_RESOURCE)
+      }
+    : record.fileThreadHistoryIds
   const workspaces = { ...registry.workspaces }
   delete workspaces[key]
   return normalizeWriteThreadRegistry({
     ...registry,
     workspaces: {
       ...workspaces,
-      [key]: { activeThreadId: id, threadIds, fileThreadIds }
+      [key]: { activeThreadId: id, threadIds, fileThreadIds, fileThreadHistoryIds }
     }
   })
 }
@@ -333,12 +381,24 @@ export function forgetWriteThread(
   for (const [workspaceRoot, record] of Object.entries(registry.workspaces)) {
     const threadIds = record.threadIds.filter((item) => item !== id)
     if (threadIds.length === 0) continue
+    const fileThreadHistoryIds = Object.fromEntries(
+      Object.entries(record.fileThreadHistoryIds).flatMap(([fileKey, historyIds]) => {
+        const nextIds = historyIds.filter((item) => item !== id)
+        return nextIds.length > 0 ? [[fileKey, nextIds] as const] : []
+      })
+    )
+    const fileThreadIds = Object.fromEntries(
+      Object.entries(record.fileThreadIds).flatMap(([fileKey, mappedId]) => {
+        if (mappedId !== id) return [[fileKey, mappedId] as const]
+        const replacement = fileThreadHistoryIds[fileKey]?.[0]
+        return replacement ? [[fileKey, replacement] as const] : []
+      })
+    )
     workspaces[workspaceRoot] = {
       activeThreadId: record.activeThreadId === id ? threadIds[0] : record.activeThreadId,
       threadIds,
-      fileThreadIds: Object.fromEntries(
-        Object.entries(record.fileThreadIds).filter(([, mappedId]) => mappedId !== id)
-      )
+      fileThreadIds,
+      fileThreadHistoryIds
     }
   }
   return normalizeWriteThreadRegistry({ version: 1, workspaces })
@@ -358,6 +418,7 @@ export function moveWriteFileThreads(
 
   let changed = false
   const fileThreadIds: Record<string, string> = {}
+  const fileThreadHistoryIds: Record<string, string[]> = {}
   for (const [fileKey, threadId] of Object.entries(record.fileThreadIds)) {
     if (fileKey === previousKey || fileKey.startsWith(`${previousKey}/`)) {
       fileThreadIds[`${nextKey}${fileKey.slice(previousKey.length)}`] = threadId
@@ -366,12 +427,20 @@ export function moveWriteFileThreads(
       fileThreadIds[fileKey] = threadId
     }
   }
+  for (const [fileKey, threadIds] of Object.entries(record.fileThreadHistoryIds)) {
+    if (fileKey === previousKey || fileKey.startsWith(`${previousKey}/`)) {
+      fileThreadHistoryIds[`${nextKey}${fileKey.slice(previousKey.length)}`] = threadIds
+      changed = true
+    } else {
+      fileThreadHistoryIds[fileKey] = threadIds
+    }
+  }
   if (!changed) return registry
   return normalizeWriteThreadRegistry({
     ...registry,
     workspaces: {
       ...registry.workspaces,
-      [workspaceKey]: { ...record, fileThreadIds }
+      [workspaceKey]: { ...record, fileThreadIds, fileThreadHistoryIds }
     }
   })
 }
@@ -390,12 +459,20 @@ export function forgetWriteFileThreads(
       candidate !== fileKey && !candidate.startsWith(`${fileKey}/`)
     )
   )
-  if (Object.keys(fileThreadIds).length === Object.keys(record.fileThreadIds).length) return registry
+  const fileThreadHistoryIds = Object.fromEntries(
+    Object.entries(record.fileThreadHistoryIds).filter(([candidate]) =>
+      candidate !== fileKey && !candidate.startsWith(`${fileKey}/`)
+    )
+  )
+  if (
+    Object.keys(fileThreadIds).length === Object.keys(record.fileThreadIds).length &&
+    Object.keys(fileThreadHistoryIds).length === Object.keys(record.fileThreadHistoryIds).length
+  ) return registry
   return normalizeWriteThreadRegistry({
     ...registry,
     workspaces: {
       ...registry.workspaces,
-      [workspaceKey]: { ...record, fileThreadIds }
+      [workspaceKey]: { ...record, fileThreadIds, fileThreadHistoryIds }
     }
   })
 }
@@ -404,25 +481,24 @@ export function pruneWriteThreadRegistry(
   threads: Array<Pick<NormalizedThread, 'id' | 'workspace'> & Partial<Pick<NormalizedThread, 'agentSurface'>>>,
   registry: WriteThreadRegistry = readWriteThreadRegistry()
 ): WriteThreadRegistry {
-  const known = new Set(
-    threads
-      .filter((thread) => thread.agentSurface !== 'code' && thread.agentSurface !== 'design')
-      .map((thread) => thread.id)
-  )
-  const workspaces: WriteThreadRegistry['workspaces'] = {}
-  for (const [workspaceRoot, record] of Object.entries(registry.workspaces)) {
-    const threadIds = record.threadIds.filter((id) => known.has(id))
-    if (threadIds.length === 0) continue
-    const activeThreadId = threadIds.includes(record.activeThreadId)
-      ? record.activeThreadId
-      : threadIds[0]
-    workspaces[workspaceRoot] = {
-      activeThreadId,
-      threadIds,
-      fileThreadIds: normalizeFileThreadIds(record.fileThreadIds, threadIds)
+  let next = normalizeWriteThreadRegistry(registry)
+  for (const thread of threads) {
+    if (thread.agentSurface === 'code' || thread.agentSurface === 'design') {
+      next = forgetWriteThread(thread.id, next)
     }
   }
-  return normalizeWriteThreadRegistry({ version: 1, workspaces })
+  return next
+}
+
+export function writeThreadIdsForFile(
+  workspaceRoot: string,
+  filePath: string,
+  registry: WriteThreadRegistry = readWriteThreadRegistry()
+): string[] {
+  const record = registry.workspaces[writeWorkspaceKey(workspaceRoot)]
+  const fileKey = writeFileKey(filePath)
+  if (!record || !fileKey) return []
+  return [...(record.fileThreadHistoryIds[fileKey] ?? [])]
 }
 
 export function activeWriteThreadForWorkspace(
@@ -437,8 +513,11 @@ export function activeWriteThreadForWorkspace(
   if (!record) return null
   const fileKey = writeFileKey(filePath)
   const targetThreadId = fileKey ? record.fileThreadIds[fileKey] : record.activeThreadId
-  if (fileKey && !targetThreadId) return null
-  const candidates = record.threadIds
+  const candidateIds = fileKey
+    ? record.fileThreadHistoryIds[fileKey] ?? (targetThreadId ? [targetThreadId] : [])
+    : record.threadIds
+  if (fileKey && candidateIds.length === 0) return null
+  const candidates = candidateIds
     .map((id) => threads.find((thread) => thread.id === id) ?? null)
     .filter((thread): thread is NormalizedThread => Boolean(thread))
     .filter((thread) => thread.archived !== true)
@@ -446,5 +525,5 @@ export function activeWriteThreadForWorkspace(
     .filter((thread) =>
       writeWorkspacePathsMatch(writeWorkspaceForThreadId(thread.id, registry) || thread.workspace, key)
     )
-  return candidates.find((thread) => thread.id === targetThreadId) ?? (fileKey ? null : candidates[0] ?? null)
+  return candidates.find((thread) => thread.id === targetThreadId) ?? candidates[0] ?? null
 }

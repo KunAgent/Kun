@@ -4,6 +4,7 @@ import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
 import { canUseMcpServer, normalizeMcpToolName } from '../src/adapters/tool/mcp-tool-provider.js'
 import {
   createMcpSearchProvider,
+  McpSearchCatalogController,
   type McpSearchCatalogRecord
 } from '../src/adapters/tool/mcp-tool-search.js'
 import { KunCapabilitiesConfig, McpServerConfig } from '../src/contracts/capabilities.js'
@@ -59,6 +60,7 @@ describe('MCP search provider honors blockedProviderIds', () => {
         createMcpSearchProvider({
           config: SEARCH_CONFIG,
           state: { records },
+          catalog: new McpSearchCatalogController(records),
           refreshCatalog: async () => records,
           isServerAvailable: () => true
         })
@@ -119,6 +121,7 @@ describe('MCP search provider honors blockedProviderIds', () => {
     const provider = createMcpSearchProvider({
       config: SEARCH_CONFIG,
       state: { records },
+      catalog: new McpSearchCatalogController(records),
       refreshCatalog: async () => {
         refreshes += 1
         return records
@@ -170,6 +173,7 @@ describe('MCP search provider honors workspace visibility roots', () => {
         createMcpSearchProvider({
           config: SEARCH_CONFIG,
           state: { records },
+          catalog: new McpSearchCatalogController(records),
           refreshCatalog: async () => records,
           isServerAvailable: canUseMcpServer
         })
@@ -223,13 +227,16 @@ describe('MCP search provider freezes its virtual catalog per turn', () => {
     }
     const added = record('github', 'create_issue', calls)
     const state = { records: [original] }
+    const catalog = new McpSearchCatalogController(state.records)
     const host = new LocalToolHost({
       registry: new CapabilityRegistry([
         createMcpSearchProvider({
           config: SEARCH_CONFIG,
           state,
+          catalog,
           refreshCatalog: async () => {
             state.records = [replacement, added]
+            catalog.replaceAll(state.records)
             return state.records
           },
           isServerAvailable: () => true

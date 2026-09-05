@@ -362,6 +362,8 @@ describe('ExtensionHostBroker', () => {
 
   it('returns fixed pre-gate permissions and leaves dynamic network scopes to broker validation', () => {
       expect(requiredExtensionBrokerPermission('storage.get', { scope: 'global', key: 'x' })).toBe('storage.global')
+      expect(requiredExtensionBrokerPermission('secrets.get', { key: 'x' })).toBe('storage.secrets')
+      expect(requiredExtensionBrokerPermission('agent.getRunOptions', {})).toBe('agent.run')
       expect(requiredExtensionBrokerPermission('agent.createRun', {})).toBe('agent.run')
       expect(requiredExtensionBrokerPermission('ui.attachComposerContext', {})).toBe('ui.actions')
       expect(requiredExtensionBrokerPermission('network.fetch', { url: 'https://api.example.test' })).toBeUndefined()

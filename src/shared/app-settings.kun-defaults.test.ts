@@ -442,6 +442,7 @@ describe('app behavior settings', () => {
     expect(normalizeAppSettings(raw).appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,
+      keepAwake: false,
       useSystemTitleBar: false,
       closeAction: 'ask',
       closeToTray: false
@@ -454,6 +455,7 @@ describe('app behavior settings', () => {
       appBehavior: {
         openAtLogin: false,
         startMinimized: true,
+        keepAwake: true,
         useSystemTitleBar: true,
         closeToTray: true
       }
@@ -462,10 +464,27 @@ describe('app behavior settings', () => {
     expect(normalized.appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,
+      keepAwake: true,
       useSystemTitleBar: true,
       closeAction: 'tray',
       closeToTray: true
     })
+  })
+
+  it('preserves and patches the keep-awake preference independently', () => {
+    const current = normalizeAppSettings({
+      ...settings(),
+      appBehavior: {
+        openAtLogin: false,
+        startMinimized: false,
+        keepAwake: true,
+        closeToTray: false
+      }
+    })
+
+    expect(current.appBehavior.keepAwake).toBe(true)
+    expect(mergeAppBehaviorSettings(current.appBehavior, { keepAwake: false }))
+      .toMatchObject({ keepAwake: false, openAtLogin: false, closeAction: 'ask' })
   })
 
   it('maps legacy closeToTray patches to explicit close actions', () => {

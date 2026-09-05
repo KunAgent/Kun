@@ -65,9 +65,10 @@ Manifest 权限是精确字符串，完整列表见 [Manifest](./manifest.md#权
 | Global State | `storage.global` | extension ID | 用户跨 workspace 偏好、轻量 cache metadata |
 | Workspace State | `storage.workspace` | extension ID + workspace | 项目相关配置/进度 |
 | View State | `webview`/View contract | extension + contribution + workspace | UI 展开、筛选、cursor 等 |
+| Protected Extension Secrets | `storage.secrets` | profile + extension ID + key | Node Host 自有的服务密钥等短字符串 |
 | Credential Store | Account Broker | provider + account + credential reference | API key、OAuth token、secret |
 
-前三者只能保存 Schema-valid、quota-bounded structured data，不能作为 secret store。Binary、大日志、完整 prompt/attachment 和 credential 禁止放入 state。账号秘密只能通过 Credential Store。
+Global、Workspace 和 View state 只能保存 Schema-valid、quota-bounded structured data，不能作为 secret store。Protected Extension Secrets 使用 OS 凭据后端或经过认证的加密回退，并且不会暴露给 Extension View。Binary、大日志、完整 prompt/attachment 和 credential 禁止放入普通 state。
 
 扩展包目录不可写作状态目录。可变数据默认在：
 

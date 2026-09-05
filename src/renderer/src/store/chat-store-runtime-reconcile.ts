@@ -40,6 +40,7 @@ export async function reconcileCompletedTurnFromThreadDetail(input: {
       latestTurnId,
       latestTurnStatus,
       latestTurnStartedAtMs,
+      turnDurationByUserId,
       goal,
       todos
     } = await input.loadThreadDetail(threadId)
@@ -55,6 +56,7 @@ export async function reconcileCompletedTurnFromThreadDetail(input: {
         latestTurnId,
         latestTurnStatus,
         latestTurnStartedAtMs,
+        turnDurationByUserId,
         goal,
         todos,
         turnId: input.turnId,

@@ -53,9 +53,8 @@ import {
   ensureRuntime,
   resolveManagedKunLaunchSettings
 } from './main-runtime-startup'
-import {
-  reconcileBrowserUseHostForRuntime
-} from './browser-use/browser-use-host'
+import { reconcileBrowserUseHostForRuntime } from './browser-use/browser-use-host'
+import { bundledSkillsDirectory } from './bundled-skill-resources'
 
 export function publishRuntimeSettingsSyncStatus(
   status: Omit<KunRuntimeSettingsSyncStatusPayload, 'at'>
@@ -173,6 +172,11 @@ export function queueRuntimeSettingsApply(
         } else if (result === 'applied') {
           mainState.settledRuntimeSettings = current
           reportCurrent({ state: 'synced' })
+        } else if (result === 'failed') {
+          reportCurrent({
+            state: 'failed',
+            message: 'Kun rejected the updated configuration; the existing Runtime was kept running.'
+          })
         } else {
           mainState.settledRuntimeSettings = current
           reportCurrent({ state: 'unavailable', message: 'Kun Runtime is not running.' })
@@ -243,6 +247,11 @@ export function queueRuntimeMcpConfigApply(settings: AppSettingsV1): void {
         reportSettingsOutcome(await restartManagedRuntimeForMcpConfigChange(current))
       } else if (result === 'applied') {
         reportSettingsOutcome({ state: 'synced' })
+      } else if (result === 'failed') {
+        reportSettingsOutcome({
+          state: 'failed',
+          message: 'Kun rejected the MCP configuration; the existing Runtime was kept running.'
+        })
       } else {
         reportSettingsOutcome({ state: 'unavailable', message: 'Kun Runtime is not running.' })
       }
@@ -325,6 +334,7 @@ type ManagedRuntimeHotApplyResult =
   | 'skipped'
   | 'superseded'
   | 'restart_required'
+  | 'failed'
 type ManagedRuntimeSettingsApplyOutcome = Pick<
   KunRuntimeSettingsSyncStatusPayload,
   'state' | 'message'
@@ -347,7 +357,8 @@ export async function applyManagedRuntimeSettingsHot(
     scheduleMcp: {
       settings,
       launch: getClawScheduleMcpLaunchConfig()
-    }
+    },
+    builtinSkillsRoot: bundledSkillsDirectory()
   })
   if (!shouldApply()) return 'superseded'
   const browserUseHost = await reconcileBrowserUseHostForRuntime(
@@ -391,7 +402,8 @@ export async function applyManagedRuntimeSettingsHot(
       logWarn(source, `Kun hot config apply requested restart: ${outcome.message}`)
       return 'restart_required'
     }
-    throw new Error(outcome.message)
+    logWarn(source, `Kun rejected hot config without restart: ${outcome.message}`)
+    return 'failed'
   } catch (error) {
     if (!shouldApply()) return 'superseded'
     const message = error instanceof Error ? error.message : String(error)
@@ -421,7 +433,13 @@ async function restartManagedRuntimeForSettingsChange(
   const wasRunning = adapter.isChildRunning()
 
   if (wasRunning) {
-    await waitForManagedRuntimeReadyBeforeStop(prev, 'settings-apply')
+    const safeToStop = await waitForManagedRuntimeReadyBeforeStop(prev, 'settings-apply')
+    if (!safeToStop) {
+      return {
+        state: 'failed',
+        message: 'Kun still has active work or its turn state could not be verified; restart was deferred.'
+      }
+    }
   }
   // Filesystem discovery is only a mirror. Always ask the Manager-aware
   // adapter to stop the authoritative registration, even when the mirror (and
@@ -568,7 +586,13 @@ async function restartManagedRuntimeForMcpConfigChange(
   const wasRunning = adapter.isChildRunning()
 
   if (wasRunning) {
-    await waitForManagedRuntimeReadyBeforeStop(settings, 'mcp-config')
+    const safeToStop = await waitForManagedRuntimeReadyBeforeStop(settings, 'mcp-config')
+    if (!safeToStop) {
+      return {
+        state: 'failed',
+        message: 'Kun still has active work or its turn state could not be verified; restart was deferred.'
+      }
+    }
   }
   await adapter.stopSharedAndWait(settings)
   if (!runtime.autoStart) {
@@ -601,18 +625,21 @@ async function restartManagedRuntimeForMcpConfigChange(
 async function waitForManagedRuntimeReadyBeforeStop(
   settings: AppSettingsV1,
   source: string
-): Promise<void> {
+): Promise<boolean> {
   const healthy = await kunRuntimeHealthMonitor.waitForHealthy(settings, 20_000)
   if (!healthy) {
-    logWarn(source, 'Kun did not become healthy before a managed restart; stopping it anyway')
-    return
+    logWarn(source, 'Kun did not become healthy before a managed restart; restart was deferred')
+    return false
   }
   const idle = await waitForRuntimeTurnsIdle({ settings })
   if (idle === 'timeout') {
-    logWarn(source, 'Kun still has running turns after waiting; stopping it anyway')
+    logWarn(source, 'Kun still has running turns after waiting; restart was deferred')
+    return false
   } else if (idle === 'unavailable') {
-    logWarn(source, 'Could not verify Kun turn idleness before a managed restart; stopping it anyway')
+    logWarn(source, 'Could not verify Kun turn idleness before a managed restart; restart was deferred')
+    return false
   }
+  return true
 }
 
 export async function runtimeRequest(
@@ -623,6 +650,7 @@ export async function runtimeRequest(
   try {
     return await runtimeRequestViaHost(settings, pathAndQuery, init, ensureRuntime)
   } catch (e) {
+    if (init.signal?.aborted) return runtimeFailure('aborted', 'Runtime request was cancelled.', 0)
     const message = e instanceof Error ? e.message : String(e)
     logError('runtime-request', `HTTP request to ${pathAndQuery} failed`, { message })
     const parsed = parseRuntimeErrorBody(message, message)

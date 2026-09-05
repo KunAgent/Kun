@@ -1,0 +1,13 @@
+{
+  "modelErrorSourceProvider": "प्रदाता की प्रतिक्रिया",
+  "modelErrorSourceNoResponse": "प्रदाता से कोई प्रतिक्रिया नहीं",
+  "modelErrorSourceNotSent": "अनुरोध नहीं भेजा गया",
+  "modelErrorProviderSummaryUnavailable": "प्रदाता अस्थायी रूप से इस अनुरोध को संसाधित नहीं कर सकता",
+  "modelErrorProviderSummaryRateLimited": "प्रदाता ने इस अनुरोध की दर सीमित कर दी",
+  "modelErrorProviderSummaryRejected": "प्रदाता ने इस अनुरोध को अस्वीकार कर दिया",
+  "modelErrorProviderSummaryGeneric": "प्रदाता ने त्रुटि लौटाई",
+  "modelErrorNoResponseSummary": "मॉडल अनुरोध भेजा गया, लेकिन प्रदाता ने प्रतिक्रिया नहीं दी",
+  "modelErrorNotSentSummary": "मॉडल अनुरोध भेजे जाने से पहले विफल हो गया",
+  "modelErrorProviderOriginalMessage": "प्रदाता द्वारा लौटाया गया संदेश",
+  "modelErrorFailureMessage": "विफलता का कारण"
+}

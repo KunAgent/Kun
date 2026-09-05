@@ -44,7 +44,8 @@ export type ProviderQuotaProbe = {
 
 export type ProviderQuotaSourceSnapshot = {
   profiles: ProviderQuotaProbeProfile[]
-  proxyUrl: string
+  /** Retained for legacy callers only; Provider profiles never inherit it. */
+  proxyUrl?: string
 }
 
 export type ProviderLocalCostLoader = (
@@ -96,7 +97,7 @@ export class ProviderQuotaService {
       mapWithConcurrency(
         source.profiles,
         QUOTA_CONCURRENCY,
-        async (profile) => this.refreshProfile(profile, source.proxyUrl)
+        async (profile) => this.refreshProfile(profile, profile.proxyUrl ?? '')
       ),
       localCostsPromise
     ])

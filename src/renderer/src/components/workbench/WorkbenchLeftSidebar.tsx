@@ -45,6 +45,7 @@ export type WorkbenchLeftSidebarProps = {
   onCodeOpen: CodeSidebarProps['onCodeOpen']
   onWriteOpen: CodeSidebarProps['onWriteOpen']
   onScheduleOpen: CodeSidebarProps['onScheduleOpen']
+  onBoardOpen?: CodeSidebarProps['onBoardOpen']
   onWorkflowOpen: CodeSidebarProps['onWorkflowOpen']
   onNewConversation: CodeSidebarProps['onNewConversation']
   onBeginResize: PointerEventHandler<HTMLDivElement>
@@ -89,6 +90,7 @@ export function WorkbenchLeftSidebar({
   onCodeOpen,
   onWriteOpen,
   onScheduleOpen,
+  onBoardOpen,
   onWorkflowOpen,
   onNewConversation,
   onBeginResize
@@ -148,6 +150,7 @@ export function WorkbenchLeftSidebar({
             onCodeOpen={onCodeOpen}
             onWriteOpen={onWriteOpen}
             onScheduleOpen={onScheduleOpen}
+            onBoardOpen={onBoardOpen}
             onWorkflowOpen={onWorkflowOpen}
             onNewConversation={onNewConversation}
           />

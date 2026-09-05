@@ -3,6 +3,7 @@ import type { NormalizedThread } from '../agent/types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import type { BrowserStorageLike } from '../lib/browser-storage'
+import { emptyRemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspaces'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -51,6 +52,12 @@ class MemoryStorage implements BrowserStorageLike {
   }
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 function buildHarness(): {
   actions: ReturnType<typeof createNavigationActions>
   state: ChatState
@@ -74,6 +81,7 @@ function buildHarness(): {
     selectThread: vi.fn(async () => undefined),
     subscribeThreadEventsLive: vi.fn(async () => undefined),
     recoverActiveTurn: vi.fn(async () => true),
+    removedCodeWorkspaces: emptyRemovedCodeWorkspacesRegistry(),
     threads: [] as NormalizedThread[],
     unreadThreadIds: {},
     watchTurnCompletion: {},
@@ -86,8 +94,10 @@ function buildHarness(): {
     state = { ...state, ...update }
   }
   const get: ChatStoreGet = () => state
+  const actions = createNavigationActions({ set, get, sseAbortRef: { current: null } })
+  state.refreshThreads = actions.refreshThreads
   return {
-    actions: createNavigationActions({ set, get, sseAbortRef: { current: null } }),
+    actions,
     get state() {
       return state
     }
@@ -173,5 +183,52 @@ describe('refreshThreads runtime state reconciliation transport', () => {
       latestTurnStatus: 'running'
     })
     expect(harness.state.watchTurnCompletion).toEqual({ thr_live: true })
+  })
+
+  it('uses the latest tombstone when a project is removed during refresh', async () => {
+    const pendingList = deferred<NormalizedThread[]>()
+    const provider = {
+      listThreads: vi.fn(() => pendingList.promise),
+      getThreadDetail: vi.fn(async () => ({ blocks: [] }))
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+    vi.stubGlobal('window', {
+      localStorage: new MemoryStorage(),
+      kunGui: { getSettings: vi.fn(async () => ({ write: { defaultWorkspaceRoot: '', activeWorkspaceRoot: '', workspaces: [] } })) }
+    })
+    const harness = buildHarness()
+    harness.state.codeWorkspaceRoots = ['/project']
+
+    const refreshing = harness.actions.refreshThreads()
+    await vi.waitFor(() => expect(provider.listThreads).toHaveBeenCalledOnce())
+    await harness.actions.removeWorkspace('/project')
+    pendingList.resolve([thread({ id: 'thr_project', workspace: '/project' })])
+    await refreshing
+
+    expect(harness.state.codeWorkspaceRoots).not.toContain('/project')
+  })
+
+  it('coalesces refresh calls made in flight into one trailing refresh', async () => {
+    const first = deferred<NormalizedThread[]>()
+    const provider = {
+      listThreads: vi.fn()
+        .mockImplementationOnce(() => first.promise)
+        .mockResolvedValue([]),
+      getThreadDetail: vi.fn(async () => ({ blocks: [] }))
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+    vi.stubGlobal('window', {
+      localStorage: new MemoryStorage(),
+      kunGui: { getSettings: vi.fn(async () => ({ write: { defaultWorkspaceRoot: '', activeWorkspaceRoot: '', workspaces: [] } })) }
+    })
+    const harness = buildHarness()
+
+    const refreshing = harness.actions.refreshThreads()
+    await vi.waitFor(() => expect(provider.listThreads).toHaveBeenCalledOnce())
+    await harness.actions.refreshThreads()
+    await harness.actions.refreshThreads()
+    first.resolve([])
+    await refreshing
+    await vi.waitFor(() => expect(provider.listThreads).toHaveBeenCalledTimes(2))
   })
 })

@@ -199,4 +199,65 @@ describe('thread send model memory', () => {
       thr_existing: { model: 'k3', providerId: 'test-provider', source: 'user' }
     })
   })
+
+  it('freezes the composer execution settings on a queued submission and keeps a queued snapshot authoritative', async () => {
+    const sendUserMessage = vi.fn(async () => ({
+      threadId: 'thr_existing',
+      turnId: 'turn_exec_snapshot',
+      userMessageItemId: 'item_exec_snapshot'
+    }))
+    registryMock.getProvider.mockReturnValue({
+      sendUserMessage,
+      subscribeThreadEvents: vi.fn(async () => undefined)
+    })
+    stubRuntimeWindow()
+    const { actions, state } = buildHarness()
+    state.busy = false
+    state.route = 'chat'
+    state.composerExecutionSettings = {
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write',
+      approvalReviewer: 'user'
+    }
+
+    // A busy-thread submission freezes whatever the composer shows now.
+    await expect(actions.sendMessage('queued with composer policy', 'agent')).resolves.toBe(true)
+    expect(sendUserMessage).toHaveBeenLastCalledWith(
+      'thr_existing',
+      'queued with composer policy',
+      expect.objectContaining({
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        approvalReviewer: 'user'
+      })
+    )
+
+    // A replayed queued message keeps its own frozen snapshot even after the
+    // composer moved on to a different policy.
+    state.busy = false
+    state.composerExecutionSettings = {
+      approvalPolicy: 'auto',
+      sandboxMode: 'danger-full-access',
+      approvalReviewer: 'user'
+    }
+    const queued = {
+      id: 'q-exec-snapshot',
+      text: 'replayed with the original policy',
+      mode: 'agent' as const,
+      deliveryState: 'starting' as const,
+      approvalPolicy: 'always' as const,
+      sandboxMode: 'read-only' as const,
+      approvalReviewer: 'agent' as const
+    }
+    await expect(actions.sendMessage(queued.text, queued.mode, { queued })).resolves.toBe(true)
+    expect(sendUserMessage).toHaveBeenLastCalledWith(
+      'thr_existing',
+      queued.text,
+      expect.objectContaining({
+        approvalPolicy: 'always',
+        sandboxMode: 'read-only',
+        approvalReviewer: 'agent'
+      })
+    )
+  })
 })

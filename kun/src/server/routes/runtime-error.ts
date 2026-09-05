@@ -25,6 +25,8 @@ export const ERRORS = {
     errorResponse({ code: 'attachment_validation_failed', message, details: issues }, 400),
   conflict: (message: string) =>
     errorResponse({ code: 'conflict', message }, 409),
+  turnInProgress: (message: string) =>
+    errorResponse({ code: 'turn_in_progress', message }, 409),
   taskSurfaceLocked: (message: string, details?: unknown) =>
     errorResponse({
       code: 'task_surface_locked',

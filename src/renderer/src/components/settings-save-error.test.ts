@@ -15,6 +15,7 @@ describe('parseSettingsSaveIssue', () => {
           apiKey: '',
           baseUrl: 'https://zenmux.ai/api/v1',
           endpointFormat: 'chat_completions',
+          useProxy: false,
           models: ['qwen/qwen3.5-flash'],
           modelProfiles: {
             'qwen/qwen3.5-flash': {

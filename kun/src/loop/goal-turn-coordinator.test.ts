@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
+import { makeToolResultItem } from '../domain/item.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { TurnService } from '../services/turn-service.js'
 import { GoalTurnCoordinator } from './goal-turn-coordinator.js'
@@ -58,9 +59,10 @@ function harness() {
     userMessageItemId: 'item_resumed'
   }))
   const runTurn = vi.fn(async () => 'completed' as const)
+  const finishTurn = vi.fn(async () => ({ kind: 'settled', status: 'failed' as const }))
   const coordinator = new GoalTurnCoordinator({
     threadStore,
-    turns: { startTurn } as Pick<TurnService, 'startTurn'>,
+    turns: { startTurn, finishTurn } as unknown as Pick<TurnService, 'startTurn' | 'finishTurn'>,
     events,
     nowIso: () => `2026-07-11T00:00:0${nowSequence++}.000Z`,
     nowMs: () => nowMs,
@@ -80,6 +82,7 @@ function harness() {
     timers,
     startTurn,
     runTurn,
+    finishTurn,
     setNowMs: (value: number) => { nowMs = value }
   }
 }
@@ -130,6 +133,24 @@ describe('GoalTurnCoordinator', () => {
     expect(h.eventDrafts).toEqual([])
   })
 
+  it('accounts a graceful suspension slice without scheduling terminal resume', async () => {
+    const h = harness()
+    await h.threadStore.upsert(activeThread())
+    const timer = await h.coordinator.begin(threadId)
+    h.setNowMs(5_900)
+
+    await h.coordinator.afterSuspended(threadId, timer)
+
+    expect((await h.threadStore.get(threadId))?.goal?.timeUsedSeconds).toBe(4)
+    expect(h.eventDrafts).toEqual([
+      expect.objectContaining({
+        kind: 'goal_updated',
+        goal: expect.objectContaining({ timeUsedSeconds: 4 })
+      })
+    ])
+    expect(h.timers.filter((entry) => !entry.cancelled)).toHaveLength(0)
+  })
+
   it('records token usage and moves an exhausted active goal to usageLimited', async () => {
     const h = harness()
     await h.threadStore.upsert(activeThread())
@@ -147,7 +168,12 @@ describe('GoalTurnCoordinator', () => {
   it('consumes progress and deliberate-stop state before cleanup', async () => {
     const progressing = harness()
     await progressing.threadStore.upsert(activeThread())
-    progressing.coordinator.noteToolExecuted(turnId, 'write')
+    progressing.coordinator.noteToolExecuted(turnId, 'write', {
+      item: makeToolResultItem({
+        id: 'item_success', threadId, turnId, callId: 'call_success', toolName: 'write', output: {}
+      }),
+      approved: true
+    })
     await progressing.coordinator.afterTerminal({
       threadId,
       turnId,
@@ -173,5 +199,59 @@ describe('GoalTurnCoordinator', () => {
       timer: null
     })
     expect(suppressed.timers.filter((entry) => !entry.cancelled)).toHaveLength(0)
+  })
+
+  it('does not count failed tool results or goal bookkeeping as progress', () => {
+    const h = harness()
+    h.coordinator.noteToolExecuted(turnId, 'write', {
+      item: makeToolResultItem({
+        id: 'item_failed', threadId, turnId, callId: 'call_failed', toolName: 'write',
+        output: { error: 'failed' }, isError: true
+      }),
+      approved: false
+    })
+    h.coordinator.noteToolExecuted(turnId, 'get_goal', {
+      item: makeToolResultItem({
+        id: 'item_goal', threadId, turnId, callId: 'call_goal', toolName: 'get_goal', output: {}
+      }),
+      approved: true
+    })
+    expect(h.coordinator.hasMadeProgress(turnId)).toBe(false)
+  })
+
+  it('resumes a restarted goal only while the same failed turn remains latest', async () => {
+    const h = harness()
+    const failed = activeThread()
+    failed.turns = [{ ...failed.turns[0]!, status: 'failed' }]
+    await h.threadStore.upsert(failed)
+
+    await expect(h.coordinator.resumeInterruptedGoals([{ threadId, turnId }])).resolves.toBe(1)
+    expect(h.startTurn).toHaveBeenCalledOnce()
+    expect(h.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId }),
+      { expectedLatestFailedTurnId: turnId }
+    )
+
+    const raced = harness()
+    await raced.threadStore.upsert(failed)
+    const originalGet = raced.threadStore.get.bind(raced.threadStore)
+    let reads = 0
+    vi.spyOn(raced.threadStore, 'get').mockImplementation(async (id) => {
+      const current = await originalGet(id)
+      reads += 1
+      if (reads === 1 || !current) return current
+      return {
+        ...current,
+        turns: [...current.turns, createTurnRecord({
+          id: 'turn_newer',
+          threadId,
+          prompt: 'new work',
+          status: 'completed'
+        })]
+      }
+    })
+
+    await expect(raced.coordinator.resumeInterruptedGoals([{ threadId, turnId }])).resolves.toBe(0)
+    expect(raced.startTurn).not.toHaveBeenCalled()
   })
 })

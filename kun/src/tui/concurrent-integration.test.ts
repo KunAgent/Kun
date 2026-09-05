@@ -18,8 +18,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('TUI and GUI-style client coexistence', () => {
-  it('shares one runtime event stream and retires an approval decided by the other client', async () => {
+describe('explicit TUI attachment and GUI-style client coexistence', () => {
+  it('shares one event stream in --no-start mode and retires an approval decided by the other client', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-concurrent-'))
     roots.push(root)
     const runtimeToken = 'integration-runtime-token'
@@ -43,7 +43,7 @@ describe('TUI and GUI-style client coexistence', () => {
       dataDir: root,
       workspace: root,
       continueLatest: false,
-      noStart: false,
+      noStart: true,
       help: false
     }
     const connection = await resolveTuiConnection(options)

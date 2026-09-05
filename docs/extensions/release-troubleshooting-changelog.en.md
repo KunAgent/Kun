@@ -196,10 +196,47 @@ The Changelog records public Extension API, not Kun internal refactors. Each ent
 The public surface snapshots below are computed from package entries, public exports, and reachable `.d.ts` declarations. Update them only after this section explains the compatibility impact; changing a hash is not itself a Changelog entry.
 
 <!-- BEGIN GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
-<!-- sdk-surface-snapshot @kun/extension-api@1.2.0 sha256:a7d676f0869a5c40f73bff7b30e567e7c5efa0536b0650b1fd30ee82551d6cf8 -->
-<!-- sdk-surface-snapshot @kun/extension-react@1.2.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
-<!-- sdk-surface-snapshot @kun/extension-test@1.2.0 sha256:fccbdd3fb3400ce179f8d6c3ae1d191bfe3488ef125577423f3d2b3f4fad851d -->
+<!-- sdk-surface-snapshot @kun/extension-api@1.4.0 sha256:2a1dd3410cd89e76b70c7752cca01442d6c42cb5dd4c78e7a96591ef8aed862b -->
+<!-- sdk-surface-snapshot @kun/extension-react@1.4.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
+<!-- sdk-surface-snapshot @kun/extension-test@1.4.0 sha256:9aa234e9c62776edab832924aef8f925f68679732e8ab08626c21ffabd42e28e -->
 <!-- END GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
+
+### v1.4.0 — Recoverable Agent conversation history
+
+Compatible Kun: `>=0.3.8`.
+
+Added:
+
+- `context.agent.getRunOptions()` returns the active primary connection's safe model catalog and per-model reasoning efforts; `createRun` accepts optional `model` / `reasoningEffort`, and Run projections report the admitted values.
+- `context.agent.listRunEvents({ runId, afterSequence?, limit? })` returns bounded chronological `{ items, cursor, hasMore, historyIncomplete }` pages, defaulting to 100 and capped at 200; the numeric cursor continues another page or seeds a live subscription.
+- Message events now support `role: 'user'` and carry stable `messageId` plus `phase: 'delta' | 'replace' | 'complete'`, allowing clients to merge streaming updates without duplicate messages.
+
+Security:
+
+- The model catalog projects only configured models and capabilities on Kun's active connection, never credentials, accounts, or other Providers. The Host rejects out-of-catalog models and unsupported efforts.
+- History remains owner-only. Public projections include user/assistant text, Host-generated tool state summaries, and existing state/usage/terminal events while filtering internal context, reasoning, tool arguments/results, file paths, and gate credentials.
+
+Migration:
+
+- Extensions that need recoverable conversation history use `apiVersion: 1.4.0` and `engines.kun >=0.3.8`. Existing v1.3 and earlier extensions remain compatible.
+
+### v1.3.0 — Protected extension secrets
+
+Compatible Kun: `>=0.3.8`.
+
+Added:
+
+- The `storage.secrets` permission and Node-Host-only `context.secrets.get/set/delete`. Values are isolated by profile, extension ID, and key, use the OS credential backend or authenticated encrypted fallback, and are limited to 16 KiB each.
+- `@kun/extension-test` provides the matching in-memory fake with the same permission gate.
+
+Security:
+
+- Extension Views cannot invoke secret methods. View work that needs a secret must route through a declared Node command.
+- Ordinary global/workspace/View state, Host projections, and logs never contain these values. Calls fail closed when protected storage is unavailable.
+
+Migration:
+
+- Only Node extensions that store their own service secrets need `apiVersion: 1.3.0` and `storage.secrets`. v1.2, v1.1, and v1.0 extensions require no changes.
 
 ### v1.2.0 — Media scheduling, local analysis, and project interchange
 

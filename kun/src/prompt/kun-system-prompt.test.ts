@@ -208,10 +208,27 @@ describe('buildToolPreferenceInstruction', () => {
     expect(instruction).toContain('fresh independent review')
     expect(instruction).toContain('parallel investigation of independent workstreams')
     expect(instruction).toContain('keep integration and final verification in the parent agent')
+    expect(instruction).toContain('required for the current final answer')
+    expect(instruction).toContain('run the child in the foreground and do not set detach=true')
+    expect(instruction).toContain('not a final-answer quality gate')
+    expect(instruction).toContain('launch only one reviewer')
+    expect(instruction).toContain('do not start an overlapping foreground reviewer')
+    expect(instruction).toContain('explicitly distinct, independent scopes')
+    expect(instruction).toContain('Do not claim that a detached review passed')
     expect(instruction).toContain('Do not delegate trivial work')
     expect(instruction).toContain('proactiveRetry.eligible=true')
     expect(instruction).toContain('exact resumeChildId and expectedResumeCount')
     expect(instruction).toContain('do not blindly retry unchanged authentication')
+  })
+
+  it('omits review scheduling guidance when delegation is unavailable', () => {
+    const instruction = buildToolPreferenceInstruction([
+      { name: 'list_subagent_profiles', description: 'List reusable roles' }
+    ])
+
+    expect(instruction).not.toContain('launch only one reviewer')
+    expect(instruction).not.toContain('not a final-answer quality gate')
+    expect(instruction).not.toContain('detached review passed')
   })
 
   it('describes the stateful image-first PPT review loop without the legacy one-call board path', () => {
@@ -229,6 +246,8 @@ describe('buildToolPreferenceInstruction', () => {
     expect(instruction).toContain('action="revise_previews"|"retry_failed"')
     expect(instruction).toContain('action="approve_and_build"')
     expect(instruction).toContain('same PPT child')
+    expect(instruction).toContain('phase="source_unavailable"')
+    expect(instruction).toContain('never bypass governance')
     expect(instruction).toContain('exact active user turn')
     expect(instruction).toContain('Never rewrite, summarize, supplement, or invent')
     expect(instruction).toContain('`.kun-ppt.html`')

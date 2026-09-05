@@ -134,6 +134,7 @@ function multiProviderSettings(): AppSettingsV1 {
     apiKey: 'codex-oauth',
     baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
     endpointFormat: 'custom_endpoint',
+    useProxy: false,
     models: ['gpt-5.6-sol'],
     modelProfiles: {}
   }
@@ -144,6 +145,7 @@ function multiProviderSettings(): AppSettingsV1 {
     apiKey: 'sk-minimax-old',
     baseUrl: 'https://api.minimaxi.com/anthropic',
     endpointFormat: 'messages',
+    useProxy: false,
     models: ['MiniMax-M2'],
     modelProfiles: {}
   }

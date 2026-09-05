@@ -146,6 +146,50 @@ describe('usage event mapping', () => {
     })
   })
 
+  it('passes through cache diagnostics and the live per-request hit rate', async () => {
+    let captured: unknown = null
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onUsage: (usage) => {
+        captured = usage
+      }
+    }
+
+    await dispatchKunRuntimeEvent(
+      {
+        kind: 'usage',
+        seq: 16,
+        turnId: 'turn_2',
+        usage: {
+          promptTokens: 100,
+          completionTokens: 5,
+          totalTokens: 105,
+          reasoningTokens: 12,
+          cacheHitTokens: 80,
+          cacheMissTokens: 20,
+          cacheHitRate: 0.8,
+          cacheableTokenHitRate: 0.8,
+          totalInputTokenHitRate: 0.6,
+          cacheMissReasons: ['tool_catalog_changed'],
+          cacheSuggestions: ['Keep MCP tools stable.'],
+          lastRequestCacheHitRate: 0.8,
+          turns: 1
+        }
+      },
+      sink,
+      async () => undefined
+    )
+
+    expect(captured).toMatchObject({
+      reasoningTokens: 12,
+      cacheableTokenHitRate: 0.8,
+      totalInputTokenHitRate: 0.6,
+      cacheMissReasons: ['tool_catalog_changed'],
+      cacheSuggestions: ['Keep MCP tools stable.'],
+      lastRequestCacheHitRate: 0.8
+    })
+  })
+
   it('normalizes missing or invalid timing fields to null', async () => {
     let captured: unknown = null
     const sink: ThreadEventSink = {

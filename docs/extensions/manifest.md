@@ -303,6 +303,7 @@ v1 权限是精确字符串数组：
 | `network:<hostname>` / `network:*.example.com` | 通过 Network Broker 访问精确 hostname，或显式接受的子域 wildcard |
 | `storage.global` | 使用扩展隔离的全局状态 |
 | `storage.workspace` | 使用扩展隔离的工作区状态 |
+| `storage.secrets` | Node Host 使用受保护、扩展隔离的秘密字符串存储；View 不可直接访问 |
 | `workspace.read` | 通过 Broker 读取获准工作区 |
 | `workspace.write` | 通过 Broker 写入获准工作区，仍受政策/审批限制 |
 

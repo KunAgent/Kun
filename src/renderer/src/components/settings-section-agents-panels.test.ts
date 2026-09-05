@@ -15,14 +15,13 @@ import {
   modelProviderPresetProfile,
   renderToStaticMarkup,
   t,
-  useChatStore,
   vi,
   type KunFastContextSettingsV1,
   type KunLabSettingsV1,
-  type ModelProviderModelGroup,
   type ModelProviderModelProfileV1, type ModelProviderProfileV1,
   type ReactTestRenderer
 } from './settings-section-agents.test-support'
+import { defaultKunLabSettings } from '@shared/app-settings'
 
 
 describe('AgentsSettingsSection Kun diagnostics smoke', () => {
@@ -147,7 +146,10 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
     act(() => {
       renderer = createRenderer(createElement(LaboratorySettingsSection, {
-        ctx: baseCtx()
+        ctx: {
+          ...baseCtx(),
+          t: (key: string) => key === 'labAutoPlanBuildTitle' ? 'Automatic plan and build' : t(key)
+        }
       }))
     })
 
@@ -155,22 +157,24 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       .findAllByProps({ role: 'tab' })
       .filter((tab) => String(tab.props.id ?? '').startsWith('laboratory-settings-tab-'))
     expect(laboratoryTabs.map(instanceText)).toEqual([
-      'Personas',
       'Conversation visualization',
+      'Automatic plan and build',
       'Computer control',
       'Browser',
       'Graph mode',
-      'PPT agent'
+      'PPT agent',
+      'Project board'
     ])
     expect(laboratoryTabs.map((tab) => tab.props['aria-selected']))
-      .toEqual([true, false, false, false, false, false])
+      .toEqual([true, false, false, false, false, false, false])
     expect(laboratoryTabs.map((tab) => tab.props['aria-controls'])).toEqual([
-      'laboratory-settings-panel-persona',
       'laboratory-settings-panel-visualization',
+      'laboratory-settings-panel-autoPlanBuild',
       'laboratory-settings-panel-computer',
       'laboratory-settings-panel-browser',
       'laboratory-settings-panel-graph',
-      'laboratory-settings-panel-ppt'
+      'laboratory-settings-panel-ppt',
+      'laboratory-settings-panel-projectBoard'
     ])
     expect(laboratoryTabs.every((tab) => tab.props.className.includes('min-w-max'))).toBe(true)
     expect(laboratoryTabs.flatMap((tab) => tab.findAllByType('span'))
@@ -179,9 +183,12 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const laboratoryPanels = renderer.root
       .findAllByProps({ role: 'tabpanel' })
       .filter((panel) => String(panel.props.id ?? '').startsWith('laboratory-settings-panel-'))
-    expect(laboratoryPanels).toHaveLength(6)
+    expect(laboratoryPanels).toHaveLength(7)
     expect(laboratoryPanels.map((panel) => panel.props.hidden))
-      .toEqual([false, true, true, true, true, true])
+      .toEqual([false, true, true, true, true, true, true])
+    expect(renderer.root.findAllByProps({
+      id: 'laboratory-settings-panel-persona'
+    })).toHaveLength(0)
   })
 
   it('passes the runtime Browser Use capability into its settings panel', () => {
@@ -212,20 +219,27 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     )
   })
 
-  it('updates the composer persona experiment from the laboratory switch', () => {
+  it('renders and updates composer personas from the assistant panel', () => {
     const update = vi.fn()
     let renderer!: ReactTestRenderer
     act(() => {
-      renderer = createRenderer(createElement(LaboratorySettingsSection, {
+      renderer = createRenderer(createElement(AgentsSettingsSection, {
         ctx: { ...baseCtx(), update }
       }))
     })
 
-    const personaPanel = renderer.root.findByProps({
-      id: 'laboratory-settings-panel-persona'
+    const assistantPanel = renderer.root.findByProps({
+      id: 'agents-settings-panel-assistant'
     })
-    expect(instanceText(personaPanel)).toContain('Enable composer personas')
-    const toggle = personaPanel.findByProps({ role: 'switch' })
+    const assistantText = instanceText(assistantPanel)
+    expect(assistantText.indexOf('Personas')).toBeGreaterThanOrEqual(0)
+    expect(assistantText.indexOf('Personas')).toBeLessThan(assistantText.indexOf('Fast Context'))
+    const personaCard = assistantPanel
+      .findAllByType('section')
+      .find((section) => instanceText(section).startsWith('Personas'))
+    expect(personaCard).toBeDefined()
+    expect(instanceText(personaCard!)).toContain('Add persona')
+    const toggle = personaCard!.findByProps({ role: 'switch' })
     expect(toggle.props['aria-checked']).toBe(true)
 
     act(() => toggle.props.onClick())
@@ -264,7 +278,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     })
     expect(fixed).toContain('Use fixed model')
     expect(fixed).toContain('Fast Context reasoning effort')
-    expect(fixed).toContain('Codex Fast mode')
+    expect(fixed).not.toContain('Codex Fast mode')
 
     const disabled = renderPanel({
       enabled: false,
@@ -290,6 +304,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     ))
 
     const followMain = renderPanel({
+      ...defaultKunLabSettings(),
       pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
       conversationVisualization: { enabled: false }
     })
@@ -298,6 +313,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(followMain).not.toContain('Codex Fast mode')
 
     const fixed = renderPanel({
+      ...defaultKunLabSettings(),
       pptAgent: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false, imageFirst: true },
       conversationVisualization: { enabled: false }
     })
@@ -306,6 +322,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(fixed).toContain('Codex Fast mode')
 
     const disabled = renderPanel({
+      ...defaultKunLabSettings(),
       pptAgent: { enabled: false, model: '', providerId: '', fast: false, imageFirst: true },
       conversationVisualization: { enabled: false }
     })
@@ -326,15 +343,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       apiKey: '',
       baseUrl: '',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: ['gpt-5.4'],
       presetSource: { presetId: 'codex', mode: 'api' },
-      modelProfiles: { 'gpt-5.4': codexModelProfile }
-    }]
-    const groups: ModelProviderModelGroup[] = [{
-      providerId: 'codex-2',
-      presetSource: 'codex',
-      label: 'Codex',
-      modelIds: ['gpt-5.4'],
       modelProfiles: { 'gpt-5.4': codexModelProfile }
     }]
     const mount = async (): Promise<ReactTestRenderer> => {
@@ -359,7 +370,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     }
 
     // Codex model advertising priority: both toggles enabled and checked.
-    useChatStore.setState({ composerModelGroups: groups })
     let renderer = await mount()
     let switches = renderer.root.findAllByProps({ role: 'switch' })
     expect(switches).toHaveLength(2)
@@ -367,7 +377,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(switches.map((node) => node.props['aria-disabled'])).toEqual([false, false])
 
     // Model without priority support: the fast toggle is disabled and unchecked.
-    useChatStore.setState({ composerModelGroups: [] })
+    modelProviders[0]!.modelProfiles = {}
     renderer = await mount()
     switches = renderer.root.findAllByProps({ role: 'switch' })
     expect(switches.map((node) => node.props['aria-checked'])).toEqual([true, false])

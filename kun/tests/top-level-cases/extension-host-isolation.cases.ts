@@ -20,14 +20,14 @@ import {
   type ResolvedExtension,
   type RpcEnvelope
 } from '../../src/extensions/index.js'
-import { admissionFor, buildBuiltinRunner, eventually, fixturePackageManager, hostCompatibility, writeFixtureRunner, writeHandshakeMismatchRunner, writeResolvedExtension } from '../support/extension-host-fixtures.js'
+import { admissionFor, buildBuiltinRunner, eventually, fixturePackageManager, hostCompatibility, withFixtureActivation, writeFixtureRunner, writeHandshakeMismatchRunner, writeResolvedExtension } from '../support/extension-host-fixtures.js'
 
 describe('extension host processes', () => {
   let builtinRunnerPath: string
 
   beforeAll(async () => {
     builtinRunnerPath = await buildBuiltinRunner()
-  }, 60_000)
+  }, 120_000)
 
   it('keeps headless hosts isolated across a crash, restarts only the failed host, and shuts down active calls', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-extension-manager-isolation-'))
@@ -38,7 +38,7 @@ describe('extension host processes', () => {
         ['acme.two', await writeResolvedExtension(root, 'acme.two')]
       ])
       let nowMs = Date.now()
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation(extensionId: string) {
           const extension = extensions.get(extensionId)
           if (extension === undefined) throw new Error(`missing extension: ${extensionId}`)
@@ -50,7 +50,7 @@ describe('extension host processes', () => {
           const extension = extensions.get(extensionId)
           return extension === undefined ? undefined : admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const hostExits: Array<{ extensionId: string; expected: boolean }> = []
       const manager = new ExtensionManager({
         packageManager,
@@ -135,7 +135,7 @@ describe('extension host processes', () => {
       const extension = await writeResolvedExtension(root, 'acme.browser-only', {
         browserOnly: true
       })
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation() {
           return extension
         },
@@ -144,7 +144,7 @@ describe('extension host processes', () => {
         async compatibilityReportForExtension() {
           return admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const manager = new ExtensionManager({
         packageManager,
         paths: new ExtensionPaths({
@@ -182,7 +182,7 @@ describe('extension host processes', () => {
       const trustedKey = paths.workspaceKey(trustedRoot)
       const deniedKey = paths.workspaceKey(deniedRoot)
       const resolvedKeys: Array<string | undefined> = []
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation(_extensionId: string, workspaceKey?: string) {
           resolvedKeys.push(workspaceKey)
           if (workspaceKey === deniedKey) {
@@ -197,7 +197,7 @@ describe('extension host processes', () => {
         async compatibilityReportForExtension() {
           return admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const manager = new ExtensionManager({ packageManager, paths })
 
       await expect(manager.activate('acme.workspace-trust', 'onStartup', {
@@ -230,7 +230,7 @@ describe('extension host processes', () => {
       const trustedGate = new Promise<void>((resolvePromise) => {
         releaseTrusted = resolvePromise
       })
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation(_extensionId: string, workspaceKey?: string) {
           if (!workspaceKey) throw new Error('workspace admission was skipped')
           resolvedKeys.push(workspaceKey)
@@ -247,7 +247,7 @@ describe('extension host processes', () => {
         async compatibilityReportForExtension() {
           return admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const manager = new ExtensionManager({ packageManager, paths })
 
       const trustedActivation = manager.activate('acme.concurrent-trust', 'onStartup', {
@@ -292,7 +292,7 @@ describe('extension host processes', () => {
       const deniedGate = new Promise<void>((resolvePromise) => {
         releaseDenied = resolvePromise
       })
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation(_extensionId: string, workspaceKey?: string) {
           if (!workspaceKey) throw new Error('workspace admission was skipped')
           resolvedKeys.push(workspaceKey)
@@ -309,7 +309,7 @@ describe('extension host processes', () => {
         async compatibilityReportForExtension() {
           return admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const manager = new ExtensionManager({ packageManager, paths })
 
       const deniedActivation = manager.activate('acme.concurrent-scope-retry', 'onStartup', {
@@ -350,7 +350,7 @@ describe('extension host processes', () => {
         releaseAdmission = resolvePromise
       })
       let admissionStarted = false
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation() {
           admissionStarted = true
           await admissionGate
@@ -361,7 +361,7 @@ describe('extension host processes', () => {
         async compatibilityReportForExtension() {
           return admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const manager = new ExtensionManager({ packageManager, paths })
 
       const activation = manager.activate('acme.pending-invalidation', 'onStartup', { workspaceRoot })

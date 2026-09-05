@@ -515,6 +515,32 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       void reconcileCompletedSideTurn(sideId, completedTurnId, ctx)
     },
     onError: (err, options) => {
+      const reset = err as Error & { code?: unknown; threadId?: unknown; floorSeq?: unknown }
+      if (
+        reset.code === 'replay_reset_required' &&
+        reset.threadId === sideId &&
+        typeof reset.floorSeq === 'number'
+      ) {
+        void ctx.getProvider().getThreadDetail(sideId).then((detail) => {
+          if (sideAbortControllers.get(sideId)?.signal.aborted) return
+          ctx.set((state) => patchSide(state, sideId, (side) => ({
+            ...side,
+            blocks: detail.blocks,
+            lastSeq: detail.latestSeq,
+            liveReasoning: '',
+            liveAssistant: '',
+            error: null
+          })))
+          startSideSubscription(sideId, detail.latestSeq, ctx)
+        }).catch((error) => {
+          ctx.set((state) => patchSide(state, sideId, (side) => ({
+            ...side,
+            busy: false,
+            error: ctx.formatRuntimeError(error)
+          })))
+        })
+        return
+      }
       const completedTurnId = ctx.get().sideConversations[sideId]?.turnId
       ctx.set((s) =>
         patchSide(s, sideId, (side) => ({

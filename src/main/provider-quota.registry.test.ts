@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AppSettingsV1, ModelProviderProfileV1 } from '../shared/app-settings'
+import {
+  PROVIDER_PROXY_ROUTING_VERSION,
+  type AppSettingsV1,
+  type ModelProviderProfileV1
+} from '../shared/app-settings'
 import {
   classifyProviderQuotaProbe,
   listProviderQuotas,
@@ -34,6 +38,7 @@ function provider(
     apiKey,
     baseUrl,
     endpointFormat: 'chat_completions',
+    useProxy: false,
     models: ['test-model'],
     modelProfiles: {
       'test-model': {
@@ -53,7 +58,8 @@ function settings(providers: ModelProviderProfileV1[], proxyUrl = ''): AppSettin
       apiKey: defaultProvider?.apiKey ?? '',
       baseUrl: defaultProvider?.baseUrl ?? 'https://api.deepseek.com',
       providers,
-      proxy: { enabled: Boolean(proxyUrl), url: proxyUrl }
+      proxy: { enabled: Boolean(proxyUrl), url: proxyUrl },
+      proxyRoutingVersion: PROVIDER_PROXY_ROUTING_VERSION
     }
   } as unknown as AppSettingsV1
 }
@@ -180,13 +186,23 @@ describe('provider quota registry and refresh', () => {
         balance_infos: [{ currency: 'CNY', total_balance: '9.5' }]
       }))
     })
+    const deepseek = provider(
+      'deepseek',
+      'DeepSeek One',
+      'https://api.deepseek.com',
+      'secret-one',
+      'deepseek'
+    )
+    deepseek.useProxy = true
     const result = await listProviderQuotas(settings([
-      provider('deepseek', 'DeepSeek One', 'https://api.deepseek.com', 'secret-one', 'deepseek'),
+      deepseek,
       provider('deepseek-two', 'DeepSeek Two', 'https://api.deepseek.com', '', 'deepseek'),
       provider('unknown', 'Unknown', 'https://example.test/v1')
     ], 'http://127.0.0.1:7890'), fetcher)
 
-    expect(result.entries.map((entry) => [entry.providerId, entry.status])).toEqual([
+    expect(result.entries
+      .filter((entry) => entry.providerId !== 'opencode-free')
+      .map((entry) => [entry.providerId, entry.status])).toEqual([
       ['deepseek', 'available'],
       ['deepseek-two', 'missing_credentials'],
       ['unknown', 'unsupported']
@@ -209,8 +225,9 @@ describe('provider quota registry and refresh', () => {
       provider('openrouter', 'OpenRouter', 'https://openrouter.ai/api/v1')
     ]), fetcher)
 
-    expect(result.entries[0]).toMatchObject({ providerId: 'deepseek', status: 'available' })
-    expect(result.entries[1]).toMatchObject({
+    expect(result.entries.find((entry) => entry.providerId === 'deepseek'))
+      .toMatchObject({ providerId: 'deepseek', status: 'available' })
+    expect(result.entries.find((entry) => entry.providerId === 'openrouter')).toMatchObject({
       providerId: 'openrouter',
       status: 'error',
       message: 'The provider quota endpoint returned HTTP 500.'
@@ -302,7 +319,7 @@ describe('provider quota registry and refresh', () => {
     })
 
     expect(result.entries
-      .filter((entry) => entry.providerId !== 'deepseek')
+      .filter((entry) => !['deepseek', 'opencode-free'].includes(entry.providerId))
       .map((entry) => [entry.providerId, entry.status])).toEqual([
       ['claude-subscription', 'available'],
       ['codex', 'available'],
@@ -413,16 +430,14 @@ describe('provider quota registry and refresh', () => {
   })
 
   it('refreshes an expired configured Codex login before querying quota', async () => {
-    const refreshFetch = vi.fn(async (url: string | URL) => {
-      expect(String(url)).toBe('https://auth.openai.com/oauth/token')
-      return Response.json({
-        access_token: 'codex-refreshed-access',
-        refresh_token: 'codex-refreshed-refresh',
-        expires_in: 3_600
-      })
-    })
-    vi.stubGlobal('fetch', refreshFetch)
     const fetcher = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (String(url) === 'https://auth.openai.com/oauth/token') {
+        return Response.json({
+          access_token: 'codex-refreshed-access',
+          refresh_token: 'codex-refreshed-refresh',
+          expires_in: 3_600
+        })
+      }
       const headers = new Headers(init?.headers)
       expect(headers.get('authorization')).toBe('Bearer codex-refreshed-access')
       expect(headers.get('chatgpt-account-id')).toBe('acct-refresh')
@@ -442,27 +457,22 @@ describe('provider quota registry and refresh', () => {
       })
     })
 
-    try {
-      const codex = subscriptionProvider('codex', 'http')
-      codex.apiKey = JSON.stringify({
-        kind: 'codex-oauth',
-        accessToken: 'codex-expired-access',
-        refreshToken: 'codex-expired-refresh',
-        expiresAt: Date.now() - 60_000,
-        accountId: 'acct-refresh'
-      })
-      const result = await listProviderQuotas(settings([codex]), fetcher)
+    const codex = subscriptionProvider('codex', 'http')
+    codex.apiKey = JSON.stringify({
+      kind: 'codex-oauth',
+      accessToken: 'codex-expired-access',
+      refreshToken: 'codex-expired-refresh',
+      expiresAt: Date.now() - 60_000,
+      accountId: 'acct-refresh'
+    })
+    const result = await listProviderQuotas(settings([codex]), fetcher)
 
-      expect(result.entries.find((entry) => entry.providerId === 'codex')).toMatchObject({
-        providerId: 'codex',
-        status: 'available',
-        metrics: [expect.objectContaining({ id: 'primary', usedPercent: 21 })]
-      })
-      expect(refreshFetch).toHaveBeenCalledTimes(1)
-      expect(fetcher).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    expect(result.entries.find((entry) => entry.providerId === 'codex')).toMatchObject({
+      providerId: 'codex',
+      status: 'available',
+      metrics: [expect.objectContaining({ id: 'primary', usedPercent: 21 })]
+    })
+    expect(fetcher).toHaveBeenCalledTimes(3)
   })
 
   it('refreshes and retries once when Codex rejects a current access token', async () => {
@@ -503,7 +513,12 @@ describe('provider quota registry and refresh', () => {
       status: 'available',
       metrics: [expect.objectContaining({ id: 'primary', usedPercent: 7 })]
     })
-    expect(resolveCodexCredential).toHaveBeenNthCalledWith(2, expect.anything(), 'codex-rejected-access')
+    expect(resolveCodexCredential).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      'codex-rejected-access',
+      expect.objectContaining({ fetcher, proxyUrl: '' })
+    )
     // Usage + reset-credit details on the rejected token, then again on the retry token.
     expect(fetcher).toHaveBeenCalledTimes(4)
   })

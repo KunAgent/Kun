@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import {
   Check,
   ClipboardList,
+  Columns3,
   Copy,
   ExternalLink,
   Loader2,
@@ -27,6 +28,7 @@ import { sddDraftRelativePathForPlanPath } from '@shared/sdd'
 import { useSddTrace } from '../../sdd/use-sdd-trace'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import { PlanBuildActions } from './PlanBuildActions'
+import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 
 type Props = {
   workspaceRoot: string
@@ -68,6 +70,8 @@ export function PlanPanel({
   onReplanChanged
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const openBoard = useChatStore((state) => state.openBoard)
+  const { enabled: projectBoardEnabled } = useProjectBoardEnabled()
   const {
     activePlan,
     content,
@@ -77,7 +81,8 @@ export function PlanPanel({
     setActivePlan,
     setContent,
     setSaveStatus,
-    markSaved,
+    setSaveStatusForPlan,
+    markSavedForPlan,
     setOperationStatus,
     clearActivePlan
   } = useGuiPlanStore(
@@ -90,7 +95,8 @@ export function PlanPanel({
       setActivePlan: s.setActivePlan,
       setContent: s.setContent,
       setSaveStatus: s.setSaveStatus,
-      markSaved: s.markSaved,
+      setSaveStatusForPlan: s.setSaveStatusForPlan,
+      markSavedForPlan: s.markSavedForPlan,
       setOperationStatus: s.setOperationStatus,
       clearActivePlan: s.clearActivePlan
     }))
@@ -180,35 +186,55 @@ export function PlanPanel({
       const snapshot = useGuiPlanStore.getState()
       if (snapshot.activePlan?.id !== activePlan.id || snapshot.saveStatus !== 'dirty') return
       const contentToSave = snapshot.content
-      setSaveStatus('saving')
+      const planId = activePlan.id
+      const threadId = activePlan.threadId?.trim() || activeThreadId?.trim() || null
+      setSaveStatusForPlan(planId, threadId, 'saving')
       void window.kunGui
         .writeWorkspaceFile({
           workspaceRoot: activePlan.workspaceRoot,
           path: activePlan.relativePath,
           content: contentToSave
         })
-        .then((result) => {
+        .then(async (result) => {
           const latest = useGuiPlanStore.getState()
           if (latest.activePlan?.id !== activePlan.id) return
           if (!result.ok) {
-            setSaveStatus('error', result.message)
+            setSaveStatusForPlan(planId, threadId, 'error', result.message)
             return
           }
           if (latest.content === contentToSave) {
-            markSaved(contentToSave)
-            if (activeThreadId && runtimeReady) {
-              void useChatStore.getState().syncPlanTodosFromMarkdown(activePlan, contentToSave)
+            if (threadId && runtimeReady) {
+              const synced = await useChatStore.getState().syncPlanTodosFromMarkdown(threadId, activePlan, contentToSave)
+              if (!synced) {
+                setSaveStatusForPlan(planId, threadId, 'error', t('planTodoSyncFailed'))
+                return
+              }
             }
+            markSavedForPlan(planId, threadId, contentToSave)
           } else {
-            setSaveStatus('dirty')
+            setSaveStatusForPlan(planId, threadId, 'dirty')
           }
         })
         .catch((saveError) => {
-          setSaveStatus('error', saveError instanceof Error ? saveError.message : String(saveError))
+          setSaveStatusForPlan(
+            planId,
+            threadId,
+            'error',
+            saveError instanceof Error ? saveError.message : String(saveError)
+          )
         })
     }, 650)
     return () => window.clearTimeout(timer)
-  }, [activePlan, activeThreadId, content, markSaved, runtimeReady, saveStatus, setSaveStatus])
+  }, [
+    activePlan,
+    activeThreadId,
+    content,
+    markSavedForPlan,
+    runtimeReady,
+    saveStatus,
+    setSaveStatusForPlan,
+    t
+  ])
 
   const readOnly =
     operationStatus === 'drafting' ||
@@ -282,6 +308,18 @@ export function PlanPanel({
     >
       <div className="ds-sidebar-surface-chrome shrink-0 border-b border-ds-border-muted">
         <div className="flex h-12 min-w-0 items-center gap-2 px-4">
+          {projectBoardEnabled ? (
+            <button
+              type="button"
+              onClick={() => openBoard(activePlan?.workspaceRoot || workspaceRoot)}
+              disabled={!activePlan}
+              className="ds-sidebar-toggle-button shrink-0 disabled:cursor-not-allowed disabled:opacity-45"
+              aria-label={t('projectBoardOpen')}
+              title={t('projectBoardOpen')}
+            >
+              <Columns3 className="h-4 w-4" strokeWidth={1.9} />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onCollapse}
@@ -407,7 +445,7 @@ export function PlanPanel({
             </p>
           </div>
         ) : (
-          <div className="flex h-full min-h-0 min-w-0">
+          <div className="flex h-full min-h-0 min-w-0 flex-col">
             <div className="ds-sidebar-surface-body min-h-0 min-w-0 flex-1">
               <WriteRichEditor
                 value={content}

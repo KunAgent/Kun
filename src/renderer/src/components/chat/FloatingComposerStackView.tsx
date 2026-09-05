@@ -1,5 +1,4 @@
 import type { ReactElement } from 'react'
-import type { QueuedComposerMessage } from './FloatingComposerQueuedMessages'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
 export function FloatingComposerStackView({
@@ -15,15 +14,32 @@ export function FloatingComposerStackView({
     busy, canOpenGoalPanel, canSetGoalPanelDraft, clearActiveThreadGoal, compact, composerMenuOpen,
     currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, goalBannerLabel,
     goalElapsedLabel, goalPanelOpen, goalPanelRef, graphEnabled, highlightedSlashCommand,
-    onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, pendingUserInputBlock,
-    queuedMessages, reorderQueuedMessage, returnQueuedMessageToComposer, runtimeReady,
-    setActiveThreadGoalStatus, setGoalFromComposerInput, setGoalPanelOpen, setInput,
+    onReorderQueuedMessage, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingUserInputBlock,
+    queuedMessages, runtimeReady,
+    setActiveThreadGoalStatus, setGoalFromComposerInput, setGoalPanelOpen,
     showGoalFloater, showGoalMenuOption, showGraphProgress, showTodoProgress, slashCommandMenu,
     slashQuery, t, userInput
   } = context
   return (
     <>
       <FloatingComposerAboveInputStack
+        attachedDock={(
+          <FloatingComposerQueuedMessages
+            messages={queuedMessages}
+            running={busy}
+            guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : 'turn'}
+            onRemove={onRemoveQueuedMessage}
+            onGuide={onGuideQueuedMessage}
+            onRestoreToComposer={onRestoreQueuedMessageToComposer
+              ? (id: string) => {
+                  const restored = onRestoreQueuedMessageToComposer(id)
+                  if (restored !== false) draft.focusComposer()
+                  return restored
+                }
+              : undefined}
+            onReorder={onReorderQueuedMessage}
+          />
+        )}
         floatingStatuses={(
           <>
             {showTodoProgress && activeThreadTodos ? (
@@ -99,17 +115,6 @@ export function FloatingComposerStackView({
         )}
         flowPanels={(
           <>
-            <FloatingComposerQueuedMessages
-              messages={queuedMessages}
-              guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : 'turn'}
-              onRemove={onRemoveQueuedMessage}
-              onGuide={onGuideQueuedMessage}
-              onReorder={reorderQueuedMessage}
-              onEdit={(message: QueuedComposerMessage) => {
-                returnQueuedMessageToComposer(message, onRemoveQueuedMessage, setInput)
-                draft.focusComposer()
-              }}
-            />
             {userInput.active ? (
               <FloatingComposerUserInputPanel
                 controller={userInput}

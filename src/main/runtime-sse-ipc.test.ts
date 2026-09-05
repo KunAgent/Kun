@@ -20,6 +20,7 @@ describe('runtime-sse-ipc', () => {
   let mockLogError: any
   let mockEvent: any
   let mockFetch: any
+  let destroySender: () => void
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -44,12 +45,15 @@ describe('runtime-sse-ipc', () => {
     mockEnsureRuntime = vi.fn().mockImplementation(async (settings) => settings)
     mockLogError = vi.fn()
 
-    mockEvent = {
-      sender: {
-        isDestroyed: () => false,
-        send: vi.fn()
-      }
-    }
+    const destroyedListeners: Array<() => void> = []
+    mockEvent = { sender: {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn((name: string, listener: () => void) => {
+        if (name === 'destroyed') destroyedListeners.push(listener)
+      })
+    } }
+    destroySender = () => destroyedListeners.splice(0).forEach((listener) => listener())
 
     mockFetch = vi.fn()
     vi.stubGlobal('fetch', mockFetch)
@@ -180,6 +184,46 @@ describe('runtime-sse-ipc', () => {
     expect(allEvents[1].text).toBe('world')
     expect(allEvents[2].seq).toBe(3)
     expect(allEvents[2].text).toBe('bye')
+
+    // Both successful streams above reconnect from the reader path, so each
+    // reconnect emits an open before its first event.
+    const openMessages = sendCalls.filter((call: any) => call[0] === 'runtime:sse-open')
+    expect(openMessages.length).toBe(2)
+    expect(openMessages[0][1]).toEqual({ streamId })
+  })
+
+  it('emits runtime:sse-open before the first event once the reader is ready', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    expect(startHandler).toBeDefined()
+    mockFetch.mockImplementation(async () => {
+      if (mockFetch.mock.calls.length === 1) {
+        return {
+          ok: true,
+          status: 200,
+          body: mockReadableStream(['id: 1\ndata: {"text":"hello"}\n\n'])
+        }
+      }
+      return { ok: false, status: 400, body: null }
+    })
+
+    const started = await startHandler!(mockEvent, { threadId: 'thread-open', sinceSeq: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+
+    const calls = mockEvent.sender.send.mock.calls
+    const openIndex = calls.findIndex((call: any) => call[0] === 'runtime:sse-open')
+    const eventIndex = calls.findIndex((call: any) => call[0] === 'runtime:sse-event')
+    expect(openIndex).toBeGreaterThanOrEqual(0)
+    expect(eventIndex).toBeGreaterThanOrEqual(0)
+    expect(openIndex).toBeLessThan(eventIndex)
+    expect(calls[openIndex][1]).toEqual({ streamId: started.streamId })
+    await handlers.get('runtime:sse:stop')!(mockEvent, started.streamId)
   })
 
   it('uses the replay synchronization cursor when reconnecting after an id-less marker', async () => {
@@ -222,6 +266,43 @@ describe('runtime-sse-ipc', () => {
       cursor: 42
     })
     await handlers.get('runtime:sse:stop')!(mockEvent, started.streamId)
+  })
+
+  it('surfaces replay reset as a control error and never reconnects the stale cursor', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: mockReadableStream([
+        'event: replay_reset_required\ndata: {"threadId":"thread-reset","floorSeq":80}\n\n'
+      ])
+    })
+
+    const started = await startHandler!(mockEvent, {
+      threadId: 'thread-reset',
+      sinceSeq: 7
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockEvent.sender.send).toHaveBeenCalledWith('runtime:sse-error', {
+      streamId: started.streamId,
+      code: 'replay_reset_required',
+      threadId: 'thread-reset',
+      floorSeq: 80,
+      message: 'Runtime event history was compacted; reload the thread snapshot.'
+    })
+    expect(mockEvent.sender.send).not.toHaveBeenCalledWith(
+      'runtime:sse-event',
+      expect.anything()
+    )
   })
 
   it('retries a bounded number of times on 404 before surfacing the error', async () => {
@@ -287,6 +368,10 @@ describe('runtime-sse-ipc', () => {
     expect(mockEvent.sender.send).toHaveBeenCalledWith(
       'runtime:sse-error',
       expect.objectContaining({ streamId: started.streamId, status: 404, threadMissing: true })
+    )
+    expect(mockEvent.sender.send).not.toHaveBeenCalledWith(
+      'runtime:sse-open',
+      expect.anything()
     )
     expect(mockLogError).toHaveBeenCalledWith(
       'sse',
@@ -410,7 +495,7 @@ describe('runtime-sse-ipc', () => {
     await handlers.get('runtime:sse:stop')!(mockEvent, started.streamId)
   })
 
-  it('does not advance the reconnect cursor until the renderer acknowledges a batch', async () => {
+  it('advances the reconnect cursor on send and accepts the renderer acknowledgement', async () => {
     registerRuntimeSseIpc({
       ipcMain: mockIpcMain,
       store: mockStore,
@@ -423,12 +508,25 @@ describe('runtime-sse-ipc', () => {
     expect(startHandler).toBeDefined()
     expect(ackHandler).toBeDefined()
 
+    const firstRead = (() => {
+      let sent = false
+      return async () => {
+        if (sent) return await new Promise(() => undefined)
+        sent = true
+        return { done: false, value: new TextEncoder().encode('id: 9\ndata: {"text": "await-ack"}\n\n') }
+      }
+    })()
     mockFetch.mockImplementation(async () => {
       if (mockFetch.mock.calls.length === 1) {
         return {
           ok: true,
           status: 200,
-          body: mockReadableStream(['id: 9\ndata: {"text": "await-ack"}\n\n'])
+          body: {
+            getReader: () => ({
+              read: firstRead,
+              cancel: async () => undefined
+            })
+          }
         }
       }
       return { ok: false, status: 400, body: null }
@@ -444,16 +542,81 @@ describe('runtime-sse-ipc', () => {
     const batch = mockEvent.sender.send.mock.calls.find((call: any) => call[0] === 'runtime:sse-event')?.[1]
     expect(batch).toMatchObject({ streamId: started.streamId, events: [{ seq: 9 }] })
     expect(typeof batch.batchId).toBe('string')
-    expect(mockFetch).toHaveBeenCalledTimes(1)
 
     await expect(ackHandler!(mockEvent, {
       streamId: started.streamId,
       batchId: batch.batchId
     })).resolves.toBe(true)
+    await handlers.get('runtime:sse:stop')!(mockEvent, started.streamId)
+  })
+
+  it('sends a renderer_ack_timeout error and no end when the renderer never acknowledges', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    const ackHandler = handlers.get('runtime:sse:ack')
+    expect(startHandler).toBeDefined()
+    expect(ackHandler).toBeDefined()
+
+    // Emit one event then hang: the renderer never sends runtime:sse:ack.
+    const firstRead = (() => {
+      let sent = false
+      return async () => {
+        if (sent) return await new Promise(() => undefined)
+        sent = true
+        return { done: false, value: new TextEncoder().encode('id: 9\ndata: {"text": "await-ack"}\n\n') }
+      }
+    })()
+    mockFetch.mockImplementation(async () => {
+      if (mockFetch.mock.calls.length === 1) {
+        return {
+          ok: true,
+          status: 200,
+          body: {
+            getReader: () => ({
+              read: firstRead,
+              cancel: async () => undefined
+            })
+          }
+        }
+      }
+      return { ok: false, status: 400, body: null }
+    })
+
+    const started = await startHandler!(mockEvent, {
+      threadId: 'thread-ack-timeout',
+      sinceSeq: 0,
+      acknowledgedBatches: true
+    })
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(mockFetch).toHaveBeenCalledTimes(2)
-    expect(mockFetch.mock.calls[1][0].toString()).toContain('since_seq=9')
+    const batch = mockEvent.sender.send.mock.calls.find((call: any) => call[0] === 'runtime:sse-event')?.[1]
+    expect(batch).toMatchObject({ streamId: started.streamId, events: [{ seq: 9 }] })
+    expect(typeof batch.batchId).toBe('string')
+
+    // The ACK watchdog is 15s; advancing past it must surface a terminal error
+    // instead of silently aborting the stream and leaking the renderer's
+    // subscription promise and IPC listeners.
+    await vi.advanceTimersByTimeAsync(15_000)
+
+    expect(mockEvent.sender.send).toHaveBeenCalledWith('runtime:sse-error', {
+      streamId: started.streamId,
+      code: 'renderer_ack_timeout',
+      threadId: 'thread-ack-timeout',
+      batchId: batch.batchId
+    })
+    expect(mockEvent.sender.send).not.toHaveBeenCalledWith('runtime:sse-end', expect.anything())
+
+    // The timed-out batch is settled, so a late ACK cannot resurrect it.
+    await expect(ackHandler!(mockEvent, {
+      streamId: started.streamId,
+      batchId: batch.batchId
+    })).resolves.toBe(false)
   })
 
   it('surfaces an id-less server replay error instead of reconnecting into the same cursor', async () => {
@@ -500,5 +663,33 @@ describe('runtime-sse-ipc', () => {
     expect(mockStore.load).not.toHaveBeenCalled()
     expect(mockEnsureRuntime).not.toHaveBeenCalled()
     expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('aborts all SSE workers owned by a destroyed renderer', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    let fetchSignal: AbortSignal | undefined
+    mockFetch.mockImplementation(async (_url: unknown, init: RequestInit) => {
+      fetchSignal = init.signal as AbortSignal
+      return await new Promise<Response>((_resolve, reject) => {
+        fetchSignal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      })
+    })
+
+    await handlers.get('runtime:sse:start')!(mockEvent, {
+      threadId: 'thread-renderer-owned', sinceSeq: 0
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetchSignal?.aborted).toBe(false)
+    destroySender()
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(fetchSignal?.aborted).toBe(true)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 })

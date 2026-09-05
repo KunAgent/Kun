@@ -213,6 +213,70 @@ describe('KunRuntimeSupervisor', () => {
     expect(h.statuses).toEqual([])
   })
 
+  it('does not spend restart budget while the host is suspended or recovering', async () => {
+    const h = harness({ childRunning: false })
+    h.supervisor.setManagedRuntimeExpected(true)
+    h.supervisor.noteHostSuspended()
+
+    h.supervisor.handleUnexpectedExit({ code: 1, signal: null, stderrTail: 'sleep' })
+    await h.supervisor.watchdogTick()
+    expect(h.ensureRuntime).not.toHaveBeenCalled()
+    expect(h.statuses).toEqual([])
+
+    h.supervisor.noteHostResumed(20_000)
+    await h.supervisor.watchdogTick()
+    expect(h.ensureRuntime).not.toHaveBeenCalled()
+
+    h.supervisor.noteHostResumed(0)
+    await h.supervisor.watchdogTick()
+    expect(h.ensureRuntime).toHaveBeenCalledOnce()
+    expect(h.statuses.map((status) => status.state)).toEqual(['restarting', 'running'])
+  })
+
+  it('does not publish a stale failure when suspend begins during restart', async () => {
+    const gate = createGate()
+    const h = harness({ ensureGate: gate.promise, ensureError: new Error('late restart failure') })
+    h.supervisor.setManagedRuntimeExpected(true)
+    h.supervisor.handleUnexpectedExit({ code: 1, signal: null, stderrTail: 'failed' })
+    await vi.waitFor(() => expect(h.ensureRuntime).toHaveBeenCalledOnce())
+
+    h.supervisor.noteHostSuspended()
+    gate.release()
+    await vi.waitFor(() => expect(h.statuses.map((status) => status.state)).toEqual([
+      'crashed',
+      'restarting'
+    ]))
+    expect(h.statuses.some((status) => status.state === 'failed')).toBe(false)
+  })
+
+  it('does not spend crash budget when suspend begins while settings reload', async () => {
+    const gate = createGate()
+    const h = harness({ maxRestarts: 1 })
+    let settingsReads = 0
+    h.deps.loadSettings = vi.fn(async () => {
+      settingsReads += 1
+      if (settingsReads === 2) await gate.promise
+      return { autoStart: true }
+    })
+    h.supervisor.setManagedRuntimeExpected(true)
+    h.supervisor.handleUnexpectedExit({ code: 1, signal: null, stderrTail: 'first' })
+    await vi.waitFor(() => expect(settingsReads).toBe(2))
+
+    h.supervisor.noteHostSuspended()
+    gate.release()
+    await vi.waitFor(() => expect(h.statuses.map((status) => status.state)).toEqual(['crashed']))
+    await vi.waitFor(() => expect(
+      (h.supervisor as unknown as { recoveryInFlight: boolean }).recoveryInFlight
+    ).toBe(false))
+    h.supervisor.noteHostResumed(0)
+    h.supervisor.handleUnexpectedExit({ code: 1, signal: null, stderrTail: 'second' })
+    await vi.waitFor(() => expect(h.ensureRuntime).toHaveBeenCalledOnce())
+
+    expect(h.statuses.map((status) => status.state)).toEqual([
+      'crashed', 'crashed', 'restarting', 'running'
+    ])
+  })
+
   it('publishes failed when watchdog restart fails', async () => {
     const h = harness({ restartError: new Error('restart failed') })
     h.supervisor.setManagedRuntimeExpected(true)

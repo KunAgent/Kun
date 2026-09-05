@@ -26,11 +26,28 @@ import {
   tmpdir
 } from 'node:os'
 import {
+  createHash
+} from 'node:crypto'
+import {
+  dirname,
   join
 } from 'node:path'
 import {
   registerAppIpcHandlers
 } from './register-app-ipc-handlers'
+import {
+  AGENT_SDK_INTEGRITY_BY_PACKAGE,
+  AGENT_SDK_VERSION,
+  claudeBinaryName,
+  platformBinaryPackage
+} from '../agent-sdk-installer'
+import {
+  agentSdkRoot,
+  manifestRelativePath,
+  serializeActivePointer,
+  serializeManifest,
+  type AgentSdkInstallManifest
+} from '../agent-sdk-installer-storage'
 
 vi.mock('../main-window', () => ({
   trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
@@ -333,7 +350,7 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
     expect(restartRuntime).toHaveBeenCalledTimes(1)
   })
 
-  it('restarts all current-user Kun serves only after trusted confirmation', async () => {
+  it('restarts only the GUI-owned Runtime after trusted confirmation', async () => {
     const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
@@ -364,19 +381,19 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
       mainWindow,
       expect.objectContaining({
         type: 'warning',
-        title: 'Restart all Kun services',
-        message: 'Stop all Kun service processes owned by the current user and start a new service?',
-        buttons: ['Restart all services', 'Cancel'],
+        title: 'Restart desktop Runtime',
+        message: 'Stop and restart the Runtime owned by this desktop app?',
+        buttons: ['Restart desktop Runtime', 'Cancel'],
         defaultId: 1,
         cancelId: 1,
         detail: expect.stringMatching(
-          /old ports or data directories[\s\S]*Running Agent tasks, tool calls, background work, and pending approvals may be interrupted[\s\S]*Workspace changes already in progress will remain and may be incomplete[\s\S]*Saved sessions and conversations, memory, archives, settings, logs, and workspace files will not be deleted[\s\S]*No automatic backup is created[\s\S]*desktop app and Kun Service Manager are not cleared/u
+          /Only the Kun Runtime owned by this desktop app will restart[\s\S]*TUI processes[\s\S]*Kun Service Manager will not be scanned or stopped[\s\S]*Running Agent tasks, tool calls, background work, and pending approvals may be interrupted[\s\S]*Workspace changes already in progress will remain and may be incomplete[\s\S]*Saved sessions and conversations, memory, archives, settings, logs, and workspace files will not be deleted/u
         )
       })
     )
   })
 
-  it('explains the complete restart scope in Chinese before invoking restart', async () => {
+  it('explains the GUI-owned restart scope in Chinese before invoking restart', async () => {
     electronMock.appLocale = 'zh-CN'
     const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }
@@ -398,13 +415,13 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
       mainWindow,
       expect.objectContaining({
         type: 'warning',
-        title: '重启所有 Kun 服务',
-        message: '停止当前用户的所有 Kun 服务进程并启动新服务？',
-        buttons: ['重启所有服务', '取消'],
+        title: '重启桌面 Runtime',
+        message: '停止并重新启动当前桌面应用拥有的 Runtime？',
+        buttons: ['重启桌面 Runtime', '取消'],
         defaultId: 1,
         cancelId: 1,
         detail: expect.stringMatching(
-          /旧端口、旧数据目录[\s\S]*Agent 任务、工具调用、后台任务和待审批操作可能中断[\s\S]*工作区修改会原样保留，可能处于未完成状态[\s\S]*会话和对话记录、记忆、归档、设置、日志及工作区文件不会被删除[\s\S]*不会自动创建备份[\s\S]*桌面应用和 Kun Service Manager 不会被清理/u
+          /只会重启当前桌面应用拥有的 Kun Runtime[\s\S]*不会扫描或停止 TUI[\s\S]*Kun Service Manager[\s\S]*Agent 任务、工具调用、后台任务和待审批操作可能中断[\s\S]*工作区修改会原样保留，可能处于未完成状态[\s\S]*会话和对话记录、记忆、归档、设置、日志及工作区文件不会被删除/u
         )
       })
     )
@@ -414,18 +431,18 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
     {
       locale: 'en-US',
       title: 'Kun restart failed',
-      message: 'Kun could not stop every service and finish restarting.',
-      detail: 'Some services may already have stopped. Saved data was not deleted; check the logs and retry.',
+      message: 'The desktop Runtime could not finish restarting.',
+      detail: 'The previous desktop Runtime may already have stopped. Saved data was not deleted; check the logs and retry.',
       error: 'Restart failed. Check the logs and retry.'
     },
     {
       locale: 'zh-CN',
       title: 'Kun 重启失败',
-      message: '未能停止全部 Kun 服务并完成重启。',
-      detail: '部分服务可能已经停止。已保存的数据未被删除；请查看日志后重试。',
+      message: '桌面 Runtime 未能完成重启。',
+      detail: '原桌面 Runtime 可能已经停止。已保存的数据未被删除；请查看日志后重试。',
       error: '重启失败，请查看日志后重试。'
     }
-  ])('reports partial service shutdown without implying data deletion in $locale', async ({
+  ])('reports a desktop Runtime restart failure without implying data deletion in $locale', async ({
     locale,
     title,
     message,
@@ -462,12 +479,33 @@ describe('registerAppIpcHandlers UI plugins and runtime', () => {
 
   it('restarts Kun after an already-downloaded Claude SDK is provisioned through IPC', async () => {
     const userDataDir = mkdtempSync(join(tmpdir(), 'kun-agent-sdk-ipc-'))
-    const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude'
-    const binaryPath = join(userDataDir, 'agent-sdk', binaryName)
+    const binaryName = claudeBinaryName()
+    const packageName = platformBinaryPackage()!
+    const binary = Buffer.from('authenticated claude binary')
+    const manifest: AgentSdkInstallManifest = {
+      schemaVersion: 1,
+      sdkVersion: AGENT_SDK_VERSION,
+      packageName,
+      platform: process.platform,
+      arch: process.arch,
+      binaryName,
+      binarySize: binary.length,
+      binarySha256: createHash('sha256').update(binary).digest('hex'),
+      cliVersion: 'test Claude Code',
+      helpProbe: 'Usage: claude [options]',
+      integrity: AGENT_SDK_INTEGRITY_BY_PACKAGE[packageName]!,
+      installedAt: new Date().toISOString()
+    }
+    const sdkRoot = agentSdkRoot(userDataDir)
+    const manifestPath = join(sdkRoot, manifestRelativePath(manifest))
+    const manifestBytes = serializeManifest(manifest)
+    const binaryPath = join(dirname(manifestPath), binaryName)
     const restartKunServe = vi.fn(async () => undefined)
     electronMock.userDataPath = userDataDir
-    mkdirSync(join(userDataDir, 'agent-sdk'), { recursive: true })
-    writeFileSync(binaryPath, 'claude binary')
+    mkdirSync(dirname(manifestPath), { recursive: true })
+    writeFileSync(binaryPath, binary)
+    writeFileSync(manifestPath, manifestBytes)
+    writeFileSync(join(sdkRoot, 'active.json'), serializeActivePointer(manifest, manifestBytes))
 
     try {
       registerAppIpcHandlers(registerOptions({ restartKunServe }))

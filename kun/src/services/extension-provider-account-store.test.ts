@@ -83,6 +83,7 @@ describe('ExtensionProviderAccountStore bindings', () => {
     await mkdir(join(root, 'extensions'), { recursive: true })
     await writeFile(path, JSON.stringify({
       schemaVersion: 1,
+      proxyRoutingVersion: 1,
       revision: 1,
       bindings: {
         legacySha256Key: {

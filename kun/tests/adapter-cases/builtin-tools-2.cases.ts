@@ -51,6 +51,11 @@ import {
 
 import { createBackgroundShellTool } from '../../src/adapters/tool/background-shell-tool.js'
 
+import {
+  listBashSessionRecords,
+  stopBashSessionById
+} from '../../src/adapters/tool/builtin-bash-tool.js'
+
 import { createReadTool as createReadToolFromModule } from '../../src/adapters/tool/read.js'
 
 import { createBashTool as createBashToolFromModule } from '../../src/adapters/tool/bash.js'
@@ -143,8 +148,10 @@ beforeEach(async () => {
   })
 
 afterEach(async () => {
-    await rm(workspace, { recursive: true, force: true })
-    await rm(backgroundShellDataDir, { recursive: true, force: true })
+    const sessions = await listBashSessionRecords()
+    await Promise.all(sessions.map((session) => stopBashSessionById(session.id, session.threadId)))
+    await rm(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await rm(backgroundShellDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
 it.skipIf(process.platform === 'win32')(

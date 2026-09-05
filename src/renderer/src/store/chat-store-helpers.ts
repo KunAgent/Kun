@@ -13,7 +13,11 @@ import {
   type ClawImProvider,
   type ModelReasoningEffort
 } from '@shared/app-settings'
-import type { ChatState } from './chat-store-types'
+import type {
+  ChatState,
+  WriteAssistantMessageContext
+} from './chat-store-types'
+import type { WriteTurnContext } from '../agent/write-turn-context'
 import {
   isClawWorkspacePath,
   isInternalDeepSeekGuiWorkspace,
@@ -35,6 +39,28 @@ import {
 
 export { normalizeTurnModelMap } from './chat-store-helper-storage'
 
+/**
+ * Map the renderer-only Write routing context to the runtime-persistable
+ * reference. `threadId` is intentionally dropped: the turn already owns the
+ * thread, and the runtime has no renderer thread registry.
+ */
+export function toWriteTurnContext(
+  context: WriteAssistantMessageContext | undefined
+): WriteTurnContext | undefined {
+  if (!context) return undefined
+  return {
+    workspaceRoot: context.workspaceRoot,
+    documentPath: context.activeFilePath,
+    ...(Number.isInteger(context.documentEpoch) ? { documentEpoch: context.documentEpoch } : {}),
+    ...(Number.isInteger(context.contentRevision) ? { contentRevision: context.contentRevision } : {}),
+    ...(context.whiteboardId ? { whiteboardId: context.whiteboardId } : {}),
+    ...(Number.isInteger(context.whiteboardRevision)
+      ? { whiteboardRevision: context.whiteboardRevision }
+      : {}),
+    ...(context.expectedSha256 ? { expectedSha256: context.expectedSha256 } : {})
+  }
+}
+
 const COMPOSER_MODEL_STORAGE_KEY = 'kun.composerModel'
 const COMPOSER_PROVIDER_STORAGE_KEY = 'kun.composerProviderId'
 const COMPOSER_PERSONA_STORAGE_KEY = 'kun.composerPersonaId'
@@ -55,7 +81,8 @@ const LEGACY_COMPOSER_REASONING_EFFORTS: readonly ModelReasoningEffort[] = [
   'max'
 ]
 
-export type ComposerPlanMode = 'plan' | 'agent'
+/** Renderer composer intent. `auto` is translated into plan/agent runtime turns. */
+export type ComposerPlanMode = 'plan' | 'agent' | 'auto'
 
 export type ThreadComposerSelection = {
   model: string
@@ -202,7 +229,7 @@ export function readThreadComposerSelection(threadId: string): ThreadComposerSel
 }
 
 export function normalizeComposerPlanMode(raw: unknown): ComposerPlanMode | null {
-  if (raw === 'plan' || raw === 'agent') return raw
+  if (raw === 'plan' || raw === 'agent' || raw === 'auto') return raw
   return null
 }
 

@@ -34,6 +34,7 @@ function provider(
     apiKey,
     baseUrl,
     endpointFormat: 'chat_completions',
+    useProxy: false,
     models: ['test-model'],
     modelProfiles: {
       'test-model': {

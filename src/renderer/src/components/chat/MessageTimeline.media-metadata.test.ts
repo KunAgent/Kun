@@ -532,19 +532,62 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect((html.match(/type="button"/g) ?? []).length).toBe(2)
   })
 
-  it('leaves supported presentation outputs to the dedicated presentation panel', () => {
+  it('leaves Office and PDF outputs to the generated-document handoff', () => {
     const block: ToolBlock = toolBlock({
-      id: 'tool_presentations',
-      summary: 'presentation export',
+      id: 'tool_documents',
+      summary: 'document export',
       meta: {
         generatedFiles: [
+          { relativePath: 'reports/summary.docx' },
+          { relativePath: 'reports/data.xlsx' },
           { relativePath: 'presentations/brief.pptx' },
-          { relativePath: 'brief.kun-ppt.html' }
+          { relativePath: 'reports/appendix.pdf' }
         ]
       }
     })
 
     expect(renderToStaticMarkup(createElement(GeneratedFilesPanel, { blocks: [block] }))).toBe('')
+  })
+
+  it('restores document cards from completed metadata while keeping image media alongside them', () => {
+    const html = renderToStaticMarkup(
+      createElement(ConversationTurn, {
+        threadId: 'thr_1',
+        turn: {
+          user: { kind: 'user', id: 'user_historical_documents', text: 'Create the report' },
+          blocks: [
+            toolBlock({
+              id: 'tool_historical_documents',
+              turnId: 'turn_historical_documents',
+              summary: 'export report',
+              meta: {
+                generatedFiles: [
+                  { relativePath: 'reports/summary.docx', byteSize: 35_700 },
+                  {
+                    relativePath: 'reports/chart.png',
+                    name: 'chart.png',
+                    mimeType: 'image/png',
+                    previewUrl: 'data:image/png;base64,chart'
+                  }
+                ]
+              }
+            }),
+            { kind: 'assistant', id: 'assistant_historical_documents', text: 'The report is ready.' }
+          ]
+        },
+        isProcessing: false,
+        liveReasoning: '',
+        live: '',
+        filePreviewWorkspaceRoot: '/tmp/project',
+        viewportRef: { current: null }
+      })
+    )
+
+    expect(html).toContain('data-generated-document-card="true"')
+    expect(html).toContain('summary.docx')
+    expect(html).toContain('data-generated-document-all="true"')
+    expect(html).toContain('data-generated-media-carousel')
+    expect(html).toContain('chart.png')
   })
 
   it('projects only bounded non-secret generated-file metadata to result preview Views', () => {

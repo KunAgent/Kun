@@ -1,5 +1,25 @@
-import { describe, expect, it } from 'vitest'
-import { usageRecordsFromRows, usageRowFromEvent, type UsageRow } from './hybrid-thread-support.js'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  describeSqliteAbiMismatch,
+  usageRecordsFromRows,
+  usageRowFromEvent,
+  warnSqlite,
+  type UsageRow
+} from './hybrid-thread-support.js'
+
+describe('hybrid SQLite diagnostics', () => {
+  it('reports native ABI mismatches with an actionable rebuild command', () => {
+    const message = 'was compiled against NODE_MODULE_VERSION 120 but this runtime requires another version'
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    expect(describeSqliteAbiMismatch(message)).toContain('compiled=120')
+    warnSqlite('initialize', new Error(message))
+
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('current='))
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('npm rebuild better-sqlite3'))
+    warning.mockRestore()
+  })
+})
 
 describe('usageRecordsFromRows', () => {
   it('preserves turn ids, cache writes, and current attribution across cumulative rows', () => {

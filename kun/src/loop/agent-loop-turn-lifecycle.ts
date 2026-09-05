@@ -1,6 +1,8 @@
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import {
   isHostShutdownTurnSuspension,
+  ownerLeaseExpiredTurnAbortFrom,
+  ownerLeaseExpiredTurnMessage,
   type TurnSettlement
 } from '../services/turn-service.js'
 import { makeErrorItem } from '../domain/item.js'
@@ -50,7 +52,11 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         return outcome
       })
     }
-    const run = this.runTurnOwned(threadId, turnId)
+    const run = this.opts.turns.withTurnMutationFence(
+      threadId,
+      turnId,
+      () => this.runTurnOwned(threadId, turnId)
+    )
     const active = {
       promise: run,
       signal: this.opts.turns.getAbortController(turnId)
@@ -74,12 +80,31 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     const errorFromSettlement = (settlement: TurnSettlement): string | undefined =>
       settlement.kind === 'missing' ? undefined : settlement.error
     const signal = this.opts.turns.getAbortController(turnId)
+    let finalStatus: 'completed' | 'failed' | 'aborted' | undefined
+    let finalError: string | undefined
+    const failOwnerLease = async (): Promise<TurnExecutionStatus | null> => {
+      if (!signal) return null
+      const reason = ownerLeaseExpiredTurnAbortFrom(signal)
+      if (!reason) return null
+      const error = ownerLeaseExpiredTurnMessage(reason)
+      const settlement = await settle({
+        status: 'failed',
+        error,
+        code: reason.code,
+        severity: 'warning'
+      })
+      finalStatus = statusFromSettlement(settlement, 'failed')
+      finalError = errorFromSettlement(settlement)
+      return finalStatus
+    }
     if (!signal) {
       const settlement = await settle({ status: 'failed', error: 'no abort controller for turn' })
       return statusFromSettlement(settlement, 'failed')
     }
     if (signal.aborted) {
       if (isHostShutdownTurnSuspension(signal)) return 'suspended'
+      const ownerLeaseFailure = await failOwnerLease()
+      if (ownerLeaseFailure) return ownerLeaseFailure
       const settlement = await settle({ status: 'aborted' })
       return statusFromSettlement(settlement, 'aborted')
     }
@@ -128,8 +153,6 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       }
     }
     let goalTimer: GoalElapsedTimer | null = null
-    let finalStatus: 'completed' | 'failed' | 'aborted' | undefined
-    let finalError: string | undefined
     let suspended = false
     const failWallTimeLimit = async (): Promise<TurnExecutionStatus> => {
       const extensionLimited = Boolean(
@@ -239,6 +262,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
           suspended = true
           return 'suspended'
         }
+        const ownerLeaseFailure = await failOwnerLease()
+        if (ownerLeaseFailure) return ownerLeaseFailure
         const settlement = await finalizer.observeExternal({ threadId, turnId })
         finalStatus = statusFromSettlement(settlement, reportedStatus)
         finalError = errorFromSettlement(settlement)
@@ -257,6 +282,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         return 'suspended'
       }
       if (wallTimeExceeded) return failWallTimeLimit()
+      const ownerLeaseFailure = await failOwnerLease()
+      if (ownerLeaseFailure) return ownerLeaseFailure
       // An aborted turn (user stop / tool cancel / host shutdown) must settle
       // as `aborted` even when a racing provider disconnect error reached the
       // loop first and classified the round as `failed`. The abort owns the
@@ -284,6 +311,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
           suspended = true
           return 'suspended'
         }
+        const ownerLeaseFailure = await failOwnerLease()
+        if (ownerLeaseFailure) return ownerLeaseFailure
         const settlement = await settle({ status: 'aborted' })
         finalStatus = statusFromSettlement(settlement, 'aborted')
         finalError = errorFromSettlement(settlement)
@@ -321,7 +350,9 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         // Accounting/resume are post-settlement conveniences. A late store or
         // event failure must not hide an already durable terminal outcome, nor
         // skip the unconditional transient-state cleanup below.
-        if (!suspended) {
+        if (suspended) {
+          await this.goalTurns.afterSuspended(threadId, goalTimer)
+        } else {
           await this.goalTurns.afterTerminal({
             threadId,
             turnId,

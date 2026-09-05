@@ -208,6 +208,7 @@ export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
 export type GatewayCredentialStatus = { configured: boolean; createdAt?: string; rotatedAt?: string }
 export type GatewayCredentialResult = { ok: boolean; status: number; credential: GatewayCredentialStatus; copied?: boolean }
 export type WorkspacePickResult = { canceled: boolean; path: string | null }
+export type WorkspaceCreationTimeEntry = { path: string; createdAtMs: number | null }
 
 export type LocalFilesPickResult = { canceled: boolean; paths: string[] }
 
@@ -248,11 +249,10 @@ export type SkillListItem = {
   root: string
   entryPath: string
   scope: 'project' | 'global'
+  builtin?: boolean
   legacy: boolean
 }
-
-export type SkillListResult =
-  | { ok: true; skills: SkillListItem[]; validationErrors: Array<{ root: string; message: string }> }
+export type SkillListResult = { ok: true; skills: SkillListItem[]; validationErrors: Array<{ root: string; message: string }> }
   | { ok: false; message: string }
 
 export type SkillRootListItem = {
@@ -387,13 +387,15 @@ export type ModelProviderModelGroup = {
 }
 
 export type ModelProviderProbeRequest = {
+  providerId: string
   baseUrl: string
   apiKey: string
   endpointFormat: ModelEndpointFormat
+  useProxy: boolean
 }
 
 export type ModelProviderProbeResult =
-  | { ok: true; latencyMs: number; modelIds: string[] }
+  | { ok: true; latencyMs: number; modelIds: string[]; modelProfiles?: Record<string, ModelProviderModelProfileV1> }
   | { ok: false; message: string; suggestedProxyUrl?: string }
 
 export type ProviderModelCatalogSource = 'provider-api' | 'models-dev'
@@ -513,6 +515,8 @@ export type CodexAuthStartResult =
   | { ok: true; url: string; deviceCode: string; userCode: string; interval: number }
   | { ok: false; message: string }
 
+export type ProviderAuthProxySelection = { providerId: string; useProxy: boolean }
+
 export type CodexOAuthCredentials = {
   kind: 'codex-oauth'
   accessToken: string
@@ -628,12 +632,7 @@ export type LegacySessionImportResult =
   | ({ ok: true } & LegacySessionImportSummary)
   | { ok: false; message: string }
 
-/** One IPC message carries every SSE event parsed from a network chunk. */
-export type SseEventPayload = { streamId: string; events: unknown[]; batchId?: string }
-
-export type SseEndPayload = { streamId: string }
-
-export type SseErrorPayload = { streamId: string; status?: number; message?: string }
+export type { SseEventPayload, SseOpenPayload, SseEndPayload, SseErrorPayload, KunGuiSseSurface } from './kun-gui-sse-contracts'
 
 export type TrayActionPayload =
   | { type: 'new-chat' }

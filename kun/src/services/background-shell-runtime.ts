@@ -8,6 +8,8 @@ import {
   formatBackgroundShellCompletionNotice
 } from './background-shell-notice.js'
 import { resolveTurnClientSurface } from '../loop/turn-context-resolver.js'
+import { existsSync } from 'node:fs'
+import { BACKGROUND_SHELL_OUTPUT_EXPIRED_NOTICE } from './background-shell-output.js'
 
 export type BackgroundShellRuntimeDeps = {
   events: RuntimeEventRecorder
@@ -53,11 +55,14 @@ export class BackgroundShellRuntime {
   listSessions(threadId?: string): BackgroundShellRecord[] {
     const all = [...this.sessions.values()]
     const filtered = threadId ? all.filter((session) => session.threadId === threadId) : all
-    return filtered.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    return filtered
+      .map((session) => this.visibleSession(session))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
   }
 
   getSession(sessionId: string): BackgroundShellRecord | null {
-    return this.sessions.get(sessionId) ?? null
+    const session = this.sessions.get(sessionId)
+    return session ? this.visibleSession(session) : null
   }
 
   private stopHandler: ((sessionId: string) => Promise<boolean>) | null = null
@@ -123,6 +128,20 @@ export class BackgroundShellRuntime {
       output: record.output,
       ...(record.outputTruncated ? { outputTruncated: true as const } : {}),
       ...(record.outputFilePath ? { outputFilePath: record.outputFilePath } : {})
+    }
+  }
+
+  private visibleSession(record: BackgroundShellRecord): BackgroundShellRecord {
+    if (
+      record.status === 'running' ||
+      !record.outputFilePath ||
+      existsSync(record.outputFilePath)
+    ) return record
+    return {
+      ...record,
+      output: BACKGROUND_SHELL_OUTPUT_EXPIRED_NOTICE,
+      outputTruncated: true,
+      outputFilePath: undefined
     }
   }
 
@@ -233,11 +252,32 @@ export class BackgroundShellRuntime {
     // inspect the output and report the real outcome without asking the user
     // to send a manual "continue" message (KunAgent/Kun#1031).
     if (!this.shuttingDown && record.detached && record.status !== 'running') {
-      await this.notifyAgent(record)
+      // Serialize per-thread wake-ups: two detached shells finishing at the
+      // same moment would otherwise both observe "no running turn", one
+      // startTurn would win, and the loser's completion notice would be lost
+      // after its event was already persisted.
+      await this.enqueueAgentNotice(record)
     }
     if (record.status !== 'running') {
       this.detachedIds.delete(record.id)
     }
+  }
+
+  private readonly agentNoticeQueues = new Map<string, Promise<void>>()
+
+  private enqueueAgentNotice(record: BackgroundShellRecord): Promise<void> {
+    const previous = this.agentNoticeQueues.get(record.threadId) ?? Promise.resolve()
+    const task = previous.then(
+      () => this.notifyAgent(record),
+      () => this.notifyAgent(record)
+    )
+    const drained = task.catch(() => undefined).then(() => {
+      if (this.agentNoticeQueues.get(record.threadId) === drained) {
+        this.agentNoticeQueues.delete(record.threadId)
+      }
+    })
+    this.agentNoticeQueues.set(record.threadId, drained)
+    return task
   }
 
   private async discardUpdateCheckpoint(sessionId: string): Promise<void> {
@@ -276,16 +316,38 @@ export class BackgroundShellRuntime {
     }
     if (!this.runTurn) return
     const sourceTurn = thread.turns.find((turn) => turn.id === record.turnId) ?? thread.turns.at(-1)
-    const started = await this.deps.turns.startTurn({
-      threadId: record.threadId,
-      request: {
-        prompt: notice,
-        ...(sourceTurn ? { clientSurface: resolveTurnClientSurface(sourceTurn) } : {}),
-        ...(sourceTurn?.disableUserInput ? { disableUserInput: true } : {}),
-        ...noticeMeta
+    try {
+      const started = await this.deps.turns.startTurn({
+        threadId: record.threadId,
+        request: {
+          prompt: notice,
+          ...(sourceTurn ? { clientSurface: resolveTurnClientSurface(sourceTurn) } : {}),
+          ...(sourceTurn?.disableUserInput ? { disableUserInput: true } : {}),
+          ...noticeMeta
+        }
+      })
+      void this.runTurn(record.threadId, started.turnId)
+    } catch {
+      // A concurrent startTurn on the same thread won the race. Re-read the
+      // thread and steer the completion notice into the running turn so the
+      // persisted settlement still reaches the agent (#5).
+      const current = await this.deps.threadStore.get(record.threadId)
+      const runningTurn = current && current.status !== 'archived'
+        ? [...current.turns].reverse().find((turn) => turn.status === 'running')
+        : undefined
+      if (runningTurn) {
+        await this.deps.turns.steerTurn({
+          threadId: record.threadId,
+          turnId: runningTurn.id,
+          text: notice,
+          ...noticeMeta
+        })
+        return
       }
-    })
-    void this.runTurn(record.threadId, started.turnId)
+      throw new Error(
+        `background shell ${record.id} completion could not reach the agent: startTurn conflicted and no running turn exists`
+      )
+    }
   }
 
   private rememberSession(record: BackgroundShellRecord): void {

@@ -1,0 +1,20 @@
+{
+  "writeConversationFileTrigger": "File conversations",
+  "writeConversationWhiteboardTrigger": "Whiteboard conversations",
+  "writeConversationFileTitle": "Conversations for this file",
+  "writeConversationWhiteboardTitle": "Conversations for this whiteboard",
+  "writeConversationNew": "New",
+  "writeConversationSearch": "Search conversation titles",
+  "writeConversationCurrent": "Current",
+  "writeConversationFallback": "Conversation {{number}}",
+  "writeConversationEmpty": "No conversations are associated with this resource yet.",
+  "writeConversationNoMatches": "No matching conversation titles.",
+  "writeConversationMore": "Conversation actions",
+  "writeConversationUnavailable": "This conversation is not available in the current runtime list.",
+  "writeConversationLoadingMetadata": "Loading conversation details…",
+  "writeConversationNoTimestamp": "No recent activity",
+  "writeConversationLockedRunning": "Conversation actions are locked while this resource has a running task.",
+  "writeConversationWorkflowLocked": "This review whiteboard stays bound to its workflow conversation.",
+  "writeConversationArchiveTitle": "Archive conversation?",
+  "writeConversationArchiveDescription": "The conversation will leave this resource's active history. You can restore it from archived conversations."
+}

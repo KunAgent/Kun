@@ -24,6 +24,7 @@ import { materializeLegacyProviderCredential } from './legacy-provider-credentia
 import type { ExtensionCredentialStore } from './extension-credential-store.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import { type ModelConnectionRegistry, StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, type RegistryDocument, type StoredProfile, type CredentialTransaction, type PreparedCredentialSecret, type ModelConnectionSeed, type AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, type MaterializedModelConnections, type ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
+import { resolveRegistryProfileProxyUrl } from './model-connection-registry-proxy.js'
 
 export const modelConnectionRegistrySelectionOperations = {
 async select(this: ModelConnectionRegistry, raw: unknown): Promise<ModelConnectionSnapshot> {
@@ -152,7 +153,7 @@ async probe(this: ModelConnectionRegistry, providerId: string): Promise<{ ok: tr
       apiKey: resolved.apiKey,
       headers: { ...(profile.headers ?? {}), ...(resolved.headers ?? {}) },
       fallbackModels: profile.models,
-      proxyUrl: document.proxy.enabled ? document.proxy.url : ''
+      proxyUrl: resolveRegistryProfileProxyUrl(document, profile)
     })
     return { ok: true, models }
   },

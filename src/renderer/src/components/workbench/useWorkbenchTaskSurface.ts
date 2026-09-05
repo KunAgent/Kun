@@ -3,10 +3,8 @@ import type { NormalizedThread } from '../../agent/types'
 import type { DesignTaskProfile } from '../../agent/design-task-profile'
 import type { ChatState } from '../../store/chat-store-types'
 import { useChatStore } from '../../store/chat-store'
-import {
-  type ComposerTaskSurface,
-  type DesignTaskComposerProfile
-} from '../chat/FloatingComposerTaskProfile'
+import type { DesignTaskComposerProfile } from '../chat/FloatingComposerTaskProfile'
+import type { ComposerTaskSurface } from '../chat/FloatingComposerTaskSurfacePicker'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { designContextFromTaskProfile } from '../../design/design-task-profile-input'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'

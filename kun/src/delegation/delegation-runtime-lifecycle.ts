@@ -87,6 +87,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     threadId: string,
     deleteSideThread?: (childId: string) => Promise<boolean>
   ): Promise<number> {
+    await this.detachedHandoffs.cleanupParent(threadId)
     const children = await this.options.store.list(threadId)
     await this.releaseArtifactOwner(`thread:${threadId}`)
     await this.releaseArtifactOwner(`child:${threadId}`)
@@ -452,6 +453,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
         updatedAt: this.now()
       })
       try {
+        await this.detachedHandoffs.prepare(updated)
         await this.options.store.upsert(updated)
         await this.recordChildEvent(updated)
         reconciled += 1
@@ -475,6 +477,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
   /** Safe child facts injected into parent recovery turns after a restart. */
   async proactiveRetryRecoveryCandidates(): Promise<Array<{
     parentThreadId: string
+    parentTurnId: string
     childId: string
     label?: string
     error?: string
@@ -493,6 +496,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       .filter(({ retry }) => retry.eligible)
       .map(({ record, retry }) => ({
         parentThreadId: record.parentThreadId,
+        parentTurnId: record.parentTurnId,
         childId: record.id,
         ...(record.label ? { label: record.label } : {}),
         ...(record.error ? { error: record.error } : {}),

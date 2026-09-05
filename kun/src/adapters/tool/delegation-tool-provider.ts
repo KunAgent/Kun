@@ -17,6 +17,7 @@ import type { ToolExecutionUpdate, ToolHostContext } from '../../ports/tool-host
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
 import { proactiveRetryStatus } from '../../delegation/delegation-proactive-retry.js'
+import { elapsedMs } from '../../delegation/delegation-runtime-support.js'
 
 type InlineProfile = {
   id: string
@@ -73,7 +74,10 @@ export function buildDelegationToolProviders(
               description: 'Last observed resumeCount for stale/double-submit protection. Set only with resumeChildId; omit it entirely for a new child.'
             },
             ...modeProperties,
-            detach: { type: 'boolean', description: 'Run in the background and return after the child is queued.' },
+            detach: {
+              type: 'boolean',
+              description: 'Run in the background and return after the child is queued. The current turn does not wait for the result; omit this when the result must be consumed before the final answer.'
+            },
             returnFormat: { type: 'string', enum: ['summary', 'evidence'] }
           },
           required: ['prompt'],
@@ -538,6 +542,10 @@ function childToolResult(
       ...(record.routing ? { routing: routingToolOutput(record.routing) } : {}),
       ...(record.toolPolicy ? { toolPolicy: record.toolPolicy } : {}),
       ...(record.toolInvocations !== undefined ? { toolInvocations: record.toolInvocations } : {}),
+      ...(record.startedAt ? {
+        attemptStartedAt: record.startedAt,
+        attemptDurationMs: elapsedMs(record.startedAt, record.updatedAt)
+      } : {}),
       ...(record.durationMs !== undefined ? { durationMs: record.durationMs } : {}),
       ...(record.queuedMs !== undefined ? { queuedMs: record.queuedMs } : {})
     },
@@ -656,7 +664,7 @@ function buildDelegateTaskDescription(runtime: DelegationRuntime): string {
     modeDescription,
     'For a new child, omit resumeChildId and expectedResumeCount entirely; never use empty or "new" sentinel values.',
     'Child model, provider, and reasoning strength remain host-controlled and are not tool-call arguments.',
-    'Issue multiple calls in one message for independent parallel work.',
+    'Issue multiple calls in one message only for independent work. Do not start a detached review and then a foreground review for the same scope.',
     `Children default to the "${runtime.defaultToolPolicy}" tool policy and can never recursively delegate.`
   ].join(' ')
 }

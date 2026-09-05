@@ -42,6 +42,14 @@ import {
 } from '../lib/workspace-path'
 import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
+import {
+  codeRootsAfterRemoval,
+  isCodeWorkspaceRemoved
+} from './chat-store-navigation-workspace-removal'
+import {
+  effectiveCodeWorkspaceRoot,
+  readRemovedCodeWorkspaces
+} from '../lib/removed-code-workspaces'
 import { buildClawRuntimePrompt } from '@shared/app-settings'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
@@ -235,18 +243,28 @@ export function createNavigationRuntimeActions(
           return
         }
         const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
-        const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
+        const removedRegistry = readRemovedCodeWorkspaces()
+        const workspaceRoot = effectiveCodeWorkspaceRoot(settings.workspaceRoot, removedRegistry)
+        if (settings.workspaceRoot && !workspaceRoot && typeof window.kunGui.setSettings === 'function') {
+          void rendererRuntimeClient.setSettings({ workspaceRoot: '' }).catch(() => undefined)
+        }
         const writeWorkspaceRoots = [
           settings.write.defaultWorkspaceRoot,
           settings.write.activeWorkspaceRoot,
           ...settings.write.workspaces
         ]
-        const codeWorkspaceRoots = reconcileCodeWorkspaceRoots({
-          currentRoots: readCodeWorkspaceRoots(),
-          codeThreadWorkspaceRoots: [workspaceRoot],
-          writeWorkspaceRoots,
-          preservedWorkspaceRoots: [workspaceRoot]
-        })
+        // Load hidden projects before reconciling remembered roots: a removed
+        // project must neither re-enter `codeWorkspaceRoots` nor keep its
+        // persisted root through the preserved-root path.
+        const codeWorkspaceRoots = codeRootsAfterRemoval(
+          reconcileCodeWorkspaceRoots({
+            currentRoots: readCodeWorkspaceRoots(),
+            codeThreadWorkspaceRoots: [workspaceRoot],
+            writeWorkspaceRoots,
+            preservedWorkspaceRoots: workspaceRoot ? [workspaceRoot] : []
+          }),
+          removedRegistry
+        )
         saveCodeWorkspaceRoots(codeWorkspaceRoots)
         const needsInitialSetup = settings.initialSetupCompleted !== true
         applyTheme(settings.theme)
@@ -330,6 +348,7 @@ export function createNavigationRuntimeActions(
           initialSetupMode: 'required',
           workspaceRoot,
           codeWorkspaceRoots,
+          removedCodeWorkspaces: removedRegistry,
           workspaceLabel: workspaceLabelFromPath(workspaceRoot),
           conversationWorkspaceRoot: settings.conversationWorkspaceRoot || '',
           disabledSkillIds: settings.disabledSkillIds,

@@ -58,6 +58,7 @@ import {
   reconcileQueuedMessages,
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
+import { restoreQueuedMessageFromQueue } from './queued-message-edit'
 import {
   accountIdForComposerSelection,
   activeClawChannel,
@@ -149,7 +150,6 @@ import { mergeChatBlocks } from '../agent/kun-mapper'
 import {
   activeChatWorkspaceRoot,
   activeWriteMessageContextMatches,
-  createClientTurnRequestId,
   createWorkspaceCheckpointRequestId,
   hasRuntimeUserBlockForGuidance,
   localConversationErrorBlock,
@@ -170,13 +170,41 @@ import {
 export function createThreadQueueActions(
   context: StoreActionContext,
   runtime: ThreadActionRuntime
-): Pick<ChatState, 'drainQueuedMessages' | 'removeQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage'> {
+): Pick<ChatState, 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns'> {
   const { set, get, sseAbortRef } = context
+  const cancelRuntimeQueuedTurn = async (message: QueuedUserMessage | undefined): Promise<void> => {
+    // in_flight and runtime-owned paused rows both own a durable server-side
+    // queued turn; failed rows may still carry one before settlement.
+    if (
+      !message?.deliveryTurnId ||
+      (
+        message.deliveryState !== 'in_flight' &&
+        message.deliveryState !== 'paused' &&
+        message.deliveryState !== 'failed'
+      )
+    ) return
+    const threadId = get().activeThreadId
+    const provider = getProvider()
+    if (!threadId || typeof provider.cancelQueuedTurn !== 'function') return
+    try {
+      await provider.cancelQueuedTurn(threadId, message.deliveryTurnId)
+    } catch (error) {
+      // The turn may have started already; that is fine, the message
+      // simply delivered before the cancel landed.
+      if (!/not found|no longer queued|not queued/i.test(formatRuntimeError(error))) {
+        set({ error: describeRuntimeError(error).message })
+      }
+    }
+  }
   return {
   drainQueuedMessages: async () => {
     const threadId = get().activeThreadId?.trim()
     if (!threadId || threadActionSharedState.drainingQueuedMessageThreadIds.has(threadId)) return
     threadActionSharedState.drainingQueuedMessageThreadIds.add(threadId)
+    // Tombstones only matter while a drain is mid-send. Message ids are unique
+    // per submission and this thread has no concurrent drain, so stale markers
+    // from earlier rounds can be discarded safely.
+    threadActionSharedState.removedQueuedMessageIds.clear()
     try {
       while (true) {
         let state = get()
@@ -204,6 +232,22 @@ export function createThreadQueueActions(
           continue
         }
         const started = await get().sendMessage(next.text, next.mode, { queued: next })
+        // The user may have removed/restored this row while the send was in
+        // flight; the submission path upserts by id and re-adds it. Cancel the
+        // just-admitted server turn and drop the resurrected row instead of
+        // executing a message the user already deleted.
+        if (threadActionSharedState.removedQueuedMessageIds.has(next.id)) {
+          threadActionSharedState.removedQueuedMessageIds.delete(next.id)
+          const resurrected = get().queuedMessages.find((message) => message.id === next.id)
+          if (resurrected) {
+            await cancelRuntimeQueuedTurn(resurrected)
+            set((current) => ({
+              queuedMessages: current.queuedMessages.filter((message) => message.id !== next.id)
+            }))
+            runtime.persistActiveQueuedMessages()
+          }
+          continue
+        }
         if (!started) {
           if (next.waitForRuntimeAdmission) {
             set((current) => ({
@@ -220,8 +264,10 @@ export function createThreadQueueActions(
     }
   },
 
-  removeQueuedMessage: (id) => {
+  removeQueuedMessage: async (id) => {
     const removed = get().queuedMessages.find((message) => message.id === id)
+    // Tombstone before the local removal so a concurrent drain loop sees it.
+    threadActionSharedState.removedQueuedMessageIds.add(id)
     set((s) => ({
       queuedMessages: s.queuedMessages.filter((message) => message.id !== id)
     }))
@@ -229,9 +275,29 @@ export function createThreadQueueActions(
     if (removed?.waitForRuntimeAdmission) {
       settleRuntimeTurnAdmission(removed.clientRequestId, false)
     }
+    // In-flight entries are admitted to the durable runtime queue; removing
+    // them locally must also cancel the server-side queued turn or it would
+    // still execute later.
+    await cancelRuntimeQueuedTurn(removed)
   },
 
-  reorderQueuedMessage: (id, targetId, position) => {
+  restoreQueuedMessage: async (id) => {
+    const restored = restoreQueuedMessageFromQueue(get().queuedMessages, id)
+    if (!restored.restored) return null
+    // Tombstone before the local removal so a concurrent drain loop sees it.
+    threadActionSharedState.removedQueuedMessageIds.add(id)
+    set({ queuedMessages: restored.messages })
+    runtime.persistActiveQueuedMessages()
+    // Editing an already-admitted queued turn cancels its server-side entry
+    // so it does not keep executing after the composer re-send.
+    await cancelRuntimeQueuedTurn(restored.restored)
+    return restored.restored
+  },
+
+  reorderQueuedMessage: async (id, targetId, position) => {
+    const moving = get().queuedMessages.find((message) => message.id === id)
+    const anchor = get().queuedMessages.find((message) => message.id === targetId)
+    const anchorTurnId = anchor?.deliveryTurnId
     set((state) => {
       if (id === targetId) return {}
       const sourceIndex = state.queuedMessages.findIndex((message) => message.id === id)
@@ -250,6 +316,46 @@ export function createThreadQueueActions(
       return { queuedMessages }
     })
     runtime.persistActiveQueuedMessages()
+    if (
+      moving?.deliveryState === 'in_flight' &&
+      moving.deliveryTurnId &&
+      anchorTurnId
+    ) {
+      const threadId = get().activeThreadId
+      const provider = getProvider()
+      if (threadId && typeof provider.moveQueuedTurn === 'function') {
+        try {
+          await provider.moveQueuedTurn(threadId, moving.deliveryTurnId, {
+            [position === 'before' ? 'beforeTurnId' : 'afterTurnId']: anchorTurnId
+          })
+        } catch (error) {
+          set({ error: describeRuntimeError(error).message })
+        }
+      }
+    }
+  },
+
+  resumeQueuedTurns: async () => {
+    const state = get()
+    const threadId = state.activeThreadId
+    if (!threadId || state.busy) return false
+    const provider = getProvider()
+    if (typeof provider.resumeQueuedTurns !== 'function') return false
+    const result = await provider.resumeQueuedTurns(threadId)
+    if (!result.started) return false
+    // The interrupt paused locally parked entries; the runtime queue kept
+    // them queued, so resume them locally too. Paused entries that never
+    // reached the runtime stay local and keep their paused state.
+    set((current) => ({
+      queuedMessages: current.queuedMessages.map((message) =>
+        message.deliveryState === 'paused' && message.clientRequestId
+          ? { ...message, deliveryState: 'in_flight' as const }
+          : message
+      )
+    }))
+    runtime.persistActiveQueuedMessages()
+    await get().recoverActiveTurn()
+    return true
   },
 
   guideQueuedMessage: async (id) => {
@@ -258,7 +364,16 @@ export function createThreadQueueActions(
     const message = state.queuedMessages.find((candidate) => candidate.id === id)
     if (!message) return false
     if (message.deliveryState === 'paused' || message.deliveryState === 'failed') {
+      if (message.waitForRuntimeAdmission) {
+        set({ error: i18n.t('common:queuedMessageRetryUnavailable') })
+        return false
+      }
       if (state.busy) return false
+      // Runtime-parked entries (admitted, then paused by an interrupt) resume
+      // the server-side queue instead of re-submitting a new turn.
+      if (message.deliveryState === 'paused' && message.clientRequestId) {
+        return get().resumeQueuedTurns()
+      }
       set((current) => ({
         queuedMessages: current.queuedMessages.map((candidate) => candidate.id === id
           ? {

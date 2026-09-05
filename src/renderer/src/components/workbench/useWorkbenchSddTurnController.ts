@@ -73,7 +73,7 @@ type UseWorkbenchSddTurnControllerParams = {
   blocks: ChatBlock[]
   busy: boolean
   composerAttachments: AttachmentReference[]
-  composerMode: 'plan' | 'agent'
+  composerMode: 'plan' | 'agent' | 'auto'
   composerModelGroups: ModelProviderModelGroup[]
   composerReasoningEffort: ComposerReasoningEffort
   composerFastMode: boolean

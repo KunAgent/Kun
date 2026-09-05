@@ -23,6 +23,7 @@ export type GraphThreadObserverDeps = {
   onGraphEvent: (event: unknown) => void
   onChildRuntimeEvent?: ThreadEventSink['onChildRuntimeEvent']
   onGraphPlanningEvent?: ThreadEventSink['onGraphPlanningEvent']
+  onReplayResetRequired?: (floorSeq: number) => number | Promise<number>
   subscribe: (
     threadId: string,
     sinceSeq: number,
@@ -67,6 +68,7 @@ export function startGraphThreadObserver(
   const wait = deps.waitForReconnect ?? defaultWait
   let reconnectAttempt = 0
   let stopped = false
+  let replayResetFloor: number | undefined
 
   const sink: ThreadEventSink = {
     onConnected: () => {
@@ -89,8 +91,16 @@ export function startGraphThreadObserver(
     onUserInputStatus: () => undefined,
     onGoal: () => undefined,
     onTurnComplete: () => undefined,
-    onError: () => {
+    onError: (error) => {
       if (stopped || controller.signal.aborted) return
+      const reset = error as Error & { code?: unknown; floorSeq?: unknown; threadId?: unknown }
+      if (
+        reset.code === 'replay_reset_required' &&
+        reset.threadId === deps.threadId &&
+        typeof reset.floorSeq === 'number'
+      ) {
+        replayResetFloor = reset.floorSeq
+      }
       deps.onStatus('reconnecting')
     },
     onChildRuntimeEvent: deps.onChildRuntimeEvent,
@@ -112,6 +122,18 @@ export function startGraphThreadObserver(
         if (controller.signal.aborted || stopped) return
       }
       if (controller.signal.aborted || stopped) return
+      if (replayResetFloor !== undefined && deps.onReplayResetRequired) {
+        const floor = replayResetFloor
+        replayResetFloor = undefined
+        try {
+          const recovered = await deps.onReplayResetRequired(floor)
+          deps.onSeq(recovered)
+          reconnectAttempt = 0
+          continue
+        } catch {
+          if (controller.signal.aborted || stopped) return
+        }
+      }
       if (deps.shouldReconnect && !deps.shouldReconnect()) {
         deps.onStatus('stopped')
         return

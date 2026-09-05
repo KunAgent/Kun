@@ -10,6 +10,7 @@ import type {
   RequestContextSnapshot,
   ThreadUsageSnapshot
 } from './thread-runtime-types'
+import type { CoreModelRequestFailureJson } from './kun-contract'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { RendererChartSpec } from './chart-spec-adapter'
 
@@ -138,6 +139,10 @@ export type RuntimeChildMetadata = {
   prefixReused?: boolean
   inheritedHistoryItems?: number
   toolInvocations?: number
+  /** Start of the current resume attempt; cumulative child timing remains in durationMs. */
+  attemptStartedAt?: string
+  /** Elapsed milliseconds for the current resume attempt. */
+  attemptDurationMs?: number
   durationMs?: number
   queuedMs?: number
   summaryTruncated?: boolean
@@ -209,6 +214,7 @@ export type RuntimeDisclosureMetadata = {
 export type UserInputOption = {
   label: string
   description: string
+  recommended?: boolean
 }
 
 export type UserInputQuestion = {
@@ -450,6 +456,7 @@ export type ChatBlock =
       text: string
       code?: string
       detail?: string
+      modelRequestFailure?: CoreModelRequestFailureJson
       severity?: RuntimeErrorSeverity
       /** Distinguishes durable runtime failures from ordinary system status rows. */
       runtimeError?: true
@@ -582,6 +589,7 @@ export type RuntimeErrorEventPayload = {
   message: string
   code?: string
   details?: unknown
+  modelRequestFailure?: CoreModelRequestFailureJson
   severity?: RuntimeErrorSeverity
 }
 

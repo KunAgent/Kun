@@ -23,9 +23,10 @@ const POSITIVE_SCENARIOS = Object.freeze([
   Object.freeze({ name: 'in-app-auto-on', path: 'in-app', autoStart: true, activeWork: false }),
   Object.freeze({ name: 'external-auto-off', path: 'external', autoStart: false, activeWork: false })
 ])
+const RECYCLED_PID_SCENARIOS = Object.freeze([
+  'runtime-discovery-and-manager-slot'
+])
 const NEGATIVE_SCENARIOS = Object.freeze([
-  'pid-port-reuse',
-  'non-kun-command',
   'changed-discovery-identity',
   'inspection-denied'
 ])
@@ -384,6 +385,7 @@ module.exports = {
   MODEL_NAME,
   NEGATIVE_SCENARIOS,
   POSITIVE_SCENARIOS,
+  RECYCLED_PID_SCENARIOS,
   SAVED_THREAD_TITLE,
   buildSmokeSettings,
   childState,

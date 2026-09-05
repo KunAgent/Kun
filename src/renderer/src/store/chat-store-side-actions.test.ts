@@ -224,7 +224,7 @@ function buildHarness(
     probeRuntime: async () => undefined,
     chooseWorkspace: async () => null,
     clearWorkspace: async () => undefined,
-    deleteWorkspace: async () => undefined,
+    removeWorkspace: async () => undefined,
     refreshThreads: async () => {
       provider.refreshThreadsMock()
     },

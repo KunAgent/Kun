@@ -173,7 +173,9 @@ describe('getThreadTimeline child-backed tool overlay', () => {
       id: 'child_fast_context',
       launcher: 'fast_context',
       fastContext: true,
-      model: 'retrieval-model'
+      model: 'retrieval-model',
+      startedAt: '2026-08-27T03:26:44.000Z',
+      updatedAt: '2026-08-27T03:27:14.000Z'
     })])
     await setup.store.appendEvent('thr_fast_context_running', {
       kind: 'turn_started',
@@ -199,11 +201,15 @@ describe('getThreadTimeline child-backed tool overlay', () => {
       status: 'running',
       launcher: 'fast_context',
       model: 'retrieval-model',
+      attemptStartedAt: '2026-08-27T03:26:44.000Z',
+      attemptDurationMs: 30_000,
       child: {
         childId: 'child_fast_context',
         status: 'running',
         launcher: 'fast_context',
-        model: 'retrieval-model'
+        model: 'retrieval-model',
+        attemptStartedAt: '2026-08-27T03:26:44.000Z',
+        attemptDurationMs: 30_000
       }
     })
     expect(item.isError).toBe(false)

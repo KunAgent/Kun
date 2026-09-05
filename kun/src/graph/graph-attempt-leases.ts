@@ -82,8 +82,11 @@ export class GraphAttemptLeaseManager {
       const integrated = await this.options.writes.integrate(attemptId)
       if (integrated.outcome !== 'applied') return 'conflict'
     }
-    if (lease) await this.options.writes.release(lease.leaseId, 'accepted')
-    this.stop(attemptId)
+    try {
+      if (lease) await this.options.writes.release(lease.leaseId, 'accepted')
+    } finally {
+      this.stop(attemptId)
+    }
     return 'applied'
   }
 
@@ -92,8 +95,11 @@ export class GraphAttemptLeaseManager {
     disposition: 'failed' | 'cancelled'
   ): Promise<void> {
     const lease = this.leases.get(attemptId)
-    if (lease) await this.options.writes.release(lease.leaseId, disposition)
-    this.stop(attemptId)
+    try {
+      if (lease) await this.options.writes.release(lease.leaseId, disposition)
+    } finally {
+      this.stop(attemptId)
+    }
   }
 
   stopRunHeartbeats(runId: string): void {

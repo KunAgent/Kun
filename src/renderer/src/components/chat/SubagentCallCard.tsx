@@ -173,8 +173,8 @@ export function SubagentCallCard({
 
   const elapsed = useSubagentElapsed(
     status,
-    block.createdAt,
-    child.durationMs ?? detail.durationMs,
+    child.attemptStartedAt ?? detail.attemptStartedAt ?? block.createdAt,
+    child.attemptDurationMs ?? detail.attemptDurationMs ?? child.durationMs ?? detail.durationMs,
     tickNow
   )
 
@@ -657,7 +657,6 @@ export function SubagentGroup({
     </section>
   )
 }
-
 function expandExploreBatchBlock(block: ChatBlock): ChatBlock[] {
   if (block.kind !== 'tool' || !isFastContextToolBlock(block as ToolBlock)) return [block]
   const tool = block as ToolBlock
@@ -691,6 +690,8 @@ function expandExploreBatchBlock(block: ChatBlock): ChatBlock[] {
         childSeq: child.index,
         parentTurnId: tool.turnId,
         toolInvocations: child.toolInvocations,
+        attemptStartedAt: child.attemptStartedAt,
+        attemptDurationMs: child.attemptDurationMs,
         durationMs: child.durationMs,
         totalTokens: child.totalTokens
       }

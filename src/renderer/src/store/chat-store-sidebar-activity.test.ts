@@ -3,14 +3,20 @@ import type { AgentProvider, NormalizedThread } from '../agent/types'
 import type { ScheduleRuntimeStatus } from '@shared/app-settings'
 import type { ChatState } from './chat-store-types'
 import { stopTurnCompletionPoll } from './chat-store-schedulers'
+import { SIDEBAR_ACTIVITY_CHECKPOINTS_KEY } from './sidebar-activity-checkpoints'
 import {
   createSidebarActivityActions,
   scheduledThreadActivities
 } from './chat-store-sidebar-activity'
+import {
+  createAutoPlanBuildIntent,
+  patchAutoPlanBuildIntent,
+  saveAutoPlanBuildIntent
+} from '../plan/auto-plan-build-intents'
 
 let provider: Pick<
   AgentProvider,
-  'listThreadsPage' | 'listThreads' | 'getThreadState' | 'getThreadStates'
+  'listThreadsPage' | 'listThreads' | 'getThreadSummary' | 'getThreadState' | 'getThreadStates'
 >
 
 vi.mock('../agent/registry', () => ({ getProvider: () => provider }))
@@ -60,7 +66,8 @@ function harness(initialThread: NormalizedThread | NormalizedThread[] = thread()
     unreadThreadIds: {},
     awaitingUserInputThreadIds: {},
     scheduledThreadActivities: {},
-    refreshThreads: vi.fn(async () => undefined)
+    refreshThreads: vi.fn(async () => undefined),
+    clearActiveThreadSelection: vi.fn()
   } as unknown as ChatState
   const set = (partial: Partial<ChatState> | ((value: ChatState) => Partial<ChatState>)): void => {
     state = { ...state, ...(typeof partial === 'function' ? partial(state) : partial) }
@@ -101,6 +108,63 @@ describe('sidebar activity observer', () => {
     await h.action()
 
     expect(h.get().threads[0]).toMatchObject({ latestSeq: 3, latestTurnId: 'turn-2', status: 'idle' })
+    expect(h.get().unreadThreadIds).toEqual({ 'thread-1': 'completed' })
+  })
+
+  it('does not mark the intermediate auto-plan completion as unread', async () => {
+    const intent = createAutoPlanBuildIntent({
+      planId: '/repo:.kunsdd/plan/auto.md',
+      relativePath: '.kunsdd/plan/auto.md',
+      workspaceRoot: '/project',
+      threadId: 'thread-1',
+      selection: { buildMode: 'direct', useWorktree: false }
+    })
+    saveAutoPlanBuildIntent(intent)
+    patchAutoPlanBuildIntent(intent.id, { planTurnId: 'turn-2', status: 'planning' })
+
+    let listed = thread()
+    provider = {
+      listThreads: vi.fn(async () => [listed]),
+      listThreadsPage: vi.fn(async () => ({ threads: [listed], hasMore: false })),
+      getThreadState: vi.fn(async () => ({
+        status: 'idle', updatedAt: listed.updatedAt, latestSeq: listed.latestSeq ?? 0,
+        latestTurnId: 'turn-2', latestTurnStatus: 'completed'
+      }))
+    }
+    const h = harness()
+
+    await h.action()
+    listed = thread({ latestSeq: 3, updatedAt: '2026-08-20T00:01:00.000Z' })
+    await h.action()
+
+    expect(h.get().unreadThreadIds).toEqual({})
+  })
+
+  it('migrates a v1 baseline without a false unread and retains latestSeq detection', async () => {
+    const legacyKey = 'kun.sidebarActivityCheckpoints.v1'
+    window.localStorage.setItem(legacyKey, JSON.stringify({
+      initialized: true,
+      threads: { 'thread-1': { latestSeq: 1, fallback: '2026-08-20T00:00:00.000Z|idle' } },
+      scheduleRuns: {}
+    }))
+    let listed = thread()
+    provider = {
+      listThreads: vi.fn(async () => [listed]),
+      listThreadsPage: vi.fn(async () => ({ threads: [listed], hasMore: false })),
+      getThreadState: vi.fn(async () => ({
+        status: 'idle', updatedAt: listed.updatedAt, latestSeq: listed.latestSeq ?? 0,
+        latestTurnId: 'turn-2', latestTurnStatus: 'completed'
+      }))
+    }
+    const h = harness()
+
+    await h.action()
+    expect(h.get().unreadThreadIds).toEqual({})
+    expect(window.localStorage.getItem(SIDEBAR_ACTIVITY_CHECKPOINTS_KEY)).not.toBeNull()
+
+    listed = thread({ latestSeq: 2, updatedAt: '2026-08-20T00:01:00.000Z' })
+    await h.action()
+
     expect(h.get().unreadThreadIds).toEqual({ 'thread-1': 'completed' })
   })
 
@@ -291,6 +355,39 @@ describe('sidebar activity observer', () => {
     await h.action()
     expect(h.get().scheduledThreadActivities).toEqual({})
     expect(h.get().unreadThreadIds).toEqual({ 'thread-1': 'failed' })
+  })
+
+  it('hydrates one unknown pushed thread without refreshing the full list', async () => {
+    const pushed = thread({ id: 'thread-new', latestSeq: 4 })
+    provider = {
+      listThreads: vi.fn(), listThreadsPage: vi.fn(),
+      getThreadSummary: vi.fn(async () => pushed),
+      getThreadState: vi.fn(async () => ({
+        status: 'running', updatedAt: pushed.updatedAt, latestSeq: 4,
+        latestTurnId: 'turn-new', pendingUserInputIds: []
+      }))
+    }
+    const h = harness([])
+
+    await h.action({ threadIds: ['thread-new'], includeSchedule: false })
+
+    expect(provider.listThreadsPage).not.toHaveBeenCalled()
+    expect(provider.getThreadSummary).toHaveBeenCalledWith('thread-new')
+    expect(h.get().threads).toEqual([expect.objectContaining({
+      id: 'thread-new', status: 'running', latestTurnId: 'turn-new'
+    })])
+    expect(h.get().refreshThreads).not.toHaveBeenCalled()
+  })
+
+  it('removes a pushed deleted thread without a list request', async () => {
+    provider = { listThreads: vi.fn(), listThreadsPage: vi.fn(), getThreadState: vi.fn() }
+    const h = harness(thread())
+
+    await h.action({ deletedThreadIds: ['thread-1'], includeSchedule: false })
+
+    expect(h.get().threads).toEqual([])
+    expect(provider.listThreadsPage).not.toHaveBeenCalled()
+    expect(h.get().refreshThreads).not.toHaveBeenCalled()
   })
 
   it('aggregates multiple schedules without letting queued work look running', () => {

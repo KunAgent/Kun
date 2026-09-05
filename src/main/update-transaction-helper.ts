@@ -1,8 +1,14 @@
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InstallerRecoveryEnvironment } from './gui-updater-pending'
+import {
+  clearGuiUpdateRecovery,
+  clearPendingUpdate,
+  clearPendingUpdateResult,
+  cleanupPendingUpdateBackup
+} from './gui-updater-pending'
 
 export type UpdateTransactionHelperDeps = {
   platform: NodeJS.Platform
@@ -78,4 +84,98 @@ export async function scheduleUpdateRollbackAfterExit(
 ): Promise<void> {
   if (deps.platform !== 'win32') return
   await deps.scheduleRollback(await resolveScript(deps), environment, pid)
+}
+
+export type FinalizeUpdateTransactionOutcome =
+  | { kind: 'finalized', phase: string }
+  | { kind: 'already-finalized', phase: string }
+  | { kind: 'unconfirmed', reason: string }
+
+/**
+ * Read the installer-owned transaction file to confirm its terminal phase.
+ * Returns null when the file is missing or unreadable; callers treat that as
+ * "unconfirmed" and keep every recovery artifact.
+ */
+async function readTransactionPhase(
+  environment: InstallerRecoveryEnvironment
+): Promise<string | null> {
+  const transactionPath = environment.KUN_INSTALLER_TRANSACTION
+  if (!transactionPath) return null
+  try {
+    const value = JSON.parse(await readFile(transactionPath, 'utf8')) as Record<string, unknown>
+    return typeof value.Phase === 'string' ? value.Phase : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Unified transaction termination: finalize the PowerShell transaction, then
+ * clean GUI records only after the transaction file confirms a terminal state
+ * that authorizes backup deletion. Any failure keeps every recovery artifact
+ * so the update can still be rolled back or retried later.
+ */
+export async function finalizeUpdateTransactionAndCleanup(
+  input: {
+    environment: InstallerRecoveryEnvironment
+    backupDir?: string
+  },
+  deps: {
+    platform?: NodeJS.Platform
+    runHelper?: typeof runUpdateTransactionHelper
+    cleanupBackup?: (backupDir?: string) => Promise<void>
+    clearRecords?: () => Promise<void>
+  } = {}
+): Promise<FinalizeUpdateTransactionOutcome> {
+  const platform = deps.platform ?? process.platform
+  const runHelper = deps.runHelper ?? runUpdateTransactionHelper
+  const cleanupBackup = deps.cleanupBackup ?? cleanupPendingUpdateBackup
+  const clearRecords = deps.clearRecords ?? (async () => {
+    await clearPendingUpdateResult()
+    await clearPendingUpdate()
+    await clearGuiUpdateRecovery()
+  })
+
+  if (platform !== 'win32') {
+    await clearRecords()
+    return { kind: 'finalized', phase: 'skipped-non-windows' }
+  }
+
+  const before = await readTransactionPhase(input.environment)
+  if (before === null && input.environment.KUN_INSTALLER_TRANSACTION) {
+    // No transaction file at all: nothing the installer owns can block a new
+    // update, so converging the GUI records is safe.
+    await clearRecords()
+    return { kind: 'already-finalized', phase: 'missing' }
+  }
+  if (before === 'rolled_back' || before === 'finalizing') {
+    // Terminal states that no longer need a finalize round-trip. The payload
+    // backup is only removed when the state authorizes it (rolled_back);
+    // finalizing still owns artifacts a repeated finalize must clean up.
+    if (before === 'rolled_back') {
+      await cleanupBackup(input.backupDir).catch(() => undefined)
+    }
+    await clearRecords()
+    return { kind: 'already-finalized', phase: before }
+  }
+
+  try {
+    await runHelper('FinalizeUpdateTransaction', input.environment)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return { kind: 'unconfirmed', reason }
+  }
+
+  // FinalizeUpdateTransaction deletes the transaction file on success, so a
+  // missing file after a successful helper run is the confirmation signal.
+  const after = await readTransactionPhase(input.environment)
+  if (after !== null) {
+    return {
+      kind: 'unconfirmed',
+      reason: `transaction file still reports phase ${after} after finalize`
+    }
+  }
+  await cleanupBackup(input.backupDir).catch(() => undefined)
+  await clearRecords()
+  return { kind: 'finalized', phase: 'finalized' }
 }

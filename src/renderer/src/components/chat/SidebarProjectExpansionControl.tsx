@@ -4,8 +4,8 @@ import type { ReactElement } from 'react'
 type T = (key: string, options?: Record<string, unknown>) => string
 
 export type SidebarProjectExpansionControlProps = {
-  /** Threads already loaded locally but not visible at the current stage. */
-  hiddenThreadCount: number
+  /** Rows that the next local expansion actually adds; 0 when exhausted. */
+  nextThreadCount: number
   /** The project cursor can still serve the next remote page. */
   canLoadMore: boolean
   /** A remote page request for this project is in flight. */
@@ -22,7 +22,7 @@ const controlButtonClass = 'rounded-md px-2.5 py-1.5 text-[12.5px] text-ds-faint
 
 /**
  * Split the old single sidebar control into two single-purpose actions:
- * the primary "show more / load more" action and an independent collapse
+ * the primary "show next batch / load more" action and an independent collapse
  * action that is available whenever the project is past its initial stage,
  * even while a remote page is still loading.
  */
@@ -30,14 +30,14 @@ export function SidebarProjectExpansionControl(
   props: SidebarProjectExpansionControlProps
 ): ReactElement {
   const {
-    hiddenThreadCount, canLoadMore, loading, canCollapse,
+    nextThreadCount, canLoadMore, loading, canCollapse,
     onShowMore, onLoadMore, onCollapse, t
   } = props
 
-  const primary = hiddenThreadCount > 0
+  const primary = nextThreadCount > 0
     ? {
         key: 'show-more',
-        label: t('sidebarWorkspaceShowMore', { count: hiddenThreadCount }),
+        label: t('sidebarWorkspaceShowMore', { count: nextThreadCount }),
         onClick: onShowMore
       }
     : canLoadMore

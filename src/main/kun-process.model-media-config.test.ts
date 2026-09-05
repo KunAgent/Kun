@@ -208,6 +208,7 @@ describe('syncGuiManagedKunConfig', () => {
         apiKey: 'sk-a',
         baseUrl: 'https://a.example/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['shared-model'],
         modelProfiles: { 'shared-model': profile('messages', 128_000) }
       },
@@ -217,6 +218,7 @@ describe('syncGuiManagedKunConfig', () => {
         apiKey: 'sk-b',
         baseUrl: 'https://b.example/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['shared-model'],
         modelProfiles: { 'shared-model': profile('responses', 256_000) }
       }
@@ -383,12 +385,14 @@ describe('syncGuiManagedKunConfig', () => {
     })
   })
 
-  it('writes the selected provider endpoint into the default model client config', async () => {
+  it('writes explicit direct and proxied routes without cross-provider fallback', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
     const configPath = join(tempRoot, 'config.json')
     const module = await import('./kun-process')
     const settings = createSettings('/tmp/fake-kun-child.js')
     settings.provider.proxy = { enabled: true, url: 'socks5://127.0.0.1:1080' }
+    const deepseek = settings.provider.providers.find((provider) => provider.id === 'deepseek')!
+    deepseek.useProxy = true
     settings.provider.providers = [
       ...settings.provider.providers,
       {
@@ -397,6 +401,7 @@ describe('syncGuiManagedKunConfig', () => {
         apiKey: 'sk-newapi',
         baseUrl: 'https://newapi.example/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         retry: {
           maxAttempts: 0,
           initialDelayMs: 3000,
@@ -435,8 +440,13 @@ describe('syncGuiManagedKunConfig', () => {
       credentialSourceId: 'settings:provider:custom',
       baseUrl: 'https://newapi.example/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: ['glm-5.2'],
       selectedModel: 'glm-5.2',
+      modelProxyUrl: ''
+    })
+    expect(parsed.serve.providers?.deepseek).toMatchObject({
+      useProxy: true,
       modelProxyUrl: 'socks5://127.0.0.1:1080'
     })
     expect(JSON.stringify(parsed)).not.toContain('sk-newapi')

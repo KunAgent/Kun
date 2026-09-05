@@ -140,7 +140,7 @@ export function updateActivityForItem(
 
 export function projectChildLifecycle(
   state: ThreadProjection,
-  event: Extract<RuntimeEvent, { kind: 'turn_started' | 'turn_completed' | 'turn_failed' | 'turn_aborted' | 'turn_steered' }>
+  event: Extract<RuntimeEvent, { kind: 'turn_started' | 'turn_queued' | 'turn_completed' | 'turn_failed' | 'turn_aborted' | 'turn_steered' }>
 ): ThreadProjection {
   const child = event.child!
   const index = state.childRuns.findIndex((run) => run.childId === child.childId)

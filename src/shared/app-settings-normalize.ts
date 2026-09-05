@@ -41,6 +41,7 @@ import { migrateLegacyAppSettings } from './app-settings-kun-migration'
 import { migrateKunContextCompactionDefaults } from './app-settings-kun-tuning'
 import {
   activeModelProviderNeedsApiKey,
+  modelProviderModelProfile,
   normalizeModelProviderSettings
 } from './app-settings-provider-core'
 import { defaultMiniMaxMediaGenerationKunPatch } from './app-settings-provider-media'
@@ -182,13 +183,33 @@ function normalizeRuntimeModelProviderSelection(
       providerId: normalized.providerId || providers[0].id
     }
   })
+  const fastContext = normalizeFastContextCodexFast(runtime.fastContext, providers)
   return {
     ...runtime,
     ...main,
+    fastContext,
     ...(runtime.subagents && profiles
       ? { subagents: { ...runtime.subagents, profiles } }
       : {})
   }
+}
+
+function normalizeFastContextCodexFast(
+  fastContext: KunRuntimeSettingsV1['fastContext'],
+  providers: readonly ModelProviderProfileV1[]
+): KunRuntimeSettingsV1['fastContext'] {
+  if (!fastContext.fast) return fastContext
+  const providerId = fastContext.providerId.trim()
+  const model = fastContext.model.trim()
+  const provider = providers.find((candidate) => candidate.id === providerId)
+  const codex = provider?.presetSource?.presetId === 'codex' || providerId.toLowerCase() === 'codex'
+  const profile = provider && (
+    modelProviderModelProfile(provider, model) ?? Object.values(provider.modelProfiles)
+      .find((candidate) => candidate.aliases?.some((alias) => alias.trim().toLowerCase() === model.toLowerCase()))
+  )
+  return codex && profile?.serviceTiers?.includes('priority')
+    ? fastContext
+    : { ...fastContext, fast: false }
 }
 
 function normalizeModelProviderPair(
@@ -349,6 +370,7 @@ export function normalizeAppBehaviorSettings(
   return {
     openAtLogin,
     startMinimized: openAtLogin && settings?.startMinimized === true,
+    keepAwake: settings?.keepAwake === true,
     useSystemTitleBar: settings?.useSystemTitleBar === true,
     closeAction,
     closeToTray: closeAction === 'tray'

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { requestUsage } from './usage-request-cache'
 import { parseUsageResponse } from './usage-response'
+import type { ThreadUsageSnapshot } from '../agent/thread-runtime-types'
 
 const THREAD_USAGE_RETRY_DELAYS_MS = [250, 750] as const
 
@@ -57,6 +59,67 @@ export function retainPendingThreadUsage(
   }
 }
 
+/**
+ * Merge the live per-request `usage` SSE snapshot over the persisted REST
+ * summary. The REST summary stays authoritative after settle/reload; the live
+ * snapshot only overlays fields the runtime reports every model response, so
+ * the footer and session header update between turns instead of freezing.
+ * Fields the live snapshot never carries (reference price estimates and
+ * coverage) are left to the REST value and refreshed on reconcile.
+ */
+export function mergeLiveThreadUsage(
+  rest: ThreadUsageSummary | null,
+  live: ThreadUsageSnapshot | null
+): ThreadUsageSummary | null {
+  if (!live) return rest
+  if (!rest) {
+    return {
+      inputTokens: live.inputTokens,
+      outputTokens: live.outputTokens,
+      reasoningTokens: live.reasoningTokens,
+      cachedTokens: live.cachedTokens,
+      cacheMissTokens: live.cacheMissTokens,
+      cacheHitRate: live.cacheHitRate,
+      lastTurnCacheHitRate: live.lastRequestCacheHitRate ?? null,
+      lastTurnCacheableHitRate: live.cacheableTokenHitRate ?? null,
+      lastTurnTotalInputHitRate: live.totalInputTokenHitRate ?? null,
+      cacheMissReasons: live.cacheMissReasons,
+      cacheSuggestions: live.cacheSuggestions,
+      totalTokens: live.totalTokens,
+      costUsd: live.costUsd,
+      costCny: live.costCny,
+      valueEstimateUsd: null,
+      valueEstimateCny: null,
+      valueEstimateCoverage: 'unavailable',
+      tokenEconomySavingsTokens: live.tokenEconomySavingsTokens,
+      turns: live.turns,
+      avgTtftMs: live.avgTtftMs,
+      avgTokensPerSecond: live.avgTokensPerSecond
+    }
+  }
+  return {
+    ...rest,
+    inputTokens: live.inputTokens,
+    outputTokens: live.outputTokens,
+    reasoningTokens: live.reasoningTokens,
+    cachedTokens: live.cachedTokens,
+    cacheMissTokens: live.cacheMissTokens,
+    cacheHitRate: live.cacheHitRate,
+    lastTurnCacheHitRate: live.lastRequestCacheHitRate ?? rest.lastTurnCacheHitRate,
+    lastTurnCacheableHitRate: live.cacheableTokenHitRate ?? rest.lastTurnCacheableHitRate,
+    lastTurnTotalInputHitRate: live.totalInputTokenHitRate ?? rest.lastTurnTotalInputHitRate,
+    cacheMissReasons: live.cacheMissReasons ?? rest.cacheMissReasons,
+    cacheSuggestions: live.cacheSuggestions ?? rest.cacheSuggestions,
+    totalTokens: live.totalTokens,
+    costUsd: live.costUsd,
+    costCny: live.costCny,
+    tokenEconomySavingsTokens: live.tokenEconomySavingsTokens,
+    turns: live.turns,
+    avgTtftMs: live.avgTtftMs,
+    avgTokensPerSecond: live.avgTokensPerSecond
+  }
+}
+
 function usageNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
@@ -70,6 +133,7 @@ function usageRate(value: unknown): number | null {
 }
 
 export function formatCompactNumber(value: number): string {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`
   return new Intl.NumberFormat().format(value)
@@ -82,10 +146,13 @@ export function isChineseLocale(locale?: string): boolean {
   return normalized === 'zh' || normalized.startsWith('zh-')
 }
 
-function formatMoneyValue(value: number): string {
+function formatMoneyValue(value: number, locale: string): string {
   const safeValue = Number.isFinite(value) ? value : 0
   if (safeValue > 0 && safeValue < 0.0001) return '<0.0001'
-  return safeValue.toFixed(safeValue >= 1 ? 2 : 4)
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: safeValue >= 1 ? 2 : 4,
+    maximumFractionDigits: safeValue >= 1 ? 2 : 4
+  }).format(safeValue)
 }
 
 export function formatCost(
@@ -100,9 +167,9 @@ export function formatCost(
     (includeZero ? costCny >= 0 : costCny > 0)
   if (!hasUsd && !hasCny) return '-'
   if (isChineseLocale(locale)) {
-    return `￥${formatMoneyValue(hasCny ? costCny as number : (costUsd as number) * USD_TO_CNY_REFERENCE_RATE)}`
+    return `￥${formatMoneyValue(hasCny ? costCny as number : (costUsd as number) * USD_TO_CNY_REFERENCE_RATE, locale)}`
   }
-  return `$${formatMoneyValue(hasUsd ? costUsd as number : (costCny as number) / USD_TO_CNY_REFERENCE_RATE)}`
+  return `$${formatMoneyValue(hasUsd ? costUsd as number : (costCny as number) / USD_TO_CNY_REFERENCE_RATE, locale)}`
 }
 
 export type MoneySummaryItem = {
@@ -205,13 +272,16 @@ export function formatCacheMissReason(reason: string): string {
   }
 }
 
-export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSummary | null> {
+export async function loadThreadUsage(
+  threadId: string,
+  generation?: string | number
+): Promise<ThreadUsageSummary | null> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return null
   const params = new URLSearchParams({
     group_by: 'thread',
     thread_id: threadId
   })
-  const r = await window.kunGui.runtimeRequest(`/v1/usage?${params.toString()}`, 'GET')
+  const r = await requestUsage(`/v1/usage?${params.toString()}`, 'thread usage', generation)
   if (!r.ok || !r.body.trim()) return null
   const parsed = parseUsageResponse<{
     buckets?: Array<Record<string, unknown>>
@@ -335,7 +405,9 @@ export function useThreadUsageState(
     const threadChanged = activeThreadRef.current !== nextThreadId
     activeThreadRef.current = nextThreadId
     if (!threadId || !enabled) {
-      setState({ usage: null, loading: false, loaded: false })
+      setState((current) => threadChanged
+        ? { usage: null, loading: false, loaded: false }
+        : { ...current, loading: false })
       return
     }
     setState((current) => threadChanged
@@ -343,7 +415,7 @@ export function useThreadUsageState(
       : { ...current, loading: true, loaded: false })
 
     const load = (attempt: number): void => {
-      void loadThreadUsage(threadId)
+      void loadThreadUsage(threadId, `${String(refreshKey)}:${attempt}`)
         .then((usage) => {
           if (cancelled) return
           if (usage) {

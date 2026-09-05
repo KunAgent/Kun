@@ -223,13 +223,14 @@ describe('SidebarProjectsSection project expansion', () => {
 
   it('does not use a global thread total as a project remaining count', () => {
     const html = renderToStaticMarkup(createElement(SidebarProjectsSection, sidebarProjectProps({
-      threads: cindyThreads(6), workspaceRoot: '/Users/zxy/cindy',
+      threads: cindyThreads(22), workspaceRoot: '/Users/zxy/cindy',
       workspaceRoots: ['/Users/zxy/cindy', '/Users/zxy/other'],
       threadListCursorByWorkspace: {
         '/users/zxy/other': { workspaceKey: '/users/zxy/other', hasMore: false, total: 1040 }
       }, t: expansionTranslation
     })))
-    expect(html).toContain('sidebarWorkspaceShowMore:1')
+    expect(html).toContain('sidebarWorkspaceShowMore:5')
+    expect(html).not.toContain('sidebarWorkspaceShowMore:17')
     expect(html).not.toContain('sidebarWorkspaceShowMore:1034')
   })
 

@@ -32,12 +32,11 @@ export const PLATFORM_SPECS = {
 export function usage() {
   console.log(`Usage:
   node scripts/publish-r2.mjs upload --platform mac|win|linux --tag vX.Y.Z [--channel frontier|stable] [--dry-run]
-  node scripts/publish-r2.mjs upload-tui --tag vX.Y.Z --dist <release-directory> [--channel frontier|stable] [--dry-run]
-  node scripts/publish-r2.mjs promote --tag vX.Y.Z [--channel frontier|stable] [--platforms mac,win,linux] [--require-tui] [--dry-run]
+  node scripts/publish-r2.mjs promote --tag vX.Y.Z [--channel frontier|stable] [--platforms mac,win,linux] [--require-all-platforms] [--dry-run]
 
 If --platforms is omitted, promote uses the platform manifests already uploaded for that tag.
 If --channel is omitted, the default channel is frontier.
-Stable and Daily CI pass --require-tui so GUI and standalone TUI latest pointers advance together.
+Stable and Daily CI require all three GUI platform manifests before latest promotion.
 
 Environment:
   KUN_RELEASE_ENV=scripts/release.local.env (legacy DEEPSEEK_GUI_RELEASE_ENV is also accepted)
@@ -106,7 +105,7 @@ export function readArgs(argv) {
       name === 'h' ||
       name === 'stable' ||
       name === 'frontier' ||
-      name === 'require-tui'
+      name === 'require-all-platforms'
     ) {
       flags.set(name, true)
       continue

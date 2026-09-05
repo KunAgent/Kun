@@ -178,6 +178,8 @@ export interface AgentSdkRuntimeFactoryDeps {
    */
   toolContextBoundary?: Pick<
     ToolHostContext,
+    | 'allowedModelProviderIds'
+    | 'allowedModelIds'
     | 'allowedProviderIds'
     | 'allowedToolNames'
     | 'allowedSkillIds'

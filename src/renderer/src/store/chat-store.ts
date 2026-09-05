@@ -119,6 +119,18 @@ import { createInitialChatStoreState } from './chat-store-initial-state'
 import { createComposerContextActions } from './chat-store-composer-context-actions'
 import { createKnowledgeBaseActions } from './chat-store-knowledge-base-actions'
 import { createSidebarActivityActions } from './chat-store-sidebar-activity'
+import {
+  REMOVED_CODE_WORKSPACES_STORAGE_KEY,
+  readRemovedCodeWorkspaces
+} from '../lib/removed-code-workspaces'
+import {
+  SHARED_BUSINESS_STORAGE_CHANGED_EVENT,
+  type SharedBusinessStorageChangedDetail
+} from '../lib/shared-business-storage'
+import {
+  removedWorkspaceVisibilityForState,
+  saveCodeWorkspaceRoots
+} from './chat-store-navigation-workspace-removal'
 
 export type { AppRoute, SettingsRouteSection } from './chat-store-types'
 export { CLAW_COMPOSER_MODEL_IDS } from './chat-store-helpers'
@@ -206,3 +218,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   ...createMaintenanceActions({ set, get, sseAbortRef })
 }))
+
+let sharedRemovalListenerInstalled = false
+
+export function installRemovedWorkspaceSharedStateListener(): void {
+  if (sharedRemovalListenerInstalled || typeof window === 'undefined') return
+  sharedRemovalListenerInstalled = true
+  window.addEventListener(SHARED_BUSINESS_STORAGE_CHANGED_EVENT, (event) => {
+    const detail = (event as CustomEvent<SharedBusinessStorageChangedDetail>).detail
+    if (!detail?.keys.includes(REMOVED_CODE_WORKSPACES_STORAGE_KEY)) return
+    const registry = readRemovedCodeWorkspaces()
+    const state = useChatStore.getState()
+    const visibility = removedWorkspaceVisibilityForState(state, registry)
+    if (visibility.activeThreadRemoved) {
+      sseAbortRef.current?.abort()
+      sseAbortRef.current = null
+      clearBusyWatchdog()
+    }
+    const roots = visibility.patch.codeWorkspaceRoots ?? state.codeWorkspaceRoots
+    saveCodeWorkspaceRoots(roots)
+    useChatStore.setState(visibility.patch)
+    if (useChatStore.getState().runtimeConnection === 'ready') {
+      void useChatStore.getState().refreshThreads()
+    }
+  })
+}
+
+installRemovedWorkspaceSharedStateListener()

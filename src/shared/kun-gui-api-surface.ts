@@ -26,17 +26,17 @@ import type {
   WorkflowRuntimeStatus
 } from './app-settings'
 import type { DesktopTitleBarMode } from './desktop-title-bar'
+import type {
+  BuiltinGitHubMcpAuthorizationConfirmation,
+  BuiltinGitHubMcpAuthorizationPreflight,
+  BuiltinGitHubMcpAuthorizationResult,
+  BuiltinGitHubMcpLoginResult
+} from './github-mcp-authorization'
 import type { DesktopStartupStatePayload } from './desktop-startup-state'
 import type { EditorListResult, EditorOpenResult, OpenEditorPathOptions } from './editor'
 import type { GitBranchesResult, GitBranchWorktreesResult, GitWorktreeCheckoutResult } from './git-branches'
 import type { GitCheckpointCreateResult, GitCheckpointRestoreResult } from './git-checkpoint'
-import type {
-  MergeResult,
-  SyncResult,
-  WorktreeChanges,
-  WorktreeInfo,
-  WorktreePoolStatus
-} from './worktree'
+import type { MergeResult, SyncResult, WorktreeChanges, WorktreeInfo, WorktreePoolStatus } from './worktree'
 import type {
   GuiUpdateChannel,
   GuiUpdateDownloadResult,
@@ -53,7 +53,10 @@ import type {
 } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
 import type { UninstallApi } from './uninstall'
+import type { RuntimeRequestIpcApi } from './kun-gui-api-runtime-request'
 import type { RuntimeDataRecoveryApi } from './runtime-data-recovery'
+import type { ProviderAuthApi } from './kun-gui-api-provider-auth'
+import type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from './kun-gui-api-protected-approval'
 import type { ProviderMutationFlushRequestHandler } from './provider-mutation-barrier'
 import type {
   ClipboardImageReadResult,
@@ -142,6 +145,7 @@ import type {
   WriteRetrievalRequest,
   WriteRetrievalResult
 } from './write-retrieval'
+import type { WriteDocumentSha256Request, WriteDocumentSha256Result } from './write-document-sha256'
 import type {
   WriteExportPayload,
   WriteExportResult,
@@ -203,9 +207,6 @@ import {
   ClawImInstallPollResult,
   ClawImInstallQrResult,
   ClawImTelegramConnectResult,
-  CodexAuthPollResult,
-  CodexAuthStartResult,
-  CodexBrowserAuthResult,
   ComputerUsePermissionKind,
   ComputerUsePermissions,
   ConfirmDialogOptions,
@@ -234,15 +235,12 @@ import {
   PromptOptimizationRequest,
   PromptOptimizationResult,
   GatewayCredentialResult,
-  RuntimeRequestResult,
   SdkDownloadState,
   SkillGithubImportResult,
   SkillListResult,
   SkillRootListResult,
   SkillSaveResult,
-  SseEndPayload,
-  SseErrorPayload,
-  SseEventPayload,
+  KunGuiSseSurface,
   SystemNotificationResult,
   TrayActionPayload,
   TurnCompleteNotificationPayload,
@@ -252,9 +250,10 @@ import {
   UiPluginThemeActivateIpcResult,
   UiPluginThemeDeactivateIpcResult,
   UpstreamModelsResult,
+  WorkspaceCreationTimeEntry,
   WorkspacePickResult
 } from './kun-gui-api-contracts'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & {
   platform: string
   /** Immutable mode selected before the BrowserWindow and renderer are created. */
   desktopTitleBarMode: DesktopTitleBarMode
@@ -367,7 +366,6 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   }>
   setSettings: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
-  runtimeRequest: (path: string, method?: string, body?: string) => Promise<RuntimeRequestResult>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
   uploadRuntimeImageAttachment: (
@@ -402,6 +400,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   getClawStatus: () => Promise<ClawRuntimeStatus>
   runClawTask: (taskId: string) => Promise<ClawRunResult>
   getScheduleStatus: () => Promise<ScheduleRuntimeStatus>
+  onScheduleStatusChanged: (handler: (status: ScheduleRuntimeStatus) => void) => () => void
   createScheduleTask: (payload: ScheduleTaskCreateInput) => Promise<ScheduleTaskMutationResult>
   updateScheduleTask: (payload: ScheduleTaskUpdateInput) => Promise<ScheduleTaskMutationResult>
   deleteScheduleTask: (taskId: string) => Promise<ScheduleTaskDeleteResult>
@@ -429,10 +428,6 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
     allowedChatIds?: string,
     proxy?: ClawImTelegramProxyV1
   ) => Promise<ClawImTelegramConnectResult>
-  startCodexAuth: () => Promise<CodexAuthStartResult>
-  pollCodexAuth: (deviceCode: string, userCode: string) => Promise<CodexAuthPollResult>
-  startCodexBrowserAuth: () => Promise<CodexBrowserAuthResult>
-  startGrokBrowserAuth: () => Promise<GrokBrowserAuthResult>
   /** Paste the authorization code (or callback URL) from accounts.x.ai. */
   submitGrokBrowserAuthCode: (code: string) => Promise<GrokBrowserAuthResult>
   cancelGrokBrowserAuth: () => Promise<GrokBrowserAuthCancelResult>
@@ -467,6 +462,12 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   deactivateUiPluginTheme: () => Promise<UiPluginThemeDeactivateIpcResult>
   getKunConfigFile: () => Promise<DeepseekConfigFileResult>
   setKunConfigFile: (content: string) => Promise<DeepseekConfigSaveResult>
+  preflightBuiltinGitHubMcpAuthorization: (host?: string) => Promise<BuiltinGitHubMcpAuthorizationPreflight>
+  startBuiltinGitHubMcpLogin: (host?: string) => Promise<BuiltinGitHubMcpLoginResult>
+  disableBuiltinGitHubMcp: () => Promise<{ disabled: true }>
+  confirmBuiltinGitHubMcpAuthorization: (
+    request: BuiltinGitHubMcpAuthorizationConfirmation
+  ) => Promise<BuiltinGitHubMcpAuthorizationResult>
   openKunConfigDir: () => Promise<PathOpenResult>
   getKunProjectConfigFile: (workspaceRoot: string) => Promise<KunProjectConfigFileResult>
   setKunProjectConfigFile: (workspaceRoot: string, content: string) => Promise<KunProjectConfigFileResult>
@@ -477,6 +478,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   ) => Promise<KunProjectConfigFileResult>
   openKunProjectConfigDir: (workspaceRoot: string) => Promise<PathOpenResult>
   getGitBranches: (workspaceRoot: string) => Promise<GitBranchesResult>
+  getWorkspaceCreationTimes: (workspaceRoots: string[]) => Promise<WorkspaceCreationTimeEntry[]>
   switchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createAndSwitchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createGitCheckpoint: (params: {
@@ -582,6 +584,9 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   retrieveWriteContext: (
     payload: WriteRetrievalRequest
   ) => Promise<WriteRetrievalResult>
+  readWriteDocumentSha256: (
+    payload: WriteDocumentSha256Request
+  ) => Promise<WriteDocumentSha256Result>
   generateWriteInfographic: (
     payload: WriteInfographicRequest
   ) => Promise<WriteInfographicResult>
@@ -618,17 +623,6 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   copyWriteDocumentAsRichText: (
     payload: WriteRichClipboardPayload
   ) => Promise<WriteRichClipboardResult>
-  startSse: (
-    threadId: string,
-    sinceSeq: number,
-    streamId?: string,
-    options?: { acknowledgedBatches?: boolean }
-  ) => Promise<{ streamId: string }>
-  stopSse: (streamId: string) => Promise<boolean>
-  ackSse: (streamId: string, batchId: string) => Promise<boolean>
-  onSseEvent: (handler: (payload: SseEventPayload) => void) => () => void
-  onSseEnd: (handler: (payload: SseEndPayload) => void) => () => void
-  onSseError: (handler: (payload: SseErrorPayload) => void) => () => void
   onClawChannelActivity: (handler: (payload: ClawChannelActivityPayload) => void) => () => void
   onTrayAction: (handler: (payload: TrayActionPayload) => void) => () => void
   onRuntimeStatus: (handler: (payload: KunRuntimeStatusPayload) => void) => () => void
@@ -689,12 +683,5 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & {
   onTerminalData: (handler: (payload: TerminalDataPayload) => void) => () => void
   onTerminalExit: (handler: (payload: TerminalExitPayload) => void) => () => void
 }
-export type KunProtectedApprovalRequest = {
-  approvalId: string
-  decision: 'allow' | 'deny'
-  /** Policy decisions are generated by Kun; user decisions require a protected native confirmation. */
-  source: 'policy' | 'user'
-}
-export type KunProtectedApprovalResult =
-  | { confirmed: false }
-  | { confirmed: true; response: RuntimeRequestResult }
+
+export type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from './kun-gui-api-protected-approval'

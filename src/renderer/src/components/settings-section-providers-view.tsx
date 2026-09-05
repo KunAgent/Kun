@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Check,
   CheckCircle2,
+  Download,
   FilePenLine,
   ChevronDown,
   Loader2,
@@ -261,6 +262,23 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                               : t('autoApplyHint')}
                       </StatusPill>
                     ) : null}
+                    <button
+                      type="button"
+                      data-testid="provider-fetch-models"
+                      disabled={probeBusy || activeProbeBlocked}
+                      title={activeMissingCredential
+                        ? t('modelProviderPresetMissingKeyForProbe')
+                        : activeBaseUrlInvalid
+                          ? t('modelProviderInvalidUrl')
+                          : t('modelProviderFetchModels')}
+                      onClick={() => void runProbe(activeProvider, 'fetch')}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
+                    >
+                      {probeBusy && activeProbe?.mode === 'fetch'
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
+                        : <Download className="h-3.5 w-3.5" strokeWidth={1.9} />}
+                      {t('modelProviderFetchModels')}
+                    </button>
                     <button
                       type="button"
                       disabled={probeBusy || activeProbeBlocked}

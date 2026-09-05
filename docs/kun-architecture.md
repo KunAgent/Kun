@@ -1,11 +1,12 @@
-# Kun GUI 单运行时方案
+# Kun 客户端持有单运行时方案
 
-本文记录 Kun 桌面应用和独立 TUI 如何共同使用同一个 Kun 运行时。
-结论先说清楚：GUI 只保留一个 agent，唯一 ID 是 `kun`；GUI、TUI、
-脚本、扩展和连接手机都通过同一条 `kun serve` HTTP/SSE 边界工作；
-GUI 与 TUI 可以独立启动并同时使用，任何一个客户端退出都不应关闭或
-重置共享运行时。历史运行时、旧绘画/设计 starter、运行时诊断面板、
-agent 切换都不再是产品表面。
+本文记录 Kun 桌面应用和独立 TUI 如何使用同一套 Kun 协议与持久化数据，
+但各自持有自己的运行时进程。结论先说清楚：GUI 只保留一个 agent，唯一
+ID 是 `kun`；GUI、TUI、脚本、扩展和连接手机都通过同一条 `kun serve`
+HTTP/SSE 边界工作。正常 GUI/TUI 在同一 `(规范化 dataDir, runtime flavor)`
+槽位内互斥：谁启动 Runtime，谁负责在真实退出时关闭它。对话、设置、记忆
+和用量继续由 Service Manager 持久化并可被后续客户端顺序复用。历史运行时、
+旧绘画/设计 starter、运行时诊断面板、agent 切换都不再是产品表面。
 
 Graph 编排、自进化项目 Agent、恢复与治理仍运行在同一个 Kun 边界内，完整设计与
 运维说明见 [`docs/graph-mode.md`](./graph-mode.md)。
@@ -13,6 +14,10 @@ Graph 编排、自进化项目 Agent、恢复与治理仍运行在同一个 Kun 
 Work 工作区可以按线程挂载为 Code 的只读、无向量结构知识库。索引、工具、权限边界
 与检索流程见 [`docs/knowledge-bases.md`](./knowledge-bases.md)。知识库挂载不会扩大
 普通文件工具或 sandbox 的可写根。
+
+长期记忆使用“原子 JSON 标准数据 + 可重建 SQLite FTS5 投影”。检索必须先做作用域和生命周期
+过滤，记忆只能作为动态、不可信的 `reference` 证据，不能进入稳定 system 前缀或获得指令权限。
+数据布局、迁移、降级与验证见 [`docs/memory-foundation.md`](./memory-foundation.md)。
 
 ## 客户端能力边界
 
@@ -44,10 +49,10 @@ Preload IPC bridge
         v
 Main process
   RuntimeHost -> kunRuntimeAdapter
-  process/config/port/token management only
+  exact GUI child/config/port/token management only
         |
         v
-kun serve (TypeScript package)
+GUI-owned kun serve (TypeScript package)
   /health
   /v1/threads
   /v1/threads/{id}/turns
@@ -58,12 +63,52 @@ kun serve (TypeScript package)
   /v1/user-inputs/{id}
   /v1/usage
   /v1/workspace/status
+
+Default TUI process
+        |
+        | starts/stops its exact owned Runtime
+        v
+TUI-owned kun serve
+
+GUI/TUI-owned Runtime
+        |
+        v
+Service Manager
+  election / fencing / canonical persisted data
 ```
 
 这个边界采用本地 HTTP 服务架构：GUI 不直接嵌 agent loop，不通过
 stdio/RPC 混跑多个状态机，只把 `kun serve` 当成稳定协议。Kun 内部使用
 cache-first loop：immutable prefix、append-only log、bounded LRU/TTL cache、
 inflight cleanup、steering queue、context compaction、usage/cache telemetry。
+
+## 客户端持有的生命周期
+
+- GUI 在 `autoStart` 开启且目标槽位空闲时启动一个受监督的非 detached
+  Runtime 子进程，只把请求路由到这个精确子进程。关闭自动启动时，GUI
+  不启动也不接管已有 Runtime。
+- 真正的应用 Quit、平台退出快捷键、保存的 `closeAction: quit`、更新退出和
+  非 macOS 最后窗口退出都进入同一 quit barrier：停止恢复调度、优雅关闭
+  精确 GUI 子进程并等待退出。隐藏窗口、最小化到托盘以及 Electron 仍存活的
+  macOS 无窗口状态不算退出，Runtime 继续运行。
+- 默认 TUI 启动自己的 Runtime，并在 `/quit`、信号退出、初始化失败或其他
+  command 退出路径的 `finally` 中关闭精确实例。`--url` 和 `--no-start` 是
+  显式外部连接例外：它们不拥有、不启动，也不停止目标 Runtime；目标 owner
+  退出时，这类连接可以随之断开。
+- 同一 `(Service Manager profile, runtime flavor)` 已有 live/starting GUI 或
+  TUI owner 时，另一个正常客户端必须返回可操作的 ownership conflict，不能
+  attach、steal、replace 或 silent kill。默认 Manager profile 绑定一个 canonical
+  dataDir，production/development flavor 仍是独立槽位；若确实需要并行的第二套
+  profile，必须显式隔离 Manager control directory，不能只换 `dataDir` 参数。
+- GUI 顶部重启只优雅停止并重拉当前 Electron 持有的 Runtime；不再扫描当前
+  用户的所有 `kun serve`，不触碰 TUI、其他 dataDir/flavor 或 Service Manager。
+- Service Manager 是独立、轻量的选举与数据面进程。普通 GUI/TUI 退出和 Runtime
+  restart 都不停止 Manager；Manager 可以在没有 Runtime slot 时继续保留持久化
+  状态，但它自身不执行 Agent turn。
+- 首次升级到 client-owned 生命周期时，可以只对同一 canonical dataDir 中、
+  已认证且身份精确、`launchMode: shared` 且无 client-owner 元数据的旧 daemon
+  做一次优雅退休并等待 PID 退出。任何 discovery、PID、endpoint、dataDir、
+  Manager registration 或认证歧义都必须 fail closed，禁止扩大为全用户进程扫描。
 
 ## 缓存命中优化
 
@@ -102,8 +147,16 @@ Kun 的缓存命中率要按 provider 原生 usage 字段优先计算和优化�
   模式规则、Design profile 与画布快照只作为 append-only `model_context` 追加在历史末尾。
   Code / Design 模式切换不得改变 immutable prefix；计划 Worktree 的分支、路径、脏文件数和
   Markdown 快照也只允许进入当次 user input。
-  工具执行仍按当前回合的真实 surface / canvas 状态重新校验，所以稳定 schema 不会扩大执行权限。
+工具执行仍按当前回合的真实 surface / canvas 状态重新校验，所以稳定 schema 不会扩大执行权限。
   Plan、Graph 与专用 SVG 回合属于真实能力阶段，继续使用独立分区和受限工具目录。
+
+实验室中的“自动模式（计划 + 构建）”只是一层 Renderer 编排，不新增 Kun mode：用户请求先以
+`plan` 回合生成绑定 workspace/thread/path 的 `create_plan` 结果，只有精确匹配后才以普通
+Direct `agent` 回合构建，或复用现有一次性定时任务。Renderer 持久化有界 intent，并用稳定
+request id、计划身份和定时任务指纹处理任务切换与重启恢复；无法证明安全时进入
+`needs_attention`，不得降级执行。自动模式的 worktree 默认值独立于手动计划，但最终仍复用
+同一套 `preparePlanBuild` 和 Agent 管理的 worktree prompt。Graph 不参与此模式，所有选择和
+恢复事实都留在动态 GUI 状态中，不写入 Kun config 或 immutable prefix。
 - Work turn 按 `agentSurface: write` 追加稳定的 Work mode system instruction；Renderer
   持久化的用户正文只保留用户原话。当前资源、精确选区、检索/Office 摘录和白板快照
   通过有界 `composerContexts` 引用随 turn 传入，不再把工作区、工具手册或画布规则拼进
@@ -133,8 +186,10 @@ provider 原生缓存字段；这些历史数据只能作为旧实现的证据�
 
 ## Subagent 召回与派发
 
-`delegate_task` 是唯一创建 child run 的入口，`list_subagent_profiles` 是主代理专用的
-只读发现工具。开启“使用现有代理”时，发现结果只按页返回当前 workspace 和 product
+`delegate_task` 是创建普通 child run 的唯一模型入口，`list_subagent_profiles` 是主代理专用的
+只读发现工具。`fast_context` 是例外的 host-owned 全局只读检索能力：支持 Kun ToolHost
+的普通 agent、subagent 和 Graph Worker 都可以启动它的受管 retrieval child，但这不会
+开放普通 child fan-out。开启“使用现有代理”时，发现结果只按页返回当前 workspace 和 product
 surface 的有效 profile；`delegate_task` 只公开可选 `profile`，省略时由 Kun 在有效
 目录中自动路由。该模式不向模型公开 `custom_agent`，宿主也会拒绝旧客户端或手工请求
 携带的该字段。关闭该开关时不读取或返回注入目录，发现结果只描述一次性 custom
@@ -149,7 +204,11 @@ body），也可按精确 ID 显式选择，并出现在设置页与工作台右
 `toolPolicy: inherit` 时可在父能力快照内使用写工具。`omit_base_prompt: true`
 时 child 只用 role prompt，不再 prepend Kun base。宿主仍强制禁用 Skills、
 屏蔽 model/provider/reasoning 覆盖，并阻止嵌套 `delegate_task` /
-`generate_subagent`。
+`generate_subagent`。`fast_context` 在普通 profile allowlist 收窄后由宿主统一补入，
+但父 capability snapshot、显式 tool/provider deny 和 Lab 总开关仍优先。它的内部 child
+只获得 `grep` / `glob` / `read` 和继承的 read scope；嵌套调用借用当前 subagent 的
+全局并发位，同时仍受独立 Fast Context lane 串行约束。provider-native runtime 若声明
+`kunTools: false`（当前 Antigravity CLI）则整个回合都没有 Kun 独占工具，不会静默换模型。
 
 Subagent 目录按产品 surface 分层。`shared` 是 Code、Work、Design 强制继承的
 基础池，其余 profile 可以属于一个或多个 `code` / `write` / `design` surface；
@@ -234,8 +293,8 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 
 主进程现在只需要：
 
-- `kunRuntimeAdapter`：启动/停止 `kun serve`、同步 config、
-  计算 base URL、附加 auth header。
+- `kunRuntimeAdapter`：启动/停止精确 GUI-owned `kun serve`、拒绝同槽位外部
+  owner、同步 config、计算 base URL、附加 auth header。
 - `runtimeRequestViaHost`：确保 Kun running 后转发 `/v1/*`。
 - `startSse/stopSse`：按 `threadId + sinceSeq` 转发 Kun SSE。
 
@@ -371,6 +430,11 @@ Kun 包按 ports & adapters 组织：
   ApprovalGate、EventBus、WorkspaceInspector、Clock。
 - `adapters/`：DeepSeek-compatible model client、local tool host、
   file/in-memory stores、workspace inspector。
+
+线程存储采用「原子 JSON 元数据 + 可重建 SQLite 索引」混合实现。`list()`/`listPage()`
+不再阻塞等待冷启动补索引：索引缺失时首屏从 SQLite 已索引行与 dirty filesystem delta
+合并立即返回；补索引在后台分批并行读取 metadata 并单事务批量写回，进度通过响应中的
+`indexStatus`（status/indexed/total）暴露，避免 GUI 陷入无期限 loading。
 - `loop/`：AgentLoop、InflightTracker、SteeringQueue、ContextCompactor。
 - `cache/`：ImmutablePrefix、LRU、TTL-LRU。
 - `server/`：Router、auth、SSE、routes。
@@ -379,26 +443,19 @@ GUI 侧不实现 agent 逻辑，只做 HTTP client、SSE subscription 和状态�
 新增能力时优先加 Kun tool 或 HTTP endpoint，不新增 GUI 内第二个
 agent。
 
-## GUI 与独立 TUI 联合发布约束
+## 桌面应用发布约束
 
-GUI 包继续通过 `electron-builder` 内置 `kun/dist` 和平台启动器；独立 TUI 是额外的
-headless 压缩包，不替代 GUI 中的终端命令。两种形态必须从同一 commit 和同一份
-`kun/dist/runtime-build.json` 派生，并共享应用版本、tag、release channel 和 build ID。
-TUI 没有独立版本、独立 tag 或 npm 发布流程。
+从 0.3.8 起，Stable 和 Daily 只分发桌面应用，不再构建独立 TUI 压缩包或推进
+独立 TUI 更新清单。GUI 包仍通过 `electron-builder` 内置 `kun/dist` 和平台
+启动器，`kun` / `kun tui` 及共享 Runtime 保留，随 GUI 一起更新。
 
-独立 TUI 中 `/usage` 是只读 Kun 本地用量报告，展示当前会话、全部会话和
-Top Sessions；`/quota` 展示 provider 订阅额度及可用的本地今日/30 天参考价值，`/provider usage` 与
-`/provider quota` 保持相同的 provider 兼容语义，`/context` 继续展示当前
-请求上下文。这些命令只复用现有查询接口，不增加 runtime 诊断或控制入口。
+发布必须校验 macOS arm64/x64、Windows x64 和 Linux x64/arm64 的 GUI 产物与
+更新元数据。Stable 最终候选包通过真实跨版本 GUI 升级验收后，才能推进 latest；
+签名、历史数据/配置保留、运行时启动和公开下载校验都不能因停止独立 TUI 分发而跳过。
 
-Stable 和 Daily 的发布工作流都必须生成 macOS arm64/x64、Windows x64、Linux x64
-四个独立 TUI 目标，并把 GUI/TUI 同一组资产上传到 GitHub Release 与 R2。R2 的
-`latest.json` 同时描述 GUI 和 TUI，`latest-tui.json` 为独立 TUI 更新器和官网提供
-精简契约。提升 latest 前必须预检三个 GUI 平台和四个 TUI 目标；任一缺失或哈希、
-版本、tag、commit、build ID 不一致都要终止联合发布。
-
-独立 TUI 固定携带 Node.js，Stable 只做节流后的更新提示并要求显式确认；GUI 内置
-TUI 跟随桌面应用更新，Daily/frontier 独立包禁止自更新。
+历史独立 TUI 包及其旧更新清单不在本次变更中删除。旧独立客户端不会收到 0.3.8
+独立包；需要安装桌面应用才能获得后续版本。TUI 的只读用量、provider 额度和上下文
+命令继续复用已有协议，不增加 GUI Runtime 诊断或控制入口。
 
 ## 验证清单
 
@@ -424,3 +481,11 @@ npm run build
    “暂无用量”，而显示 token、回合、缓存命中等指标。
 8. 线程搜索、归档视图、fork、resume session、request_user_input 回答/取消
    都能通过 Kun HTTP 路径完成。
+9. 最小化到托盘后 GUI Runtime PID 不变；真正退出应用后该精确 PID 退出，
+   Service Manager 仍可用且 Runtime slot 已释放。
+10. 默认 TUI 退出后没有遗留 owned Runtime；`--url` / `--no-start` 退出不停止
+    外部 Runtime。
+11. 同一 `(dataDir, flavor)` 的第二个正常 GUI/TUI 启动明确报 ownership conflict，
+    首个 owner 退出后另一个客户端能启动并读取原有会话。
+12. GUI 顶部重启只更换自己的 Runtime PID/instance，不停止 TUI、其他 dataDir /
+    flavor 或 Service Manager。

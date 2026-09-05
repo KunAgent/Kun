@@ -36,4 +36,39 @@ describe('app-ipc-schemas Laboratory settings', () => {
       agents: { kun: { planExecution: { useWorktreeByDefault: 'yes' } } }
     })).toThrow()
   })
+
+  it('accepts strict Automatic plan-build Laboratory settings', () => {
+    const payload = settingsPatchSchema.parse({
+      agents: {
+        kun: {
+          lab: {
+            autoPlanBuild: {
+              enabled: true,
+              confirmation: 'defaults',
+              defaultBuildMode: 'scheduled',
+              useWorktreeByDefault: false,
+              scheduledDefaults: {
+                providerId: 'codex',
+                model: 'gpt-5.4',
+                reasoningEffort: 'high',
+                timeZone: 'Asia/Shanghai'
+              }
+            }
+          }
+        }
+      }
+    })
+    expect(payload.agents?.kun?.lab?.autoPlanBuild).toMatchObject({
+      enabled: true,
+      confirmation: 'defaults',
+      defaultBuildMode: 'scheduled',
+      useWorktreeByDefault: false
+    })
+    expect(() => settingsPatchSchema.parse({
+      agents: { kun: { lab: { autoPlanBuild: { defaultBuildMode: 'graph' } } } }
+    })).toThrow()
+    expect(() => settingsPatchSchema.parse({
+      agents: { kun: { lab: { autoPlanBuild: { scheduledDefaults: { unknown: true } } } } }
+    })).toThrow()
+  })
 })

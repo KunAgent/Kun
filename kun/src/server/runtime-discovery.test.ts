@@ -9,9 +9,11 @@ import {
   readRuntimeHandoffDiscoveryStrict,
   readRuntimeDiscovery,
   removeRuntimeDiscovery,
+  RuntimeDiscoveryRecordSchema,
   runtimeDiscoveryPath,
   withRuntimeStartLock
 } from './runtime-discovery.js'
+import { KUN_VERSION } from '../version.js'
 
 const roots: string[] = []
 
@@ -51,7 +53,7 @@ describe('runtime discovery', () => {
       baseUrl: 'http://127.0.0.1:18899',
       runtimeToken: 'secret-token',
       insecure: false,
-      serviceVersion: '0.1.0',
+      serviceVersion: KUN_VERSION,
       buildId,
       launchMode: 'foreground'
     })
@@ -63,6 +65,31 @@ describe('runtime discovery', () => {
 
     expect(record.buildId).toBeUndefined()
     expect((await readRuntimeDiscovery(root))?.instanceId).toBe('legacy-server')
+  })
+
+  it.each(['gui', 'tui'] as const)(
+    'round-trips optional %s client-owner metadata through normal and handoff discovery',
+    async (clientOwnerKind) => {
+      const root = await tempRoot()
+      const record = await publishRuntimeDiscovery(root, input({
+        instanceId: `${clientOwnerKind}-runtime`,
+        clientOwnerKind
+      }))
+
+      expect(record.clientOwnerKind).toBe(clientOwnerKind)
+      expect((await readRuntimeDiscovery(root))?.clientOwnerKind).toBe(clientOwnerKind)
+      expect((await readRuntimeHandoffDiscovery(root))?.clientOwnerKind).toBe(clientOwnerKind)
+    }
+  )
+
+  it('rejects unbounded client-owner kinds while preserving ownerless legacy records', () => {
+    const base = createRuntimeDiscoveryRecord(input({ instanceId: 'runtime-owner-schema' }))
+
+    expect(RuntimeDiscoveryRecordSchema.safeParse(base).success).toBe(true)
+    expect(RuntimeDiscoveryRecordSchema.safeParse({
+      ...base,
+      clientOwnerKind: 'cli'
+    }).success).toBe(false)
   })
 
   it('reads an older safe record only through the handoff contract', async () => {

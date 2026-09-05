@@ -6,10 +6,14 @@ describe('normalizeWorkbenchRoute', () => {
     expect(normalizeWorkbenchRoute('design')).toBe('chat')
   })
 
-  it.each(['chat', 'write', 'plugins', 'extensions', 'schedule', 'workflow'])(
+  it.each(['chat', 'write', 'plugins', 'extensions', 'board', 'schedule', 'workflow'])(
     'preserves the active %s route',
     (route) => {
       expect(normalizeWorkbenchRoute(route)).toBe(route)
     }
   )
+
+  it('falls back to chat for an unknown persisted route', () => {
+    expect(normalizeWorkbenchRoute('removed-surface')).toBe('chat')
+  })
 })

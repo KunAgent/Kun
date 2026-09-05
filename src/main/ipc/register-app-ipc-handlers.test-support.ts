@@ -77,6 +77,9 @@ const telegramMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  protocol: {
+    registerSchemesAsPrivileged: vi.fn()
+  },
   app: {
     quit: vi.fn(),
     getPath: vi.fn(() => electronMock.userDataPath),
@@ -263,7 +266,7 @@ export function expectRendererModelCredentialsRedacted(value: unknown): void {
   expect(projected.agents.kun.musicGeneration.apiKeyConfigured).toBe(true)
   expect(projected.agents.kun.videoGeneration.apiKey).toBe('')
   expect(projected.agents.kun.videoGeneration.apiKeyConfigured).toBe(true)
-  expect(projected.agents.kun.runtimeToken).toBe('runtime-auth-token')
+  expect(projected.agents.kun.runtimeToken).toBe('')
 }
 
 export function registerOptions(overrides: Partial<Parameters<typeof import('./register-app-ipc-handlers').registerAppIpcHandlers>[0]> = {}) {

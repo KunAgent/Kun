@@ -201,7 +201,7 @@ export async function discoverSkills(
     }
   }
 
-  // Scan global roots (#149: global skill loading fix)
+  // Scan global roots after project roots.
   const globalRoots = config.globalRoots ?? []
   for (const rawRoot of globalRoots) {
     const root = resolve(rawRoot)
@@ -218,11 +218,39 @@ export async function discoverSkills(
     }
   }
 
+  // Bundled skills are the final fallback for an id.
+  const builtinRoots = config.builtinRoots ?? []
+  for (const rawRoot of builtinRoots) {
+    const root = resolve(rawRoot)
+    const candidates = await packageCandidates(root).catch((error) => {
+      validationErrors.push({ root, message: errorMessage(error) })
+      return []
+    })
+    for (const candidate of candidates) {
+      const loaded = await loadSkillPackage(candidate, config.legacySkillMd, 'builtin').catch((error) => {
+        validationErrors.push({ root: candidate, message: errorMessage(error) })
+        return null
+      })
+      if (loaded) skills.push(loaded)
+    }
+  }
+
   const unique = new Map<string, LoadedSkill>()
+  const duplicateCountBySource = new Map<string, Set<LoadedSkill['source']>>()
   for (const skill of skills) {
     if (disabledIds.has(skill.id)) continue
-    if (!unique.has(skill.id)) unique.set(skill.id, skill)
-    else validationErrors.push({ root: skill.root, message: `duplicate Skill id: ${skill.id}` })
+    if (!unique.has(skill.id)) {
+      unique.set(skill.id, skill)
+      continue
+    }
+    const sources = duplicateCountBySource.get(skill.id) ?? new Set([unique.get(skill.id)!.source])
+    sources.add(skill.source)
+    duplicateCountBySource.set(skill.id, sources)
+    // A duplicate inside one source layer is ambiguous; an override across
+    // project/global/builtin layers is the documented precedence model.
+    if (sources.size === 1) {
+      validationErrors.push({ root: skill.root, message: `duplicate Skill id: ${skill.id}` })
+    }
   }
   return { skills: [...unique.values()].sort((a, b) => a.id.localeCompare(b.id)), validationErrors }
 }
@@ -270,7 +298,11 @@ export async function entryIsDirectory(entry: Dirent, path: string): Promise<boo
   }
 }
 
-export async function loadSkillPackage(root: string, allowLegacy: boolean, source: 'project' | 'global'): Promise<LoadedSkill | null> {
+export async function loadSkillPackage(
+  root: string,
+  allowLegacy: boolean,
+  source: 'project' | 'global' | 'builtin'
+): Promise<LoadedSkill | null> {
   const manifestPath = join(root, 'skill.json')
   if (await exists(manifestPath)) {
     const packageRoot = await realpath(root)

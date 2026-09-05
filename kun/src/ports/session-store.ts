@@ -2,6 +2,10 @@ import type { AgentSession } from '../domain/session.js'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
+import type {
+  SessionUsageAggregateQuery,
+  SessionUsageAggregateResponse
+} from '../contracts/usage-query.js'
 
 export type SessionUsageQueryOptions = {
   threadId?: string
@@ -18,6 +22,8 @@ export type SessionUsageRecord = {
   providerId?: string
   completedAt: string
   usage: UsageSnapshot
+  /** Worker-only marker: `usage` is cumulative and must be diffed in SQLite. */
+  cumulative?: boolean
 }
 
 export type SessionLatestUsageSnapshot = {
@@ -35,6 +41,8 @@ export type SessionLatestUsageSnapshot = {
 export type ItemHistorySnapshot = {
   revision: number
   items: TurnItem[]
+  /** Replay events after this sequence to close a live-checkpoint gap. */
+  replayAfterSeq?: number
 }
 
 /** Result of a conditional full-history replacement. */
@@ -88,6 +96,29 @@ export type ItemHistoryPage = {
   nextCursor?: string
   hasMore: boolean
   itemBytes: number
+  /** Replay events after this sequence to close a live-checkpoint gap. */
+  replayAfterSeq?: number
+}
+
+export type LiveItemCheckpoint = {
+  item: TurnItem
+  representedSeq: number
+}
+
+export type EventHistoryPageOptions = {
+  sinceSeq: number
+  /** Opaque forward-only cursor returned by the previous page. */
+  cursor?: string
+  maxEvents?: number
+  maxBytes?: number
+  maxRecordBytes?: number
+}
+
+export type EventHistoryPage = {
+  events: RuntimeEvent[]
+  nextCursor?: string
+  hasMore: boolean
+  eventBytes: number
 }
 
 export type ItemTextSearchOptions = {
@@ -115,6 +146,13 @@ export interface SessionStore {
   allocateEventSeq?(threadId: string): Promise<number>
   appendEvent(threadId: string, event: RuntimeEvent): Promise<void>
   appendItem(threadId: string, item: TurnItem): Promise<void>
+  /**
+   * Persist a recoverable, replaceable projection of an in-progress assistant
+   * item without appending another cumulative record to canonical history.
+   */
+  checkpointLiveItem?(threadId: string, item: TurnItem, representedSeq: number): Promise<void>
+  /** Append the authoritative item once, then remove its live checkpoint. */
+  finalizeLiveItem?(threadId: string, item: TurnItem): Promise<void>
   /**
    * Replace the canonical item stream for a thread. File-backed stores
    * should write atomically because this is used by load-time healing
@@ -161,7 +199,18 @@ export interface SessionStore {
   scheduleUsageEventCompaction?(threadId: string): void
   /** Flush pending scheduled compaction for one thread or the whole store. */
   flushScheduledCompaction?(threadId?: string): Promise<void>
+  /**
+   * Run one bounded slice of the low-priority event sparse-index rebuild.
+   * Returns `false` while work remains and `true` once the current sweep
+   * generation has visited every thread. File-backed stores implement this;
+   * manager-backed stores leave it undefined and the maintenance lane idles.
+   */
+  runEventIndexRebuildSlice?(): Promise<boolean>
+  /** Register the wake callback used to pull an idle rebuild to now. */
+  setEventIndexRebuildWake?(wake: () => void): void
   loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]>
+  /** Bounded replay page used by cross-process stores and long backlogs. */
+  loadEventPage?(threadId: string, options: EventHistoryPageOptions): Promise<EventHistoryPage>
   /**
    * Optional cross-process live feed. The normal EventBus remains the fast
    * path for events produced by this runtime; shared stores use this feed to
@@ -210,6 +259,11 @@ export interface SessionStore {
    * usage deltas without replaying the full event log.
    */
   loadUsageRecords?(options?: SessionUsageQueryOptions): Promise<SessionUsageRecord[]>
+  /** Run a bounded usage aggregation without returning the full fact history. */
+  aggregateUsage?(
+    query: SessionUsageAggregateQuery,
+    liveRecords?: SessionUsageRecord[]
+  ): Promise<SessionUsageAggregateResponse>
   /** Optional indexed latest cumulative usage snapshot query. */
   loadLatestUsageSnapshots?(options?: { threadIds?: string[] }): Promise<SessionLatestUsageSnapshot[]>
   /** Forget the per-thread in-memory state without touching disk. */

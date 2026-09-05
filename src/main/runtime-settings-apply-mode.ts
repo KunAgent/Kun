@@ -169,9 +169,10 @@ function runtimeProcessConfigFingerprint(settings: AppSettingsV1): string {
     storage: runtime.storage,
     insecure: runtime.insecure,
     defaultProviderKind: activeProvider.kind ?? 'http',
-    ...(process.platform === 'darwin'
-      ? { computerUseEnabled: runtime.computerUse.enabled }
-      : {})
+    computerUse: {
+      enabled: runtime.computerUse.enabled,
+      maxImageDimension: runtime.computerUse.maxImageDimension
+    }
   })
 }
 

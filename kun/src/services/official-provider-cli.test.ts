@@ -21,14 +21,10 @@ afterEach(async () => {
 })
 
 describe('official provider CLI authentication', () => {
-  it('resolves the production-bundled official Gemini CLI without relying on PATH', () => {
+  it('does not return a bundled Gemini CLI command', () => {
     const command = resolveGeminiCliCommand({ PATH: '' })
-    expect(command).toMatchObject({
-      provider: 'gemini-cli',
-      command: process.execPath,
-      displayName: 'Gemini CLI'
-    })
-    expect(command?.args[0].replaceAll('\\', '/')).toContain('@google/gemini-cli')
+    expect(command?.args ?? []).toEqual([])
+    if (command) expect(command.command).not.toBe(process.execPath)
   })
 
   it('rejects an Antigravity download before extraction when its checksum is invalid', async () => {

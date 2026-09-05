@@ -20,6 +20,14 @@ describe('Agent Perspective tool provenance', () => {
     ])).toMatchObject({
       source: 'mcp', providerName: 'gui_schedule', management: 'kun-managed', inferred: false
     })
+    expect(resolveToolProvenance('issue_read', [
+      { name: 'issue_read', providerKind: 'mcp', providerId: 'mcp:github' }
+    ])).toMatchObject({
+      source: 'mcp', providerName: 'github', inferred: false
+    })
+    expect(resolveToolProvenance('issue_read', [
+      { name: 'issue_read', providerKind: 'mcp', providerId: 'mcp:github' }
+    ])).not.toHaveProperty('management')
     expect(resolveToolProvenance('mcp_search', [
       { name: 'mcp_search', providerKind: 'mcp', providerId: 'mcp:search' }
     ])).toMatchObject({ source: 'mcp', management: 'discovery' })

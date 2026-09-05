@@ -14,6 +14,7 @@ import {
 import { expandHomePath } from './workspace-paths'
 
 export type GuiSkillScope = 'project' | 'global'
+export type GuiSkillSource = 'project' | 'global' | 'builtin'
 
 export type GuiSkillSummary = {
   id: string
@@ -22,6 +23,9 @@ export type GuiSkillSummary = {
   root: string
   entryPath: string
   scope: GuiSkillScope
+  source: GuiSkillSource
+  readOnly: boolean
+  builtin: boolean
   legacy: boolean
 }
 
@@ -278,19 +282,26 @@ async function countSkillPackages(root: string): Promise<number> {
 
 export async function listGuiSkills(
   settings: AppSettingsV1,
-  workspaceRootOverride?: string
+  workspaceRootOverride?: string,
+  builtinRoot?: string
 ): Promise<GuiSkillListResult> {
   try {
     const roots = await guiSkillRootsForRuntime(settings, workspaceRootOverride)
+    const skillRoots: Array<GuiSkillRoot & { sourceType: GuiSkillSource }> = [
+      ...roots.map((root) => ({ ...root, sourceType: root.scope })),
+      ...(builtinRoot?.trim()
+        ? [{ path: normalizeSkillRootPath(builtinRoot), scope: 'global' as const, sourceType: 'builtin' as const }]
+        : [])
+    ]
     const skills: GuiSkillSummary[] = []
     const validationErrors: Array<{ root: string; message: string }> = []
-    for (const root of roots) {
+    for (const root of skillRoots) {
       const candidates = await packageCandidates(root.path).catch((error) => {
         validationErrors.push({ root: root.path, message: errorMessage(error) })
         return []
       })
       for (const candidate of candidates) {
-        const loaded = await loadSkillSummary(candidate, root.scope).catch((error) => {
+        const loaded = await loadSkillSummary(candidate, root.scope, root.sourceType).catch((error) => {
           validationErrors.push({ root: candidate, message: errorMessage(error) })
           return null
         })
@@ -403,7 +414,11 @@ function entryIsDirectorySync(entry: Dirent, path: string): boolean {
   }
 }
 
-async function loadSkillSummary(root: string, scope: GuiSkillScope): Promise<GuiSkillSummary | null> {
+async function loadSkillSummary(
+  root: string,
+  scope: GuiSkillScope,
+  source: GuiSkillSource = scope
+): Promise<GuiSkillSummary | null> {
   const manifestPath = join(root, 'skill.json')
   if (existsSync(manifestPath)) {
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
@@ -416,6 +431,9 @@ async function loadSkillSummary(root: string, scope: GuiSkillScope): Promise<Gui
       root,
       entryPath: join(root, entry),
       scope,
+      source,
+      readOnly: source === 'builtin',
+      builtin: source === 'builtin',
       legacy: false
     }
   }
@@ -431,6 +449,9 @@ async function loadSkillSummary(root: string, scope: GuiSkillScope): Promise<Gui
     root,
     entryPath,
     scope,
+    source,
+    readOnly: source === 'builtin',
+    builtin: source === 'builtin',
     legacy: true
   }
 }
@@ -521,7 +542,9 @@ function dedupeSkills(skills: GuiSkillSummary[]): GuiSkillSummary[] {
 }
 
 function compareSkillSummary(a: GuiSkillSummary, b: GuiSkillSummary): number {
-  if (a.scope !== b.scope) return a.scope === 'project' ? -1 : 1
+  const rank = (source: GuiSkillSource): number => source === 'project' ? 0 : source === 'global' ? 1 : 2
+  const sourceDifference = rank(a.source) - rank(b.source)
+  if (sourceDifference !== 0) return sourceDifference
   return a.name.localeCompare(b.name)
 }
 

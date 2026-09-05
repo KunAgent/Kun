@@ -85,7 +85,8 @@ describe('detached subagent tool projection', () => {
   it('allows a newer foreground resume without retaining old attempt metadata', () => {
     const failed = childEvent('error', 'failed', true, 0)
     Object.assign(failed.meta!.child as Record<string, unknown>, {
-      childTerminationReason: 'child_error', failure: { source: 'runtime' }, resumable: true
+      childTerminationReason: 'child_error', failure: { source: 'runtime' }, resumable: true,
+      attemptStartedAt: '2026-08-20T10:00:00.000Z', attemptDurationMs: 45_000
     })
     const resumedEvent = childEvent('running', 'running', false, 1)
     const resumedChild = resumedEvent.meta!.child as Record<string, unknown>
@@ -98,6 +99,8 @@ describe('detached subagent tool projection', () => {
     expect(resumed.meta?.child).not.toHaveProperty('failure')
     expect(resumed.meta?.child).not.toHaveProperty('childTerminationReason')
     expect(resumed.meta?.child).not.toHaveProperty('resumable')
+    expect(resumed.meta?.child).not.toHaveProperty('attemptStartedAt')
+    expect(resumed.meta?.child).not.toHaveProperty('attemptDurationMs')
   })
 
   it('allows a newer resume attempt to return to running and rejects an older replay', () => {

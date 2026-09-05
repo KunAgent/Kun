@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, open, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 export type AtomicWriteFileOptions = {
   allowDirectWriteFallback?: boolean
+  /** Sync the temporary file and parent directory around the atomic rename. */
+  durable?: boolean
   /** Synchronous guard run immediately before each irreversible commit attempt. */
   beforeCommit?: () => void
   signal?: AbortSignal
@@ -26,7 +28,18 @@ export async function atomicWriteFile(
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const tmp = `${path}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`
   try {
-    await writeFile(tmp, contents, { encoding: 'utf-8', mode: 0o600, signal: options.signal })
+    if (options.durable) {
+      const handle = await open(tmp, 'w', 0o600)
+      try {
+        options.signal?.throwIfAborted()
+        await handle.writeFile(contents, { encoding: 'utf8', signal: options.signal })
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
+    } else {
+      await writeFile(tmp, contents, { encoding: 'utf-8', mode: 0o600, signal: options.signal })
+    }
     try {
       await renameFileWithRetry(tmp, path, options.renameRetry, options.beforeCommit, options.signal)
     } catch (error) {
@@ -37,11 +50,24 @@ export async function atomicWriteFile(
       options.beforeCommit?.()
       await writeFile(path, contents, { encoding: 'utf-8', mode: 0o600, signal: options.signal })
     }
+    if (options.durable) await syncDirectory(dirname(path))
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => undefined)
     throw describeAtomicWriteError(path, error)
   }
   await rm(tmp, { force: true }).catch(() => undefined)
+}
+
+async function syncDirectory(path: string): Promise<void> {
+  // Directory handles cannot be opened on Windows. The file itself was still
+  // synced before rename, so retain the strongest portable boundary there.
+  if (process.platform === 'win32') return
+  const handle = await open(path, 'r')
+  try {
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
 }
 
 /**

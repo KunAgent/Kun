@@ -324,6 +324,7 @@ export async function createFixture(options: {
     paths,
     registry,
     packageManager: {
+      waitForPendingOperation: vi.fn().mockResolvedValue(undefined),
       compatibilityReport: (input: typeof manifest) => manifestCompatibilityReport(input, {
         kunVersion: '0.1.0',
         supportedManifestVersions: [1],
@@ -414,6 +415,7 @@ export async function createFixture(options: {
   return {
     runtime,
     paths,
+    registry,
     manager,
     agent,
     broker,

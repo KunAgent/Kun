@@ -369,6 +369,7 @@ export function makeErrorItem(input: {
   message: string
   code?: string
   details?: unknown
+  modelRequestFailure?: import('../contracts/model-request-failure.js').ModelRequestFailureContext
   severity?: 'info' | 'warning' | 'error'
 }): TurnItem {
   return {
@@ -383,6 +384,7 @@ export function makeErrorItem(input: {
     message: input.message,
     ...(input.code ? { code: input.code } : {}),
     ...(input.details !== undefined ? { details: input.details } : {}),
+    ...(input.modelRequestFailure ? { modelRequestFailure: input.modelRequestFailure } : {}),
     ...(input.severity ? { severity: input.severity } : {})
   }
 }

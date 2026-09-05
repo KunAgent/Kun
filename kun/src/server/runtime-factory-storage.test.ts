@@ -5,6 +5,27 @@ import { UsageService } from '../services/usage-service-core.js'
 import { seedUsageCarryover } from './runtime-factory-storage.js'
 
 describe('seedUsageCarryover', () => {
+  it('seeds the latest durable cumulative usage snapshot', async () => {
+    const usageService = new UsageService()
+    const sessionStore = { loadLatestUsageSnapshots: async () => [{
+      threadId: 'thread-seeded',
+      seq: 4,
+      usage: {
+        promptTokens: 10, completionTokens: 3, totalTokens: 13, cacheHitRate: null, turns: 2
+      }
+    }] } as unknown as SessionStore
+    await seedUsageCarryover({
+      threadStore: { list: async () => [] } as unknown as ThreadStore,
+      sessionStore,
+      usageService
+    })
+
+    expect(usageService.forThread('thread-seeded')).toMatchObject({
+      promptTokens: 10, completionTokens: 3, totalTokens: 13, turns: 2
+    })
+    expect(usageService.snapshots()).toHaveLength(0)
+  })
+
   it('bounds event replay fallback concurrency when usage snapshots are unavailable', async () => {
     let active = 0
     let peak = 0

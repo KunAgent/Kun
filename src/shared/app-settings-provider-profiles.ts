@@ -114,6 +114,7 @@ export function defaultModelProviderProfile(apiKey: string, baseUrl: string): Mo
     apiKey: apiKey.trim(),
     baseUrl: normalizeModelProviderBaseUrl(baseUrl),
     endpointFormat: DEFAULT_MODEL_ENDPOINT_FORMAT,
+    useProxy: false,
     retry: defaultModelRequestRetrySettings(),
     models: [...DEFAULT_COMPOSER_MODEL_IDS],
     modelProfiles: {
@@ -127,7 +128,8 @@ export function defaultModelProviderProfile(apiKey: string, baseUrl: string): Mo
 }
 
 export function normalizeModelProviderProfile(
-  input: ModelProviderProfilePatchV1 | undefined
+  input: ModelProviderProfilePatchV1 | undefined,
+  missingUseProxy = false
 ): ModelProviderProfileV1 | null {
   const id = normalizeModelProviderId(input?.id)
   if (!id) return null
@@ -189,6 +191,7 @@ export function normalizeModelProviderProfile(
           : '',
     baseUrl,
     endpointFormat,
+    useProxy: typeof input?.useProxy === 'boolean' ? input.useProxy : missingUseProxy,
     retry: normalizeModelRequestRetrySettings(
       input?.retry,
       resolvedPresetSource?.mode === 'api'

@@ -313,7 +313,7 @@ describe('AgentLoop', () => {
       expect(status).toBe('completed')
       expect(observedToolLists[0]).toContain(CREATE_PLAN_TOOL_NAME)
       expect(observedRequiredToolNames).toEqual([undefined, undefined])
-      await expect(readFile(join(workspace, '.kunsdd/plan/auth.md'), 'utf8')).resolves.toBe('# Generated plan')
+      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).resolves.toBe('# Generated plan')
       const turn = await h.turns.getTurn(h.threadId, h.turnId)
       expect(turn?.guiPlan?.relativePath).toBe('.kunsdd/plan/auth.md')
       const items = await h.sessionStore.loadItems(h.threadId)
@@ -322,7 +322,7 @@ describe('AgentLoop', () => {
       if (result?.kind === 'tool_result') {
         expect(result.toolName).toBe(CREATE_PLAN_TOOL_NAME)
         expect(result.output).toMatchObject({
-          relative_path: '.kunsdd/plan/auth.md',
+          relative_path: '.kunsdd/plan/thr-1.md',
           workspace_root: workspace,
           operation: 'draft'
         })
@@ -364,7 +364,7 @@ describe('AgentLoop', () => {
       const items = await h.sessionStore.loadItems(h.threadId)
 
       expect(status).toBe('completed')
-      await expect(readFile(join(workspace, '.kunsdd/plan/auth.md'), 'utf8')).resolves.toBe(
+      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).resolves.toBe(
         '## Plan\nImplement auth.'
       )
       expect(items.some((item) =>

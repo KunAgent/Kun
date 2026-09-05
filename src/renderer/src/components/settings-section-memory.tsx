@@ -1,9 +1,6 @@
 import {
-  buildMemoryImportContent,
   buildMemoryMarkdownExport,
-  defaultMemoryExportFileName,
-  parseMemoryProfileImport,
-  type MemoryImportEntry
+  defaultMemoryExportFileName
 } from '@shared/memory-import-export'
 import {
   Ban,
@@ -21,7 +18,6 @@ import type { ReactElement } from 'react'
 import { useMemo, useState } from 'react'
 import type { CoreMemoryRecordJson } from '../agent/kun-contract'
 import { confirmDialog } from '../lib/confirm-dialog'
-import { workspaceRootIdentityKey } from '../lib/workspace-path'
 import {
   SettingRow,
   SettingsCard,
@@ -30,8 +26,13 @@ import {
   Toggle
 } from './settings-controls'
 import { MemoryImportDialog, MemoryRecordDialog } from './settings-section-memory-dialogs'
+import { MemoryDiagnosticsPanel } from './settings-section-memory-diagnostics'
+import {
+  filterDuplicateMemoryImports,
+  prepareMemoryImport,
+  type MemoryScope
+} from './settings-section-memory-import'
 
-type MemoryScope = 'user' | 'workspace' | 'project'
 type MemorySettingsTab = 'overview' | 'records'
 
 export type MemoryDraft = {
@@ -40,6 +41,8 @@ export type MemoryDraft = {
   targetPath: string
   tags: string
   confidence: number
+  type: NonNullable<CoreMemoryRecordJson['type']>
+  importance: number
 }
 
 export type MemoryDialogState =
@@ -52,7 +55,9 @@ const EMPTY_DRAFT: MemoryDraft = {
   scope: 'user',
   targetPath: '',
   tags: '',
-  confidence: 1
+  confidence: 1,
+  type: 'fact',
+  importance: 0.8
 }
 
 const DEFAULT_DRAFT_SCOPE: MemoryScope = EMPTY_DRAFT.scope
@@ -67,6 +72,25 @@ export function serializeMemoryTags(tags: ReadonlyArray<string> | undefined | nu
     .map((tag) => tag.trim())
     .filter(Boolean)
     .join(', ')
+}
+
+export function memoryDraftMutation(draft: MemoryDraft): {
+  content: string
+  tags: string[]
+  confidence: number
+  type: MemoryDraft['type']
+  importance: number
+} {
+  return {
+    content: draft.content.trim(),
+    tags: draft.tags
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    confidence: draft.confidence,
+    type: draft.type,
+    importance: draft.importance
+  }
 }
 
 /**
@@ -86,7 +110,11 @@ export function isMemoryDraftDirty(
     return (
       draft.content !== original.content ||
       draft.scope !== original.scope ||
-      draft.tags !== originalTags
+      draft.targetPath !== (projectForMemory(original) ?? '') ||
+      draft.tags !== originalTags ||
+      draft.confidence !== (original.confidence ?? 1) ||
+      draft.type !== (original.type ?? 'fact') ||
+      draft.importance !== (original.importance ?? 0.5)
     )
   }
   // create
@@ -94,7 +122,10 @@ export function isMemoryDraftDirty(
     draft.content.trim() !== '' ||
     draft.tags.trim() !== '' ||
     draft.targetPath.trim() !== '' ||
-    draft.scope !== DEFAULT_DRAFT_SCOPE
+    draft.scope !== DEFAULT_DRAFT_SCOPE ||
+    draft.confidence !== EMPTY_DRAFT.confidence ||
+    draft.type !== EMPTY_DRAFT.type ||
+    draft.importance !== EMPTY_DRAFT.importance
   )
 }
 
@@ -133,18 +164,6 @@ function memoryPreview(content: string): string {
   return `${compact.slice(0, 140).trimEnd()}...`
 }
 
-function memoryImportDedupKey(input: {
-  content: string
-  scope: MemoryScope
-  targetPath?: string
-  expandPath: (path: string) => string
-}): string {
-  const target = input.scope === 'user'
-    ? ''
-    : workspaceRootIdentityKey(input.expandPath(input.targetPath ?? ''))
-  return `${input.scope}\u0000${target}\u0000${input.content.trim()}`
-}
-
 export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const {
     t,
@@ -180,7 +199,10 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     return records.filter((record) => record.scope === scopeFilter)
   }, [memoryRecords, scopeFilter])
 
-  const parsedImportEntries = useMemo(() => parseMemoryProfileImport(importText), [importText])
+  const preparedImport = useMemo(
+    () => prepareMemoryImport(importText, importScope, importTargetPath.trim()),
+    [importScope, importTargetPath, importText]
+  )
   const expandImportTargetPath = typeof expandHomePath === 'function'
     ? expandHomePath as (path: string) => string
     : (path: string) => path
@@ -204,7 +226,9 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       scope: record.scope,
       targetPath: projectForMemory(record) ?? '',
       tags: (record.tags ?? []).join(', '),
-      confidence: record.confidence ?? 1
+      confidence: record.confidence ?? 1,
+      type: record.type ?? 'fact',
+      importance: record.importance ?? 0.5
     })
     setMemoryDialogNotice(null)
     setDialog({ mode: 'edit', memory: record })
@@ -224,12 +248,6 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       close: closeDialog
     })
   }
-
-  const parseTags = (raw: string): string[] =>
-    raw
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean)
 
   const exportMemories = async (): Promise<void> => {
     if (typeof window.kunGui?.exportMemoryMarkdown !== 'function') {
@@ -254,58 +272,36 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   }
 
   const importMemories = async (): Promise<void> => {
-    if (parsedImportEntries.length === 0) return
+    if (preparedImport.kind === 'invalid-portable') {
+      setImportNotice(preparedImport.error ?? t('memoryImportInvalidPortable'))
+      return
+    }
+    if (preparedImport.candidates.length === 0) return
     const targetPath = importTargetPath.trim()
-    if (importScope !== 'user' && !targetPath) {
+    if (preparedImport.kind === 'profile' && importScope !== 'user' && !targetPath) {
       setImportNotice(t('memoryImportTargetRequired'))
       return
     }
     setImportBusy(true)
     setNotice(null)
     setImportNotice(null)
-    const existingKeys = new Set((memoryRecords ?? [])
-      .filter((memory: CoreMemoryRecordJson) => !memory.deletedAt)
-      .map((memory: CoreMemoryRecordJson) => memoryImportDedupKey({
-        content: memory.content,
-        scope: memory.scope,
-        targetPath: memory.scope === 'project' ? memory.project ?? memory.workspace : memory.workspace,
-        expandPath: expandImportTargetPath
-      })))
-    const batchKeys = new Set<string>()
-    const entriesToImport: MemoryImportEntry[] = []
-    let skipped = 0
-    for (const entry of parsedImportEntries) {
-      const key = memoryImportDedupKey({
-        content: buildMemoryImportContent(entry),
-        scope: importScope,
-        targetPath,
-        expandPath: expandImportTargetPath
-      })
-      if (existingKeys.has(key) || batchKeys.has(key)) {
-        skipped += 1
-        continue
-      }
-      batchKeys.add(key)
-      entriesToImport.push(entry)
-    }
-    if (entriesToImport.length === 0) {
+    const selected = filterDuplicateMemoryImports({
+      candidates: preparedImport.candidates,
+      existingRecords: memoryRecords ?? [],
+      expandPath: expandImportTargetPath
+    })
+    if (selected.candidates.length === 0) {
       setImportNotice(t('memoryImportAllDuplicate'))
       setImportBusy(false)
       return
     }
     let imported = 0
     try {
-      for (const entry of entriesToImport) {
-        const ok = await createMemoryRecord({
-          content: buildMemoryImportContent(entry),
-          scope: importScope,
-          ...(importScope === 'user' ? {} : { targetPath }),
-          tags: entry.tags,
-          confidence: 1
-        })
+      for (const candidate of selected.candidates) {
+        const ok = await createMemoryRecord(candidate.input)
         if (ok) imported += 1
       }
-      const failed = entriesToImport.length - imported
+      const failed = selected.candidates.length - imported
       if (failed === 0) {
         setImportDialogOpen(false)
         setImportText('')
@@ -314,8 +310,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       const message = failed === 0
         ? `${t('memoryImportedPrefix')}${imported}${t('memoryImportedSuffix')}`
         : `${t('memoryImportPartialPrefix')}${imported}${t('memoryImportPartialMiddle')}${failed}${t('memoryImportPartialSuffix')}`
-      const skipMessage = skipped > 0
-        ? ` ${t('memoryImportSkippedPrefix')}${skipped}${t('memoryImportSkippedSuffix')}`
+      const skipMessage = selected.skipped > 0
+        ? ` ${t('memoryImportSkippedPrefix')}${selected.skipped}${t('memoryImportSkippedSuffix')}`
         : ''
       if (failed === 0) setNotice(`${message}${skipMessage}`)
       else setImportNotice(`${message}${skipMessage}`)
@@ -325,26 +321,20 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   }
 
   const saveDraft = async (): Promise<void> => {
-    const trimmed = draft.content.trim()
-    if (!trimmed) return
+    const mutation = memoryDraftMutation(draft)
+    if (!mutation.content) return
     setMemoryDialogNotice(null)
     const targetPath = draft.targetPath.trim()
     if (dialog?.mode === 'create' && draft.scope !== 'user' && !targetPath) return
     let ok = false
     if (dialog?.mode === 'create') {
       ok = await createMemoryRecord({
-        content: trimmed,
+        ...mutation,
         scope: draft.scope,
-        ...(draft.scope === 'user' ? {} : { targetPath }),
-        tags: parseTags(draft.tags),
-        confidence: draft.confidence
+        ...(draft.scope === 'user' ? {} : { targetPath })
       })
     } else if (dialog?.mode === 'edit') {
-      ok = await updateMemoryRecord(dialog.memory.id, {
-        content: trimmed,
-        tags: parseTags(draft.tags),
-        confidence: draft.confidence
-      })
+      ok = await updateMemoryRecord(dialog.memory.id, mutation)
     }
     if (ok) closeDialog()
     else setMemoryDialogNotice(t('memorySaveFailed'))
@@ -381,53 +371,11 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
               />
             }
           />
-          <SettingRow
-            title={t('memoryOverview')}
-            description={t('memoryOverviewDesc')}
-            wideControl
-            control={
-              <div className="grid grid-cols-3 gap-2 text-[12px]">
-                <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
-                  <div className="text-ds-faint">{t('memoryActiveCount')}</div>
-                  <div className="mt-0.5 font-mono text-[15px] font-semibold text-ds-ink">
-                    {memoryDiagnostics?.activeCount ?? memoryRecords?.length ?? 0}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
-                  <div className="text-ds-faint">{t('memoryTombstoneCount')}</div>
-                  <div className="mt-0.5 font-mono text-[15px] font-semibold text-ds-ink">
-                    {memoryDiagnostics?.tombstoneCount ?? 0}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
-                  <div className="text-ds-faint">{t('memoryEnabled')}</div>
-                  <div className="mt-0.5 font-mono text-[15px] font-semibold text-ds-ink">
-                    {memoryDiagnostics?.enabled === false ? t('memoryOff') : t('memoryOn')}
-                  </div>
-                </div>
-              </div>
-            }
+          <MemoryDiagnosticsPanel
+            diagnostics={memoryDiagnostics}
+            fallbackRecordCount={memoryRecords?.length ?? 0}
+            t={t}
           />
-
-          {memoryDiagnostics?.lastInjectedIds?.length ? (
-            <SettingRow
-              title={t('memoryLastInjected')}
-              description={t('memoryLastInjectedDesc')}
-              wideControl
-              control={
-                <div className="flex flex-wrap gap-1.5">
-                  {memoryDiagnostics.lastInjectedIds.map((id: string) => (
-                    <span
-                      key={id}
-                      className="rounded-lg bg-ds-hover/50 px-2 py-0.5 font-mono text-[11px] text-ds-faint"
-                    >
-                      {id.slice(0, 12)}
-                    </span>
-                  ))}
-                </div>
-              }
-            />
-          ) : null}
         </SettingsCard>
       </SettingsTabPanel>
 
@@ -529,6 +477,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                           {memory.confidence !== undefined && memory.confidence !== 1 && (
                             <span className="font-mono">★ {memory.confidence.toFixed(2)}</span>
                           )}
+                          {memory.type ? <span>{memory.type}</span> : null}
+                          {memory.importance !== undefined ? <span className="font-mono">I {memory.importance.toFixed(2)}</span> : null}
                           {memory.tags?.length ? (
                             <span>{memory.tags.join(' · ')}</span>
                           ) : null}
@@ -611,9 +561,13 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
         <MemoryImportDialog
           t={t}
           text={importText}
-          entries={parsedImportEntries}
+          entries={preparedImport.candidates.map((candidate) => candidate.preview)}
+          portable={preparedImport.kind === 'portable'}
+          invalid={preparedImport.kind === 'invalid-portable'}
           busy={importBusy}
-          notice={importNotice}
+          notice={preparedImport.kind === 'invalid-portable'
+            ? t('memoryImportInvalidPortable')
+            : importNotice}
           scope={importScope}
           targetPath={importTargetPath}
           onScopeChange={setImportScope}

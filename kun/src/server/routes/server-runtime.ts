@@ -1,3 +1,4 @@
+import type { ThreadActivityRegistry } from '../../services/thread-activity-registry.js'
 import type { ThreadService } from '../../services/thread-service.js'
 import type { TurnService } from '../../services/turn-service.js'
 import type { ThreadStore } from '../../ports/thread-store.js'
@@ -102,6 +103,7 @@ import type {
 import type { ProviderQuotaService } from '../../services/provider-quota-service.js'
 import type { ToolCancellationService } from '../../services/tool-cancellation-service.js'
 import type { KnowledgeBaseService } from '../../knowledge/knowledge-base-service.js'
+import type { ProjectBoardService } from '../../services/project-board-service.js'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -169,6 +171,7 @@ export type ExtensionPlatformRuntime = {
  */
 export type ServerRuntime = {
   threadService: ThreadService
+  projectBoardService?: ProjectBoardService
   turnService: TurnService
   toolCancellationService?: ToolCancellationService
   usageService: UsageService
@@ -176,6 +179,8 @@ export type ServerRuntime = {
   eventBus: EventBus
   sessionStore: SessionStore
   events: RuntimeEventRecorder
+  /** Compact process-wide invalidations used by sidebar observers. */
+  threadActivity?: ThreadActivityRegistry
   /** Active SSE streams, so a successful thread delete can close them. */
   eventStreamRegistry?: ThreadEventStreamRegistry
   /** Optional troubleshooting buffer of the most recent LLM rounds (in-memory). */
@@ -257,16 +262,23 @@ export type ServerRuntime = {
    * just reconciled to `failed` after a runtime restart. Returns the number
    * of goals resumed. Optional so embedders without the agent loop can omit it.
    */
-  resumeInterruptedGoals?(threadIds: readonly string[]): Promise<number>
+  resumeInterruptedGoals?(
+    sources: readonly import('../../loop/restart-recovery-source.js').RestartRecoverySource[]
+  ): Promise<number>
   /**
    * Relaunch continuation turns for ordinary threads (no active goal) whose
    * in-flight turn was just reconciled to `failed` after a runtime restart.
    * Optional so embedders without the agent loop can omit it.
    */
   resumeInterruptedTurns?(
-    threadIds: readonly string[],
+    sources: readonly import('../../loop/restart-recovery-source.js').RestartRecoverySource[],
     childRecoveryCandidates?: readonly import('../../loop/interrupted-turn-coordinator.js').InterruptedSubagentRecoveryCandidate[]
   ): Promise<number>
+  /**
+   * Durable per-thread turn queue drain, used by turn settlement and by the
+   * restart sweep. Optional so embedders without the agent loop can omit it.
+   */
+  queuedTurnDispatcher?: import('../queued-turn-dispatcher.js').QueuedTurnDispatcher
   /**
    * Canonical thread store, exposed for maintenance sweeps (e.g. the
    * memory-pressure monitor compacting idle thread histories).
@@ -293,6 +305,8 @@ export type ServerRuntime = {
   requestShutdown?(instanceId: string): Promise<boolean>
   /** Starts non-critical historical scans only after the HTTP server is live. */
   startBackgroundMaintenance?(): void
+  /** Restores usage counters before the server accepts turns or usage reads. */
+  prepareForRequests?(): Promise<void>
   /** Runs the bounded thread-store guardian immediately. */
   inspectThreadStore?(): Promise<import('../../services/thread-store-guardian.js').ThreadStoreGuardianResult>
   /** Read-only session storage health scans (guardian). */

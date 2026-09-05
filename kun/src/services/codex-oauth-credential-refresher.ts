@@ -30,13 +30,19 @@ export type ResolvedCodexRequestCredential = {
 export class CodexOAuthCredentialRefresher {
   private readonly inflight = new Map<string, Promise<void>>()
   private readonly fetchImpl: typeof fetch
+  private readonly fetchForSource?: (sourceId: string) => typeof fetch | Promise<typeof fetch>
   private readonly nowMs: () => number
 
   constructor(
     private readonly store: CodexRefreshableCredentialStore,
-    options: { fetchImpl?: typeof fetch; nowMs?: () => number } = {}
+    options: {
+      fetchImpl?: typeof fetch
+      fetchForSource?: (sourceId: string) => typeof fetch | Promise<typeof fetch>
+      nowMs?: () => number
+    } = {}
   ) {
     this.fetchImpl = options.fetchImpl ?? fetch
+    this.fetchForSource = options.fetchForSource
     this.nowMs = options.nowMs ?? Date.now
   }
 
@@ -100,7 +106,7 @@ export class CodexOAuthCredentialRefresher {
 
     const refreshed = await refreshStoredCodexOAuthCredentials(
       credentials,
-      this.fetchImpl,
+      this.fetchForSource ? await this.fetchForSource(sourceId) : this.fetchImpl,
       this.nowMs
     )
     const updated = await this.store.updateResolvedApiKey(

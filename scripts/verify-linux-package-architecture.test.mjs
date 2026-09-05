@@ -13,7 +13,6 @@ function targetModules(arch) {
     '/app/node_modules/node-pty/build/Release/pty.node',
     `/app/node_modules/@napi-rs/canvas-linux-${arch}-gnu/skia.linux-${arch}-gnu.node`,
     `/app/node_modules/@img/sharp-linux-${arch}/lib/sharp-linux-${arch}.node`,
-    `/app/kun/node_modules/@github/keytar/prebuilds/linux-${arch}/keytar.node`,
     ...(arch === 'x64'
       ? ['/app/node_modules/@computer-use/libnut-linux/build/Release/libnut.node']
       : [])

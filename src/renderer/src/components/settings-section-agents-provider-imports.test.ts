@@ -189,7 +189,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       const target = {
         id: 'shared-provider', name: 'Shared Provider', apiKey: '',
         baseUrl: 'https://api.example.com/v1', endpointFormat: 'chat_completions',
-        models: ['old-model'], modelProfiles: {}
+        useProxy: false, models: ['old-model'], modelProfiles: {}
       } satisfies ModelProviderProfileV1
       const snapshot = (revision: number, models = target.models) => ({
         schemaVersion: 1,
@@ -331,6 +331,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         apiKey: 'sk-probe',
         baseUrl: 'https://api.example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['probe-model'],
         modelProfiles: {}
       } satisfies ModelProviderProfileV1
@@ -363,9 +364,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         await Promise.resolve()
       })
       expect(probeModelProvider).toHaveBeenCalledWith({
+        providerId: probeProvider.id,
         baseUrl: 'https://api.example.com/v1',
         apiKey: 'sk-probe',
-        endpointFormat: 'chat_completions'
+        endpointFormat: 'chat_completions',
+        useProxy: false
       })
       expect(fetchModelsDevCatalog).not.toHaveBeenCalled()
       expect(rendererText(renderer)).toContain('Connected · 18ms · 2 models')
@@ -385,6 +388,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(rendererText(renderer)).toContain('Needs configuration')
       expect(rendererText(renderer)).toContain('URL must start with http:// or https://')
       expect(findButton(renderer, 'Test connection').props.disabled).toBe(true)
+      expect(findButton(renderer, 'Fetch models').props.disabled).toBe(true)
+      expect(renderer.root.findByProps({ 'data-testid': 'provider-list-fetch-probe-provider' }).props.disabled)
+        .toBe(true)
       expect(rendererText(renderer)).toContain('Could not apply')
     })
 
@@ -396,6 +402,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         apiKey: 'sk-probe',
         baseUrl: 'https://api.example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: [],
         modelProfiles: {}
       } satisfies ModelProviderProfileV1
@@ -416,9 +423,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       })
 
       expect(probeModelProvider).toHaveBeenCalledWith({
+        providerId: target.id,
         baseUrl: target.baseUrl,
         apiKey: target.apiKey,
-        endpointFormat: target.endpointFormat
+        endpointFormat: target.endpointFormat,
+        useProxy: target.useProxy
       })
       expect(fetchModelsDevCatalog).toHaveBeenCalledWith({
         providerId: target.id,
@@ -452,6 +461,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         apiKey: 'sk-probe',
         baseUrl: 'https://api.example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['model-a', 'model-b'],
         modelProfiles: {}
       } satisfies ModelProviderProfileV1
@@ -644,6 +654,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         apiKey: 'sk-probe',
         baseUrl: 'https://api.example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: [],
         modelProfiles: {}
       } satisfies ModelProviderProfileV1

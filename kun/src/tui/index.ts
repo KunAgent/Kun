@@ -1,5 +1,9 @@
 import { stdin as processStdin, stdout as processStdout } from 'node:process'
-import { KunTuiClient, resolveTuiConnection } from './client.js'
+import {
+  KunTuiClient,
+  resolveTuiConnection,
+  type TuiConnection
+} from './client.js'
 import { TuiController } from './controller.js'
 import { KUN_TUI_USAGE, parseTuiOptions } from './options.js'
 import {
@@ -9,7 +13,10 @@ import {
 } from '../cli/gui-settings-bridge.js'
 import { importGuiProviderCatalogForTui } from './gui-catalog-startup.js'
 import type { TerminalInput, TerminalOutput } from './pi-terminal.js'
-import { checkStandaloneTuiUpdateOnce } from '../cli/self-update.js'
+import { checkStandaloneTuiUpdateOnce, readStandaloneTuiRelease } from '../cli/self-update.js'
+import { reconcilePendingTuiUpdate } from '../cli/self-update-reconcile.js'
+import type { ClientOwnedRuntimeHandle } from '../cli/client-owned-runtime.js'
+import type { TuiOptions } from './options.js'
 
 type WritableLike = { write(chunk: string): unknown }
 
@@ -21,6 +28,7 @@ export type TuiCommandIo = {
   cwd?: () => string
   fetch?: typeof fetch
   nodeVersion?: string
+  resolveConnection?: typeof resolveTuiConnection
 }
 
 export const MINIMUM_TUI_NODE_VERSION = '22.19.0'
@@ -63,6 +71,7 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
 
   let controller: TuiController | undefined
   let app: import('./pi-app.js').PiTuiApplication | undefined
+  let ownedRuntime: ClientOwnedRuntimeHandle | undefined
   try {
     const guiSettings = parsed.options.url
       ? null
@@ -79,14 +88,14 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
       await hasUnpublishedGuiRuntime(guiSettings, io.fetch ?? fetch)
     ) {
       throw new Error(
-        'an older GUI-private runtime is writing this data directory without shared discovery; update or close that GUI once, then run `kun` again. Current GUI and TUI releases start the same UI-independent background runtime.'
+        'an older GUI Runtime is writing this data directory without discovery; close or update that GUI, then run `kun` again.'
       )
     }
     let guiConfigSync: GuiConfigSyncResult | null = null
     let guiConfigWarning = ''
     if (guiSettings && !parsed.options.url) {
-      // Skip config.json rewrite when a live shared runtime already owns the
-      // data dir (GUI+TUI coexistence). Registry is the catalog authority.
+      // Registry remains the catalog authority when explicit attach mode sees
+      // a live Runtime; default owned startup will reject that foreign owner.
       const imported = await importGuiProviderCatalogForTui({
         dataDir: parsed.options.dataDir,
         settings: guiSettings,
@@ -103,22 +112,20 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
       import('./keymap.js')
     ])
     const keymapConfig = await loadTuiKeymap()
-    const connection = await resolveTuiConnection(parsed.options, io.fetch ?? fetch)
+    const resolveConnection = io.resolveConnection ?? resolveTuiConnection
+    const connection = await resolveConnection(parsed.options, io.fetch ?? fetch)
+    ownedRuntime = connection.ownedRuntime
+    const reconnect = createTuiReconnectResolver(
+      connection,
+      parsed.options,
+      io.fetch ?? fetch,
+      resolveConnection
+    )
     const client = new KunTuiClient({
       baseUrl: connection.baseUrl,
       runtimeToken: connection.runtimeToken,
       fetch: io.fetch ?? fetch,
-      ...(connection.discovered
-        ? {
-            resolveConnection: async () => {
-              const refreshed = await resolveTuiConnection(parsed.options, io.fetch ?? fetch)
-              return {
-                baseUrl: refreshed.baseUrl,
-                runtimeToken: refreshed.runtimeToken
-              }
-            }
-          }
-        : {})
+      ...(reconnect ? { resolveConnection: reconnect } : {})
     })
     if (guiConfigSync) {
       try {
@@ -140,7 +147,7 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
         io.stderr.write(`kun tui: ${guiConfigWarning}\n`)
       }
     }
-    // The shared Registry is the sole model-connection authority. Modern TUI
+    // The Manager Registry is the sole model-connection authority. Modern TUI
     // clients must not mirror snapshots directly into the Manager-owned GUI
     // settings document: concurrent projectors can replay an older Registry
     // revision over a newer one. Legacy pre-Manager compatibility keeps its
@@ -170,6 +177,19 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
         )
       }
     }).catch(() => undefined)
+    void readStandaloneTuiRelease(io.env ?? process.env).then((standalone) => {
+      if (!standalone) return undefined
+      return reconcilePendingTuiUpdate(standalone.root)
+    }).then((pending) => {
+      if (!pending) return
+      if (pending.kind === 'activated') {
+        controller?.notify(
+          `Kun ${pending.targetVersion} is now active (updated from ${pending.previousVersion}).`
+        )
+      } else if (pending.kind === 'failed') {
+        controller?.notify(pending.message, 'error')
+      }
+    }).catch(() => undefined)
     if (parsed.options.graphPrompt) {
       await app.submitStartupGraphPrompt(parsed.options.graphPrompt)
     }
@@ -180,8 +200,30 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
     io.stderr.write(`kun tui: ${error instanceof Error ? error.message : String(error)}\n`)
     return 70
   } finally {
-    await app?.stop()
+    await app?.stop().catch((error) => {
+      io.stderr.write(`kun tui: terminal cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    })
     await controller?.stop().catch(() => undefined)
+    await ownedRuntime?.stop().catch((error) => {
+      io.stderr.write(`kun tui: owned Runtime cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)
+      return false
+    })
+  }
+}
+
+export function createTuiReconnectResolver(
+  connection: TuiConnection,
+  options: TuiOptions,
+  fetchImpl: typeof fetch,
+  resolveConnection: typeof resolveTuiConnection = resolveTuiConnection
+): (() => Promise<{ baseUrl: string; runtimeToken: string }>) | undefined {
+  if (!connection.discovered || connection.ownedRuntime) return undefined
+  return async () => {
+    const refreshed = await resolveConnection(options, fetchImpl)
+    return {
+      baseUrl: refreshed.baseUrl,
+      runtimeToken: refreshed.runtimeToken
+    }
   }
 }
 

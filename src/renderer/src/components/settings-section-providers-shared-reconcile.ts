@@ -300,7 +300,8 @@ export function sharedConnectionProfilePatch(provider: ModelProviderProfileV1): 
     kind: provider.kind ?? 'http',
     authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
     ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
-    endpointFormat: provider.endpointFormat
+    endpointFormat: provider.endpointFormat,
+    useProxy: provider.useProxy
   }
 }
 
@@ -322,6 +323,7 @@ async function connectSharedModelConnectionWithCatalog(
     authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
     ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
     endpointFormat: provider.endpointFormat,
+    useProxy: provider.useProxy,
     ...(resolvedCredential ? { credential: resolvedCredential } : {}),
     models: pending.localModels,
     modelCapabilities: catalogCapabilities(pending.localModels, pending.localModelProfiles),
@@ -455,6 +457,7 @@ export async function connectOrReplaceSharedModelConnectionCredential(
         authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
         ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
         endpointFormat: provider.endpointFormat,
+        useProxy: provider.useProxy,
         ...(!operation ? { credential } : {}),
         models: provider.models,
         modelCapabilities: sharedCapabilitiesFromProvider(provider),
@@ -583,6 +586,7 @@ export function projectSharedModelConnections(
         apiKey: '',
         baseUrl: connection.baseUrl ?? '',
         endpointFormat: connection.endpointFormat,
+        useProxy: false,
         retry: defaultModelRequestRetrySettings(),
         models: [],
         modelProfiles: {}
@@ -595,6 +599,7 @@ export function projectSharedModelConnections(
       apiKey: '',
       baseUrl: pendingNames.get(connection.id)?.localBaseUrl ?? connection.baseUrl ?? '',
       endpointFormat: pendingNames.get(connection.id)?.localEndpointFormat ?? connection.endpointFormat,
+      useProxy: connection.useProxy,
       kind: connection.kind,
       models: pendingCatalog ? [...pendingCatalog.localModels] : [...connection.models],
       modelProfiles: pendingCatalog
@@ -667,6 +672,7 @@ export function sharedSettingsFingerprint(input: {
       name: item.name,
       baseUrl: item.baseUrl,
       endpointFormat: item.endpointFormat,
+      useProxy: item.useProxy,
       kind: item.kind,
       models: item.models,
       modelProfiles: item.modelProfiles

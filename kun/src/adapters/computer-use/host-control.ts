@@ -15,7 +15,28 @@
  * logical-point space (DPI/Retina aware) before driving the cursor.
  */
 
-export type HostControlAvailability = { available: boolean; reason?: string }
+export type HostControlAvailability = {
+  available: boolean
+  reason?: string
+  backend?: 'cua' | 'legacy'
+  driverVersion?: string
+  contractVersion?: string
+}
+
+export type HostFrameDescriptor = {
+  frameId: string
+  sessionId: string
+  capturedAtMs: number
+  image: { width: number; height: number; mimeType: string }
+  nativeDesktop: { width: number; height: number; scaleX: number; scaleY: number }
+  coordinateSpace: 'kun-frame-v1'
+}
+
+export type HostActionContext = {
+  sessionId?: string
+  frameId?: string
+  signal?: AbortSignal
+}
 
 export type HostScreenshot = {
   mimeType: string
@@ -23,6 +44,14 @@ export type HostScreenshot = {
   /** Width/height of the returned image; the coordinate space for actions. */
   width: number
   height: number
+  frame?: HostFrameDescriptor
+}
+
+export type HostActionResult = {
+  degraded?: boolean
+  errorCode?: string
+  structured?: unknown
+  verification?: unknown
 }
 
 export type ScrollDirection = 'up' | 'down' | 'left' | 'right'
@@ -30,26 +59,35 @@ export type MouseButton = 'left' | 'right' | 'middle'
 
 export interface HostControlController {
   ensureReady(): Promise<HostControlAvailability>
-  screenSize(): Promise<{ width: number; height: number }>
-  capture(): Promise<HostScreenshot>
-  cursorPosition(): Promise<{ x: number; y: number }>
-  moveTo(x: number, y: number): Promise<void>
+  shutdown?(): Promise<void>
+  screenSize(context?: HostActionContext): Promise<{ width: number; height: number }>
+  capture(context?: HostActionContext): Promise<HostScreenshot>
+  cursorPosition(context?: HostActionContext): Promise<{ x: number; y: number }>
+  moveTo(x: number, y: number, context?: HostActionContext): Promise<HostActionResult | void>
   click(
     x?: number,
     y?: number,
     button?: MouseButton,
     count?: 1 | 2,
-    modifiers?: string[]
-  ): Promise<void>
-  drag(x1: number, y1: number, x2: number, y2: number): Promise<void>
+    modifiers?: string[],
+    context?: HostActionContext
+  ): Promise<HostActionResult | void>
+  drag(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    context?: HostActionContext
+  ): Promise<HostActionResult | void>
   scroll(
     x: number | undefined,
     y: number | undefined,
     direction: ScrollDirection,
-    amount?: number
-  ): Promise<void>
-  typeText(text: string): Promise<void>
-  pressHotkey(keyStr: string): Promise<void>
+    amount?: number,
+    context?: HostActionContext
+  ): Promise<HostActionResult | void>
+  typeText(text: string, context?: HostActionContext): Promise<HostActionResult | void>
+  pressHotkey(keyStr: string, context?: HostActionContext): Promise<HostActionResult | void>
   wait(ms: number, signal?: AbortSignal): Promise<void>
 }
 

@@ -273,7 +273,10 @@ export function WriteWorkspaceDocumentPane({
   }
 
   if (activeFileIsOffice && officePreview) {
-    if (officePreview.sourceFormat === 'xlsx' && onSpreadsheetMutations) {
+    if (
+      officePreview.sourceFormat === 'xlsx' &&
+      onSpreadsheetMutations
+    ) {
       return (
         <div ref={editorPaneRef} className="flex h-full min-h-0 min-w-0 flex-col">
           {spreadsheetUnsupportedReason || spreadsheetConflict || spreadsheetSaveError ? (

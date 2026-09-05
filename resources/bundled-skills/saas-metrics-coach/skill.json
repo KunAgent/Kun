@@ -1,0 +1,25 @@
+{
+  "id": "saas-metrics-coach",
+  "name": "SaaS Metrics Coach",
+  "version": "1.0.0",
+  "description": "Analyze SaaS growth, retention, efficiency, unit economics, runway, and reporting quality from supplied data.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/saas-metrics-coach"
+    ],
+    "promptPatterns": [
+      "ARR",
+      "churn",
+      "LTV CAC",
+      "MRR",
+      "SaaS metrics",
+      "SaaS Metrics Coach",
+      "saas-metrics-coach"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

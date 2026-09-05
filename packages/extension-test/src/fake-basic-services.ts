@@ -3,6 +3,7 @@ import {
   ComposerContextAttachmentRequestSchema,
   ComposerContextAttachmentSchema,
   AgentCreateRunRequestSchema,
+  AgentListRunEventsRequestSchema,
   AgentRunEventSchema,
   ExtensionApiError,
   ExtensionHostClient,
@@ -117,6 +118,27 @@ export class FakeStorageService {
   }
 }
 
+export class FakeSecretStorageService {
+  readonly values = new Map<string, string>()
+
+  install(transport: FakeHostTransport): void {
+    transport.handle('secrets.get', (params) => {
+      const key = String(JsonObjectSchema.parse(params).key)
+      return this.values.has(key)
+        ? { found: true, value: this.values.get(key) }
+        : { found: false }
+    })
+    transport.handle('secrets.set', (params) => {
+      const parsed = JsonObjectSchema.parse(params)
+      this.values.set(String(parsed.key), String(parsed.value))
+      return null
+    })
+    transport.handle('secrets.delete', (params) => ({
+      deleted: this.values.delete(String(JsonObjectSchema.parse(params).key))
+    }))
+  }
+}
+
 export class FakeWorkspaceService {
   readonly files = new Map<string, WorkspaceFile>()
 
@@ -163,8 +185,31 @@ export class FakeAgentService {
   ) {}
 
   install(): void {
+    this.transport.handle('agent.getRunOptions', () => ({
+      defaultModel: 'fake-model',
+      models: [{
+        id: 'fake-model',
+        displayName: 'Fake model',
+        selected: true,
+        reasoningEfforts: ['off', 'low', 'medium', 'high', 'max'],
+        defaultReasoningEffort: 'medium'
+      }]
+    }))
     this.transport.handle('agent.createRun', (params) => this.createRun(AgentCreateRunRequestSchema.parse(params)))
     this.transport.handle('agent.getRun', (params) => this.getRun(String(JsonObjectSchema.parse(params).runId)))
+    this.transport.handle('agent.listRunEvents', (params) => {
+      const input = AgentListRunEventsRequestSchema.parse(params)
+      this.getRun(input.runId)
+      const matching = (this.events.get(input.runId) ?? [])
+        .filter((event) => event.sequence > input.afterSequence)
+      const items = matching.slice(0, input.limit)
+      return {
+        items,
+        cursor: items.at(-1)?.sequence ?? input.afterSequence,
+        hasMore: matching.length > items.length,
+        historyIncomplete: false
+      }
+    })
     this.transport.handle('agent.subscribe', (params) => {
       const parsed = JsonObjectSchema.parse(params)
       const runId = String(parsed.runId)
@@ -230,6 +275,38 @@ export class FakeAgentService {
   }
 
   createRun(request: AgentCreateRunRequest): { run: AgentRun; createdThread: boolean } {
+    if ((request.model || request.reasoningEffort) && request.providerBinding) {
+      throw new ExtensionApiError({
+        code: 'INVALID_ARGUMENT',
+        message: 'Host model selection cannot be combined with a provider binding',
+        operation: 'agent.createRun',
+        retryable: false
+      })
+    }
+    const previous = request.threadId
+      ? [...this.runs.values()].find((candidate) => candidate.threadId === request.threadId)
+      : undefined
+    const model = request.model ?? previous?.model ?? request.providerBinding?.modelId ?? 'fake-model'
+    const hostModel = model === 'fake-model'
+    if (request.model && !hostModel) {
+      throw new ExtensionApiError({
+        code: 'INVALID_ARGUMENT',
+        message: 'Requested model is not available',
+        operation: 'agent.createRun',
+        retryable: false
+      })
+    }
+    if (
+      request.reasoningEffort &&
+      (!hostModel || !['off', 'low', 'medium', 'high', 'max'].includes(request.reasoningEffort))
+    ) {
+      throw new ExtensionApiError({
+        code: 'INVALID_ARGUMENT',
+        message: 'Requested reasoning effort is not supported by this model',
+        operation: 'agent.createRun',
+        retryable: false
+      })
+    }
     const id = `run-${this.#nextRun++}`
     const threadId = request.threadId ?? `thread-${id}`
     const run: AgentRun = {
@@ -251,7 +328,9 @@ export class FakeAgentService {
       extensionBudget: request.budget ?? {},
       toolCatalogEpoch: 'fake-epoch-1',
       state: 'running',
+      model,
       providerBinding: request.providerBinding,
+      reasoningEffort: request.reasoningEffort,
       createdAt: this.clock.nowIso(),
       updatedAt: this.clock.nowIso()
     }
@@ -276,6 +355,9 @@ export class FakeAgentService {
       sequence: list.length + 1,
       timestamp: this.clock.nowIso(),
       type,
+      ...(type === 'message'
+        ? { messageId: `message-${list.length + 1}`, phase: 'complete' }
+        : {}),
       ...fields
     })
     list.push(event)

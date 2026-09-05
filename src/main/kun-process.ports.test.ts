@@ -41,7 +41,10 @@ vi.mock('electron', () => ({
     getPath: () => '/tmp/deepseek-gui-test-user-data'
   }
 }))
-
+vi.mock('../../kun/src/manager/manager-discovery.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../kun/src/manager/manager-discovery.js')>()),
+  defaultKunControlDir: () => join(tempRoot ?? tmpdir(), 'manager-control')
+}))
 let tempRoot: string | null = null
 let testKunPort = 18899
 
@@ -58,7 +61,7 @@ function createSettings(binaryPath: string): AppSettingsV1 {
       kun: {
         ...defaultKunRuntimeSettings(testKunPort),
         binaryPath,
-        autoStart: true
+        autoStart: true, dataDir: join(tempRoot ?? tmpdir(), 'runtime-data')
       }
     },
     workspaceRoot: '/tmp/workspace',
@@ -323,4 +326,22 @@ describe('terminateVerifiedPid', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
+})
+
+describe('processIdentity', () => {
+  it.runIf(process.platform === 'win32')(
+    'reads a complete identity through Windows PowerShell 5.1',
+    async () => {
+      const { processIdentity } = await import('./kun-process-ports')
+
+      const identity = await processIdentity(process.pid)
+
+      expect(identity).toMatchObject({
+        pid: process.pid,
+        executablePath: expect.any(String),
+        commandLine: expect.any(String),
+        startedAtMs: expect.any(Number)
+      })
+    }
+  )
 })

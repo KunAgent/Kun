@@ -1,9 +1,114 @@
 import { describe, expect, it, vi } from 'vitest'
 import { emptyUsageSnapshot } from '../../contracts/usage.js'
+import { ServiceManagerHttpError, UsageIndexUnavailableError } from '../../manager/usage-errors.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { usageJsonResponse } from './usage.js'
 
 describe('usageJsonResponse', () => {
+  it('returns a recoverable 503 when the bounded JSONL fallback cannot run', async () => {
+    const runtime = runtimeFixture({
+      list: vi.fn(async () => Array.from({ length: 2_001 }, (_value, index) => ({
+        id: `thread-${index}`,
+        status: 'active',
+        updatedAt: '2026-08-09T00:00:00.000Z'
+      }))),
+      loadUsageRecords: vi.fn(async () => { throw new Error('index must be bypassed') }),
+      aggregateUsage: vi.fn(async () => {
+        throw new UsageIndexUnavailableError('usage_query_timeout', 'usage query timed out')
+      })
+    })
+
+    const response = await usageJsonResponse(request('day', '2026-08-01', '2026-08-09'), runtime)
+
+    expect(response.status).toBe(503)
+    expect(JSON.parse(response.body)).toEqual({
+      code: 'usage_fallback_limit_exceeded',
+      message: 'Usage JSONL fallback is limited to 2000 threads.'
+    })
+    expect(runtime.sessionStore.loadUsageRecords).not.toHaveBeenCalled()
+  })
+
+  it('shares a JSONL scan across concurrent degraded day and model queries', async () => {
+    const loadUsageRecords = vi.fn(async () => { throw new Error('index must be bypassed') })
+    const loadEventsSince = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return [{
+        kind: 'usage',
+        seq: 1,
+        timestamp: '2026-08-09T00:00:00.000Z',
+        threadId: 'thread-degraded',
+        turnId: 'turn-degraded',
+        model: 'fixture-model',
+        usage: { ...emptyUsageSnapshot(), promptTokens: 5, totalTokens: 5, turns: 1 }
+      }]
+    })
+    const runtime = runtimeFixture({
+      get: vi.fn(async () => ({
+        id: 'thread-degraded',
+        model: 'fixture-model',
+        updatedAt: '2026-08-09T00:00:00.000Z',
+        turns: [{ id: 'turn-degraded', model: 'fixture-model' }]
+      })),
+      list: vi.fn(async () => [{
+        id: 'thread-degraded',
+        model: 'fixture-model',
+        status: 'active',
+        updatedAt: '2026-08-09T00:00:00.000Z'
+      }]),
+      loadEventsSince,
+      loadUsageRecords,
+      aggregateUsage: vi.fn(async () => {
+        throw new UsageIndexUnavailableError('usage_index_unavailable', 'Hybrid SQLite usage index is unavailable')
+      })
+    })
+
+    const [daily, model] = await Promise.all([
+      usageJsonResponse(request('day', '2026-08-01', '2026-08-09'), runtime),
+      usageJsonResponse(request('model', '2026-08-01', '2026-08-09'), runtime)
+    ])
+
+    expect(daily.status).toBe(200)
+    expect(model.status).toBe(200)
+    expect(aggregateCalls(runtime)).toBe(2)
+    expect(loadUsageRecords).not.toHaveBeenCalled()
+    expect(loadEventsSince).toHaveBeenCalledTimes(1)
+    const dailyBody = JSON.parse(daily.body) as {
+      source?: string
+      degraded?: boolean
+      buckets: Array<Record<string, unknown>>
+    }
+    expect(dailyBody).toMatchObject({ source: 'jsonl-fallback', degraded: true })
+    expect(dailyBody.buckets).toContainEqual(expect.objectContaining({
+      date: '2026-08-09',
+      input_tokens: 5,
+      turns: 1
+    }))
+    const modelBody = JSON.parse(model.body) as {
+      source?: string
+      degraded?: boolean
+      buckets: Array<Record<string, unknown>>
+    }
+    expect(modelBody).toMatchObject({ source: 'jsonl-fallback', degraded: true })
+    expect(modelBody.buckets).toContainEqual(expect.objectContaining({ model: 'fixture-model' }))
+  })
+
+  it('preserves a manager HTTP 500 instead of falling back to JSONL history', async () => {
+    const loadUsageRecords = vi.fn(async () => [])
+    const runtime = runtimeFixture({
+      list: vi.fn(async () => []),
+      loadUsageRecords,
+      aggregateUsage: vi.fn(async () => {
+        throw new ServiceManagerHttpError(500, 'internal_error', 'Internal server error.')
+      })
+    })
+
+    const response = await usageJsonResponse(request('day', '2026-08-01', '2026-08-09'), runtime)
+
+    expect(response.status).toBe(500)
+    expect(JSON.parse(response.body)).toEqual({ code: 'internal_error', message: 'Internal server error.' })
+    expect(loadUsageRecords).not.toHaveBeenCalled()
+  })
+
   it('validates day queries before loading history and forwards the UTC range', async () => {
     const loadUsageRecords = vi.fn(async () => [])
     const runtime = runtimeFixture({ list: vi.fn(async () => []), loadUsageRecords })
@@ -171,7 +276,11 @@ describe('usageJsonResponse', () => {
     const body = JSON.parse(response.body) as { buckets: Array<{ model: string }> }
 
     expect(response.status).toBe(200)
-    expect(list).toHaveBeenCalledWith({ includeArchived: true, includeSide: true })
+    expect(list).toHaveBeenCalledWith({
+      limit: 2_001,
+      includeArchived: true,
+      includeSide: true
+    })
     expect(body.buckets.map((bucket) => bucket.model)).toEqual([
       'deepseek-v4',
       'glm-5.2',
@@ -356,11 +465,17 @@ function request(groupBy: 'thread' | 'day' | 'model' | 'turn', from?: string, to
   return new Request(`http://kun.local/v1/usage?${params.toString()}`)
 }
 
+function aggregateCalls(runtime: ServerRuntime): number {
+  return (runtime.sessionStore as { aggregateUsage?: { mock?: { calls: unknown[] } } })
+    .aggregateUsage?.mock?.calls.length ?? 0
+}
+
 function runtimeFixture(overrides: {
   get?: (threadId: string) => Promise<unknown>
   list: (options?: unknown) => Promise<unknown[]>
   loadEventsSince?: (threadId: string, sinceSeq: number) => Promise<unknown[]>
   loadUsageRecords: (options?: unknown) => Promise<unknown[]>
+  aggregateUsage?: (query: unknown) => Promise<unknown>
 }): ServerRuntime {
   return {
     threadService: {
@@ -369,7 +484,8 @@ function runtimeFixture(overrides: {
     },
     sessionStore: {
       loadEventsSince: overrides.loadEventsSince ?? vi.fn(async () => []),
-      loadUsageRecords: overrides.loadUsageRecords
+      loadUsageRecords: overrides.loadUsageRecords,
+      ...(overrides.aggregateUsage ? { aggregateUsage: overrides.aggregateUsage } : {})
     },
     usageService: {
       forThread: () => emptyUsageSnapshot()

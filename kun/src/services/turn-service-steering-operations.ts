@@ -67,6 +67,8 @@ async steerTurn(this: TurnService, input: {
     messageSource?: UserMessageSource
     attachmentIds?: string[]
   }): Promise<void> {
+    const finishAdmission = this['beginExecutionAdmission']()
+    try {
     const requestedAttachmentIds = (input.attachmentIds ?? []).map((id) => id.trim())
     let acceptedAttachmentIds: string[] = []
     let holdsGraphResumeFence = false
@@ -145,6 +147,9 @@ async steerTurn(this: TurnService, input: {
       ...(input.messageSource ? { messageSource: input.messageSource } : {}),
       ...(acceptedAttachmentIds.length ? { attachmentIds: acceptedAttachmentIds } : {})
     })
+    } finally {
+      finishAdmission()
+    }
   },
 
 async resumeGraphTurnForSteering(this: TurnService, input: {
@@ -303,18 +308,24 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
     }
     if (!transition) return { status: 'aborted' }
 
-    this['clearRuntimeTurnState'](input.threadId, input.turnId, { abort: true })
-    await this['deps'].events.record({
-      kind: 'turn_aborted',
-      threadId: input.threadId,
-      turnId: input.turnId
-    })
-    if (input.discard) {
-      await this['discardTurnItems'](input.threadId, input.turnId)
-    } else {
-      await this['finalizePersistedOpenItems'](input.threadId, input.turnId, 'aborted')
+    // Wake the local loop before publishing the terminal event. Event
+    // persistence may be queued behind the in-flight operation being aborted.
+    this.abortTurnExecution(input.turnId)
+    try {
+      await this['deps'].events.record({
+        kind: 'turn_aborted',
+        threadId: input.threadId,
+        turnId: input.turnId
+      })
+      if (input.discard) {
+        await this['discardTurnItems'](input.threadId, input.turnId)
+      } else {
+        await this['finalizePersistedOpenItems'](input.threadId, input.turnId, 'aborted')
+      }
+      return { status: 'aborted' }
+    } finally {
+      this['clearRuntimeTurnState'](input.threadId, input.turnId, { abort: true })
     }
-    return { status: 'aborted' }
   },
 
 /** Abort every in-process turn before runtime shutdown closes its stores. */
@@ -341,7 +352,13 @@ async suspendActiveTurnsForShutdown(this: TurnService): Promise<number> {
     const settled = await Promise.allSettled(
       active.map((input) => this.suspendTurnForHostShutdown(input))
     )
-    return settled.filter((result) => result.status === 'fulfilled').length
+    const errors = settled.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : []
+    )
+    if (errors.length > 0) {
+      throw new AggregateError(errors, 'one or more active turns could not be suspended')
+    }
+    return settled.length
   },
 
 async suspendTurnForHostShutdown(this: TurnService, input: {
@@ -360,7 +377,8 @@ async suspendTurnForHostShutdown(this: TurnService, input: {
           ...input,
           force: true,
           preserveDeliveryCursor: true,
-          allowPendingSupervision: true
+          allowPendingSupervision: true,
+          releaseLease: false
         })
       } else {
         // A planning draft is not invalid merely because its host exits.
@@ -382,9 +400,12 @@ async suspendTurnForHostShutdown(this: TurnService, input: {
         }
       }
     } finally {
-      // suspendGraphLeadTurn normally releases this lease. Keep this
-      // idempotent fallback for terminal/recovery races and store errors.
-      this['releaseRuntimeTurnExecution'](input.threadId, input.turnId)
+      // Keep the Manager fence valid until AgentLoop's suspended-finally path
+      // persists its reliable goal elapsed slice. Runtime shutdown drains the
+      // retained lease after every active run has had a chance to unwind.
+      this['releaseRuntimeTurnExecution'](input.threadId, input.turnId, {
+        releaseLease: false
+      })
     }
   },
 }

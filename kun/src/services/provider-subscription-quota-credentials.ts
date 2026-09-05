@@ -201,7 +201,8 @@ export async function resolveClaudeToken(
 
 export async function resolveDefaultCodexQuotaCredential(
   provider: ProviderQuotaProbeProfile,
-  rejectedAccessToken?: string
+  rejectedAccessToken?: string,
+  context?: ProbeContext
 ): Promise<CodexCredential | undefined> {
   let stored = parseStoredCodexOAuthCredentials(provider.apiKey)
   if (stored) {
@@ -211,7 +212,7 @@ export async function resolveDefaultCodexQuotaCredential(
       rejectedAccessToken && stored.accessToken === rejectedAccessToken
     )
     if (rejectedCurrentToken || isStoredCodexCredentialExpired(stored)) {
-      const refreshed = await refreshCodexQuotaCredential(stored)
+      const refreshed = await refreshCodexQuotaCredential(stored, context)
       if (!refreshed) {
         if (!rejectedCurrentToken && Date.now() < stored.expiresAt) {
           return codexCredential(stored)
@@ -250,7 +251,7 @@ export async function resolveDefaultCodexQuotaCredential(
       rejectedAccessToken && stored.accessToken === rejectedAccessToken
     )
     if (rejectedCurrentToken || isStoredCodexCredentialExpired(stored)) {
-      const refreshed = await refreshCodexQuotaCredential(stored)
+      const refreshed = await refreshCodexQuotaCredential(stored, context)
       if (!refreshed) {
         if (!rejectedCurrentToken && Date.now() < stored.expiresAt) {
           return codexCredential(stored)
@@ -265,10 +266,18 @@ export async function resolveDefaultCodexQuotaCredential(
 }
 
 export async function refreshCodexQuotaCredential(
-  credentials: StoredCodexOAuthCredentials
+  credentials: StoredCodexOAuthCredentials,
+  context?: ProbeContext
 ): Promise<StoredCodexOAuthCredentials | undefined> {
   try {
-    const refreshed = await refreshStoredCodexOAuthCredentials(credentials)
+    const fetchImpl = context
+      ? ((input: string | URL | Request, init?: RequestInit) => context.fetcher(
+          typeof input === 'string' || input instanceof URL ? input : input.url,
+          init,
+          context.proxyUrl
+        )) as typeof fetch
+      : fetch
+    const refreshed = await refreshStoredCodexOAuthCredentials(credentials, fetchImpl)
     codexQuotaCredentialCache.set(credentials.refreshToken, refreshed)
     codexQuotaCredentialCache.set(refreshed.refreshToken, refreshed)
     return refreshed
@@ -363,11 +372,12 @@ export function decodeAntigravityUnifiedOAuth(value: string | undefined): {
 
 export async function resolveDefaultGrokQuotaCredential(
   provider: ProviderQuotaProbeProfile,
-  rejectedAccessToken?: string
+  rejectedAccessToken?: string,
+  context?: ProbeContext
 ): Promise<GrokCredential | undefined> {
   const configured = parseStoredGrokOAuthCredentials(provider.apiKey.trim())
   if (configured) {
-    return refreshableGrokQuotaCredential(configured, rejectedAccessToken)
+    return refreshableGrokQuotaCredential(configured, rejectedAccessToken, context)
   }
   const configuredToken = provider.apiKey.trim()
   if (configuredToken && !configuredToken.startsWith('{') && configuredToken !== rejectedAccessToken) {
@@ -408,7 +418,7 @@ export async function resolveDefaultGrokQuotaCredential(
         ...(stringValue(entry?.user_id) ? { userId: stringValue(entry?.user_id) } : {}),
         ...(stringValue(entry?.oidc_issuer) ? { issuer: stringValue(entry?.oidc_issuer) } : {}),
         ...(stringValue(entry?.oidc_client_id) ? { clientId: stringValue(entry?.oidc_client_id) } : {})
-      }, rejectedAccessToken)
+      }, rejectedAccessToken, context)
       if (credential) return credential
       continue
     }
@@ -420,7 +430,8 @@ export async function resolveDefaultGrokQuotaCredential(
 
 export async function refreshableGrokQuotaCredential(
   source: StoredGrokOAuthCredentials,
-  rejectedAccessToken?: string
+  rejectedAccessToken?: string,
+  context?: ProbeContext
 ): Promise<GrokCredential | undefined> {
   const cached = grokQuotaCredentialCache.get(source.refreshToken)
   const credential = cached ?? source
@@ -431,7 +442,14 @@ export async function refreshableGrokQuotaCredential(
     return grokCredential(credential)
   }
   try {
-    const refreshed = await refreshStoredGrokOAuthCredentials(credential)
+    const fetchImpl = context
+      ? ((input: string | URL | Request, init?: RequestInit) => context.fetcher(
+          typeof input === 'string' || input instanceof URL ? input : input.url,
+          init,
+          context.proxyUrl
+        )) as typeof fetch
+      : fetch
+    const refreshed = await refreshStoredGrokOAuthCredentials(credential, fetchImpl)
     grokQuotaCredentialCache.set(source.refreshToken, refreshed)
     grokQuotaCredentialCache.set(refreshed.refreshToken, refreshed)
     return grokCredential(refreshed)

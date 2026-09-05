@@ -458,6 +458,9 @@ describe('extension public routes', () => {
       status: 500,
       body: { code: 'extension_operation_failed' }
     })
+    expect(fixture.runtime.extensionPlatform!.packageManager.waitForPendingOperation)
+      .toHaveBeenCalledTimes(1)
+    expect(fixture.manager.activate).toHaveBeenCalledTimes(1)
     expect(lifecycle).toEqual([
       { state: 'created', sessionId: expect.any(String) },
       { state: 'disposed', sessionId: expect.any(String) }
@@ -466,5 +469,139 @@ describe('extension public routes', () => {
     expect(() => fixture.viewSessions.principal(lifecycle[0]!.sessionId)).toThrowError(
       expect.objectContaining({ code: 'not_found' })
     )
+  })
+
+  it('rebuilds a View Session once when lifecycle fencing cancels Host activation', async () => {
+    const fixture = await createFixture()
+    const lifecycle: Array<{ state: string; sessionId: string }> = []
+    fixture.viewSessions.onDidLifecycle(({ state, session }) => {
+      lifecycle.push({ state, sessionId: session.sessionId })
+    })
+    fixture.manager.activate.mockRejectedValueOnce(Object.assign(
+      new Error('activation was fenced'),
+      { code: 'EXTENSION_ACTIVATION_CANCELLED' }
+    ))
+
+    const response = await createSession(buildExtensionPublicRouter(fixture.runtime))
+
+    expect(response.status).toBe(201)
+    expect(fixture.runtime.extensionPlatform!.packageManager.waitForPendingOperation)
+      .toHaveBeenCalledTimes(2)
+    expect(fixture.manager.activate).toHaveBeenCalledTimes(2)
+    expect(lifecycle.map(({ state }) => state)).toEqual(['created', 'disposed', 'created'])
+    expect(lifecycle[0]!.sessionId).not.toBe(lifecycle[2]!.sessionId)
+    expect(() => fixture.viewSessions.principal(lifecycle[0]!.sessionId)).toThrowError(
+      expect.objectContaining({ code: 'not_found' })
+    )
+    expect(fixture.viewSessions.principal(lifecycle[2]!.sessionId)).toMatchObject({
+      extensionId: 'acme.dashboard',
+      extensionVersion: '1.0.0'
+    })
+  })
+
+  it('re-resolves workspace grants after a cancelled View activation', async () => {
+    const fixture = await createFixture()
+    const lifecycle: Array<{ state: string; sessionId: string }> = []
+    fixture.viewSessions.onDidLifecycle(({ state, session }) => {
+      lifecycle.push({ state, sessionId: session.sessionId })
+    })
+    fixture.manager.activate.mockRejectedValueOnce(Object.assign(
+      new Error('activation was fenced'),
+      { code: 'EXTENSION_ACTIVATION_CANCELLED' }
+    ))
+    const waitForPendingOperation = vi.mocked(
+      fixture.runtime.extensionPlatform!.packageManager.waitForPendingOperation
+    )
+    waitForPendingOperation.mockResolvedValueOnce(undefined).mockImplementationOnce(async () => {
+      await fixture.registry.setWorkspacePermissionGrant(
+        'acme.dashboard',
+        fixture.paths.workspaceKey(WORKSPACE_ROOT),
+        undefined,
+        '1.0.0'
+      )
+    })
+
+    const response = await dispatchJson(
+      buildExtensionPublicRouter(fixture.runtime),
+      'POST',
+      '/v1/extensions/view-sessions',
+      {
+        contributionId: 'extension:acme.dashboard/panel',
+        workspaceRoot: WORKSPACE_ROOT
+      },
+      runtimeHeaders()
+    )
+
+    expect(response.status).toBe(404)
+    expect(waitForPendingOperation).toHaveBeenCalledWith('acme.dashboard')
+    expect(waitForPendingOperation).toHaveBeenCalledTimes(2)
+    expect(fixture.manager.activate).toHaveBeenCalledTimes(1)
+    expect(lifecycle.map(({ state }) => state)).toEqual(['created', 'disposed'])
+  })
+
+  it('recovers when adjacent lifecycle changes cancel View activation twice', async () => {
+    const fixture = await createFixture()
+    const lifecycle: Array<{ state: string; sessionId: string }> = []
+    fixture.viewSessions.onDidLifecycle(({ state, session }) => {
+      lifecycle.push({ state, sessionId: session.sessionId })
+    })
+    const cancelled = () => Object.assign(
+      new Error('activation was fenced'),
+      { code: 'EXTENSION_ACTIVATION_CANCELLED' }
+    )
+    fixture.manager.activate
+      .mockRejectedValueOnce(cancelled())
+      .mockRejectedValueOnce(cancelled())
+
+    const response = await createSession(buildExtensionPublicRouter(fixture.runtime))
+
+    expect(response.status).toBe(201)
+    expect(fixture.manager.activate).toHaveBeenCalledTimes(3)
+    expect(fixture.runtime.extensionPlatform!.packageManager.waitForPendingOperation)
+      .toHaveBeenCalledTimes(3)
+    expect(lifecycle.map(({ state }) => state)).toEqual([
+      'created',
+      'disposed',
+      'created',
+      'disposed',
+      'created'
+    ])
+  })
+
+  it('bounds repeated cancelled View activation recovery to three retries', async () => {
+    const fixture = await createFixture()
+    const lifecycle: Array<{ state: string; sessionId: string }> = []
+    fixture.viewSessions.onDidLifecycle(({ state, session }) => {
+      lifecycle.push({ state, sessionId: session.sessionId })
+    })
+    fixture.manager.activate.mockRejectedValue(Object.assign(
+      new Error('activation was repeatedly fenced'),
+      { code: 'EXTENSION_ACTIVATION_CANCELLED' }
+    ))
+
+    const response = await createSession(buildExtensionPublicRouter(fixture.runtime))
+
+    expect(response).toMatchObject({
+      status: 500,
+      body: { code: 'extension_operation_failed' }
+    })
+    expect(fixture.manager.activate).toHaveBeenCalledTimes(4)
+    expect(fixture.runtime.extensionPlatform!.packageManager.waitForPendingOperation)
+      .toHaveBeenCalledTimes(4)
+    expect(lifecycle.map(({ state }) => state)).toEqual([
+      'created',
+      'disposed',
+      'created',
+      'disposed',
+      'created',
+      'disposed',
+      'created',
+      'disposed'
+    ])
+    for (const { sessionId } of lifecycle) {
+      expect(() => fixture.viewSessions.principal(sessionId)).toThrowError(
+        expect.objectContaining({ code: 'not_found' })
+      )
+    }
   })
 })

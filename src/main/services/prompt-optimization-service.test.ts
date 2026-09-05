@@ -167,6 +167,7 @@ describe('optimizePrompt', () => {
       apiKey: 'sk-other',
       baseUrl: 'https://other.example',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: ['other-chat'],
       modelProfiles: {}
     })
@@ -228,6 +229,7 @@ describe('optimizePrompt', () => {
       }),
       baseUrl: 'https://chatgpt.com/backend-api/codex',
       endpointFormat: 'responses',
+      useProxy: false,
       models: ['gpt-5.6-luna'],
       modelProfiles: {
         'gpt-5.6-luna': {

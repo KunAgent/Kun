@@ -15,8 +15,10 @@ import {
   SettingRow,
   Toggle
 } from './settings-controls'
-import { composerSupportsCodexFastMode } from './chat/composer-fast-mode'
-import { useChatStore } from '../store/chat-store'
+import {
+  modelProviderIsCodex,
+  modelProviderSupportsCodexFastMode
+} from './chat/composer-fast-mode'
 
 type Translate = (key: string) => string
 
@@ -79,8 +81,8 @@ export function FastContextSettingsPanel({
   const provider = modelProviders.find((candidate) => candidate.id === providerId) ?? modelProviders[0]
   const model = fixed ? agent.model : leadModel
   const reasoningEfforts = reasoningEffortsForModel(provider, model)
-  const composerModelGroups = useChatStore((s) => s.composerModelGroups)
-  const fastSupported = composerSupportsCodexFastMode(composerModelGroups, model, providerId)
+  const fastSupported = modelProviderSupportsCodexFastMode(provider, model)
+  const codexProvider = modelProviderIsCodex(provider)
 
   return (
     <div className="mt-6">
@@ -158,7 +160,10 @@ export function FastContextSettingsPanel({
                             nextProvider,
                             nextModel,
                             agent.reasoningEffort
-                          )
+                          ),
+                          ...(!modelProviderSupportsCodexFastMode(nextProvider, nextModel)
+                            ? { fast: false }
+                            : {})
                         })
                       }}
                     >
@@ -175,14 +180,18 @@ export function FastContextSettingsPanel({
                       selectClassName={selectControlClass}
                       onChange={(nextModel) => {
                         const trimmed = nextModel.trim()
+                        const nextModelId = trimmed || model
                         onChange({
-                          model: trimmed || model,
+                          model: nextModelId,
                           providerId: provider?.id ?? providerId,
                           reasoningEffort: compatibleReasoningEffort(
                             provider,
-                            trimmed || model,
+                            nextModelId,
                             agent.reasoningEffort
-                          )
+                          ),
+                          ...(!modelProviderSupportsCodexFastMode(provider, nextModelId)
+                            ? { fast: false }
+                            : {})
                         })
                       }}
                     />
@@ -215,7 +224,7 @@ export function FastContextSettingsPanel({
                 }
               />
             ) : null}
-            {fixed ? (
+            {fixed && codexProvider ? (
               <SettingRow
                 title={t('fastContextFast')}
                 description={t('fastContextFastDesc')}
@@ -228,7 +237,7 @@ export function FastContextSettingsPanel({
                 }
               />
             ) : null}
-            {fixed && !fastSupported ? (
+            {fixed && codexProvider && !fastSupported ? (
               <div className="px-3 pb-3">
                 <p className="text-[12px] leading-5 text-ds-faint">
                   {t('fastContextFastUnsupportedHint')}

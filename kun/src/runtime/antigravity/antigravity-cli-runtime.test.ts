@@ -55,9 +55,9 @@ class BlockingAntigravityDeltaSessionStore extends InMemorySessionStore {
     this.releaseDeltaEventAppend()
   }
 
-  override async appendItem(threadId: string, item: Parameters<InMemorySessionStore['appendItem']>[1]): Promise<void> {
+  override async checkpointLiveItem(threadId: string, item: Parameters<InMemorySessionStore['checkpointLiveItem']>[1], representedSeq: number): Promise<void> {
     if (item.kind === 'assistant_text') this.order.push(`item:${item.status}`)
-    await super.appendItem(threadId, item)
+    await super.checkpointLiveItem(threadId, item, representedSeq)
   }
 
   override async appendEvent(threadId: string, event: RuntimeEvent): Promise<void> {
@@ -351,8 +351,7 @@ describe('AntigravityCliRuntime', () => {
     expect(sessionStore.order).toEqual([
       'item:running',
       'event-start:0',
-      'event-commit',
-      'item:completed'
+      'event-commit'
     ])
     const replayEvents = (await sessionStore.loadEventsSince(turn.threadId, hydratedSeq))
       .filter((event) => event.kind === 'assistant_text_delta')

@@ -1,0 +1,23 @@
+{
+  "id": "yahoo-finance",
+  "name": "Yahoo Finance",
+  "version": "1.0.0",
+  "description": "Retrieve public Yahoo Finance market, company, financial, ownership, and analyst data through authorized access.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/yahoo-finance"
+    ],
+    "promptPatterns": [
+      "stock quote",
+      "ticker",
+      "Yahoo Finance",
+      "yahoo-finance",
+      "股票行情"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

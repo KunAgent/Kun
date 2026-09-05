@@ -196,10 +196,47 @@ Changelog 记录公开 Extension API，而不是 Kun 内部重构。每项包含
 下面的 public surface 快照由文档门禁从 package 入口、公开 export 和可达 `.d.ts` 计算。只有在本节已经解释兼容性影响后才更新快照；不能把更新 hash 当成 Changelog 条目。
 
 <!-- BEGIN GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
-<!-- sdk-surface-snapshot @kun/extension-api@1.2.0 sha256:a7d676f0869a5c40f73bff7b30e567e7c5efa0536b0650b1fd30ee82551d6cf8 -->
-<!-- sdk-surface-snapshot @kun/extension-react@1.2.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
-<!-- sdk-surface-snapshot @kun/extension-test@1.2.0 sha256:fccbdd3fb3400ce179f8d6c3ae1d191bfe3488ef125577423f3d2b3f4fad851d -->
+<!-- sdk-surface-snapshot @kun/extension-api@1.4.0 sha256:2a1dd3410cd89e76b70c7752cca01442d6c42cb5dd4c78e7a96591ef8aed862b -->
+<!-- sdk-surface-snapshot @kun/extension-react@1.4.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
+<!-- sdk-surface-snapshot @kun/extension-test@1.4.0 sha256:9aa234e9c62776edab832924aef8f925f68679732e8ab08626c21ffabd42e28e -->
 <!-- END GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
+
+### v1.4.0 — 可恢复的 Agent 会话历史
+
+Compatible Kun: `>=0.3.8`。
+
+Added:
+
+- `context.agent.getRunOptions()` 返回当前主模型连接的安全模型目录和逐模型推理强度；`createRun` 新增可选 `model` / `reasoningEffort`，Run 投影返回实际模型与推理强度。
+- `context.agent.listRunEvents({ runId, afterSequence?, limit? })` 返回正序、有界的 `{ items, cursor, hasMore, historyIncomplete }`，默认 100 条、最多 200 条；数字 cursor 可直接继续分页或衔接 live subscribe。
+- message 事件支持 `role: 'user'`，并提供稳定 `messageId` 与 `phase: 'delta' | 'replace' | 'complete'`，客户端可合并流式更新而不重复创建消息。
+
+Security:
+
+- 模型目录只投影活动 Kun 连接上已配置的模型和能力，不包含凭据、账号或其它 Provider；Host 会拒绝目录外模型和不受支持的推理强度。
+- 历史读取仅限调用扩展自有 Run。公共投影只包含用户/助手文本、Host 生成的工具状态摘要和既有状态/用量/终态；内部上下文、reasoning、工具参数/结果、文件路径与 gate 凭据继续被过滤。
+
+Migration:
+
+- 需要可恢复会话历史的扩展升级到 `apiVersion: 1.4.0` 和 `engines.kun >=0.3.8`。既有 v1.3 及更早扩展继续兼容。
+
+### v1.3.0 — 受保护的扩展秘密
+
+Compatible Kun: `>=0.3.8`。
+
+Added:
+
+- `storage.secrets` 权限和 Node Host 专用的 `context.secrets.get/set/delete`。秘密按 profile、扩展 ID 和 key 隔离，使用 OS 凭据后端或经过认证的加密回退，单值上限 16 KiB。
+- `@kun/extension-test` 提供对应的内存 fake，并保持与生产相同的权限门禁。
+
+Security:
+
+- Extension View 不允许调用 secrets 方法；需要秘密的 View 操作必须通过声明过的 Node command。
+- 普通 global/workspace/View state、Host projection 和日志不会包含这些值。保护存储不可用时调用失败关闭。
+
+Migration:
+
+- 只有需要保存自有服务秘密的 Node 扩展才升级到 `apiVersion: 1.3.0` 并新增 `storage.secrets`。v1.2、v1.1 和 v1.0 扩展无需修改。
 
 ### v1.2.0 — 媒体调度、本地分析与项目交换
 

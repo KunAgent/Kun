@@ -69,6 +69,7 @@ function installDsGui(overrides: Partial<Window['kunGui']>): void {
       })),
       stopSse: vi.fn(async () => true),
       ackSse: vi.fn(async () => true),
+      onSseOpen: vi.fn(() => () => undefined),
       onSseEvent: vi.fn(() => () => undefined),
       onSseEnd: vi.fn(() => () => undefined),
       onSseError: vi.fn(() => () => undefined),
@@ -122,6 +123,56 @@ describe('KunRuntimeProvider', () => {
       name: 'KunSseSubscriptionError',
       message: 'stream route unavailable',
       status: 404
+    })
+  })
+
+  it('preserves replay reset metadata for projection recovery', async () => {
+    let onSseError: ((payload: {
+      streamId: string
+      message?: string
+      code?: 'replay_reset_required'
+      threadId?: string
+      floorSeq?: number
+    }) => void) | null = null
+    const onError = vi.fn()
+    const sink: ThreadEventSink = {
+      onSeq: vi.fn(),
+      onDeltas: vi.fn(),
+      onUserMessage: vi.fn(),
+      onTool: vi.fn(),
+      onCompaction: vi.fn(),
+      onApproval: vi.fn(),
+      onUserInput: vi.fn(),
+      onUserInputStatus: vi.fn(),
+      onGoal: vi.fn(),
+      onTodos: vi.fn(),
+      onTurnComplete: vi.fn(),
+      onError
+    }
+    installDsGui({
+      onSseError: vi.fn((handler) => {
+        onSseError = handler
+        return () => undefined
+      }),
+      startSse: vi.fn(async (_threadId, _sinceSeq, streamId) => {
+        queueMicrotask(() => onSseError?.({
+          streamId: streamId ?? 'stream-1',
+          message: 'reload snapshot',
+          code: 'replay_reset_required',
+          threadId: 'thr_1',
+          floorSeq: 80
+        }))
+        return { streamId: streamId ?? 'stream-1' }
+      })
+    })
+
+    await new KunRuntimeProvider().subscribeThreadEvents('thr_1', 7, sink, new AbortController().signal)
+
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({
+      name: 'KunSseSubscriptionError',
+      code: 'replay_reset_required',
+      threadId: 'thr_1',
+      floorSeq: 80
     })
   })
 

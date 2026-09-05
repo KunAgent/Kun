@@ -2,16 +2,198 @@ import { appendFile, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { makeAssistantTextItem, makeToolCallItem, makeToolResultItem, makeUserItem } from '../../domain/item.js'
+import {
+  makeAssistantReasoningItem,
+  makeAssistantTextItem,
+  makeToolCallItem,
+  makeToolResultItem,
+  makeUserItem
+} from '../../domain/item.js'
 import { FileSessionStore, readLatestItemsFromJsonl } from './file-session-store.js'
 
 const roots: string[] = []
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map((root) => rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === 'win32' ? 5 : 0,
+    retryDelay: 50
+  })))
 })
 
 describe('FileSessionStore item ordering', () => {
+  it('checkpoints a long assistant stream without cumulative canonical appends', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-live-item-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_live_item'
+    let text = ''
+    for (let index = 0; index < 256; index += 1) {
+      text += 'r'.repeat(2_048)
+      await store.checkpointLiveItem(threadId, makeAssistantReasoningItem({
+        id: 'reasoning_live',
+        threadId,
+        turnId: 'turn_live',
+        text,
+        status: 'running'
+      }), index)
+    }
+    const messagesPath = join(root, 'threads', threadId, 'messages.jsonl')
+    await expect(stat(messagesPath)).rejects.toThrow()
+    const checkpointPath = join(root, 'threads', threadId, 'live-items.json')
+    expect((await stat(checkpointPath)).size).toBeLessThan(text.length * 2)
+
+    store.clearThreadMemory(threadId)
+    const snapshot = await store.loadItemSnapshot(threadId)
+    expect(snapshot.items).toMatchObject([
+      { id: 'reasoning_live', kind: 'assistant_reasoning', status: 'running' }
+    ])
+    expect(snapshot.replayAfterSeq).toBeTypeOf('number')
+
+    await store.finalizeLiveItem(threadId, makeAssistantReasoningItem({
+      id: 'reasoning_live',
+      threadId,
+      turnId: 'turn_live',
+      text,
+      status: 'completed'
+    }))
+    expect((await readFile(messagesPath, 'utf8')).trim().split('\n')).toHaveLength(1)
+    await expect(stat(checkpointPath)).rejects.toThrow()
+  })
+
+  it('removes omitted live checkpoints during a full rewrite and cold reload', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-live-rewrite-remove-'))
+    roots.push(root)
+    const threadId = 'thread_live_rewrite_remove'
+    const store = new FileSessionStore({ dataDir: root })
+    await store.checkpointLiveItem(threadId, makeAssistantReasoningItem({
+      id: 'reasoning_removed',
+      threadId,
+      turnId: 'turn_removed',
+      text: 'stale reasoning',
+      status: 'running'
+    }), 4)
+
+    await store.rewriteItems(threadId, [])
+    const checkpointPath = join(root, 'threads', threadId, 'live-items.json')
+    await expect(stat(checkpointPath)).rejects.toThrow()
+    await store.close()
+
+    const recovered = new FileSessionStore({ dataDir: root })
+    const snapshot = await recovered.loadItemSnapshot(threadId)
+    expect(snapshot.items).toEqual([])
+    expect(snapshot).not.toHaveProperty('replayAfterSeq')
+    await expect(recovered.loadItemPage(threadId, {
+      maxItems: 10,
+      maxBytes: 64 * 1024
+    })).resolves.toMatchObject({ items: [], hasMore: false })
+    await recovered.close()
+  })
+
+  it('reconciles terminal and retained live checkpoints in a revisioned rewrite', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-live-rewrite-terminal-'))
+    roots.push(root)
+    const threadId = 'thread_live_rewrite_terminal'
+    const store = new FileSessionStore({ dataDir: root })
+    const terminalLive = makeAssistantTextItem({
+      id: 'assistant_terminal',
+      threadId,
+      turnId: 'turn_terminal',
+      text: 'partial terminal answer',
+      status: 'running'
+    })
+    const retainedLive = makeAssistantReasoningItem({
+      id: 'reasoning_retained',
+      threadId,
+      turnId: 'turn_active',
+      text: 'active reasoning',
+      status: 'running'
+    })
+    await store.checkpointLiveItem(threadId, terminalLive, 6)
+    await store.checkpointLiveItem(threadId, retainedLive, 9)
+    const before = await store.loadItemSnapshot(threadId)
+    const terminal = makeAssistantTextItem({
+      ...terminalLive,
+      text: 'settled terminal answer',
+      status: 'failed'
+    })
+
+    await expect(store.rewriteItemsIfRevision(
+      threadId,
+      before.revision,
+      [terminal, retainedLive]
+    )).resolves.toMatchObject({ applied: true })
+    const checkpointPath = join(root, 'threads', threadId, 'live-items.json')
+    expect(JSON.parse(await readFile(checkpointPath, 'utf8'))).toMatchObject({
+      entries: [{ item: { id: retainedLive.id, status: 'running' }, representedSeq: 9 }]
+    })
+    await store.close()
+
+    const recovered = new FileSessionStore({ dataDir: root })
+    const snapshot = await recovered.loadItemSnapshot(threadId)
+    expect(snapshot.items).toMatchObject([
+      { id: terminal.id, text: 'settled terminal answer', status: 'failed' },
+      { id: retainedLive.id, text: 'active reasoning', status: 'running' }
+    ])
+    expect(snapshot.replayAfterSeq).toBe(9)
+    await recovered.close()
+  })
+
+  it('replays durable deltas after the last checkpoint during cold recovery', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-live-recovery-'))
+    roots.push(root)
+    const threadId = 'thread_live_recovery'
+    const store = new FileSessionStore({ dataDir: root })
+    const item = (text: string) => makeAssistantTextItem({
+      id: 'assistant_live', threadId, turnId: 'turn_live', text, status: 'running'
+    })
+    await store.checkpointLiveItem(threadId, item('hello'), 0)
+    await store.appendEvent(threadId, {
+      seq: 1,
+      timestamp: '2026-08-29T00:00:00.000Z',
+      kind: 'assistant_text_delta',
+      threadId,
+      turnId: 'turn_live',
+      itemId: 'assistant_live',
+      deltaOffset: 0,
+      item: item('hello')
+    })
+    // This in-memory checkpoint refresh is below 64 KiB, so only the event
+    // carries the second fragment durably.
+    await store.checkpointLiveItem(threadId, item('hello world'), 1)
+    await store.appendEvent(threadId, {
+      seq: 2,
+      timestamp: '2026-08-29T00:00:01.000Z',
+      kind: 'assistant_text_delta',
+      threadId,
+      turnId: 'turn_live',
+      itemId: 'assistant_live',
+      deltaOffset: 5,
+      item: item(' world')
+    })
+
+    const recovered = new FileSessionStore({ dataDir: root })
+    await expect(recovered.loadItems(threadId)).resolves.toMatchObject([
+      { id: 'assistant_live', text: 'hello world', status: 'running' }
+    ])
+  })
+
+  it('rejects an oversized item before creating a partial history record', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-record-limit-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_record_limit'
+    await expect(store.appendItem(threadId, makeAssistantTextItem({
+      id: 'assistant_too_large',
+      threadId,
+      turnId: 'turn_1',
+      text: 'x'.repeat(16 * 1024 * 1024),
+      status: 'completed'
+    }))).rejects.toThrow('item history record exceeds')
+    await expect(stat(join(root, 'threads', threadId, 'messages.jsonl'))).rejects.toThrow()
+  })
+
   it('keeps an updated item in its original timeline slot after a cold reload', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-session-order-'))
     roots.push(root)
@@ -266,6 +448,12 @@ describe('FileSessionStore item ordering', () => {
     await store.flushScheduledCompaction(threadId)
     expect((await stat(path)).size).toBeLessThan(before / 10)
     expect((await readFile(path, 'utf-8')).trim().split('\n')).toHaveLength(1)
+    const indexPath = join(root, 'threads', threadId, 'messages-index.jsonl')
+    const statePath = join(root, 'threads', threadId, 'messages-index.state.json')
+    expect((await readFile(indexPath, 'utf-8')).trim().split('\n')).toHaveLength(1)
+    expect(JSON.parse(await readFile(statePath, 'utf-8'))).toMatchObject({ rowCount: 1 })
+    await expect(store.loadItemPage(threadId, { maxItems: 5, maxBytes: 64 * 1024 }))
+      .resolves.toMatchObject({ items: [{ id: 'result_1', status: 'completed' }] })
   })
 
   it('pins the running turn user message on the newest JSONL page', async () => {

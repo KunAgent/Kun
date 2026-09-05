@@ -1,0 +1,20 @@
+{
+  "writeConversationFileTrigger": "文件会话",
+  "writeConversationWhiteboardTrigger": "白板会话",
+  "writeConversationFileTitle": "当前文件的会话历史",
+  "writeConversationWhiteboardTitle": "当前白板的会话历史",
+  "writeConversationNew": "新建会话",
+  "writeConversationSearch": "搜索会话标题",
+  "writeConversationCurrent": "当前",
+  "writeConversationFallback": "会话 {{number}}",
+  "writeConversationEmpty": "这个资源还没有关联的会话。",
+  "writeConversationNoMatches": "没有匹配的会话标题。",
+  "writeConversationMore": "会话操作",
+  "writeConversationUnavailable": "当前运行时列表中暂时无法获取这个会话。",
+  "writeConversationLoadingMetadata": "正在加载会话信息…",
+  "writeConversationNoTimestamp": "暂无最近活动",
+  "writeConversationLockedRunning": "当前资源有任务正在运行，会话操作暂时锁定。",
+  "writeConversationWorkflowLocked": "评审白板会始终绑定到创建它的工作流会话。",
+  "writeConversationArchiveTitle": "归档这个会话？",
+  "writeConversationArchiveDescription": "归档后，它会离开当前资源的活动历史；之后仍可从已归档会话中恢复。"
+}

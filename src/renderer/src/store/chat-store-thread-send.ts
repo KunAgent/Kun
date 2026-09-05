@@ -2,6 +2,7 @@ import type { ChatBlock, NormalizedThread, ReviewTarget } from '../agent/types'
 import type { DesignDocumentTarget, DesignTaskProfileInput } from '../agent/design-task-profile'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { prepareAssistantMarkdownRenderer } from '../lib/assistant-markdown-loader'
 import {
   showWorkspaceMissingDialog,
   workspaceDirectoryExists,
@@ -171,6 +172,9 @@ import {
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
 import { performPreparedThreadSend } from './chat-store-thread-send-direct'
+import { submitToRuntimeQueue } from './chat-store-thread-send-enqueue'
+import { runtimePromptForSurface } from './chat-store-send-prompt'
+import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
 
 function mergeTurnComposerContexts(
   primary: readonly ComposerContextAttachment[],
@@ -255,6 +259,10 @@ export async function sendThreadMessage(
   const { set, get } = context
     const trimmedText = text.trim()
     if (!trimmedText) return false
+    // The first streaming token usually lands before the lazy Streamdown
+    // chunk finishes loading on a cold start. Warm it as soon as the user
+    // commits a turn so the fallback plain-text frame is as short as possible.
+    void prepareAssistantMarkdownRenderer().catch(() => undefined)
     const queued = overrides?.queued
     const clientRequestId = queued?.clientRequestId?.trim() ||
       overrides?.clientRequestId?.trim() ||
@@ -410,6 +418,45 @@ export async function sendThreadMessage(
         (mode === 'agent' && state.route === 'chat' && state.graphEnabled
           ? state.composerOrchestration
           : 'direct')
+      // Runtime-owned queue: submit the follow-up directly with
+      // enqueueIfBusy so it executes even when this conversation is never
+      // opened again. Write sends now carry a durable `writeContext` reference
+      // so they can join the runtime queue too.
+      if (activeThreadId && !shouldWaitForRuntimeAdmission) {
+        const submitted = await submitToRuntimeQueue({
+          provider: p,
+          activeThreadId,
+          trimmedText,
+          clientRequestId,
+          mode,
+          orchestration,
+          requestedAgentSurface,
+          writeContext,
+          composerModel,
+          composerProviderId,
+          composerAccountId,
+          userModelChip,
+          displayText,
+          reasoningEffort,
+          serviceTier,
+          subagentResume,
+          messageSource,
+          persona,
+          designProfile,
+          designDocumentTarget,
+          designImagePlacementTarget,
+          attachmentIds,
+          attachments,
+          fileReferences,
+          composerContexts,
+          queued,
+          overrides,
+          set,
+          get,
+          persistActiveQueuedMessages: runtime.persistActiveQueuedMessages
+        })
+        if (submitted !== null) return submitted
+      }
       set((s) => ({
         queuedMessages: upsertQueuedSubmission(s.queuedMessages, {
           ...queued,
@@ -526,6 +573,16 @@ export async function sendThreadMessage(
         : 'direct')
     const userModelChip =
       queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
+    // Freeze the composer execution settings at enqueue time so a queued
+    // message keeps the approval/sandbox policy selected when it was submitted,
+    // not whatever is global by the time the queue drains.
+    const composerExecutionSettings = get().composerExecutionSettings
+    const snapshotApprovalPolicy =
+      queued?.approvalPolicy ?? overrides?.approvalPolicy ?? composerExecutionSettings?.approvalPolicy
+    const snapshotSandboxMode =
+      queued?.sandboxMode ?? overrides?.sandboxMode ?? composerExecutionSettings?.sandboxMode
+    const snapshotApprovalReviewer =
+      queued?.approvalReviewer ?? overrides?.approvalReviewer ?? composerExecutionSettings?.approvalReviewer
     const submittedMessageForQueue = pendingQueuedMessage({
       ...queued,
       id: queued?.id ?? `q-${clientRequestId}`,
@@ -556,6 +613,9 @@ export async function sendThreadMessage(
         ? { guiDesignArtifact: queued?.guiDesignArtifact ?? overrides?.guiDesignArtifact }
         : {}),
       ...(writeContext ? { writeContext } : {}),
+      ...(snapshotApprovalPolicy ? { approvalPolicy: snapshotApprovalPolicy } : {}),
+      ...(snapshotSandboxMode ? { sandboxMode: snapshotSandboxMode } : {}),
+      ...(snapshotApprovalReviewer ? { approvalReviewer: snapshotApprovalReviewer } : {}),
       ...(attachmentIds.length ? { attachmentIds } : {}),
       ...(attachments.length ? { attachments } : {}),
       ...(fileReferences.length ? { fileReferences } : {}),

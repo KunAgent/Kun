@@ -7,43 +7,25 @@ alternate screen, so the transcript remains in native scrollback after exit.
 
 ## Installation and release forms
 
-Every Kun GUI package continues to include the complete TUI and runtime. A
-desktop installation does not need a second TUI download. The standalone TUI
-archive is an additional headless distribution for developer machines and
-servers without a graphical environment. It includes a pinned Node.js runtime,
-does not require a system Node.js installation, and is not published through
-npm.
+Kun desktop packages include the complete TUI and runtime. Install the desktop
+app to use `kun` / `kun tui`; no separate Node.js or TUI download is needed.
+Starting with 0.3.8, Stable and Daily no longer build or publish standalone TUI
+archives or advance the standalone update manifest. The bundled TUI updates
+with the desktop app.
 
-Each Stable or Daily release builds the GUI and TUI from the same commit. They
-share one application version, tag, runtime build ID, and release cadence;
-there is no independently versioned TUI release line. If any required GUI or
-TUI target fails, the joint release is not promoted to R2 latest and the
-GitHub Release is not made public.
+Existing historical archives and user data are not deleted. Users of the
+0.3.7 standalone archive need the desktop app for 0.3.8 and later versions;
+the old `kun update` command does not install a GUI package. Real GUI upgrades,
+signing, artifact integrity, and public update-feed validation remain required.
 
-| Platform | Standalone TUI archive | Architecture |
-| --- | --- | --- |
-| macOS | `.tar.gz` | arm64 / x64 |
-| Windows | `.zip` | x64 |
-| Linux | `.tar.gz` | x64 |
+The GUI and TUI use the same local HTTP/SSE protocol and persisted data, but
+they no longer share one long-lived background Runtime by default. A normal
+GUI or TUI owns the Runtime it starts, and only one owner may occupy a
+`(canonical data directory, runtime flavor)` slot. When that owner exits, its
+Runtime stops; the next client still reads the same threads, settings, memory,
+usage, and model connections through Service Manager.
 
-GitHub Releases and R2 receive the same archives, SHA-256 files, and
-machine-readable manifests. The website can consume R2 `latest.json` and
-`latest-tui.json` for its download flow; this repository does not ship an npm
-package or curl/PowerShell installer.
-
-A Stable standalone TUI checks for updates at most once every 24 hours on
-startup and only displays a notice. Run `/update` to review it, then
-`/update yes` to confirm; non-interactive callers can use `kun update --check`
-or `kun update --yes`. A GUI-bundled TUI must be updated with the desktop app
-and directs the user there. Daily/frontier archives are downloadable but
-self-update is disabled.
-
-The GUI and TUI are clients of one persistent local HTTP/SSE runtime. They
-share threads, turns, approvals, structured input, event sequence numbers,
-usage, and model connections. Closing one GUI or TUI does not stop other
-clients or background turns.
-
-## Startup and the shared runtime
+## Startup and the client-owned runtime
 
 ```bash
 # Use the GUI-configured data dir, falling back to ~/.kun/data without GUI settings
@@ -53,14 +35,45 @@ kun
 kun tui --workspace "$PWD" --continue
 kun tui --thread <thread-id>
 
-# Attach only
+# Attach to a Runtime already owned by the GUI or another client
 kun --no-start
+
+# Start a fully independent TUI Runtime (separate threads, memory, and settings)
+KUN_MANAGER_CONTROL_DIR="$HOME/.kun/tui-control" \
+KUN_MANAGER_SETTINGS_PATH="$HOME/.kun/tui-settings.json" \
+KUN_DATA_DIR="$HOME/.kun/tui-data" \
+kun tui
 ```
 
-Startup is elected under a data-directory lock. One process creates the token,
-chooses the port, and launches a detached service; concurrent GUI/TUI clients
-attach to that same instance. `{dataDir}/runtime.json` records its instance ID,
-PID, version, start time, loopback URL, and log path.
+Default TUI startup elects under the data-directory/flavor lock and Manager
+fence, creates the token, chooses the port, and starts a Runtime owned by that
+TUI session. Discovery records its instance ID, PID, owner, version, start time,
+loopback URL, and log path. If the same slot already has a live or starting GUI,
+another TUI, or a foreground `kun serve` owner, startup reports an actionable
+conflict; it does not attach to, replace, or stop that owner. The default
+Manager profile binds one canonical data directory, while production and
+development flavors retain independent slots.
+
+On `/quit`, terminal or signal exit, initialization failure, and every other
+command exit, the TUI stops and waits for only its exact owned Runtime. Service
+Manager stays alive across ordinary TUI exits as the lightweight election and
+canonical data plane, but does not execute Agent turns itself. The GUI follows
+the same ownership rule: real Quit stops its Runtime, while hiding, close to
+tray, or macOS residency without a window does not. A default TUI therefore
+still conflicts while the GUI is in the tray. The GUI restart control restarts
+only that GUI's Runtime.
+
+`--url` and `--no-start` are explicit non-owning connections. When the GUI owns
+the default Runtime, run `kun tui --no-start` to share its threads and settings.
+The TUI neither starts nor stops that Runtime, and the connection may end when
+the owner exits. To let the GUI and TUI each own a Runtime, isolate
+`KUN_MANAGER_CONTROL_DIR`, `KUN_MANAGER_SETTINGS_PATH`, and `KUN_DATA_DIR`
+together as shown above; changing only the port or data directory does not form
+a fully isolated Manager profile. During the first upgrade, the launcher may
+gracefully retire one authenticated, exact legacy `launchMode: shared` daemon
+without client-owner metadata in the same canonical data directory. Ambiguous
+identity fails closed and never scans or terminates other data directories or
+user processes.
 
 Without `--data-dir` or `KUN_DATA_DIR`, the CLI reads `agents.kun.dataDir`
 from the installed GUI settings. Existing users whose authoritative data is
@@ -76,11 +89,18 @@ kun runtime restart
 kun runtime stop
 ```
 
-`kun serve` is the explicit foreground/debug mode. It also publishes discovery
-and reports a conflict when a valid service already owns the data directory.
-Use `--url` for an explicit loopback endpoint and `--no-start` to prevent any
-service startup. Non-TTY use prints a usage error without starting a service;
-automation should use `kun run`, `kun chat`, or `kun exec`.
+`kun runtime status` remains read-only. `kun runtime stop` and `restart` do not
+stop a GUI/TUI-owned Runtime or leave an ownerless detached replacement after a
+one-shot command exits. They direct the user to the owning GUI, or to exit and
+reopen the owning TUI. A lifecycle command executed by an agent tool against
+its own Runtime remains rejected with `runtime_self_control_forbidden`.
+
+`kun serve` is the explicit foreground/debug mode and is owned by the terminal
+that starts it; normal signals stop its Runtime. It publishes discovery and
+reports a conflict when a valid owner already occupies that data-directory /
+flavor slot. Use `--url` for an explicit endpoint and `--no-start` to prevent
+the TUI from changing service state. Non-TTY use prints a usage error without
+starting a service; automation should use `kun run`, `kun chat`, or `kun exec`.
 
 ### Trying the development TUI
 
@@ -94,11 +114,14 @@ npm run dev:tui
 npm run dev:tui -- --workspace "$PWD" --continue
 ```
 
-The command builds `kun/` and starts the terminal client. The TUI starts the
-shared background runtime itself when needed. Its welcome surface focuses the
-composer: type a task and press Enter to create the first conversation, use
-`/connect` to configure a model, `Ctrl+X L` to browse sessions, and `Ctrl+P`
-to search every command. The GUI and TUI remain independently usable clients.
+The command builds `kun/`, starts the terminal client, and starts a Runtime
+owned by that TUI session. If another GUI/TUI owner occupies the same data-dir /
+flavor slot, it reports an ownership conflict; really quit that owner (hiding
+to tray is not a quit), or use an explicit non-owning connection. The welcome
+surface focuses the composer: type a task and press Enter to create the first
+conversation, use `/connect` to configure a model, `Ctrl+X L` to browse
+sessions, and `Ctrl+P` to search every command. Exiting the TUI stops its exact
+Runtime but leaves Service Manager and all saved data intact.
 
 The welcome surface contains only the text identity `KUN`, one concise value
 statement, Workspace/Model/Mode/Version metadata, and three starts: type a task,
@@ -192,11 +215,13 @@ Connection pages show one current step, while read-only inspection pages group
 fields and statuses instead of reusing a heavy generic modal.
 
 If `/model` shows only DeepSeek, run `kun runtime status` and verify that its
-data directory matches the GUI. Kun never attaches to an older GUI-private
-runtime that lacks shared discovery, and it never starts a second writer for
-that data directory. Close or update that old GUI once; after that, whichever
-current GUI or TUI starts first elects the same UI-independent background
-service. `/connect` uses the protected credential/registry files in that data
+data directory matches the GUI. An exact authenticated ownerless legacy shared
+daemon may be retired narrowly on the first client-owned launch. Kun neither
+attaches to nor terminates an older GUI-private or otherwise ambiguous process,
+and it never starts a second writer for the same data-directory/flavor slot.
+Really close or update the old owner first. Current GUI and TUI sessions then
+start their own Runtimes sequentially while reusing the same persisted data.
+`/connect` uses the protected credential/registry files in that data
 directory, writes only a secret-free GUI compatibility projection, and
 `/model` refreshes from the registry.
 
@@ -275,7 +300,7 @@ conversation text never requires holding Shift.
 | `/attach <path>`, `/attach list`, `/attach remove <n>`, `/attach clear` | Add a file, inspect queued attachments, remove one item, or clear them all |
 | `/mouse [on\|off]` | Toggle clickable Pointer mode; when off, the terminal owns selection and copy |
 | `/variants` | Select reasoning effort using the same state as `Ctrl+T` and the turn request |
-| `/compact` | Ask the shared runtime to compact long context |
+| `/compact` | Ask the current Runtime to compact long context |
 
 ### Runtime and project
 
@@ -354,12 +379,16 @@ reports a sanitized warning in the welcome surface and stderr. Recent/favorite
 models and per-model effort are stored without credentials in
 `<data-dir>/tui/state.json` (mode `0600` on POSIX).
 
-## Concurrency, reconnects, and security
+## External connections, reconnects, and security
 
 Clients hydrate an authoritative thread snapshot and `latestSeq`, then
 subscribe to SSE at that cursor. Reconnects revalidate discovery and replay
-missing events; duplicate and out-of-order events are ignored. When another
-client resolves an approval or input first, stale controls are retired.
+missing events; duplicate and out-of-order events are ignored. Default GUI/TUI
+owners do not coexist in one data-directory/flavor slot; only explicit
+non-owning modes such as `--url` and `--no-start` may coexist with an owner.
+When another explicit client resolves an approval or input first, stale
+controls are retired. Once the owner exits, its Runtime stops and external
+clients must wait for a new explicit target.
 
 `item.text` in `assistant_text_delta` and `assistant_reasoning_delta` is a
 fragment. The TUI appends it by stable item ID and lets
@@ -371,6 +400,9 @@ text appears before turn completion without duplication after reconnect.
   time, and service version.
 - Runtime shutdown requires loopback, bearer authentication, and the current
   instance ID, so an old client cannot stop a replacement instance.
+- A GUI/TUI-owned Runtime uses an OS IPC ownership channel to detect abnormal
+  parent exit and enter bounded graceful shutdown. Normal exit still performs
+  explicit exact-instance shutdown and wait.
 - API keys, OAuth tokens, and subscription credentials are kept out of argv,
   shell history, logs, and ordinary settings.
 

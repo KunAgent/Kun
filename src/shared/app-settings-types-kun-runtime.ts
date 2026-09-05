@@ -11,6 +11,7 @@ import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { BrowserUseMode } from './browser-use'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
+import type { KunGitHubMcpSettingsV1 } from './github-mcp-authorization'
 
 import {
   KunContextCompactionSettingsV1,
@@ -31,7 +32,8 @@ import {
 import {
   ModelProviderModelProfileV1,
   ModelReasoningEffort,
-  ModelRequestRetrySettingsV1
+  ModelRequestRetrySettingsV1,
+  ScheduleReasoningEffort
 } from './app-settings-types-provider'
 
 export type KunSubagentSurfaceV1 = 'shared' | 'code' | 'write' | 'design'
@@ -139,16 +141,49 @@ export type KunLabConversationVisualizationSettingsV1 = {
   enabled: boolean
 }
 
+/** Experimental Lab feature settings for the project board sidebar entry. */
+export type KunLabProjectBoardSettingsV1 = {
+  /** Master switch. Default false while the feature is experimental. */
+  enabled: boolean
+}
+
+export type KunLabAutoPlanBuildMode = 'direct' | 'scheduled'
+export type KunLabAutoPlanBuildConfirmation = 'always' | 'defaults'
+
+export type KunLabAutoPlanBuildScheduledDefaultsV1 = {
+  /** Empty values inherit the active composer/runtime selection. */
+  providerId: string
+  model: string
+  reasoningEffort: ScheduleReasoningEffort
+  /** Empty uses the host system time zone. Exact date/time is never persisted here. */
+  timeZone: string
+}
+
+/** GUI-only Laboratory defaults for the Automatic (plan + build) composer mode. */
+export type KunLabAutoPlanBuildSettingsV1 = {
+  enabled: boolean
+  confirmation: KunLabAutoPlanBuildConfirmation
+  defaultBuildMode: KunLabAutoPlanBuildMode
+  useWorktreeByDefault: boolean
+  scheduledDefaults: KunLabAutoPlanBuildScheduledDefaultsV1
+}
+
 /** Experimental Lab feature settings written into Kun config `lab`. */
 export type KunLabSettingsV1 = {
   pptAgent: KunLabPptAgentSettingsV1
   conversationVisualization: KunLabConversationVisualizationSettingsV1
+  autoPlanBuild: KunLabAutoPlanBuildSettingsV1
+  projectBoard: KunLabProjectBoardSettingsV1
 }
 
 /** Partial settings patch for the Lab section. Nested fields merge with current values. */
 export type KunLabSettingsPatchV1 = {
   pptAgent?: Partial<KunLabPptAgentSettingsV1>
   conversationVisualization?: Partial<KunLabConversationVisualizationSettingsV1>
+  autoPlanBuild?: Partial<Omit<KunLabAutoPlanBuildSettingsV1, 'scheduledDefaults'>> & {
+    scheduledDefaults?: Partial<KunLabAutoPlanBuildScheduledDefaultsV1>
+  }
+  projectBoard?: Partial<KunLabProjectBoardSettingsV1>
 }
 
 export const KUN_GRAPH_ROLLOUT_STAGES = [
@@ -333,6 +368,8 @@ export type KunRuntimeSettingsV1 = {
   insecure: boolean
   /** GUI-managed MCP progressive discovery/search settings written into Kun config.json. */
   mcpSearch: KunMcpSearchSettingsV1
+  /** Explicit opt-in and non-secret policy for the managed read-only GitHub MCP connector. */
+  githubMcp: KunGitHubMcpSettingsV1
   /** User-local, digest-bound grants for repository `.kun/project.json` MCP declarations. */
   projectConfig: KunProjectConfigSettingsV1
   /** Persistent store backend used by Kun. */

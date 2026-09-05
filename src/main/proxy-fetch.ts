@@ -1,7 +1,12 @@
-import { request as httpRequest } from 'node:http'
-import { request as httpsRequest } from 'node:https'
 import { Readable } from 'node:stream'
-import { ProxyAgent } from 'proxy-agent'
+import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web'
+import {
+  disposeProxyAgents,
+  cachedProxyAgentCountForTests,
+  proxyTransportRequest
+} from '../../kun/src/adapters/model/proxy-transport.js'
+
+export { disposeProxyAgents, cachedProxyAgentCountForTests } from '../../kun/src/adapters/model/proxy-transport.js'
 
 export async function fetchWithOptionalProxy(
   input: string | URL,
@@ -28,81 +33,55 @@ async function fetchViaProxy(input: string | URL, init: RequestInit | undefined,
     headers['content-length'] = String(body.buffer.byteLength)
   }
 
-  return new Promise<Response>((resolve, reject) => {
-    const agent = new ProxyAgent({ getProxyForUrl: () => proxyUrl })
-    const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
-      url,
-      {
-        method: init?.method ?? 'GET',
-        headers,
-        agent
-      },
-      (response) => {
-        const responseHeaders = new Headers()
-        for (const [key, value] of Object.entries(response.headers)) {
-          if (Array.isArray(value)) {
-            for (const item of value) responseHeaders.append(key, item)
-          } else if (value !== undefined) {
-            responseHeaders.set(key, String(value))
-          }
-        }
-        const webBody = Readable.toWeb(response) as ReadableStream<Uint8Array>
-        resolve(new Response(webBody, {
-          status: response.statusCode ?? 0,
-          statusText: response.statusMessage ?? '',
-          headers: responseHeaders
-        }))
-      }
-    )
-
-    const signal = init?.signal
-    const abort = (): void => {
-      request.destroy(new Error('The operation was aborted.'))
-    }
-    if (signal?.aborted) {
-      abort()
-      return
-    }
-    signal?.addEventListener('abort', abort, { once: true })
-    request.on('error', reject)
-    request.on('close', () => signal?.removeEventListener('abort', abort))
-    if (body.buffer) request.write(body.buffer)
-    request.end()
+  return proxyTransportRequest({
+    url,
+    method: init?.method ?? 'GET',
+    headers,
+    proxyUrl,
+    body: { buffer: body.buffer, stream: body.stream },
+    signal: init?.signal ?? undefined
   })
 }
 
 type MaterializedRequestBody = {
   buffer: Buffer | null
+  stream: Readable | null
   headers: Record<string, string>
 }
 
 export async function materializeProxyRequestBody(body: BodyInit | null | undefined): Promise<MaterializedRequestBody> {
-  if (body === null || body === undefined) return { buffer: null, headers: {} }
-  if (typeof body === 'string') return { buffer: Buffer.from(body), headers: {} }
+  if (body === null || body === undefined) return { buffer: null, stream: null, headers: {} }
+  if (typeof body === 'string') return { buffer: Buffer.from(body), stream: null, headers: {} }
   if (body instanceof URLSearchParams) {
     return {
       buffer: Buffer.from(body.toString()),
+      stream: null,
       headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' }
     }
   }
-  if (body instanceof ArrayBuffer) return { buffer: Buffer.from(body), headers: {} }
+  if (body instanceof ArrayBuffer) return { buffer: Buffer.from(body), stream: null, headers: {} }
   if (ArrayBuffer.isView(body)) {
     return {
       buffer: Buffer.from(body.buffer, body.byteOffset, body.byteLength),
+      stream: null,
       headers: {}
     }
   }
   if (body instanceof Blob) {
     return {
-      buffer: Buffer.from(await body.arrayBuffer()),
-      headers: body.type ? { 'content-type': body.type } : {}
+      buffer: null,
+      stream: Readable.fromWeb(body.stream() as unknown as NodeWebReadableStream),
+      headers: body.type
+        ? { 'content-type': body.type, 'content-length': String(body.size) }
+        : { 'content-length': String(body.size) }
     }
   }
   if (body instanceof FormData) {
     const encoded = new Response(body)
     const contentType = encoded.headers.get('content-type')
     return {
-      buffer: Buffer.from(await encoded.arrayBuffer()),
+      buffer: null,
+      stream: encoded.body ? Readable.fromWeb(encoded.body as unknown as NodeWebReadableStream) : null,
       headers: contentType ? { 'content-type': contentType } : {}
     }
   }

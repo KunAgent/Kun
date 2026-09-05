@@ -3,6 +3,7 @@ import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import type { NormalizedThread } from '../../agent/types'
 import {
   composerFileReferenceFromPath,
+  composerFileReferenceKey,
   mergeComposerFileReferences,
   type ComposerFileReference
 } from '../../lib/composer-file-references'
@@ -19,10 +20,14 @@ import {
   type LiveOfficePreviewDetail
 } from '../../lib/live-office-preview'
 import type { ChatFileTreeReference } from '../chat/ChatFileTreePanel'
+import type {
+  GeneratedDocumentArtifact,
+  GeneratedDocumentCollection
+} from '../chat/generated-document-artifacts'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 
-export type WorkbenchFileTreeSidePanelView = 'workspace' | 'design'
+export type WorkbenchFileTreeSidePanelView = 'workspace' | 'design' | 'generated'
 
 export type WorkbenchFileTreeControllerOptions = {
   route: string
@@ -176,6 +181,8 @@ export function useWorkbenchFileTreeController({
   const [fileTreeSidePanelOpen, setFileTreeSidePanelOpen] = useState(false)
   const [fileTreeSidePanelView, setFileTreeSidePanelView] =
     useState<WorkbenchFileTreeSidePanelView>('workspace')
+  const [generatedDocumentCollection, setGeneratedDocumentCollection] =
+    useState<GeneratedDocumentCollection | null>(null)
   const [openFilePreviewTargets, setOpenFilePreviewTargets] = useState<WorkspaceFileTarget[]>([])
   const [pinnedFilePreviewTargetKeys, setPinnedFilePreviewTargetKeys] = useState<string[]>(
     readStoredPinnedTargetKeys
@@ -203,6 +210,15 @@ export function useWorkbenchFileTreeController({
 
   function addComposerFileReference(reference: ComposerFileReference): void {
     setComposerFileReferences((current) => mergeComposerFileReferences(current, reference))
+  }
+
+  function restoreComposerFileReferences(references: readonly ComposerFileReference[]): void {
+    if (references.length === 0) return
+    setComposerFileReferences((current) => {
+      const byKey = new Map(current.map((reference) => [composerFileReferenceKey(reference), reference]))
+      for (const reference of references) byKey.set(composerFileReferenceKey(reference), reference)
+      return [...byKey.values()]
+    })
   }
 
   async function pickComposerFileReferences(): Promise<void> {
@@ -271,6 +287,35 @@ export function useWorkbenchFileTreeController({
   function openWorkspaceFilePreviewTarget(target: WorkspaceFileTarget): void {
     suppressCurrentOfficePreviewFocus()
     upsertWorkspaceFilePreviewTarget(target, { activate: true })
+  }
+
+  function openGeneratedDocumentPreview(
+    file: GeneratedDocumentArtifact,
+    owningWorkspaceRoot: string
+  ): void {
+    const root = normalizeWorkspaceRoot(owningWorkspaceRoot)
+    if (!root || root !== fileTreeWorkspaceRoot) return
+    openWorkspaceFilePreviewTarget({ path: file.path, workspaceRoot: root })
+  }
+
+  function openGeneratedDocuments(collection: GeneratedDocumentCollection): void {
+    const root = normalizeWorkspaceRoot(collection.workspaceRoot)
+    if (
+      !activeThreadId ||
+      collection.threadId !== activeThreadId ||
+      !collection.turnId.trim() ||
+      !root ||
+      root !== fileTreeWorkspaceRoot ||
+      collection.files.length === 0
+    ) return
+    setGeneratedDocumentCollection({
+      ...collection,
+      workspaceRoot: root,
+      files: collection.files.slice()
+    })
+    setFileTreeSidePanelView('generated')
+    setFileTreeSidePanelOpen(true)
+    setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.files)
   }
 
   function previewWorkspaceFileFromSidebar(path: string): void {
@@ -397,6 +442,8 @@ export function useWorkbenchFileTreeController({
     const previousThreadId = previousActiveThreadIdRef.current
     previousActiveThreadIdRef.current = activeThreadId
     if (previousThreadId === activeThreadId) return
+    setGeneratedDocumentCollection(null)
+    setFileTreeSidePanelView((view) => view === 'generated' ? 'workspace' : view)
     officePreviewTurnsRef.current.clear()
     latestOfficePreviewTurnRef.current = ''
 
@@ -418,22 +465,39 @@ export function useWorkbenchFileTreeController({
   }, [activeThreadId, closeRightPanelTab, rightPanelMode, selectFilePreviewTarget, setRightPanelMode])
 
   useEffect(() => {
-    if (route !== 'chat') setComposerFileReferences([])
+    if (route === 'chat') return
+    setComposerFileReferences([])
+    setGeneratedDocumentCollection(null)
+    setFileTreeSidePanelView((view) => view === 'generated' ? 'workspace' : view)
   }, [route])
+
+  useEffect(() => {
+    setGeneratedDocumentCollection((current) => {
+      if (!current || normalizeWorkspaceRoot(current.workspaceRoot) === fileTreeWorkspaceRoot) {
+        return current
+      }
+      return null
+    })
+    setFileTreeSidePanelView((view) => view === 'generated' ? 'workspace' : view)
+  }, [fileTreeWorkspaceRoot])
 
   return {
     composerFileReferences,
     fileTreeSidePanelOpen,
     fileTreeSidePanelView,
+    generatedDocumentCollection,
     openFilePreviewTargets,
     pinnedFilePreviewTargetKeys,
     preserveFilePreviewTargets,
     fileTreeWorkspaceRoot,
     clearComposerFileReferences,
     addComposerFileReference,
+    restoreComposerFileReferences,
     pickComposerFileReferences,
     removeComposerFileReference,
     openWorkspaceFilePreviewTarget,
+    openGeneratedDocumentPreview,
+    openGeneratedDocuments,
     previewWorkspaceFileFromSidebar,
     closeWorkspaceFilePreviewTarget,
     togglePinnedFilePreviewTarget,

@@ -78,6 +78,12 @@ export const localOfficeDocumentTargetPayloadSchema = z
 export const deepseekConfigContentSchema = z.string().max(MAX_CONFIG_FILE_BYTES)
 
 export const workspaceRootSchema = trimmedString(MAX_PATH_LENGTH)
+export const workspaceCreationTimesPayloadSchema = z
+  .object({
+    // A sidebar surfaces a few dozen roots at most; the cap is defensive only.
+    workspaceRoots: z.array(workspaceRootSchema).max(256)
+  })
+  .strict()
 export const kunProjectConfigWorkspacePayloadSchema = z
   .object({
     workspaceRoot: workspaceRootSchema.refine(isAbsolutePath, {
@@ -183,7 +189,7 @@ export const openEditorPathPayloadSchema = z
     editorId: optionalTrimmedString(MAX_EDITOR_ID_LENGTH),
     line: z.number().int().positive().max(1_000_000).optional(),
     column: z.number().int().positive().max(1_000_000).optional(),
-    openPolicy: z.enum(['presentation-artifact']).optional(),
+    openPolicy: z.enum(['presentation-artifact', 'generated-document-artifact']).optional(),
     expectedSha256: z.string().trim().regex(/^[a-f0-9]{64}$/i).optional()
   })
   .strict()
@@ -450,6 +456,13 @@ export const writeRetrievalPayloadSchema = z
     query: z.string().trim().min(1).max(MAX_CHANNEL_TEXT_LENGTH),
     maxSnippets: z.number().int().min(1).max(8).optional(),
     includeCurrentFile: z.boolean().optional()
+  })
+  .strict()
+
+export const writeDocumentSha256PayloadSchema = z
+  .object({
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    filePath: trimmedString(MAX_PATH_LENGTH)
   })
   .strict()
 

@@ -1,28 +1,14 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto'
-import { chmod, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { z } from 'zod'
-import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import {
-  RuntimeFlavorSchema,
-  RuntimeRegistrationSchema,
-  ThreadExecutionLeaseSchema,
-  type RuntimeFlavor,
-  type RuntimeRegistration,
-  type ThreadExecutionLease
+  RuntimeFlavorSchema
 } from '../contracts/runtime-flavor.js'
-import { startNodeHttpServer, type NodeHttpServerHandle } from '../server/node-http-server.js'
-import { acquireRuntimeDataDirLease } from '../server/runtime-data-dir-lease.js'
 import { readJsonBody } from '../server/read-json-body.js'
-import { jsonResponse, type JsonResponse } from '../server/response.js'
+import { jsonResponse } from '../server/response.js'
 import { Router } from '../server/router.js'
 import { GraphRunConflictError } from '../graph/graph-run-store.js'
 import { KUN_VERSION } from '../version.js'
 import {
-  KUN_MANAGER_PROTOCOL_VERSION,
-  publishManagerDiscovery,
-  removeManagerDiscovery,
-  type ManagerDiscoveryRecord
+  KUN_MANAGER_PROTOCOL_VERSION
 } from './manager-discovery.js'
 import {
   ManagerSharedDataStore,
@@ -39,7 +25,8 @@ import {
 
 import {
   ManagerResourceFenceSchema,
-  ResourceFenceStaleError
+  RESOURCE_COMMIT_TTL_MS,
+  RESOURCE_LEASE_TTL_MS
 } from './resource-lease-state.js'
 import {
   ArtifactStoreOperationSchema,
@@ -48,13 +35,43 @@ import {
   KUN_MANAGER_CAPABILITIES,
   MAX_MANAGER_DATA_BODY_BYTES,
   MemoryStoreOperationSchema,
+  RUNTIME_HEARTBEAT_TTL_MS,
   RuntimeRegistrationRequiredError,
-  RuntimeSlotBusyError,
   ServiceManagerState,
   SessionStoreOperationSchema,
+  StaleTurnFenceError,
+  THREAD_EXECUTION_LEASE_TTL_MS,
   ThreadLeaseBusyError,
   ThreadStoreOperationSchema
 } from './service-manager-state.js'
+import { ManagerDataRequestEnvelopeSchema } from './shared-data-store-contracts.js'
+import { guardManagerDataTurnFence } from './service-manager-router-turn-fencing.js'
+import {
+  authorized,
+  authorizedAsync,
+  tokenMatches,
+  validation
+} from './service-manager-router-auth.js'
+import { addHostPowerRoute } from './service-manager-router-host-power.js'
+import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
+import {
+  fencedAtomicJsonMutation,
+  flushRenewal,
+  isResourceFenceStale,
+  resourceFenceStale
+} from './service-manager-router-fenced-mutation.js'
+import {
+  isManagerPersistenceDegraded,
+  managerPersistenceDegradedResponse
+} from './service-manager-router-persistence.js'
+import type { ManagerStateWriteQueueStats } from './service-manager-state-write-queue.js'
+import {
+  isUsageIndexUnavailable,
+  usageIndexUnavailableResponse
+} from './service-manager-usage-response.js'
+
+export { authorized, authorizedAsync, tokenMatches, validation } from './service-manager-router-auth.js'
+export { isUsageIndexUnavailable } from './service-manager-usage-response.js'
 
 export function buildServiceManagerRouter(input: {
   managerToken: string
@@ -66,6 +83,17 @@ export function buildServiceManagerRouter(input: {
   documents?: RevisionedDocumentStore
   requestShutdown?: () => void
   flushState?: () => Promise<void>
+  /**
+   * Renewal-only durability: responds as soon as the in-memory mutation is
+   * queued, within the safe TTL window; falls back to a full flush once the
+   * deferred window is exhausted so a persisted copy never lags the lease TTL.
+   */
+  flushStateForRenewal?: (ttlMs: number) => Promise<void>
+  statePersistence?: () => {
+    degraded: boolean
+    durableLag: number
+    stats?: ManagerStateWriteQueueStats
+  }
 }): Router {
   const router = new Router()
   const capabilities = input.sharedData
@@ -75,19 +103,11 @@ export function buildServiceManagerRouter(input: {
         capability !== 'artifact-memory-data-v1' &&
         capability !== 'atomic-json-v1'
       )
-  router.add('GET', '/health', () => jsonResponse({
-    status: 'ok',
-    service: 'kun-service-manager',
-    protocolVersion: KUN_MANAGER_PROTOCOL_VERSION,
-    instanceId: input.instanceId,
-    pid: process.pid,
-    startedAt: input.startedAt,
-    serviceVersion: KUN_VERSION,
-    ...(input.buildId ? { buildId: input.buildId } : {}),
-    capabilities
-  }))
-  router.add('GET', '/v1/manager/status', (request) => authorized(request, input.managerToken, () =>
-    jsonResponse({
+  router.add('GET', '/health', () => {
+    const persistence = input.statePersistence?.()
+    return jsonResponse({
+      status: 'ok',
+      service: 'kun-service-manager',
       protocolVersion: KUN_MANAGER_PROTOCOL_VERSION,
       instanceId: input.instanceId,
       pid: process.pid,
@@ -95,13 +115,32 @@ export function buildServiceManagerRouter(input: {
       serviceVersion: KUN_VERSION,
       ...(input.buildId ? { buildId: input.buildId } : {}),
       capabilities,
-      slots: input.state.snapshot()
-    })))
+      persistence: {
+        state: persistence?.degraded ? 'degraded' : 'healthy',
+        durableLag: persistence?.durableLag ?? 0
+      }
+    })
+  })
+  router.add('GET', '/v1/manager/status', (request) => authorized(request, input.managerToken, () => {
+    const persistence = input.statePersistence?.()
+    return jsonResponse({
+      protocolVersion: KUN_MANAGER_PROTOCOL_VERSION,
+      instanceId: input.instanceId,
+      pid: process.pid,
+      startedAt: input.startedAt,
+      serviceVersion: KUN_VERSION,
+      ...(input.buildId ? { buildId: input.buildId } : {}),
+      capabilities,
+      slots: input.state.snapshot(),
+      ...(persistence?.stats ? { statePersistence: persistence.stats } : {})
+    })
+  }))
   router.add('GET', '/v1/runtimes/:flavor', (request, context) => authorized(request, input.managerToken, () => {
     const flavor = RuntimeFlavorSchema.safeParse(context.params.flavor)
     if (!flavor.success) return validation('invalid runtime flavor')
     return jsonResponse({ registration: input.state.registration(flavor.data) })
   }))
+  addHostPowerRoute(router, input)
   router.add('GET', '/v1/leases/threads/:threadId', (request, context) => authorized(
     request,
     input.managerToken,
@@ -111,6 +150,7 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = z.object({
@@ -120,12 +160,15 @@ export function buildServiceManagerRouter(input: {
       }).strict().safeParse(body.value)
       if (!parsed.success) return validation('invalid thread lease request', parsed.error.issues)
       try {
-        return jsonResponse({ lease: input.state.acquireLease({
+        const lease = input.state.acquireLease({
           threadId: context.params.threadId,
           ...parsed.data
-        }) })
+        })
+        await input.flushState?.()
+        return jsonResponse({ lease })
       } catch (error) {
         if (error instanceof ThreadLeaseBusyError) {
+          await input.flushState?.()
           return jsonResponse({
             code: 'thread_busy',
             message: error.message,
@@ -143,11 +186,13 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = leaseOwnerBody(body.value)
       if (!parsed.success) return validation('invalid thread lease renewal', parsed.error.issues)
       const lease = input.state.renewLease({ threadId: context.params.threadId, ...parsed.data })
+      if (lease) await flushRenewal(input, THREAD_EXECUTION_LEASE_TTL_MS)
       return lease
         ? jsonResponse({ lease })
         : jsonResponse({ code: 'thread_lease_lost', message: 'thread lease is no longer owned by this runtime' }, 409)
@@ -157,20 +202,24 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = leaseOwnerBody(body.value)
       if (!parsed.success) return validation('invalid thread lease release', parsed.error.issues)
-      return jsonResponse({ released: input.state.releaseLease({
+      const released = input.state.releaseLease({
         threadId: context.params.threadId,
         ...parsed.data
-      }) })
+      })
+      if (released) await input.flushState?.()
+      return jsonResponse({ released })
     }
   ))
   router.add('POST', '/v1/leases/resources/:resource/acquire', (request, context) => authorizedAsync(
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = z.object({
@@ -190,12 +239,13 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = resourceFenceBody(context.params.resource, body.value)
       if (!parsed.success) return validation('invalid resource lease renewal', parsed.error.issues)
       const lease = input.state.renewResource(parsed.data)
-      if (lease) await input.flushState?.()
+      if (lease) await flushRenewal(input, RESOURCE_LEASE_TTL_MS)
       return lease
         ? jsonResponse({ lease })
         : resourceFenceStale()
@@ -218,6 +268,7 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = resourceFenceBody(context.params.resource, body.value)
@@ -232,13 +283,14 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = resourceFenceBody(context.params.resource, body.value)
       if (!parsed.success) return validation('invalid resource commit renewal', parsed.error.issues)
       const lease = input.state.renewResourceCommit(parsed.data, context.params.commitId)
       if (!lease) return resourceFenceStale()
-      await input.flushState?.()
+      await flushRenewal(input, RESOURCE_COMMIT_TTL_MS)
       return jsonResponse({ lease })
     }
   ))
@@ -246,6 +298,7 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = resourceFenceBody(context.params.resource, body.value)
@@ -259,6 +312,7 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = resourceFenceBody(context.params.resource, body.value)
@@ -268,36 +322,12 @@ export function buildServiceManagerRouter(input: {
       return jsonResponse({ released })
     }
   ))
-  router.add('PUT', '/v1/runtimes/:flavor/register', (request, context) => authorizedAsync(
-    request,
-    input.managerToken,
-    async () => {
-      const flavor = RuntimeFlavorSchema.safeParse(context.params.flavor)
-      if (!flavor.success) return validation('invalid runtime flavor')
-      const body = await readJsonBody(request)
-      if (!body.ok) return body.response
-      const registration = RuntimeRegistrationSchema.safeParse(body.value)
-      if (!registration.success || registration.data.flavor !== flavor.data) {
-        return validation('invalid runtime registration', registration.success ? undefined : registration.error.issues)
-      }
-      try {
-        return jsonResponse({ registration: input.state.register(registration.data) })
-      } catch (error) {
-        if (error instanceof RuntimeSlotBusyError) {
-          return jsonResponse({
-            code: 'runtime_slot_busy',
-            message: error.message,
-            owner: error.owner
-          }, 409)
-        }
-        throw error
-      }
-    }
-  ))
+  addRuntimeRegistrationRoute(router, input)
   router.add('POST', '/v1/runtimes/:flavor/heartbeat', (request, context) => authorizedAsync(
     request,
     input.managerToken,
     async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const flavor = RuntimeFlavorSchema.safeParse(context.params.flavor)
       if (!flavor.success) return validation('invalid runtime flavor')
       const body = await readJsonBody(request)
@@ -307,18 +337,20 @@ export function buildServiceManagerRouter(input: {
       if (!input.state.heartbeat(flavor.data, parsed.data.instanceId)) {
         return jsonResponse({ code: 'runtime_instance_changed', message: 'runtime slot owner changed' }, 409)
       }
+      await flushRenewal(input, RUNTIME_HEARTBEAT_TTL_MS)
       return jsonResponse({ accepted: true })
     }
   ))
-  router.add('DELETE', '/v1/runtimes/:flavor/:instanceId', (request, context) => authorized(
+  router.add('DELETE', '/v1/runtimes/:flavor/:instanceId', (request, context) => authorizedAsync(
     request,
     input.managerToken,
-    () => {
+    async () => {
+      if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const flavor = RuntimeFlavorSchema.safeParse(context.params.flavor)
       if (!flavor.success) return validation('invalid runtime flavor')
-      return jsonResponse({
-        removed: input.state.unregister(flavor.data, context.params.instanceId)
-      })
+      const removed = input.state.unregister(flavor.data, context.params.instanceId)
+      if (removed) await input.flushState?.()
+      return jsonResponse({ removed })
     }
   ))
   router.add('POST', '/v1/manager/shutdown', (request) => authorizedAsync(
@@ -342,13 +374,22 @@ export function buildServiceManagerRouter(input: {
       const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
       if (!body.ok) return body.response
       try {
+        const envelope = ManagerDataRequestEnvelopeSchema.parse(body.value)
+        const assertCurrent = guardManagerDataTurnFence(
+          input.state, 'thread', operation.data, envelope
+        )
         const result = await input.sharedData!.executeThread(
           operation.data,
-          body.value
+          envelope.value,
+          assertCurrent
         )
         return jsonResponse({ result })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid thread-store request', error.issues)
+        if (error instanceof StaleTurnFenceError) {
+          return jsonResponse({ code: error.code, message: error.message }, 409)
+        }
+        if (isUsageIndexUnavailable(error)) return usageIndexUnavailableResponse(error)
         throw error
       }
     }
@@ -362,13 +403,22 @@ export function buildServiceManagerRouter(input: {
       const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
       if (!body.ok) return body.response
       try {
+        const envelope = ManagerDataRequestEnvelopeSchema.parse(body.value)
+        const assertCurrent = guardManagerDataTurnFence(
+          input.state, 'session', operation.data, envelope
+        )
         const result = await input.sharedData!.executeSession(
           operation.data as ManagerSessionStoreOperation,
-          body.value
+          envelope.value,
+          assertCurrent
         )
         return jsonResponse({ result })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid session-store request', error.issues)
+        if (error instanceof StaleTurnFenceError) {
+          return jsonResponse({ code: error.code, message: error.message }, 409)
+        }
+        if (isUsageIndexUnavailable(error)) return usageIndexUnavailableResponse(error)
         throw error
       }
     }
@@ -595,87 +645,6 @@ export function buildServiceManagerRouter(input: {
   return router
 }
 
-export function authorized(
-  request: Request,
-  token: string,
-  action: () => JsonResponse | Response
-): JsonResponse | Response {
-  return tokenMatches(request.headers.get('authorization'), token)
-    ? action()
-    : jsonResponse({ code: 'unauthorized', message: 'manager authorization required' }, 401)
-}
-
-export async function authorizedAsync(
-  request: Request,
-  token: string,
-  action: () => Promise<JsonResponse | Response>
-): Promise<JsonResponse | Response> {
-  return tokenMatches(request.headers.get('authorization'), token)
-    ? action()
-    : jsonResponse({ code: 'unauthorized', message: 'manager authorization required' }, 401)
-}
-
-export function tokenMatches(header: string | null, expected: string): boolean {
-  const actual = header?.replace(/^Bearer\s+/iu, '') ?? ''
-  const left = Buffer.from(actual)
-  const right = Buffer.from(expected)
-  return left.length === right.length && timingSafeEqual(left, right)
-}
-
-export function validation(message: string, details?: unknown): JsonResponse {
-  return jsonResponse({ code: 'validation_error', message, ...(details ? { details } : {}) }, 400)
-}
-
-async function fencedAtomicJsonMutation<T>(
-  input: { state: ServiceManagerState; flushState?: () => Promise<void> },
-  mutation: { fence?: z.infer<typeof ManagerResourceFenceSchema>; commitId?: string },
-  operation: (commitId?: string) => Promise<T>
-): Promise<JsonResponse> {
-  const needsReservation = Boolean(mutation.fence && !mutation.commitId)
-  const commitId = mutation.commitId ?? (needsReservation ? randomUUID() : undefined)
-  if (mutation.fence && commitId && needsReservation) {
-    const lease = input.state.beginResourceCommit(mutation.fence, commitId)
-    if (!lease) return resourceFenceStale()
-    await input.flushState?.()
-  }
-  let renewalInFlight: Promise<void> | undefined
-  const renewalTimer = needsReservation && mutation.fence && commitId
-    ? setInterval(() => {
-        if (renewalInFlight) return
-        renewalInFlight = Promise.resolve().then(async () => {
-          const lease = input.state.renewResourceCommit(mutation.fence!, commitId)
-          if (!lease) throw new ResourceFenceStaleError()
-          await input.flushState?.()
-        }).finally(() => { renewalInFlight = undefined })
-        void renewalInFlight.catch(() => undefined)
-      }, 3_000)
-    : undefined
-  renewalTimer?.unref?.()
-  try {
-    if (mutation.fence && commitId) input.state.assertResourceCommit(mutation.fence, commitId)
-    return jsonResponse({ snapshot: await operation(commitId) })
-  } finally {
-    if (renewalTimer) clearInterval(renewalTimer)
-    if (renewalInFlight) await renewalInFlight
-    if (mutation.fence && commitId && needsReservation) {
-      input.state.endResourceCommit(mutation.fence, commitId)
-      await input.flushState?.()
-    }
-  }
-}
-
-export function resourceFenceStale(): JsonResponse {
-  return jsonResponse({
-    code: 'resource_fence_stale',
-    message: 'resource lease fencing token is no longer current'
-  }, 409)
-}
-
-function isResourceFenceStale(error: unknown): boolean {
-  return error instanceof ResourceFenceStaleError ||
-    (error instanceof Error && error.cause instanceof ResourceFenceStaleError)
-}
-
 function resourceFenceBody(resource: string, value: unknown) {
   return ManagerResourceFenceSchema.safeParse({
     resource,
@@ -687,6 +656,7 @@ export function leaseOwnerBody(value: unknown) {
   return z.object({
     turnId: z.string().min(1).max(256),
     ownerFlavor: RuntimeFlavorSchema,
-    ownerInstanceId: z.string().min(1).max(256)
+    ownerInstanceId: z.string().min(1).max(256),
+    fencingToken: z.number().int().positive()
   }).strict().safeParse(value)
 }

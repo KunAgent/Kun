@@ -400,7 +400,7 @@ it('recovers a server that lost the startup connect race via background reconnec
     expect(built.providers.map((provider) => provider.id)).toEqual(['mcp:search', 'mcp:facade'])
 
     const registry = new CapabilityRegistry(built.providers)
-    await built.startBackgroundReconnect((provider) => registry.registerProvider(provider))
+    await built.startBackgroundReconnect({ register: (provider) => registry.registerProvider(provider), unregister: () => undefined })
 
     // The background retry connected, updated the gateway catalog, and flipped
     // the diagnostic without a runtime restart.
@@ -441,8 +441,11 @@ it('does not retry when every MCP server connected at startup', async () => {
         return fakeClient()
       }
     })
-    await built.startBackgroundReconnect(() => {
-      throw new Error('register should not be called when nothing failed')
+    await built.startBackgroundReconnect({
+      register: () => {
+        throw new Error('register should not be called when nothing failed')
+      },
+      unregister: () => undefined
     })
     expect(factories).toBe(1)
   })

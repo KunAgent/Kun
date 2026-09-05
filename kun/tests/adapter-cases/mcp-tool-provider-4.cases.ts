@@ -286,7 +286,7 @@ it('connects and registers a server immediately after a successful authorization
       }
     })
     const registry = new CapabilityRegistry(built.providers)
-    await built.startBackgroundReconnect((provider) => registry.registerProvider(provider))
+    await built.startBackgroundReconnect({ register: (provider) => registry.registerProvider(provider), unregister: () => undefined })
 
     const result = await built.authorizeOAuth('vercel')
     await built.close()
@@ -323,7 +323,7 @@ it('shares one authorization run per server for concurrent clicks (single-flight
         return { serverId, status: 'authorized', authorized: true }
       }
     })
-    await built.startBackgroundReconnect(() => undefined)
+    await built.startBackgroundReconnect({ register: () => undefined, unregister: () => undefined })
 
     const [a, b] = await Promise.all([built.authorizeOAuth('vercel'), built.authorizeOAuth('vercel')])
     await built.close()

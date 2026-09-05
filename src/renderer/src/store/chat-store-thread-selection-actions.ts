@@ -48,8 +48,10 @@ import type {
   WriteAssistantMessageContext
 } from './chat-store-types'
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
+import { threadIdBelongsToRemovedCodeProject } from './chat-store-navigation-workspace-removal'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
+  fetchRuntimeQueuedTurnsBestEffort,
   isPendingQueuedMessage,
   queuedMessagesForThread,
   reconcileQueuedMessages,
@@ -133,7 +135,8 @@ import {
   turnTimingSnapshotPatch
 } from './thread-snapshot-cache'
 import { copyLiveProjection, emptyLiveProjection, restoredLiveProjection } from './chat-store-live-projection'
-import { getThreadPrewarmHandle, threadPrewarmHandleIsCurrent } from './thread-detail-prewarm'
+import { getThreadPrewarmHandle } from './thread-detail-prewarm'
+import { beginThreadSelection, finishThreadHydration, hydrateThreadDetail, isThreadHydrationCancellation, startThreadHydration } from './thread-selection-hydration'
 import {
   ensureRuntimeProviderForSend,
   fallbackComposerProviderIdForSend,
@@ -172,11 +175,17 @@ export function createThreadSelectionActions(
   return {
   selectThread: async (id, options) => {
     if (options?.selectionGuard?.() === false) return
+    const currentState = get()
+    if (threadIdBelongsToRemovedCodeProject(id, currentState)) {
+      set({ error: i18n.t('common:sidebarWorkspaceRemoveDialogDetail') })
+      return
+    }
+    const targetThread = currentState.threads.find((thread) => thread.id === id) ?? null
     if (get().runtimeConnection !== 'ready') {
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return
     }
-    const selectionGeneration = ++runtime.threadSelectionGeneration
+    const selectionGeneration = beginThreadSelection(runtime, currentState.activeThreadId, id)
     const previousState = get()
     const prevId = previousState.activeThreadId
     const prevBusy = previousState.busy
@@ -216,7 +225,6 @@ export function createThreadSelectionActions(
     // Re-selecting the active conversation is an explicit refresh (and is
     // used by recovery paths to pick up durable queues), so only cross-thread
     // navigation may consume an in-memory snapshot.
-    const targetThread = get().threads.find((thread) => thread.id === id) ?? null
     const cached = prevId !== id && targetThread
       ? getThreadSnapshotForSelection(targetThread)
       : null
@@ -234,7 +242,9 @@ export function createThreadSelectionActions(
         busy: cached.busy,
         turnId: cached.currentTurnId ?? undefined,
         blocks: cached.blocks
-      })
+      }, durableQueuedMessages.length > 0
+        ? await fetchRuntimeQueuedTurnsBestEffort(p, id)
+        : undefined)
       const remembersCodeThread = targetThread != null &&
         targetThread.archived !== true &&
         isCodeSidebarThread(
@@ -333,20 +343,11 @@ export function createThreadSelectionActions(
         ...initialComposerState
       })
     }
+    const hydrationAbort = startThreadHydration(runtime)
     try {
       const prewarmHandle = targetThread ? getThreadPrewarmHandle(targetThread) : null
-      let detail = await (prewarmHandle?.promise ?? p.getThreadDetail(id))
+      const detail = await hydrateThreadDetail(p, id, prewarmHandle, () => get().threads.find((thread) => thread.id === id) ?? null, hydrationAbort.signal)
       if (!selectionStillCurrent()) return
-      if (prewarmHandle) {
-        const currentThread = get().threads.find((thread) => thread.id === id) ?? null
-        // The thread may have advanced while the prewarm request was in
-        // flight; a stale detail would both render outdated blocks and be
-        // re-cached under the new fingerprint by snapshotThreadProjection.
-        if (!threadPrewarmHandleIsCurrent(prewarmHandle, currentThread)) {
-          detail = await p.getThreadDetail(id)
-          if (!selectionStillCurrent()) return
-        }
-      }
       const {
         blocks: rawBlocks,
         latestSeq,
@@ -410,7 +411,7 @@ export function createThreadSelectionActions(
         busy,
         turnId: latestTurnId,
         blocks
-      })
+      }, await fetchRuntimeQueuedTurnsBestEffort(p, id))
       if (refreshingActiveThread) {
         sseAbortRef.current?.abort()
         sseAbortRef.current = null
@@ -489,6 +490,12 @@ export function createThreadSelectionActions(
         void get().drainQueuedMessages()
       }
     } catch (e) {
+      if (hydrationAbort.signal.aborted) return
+      if (isThreadHydrationCancellation(e)) {
+        // An unrelated in-flight request was cancelled, not a selection failure.
+        set({ threadLoadingId: null, threadRefreshingId: get().threadRefreshingId === id ? null : get().threadRefreshingId })
+        return
+      }
       if (!selectionStillCurrent()) return
       set({
         threadLoadingId: null,
@@ -498,7 +505,7 @@ export function createThreadSelectionActions(
           ? { route: 'settings' as const, settingsSection: 'agents' as const }
           : {})
       })
-    }
+    } finally { finishThreadHydration(runtime, hydrationAbort) }
   },
   loadEarlierThreadHistory: async () => {
     const state = get()

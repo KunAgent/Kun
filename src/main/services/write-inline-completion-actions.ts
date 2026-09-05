@@ -3,7 +3,6 @@ import {
   DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
   isCustomModelEndpointFormat,
   modelEndpointPath,
-  resolveModelProviderProxyUrl,
   resolveWriteInlineCompletionEndpointFormat,
   resolveWriteInlineCompletionApiKey,
   resolveWriteInlineCompletionBaseUrl,

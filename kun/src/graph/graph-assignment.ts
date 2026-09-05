@@ -22,6 +22,7 @@ import {
   GRAPH_WORKER_TOOL_NAMES
 } from './graph-tool-boundary.js'
 import { graphHostRelativePathCovers } from './graph-platform-path.js'
+import { withGlobalSubagentTools } from '../delegation/subagent-global-tool-policy.js'
 
 export type GraphParentAuthority = {
   workspaceRoot: string
@@ -100,19 +101,25 @@ export class GraphAssignmentResolver {
       ...GRAPH_WORKER_TOOL_NAMES,
       GRAPH_WORKER_REPORT_TOOL_NAME
     ])
-    const allowedTools = union(
-      intersect(input.parent.allowedTools, caps.allowedTools)
-        .filter((tool) => !graphControlTools.has(tool)),
-      [GRAPH_WORKER_REPORT_TOOL_NAME]
-    )
-    const allowedSkills = intersect(input.parent.allowedSkills, caps.allowedSkills)
-    const allowedMcpServers = intersect(input.parent.allowedMcpServers, caps.allowedMcpServers)
     const blockedTools = union(input.parent.blockedTools, caps.blockedTools, [
       ...GRAPH_INCOMPATIBLE_TOOL_NAMES,
       ...GRAPH_LEAD_TOOL_NAMES,
       ...GRAPH_WORKER_TOOL_NAMES,
       'graph_agent_governance'
     ]).filter((tool) => tool !== GRAPH_WORKER_REPORT_TOOL_NAME)
+    const ordinaryAllowedTools = union(
+      intersect(input.parent.allowedTools, caps.allowedTools)
+        .filter((tool) => !graphControlTools.has(tool)),
+      [GRAPH_WORKER_REPORT_TOOL_NAME]
+    )
+    const allowedTools = withGlobalSubagentTools({
+      allowedToolNames: ordinaryAllowedTools,
+      parentAllowedToolNames: input.parent.allowedTools,
+      blockedToolNames: blockedTools,
+      parentAllowedProviderIds: input.parent.allowedProviderIds
+    }) ?? ordinaryAllowedTools
+    const allowedSkills = intersect(input.parent.allowedSkills, caps.allowedSkills)
+    const allowedMcpServers = intersect(input.parent.allowedMcpServers, caps.allowedMcpServers)
     const blockedSkills = union(input.parent.blockedSkills, caps.blockedSkills)
     const blockedMcpServers = union(
       input.parent.blockedMcpServers,

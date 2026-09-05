@@ -37,10 +37,12 @@ vi.mock('../agent/registry', () => ({
 const applyThemeLibMock = vi.hoisted(() => ({
   applyCursorSpotlight: vi.fn(),
   applyCursorSpotlightColor: vi.fn(),
+  applyDarkUiColors: vi.fn(),
   applyTheme: vi.fn(),
   applyUiFontScale: vi.fn(),
   applyChatContentMaxWidth: vi.fn(),
-  applyDocumentLocale: vi.fn()
+  applyDocumentLocale: vi.fn(),
+  applyWriteTypography: vi.fn()
 }))
 
 vi.mock('../lib/apply-theme', () => applyThemeLibMock)

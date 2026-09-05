@@ -3,5 +3,8 @@
  * legacy route value readable, but project it through the Code shell.
  */
 export function normalizeWorkbenchRoute(route: string): string {
-  return route === 'design' ? 'chat' : route
+  if (route === 'design') return 'chat'
+  return new Set([
+    'chat', 'write', 'settings', 'plugins', 'extensions', 'claw', 'board', 'schedule', 'workflow'
+  ]).has(route) ? route : 'chat'
 }

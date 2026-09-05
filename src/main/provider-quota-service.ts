@@ -1,6 +1,6 @@
 import {
   getModelProviderSettings,
-  resolveModelProviderProxyUrl,
+  resolveProviderProxyUrl,
   type AppSettingsV1,
   type ModelProviderProfileV1
 } from '../shared/app-settings'
@@ -82,11 +82,10 @@ export async function listProviderQuotas(
 ): Promise<ProviderQuotaListResult> {
   const refreshedAt = new Date().toISOString()
   const providers = getModelProviderSettings(settings).providers
-  const proxyUrl = resolveModelProviderProxyUrl(settings)
   const entries = await mapWithConcurrency(
     providers,
     PROVIDER_QUOTA_CONCURRENCY,
-    async (provider) => refreshProviderQuota(provider, proxyUrl, fetcher, subscriptionRuntime)
+    async (provider) => refreshProviderQuota(provider, settings, fetcher, subscriptionRuntime)
   )
   return { entries, refreshedAt }
 }
@@ -228,7 +227,7 @@ export function classifyProviderQuotaProbe(
 
 export async function refreshProviderQuota(
   provider: ModelProviderProfileV1,
-  proxyUrl: string,
+  settings: AppSettingsV1,
   fetcher: ProviderQuotaFetch,
   subscriptionRuntime: Partial<SubscriptionQuotaRuntime>
 ): Promise<ProviderQuotaEntry> {
@@ -259,6 +258,7 @@ export async function refreshProviderQuota(
   }
 
   try {
+    const proxyUrl = resolveProviderProxyUrl(settings, provider)
     const result = await runProbe(
       probe.kind,
       provider,

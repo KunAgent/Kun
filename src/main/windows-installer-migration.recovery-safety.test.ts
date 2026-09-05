@@ -20,9 +20,9 @@ const helperModulePaths = [
   'windows-installer-migration-paths.ps1',
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
-  'windows-installer-migration-actions.ps1'
+  'windows-installer-migration-actions.ps1',
+  'windows-installer-migration-recovery-env.ps1'
 ].map((fileName) => join(process.cwd(), 'build', fileName))
-const smokePath = join(process.cwd(), 'scripts/smoke-windows-installer-migration.ps1')
 const windowsOnly = process.platform === 'win32' ? describe : describe.skip
 const tempRoots: string[] = []
 
@@ -39,7 +39,7 @@ function makeTempRoot(): string {
 }
 
 function runHelper(input: {
-  action: 'ResolvePath' | 'ResolveSource' | 'ResolveUpdateScope' | 'ResolveUninstaller' | 'Recover' | 'Prepare' | 'FallbackCleanup' | 'Restore' | 'ValidatePayload' | 'CleanupInPlaceLeftovers'
+  action: 'ResolvePath' | 'ResolveSource' | 'ResolveUpdateScope' | 'Recover' | 'Prepare' | 'FallbackCleanup' | 'Restore' | 'ValidatePayload' | 'CleanupInPlaceLeftovers'
   source?: string
   secondary?: string
   currentUserSource?: string
@@ -105,7 +105,8 @@ function runHelper(input: {
         KUN_INSTALLER_CANONICAL_LEAF: input.canonicalLeaf ?? 'Kun',
         KUN_INSTALLER_APP_EXECUTABLE: input.appExecutable ?? 'Kun.exe',
         KUN_INSTALLER_PRODUCT_NAME: input.productName ?? 'Kun',
-        KUN_INSTALLER_SELF_PID: String(process.pid)
+        KUN_INSTALLER_SELF_PID: String(process.pid),
+        KUN_INSTALLER_SELF_PATH: ''
       }
     }
   )
@@ -172,9 +173,7 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
       'keep me'
     )
 
-    // A successful old uninstaller removes the identity executable before the
-    // installer asks the helper to clean allowlisted leftovers.
-    rmSync(join(source, 'Kun.exe'))
+    // Manual overwrite owns the allowlisted cleanup; no old uninstaller runs first.
     const cleaned = runHelper({ action: 'FallbackCleanup', source, target, journal })
     expect(cleaned.status, processError(cleaned)).toBe(0)
     expect(existsSync(join(source, 'Kun.exe'))).toBe(false)
@@ -197,9 +196,7 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
     expect(prepared.status, processError(prepared)).toBe(0)
     expect(existsSync(journal)).toBe(true)
 
-    // The old uninstaller removes the identity executable before fallback
-    // cleanup, so the validated preparation record becomes the authorization.
-    rmSync(join(source, 'Kun.exe'))
+    // The validated preparation record authorizes direct allowlisted cleanup.
     const cleaned = runHelper({ action: 'FallbackCleanup', source, target, journal })
     expect(cleaned.status, processError(cleaned)).toBe(0)
     expect(existsSync(source)).toBe(false)
@@ -256,7 +253,7 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
       .toBe('personal')
   })
 
-  it('rejects an existing journal under a cross-user-writable directory', () => {
+  it('quarantines an existing journal under a cross-user-writable directory', () => {
     const root = makeTempRoot()
     const source = join(root, 'Kun')
     const recoveryDirectory = join(root, 'recovery')
@@ -282,8 +279,11 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
 
     const recovery = runHelper({ action: 'Recover', source, target: source, journal })
 
-    expect(recovery.status).not.toBe(0)
-    expect(processError(recovery)).toContain('untrusted ACL')
+    expect(recovery.status, processError(recovery)).toBe(0)
+    expect(existsSync(journal)).toBe(false)
+    expect(readdirSync(recoveryDirectory).filter((name) =>
+      /^journal\.json\.untrusted-[a-f0-9]{32}$/u.test(name)
+    )).toHaveLength(1)
     expect(readFileSync(join(source, 'personal.txt'), 'utf8')).toBe('do not move')
   })
 

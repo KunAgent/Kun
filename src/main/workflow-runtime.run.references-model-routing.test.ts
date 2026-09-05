@@ -282,6 +282,7 @@ describe('WorkflowRuntime end-to-end execution', () => {
             apiKey: 'sk-mm',
             baseUrl: 'https://api.minimaxi.com/anthropic',
             endpointFormat: 'messages',
+            useProxy: false,
             models: ['MiniMax-M3'],
             modelProfiles: {}
           }

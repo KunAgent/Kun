@@ -3,27 +3,53 @@ import type { PowerSaveBlockerLike } from './schedule-runtime-helpers'
 /**
  * Shared power-save blocker with reference counting.
  *
- * ScheduleRuntime holds one reference while an enabled scheduled task exists
- * and `keepAwake` is on; DaemonRuntime holds one while at least one daemon is
- * running. Both runtimes receive the same instance (wired in index.ts) so the
- * Electron power save blocker is never started twice nor stopped by the wrong
- * owner. `reset()` force-releases everything during runtime teardown.
+ * ScheduleRuntime and DaemonRuntime hold independent references while their
+ * background work needs the computer awake. The desktop-wide app preference
+ * owns one additional idempotent reference. All three use the same controller,
+ * so one owner cannot stop the Electron blocker while another still needs it.
+ * WorkflowRuntime currently owns a separate native blocker id. `reset()`
+ * force-releases this controller during desktop-service teardown.
  */
 export class PowerSaveController {
   private refCount = 0
   private blockerId: number | null = null
+  private appKeepAwakeRequested = false
+  private appKeepAwakeHeld = false
 
   constructor(private readonly blocker: PowerSaveBlockerLike) {}
 
-  acquire(): void {
+  acquire(): boolean {
+    const acquired = this.acquireReference()
+    if (acquired && this.appKeepAwakeRequested && !this.appKeepAwakeHeld) {
+      this.refCount += 1
+      this.appKeepAwakeHeld = true
+    }
+    return acquired
+  }
+
+  private acquireReference(): boolean {
     this.refCount += 1
-    if (this.refCount > 1) return
+    if (this.refCount > 1) return this.blockerId != null
     try {
       this.blockerId = this.blocker.start('prevent-app-suspension')
+      return true
     } catch {
       this.refCount = 0
       this.blockerId = null
+      return false
     }
+  }
+
+  /** Apply the desktop-wide preference without leaking duplicate references. */
+  setAppKeepAwake(enabled: boolean): void {
+    this.appKeepAwakeRequested = enabled
+    if (enabled) {
+      if (!this.appKeepAwakeHeld) this.appKeepAwakeHeld = this.acquireReference()
+      return
+    }
+    if (!this.appKeepAwakeHeld) return
+    this.appKeepAwakeHeld = false
+    this.release()
   }
 
   release(): void {
@@ -43,6 +69,8 @@ export class PowerSaveController {
 
   /** Force-release every reference (runtime teardown). */
   reset(): void {
+    this.appKeepAwakeRequested = false
+    this.appKeepAwakeHeld = false
     this.refCount = 0
     this.stopBlocker()
   }

@@ -285,6 +285,37 @@ describe('skill-service', () => {
     expect(isCodexPluginCacheRoot(join(tempRoot, '.kun', 'skills'))).toBe(false)
   })
 
+  it('lists bundled skills as read-only fallback and lets user skills override the same id', async () => {
+    const workspaceRoot = join(tempRoot, 'ws-builtin')
+    const globalRoot = join(tempRoot, '.kun', 'skills', 'shared')
+    const builtinRoot = join(tempRoot, 'bundled-skills')
+    const builtinSkill = join(builtinRoot, 'shared')
+    const builtinOnly = join(builtinRoot, 'builtin-only')
+    await mkdir(globalRoot, { recursive: true })
+    await mkdir(builtinSkill, { recursive: true })
+    await mkdir(builtinOnly, { recursive: true })
+    await writeFile(join(globalRoot, 'skill.json'), JSON.stringify({ id: 'shared', name: 'User Shared' }), 'utf8')
+    await writeFile(join(globalRoot, 'SKILL.md'), '# User Shared', 'utf8')
+    await writeFile(join(builtinSkill, 'skill.json'), JSON.stringify({ id: 'shared', name: 'Builtin Shared' }), 'utf8')
+    await writeFile(join(builtinSkill, 'SKILL.md'), '# Builtin Shared', 'utf8')
+    await writeFile(join(builtinOnly, 'skill.json'), JSON.stringify({ id: 'builtin-only', name: 'Builtin Only' }), 'utf8')
+    await writeFile(join(builtinOnly, 'SKILL.md'), '# Builtin Only', 'utf8')
+
+    const result = await listGuiSkills(createSettings(workspaceRoot), workspaceRoot, builtinRoot)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.skills.filter((skill) => skill.id === 'shared')).toEqual([
+      expect.objectContaining({ name: 'User Shared', source: 'global', readOnly: false })
+    ])
+    expect(result.skills).toContainEqual(expect.objectContaining({
+      id: 'builtin-only',
+      source: 'builtin',
+      scope: 'global',
+      readOnly: true
+    }))
+  })
+
   it('rejects a skill.json whose entry escapes the package directory (path traversal)', async () => {
     const workspaceRoot = join(tempRoot, 'ws-traversal')
     const skillRoot = join(workspaceRoot, '.claude', 'skills', 'evil')

@@ -73,6 +73,7 @@ function buildHarness(): {
     liveReasoning: '',
     liveAssistant: '',
     queuedMessages: [],
+    recoverActiveTurn: vi.fn(async () => undefined),
     refreshThreads: vi.fn(async () => undefined),
     route: 'chat',
     runtimeConnection: 'ready',

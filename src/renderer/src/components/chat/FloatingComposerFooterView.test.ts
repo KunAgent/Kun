@@ -97,6 +97,25 @@ describe('FloatingComposerFooterView', () => {
     expect(html).not.toContain('ds-composer-usage-cost')
   })
 
+  it('updates the cache chip from the live per-request rate mid-turn', () => {
+    // The composer merges the live usage SSE snapshot over the stale REST
+    // summary; the footer should reflect the fresh per-request rate and
+    // counters, not the frozen REST values.
+    const html = renderFooter({
+      threadUsage: usageSummary({
+        totalTokens: 220,
+        turns: 2,
+        cacheHitRate: 0.41,
+        lastTurnCacheHitRate: 0.92
+      })
+    })
+
+    expect(html).toContain('92% cache')
+    expect(html).toContain('220 tokens')
+    expect(html).toContain('2 turns')
+    expect(html).not.toContain('41% cache')
+  })
+
   it('shows a gpt-5.6-luna subscription estimate after throughput', () => {
     const html = renderFooter({
       i18n: { language: 'zh' },

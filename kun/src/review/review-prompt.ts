@@ -8,6 +8,8 @@ export const KUN_REVIEW_PROMPT = [
   'Do not flag trivial style, formatting, naming, documentation, or optional improvements.',
   '',
   'You may use only the available read-only tools to inspect files. Never edit files.',
+  'Use inspection rounds efficiently and stop once you have enough evidence to judge the scoped change.',
+  'When tools are no longer available, evidence collection is over: immediately return the required JSON using only completed evidence.',
   '',
   'Each finding must:',
   '- describe one bug',

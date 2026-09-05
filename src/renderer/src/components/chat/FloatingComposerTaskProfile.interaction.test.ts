@@ -41,8 +41,6 @@ describe('FloatingComposerTaskProfile design style picker interactions', () => {
       root.render(createElement(FloatingComposerTaskProfile, {
         surface: 'design',
         locked: false,
-        showSurfaceSelector: false,
-        variant: 'summary',
         profile: { outputMedium: 'image', target: 'web', preset: 'ios' },
         imageGenerationEnabled: true,
         imageGenerationAvailable: true,
@@ -85,8 +83,6 @@ describe('FloatingComposerTaskProfile design style picker interactions', () => {
       root.render(createElement(FloatingComposerTaskProfile, {
         surface: 'design',
         locked: false,
-        showSurfaceSelector: false,
-        variant: 'summary',
         profile: { outputMedium: 'image', target: 'web', preset: 'ios' },
         imageGenerationEnabled: true,
         imageGenerationAvailable: true,
@@ -135,8 +131,6 @@ describe('FloatingComposerTaskProfile design style picker interactions', () => {
       root.render(createElement(FloatingComposerTaskProfile, {
         surface: 'design',
         locked: false,
-        showSurfaceSelector: false,
-        variant: 'summary',
         profile: { outputMedium: 'html', target: 'web', preset: 'none' },
         imageGenerationEnabled: false,
         imageGenerationAvailable: false,

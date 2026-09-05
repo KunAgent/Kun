@@ -11,6 +11,7 @@ import {
 import type { ToolExecutionUpdate, ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
+import { elapsedMs } from '../../delegation/delegation-runtime-support.js'
 
 export const FAST_CONTEXT_TOOL_NAME = 'fast_context' as const
 export const FAST_CONTEXT_PROVIDER_ID = 'fast-context' as const
@@ -64,6 +65,12 @@ export function buildFastContextToolProvider(
     kind: 'delegation',
     enabled: true,
     available: true,
+    effects: {
+      network: false,
+      externalWrite: false,
+      processExecution: false,
+      guiAutomation: false
+    },
     tools: [LocalToolHost.defineTool({
       name: FAST_CONTEXT_TOOL_NAME,
       description: FAST_CONTEXT_DESCRIPTION,
@@ -157,6 +164,8 @@ type FastContextOutput = {
   failure?: { source: 'model' | 'runtime' | 'contract'; code?: string; category?: string }
   queuedMs?: number
   toolInvocations?: number
+  attemptStartedAt?: string
+  attemptDurationMs?: number
   durationMs?: number
   parentThreadId?: string
   parentTurnId?: string
@@ -173,6 +182,8 @@ type FastContextOutput = {
     parentThreadId?: string
     parentTurnId?: string
     launcher: 'fast_context'
+    attemptStartedAt?: string
+    attemptDurationMs?: number
   }
 }
 
@@ -203,7 +214,11 @@ class FastContextRunState {
       model: this.model,
       parentThreadId: record?.parentThreadId,
       parentTurnId: record?.parentTurnId,
-      launcher: 'fast_context' as const
+      launcher: 'fast_context' as const,
+      attemptStartedAt: record?.startedAt,
+      attemptDurationMs: record?.startedAt
+        ? elapsedMs(record.startedAt, record.updatedAt)
+        : undefined
     })
     return compact({
       status: this.status,
@@ -218,6 +233,10 @@ class FastContextRunState {
       failure: record?.failure,
       queuedMs: record?.queuedMs,
       toolInvocations: record?.toolInvocations,
+      attemptStartedAt: record?.startedAt,
+      attemptDurationMs: record?.startedAt
+        ? elapsedMs(record.startedAt, record.updatedAt)
+        : undefined,
       durationMs: record?.durationMs,
       parentThreadId: record?.parentThreadId,
       parentTurnId: record?.parentTurnId,
@@ -303,18 +322,14 @@ function fastContextPrompt(tasks: readonly FastContextTask[]): string {
 function securitySnapshot(workspace: string, context: ToolHostContext) {
   return {
     sandboxRoot: workspace,
-    ...(context.allowedProviderIds ? { allowedProviderIds: [...context.allowedProviderIds] } : {}),
-    ...(context.allowedToolNames ? { allowedToolNames: [...context.allowedToolNames] } : {}),
-    ...(context.allowedSkillIds ? { allowedSkillIds: [...context.allowedSkillIds] } : {}),
-    // A Fast Context child never inherits full-access filesystem reach. An
-    // explicit read scope remains a parent upper bound; otherwise `.` pins
-    // every source tool to the captured workspace root.
+    // The retrieval child is an opaque implementation of the already-authorized
+    // fast_context call. It receives no caller tool/provider catalog: its own
+    // profile and ToolHost wrapper enforce exactly grep, glob, and read.
+    allowedModelProviderIds: context.allowedModelProviderIds
+      ? [...context.allowedModelProviderIds]
+      : undefined,
+    allowedModelIds: context.allowedModelIds ? [...context.allowedModelIds] : undefined,
     allowedReadPaths: context.allowedReadPaths ? [...context.allowedReadPaths] : ['.'],
-    ...(context.allowedWritePaths ? { allowedWritePaths: [...context.allowedWritePaths] } : {}),
-    ...(context.allowedArtifactIds ? { allowedArtifactIds: [...context.allowedArtifactIds] } : {}),
-    ...(context.blockedProviderIds ? { blockedProviderIds: [...context.blockedProviderIds] } : {}),
-    ...(context.blockedToolNames ? { blockedToolNames: [...context.blockedToolNames] } : {}),
-    ...(context.blockedSkillIds ? { blockedSkillIds: [...context.blockedSkillIds] } : {}),
     memoryEnabled: false
   }
 }

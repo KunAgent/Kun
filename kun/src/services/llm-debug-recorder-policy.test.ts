@@ -15,12 +15,15 @@ const meta = {
 }
 
 describe('Agent Perspective thread capture policy', () => {
-  it('does not create a round when capture is disabled', async () => {
+  it('creates metadata-only rounds when complete content capture is disabled', async () => {
     const recorder = new LlmDebugRecorder({ shouldCapture: async () => false })
 
-    await expect(startLlmDebugRoundIfEnabled(recorder, meta)).resolves.toBeUndefined()
-    expect(recorder.snapshot()).toEqual([])
-    expect(recorder.activeCaptureCount).toBe(0)
+    const round = await startLlmDebugRoundIfEnabled(recorder, meta)
+    expect(round).toMatchObject({ captureContent: false })
+    expect(recorder.activeCaptureCount).toBe(1)
+    if (!round) throw new Error('expected metadata round')
+    await recorder.finish(round)
+    expect(recorder.snapshot()).toHaveLength(1)
   })
 
   it('snapshots the policy at request start', async () => {
@@ -34,11 +37,13 @@ describe('Agent Perspective thread capture policy', () => {
     await recorder.finish(started)
 
     expect(recorder.snapshot()).toHaveLength(1)
-    await expect(startLlmDebugRoundIfEnabled(recorder, {
+    const disabled = await startLlmDebugRoundIfEnabled(recorder, {
       ...meta,
       turnId: 'turn-disabled'
-    })).resolves.toBeUndefined()
-    expect(recorder.snapshot()).toHaveLength(1)
+    })
+    expect(disabled).toMatchObject({ captureContent: false })
+    if (disabled) await recorder.finish(disabled)
+    expect(recorder.snapshot()).toHaveLength(2)
   })
 
   it('fails closed without throwing when the policy lookup fails', async () => {
@@ -83,14 +88,13 @@ describe('Agent Perspective thread capture policy', () => {
 
       expect(recorder.snapshot()[0]?.output.toolCalls[0]?.arguments).toEqual({})
       const retained = await recorder.listThread(meta.threadId)
-      expect(retained.records[0]?.response?.body).toMatchObject({
-        text: expect.stringContaining('response body omitted'),
-        truncated: true
-      })
+      expect(retained.records[0]?.response?.body).toBeUndefined()
+      expect(retained.records[0]?.request?.body).toMatchObject({ text: '', originalBytes: 0 })
       const tracePath = join(
         dataDir,
         'observability',
-        'model-http',
+        'trajectory',
+        'records',
         `${Buffer.from(meta.threadId, 'utf8').toString('base64url')}.jsonl`
       )
       const jsonl = await readFile(tracePath, 'utf8')

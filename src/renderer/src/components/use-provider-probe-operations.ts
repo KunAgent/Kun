@@ -48,7 +48,7 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 export function useProviderProbeOperations(scope: Record<string, any>): Record<string, any> {
-  const { t, sharedConnectionFor, fetchModelsDevCatalogFor, openModelImport, flushSharedProviderCatalog } = scope
+  const { t, sharedConnectionFor, fetchModelsDevCatalogFor, openModelImport, flushSharedProviderCatalog, providerProxy } = scope
   const setProbeStates = scope.setProbeStates as Dispatch<SetStateAction<Record<string, ProbeState>>>
   const setCursorAccounts = scope.setCursorAccounts as Dispatch<SetStateAction<Record<string, {
     fingerprint: string
@@ -60,7 +60,7 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
     transform: (item: ModelProviderProfileV1) => ModelProviderProfileV1
   ) => void
   const runProbe = async (target: ModelProviderProfileV1, mode: 'test' | 'fetch'): Promise<void> => {
-    const fingerprint = providerConnectionFingerprint(target)
+    const fingerprint = providerConnectionFingerprint(target, providerProxy)
     if (isCursorSubscriptionProvider(target)) {
       const cursorCredentialReady =
         Boolean(target.apiKey.trim()) ||
@@ -381,9 +381,11 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
     const probe = async (): Promise<ModelProviderProbeResult> => {
       try {
         return await window.kunGui.probeModelProvider({
+          providerId: target.id,
           baseUrl: target.baseUrl,
           apiKey: target.apiKey,
-          endpointFormat: target.endpointFormat
+          endpointFormat: target.endpointFormat,
+          useProxy: target.useProxy
         })
       } catch (error) {
         return { ok: false, message: error instanceof Error ? error.message : String(error) }
@@ -412,6 +414,7 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
         target,
         fingerprint,
         providerModelIds: result.ok ? [...result.modelIds] : [],
+        discoveredModelProfiles: result.ok ? result.modelProfiles : undefined,
         catalogResult,
         providerError: result.ok
           ? (result.modelIds.length === 0 ? t('providerModelImportProviderReturnedEmpty') : undefined)

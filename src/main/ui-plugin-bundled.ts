@@ -1,7 +1,6 @@
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import ikunFigureRef from '../asset/img/ikun.png?url'
 import ikunRunFigureRef from '../asset/img/ikun_run.png?url'
 import ikunBobaFigureRef from '../asset/img/ikun_boba.png?url'
@@ -10,6 +9,7 @@ import ikunSleepFigureRef from '../asset/img/ikun_sleep.png?url'
 import ikunStandFigureRef from '../asset/img/ikun_stand.png?url'
 import { UI_PLUGIN_BUNDLED_IKUN_ID } from '../shared/ui-plugin'
 import { seedUiPlugin, uiPluginsRootDir } from './services/ui-plugin-service'
+import { mainBundleDirectory } from './main-bundle-path'
 
 /**
  * 预装 UI 插件:iKun 模式就是形象工坊的官方示例插件,
@@ -53,7 +53,7 @@ const BUNDLED_IKUN_FIGURE_REFS: Record<string, string> = {
 }
 
 /** bundle 所在目录,用于把 ?url 的 /chunks/xxx.png 还原为真实文件路径 */
-const BUNDLE_DIR = dirname(fileURLToPath(import.meta.url))
+const BUNDLE_DIR = mainBundleDirectory(import.meta.url)
 
 /**
  * 资源引用在打包/开发下可能是:

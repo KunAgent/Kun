@@ -6,10 +6,12 @@ import {
   MemorySettingsSection,
   attemptCloseMemoryDialog,
   isMemoryDraftDirty,
+  memoryDraftMutation,
   serializeMemoryTags,
   type MemoryDialogState,
   type MemoryDraft
 } from './settings-section-memory'
+import { clampMemoryUnitValue, MemoryRecordDialog } from './settings-section-memory-dialogs'
 
 const labels: Record<string, string> = {
   sectionMemory: 'Long-term memory',
@@ -51,6 +53,8 @@ const labels: Record<string, string> = {
   memoryImportSkippedPrefix: 'Skipped ',
   memoryImportSkippedSuffix: ' duplicate memory item(s).',
   memoryImportAllDuplicate: 'No new memories to import.',
+  memoryImportInvalidPortable: 'Invalid portable memory archive.',
+  memoryImportPortableScopeHint: 'Portable records keep their original scopes.',
   memoryDisabledHint: 'Memory disabled',
   memoryScope_all: 'All',
   memoryScope_user: 'User',
@@ -62,6 +66,8 @@ const labels: Record<string, string> = {
   memoryContentPlaceholder: 'Memory content',
   memoryTagsPlaceholder: 'Tags',
   memoryConfidence: 'Confidence',
+  memoryType: 'Type',
+  memoryImportance: 'Importance',
   memoryCancel: 'Cancel',
   memorySave: 'Save',
   memorySaveFailed: 'Memory save failed',
@@ -115,10 +121,25 @@ function sampleRecord(overrides: Partial<CoreMemoryRecordJson> = {}): CoreMemory
     workspace: '/Users/mothra/data/code/kook-bot',
     tags: ['summary', 'kook-bot'],
     confidence: 1,
+    type: 'fact',
+    importance: 0.8,
     createdAt: '2026-06-21T00:00:00.000Z',
     updatedAt: '2026-06-21T00:00:00.000Z',
     ...overrides
   } as CoreMemoryRecordJson
+}
+
+function memoryDraft(overrides: Partial<MemoryDraft> = {}): MemoryDraft {
+  return {
+    content: '',
+    scope: 'user',
+    targetPath: '',
+    tags: '',
+    confidence: 1,
+    type: 'fact',
+    importance: 0.8,
+    ...overrides
+  }
 }
 
 describe('MemorySettingsSection', () => {
@@ -243,49 +264,60 @@ describe('isMemoryDraftDirty', () => {
   it('returns false in view mode regardless of draft', () => {
     const record = sampleRecord()
     const dialog: MemoryDialogState = { mode: 'view', memory: record }
-    const draft: MemoryDraft = { content: 'totally different', scope: 'user', targetPath: '', tags: 'x', confidence: 0 }
+    const draft = memoryDraft({ content: 'totally different', tags: 'x', confidence: 0 })
     expect(isMemoryDraftDirty(dialog, draft)).toBe(false)
   })
 
   it('returns false in edit mode when the draft mirrors the original record', () => {
     const record = sampleRecord({ tags: ['summary', 'kook-bot'] })
     const dialog: MemoryDialogState = { mode: 'edit', memory: record }
-    const draft: MemoryDraft = {
+    const draft = memoryDraft({
       content: record.content,
       scope: record.scope,
       targetPath: record.workspace ?? '',
       tags: 'summary, kook-bot',
-      confidence: record.confidence ?? 1
-    }
+      confidence: record.confidence ?? 1,
+      type: record.type ?? 'fact',
+      importance: record.importance ?? 0.5
+    })
     expect(isMemoryDraftDirty(dialog, draft)).toBe(false)
   })
 
-  it('returns true in edit mode when content / scope / tags differ', () => {
+  it('returns true in edit mode when any editable field differs', () => {
     const record = sampleRecord({ tags: ['summary'] })
     const dialog: MemoryDialogState = { mode: 'edit', memory: record }
-    const baseline: MemoryDraft = {
+    const baseline = memoryDraft({
       content: record.content,
       scope: record.scope,
       targetPath: record.workspace ?? '',
       tags: 'summary',
-      confidence: 1
-    }
+      confidence: 1,
+      type: record.type ?? 'fact',
+      importance: record.importance ?? 0.5
+    })
     expect(isMemoryDraftDirty(dialog, { ...baseline, content: 'edited' })).toBe(true)
     expect(isMemoryDraftDirty(dialog, { ...baseline, scope: 'user' })).toBe(true)
+    expect(isMemoryDraftDirty(dialog, { ...baseline, targetPath: '/different' })).toBe(true)
     expect(isMemoryDraftDirty(dialog, { ...baseline, tags: 'summary, extra' })).toBe(true)
+    expect(isMemoryDraftDirty(dialog, { ...baseline, confidence: 0.6 })).toBe(true)
+    expect(isMemoryDraftDirty(dialog, { ...baseline, type: 'decision' })).toBe(true)
+    expect(isMemoryDraftDirty(dialog, { ...baseline, importance: 0.9 })).toBe(true)
   })
 
   it('returns false in create mode for an empty draft on the default scope', () => {
     const dialog: MemoryDialogState = { mode: 'create' }
-    const draft: MemoryDraft = { content: '   ', scope: 'user', targetPath: '', tags: '   ', confidence: 1 }
+    const draft = memoryDraft({ content: '   ', tags: '   ' })
     expect(isMemoryDraftDirty(dialog, draft)).toBe(false)
   })
 
   it('returns true in create mode when any field changes from the empty default', () => {
     const dialog: MemoryDialogState = { mode: 'create' }
-    expect(isMemoryDraftDirty(dialog, { content: 'hello', scope: 'user', targetPath: '', tags: '', confidence: 1 })).toBe(true)
-    expect(isMemoryDraftDirty(dialog, { content: '', scope: 'user', targetPath: '', tags: 'tag', confidence: 1 })).toBe(true)
-    expect(isMemoryDraftDirty(dialog, { content: '', scope: 'workspace', targetPath: '', tags: '', confidence: 1 })).toBe(true)
+    expect(isMemoryDraftDirty(dialog, memoryDraft({ content: 'hello' }))).toBe(true)
+    expect(isMemoryDraftDirty(dialog, memoryDraft({ tags: 'tag' }))).toBe(true)
+    expect(isMemoryDraftDirty(dialog, memoryDraft({ scope: 'workspace' }))).toBe(true)
+    expect(isMemoryDraftDirty(dialog, memoryDraft({ confidence: 0.6 }))).toBe(true)
+    expect(isMemoryDraftDirty(dialog, memoryDraft({ type: 'decision' }))).toBe(true)
+    expect(isMemoryDraftDirty(dialog, memoryDraft({ importance: 0.9 }))).toBe(true)
   })
 })
 
@@ -293,13 +325,15 @@ describe('attemptCloseMemoryDialog', () => {
   it('closes immediately and never prompts when the draft is clean', async () => {
     const record = sampleRecord({ tags: ['summary'] })
     const dialog: MemoryDialogState = { mode: 'edit', memory: record }
-    const draft: MemoryDraft = {
+    const draft = memoryDraft({
       content: record.content,
       scope: record.scope,
       targetPath: record.workspace ?? '',
       tags: 'summary',
-      confidence: 1
-    }
+      confidence: 1,
+      type: record.type ?? 'fact',
+      importance: record.importance ?? 0.5
+    })
     const confirm = vi.fn(async () => false)
     const close = vi.fn()
     const result = await attemptCloseMemoryDialog({ dialog, draft, confirm, close })
@@ -313,7 +347,7 @@ describe('attemptCloseMemoryDialog', () => {
     const close = vi.fn()
     const result = await attemptCloseMemoryDialog({
       dialog: null,
-      draft: { content: 'anything', scope: 'workspace', targetPath: '', tags: '', confidence: 1 },
+      draft: memoryDraft({ content: 'anything', scope: 'workspace' }),
       confirm,
       close
     })
@@ -325,13 +359,15 @@ describe('attemptCloseMemoryDialog', () => {
   it('prompts on dirty close and stays open when the user keeps editing', async () => {
     const record = sampleRecord({ tags: ['summary'] })
     const dialog: MemoryDialogState = { mode: 'edit', memory: record }
-    const draft: MemoryDraft = {
+    const draft = memoryDraft({
       content: 'EDITED content',
       scope: record.scope,
       targetPath: record.workspace ?? '',
       tags: 'summary',
-      confidence: 1
-    }
+      confidence: 1,
+      type: record.type ?? 'fact',
+      importance: record.importance ?? 0.5
+    })
     const confirm = vi.fn(async () => false)
     const close = vi.fn()
     const result = await attemptCloseMemoryDialog({ dialog, draft, confirm, close })
@@ -342,18 +378,61 @@ describe('attemptCloseMemoryDialog', () => {
 
   it('prompts on dirty close and closes when the user confirms discard', async () => {
     const dialog: MemoryDialogState = { mode: 'create' }
-    const draft: MemoryDraft = {
+    const draft = memoryDraft({
       content: 'half-typed thought',
       scope: 'workspace',
-      targetPath: '',
-      tags: '',
-      confidence: 1
-    }
+      targetPath: ''
+    })
     const confirm = vi.fn(async () => true)
     const close = vi.fn()
     const result = await attemptCloseMemoryDialog({ dialog, draft, confirm, close })
     expect(result).toEqual({ prompted: true, closed: true })
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('memoryDraftMutation', () => {
+  it('sends content, tags, confidence, type, and importance together', () => {
+    expect(memoryDraftMutation(memoryDraft({
+      content: '  Updated decision  ',
+      tags: 'alpha, beta',
+      confidence: 0.7,
+      type: 'decision',
+      importance: 0.9
+    }))).toEqual({
+      content: 'Updated decision',
+      tags: ['alpha', 'beta'],
+      confidence: 0.7,
+      type: 'decision',
+      importance: 0.9
+    })
+  })
+})
+
+describe('MemoryRecordDialog', () => {
+  it('renders type and importance controls for create and edit forms', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'create' },
+      draft: memoryDraft({ type: 'decision', importance: 0.9 }),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).toContain('Type')
+    expect(html).toContain('value="decision" selected=""')
+    expect(html).toContain('Importance')
+    expect(html).toContain('value="0.9"')
+  })
+
+  it('clamps confidence and importance inputs to their contract bounds', () => {
+    expect(clampMemoryUnitValue(-1)).toBe(0)
+    expect(clampMemoryUnitValue(0.4)).toBe(0.4)
+    expect(clampMemoryUnitValue(2)).toBe(1)
+    expect(clampMemoryUnitValue(Number.NaN)).toBe(0)
   })
 })

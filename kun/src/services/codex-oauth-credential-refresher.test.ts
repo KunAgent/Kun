@@ -140,6 +140,24 @@ describe('CodexOAuthCredentialRefresher', () => {
     expect(parseStoredCodexOAuthCredentials(store.current)?.accessToken).toBe('new-access')
   })
 
+  it('resolves the refresh transport from the owning credential source', async () => {
+    const store = memoryStore(encodedCredentials())
+    const fallbackFetch = vi.fn() as unknown as typeof fetch
+    const { fetchImpl, tokenPosts } = tokenFetch()
+    const fetchForSource = vi.fn(async () => fetchImpl)
+    const refresher = new CodexOAuthCredentialRefresher(store, {
+      fetchImpl: fallbackFetch,
+      fetchForSource,
+      nowMs: () => NOW
+    })
+
+    await refresher.resolve(SOURCE_ID)
+
+    expect(fetchForSource).toHaveBeenCalledWith(SOURCE_ID)
+    expect(tokenPosts).toHaveBeenCalledTimes(1)
+    expect(fallbackFetch).not.toHaveBeenCalled()
+  })
+
   it('forces a refresh for the rejected bearer and reuses an already rotated credential', async () => {
     const store = memoryStore(encodedCredentials({ expiresAt: NOW + 3_600_000 }))
     const { fetchImpl, tokenPosts } = tokenFetch()

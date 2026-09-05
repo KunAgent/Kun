@@ -21,18 +21,24 @@ import {
   KUN_RUNTIME_TOOLS_PATH,
   KUN_SKILLS_PATH,
   KUN_THREAD_STATES_PATH,
+  KUN_THREADS_BULK_DELETE_PATH,
+  kunThreadCancelQueuedPath,
   kunThreadCompactPath,
+  kunThreadQueuePositionPath,
+  kunThreadQueueResumePath,
   kunThreadEventsPath,
   kunThreadForkPath,
   kunThreadGoalPath,
   kunThreadReviewPath,
   kunThreadRewindPath,
   kunThreadTodosPath,
+  kunThreadTodosSyncPlanPath,
   kunThreadInterruptPath,
   kunThreadKnowledgeBaseReindexPath,
   kunThreadKnowledgeBasesPath,
   kunThreadToolCancelPath,
   kunThreadPath,
+  kunThreadSummaryPath,
   kunThreadStatePath,
   kunThreadTimelinePath,
   kunThreadSteerPath,
@@ -105,8 +111,24 @@ import {
 } from './kun-runtime-services'
 
 export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
-  async getThreadState(threadId: string): Promise<ThreadRuntimeState> {
-    const response = await rendererRuntimeClient.runtimeRequest(kunThreadStatePath(threadId), 'GET')
+  async getThreadSummary(threadId: string): Promise<NormalizedThread> {
+    const response = await rendererRuntimeClient.runtimeRequest(kunThreadSummaryPath(threadId), 'GET')
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread summary'))
+    }
+    return threadFromCore(readRuntimeJson<CoreThreadSummaryJson>(
+      response.body,
+      'runtime returned an invalid thread summary response'
+    ))
+  }
+
+  async getThreadState(threadId: string, options: { signal?: AbortSignal } = {}): Promise<ThreadRuntimeState> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadStatePath(threadId),
+      'GET',
+      undefined,
+      { signal: options.signal, priority: 'foreground' }
+    )
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread state'))
     }
@@ -208,6 +230,46 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to queue message'))
     }
+  }
+
+  async cancelQueuedTurn(threadId: string, turnId: string): Promise<void> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadCancelQueuedPath(threadId, turnId),
+      'POST'
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to cancel queued turn'))
+    }
+  }
+
+  async moveQueuedTurn(
+    threadId: string,
+    turnId: string,
+    position: { beforeTurnId?: string; afterTurnId?: string }
+  ): Promise<void> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadQueuePositionPath(threadId, turnId),
+      'PATCH',
+      JSON.stringify(position)
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to reorder queued turn'))
+    }
+  }
+
+  async resumeQueuedTurns(threadId: string): Promise<{ started: boolean; turnId?: string }> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadQueueResumePath(threadId),
+      'POST'
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to resume queued turns'))
+    }
+    const parsed = readRuntimeJson<{
+      started: boolean
+      turnId?: string
+    }>(response.body, 'runtime returned an invalid queue resume response')
+    return { started: parsed.started, ...(parsed.turnId ? { turnId: parsed.turnId } : {}) }
   }
 
   async interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void> {
@@ -338,7 +400,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
 
   async deleteThreadsByWorkspace(workspace: string): Promise<string[]> {
     const response = await rendererRuntimeClient.runtimeRequest(
-      '/v1/threads/bulk-delete',
+      KUN_THREADS_BULK_DELETE_PATH,
       'POST',
       JSON.stringify({ workspace })
     )
@@ -505,6 +567,28 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     return todosFromCore(body.todos)
   }
 
+  async syncThreadTodosFromPlan(
+    threadId: string,
+    plan: Parameters<NonNullable<AgentProvider['syncThreadTodosFromPlan']>>[1]
+  ): Promise<NonNullable<NormalizedThread['todos']>> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadTodosSyncPlanPath(threadId),
+      'POST',
+      JSON.stringify(plan)
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to sync plan todos'))
+    }
+    const body = readRuntimeJson<CoreThreadTodosResponseJson>(
+      response.body,
+      'runtime returned an invalid thread todos response'
+    )
+    if (!body.todos) {
+      throw runtimeErrorToError({ code: 'unknown', message: 'sync plan todos returned no todos' })
+    }
+    return todosFromCore(body.todos)
+  }
+
   async clearThreadTodos(threadId: string): Promise<boolean> {
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTodosPath(threadId),
@@ -568,6 +652,7 @@ function runtimeStateFromCore(state: CoreThreadRuntimeStateJson): ThreadRuntimeS
     status: state.status,
     updatedAt: state.updatedAt,
     latestSeq: state.latestSeq,
+    ...(typeof state.replayFloorSeq === 'number' ? { replayFloorSeq: state.replayFloorSeq } : {}),
     pendingUserInputIds: state.pendingUserInputIds,
     ...(state.latestTurn
       ? {

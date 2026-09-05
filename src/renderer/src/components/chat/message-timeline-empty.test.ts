@@ -34,7 +34,7 @@ describe('MessageTimelineEmptyHero — chat init welcome', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('renders the page-level task selector without starter actions', () => {
+  it('renders the welcome without page-level task controls or starter actions', () => {
     const html = renderEmptyHero()
 
     expect(html).toContain('ds-chat-empty-hero')
@@ -47,42 +47,20 @@ describe('MessageTimelineEmptyHero — chat init welcome', () => {
     expect(html).not.toContain('ds-kun-state-')
     expect(html).not.toContain('ds-initial-usage-heatmap')
     expect(html).not.toContain('Expand calendar')
-    expect(html).toContain('data-task-surface-selector="hero"')
-    expect(html).toContain('Code')
-    expect(html).toContain('Design')
+    expect(html).not.toContain('data-task-surface-selector')
+    expect(html).not.toContain('role="radiogroup"')
     expect(html).not.toContain('data-task-starters')
     expect(html).not.toContain('Understand this codebase')
     expect(html).not.toContain('Build a feature')
     expect(html).not.toContain('Fix a bug')
   })
 
-  it('switches the page-level selector to Design without rendering suggestion buttons', () => {
-    const html = renderEmptyHero({ taskSurfaceControl: { surface: 'design' } })
-
-    expect(html).toContain('aria-checked="true"')
-    expect(html).not.toContain('data-task-starters')
-    expect(html).not.toContain('Design a page')
-    expect(html).not.toContain('Recreate a screenshot')
-    expect(html).not.toContain('Create a diagram')
-    expect(html).not.toContain('Understand this codebase')
-  })
-
-  it('keeps the page-level intent selector outside the composer surface', () => {
+  it('keeps task controls out of the page-level hero', () => {
     const html = renderEmptyHero()
 
-    expect(html).toContain('data-task-surface-selector="hero"')
+    expect(html).not.toContain('data-task-surface-selector')
     expect(html).not.toContain('ds-composer-shell')
     expect(html).not.toContain('ds-composer-task-profile')
-  })
-
-  it('removes the page-level task selector after the conversation mode is locked', () => {
-    const html = renderEmptyHero({
-      taskSurfaceControl: { surface: 'code', locked: true }
-    })
-
-    expect(html).toContain('ds-chat-empty-hero')
-    expect(html).not.toContain('data-task-surface-selector')
-    expect(html).not.toContain('role="radiogroup"')
   })
 
   it('keeps the static welcome copy visible in focus mode without restoring the usage panel', () => {
@@ -105,7 +83,7 @@ describe('MessageTimelineEmptyHero — runtime status on the chat home', () => {
     const html = renderOfflineHero(null)
     expect(html).toContain('ds-chat-empty-hero')
     expect(html).toContain('What would you like to do with Kun today?')
-    expect(html).toContain('data-task-surface-selector="hero"')
+    expect(html).not.toContain('data-task-surface-selector')
     expect(html).toContain('data-runtime-home-status')
     expect(html).not.toContain('ds-runtime-wake-hero')
     expect(html).toContain('Kun is waking the local agent')
@@ -174,7 +152,7 @@ describe('MessageTimelineEmptyHero — runtime status on the chat home (zh-CN)',
   it('uses 正在唤醒 title when no runtime error is available', () => {
     const html = renderOfflineHero(null)
     expect(html).toContain('今天想和 Kun 一起做什么？')
-    expect(html).toContain('data-task-surface-selector="hero"')
+    expect(html).not.toContain('data-task-surface-selector')
     expect(html).toContain('data-runtime-home-status')
     expect(html).not.toContain('ds-runtime-wake-hero')
     expect(html).toContain('正在唤醒本地智能体')

@@ -14,6 +14,7 @@ import {
   readStoredComposerReasoningEffort
 } from './chat-store-helpers'
 import { createAppActions } from './chat-store-app-actions'
+import { useProjectBoardStore } from '../project-board/project-board-store'
 
 const COMPOSER_MODEL_STORAGE_KEY = 'kun.composerModel'
 const COMPOSER_PROVIDER_STORAGE_KEY = 'kun.composerProviderId'
@@ -132,6 +133,19 @@ describe('chat-store app actions composer model loading', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('opens a project board without changing the active conversation', () => {
+    const { actions, state } = buildHarness({ ok: true, modelIds: [] })
+    state.route = 'chat'
+    state.workspaceRoot = '/Users/test/project'
+    state.activeThreadId = 'thread-a'
+
+    actions.openBoard()
+
+    expect(state.route).toBe('board')
+    expect(state.activeThreadId).toBe('thread-a')
+    expect(useProjectBoardStore.getState().selectedWorkspaceRoot).toBe('/Users/test/project')
   })
 
   it('prefers the configured default model over a stale global composer model', async () => {

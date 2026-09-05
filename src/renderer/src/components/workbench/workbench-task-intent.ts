@@ -1,8 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import type {
-  ComposerTaskSurface,
-  DesignTaskComposerProfile
-} from '../chat/FloatingComposerTaskProfile'
+import type { DesignTaskComposerProfile } from '../chat/FloatingComposerTaskProfile'
+import type { ComposerTaskSurface } from '../chat/FloatingComposerTaskSurfacePicker'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 import { workspaceRootScopeKey } from '../../lib/workspace-path'
 
@@ -10,7 +8,7 @@ export type WorkbenchTaskIntentDraft = {
   surface: ComposerTaskSurface
   profile: DesignTaskComposerProfile
   codeExecution?: {
-    mode: 'plan' | 'agent'
+    mode: 'plan' | 'agent' | 'auto'
     orchestration: 'direct' | 'graph'
   }
 }

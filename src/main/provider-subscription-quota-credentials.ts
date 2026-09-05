@@ -241,7 +241,8 @@ export async function resolveClaudeToken(provider: ModelProviderProfileV1): Prom
 
 export async function resolveCodexCredential(
   provider: ModelProviderProfileV1,
-  rejectedAccessToken?: string
+  rejectedAccessToken?: string,
+  context?: SubscriptionProbeContext
 ): Promise<CodexQuotaCredential | undefined> {
   const ambient = provider.apiKey.trim()
     ? undefined
@@ -281,7 +282,9 @@ export async function resolveCodexCredential(
     Date.now() >= credential.expiresAt - CODEX_QUOTA_EARLY_REFRESH_MS
   if (!rejectedCurrentToken && !expiresSoon) return codexQuotaCredential(credential)
 
-  const refreshed = await refreshCodexToken(credential)
+  const refreshed = await refreshCodexToken(credential, context
+    ? { fetcher: context.fetcher, proxyUrl: context.proxyUrl }
+    : {})
   if (!refreshed) {
     if (!rejectedCurrentToken && Date.now() < credential.expiresAt) {
       return codexQuotaCredential(credential)

@@ -211,6 +211,7 @@ describe('legacy model connection transport', () => {
     expect(connected.providers.find((provider) => provider.id === 'company-proxy')).toMatchObject({
       name: 'Company Proxy',
       endpointFormat: 'custom_endpoint',
+      useProxy: false,
       configured: true,
       models: ['company-fast', 'company-reasoning']
     })

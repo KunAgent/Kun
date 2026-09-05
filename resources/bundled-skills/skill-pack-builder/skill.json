@@ -1,0 +1,24 @@
+{
+  "id": "skill-pack-builder",
+  "name": "KunAgent Skill Pack Builder",
+  "version": "1.0.0",
+  "description": "Create, validate, package, and optionally install original KunAgent skills.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/skill-pack-builder"
+    ],
+    "promptPatterns": [
+      "create skill",
+      "KunAgent Skill Pack Builder",
+      "skill pack",
+      "skill-pack-builder",
+      "做skill",
+      "技能包"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

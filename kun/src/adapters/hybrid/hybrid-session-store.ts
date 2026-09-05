@@ -2,6 +2,8 @@ import type { RuntimeEvent } from '../../contracts/events.js'
 import type { TurnItem } from '../../contracts/items.js'
 import type { AgentSession } from '../../domain/session.js'
 import type {
+  EventHistoryPage,
+  EventHistoryPageOptions,
   ItemHistoryCompactionResult,
   ItemHistoryCommit,
   ItemHistoryPage,
@@ -13,6 +15,10 @@ import type {
   SessionUsageQueryOptions,
   SessionUsageRecord
 } from '../../ports/session-store.js'
+import type {
+  SessionUsageAggregateQuery,
+  SessionUsageAggregateResponse
+} from '../../contracts/usage-query.js'
 import { FileSessionStore } from '../file/file-session-store.js'
 import type { HybridThreadStore } from './hybrid-thread-store.js'
 
@@ -29,10 +35,12 @@ export class HybridSessionStore implements SessionStore {
     dataDir: string
     index: HybridThreadStore
     usageEventCompaction?: ConstructorParameters<typeof FileSessionStore>[0]['usageEventCompaction']
+    fileAccess?: ConstructorParameters<typeof FileSessionStore>[0]['fileAccess']
   }) {
     this.delegate = new FileSessionStore({
       dataDir: options.dataDir,
-      usageEventCompaction: options.usageEventCompaction
+      usageEventCompaction: options.usageEventCompaction,
+      fileAccess: options.fileAccess
     })
     this.index = options.index
   }
@@ -44,6 +52,14 @@ export class HybridSessionStore implements SessionStore {
 
   async appendItem(threadId: string, item: TurnItem): Promise<void> {
     await this.delegate.appendItem(threadId, item)
+  }
+
+  async checkpointLiveItem(threadId: string, item: TurnItem, representedSeq: number): Promise<void> {
+    await this.delegate.checkpointLiveItem(threadId, item, representedSeq)
+  }
+
+  async finalizeLiveItem(threadId: string, item: TurnItem): Promise<void> {
+    await this.delegate.finalizeLiveItem(threadId, item)
   }
 
   async rewriteItems(threadId: string, items: TurnItem[]): Promise<void> {
@@ -85,8 +101,28 @@ export class HybridSessionStore implements SessionStore {
     await this.delegate.flushScheduledCompaction(threadId)
   }
 
+  async runEventIndexRebuildSlice(): Promise<boolean> {
+    return this.delegate.runEventIndexRebuildSlice()
+  }
+
+  setEventIndexRebuildWake(wake: () => void): void {
+    this.delegate.setEventIndexRebuildWake(wake)
+  }
+
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
     return this.delegate.loadEventsSince(threadId, sinceSeq)
+  }
+
+  async loadEventPage(threadId: string, options: EventHistoryPageOptions): Promise<EventHistoryPage> {
+    return this.delegate.loadEventPage(threadId, options)
+  }
+
+  async trimEventsFromSeq(threadId: string, fromSeqInclusive: number): Promise<{ afterBytes: number }> {
+    return this.delegate.trimEventsFromSeq(threadId, fromSeqInclusive)
+  }
+
+  async eventReplayFloorSeq(threadId: string): Promise<number> {
+    return this.delegate.eventReplayFloorSeq(threadId)
   }
 
   iterateEventsSince(
@@ -147,6 +183,13 @@ export class HybridSessionStore implements SessionStore {
     }
   }
 
+  async aggregateUsage(
+    query: SessionUsageAggregateQuery,
+    liveRecords: SessionUsageRecord[] = []
+  ): Promise<SessionUsageAggregateResponse> {
+    return this.index.aggregateUsage(query, liveRecords)
+  }
+
   async loadLatestUsageSnapshots(options?: { threadIds?: string[] }): Promise<SessionLatestUsageSnapshot[]> {
     try {
       return await this.index.loadLatestUsageSnapshots(options)
@@ -164,4 +207,6 @@ export class HybridSessionStore implements SessionStore {
   clearThreadMemory(threadId: string): void {
     this.delegate.clearThreadMemory(threadId)
   }
+
+  close(): Promise<void> { return this.delegate.close() }
 }

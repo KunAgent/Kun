@@ -41,6 +41,7 @@ import {
   completionIsCurrentlyVisible,
   markUnreadCompletion
 } from './unread-completions'
+import { isAutoPlanIntermediatePlanCompletion } from '../plan/auto-plan-build-intents'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import {
   isWriteAssistantThread,
@@ -350,7 +351,8 @@ export function notifyTurnComplete(
   threadId: string | null,
   state: ChatState,
   dedupeKey: string,
-  source?: TurnCompleteNotificationSource
+  source?: TurnCompleteNotificationSource,
+  turnId?: string | null
 ): void {
   if (
     !threadId ||
@@ -359,6 +361,11 @@ export function notifyTurnComplete(
   ) {
     return
   }
+  // The intermediate plan turn of an Automatic plan-and-build handoff is not
+  // a user-facing completion: it would fire a "task done" notification right
+  // before the build turn begins. Suppress it so the final build turn keeps
+  // the ordinary once-only notification semantics.
+  if (isAutoPlanIntermediatePlanCompletion(threadId, turnId)) return
   if (!rememberCompletionNotificationKey(dedupeKey)) return
 
   const threadTitle =

@@ -24,7 +24,7 @@ function waitForReconnect(ms: number, signal: AbortSignal): Promise<void> {
 function graphObserverSink(
   onConnected: () => void,
   onSeq: (seq: number) => void,
-  onConnectionError: () => void
+  onConnectionError: (error?: Error) => void
 ): ThreadEventSink {
   return {
     onConnected,
@@ -62,6 +62,7 @@ export function useGraphParentObserver(activeThreadId: string | null): void {
 
     const controller = new AbortController()
     let reconnectAttempt = 0
+    let replayResetFloor: number | undefined
     const sink = graphObserverSink(
       () => {
         reconnectAttempt = 0
@@ -71,7 +72,11 @@ export function useGraphParentObserver(activeThreadId: string | null): void {
         reconnectAttempt = 0
         useGraphStore.getState().updateChildObserver('live', seq)
       },
-      () => {
+      (error?: Error) => {
+        const reset = error as (Error & { code?: unknown; floorSeq?: unknown }) | undefined
+        if (reset?.code === 'replay_reset_required' && typeof reset.floorSeq === 'number') {
+          replayResetFloor = reset.floorSeq
+        }
         useGraphStore.getState().updateChildObserver('reconnecting')
       }
     )
@@ -94,6 +99,17 @@ export function useGraphParentObserver(activeThreadId: string | null): void {
           if (controller.signal.aborted) return
         }
         if (controller.signal.aborted) return
+        if (replayResetFloor !== undefined) {
+          replayResetFloor = undefined
+          try {
+            const detail = await getProvider().getThreadDetail(target.parentThreadId)
+            useGraphStore.getState().updateChildObserver('reconnecting', detail.latestSeq)
+            reconnectAttempt = 0
+            continue
+          } catch {
+            if (controller.signal.aborted) return
+          }
+        }
         reconnectAttempt += 1
         useGraphStore.getState().updateChildObserver('reconnecting')
         const delay = Math.min(5_000, 1_000 * (2 ** Math.min(2, reconnectAttempt - 1)))

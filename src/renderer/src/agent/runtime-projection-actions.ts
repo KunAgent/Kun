@@ -64,6 +64,8 @@ type RuntimeProjectionActionPayload =
         latestTurnId?: string
         latestTurnStatus?: string
         latestTurnStartedAtMs?: number
+        /** Server-derived per-user durations from the reconciled turn records. */
+        turnDurationByUserId?: Record<string, number>
         goal?: ThreadGoal | null
         todos?: ThreadTodoList | null
         turnId?: string | null

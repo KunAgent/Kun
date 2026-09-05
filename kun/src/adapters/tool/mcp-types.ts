@@ -109,6 +109,7 @@ export type McpClientLike = {
 export type McpServerDiagnostic = {
   id: string
   enabled: boolean
+  managedBy?: McpServerConfig['managedBy']
   transport: McpServerConfig['transport']
   trustScope: McpServerConfig['trustScope']
   available: boolean
@@ -160,8 +161,11 @@ export type McpOAuthAuthorizeResult = {
 }
 
 export class McpAuthorizationRequiredError extends Error {
-  constructor(public readonly serverId: string) {
-    super(`MCP server "${serverId}" requires OAuth authorization`)
+  constructor(
+    public readonly serverId: string,
+    public readonly userMessage?: string
+  ) {
+    super(userMessage ?? `MCP server "${serverId}" requires OAuth authorization`)
     this.name = 'McpAuthorizationRequiredError'
   }
 }

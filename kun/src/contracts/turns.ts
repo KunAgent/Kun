@@ -21,6 +21,7 @@ import {
   DesignTaskProfileInputSchema,
   DesignTaskProfileSchema
 } from './design-task-profile.js'
+import { WriteTurnContextSchema } from './write-turn-context.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
 export type { TurnReasoningEffort } from './turn-reasoning.js'
@@ -165,6 +166,16 @@ export const GraphPlanningLifecycleSchema = z.object({
 }).strict()
 export type GraphPlanningLifecycle = z.infer<typeof GraphPlanningLifecycleSchema>
 
+/** Manager-authored proof that an execution owner expired for this turn. */
+export const ManagerLeaseSettlementSchema = z.object({
+  code: z.literal('owner_lease_expired'),
+  ownerFlavor: z.enum(['production', 'development']),
+  ownerInstanceId: z.string().min(1).max(256),
+  fencingToken: z.number().int().positive(),
+  settledAt: z.string().datetime()
+}).strict()
+export type ManagerLeaseSettlement = z.infer<typeof ManagerLeaseSettlementSchema>
+
 export const TurnSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
@@ -243,6 +254,8 @@ export const TurnSchema = z.object({
   designProfile: DesignTaskProfileSchema.optional(),
   /** Explicit replay target duplicated from the effective Design profile. */
   designDocumentTarget: DesignDocumentTargetSchema.optional(),
+  /** Durable document reference for Write turns; verified again at promotion. */
+  writeContext: WriteTurnContextSchema.optional(),
   /**
    * Turn-scoped persona text chosen by the user in the composer. Rendered as
    * a `user`-authority dynamic context block after history, so it never
@@ -271,6 +284,10 @@ export const TurnSchema = z.object({
    * turns.
    */
   imContext: z.boolean().optional(),
+  /** Optional stable machine-readable reason for a terminal turn. */
+  terminalCode: z.string().trim().min(1).max(128).optional(),
+  /** Internal Manager-authored ownership-expiry provenance. */
+  managerLeaseSettlement: ManagerLeaseSettlementSchema.optional(),
   error: z.string().optional()
 })
 export type Turn = z.infer<typeof TurnSchema>
@@ -357,6 +374,8 @@ export const StartTurnRequest = z.object({
   designProfile: DesignTaskProfileInputSchema.optional(),
   /** Canvas routing target; when supplied it must match designProfile.documentTarget. */
   designDocumentTarget: DesignDocumentTargetSchema.optional(),
+  /** Durable document reference for Write turns. */
+  writeContext: WriteTurnContextSchema.optional(),
   /** Frozen target for durable placement of a generated primary image. */
   designImagePlacementTarget: DesignImagePlacementTargetSchema.optional(),
   /** Reserved first-class SVG artifact for structured SVG tools. */
@@ -371,7 +390,14 @@ export const StartTurnRequest = z.object({
    * True when the turn is handled through an IM bridge. This gates
    * IM-only tool exposure separately from generic headless turns.
    */
-  imContext: z.boolean().optional()
+  imContext: z.boolean().optional(),
+  /**
+   * When true and the thread already has an active turn, the request is
+   * persisted as a queued turn instead of being rejected with a busy
+   * conflict. The runtime starts queued turns in order once the active
+   * turn settles. Callers that omit this keep the historical 409 behavior.
+   */
+  enqueueIfBusy: z.boolean().optional()
 }).superRefine((value, ctx) => {
   if (Boolean(value.designProfile) !== Boolean(value.designDocumentTarget)) {
     ctx.addIssue({
@@ -415,14 +441,30 @@ export const StartTurnResponse = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
   userMessageItemId: z.string().min(1),
+  /** Present for enqueueIfBusy requests persisted as queued turns. */
+  status: TurnStatus.optional(),
+  /** 1-based position among this thread's queued turns when status is queued. */
+  queuedPosition: z.number().int().positive().optional(),
   /** Durable thread ownership; distinct from the effective surface of this turn. */
   threadAgentSurface: z.enum(['code', 'write', 'design']).optional(),
   /** Effective surface for this turn. */
   agentSurface: z.enum(['code', 'write', 'design']).optional(),
   designProfile: DesignTaskProfileSchema.optional(),
-  designDocumentTarget: DesignDocumentTargetSchema.optional()
+  designDocumentTarget: DesignDocumentTargetSchema.optional(),
+  writeContext: WriteTurnContextSchema.optional()
 })
 export type StartTurnResponse = z.infer<typeof StartTurnResponse>
+
+export const MoveQueuedTurnRequest = z.object({
+  /** Move the queued turn directly before this queued sibling. */
+  beforeTurnId: z.string().min(1).optional(),
+  /** Move the queued turn directly after this queued sibling. */
+  afterTurnId: z.string().min(1).optional()
+}).refine(
+  (value) => Boolean(value.beforeTurnId) !== Boolean(value.afterTurnId),
+  { message: 'exactly one of beforeTurnId or afterTurnId is required' }
+)
+export type MoveQueuedTurnRequest = z.infer<typeof MoveQueuedTurnRequest>
 
 export const SteerTurnRequest = z.object({
   text: z.string().min(1),
@@ -591,3 +633,21 @@ export const RewindThreadResponse = z.object({
   remainingTurns: z.number().int().nonnegative()
 })
 export type RewindThreadResponse = z.infer<typeof RewindThreadResponse>
+
+/**
+ * A lightweight summary of one durable turn still waiting in a thread's queue.
+ * Used by the renderer to reconcile locally-persisted rows against the runtime
+ * after a crash between admission and local persistence.
+ */
+export const QueuedTurnSummarySchema = z.object({
+  turnId: z.string().min(1),
+  clientRequestId: z.string().trim().min(1).max(256).optional(),
+  position: z.number().int().nonnegative(),
+  createdAt: z.string()
+}).strict()
+export type QueuedTurnSummary = z.infer<typeof QueuedTurnSummarySchema>
+
+export const QueuedTurnsResponseSchema = z.object({
+  queuedTurns: z.array(QueuedTurnSummarySchema)
+}).strict()
+export type QueuedTurnsResponse = z.infer<typeof QueuedTurnsResponseSchema>

@@ -2,11 +2,13 @@ import type { ModelRoundOutcome, TurnRunOutcome } from './turn-execution-types.j
 import { makeErrorItem } from '../domain/item.js'
 import { normalizeTurnLimits } from './turn-limits.js'
 import { AgentLoopTurnLifecycle } from './agent-loop-turn-lifecycle.js'
+import { STREAM_DISCONNECTED_CODE } from './stream-disconnection-failure.js'
 
 const RECOVERABLE_GRAPH_LEAD_MODEL_FAILURE_CODES = new Set([
   'stream_idle_timeout',
   'stream_read_error',
-  'stream_truncated'
+  'stream_truncated',
+  STREAM_DISCONNECTED_CODE
 ])
 
 // A GraphRun may live for hours, but one process-local Lead wake-up must not.
@@ -241,6 +243,9 @@ export class AgentLoopExecution extends AgentLoopTurnLifecycle {
                 message: failure.error,
                 code: failure.code,
                 ...(failure.details !== undefined ? { details: failure.details } : {}),
+                ...(failure.modelRequestFailure
+                  ? { modelRequestFailure: failure.modelRequestFailure }
+                  : {}),
                 severity: failure.severity ?? 'error'
               })
             ).catch(() => undefined)

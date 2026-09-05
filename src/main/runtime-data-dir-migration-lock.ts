@@ -174,12 +174,13 @@ function acquireWriterClaimSync(
     handle = undefined
     for (const entry of readdirSync(claimsPath, { withFileTypes: true })) {
       if (entry.name === basename(path) || !entry.name.startsWith('claim-')) continue
+      const contenderPid = claimFilenamePid(entry.name)
+      // Only canonical claim names participate in writer fencing. Recovery or
+      // support tooling may leave tombstones such as `claim-*.json.stale` in
+      // this directory; they are not live claims and must not block startup.
+      if (contenderPid === undefined) continue
       if (!entry.isFile()) {
         throw new Error(`Kun Runtime writer claim is not a regular file: ${join(claimsPath, entry.name)}`)
-      }
-      const contenderPid = claimFilenamePid(entry.name)
-      if (contenderPid === undefined) {
-        throw new Error(`Kun Runtime writer claim name is invalid: ${join(claimsPath, entry.name)}`)
       }
       const contenderPath = join(claimsPath, entry.name)
       let raw: string

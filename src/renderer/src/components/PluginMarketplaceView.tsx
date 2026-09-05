@@ -1,41 +1,19 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Check,
-  ChevronDown,
-  Download,
-  FolderOpen,
-  Info,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Search,
-  Settings
-} from 'lucide-react'
+import { Check, ChevronDown, Download, FolderOpen, Info, Loader2, Plus, RefreshCw, Search, Settings } from 'lucide-react'
 import { rendererRuntimeClient } from '../agent/runtime-client'
-import {
-  loadPreferredSkillRootId,
-  savePreferredSkillRootId,
-  type SkillRootId
-} from '../lib/skill-root-preference'
+import { loadPreferredSkillRootId, savePreferredSkillRootId, type SkillRootId } from '../lib/skill-root-preference'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { getProvider } from '../agent/registry'
 import type { SkillListItem, SkillRootListItem } from '@shared/kun-gui-api'
-import type {
-  CoreRuntimeInfoJson,
-  CoreRuntimeToolDiagnosticsJson
-} from '../agent/kun-contract'
+import { BUILTIN_GITHUB_MCP_SERVER_ID } from '@shared/github-mcp'
+import type { CoreRuntimeInfoJson, CoreRuntimeToolDiagnosticsJson } from '../agent/kun-contract'
 import { useChatStore } from '../store/chat-store'
 import { NoticeView, TabButton, type MarketplaceNotice } from './PluginMarketplaceParts'
-import {
-  buildMcpMarketplaceOverlay,
-  type McpMarketplaceOverlay,
-  type McpMarketplaceOverlayStatus
-} from './plugin-marketplace-runtime'
+import { buildMcpMarketplaceOverlay, type McpMarketplaceOverlay, type McpMarketplaceOverlayStatus } from './plugin-marketplace-runtime'
 import { SidebarTitlebarToggleButton } from './sidebar/SidebarPrimitives'
-
 export {
   auditMarketplaceInstall,
   auditMcpConfigSupplyChain,
@@ -53,22 +31,20 @@ export {
 } from './plugin-marketplace-config'
 export {
   mcpMarketplaceItemsFromConfigAndDiagnostics,
+  hasUserConfiguredGitHubMcp,
+  isSystemManagedMcpServerId,
+  overlaySystemManagedMcpDiagnostics,
+  recommendedMarketplaceItemsForMcpConfig,
   recommendedMarketplaceItemIds,
   skillMarketplaceItemsFromDiscoveredSkills,
   skillRootOptionsFromRoots,
   skillRootShortLabel
 } from './plugin-marketplace-catalog'
+import { GitHubMcpAuthorizationDialog } from './GitHubMcpAuthorizationDialog'
+import { useGitHubMcpAuthorization } from './use-github-mcp-authorization'
 import { PluginMarketplaceContent } from './PluginMarketplaceContent'
 import { runtimeOverlayErrorMessage } from './PluginMarketplaceRuntimePanels'
-import {
-  RECOMMENDED_ITEMS,
-  itemDescription,
-  itemTitle,
-  mcpMarketplaceItemsFromConfigAndDiagnostics,
-  skillMarketplaceItemsFromDiscoveredSkills,
-  skillNameLooksValid,
-  skillRootOptionsFromRoots
-} from './plugin-marketplace-catalog'
+import { RECOMMENDED_ITEMS, isSystemManagedMcpServerId, itemDescription, itemTitle, mcpMarketplaceItemsFromConfigAndDiagnostics, overlaySystemManagedMcpDiagnostics, recommendedMarketplaceItemsForMcpConfig, skillMarketplaceItemsFromDiscoveredSkills, skillNameLooksValid, skillRootOptionsFromRoots } from './plugin-marketplace-catalog'
 import {
   auditMarketplaceInstall,
   auditMcpConfigSupplyChain,
@@ -94,6 +70,7 @@ import {
   type Props,
   type SkillRootOption
 } from './plugin-marketplace-config'
+
 export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSidebar }: Props): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = normalizeWorkspaceRoot(useChatStore((s) => s.workspaceRoot))
@@ -209,6 +186,12 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
     void refreshMcpRuntimeOverlay()
   }, [activeKind, refreshMcpRuntimeOverlay])
 
+  const githubAuthorization = useGitHubMcpAuthorization({
+    t,
+    setNotice,
+    refreshRuntime: refreshMcpRuntimeOverlay
+  })
+
   const refreshSkillList = useCallback(async (): Promise<void> => {
     if (typeof window.kunGui?.listSkills !== 'function') {
       setDiscoveredSkills([])
@@ -296,24 +279,45 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
     }),
     [discoveredSkills, t]
   )
+  const mcpRuntimeLabels = useMemo(() => ({
+    configured: t('pluginMcpSourceConfigured'),
+    connected: t('pluginMcpSourceConnected'),
+    error: t('pluginMcpSourceError'),
+    disabled: t('pluginMcpSourceDisabled')
+  }), [t])
+  const systemManagedGitHubMcp = useMemo(
+    () => isSystemManagedMcpServerId(
+      BUILTIN_GITHUB_MCP_SERVER_ID,
+      mcpConfigText,
+      toolDiagnostics
+    ),
+    [mcpConfigText, toolDiagnostics]
+  )
   const discoveredMcpItems = useMemo(
-    () => mcpMarketplaceItemsFromConfigAndDiagnostics(mcpConfigText, toolDiagnostics, {
-      configured: t('pluginMcpSourceConfigured'),
-      connected: t('pluginMcpSourceConnected'),
-      error: t('pluginMcpSourceError'),
-      disabled: t('pluginMcpSourceDisabled')
-    }).filter((item) => item.id !== GUI_SCHEDULE_MCP_SERVER_ID),
-    [mcpConfigText, t, toolDiagnostics]
+    () => mcpMarketplaceItemsFromConfigAndDiagnostics(
+      mcpConfigText,
+      toolDiagnostics,
+      mcpRuntimeLabels
+    ).filter((item) => !isSystemManagedMcpServerId(item.id, mcpConfigText, toolDiagnostics)),
+    [mcpConfigText, mcpRuntimeLabels, toolDiagnostics]
   )
   const discoveredMcpIds = useMemo(
     () => new Set(discoveredMcpItems.map((item) => item.id)),
     [discoveredMcpItems]
   )
+  const catalogItems = useMemo(
+    () => overlaySystemManagedMcpDiagnostics(
+      recommendedMarketplaceItemsForMcpConfig(mcpConfigText, toolDiagnostics),
+      toolDiagnostics,
+      mcpRuntimeLabels
+    ),
+    [mcpConfigText, mcpRuntimeLabels, toolDiagnostics]
+  )
   const marketplaceItems = useMemo(
     () => activeKind === 'skill'
-      ? [...RECOMMENDED_ITEMS, ...discoveredSkillItems]
-      : [...RECOMMENDED_ITEMS, ...discoveredMcpItems],
-    [activeKind, discoveredMcpItems, discoveredSkillItems]
+      ? [...catalogItems, ...discoveredSkillItems]
+      : [...catalogItems, ...discoveredMcpItems],
+    [activeKind, catalogItems, discoveredMcpItems, discoveredSkillItems]
   )
 
   const isInstalled = useCallback((item: Pick<MarketplaceItem, 'kind' | 'id'> & Partial<Pick<MarketplaceItem, 'group' | 'serverIds'>>): boolean => {
@@ -358,9 +362,14 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
     () => buildMcpMarketplaceOverlay({
       runtimeInfo,
       toolDiagnostics,
-      managedServers: [{ id: GUI_SCHEDULE_MCP_SERVER_ID, toolCount: 4 }]
+      managedServers: [
+        { id: GUI_SCHEDULE_MCP_SERVER_ID, toolCount: 4 },
+        ...(systemManagedGitHubMcp
+          ? [{ id: BUILTIN_GITHUB_MCP_SERVER_ID, toolCount: 0 }]
+          : [])
+      ]
     }),
-    [runtimeInfo, toolDiagnostics]
+    [runtimeInfo, systemManagedGitHubMcp, toolDiagnostics]
   )
 
   const appendMcpConfig = async (id: string, config: JsonRecord): Promise<void> => {
@@ -386,6 +395,10 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
   }
 
   const addItem = async (item: MarketplaceItem): Promise<void> => {
+    if (item.id === BUILTIN_GITHUB_MCP_SERVER_ID) {
+      await githubAuthorization.inspect()
+      return
+    }
     if (item.kind === 'mcp' && item.oauth) {
       setNotice(null)
       setOauthPreviewItem(item)
@@ -589,7 +602,8 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
   }
 
   return (
-    <PluginMarketplaceContent
+    <>
+      <PluginMarketplaceContent
       leftSidebarCollapsed={leftSidebarCollapsed}
       onToggleLeftSidebar={onToggleLeftSidebar}
       t={t}
@@ -650,6 +664,16 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
       mcpConfigText={mcpConfigText}
       mcpToggleBusyId={mcpToggleBusyId}
       toggleMcpEnabled={toggleMcpEnabled}
-    />
+      />
+      <GitHubMcpAuthorizationDialog
+        preflight={githubAuthorization.preflight ?? undefined}
+        busy={githubAuthorization.busy}
+        onCancel={githubAuthorization.close}
+        onBind={(host) => void githubAuthorization.bind(host)}
+        onDisable={() => void githubAuthorization.disable()}
+        onConfirm={(input) => void githubAuthorization.confirm(input)}
+        t={t}
+      />
+    </>
   )
 }

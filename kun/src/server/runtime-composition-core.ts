@@ -31,12 +31,15 @@ import {
   type ThreadStore,
   KUN_SYSTEM_PROMPT,
   RuntimeEventRecorder,
+  ThreadActivityRegistry,
   GraphRuntimeComposition,
   LifecycleFencedSessionStore,
   LifecycleFencedThreadStore,
   ThreadLifecycleFence,
   LlmDebugRecorder,
   ThreadService,
+  FileProjectBoardStore,
+  ProjectBoardService,
   UsageService,
   ModelConnectionRegistry,
   type RuntimeDataDirLease
@@ -97,27 +100,30 @@ export async function createRuntimeCore(
   const nowIso = () => new Date().toISOString()
   const allocateSeq = (threadId: string) =>
     sessionStore.allocateEventSeq?.(threadId) ?? eventBus.allocateSeq(threadId)
-  // Agent Perspective is a visible runtime capability, so capture is available
-  // by default. Advanced configurations can explicitly opt out when local
-  // sensitive-content retention or request-path overhead is undesirable.
-  const llmDebug = llmDebugCaptureEnabled(activeOptions)
-    ? new LlmDebugRecorder({
-        dataDir: activeOptions.dataDir,
-        shouldCapture: async (threadId) =>
-          (await threadStore.get(threadId))?.modelRequestCaptureEnabled === true
-      })
-    : undefined
+  // Compact lifecycle metadata is always available. The legacy llmDebug
+  // facility flag and per-thread switch now gate optional prompt/wire content.
+  const llmDebug = new LlmDebugRecorder({
+    dataDir: activeOptions.dataDir,
+    shouldCapture: async (threadId) =>
+      llmDebugCaptureEnabled(activeOptions) &&
+      (await threadStore.get(threadId))?.modelRequestCaptureEnabled === true
+  })
   const agentObservability = createAgentObservabilityRecorder({
     config: activeOptions.observability,
     dataDir: activeOptions.dataDir
   })
+  const threadActivity = new ThreadActivityRegistry()
+  const observers = [
+    threadActivity,
+    ...(agentObservability ? [agentObservability] : [])
+  ]
   const events = new RuntimeEventRecorder({
     eventBus,
     sessionStore,
     allocateSeq,
     nowIso,
     lifecycleFence,
-    ...(agentObservability ? { observers: [agentObservability] } : {})
+    observers
   })
   let prefix = createImmutablePrefix({
     systemPrompt: KUN_SYSTEM_PROMPT,
@@ -168,6 +174,17 @@ export async function createRuntimeCore(
     onStatusChanged: (threadId, status) => handleGraphThreadStatus?.(threadId, status),
     onForked: (sourceThreadId, targetThreadId) =>
       handleGraphThreadFork?.(sourceThreadId, targetThreadId)
+  })
+  const projectBoardStore = new FileProjectBoardStore({
+    dataDir: options.dataDir,
+    nowIso
+  })
+  const projectBoardService = new ProjectBoardService({
+    store: projectBoardStore,
+    threadStore,
+    threadService,
+    ids,
+    nowIso
   })
   const artifactStore: ArtifactStore = activeOptions.serviceManager
     ? new ManagerRemoteArtifactStore(activeOptions.serviceManager)
@@ -277,9 +294,12 @@ export async function createRuntimeCore(
     llmDebug,
     agentObservability,
     events,
+    threadActivity,
     prefix,
     delegatedSessions,
     threadService,
+    projectBoardStore,
+    projectBoardService,
     artifactStore,
     graphConfig,
     graphRuntime,

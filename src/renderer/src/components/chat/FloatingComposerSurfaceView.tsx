@@ -15,8 +15,8 @@ export function FloatingComposerSurfaceView({
   const {
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
     FloatingComposerContextCapacity, FloatingComposerExecutionPicker, FloatingComposerModelPicker,
-    FloatingComposerTaskProfile,
-    Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
+    FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
+    Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
     activeThreadId, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
     canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
@@ -26,7 +26,7 @@ export function FloatingComposerSurfaceView({
     executionSettings, executionSettingsApplying, fileInputRef, fileMentions, fileReferences,
     goalInputMode, graphEnabled, graphPlanningNeedsCorrection, handleAttachmentInput,
     handleComposerDragOver, handleComposerDrop, handleComposerKeyDown, handleComposerMenuButtonClick,
-    handleComposerPaste, handleComposerShellMouseDown, handlePlanToolbarClick, handlePrimaryAction,
+    handleComposerPaste, handleComposerShellMouseDown, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, handlePrimaryAction,
     handlePromptOptimizationClick, hideModelPicker, input, isComposerDirectoryReference, mode,
     imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, modelControlVariant, modelPickerMode, onComposerFastModeChange, onComposerModelChange,
     onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange, onInterrupt,
@@ -42,21 +42,17 @@ export function FloatingComposerSurfaceView({
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
   return (
     <>
-        {!compact && !emptyTaskLayout && taskSurface && designTaskProfile && (
-          !taskSurfaceLocked || taskSurface === 'design'
-        ) ? (
+        {!compact && !emptyTaskLayout && taskSurface === 'design' && designTaskProfile ? (
           <div className="ds-composer-task-controls ds-no-drag flex min-h-9 min-w-0 flex-wrap items-center gap-2 px-3 pb-1">
             <FloatingComposerTaskProfile
-              surface={taskSurface}
+              surface="design"
               locked={taskSurfaceLocked === true}
               profileLocked={designProfileLocked === true}
-              showSurfaceSelector={!taskSurfaceLocked}
               disabled={!canCompose || busy}
               profile={designTaskProfile}
               imageGenerationEnabled={imageGenerationEnabled}
               imageGenerationAvailable={imageGenerationAvailable === true}
               imageGenerationReason={imageGenerationReason}
-              onSurfaceChange={onTaskSurfaceChange}
               onProfileChange={onDesignTaskProfileChange}
               onConfigureImageGeneration={onConfigureImageGeneration}
             />
@@ -94,8 +90,6 @@ export function FloatingComposerSurfaceView({
                 surface="design"
                 locked={taskSurfaceLocked === true}
                 profileLocked={designProfileLocked === true}
-                showSurfaceSelector={false}
-                variant="summary"
                 disabled={!canCompose || busy}
                 profile={designTaskProfile}
                 imageGenerationEnabled={imageGenerationEnabled}
@@ -234,6 +228,13 @@ export function FloatingComposerSurfaceView({
                     >
                       <Plus className="h-5 w-5" strokeWidth={1.8} />
                     </button>
+                    {taskSurface && onTaskSurfaceChange && !taskSurfaceLocked ? (
+                      <FloatingComposerTaskSurfacePicker
+                        surface={taskSurface}
+                        disabled={!canCompose || busy}
+                        onSurfaceChange={onTaskSurfaceChange}
+                      />
+                    ) : null}
                     {showCodeExecutionControls && mode === 'plan' ? (
                       <button
                         type="button"
@@ -245,6 +246,19 @@ export function FloatingComposerSurfaceView({
                       >
                         <ListTodo className="h-3.5 w-3.5" strokeWidth={1.9} />
                         <span className="ds-composer-mode-label">{t('slashCommandPlanTitle')}</span>
+                        <X className="h-3 w-3" strokeWidth={2} />
+                      </button>
+                    ) : showCodeExecutionControls && mode === 'auto' ? (
+                      <button
+                        type="button"
+                        data-composer-auto-plan-build-mode-badge
+                        onClick={handleAutoPlanBuildToolbarClick}
+                        className="ds-composer-mode-badge ds-no-drag inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-[13px] font-medium text-accent transition hover:brightness-95"
+                        title={`${t('cancel')} ${t('composerMenuAutoPlanBuild')}`}
+                        aria-label={`${t('cancel')} ${t('composerMenuAutoPlanBuild')}`}
+                      >
+                        <Bot className="h-3.5 w-3.5" strokeWidth={1.9} />
+                        <span className="ds-composer-mode-label">{t('composerMenuAutoPlanBuild')}</span>
                         <X className="h-3 w-3" strokeWidth={2} />
                       </button>
                     ) : null}

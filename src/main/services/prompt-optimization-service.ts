@@ -6,7 +6,7 @@ import {
   resolveKunPromptOptimizationPrompt,
   resolveKunRuntimeSettings,
   resolveModelEndpointFormat,
-  resolveModelProviderProxyUrl,
+  resolveProviderProxyUrl,
   isCustomModelEndpointFormat,
   type AppSettingsV1,
   type ModelEndpointFormat,
@@ -318,7 +318,7 @@ export async function optimizePrompt(
       headers: request.headers,
       body: JSON.stringify(request.body),
       signal: AbortSignal.timeout(modelSettings.timeoutMs)
-    }, resolveModelProviderProxyUrl(settings))
+    }, resolveProviderProxyUrl(settings, modelSettings.providerId))
     bodyText = await response.text()
   } catch (error) {
     return {

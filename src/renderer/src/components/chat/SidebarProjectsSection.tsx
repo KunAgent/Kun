@@ -20,6 +20,7 @@ import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
 import { rememberCodeWorkspaceRoots } from '../../store/chat-store-helpers'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { removedWorkspaceIdentityKeys } from '../../lib/removed-code-workspaces'
 import {
   normalizeWorkspaceRoot,
   workspaceRootIdentityKey
@@ -131,7 +132,9 @@ import { createSidebarProjectWorkspaceActions } from './sidebar-project-workspac
 import { useSidebarWorkspaceAutoLoad } from './sidebar-project-auto-load'
 import type { SidebarProjectExpansionStage } from './sidebar-project-expansion'
 import { SidebarProjectsContent, type SidebarThreadListStatus } from './SidebarProjectsContent'
-import { discoverSidebarWorktrees } from './sidebar-worktree-discovery'
+import { useSidebarWorktreeDiscovery } from './sidebar-worktree-discovery'
+import { useSidebarWorkspaceCreationTimes } from './sidebar-project-creation-times'
+import { useRemovedWorkspaceDiscoveredAliases } from './use-removed-workspace-discovered-aliases'
 export {
   buildSidebarDraftWorkspacePaths,
   buildSidebarThreadMoveTargets,
@@ -170,7 +173,11 @@ type SidebarProjectsSectionProps = {
   awaitingUserInputThreadIds?: Parameters<typeof sidebarThreadActivity>[1]['awaitingUserInputThreadIds']
   locale: string
   onPickWorkspace: () => void
-  onRemoveWorkspace: (workspacePath: string) => Promise<void>
+  /**
+   * Remove the whole project identity (main dir + resolved worktree aliases)
+   * from the Code sidebar/picker. Keeps threads and files on disk.
+   */
+  onRemoveWorkspace: (workspacePath: string, relatedPaths?: string[]) => Promise<void>
   onCreateThreadInWorkspace: (
     workspacePath: string,
     options?: { forceNew?: boolean }
@@ -278,7 +285,7 @@ export function SidebarProjectsSection({
   const [registeredThreadWorktrees, setRegisteredThreadWorktrees] = useState<SidebarThreadWorktrees>(
     () => readThreadWorktreeRegistry().worktrees
   )
-  const [discoveredThreadWorktrees, setDiscoveredThreadWorktrees] = useState<SidebarThreadWorktrees>({})
+  const removedCodeWorkspaces = useChatStore((s) => s.removedCodeWorkspaces)
   const threadWorkspaceIdentityKey = sidebarThreadWorkspaceIdentityKey(threads)
   const workspaceRootsIdentityKey = workspaceRoots.map(normalizeWorkspaceRoot).sort().join('\n')
 
@@ -291,27 +298,18 @@ export function SidebarProjectsSection({
     workspaceRoot,
     workspaceRoots
   )
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.kunGui?.getGitBranches !== 'function') return
-    let cancelled = false
-    setDiscoveredThreadWorktrees({})
-    const workspacePaths = JSON.parse(worktreeDiscoveryKey) as string[]
-    void discoverSidebarWorktrees(
-      workspacePaths,
-      (workspacePath) => window.kunGui.getGitBranches(workspacePath)
-    ).then((records) => {
-      if (!cancelled) setDiscoveredThreadWorktrees(records)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [worktreeDiscoveryKey])
+  const discoveredThreadWorktrees = useSidebarWorktreeDiscovery(worktreeDiscoveryKey)
 
   const threadWorktrees = useMemo(() => ({
     ...discoveredThreadWorktrees,
     ...registeredThreadWorktrees
   }), [discoveredThreadWorktrees, registeredThreadWorktrees])
+
+  const workspaceCreationTimes = useSidebarWorkspaceCreationTimes(
+    sidebarWorkspaceResolutionCandidates({ workspaceRoot, workspaceRoots, threadWorktrees, threads })
+  )
+
+  useRemovedWorkspaceDiscoveredAliases(discoveredThreadWorktrees, removedCodeWorkspaces)
 
   const sidebarThreadActivityContext = {
     activeThreadId,
@@ -322,6 +320,11 @@ export function SidebarProjectsSection({
     awaitingUserInputThreadIds
   }
 
+  const removedProjectKeys = useMemo(
+    () => removedWorkspaceIdentityKeys(removedCodeWorkspaces),
+    [removedCodeWorkspaces]
+  )
+
   const groups = useMemo(() => {
     return buildSidebarWorkspaceGroups({
       threads,
@@ -330,9 +333,11 @@ export function SidebarProjectsSection({
       workspaceRoot,
       workspaceRoots,
       conversationRoot,
-      threadWorktrees
+      threadWorktrees,
+      removedProjectKeys,
+      workspaceCreatedAt: workspaceCreationTimes
     })
-  }, [searchQuery, showArchived, threadWorktrees, threads, workspaceRoot, workspaceRoots, conversationRoot])
+  }, [searchQuery, showArchived, threadWorktrees, threads, workspaceRoot, workspaceRoots, conversationRoot, removedProjectKeys, workspaceCreationTimes])
 
   const allProjectGroups = useMemo(() => {
     const byWorkspace = new Map<string, [string, NormalizedThread[]]>()
@@ -344,7 +349,9 @@ export function SidebarProjectsSection({
         workspaceRoot,
         workspaceRoots,
         conversationRoot,
-        threadWorktrees
+        threadWorktrees,
+        removedProjectKeys,
+        workspaceCreatedAt: workspaceCreationTimes
       })
       for (const [workspacePath, items] of nextGroups) {
         const key = workspaceRootIdentityKey(workspacePath)
@@ -354,7 +361,7 @@ export function SidebarProjectsSection({
       }
     }
     return [...byWorkspace.values()]
-  }, [conversationRoot, threadWorktrees, threads, workspaceRoot, workspaceRoots])
+  }, [conversationRoot, threadWorktrees, threads, workspaceRoot, workspaceRoots, removedProjectKeys, workspaceCreationTimes])
 
   const allThreadIdsByScope = useMemo(() => {
     return Object.fromEntries(allProjectGroups.map(([workspacePath, items]) => [

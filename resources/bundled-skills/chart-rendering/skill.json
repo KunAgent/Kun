@@ -1,0 +1,25 @@
+{
+  "id": "chart-rendering",
+  "name": "Chart Rendering",
+  "version": "1.0.0",
+  "description": "Render governed Kun charts and tables from structured data for trustworthy comparison and lookup.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/chart-rendering"
+    ],
+    "promptPatterns": [
+      "bar chart",
+      "Chart Rendering",
+      "chart-rendering",
+      "line chart",
+      "render chart",
+      "图表",
+      "数据表"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

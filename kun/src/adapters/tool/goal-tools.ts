@@ -30,6 +30,7 @@ function createGetGoalTool(threadService: ThreadService): LocalTool {
       additionalProperties: false
     },
     policy: 'auto',
+    sideEffect: 'read-only',
     toolKind: 'tool_call',
     execute: async (_args, context) => {
       const goal = await threadService.getGoal(context.threadId)

@@ -4,6 +4,7 @@ import type { ToolCallProviderMetadata } from '../../contracts/items.js'
 import type { ModelRequest, ModelToolSpec } from '../../ports/model-client.js'
 import { promptCacheKey } from '../../cache/prompt-cache-partition.js'
 import { isFixedSamplingModel } from './fixed-sampling.js'
+import { projectAnthropicToolInputSchema } from './anthropic-tool-schema-projection.js'
 import { isDeepSeekHost, isGeminiOpenAiHost } from './model-error-probe.js'
 
 export const COMPAT_HISTORY_CONTEXT = Symbol('compat-history-context')
@@ -281,7 +282,9 @@ export class CompatRequestCodecs {
     }
     if (input.tools.length) {
       body.tools = input.tools.map((tool) => ({
-        name: tool.name, description: tool.description, input_schema: tool.inputSchema
+        name: tool.name,
+        description: tool.description,
+        input_schema: projectAnthropicToolInputSchema(tool.inputSchema)
       }))
     }
     if (requiredToolChoice) body.tool_choice = { type: 'tool', name: requiredToolChoice }

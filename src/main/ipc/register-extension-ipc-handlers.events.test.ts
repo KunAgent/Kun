@@ -367,6 +367,11 @@ describe('extension IPC security bridge environment and events', () => {
       }
     })
     expect(eventPoll).toBeGreaterThanOrEqual(2)
+    await vi.waitFor(() => expect(state.mainContents.send).toHaveBeenCalledWith(
+      'extension:view-session:invalidated',
+      { sessionId: created.sessionId }
+    ))
+    expect(state.viewSessions.get(created.sessionId)).toBeUndefined()
     state.registration.dispose()
   })
 
@@ -412,6 +417,46 @@ describe('extension IPC security bridge environment and events', () => {
       '*.bilibili.com',
       'bilibili.com'
     ])
+    const sessionPostIndex = state.runtimeRequest.mock.calls.findIndex(
+      ([path, method]) => path === '/v1/extensions/view-sessions' && method === 'POST'
+    )
+    expect(state.runtimeRequest.mock.invocationCallOrder[sessionPostIndex]!).toBeLessThan(
+      state.descriptors.resolveView.mock.invocationCallOrder[0]!
+    )
+    expect(state.descriptors.resolveView).toHaveBeenCalledTimes(1)
+    state.registration.dispose()
+  })
+
+  it('rolls back a runtime View Session when its current descriptor no longer resolves', async () => {
+    const state = fixture()
+    state.descriptors.resolveView.mockRejectedValue(new Error('workspace grant was revoked'))
+    state.runtimeRequest.mockImplementation(async (path: string, method?: string) => {
+      if (path === '/v1/extensions/view-sessions' && method === 'POST') {
+        return {
+          ok: true,
+          status: 201,
+          body: JSON.stringify({
+            sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+            nonce: 'n'.repeat(43),
+            extensionId: 'acme.example',
+            extensionVersion: '1.0.0',
+            contributionId: 'extension:acme.example/issues'
+          })
+        }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+
+    await expect(electronMock.handlers.get('extension:view-session:create')!(
+      state.trustedEvent,
+      { contributionId: 'extension:acme.example/issues', workspaceRoot: '/workspace' }
+    )).rejects.toThrow(/workspace grant was revoked/)
+
+    expect(state.runtimeRequest).toHaveBeenCalledWith(
+      '/v1/extensions/view-sessions/view_12345678-1234-1234-1234-123456789abc',
+      'DELETE'
+    )
+    expect(state.viewSessions.get('view_12345678-1234-1234-1234-123456789abc')).toBeUndefined()
     state.registration.dispose()
   })
 
@@ -570,6 +615,29 @@ describe('extension IPC security bridge environment and events', () => {
     expect(state.protectedActions.revokeSender).toHaveBeenCalledWith(1)
     expect(state.viewSessions.get(record.sessionId)).toBeUndefined()
     expect(state.viewProtocols.dispose).toHaveBeenCalledWith(record.sessionId)
+  })
+
+  it('does not report an explicit Renderer disposal as a lifecycle invalidation', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+
+    await electronMock.handlers.get('extension:view-session:dispose')!(state.trustedEvent, {
+      sessionId: record.sessionId
+    })
+
+    expect(state.mainContents.send).not.toHaveBeenCalledWith(
+      'extension:view-session:invalidated',
+      expect.anything()
+    )
+    expect(state.viewSessions.get(record.sessionId)).toBeUndefined()
   })
 
   it('cancels the event pump and disposes the runtime session when a guest is destroyed', async () => {

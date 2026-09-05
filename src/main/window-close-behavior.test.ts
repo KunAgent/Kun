@@ -34,4 +34,12 @@ describe('window close behavior', () => {
       isUpdateInstallQuitting: false
     })).toBe('allow')
   })
+
+  it('routes a saved quit action through the application quit barrier', () => {
+    expect(resolveMainWindowCloseDecision({
+      closeAction: 'quit',
+      isQuitting: false,
+      isUpdateInstallQuitting: false
+    })).toBe('quit-app')
+  })
 })

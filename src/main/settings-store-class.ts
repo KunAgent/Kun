@@ -67,7 +67,8 @@ import {
   replaceInvalidSettingsWithDefaults,
   serializeSettingsForDisk,
   storedKunRuntimeTuning,
-  writeLegacyCredentialSettingsBackup
+  writeLegacyCredentialSettingsBackup,
+  assertSupportedSettingsVersion
 } from './settings-store-foundation'
 
 export class JsonSettingsStore {
@@ -156,6 +157,8 @@ export class JsonSettingsStore {
       )
     }
 
+    assertSupportedSettingsVersion(parsed, sourcePath)
+
     const persistRuntimeTuningDefaultsMigration = (() => {
       const runtimeTuning = storedKunRuntimeTuning(parsed)
       return runtimeTuning !== undefined &&
@@ -221,6 +224,7 @@ export class JsonSettingsStore {
   }
 
   private async saveOnce(data: AppSettingsV1, expectedRevision = this.documentRevision): Promise<void> {
+    assertSupportedSettingsVersion(data, this.path)
     const normalized = normalizeStoredSettings(data)
     await ensureManagedWorkspaceRootsExist(normalized)
     const prepared = normalized
@@ -369,12 +373,12 @@ export class JsonSettingsStore {
     try {
       const repairedSourceIds = await repair.call(credentialMigration, settings, backup)
       if (repairedSourceIds.length > 0) {
-        console.info('[kun-gui] Recovered refreshable OAuth credentials from the protected migration backup.', {
+        console.info('[kun-gui] Recovered provider credentials from the protected migration backup.', {
           sourceIds: repairedSourceIds
         })
       }
     } catch (error) {
-      console.warn('[kun-gui] Refreshable OAuth credential recovery was skipped.', {
+      console.warn('[kun-gui] Protected credential recovery was skipped.', {
         message: error instanceof Error ? error.message : String(error)
       })
     }

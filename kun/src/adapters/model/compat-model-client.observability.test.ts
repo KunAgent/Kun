@@ -41,7 +41,7 @@ function okJson(text = 'ok'): Response {
 }
 
 describe('CompatModelClient request observability', () => {
-  it('skips trace creation when the thread capture policy is disabled', async () => {
+  it('retains metadata but not request content when the thread capture policy is disabled', async () => {
     const recorder = new LlmDebugRecorder({ shouldCapture: () => false })
     let calls = 0
     const client = new CompatModelClient({
@@ -61,7 +61,11 @@ describe('CompatModelClient request observability', () => {
 
     expect(calls).toBe(1)
     expect(chunks).toContainEqual({ kind: 'assistant_text_delta', text: 'not traced' })
-    expect(recorder.snapshot()).toEqual([])
+    expect(recorder.snapshot()).toHaveLength(1)
+    expect(recorder.snapshot()[0]).toMatchObject({
+      captureContent: false,
+      exchanges: [{ captureMode: 'metadata', request: { body: { text: '', originalBytes: 0 } } }]
+    })
   })
 
   it('captures exact request JSON, redacted headers, raw SSE, response headers, and decoded output', async () => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { UsageSnapshot } from '../src/contracts/usage.js'
@@ -8,7 +8,8 @@ import type { TurnItem } from '../src/contracts/items.js'
 const atomicWriteFileMock = vi.hoisted(() => vi.fn())
 const compactUsageEventsJsonlFileMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../src/adapters/file/atomic-write.js', () => ({
+vi.mock('../src/adapters/file/atomic-write.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/adapters/file/atomic-write.js')>(),
   atomicWriteFile: atomicWriteFileMock
 }))
 
@@ -144,6 +145,56 @@ describe('FileSessionStore', () => {
     expect(events.map((event) => event.seq)).toEqual([36, 37, 38, 39, 40])
   })
 
+  it('pages event history with a forward byte cursor and bounded results', async () => {
+    const sessionStore = new FileSessionStore({ dataDir })
+    const threadId = 'thr_event_pages'
+    for (let seq = 1; seq <= 5; seq += 1) {
+      await sessionStore.appendEvent(threadId, {
+        kind: 'heartbeat', seq, timestamp: `2026-01-01T00:00:0${seq}.000Z`, threadId
+      })
+    }
+
+    const first = await sessionStore.loadEventPage(threadId, { sinceSeq: 0, maxEvents: 2 })
+    expect(first.events.map((event) => event.seq)).toEqual([1, 2])
+    expect(first).toMatchObject({ hasMore: true, nextCursor: expect.any(String) })
+    await sessionStore.appendEvent(threadId, {
+      kind: 'heartbeat', seq: 6, timestamp: '2026-01-01T00:00:06.000Z', threadId
+    })
+    const second = await sessionStore.loadEventPage(threadId, {
+      sinceSeq: 2, cursor: first.nextCursor, maxEvents: 2
+    })
+    const third = await sessionStore.loadEventPage(threadId, {
+      sinceSeq: 4, cursor: second.nextCursor, maxEvents: 2
+    })
+    expect(second.events.map((event) => event.seq)).toEqual([3, 4])
+    expect(third.events.map((event) => event.seq)).toEqual([5, 6])
+    expect(third.hasMore).toBe(false)
+  })
+
+  it('bounds event history while preserving the durable high-water mark', async () => {
+    const sessionStore = new FileSessionStore({
+      dataDir,
+      compactionDelayMs: 0,
+      eventHistoryCompaction: { maxBytes: 700, retainBytes: 350 }
+    })
+    const threadId = 'thr_event_retention'
+    for (let seq = 1; seq <= 12; seq += 1) {
+      await sessionStore.appendEvent(threadId, {
+        kind: 'error', seq, timestamp: `2026-01-01T00:00:${String(seq).padStart(2, '0')}.000Z`,
+        threadId, message: 'x'.repeat(80)
+      })
+    }
+    await sessionStore.flushScheduledCompaction(threadId)
+
+    const retained = await sessionStore.loadEventsSince(threadId, 0)
+    expect(warnSpy.mock.calls).toEqual([])
+    expect(retained.length).toBeGreaterThan(0)
+    expect(retained.length).toBeLessThan(12)
+    expect(retained.at(-1)?.seq).toBe(12)
+    expect(await sessionStore.eventReplayFloorSeq(threadId)).toBe(retained[0]?.seq)
+    expect(await sessionStore.highestSeq(threadId)).toBe(12)
+  })
+
   it('caches the event high-water mark until the event file changes', async () => {
     const sessionStore = new FileSessionStore({ dataDir })
     await sessionStore.appendEvent('thr_high_water', {
@@ -183,6 +234,47 @@ describe('FileSessionStore', () => {
 
     await appendFile(eventsPath, `${eventTwo.slice(Math.ceil(eventTwo.length / 2))}\n`)
     expect(await sessionStore.highestSeq(threadId)).toBe(2)
+  })
+
+  it('repairs and records a crash-torn event tail before the next append', async () => {
+    const threadId = 'thr_torn_tail'
+    const writer = new FileSessionStore({ dataDir })
+    await writer.appendEvent(threadId, {
+      kind: 'heartbeat', seq: 1, timestamp: '2026-01-01T00:00:00.000Z', threadId
+    })
+    const threadDir = join(dataDir, 'threads', threadId)
+    const eventsPath = join(threadDir, 'events.jsonl')
+    await appendFile(eventsPath, '{"kind":"heartbeat","seq":2')
+
+    // A restarted store must discard the bytes that were never committed by
+    // a newline before it accepts another durable record.
+    const restarted = new FileSessionStore({ dataDir })
+    await restarted.appendEvent(threadId, {
+      kind: 'heartbeat', seq: 3, timestamp: '2026-01-01T00:00:02.000Z', threadId
+    })
+
+    expect((await restarted.loadEventsSince(threadId, 0)).map((event) => event.seq)).toEqual([1, 3])
+    const evidence = JSON.parse(await readFile(join(threadDir, 'events.torn-tail.json'), 'utf8')) as {
+      truncatedBytes: number
+      sampleBase64: string
+    }
+    expect(evidence.truncatedBytes).toBeGreaterThan(0)
+    expect(Buffer.from(evidence.sampleBase64, 'base64').toString('utf8')).toContain('"seq":2')
+    expect(await readFile(eventsPath, 'utf8')).toMatch(/"seq":1[^\n]*\n.*"seq":3[^\n]*\n$/s)
+  })
+
+  it('uses the replay record limit when reading a large first event as the floor', async () => {
+    const sessionStore = new FileSessionStore({ dataDir })
+    const threadId = 'thr_large_floor'
+    await sessionStore.appendEvent(threadId, {
+      kind: 'error',
+      seq: 91,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      threadId,
+      message: 'x'.repeat(1024 * 1024 + 32)
+    })
+
+    await expect(sessionStore.eventReplayFloorSeq(threadId)).resolves.toBe(91)
   })
 
   it('streams replay records in order and rejects an oversized unterminated record', async () => {

@@ -671,7 +671,7 @@ describe('thread event sink runtime errors', () => {
     expect(state.error).toBeNull()
     expect(state.runtimeErrorDetail).toBeNull()
     expect(state.watchTurnCompletion).toEqual({})
-    expect(state.unreadThreadIds).toEqual({})
+    expect(state.unreadThreadIds).toEqual({ 'thr-1': 'failed' })
     expect(state.blocks.map((block) => ('status' in block ? block.status : block.kind))).toEqual([
       'user',
       'error',

@@ -8,6 +8,7 @@ import { emptyUsageSnapshot } from '../contracts/usage.js'
  */
 export class UsageCounter {
   private perThread = new Map<string, UsageSnapshot>()
+  private readonly dirtyThreads = new Set<string>()
   /** Raw per-request timing sums keyed by thread, used to derive averages. */
   private readonly timing = new Map<string, TimingAgg>()
 
@@ -15,15 +16,18 @@ export class UsageCounter {
     if (threadId === undefined) {
       this.perThread.clear()
       this.timing.clear()
+      this.dirtyThreads.clear()
       return
     }
     this.perThread.delete(threadId)
     this.timing.delete(threadId)
+    this.dirtyThreads.delete(threadId)
   }
 
   seed(threadId: string, snapshot: UsageSnapshot): UsageSnapshot {
     const next = attachTimingAverages(normalizeUsageSnapshot(snapshot), emptyTimingAgg())
     this.perThread.set(threadId, next)
+    this.dirtyThreads.delete(threadId)
     // Restored threads have no in-process timing history.
     this.timing.delete(threadId)
     return next
@@ -123,6 +127,7 @@ export class UsageCounter {
     const threadTiming = this.timing.get(threadId) ?? emptyTimingAgg()
     this.timing.set(threadId, foldTiming(threadTiming, snapshot))
     this.perThread.set(threadId, attachTimingAverages(next, this.timing.get(threadId)!))
+    this.dirtyThreads.add(threadId)
     return this.perThread.get(threadId)!
   }
 
@@ -148,6 +153,7 @@ export class UsageCounter {
           : (current.tokenEconomySavingsCny ?? 0) + (savings.tokenEconomySavingsCny ?? 0)
     }
     this.perThread.set(threadId, next)
+    this.dirtyThreads.add(threadId)
     return next
   }
 
@@ -161,6 +167,13 @@ export class UsageCounter {
 
   forThread(threadId: string): UsageSnapshot {
     return this.perThread.get(threadId) ?? emptyUsageSnapshot()
+  }
+
+  snapshots(): Array<{ threadId: string; usage: UsageSnapshot }> {
+    return [...this.dirtyThreads].map((threadId) => ({
+      threadId,
+      usage: this.perThread.get(threadId) ?? emptyUsageSnapshot()
+    }))
   }
 }
 

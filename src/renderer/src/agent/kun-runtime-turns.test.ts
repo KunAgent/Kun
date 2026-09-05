@@ -69,6 +69,7 @@ function installDsGui(overrides: Partial<Window['kunGui']>): void {
       })),
       stopSse: vi.fn(async () => true),
       ackSse: vi.fn(async () => true),
+      onSseOpen: vi.fn(() => () => undefined),
       onSseEvent: vi.fn(() => () => undefined),
       onSseEnd: vi.fn(() => () => undefined),
       onSseError: vi.fn(() => () => undefined),
@@ -102,6 +103,35 @@ describe('KunRuntimeProvider', () => {
       })
     )
     expect(result.userMessageItemId).toBe('item_user_real')
+  })
+
+  it('prefers queued per-turn execution settings over the global runtime settings', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_snapshot', userMessageItemId: 'item_snapshot' })
+    }))
+    installDsGui({ runtimeRequest })
+
+    await new KunRuntimeProvider().sendUserMessage('thr_1', 'run queued turn', {
+      clientRequestId: 'turn_client_snapshot',
+      approvalPolicy: 'always',
+      sandboxMode: 'read-only',
+      approvalReviewer: 'agent'
+    })
+
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/turns',
+      'POST',
+      JSON.stringify({
+        prompt: 'run queued turn',
+        clientRequestId: 'turn_client_snapshot',
+        clientSurface: 'gui',
+        approvalPolicy: 'always',
+        sandboxMode: 'read-only',
+        approvalReviewer: 'agent'
+      })
+    )
   })
 
   it('forwards a client request id for retry-safe turn admission', async () => {

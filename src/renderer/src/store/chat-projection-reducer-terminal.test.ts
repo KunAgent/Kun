@@ -127,6 +127,26 @@ describe('chat projection turn failure identity', () => {
 })
 
 describe('chat projection terminal settlement by turnId', () => {
+  it('refreshes usage once at the matching terminal boundary', () => {
+    const initial = {
+      ...state(),
+      busy: true,
+      currentTurnId: 'turn_1',
+      threads: [{ ...state().threads[0]!, status: 'running' }]
+    }
+    const completed = project(initial, [{
+      type: 'turn_completed',
+      payload: { status: 'completed', threadId: 'thread_1', turnId: 'turn_1' }
+    }])
+    const replayed = project(completed, [{
+      type: 'turn_completed',
+      payload: { status: 'completed', threadId: 'thread_1', turnId: 'turn_1' }
+    }])
+
+    expect(completed.usageRefreshKey).toBe(initial.usageRefreshKey + 1)
+    expect(replayed.usageRefreshKey).toBe(completed.usageRefreshKey)
+  })
+
   it('repairs latestTurnId/latestTurnStatus when the local status is already idle', () => {
     const projected = project({
       ...state(),
@@ -180,6 +200,67 @@ describe('chat projection terminal settlement by turnId', () => {
       status: 'idle',
       latestTurnId: 'turn_1',
       latestTurnStatus: 'failed'
+    })
+  })
+})
+
+describe('chat projection terminal timing', () => {
+  const timingContext = { ...context, now: 61_000 }
+
+  it('records the duration from the persisted turn start when a mid-turn hydration cleared per-user starts', () => {
+    const projected = project({
+      ...state(),
+      busy: true,
+      currentTurnId: 'turn_1',
+      currentTurnUserId: 'user_1',
+      currentTurnStartedAtMs: 1_000,
+      turnStartedAtByUserId: {},
+      threads: [{ ...state().threads[0]!, status: 'running' }]
+    }, [{
+      type: 'turn_completed',
+      payload: { status: 'completed', threadId: 'thread_1', turnId: 'turn_1' }
+    }], timingContext)
+
+    expect(projected.currentTurnUserId).toBeNull()
+    expect(projected.turnDurationByUserId).toEqual({ user_1: 60_000 })
+  })
+
+  it('still records nothing when neither a per-user start nor the persisted turn start exists', () => {
+    const projected = project({
+      ...state(),
+      busy: true,
+      currentTurnId: 'turn_1',
+      currentTurnUserId: 'user_1',
+      currentTurnStartedAtMs: null,
+      turnStartedAtByUserId: {},
+      threads: [{ ...state().threads[0]!, status: 'running' }]
+    }, [{
+      type: 'turn_completed',
+      payload: { status: 'completed', threadId: 'thread_1', turnId: 'turn_1' }
+    }], timingContext)
+
+    expect(projected.currentTurnUserId).toBeNull()
+    expect(projected.turnDurationByUserId ?? {}).toEqual({})
+  })
+
+  it('merges server-derived durations on reconcile and keeps uncovered local entries', () => {
+    const projected = project({
+      ...state(),
+      turnDurationByUserId: { user_local_only: 5_000, user_1: 1_000 }
+    }, [{
+      type: 'thread_snapshot_reconciled',
+      payload: {
+        threadId: 'thread_1',
+        blocks: [],
+        latestSeq: 7,
+        threadStatus: 'idle',
+        turnDurationByUserId: { user_1: 42_000 }
+      }
+    }], timingContext)
+
+    expect(projected.turnDurationByUserId).toEqual({
+      user_local_only: 5_000,
+      user_1: 42_000
     })
   })
 })

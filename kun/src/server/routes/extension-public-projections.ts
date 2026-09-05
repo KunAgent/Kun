@@ -4,7 +4,6 @@ import { z } from 'zod'
 import {
   AccountSchema,
   AgentCreateRunRequestSchema,
-  AgentRunEventSchema,
   AgentRunSchema,
   AgentSteerRequestSchema,
   ExtensionContributionsSchema,
@@ -40,6 +39,7 @@ import {
   extensionProviderId
 } from '../../services/extension-provider-account-store.js'
 import { requiredExtensionBrokerPermission } from '../../services/extension-host-broker.js'
+import { publicAgentEvent } from '../../services/extension-host-broker-public-projection.js'
 import { ExtensionConfigurationConflictError } from '../../services/extension-configuration-service.js'
 import {
   ExtensionMediaHandleError,
@@ -110,7 +110,7 @@ import {
   VIEW_CONTRIBUTION_KEYS,
   SelectedExtension
 } from './extension-public-schemas.js'
-import { isObject, safeJson } from './extension-public-common.js'
+import { isObject } from './extension-public-common.js'
 
 export function projectProvider(provider: ExtensionProviderDefinition) {
   return {
@@ -148,7 +148,9 @@ export function projectAgentRun(run: ExtensionAgentRun): AgentRun {
     extensionBudget: publicBudget(run.effectiveBudget),
     toolCatalogEpoch: run.toolCatalogEpoch?.id ?? 'epoch:none',
     state: run.status,
+    model: run.providerBinding.modelId,
     ...(binding ? { providerBinding: binding } : {}),
+    ...(run.reasoningEffort ? { reasoningEffort: run.reasoningEffort } : {}),
     ...(run.usage ? { usage: publicUsage(run.usage) } : {}),
     createdAt: run.createdAt,
     updatedAt: run.finishedAt ?? run.createdAt,
@@ -159,46 +161,7 @@ export function projectAgentRun(run: ExtensionAgentRun): AgentRun {
 
 export function projectAgentEvent(event: ExtensionAgentEvent): AgentRunEvent | undefined {
   if (isInternalGoalContextEvent(event)) return undefined
-  const base = {
-    runId: event.runId,
-    threadId: event.threadId,
-    sequence: event.seq + 1,
-    timestamp: event.timestamp
-  }
-  if (event.type === 'turn_started') return AgentRunEventSchema.parse({ ...base, type: 'state', state: 'running' })
-  if (event.type === 'approval_requested') return AgentRunEventSchema.parse({ ...base, type: 'state', state: 'waiting-approval' })
-  if (event.type === 'user_input_requested') return AgentRunEventSchema.parse({ ...base, type: 'state', state: 'waiting-user-input' })
-  if (event.type === 'turn_completed') return AgentRunEventSchema.parse({ ...base, type: 'terminal', state: 'completed' })
-  if (event.type === 'turn_aborted') return AgentRunEventSchema.parse({ ...base, type: 'terminal', state: 'cancelled' })
-  if (event.type === 'turn_failed') return AgentRunEventSchema.parse({
-    ...base,
-    type: 'terminal',
-    state: 'failed',
-    error: safeJson(event.payload)
-  })
-  if (event.type === 'usage') {
-    const usage = isObject(event.payload.usage) ? publicUsage(event.payload.usage as never) : {}
-    return AgentRunEventSchema.parse({ ...base, type: 'usage', usage })
-  }
-  if (event.type === 'turn_steered') return AgentRunEventSchema.parse({
-    ...base,
-    type: 'steering-accepted',
-    steeringId: `steer_${event.seq}`
-  })
-  if (event.type === 'assistant_text_delta' || event.type === 'item_completed') {
-    return AgentRunEventSchema.parse({
-      ...base,
-      type: 'message',
-      role: 'assistant',
-      content: safeJson(event.payload)
-    })
-  }
-  return AgentRunEventSchema.parse({
-    ...base,
-    type: 'progress',
-    message: event.type,
-    data: safeJson(event.payload)
-  })
+  return publicAgentEvent(event)
 }
 
 /**
@@ -230,6 +193,7 @@ export function projectOwnedThread(principal: ExtensionPrincipal, thread: Extens
     ownerExtensionVersion: thread.ownerExtensionVersion,
     extensionVisibility: thread.visibility,
     workspace: thread.workspace,
+    ...(thread.latestRun ? { latestRun: projectAgentRun(thread.latestRun) } : {}),
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt
   }

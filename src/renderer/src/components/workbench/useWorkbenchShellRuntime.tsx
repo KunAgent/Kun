@@ -30,6 +30,7 @@ export function useWorkbenchShellRuntime(context: Context): {
     leftSidebarCollapsed,
     toggleLeftSidebar,
     input, setInput, composerMode, setComposerMode, composerOrchestration, graphEnabled,
+    autoPlanBuildEnabled,
     taskSurface, taskSurfaceLocked, taskSurfaceTransitioning, designTaskProfile, designProfileLocked,
     threadHasDesignDocument, lockedDesignProfile, onTaskSurfaceChange,
     onDesignTaskProfileChange,
@@ -43,7 +44,7 @@ export function useWorkbenchShellRuntime(context: Context): {
     attachmentUploadBusy, attachmentUploadError, activeSddDraft, composerFileReferences,
     designDocumentFileMentionCandidates, webAccessAvailable, composerExecutionSettings,
     composerExecutionApplying, runtimeSkills, disabledSkillIds, handlePickAttachments,
-    handlePasteClipboardImage, removeComposerAttachment, addComposerFileReference,
+    handlePasteClipboardImage, removeComposerAttachment, restoreComposerAttachments, addComposerFileReference,
     pickComposerFileReferences, openWorkspaceFileTreeTab, openDesignFileTreeTab,
     removeComposerFileReference, queuedMessages, removeQueuedMessage, guideQueuedMessage,
     interrupt, handleGuiPlanCommand, useWorktreePool, worktreeBranch, setWorktreeBranch,
@@ -70,6 +71,7 @@ export function useWorkbenchShellRuntime(context: Context): {
     togglePinnedFilePreviewTarget, closeOtherFilePreviewTargets, togglePreserveFilePreviewTargets,
     activeExtensionRightPanel, codeRightTabs, currentSideConversations, currentSideRunningCount,
     runtimeInfo, fileTreeSidePanelOpen, fileTreeSidePanelView, fileTreeWorkspaceRoot,
+    generatedDocumentCollection, openGeneratedDocumentPreview,
     designWorkspaceRoot, designDocuments, designActiveDocumentId, setFileTreeSidePanelView,
     previewWorkspaceFileFromSidebar, addWorkspaceReferenceFromSidebar,
     openDesignDocumentInWhiteboard, extensionRightRailItems, extensionRightPanelItems,
@@ -89,6 +91,7 @@ export function useWorkbenchShellRuntime(context: Context): {
   }
   const chatComposerProps = useWorkbenchChatComposerProps({
     input, setInput, composerMode, setComposerMode, composerOrchestration, graphEnabled,
+    autoPlanBuildEnabled,
     taskSurface, taskSurfaceLocked, taskSurfaceTransitioning, designTaskProfile, designProfileLocked, onTaskSurfaceChange,
     onDesignTaskProfileChange,
     imageGenerationEnabled: runtimeInfo
@@ -114,7 +117,7 @@ export function useWorkbenchShellRuntime(context: Context): {
     activeSddDraft: Boolean(activeSddDraft), composerFileReferences,
     extraFileMentionCandidates: designDocumentFileMentionCandidates, webAccessAvailable,
     composerExecutionSettings, composerExecutionApplying, runtimeSkills, disabledSkillIds,
-    handlePickAttachments, handlePasteClipboardImage, removeComposerAttachment, addComposerFileReference,
+    handlePickAttachments, handlePasteClipboardImage, removeComposerAttachment, restoreComposerAttachments, addComposerFileReference,
     pickComposerFileReferences, openFileTreeSidePanel: openWorkspaceFileTreeTab,
     openDesignFileTreeSidePanel: openDesignFileTreeTab,
     removeComposerFileReference, queuedMessages,
@@ -327,8 +330,10 @@ export function useWorkbenchShellRuntime(context: Context): {
         designDocuments,
         activeDesignDocumentId: designActiveDocumentId,
         selectedTarget: filePreviewTarget,
+        generatedDocumentCollection,
         onViewChange: setFileTreeSidePanelView,
         onPreviewFile: previewWorkspaceFileFromSidebar,
+        onPreviewGeneratedDocument: openGeneratedDocumentPreview,
         onAddReference: addWorkspaceReferenceFromSidebar,
         onOpenDesignInWhiteboard: openDesignDocumentInWhiteboard
       },

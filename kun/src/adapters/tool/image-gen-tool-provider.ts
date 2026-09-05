@@ -98,6 +98,12 @@ export type ImageGenToolProviderOptions = {
   attachmentStore?: AttachmentStore
   nowIso?: () => string
   resolveCredential?: ProviderCredentialResolver
+  /**
+   * Provider-level model proxy. Custom inline configs have no provider
+   * credential to resolve, so without this fallback their requests would
+   * bypass the proxy that chat model requests honor.
+   */
+  proxyUrl?: string
 }
 
 export type ProviderCredentialResolver = (providerId: string) => Promise<{
@@ -316,13 +322,19 @@ export function buildImageGenToolProviders(
           const credential = config.providerId && options.resolveCredential
             ? await options.resolveCredential(config.providerId)
             : undefined
+          // A resolved connection credential is authoritative: an empty proxyUrl
+          // means the connection explicitly bypasses the app proxy. Only inline
+          // configs without a providerId fall back to the provider-level proxy.
+          const proxyUrl = credential
+            ? credential.proxyUrl?.trim() || ''
+            : options.proxyUrl?.trim() || ''
           client = createImageGenClient({
             ...config,
             ...(credential ? {
               apiKey: credential.apiKey,
-              headers: { ...(config.headers ?? {}), ...(credential.headers ?? {}) },
-              ...(credential.proxyUrl ? { proxyUrl: credential.proxyUrl } : {})
-            } : {})
+              headers: { ...(config.headers ?? {}), ...(credential.headers ?? {}) }
+            } : {}),
+            ...(proxyUrl ? { proxyUrl } : {})
           })
         }
         const request = {

@@ -351,6 +351,8 @@ export function normalizeChildMetadata(
     ...(child.prefixReused !== undefined ? { prefixReused: child.prefixReused } : {}),
     ...(child.inheritedHistoryItems !== undefined ? { inheritedHistoryItems: child.inheritedHistoryItems } : {}),
     ...(child.toolInvocations !== undefined ? { toolInvocations: child.toolInvocations } : {}),
+    ...(child.attemptStartedAt ? { attemptStartedAt: child.attemptStartedAt } : {}),
+    ...(child.attemptDurationMs !== undefined ? { attemptDurationMs: child.attemptDurationMs } : {}),
     ...(child.durationMs !== undefined ? { durationMs: child.durationMs } : {}),
     ...(child.queuedMs !== undefined ? { queuedMs: child.queuedMs } : {}),
     ...(child.summaryTruncated !== undefined

@@ -220,7 +220,7 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
       workspaceRoots: ['/Users/zxy/cindy']
     })
 
-    await clickButton('sidebarWorkspaceShowMore:6')
+    await clickButton('sidebarWorkspaceShowMore:5')
     expect(outputJson()).toContain('Cindy 10')
     await clickButton('/Users/zxy/cindy')
     await clickButton('/Users/zxy/cindy')
@@ -228,6 +228,133 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
     expect(outputJson()).toContain('Cindy 5')
     expect(outputJson()).not.toContain('Cindy 6')
     expect(outputJson()).not.toContain('Cindy 10')
+  })
+
+  it('expands a 22-thread cache in strict five-row batches with honest labels', async () => {
+    await renderSidebar({
+      threads: projectThreads(22),
+      workspaceRoot: '/Users/zxy/cindy',
+      workspaceRoots: ['/Users/zxy/cindy']
+    })
+
+    expect(outputJson()).toContain('Cindy 5')
+    expect(outputJson()).not.toContain('Cindy 6')
+    // The label is the next batch size (5), never the cached backlog (17).
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:17').length).toBe(0)
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:5').length).toBe(1)
+
+    await clickButton('sidebarWorkspaceShowMore:5')
+    expect(outputJson()).toContain('Cindy 10')
+    expect(outputJson()).not.toContain('Cindy 11')
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:12').length).toBe(0)
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:5').length).toBe(1)
+
+    await clickButton('sidebarWorkspaceShowMore:5')
+    expect(outputJson()).toContain('Cindy 15')
+    expect(outputJson()).not.toContain('Cindy 16')
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:7').length).toBe(0)
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:5').length).toBe(1)
+
+    await clickButton('sidebarWorkspaceShowMore:5')
+    expect(outputJson()).toContain('Cindy 20')
+    expect(outputJson()).not.toContain('Cindy 21')
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:2').length).toBe(1)
+
+    // The final tail batch shows only the real remaining rows.
+    await clickButton('sidebarWorkspaceShowMore:2')
+    expect(outputJson()).toContain('Cindy 22')
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:5').length).toBe(0)
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:2').length).toBe(0)
+  })
+
+  it('reveals only the first five rows of a merged remote page', async () => {
+    const onLoadMoreThreads = vi.fn()
+    await renderSidebar({
+      threads: projectThreads(8),
+      workspaceRoot: '/Users/zxy/cindy',
+      workspaceRoots: ['/Users/zxy/cindy'],
+      threadListCursorByWorkspace: {
+        '/users/zxy/cindy': {
+          workspaceKey: '/Users/zxy/cindy',
+          mode: 'active',
+          status: 'ready',
+          hasMore: true
+        }
+      },
+      onLoadMoreThreads
+    })
+
+    // Drain the local cache through tail batches first.
+    await clickButton('sidebarWorkspaceShowMore:3')
+    expect(outputJson()).toContain('Cindy 8')
+    expect(findButtonsByLabel('sidebarWorkspaceLoadMore').length).toBe(1)
+
+    await clickButton('sidebarWorkspaceLoadMore')
+    expect(onLoadMoreThreads).toHaveBeenCalledTimes(1)
+
+    // The merged remote page holds six more threads, but only the first five
+    // of the next batch become visible; the sixth stays behind a new label.
+    const threads = [
+      ...projectThreads(8),
+      ...Array.from({ length: 6 }, (_, index) => thread({
+        id: `cindy-page2-${index + 1}`,
+        title: `Cindy Page2 ${index + 1}`,
+        workspace: '/Users/zxy/cindy',
+        updatedAt: `2026-05-${String(28 - index).padStart(2, '0')}T00:00:00.000Z`
+      }))
+    ]
+    await rerenderSidebar({
+      threads,
+      workspaceRoot: '/Users/zxy/cindy',
+      workspaceRoots: ['/Users/zxy/cindy'],
+      threadListCursorByWorkspace: {
+        '/users/zxy/cindy': {
+          workspaceKey: '/Users/zxy/cindy',
+          mode: 'active',
+          status: 'ready',
+          hasMore: true
+        }
+      },
+      onLoadMoreThreads
+    })
+
+    expect(outputJson()).toContain('Cindy Page2 5')
+    expect(outputJson()).not.toContain('Cindy Page2 6')
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:1').length).toBe(1)
+    expect(onLoadMoreThreads).toHaveBeenCalledTimes(1)
+  })
+
+  it('never uses a large page total as the next-batch label', async () => {
+    await renderSidebar({
+      threads: projectThreads(7),
+      workspaceRoot: '/Users/zxy/cindy',
+      workspaceRoots: ['/Users/zxy/cindy'],
+      threadListCursorByWorkspace: {
+        '/users/zxy/cindy': {
+          workspaceKey: '/Users/zxy/cindy',
+          mode: 'active',
+          status: 'ready',
+          hasMore: true,
+          total: 1040
+        }
+      }
+    })
+
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:1032').length).toBe(0)
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:2').length).toBe(1)
+  })
+
+  it('keeps the label honest for sub-batch local tails', async () => {
+    await renderSidebar({
+      threads: projectThreads(7),
+      workspaceRoot: '/Users/zxy/cindy',
+      workspaceRoots: ['/Users/zxy/cindy']
+    })
+
+    await clickButton('sidebarWorkspaceShowMore:2')
+    expect(outputJson()).toContain('Cindy 7')
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:5').length).toBe(0)
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:2').length).toBe(0)
   })
 
   it('collapses only the clicked project in a multi-project sidebar', async () => {
@@ -268,7 +395,7 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
       workspaceRoots: ['/Users/zxy/cindy'],
       threadListCursorByWorkspace: {
         '/users/zxy/cindy': {
-          workspaceKey: '/users/zxy/cindy',
+          workspaceKey: '/Users/zxy/cindy',
           mode: 'active',
           status: 'unknown',
           hasMore: true
@@ -292,7 +419,7 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
       workspaceRoots: ['/Users/zxy/cindy'],
       threadListCursorByWorkspace: {
         '/users/zxy/cindy': {
-          workspaceKey: '/users/zxy/cindy',
+          workspaceKey: '/Users/zxy/cindy',
           mode: 'active',
           status: 'ready',
           hasMore: true
@@ -306,7 +433,7 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
     expect(onLoadMoreThreads).not.toHaveBeenCalled()
   })
 
-  it('keeps forced running threads visible after collapse', async () => {
+  it('keeps forced running threads visible without inflating the next-batch label', async () => {
     const onLoadMoreThreads = vi.fn()
     await renderSidebar({
       threads: [
@@ -315,9 +442,10 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
           id: 'cindy-running',
           title: 'Cindy Running',
           workspace: '/Users/zxy/cindy',
-          // Older than the first five threads so the running item is part of
-          // the local overflow instead of the initial visible batch.
-          updatedAt: '2026-06-01T00:00:00.000Z',
+          // Newest timestamp, so the running row sits inside the initial
+          // five-row batch after the activity partition and no extra label
+          // inflation can appear from forced visibility.
+          updatedAt: '2026-06-28T12:00:00.000Z',
           status: 'running'
         })
       ],
@@ -327,14 +455,16 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
     })
 
     expect(outputJson()).toContain('Cindy Running')
-    // The running thread is forced visible in addition to the base batch, so
-    // the remaining hidden count still includes Cindy 6 plus itself until expanded.
+    // Five rows are visible (running + Cindy 1-4); the next batch adds the
+    // two real remaining rows, never the whole cached backlog.
     expect(findButtonsByLabel('sidebarWorkspaceShowMore:2').length).toBe(1)
+    expect(outputJson()).not.toContain('Cindy 5')
     await clickButton('sidebarWorkspaceShowMore:2')
+    expect(outputJson()).toContain('Cindy 5')
     expect(outputJson()).toContain('Cindy 6')
     await clickButton('sidebarWorkspaceShowLess')
     expect(outputJson()).toContain('Cindy Running')
-    expect(outputJson()).not.toContain('Cindy 6')
+    expect(outputJson()).not.toContain('Cindy 5')
     expect(findButtonsByLabel('sidebarWorkspaceShowMore:2').length).toBe(1)
     expect(onLoadMoreThreads).not.toHaveBeenCalled()
   })
@@ -346,6 +476,6 @@ describe('SidebarProjectsSection expansion collapse integration', () => {
       workspaceRoots: ['/Users/zxy/cindy']
     })
     expect(findButtonsByLabel('sidebarWorkspaceShowLess').length).toBe(0)
-    expect(findButtonsByLabel('sidebarWorkspaceShowMore:15').length).toBe(1)
+    expect(findButtonsByLabel('sidebarWorkspaceShowMore:5').length).toBe(1)
   })
 })

@@ -1,0 +1,20 @@
+name: Daily Dev Prerelease
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub cron 使用 UTC,对应 Asia/Shanghai 的 12:00 和次日 00:00。
+    - cron: '0 4,16 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-dev-prerelease
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Run develop prerelease
+    uses: KunAgent/Kun/.github/workflows/daily-dev-prerelease.yml@develop
+    secrets: inherit

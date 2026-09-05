@@ -4,6 +4,37 @@ import { loadUsageHistory } from './usage-history.js'
 import { buildThreadUsageResponse } from './usage-service-responses.js'
 
 describe('loadUsageHistory provider attribution', () => {
+  it('uses metadata reads instead of hydrating message history', async () => {
+    const metadata = {
+      id: 'thread-metadata',
+      model: 'model-a',
+      providerId: 'provider-a',
+      updatedAt: '2026-08-22T00:00:01.000Z',
+      turns: [{ id: 'turn-metadata', model: 'model-a', providerId: 'provider-a' }]
+    }
+    const get = vi.fn(async () => { throw new Error('full thread hydration is forbidden') })
+    const getMetadata = vi.fn(async () => metadata)
+    const source = {
+      threadService: { list: async () => [], get, getMetadata },
+      sessionStore: {
+        loadUsageRecords: async () => [{
+          threadId: metadata.id,
+          turnId: 'turn-metadata',
+          completedAt: '2026-08-22T00:00:00.000Z',
+          usage: { ...emptyUsageSnapshot(), promptTokens: 10, totalTokens: 10, turns: 1 }
+        }],
+        loadLatestUsageSnapshots: async () => []
+      },
+      usageService: { forThread: () => emptyUsageSnapshot() },
+      nowIso: () => '2026-08-22T00:00:02.000Z'
+    }
+
+    await expect(loadUsageHistory(source as never, { threadId: metadata.id }))
+      .resolves.toMatchObject([{ providerId: 'provider-a' }])
+    expect(getMetadata).toHaveBeenCalledWith(metadata.id)
+    expect(get).not.toHaveBeenCalled()
+  })
+
   it('recovers providerId from the matching turn for indexed usage records', async () => {
     const thread = {
       id: 'thread-glm',
@@ -73,7 +104,7 @@ describe('loadUsageHistory provider attribution', () => {
     expect(source.threadService.get).toHaveBeenCalledWith('thread-switch')
   })
 
-  it('hydrates full threads so all-history indexed queries keep per-turn providers', async () => {
+  it('falls back to full reads when metadata-only reads are unavailable', async () => {
     const source = makeSwitchedThreadSource()
 
     const records = await loadUsageHistory(source as never)
@@ -84,6 +115,30 @@ describe('loadUsageHistory provider attribution', () => {
     })
     // The summary has no turns, so the full record must have been hydrated.
     expect(source.threadService.get).toHaveBeenCalledWith('thread-switch')
+  })
+
+  it('prefers metadata-only reads and never hydrates message items for attribution', async () => {
+    const source = makeSwitchedThreadSource()
+    const getMetadata = vi.fn(async () => ({
+      id: 'thread-switch',
+      model: 'glm-5.3',
+      providerId: 'provider-b',
+      updatedAt: '2026-08-23T00:00:02.000Z',
+      turns: [
+        { id: 'turn-1', model: 'glm-5.3', providerId: 'provider-a' },
+        { id: 'turn-2', model: 'glm-5.3', providerId: 'provider-b' }
+      ]
+    }))
+    source.threadService.getMetadata = getMetadata
+
+    const records = await loadUsageHistory(source as never)
+
+    expect(providerByTurn(records)).toEqual({
+      'turn-1': 'provider-a',
+      'turn-2': 'provider-b'
+    })
+    expect(getMetadata).toHaveBeenCalledWith('thread-switch')
+    expect(source.threadService.get).not.toHaveBeenCalled()
   })
 
   it('prefers a persisted provider id over the hydrated turn and thread fallbacks', async () => {
@@ -125,7 +180,61 @@ describe('loadUsageHistory provider attribution', () => {
     })
   })
 
-  it('hydrates full threads in the JSONL fallback path too', async () => {
+  it('bypasses every SQLite usage read in jsonl-only mode', async () => {
+    const source = makeSwitchedThreadSource()
+    source.sessionStore.loadEventsSince = vi.fn(async () => [
+      jsonlUsageEvent(1, 'turn-1', 1_000, 100)
+    ])
+
+    const records = await loadUsageHistory(source as never, {}, 'jsonl-only')
+
+    expect(records).toHaveLength(1)
+    expect(source.sessionStore.loadUsageRecords).not.toHaveBeenCalled()
+    expect(source.sessionStore.loadEventsSince).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one JSONL scan across concurrent ranges before filtering', async () => {
+    const source = makeSwitchedThreadSource()
+    source.sessionStore.loadEventsSince = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return [
+        jsonlUsageEvent(1, 'turn-1', 1_000, 100),
+        jsonlUsageEvent(2, 'turn-2', 1_200, 140)
+      ]
+    })
+
+    const [first, second] = await Promise.all([
+      loadUsageHistory(source as never, {
+        fromInclusive: '2026-08-23T00:00:01.000Z',
+        toExclusive: '2026-08-23T00:00:02.000Z'
+      }, 'jsonl-only'),
+      loadUsageHistory(source as never, {
+        fromInclusive: '2026-08-23T00:00:02.000Z',
+        toExclusive: '2026-08-23T00:00:03.000Z'
+      }, 'jsonl-only')
+    ])
+
+    expect(first.map((record) => record.turnId)).toEqual(['turn-1'])
+    expect(second.map((record) => record.turnId)).toEqual(['turn-2'])
+    expect(source.sessionStore.loadUsageRecords).not.toHaveBeenCalled()
+    expect(source.sessionStore.loadEventsSince).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears a failed JSONL-only load so a later refresh can retry', async () => {
+    const source = makeSwitchedThreadSource()
+    source.sessionStore.loadEventsSince = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary JSONL read failure'))
+      .mockResolvedValueOnce([jsonlUsageEvent(1, 'turn-1', 1_000, 100)])
+
+    await expect(loadUsageHistory(source as never, {}, 'jsonl-only'))
+      .rejects.toThrow('temporary JSONL read failure')
+    await expect(loadUsageHistory(source as never, {}, 'jsonl-only'))
+      .resolves.toHaveLength(1)
+
+    expect(source.sessionStore.loadEventsSince).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses compatible thread reads in the JSONL fallback path too', async () => {
     const source = makeSwitchedThreadSource({
       loadUsageRecords: vi.fn(async () => {
         throw new Error('index unavailable')
@@ -192,14 +301,15 @@ describe('loadUsageHistory provider attribution', () => {
     expect(peakInFlight).toBeLessThanOrEqual(4)
   })
 
-  it('degrades a corrupt thread document to the summary instead of failing aggregation', async () => {
+  it('degrades corrupt thread metadata to the summary instead of failing aggregation', async () => {
     const source = {
       threadService: {
         list: async () => [
           { id: 'thread-broken', model: 'glm-5.3', providerId: 'summary-provider', status: 'active', updatedAt: '2026-08-23T00:00:00.000Z' },
           { id: 'thread-healthy', model: 'glm-5.3', providerId: 'summary-provider', status: 'active', updatedAt: '2026-08-23T00:00:00.000Z' }
         ],
-        get: async (threadId: string) => {
+        get: async () => { throw new Error('full thread read must not run') },
+        getMetadata: async (threadId: string) => {
           if (threadId === 'thread-broken') throw new Error('corrupt thread document')
           return {
             id: threadId,
@@ -273,6 +383,44 @@ describe('loadUsageHistory provider attribution', () => {
     expect(source.threadService.get).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps compact attribution reusable beyond the old 512-thread cache limit', async () => {
+    const threadIds = Array.from({ length: 520 }, (_value, index) =>
+      `thread-compact-memo-${index}`)
+    const getMetadata = vi.fn(async (threadId: string) => ({
+      id: threadId,
+      model: 'glm-5.3',
+      providerId: 'provider-current',
+      updatedAt: '2026-08-23T00:00:04.000Z',
+      turns: [{ id: `turn-${threadId}`, model: 'glm-5.3', providerId: 'provider-historical' }]
+    }))
+    const source = {
+      threadService: {
+        list: async () => threadIds.map((id) => ({
+          id,
+          model: 'glm-5.3',
+          providerId: 'provider-current',
+          status: 'idle',
+          updatedAt: '2026-08-23T00:00:04.000Z'
+        })),
+        get: vi.fn(async () => { throw new Error('full thread read must not run') }),
+        getMetadata
+      },
+      sessionStore: {
+        loadUsageRecords: async () => threadIds.map((threadId) =>
+          indexedRecord(`turn-${threadId}`, undefined, 1_000, 100, threadId)),
+        loadLatestUsageSnapshots: async () => []
+      },
+      usageService: { forThread: () => emptyUsageSnapshot() },
+      nowIso: () => '2026-08-23T00:00:05.000Z'
+    }
+
+    await loadUsageHistory(source as never)
+    await loadUsageHistory(source as never)
+
+    expect(getMetadata).toHaveBeenCalledTimes(threadIds.length)
+    expect(source.threadService.get).not.toHaveBeenCalled()
+  })
+
   it('feeds per-turn provider attribution into coding-plan zero-price aggregation', async () => {
     const source = {
       threadService: {
@@ -326,6 +474,7 @@ type SwitchedSource = {
   threadService: {
     list: ReturnType<typeof vi.fn>
     get: ReturnType<typeof vi.fn>
+    getMetadata?: ReturnType<typeof vi.fn>
   }
   sessionStore: {
     loadUsageRecords: ReturnType<typeof vi.fn>

@@ -1,10 +1,15 @@
 import type { SkillListItem, SkillRootListItem } from '@shared/kun-gui-api'
+import {
+  BUILTIN_GITHUB_MCP_MANAGED_BY,
+  BUILTIN_GITHUB_MCP_SERVER_ID
+} from '@shared/github-mcp'
 import type { CoreRuntimeToolDiagnosticsJson } from '../agent/kun-contract'
 import {
   GUI_SCHEDULE_MCP_SERVER_ID,
   buildMcpConfig,
   buildRemoteMcpConfig,
   isJsonRecord,
+  mcpConfigHasServer,
   mcpServerDescription,
   mcpServerStatus,
   mcpServersFromConfig,
@@ -107,7 +112,7 @@ export function mcpMarketplaceItemsFromConfigAndDiagnostics(
     const details = { ...(config ?? {}), ...(diagnostic ?? {}) }
     const sourceLabel =
       status === 'connected' || status === 'available' ? labels.connected :
-      status === 'error' || status === 'unavailable' ? labels.error :
+      status === 'error' || status === 'unavailable' || status === 'authorization_required' ? labels.error :
       status === 'disabled' ? labels.disabled :
       labels.configured
     const detail = mcpServerDescription(details, labels.configured)
@@ -129,6 +134,57 @@ export function mcpMarketplaceItemsFromConfigAndDiagnostics(
       statusTone: mcpStatusTone(status)
     }
   }).sort((left, right) => left.title.localeCompare(right.title))
+}
+
+export function hasUserConfiguredGitHubMcp(configText: string): boolean {
+  return mcpConfigHasServer(configText, BUILTIN_GITHUB_MCP_SERVER_ID)
+}
+
+export function isSystemManagedMcpServerId(
+  id: string,
+  configText: string,
+  diagnostics?: CoreRuntimeToolDiagnosticsJson | null
+): boolean {
+  if (id === GUI_SCHEDULE_MCP_SERVER_ID) return true
+  if (id !== BUILTIN_GITHUB_MCP_SERVER_ID || hasUserConfiguredGitHubMcp(configText)) return false
+  const runtimeGitHub = diagnostics?.mcpServers?.find((server) => server.id === id)
+  return runtimeGitHub
+    ? runtimeGitHub.managedBy === BUILTIN_GITHUB_MCP_MANAGED_BY
+    : true
+}
+
+/** Hide the built-in card when the user deliberately supplies `github`. */
+export function recommendedMarketplaceItemsForMcpConfig(
+  configText: string,
+  diagnostics?: CoreRuntimeToolDiagnosticsJson | null
+): MarketplaceItem[] {
+  if (isSystemManagedMcpServerId(BUILTIN_GITHUB_MCP_SERVER_ID, configText, diagnostics)) {
+    return RECOMMENDED_ITEMS
+  }
+  return RECOMMENDED_ITEMS.filter((item) =>
+    item.kind !== 'mcp' || item.id !== BUILTIN_GITHUB_MCP_SERVER_ID
+  )
+}
+
+/** Put managed-server connection and credential errors on their built-in cards. */
+export function overlaySystemManagedMcpDiagnostics(
+  items: readonly MarketplaceItem[],
+  diagnostics: CoreRuntimeToolDiagnosticsJson | null,
+  labels: Parameters<typeof mcpMarketplaceItemsFromConfigAndDiagnostics>[2]
+): MarketplaceItem[] {
+  const runtimeItems = mcpMarketplaceItemsFromConfigAndDiagnostics('', diagnostics, labels)
+  const runtimeById = new Map(runtimeItems.map((item) => [item.id, item]))
+  return items.map((item) => {
+    if (item.kind !== 'mcp' || !item.systemManaged) return item
+    const runtime = runtimeById.get(item.id)
+    if (!runtime) return item
+    return {
+      ...item,
+      sourceLabel: runtime.sourceLabel,
+      detail: runtime.detail,
+      statusTone: runtime.statusTone
+    }
+  })
 }
 
 export function skillNameLooksValid(raw: string): boolean {
@@ -160,18 +216,14 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
     supplyChain: { source: 'mcp', packageName: '@playwright/mcp', version: '0.0.77', permissions: ['command', 'network', 'file'] }
   },
   {
-    id: 'github',
+    id: BUILTIN_GITHUB_MCP_SERVER_ID,
     kind: 'mcp',
     titleKey: 'pluginMcpGithubTitle',
     descriptionKey: 'pluginMcpGithubDesc',
     group: 'recommended',
-    mcpConfig: () =>
-      buildMcpConfig(
-        'github',
-        'npx',
-        ['-y', '@modelcontextprotocol/server-github@2025.4.8']
-      ),
-    supplyChain: { source: 'mcp', packageName: '@modelcontextprotocol/server-github', version: '2025.4.8', permissions: ['command', 'network', 'secret'] }
+    systemManaged: true,
+    serverIds: [BUILTIN_GITHUB_MCP_SERVER_ID],
+    supplyChain: { source: 'remote-mcp', permissions: ['network', 'secret'] }
   },
   {
     id: 'vercel',

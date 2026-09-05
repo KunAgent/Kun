@@ -1,0 +1,24 @@
+{
+  "id": "integration-binding",
+  "name": "Integration Binding",
+  "version": "1.0.0",
+  "description": "Connect a task to MCP tools, workflows, resources, files, or visual outputs through explicit validated interfaces.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/integration-binding"
+    ],
+    "promptPatterns": [
+      "binding",
+      "integration",
+      "Integration Binding",
+      "integration-binding",
+      "MCP integration",
+      "连接工具"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

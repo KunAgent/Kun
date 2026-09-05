@@ -291,6 +291,7 @@ type SidebarTreeRowProps = {
   onMouseMove?: (event: ReactMouseEvent<HTMLDivElement>) => void
   onMouseLeave?: (event: ReactMouseEvent<HTMLDivElement>) => void
   onFocusCapture?: () => void
+  onBlurCapture?: () => void
   draggable?: boolean
   onDragStart?: (event: ReactDragEvent<HTMLDivElement>) => void
   onDragEnd?: (event: ReactDragEvent<HTMLDivElement>) => void
@@ -320,6 +321,7 @@ export function SidebarTreeRow({
   onMouseMove,
   onMouseLeave,
   onFocusCapture,
+  onBlurCapture,
   draggable = false,
   onDragStart,
   onDragEnd,
@@ -374,6 +376,7 @@ export function SidebarTreeRow({
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
       onFocusCapture={onFocusCapture}
+      onBlurCapture={onBlurCapture}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}

@@ -26,7 +26,7 @@ import {
   DEFAULT_WORKBENCH_DESIGN_PROFILE
 } from './workbench-task-intent'
 
-export type WorkbenchSidebarView = 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'subagents'
+export type WorkbenchSidebarView = 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
 
 export type UseWorkbenchNavigationControllerParams = {
   activeSddDraft: boolean
@@ -52,6 +52,7 @@ export type UseWorkbenchNavigationControllerParams = {
     thread: NormalizedThread | null
   ) => Promise<SddDraft | null>
   openClaw: ChatState['openClaw']
+  openBoard: ChatState['openBoard']
   openCode: ChatState['openCode']
   openPlugins: ChatState['openPlugins']
   openSchedule: ChatState['openSchedule']
@@ -73,6 +74,7 @@ export type WorkbenchNavigationController = {
   exploreSddRequirementInDesign: () => void
   openCodeMode: () => void
   openPluginsView: () => void
+  openBoardView: () => void
   openExtensionsView: () => void
   openScheduleView: () => void
   openThread: (id: string) => void
@@ -144,6 +146,7 @@ export function useWorkbenchNavigationController({
   ensureWriteThreadForWorkspace,
   findSddDraftForSidebarThread,
   openClaw,
+  openBoard,
   openCode,
   openPlugins,
   openSchedule,
@@ -176,6 +179,7 @@ export function useWorkbenchNavigationController({
   const sidebarView: WorkbenchSidebarView = useMemo(() => {
     if (route === 'claw' || (route === 'plugins' && pluginHostRoute === 'claw')) return 'claw'
     if (route === 'schedule') return 'schedule'
+    if (route === 'board') return 'board'
     if (route === 'workflow') return 'workflow'
     if (route === 'write') return 'write'
     return 'chat'
@@ -445,6 +449,12 @@ export function useWorkbenchNavigationController({
     openSchedule()
   }, [beginNavigation, openSchedule, setConnectPhoneSidebarOpen])
 
+  const openBoardView = useCallback((): void => {
+    beginNavigation()
+    setConnectPhoneSidebarOpen(false)
+    openBoard(workspaceRoot)
+  }, [beginNavigation, openBoard, setConnectPhoneSidebarOpen, workspaceRoot])
+
   const openWorkflowView = useCallback((): void => {
     beginNavigation()
     setConnectPhoneSidebarOpen(false)
@@ -570,6 +580,7 @@ export function useWorkbenchNavigationController({
     exploreSddRequirementInDesign,
     openCodeMode,
     openPluginsView,
+    openBoardView,
     openExtensionsView,
     openScheduleView,
     openThread,

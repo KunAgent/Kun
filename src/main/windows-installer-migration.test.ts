@@ -21,9 +21,9 @@ const helperModulePaths = [
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
   'windows-installer-migration-actions.ps1',
+  'windows-installer-migration-recovery-env.ps1',
   'windows-installer-migration-transaction.ps1'
 ].map((fileName) => join(process.cwd(), 'build', fileName))
-const smokePath = join(process.cwd(), 'scripts/smoke-windows-installer-migration.ps1')
 const windowsOnly = process.platform === 'win32' ? describe : describe.skip
 const tempRoots: string[] = []
 
@@ -40,7 +40,7 @@ function makeTempRoot(): string {
 }
 
 function runHelper(input: {
-  action: 'ResolvePath' | 'ResolveSource' | 'ResolveUpdateScope' | 'ResolveUninstaller' | 'ResolveRecoveryExecutable' | 'PrepareUpdateTransaction' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'ResolveHealthToken' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'StopProcesses' | 'Recover' | 'Prepare' | 'FallbackCleanup' | 'Restore' | 'ValidatePayload' | 'BackupPayload' | 'RestorePayloadBackup' | 'CleanupInPlaceLeftovers' | 'CleanupJournal'
+  action: 'ResolvePath' | 'ResolveSource' | 'ResolveUpdateScope' | 'ResolveRecoveryExecutable' | 'PrepareUpdateTransaction' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'ResolveHealthToken' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'StopProcesses' | 'Recover' | 'Prepare' | 'FallbackCleanup' | 'Restore' | 'ValidatePayload' | 'BackupPayload' | 'RestorePayloadBackup' | 'CleanupInPlaceLeftovers' | 'CleanupJournal'
   source?: string
   secondary?: string
   currentUserSource?: string
@@ -66,6 +66,7 @@ function runHelper(input: {
   productName?: string
   appRoot?: string
   diagnosticPath?: string
+  selfPath?: string
   automaticUpdate?: boolean
   backupPath?: string
   transactionPath?: string
@@ -119,6 +120,7 @@ function runHelper(input: {
         KUN_INSTALLER_APP_EXECUTABLE: input.appExecutable ?? 'Kun.exe',
         KUN_INSTALLER_PRODUCT_NAME: input.productName ?? 'Kun',
         KUN_INSTALLER_SELF_PID: String(process.pid),
+        KUN_INSTALLER_SELF_PATH: input.selfPath ?? '',
         KUN_INSTALLER_APP_ROOT: input.appRoot ?? '',
         KUN_INSTALLER_DIAGNOSTIC_PATH: input.diagnosticPath ?? '',
         KUN_INSTALLER_AUTOMATIC_UPDATE: input.automaticUpdate ? '1' : '0',
@@ -229,6 +231,7 @@ describe('Windows installer migration ACL contract', () => {
   it('migrates trusted schema-2 journals and cleans stale journals during uninstall', () => {
     const script = readHelperSources()
     const installerScript = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
+      .replace(/\r\n/g, '\n')
 
     expect(script).toContain('function Convert-LegacyJournal')
     expect(script).toContain("if ($schemaVersion -ne 2)")
@@ -238,37 +241,6 @@ describe('Windows installer migration ACL contract', () => {
     expect(installerScript).toContain(
       '${ifNot} ${isUpdated}\n    StrCpy $KunInstallerJournalPath'
     )
-  })
-
-  it('waits for the real NSIS uninstall lifecycle before starting another installer', () => {
-    const script = readFileSync(smokePath, 'utf8')
-
-    expect(script).toContain("$arguments = @('/S', $Mode, ('_?={0}' -f $InstallLocation))")
-    expect(script).toContain('Start-Process -FilePath $copy -ArgumentList $arguments -Wait -PassThru')
-    expect(script).not.toMatch(/Start-Process -FilePath \$(?:unicode|machine)Uninstaller/u)
-  })
-
-  it('retries only a Windows access violation and never more than once', () => {
-    const script = readFileSync(smokePath, 'utf8')
-
-    expect(script).toContain('$accessViolationExitCode = -1073741819')
-    expect(script).toContain('$maximumAttempts = 2')
-    expect(script).toContain('$process.WaitForExit(600000)')
-    expect(script).not.toContain(
-      'Start-Process -FilePath $script:InstallerPath -ArgumentList $Arguments -Wait'
-    )
-    expect(script).toContain('Show-InstallerDiagnostics $Scenario')
-    expect(script).toContain('$process.ExitCode -ne $accessViolationExitCode')
-    expect(script).toContain('retrying once after 2 seconds')
-  })
-
-  it('runs automatic-update migration smoke scenarios through the production silent path', () => {
-    const script = readFileSync(smokePath, 'utf8')
-
-    expect(script).toContain(
-      "Invoke-Installer 'legacy uninstall-source recovery' @('--updated', '/S', '/currentuser')"
-    )
-    expect(script).not.toContain("@('--updated', '/currentuser')")
   })
 
   it('opens automatic-update transaction keys in the NSIS 64-bit registry view', () => {
@@ -293,14 +265,6 @@ describe('Windows installer migration ACL contract', () => {
     expect(prepare).toContain("Open-TransactionRegistryHive 'CurrentUser'")
     expect(validate).toContain('$hive = Open-TransactionRegistryHive')
     expect(rollback).toContain('Open-TransactionRegistryHive ([string]$record.Hive)')
-  })
-
-  it('hashes smoke payloads without relying on PowerShell module auto-loading', () => {
-    const script = readFileSync(smokePath, 'utf8')
-
-    expect(script).toContain('function Get-FileSha256')
-    expect(script).toContain('[Security.Cryptography.SHA256]::Create()')
-    expect(script).not.toContain('Get-FileHash')
   })
 
   it('aborts an ambiguous dual-scope automatic update without a source marker', () => {
@@ -346,8 +310,6 @@ describe('Windows installer migration ACL contract', () => {
     expect(automaticUpdateScript).toContain('!insertmacro kunRunMigrationHelper ResolveRecoveryExecutable')
     expect(automaticUpdateScript).toContain('!insertmacro kunRunMigrationHelper CommitUpdateTransaction')
     expect(automaticUpdateScript).not.toContain('KUN_INSTALLER_UPDATE_SOURCE')
-    expect(smokePath.length).toBeGreaterThan(0)
-    expect(readFileSync(smokePath, 'utf8')).toContain('in-app all-users automatic update scope')
   })
 })
 

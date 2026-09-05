@@ -76,7 +76,7 @@ describe('SddAssistantPanel', () => {
       onCollapse: () => undefined
     }))
 
-    expect(html).toContain('aria-label="Model"')
+    expect(html).toContain('aria-label="Model: Codex / gpt-5.6-sol"')
     expect(html).toContain('aria-label="Reasoning: High"')
     expect(html).toContain('aria-label="Fast mode on"')
   })

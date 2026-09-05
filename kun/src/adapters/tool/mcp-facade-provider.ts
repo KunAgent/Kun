@@ -1,4 +1,5 @@
 import type { McpServerConfig } from '../../contracts/capabilities.js'
+import { isKunManagedGitHubMcpServer } from '../../contracts/builtin-mcp.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
@@ -222,6 +223,7 @@ function isUsableServer(
   capability: FacadeCapability
 ): boolean {
   return state.status === 'connected' &&
+    !isKunManagedGitHubMcpServer(state.server) &&
     typeof state.client[capability] === 'function' &&
     !context.blockedProviderIds?.includes(`mcp:${state.serverId}`) &&
     canUseMcpServer(state.server, context.workspace) &&

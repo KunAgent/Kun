@@ -426,7 +426,7 @@ export async function applyRuntimeProjectionAction(
     case 'seq_observed': sink.onSeq(action.seq); return
     case 'deltas_received': sink.onDeltas(action.deltas); return
     case 'assistant_item_upserted': sink.onAssistantItem?.(action.payload); return
-    case 'user_message_received': sink.onUserMessage(action.payload); return
+    case 'user_message_received': sink.onUserMessage(action.payload, action.seq); return
     case 'tool_updated': sink.onTool(action.payload); return
     case 'compaction_updated': sink.onCompaction(action.payload); return
     case 'review_updated': sink.onReview?.(action.payload); return

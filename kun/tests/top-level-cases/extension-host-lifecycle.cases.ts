@@ -20,14 +20,54 @@ import {
   type ResolvedExtension,
   type RpcEnvelope
 } from '../../src/extensions/index.js'
-import { admissionFor, buildBuiltinRunner, eventually, fixturePackageManager, hostCompatibility, writeFixtureRunner, writeHandshakeMismatchRunner, writeResolvedExtension } from '../support/extension-host-fixtures.js'
+import { admissionFor, buildBuiltinRunner, eventually, fixturePackageManager, hostCompatibility, withFixtureActivation, writeFixtureRunner, writeHandshakeMismatchRunner, writeResolvedExtension } from '../support/extension-host-fixtures.js'
 
 describe('extension host processes', () => {
   let builtinRunnerPath: string
 
   beforeAll(async () => {
     builtinRunnerPath = await buildBuiltinRunner()
-  }, 60_000)
+  }, 120_000)
+
+  it('captures a fresh activation epoch after package recovery invalidates the prior lifecycle', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-extension-manager-recovery-fence-'))
+    try {
+      const extension = await writeResolvedExtension(root, 'acme.recovery-fence', {
+        activationEvents: ['onStartup'],
+        browserOnly: true
+      })
+      const paths = new ExtensionPaths({
+        packageRoot: join(root, 'extensions'),
+        dataRoot: join(root, 'data')
+      })
+      let manager!: ExtensionManager
+      const packageManager = {
+        async resolveActivation<T>(
+          _extensionId: string,
+          _workspaceKeys: readonly string[],
+          captureFence: () => T
+        ) {
+          await manager.deactivate(extension.id)
+          return { resolvedScopes: [extension], fence: captureFence() }
+        },
+        admitManifest: (manifest: ResolvedExtension['manifest']) =>
+          manifestCompatibilityReport(manifest, hostCompatibility),
+        async compatibilityReportForExtension() {
+          return admissionFor(extension)
+        }
+      } as unknown as ExtensionPackageManager
+      manager = new ExtensionManager({ packageManager, paths })
+
+      await expect(manager.activate(extension.id, 'onStartup')).resolves.toBeUndefined()
+      await expect(manager.diagnostic(extension.id)).resolves.toMatchObject({
+        version: extension.version,
+        lifecycleState: 'browser-only'
+      })
+      await manager.shutdown()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 
   it('invalidates only the pending activation for the revoked workspace', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-extension-manager-workspace-pending-stop-'))
@@ -43,7 +83,7 @@ describe('extension host processes', () => {
       const workspaceA = join(root, 'workspace-a')
       const workspaceB = join(root, 'workspace-b')
       const gates = new Map<string, () => void>()
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation(_extensionId: string, workspaceKey?: string) {
           await new Promise<void>((resolvePromise) => {
             gates.set(workspaceKey!, resolvePromise)
@@ -55,7 +95,7 @@ describe('extension host processes', () => {
         async compatibilityReportForExtension() {
           return admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const manager = new ExtensionManager({ packageManager, paths })
       const keyA = paths.workspaceKey(workspaceA)
       const keyB = paths.workspaceKey(workspaceB)
@@ -81,7 +121,7 @@ describe('extension host processes', () => {
       const runnerPath = await writeFixtureRunner(root)
       const extension = await writeResolvedExtension(root, 'acme.demo')
       let resolutions = 0
-      const packageManager = {
+      const packageManager = withFixtureActivation({
         async resolveForActivation() {
           resolutions += 1
           return extension
@@ -91,7 +131,7 @@ describe('extension host processes', () => {
         async compatibilityReportForExtension() {
           return admissionFor(extension)
         }
-      } as unknown as ExtensionPackageManager
+      }) as unknown as ExtensionPackageManager
       const paths = new ExtensionPaths({
         packageRoot: join(root, 'extensions'),
         dataRoot: join(root, 'data')

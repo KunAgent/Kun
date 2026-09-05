@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { resolve } from 'node:path'
-import { parseTuiOptions } from './options.js'
+import { KUN_TUI_USAGE, parseTuiOptions } from './options.js'
 
 describe('parseTuiOptions', () => {
+  it('documents shared and isolated Runtime coexistence', () => {
+    expect(KUN_TUI_USAGE).toContain('kun tui --no-start')
+    expect(KUN_TUI_USAGE).toContain('KUN_MANAGER_CONTROL_DIR')
+    expect(KUN_TUI_USAGE).toContain('KUN_MANAGER_SETTINGS_PATH')
+    expect(KUN_TUI_USAGE).toContain('KUN_DATA_DIR')
+  })
+
   it('uses explicit flags above environment values', () => {
     const parsed = parseTuiOptions([
       '--url', 'http://127.0.0.1:19000/',

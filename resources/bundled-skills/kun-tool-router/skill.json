@@ -1,0 +1,24 @@
+{
+  "id": "kun-tool-router",
+  "name": "Kun Tool Router",
+  "version": "1.0.0",
+  "description": "Route requests to the narrowest real Kun tool family and define the required verification boundary.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/kun-tool-router"
+    ],
+    "promptPatterns": [
+      "Kun Tool Router",
+      "Kun tools",
+      "kun-tool-router",
+      "tool router",
+      "which tool",
+      "工具选择"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

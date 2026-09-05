@@ -9,17 +9,77 @@ describe('SkillRuntime project config', () => {
   let root = ''
   let workspace = ''
   let globalRoot = ''
+  let builtinRoot = ''
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'kun-project-skills-'))
     workspace = join(root, 'workspace')
     globalRoot = join(root, 'global-skills')
+    builtinRoot = join(root, 'builtin-skills')
     await mkdir(join(workspace, '.kun'), { recursive: true })
     await mkdir(globalRoot)
+    await mkdir(builtinRoot)
   })
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true })
+  })
+
+  it('loads builtin-only Skills and reports their source and roots', async () => {
+    await writeSkill(builtinRoot, 'bundled', 'builtin instructions')
+    const runtime = await createRuntimeWithRoots({ builtinRoots: [builtinRoot] })
+
+    await expect(runtime.availableSkillIdsForWorkspace(workspace)).resolves.toEqual(['bundled'])
+    const diagnostics = await runtime.diagnosticsForWorkspace(workspace)
+    expect(diagnostics.builtinRoots).toContain(join(builtinRoot, 'bundled'))
+    expect(diagnostics.skills).toEqual([
+      expect.objectContaining({ id: 'bundled', source: 'builtin' })
+    ])
+  })
+
+  it('gives global Skills precedence over builtin duplicates', async () => {
+    await writeSkill(globalRoot, 'duplicate', 'global instructions')
+    await writeSkill(builtinRoot, 'duplicate', 'builtin instructions')
+    const runtime = await createRuntimeWithRoots({
+      globalRoots: [globalRoot],
+      builtinRoots: [builtinRoot]
+    })
+
+    const loaded = await runtime.loadSkillById('duplicate', workspace)
+    expect('instruction' in loaded ? loaded.instruction : '').toContain('global instructions')
+    const diagnostics = await runtime.diagnosticsForWorkspace(workspace)
+    expect(diagnostics.skills[0]?.source).toBe('global')
+    expect(diagnostics.validationErrors).toEqual([])
+  })
+
+  it('gives project Skills precedence over global and builtin duplicates', async () => {
+    await writeSkill(join(workspace, '.kun', 'skills'), 'duplicate', 'project instructions')
+    await writeSkill(globalRoot, 'duplicate', 'global instructions')
+    await writeSkill(builtinRoot, 'duplicate', 'builtin instructions')
+    await writeProjectConfig({ skills: {} })
+    const runtime = await createRuntimeWithRoots({
+      globalRoots: [globalRoot],
+      builtinRoots: [builtinRoot]
+    })
+
+    const loaded = await runtime.loadSkillById('duplicate', workspace)
+    expect('instruction' in loaded ? loaded.instruction : '').toContain('project instructions')
+    const diagnostics = await runtime.diagnosticsForWorkspace(workspace)
+    expect(diagnostics.skills[0]?.source).toBe('project')
+    expect(diagnostics.validationErrors).toEqual([])
+  })
+
+  it('removes disabled builtin Skills from workspace diagnostics', async () => {
+    await writeSkill(builtinRoot, 'disabled-builtin', 'builtin instructions')
+    const runtime = await createRuntimeWithRoots({
+      builtinRoots: [builtinRoot],
+      disabledIds: ['DISABLED-BUILTIN']
+    })
+
+    await expect(runtime.availableSkillIdsForWorkspace(workspace)).resolves.toEqual([])
+    const diagnostics = await runtime.diagnosticsForWorkspace(workspace)
+    expect(diagnostics.skills).toEqual([])
+    expect(diagnostics.builtinRoots).toEqual([])
   })
 
   it('gives an explicit project root precedence over conventional and global duplicates', async () => {
@@ -233,6 +293,26 @@ describe('SkillRuntime project config', () => {
     )).resolves.toMatchObject({ error: expect.stringContaining('unknown skill id') })
   })
 
+  async function createRuntimeWithRoots(skills: {
+    globalRoots?: string[]
+    builtinRoots?: string[]
+    disabledIds?: string[]
+  }): Promise<SkillRuntime> {
+    const config = KunCapabilitiesConfig.parse({
+      skills: {
+        enabled: true,
+        projectConfigEnabled: true,
+        roots: [],
+        workspaceRoots: [],
+        globalRoots: skills.globalRoots ?? [],
+        builtinRoots: skills.builtinRoots ?? [],
+        disabledIds: skills.disabledIds ?? [],
+        legacySkillMd: true
+      }
+    })
+    return SkillRuntime.create(config.skills)
+  }
+
   async function createRuntime(): Promise<SkillRuntime> {
     await writeSkill(globalRoot, 'global', 'global instructions')
     const config = KunCapabilitiesConfig.parse({
@@ -242,6 +322,7 @@ describe('SkillRuntime project config', () => {
         roots: [],
         workspaceRoots: [],
         globalRoots: [globalRoot],
+        builtinRoots: [],
         legacySkillMd: true
       }
     })

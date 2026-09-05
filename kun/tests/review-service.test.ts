@@ -37,6 +37,48 @@ const successfulReviewJson = JSON.stringify({
   overallConfidenceScore: 0.9
 })
 
+const reviewInspectionPaths = [
+  '.',
+  'kun',
+  'src',
+  'docs',
+  'scripts',
+  'packages',
+  'resources',
+  'benchmarks'
+]
+
+function inspectingUntilFinalModel(
+  modelName: string,
+  options: { visibleFirstRound?: boolean } = {}
+): { model: ModelClient; requests: ModelRequest[] } {
+  const requests: ModelRequest[] = []
+  const model: ModelClient = {
+    provider: 'test',
+    model: modelName,
+    async *stream(request): AsyncIterable<ModelStreamChunk> {
+      requests.push(request)
+      if (request.tools.length === 0) {
+        yield { kind: 'assistant_text_delta', text: successfulReviewJson }
+        yield { kind: 'completed', stopReason: 'stop' }
+        return
+      }
+      if (options.visibleFirstRound && requests.length === 1) {
+        yield { kind: 'assistant_reasoning_delta', text: 'Inspect the relevant files.' }
+        yield { kind: 'assistant_text_delta', text: 'I will inspect the workspace.' }
+      }
+      yield {
+        kind: 'tool_call_complete',
+        callId: `call_visible_ls_${requests.length}`,
+        toolName: 'ls',
+        arguments: { path: reviewInspectionPaths[requests.length - 1] ?? '.' }
+      }
+      yield { kind: 'completed', stopReason: 'tool_calls' }
+    }
+  }
+  return { model, requests }
+}
+
 describe('ReviewService isolation', () => {
   it('creates the isolated reviewer with a read-only sandbox', async () => {
     const { ReviewService } = await import('../src/services/review-service.js')
@@ -122,22 +164,31 @@ describe('ReviewService isolation', () => {
     expect(progress.join('\n')).not.toContain('private reasoning')
   })
 
-  it('applies configured model-step limits to the isolated reviewer', async () => {
-    let requestCount = 0
-    const model: ModelClient = {
-      provider: 'test',
-      model: 'looping-review-model',
-      async *stream(): AsyncIterable<ModelStreamChunk> {
-        requestCount += 1
-        yield {
-          kind: 'tool_call_complete',
-          callId: `call_ls_${requestCount}`,
-          toolName: 'ls',
-          arguments: { path: '.' }
-        }
-        yield { kind: 'completed', stopReason: 'tool_calls' }
-      }
-    }
+  it('reserves the last configured model step for final synthesis', async () => {
+    const { model, requests } = inspectingUntilFinalModel('bounded-review-model')
+    const { ReviewService } = await import('../src/services/review-service.js')
+    const service = new ReviewService({
+      threadStore: {} as never,
+      turns: {} as never,
+      model,
+      defaultModel: model.model,
+      nowIso: () => '2026-08-12T00:00:00.000Z',
+      runtime: { turnLimits: { maxSteps: 3 } }
+    })
+
+    await expect((service as unknown as IsolatedReviewer).runIsolatedReviewer({
+      prompt: 'Review current changes.',
+      workspace: process.cwd(),
+      model: model.model,
+      signal: new AbortController().signal
+    })).resolves.toBe(successfulReviewJson)
+    expect(requests).toHaveLength(3)
+    expect(requests.slice(0, 2).every((request) => request.tools.length > 0)).toBe(true)
+    expect(requests[2]?.tools).toEqual([])
+  })
+
+  it('uses a single no-tool synthesis request when maxSteps is one', async () => {
+    const { model, requests } = inspectingUntilFinalModel('single-step-review-model')
     const { ReviewService } = await import('../src/services/review-service.js')
     const service = new ReviewService({
       threadStore: {} as never,
@@ -153,33 +204,16 @@ describe('ReviewService isolation', () => {
       workspace: process.cwd(),
       model: model.model,
       signal: new AbortController().signal
-    })).rejects.toThrow('turn exceeded 1 model steps')
-    expect(requestCount).toBe(1)
+    })).resolves.toBe(successfulReviewJson)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.tools).toEqual([])
   })
 
   it('projects reviewer reasoning, intermediate text, and tools into the parent turn', async () => {
-    let requestCount = 0
-    const model: ModelClient = {
-      provider: 'test',
-      model: 'visible-review-model',
-      async *stream(): AsyncIterable<ModelStreamChunk> {
-        requestCount += 1
-        if (requestCount === 1) {
-          yield { kind: 'assistant_reasoning_delta', text: 'Inspect the relevant files.' }
-          yield { kind: 'assistant_text_delta', text: 'I will inspect the workspace.' }
-          yield {
-            kind: 'tool_call_complete',
-            callId: 'call_visible_ls',
-            toolName: 'ls',
-            arguments: { path: '.' }
-          }
-          yield { kind: 'completed', stopReason: 'tool_calls' }
-          return
-        }
-        yield { kind: 'assistant_text_delta', text: successfulReviewJson }
-        yield { kind: 'completed', stopReason: 'stop' }
-      }
-    }
+    const { model, requests } = inspectingUntilFinalModel(
+      'visible-review-model',
+      { visibleFirstRound: true }
+    )
     const nowIso = () => '2026-08-12T00:00:00.000Z'
     const eventBus = new InMemoryEventBus()
     const sessionStore = new InMemorySessionStore()
@@ -238,6 +272,9 @@ describe('ReviewService isolation', () => {
       model: model.model,
       reasoningEffort: 'high'
     })).resolves.toBe('completed')
+    expect(requests).toHaveLength(9)
+    expect(requests.slice(0, 8).every((request) => request.tools.length > 0)).toBe(true)
+    expect(requests[8]?.tools).toEqual([])
 
     const items = await sessionStore.loadItems(thread.id)
     expect(items).toEqual(expect.arrayContaining([

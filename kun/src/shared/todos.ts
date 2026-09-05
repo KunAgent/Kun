@@ -16,12 +16,18 @@ type ParsedTaskLine = {
   content: string
 }
 
+type FenceState = { marker: '`' | '~'; length: number }
+
+export type PlanTodoSyncMode = 'document_edit' | 'plan_write'
+
 export type MergePlanTodosOptions = {
   threadId: string
   existing: ThreadTodoList | null | undefined
   planItems: readonly ExtractedPlanTodo[]
+  planId: string
+  relativePath: string
   now: string
-  preserveCompleted?: boolean
+  mode: PlanTodoSyncMode
 }
 
 export function normalizeTodoContent(value: string): string {
@@ -58,7 +64,10 @@ export function extractPlanTodos(input: {
   const items: ExtractedPlanTodo[] = []
   const lines = input.markdown.split(/\r?\n/)
   let ordinal = 0
+  let fence: FenceState | null = null
   for (const line of lines) {
+    fence = nextFence(line, fence)
+    if (fence) continue
     const task = parseTaskLine(line)
     if (!task) continue
     const content = normalizeTodoContent(task.content)
@@ -92,10 +101,7 @@ export function mergePlanTodos(options: MergePlanTodosOptions): ThreadTodoList {
   for (const planItem of options.planItems) {
     const existing = findExistingPlanTodo(existingItems, usedExistingIds, planItem)
     if (existing) usedExistingIds.add(existing.id)
-    const status =
-      existing && options.preserveCompleted && existing.status === 'completed'
-        ? existing.status
-        : existing?.status ?? planItem.status
+    const status = mergedPlanTodoStatus(planItem.status, existing?.status, options.mode)
     nextItems.push({
       ...planItem,
       id: existing?.id ?? planItem.id,
@@ -110,15 +116,8 @@ export function mergePlanTodos(options: MergePlanTodosOptions): ThreadTodoList {
 
   for (const item of existingItems) {
     if (usedExistingIds.has(item.id)) continue
-    if (item.source?.kind === 'plan') {
-      nextItems.push({
-        ...item,
-        source: undefined,
-        updatedAt: options.now
-      })
-    } else {
-      nextItems.push(item)
-    }
+    if (item.source?.kind === 'plan' && samePlanSource(item.source, options)) continue
+    nextItems.push(item)
   }
 
   return {
@@ -136,12 +135,16 @@ export function patchPlanTodoStatus(
   if (!source || source.kind !== 'plan') return { markdown, changed: false }
   const lines = markdown.split(/\r?\n/)
   const lineEnding = markdown.includes('\r\n') ? '\r\n' : '\n'
-  const tasks = lines
-    .map((line, lineIndex) => ({ line, lineIndex, task: parseTaskLine(line) }))
-    .filter((entry): entry is { line: string; lineIndex: number; task: ParsedTaskLine } =>
-      Boolean(entry.task)
-    )
-    .map((entry, ordinal) => ({
+  const tasks: Array<{ line: string; lineIndex: number; task: ParsedTaskLine }> = []
+  let fence: FenceState | null = null
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex] ?? ''
+    fence = nextFence(line, fence)
+    if (fence) continue
+    const task = parseTaskLine(line)
+    if (task) tasks.push({ line, lineIndex, task })
+  }
+  const indexedTasks = tasks.map((entry, ordinal) => ({
       ...entry,
       ordinal,
       content: normalizeTodoContent(entry.task.content),
@@ -149,9 +152,9 @@ export function patchPlanTodoStatus(
     }))
 
   const target =
-    tasks.find((task) => task.ordinal === source.ordinal && task.contentHash === source.contentHash) ??
-    tasks.find((task) => task.contentHash === source.contentHash) ??
-    tasks.find((task) => task.ordinal === source.ordinal)
+    indexedTasks.find((task) => task.ordinal === source.ordinal && task.contentHash === source.contentHash) ??
+    indexedTasks.find((task) => task.contentHash === source.contentHash) ??
+    indexedTasks.find((task) => task.ordinal === source.ordinal)
   if (!target) return { markdown, changed: false }
 
   const marker = item.status === 'completed' ? 'x' : ' '
@@ -167,6 +170,39 @@ export function sourceKey(source: ThreadTodoSource): string {
 
 export function normalizePlanRelativePath(relativePath: string): string {
   return relativePath.replaceAll('\\', '/').replace(/\/+/g, '/').replace(/^\.\//, '')
+}
+
+function mergedPlanTodoStatus(
+  markdownStatus: ThreadTodoStatus,
+  existingStatus: ThreadTodoStatus | undefined,
+  mode: PlanTodoSyncMode
+): ThreadTodoStatus {
+  if (markdownStatus === 'completed') return 'completed'
+  if (existingStatus === 'in_progress') return 'in_progress'
+  if (mode === 'plan_write' && existingStatus === 'completed') return 'completed'
+  return 'pending'
+}
+
+function samePlanSource(
+  source: ThreadTodoSource,
+  target: Pick<MergePlanTodosOptions, 'planId' | 'relativePath'>
+): boolean {
+  return source.planId === target.planId &&
+    normalizePlanRelativePath(source.relativePath) === normalizePlanRelativePath(target.relativePath)
+}
+
+function nextFence(line: string, current: FenceState | null): FenceState | null {
+  const match = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+  if (!match) return current
+  const marker = match[1] ?? ''
+  const trailing = match[2] ?? ''
+  const char = marker[0] as '`' | '~'
+  if (!current) return { marker: char, length: marker.length }
+  const closes =
+    char === current.marker &&
+    marker.length >= current.length &&
+    /^\s*$/.test(trailing)
+  return closes ? null : current
 }
 
 function taskMarkerToStatus(marker: string | undefined): ThreadTodoStatus {
@@ -217,25 +253,15 @@ function findExistingPlanTodo(
   usedExistingIds: ReadonlySet<string>,
   planItem: ExtractedPlanTodo
 ): ThreadTodoItem | undefined {
-  const candidates = existingItems.filter((item) => !usedExistingIds.has(item.id))
+  const candidates = existingItems.filter((item) =>
+    !usedExistingIds.has(item.id) &&
+    item.source?.kind === 'plan' &&
+    item.source.planId === planItem.source.planId &&
+    normalizePlanRelativePath(item.source.relativePath) === normalizePlanRelativePath(planItem.source.relativePath)
+  )
   return (
-    candidates.find((item) =>
-      item.source?.kind === 'plan' &&
-      item.source.planId === planItem.source.planId &&
-      item.source.relativePath === planItem.source.relativePath &&
-      item.source.contentHash === planItem.source.contentHash
-    ) ??
-    candidates.find((item) =>
-      item.source?.kind === 'plan' &&
-      item.source.relativePath === planItem.source.relativePath &&
-      item.source.contentHash === planItem.source.contentHash
-    ) ??
+    candidates.find((item) => item.source?.contentHash === planItem.source.contentHash) ??
     candidates.find((item) => todoContentHash(item.content) === planItem.source.contentHash) ??
-    candidates.find((item) =>
-      item.source?.kind === 'plan' &&
-      item.source.planId === planItem.source.planId &&
-      item.source.relativePath === planItem.source.relativePath &&
-      item.source.ordinal === planItem.source.ordinal
-    )
+    candidates.find((item) => item.source?.ordinal === planItem.source.ordinal)
   )
 }

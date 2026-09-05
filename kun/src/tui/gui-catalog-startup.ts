@@ -17,8 +17,8 @@ export function isDataDirLeaseConflictError(error: unknown): boolean {
 
 /**
  * Import GUI providers into config.json only for cold start.
- * When a shared runtime already owns the data dir, the live Registry is the
- * catalog authority — skipping the file rewrite avoids a misleading lease warning.
+ * When a Runtime already owns the data dir (normally explicit attach mode),
+ * its live Registry is authoritative and a file rewrite would race the owner.
  */
 export async function importGuiProviderCatalogForTui(input: {
   dataDir: string

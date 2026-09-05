@@ -178,15 +178,22 @@ describe('extension package management', () => {
         '1.0.0'
       )
       await permissionChangeEntered
+      let barrierSettled = false
+      const barrier = manager.waitForPendingOperation('acme.demo').finally(() => {
+        barrierSettled = true
+      })
       let admissionSettled = false
       const admission = manager.resolveForActivation('acme.demo', workspaceKey).finally(() => {
         admissionSettled = true
       })
       await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(barrierSettled).toBe(false)
       expect(admissionSettled).toBe(false)
 
       releasePermissionChange()
       await revoking
+      await barrier
+      expect(admissionSettled).toBe(true)
       await expect(admission).rejects.toMatchObject({ code: 'EXTENSION_WORKSPACE_UNTRUSTED' })
     } finally {
       await makeWritable(root)

@@ -16,7 +16,7 @@ import './styles/workflow-canvas.css'
 import './styles/graph-workbench.css'
 import './styles/neutral-polish.css'
 import './styles/provider-quota-panel.css'
-import { applyCursorSpotlight } from './lib/apply-theme'
+import { applyCursorSpotlight, initializeStartupTheme } from './lib/apply-theme'
 import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
@@ -29,6 +29,7 @@ import {
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
+initializeStartupTheme(window.kunGui?.getSettings)
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()
 const storageRelocationMode = new URLSearchParams(window.location.search).get('storageRelocation') === '1'

@@ -83,7 +83,8 @@ export function CodexLoginSection({
     setError('')
     setNotice(fallbackNotice)
     try {
-      const result = await window.kunGui.startCodexAuth()
+      const selection = { providerId: provider.id, useProxy: provider.useProxy }
+      const result = await window.kunGui.startCodexAuth(selection)
       if (!isCurrentLoginRun(runId)) return
       if (!result.ok) {
         setPhase('error')
@@ -105,7 +106,7 @@ export function CodexLoginSection({
         }
         if (typeof window.kunGui?.pollCodexAuth !== 'function') return
         try {
-          const poll = await window.kunGui.pollCodexAuth(deviceCode, uc)
+          const poll = await window.kunGui.pollCodexAuth(deviceCode, uc, selection)
           if (!isCurrentLoginRun(runId)) return
           if (poll.done) {
             clearPoll()
@@ -146,7 +147,10 @@ export function CodexLoginSection({
     setError('')
     setNotice(null)
     try {
-      const result = await window.kunGui.startCodexBrowserAuth()
+      const result = await window.kunGui.startCodexBrowserAuth({
+        providerId: provider.id,
+        useProxy: provider.useProxy
+      })
       if (!isCurrentLoginRun(runId)) return
       if (result.ok) {
         setNotice(null)

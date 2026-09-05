@@ -30,6 +30,17 @@ import {
 } from './model-request-trace-store.js'
 import { type CaptureState, DEFAULT_LLM_DEBUG_RECORDER_LIMITS, type LlmCliInvocationMeta, type LlmDebugRecorderLimits, type LlmDebugRecorderOptions, type LlmDebugRound, type LlmDebugRoundMeta, type LlmDebugSink, type LlmDebugToolCall, type LlmDebugToolResult, type LlmHttpAttemptMeta, type LlmHttpAttemptReason, type LlmPhaseDiagnosticMeta, type LlmSdkInvocationMeta } from './llm-debug-recorder-contracts.js'
 import { addCaptureWarning, appendStringBlock, cloneDecoded, cloneDecodedLive, createCaptureState, elapsedMs, finishRecord, joinStringBlocks, jsonBytes, jsonStringContentBytes, markTruncated, newestRecordFirst, parseLegacyRequestBody, positiveInteger, redactBrowserUseDebugContent, safeError, truncateJsonStringContent } from './llm-debug-recorder-support.js'
+import { TrajectoryContentStore } from './trajectory-content-store.js'
+import type { PromptManifest } from '../contracts/trajectory.js'
+import {
+  emptyBody,
+  emptyHeaders,
+  interruptedRecord,
+  isFirstContentChunk,
+  persistentMetadataRecord,
+  retainedReasoningLength,
+  retainedTextLength
+} from './llm-debug-recorder-trajectory.js'
 
 /**
  * Count/byte-bounded live recorder plus private per-thread JSONL persistence.
@@ -42,6 +53,7 @@ export class LlmDebugRecorder implements LlmDebugSink {
   private readonly activeByThread = new Map<string, Set<LlmDebugRound>>()
   private readonly limits: LlmDebugRecorderLimits
   private readonly store?: ModelRequestTraceStore
+  private readonly contentStore?: TrajectoryContentStore
   private readonly capturePolicy?: LlmDebugRecorderOptions['shouldCapture']
   private nextId = 1
   private nextTraceSequence = 1
@@ -63,7 +75,10 @@ export class LlmDebugRecorder implements LlmDebugSink {
       maxTotalBytes: positiveInteger(options.maxTotalBytes, DEFAULT_LLM_DEBUG_RECORDER_LIMITS.maxTotalBytes),
       maxPageSize: positiveInteger(options.maxPageSize, DEFAULT_LLM_DEBUG_RECORDER_LIMITS.maxPageSize)
     }
-    if (options.dataDir) this.store = new ModelRequestTraceStore(options.dataDir)
+    if (options.dataDir) {
+      this.store = new ModelRequestTraceStore(options.dataDir)
+      this.contentStore = new TrajectoryContentStore(options.dataDir)
+    }
     this.capturePolicy = options.shouldCapture
   }
 
@@ -75,6 +90,10 @@ export class LlmDebugRecorder implements LlmDebugSink {
     const startedAt = new Date().toISOString()
     const round: LlmDebugRound = {
       id: this.nextId++,
+      roundId: meta.roundId ?? randomUUID(),
+      step: Math.max(0, Math.floor(meta.step ?? 0)),
+      purpose: meta.purpose ?? 'assistant',
+      captureContent: meta.captureContent !== false,
       threadId: meta.threadId,
       turnId: meta.turnId,
       provider: meta.provider,
@@ -190,16 +209,22 @@ export class LlmDebugRecorder implements LlmDebugSink {
   ): ModelRequestTraceRecord {
     const state = this.stateFor(round)
     const sanitizedUrl = sanitizeModelTraceUrl(meta.target)
-    const body = boundedModelTraceText(
-      redactModelTraceValues(
-        redactBrowserUseDebugContent(meta.bodyText),
-        state.redactedRequestValues
-      ),
-      this.limits.maxRequestBodyBytes
-    )
+    const body = round.captureContent
+      ? boundedModelTraceText(
+          redactModelTraceValues(
+            redactBrowserUseDebugContent(meta.bodyText),
+            state.redactedRequestValues
+          ),
+          this.limits.maxRequestBodyBytes
+        )
+      : undefined
     const record: ModelRequestTraceRecord = {
       schemaVersion: MODEL_REQUEST_TRACE_SCHEMA_VERSION,
       id: randomUUID(),
+      roundId: round.roundId,
+      step: round.step,
+      purpose: round.purpose,
+      captureMode: round.captureContent ? 'full' : 'metadata',
       sequence: this.nextTraceSequence++,
       threadId: round.threadId,
       turnId: round.turnId,
@@ -221,8 +246,15 @@ export class LlmDebugRecorder implements LlmDebugSink {
         method: meta.method,
         url: sanitizedUrl.value,
         urlRedacted: sanitizedUrl.redacted,
-        headers: sanitizeModelTraceHeaders(meta.headers, meta.secretValues),
-        body
+        ...(round.captureContent
+          ? {
+              headers: sanitizeModelTraceHeaders(meta.headers, meta.secretValues),
+              body: body!
+            }
+          : {
+              headers: emptyHeaders(),
+              body: emptyBody()
+            })
       },
       ...(meta.delegated
         ? {
@@ -235,10 +267,26 @@ export class LlmDebugRecorder implements LlmDebugSink {
     }
     round.exchanges.push(record)
     round.url = sanitizedUrl.value
-    round.requestBodyOriginalBytes = body.originalBytes
-    round.requestBodyTruncated = body.truncated
-    round.requestBody = parseLegacyRequestBody(body.text, body)
-    state.requestBytes = Math.max(state.requestBytes, body.capturedBytes)
+    if (body) {
+      round.requestBodyOriginalBytes = body.originalBytes
+      round.requestBodyTruncated = body.truncated
+      round.requestBody = parseLegacyRequestBody(body.text, body)
+      state.requestBytes = Math.max(state.requestBytes, body.capturedBytes)
+    }
+    if (round.captureContent && this.contentStore) {
+      const capture = this.contentStore.captureRequest({
+        threadId: round.threadId,
+        requestId: record.id,
+        bodyText: meta.bodyText,
+        secretValues: [...state.redactedRequestValues, ...(meta.secretValues ?? [])]
+      }).then((manifest) => {
+        record.manifestId = manifest.manifestId
+      }).catch((error) => {
+        addCaptureWarning(record, `prompt manifest capture failed: ${safeError(error)}`)
+      })
+      state.pendingCaptures.push(capture)
+    }
+    void this.persistCheckpoint(record)
     return record
   }
 
@@ -249,8 +297,9 @@ export class LlmDebugRecorder implements LlmDebugSink {
     record.response = {
       status: response.status,
       statusText: response.statusText,
-      headers: sanitizeModelTraceHeaders(response.headers)
+      headers: round.captureContent ? sanitizeModelTraceHeaders(response.headers) : emptyHeaders()
     }
+    if (!round.captureContent) return
     let clone: Response
     try {
       clone = response.clone()
@@ -277,6 +326,13 @@ export class LlmDebugRecorder implements LlmDebugSink {
 
   captureChunk(round: LlmDebugRound, chunk: ModelStreamChunk): void {
     const state = this.stateFor(round)
+    if (isFirstContentChunk(chunk)) {
+      const current = round.exchanges.at(-1)
+      if (current && !current.firstTokenAt) {
+        current.firstTokenAt = new Date().toISOString()
+        void this.persistCheckpoint(current)
+      }
+    }
     switch (chunk.kind) {
       case 'assistant_text_delta':
         this.captureText(round, state, 'text', chunk.text)
@@ -300,6 +356,16 @@ export class LlmDebugRecorder implements LlmDebugSink {
       case 'error':
         this.captureString(round, state, 'error', chunk.message)
         break
+    }
+    const current = round.exchanges.at(-1)
+    if (current) {
+      current.receivedTextLength = retainedTextLength(state)
+      current.receivedReasoningLength = retainedReasoningLength(state)
+      const now = Date.now()
+      if (now - state.lastCheckpointAt >= 2_000) {
+        state.lastCheckpointAt = now
+        void this.persistCheckpoint(current)
+      }
     }
   }
 
@@ -337,10 +403,16 @@ export class LlmDebugRecorder implements LlmDebugSink {
     if (lastExchange) lastExchange.decoded = cloneDecoded(round.output)
     for (const record of round.exchanges) {
       if (record.status === 'pending') {
-        record.status = record.response?.captureError ? 'capture_error' : 'completed'
+        record.status = record.response?.captureError
+          ? 'capture_error'
+          : round.output.error
+            ? 'failed'
+            : round.output.stopReason
+              ? 'completed'
+              : 'cancelled'
         finishRecord(record)
       }
-      await this.store?.append(record)
+      await this.store?.append(persistentMetadataRecord(record))
     }
     if (this.states.delete(round)) this.activeCaptureCountValue = Math.max(0, this.activeCaptureCountValue - 1)
     const active = this.activeByThread.get(round.threadId)
@@ -389,9 +461,17 @@ export class LlmDebugRecorder implements LlmDebugSink {
             .slice(0, remaining),
           warnings: []
         }
+    const activeIds = new Set(active.map((record) => record.id))
+    const merged = new Map<string, ModelRequestTraceRecord>()
+    for (const record of persisted.records) {
+      merged.set(record.id, record.status === 'pending' && !activeIds.has(record.id)
+        ? interruptedRecord(record)
+        : record)
+    }
+    for (const record of active) merged.set(record.id, record)
     return {
       schemaVersion: MODEL_REQUEST_TRACE_SCHEMA_VERSION,
-      records: [...active, ...persisted.records].sort(newestRecordFirst).slice(0, limit),
+      records: [...merged.values()].sort(newestRecordFirst).slice(0, limit),
       ...(persisted.nextCursor ? { nextCursor: persisted.nextCursor } : {}),
       activeCount: active.length,
       limits: this.traceLimits(),
@@ -415,7 +495,21 @@ export class LlmDebugRecorder implements LlmDebugSink {
       )
       this.rounds.splice(index, 1)
     }
-    await this.store?.deleteThread(threadId)
+    await Promise.all([
+      this.store?.deleteThread(threadId),
+      this.contentStore?.deleteThread(threadId)
+    ])
+  }
+
+  loadPromptManifest(threadId: string, manifestId: string): Promise<PromptManifest | null> {
+    return this.contentStore?.loadManifest(threadId, manifestId) ?? Promise.resolve(null)
+  }
+
+  loadPromptManifestContent(
+    threadId: string,
+    manifestId: string
+  ): ReturnType<TrajectoryContentStore['loadManifestContent']> {
+    return this.contentStore?.loadManifestContent(threadId, manifestId) ?? Promise.resolve(null)
   }
 
   async shutdown(): Promise<void> {
@@ -446,6 +540,10 @@ export class LlmDebugRecorder implements LlmDebugSink {
         ...(record === round.exchanges.at(-1) ? { decoded: cloneDecodedLive(round, this.states.get(round)) } : {})
       })))
       .sort(newestRecordFirst)
+  }
+
+  private async persistCheckpoint(record: ModelRequestTraceRecord): Promise<void> {
+    await this.store?.append(persistentMetadataRecord(record))
   }
 
   private async captureResponseBody(record: ModelRequestTraceRecord, response: Response): Promise<void> {

@@ -63,6 +63,7 @@ function credentialSnapshot(
 ): ModelConnectionSnapshot {
   return {
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: 9,
     providers: [{
       id: 'legacy-provider',
@@ -71,6 +72,7 @@ function credentialSnapshot(
       kind: 'http',
       authType: 'api-key',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       configured: true,
       ...(credentialStatus ? { credentialStatus } : {}),
       models: ['model-a'],

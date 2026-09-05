@@ -58,7 +58,7 @@ export async function createRuntimeExtensionComposition(
 	  })
 	  const extensionRegistry = new ExtensionRegistry(extensionPaths)
 	  const extensionApiCapabilities = [
-	    'commands', 'storage', 'configuration', 'network', 'ui', 'agent', 'threads', 'tools',
+	    'commands', 'storage', 'secrets', 'configuration', 'network', 'ui', 'agent', 'threads', 'tools',
 	    'modelProviders', 'authentication', 'workspace', 'media', 'jobs'
 	  ]
 	  const legacyExtensionApiCapabilities = extensionApiCapabilities.filter((capability) =>
@@ -71,7 +71,11 @@ export async function createRuntimeExtensionComposition(
 	      capabilitiesByApiVersion: Object.fromEntries(
 	        SUPPORTED_EXTENSION_API_VERSIONS.map((version) => [
 	          version,
-	          version === '1.0.0' ? legacyExtensionApiCapabilities : extensionApiCapabilities
+	          version === '1.3.0'
+	            ? extensionApiCapabilities
+	            : version === '1.0.0'
+	              ? legacyExtensionApiCapabilities.filter((capability) => capability !== 'secrets')
+	              : extensionApiCapabilities.filter((capability) => capability !== 'secrets')
 	        ])
 	      )
 	    }

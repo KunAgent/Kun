@@ -85,6 +85,7 @@ describe('model provider retry settings', () => {
           apiKey: 'k',
           baseUrl: 'https://example.com/v1',
           endpointFormat: 'chat_completions',
+          useProxy: false,
           retry: {
             maxAttempts: 99,
             initialDelayMs: 700_000,
@@ -113,6 +114,7 @@ describe('model provider retry settings', () => {
         apiKey: 'k',
         baseUrl: 'https://example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         retry: { maxAttempts: 3, initialDelayMs: 9_000, httpStatusCodes: [429, 503] },
         models: ['m'],
         modelProfiles: {}
@@ -135,6 +137,7 @@ describe('model provider retry settings', () => {
         apiKey: 'k',
         baseUrl: 'https://example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         retry: { maxAttempts: 0, initialDelayMs: 3_000, httpStatusCodes: [429, 503] },
         models: ['m'],
         modelProfiles: {}
@@ -156,6 +159,7 @@ describe('model provider retry settings', () => {
         apiKey: 'k',
         baseUrl: 'https://example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         retry: {
           maxAttempts: 0,
           initialDelayMs: 3_000,
@@ -181,6 +185,7 @@ describe('model provider retry settings', () => {
         apiKey: 'k',
         baseUrl: 'https://example.com/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         retry: {
           maxAttempts: 5,
           initialDelayMs: 3_000,
@@ -211,6 +216,7 @@ describe('Gemini subscription provider preset', () => {
       kind: 'antigravity-cli',
       baseUrl: '',
       endpointFormat: 'custom_endpoint',
+      useProxy: false,
       models: expect.arrayContaining(['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro'])
     })
   })
@@ -228,6 +234,7 @@ describe('Gemini subscription provider preset', () => {
       apiKey: '',
       baseUrl: '',
       endpointFormat: 'custom_endpoint',
+      useProxy: false,
       retry: expect.objectContaining({
         maxAttempts: 5,
         httpStatusCodes: expect.arrayContaining([429, 503])
@@ -279,6 +286,7 @@ describe('Cursor subscription provider preset', () => {
       apiKey: 'cursor-secret',
       baseUrl: '',
       endpointFormat: 'custom_endpoint',
+      useProxy: false,
       models: ['auto'],
       modelProfiles: {
         auto: {

@@ -121,6 +121,20 @@ describe('ToolCallDispatcher', () => {
     expect(executed).toEqual(['read', 'grep'])
   })
 
+  it('reports execution only after the result is durably persisted', async () => {
+    const onToolExecuted = vi.fn()
+    const dispatcher = new ToolCallDispatcher({
+      executeSafely: vi.fn(async (input: { call: ToolCallLike }) => resultFor(input.call)),
+      persistResult: vi.fn(async () => { throw new Error('item log unavailable') }),
+      persistSuppressed: vi.fn(async () => undefined)
+    } as never)
+
+    await expect(dispatcher.dispatch({
+      dispatch: dispatchInput([call('write', 'write_1')]), context, onToolExecuted
+    })).rejects.toThrow('item log unavailable')
+    expect(onToolExecuted).not.toHaveBeenCalled()
+  })
+
   it('continues a parallel batch when one result is a tool-level cancellation', async () => {
     const persisted: Array<{ callId: string; isError?: boolean }> = []
     const dispatcher = new ToolCallDispatcher({

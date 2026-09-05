@@ -56,7 +56,7 @@ import {
   goalContextInstruction,
   goalContextKey
 } from '../loop/continuation-instructions.js'
-import { type TurnService, type TurnServiceDeps, TurnConflictError, ThreadClosingError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
+import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnInProgressError, ThreadClosingError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction, isPendingQueuedAdmission } from './turn-service-core.js'
 import { resolveDesignTurnAdmission } from './turn-service-design-admission.js'
 import {
   InternalTurnRuntimeContext,
@@ -84,15 +84,28 @@ async startTurn(this: TurnService, input: {
     extensionBudgetTokenBaseline?: number
     /** Private host-authored context; never accepted from HTTP or projected to clients. */
     runtimeContext?: import('../domain/internal-turn-runtime-context.js').InternalTurnRuntimeContext
+    /** Atomically bind an automatic restart continuation to its proven failed source. */
+    expectedLatestFailedTurnId?: string
     /** Runs only for a newly admitted turn, never for an idempotent replay. */
-    onAdmitted?: (response: StartTurnResponse) => void
+    onAdmitted?: (response: StartTurnResponse) => void | Promise<void>
   } = {}): Promise<StartTurnResponse> {
     const runtimeContext = options.runtimeContext
       ? InternalTurnRuntimeContext.parse(options.runtimeContext)
       : undefined
     const requestFingerprint = fingerprintStartTurnRequest(input.request)
-    const replay = await this['findIdempotentStart'](input, requestFingerprint)
+    const replay = options.expectedLatestFailedTurnId
+      ? null
+      : await this['findIdempotentStart'](input, requestFingerprint)
     if (replay) return replay
+    if (
+      !options.expectedLatestFailedTurnId &&
+      input.request.enqueueIfBusy === true &&
+      await this['deps'].executionLeases?.owner(input.threadId)
+    ) {
+      return this.enqueueTurn(input)
+    }
+    const finishAdmission = this['beginExecutionAdmission']()
+    try {
     if (this['deps'].migrationMaintenance?.isLocked()) {
       throw new TurnConflictError('runtime migration maintenance is in progress')
     }
@@ -108,6 +121,43 @@ async startTurn(this: TurnService, input: {
         }
         const thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        if (thread.turns.some((turn) => turn.status === 'running')) {
+          if (
+            !options.expectedLatestFailedTurnId &&
+            input.request.enqueueIfBusy === true
+          ) {
+            // Busy decision and durable queue commit share this critical
+            // section: a turn settling right after the check must not make
+            // the follow-up fail — it queues and the dispatcher promotes it
+            // (a direct start when the thread is already idle by then).
+            try {
+              const queuedStart = await this['persistQueuedTurnRecord'](thread, input)
+              return { kind: 'queued' as const, start: queuedStart }
+            } catch (error) {
+              // Phase 1 failed (limit, append failure, ...): surface the
+              // half-written record so the rollback below (outside the
+              // mutation lock) mirrors enqueueTurn's rollback.
+              const halfWritten = await this['deps'].threadStore.get(input.threadId)
+              const pendingTurn = halfWritten?.turns.find((turn) => turn.admissionPending === true)
+              return {
+                kind: 'enqueueFailed' as const,
+                error,
+                pendingTurnId: pendingTurn?.id
+              }
+            }
+          }
+        }
+        if (options.expectedLatestFailedTurnId) {
+          const latest = thread.turns.at(-1)
+          if (
+            latest?.id !== options.expectedLatestFailedTurnId ||
+            latest.status !== 'failed'
+          ) {
+            throw new TurnConflictError(
+              `restart recovery source is no longer latest: ${options.expectedLatestFailedTurnId}`
+            )
+          }
+        }
         const replay = this['idempotentStartFromThread'](thread, input.request, requestFingerprint)
         if (replay) return { kind: 'replay' as const, response: replay }
         // Archival is an overlay on the execution-derived thread state. It
@@ -133,8 +183,8 @@ async startTurn(this: TurnService, input: {
         attemptedTurnId = turnId
         try {
           if (this['deps'].executionLeases) {
-            await this['deps'].executionLeases.acquire(input.threadId, turnId)
-            this['leasedTurns'].add(turnId)
+            const lease = await this['deps'].executionLeases.acquire(input.threadId, turnId)
+            this['leasedTurns'].set(turnId, lease)
           }
           const composerContexts = ComposerContextAttachmentSchema.array().parse(
             input.request.composerContexts ?? []
@@ -277,12 +327,68 @@ async startTurn(this: TurnService, input: {
           // A failed start has no loop to perform lifecycle cleanup. Release
           // its slot immediately; the outer catch best-effort marks any
           // already-persisted turn aborted so it cannot strand the thread.
-          this['clearRuntimeTurnState'](input.threadId, turnId, { abort: true })
+          this['clearRuntimeTurnState'](input.threadId, turnId, {
+            abort: true,
+            releaseLease: false
+          })
           throw error
         }
       })
       )
       if (started.kind === 'replay') return started.response
+      if (started.kind === 'enqueueFailed') {
+        // Phase 1 of the atomic queue write failed; roll the half-written
+        // pending record back exactly like a failed enqueueTurn.
+        if (started.pendingTurnId) {
+          const rolledBack = await this['rollbackPendingAdmission'](
+            input.threadId,
+            started.pendingTurnId
+          ).catch(() => false)
+          if (!rolledBack) {
+            await this.interruptTurn({
+              threadId: input.threadId,
+              turnId: started.pendingTurnId
+            }).catch(() => undefined)
+          }
+          this['clearRuntimeTurnState'](input.threadId, started.pendingTurnId, {
+            abort: true,
+            releaseLease: false
+          })
+        }
+        throw started.error
+      }
+      if (started.kind === 'queued') {
+        // Phase 1 is durable inside the same critical section as the busy
+        // decision. Complete the admission here (rollback on failure), then
+        // wake the dispatcher so promotion — or a direct start on an idle
+        // thread — can begin.
+        let queuedResponseResult: StartTurnResponse
+        try {
+          queuedResponseResult = await this['completeQueuedTurnAdmission']({
+            ...input,
+            attemptedTurnId: started.start.turnId,
+            userItem: started.start.userItem
+          })
+        } catch (error) {
+          const rolledBack = await this['rollbackPendingAdmission'](
+            input.threadId,
+            started.start.turnId
+          ).catch(() => false)
+          if (!rolledBack) {
+            await this.interruptTurn({
+              threadId: input.threadId,
+              turnId: started.start.turnId
+            }).catch(() => undefined)
+          }
+          this['clearRuntimeTurnState'](input.threadId, started.start.turnId, {
+            abort: true,
+            releaseLease: false
+          })
+          throw error
+        }
+        this['notifyTurnQueued'](input.threadId)
+        return queuedResponseResult
+      }
       const committedThread = await this['markTurnAdmissionCompleted'](
         input.threadId,
         started.turnId,
@@ -360,13 +466,13 @@ async startTurn(this: TurnService, input: {
           : {})
       }
       try {
-        options.onAdmitted?.(response)
+        await options.onAdmitted?.(response)
       } catch (error) {
         console.warn(
           `[kun] turn dispatch callback failed after admission commit for ${started.turnId}: ` +
           `${error instanceof Error ? error.message : String(error)}`
         )
-        void this.finishTurn({
+        await this.finishTurn({
           threadId: input.threadId,
           turnId: started.turnId,
           status: 'failed',
@@ -390,8 +496,12 @@ async startTurn(this: TurnService, input: {
             turnId: attemptedTurnId
           }).catch(() => undefined)
         }
+        this['clearRuntimeTurnState'](input.threadId, attemptedTurnId, { abort: true })
       }
       throw error
+    }
+    } finally {
+      finishAdmission()
     }
   },
 
@@ -405,7 +515,7 @@ async findIdempotentStart(this: TurnService, input: {
       ? await this['deps'].threadStore.getMetadata(input.threadId)
       : await this['deps'].threadStore.get(input.threadId)
     const projectedTurn = projection?.turns.find((turn) =>
-      turn.clientRequestId === clientRequestId && !this['isRetryableFailedAdmission'](turn)
+      turn.clientRequestId === clientRequestId && !this['isRetryableFailedAdmission'](turn) && !isPendingQueuedAdmission(turn)
     )
     if (!projectedTurn) return null
     if (projectedTurn.prompt) {
@@ -418,7 +528,7 @@ async findIdempotentStart(this: TurnService, input: {
     }
     const hydrated = await this['deps'].threadStore.get(input.threadId)
     const turn = hydrated?.turns.find((candidate) =>
-      candidate.clientRequestId === clientRequestId && !this['isRetryableFailedAdmission'](candidate)
+      candidate.clientRequestId === clientRequestId && !this['isRetryableFailedAdmission'](candidate) && !isPendingQueuedAdmission(candidate)
     )
     return turn
       ? this['idempotentStartFromTurn'](
@@ -438,7 +548,7 @@ idempotentStartFromThread(this: TurnService,
     const clientRequestId = request.clientRequestId?.trim()
     if (!clientRequestId) return null
     const turn = thread.turns.find((candidate) =>
-      candidate.clientRequestId === clientRequestId && !this['isRetryableFailedAdmission'](candidate)
+      candidate.clientRequestId === clientRequestId && !this['isRetryableFailedAdmission'](candidate) && !isPendingQueuedAdmission(candidate)
     )
     return turn
       ? this['idempotentStartFromTurn'](
@@ -495,7 +605,7 @@ async rewindThread(this: TurnService, input: {
       // caller rewrite history while a turn is still queued/running. The turn
       // records are the source of truth for execution state.
       if (thread.turns.some(isActiveTurn)) {
-        throw new TurnConflictError(`cannot rewind while a turn is active: ${input.threadId}`)
+        throw new TurnInProgressError(`cannot rewind while a turn is active: ${input.threadId}`)
       }
       const targetIndex = thread.turns.findIndex((turn) => turn.id === input.turnId)
       if (targetIndex < 0) throw new Error(`turn not found: ${input.turnId}`)

@@ -5,6 +5,7 @@ import type {
 } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
+  OPENCODE_FREE_MODEL_IDS,
   OPENCODE_FREE_PROVIDER_ID,
   defaultModelRequestRetrySettings,
   isMultiAccountProviderPreset,
@@ -33,6 +34,8 @@ import {
 import {
   cursorProviderNeedsMetadataRepair,
   kunProviderSelectionPatch,
+  modelProviderDeletionKunPatch,
+  modelProviderDeletionWritePatch,
   nonEmptyModelId,
   type ProbeState
 } from './settings-section-providers-profile'
@@ -61,17 +64,24 @@ function isOpenCodeFreeProvider(provider: ModelProviderProfileV1): boolean {
   return resolveModelProviderPresetSource(provider)?.preset.id === OPENCODE_FREE_PROVIDER_ID
 }
 
+const OPEN_CODE_ANONYMOUS_CHAT_MODELS = new Set<string>(OPENCODE_FREE_MODEL_IDS)
+
 export function catalogResultForProviderImport(
   provider: ModelProviderProfileV1,
   catalogResult: ModelsDevCatalogResult
 ): ModelsDevCatalogResult {
   return isOpenCodeFreeProvider(provider) && catalogResult.status === 'ok'
-    ? { ...catalogResult, models: catalogResult.models.filter((model) => model.free === true) }
+    ? {
+        ...catalogResult,
+        models: catalogResult.models.filter((model) =>
+          model.free === true && OPEN_CODE_ANONYMOUS_CHAT_MODELS.has(model.id)
+        )
+      }
     : catalogResult
 }
 
 export function useProviderLifecycleActions(scope: Record<string, any>): Record<string, any> {
-  const { t, form, kun, provider, setSharedConnections, setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers, credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation, selectedProviderId, setSelectedProviderId, activeTab, setActiveTab, previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts, setDraftProvider, activeKunProviderId, confirmAction, updateModelProviders } = scope
+  const { t, form, kun, provider, setSharedConnections, setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers, credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation, selectedProviderId, setSelectedProviderId, activeTab, setActiveTab, previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts, setDraftProvider, activeKunProviderId, confirmAction, updateModelProviders, sharedProjectionInput } = scope
   const modelProviders = scope.modelProviders as ModelProviderProfileV1[]
   const displayProviders = scope.displayProviders as ModelProviderProfileV1[]
   const draftProvider = scope.draftProvider as ModelProviderProfileV1 | null
@@ -173,6 +183,7 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       apiKey: '',
       baseUrl: 'https://api.example.com/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       retry: defaultModelRequestRetrySettings(),
       models: [],
       modelProfiles: {}
@@ -213,6 +224,7 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       ...presetProvider,
       name: existingProvider.name.trim() || presetProvider.name,
       apiKey: existingProvider.apiKey,
+      useProxy: existingProvider.useProxy,
       models: mergeProviderModelIds(presetProvider.models, existingProvider.models),
       modelProfiles: {
         ...existingProvider.modelProfiles,
@@ -299,6 +311,31 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
         setSharedConnections(snapshot)
         setSharedConnectionsError('')
       }
+
+      // Registry deletion must be reflected in AppSettings as part of the
+      // same successful mutation. Otherwise the next shared-settings refresh
+      // sees the stale local provider and recreates the deleted connection.
+      const latest = sharedProjectionInput.current
+      const latestProviders = latest.provider.providers as ModelProviderProfileV1[]
+      const latestKun = latest.kun as typeof kun
+      const remainingProviders = latestProviders.filter((item) => item.id !== id)
+      const fallbackProvider = remainingProviders.find((item) => item.id === DEFAULT_MODEL_PROVIDER_ID) ??
+        remainingProviders[0]
+      const kunPatch = modelProviderDeletionKunPatch({
+        currentKun: latestKun,
+        deletedProviderIds: new Set([id]),
+        fallbackProvider
+      })
+      const latestWriteInline = latest.form?.write?.inlineCompletion
+      const writePatch = modelProviderDeletionWritePatch(latestWriteInline, new Set([id]))
+      updateModelProviders(
+        remainingProviders,
+        Object.keys(kunPatch).length > 0 ? kunPatch : undefined,
+        writePatch
+      )
+      setSelectedProviderId((currentId: string) => currentId === id
+        ? fallbackProvider?.id ?? DEFAULT_MODEL_PROVIDER_ID
+        : currentId)
     } catch (error) {
       if (pendingSharedProviderDeletions.current.get(id)?.generation === generation) {
         pendingSharedProviderDeletions.current.delete(id)

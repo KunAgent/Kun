@@ -9,6 +9,7 @@ function provider(overrides: Partial<ModelProviderProfileV1>): ModelProviderProf
     apiKey: '',
     baseUrl: '',
     endpointFormat: 'chat_completions',
+    useProxy: false,
     models: [],
     modelProfiles: {},
     ...overrides

@@ -495,6 +495,22 @@ export class SubagentDialog implements Component, Focusable {
           this.transcript.update(this.childProjection, this.showReasoning, false)
           this.tui.requestRender()
         },
+        onReplayResetRequired: async () => {
+          const delegationRequest = typeof this.controller.client.delegationDiagnostics === 'function'
+            ? this.controller.client.delegationDiagnostics(child.childId).catch(() => undefined)
+            : Promise.resolve(undefined)
+          const [detail, delegation] = await Promise.all([
+            this.controller.client.getThread(child.childId),
+            delegationRequest
+          ])
+          if (this.detailAbort !== abort || abort.signal.aborted) {
+            throw new Error('child subscription was replaced during replay recovery')
+          }
+          this.childProjection = hydrateProjectedChildRuns(projectThreadSnapshot(detail), delegation)
+          this.transcript.update(this.childProjection, this.showReasoning, false)
+          this.tui.requestRender()
+          return this.childProjection.lastSeq
+        },
         onError: (error) => {
           if (this.detailAbort !== abort) return
           this.error = safeError(error)

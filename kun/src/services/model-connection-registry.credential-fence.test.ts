@@ -116,6 +116,7 @@ async function registry(
   resolveCredentialSource?: ConstructorParameters<typeof ModelConnectionRegistry>[0]['resolveCredentialSource'],
   inspectCredentialSource?: ConstructorParameters<typeof ModelConnectionRegistry>[0]['inspectCredentialSource'],
   credentialFenceTtlMs?: number,
+  nowMs?: () => number,
   beforeCredentialFenceInstall?: ConstructorParameters<
     typeof ModelConnectionRegistry
   >[0]['beforeCredentialFenceInstall'],
@@ -135,6 +136,7 @@ async function registry(
     ...(resolveCredentialSource ? { resolveCredentialSource } : {}),
     inspectCredentialSource: inspectCredentialSource ?? (async () => 'ready'),
     ...(credentialFenceTtlMs ? { credentialFenceTtlMs } : {}),
+    ...(nowMs ? { nowMs } : {}),
     ...(beforeCredentialFenceInstall ? { beforeCredentialFenceInstall } : {}),
     ...(afterCredentialCommitWrite ? { afterCredentialCommitWrite } : {}),
     onChanged: (connections) => {
@@ -259,6 +261,7 @@ describe('ModelConnectionRegistry', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         afterCredentialCommitWrite
       )
       const connected = await value.connect({
@@ -321,8 +324,15 @@ describe('ModelConnectionRegistry', () => {
     })
 
   it('expires an abandoned prepared credential and restores the durable credential', async () => {
-      vi.useFakeTimers()
-      const { dataDir, value } = await registry(undefined, undefined, undefined, undefined, 25)
+      let now = 0
+      const { dataDir, value } = await registry(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        60_000,
+        () => now
+      )
       const connected = await value.connect({
         expectedRevision: 0,
         id: 'deepseek',
@@ -353,7 +363,7 @@ describe('ModelConnectionRegistry', () => {
       expect(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8'))
         .not.toContain('abandoned-plaintext')
 
-      await vi.advanceTimersByTimeAsync(25)
+      now += 60_000
 
       await expect(value.resolveApiKey(sourceId)).resolves.toEqual({ apiKey: 'durable-secret' })
       await expect(value.credentialStateForInternalConsumer('deepseek')).resolves.toEqual({
@@ -370,8 +380,15 @@ describe('ModelConnectionRegistry', () => {
     })
 
   it('cancels an older expiry when a newer fence takes ownership', async () => {
-      vi.useFakeTimers()
-      const { value } = await registry(undefined, undefined, undefined, undefined, 25)
+      let now = 0
+      const { value } = await registry(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        60_000,
+        () => now
+      )
       const connected = await value.connect({
         expectedRevision: 0,
         id: 'deepseek',
@@ -399,20 +416,20 @@ describe('ModelConnectionRegistry', () => {
         credential: 'superseded-plaintext',
         operationToken: firstToken
       })
-      await vi.advanceTimersByTimeAsync(20)
+      now += 50_000
       await value.fenceCredential('deepseek', {
         expectedRevision: (await value.snapshot()).revision,
         operationToken: secondToken
       })
 
-      await vi.advanceTimersByTimeAsync(5)
+      now += 10_000
       await expect(value.resolveApiKey(sourceId)).resolves.toBeNull()
       await expect(value.commitPreparedCredential('deepseek', {
         expectedRevision: connected.revision,
         operationToken: firstToken
       })).rejects.toBeInstanceOf(ModelConnectionConflictError)
 
-      await vi.advanceTimersByTimeAsync(20)
+      now += 50_000
       await expect(value.resolveApiKey(sourceId)).resolves.toEqual({ apiKey: 'durable-secret' })
     })
 

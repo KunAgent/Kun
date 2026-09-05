@@ -152,7 +152,20 @@ export function decodeResponsesStreamPayload(input: {
     usage = materialized.usage
     finishReason = materialized.finishReason
   } else if (type === 'response.failed' || type === 'error') {
-    chunks.push({ kind: 'error', message: responseErrorMessage(input.payload), code: 'response_stream_error' })
+    const providerError = responseError(input.payload)
+    chunks.push({
+      kind: 'error',
+      message: providerError.message,
+      code: providerError.code,
+      failure: {
+        category: /overload|capacity|unavailable/i.test(`${providerError.code} ${providerError.message}`)
+          ? 'unavailable'
+          : 'unknown',
+        responseReceived: true,
+        ...(providerError.providerCode ? { providerCode: providerError.providerCode } : {}),
+        failoverAllowed: false
+      }
+    })
     finishReason = 'error'
   }
   return { chunks, sawTextDelta: sawText, finishReason, usage }
@@ -367,10 +380,19 @@ function overlapLength(previous: string, finalText: string): number {
   return 0
 }
 
-function responseErrorMessage(payload: Record<string, unknown>): string {
+function responseError(payload: Record<string, unknown>): {
+  message: string
+  code: string
+  providerCode?: string
+} {
   const error = recordValue(payload, 'error') ?? recordValue(recordValue(payload, 'response') ?? {}, 'error')
-  return (error ? recordString(error, 'message') : '') || recordString(payload, 'message') ||
-    'model stream reported an error'
+  const providerCode = error ? recordString(error, 'code') : ''
+  return {
+    message: (error ? recordString(error, 'message') : '') || recordString(payload, 'message') ||
+      'model stream reported an error',
+    code: providerCode || 'response_stream_error',
+    ...(providerCode ? { providerCode } : {})
+  }
 }
 
 function recordString(record: Record<string, unknown>, key: string): string {

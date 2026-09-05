@@ -17,7 +17,7 @@ import {
   normalizeModelProviderId,
   resolveKunRuntimeSettings,
   resolveModelEndpointFormat,
-  resolveModelProviderProxyUrl
+  resolveProviderProxyUrl
 } from '../shared/app-settings'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import {
@@ -361,7 +361,7 @@ export async function detectClawScheduledTaskRequest(
     headers: detectionRequest.headers,
     body: JSON.stringify(detectionRequest.body),
     signal: AbortSignal.timeout(DETECTOR_TIMEOUT_MS)
-  }, resolveModelProviderProxyUrl(settings))
+  }, resolveProviderProxyUrl(settings, provider))
   const text = await response.text()
   if (!response.ok) return null
   let content = ''

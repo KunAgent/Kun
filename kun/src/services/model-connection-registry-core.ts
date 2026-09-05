@@ -30,6 +30,7 @@ import { modelConnectionRegistryCredentialMutationOperations } from './model-con
 import { modelConnectionRegistrySelectionOperations } from './model-connection-registry-selection-operations.js'
 import { modelConnectionRegistryMaterializationOperations } from './model-connection-registry-materialization-operations.js'
 import { modelConnectionRegistryCredentialRecoveryOperations } from './model-connection-registry-credential-recovery-operations.js'
+import { upgradeRegistryProxyRouting } from './model-connection-registry-proxy.js'
 import { reconciledSeedIdentity } from './model-connection-registry-seed-support.js'
 import type { ModelConnectionRegistryOperations } from './model-connection-registry-operations-contract.js'
 import { isAnonymousHttpProfile, isProfileUsable } from './model-connection-registry-usability.js'
@@ -85,6 +86,7 @@ export const CredentialRefCleanupEntrySchema = z.object({
 }).strict()
 export const RegistryDocumentSchema = z.object({
   schemaVersion: z.literal(1),
+  proxyRoutingVersion: z.literal(1),
   revision: z.number().int().nonnegative(),
   profiles: z.record(z.string(), StoredProfileSchema),
   tombstones: z.record(z.string(), DeletedProfileTombstoneSchema).default({}),
@@ -109,14 +111,15 @@ export type PreparedCredentialSecret = {
   credential: string
 }
 
-export type ModelConnectionSeed = ModelConnectionConnectRequest & {
+export type ModelConnectionSeed = Omit<ModelConnectionConnectRequest, 'useProxy'> & {
+  useProxy?: boolean
   /** Trusted runtime-only binding; never accepted by public connection APIs. */
   credentialSourceId?: string
 }
 
 export type AuthenticatedModelConnectionInput = Omit<
   ModelConnectionConnectRequest,
-  'credential' | 'probe'
+  'credential' | 'probe' | 'useProxy'
 > & {
   /**
    * Credential material produced by a runtime-owned OAuth/SDK flow. Official
@@ -124,6 +127,7 @@ export type AuthenticatedModelConnectionInput = Omit<
    * provider-owned login.
    */
   credential?: string
+  useProxy?: boolean
   externalAuthVerified?: boolean
 }
 
@@ -224,7 +228,7 @@ export class ModelConnectionRegistry {
     assertManagerAtomicJsonPath(registryPath)
     this.file = new AtomicJsonFile(
       registryPath,
-      (value) => RegistryDocumentSchema.parse(value),
+      (value) => RegistryDocumentSchema.parse(upgradeRegistryProxyRouting(value)),
       false
     )
   }
@@ -350,6 +354,7 @@ export function processIsAlive(pid: number): boolean {
 export function emptyDocument(): RegistryDocument {
   return {
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: 0,
     profiles: {},
     tombstones: {},
@@ -408,6 +413,7 @@ export function reconcileSeedProfile(
     // credentialRef, resurrect a cleared credential, or switch an existing
     // profile back to a legacy settings:provider:* source.
     ...seedIdentity,
+    useProxy: request.useProxy ?? existing.useProxy,
     ...(anonymousCredentiallessSeed
       ? { configured: true }
       : migrateTransport
@@ -433,6 +439,7 @@ export function sameStoredProfile(left: StoredProfile, right: StoredProfile): bo
     left.authType === right.authType &&
     left.baseUrl === right.baseUrl &&
     left.endpointFormat === right.endpointFormat &&
+    left.useProxy === right.useProxy &&
     left.configured === right.configured &&
     left.incarnationId === right.incarnationId &&
     left.selectedModel === right.selectedModel &&
@@ -483,6 +490,7 @@ export function project(
     : undefined
   return ModelConnectionSnapshotSchema.parse({
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: document.revision,
     providers,
     ...(selected
@@ -497,7 +505,6 @@ export function project(
     localModelGateway: document.localModelGateway
   })
 }
-
 
 export function mergeProjectedCapability(
   stored: ModelCapabilityMetadata | undefined,

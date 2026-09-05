@@ -3,7 +3,20 @@ import { buildComputerUseToolProviders } from './computer-use-tool-provider.js'
 import type { HostController, HostScreenshot } from '../computer-use/host-control.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 
-const SHOT: HostScreenshot = { mimeType: 'image/png', dataBase64: 'PNGDATA', width: 1280, height: 800 }
+const SHOT: HostScreenshot = {
+  mimeType: 'image/png',
+  dataBase64: 'PNGDATA',
+  width: 1280,
+  height: 800,
+  frame: {
+    frameId: 'frame-1',
+    sessionId: 'session-1',
+    capturedAtMs: 1,
+    image: { width: 1280, height: 800, mimeType: 'image/png' },
+    nativeDesktop: { width: 1280, height: 800, scaleX: 1, scaleY: 1 },
+    coordinateSpace: 'kun-frame-v1'
+  }
+}
 
 function fakeController(overrides: Partial<Record<string, unknown>> = {}): {
   controller: HostController
@@ -89,10 +102,11 @@ describe('computer_use execution', () => {
   it('returns a screenshot image for the screenshot action', async () => {
     const { tool } = await buildTool()
     const out = (await tool!.execute({ action: 'screenshot' }, visionContext(true))) as {
-      output: { kind: string; images: { data_base64: string }[] }
+      output: { kind: string; images: { data_base64: string }[]; frame_id?: string }
     }
     expect(out.output.kind).toBe('computer_screenshot')
     expect(out.output.images[0]?.data_base64).toBe('PNGDATA')
+    expect(out.output.frame_id).toBe('frame-1')
   })
 
   it('clicks at a coordinate then returns a fresh screenshot', async () => {
@@ -135,14 +149,20 @@ describe('computer_use execution', () => {
     expect(third.output.error).toBe('action_budget_exhausted')
   })
 
-  it('surfaces a clear permission-style error when the backend throws', async () => {
-    const { tool } = await buildTool({}, { capture: async () => { throw new Error('not authorized') } })
+  it('preserves structured host errors without appending misleading permission advice', async () => {
+    const stale = Object.assign(new Error('take a new screenshot'), {
+      code: 'stale_frame',
+      retryable: true,
+      needsFreshFrame: true
+    })
+    const { tool } = await buildTool({}, { capture: async () => { throw stale } })
     const out = (await tool!.execute({ action: 'screenshot' }, visionContext(true))) as {
       isError?: boolean
       output: { error?: string; message?: string }
     }
     expect(out.isError).toBe(true)
-    expect(out.output.error).toBe('execution_failed')
-    expect(out.output.message).toContain('Accessibility')
+    expect(out.output.error).toBe('stale_frame')
+    expect(out.output.message).toContain('take a new screenshot')
+    expect(out.output.message).not.toContain('Accessibility')
   })
 })

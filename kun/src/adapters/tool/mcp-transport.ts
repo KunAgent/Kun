@@ -9,6 +9,7 @@ import {
 } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import type { McpServerConfig } from '../../contracts/capabilities.js'
+import { isKunManagedGitHubMcpServer } from '../../contracts/builtin-mcp.js'
 import { KUN_VERSION } from '../../version.js'
 import { resolveMcpServerCwd } from './mcp-naming.js'
 import {
@@ -19,6 +20,10 @@ import {
 import { McpElicitationRuntime } from './mcp-elicitation.js'
 import { buildMcpStdioEnvironment, errorMessage } from './mcp-stdio-environment.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
+import {
+  GITHUB_MCP_AUTHORIZATION_REJECTED_MESSAGE,
+  resolveBuiltinGitHubMcpCredentials
+} from './github-mcp-credential.js'
 import {
   McpAuthorizationRequiredError,
   isMcpAuthorizationRequiredError,
@@ -63,9 +68,11 @@ export async function createSdkMcpClient(
   server: McpServerConfig,
   options: SdkMcpClientOptions = {}
 ): Promise<McpClientLike> {
+  const managedGitHub = isKunManagedGitHubMcpServer(server)
+  const connectionServer = await resolveBuiltinGitHubMcpCredentials(serverId, server)
   const client = new Client(
     { name: `kun-${serverId}`, version: KUN_VERSION },
-    mcpClientOptions(server)
+    mcpClientOptions(connectionServer)
   )
   const elicitation = new McpElicitationRuntime(serverId, options.openExternal ?? defaultOpenExternal)
   client.setRequestHandler('elicitation/create', async (request) => elicitation.handle(request.params))
@@ -86,9 +93,9 @@ export async function createSdkMcpClient(
     interactive: options.interactive ?? false,
     ...(options.encryptor ? { encryptor: options.encryptor } : {})
   })
-  let transport = createTransport(server, authProvider)
+  let transport = createTransport(connectionServer, authProvider)
   try {
-    await client.connect(transport, { timeout: server.timeoutMs })
+    await client.connect(transport, { timeout: connectionServer.timeoutMs })
   } catch (error) {
     // The non-interactive provider throws this synchronously from
     // redirectToAuthorization (before any browser/callback), so it surfaces
@@ -96,6 +103,13 @@ export async function createSdkMcpClient(
     if (isMcpAuthorizationRequiredError(error)) {
       await client.close().catch(() => undefined)
       throw error
+    }
+    if (managedGitHub && isGitHubCredentialRejection(error)) {
+      await client.close().catch(() => undefined)
+      throw new McpAuthorizationRequiredError(
+        serverId,
+        GITHUB_MCP_AUTHORIZATION_REJECTED_MESSAGE
+      )
     }
     if (!(error instanceof UnauthorizedError) || !authProvider || typeof transport.finishAuth !== 'function') {
       await client.close().catch(() => undefined)
@@ -116,8 +130,8 @@ export async function createSdkMcpClient(
       await client.close().catch(() => undefined)
       throw authError
     }
-    transport = createTransport(server, authProvider)
-    await client.connect(transport, { timeout: server.timeoutMs })
+    transport = createTransport(connectionServer, authProvider)
+    await client.connect(transport, { timeout: connectionServer.timeoutMs })
   }
   return {
     listTools: (listOptions) => {
@@ -190,6 +204,11 @@ export async function createSdkMcpClient(
       ;(client as { onclose?: () => void }).onclose = handlers.onClose
     }
   }
+}
+
+function isGitHubCredentialRejection(error: unknown): boolean {
+  if (error instanceof UnauthorizedError) return true
+  return /\b401\b|unauthori[sz]ed|bad credentials/i.test(errorMessage(error))
 }
 
 export function mcpClientOptions(server: McpServerConfig): ClientOptions {

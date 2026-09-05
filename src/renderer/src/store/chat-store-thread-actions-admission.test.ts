@@ -400,7 +400,7 @@ describe('chat-store-thread-actions queued messages', () => {
     expect(subscribeThreadEvents).not.toHaveBeenCalled()
 
     await actions.selectThread('thr_existing')
-    expect(getThreadDetail).toHaveBeenCalledWith('thr_existing')
+    expect(getThreadDetail).toHaveBeenCalledWith('thr_existing', expect.objectContaining({ priority: 'foreground' }))
     expect(state.blocks).toEqual([
       expect.objectContaining({ id: 'user_code', turnId: 'turn_code' }),
       expect.objectContaining({ id: 'reasoning_code', turnId: 'turn_code' })

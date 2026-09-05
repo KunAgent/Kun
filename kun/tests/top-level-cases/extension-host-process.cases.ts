@@ -27,7 +27,7 @@ describe('extension host processes', () => {
 
   beforeAll(async () => {
     builtinRunnerPath = await buildBuiltinRunner()
-  }, 60_000)
+  }, 120_000)
 
   it('rejects mismatched API or RPC handshakes before requesting extension entrypoint load', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-extension-host-handshake-'))

@@ -64,8 +64,8 @@ export type LoadedSkill = {
   assets: string[]
   priority: number
   legacy: boolean
-  /** Source of the skill: 'project' (workspace) or 'global' (user-level). */
-  source: 'project' | 'global'
+  /** Source of the skill, ordered by precedence: project, global, builtin. */
+  source: 'project' | 'global' | 'builtin'
 }
 
 export type SkillActivation = {
@@ -87,13 +87,14 @@ export type SkillRuntimeDiagnostics = {
   enabled: boolean
   roots: string[]
   globalRoots: string[]
+  builtinRoots?: string[]
   skills: Array<{
     id: string
     name: string
     description?: string
     version: string
     root: string
-    source: 'project' | 'global'
+    source: 'project' | 'global' | 'builtin'
     legacy: boolean
     triggers: LoadedSkill['triggers']
     allowedTools: string[]

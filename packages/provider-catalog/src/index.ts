@@ -1,8 +1,10 @@
+import { OPENCODE_FREE_MODELS } from './opencode-free-models.js'
+
 export * from './antigravity-model-catalog.js'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
-export type ProviderCatalogCategory = 'api' | 'subscription'
+export type ProviderCatalogCategory = 'api' | 'free' | 'subscription'
 export type ProviderCatalogKind =
   | 'http'
   | 'agent-sdk'
@@ -18,6 +20,7 @@ export type ProviderCatalogAuthFlow =
   | 'gemini-cli-subscription'
   | 'cursor-api-key'
 export type ProviderCatalogAuthType = 'api-key' | 'oauth' | 'subscription'
+export type ProviderCatalogCredentialRequirement = 'required' | 'optional' | 'none'
 export type ProviderCatalogEndpointFormat =
   | 'chat_completions'
   | 'responses'
@@ -41,6 +44,7 @@ export type ProviderCatalogPreset = {
   kind: ProviderCatalogKind
   authFlow: ProviderCatalogAuthFlow
   authType: ProviderCatalogAuthType
+  credentialRequirement?: ProviderCatalogCredentialRequirement
   baseUrl: string
   endpointFormat: ProviderCatalogEndpointFormat
   models: readonly string[]
@@ -60,6 +64,7 @@ export type ProviderCatalogEntry = {
   kind: ProviderCatalogKind
   authFlow: ProviderCatalogAuthFlow
   authType: ProviderCatalogAuthType
+  credentialRequirement: ProviderCatalogCredentialRequirement
   baseUrl: string
   endpointFormat: ProviderCatalogEndpointFormat
   models: readonly string[]
@@ -292,7 +297,7 @@ export const PROVIDER_CATALOG = [
     authType: 'subscription',
     baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
     endpointFormat: 'custom_endpoint',
-    models: ['glm-5.2', 'glm-5.1', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
+    models: ['glm-5.3', 'glm-5.3-flash', 'glm-5.2', 'glm-5.1', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
     docsUrl: 'https://docs.bigmodel.cn/cn/coding-plan/overview',
     credentialUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys'
   },
@@ -305,7 +310,7 @@ export const PROVIDER_CATALOG = [
     authType: 'subscription',
     baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
     endpointFormat: 'custom_endpoint',
-    models: ['glm-5.2', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
+    models: ['glm-5.3', 'glm-5.2', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
     docsUrl: 'https://docs.z.ai/devpack/tool/others',
     credentialUrl: 'https://z.ai/subscribe'
   },
@@ -361,6 +366,20 @@ export const PROVIDER_CATALOG = [
     models: ['doubao-seed-1-6-250615', 'doubao-seed-1-6-flash-250828'],
     docsUrl: 'https://www.volcengine.com/docs/82379/1928262',
     credentialUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
+  },
+  {
+    id: 'opencode-free',
+    name: 'OpenCore Free',
+    category: 'free',
+    kind: 'http',
+    authFlow: 'api-key',
+    authType: 'api-key',
+    credentialRequirement: 'optional',
+    baseUrl: 'https://opencode.ai/zen/v1',
+    endpointFormat: 'chat_completions',
+    models: OPENCODE_FREE_MODELS,
+    docsUrl: 'https://opencode.ai/docs/zen/',
+    credentialUrl: 'https://opencode.ai/docs/zen/'
   },
   {
     id: 'opencode-go',
@@ -624,6 +643,7 @@ export function providerCatalogEntries(): ProviderCatalogEntry[] {
       kind: preset.kind,
       authFlow: preset.authFlow,
       authType: preset.authType,
+      credentialRequirement: preset.credentialRequirement ?? 'required',
       baseUrl: preset.baseUrl,
       endpointFormat: preset.endpointFormat,
       models: [...preset.models],
@@ -645,6 +665,7 @@ export function providerCatalogEntries(): ProviderCatalogEntry[] {
         kind: 'http',
         authFlow: 'api-key',
         authType: 'subscription',
+        credentialRequirement: 'required',
         baseUrl: preset.tokenPlan.baseUrl,
         endpointFormat: preset.tokenPlan.endpointFormat,
         models: [...preset.tokenPlan.models],
@@ -654,6 +675,7 @@ export function providerCatalogEntries(): ProviderCatalogEntry[] {
     ]
   })
   return [
+    ...entries.filter((entry) => entry.category === 'free'),
     ...entries.filter((entry) => entry.category === 'subscription'),
     ...entries.filter((entry) => entry.category === 'api')
   ]

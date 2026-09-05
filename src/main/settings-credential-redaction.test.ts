@@ -25,6 +25,7 @@ function settingsWithSecrets(): AppSettingsV1 {
           apiKey: 'opencode-secret',
           baseUrl: 'https://opencode.ai/zen/go/v1',
           endpointFormat: 'chat_completions',
+          useProxy: false,
           models: ['grok-4.5'],
           modelProfiles: {}
         }
@@ -99,6 +100,7 @@ describe('preserveRedactedProviderCredentials', () => {
             apiKey: '',
             baseUrl: 'https://example.test/v1',
             endpointFormat: 'chat_completions',
+            useProxy: false,
             models: [],
             modelProfiles: {}
           }

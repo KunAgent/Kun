@@ -23,6 +23,14 @@ import { readRuntimeBuildIdForEntry } from '../server/runtime-build-identity.js'
 import { KUN_VERSION } from '../version.js'
 import { runSelfUpdateCommand } from './self-update.js'
 import { RuntimeFlavorSchema } from '../contracts/runtime-flavor.js'
+import {
+  KUN_RUNTIME_CLIENT_OWNER_KIND_ENV,
+  RuntimeClientOwnerKindSchema
+} from '../contracts/runtime-owner.js'
+import {
+  monitorRuntimeClientOwnerChannel,
+  type RuntimeClientOwnerMonitor
+} from './client-owner-channel.js'
 import { runtimeDiscoveryDirectory } from './shared-runtime.js'
 import { defaultKunControlDir } from '../manager/manager-discovery.js'
 import {
@@ -39,6 +47,7 @@ import {
   runtimeBuildIdForFlavor
 } from './runtime-flavor.js'
 import { settleCleanupBeforeDeadline } from '../server/runtime-factory-cleanup.js'
+import { installLiveProcessLog } from './live-process-log.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 // Replacement clients wait 15 seconds before escalating to a hard kill. Keep
@@ -63,10 +72,28 @@ async function serveMain(argv: readonly string[]): Promise<number> {
     }
     return parsed.exitCode
   }
-  const launchMode = process.env.KUN_RUNTIME_LAUNCH_MODE === 'shared' ? 'shared' : 'foreground'
+  const launchModeValue = process.env.KUN_RUNTIME_LAUNCH_MODE
+  const launchMode = launchModeValue === 'shared' || launchModeValue === 'gui'
+    ? launchModeValue
+    : 'foreground'
   const runtimeFlavor = RuntimeFlavorSchema.parse(
     process.env.KUN_RUNTIME_FLAVOR?.trim() || 'production'
   )
+  const ownerKindValue = process.env[KUN_RUNTIME_CLIENT_OWNER_KIND_ENV]?.trim()
+  const ownerKind = ownerKindValue
+    ? RuntimeClientOwnerKindSchema.parse(ownerKindValue)
+    : undefined
+  let ownerMonitor: RuntimeClientOwnerMonitor | undefined
+  if (ownerKind) {
+    try {
+      ownerMonitor = monitorRuntimeClientOwnerChannel(ownerKind)
+    } catch (error) {
+      process.stderr.write(
+        `kun serve: ${error instanceof Error ? error.message : String(error)}\n`
+      )
+      return ServeExitCode.runtime
+    }
+  }
   const controlDir = process.env.KUN_MANAGER_CONTROL_DIR?.trim() || defaultKunControlDir()
   const discoveryDir = process.env.KUN_RUNTIME_DISCOVERY_DIR?.trim() ||
     runtimeDiscoveryDirectory(parsed.options.dataDir, runtimeFlavor, controlDir)
@@ -118,6 +145,7 @@ async function serveMain(argv: readonly string[]): Promise<number> {
         ...parsed.options,
         launchMode,
         runtimeFlavor,
+        ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
         discoveryDir,
         serviceManager: manager,
         ...(buildId ? { buildId } : {}),
@@ -143,7 +171,6 @@ async function serveMain(argv: readonly string[]): Promise<number> {
   const server = elected.server
   handle = server
   process.title = runtimeFlavor === 'development' ? 'kun-dv-runtime' : 'kun-runtime'
-  await selfVerifyHealth(server.host, server.port)
   const info = server.runtime.info()
   let managerHeartbeat: ReturnType<typeof setInterval> | null = null
   const registration = {
@@ -155,6 +182,7 @@ async function serveMain(argv: readonly string[]): Promise<number> {
     port: server.port,
     baseUrl: `http://${server.host}:${server.port}`,
     runtimeToken: parsed.options.runtimeToken,
+    ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
     ...(buildId ? { buildId } : {}),
     ...(process.env.KUN_RUNTIME_LOG_PATH ? { logPath: process.env.KUN_RUNTIME_LOG_PATH } : {})
   }
@@ -237,6 +265,10 @@ async function serveMain(argv: readonly string[]): Promise<number> {
     await server.close().catch(() => undefined)
     throw error
   }
+  // The startup bridge refreshed this registration immediately before
+  // discovery publication. Install steady liveness before self-verification
+  // so even a slow local health probe cannot reopen a heartbeat gap.
+  await selfVerifyHealth(server.host, server.port)
   const startupInfo = {
     service: 'kun',
     mode: 'serve',
@@ -307,7 +339,9 @@ async function serveMain(argv: readonly string[]): Promise<number> {
     process.once('SIGINT', stop)
     void server.shutdownRequested.then(stop)
     void ownershipShutdownRequested.then(stop)
+    if (ownerMonitor) void ownerMonitor.disconnected.then(stop)
   })
+  ownerMonitor?.dispose()
   return ServeExitCode.ok
 }
 
@@ -390,7 +424,10 @@ export async function main(argv: readonly string[]): Promise<number> {
   })
 }
 
-main(process.argv.slice(2)).then(
+const liveLog = process.env.KUN_RUNTIME_LOG_PATH?.trim()
+  ? installLiveProcessLog({ logPath: process.env.KUN_RUNTIME_LOG_PATH.trim() })
+  : undefined
+main(process.argv.slice(2)).finally(() => liveLog?.close()).then(
   (code) => {
     process.exit(code)
   },

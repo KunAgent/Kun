@@ -234,8 +234,7 @@ const BUILTIN_PANEL_DEFINITIONS: readonly [string, string][] = [
   [BUILTIN_RIGHT_PANEL_IDS.canvas, 'Whiteboard'],
   [BUILTIN_RIGHT_PANEL_IDS.subagents, 'Subagents'],
   [BUILTIN_RIGHT_PANEL_IDS.mcpSkills, 'MCP & Skills'],
-  [BUILTIN_RIGHT_PANEL_IDS.providerQuotas, 'Provider quota'],
-  [BUILTIN_RIGHT_PANEL_IDS.agentPerspective, 'Agent Perspective']
+  [BUILTIN_RIGHT_PANEL_IDS.providerQuotas, 'Provider quota']
 ]
 
 function payloadWhen(payload: ContributionPayloadMap[WorkbenchContributionPoint]): string | undefined {

@@ -15,6 +15,7 @@ import { pathExists, resolveOpenTargetPath } from './workspace-paths'
 
 import {
   DEFAULT_EDITOR_ID,
+  GENERATED_DOCUMENT_FILE_SUFFIXES,
   MAX_KUN_PRESENTATION_HTML_BYTES,
   PRESENTATION_FILE_SUFFIXES,
   ResolvedEditor,
@@ -136,11 +137,14 @@ export async function openEditorPath(payload: OpenEditorPathOptions): Promise<Ed
     const targetPath = payload.openPolicy
       ? await resolveOpenTargetPath(payload.path, payload.workspaceRoot, { allowBasenameFallback: false })
       : await resolveOpenTargetPath(payload.path, payload.workspaceRoot)
-    if (payload.openPolicy === 'presentation-artifact') {
+    if (payload.openPolicy) {
       const info = await stat(targetPath)
       if (!info.isFile()) throw new Error('Path must point to a regular file.')
       const normalizedTarget = targetPath.toLowerCase()
-      if (!PRESENTATION_FILE_SUFFIXES.some((suffix) => normalizedTarget.endsWith(suffix))) {
+      const allowedSuffixes = payload.openPolicy === 'presentation-artifact'
+        ? PRESENTATION_FILE_SUFFIXES
+        : GENERATED_DOCUMENT_FILE_SUFFIXES
+      if (!allowedSuffixes.some((suffix) => normalizedTarget.endsWith(suffix))) {
         throw new Error('Resolved file type is not allowed for this action.')
       }
       if (editor.id === 'system' && normalizedTarget.endsWith('.kun-ppt.html')) {

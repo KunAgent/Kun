@@ -1,0 +1,24 @@
+{
+  "id": "browser",
+  "name": "Kun Browser",
+  "version": "1.0.0",
+  "description": "Open, inspect, navigate, and interact with public web pages using Kun's bounded structured browser.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/browser"
+    ],
+    "promptPatterns": [
+      "browser",
+      "browser automation",
+      "click page",
+      "Kun Browser",
+      "open website",
+      "浏览网页"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

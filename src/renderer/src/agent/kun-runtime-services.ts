@@ -29,6 +29,7 @@ import {
   kunThreadInterruptPath,
   kunThreadToolCancelPath,
   kunThreadPath,
+  kunThreadQueuedTurnsPath,
   kunThreadStatePath,
   kunThreadTimelinePath,
   kunThreadSteerPath,
@@ -60,6 +61,7 @@ import type {
   CoreMcpOAuthAuthorizeResponseJson,
   CoreMcpOAuthDiagnosticJson,
   CoreMcpOAuthDiagnosticsResponseJson,
+  CoreQueuedTurnsResponseJson,
   CoreResumeSessionMetadataJson,
   CoreResumeSessionResponseJson,
   CoreRuntimeInfoJson,
@@ -96,7 +98,13 @@ const MAX_PENDING_SSE_DISPATCH_BATCHES = 32
 
 /** Preserves the native SSE failure status for the store's recovery policy. */
 export class KunSseSubscriptionError extends Error {
-  constructor(message: string, readonly status?: number) {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly code?: 'replay_reset_required' | 'renderer_ack_timeout',
+    readonly threadId?: string,
+    readonly floorSeq?: number
+  ) {
     super(message)
     this.name = 'KunSseSubscriptionError'
   }
@@ -282,9 +290,10 @@ export class KunRuntimeProviderServices {
     )
   }
 
-  async listMemories(options: { workspace?: string; includeDeleted?: boolean; all?: boolean } = {}): Promise<CoreMemoryRecordJson[]> {
+  async listMemories(options: { workspace?: string; project?: string; includeDeleted?: boolean; all?: boolean } = {}): Promise<CoreMemoryRecordJson[]> {
     const query = buildQuery({
       workspace: options.workspace,
+      project: options.project,
       include_deleted: options.includeDeleted,
       all: options.all
     })
@@ -305,6 +314,14 @@ export class KunRuntimeProviderServices {
     project?: string
     tags?: string[]
     confidence?: number
+    type?: CoreMemoryRecordJson['type']
+    importance?: number
+    observedAt?: string
+    validFrom?: string
+    validTo?: string
+    expiresAt?: string
+    disabled?: boolean
+    sources?: Array<Omit<NonNullable<CoreMemoryRecordJson['sources']>[number], 'id'> & { id?: string }>
   }): Promise<CoreMemoryRecordJson> {
     const response = await rendererRuntimeClient.runtimeRequest(
       KUN_MEMORY_PATH,
@@ -322,10 +339,10 @@ export class KunRuntimeProviderServices {
 
   async updateMemory(
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; disabled?: boolean },
-    options: { workspace?: string } = {}
+    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; disabled?: boolean },
+    options: { workspace?: string; project?: string } = {}
   ): Promise<CoreMemoryRecordJson> {
-    const query = buildQuery({ workspace: options.workspace })
+    const query = buildQuery({ workspace: options.workspace, project: options.project })
     const response = await rendererRuntimeClient.runtimeRequest(
       `${kunMemoryRecordPath(memoryId)}${query}`,
       'PATCH',
@@ -340,8 +357,8 @@ export class KunRuntimeProviderServices {
     ).memory
   }
 
-  async deleteMemory(memoryId: string, options: { workspace?: string } = {}): Promise<CoreMemoryRecordJson> {
-    const query = buildQuery({ workspace: options.workspace })
+  async deleteMemory(memoryId: string, options: { workspace?: string; project?: string } = {}): Promise<CoreMemoryRecordJson> {
+    const query = buildQuery({ workspace: options.workspace, project: options.project })
     const response = await rendererRuntimeClient.runtimeRequest(`${kunMemoryRecordPath(memoryId)}${query}`, 'DELETE')
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to delete memory'))
@@ -449,6 +466,20 @@ export class KunRuntimeProviderServices {
     )
   }
 
+  async getQueuedTurns(threadId: string): Promise<CoreQueuedTurnsResponseJson> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadQueuedTurnsPath(threadId),
+      'GET'
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'read queued turns failed'))
+    }
+    return readRuntimeJson<CoreQueuedTurnsResponseJson>(
+      response.body,
+      'runtime returned invalid queued turns'
+    )
+  }
+
   async subscribeThreadEvents(
     threadId: string,
     sinceSeq: number,
@@ -473,6 +504,7 @@ export class KunRuntimeProviderServices {
         offData()
         offEnd()
         offErr()
+        offOpen()
         signal.removeEventListener('abort', onAbort)
         void dispatchTail.finally(() => resolve())
       }
@@ -586,14 +618,31 @@ export class KunRuntimeProviderServices {
           queuedDispatchBatches = Math.max(0, queuedDispatchBatches - 1)
         })
       })
-      const offErr = rendererRuntimeClient.onSseError(({ streamId: sid, message, status }) => {
+      const offErr = rendererRuntimeClient.onSseError(({
+        streamId: sid,
+        message,
+        status,
+        code,
+        threadId: resetThreadId,
+        floorSeq
+      }) => {
         if (sid !== streamId) return
-        sink.onError(new KunSseSubscriptionError(message ?? `sse error ${status ?? ''}`, status))
+        sink.onError(new KunSseSubscriptionError(
+          message ?? `sse error ${status ?? ''}`,
+          status,
+          code,
+          resetThreadId,
+          floorSeq
+        ))
         finish()
       })
       const offEnd = rendererRuntimeClient.onSseEnd(({ streamId: sid }) => {
         if (sid !== streamId) return
         finish()
+      })
+      const offOpen = rendererRuntimeClient.onSseOpen(({ streamId: sid }) => {
+        if (sid !== streamId || settled || signal.aborted) return
+        sink.onConnected?.()
       })
       const onAbort = (): void => {
         void rendererRuntimeClient.stopSse(streamId)
@@ -606,7 +655,6 @@ export class KunRuntimeProviderServices {
       signal.addEventListener('abort', onAbort, { once: true })
       try {
         await rendererRuntimeClient.startSse(threadId, sinceSeq, streamId, { acknowledgedBatches: true })
-        if (!settled && !signal.aborted) sink.onConnected?.()
       } catch (error) {
         sink.onError(error instanceof Error ? error : new Error(String(error)))
         finish()

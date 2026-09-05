@@ -1,0 +1,13 @@
+{
+  "modelErrorSourceProvider": "Provider response",
+  "modelErrorSourceNoResponse": "No provider response",
+  "modelErrorSourceNotSent": "Request not sent",
+  "modelErrorProviderSummaryUnavailable": "The provider is temporarily unable to process this request",
+  "modelErrorProviderSummaryRateLimited": "The provider rate-limited this request",
+  "modelErrorProviderSummaryRejected": "The provider rejected this request",
+  "modelErrorProviderSummaryGeneric": "The provider returned an error",
+  "modelErrorNoResponseSummary": "The model request was sent, but the provider did not respond",
+  "modelErrorNotSentSummary": "The model request failed before it was sent",
+  "modelErrorProviderOriginalMessage": "Provider-returned message",
+  "modelErrorFailureMessage": "Failure reason"
+}

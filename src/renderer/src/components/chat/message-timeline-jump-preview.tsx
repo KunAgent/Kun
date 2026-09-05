@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, CircleAlert } from 'lucide-react'
+import { ChevronDown, CircleAlert, CloudAlert } from 'lucide-react'
 import type { ChatBlock } from '../../agent/types'
 import { extractDiffFilePath, extractUnifiedDiffText } from '../../lib/diff-stats'
 import { boundedPlainText } from '../../extensions/safe-text'
@@ -246,11 +246,17 @@ export function TimelineRuntimeError({
   const { t } = useTranslation('common')
   const code = block.code?.trim() ?? ''
   const detail = block.detail?.trim() ?? ''
+  const requestFailure = block.modelRequestFailure
+  const providerResponded = requestFailure?.requestState === 'provider_responded'
+  const sentNoResponse = requestFailure?.requestState === 'sent_no_response'
+  const requestNotSent = requestFailure?.requestState === 'not_sent'
   // Restart interrupts get friendly localized copy; the raw runtime message
   // stays available in the collapsible detail.
   const localizedMessage =
     code === 'orphaned_after_restart'
       ? t('turnInterruptedByRestart')
+      : code === 'owner_lease_expired'
+        ? t('turnInterruptedByRuntimeOwnership')
       : code === 'interrupted_turn_auto_resume'
         ? t('autoResumingInterruptedTask')
         : code === 'memory_pressure_critical'
@@ -262,25 +268,96 @@ export function TimelineRuntimeError({
                 defaultValue: 'Agent Runtime memory usage is high. New subagents are temporarily limited while memory is reclaimed.'
               })
             : ''
-  const message = (localizedMessage || block.text.trim() || block.detail?.trim() || block.code?.trim() || '')
+  const providerSummary = requestFailure?.category === 'rate_limit'
+    ? t('modelErrorProviderSummaryRateLimited')
+    : requestFailure?.category === 'unavailable'
+      ? t('modelErrorProviderSummaryUnavailable')
+      : requestFailure?.category === 'authentication' || requestFailure?.category === 'quota' ||
+          requestFailure?.category === 'model_not_found' || requestFailure?.category === 'request'
+        ? t('modelErrorProviderSummaryRejected')
+        : t('modelErrorProviderSummaryGeneric')
+  const sourceSummary = providerResponded
+    ? providerSummary
+    : sentNoResponse
+      ? t('modelErrorNoResponseSummary')
+      : requestNotSent
+        ? t('modelErrorNotSentSummary')
+        : ''
+  const message = (localizedMessage || sourceSummary || block.text.trim() || block.detail?.trim() || block.code?.trim() || '')
   const showCode = Boolean(code && !message.toLowerCase().includes(code.toLowerCase()))
+  const providerIdentity = [requestFailure?.providerId, requestFailure?.model].filter(Boolean).join(' · ')
+  const providerCode = requestFailure?.providerCode?.trim() || (providerResponded ? code : '')
+  const metadata = [
+    requestFailure?.httpStatus ? `HTTP ${requestFailure.httpStatus}` : '',
+    providerCode
+  ].filter(Boolean)
 
   return (
     <div
       role="alert"
       data-testid="timeline-runtime-error"
-      className="flex min-w-0 items-start gap-3 border-l-2 border-orange-300/80 py-1 pl-4 dark:border-orange-700/70"
+      className={`flex min-w-0 items-start gap-3 border-l-2 py-1 pl-4 ${
+        providerResponded
+          ? 'border-red-400/90 dark:border-red-700/80'
+          : 'border-orange-300/80 dark:border-orange-700/70'
+      }`}
     >
-      <CircleAlert
+      {providerResponded ? <CloudAlert
+        aria-hidden="true"
+        className="mt-1 h-4 w-4 shrink-0 text-red-600 dark:text-red-300"
+        strokeWidth={1.9}
+      /> : <CircleAlert
         aria-hidden="true"
         className="mt-1 h-4 w-4 shrink-0 text-orange-600 dark:text-orange-300"
         strokeWidth={1.9}
-      />
+      />}
       <div className="min-w-0 flex-1">
-        <p className="whitespace-pre-wrap break-words font-mono text-[13.5px] leading-6 text-orange-900 dark:text-orange-100">
+        {requestFailure ? (
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={`rounded-full border px-2 py-0.5 text-[11.5px] font-medium ${
+              providerResponded
+                ? 'border-red-300/70 bg-red-100/70 text-red-800 dark:border-red-800/70 dark:bg-red-950/45 dark:text-red-200'
+                : 'border-orange-300/70 bg-orange-100/70 text-orange-800 dark:border-orange-800/70 dark:bg-orange-950/45 dark:text-orange-200'
+            }`}>
+              {providerResponded
+                ? t('modelErrorSourceProvider')
+                : sentNoResponse
+                  ? t('modelErrorSourceNoResponse')
+                  : t('modelErrorSourceNotSent')}
+            </span>
+            {providerIdentity ? (
+              <span className="break-all font-mono text-[11.5px] text-ds-muted">{providerIdentity}</span>
+            ) : null}
+          </div>
+        ) : null}
+        <p className={`whitespace-pre-wrap break-words text-[13.5px] font-medium leading-6 ${
+          providerResponded
+            ? 'text-red-900 dark:text-red-100'
+            : 'text-orange-900 dark:text-orange-100'
+        }`}>
           {message}
         </p>
-        {showCode ? (
+        {requestFailure && block.text.trim() ? (
+          <div className={`mt-2 max-h-40 overflow-auto rounded-lg border px-3 py-2 ${
+            providerResponded
+              ? 'border-red-300/50 bg-red-50/60 dark:border-red-800/50 dark:bg-red-950/25'
+              : 'border-orange-300/50 bg-orange-50/60 dark:border-orange-800/50 dark:bg-orange-950/25'
+          }`}>
+            <p className="mb-1 text-[11.5px] font-medium opacity-70">
+              {providerResponded ? t('modelErrorProviderOriginalMessage') : t('modelErrorFailureMessage')}
+            </p>
+            <p className="whitespace-pre-wrap break-words font-mono text-[12.5px] leading-5">{block.text.trim()}</p>
+          </div>
+        ) : null}
+        {metadata.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {metadata.map((value) => (
+              <code key={value} className="rounded border border-current/15 bg-black/[0.03] px-1.5 py-0.5 text-[11px] opacity-75 dark:bg-white/[0.04]">
+                {value}
+              </code>
+            ))}
+          </div>
+        ) : showCode ? (
           <p className="mt-1 font-mono text-[11.5px] leading-5 text-orange-700/75 dark:text-orange-300/75">
             {code}
           </p>
@@ -300,7 +377,9 @@ export function TimelineRuntimeError({
             </pre>
           </details>
         ) : null}
-        {onContinue && code === 'orphaned_after_restart' ? (
+        {onContinue && (
+          code === 'orphaned_after_restart' || code === 'owner_lease_expired'
+        ) ? (
           <button
             type="button"
             data-testid="timeline-runtime-error-continue"

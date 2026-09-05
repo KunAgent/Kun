@@ -15,7 +15,9 @@ const labels: Record<string, string> = {
   mainAgentTurnCompleteNotification: 'Main agent completions',
   subagentTurnCompleteNotification: 'Subagent completions',
   desktopUseSystemTitleBar: 'Use system title bar',
-  desktopUseSystemTitleBarDesc: 'Let Linux draw the title bar. Restart Kun to apply.'
+  desktopUseSystemTitleBarDesc: 'Let Linux draw the title bar. Restart Kun to apply.',
+  desktopKeepAwake: 'Keep computer awake',
+  desktopKeepAwakeDesc: 'Prevent sleep while Kun is running.'
 }
 
 function t(key: string, values?: Record<string, unknown>): string {
@@ -41,6 +43,7 @@ function baseCtx(): Record<string, unknown> {
       appBehavior: {
         openAtLogin: false,
         startMinimized: false,
+        keepAwake: true,
         useSystemTitleBar: false,
         closeToTray: false,
         closeAction: 'ask'
@@ -163,6 +166,17 @@ describe('GeneralSettingsSection workspace layout', () => {
     expect(html).toContain('legacyImportTitle')
     expect(html).toContain('gitCheckpointTitle')
     expect(html).toContain('logTitle')
+  })
+
+  it('shows the keep-awake preference in desktop behavior', () => {
+    const html = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+    const toggleIndex = html.indexOf('aria-label="Keep computer awake"')
+    const toggle = html.slice(toggleIndex, toggleIndex + 500)
+
+    expect(html).toContain('Keep computer awake')
+    expect(html).toContain('Prevent sleep while Kun is running.')
+    expect(toggleIndex).toBeGreaterThan(-1)
+    expect(toggle).toContain('aria-checked="true"')
   })
 
   it('shows the restart-scoped system title bar switch only on Linux', () => {

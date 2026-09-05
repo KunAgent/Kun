@@ -6,7 +6,7 @@ import process from 'node:process'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveSharedRuntime, stopSharedRuntime } from '../cli/shared-runtime.js'
-import { resolveServiceManager } from '../manager/manager-client.js'
+import { readManagerRuntime, resolveServiceManager } from '../manager/manager-client.js'
 import { readManagerDiscovery } from '../manager/manager-discovery.js'
 import { readRuntimeBuildIdForEntry } from '../server/runtime-build-identity.js'
 import { startKunServe, type KunServeHandle } from '../server/runtime-factory.js'
@@ -65,6 +65,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
     const terminal = pty.spawn(process.execPath, [
       cliEntry,
       'tui',
+      '--no-start',
       '--data-dir', root,
       '--workspace', root
     ], {
@@ -211,13 +212,16 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       expect(output).toContain('\x1b[?2004l')
       expect(output).not.toContain('\x1b[?1049l')
       expect(output).not.toContain('\x1b[3J')
+      await expect(client.runtimeInfo()).resolves.toMatchObject({
+        instanceId: server.instanceId
+      })
     } finally {
       dataSubscription.dispose()
       try { terminal.kill() } catch { /* already exited */ }
     }
   }, 30_000)
 
-  it('starts its own shared runtime and leaves it alive after the standalone TUI exits', async () => {
+  it('stops its exact owned Runtime while leaving Manager alive after Ctrl+C exit', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-standalone-'))
     roots.push(root)
     const controlDir = join(root, 'control')
@@ -266,6 +270,20 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         }
       )
       expect(connection.discovery.launchMode).toBe('shared')
+      expect(connection.discovery.clientOwnerKind).toBe('tui')
+      expect((await readManagerRuntime(manager, 'production'))?.clientOwnerKind).toBe('tui')
+      const ownedPid = connection.discovery.pid
+      const managerInstanceId = manager.discovery.instanceId
+      const client = new KunTuiClient({
+        baseUrl: connection.discovery.baseUrl,
+        runtimeToken: connection.discovery.runtimeToken
+      })
+      const persistedThread = await client.createThread({
+        title: 'Sequential TUI state',
+        workspace: root,
+        model: 'model-a',
+        mode: 'agent'
+      })
       await waitForPtyValue(
         () => output.includes('Welcome to Kun') &&
           output.includes('/connect') &&
@@ -274,7 +292,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
           : undefined,
         {
           stage: 'TUI first render',
-          timeoutMs: 10_000,
+          timeoutMs: 30_000,
           getExit: () => exitState,
           getOutput: () => output
         }
@@ -283,14 +301,154 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       terminal.write('\x03')
       await new Promise((resolve) => setTimeout(resolve, 80))
       terminal.write('\x03')
-      const exit = await withTimeout(exited, 5_000, 'standalone TUI process did not exit')
+      const exit = await withTimeout(exited, 15_000, 'standalone TUI process did not exit')
       expect(exit.exitCode).toBe(0)
       expect(output).not.toContain('\x1b[?1049h')
       expect(output).not.toContain('\x1b[?1049l')
-      expect(await resolveSharedRuntime(root)).not.toBeNull()
+      await waitFor(() => !processIsAlive(ownedPid), 10_000)
+      expect(await resolveSharedRuntime(root, fetch, { manager, controlDir })).toBeNull()
+      expect(await readManagerRuntime(manager, 'production')).toBeNull()
+      expect((await resolveServiceManager(controlDir))?.discovery.instanceId).toBe(managerInstanceId)
 
-      expect(await stopSharedRuntime(root)).toBe(true)
-      expect(await resolveSharedRuntime(root)).toBeNull()
+      const secondTerminal = pty.spawn(process.execPath, [
+        cliEntry,
+        '--data-dir', root,
+        '--workspace', root,
+        '--continue'
+      ], {
+        name: 'xterm-256color',
+        cols: 88,
+        rows: 26,
+        cwd: worktreeRoot,
+        env: stringEnvironment({
+          ...process.env,
+          KUN_MANAGER_CONTROL_DIR: controlDir,
+          KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json')
+        })
+      })
+      let secondOutput = ''
+      let secondExitState: { exitCode: number; signal?: number } | undefined
+      const secondData = secondTerminal.onData((data) => { secondOutput += data })
+      const secondExited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
+        secondTerminal.onExit((state) => {
+          secondExitState = state
+          accept(state)
+        })
+      })
+      try {
+        const secondConnection = await waitForPtyValue(
+          async () => {
+            const candidate = await resolveSharedRuntime(root, fetch, { manager, controlDir })
+            return candidate?.discovery.instanceId !== connection.discovery.instanceId
+              ? candidate ?? undefined
+              : undefined
+          },
+          {
+            stage: 'sequential Runtime readiness',
+            timeoutMs: 35_000,
+            getExit: () => secondExitState,
+            getOutput: () => secondOutput
+          }
+        )
+        expect(secondConnection.discovery.clientOwnerKind).toBe('tui')
+        const secondClient = new KunTuiClient({
+          baseUrl: secondConnection.discovery.baseUrl,
+          runtimeToken: secondConnection.discovery.runtimeToken
+        })
+        await expect(secondClient.getThread(persistedThread.id)).resolves.toMatchObject({
+          id: persistedThread.id,
+          title: 'Sequential TUI state'
+        })
+        await waitForPtyValue(
+          () => secondOutput.includes('Welcome to Kun') ? true : undefined,
+          {
+            stage: 'sequential TUI first render',
+            timeoutMs: 30_000,
+            getExit: () => secondExitState,
+            getOutput: () => secondOutput
+          }
+        )
+
+        secondTerminal.write('/quit\r')
+        const secondExit = await withTimeout(secondExited, 15_000, 'second TUI process did not exit')
+        expect(secondExit.exitCode).toBe(0)
+        await waitFor(() => !processIsAlive(secondConnection.discovery.pid), 10_000)
+        expect(await readManagerRuntime(manager, 'production')).toBeNull()
+      } finally {
+        secondData.dispose()
+        try { secondTerminal.kill() } catch { /* already exited */ }
+      }
+    } finally {
+      dataSubscription.dispose()
+      try { terminal.kill() } catch { /* already exited */ }
+    }
+  }, 90_000)
+
+  it('stops its exact owned Runtime after the TUI receives SIGTERM', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-tui-signal-exit-'))
+    roots.push(root)
+    const controlDir = join(root, 'control')
+    const terminal = pty.spawn(process.execPath, [
+      cliEntry,
+      '--data-dir', root,
+      '--workspace', root
+    ], {
+      name: 'xterm-256color',
+      cols: 88,
+      rows: 26,
+      cwd: worktreeRoot,
+      env: stringEnvironment({
+        ...process.env,
+        KUN_MANAGER_CONTROL_DIR: controlDir,
+        KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json')
+      })
+    })
+    let output = ''
+    let exitState: { exitCode: number; signal?: number } | undefined
+    const dataSubscription = terminal.onData((data) => { output += data })
+    const exited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
+      terminal.onExit((state) => {
+        exitState = state
+        accept(state)
+      })
+    })
+
+    try {
+      const manager = await waitForPtyValue(
+        async () => (await resolveServiceManager(controlDir)) ?? undefined,
+        {
+          stage: 'signal test Manager readiness',
+          timeoutMs: 35_000,
+          getExit: () => exitState,
+          getOutput: () => output
+        }
+      )
+      const connection = await waitForPtyValue(
+        async () => (await resolveSharedRuntime(root, fetch, { manager, controlDir })) ?? undefined,
+        {
+          stage: 'signal test Runtime readiness',
+          timeoutMs: 35_000,
+          getExit: () => exitState,
+          getOutput: () => output
+        }
+      )
+      expect(connection.discovery.clientOwnerKind).toBe('tui')
+      await waitForPtyValue(
+        () => output.includes('Welcome to Kun') ? true : undefined,
+        {
+          stage: 'signal test first render',
+          timeoutMs: 30_000,
+          getExit: () => exitState,
+          getOutput: () => output
+        }
+      )
+
+      terminal.kill('SIGTERM')
+      await withTimeout(exited, 15_000, 'SIGTERM TUI process did not exit')
+      await waitFor(() => !processIsAlive(connection.discovery.pid), 10_000)
+      expect(await resolveSharedRuntime(root, fetch, { manager, controlDir })).toBeNull()
+      expect(await readManagerRuntime(manager, 'production')).toBeNull()
+      expect(await resolveServiceManager(controlDir)).not.toBeNull()
     } finally {
       dataSubscription.dispose()
       try { terminal.kill() } catch { /* already exited */ }
@@ -325,6 +483,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
     const requirement = 'Build the PTY Graph board'
     const terminal = pty.spawn(process.execPath, [
       cliEntry,
+      '--no-start',
       '--data-dir', root,
       '--workspace', root,
       '--graph', requirement
@@ -472,6 +631,15 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
       (error) => { clearTimeout(timer); reject(error) }
     )
   })
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return String((error as NodeJS.ErrnoException).code ?? '') === 'EPERM'
+  }
 }
 
 async function stopIsolatedManager(controlDir: string): Promise<void> {

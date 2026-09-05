@@ -5,6 +5,8 @@ import type { InteractiveToolBridge } from './interactive-tool-bridge.js'
 
 export type ToolExecutionContextFactoryDeps = {
   memoryEnabled: boolean
+  allowedModelProviderIds?: readonly string[]
+  allowedModelIds?: readonly string[]
   allowedProviderIds?: readonly string[]
   allowedSkillIds?: readonly string[]
   allowedReadPaths?: readonly string[]
@@ -68,6 +70,10 @@ export function createToolExecutionContext(
     ...(input.extensionToolCatalogEpoch
       ? { extensionToolCatalogEpoch: input.extensionToolCatalogEpoch }
       : {}),
+    ...(deps.allowedModelProviderIds
+      ? { allowedModelProviderIds: deps.allowedModelProviderIds }
+      : {}),
+    ...(deps.allowedModelIds ? { allowedModelIds: deps.allowedModelIds } : {}),
     ...(deps.allowedProviderIds ? { allowedProviderIds: deps.allowedProviderIds } : {}),
     ...(deps.allowedSkillIds ? { allowedSkillIds: deps.allowedSkillIds } : {}),
     ...(deps.allowedReadPaths ? { allowedReadPaths: deps.allowedReadPaths } : {}),

@@ -101,10 +101,12 @@ function runStartupProbe(get: ChatStoreGet, generation: number): void {
       // can outlive the 900ms fallback armed below. If the connection still is
       // not ready by now, re-arm the fallback from this point so the earlier
       // timer firing during the probe does not consume the only retry.
-      if (generation !== startupProbeGeneration) return
-      if (startupRuntimeProbeTimer || startupRuntimeProbeInFlight) return
-      if (get().runtimeConnection === 'ready') return
-      armStartupProbeFallback(get, generation, 0)
+      if (generation === startupProbeGeneration &&
+        !startupRuntimeProbeTimer &&
+        !startupRuntimeProbeInFlight &&
+        get().runtimeConnection !== 'ready') {
+        armStartupProbeFallback(get, generation, 0)
+      }
     }
   })()
 }

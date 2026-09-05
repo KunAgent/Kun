@@ -9,6 +9,7 @@ import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { TurnItem } from '../contracts/items.js'
+import type { SessionUsageAggregateResponse } from '../contracts/usage-query.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { makeUserItem } from '../domain/item.js'
 import type { AgentSession } from '../domain/session.js'
@@ -198,6 +199,13 @@ async function waitForClosing(fence: ThreadLifecycleFence, threadId: string): Pr
 }
 
 describe('ThreadLifecycleFence persistence guard', () => {
+  it('preserves indexed usage aggregation through the lifecycle wrapper', () => {
+    const raw = new InMemorySessionStore() as SessionStore
+    raw.aggregateUsage = async () => ({}) as SessionUsageAggregateResponse
+    const wrapped = new LifecycleFencedSessionStore(raw, new ThreadLifecycleFence())
+    expect(wrapped.aggregateUsage).toBeTypeOf('function')
+  })
+
   it('rejects a conditional history rewrite once deletion closes the thread', async () => {
     const runtime = await makeRuntime('item')
     await runtime.rawSessionStore.appendItem(runtime.threadId, item(runtime.threadId, 'item_before_delete'))

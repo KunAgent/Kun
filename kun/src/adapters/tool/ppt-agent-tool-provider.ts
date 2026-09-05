@@ -48,6 +48,7 @@ import {
   type PptProviderSourceEnvelope
 } from './ppt-agent-provider-support.js'
 import { resolvePptRetryState } from './ppt-agent-retry-state.js'
+import { elapsedMs } from '../../delegation/delegation-runtime-support.js'
 import {
   resolvePptPromptDirectionSelection,
   resolvePptUserInputDirectionSelection
@@ -601,6 +602,9 @@ export function buildPptAgentToolProvider(
             return {
               output: {
                 childId: record.id,
+                parentThreadId: record.parentThreadId,
+                parentTurnId: record.parentTurnId,
+                resumeCount: record.resumeCount ?? 0,
                 workflowId,
                 projectDir,
                 status: record.status,
@@ -626,6 +630,10 @@ export function buildPptAgentToolProvider(
                 profile: 'ppt',
                 profileName,
                 ...(resolvedModel ? { model: resolvedModel } : {}),
+                ...(record.startedAt ? {
+                  attemptStartedAt: record.startedAt,
+                  attemptDurationMs: elapsedMs(record.startedAt, record.updatedAt)
+                } : {}),
                 ...(record.durationMs !== undefined ? { durationMs: record.durationMs } : {}),
                 ...(failed || recoverableQaReview
                   ? { error: formatPptChildError(

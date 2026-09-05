@@ -25,6 +25,7 @@ const SCOPED_WORKSPACE_TOOL_NAMES = new Set([
   'write',
   'edit',
   'read_artifact',
+  'fast_context',
   'load_skill'
 ])
 

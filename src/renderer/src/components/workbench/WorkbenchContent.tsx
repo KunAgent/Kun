@@ -24,7 +24,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
     deleteThread, startNewChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone, openConnectWeixin,
-    openCodeMode, openWriteMode, openScheduleView, openWorkflowView,
+    openCodeMode, openWriteMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy,
     input, rightPanel, writeRuntimeBanner, setInput, sendWritePrompt,
     conversationRuntimeBanner, activeSddDraft, rightPanelMode, toggleSddAssistantPanel,
@@ -43,7 +43,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
     extensionSurfaceItems, openExtensionSurface, openCodeRightTool, currentSideRunningCount,
     extensionRightRailItems, selectRightRailExtension, imageAnnotationHost, planOverlay,
     openManagedExtensionView, activeExtensionAuxiliaryPanel, workspaceContextMenu, activeGuiPlan,
-    focusedCanvasWorkspace
+    focusedCanvasWorkspace, openGeneratedDocuments, openGeneratedDocumentPreview
   } = context
   const normalizedRoute = normalizeWorkbenchRoute(route)
   const activeConversationThread = threads.find((thread: any) => thread.id === activeThreadId)
@@ -111,6 +111,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onCodeOpen={openCodeMode}
         onWriteOpen={openWriteMode}
         onScheduleOpen={openScheduleView}
+        onBoardOpen={openBoardView}
         onWorkflowOpen={openWorkflowView}
         onNewConversation={startNewConversation}
         onBeginResize={beginLeftResize}
@@ -207,6 +208,8 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             onOpenChanges: () => setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.changes),
             onReviewChanges: () => void reviewActiveThread({ kind: 'uncommittedChanges' }),
             reviewChangesDisabled: busy || runtimeConnection !== 'ready',
+            onPreviewGeneratedDocument: openGeneratedDocumentPreview,
+            onOpenGeneratedDocuments: openGeneratedDocuments,
             onOpenDevPreview: openDevPreview,
             onBackToParent: returnFromSubagent,
             onBeginTerminalResize: beginTerminalResize,
@@ -247,7 +250,6 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             sideChatRunningCount: currentSideRunningCount,
             sideChatOpen: rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sideConversations,
             sideChatEnabled: runtimeConnection === 'ready' && Boolean(activeThreadId),
-            agentPerspectiveEnabled: Boolean(activeThreadId),
             fileTreeOpen: rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.files,
             fileTreeEnabled: Boolean(fileTreeWorkspaceRoot),
             onToggleFileTree: () => openCodeRightTool(BUILTIN_RIGHT_PANEL_IDS.files),

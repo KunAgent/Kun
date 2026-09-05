@@ -1,0 +1,13 @@
+{
+  "modelErrorSourceProvider": "プロバイダーからの応答",
+  "modelErrorSourceNoResponse": "プロバイダーから応答なし",
+  "modelErrorSourceNotSent": "リクエスト未送信",
+  "modelErrorProviderSummaryUnavailable": "プロバイダーは現在このリクエストを処理できません",
+  "modelErrorProviderSummaryRateLimited": "プロバイダーがこのリクエストを制限しました",
+  "modelErrorProviderSummaryRejected": "プロバイダーがこのリクエストを拒否しました",
+  "modelErrorProviderSummaryGeneric": "プロバイダーがエラーを返しました",
+  "modelErrorNoResponseSummary": "モデルリクエストは送信されましたが、プロバイダーから応答がありません",
+  "modelErrorNotSentSummary": "モデルリクエストは送信前に失敗しました",
+  "modelErrorProviderOriginalMessage": "プロバイダーから返されたメッセージ",
+  "modelErrorFailureMessage": "失敗理由"
+}

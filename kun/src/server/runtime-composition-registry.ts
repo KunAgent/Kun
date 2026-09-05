@@ -25,6 +25,7 @@ import {
   resolveAntigravityCliCommand
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
+import { diffUsage, hasUsage } from '../domain/usage.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -95,6 +96,10 @@ export function createRuntimeRegistry(
             : {}),
           allowSdkBuiltins: false,
           toolContextBoundary: {
+            ...(child.allowedModelProviderIds
+              ? { allowedModelProviderIds: child.allowedModelProviderIds }
+              : {}),
+            ...(child.allowedModelIds ? { allowedModelIds: child.allowedModelIds } : {}),
             ...(child.allowedProviderIds ? { allowedProviderIds: child.allowedProviderIds } : {}),
             ...(child.allowedToolNames ? { allowedToolNames: child.allowedToolNames } : {}),
             ...(child.allowedSkillIds ? { allowedSkillIds: child.allowedSkillIds } : {}),
@@ -177,6 +182,10 @@ export function createRuntimeRegistry(
             ? { instructionRuntime: services.instructionRuntime }
             : {}),
           toolContextBoundary: {
+            ...(child.allowedModelProviderIds
+              ? { allowedModelProviderIds: child.allowedModelProviderIds }
+              : {}),
+            ...(child.allowedModelIds ? { allowedModelIds: child.allowedModelIds } : {}),
             ...(child.allowedProviderIds ? { allowedProviderIds: child.allowedProviderIds } : {}),
             ...(child.allowedToolNames ? { allowedToolNames: child.allowedToolNames } : {}),
             ...(child.allowedSkillIds ? { allowedSkillIds: child.allowedSkillIds } : {}),
@@ -241,8 +250,21 @@ export function createRuntimeRegistry(
           artifactStore,
           nowIso
         }),
-        recordExternalUsage: (threadId, usage) => {
-          usageService.record(threadId, usage)
+        recordExternalUsage: async (threadId, usage, attribution, cumulativeUsage) => {
+          const target = cumulativeUsage ?? usage
+          // Direct children already use this shared ledger and persist their
+          // cumulative usage in AgentLoop. Only external runtimes need the
+          // missing suffix settled here.
+          if (!hasUsage(diffUsage(target, usageService.forThread(threadId)))) return
+          await events.record({
+            kind: 'usage',
+            threadId,
+            ...(attribution?.model ? { model: attribution.model } : {}),
+            ...(attribution?.providerId ? { providerId: attribution.providerId } : {}),
+            usage: target
+          })
+          const missing = diffUsage(target, usageService.forThread(threadId))
+          if (hasUsage(missing)) usageService.record(threadId, missing)
         }
       })
     : undefined

@@ -105,6 +105,31 @@ export function modelPayloadError(payload: Record<string, unknown>): { message: 
   return null
 }
 
+export function modelPayloadFailure(
+  error: { message: string; code?: string }
+): import('../../contracts/model-route-pool.js').ModelFailureMetadata {
+  const signal = `${error.code ?? ''} ${error.message}`.toLowerCase()
+  const category = /rate.?limit|too many requests/.test(signal)
+    ? 'rate_limit' as const
+    : /overload|at capacity|unavailable|server busy/.test(signal)
+      ? 'unavailable' as const
+      : /auth|unauthor|forbidden|credential|api.?key/.test(signal)
+        ? 'authentication' as const
+        : /quota|credit|balance|payment/.test(signal)
+          ? 'quota' as const
+          : /model.*(?:missing|not found|unavailable)/.test(signal)
+            ? 'model_not_found' as const
+            : 'unknown' as const
+  return {
+    category,
+    responseReceived: true,
+    ...(error.code ? { providerCode: error.code } : {}),
+    // Preserve existing route behavior: streamed provider rejections were not
+    // failover-eligible before provenance was attached.
+    failoverAllowed: false
+  }
+}
+
 function modelErrorObject(error: Record<string, unknown> | null): { message: string; code?: string } | null {
   if (!error) return null
   const message =

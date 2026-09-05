@@ -617,7 +617,9 @@ describe('ModelRoundEngine', () => {
   it('drains and persists text after a model error while keeping failure sticky', async () => {
     const test = harness([
       { kind: 'assistant_text_delta', text: 'partial' },
-      { kind: 'error', message: 'upstream failed', code: 'upstream' },
+      { kind: 'error', message: 'upstream failed', code: 'upstream', failure: {
+        category: 'unknown', responseReceived: true, providerCode: 'upstream', failoverAllowed: false
+      } },
       { kind: 'completed', stopReason: 'stop' }
     ])
 
@@ -629,7 +631,8 @@ describe('ModelRoundEngine', () => {
     ])
     // The provider's own error chunk must remain the surfaced failure.
     expect(test.recordedEvents.at(-1)).toMatchObject({
-      kind: 'error', message: 'upstream failed', code: 'upstream'
+      kind: 'error', message: 'upstream failed', code: 'upstream',
+      modelRequestFailure: { requestState: 'provider_responded', model: 'model_1', providerCode: 'upstream' }
     })
   })
 

@@ -87,7 +87,7 @@ kun exec --data-dir ~/.kun/data --workspace "$PWD" read --args '{"path":"README.
 
 - `kun run` 会创建一个线程，执行一个回合并流式输出助手文本后退出。
 - `kun chat` 启动行式 REPL。使用 `/exit`、`/quit` 或空行退出。
-- 裸 `kun`（或别名 `kun tui`）连接或自动启动共享后台运行时，提供可与 GUI 同时使用、保留终端 scrollback 的 pi-tui 内联界面。参见 [TUI 指南](../docs/kun-tui.md)。
+- 裸 `kun`（或别名 `kun tui`）在槽位空闲时启动由该 TUI 会话持有的 Runtime；要与 GUI 已持有的 Runtime 共用实时 HTTP/SSE 状态，请运行 `kun tui --no-start`。pi-tui 内联界面会保留终端 scrollback。参见 [TUI 指南](../docs/kun-tui.md)。
 - `kun exec --list-tools` 打印当前配置 / 工作区下生效的动态工具列表。
 - `kun exec <tool> --args <json>` 直接调用单个工具。`run` 或 `exec` 上可配合 `--json` 获取机器可读输出。
 
@@ -172,17 +172,18 @@ Kun 使用 JSON 配置文件管理运行时行为，避免重建后重配或硬�
   },
   "capabilities": {
     "mcp": {
-      "enabled": false,
+      "enabled": true,
       "servers": {
         "github": {
           "enabled": true,
-          "transport": "stdio",
-          "command": "npx",
-          "cwd": "/path/to/workspace",
-          "args": ["-y", "@modelcontextprotocol/server-github"],
-          "env": { "GITHUB_TOKEN": "<github-token>" },
-          "trustScope": "workspace",
-          "trustedWorkspaceRoots": ["/path/to/workspace"],
+          "transport": "streamable-http",
+          "url": "https://api.githubcopilot.com/mcp/readonly",
+          "headers": {
+            "Authorization": "Bearer ${GITHUB_PAT_TOKEN}",
+            "X-MCP-Toolsets": "context,repos,issues,pull_requests,users",
+            "X-MCP-Readonly": "true"
+          },
+          "trustScope": "user",
           "timeoutMs": 30000
         },
         "remote-docs": {
@@ -244,6 +245,7 @@ Kun 默认使用混合存储：`threads/{threadId}/messages.jsonl` 与 `events.j
 功能开关是显式设计：
 
 - `capabilities.mcp` 启动配置化 MCP 客户端并将工具加入动态注册表；工作区级服务器要求设置 `trustedWorkspaceRoots`。远程 HTTP/SSE MCP 可配置 `oauth`，Kun 会把 OAuth token 存在数据目录下，而不是写进 config。使用 `GET /v1/mcp/oauth` 可查看脱敏后的 OAuth 状态，使用 `DELETE /v1/mcp/oauth/{serverId}` 可清除某个服务保存的授权。
+- GUI 会默认写入由系统托管的 GitHub 官方只读 MCP。连接时 Kun 优先使用 `GITHUB_PAT_TOKEN`，否则读取 `gh auth token` 的登录凭据；两者都不可用时可先运行 `gh auth login`。Kun 会先从标准位置、再从 `PATH` 中安全解析已验证的 `gh`（支持 Nix、asdf、mise、Devbox 与自定义前缀等）；它会解析符号链接、要求目标是普通可执行文件，并且不会把原始 `PATH` 传给子进程。Kun 只在进程内存中实例化 Token，持久化 header 仅保留环境变量引用，不会写入明文。用户在 `~/.kun/mcp.json` 中定义同名 `github` server 时，以用户配置为准。
 - `serve.mcpSearch` 可把大量 MCP 工具收敛为 `mcp_search`、`mcp_describe`、`mcp_call` 和 `mcp_refresh_catalog` 四个入口；当工具目录过大时，模型先检索意图相关工具，再描述和调用具体工具，避免每轮都携带完整 MCP schema。
 - `serve.tokenEconomy` / `tokenEconomyMode` 会压缩工具描述、工具结果和历史上下文；保留代码、路径、命令、URL、错误信号等高价值信息，同时省掉重复、超长或二进制 payload。
 - `contextCompaction` 控制长会话压缩的兜底阈值和摘要方式；模型级阈值写在 `models.profiles`。压缩时保留目标、约束、决策、已触碰文件、工具结果和未解决事项。
@@ -336,6 +338,7 @@ Hooks 按声明顺序链式执行：每个 hook 看到的是前面 hook 改写�
   config.json      # 可选，运行时配置
   attachments/     # 附件元数据与二进制（启用时）
   memory/          # 长期记忆记录与墓碑记录（启用时）
+  memory-index.sqlite3 # 可重建的记忆 FTS5 检索投影
   child-runs/      # 子任务运行记录（subagents 开启时）
   threads/
     index.json
@@ -349,6 +352,8 @@ Hooks 按声明顺序链式执行：每个 hook 看到的是前面 hook 改写�
 
 `index.json`、`thread.json` 与 `session.json` 使用原子写入。
 JSONL 为追加式，即使包含部分格式错误行也可通过下一次重放跳过。GUI 可通过 `index.json` 列表并重放各线程 JSONL 来重建会话。
+记忆 JSON 始终是标准数据，SQLite 只是可删除、可重建的投影；迁移、回退、诊断与验证见
+[`docs/memory-foundation.md`](../docs/memory-foundation.md)。
 
 ## HTTP API
 
@@ -377,7 +382,7 @@ HTTP 服务在 `/v1/*` 提供以下路由：
 | GET | `/v1/attachments/diagnostics` | 附件存储状态 |
 | GET | `/v1/attachments/{id}` | 获取附件元数据 |
 | GET | `/v1/attachments/{id}/content?thread_id=...&workspace=...` | 授权后返回附件字节（base64） |
-| GET | `/v1/memory?workspace=...&include_deleted=false` | 查询作用域内记忆 |
+| GET | `/v1/memory?workspace=...&project=...&include_deleted=false` | 查询作用域内记忆 |
 | POST | `/v1/memory` | 创建记忆 |
 | GET | `/v1/memory/diagnostics` | 记忆存储状态 |
 | PATCH | `/v1/memory/{id}` | 更新、禁用或重标记记忆 |

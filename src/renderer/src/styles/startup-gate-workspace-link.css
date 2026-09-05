@@ -1,0 +1,161 @@
+.kun-startup-artwork__workspace-link {
+  position: absolute;
+  bottom: 7%;
+  left: 21%;
+  width: 43%;
+  height: 23%;
+  pointer-events: none;
+}
+
+.kun-startup-artwork__workspace-rail {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-2deg);
+  transform-origin: center;
+  filter: drop-shadow(0 0 5px rgb(var(--kun-startup-accent-rgb) / 0.42));
+}
+
+.kun-startup-artwork__workspace-track,
+.kun-startup-artwork__workspace-flow {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+
+.kun-startup-artwork__workspace-track {
+  stroke: rgb(var(--kun-startup-secondary-rgb) / 0.38);
+  stroke-width: 1.4;
+  stroke-dasharray: 1 5;
+}
+
+.kun-startup-artwork__workspace-flow {
+  stroke: rgb(var(--kun-startup-accent-rgb) / 0.92);
+  stroke-width: 2.6;
+  stroke-dasharray: 13 87;
+  animation: kun-startup-workspace-flow 1.85s linear infinite;
+}
+
+.kun-startup-artwork__workspace-node {
+  position: absolute;
+  z-index: 3;
+  display: block;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgb(var(--kun-startup-accent-rgb));
+  box-shadow:
+    0 0 0 4px rgb(var(--kun-startup-accent-rgb) / 0.1),
+    0 0 10px rgb(var(--kun-startup-accent-rgb) / 0.68);
+}
+
+.kun-startup-artwork__workspace-node--source {
+  bottom: 17%;
+  left: 0;
+}
+
+.kun-startup-artwork__workspace-node--relay {
+  top: 34%;
+  left: 36%;
+  width: 5px;
+  height: 5px;
+  opacity: 0.68;
+}
+
+.kun-startup-artwork__workspace-target {
+  position: absolute;
+  z-index: 6;
+  top: 36%;
+  right: 46%;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgb(var(--kun-startup-accent-rgb) / 0.56);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 45% 38%, rgba(255, 255, 255, 0.9), transparent 42%),
+    rgb(var(--kun-startup-secondary-rgb) / 0.13);
+  box-shadow:
+    0 0 0 6px rgb(var(--kun-startup-accent-rgb) / 0.07),
+    0 0 18px rgb(var(--kun-startup-accent-rgb) / 0.34),
+    inset 0 0 12px rgba(255, 255, 255, 0.34);
+  transform: rotate(2deg);
+  animation: kun-startup-workspace-target 2.6s ease-in-out infinite;
+  backdrop-filter: blur(2px);
+}
+
+.kun-startup-artwork__workspace-target::before {
+  position: absolute;
+  inset: -6px;
+  border: 1px solid rgb(var(--kun-startup-accent-rgb) / 0.2);
+  border-radius: 50%;
+  content: '';
+}
+
+.kun-startup-artwork__workspace-icon {
+  width: 23px;
+  height: 20px;
+  overflow: visible;
+  fill: rgb(var(--kun-startup-accent-rgb) / 0.13);
+  filter: drop-shadow(0 0 5px rgb(var(--kun-startup-accent-rgb) / 0.52));
+  stroke: rgb(var(--kun-startup-secondary-rgb));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.kun-startup__artwork[data-variant='focus'] .kun-startup-artwork__workspace-flow {
+  animation-duration: 3s;
+}
+
+[data-theme='dark'] .kun-startup-artwork__workspace-track {
+  stroke: rgb(var(--kun-startup-accent-rgb) / 0.5);
+}
+
+[data-theme='dark'] .kun-startup-artwork__workspace-target {
+  background:
+    radial-gradient(circle at 45% 38%, rgba(224, 242, 254, 0.28), transparent 45%),
+    rgb(var(--kun-startup-secondary-rgb) / 0.2);
+  box-shadow:
+    0 0 0 6px rgb(var(--kun-startup-accent-rgb) / 0.1),
+    0 0 22px rgb(var(--kun-startup-accent-rgb) / 0.44),
+    inset 0 0 12px rgba(191, 219, 254, 0.14);
+}
+
+@keyframes kun-startup-workspace-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -100; }
+}
+
+@keyframes kun-startup-workspace-target {
+  0%, 100% { transform: translate3d(0, 1px, 0) rotate(2deg); }
+  50% { transform: translate3d(0, -2px, 0) rotate(2deg); }
+}
+
+@media (max-height: 620px) {
+  .kun-startup-artwork__workspace-target {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+  }
+
+  .kun-startup-artwork__workspace-icon {
+    width: 20px;
+    height: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-startup-artwork__workspace-flow {
+    stroke-dashoffset: -36;
+  }
+
+  .kun-startup-artwork__workspace-target {
+    transform: rotate(2deg);
+  }
+}

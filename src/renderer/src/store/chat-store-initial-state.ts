@@ -5,6 +5,7 @@ import {
   readStoredComposerMode
 } from './chat-store-helpers'
 import { defaultConversationWorkspaceRoot } from '../lib/workspace-path'
+import { readRemovedCodeWorkspaces } from '../lib/removed-code-workspaces'
 import { readProtectedSurfaceRestore } from '../extensions/protected-surface-session'
 
 import { readUnreadCompletions } from './unread-completions'
@@ -24,6 +25,9 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     runtimeConnection: 'idle' as const,
     runtimeStatus: null,
     codeWorkspaceRoots: [],
+    // Hydrate hidden projects at store creation so the first sidebar render
+    // already excludes them (no flash from the local thread cache).
+    removedCodeWorkspaces: readRemovedCodeWorkspaces(),
     threads: [],
     threadListStatus: 'idle' as const,
     threadListError: null,
@@ -65,6 +69,9 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     turnReasoningLastAtByUserId: {},
     inspectorSelectedId: null,
     composerMode: readStoredComposerMode(),
+    // The workbench execution-settings hook mirrors runtime settings here
+    // once loaded; null keeps sends on the runtime defaults until then.
+    composerExecutionSettings: null,
     composerOrchestration: 'direct' as const,
     graphEnabled: false,
     composerModel: '',

@@ -9,7 +9,7 @@ import {
 } from 'react'
 import type { MessageTimeline } from './MessageTimeline'
 import { useChatStore } from '../../store/chat-store'
-import { prepareAssistantMarkdownRenderer } from './AssistantMarkdown'
+import { prepareAssistantMarkdownRenderer } from '../../lib/assistant-markdown-loader'
 import { ThreadHydrationGate } from './ThreadHydrationLoading'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 
@@ -48,9 +48,12 @@ export function LazyMessageTimeline({
   }, [activeThreadId])
 
   const preparingRenderer = Boolean(activeThreadId && preparedThreadId !== activeThreadId)
+  const trustedContentVisible = props.blocks.length > 0 || Boolean(props.live || props.liveReasoning)
   return (
     <ThreadHydrationGate
       loading={hydrating || preparingRenderer}
+      catchingUp={hydrating}
+      trustedContentVisible={trustedContentVisible}
       presentationKey={activeThreadId}
     >
       <LiveAssistantStreamingProvider streaming={!hydrating && !preparingRenderer}>

@@ -39,13 +39,19 @@ type GrokTokenResponse = Record<string, unknown>
 export class GrokOAuthCredentialRefresher {
   private readonly inflight = new Map<string, Promise<void>>()
   private readonly fetchImpl: typeof fetch
+  private readonly fetchForSource?: (sourceId: string) => typeof fetch | Promise<typeof fetch>
   private readonly nowMs: () => number
 
   constructor(
     private readonly store: RefreshableLegacyCredentialStore,
-    options: { fetchImpl?: typeof fetch; nowMs?: () => number } = {}
+    options: {
+      fetchImpl?: typeof fetch
+      fetchForSource?: (sourceId: string) => typeof fetch | Promise<typeof fetch>
+      nowMs?: () => number
+    } = {}
   ) {
     this.fetchImpl = options.fetchImpl ?? fetch
+    this.fetchForSource = options.fetchForSource
     this.nowMs = options.nowMs ?? Date.now
   }
 
@@ -116,7 +122,7 @@ export class GrokOAuthCredentialRefresher {
 
     const refreshed = await refreshStoredGrokOAuthCredentials(
       credentials,
-      this.fetchImpl,
+      this.fetchForSource ? await this.fetchForSource(sourceId) : this.fetchImpl,
       this.nowMs
     )
     const updated = await this.store.updateResolvedApiKey(

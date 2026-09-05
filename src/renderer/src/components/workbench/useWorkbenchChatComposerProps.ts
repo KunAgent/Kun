@@ -5,6 +5,7 @@ import {
   queuedMessageMatchesRunningTurn
 } from '../../store/queued-message-guidance'
 import { useChatStore } from '../../store/chat-store'
+import { canRestoreQueuedMessageToComposer, queuedMessageComposerRestoreText } from '../../store/queued-message-edit'
 import type { WorkbenchChatStageProps } from './WorkbenchChatStage'
 
 type ComposerProps = WorkbenchChatStageProps['composerProps']
@@ -13,6 +14,7 @@ type UseWorkbenchChatComposerPropsInput = {
   input: string
   setInput: ComposerProps['setInput']
   composerMode: ComposerProps['mode']
+  autoPlanBuildEnabled: boolean
   setComposerMode: ComposerProps['setMode']
   taskSurface: NonNullable<ComposerProps['taskSurface']>
   taskSurfaceLocked: boolean
@@ -75,6 +77,7 @@ type UseWorkbenchChatComposerPropsInput = {
   openFileTreeSidePanel: () => void
   openDesignFileTreeSidePanel: () => void
   removeComposerFileReference: NonNullable<ComposerProps['onRemoveFileReference']>
+  restoreComposerAttachments: (attachments: readonly import('../../agent/types').AttachmentReference[]) => void | Promise<void>
   queuedMessages: QueuedUserMessage[]
   removeQueuedMessage: ComposerProps['onRemoveQueuedMessage']
   guideQueuedMessage: NonNullable<ComposerProps['onGuideQueuedMessage']>
@@ -101,6 +104,7 @@ export function useWorkbenchChatComposerProps({
   input,
   setInput,
   composerMode,
+  autoPlanBuildEnabled,
   setComposerMode,
   taskSurface,
   taskSurfaceLocked,
@@ -163,6 +167,7 @@ export function useWorkbenchChatComposerProps({
   openFileTreeSidePanel,
   openDesignFileTreeSidePanel,
   removeComposerFileReference,
+  restoreComposerAttachments,
   queuedMessages,
   removeQueuedMessage,
   guideQueuedMessage,
@@ -186,12 +191,16 @@ export function useWorkbenchChatComposerProps({
     ))
     return runningUser?.kind === 'user' ? runningUser.meta : undefined
   })
+  const restoreQueuedMessage = useChatStore((s) => s.restoreQueuedMessage)
   return useMemo(() => {
     const designTaskActive = route === 'chat' && !activeSddDraft && taskSurface === 'design'
     return ({
     input,
     setInput,
     mode: designTaskActive ? 'agent' : composerMode,
+    autoPlanBuildEnabled: route === 'chat' && !activeSddDraft && taskSurface === 'code'
+      ? autoPlanBuildEnabled
+      : false,
     setMode: setComposerMode,
     taskSurface: route === 'chat' && !activeSddDraft ? taskSurface : undefined,
     taskSurfaceLocked,
@@ -261,9 +270,20 @@ export function useWorkbenchChatComposerProps({
       id: message.id,
       text: message.text,
       ...(message.deliveryState ? { deliveryState: message.deliveryState } : {}),
+      ...(message.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
       ...(message.deliveryTurnId ? { deliveryTurnId: message.deliveryTurnId } : {}),
+      ...(message.deliveryUserMessageItemId
+        ? { deliveryUserMessageItemId: message.deliveryUserMessageItemId }
+        : {}),
       ...(message.displayText ? { displayText: message.displayText } : {}),
+      ...(message.errorCode ? { errorCode: message.errorCode } : {}),
+      ...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
       ...(message.mode ? { mode: message.mode } : {}),
+      ...(message.model ? { model: message.model } : {}),
+      ...(message.reasoningEffort ? { reasoningEffort: message.reasoningEffort } : {}),
+      ...(message.approvalPolicy ? { approvalPolicy: message.approvalPolicy } : {}),
+      ...(message.sandboxMode ? { sandboxMode: message.sandboxMode } : {}),
+      ...(message.approvalReviewer ? { approvalReviewer: message.approvalReviewer } : {}),
       ...(message.guiPlan ? { guiPlan: message.guiPlan } : {}),
       ...(message.attachmentIds?.length ? { attachmentIds: message.attachmentIds } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
@@ -273,10 +293,37 @@ export function useWorkbenchChatComposerProps({
       ...(message.guiDesignMode ? { guiDesignMode: true } : {}),
       ...(message.guiDesignArtifact ? { guiDesignArtifact: message.guiDesignArtifact } : {}),
       ...(message.writeContext ? { writeContext: message.writeContext } : {}),
+      composerRestoreEligible: canRestoreQueuedMessageToComposer(message),
       guidanceEligible: canGuideQueuedMessage(message) &&
         queuedMessageMatchesRunningTurn(message, runningTurnMeta)
     })),
     onRemoveQueuedMessage: removeQueuedMessage,
+    onRestoreQueuedMessageToComposer: async (id) => {
+      const restored = await restoreQueuedMessage(id)
+      if (!restored) return false
+      const text = queuedMessageComposerRestoreText(restored)
+      setInput(text
+        ? (input.trim() ? `${input.replace(/\s+$/, '')}\n${text}` : text)
+        : input)
+      if (restored.attachments?.length) void restoreComposerAttachments(restored.attachments)
+      // Replay the frozen submission settings so a re-send reproduces the
+      // original turn instead of silently adopting current composer state.
+      if (restored.mode === 'agent' || restored.mode === 'auto' || restored.mode === 'plan') setComposerMode(restored.mode)
+      if (restored.model?.trim()) setComposerModel(restored.model.trim())
+      if (restored.reasoningEffort && setComposerReasoningEffort) {
+        setComposerReasoningEffort(
+          restored.reasoningEffort as Parameters<NonNullable<typeof setComposerReasoningEffort>>[0]
+        )
+      }
+      if (restored.approvalPolicy || restored.sandboxMode || restored.approvalReviewer) {
+        updateComposerExecutionSettings({
+          ...(restored.approvalPolicy ? { approvalPolicy: restored.approvalPolicy } : {}),
+          ...(restored.sandboxMode ? { sandboxMode: restored.sandboxMode } : {}),
+          ...(restored.approvalReviewer ? { approvalReviewer: restored.approvalReviewer } : {})
+        })
+      }
+      return true
+    },
     onGuideQueuedMessage: guideQueuedMessage,
     onInterrupt: (options) => void interrupt(options),
     onPlanCommand: designTaskActive ? undefined : () => void handleGuiPlanCommand(),
@@ -346,6 +393,7 @@ export function useWorkbenchChatComposerProps({
     extraFileMentionCandidates,
     composerFileReferences,
     composerMode,
+    autoPlanBuildEnabled,
     composerOrchestration,
     composerModel,
     composerModelGroups,
@@ -361,6 +409,8 @@ export function useWorkbenchChatComposerProps({
     handlePickAttachments,
     handleSend,
     guideQueuedMessage,
+    restoreComposerAttachments,
+    restoreQueuedMessage,
     graphEnabled,
     input,
     interrupt,

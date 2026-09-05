@@ -63,6 +63,7 @@ function credentialSnapshot(
 ): ModelConnectionSnapshot {
   return {
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: 9,
     providers: [{
       id: 'legacy-provider',
@@ -71,6 +72,7 @@ function credentialSnapshot(
       kind: 'http',
       authType: 'api-key',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       configured: true,
       ...(credentialStatus ? { credentialStatus } : {}),
       models: ['model-a'],
@@ -433,11 +435,12 @@ describe("TuiController Graph, attachment hydration, and legacy runtime behavior
     try {
       controller.applyModelSelection({
         schemaVersion: 1,
+        proxyRoutingVersion: 1,
         revision: 0,
         providers: [{
           id: 'codex', accountId: 'account:codex', name: 'Codex', kind: 'http',
           authType: 'subscription', baseUrl: 'https://chatgpt.com/backend-api',
-          endpointFormat: 'responses', configured: true,
+          endpointFormat: 'responses', useProxy: false, configured: true,
           models: ['gpt-5.6-luna', 'gpt-5.6-sol'], selectedModel: 'gpt-5.6-luna'
         }],
         defaultProviderId: 'codex', defaultAccountId: 'account:codex', defaultModel: 'gpt-5.6-luna',
@@ -481,11 +484,12 @@ describe("TuiController Graph, attachment hydration, and legacy runtime behavior
   it('refreshes a stale model catalog after another client wins the revision race', async () => {
     const initial = {
       schemaVersion: 1 as const,
+      proxyRoutingVersion: 1 as const,
       revision: 2,
       providers: [{
         id: 'deepseek', accountId: 'account:deepseek', name: 'DeepSeek', kind: 'http' as const,
         authType: 'api-key' as const, endpointFormat: 'chat_completions' as const,
-        configured: true, models: ['deepseek-chat'], selectedModel: 'deepseek-chat'
+        useProxy: false, configured: true, models: ['deepseek-chat'], selectedModel: 'deepseek-chat'
       }],
       defaultProviderId: 'deepseek', defaultAccountId: 'account:deepseek', defaultModel: 'deepseek-chat',
       proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false }
@@ -496,7 +500,7 @@ describe("TuiController Graph, attachment hydration, and legacy runtime behavior
       providers: [...initial.providers, {
         id: 'kimi-code', accountId: 'account:kimi-code', name: 'Kimi Code', kind: 'http' as const,
         authType: 'subscription' as const, endpointFormat: 'chat_completions' as const,
-        configured: true, models: ['kimi-k2.5'], selectedModel: 'kimi-k2.5'
+        useProxy: false, configured: true, models: ['kimi-k2.5'], selectedModel: 'kimi-k2.5'
       }]
     }
     const client = {

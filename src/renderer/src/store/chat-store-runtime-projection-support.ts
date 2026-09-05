@@ -103,7 +103,9 @@ export function releaseThreadWorktreeIfNeeded(threadId: string | null): void {
 export function finalizeTurnTiming(state: ChatState): Partial<ChatState> {
   const userId = state.currentTurnUserId
   if (!userId) return {}
-  const startedAt = state.turnStartedAtByUserId[userId]
+  // Fall back to the persisted turn start recovered on hydration; a mid-turn
+  // rehydrate clears turnStartedAtByUserId but keeps currentTurnStartedAtMs.
+  const startedAt = state.turnStartedAtByUserId[userId] ?? state.currentTurnStartedAtMs ?? undefined
   if (typeof startedAt !== 'number') {
     return { currentTurnUserId: null }
   }
@@ -351,12 +353,14 @@ export function runtimeErrorPayloadToError(event: {
   message: string
   code?: string
   details?: unknown
+  modelRequestFailure?: import('../agent/kun-contract').CoreModelRequestFailureJson
   severity?: string
 }): Error {
   return new Error(JSON.stringify({
     ...(event.code ? { code: event.code } : {}),
     message: event.message,
     ...(event.details !== undefined ? { details: event.details } : {}),
+    ...(event.modelRequestFailure ? { modelRequestFailure: event.modelRequestFailure } : {}),
     ...(event.severity ? { severity: event.severity } : {})
   }))
 }
@@ -372,6 +376,7 @@ export function sameRuntimeErrorContent(
   return (
     left.severity === right.severity &&
     left.code === right.code &&
+    JSON.stringify(left.modelRequestFailure) === JSON.stringify(right.modelRequestFailure) &&
     normalizeRuntimeErrorText(left.text) === normalizeRuntimeErrorText(right.text) &&
     normalizeRuntimeErrorText(left.detail) === normalizeRuntimeErrorText(right.detail)
   )

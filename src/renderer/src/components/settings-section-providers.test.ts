@@ -134,6 +134,7 @@ describe('shared model connection API-key setup status', () => {
 
     expect(sharedProviderSetupNeedsApiKey(providers, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 1,
       providers: [{
         id: 'deepseek',
@@ -143,6 +144,7 @@ describe('shared model connection API-key setup status', () => {
         authType: 'api-key',
         baseUrl: 'https://api.deepseek.com',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         configured: true,
         models: ['deepseek-chat']
       }]
@@ -172,11 +174,12 @@ describe('shared model connection API-key setup status', () => {
   })
 
   it('requests setup only after the shared registry confirms no credential', () => {
-    const providers = defaultModelProviderSettings().providers
+    const providers = defaultModelProviderSettings().providers.filter((provider) => provider.id === 'deepseek')
 
     expect(sharedProviderSetupNeedsApiKey(providers, null)).toBe(false)
     expect(sharedProviderSetupNeedsApiKey(providers, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 1,
       providers: [{
         id: 'deepseek',
@@ -186,6 +189,7 @@ describe('shared model connection API-key setup status', () => {
         authType: 'api-key',
         baseUrl: 'https://api.deepseek.com',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         configured: false,
         models: ['deepseek-chat']
       }]
@@ -193,10 +197,11 @@ describe('shared model connection API-key setup status', () => {
   })
 
   it('requests setup when a legacy credential binding is unreadable', () => {
-    const providers = defaultModelProviderSettings().providers
+    const providers = defaultModelProviderSettings().providers.filter((provider) => provider.id === 'deepseek')
 
     expect(sharedProviderSetupNeedsApiKey(providers, {
       schemaVersion: 1,
+      proxyRoutingVersion: 1 as const,
       revision: 2,
       providers: [{
         id: 'deepseek',
@@ -206,6 +211,7 @@ describe('shared model connection API-key setup status', () => {
         authType: 'api-key',
         baseUrl: 'https://api.deepseek.com',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         configured: true,
         credentialStatus: 'unreadable',
         credentialErrorCode: 'credential_unreadable',
@@ -225,11 +231,13 @@ describe('shared model connection deletion', () => {
       authType: 'api-key' as const,
       baseUrl: 'https://api.example.com/v1',
       endpointFormat: 'chat_completions' as const,
+      useProxy: false,
       configured: true,
       models: ['custom-model']
     }
     const snapshot = (revision: number, providers = [connection]) => ({
       schemaVersion: 1 as const,
+      proxyRoutingVersion: 1 as const,
       revision,
       providers
     })
@@ -266,6 +274,7 @@ describe('shared model connection deletion', () => {
       kind: 'http' as const,
       authType: 'api-key' as const,
       endpointFormat: 'chat_completions' as const,
+      useProxy: false,
       configured: true,
       models: ['custom-model']
     }
@@ -273,12 +282,12 @@ describe('shared model connection deletion', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        body: JSON.stringify({ schemaVersion: 1, revision: 9, providers: [connection] })
+        body: JSON.stringify({ schemaVersion: 1, proxyRoutingVersion: 1, revision: 9, providers: [connection] })
       })
       .mockResolvedValueOnce({
         ok: false,
         status: 409,
-        body: JSON.stringify({ snapshot: { schemaVersion: 1, revision: 10, providers: [] } })
+        body: JSON.stringify({ snapshot: { schemaVersion: 1, proxyRoutingVersion: 1, revision: 10, providers: [] } })
       })
     vi.stubGlobal('window', { kunGui: { runtimeRequest } })
 
@@ -303,11 +312,13 @@ describe('shared model connection selection', () => {
     authType: 'api-key' as const,
     baseUrl: 'https://api.example.com/v1',
     endpointFormat: 'chat_completions' as const,
+    useProxy: false,
     configured: true,
     models: ['custom-model']
   })
   const snapshot = (revision: number, providers = [connection()]) => ({
     schemaVersion: 1 as const,
+    proxyRoutingVersion: 1 as const,
     revision,
     providers
   })

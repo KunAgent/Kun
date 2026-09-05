@@ -70,10 +70,13 @@ export function useWorkbenchPptWhiteboardRouter(input: {
             })
             if (!board) return false
             if (!requestIsCurrent(detail.workspaceRoot)) return false
-            if (detail.pptState && !await useWriteWorkspaceStore.getState().updateWhiteboardPptState(
-              board.id,
-              { ...detail.pptState, childId: detail.childId }
-            )) return false
+            if (detail.pptState && !detail.pptProjectionRequired) {
+              const updated = await useWriteWorkspaceStore.getState().updateWhiteboardPptState(
+                board.id,
+                { ...detail.pptState, childId: detail.childId }
+              )
+              if (!updated) return false
+            }
             return true
           }
         })

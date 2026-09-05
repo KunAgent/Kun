@@ -259,6 +259,25 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
             attachmentHydrationGeneration
           )
         },
+        onReplayResetRequired: async () => {
+          const delegationRequest = typeof this.client.delegationDiagnostics === 'function'
+            ? this.client.delegationDiagnostics(threadId).catch(() => undefined)
+            : Promise.resolve(undefined)
+          const graphRunsRequest = typeof this.client.listGraphRuns === 'function'
+            ? this.client.listGraphRuns(threadId).catch(() => [])
+            : Promise.resolve([])
+          const [detail, delegation, graphRuns] = await Promise.all([
+            this.client.getThread(threadId),
+            delegationRequest,
+            graphRunsRequest
+          ])
+          if (this.eventsAbort !== abort || abort.signal.aborted) {
+            throw new Error('thread subscription was replaced during replay recovery')
+          }
+          const projection = hydrateProjectedChildRuns(projectThreadSnapshot(detail), delegation)
+          this.patch({ projection, graphRuns, connection: 'connecting' })
+          return projection.lastSeq
+        },
         onError: (error) => {
           if (this.eventsAbort !== abort) return
           if (isMissingThread(error)) {

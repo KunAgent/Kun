@@ -14,6 +14,7 @@ export function publishComposerFloatingStatusHeight(
 }
 
 type Props = {
+  attachedDock?: ReactNode
   floatingStatuses?: ReactNode
   flowPanels?: ReactNode
 }
@@ -25,6 +26,7 @@ type Props = {
  * keep normal-flow space so their controls never cover message content.
  */
 export function FloatingComposerAboveInputStack({
+  attachedDock,
   floatingStatuses,
   flowPanels
 }: Props): ReactElement {
@@ -60,6 +62,12 @@ export function FloatingComposerAboveInputStack({
 
   return (
     <>
+      <div
+        data-composer-attached-dock-stack
+        className="relative z-20 flex w-full flex-col items-center empty:hidden"
+      >
+        {attachedDock}
+      </div>
       <div
         ref={floatingStackRef}
         data-composer-floating-status-stack

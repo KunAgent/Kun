@@ -11,7 +11,11 @@ import {
 export function showStartupFailureWindow(
   error: unknown,
   logDir: string,
-  options: { recoverHandoff?: () => Promise<void> } = {}
+  options: {
+    recoverHandoff?: () => Promise<void>
+    recoverRetry?: () => Promise<void>
+    replaceWindow?: BrowserWindow | null
+  } = {}
 ): BrowserWindow | null {
   const presentation = startupFailurePresentation(error)
   const message = presentation.message
@@ -68,8 +72,17 @@ export function showStartupFailureWindow(
       if (action === 'retry') {
         if (recoveryInFlight) return
         if (!presentation.handoff) {
-          app.relaunch()
-          app.quit()
+          recoveryInFlight = true
+          render(message, true)
+          void (options.recoverRetry?.() ?? Promise.resolve()).then(() => {
+            app.relaunch()
+            app.quit()
+          }).catch((recoveryError) => {
+            recoveryInFlight = false
+            const detail = sanitizeStartupFailureMessage(recoveryError)
+            logWarn('startup', 'Kun startup retry cleanup failed.', { message: detail })
+            render(`${message}\n\nRetry failed: ${detail}`)
+          })
           return
         }
         if (!canRecoverHandoff || !options.recoverHandoff) return
@@ -110,6 +123,10 @@ export function showStartupFailureWindow(
         if (!window.isDestroyed()) window.show()
         dialog.showErrorBox('Kun failed to start', message)
       })
+    const replacedWindow = options.replaceWindow
+    if (replacedWindow && replacedWindow !== window && !replacedWindow.isDestroyed()) {
+      replacedWindow.destroy()
+    }
     return window
   } catch (fallbackError) {
     logError('startup', 'Failed to create startup recovery window.', {

@@ -63,6 +63,7 @@ function credentialSnapshot(
 ): ModelConnectionSnapshot {
   return {
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: 9,
     providers: [{
       id: 'legacy-provider',
@@ -71,6 +72,7 @@ function credentialSnapshot(
       kind: 'http',
       authType: 'api-key',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       configured: true,
       ...(credentialStatus ? { credentialStatus } : {}),
       models: ['model-a'],
@@ -90,6 +92,7 @@ describe("TuiController model selection and turn startup", () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-tui-default-model-'))
     const snapshot: ModelConnectionSnapshot = {
       schemaVersion: 1,
+      proxyRoutingVersion: 1,
       revision: 7,
       providers: [{
         id: 'codex',
@@ -99,6 +102,7 @@ describe("TuiController model selection and turn startup", () => {
         authType: 'subscription',
         baseUrl: 'https://example.test/codex',
         endpointFormat: 'responses',
+        useProxy: false,
         configured: true,
         models: ['gpt-next'],
         selectedModel: 'gpt-next'
@@ -262,6 +266,7 @@ describe("TuiController model selection and turn startup", () => {
     })
     controller.applyModelSelection({
       schemaVersion: 1,
+      proxyRoutingVersion: 1,
       revision: 8,
       providers: [{
         id: 'minimax',
@@ -271,6 +276,7 @@ describe("TuiController model selection and turn startup", () => {
         authType: 'api-key',
         baseUrl: 'https://example.test/minimax',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         configured: true,
         models: ['MiniMax-M3'],
         selectedModel: 'MiniMax-M3'
@@ -399,6 +405,7 @@ describe("TuiController model selection and turn startup", () => {
     const controller = new TuiController(client, options(), tuiRuntime)
     controller.applyModelSelection({
       schemaVersion: 1,
+      proxyRoutingVersion: 1,
       revision: 9,
       providers: [],
       proxy: { enabled: false, url: '' },

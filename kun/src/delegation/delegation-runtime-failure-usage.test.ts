@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LocalToolHost, echoTool } from '../adapters/tool/local-tool-host.js'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { SubagentsCapabilityConfig } from '../contracts/capabilities.js'
@@ -41,6 +41,36 @@ function failureExecutor(
 }
 
 describe('DelegationRuntime failed/aborted child usage settlement', () => {
+  it('keeps a successful child completed when external accounting fails', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-delegation-accounting-failure-'))
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const runtime = new DelegationRuntime({
+        config: subagentConfig(),
+        store: new FileDelegationStore(dir),
+        recordExternalUsage: async () => { throw new Error('event append failed') },
+        executor: async () => ({
+          summary: 'finished',
+          usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12, turns: 1 }
+        })
+      })
+
+      await expect(runtime.runChild({
+        parentThreadId: 'parent',
+        parentTurnId: 'turn-1',
+        prompt: 'complete despite accounting outage',
+        signal: new AbortController().signal
+      })).resolves.toMatchObject({ status: 'completed', summary: 'finished' })
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('child usage settlement failed'),
+        expect.any(Error)
+      )
+    } finally {
+      warning.mockRestore()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('retains accrued usage on a failed child and settles it exactly once', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-delegation-failure-usage-'))
     try {

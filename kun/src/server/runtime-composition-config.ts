@@ -32,7 +32,6 @@ import {
   DEFAULT_APPROVAL_REVIEWER,
   AgentLoop,
   type AgentLoopOptions,
-  type DelegationRuntime,
   modelCapabilitiesForModel,
   modelContextProfilesFromConfig,
   DEFAULT_QUALITY_CONFIG,
@@ -58,30 +57,7 @@ import {
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentAttachmentStore, createPersistentMemoryStore } from './runtime-factory-storage.js'
-
-type DelegationConfig = ReturnType<typeof mergeBuiltinSubagentProfiles>
-
-/**
- * Provider builders snapshot a few config-backed DelegationRuntime properties
- * while constructing their schemas. Expose the staged values without mutating
- * the live runtime before the new runtime generation is committed.
- */
-function delegationRuntimeConfigView(
-  runtime: DelegationRuntime | undefined,
-  config: DelegationConfig | undefined
-): DelegationRuntime | undefined {
-  if (!runtime || !config) return undefined
-  return new Proxy(runtime, {
-    get(target, property) {
-      if (property === 'enabled') return () => config.enabled
-      if (property === 'useExistingAgents') return config.useExistingAgents
-      if (property === 'defaultProfileName') return config.defaultProfile
-      if (property === 'defaultToolPolicy') return config.defaultToolPolicy
-      const value = Reflect.get(target, property, target)
-      return typeof value === 'function' ? value.bind(target) : value
-    }
-  })
-}
+import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
 
 export function createRuntimeConfigController(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>
@@ -334,19 +310,19 @@ export function createRuntimeConfigController(
 	    const nextImageGenProviders = buildImageGenToolProviders(nextOptions.capabilities?.imageGen, {
 	      attachmentStore: nextAttachmentStore,
 	      nowIso,
-	      resolveCredential: resolveCapabilityProviderCredential
+	      resolveCredential: resolveCapabilityProviderCredential, proxyUrl: nextOptions.modelProxyUrl
 	    })
 	    const nextSpeechGenProviders = buildSpeechGenToolProviders(nextOptions.capabilities?.speechGen, {
 	      nowIso,
-	      resolveCredential: resolveCapabilityProviderCredential
+	      resolveCredential: resolveCapabilityProviderCredential, proxyUrl: nextOptions.modelProxyUrl
 	    })
 	    const nextMusicGenProviders = buildMusicGenToolProviders(nextOptions.capabilities?.musicGen, {
 	      nowIso,
-	      resolveCredential: resolveCapabilityProviderCredential
+	      resolveCredential: resolveCapabilityProviderCredential, proxyUrl: nextOptions.modelProxyUrl
 	    })
 	    const nextVideoGenProviders = buildVideoGenToolProviders(nextOptions.capabilities?.videoGen, {
 	      nowIso,
-	      resolveCredential: resolveCapabilityProviderCredential
+	      resolveCredential: resolveCapabilityProviderCredential, proxyUrl: nextOptions.modelProxyUrl
 	    })
 	    const nextComputerUseProviders = await buildComputerUseToolProviders(nextOptions.capabilities?.computerUse)
 	    const nextBrowserUseProviders = buildBrowserUseToolProviders(nextOptions.capabilities?.browserUse)
@@ -483,6 +459,7 @@ export function createRuntimeConfigController(
 	      const selected = materializedConnections.selected
 	      nextOptions = {
 	        ...nextOptions,
+	        activeProviderId: selected?.profile.id,
 	        ...(selected
 	          ? {
 	              model: selected.model,
@@ -490,14 +467,13 @@ export function createRuntimeConfigController(
 	              credentialSourceId: selected.config.credentialSourceId,
 	              baseUrl: selected.config.baseUrl ?? nextOptions.baseUrl,
 	              endpointFormat: selected.config.endpointFormat ?? nextOptions.endpointFormat,
+	              modelProxyUrl: selected.config.modelProxyUrl,
 	              headers: selected.config.headers,
 	              geminiAuth: selected.config.geminiAuth
 	            }
 	          : {}),
 	        providers: Object.fromEntries(materializedConnections.providers.entries()),
-	        modelProxyUrl: materializedConnections.proxy.enabled
-	          ? materializedConnections.proxy.url
-	          : undefined,
+	        modelProxyUrl: selected?.config.modelProxyUrl,
 	        routePools: materializedConnections.routePools,
 	        localModelGateway: materializedConnections.localModelGateway
 	      }
@@ -536,6 +512,7 @@ export function createRuntimeConfigController(
 	      memoryStore: nextMemoryStore
 	    }
 	    const nextLoop = new AgentLoop(nextLoopOptions)
+	    const previousLoop = loop
 	    const previousMcpProviders = mcpProviders
 	    const graphChanged = !isDeepStrictEqual(activeOptions.graph, nextOptions.graph)
 	    const nextApprovalReviewClients = buildApprovalReviewClients(nextOptions, nextModelClients)
@@ -646,6 +623,8 @@ export function createRuntimeConfigController(
     registryComposition.capabilities = capabilities
     agent.loopOptions = loopOptions
     agent.loop = loop
+	    previousLoop.shutdownGoalResume()
+	    previousLoop.shutdownInterruptedResume()
 	    stagedGenerationCommitted = true
 	    stagedBrowserUseBinding.commit()
 	    if (graphChanged) {
@@ -653,16 +632,34 @@ export function createRuntimeConfigController(
 	        console.warn('[kun] Graph background-service reconcile failed after config apply:', error)
 	      })
 	    }
-	    void mcpProviders.startBackgroundReconnect((provider) => {
-	      try {
-	        registry.registerProvider(provider)
-	      } catch {
-	        // ignore duplicate/colliding registration
-	      }
-	      try {
-	        childRegistry.registerProvider(provider)
-	      } catch {
-	        // ignore duplicate/colliding registration
+	    void mcpProviders.startBackgroundReconnect({
+	      register: (provider) => {
+	        try {
+	          registry.registerProvider(provider)
+	        } catch {
+	          // ignore duplicate/colliding registration
+	        }
+	        try {
+	          childRegistry.registerProvider(provider)
+	        } catch {
+	          // ignore duplicate/colliding registration
+	        }
+	      },
+	      unregister: (providerId) => {
+	        try {
+	          registry.unregisterProvider(providerId)
+	        } catch {
+	          // ignore missing/colliding removal
+	        }
+	        try {
+	          childRegistry.unregisterProvider(providerId)
+	        } catch {
+	          // ignore missing/colliding removal
+	        }
+	      },
+	      replace: (provider) => {
+	        try { registry.replaceProvider(provider) } catch { /* ignore missing/colliding replacement */ }
+	        try { childRegistry.replaceProvider(provider) } catch { /* ignore missing/colliding replacement */ }
 	      }
 	    }).catch((error) => {
 	      console.warn('[kun] MCP background reconnect failed after config apply:', error)

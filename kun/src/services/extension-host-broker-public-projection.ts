@@ -153,6 +153,7 @@ export function requiredExtensionBrokerPermission(method: string, params: JsonVa
     return 'media.read'
   }
   if (method.startsWith('jobs.')) return 'jobs.manage'
+  if (method.startsWith('secrets.')) return 'storage.secrets'
   if (method.startsWith('storage.global')) return 'storage.global'
   if (method.startsWith('storage.workspace')) return 'storage.workspace'
   if (method.startsWith('storage.')) {
@@ -305,7 +306,9 @@ export function publicAgentRun(run: ExtensionAgentRun): AgentRun {
     extensionBudget: publicBudget(run.effectiveBudget),
     toolCatalogEpoch: run.toolCatalogEpoch?.id ?? 'epoch:none',
     state: publicRunState(run.status),
+    model: run.providerBinding.modelId,
     ...(providerBinding ? { providerBinding } : {}),
+    ...(run.reasoningEffort ? { reasoningEffort: run.reasoningEffort } : {}),
     ...(run.usage ? { usage: publicUsage(run.usage) } : {}),
     createdAt: run.createdAt,
     updatedAt: run.finishedAt ?? run.createdAt,
@@ -321,31 +324,55 @@ export function publicAgentEvent(event: ExtensionAgentEvent): AgentRunEvent {
     sequence: event.seq + 1,
     timestamp: event.timestamp
   }
+  if (
+    typeof event.payload.messageId === 'string' &&
+    (event.payload.role === 'user' || event.payload.role === 'assistant' || event.payload.role === 'tool') &&
+    (event.payload.phase === 'delta' || event.payload.phase === 'replace' || event.payload.phase === 'complete')
+  ) {
+    return AgentRunEventSchema.parse({
+      ...base,
+      type: 'message',
+      messageId: event.payload.messageId,
+      role: event.payload.role,
+      phase: event.payload.phase,
+      content: toPublicJson(event.payload.content)
+    })
+  }
   if (event.type === 'turn_started') return AgentRunEventSchema.parse({ ...base, type: 'state', state: 'running' })
   if (event.type === 'approval_requested') return AgentRunEventSchema.parse({ ...base, type: 'state', state: 'waiting-approval' })
   if (event.type === 'user_input_requested') return AgentRunEventSchema.parse({ ...base, type: 'state', state: 'waiting-user-input' })
+  if (event.type === 'approval_resolved' || event.type === 'user_input_resolved') {
+    return AgentRunEventSchema.parse({ ...base, type: 'state', state: 'running' })
+  }
   if (event.type === 'turn_completed') return AgentRunEventSchema.parse({ ...base, type: 'terminal', state: 'completed' })
   if (event.type === 'turn_aborted') return AgentRunEventSchema.parse({ ...base, type: 'terminal', state: 'cancelled' })
   if (event.type === 'turn_failed') return AgentRunEventSchema.parse({
-    ...base, type: 'terminal', state: 'failed', error: safeJsonObject(event.payload)
+    ...base,
+    type: 'terminal',
+    state: 'failed',
+    error: isObject(event.payload.error) ? safeJsonObject(event.payload.error) : { code: 'agent_run_failed', message: 'Agent run failed' }
   })
   if (event.type === 'usage') {
     const usage = isObject(event.payload.usage) ? publicUsage(event.payload.usage as never) : {}
     return AgentRunEventSchema.parse({ ...base, type: 'usage', usage })
   }
-  if (event.type === 'turn_steered') return AgentRunEventSchema.parse({
-    ...base, type: 'steering-accepted', steeringId: `steer_${event.seq}`
-  })
-  if (event.type === 'assistant_text_delta' || event.type === 'item_completed') {
+  if (event.type === 'subscription_overflow') {
     return AgentRunEventSchema.parse({
-      ...base, type: 'message', role: 'assistant', content: toPublicJson(event.payload)
+      ...base,
+      type: 'progress',
+      message: 'subscription_overflow',
+      data: {
+        resumeAfterSequence: typeof event.payload.resumeAfterSeq === 'number'
+          ? event.payload.resumeAfterSeq + 1
+          : base.sequence
+      }
     })
   }
   return AgentRunEventSchema.parse({
     ...base,
     type: 'progress',
-    message: event.type,
-    data: toPublicJson(event.payload)
+    message: typeof event.payload.message === 'string' ? event.payload.message : event.type,
+    ...(event.payload.data !== undefined ? { data: toPublicJson(event.payload.data) } : {})
   })
 }
 
@@ -357,6 +384,7 @@ export function publicOwnedThread(principal: ExtensionPrincipal, thread: Extensi
     ownerExtensionVersion: thread.ownerExtensionVersion,
     extensionVisibility: thread.visibility,
     workspace: thread.workspace,
+    ...(thread.latestRun ? { latestRun: publicAgentRun(thread.latestRun) } : {}),
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt
   }

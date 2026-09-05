@@ -6,7 +6,7 @@ export type ChatProjectionEffect =
   | { type: 'arm_stream_watchdog' }
   | { type: 'refresh_write_workspace'; event?: ToolEventPayload }
   | { type: 'mirror_claw_reply'; threadId: string; text: string }
-  | { type: 'notify_turn_complete'; threadId: string | null; state: ChatState; dedupeKey: string }
+  | { type: 'notify_turn_complete'; threadId: string | null; state: ChatState; dedupeKey: string; turnId: string | null }
   | { type: 'mirror_sdd_transcript' }
   | { type: 'mirror_design_transcript' }
   | { type: 'sync_completion_poll' }
@@ -35,7 +35,7 @@ export function completionProjectionEffects(input: {
     ...(input.mirrorText && input.mirrorThreadId
       ? [{ type: 'mirror_claw_reply' as const, threadId: input.mirrorThreadId, text: input.mirrorText }]
       : []),
-    { type: 'notify_turn_complete', threadId: input.threadId, state: input.state, dedupeKey: input.dedupeKey },
+    { type: 'notify_turn_complete', threadId: input.threadId, state: input.state, dedupeKey: input.dedupeKey, turnId: input.turnId },
     { type: 'refresh_write_workspace' },
     { type: 'mirror_sdd_transcript' },
     { type: 'mirror_design_transcript' },

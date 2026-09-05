@@ -6,26 +6,24 @@ import { registerExtensionContentScriptPreload } from './extension-content-scrip
 import { parseAppEnvironment } from './app-environment'
 import { createDesktopStartupPreloadApi } from './startup-state'
 import { createStorageRelocationWorkbenchApi } from './storage-relocation-workbench'
-
+import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorization'
+import { createDataMigrationPreloadApi } from './data-migration'
+import { getWorkspaceCreationTimes } from './workspace-creation-times'
+import { runtimeRequestPreloadApi } from './runtime-request'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
-
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
 // process via additionalArguments and read off process.argv instead.
 const HOME_DIR_ARG = '--kun-home-dir='
-const homeDirFromArgs =
-  process.argv.find((arg) => arg.startsWith(HOME_DIR_ARG))?.slice(HOME_DIR_ARG.length) ?? ''
+const homeDirFromArgs = process.argv.find((arg) => arg.startsWith(HOME_DIR_ARG))?.slice(HOME_DIR_ARG.length) ?? ''
 
 const APP_ENVIRONMENT_ARG = '--kun-app-environment='
-const appEnvironment = parseAppEnvironment(
-  process.argv.find((arg) => arg.startsWith(APP_ENVIRONMENT_ARG))?.slice(APP_ENVIRONMENT_ARG.length)
-)
+const appEnvironment = parseAppEnvironment(process.argv
+  .find((arg) => arg.startsWith(APP_ENVIRONMENT_ARG))?.slice(APP_ENVIRONMENT_ARG.length))
 
 const DESKTOP_TITLE_BAR_MODE_ARG = '--kun-desktop-title-bar-mode='
 const desktopTitleBarMode = normalizeDesktopTitleBarMode(
-  process.platform,
-  // Per-window additionalArguments are appended to argv, so prefer the last
-  // occurrence over any similarly named application launch argument.
+  process.platform, // Per-window additionalArguments are appended; prefer the last occurrence.
   [...process.argv]
     .reverse()
     .find((arg) => arg.startsWith(DESKTOP_TITLE_BAR_MODE_ARG))
@@ -52,50 +50,7 @@ const api = {
     getStatus: () => ipcRenderer.invoke('runtime-data-recovery:status'),
     execute: (input) => ipcRenderer.invoke('runtime-data-recovery:execute', input)
   },
-  dataMigration: {
-    pickExportPackage: (defaultPath) => ipcRenderer.invoke('data-migration:pick-export', { defaultPath }),
-    pickImportPackage: (defaultPath) => ipcRenderer.invoke('data-migration:pick-import', { defaultPath }),
-    pickDestinationDirectory: (defaultPath) => ipcRenderer.invoke('data-migration:pick-destination', { defaultPath }),
-    estimateExport: (input) => ipcRenderer.invoke('data-migration:estimate-export', input),
-    inspectPackage: (input) => ipcRenderer.invoke('data-migration:inspect', input),
-    planImport: (input) => ipcRenderer.invoke('data-migration:plan-import', input),
-    startExport: (input) => ipcRenderer.invoke('data-migration:start-export', input),
-    startImport: (input) => ipcRenderer.invoke('data-migration:start-import', input),
-    cancel: (operationId) => ipcRenderer.invoke('data-migration:cancel', { operationId }),
-    recover: (operationId, action) => ipcRenderer.invoke('data-migration:recover', { operationId, action }),
-    getStatus: () => ipcRenderer.invoke('data-migration:status'),
-    listReports: () => ipcRenderer.invoke('data-migration:reports:list'),
-    getReport: (operationId) => ipcRenderer.invoke('data-migration:reports:get', { operationId }),
-    deleteReport: (operationId) => ipcRenderer.invoke('data-migration:reports:delete', { operationId }),
-    onProgress: (handler) => {
-      let latest: Parameters<typeof handler>[0] | null = null
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const flush = () => {
-        timer = null
-        if (!latest) return
-        const value = latest
-        latest = null
-        handler(value)
-      }
-      const wrapped = (_: Electron.IpcRendererEvent, payload: Parameters<typeof handler>[0]) => {
-        latest = payload
-        if (!timer) timer = setTimeout(flush, 100)
-      }
-      ipcRenderer.on('data-migration:progress', wrapped)
-      return () => {
-        ipcRenderer.removeListener('data-migration:progress', wrapped)
-        if (timer) clearTimeout(timer)
-        timer = null
-        latest = null
-      }
-    },
-    onRendererRequest: (handler) => {
-      const wrapped = (_: Electron.IpcRendererEvent, request: Parameters<typeof handler>[0]) => handler(request)
-      ipcRenderer.on('data-migration:renderer-request', wrapped)
-      return () => ipcRenderer.removeListener('data-migration:renderer-request', wrapped)
-    },
-    respondRendererRequest: (response) => ipcRenderer.invoke('data-migration:renderer-response', response)
-  },
+  dataMigration: createDataMigrationPreloadApi(),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   openSettingsConfigFile: () => ipcRenderer.invoke('settings:open-config-file'),
   revealModelProviderCredential: (providerId) =>
@@ -138,8 +93,7 @@ const api = {
     ipcRenderer.invoke('settings:set', partial),
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
-  runtimeRequest: (path, method, body) =>
-    ipcRenderer.invoke('runtime:request', { path, method, body }),
+  ...runtimeRequestPreloadApi,
   gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),
@@ -163,6 +117,10 @@ const api = {
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) => ipcRenderer.invoke('claw:task:run', taskId),
   getScheduleStatus: () => ipcRenderer.invoke('schedule:status'),
+  onScheduleStatusChanged: (handler) => {
+    const wrapped = (_: Electron.IpcRendererEvent, payload: Parameters<typeof handler>[0]) => handler(payload)
+    ipcRenderer.on('schedule:status-changed', wrapped); return () => ipcRenderer.removeListener('schedule:status-changed', wrapped)
+  },
   createScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:create', payload),
   updateScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:update', payload),
   deleteScheduleTask: (taskId) => ipcRenderer.invoke('schedule:task:delete', taskId),
@@ -187,14 +145,14 @@ const api = {
     ipcRenderer.invoke('claw:im-install:poll', { provider, deviceCode }),
   connectTelegramBot: (botToken, allowedChatIds, proxy) =>
     ipcRenderer.invoke('claw:im-install:telegram-token', { botToken, allowedChatIds, proxy }),
-  startCodexAuth: () =>
-    ipcRenderer.invoke('codex:auth:start'),
-  pollCodexAuth: (deviceCode, userCode) =>
-    ipcRenderer.invoke('codex:auth:poll', { deviceCode, userCode }),
-  startCodexBrowserAuth: () =>
-    ipcRenderer.invoke('codex:auth:browser'),
-  startGrokBrowserAuth: () =>
-    ipcRenderer.invoke('grok:auth:browser'),
+  startCodexAuth: (selection) =>
+    ipcRenderer.invoke('codex:auth:start', selection),
+  pollCodexAuth: (deviceCode, userCode, selection) =>
+    ipcRenderer.invoke('codex:auth:poll', { deviceCode, userCode, ...selection }),
+  startCodexBrowserAuth: (selection) =>
+    ipcRenderer.invoke('codex:auth:browser', selection),
+  startGrokBrowserAuth: (selection) =>
+    ipcRenderer.invoke('grok:auth:browser', selection),
   submitGrokBrowserAuthCode: (code) =>
     ipcRenderer.invoke('grok:auth:browser:paste', { code }),
   cancelGrokBrowserAuth: () =>
@@ -243,6 +201,7 @@ const api = {
     ipcRenderer.invoke('kun:config:read'),
   setKunConfigFile: (content) =>
     ipcRenderer.invoke('kun:config:write', content),
+  ...createGitHubMcpAuthorizationPreloadApi(ipcRenderer),
   openKunConfigDir: () =>
     ipcRenderer.invoke('kun:config:open-dir'),
   getKunProjectConfigFile: (workspaceRoot) =>
@@ -259,6 +218,7 @@ const api = {
     ipcRenderer.invoke('kun:project-config:open-dir', { workspaceRoot }),
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
+  getWorkspaceCreationTimes,
   switchGitBranch: (workspaceRoot, branch) =>
     ipcRenderer.invoke('git:switch-branch', { workspaceRoot, branch }),
   createAndSwitchGitBranch: (workspaceRoot, branch) =>
@@ -376,6 +336,7 @@ const api = {
     ipcRenderer.invoke('write:inline-completion', payload),
   retrieveWriteContext: (payload) =>
     ipcRenderer.invoke('write:retrieve-context', payload),
+  readWriteDocumentSha256: (payload) => ipcRenderer.invoke('write:read-document-sha256', payload),
   generateWriteInfographic: (payload) =>
     ipcRenderer.invoke('write:generate-infographic', payload),
   authorizeWritePrototype: (payload) =>
@@ -410,6 +371,14 @@ const api = {
     ipcRenderer.invoke('runtime:sse:start', { threadId, sinceSeq, streamId, ...options }),
   stopSse: (streamId) => ipcRenderer.invoke('runtime:sse:stop', streamId),
   ackSse: (streamId, batchId) => ipcRenderer.invoke('runtime:sse:ack', { streamId, batchId }),
+  onSseOpen: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('runtime:sse-open', wrapped)
+    return () => ipcRenderer.removeListener('runtime:sse-open', wrapped)
+  },
   onSseEvent: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
@@ -572,6 +541,14 @@ const api = {
     ipcRenderer.invoke('extension:view-session:create', request),
   extensionDisposeViewSession: (request) =>
     ipcRenderer.invoke('extension:view-session:dispose', request),
+  onExtensionViewSessionInvalidated: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('extension:view-session:invalidated', wrapped)
+    return () => ipcRenderer.removeListener('extension:view-session:invalidated', wrapped)
+  },
   extensionExternalBrowserControl: (request) =>
     ipcRenderer.invoke('extension:external-browser:control', request),
   onExtensionExternalBrowserState: (handler) => {
@@ -688,5 +665,4 @@ const api = {
     return () => ipcRenderer.removeListener('terminal:exit', wrapped)
   }
 } satisfies KunGuiApi
-
 contextBridge.exposeInMainWorld('kunGui', api)

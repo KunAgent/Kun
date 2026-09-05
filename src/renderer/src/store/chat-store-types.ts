@@ -19,6 +19,8 @@ import type {
 import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
 import type {
   AppLocale,
+  ApprovalPolicy,
+  ApprovalReviewer,
   ClawImAgentProfileV1,
   ClawImChannelV1,
   ClawImPlatformCredentialV1,
@@ -26,7 +28,8 @@ import type {
   ClawImSettingsV1,
   ClawModel,
   CodeAgentPresetV1,
-  ModelReasoningEffort
+  ModelReasoningEffort,
+  SandboxMode
 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
@@ -40,6 +43,8 @@ import type {
   DesignTaskProfile,
   DesignTaskProfileInput
 } from '../agent/design-task-profile'
+import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
+import type { RemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspaces'
 
 export type QueuedUserMessage = {
   id: string
@@ -48,7 +53,7 @@ export type QueuedUserMessage = {
   clientRequestId?: string
   /** First Design document remains provisional until Kun accepts this queued turn. */
   waitForRuntimeAdmission?: boolean
-  /** Pending/paused items are visible; starting/in-flight items remain durable until the turn settles; failed items are terminal until retried or deleted. */
+  /** Pending/paused items are visible and waiting; starting/in-flight items stay durable while they wait in the server queue and are removed once their turn starts executing (the runtime timeline takes over); failed items are terminal until retried or deleted. */
   deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
   deliveryTurnId?: string
   deliveryUserMessageItemId?: string
@@ -104,6 +109,10 @@ export type QueuedUserMessage = {
   designImagePlacementTarget?: DesignImagePlacementTarget
   guiDesignArtifact?: GuiDesignArtifactMessageContext
   writeContext?: WriteAssistantMessageContext
+  /** Execution settings frozen at enqueue time; empty fields fall back to runtime defaults. */
+  approvalPolicy?: ApprovalPolicy
+  sandboxMode?: SandboxMode
+  approvalReviewer?: ApprovalReviewer
 }
 
 /**
@@ -138,12 +147,18 @@ export type WriteAssistantMessageContext = {
   whiteboardRevision?: number
   /** Filled after the first explicit ensure; queued sends keep this identity. */
   threadId?: string
+  /** SHA-256 of the saved document bytes; the runtime recomputes this at promotion. */
+  expectedSha256?: string
 }
 
 export type SendMessageOverrides = {
   queued?: QueuedUserMessage
   /** Optional stable idempotency key for callers that retry one logical submission. */
   clientRequestId?: string
+  /** Per-send execution settings that override the composer snapshot for this submission. */
+  approvalPolicy?: ApprovalPolicy
+  sandboxMode?: SandboxMode
+  approvalReviewer?: ApprovalReviewer
   /** Resolve the send only after Kun accepts it, including when it first enters the queue. */
   waitForRuntimeAdmission?: boolean
   model?: string
@@ -226,7 +241,7 @@ export type SettingsRouteSection =
   | 'debug'
   | 'storage'
   | 'dataMigration'
-export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'schedule' | 'workflow'
+export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -313,6 +328,8 @@ export type ChatState = {
   runtimeConnection: RuntimeConnectionStatus
   runtimeStatus: KunRuntimeStatusPayload | null
   codeWorkspaceRoots: string[]
+  /** Projects hidden from the Code sidebar/picker; persisted in localStorage. */
+  removedCodeWorkspaces: RemovedCodeWorkspacesRegistry
   threads: NormalizedThread[]
   /**
    * Sidebar thread inventory lifecycle. Guards the "no conversations yet"
@@ -412,7 +429,13 @@ export type ChatState = {
   turnReasoningFirstAtByUserId: Record<string, number>
   turnReasoningLastAtByUserId: Record<string, number>
   inspectorSelectedId: string | null
-  composerMode: 'plan' | 'agent'
+  composerMode: 'plan' | 'agent' | 'auto'
+  /** Composer execution settings mirrored from the runtime settings UI so sends can freeze them per message. */
+  composerExecutionSettings: {
+    approvalPolicy: ApprovalPolicy
+    sandboxMode: SandboxMode
+    approvalReviewer: ApprovalReviewer
+  } | null
   composerOrchestration: 'direct' | 'graph'
   graphEnabled: boolean
   composerModel: string
@@ -456,7 +479,12 @@ export type ChatState = {
   activeClawChannelId: string
   appendLocalClawTurn: (userText: string, replyText: string) => void
   setError: (message: string | null) => void
-  setComposerMode: (mode: 'plan' | 'agent') => void
+  setComposerMode: (mode: 'plan' | 'agent' | 'auto') => void
+  setComposerExecutionSettings: (settings: {
+    approvalPolicy: ApprovalPolicy
+    sandboxMode: SandboxMode
+    approvalReviewer: ApprovalReviewer
+  } | null) => void
   setComposerOrchestration: (mode: 'direct' | 'graph') => void
   setComposerModel: (modelId: string, providerId?: string) => void
   setComposerReasoningEffort: (effort: ModelReasoningEffort) => void
@@ -484,12 +512,17 @@ export type ChatState = {
     docId: string,
     options?: ClearDesignHistoryOptions
   ) => Promise<ClearDesignHistoryResult>
-  selectWriteThread: (threadId: string, workspaceRoot?: string) => Promise<void>
+  selectWriteThread: (
+    threadId: string,
+    workspaceRoot?: string,
+    activeFilePath?: string
+  ) => Promise<void>
   openSettings: (section?: SettingsRouteSection) => void
   /** 离开设置页:直接把 route 恢复为进入设置前的工作台路由,不经过会重新解析/切换会话的 open* 入口。 */
   closeSettings: () => void
   openPlugins: (host?: PluginHostRoute) => void
   openClaw: () => void
+  openBoard: (workspaceRoot?: string) => void
   openSchedule: () => void
   openWorkflow: () => void
   openDesign: () => void
@@ -520,10 +553,21 @@ export type ChatState = {
   chooseWorkspace: (options?: { createThreadAfter?: boolean; selectThreadAfter?: boolean }) => Promise<string | null>
   selectWorkspaceRoot: (workspaceRoot: string) => Promise<string | null>
   clearWorkspace: () => Promise<void>
-  deleteWorkspace: (workspacePath: string) => Promise<void>
+  /**
+   * Remove a sidebar project from the Code project list. Keeps threads,
+   * snapshots and files on disk; re-adding the directory later restores it.
+   * `relatedPaths` carries the sidebar-resolved worktree/main aliases so the
+   * whole project identity is hidden at once.
+   */
+  removeWorkspace: (workspacePath: string, relatedPaths?: string[]) => Promise<void>
   refreshThreads: () => Promise<void>
-  /** Reconcile lightweight runtime and scheduler activity for sidebar rows. */
-  syncSidebarActivity: () => Promise<boolean>
+  /** Reconcile targeted push invalidations or run a legacy discovery scan. */
+  syncSidebarActivity: (options?: {
+    threadIds?: string[]
+    deletedThreadIds?: string[]
+    includeSchedule?: boolean
+    scheduleStatus?: import('@shared/app-settings').ScheduleRuntimeStatus
+  }) => Promise<boolean>
   /** Append the next older page of threads for a workspace ("show more"). */
   loadMoreThreads: (workspacePath: string) => Promise<void>
   setThreadKnowledgeBases: (threadId: string, mounts: KnowledgeBaseMount[]) => Promise<boolean>
@@ -566,16 +610,15 @@ export type ChatState = {
    * subscribeThreadEventsLive 直接开 SSE (sinceSeq=0),跳过 HTTP 抢在 SSE 之前。
    */
   subscribeThreadEventsLive: (threadId: string) => Promise<void>
-  recoverActiveTurn: () => Promise<boolean>
+  recoverActiveTurn: (options?: ThreadRecoveryOptions) => Promise<boolean>
   sendMessage: (text: string, mode?: string, overrides?: SendMessageOverrides) => Promise<boolean>
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>
   drainQueuedMessages: () => Promise<void>
-  removeQueuedMessage: (id: string) => void
-  reorderQueuedMessage: (
-    id: string,
-    targetId: string,
-    position: 'before' | 'after'
-  ) => void
+  removeQueuedMessage: (id: string) => Promise<void> | void
+  restoreQueuedMessage: (id: string) => Promise<QueuedUserMessage | null>
+  reorderQueuedMessage: (id: string, targetId: string, position: 'before' | 'after') => Promise<void> | void
+  /** Resume a runtime queue paused by an interrupt. */
+  resumeQueuedTurns: () => Promise<boolean>
   guideQueuedMessage: (id: string) => Promise<boolean>
   attachExtensionComposerContext: (event: ExtensionComposerContextEvent) => void
   removeExtensionComposerContext: (attachmentId: string) => void
@@ -600,6 +643,7 @@ export type ChatState = {
   setActiveThreadTodoStatus: (todoId: string, status: ThreadTodoStatus) => Promise<boolean>
   clearActiveThreadTodos: () => Promise<boolean>
   syncPlanTodosFromMarkdown: (
+    threadId: string,
     plan: { id: string; relativePath: string },
     markdown: string
   ) => Promise<boolean>

@@ -1,26 +1,21 @@
-import { timingSafeEqual } from 'node:crypto'
-import { chmod, readFile, realpath } from 'node:fs/promises'
-import { join } from 'node:path'
+import { realpath } from 'node:fs/promises'
 import { z } from 'zod'
-import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import {
   RuntimeFlavorSchema,
   RuntimeRegistrationSchema,
   ThreadExecutionLeaseSchema,
+  TurnMutationFenceSchema,
   type RuntimeFlavor,
   type RuntimeRegistration,
-  type ThreadExecutionLease
+  type ThreadExecutionLease,
+  type TurnMutationFence
 } from '../contracts/runtime-flavor.js'
-import { startNodeHttpServer, type NodeHttpServerHandle } from '../server/node-http-server.js'
-import { acquireRuntimeDataDirLease } from '../server/runtime-data-dir-lease.js'
+import type { NodeHttpServerHandle } from '../server/node-http-server.js'
 import { readJsonBody } from '../server/read-json-body.js'
 import { jsonResponse, type JsonResponse } from '../server/response.js'
 import { Router } from '../server/router.js'
-import { KUN_VERSION } from '../version.js'
 import {
   KUN_MANAGER_PROTOCOL_VERSION,
-  publishManagerDiscovery,
-  removeManagerDiscovery,
   type ManagerDiscoveryRecord
 } from './manager-discovery.js'
 import {
@@ -33,14 +28,7 @@ import {
   type ManagerThreadStoreOperation
 } from './shared-data-store.js'
 import { MANAGER_THREAD_STORE_OPERATIONS } from './shared-data-store-contracts.js'
-import {
-  RevisionConflictError,
-  RevisionedDocumentStore
-} from './revisioned-document-store.js'
-
-import {
-  buildServiceManagerRouter
-} from './service-manager-router.js'
+import { RevisionConflictError } from './revisioned-document-store.js'
 import {
   consumeForcedRuntimeRecoveryOwners,
   forcedOwnerKey,
@@ -50,9 +38,7 @@ import {
 } from './forced-runtime-recovery.js'
 import { sameCanonicalPath } from './canonical-path.js'
 import {
-  LegacyManagerResourceLeaseSchema,
   ManagerResourceLeaseRegistry,
-  ManagerResourceLeaseSchema,
   ManagerResourceFenceSchema,
   ResourceFenceStaleError,
   RESOURCE_COMMIT_TTL_MS,
@@ -60,6 +46,20 @@ import {
   type ManagerResourceFence,
   type ManagerResourceLease
 } from './resource-lease-state.js'
+import {
+  ServiceManagerStateSnapshotSchema,
+  type ServiceManagerStateSnapshot
+} from './service-manager-state-snapshot.js'
+import type { ManagerStateWriteQueueStats } from './service-manager-state-write-queue.js'
+import {
+  extendHostLivenessDeadlines,
+  ManagerHostLivenessState
+} from './host-liveness-state.js'
+export { HOST_RESUME_GRACE_MS } from './host-liveness-state.js'
+export {
+  ServiceManagerStateSnapshotSchema,
+  type ServiceManagerStateSnapshot
+} from './service-manager-state-snapshot.js'
 
 export { RESOURCE_LEASE_TTL_MS }
 export type { ManagerResourceFence, ManagerResourceLease }
@@ -76,11 +76,12 @@ export const KUN_MANAGER_CAPABILITIES = [
 
 export const ThreadStoreOperationSchema = z.enum(MANAGER_THREAD_STORE_OPERATIONS)
 export const SessionStoreOperationSchema = z.enum([
-  'appendEvent', 'appendItem', 'rewriteItems', 'loadItemSnapshot',
-  'rewriteItemsIfRevision', 'updateItem', 'compactItems', 'loadEventsSince',
+  'appendEvent', 'appendItem', 'checkpointLiveItem', 'finalizeLiveItem', 'rewriteItems', 'loadItemSnapshot',
+  'rewriteItemsIfRevision', 'updateItem', 'compactItems', 'scheduleItemHistoryCompaction', 'loadEventsSince',
+  'loadEventPage', 'trimEventsFromSeq', 'eventReplayFloorSeq',
   'loadItems', 'searchItemText', 'loadItemPage', 'loadSession', 'upsertSession',
   'highestSeq', 'allocateEventSeq',
-  'loadUsageRecords', 'loadLatestUsageSnapshots', 'resetMemory', 'clearThreadMemory'
+  'loadUsageRecords', 'aggregateUsage', 'loadLatestUsageSnapshots', 'resetMemory', 'clearThreadMemory'
 ])
 export const ArtifactStoreOperationSchema = z.enum([
   'put', 'releaseOwner', 'delete', 'list', 'get', 'readRange', 'stat'
@@ -103,31 +104,11 @@ export type RuntimeSlot = {
 }
 
 export const RUNTIME_HEARTBEAT_TTL_MS = 20_000
-export const THREAD_EXECUTION_LEASE_TTL_MS = 15_000
-
-const StateSnapshotFields = {
-  slots: z.array(z.object({
-    registration: RuntimeRegistrationSchema,
-    lastHeartbeatAt: z.string().datetime()
-  }).strict()),
-  leases: z.array(ThreadExecutionLeaseSchema)
-}
-
-export const ServiceManagerStateSnapshotSchema = z.union([
-  z.object({
-    version: z.literal(1),
-    ...StateSnapshotFields,
-    resourceLeases: z.array(LegacyManagerResourceLeaseSchema)
-  }).strict(),
-  z.object({
-    version: z.literal(2),
-    ...StateSnapshotFields,
-    resourceLeases: z.array(ManagerResourceLeaseSchema),
-    resourceFenceHighWater: z.record(z.string(), z.number().int().nonnegative())
-  }).strict()
-])
-
-export type ServiceManagerStateSnapshot = z.infer<typeof ServiceManagerStateSnapshotSchema>
+// Thread renewal uses the same event loop as the runtime heartbeat. Keep its
+// deadline beyond heartbeat liveness so a transient stall cannot expire one
+// turn while Manager still considers the owning runtime alive. A real owner
+// loss is still released by RUNTIME_HEARTBEAT_TTL_MS in expireLeases().
+export const THREAD_EXECUTION_LEASE_TTL_MS = RUNTIME_HEARTBEAT_TTL_MS + 10_000
 
 export class ThreadLeaseBusyError extends Error {
   constructor(readonly lease: ThreadExecutionLease) {
@@ -145,21 +126,66 @@ export class RuntimeSlotBusyError extends Error {
 
 export class RuntimeRegistrationRequiredError extends Error {}
 
+export class StaleTurnFenceError extends Error {
+  readonly code = 'stale_turn_fence'
+  constructor() {
+    super('turn mutation fence is stale')
+    this.name = 'StaleTurnFenceError'
+  }
+}
+
 export class ServiceManagerState {
   private readonly slots = new Map<RuntimeFlavor, RuntimeSlot>()
   private readonly leases = new Map<string, ThreadExecutionLease>()
+  private readonly threadLeaseFenceHighWater = new Map<string, number>()
+  private readonly pendingExpiredLeases = new Map<string, ThreadExecutionLease>()
   private resourceLeaseRegistry = new ManagerResourceLeaseRegistry()
   private mutationListener: (() => void) | undefined
+  private hostLiveness = new ManagerHostLivenessState()
 
   static restore(value: unknown): ServiceManagerState {
     const snapshot = ServiceManagerStateSnapshotSchema.parse(value)
     const state = new ServiceManagerState()
+    const threadFenceHighWater = snapshot.version === 1 || snapshot.version === 2
+      ? {}
+      : snapshot.threadLeaseFenceHighWater
     for (const slot of snapshot.slots) state.slots.set(slot.registration.flavor, slot)
-    for (const lease of snapshot.leases) state.leases.set(lease.threadId, lease)
+    for (const stored of snapshot.leases) {
+      const fencingToken = snapshot.version >= 3
+        ? ('fencingToken' in stored ? stored.fencingToken : 1)
+        : 1
+      const lease = ThreadExecutionLeaseSchema.parse({ ...stored, fencingToken })
+      state.leases.set(lease.threadId, lease)
+      state.threadLeaseFenceHighWater.set(
+        lease.threadId,
+        Math.max(
+          fencingToken,
+          threadFenceHighWater[lease.threadId] ?? 0
+        )
+      )
+    }
+    if (snapshot.version !== 1 && snapshot.version !== 2) {
+      for (const [threadId, token] of Object.entries(threadFenceHighWater)) {
+        state.threadLeaseFenceHighWater.set(
+          threadId,
+          Math.max(token, state.threadLeaseFenceHighWater.get(threadId) ?? 0)
+        )
+      }
+    }
+    if (snapshot.version === 4 || snapshot.version === 5) {
+      for (const lease of snapshot.pendingExpiredLeases) {
+        state.pendingExpiredLeases.set(expiredLeaseKey(lease), lease)
+      }
+    }
     state.resourceLeaseRegistry = ManagerResourceLeaseRegistry.restore({
       leases: snapshot.resourceLeases,
-      ...(snapshot.version === 2 ? { highWater: snapshot.resourceFenceHighWater } : {})
+      ...(snapshot.version !== 1
+        ? { highWater: snapshot.resourceFenceHighWater }
+        : {})
     })
+    if (snapshot.version === 5) {
+      state.hostLiveness = ManagerHostLivenessState.restore(snapshot.hostLiveness)
+    }
     return state
   }
 
@@ -169,11 +195,14 @@ export class ServiceManagerState {
 
   durableSnapshot(): ServiceManagerStateSnapshot {
     return ServiceManagerStateSnapshotSchema.parse({
-      version: 2,
+      version: 5,
       slots: this.snapshot(),
       leases: [...this.leases.values()],
+      pendingExpiredLeases: [...this.pendingExpiredLeases.values()],
+      threadLeaseFenceHighWater: Object.fromEntries(this.threadLeaseFenceHighWater),
       resourceLeases: this.resourceLeaseRegistry.snapshot(),
-      resourceFenceHighWater: this.resourceLeaseRegistry.highWaterSnapshot()
+      resourceFenceHighWater: this.resourceLeaseRegistry.highWaterSnapshot(),
+      hostLiveness: this.hostLiveness.snapshot()
     })
   }
 
@@ -197,6 +226,32 @@ export class ServiceManagerState {
     slot.lastHeartbeatAt = now.toISOString()
     this.changed()
     return true
+  }
+
+  noteHostSuspended(observedAt = new Date()): void {
+    this.hostLiveness.noteSuspended(observedAt)
+    this.changed()
+  }
+
+  noteHostResumed(observedAt = new Date()): void {
+    this.hostLiveness.noteResumed(observedAt, (deltaMs, aliveAtMs) => {
+      this.extendLiveDeadlines(deltaMs, aliveAtMs)
+    })
+    this.changed()
+  }
+
+  reportHostPower(input: {
+    phase: 'suspend' | 'resume'
+    sourceId: string
+    sequence: number
+    observedAt: Date
+    receivedAt?: Date
+  }): boolean {
+    const accepted = this.hostLiveness.report(input, (deltaMs, aliveAtMs) => {
+      this.extendLiveDeadlines(deltaMs, aliveAtMs)
+    })
+    if (accepted) this.changed()
+    return accepted
   }
 
   unregister(flavor: RuntimeFlavor, instanceId: string): boolean {
@@ -228,7 +283,11 @@ export class ServiceManagerState {
     if (!slot || slot.registration.instanceId !== input.ownerInstanceId) {
       throw new RuntimeRegistrationRequiredError('runtime must register before acquiring a thread lease')
     }
-    this.expireLeases(now)
+    const expirationNow = this.expirationNow(now, false)
+    this.expireLeases(expirationNow)
+    const pending = [...this.pendingExpiredLeases.values()]
+      .find((lease) => lease.threadId === input.threadId)
+    if (pending) throw new ThreadLeaseBusyError(pending)
     const existing = this.leases.get(input.threadId)
     if (existing && (
       existing.ownerInstanceId !== input.ownerInstanceId ||
@@ -237,12 +296,16 @@ export class ServiceManagerState {
       throw new ThreadLeaseBusyError(existing)
     }
     const acquiredAt = existing?.acquiredAt ?? now.toISOString()
+    const fencingToken = existing?.fencingToken ??
+      (this.threadLeaseFenceHighWater.get(input.threadId) ?? 0) + 1
     const lease = ThreadExecutionLeaseSchema.parse({
       ...input,
+      fencingToken,
       acquiredAt,
       expiresAt: new Date(now.getTime() + THREAD_EXECUTION_LEASE_TTL_MS).toISOString()
     })
     this.leases.set(input.threadId, lease)
+    this.threadLeaseFenceHighWater.set(input.threadId, fencingToken)
     this.changed()
     return lease
   }
@@ -252,13 +315,16 @@ export class ServiceManagerState {
     turnId: string
     ownerFlavor: RuntimeFlavor
     ownerInstanceId: string
+    fencingToken: number
   }, now = new Date()): ThreadExecutionLease | null {
-    this.expireLeases(now)
+    const expirationNow = this.expirationNow(now, false)
+    this.expireLeases(expirationNow)
     const existing = this.leases.get(input.threadId)
     if (!existing ||
       existing.turnId !== input.turnId ||
       existing.ownerFlavor !== input.ownerFlavor ||
-      existing.ownerInstanceId !== input.ownerInstanceId) return null
+      existing.ownerInstanceId !== input.ownerInstanceId ||
+      existing.fencingToken !== input.fencingToken) return null
     const lease = {
       ...existing,
       expiresAt: new Date(now.getTime() + THREAD_EXECUTION_LEASE_TTL_MS).toISOString()
@@ -273,23 +339,53 @@ export class ServiceManagerState {
     turnId: string
     ownerFlavor: RuntimeFlavor
     ownerInstanceId: string
+    fencingToken: number
   }): boolean {
     const existing = this.leases.get(input.threadId)
     if (!existing ||
       existing.turnId !== input.turnId ||
       existing.ownerFlavor !== input.ownerFlavor ||
-      existing.ownerInstanceId !== input.ownerInstanceId) return false
+      existing.ownerInstanceId !== input.ownerInstanceId ||
+      existing.fencingToken !== input.fencingToken) return false
     const released = this.leases.delete(input.threadId)
     if (released) this.changed()
     return released
   }
 
   lease(threadId: string, now = new Date()): ThreadExecutionLease | null {
-    this.expireLeases(now)
+    this.expireLeases(this.expirationNow(now, false))
     return this.leases.get(threadId) ?? null
   }
 
+  requiresTurnMutationFence(threadId: string): boolean {
+    return this.leases.has(threadId) ||
+      [...this.pendingExpiredLeases.values()].some((lease) => lease.threadId === threadId)
+  }
+
+  assertTurnMutationFence(input: TurnMutationFence, now = new Date()): void {
+    const expirationNow = this.expirationNow(now, false)
+    const fence = TurnMutationFenceSchema.parse({
+      threadId: input.threadId,
+      turnId: input.turnId,
+      ownerFlavor: input.ownerFlavor,
+      ownerInstanceId: input.ownerInstanceId,
+      fencingToken: input.fencingToken
+    })
+    const lease = this.leases.get(fence.threadId)
+    const slot = this.slots.get(fence.ownerFlavor)
+    const ownerAlive = slot?.registration.instanceId === fence.ownerInstanceId &&
+      expirationNow.getTime() - Date.parse(slot.lastHeartbeatAt) <= RUNTIME_HEARTBEAT_TTL_MS
+    if (!lease || !ownerAlive || Date.parse(lease.expiresAt) <= expirationNow.getTime() ||
+      lease.turnId !== fence.turnId ||
+      lease.ownerFlavor !== fence.ownerFlavor ||
+      lease.ownerInstanceId !== fence.ownerInstanceId ||
+      lease.fencingToken !== fence.fencingToken) {
+      throw new StaleTurnFenceError()
+    }
+  }
+
   expireStale(now = new Date()): ThreadExecutionLease[] {
+    if (!this.prepareForExpiration(now)) return []
     let changed = false
     for (const [flavor, slot] of this.slots) {
       if (now.getTime() - Date.parse(slot.lastHeartbeatAt) > RUNTIME_HEARTBEAT_TTL_MS) {
@@ -298,9 +394,16 @@ export class ServiceManagerState {
       }
     }
     if (this.resourceLeaseRegistry.expireStale(now)) changed = true
-    const expired = this.expireLeases(now)
+    this.expireLeases(now)
+    const expired = [...this.pendingExpiredLeases.values()]
     if (changed && expired.length === 0) this.changed()
     return expired
+  }
+
+  completeExpiredLeaseReconciliation(lease: ThreadExecutionLease): boolean {
+    const removed = this.pendingExpiredLeases.delete(expiredLeaseKey(lease))
+    if (removed) this.changed()
+    return removed
   }
 
   expireVerifiedRuntimeOwners(
@@ -333,13 +436,17 @@ export class ServiceManagerState {
     ownerFlavor: RuntimeFlavor
     ownerInstanceId: string
   }, now = new Date()): { acquired: boolean; lease: ManagerResourceLease } {
-    const result = this.resourceLeaseRegistry.acquire(input, now)
+    const expirationNow = this.expirationNow(now, false)
+    const result = this.resourceLeaseRegistry.acquire(input, expirationNow)
     if (result.acquired) this.changed()
     return result
   }
 
   renewResource(input: ManagerResourceFence, now = new Date()): ManagerResourceLease | null {
-    const lease = this.resourceLeaseRegistry.renew(resourceFenceFrom(input), now)
+    const expirationNow = this.expirationNow(now, false)
+    const lease = this.resourceLeaseRegistry.renew(
+      resourceFenceFrom(input), expirationNow
+    )
     if (lease) this.changed()
     return lease
   }
@@ -349,9 +456,12 @@ export class ServiceManagerState {
     commitId: string,
     now = new Date()
   ): ManagerResourceLease | null {
-    const commitExpiresAt = new Date(now.getTime() + RESOURCE_COMMIT_TTL_MS).toISOString()
+    const expirationNow = this.expirationNow(now, false)
+    const commitExpiresAt = new Date(
+      expirationNow.getTime() + RESOURCE_COMMIT_TTL_MS
+    ).toISOString()
     const lease = this.resourceLeaseRegistry.beginCommit(
-      resourceFenceFrom(input), commitId, commitExpiresAt, now
+      resourceFenceFrom(input), commitId, commitExpiresAt, expirationNow
     )
     if (lease) this.changed()
     return lease
@@ -362,9 +472,12 @@ export class ServiceManagerState {
     commitId: string,
     now = new Date()
   ): ManagerResourceLease | null {
-    const commitExpiresAt = new Date(now.getTime() + RESOURCE_COMMIT_TTL_MS).toISOString()
+    const expirationNow = this.expirationNow(now, false)
+    const commitExpiresAt = new Date(
+      expirationNow.getTime() + RESOURCE_COMMIT_TTL_MS
+    ).toISOString()
     const lease = this.resourceLeaseRegistry.renewCommit(
-      resourceFenceFrom(input), commitId, commitExpiresAt, now
+      resourceFenceFrom(input), commitId, commitExpiresAt, expirationNow
     )
     if (lease) this.changed()
     return lease
@@ -377,7 +490,10 @@ export class ServiceManagerState {
   }
 
   validateResource(input: ManagerResourceFence, now = new Date()): boolean {
-    return this.resourceLeaseRegistry.validate(resourceFenceFrom(input), now)
+    const expirationNow = this.expirationNow(now, false)
+    return this.resourceLeaseRegistry.validate(
+      resourceFenceFrom(input), expirationNow
+    )
   }
 
   assertResource(input: ManagerResourceFence, now = new Date()): void {
@@ -385,7 +501,10 @@ export class ServiceManagerState {
   }
 
   assertResourceCommit(input: ManagerResourceFence, commitId: string, now = new Date()): void {
-    if (!this.resourceLeaseRegistry.validateCommit(resourceFenceFrom(input), commitId, now)) {
+    const expirationNow = this.expirationNow(now, false)
+    if (!this.resourceLeaseRegistry.validateCommit(
+      resourceFenceFrom(input), commitId, expirationNow
+    )) {
       throw new ResourceFenceStaleError()
     }
   }
@@ -405,14 +524,46 @@ export class ServiceManagerState {
       if (Date.parse(lease.expiresAt) > now.getTime() && ownerAlive) continue
       this.leases.delete(threadId)
       expired.push(lease)
+      this.pendingExpiredLeases.set(expiredLeaseKey(lease), lease)
     }
     if (expired.length > 0) this.changed()
     return expired
   }
 
+  private extendLiveDeadlines(deltaMs: number, aliveAtMs: number): void {
+    const runtimeChanged = extendHostLivenessDeadlines(
+      this.slots,
+      this.leases,
+      deltaMs,
+      aliveAtMs,
+      RUNTIME_HEARTBEAT_TTL_MS
+    )
+    const resourceChanged = this.resourceLeaseRegistry.extendLiveDeadlines(deltaMs, aliveAtMs)
+    if (runtimeChanged || resourceChanged) this.changed()
+  }
+
+  private prepareForExpiration(now: Date, fromReconcile = true): boolean {
+    const prepare = fromReconcile
+      ? this.hostLiveness.beforeReconcile.bind(this.hostLiveness)
+      : this.hostLiveness.beforeOperation.bind(this.hostLiveness)
+    return prepare(now, (deltaMs, aliveAtMs) => {
+      this.extendLiveDeadlines(deltaMs, aliveAtMs)
+    })
+  }
+
+  private expirationNow(now: Date, fromReconcile: boolean): Date {
+    return this.prepareForExpiration(now, fromReconcile)
+      ? now
+      : this.hostLiveness.expirationReference(now)
+  }
+
   private changed(): void {
     this.mutationListener?.()
   }
+}
+
+function expiredLeaseKey(lease: ThreadExecutionLease): string {
+  return `${lease.threadId}:${lease.fencingToken}`
 }
 
 function resourceFenceFrom(input: ManagerResourceFence): ManagerResourceFence {
@@ -429,6 +580,11 @@ export type ServiceManagerHandle = NodeHttpServerHandle & {
   discovery: ManagerDiscoveryRecord
   state: ServiceManagerState
   shutdownRequested: Promise<void>
+  statePersistence: () => {
+    degraded: boolean
+    durableLag: number
+    stats: ManagerStateWriteQueueStats
+  }
 }
 
 export async function reconcileVerifiedForcedRuntimeRecovery(input: {
@@ -479,190 +635,5 @@ async function canonicalRealPath(path: string): Promise<string | null> {
     return await realpath(path)
   } catch {
     return null
-  }
-}
-
-export async function startServiceManager(input: {
-  controlDir: string
-  managerToken: string
-  host?: string
-  port?: number
-  instanceId: string
-  startedAt: string
-  buildId?: string
-  logPath?: string
-  state?: ServiceManagerState
-  dataDir: string
-  sharedData?: ManagerSharedDataStore
-  settingsPath: string
-  documents?: RevisionedDocumentStore
-}): Promise<ServiceManagerHandle> {
-  // The Manager is the physical owner of canonical stores for every managed
-  // Runtime flavor. Hold the data-directory lease before constructing those
-  // stores so migration and manager election cannot overlap writes.
-  const dataDirLease = await acquireRuntimeDataDirLease(input.dataDir)
-  const managerStatePath = join(input.controlDir, 'manager-state.json')
-  let state: ServiceManagerState
-  let forcedRecovery: Awaited<ReturnType<typeof readForcedRuntimeRecovery>>
-  try {
-    ;[state, forcedRecovery] = await Promise.all([
-      input.state ?? readPersistedManagerState(managerStatePath),
-      readForcedRuntimeRecovery(input.controlDir)
-    ])
-  } catch (error) {
-    await dataDirLease.release().catch(() => undefined)
-    throw error
-  }
-  let statePersistence = Promise.resolve()
-  let statePersistenceError: unknown
-  state.onMutation(() => {
-    if (statePersistenceError !== undefined) return
-    const snapshot = state.durableSnapshot()
-    statePersistence = statePersistence.then(async () => {
-      await atomicWriteFile(managerStatePath, `${JSON.stringify(snapshot, null, 2)}\n`)
-      await chmod(managerStatePath, 0o600).catch((error) => {
-        if (process.platform !== 'win32') throw error
-      })
-    }).catch((error) => {
-      statePersistenceError = error
-      console.error('[kun-manager] failed to persist manager lease state:', error)
-      throw error
-    })
-    void statePersistence.catch(() => undefined)
-  })
-  const flushState = async () => {
-    await statePersistence
-    if (statePersistenceError !== undefined) throw statePersistenceError
-  }
-  let sharedData: ManagerSharedDataStore
-  try {
-    sharedData = input.sharedData ?? await ManagerSharedDataStore.create(input.dataDir)
-  } catch (error) {
-    state.onMutation(undefined)
-    await dataDirLease.release().catch(() => undefined)
-    throw error
-  }
-  if (forcedRecovery) {
-    try {
-      await reconcileVerifiedForcedRuntimeRecovery({
-        controlDir: input.controlDir,
-        dataDir: input.dataDir,
-        record: forcedRecovery,
-        state,
-        sharedData,
-        flushState: () => statePersistence
-      })
-    } catch (error) {
-      state.onMutation(undefined)
-      await statePersistence.catch(() => undefined)
-      await sharedData.close().catch(() => undefined)
-      await dataDirLease.release().catch(() => undefined)
-      throw error
-    }
-  }
-  let requestShutdown!: () => void
-  const shutdownRequested = new Promise<void>((resolve) => { requestShutdown = resolve })
-  let shutdownTimer: ReturnType<typeof setTimeout> | undefined
-  const deferShutdown = () => {
-    if (shutdownTimer) return
-    shutdownTimer = setTimeout(requestShutdown, 25)
-    shutdownTimer.unref?.()
-  }
-  let reconciliationTimer: ReturnType<typeof setInterval> | undefined
-  let server!: NodeHttpServerHandle
-  let discovery!: ManagerDiscoveryRecord
-  try {
-    const documents = input.documents ?? new RevisionedDocumentStore({
-      settingsPath: input.settingsPath,
-      clientStatePath: `${input.controlDir}/shared-client-state.json`
-    })
-    reconciliationTimer = setInterval(() => {
-      const expired = state.expireStale()
-      for (const lease of expired) {
-        void sharedData.reconcileExpiredLease(lease).catch((error) => {
-          console.warn('[kun-manager] failed to reconcile expired thread lease:', error)
-        })
-      }
-    }, 1_000)
-    reconciliationTimer.unref?.()
-    const router = buildServiceManagerRouter({
-      managerToken: input.managerToken,
-      instanceId: input.instanceId,
-      startedAt: input.startedAt,
-      ...(input.buildId ? { buildId: input.buildId } : {}),
-      state,
-      sharedData,
-      documents,
-      requestShutdown: deferShutdown,
-      flushState
-    })
-    server = await startNodeHttpServer({
-      router,
-      host: input.host ?? '127.0.0.1',
-      port: input.port ?? 0
-    })
-    discovery = await publishManagerDiscovery(input.controlDir, {
-      instanceId: input.instanceId,
-      pid: process.pid,
-      startedAt: input.startedAt,
-      host: server.host,
-      port: server.port,
-      baseUrl: `http://${server.host}:${server.port}`,
-      managerToken: input.managerToken,
-      serviceVersion: KUN_VERSION,
-      ...(input.buildId ? { buildId: input.buildId } : {}),
-      dataDir: input.dataDir,
-      settingsPath: input.settingsPath,
-      ...(input.logPath ? { logPath: input.logPath } : {})
-    })
-  } catch (error) {
-    if (reconciliationTimer) clearInterval(reconciliationTimer)
-    await server?.close().catch(() => undefined)
-    await statePersistence.catch(() => undefined)
-    state.onMutation(undefined)
-    await sharedData.close().catch(() => undefined)
-    await dataDirLease.release().catch(() => undefined)
-    throw error
-  }
-  let closed = false
-  return {
-    ...server,
-    instanceId: input.instanceId,
-    discovery,
-    state,
-    shutdownRequested,
-    close: async () => {
-      if (closed) return
-      closed = true
-      if (shutdownTimer) clearTimeout(shutdownTimer)
-      if (reconciliationTimer) clearInterval(reconciliationTimer)
-      state.onMutation(undefined)
-      let firstError: unknown
-      const settle = async (action: () => Promise<unknown>): Promise<void> => {
-        try {
-          await action()
-        } catch (error) {
-          if (firstError === undefined) firstError = error
-        }
-      }
-      await settle(() => server.close())
-      await settle(() => statePersistence)
-      state.onMutation(undefined)
-      await settle(() => sharedData.close())
-      await settle(() => removeManagerDiscovery(input.controlDir, input.instanceId))
-      await settle(() => dataDirLease.release())
-      if (firstError !== undefined) throw firstError
-    }
-  }
-}
-
-export async function readPersistedManagerState(path: string): Promise<ServiceManagerState> {
-  try {
-    return ServiceManagerState.restore(JSON.parse(await readFile(path, 'utf8')))
-  } catch (error) {
-    if (String((error as { code?: unknown })?.code ?? '') === 'ENOENT') {
-      return new ServiceManagerState()
-    }
-    throw error
   }
 }

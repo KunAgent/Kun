@@ -95,6 +95,25 @@ describe('GrokOAuthCredentialRefresher', () => {
     expect(parseStoredGrokOAuthCredentials(store.current)?.accessToken).toBe('new-access')
   })
 
+  it('resolves the refresh transport from the owning credential source', async () => {
+    const sourceId = 'settings:provider:grok-subscription'
+    const store = memoryStore(encodedCredentials())
+    const fallbackFetch = vi.fn() as unknown as typeof fetch
+    const { fetchImpl, tokenPosts } = tokenFetch()
+    const fetchForSource = vi.fn(async () => fetchImpl)
+    const refresher = new GrokOAuthCredentialRefresher(store, {
+      fetchImpl: fallbackFetch,
+      fetchForSource,
+      nowMs: () => NOW
+    })
+
+    await refresher.resolve(sourceId)
+
+    expect(fetchForSource).toHaveBeenCalledWith(sourceId)
+    expect(tokenPosts).toHaveBeenCalledTimes(1)
+    expect(fallbackFetch).not.toHaveBeenCalled()
+  })
+
   it('leaves plain API keys unchanged and non-refreshable', async () => {
     const store = memoryStore('sk-plain')
     const fetchImpl = vi.fn() as unknown as typeof fetch

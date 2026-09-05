@@ -77,7 +77,6 @@ describe('app-ipc-schemas settings', () => {
       },
       disabledSkillIds: ['test-skill-08']
     })
-
     expect(payload.agents?.kun?.port).toBe(19000)
     expect(payload.agents?.kun?.approvalReviewer).toBe('agent')
     expect(payload.agents?.kun?.modelProfiles?.['custom-vision-model']?.inputModalities).toEqual(['text', 'image'])
@@ -180,6 +179,7 @@ describe('app-ipc-schemas settings', () => {
           apiKey: 'sk-media',
           baseUrl: 'https://api.minimaxi.com/anthropic',
           endpointFormat: 'messages',
+          useProxy: false,
           models: ['MiniMax-M3'],
           textToSpeech: {
             protocol: 'minimax-t2a',
@@ -246,6 +246,7 @@ describe('app-ipc-schemas settings', () => {
           apiKey: 'sk-test',
           baseUrl: 'https://api.deepseek.com',
           endpointFormat: 'chat_completions',
+          useProxy: false,
           retry: {
             maxAttempts: 3,
             initialDelayMs: 3000,
@@ -315,7 +316,6 @@ describe('app-ipc-schemas settings', () => {
 
   it('accepts long provider model ids imported from upstream catalogs', () => {
     const longModelId = `openrouter/${'provider-routed-model-id-'.repeat(6)}preview`
-
     expect(longModelId.length).toBeGreaterThan(128)
 
     const payload = settingsPatchSchema.parse({
@@ -325,6 +325,7 @@ describe('app-ipc-schemas settings', () => {
           name: 'OpenRouter',
           baseUrl: 'https://openrouter.ai/api/v1',
           endpointFormat: 'chat_completions',
+          useProxy: false,
           models: [longModelId],
           modelProfiles: {
             [longModelId]: {

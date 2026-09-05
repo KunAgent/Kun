@@ -202,7 +202,9 @@ describe('ExtensionHostBroker', () => {
         runId: 'run-1',
         threadId: 'thread-1',
         ownerExtensionId: 'acme.broker',
-        payload: { delta: 'hello' }
+        payload: {
+          role: 'assistant', messageId: 'message:assistant-1', phase: 'delta', content: 'hello'
+        }
       })
 
       expect(notifyView).toHaveBeenCalledWith({
@@ -241,7 +243,9 @@ describe('ExtensionHostBroker', () => {
         runId: 'run-failed-view',
         threadId: 'thread-failed-view',
         ownerExtensionId: 'acme.broker',
-        payload: { delta: 'late' }
+        payload: {
+          role: 'assistant', messageId: 'message:assistant-late', phase: 'delta', content: 'late'
+        }
       })).rejects.toThrow('view session closed')
       expect(closes[1]).toHaveBeenCalledTimes(1)
       expect(broker.disposeViewSession('view-session-one')).toBe(0)

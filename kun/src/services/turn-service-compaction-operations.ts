@@ -14,6 +14,7 @@ import type {
 } from '../contracts/turns.js'
 import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
+import type { ModelRequestFailureContext } from '../contracts/model-request-failure.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { MigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
@@ -406,6 +407,7 @@ async finishTurn(this: TurnService, input: {
     error?: string
     code?: string
     details?: unknown
+    modelRequestFailure?: ModelRequestFailureContext
     severity?: RuntimeErrorSeverity
   }): Promise<TurnSettlement> {
     let settlement: TurnSettlement
@@ -425,7 +427,12 @@ async finishTurn(this: TurnService, input: {
         const turns = current.turns.map((candidate) => {
           if (candidate.id !== input.turnId) return candidate
           const finished = this['finalizeOpenItems'](finishTurn(candidate, input.status), input.status)
-          return input.error ? { ...finished, error: input.error } : finished
+          const terminalCode = input.code?.trim().slice(0, 128)
+          return {
+            ...finished,
+            ...(input.error ? { error: input.error } : {}),
+            ...(terminalCode ? { terminalCode } : {})
+          }
         })
         await this['deps'].threadStore.upsert({
           ...touchThread(current, this['deps'].nowIso()),
@@ -452,23 +459,26 @@ async finishTurn(this: TurnService, input: {
       return settlement
     }
 
-    this['clearRuntimeTurnState'](input.threadId, input.turnId)
-    await this['finalizePersistedOpenItems'](input.threadId, input.turnId, input.status)
+    try {
+      await this['finalizePersistedOpenItems'](input.threadId, input.turnId, input.status)
     // The turn's usage metrics are now stable; release per-turn aggregation
     // so long-lived threads do not accumulate one entry per historical turn.
-    this['deps'].usage?.endTurn(input.threadId, input.turnId)
-    const errorItem = input.error
+      this['deps'].usage?.endTurn(input.threadId, input.turnId)
+      const errorItem = input.error
       ? makeErrorItem({
-          id: `item_${input.turnId}_error`,
+          id: input.code === 'owner_lease_expired'
+            ? `item_${input.turnId}_owner_lease_expired`
+            : `item_${input.turnId}_error`,
           turnId: input.turnId,
           threadId: input.threadId,
           message: input.error,
           ...(input.code ? { code: input.code } : {}),
           ...(input.details !== undefined ? { details: input.details } : {}),
+          ...(input.modelRequestFailure ? { modelRequestFailure: input.modelRequestFailure } : {}),
           ...(input.severity ? { severity: input.severity } : {})
         })
       : null
-    await this['deps'].events.record({
+      await this['deps'].events.record({
       kind: input.status === 'completed' ? 'turn_completed' : input.status === 'aborted' ? 'turn_aborted' : 'turn_failed',
       threadId: input.threadId,
       turnId: input.turnId,
@@ -476,11 +486,20 @@ async finishTurn(this: TurnService, input: {
       ...(input.error ? { message: input.error } : {}),
       ...(input.code ? { code: input.code } : {}),
       ...(input.details !== undefined ? { details: input.details } : {}),
+      ...(input.modelRequestFailure ? { modelRequestFailure: input.modelRequestFailure } : {}),
       ...(input.severity ? { severity: input.severity } : {})
     })
-    if (errorItem) {
-      await this['appendItem'](input.threadId, errorItem)
+      if (errorItem) {
+        await this['appendItem'](input.threadId, errorItem)
+      }
+      return settlement
+    } finally {
+      this['clearRuntimeTurnState'](input.threadId, input.turnId)
+      // Every terminal status frees a global admission slot, so the
+      // scheduler is always notified. Aborted turns still pause their own
+      // thread's queue (the dispatcher evicts it from the ready queue); the
+      // wake lets other threads claim the released capacity.
+      this.notifyTurnSettled(input.threadId, input.status)
     }
-    return settlement
   },
 }

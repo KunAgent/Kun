@@ -1,0 +1,24 @@
+{
+  "id": "legal-risk-assessment",
+  "name": "Legal Risk Assessment",
+  "version": "1.0.0",
+  "description": "Structure legal-risk reviews by issue, rule source, likelihood, impact, evidence, uncertainty, controls, and escalation.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/legal-risk-assessment"
+    ],
+    "promptPatterns": [
+      "contract risk",
+      "legal risk",
+      "Legal Risk Assessment",
+      "legal-risk-assessment",
+      "合规评估",
+      "法律风险"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

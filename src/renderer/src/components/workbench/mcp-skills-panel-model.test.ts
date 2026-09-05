@@ -78,6 +78,16 @@ describe('MCP and Skills panel model', () => {
     })
   })
 
+  it('canonicalizes disabled Skill ids the same way as runtime discovery', () => {
+    const normalized = projectDisabledSkillIds(JSON.stringify({
+      skills: { disabledIds: ['Gmail', '/skill:My_Skill', '$@ＰＤＦ', ' skill-creator '] }
+    }))
+    expect(normalized).toEqual(['gmail', 'my_skill', 'pdf', 'skill-creator'])
+
+    const content = JSON.stringify({ skills: { disabledIds: ['Gmail', '/skill:My_Skill'] } })
+    expect(projectDisabledSkillIds(setProjectSkillEnabled(content, 'gmail', true))).toEqual(['my_skill'])
+  })
+
   it('searches, filters, and paginates a bounded result set', () => {
     const entries = Array.from({ length: 12 }, (_, index) => ({
       id: `server-${index + 1}`,

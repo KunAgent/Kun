@@ -161,86 +161,6 @@ export async function collectPlatformRelease({ distDir, platform, tag, channel, 
   }
 }
 
-export async function collectTuiRelease({ distDir, tag, channel, config }) {
-  const manifestPath = join(distDir, 'release-tui.json')
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-  const expectedVersion = releaseVersionForTag(tag)
-  if (
-    manifest?.schemaVersion !== 1 ||
-    manifest?.component !== 'tui' ||
-    manifest?.tag !== tag ||
-    manifest?.channel !== channel ||
-    manifest?.version !== expectedVersion ||
-    manifest?.artifactVersion !== artifactVersionForTag(tag) ||
-    typeof manifest?.buildId !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(manifest.buildId) ||
-    typeof manifest?.commit !== 'string' ||
-    !/^[a-f0-9]{40}$/.test(manifest.commit) ||
-    !Array.isArray(manifest?.artifacts) ||
-    manifest.artifacts.length !== 5
-  ) {
-    throw new Error('release-tui.json does not match the requested release')
-  }
-  const expectedTargets = new Set(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-x64'])
-  const expectedNames = new Map([
-    ['darwin-arm64', `Kun-TUI-${artifactVersionForTag(tag)}-mac-arm64.tar.gz`],
-    ['darwin-x64', `Kun-TUI-${artifactVersionForTag(tag)}-mac-x64.tar.gz`],
-    ['linux-arm64', `Kun-TUI-${artifactVersionForTag(tag)}-linux-arm64.tar.gz`],
-    ['linux-x64', `Kun-TUI-${artifactVersionForTag(tag)}-linux-x64.tar.gz`],
-    ['win32-x64', `Kun-TUI-${artifactVersionForTag(tag)}-win-x64.zip`]
-  ])
-  const files = []
-  for (const artifact of manifest.artifacts) {
-    if (!expectedTargets.delete(artifact.target)) {
-      throw new Error(`Unexpected or duplicate TUI target: ${artifact.target}`)
-    }
-    if (
-      typeof artifact.fileName !== 'string' ||
-      artifact.fileName !== expectedNames.get(artifact.target) ||
-      basename(artifact.fileName) !== artifact.fileName ||
-      !/^Kun-TUI-.+\.(?:tar\.gz|zip)$/.test(artifact.fileName) ||
-      artifact.nodeVersion !== '22.23.1' ||
-      typeof artifact.sha256 !== 'string' ||
-      !/^[a-f0-9]{64}$/.test(artifact.sha256)
-    ) {
-      throw new Error(`Invalid TUI artifact entry: ${artifact.target}`)
-    }
-    const path = join(distDir, artifact.fileName)
-    const info = await stat(path)
-    if (!info.isFile() || info.size !== artifact.size) {
-      throw new Error(`TUI artifact size mismatch: ${artifact.fileName}`)
-    }
-    const sha256 = await hashFile(path, 'sha256', 'hex')
-    if (sha256 !== artifact.sha256) {
-      throw new Error(`TUI artifact SHA-256 mismatch: ${artifact.fileName}`)
-    }
-    files.push({
-      fileName: artifact.fileName,
-      path,
-      key: `${channelBasePath(config.prefix, channel)}/releases/${tag}/${artifact.fileName}`,
-      size: info.size,
-      sha256,
-      contentType: contentType(artifact.fileName)
-    })
-  }
-  if (expectedTargets.size) {
-    throw new Error(`Missing TUI targets: ${[...expectedTargets].join(', ')}`)
-  }
-  for (const ancillary of ['release-tui.json', 'SHA256SUMS-tui.txt']) {
-    const path = join(distDir, ancillary)
-    const info = await stat(path)
-    files.push({
-      fileName: ancillary,
-      path,
-      key: `${channelBasePath(config.prefix, channel)}/releases/${tag}/${ancillary}`,
-      size: info.size,
-      sha256: await hashFile(path, 'sha256', 'hex'),
-      contentType: contentType(ancillary)
-    })
-  }
-  return { manifest, files }
-}
-
 async function putObject({ config, key, body, contentType: type, cacheControl, contentLength, dryRun }) {
   if (dryRun) {
     console.log(`[dry-run] put s3://${config.bucket || '<bucket>'}/${key}`)
@@ -330,31 +250,6 @@ async function uploadPlatform({ flags, dryRun }) {
   console.log(`  release-${platform}.json`)
 }
 
-async function uploadTui({ flags, dryRun }) {
-  const tag = normalizeTag(requireFlag(flags, 'tag'))
-  const channel = readChannel(flags)
-  const distDir = resolve(flags.get('dist') || 'dist')
-  const config = readConfig({ dryRun })
-  const release = await collectTuiRelease({ distDir, tag, channel, config })
-  console.log(`Uploading Kun ${release.manifest.version} standalone TUI assets to R2 ${channel} archive ${tag}`)
-  const uploadConcurrency = positiveInt(
-    process.env.R2_UPLOAD_CONCURRENCY || process.env.RELEASE_UPLOAD_CONCURRENCY,
-    4
-  )
-  await runConcurrently(release.files, uploadConcurrency, async (file) => {
-    await putObject({
-      config,
-      key: file.key,
-      body: createReadStream(file.path),
-      contentType: file.contentType,
-      cacheControl: 'public, max-age=31536000, immutable',
-      contentLength: file.size,
-      dryRun
-    })
-    console.log(`  ${file.fileName}`)
-  })
-}
-
 async function listReleaseKeys(config, tag, channel) {
   const prefix = `${channelBasePath(config.prefix, channel)}/releases/${tag}/`
   const keys = []
@@ -386,19 +281,18 @@ export function validatePromotionContract({
   channel,
   platforms,
   platformManifests,
-  tuiManifest,
-  requireTui
+  requireAllPlatforms
 }) {
   const expectedVersion = releaseVersionForTag(tag)
   const platformSet = new Set(platforms)
   if (
-    requireTui &&
+    requireAllPlatforms &&
     (
       platformSet.size !== PLATFORMS.length ||
       PLATFORMS.some((platform) => !platformSet.has(platform))
     )
   ) {
-    throw new Error('Joint GUI/TUI promotion requires mac, win, and linux platform manifests')
+    throw new Error('GUI promotion requires mac, win, and linux platform manifests')
   }
   const manifestPlatforms = new Set()
   for (const manifest of platformManifests) {
@@ -409,7 +303,8 @@ export function validatePromotionContract({
       !PLATFORMS.includes(manifest?.platform) ||
       manifestPlatforms.has(manifest.platform) ||
       !Array.isArray(manifest?.files) ||
-      !Array.isArray(manifest?.downloads)
+      !Array.isArray(manifest?.downloads) ||
+      manifest.files.some((file) => /^Kun-TUI-/.test(file?.fileName ?? ''))
     ) {
       throw new Error('GUI platform manifest is incompatible with the requested release')
     }
@@ -438,29 +333,6 @@ export function validatePromotionContract({
   if (manifestPlatforms.size !== platformSet.size ||
       [...platformSet].some((platform) => !manifestPlatforms.has(platform))) {
     throw new Error('GUI platform manifests do not match the requested promotion targets')
-  }
-  if (tuiManifest) {
-    const expectedTuiTargets = new Set([
-      'darwin-arm64',
-      'darwin-x64',
-      'linux-arm64',
-      'linux-x64',
-      'win32-x64'
-    ])
-    if (
-      tuiManifest.version !== expectedVersion ||
-      tuiManifest.tag !== tag ||
-      tuiManifest.channel !== channel ||
-      !/^[a-f0-9]{64}$/.test(tuiManifest.buildId) ||
-      !Array.isArray(tuiManifest.artifacts) ||
-      tuiManifest.artifacts.length !== expectedTuiTargets.size ||
-      tuiManifest.artifacts.some((artifact) => !expectedTuiTargets.delete(artifact?.target)) ||
-      expectedTuiTargets.size !== 0
-    ) {
-      throw new Error('Standalone TUI manifest is incompatible with the GUI release')
-    }
-  } else if (requireTui) {
-    throw new Error('Joint GUI/TUI promotion requires a standalone TUI manifest')
   }
   return expectedVersion
 }
@@ -501,21 +373,12 @@ async function promoteRelease({ flags, dryRun }) {
     }
     platformManifests.push(await getJson(config, key))
   }
-  const tuiManifestKey = `${channelBasePath(config.prefix, channel)}/releases/${tag}/release-tui.json`
-  const requireTui = flags.has('require-tui')
-  if (requireTui && !releaseKeys.includes(tuiManifestKey)) {
-    throw new Error(`Missing ${tuiManifestKey}. Upload the standalone TUI bundle before promotion.`)
-  }
-  const tuiManifest = releaseKeys.includes(tuiManifestKey)
-    ? await getJson(config, tuiManifestKey)
-    : null
   const version = validatePromotionContract({
     tag,
     channel,
     platforms,
     platformManifests,
-    tuiManifest,
-    requireTui
+    requireAllPlatforms: flags.has('require-all-platforms')
   })
   const allFiles = new Map()
   for (const manifest of platformManifests) {
@@ -592,22 +455,7 @@ async function promoteRelease({ flags, dryRun }) {
           version,
           platforms: platformManifests.map((manifest) => manifest.platform),
           downloads
-        },
-        ...(tuiManifest
-          ? {
-              tui: {
-                version: tuiManifest.version,
-                buildId: tuiManifest.buildId,
-                manifestUrl: joinUrl(
-                  config.publicBaseUrl,
-                  target.basePath,
-                  'latest',
-                  'latest-tui.json'
-                ),
-                downloads: tuiManifest.artifacts
-              }
-            }
-          : {})
+        }
       }
     }
 
@@ -621,34 +469,6 @@ async function promoteRelease({ flags, dryRun }) {
       dryRun
     })
     console.log(`  ${target.label}/latest.json`)
-    if (tuiManifest) {
-      const latestTuiManifest = {
-        ...tuiManifest,
-        generatedAt: new Date().toISOString(),
-        artifacts: tuiManifest.artifacts.map((artifact) => ({
-          ...artifact,
-          url: joinUrl(
-            config.publicBaseUrl,
-            config.prefix,
-            'channels',
-            channel,
-            'releases',
-            tag,
-            artifact.fileName
-          )
-        }))
-      }
-      const latestTuiKey = `${target.basePath}/latest/latest-tui.json`
-      await putObject({
-        config,
-        key: latestTuiKey,
-        body: JSON.stringify(latestTuiManifest, null, 2),
-        contentType: 'application/json; charset=utf-8',
-        cacheControl: 'public, max-age=60, must-revalidate',
-        dryRun
-      })
-      console.log(`  ${target.label}/latest-tui.json`)
-    }
     console.log(`Latest manifest: ${joinUrl(config.publicBaseUrl, target.basePath, 'latest', 'latest.json')}`)
   }
 }
@@ -663,10 +483,6 @@ async function main() {
 
   if (command === 'upload') {
     await uploadPlatform({ flags, dryRun })
-    return
-  }
-  if (command === 'upload-tui') {
-    await uploadTui({ flags, dryRun })
     return
   }
   if (command === 'promote') {

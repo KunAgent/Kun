@@ -1,14 +1,14 @@
 import type { McpCapabilityConfig, McpServerConfig } from '../../contracts/capabilities.js'
+import { assertBuiltinGitHubMcpCallAllowed } from '../../contracts/builtin-mcp.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
-import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { catalogFingerprint, canUseMcpServer, isMcpServerTrusted, isMcpServerVisible, normalizeMcpToolName } from './mcp-naming.js'
 import { isMcpAuthorizationRequiredError } from './mcp-transport.js'
 import { errorMessage, formatMcpConnectionError } from './mcp-stdio-environment.js'
 import { projectMcpSchemaForModel } from './mcp-schema-projection.js'
 import type { McpClientLike, McpServerDiagnostic, McpToolDescriptor } from './mcp-types.js'
-import type { McpSearchCatalogRecord, McpSearchCatalogState } from './mcp-tool-search.js'
+import type { McpSearchCatalogRecord } from './mcp-tool-search.js'
 import type { McpBackgroundReconnectOptions, McpConnectionState } from './mcp-tool-provider.js'
 
 const DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS = 5
@@ -17,6 +17,7 @@ const DEFAULT_MCP_RECONNECT_MAX_DELAY_MS = 30_000
 
 export function startupConnectionError(error: unknown, server: McpServerConfig): string {
   if (isMcpAuthorizationRequiredError(error)) {
+    if (error.userMessage) return redactSecretText(error.userMessage)
     return 'OAuth authorization required. Use the connector\'s Authorize action to sign in; the runtime will not prompt automatically during startup.'
   }
   return formatMcpConnectionError(error, server)
@@ -28,11 +29,7 @@ type McpBackgroundReconnectParams = {
   failedServers: FailedMcpServer[]
   clientFactory: (serverId: string, server: McpServerConfig) => Promise<McpClientLike>
   nowIso: () => string
-  diagnostics: McpServerDiagnostic[]
-  connected: McpConnectionState[]
-  catalogState: McpSearchCatalogState
-  searchActive: boolean
-  register: (provider: CapabilityToolProvider) => void
+  onServerConnected: (state: McpConnectionState, listed: McpToolDescriptor[]) => void
   isAborted: () => boolean
   delay: (ms: number) => Promise<void>
   options?: McpBackgroundReconnectOptions
@@ -68,60 +65,28 @@ async function reconnectFailedMcpServer(
     if (params.isAborted()) return
     await params.delay(Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)))
     if (params.isAborted()) return
+    let candidate: McpConnectOutcome | undefined
     try {
-      const client = await params.clientFactory(failed.serverId, failed.server)
-      const state: McpConnectionState = {
-        serverId: failed.serverId,
-        server: failed.server,
-        client,
-        clientFactory: params.clientFactory,
-        nowIso: params.nowIso,
-        status: 'connected',
-        reconnectAttempts: 0,
-        reconnectBackoffMs: DEFAULT_MCP_RECONNECT_BASE_DELAY_MS,
-        toolNames: [],
-        lastConnectedAt: params.nowIso()
-      }
-      attachMcpClientLifecycle(state)
-      const listed = await refreshMcpConnectionCatalog(state)
+      candidate = await connectAndLoadCatalog(
+        failed.serverId,
+        failed.server,
+        params.clientFactory,
+        params.nowIso
+      )
       if (params.isAborted()) {
-        await client.close().catch(() => undefined)
+        await candidate.state.client.close().catch(() => undefined)
         return
       }
-      registerLateMcpConnection(params, state, listed)
+      params.onServerConnected(candidate.state, candidate.listed)
       return
     } catch {
+      // Ownership transfers to the caller only after onServerConnected
+      // succeeds. A failed initialize, abort check, or takeover callback must
+      // not leave a stdio subprocess behind for the next retry.
+      if (candidate) await candidate.state.client.close().catch(() => undefined)
       // Leave the diagnostic as "error" and try again until attempts run out.
     }
   }
-}
-
-function registerLateMcpConnection(
-  params: McpBackgroundReconnectParams,
-  state: McpConnectionState,
-  listed: McpToolDescriptor[]
-): void {
-  params.connected.push(state)
-  params.catalogState.records.push(...listed.map((tool) => createMcpSearchCatalogRecord(state, tool)))
-  const tools = listed.map((tool) => createMcpLocalTool(state, tool))
-  if (!params.searchActive) {
-    try {
-      params.register({
-        id: `mcp:${state.serverId}`,
-        kind: 'mcp',
-        enabled: true,
-        available: true,
-        tools
-      })
-    } catch {
-      // A registry collision must not crash the loop; the diagnostic still
-      // flips to connected below so the UI stops showing the server as failed.
-    }
-  }
-  const diagnostic = syncMcpDiagnostic(state, 'connected', tools.length)
-  const index = params.diagnostics.findIndex((entry) => entry.id === state.serverId)
-  if (index >= 0) params.diagnostics[index] = diagnostic
-  else params.diagnostics.push(diagnostic)
 }
 
 export function defaultMcpReconnectDelay(ms: number): Promise<void> {
@@ -163,6 +128,7 @@ export function createMcpLocalTool(
           isError: true
         }
       }
+      assertBuiltinGitHubMcpCallAllowed(state.server, descriptor.name, args)
       const result = await callMcpToolWithReconnect(
         state,
         { name: descriptor.name, arguments: args },
@@ -211,8 +177,10 @@ export function createMcpSearchCatalogRecord(
     serverId: state.serverId,
     server: state.server,
     client: {
-      callTool: (input, options) =>
-        callMcpToolWithReconnect(state, input, options?.context, options?.timeout, isMcpReplaySafe(descriptor.annotations))
+      callTool: (input, options) => {
+        assertBuiltinGitHubMcpCallAllowed(state.server, input.name, input.arguments)
+        return callMcpToolWithReconnect(state, input, options?.context, options?.timeout, isMcpReplaySafe(descriptor.annotations))
+      }
     },
     descriptor,
     normalizedName: normalizeMcpToolName(state.serverId, descriptor.name),
@@ -232,6 +200,68 @@ export async function refreshMcpConnectionCatalog(
   state.lastError = undefined
   syncMcpDiagnostic(state, state.status, listed.length)
   return listed
+}
+
+export type McpConnectOutcome = {
+  state: McpConnectionState
+  listed: McpToolDescriptor[]
+}
+
+/**
+ * Create an MCP client, bind its lifecycle, and load its tool catalog as one
+ * ownership unit. The client stays locally owned until this call resolves;
+ * any failure after `clientFactory()` succeeds (lifecycle setup, catalog
+ * refresh, or paginated `listTools`) closes the client — and therefore its
+ * stdio transport / child process — before rethrowing, so a failed startup
+ * attempt, background retry, or live reconnect never leaks a subprocess.
+ *
+ * When `existingState` is provided (runtime reconnect), the committed state is
+ * updated in place with the fresh client instead of building a new one; the
+ * caller's reconnect state machine (cooldown / error) is left untouched.
+ */
+export async function connectAndLoadCatalog(
+  serverId: string,
+  server: McpServerConfig,
+  clientFactory: (serverId: string, server: McpServerConfig) => Promise<McpClientLike>,
+  nowIso: () => string,
+  existingState?: McpConnectionState
+): Promise<McpConnectOutcome> {
+  const client = await clientFactory(serverId, server)
+  const state: McpConnectionState =
+    existingState ??
+    ({
+      serverId,
+      server,
+      client,
+      clientFactory,
+      nowIso,
+      status: 'connected',
+      reconnectAttempts: 0,
+      reconnectBackoffMs: DEFAULT_MCP_RECONNECT_BASE_DELAY_MS,
+      toolNames: [],
+      lastConnectedAt: nowIso()
+    } satisfies McpConnectionState)
+  try {
+    if (existingState) {
+      state.client = client
+      state.status = 'connected'
+      state.lastConnectedAt = nowIso()
+      state.lastError = undefined
+      state.nextReconnectAt = undefined
+      state.reconnectBackoffMs = DEFAULT_MCP_RECONNECT_BASE_DELAY_MS
+    }
+    attachMcpClientLifecycle(state)
+    const listed = await refreshMcpConnectionCatalog(state)
+    // A runtime reconnect (existingState) carries a provider-assigned hook; fire
+    // it here so its catalog commit happens BEFORE the reconnect's next callTool.
+    // Fresh states (startup / OAuth / background) have no hook yet and commit
+    // explicitly via their own adoption path, so this never double-commits.
+    state.onCatalogChanged?.(state.serverId, listed)
+    return { state, listed }
+  } catch (error) {
+    await client.close().catch(() => undefined)
+    throw error
+  }
 }
 
 async function callMcpToolWithReconnect(
@@ -388,17 +418,14 @@ async function reconnectMcpConnectionOnce(
   if (signal?.aborted) throw new Error('MCP reconnect aborted')
   await closeMcpClient(state)
   if (signal?.aborted) throw new Error('MCP reconnect aborted')
-  const client = await state.clientFactory(state.serverId, state.server)
-  state.client = client
-  state.status = 'connected'
-  state.lastConnectedAt = state.nowIso()
-  state.lastError = undefined
-  state.nextReconnectAt = undefined
-  state.reconnectBackoffMs = DEFAULT_MCP_RECONNECT_BASE_DELAY_MS
-  attachMcpClientLifecycle(state)
-  await refreshMcpConnectionCatalog(state)
-  syncMcpDiagnostic(state, 'connected')
-  return client
+  const result = await connectAndLoadCatalog(
+    state.serverId,
+    state.server,
+    state.clientFactory,
+    state.nowIso,
+    state
+  )
+  return result.state.client
 }
 
 async function closeMcpClient(state: McpConnectionState): Promise<void> {
@@ -479,6 +506,7 @@ export function serverDiagnostic(
   return {
     id: state.serverId,
     enabled: state.server.enabled,
+    ...(state.server.managedBy ? { managedBy: state.server.managedBy } : {}),
     transport: state.server.transport,
     trustScope: state.server.trustScope,
     available: status === 'connected',
@@ -500,6 +528,7 @@ export function syncMcpDiagnostic(
   const diagnostic: McpServerDiagnostic = {
     id: state.serverId,
     enabled: state.server.enabled,
+    ...(state.server.managedBy ? { managedBy: state.server.managedBy } : {}),
     transport: state.server.transport,
     trustScope: state.server.trustScope,
     available: status === 'connected',

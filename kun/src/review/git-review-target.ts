@@ -7,7 +7,10 @@ import type { ReviewTarget } from '../contracts/review.js'
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_DIFF_MAX_BYTES = 256 * 1024
-const GIT_COMMAND_TIMEOUT_MS = 10_000
+// Git for Windows can spend several seconds starting under heavy process and
+// antivirus load. Keep the command bounded without rejecting healthy repos
+// at the Unix-oriented 10-second budget.
+const GIT_COMMAND_TIMEOUT_MS = process.platform === 'win32' ? 30_000 : 10_000
 const GIT_COMMAND_MAX_BUFFER = 384 * 1024
 const REPOSITORY_SEARCH_MAX_DEPTH = 4
 const REPOSITORY_SEARCH_MAX_DIRECTORIES = 2_000

@@ -17,7 +17,12 @@ const execFileAsync = promisify(execFile)
 const temporaryDirectories: string[] = []
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 100
+  })))
 })
 
 describe('review contracts', () => {
@@ -215,6 +220,7 @@ describe('review rubric', () => {
   it('requires findings to overlap the reviewed diff and use tight ranges', () => {
     expect(KUN_REVIEW_PROMPT).toContain('changed lines in the reviewed diff')
     expect(KUN_REVIEW_PROMPT).toContain('normally no more than 5-10 lines')
+    expect(KUN_REVIEW_PROMPT).toContain('When tools are no longer available')
   })
 })
 

@@ -131,6 +131,7 @@ export function FloatingComposerUserInputPanel({
                   controller.isOptionDisabled(currentQuestion, option)
                 }
                 compact={compact}
+                recommendedLabel={t('userInputRecommended')}
                 onSelect={() => controller.chooseOption(currentQuestion, option)}
               />
             ))}
@@ -205,6 +206,7 @@ function OptionRow({
   selected,
   disabled,
   compact,
+  recommendedLabel,
   onSelect
 }: {
   option: UserInputOption
@@ -212,6 +214,7 @@ function OptionRow({
   selected: boolean
   disabled: boolean
   compact: boolean
+  recommendedLabel: string
   onSelect: () => void
 }): ReactElement {
   return (
@@ -248,8 +251,18 @@ function OptionRow({
         ) : null}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block break-words text-[13px] font-semibold leading-5 [overflow-wrap:anywhere]">
-          {option.label}
+        <span className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
+          <span className="min-w-0 break-words text-[13px] font-semibold leading-5 [overflow-wrap:anywhere]">
+            {option.label}
+          </span>
+          {option.recommended ? (
+            <span
+              data-user-input-recommended
+              className="mt-px inline-flex shrink-0 items-center rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold leading-4 text-accent"
+            >
+              {recommendedLabel}
+            </span>
+          ) : null}
         </span>
         {option.description ? (
           <span className="mt-0.5 block break-words text-[12px] leading-5 text-ds-faint [overflow-wrap:anywhere]">

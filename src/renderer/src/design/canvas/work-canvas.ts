@@ -133,6 +133,41 @@ export function workCanvasHasBlockingQaNotes(
   })
 }
 
+export function workCanvasHasCompletePptReviewProjection(
+  document: CanvasDocument,
+  workflowId?: string,
+  childId?: string
+): boolean {
+  const expectedWorkflowId = workflowId?.trim()
+  const expectedChildId = childId?.trim()
+  const shapes = Object.values(document.objects)
+  const matchesWorkflow = (candidate?: string): boolean =>
+    Boolean(candidate && (!expectedWorkflowId || candidate === expectedWorkflowId))
+  if (shapes.some((shape) => matchesWorkflow(shape.pptDirectionRef?.workflowId))) return false
+
+  const reviewShapes = shapes.filter((shape) => matchesWorkflow(shape.pptReviewRef?.workflowId))
+  if (reviewShapes.length === 0) return false
+  const reviewChildIds = new Set(reviewShapes.flatMap((shape) =>
+    shape.pptReviewRef ? [shape.pptReviewRef.childId] : []))
+  if (reviewChildIds.size !== 1) return false
+  if (expectedChildId && reviewShapes.some((shape) => shape.pptReviewRef?.childId !== expectedChildId)) {
+    return false
+  }
+  const slides = new Map<string, { frame?: typeof reviewShapes[number]; preview?: typeof reviewShapes[number] }>()
+  for (const shape of reviewShapes) {
+    const ref = shape.pptReviewRef
+    if (!ref || ref.role === 'annotation') continue
+    const key = `${ref.childId}\0${ref.slideId}`
+    const slide = slides.get(key) ?? {}
+    if (ref.role === 'slide-frame') slide.frame = shape
+    if (ref.role === 'preview-image') slide.preview = shape
+    slides.set(key, slide)
+  }
+  return slides.size > 0 && [...slides.values()].every(({ frame, preview }) =>
+    Boolean(frame?.pptReviewRef && preview?.pptReviewRef && preview.type === 'image' &&
+      preview.imageUrl?.trim() && frame.pptReviewRef.revision === preview.pptReviewRef.revision))
+}
+
 export function workCanvasPptSelectionState(
   document: CanvasDocument,
   selectedIds: ReadonlySet<string>,

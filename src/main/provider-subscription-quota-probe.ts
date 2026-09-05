@@ -110,7 +110,7 @@ export async function runSubscriptionQuotaProbe(
     }
   }
   if (kind === 'codex-subscription') {
-    let credential = await runtime.resolveCodexCredential(provider)
+    let credential = await runtime.resolveCodexCredential(provider, undefined, context)
     if (!credential) {
       throw new ProviderQuotaMissingCredentialError(
         'Connect the ChatGPT subscription in Settings or sign in with Codex CLI.'
@@ -120,7 +120,11 @@ export async function runSubscriptionQuotaProbe(
       return await probeCodexSubscriptionQuota(credential, context)
     } catch (error) {
       if (!(error instanceof ProviderQuotaAuthorizationError)) throw error
-      const refreshed = await runtime.resolveCodexCredential(provider, credential.accessToken)
+      const refreshed = await runtime.resolveCodexCredential(
+        provider,
+        credential.accessToken,
+        context
+      )
       if (!refreshed || refreshed.accessToken === credential.accessToken) {
         throw new ProviderQuotaMissingCredentialError(
           'The Codex login expired. Sign in to the ChatGPT subscription or Codex CLI again.'

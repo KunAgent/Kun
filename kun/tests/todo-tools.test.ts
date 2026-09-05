@@ -185,7 +185,8 @@ describe('todo local tools', () => {
       const synced = await service.syncTodosFromPlan('thr_todo_plan', {
         planId: 'plan_1',
         relativePath,
-        markdown: '# Plan\n\n- [ ] Build UI\n'
+        markdown: '# Plan\n\n- [ ] Build UI\n',
+        mode: 'document_edit'
       })
       const linked = synced.items[0]!
       const host = new LocalToolHost({ tools: buildTodoLocalTools(service) })

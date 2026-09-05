@@ -48,6 +48,17 @@ export const DEFAULT_EDITOR_ID = 'system'
 
 export const PRESENTATION_FILE_SUFFIXES = ['.ppt', '.pptx', '.kun-ppt.html'] as const
 
+export const GENERATED_DOCUMENT_FILE_SUFFIXES = [
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.pdf',
+  '.kun-ppt.html'
+] as const
+
 export const MAX_KUN_PRESENTATION_HTML_BYTES = 900_000
 
 export const EDITOR_ICON_SOURCE_PX = 64

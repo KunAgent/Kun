@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   createManagerDiscoveryRecord,
+  KUN_MANAGER_PROTOCOL_VERSION,
   managerDiscoveryPath,
   publishManagerDiscovery,
   readManagerHandoffDiscovery,
@@ -47,7 +48,7 @@ describe('manager discovery', () => {
       buildId: 'b'.repeat(64)
     })).toMatchObject({
       version: 1,
-      protocolVersion: 1,
+      protocolVersion: KUN_MANAGER_PROTOCOL_VERSION,
       instanceId: 'manager-a',
       buildId: 'b'.repeat(64)
     })
@@ -58,7 +59,7 @@ describe('manager discovery', () => {
     await writeFile(managerDiscoveryPath(controlDir), JSON.stringify({
       ...input(),
       version: 1,
-      protocolVersion: 1,
+      protocolVersion: KUN_MANAGER_PROTOCOL_VERSION,
       instanceId: 'legacy-manager'
     }), 'utf8')
 

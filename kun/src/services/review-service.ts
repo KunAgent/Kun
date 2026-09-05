@@ -27,6 +27,7 @@ import { RandomIdGenerator } from '../ports/id-generator.js'
 import type { ModelClient } from '../ports/model-client.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeTuningConfig } from '../config/kun-config.js'
+import { normalizeTurnLimits } from '../loop/turn-limits.js'
 import { findSessionEvent } from '../adapters/session-event-query.js'
 import { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import { ThreadService } from './thread-service.js'
@@ -41,6 +42,7 @@ import { ReviewEventProjector } from '../review/review-event-projector.js'
 // loop cannot leave the visible parent turn looking busy for the 24-hour
 // generic default; stricter runtime limits still win below.
 const DEFAULT_REVIEW_MAX_STEPS = 32
+const DEFAULT_REVIEW_FINAL_ANSWER_STEP = 8
 const DEFAULT_REVIEW_MAX_WALL_TIME_MS = 15 * 60_000
 const DEFAULT_REVIEW_MAX_TOOL_CALLS_PER_STEP = 64
 const MAX_REVIEW_PROGRESS_UPDATES = 24
@@ -207,6 +209,7 @@ export class ReviewService {
       ids,
       nowIso
     })
+    const turnLimits = reviewTurnLimits(this.deps.runtime)
     const loop = new AgentLoop({
       threadStore,
       sessionStore,
@@ -233,7 +236,11 @@ export class ReviewService {
         this.deps.modelCapabilities?.(model, input.providerId) ?? modelCapabilitiesForModel(model),
       ...(this.deps.contextCompaction ? { contextCompaction: this.deps.contextCompaction } : {}),
       ...(this.deps.tokenEconomy ? { tokenEconomy: this.deps.tokenEconomy } : {}),
-      turnLimits: reviewTurnLimits(this.deps.runtime),
+      turnLimits,
+      finalAnswerOnlyStep: Math.min(
+        DEFAULT_REVIEW_FINAL_ANSWER_STEP,
+        turnLimits.maxSteps - 1
+      ),
       ...(this.deps.runtime?.toolStorm ? { toolStorm: this.deps.runtime.toolStorm } : {}),
       ...(this.deps.runtime?.toolArgumentRepair ? { toolArgumentRepair: this.deps.runtime.toolArgumentRepair } : {})
     })
@@ -364,15 +371,15 @@ function reviewTurnLimits(runtime: RuntimeTuningConfig | undefined): {
   maxWallTimeMs: number
   maxToolCallsPerStep: number
 } {
-  const configured = runtime?.turnLimits
+  const configured = normalizeTurnLimits(runtime?.turnLimits)
   return {
-    maxSteps: Math.min(configured?.maxSteps ?? DEFAULT_REVIEW_MAX_STEPS, DEFAULT_REVIEW_MAX_STEPS),
+    maxSteps: Math.min(configured.maxSteps ?? DEFAULT_REVIEW_MAX_STEPS, DEFAULT_REVIEW_MAX_STEPS),
     maxWallTimeMs: Math.min(
-      configured?.maxWallTimeMs ?? DEFAULT_REVIEW_MAX_WALL_TIME_MS,
+      configured.maxWallTimeMs,
       DEFAULT_REVIEW_MAX_WALL_TIME_MS
     ),
     maxToolCallsPerStep: Math.min(
-      configured?.maxToolCallsPerStep ?? DEFAULT_REVIEW_MAX_TOOL_CALLS_PER_STEP,
+      configured.maxToolCallsPerStep,
       DEFAULT_REVIEW_MAX_TOOL_CALLS_PER_STEP
     )
   }

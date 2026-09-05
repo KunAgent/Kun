@@ -33,7 +33,14 @@ function createUserInputTool(name: string): LocalTool {
         type: 'object',
         properties: {
           label: { type: 'string' },
-          description: { type: 'string' }
+          description: {
+            type: 'string',
+            description: 'Briefly explain the main tradeoff for this option.'
+          },
+          recommended: {
+            type: 'boolean',
+            description: 'Set true when this option is part of your recommendation.'
+          }
         },
         required: ['label']
       }
@@ -44,7 +51,8 @@ function createUserInputTool(name: string): LocalTool {
     description: [
       'Ask the user a structured question only when an unanswered material choice blocks safe or correct progress, or when an active workflow explicitly requires structured confirmation.',
       'Do not use this tool for greetings, status updates, optional follow-ups, offers of more help, information already available in context, or unnecessary repetitions or rephrasings of the same question.',
-      'Ask one concise round, then act on the answer. Ask again only when a material workflow state change explicitly requires a new confirmation.'
+      'Ask one concise round, then act on the answer. Ask again only when a material workflow state change explicitly requires a new confirmation.',
+      'When you provide options, use {label, description, recommended} objects and mark your recommendation based on the known context: exactly one recommended option for single choice, or every option in the recommended combination for multiple choice within minSelections and maxSelections. Briefly explain each option tradeoff, do not invent user preferences, and never treat a recommendation as the user\'s selection.'
     ].join(' '),
     toolKind: 'tool_call',
     inputSchema: {
@@ -55,7 +63,7 @@ function createUserInputTool(name: string): LocalTool {
         message: { type: 'string' },
         options: {
           type: 'array',
-          description: 'Optional answer choices for a single question. Use strings or {label, description} objects.',
+          description: 'Optional answer choices for a single question. When choices are provided, use {label, description, recommended} objects and mark the model-recommended choice or combination.',
           items: optionSchema
         },
         selectionMode: {
@@ -99,6 +107,7 @@ function createUserInputTool(name: string): LocalTool {
               },
               options: {
                 type: 'array',
+                description: 'Answer choices. Use {label, description, recommended} objects and mark the model-recommended choice or combination.',
                 items: optionSchema
               },
               selectionMode: {
@@ -120,6 +129,7 @@ function createUserInputTool(name: string): LocalTool {
       required: []
     },
     policy: 'auto',
+    sideEffect: 'read-only',
     execute: async (args, context) => {
       if (!context.awaitUserInput) {
         return {
@@ -203,13 +213,14 @@ function normalizeUserInputQuestions(
         .map((option) => normalizeUserInputOption(option))
         .filter((option) => option !== null)
     : []
+  const selection = normalizeUserInputSelection(args, options.length)
   return [
     {
       header: 'Input',
       id: String(args.id ?? fallbackId),
       question: fallbackPrompt,
-      options,
-      ...normalizeUserInputSelection(args, options.length)
+      options: normalizeUserInputRecommendations(options, selection),
+      ...selection
     }
   ]
 }
@@ -228,12 +239,13 @@ function normalizeUserInputQuestion(
         .map((option) => normalizeUserInputOption(option))
         .filter((option) => option !== null)
     : []
+  const selection = normalizeUserInputSelection(raw, options.length)
   return {
     header: typeof raw.header === 'string' && raw.header.trim() ? raw.header.trim() : `Question ${index + 1}`,
     id: typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `${fallbackId}_${index + 1}`,
     question,
-    options,
-    ...normalizeUserInputSelection(raw, options.length)
+    options: normalizeUserInputRecommendations(options, selection),
+    ...selection
   }
 }
 
@@ -265,6 +277,20 @@ function normalizeUserInputSelection(
   }
 }
 
+function normalizeUserInputRecommendations(
+  options: UserInputQuestion['options'],
+  selection: Pick<UserInputQuestion, 'selectionMode' | 'minSelections' | 'maxSelections'>
+): UserInputQuestion['options'] {
+  const recommendedCount = options.filter((option) => option.recommended === true).length
+  if (recommendedCount === 0) return options
+  const valid = selection.selectionMode === 'multiple'
+    ? recommendedCount >= (selection.minSelections ?? 1) &&
+      recommendedCount <= (selection.maxSelections ?? options.length)
+    : recommendedCount === 1
+  if (valid) return options
+  return options.map(({ recommended: _recommended, ...option }) => option)
+}
+
 function positiveInteger(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   const normalized = Math.floor(value)
@@ -273,7 +299,7 @@ function positiveInteger(value: unknown): number | undefined {
 
 function normalizeUserInputOption(
   value: unknown
-): { label: string; description: string } | null {
+): { label: string; description: string; recommended?: boolean } | null {
   if (typeof value === 'string' && value.trim()) {
     return {
       label: value.trim(),
@@ -286,7 +312,8 @@ function normalizeUserInputOption(
   if (!label) return null
   return {
     label,
-    description: typeof raw.description === 'string' ? raw.description : ''
+    description: typeof raw.description === 'string' ? raw.description : '',
+    ...(raw.recommended === true ? { recommended: true } : {})
   }
 }
 

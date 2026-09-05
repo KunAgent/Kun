@@ -19,6 +19,11 @@ export type PptCanvasProjectionOpenRequest = {
   childId: string
   workflowId: string
   phase: 'direction' | 'review'
+  pptState: {
+    phase: 'directions' | 'review' | 'complete'
+    revision: number
+    outputPath?: string
+  }
 }
 
 export type PptCanvasProjectionOptions = {
@@ -31,9 +36,11 @@ export type PptCanvasProjectionOptions = {
 }
 
 export type PptCanvasProjection =
-  | { kind: 'direction'; bundle: PptDirectionBundle }
-  | { kind: 'review'; bundle: PptReviewBundle }
+  | { kind: 'direction'; bundle: PptDirectionBundle; pptState: PptCanvasProjectionOpenRequest['pptState'] }
+  | { kind: 'review'; bundle: PptReviewBundle; pptState: PptCanvasProjectionOpenRequest['pptState'] }
   | { kind: 'filtered' }
+
+export type PptCanvasProjectionResult = 'applied' | 'current' | 'rejected' | 'retry'
 
 export function resolvePptCanvasProjection(
   toolName: string | undefined,
@@ -44,11 +51,30 @@ export function resolvePptCanvasProjection(
   if (toolName !== 'ppt_agent' || !isRecord(value)) return null
   const reviewBundle = value.reviewBundle
   const directionBundle = value.directionBundle
+  const deckArtifact = isRecord(value.deckArtifact) ? value.deckArtifact : null
+  const outputPath = typeof deckArtifact?.output === 'string' && deckArtifact.output.trim()
+    ? deckArtifact.output.trim()
+    : undefined
   const projection: Exclude<PptCanvasProjection, { kind: 'filtered' }> | null =
     isPptReviewBundle(reviewBundle)
-      ? { kind: 'review', bundle: reviewBundle }
+      ? {
+          kind: 'review',
+          bundle: reviewBundle,
+          pptState: {
+            phase: reviewBundle.phase === 'completed' && outputPath ? 'complete' : 'review',
+            revision: Math.max(0, ...reviewBundle.slides.map((slide) => slide.revision)),
+            ...(outputPath ? { outputPath } : {})
+          }
+        }
       : isPptDirectionBundle(directionBundle)
-        ? { kind: 'direction', bundle: directionBundle }
+        ? {
+            kind: 'direction',
+            bundle: directionBundle,
+            pptState: {
+              phase: 'directions',
+              revision: Math.max(0, ...directionBundle.directions.map((direction) => direction.revision))
+            }
+          }
         : null
   if (!projection) return null
   return (expectedWorkflowId && projection.bundle.workflowId !== expectedWorkflowId) ||
@@ -65,7 +91,7 @@ export function projectPptCanvasBundle(input: {
   affectedThisTurn: Set<string>
   errorsThisTurn: OpError[]
   onOpenRequested?: (request: PptCanvasProjectionOpenRequest) => void
-}): boolean {
+}): PptCanvasProjectionResult {
   const { bundle, kind } = input.projection
   const canvasShapes = Object.values(useCanvasShapeStore.getState().document.objects)
   // Tool-result replay is not guaranteed to arrive in phase or revision order
@@ -75,7 +101,7 @@ export function projectPptCanvasBundle(input: {
   // the slide board. Equal review revisions remain replayable for Code canvas
   // recovery; only strictly older reviews are rejected.
   if (shouldRejectPptProjection(bundle, kind, canvasShapes)) {
-    return false
+    return 'rejected'
   }
   const parentThreadId = input.targetThreadId ?? useChatStore.getState().activeThreadId ?? undefined
   const boardOps = kind === 'review'
@@ -87,7 +113,13 @@ export function projectPptCanvasBundle(input: {
   const { affectedIds, errors } = applyCanvasOpBlocks(
     [boardOps], `ppt-${kind}:${input.blockId}`, input.executeOptions)
   if (errors.length > 0) input.errorsThisTurn.push(...errors)
-  if (affectedIds.length === 0) return false
+  if (errors.length > 0) return 'retry'
+  const current = pptProjectionIsCurrent(
+    bundle,
+    kind,
+    Object.values(useCanvasShapeStore.getState().document.objects)
+  )
+  if (affectedIds.length === 0 && !current) return 'retry'
   for (const id of affectedIds) input.affectedThisTurn.add(id)
   if (kind === 'direction') useCanvasSelectionStore.getState().clearSelection()
   else useCanvasSelectionStore.getState().select([...input.affectedThisTurn])
@@ -96,11 +128,38 @@ export function projectPptCanvasBundle(input: {
     blockId: input.blockId,
     childId: bundle.childId,
     workflowId: bundle.workflowId,
-    phase: kind
+    phase: kind,
+    pptState: input.projection.pptState
   }
   if (input.onOpenRequested) input.onOpenRequested(openRequest)
   else requestCodeCanvasPanelOpen()
-  return true
+  return affectedIds.length > 0 ? 'applied' : 'current'
+}
+
+function pptProjectionIsCurrent(
+  bundle: PptDirectionBundle | PptReviewBundle,
+  kind: 'direction' | 'review',
+  shapes: readonly CanvasShape[]
+): boolean {
+  const matching = shapes.filter((shape) => {
+    const ref = shape.pptReviewRef ?? shape.pptDirectionRef
+    return ref?.workflowId === bundle.workflowId && ref.childId === bundle.childId
+  })
+  if (kind === 'direction') {
+    if (matching.some((shape) => shape.pptReviewRef)) return false
+    return (bundle as PptDirectionBundle).directions.every((direction) =>
+      matching.some((shape) => shape.pptDirectionRef?.directionId === direction.directionId &&
+        shape.pptDirectionRef.revision === direction.revision &&
+        shape.pptDirectionRef.role === 'direction-card'))
+  }
+  if (matching.some((shape) => shape.pptDirectionRef)) return false
+  return (bundle as PptReviewBundle).slides.every((slide) => {
+    const refs = matching.flatMap((shape) => shape.pptReviewRef?.slideId === slide.slideId
+      ? [{ shape, ref: shape.pptReviewRef }]
+      : [])
+    return refs.some(({ ref }) => ref.role === 'slide-frame' && ref.revision === slide.revision) &&
+      refs.some(({ ref }) => ref.role === 'preview-image' && ref.revision === slide.revision)
+  })
 }
 
 function shouldRejectPptProjection(

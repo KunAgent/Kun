@@ -3,8 +3,10 @@ import { act, create } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cumulativeCacheHitRate,
+  formatCompactNumber,
   formatCost,
   loadThreadUsage,
+  mergeLiveThreadUsage,
   primaryCacheHitRate,
   retainPendingThreadUsage,
   summarizeThreadMoney,
@@ -12,6 +14,7 @@ import {
   type ThreadUsageState,
   type ThreadUsageSummary
 } from './use-thread-usage'
+import type { ThreadUsageSnapshot } from '../agent/thread-runtime-types'
 
 type RuntimeRequest = (path: string, method?: string) => Promise<{ ok: boolean; status: number; body: string }>
 
@@ -42,6 +45,32 @@ function usageSummary(overrides: Partial<ThreadUsageSummary> = {}): ThreadUsageS
   }
 }
 
+function liveUsage(overrides: Partial<ThreadUsageSnapshot> = {}): ThreadUsageSnapshot {
+  return {
+    inputTokens: 180,
+    outputTokens: 40,
+    reasoningTokens: 8,
+    cachedTokens: 150,
+    cacheMissTokens: 30,
+    cacheHitRate: 5 / 6,
+    totalTokens: 220,
+    costUsd: 0.02,
+    costCny: null,
+    tokenEconomySavingsTokens: 128,
+    turns: 2,
+    avgTtftMs: 900,
+    avgTokensPerSecond: 45,
+    turnAvgTtftMs: 900,
+    turnAvgTokensPerSecond: 45,
+    lastRequestCacheHitRate: 0.92,
+    cacheableTokenHitRate: 0.92,
+    totalInputTokenHitRate: 0.6,
+    cacheMissReasons: ['cold_request'],
+    cacheSuggestions: ['Keep prompts stable.'],
+    ...overrides
+  }
+}
+
 function setRuntimeRequest(runtimeRequest: RuntimeRequest): void {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -63,6 +92,20 @@ afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   Reflect.deleteProperty(globalThis, 'window')
+})
+
+describe('formatCompactNumber', () => {
+  it('formats values below one million with k or locale grouping', () => {
+    expect(formatCompactNumber(999)).toBe(new Intl.NumberFormat().format(999))
+    expect(formatCompactNumber(11_900_000 / 1000)).toBe('11.9k')
+    expect(formatCompactNumber(11_900_000)).toBe('11.9M')
+  })
+
+  it('keeps M below the four-digit threshold and switches to B at 1000M', () => {
+    expect(formatCompactNumber(999_949_999)).toBe('999.9M')
+    expect(formatCompactNumber(1_000_000_000)).toBe('1.0B')
+    expect(formatCompactNumber(12_481_900_000)).toBe('12.5B')
+  })
 })
 
 describe('thread usage formatting', () => {
@@ -115,6 +158,8 @@ describe('thread usage formatting', () => {
     expect(formatCost(null, 'en', 0.88)).toBe('$0.1222')
     expect(formatCost(null, 'ja', 0.88)).toBe('$0.1222')
     expect(formatCost(0.125, 'zh-CN')).toBe('￥0.9000')
+    expect(formatCost(2344.5, 'en')).toBe('$2,344.50')
+    expect(formatCost(0.125, 'zh-CN', 16880.03)).toBe('￥16,880.03')
     expect(formatCost(0.00000001, 'en')).toBe('$<0.0001')
   })
 
@@ -183,6 +228,68 @@ describe('thread usage formatting', () => {
     expect(retainPendingThreadUsage(previous, usageSummary({ lastTurnCacheHitRate: 0 })))
       .toMatchObject({ lastTurnCacheHitRate: 0 })
     expect(retainPendingThreadUsage(previous, null)).toBe(previous)
+  })
+
+  it('merges live usage over the REST summary while preserving REST-only fields', () => {
+    const rest = usageSummary({
+      totalTokens: 120,
+      costUsd: 0.05,
+      valueEstimateUsd: 0.25,
+      valueEstimateCny: 1.8,
+      valueEstimateCoverage: 'complete',
+      lastTurnCacheHitRate: 0.5
+    })
+
+    const merged = mergeLiveThreadUsage(rest, liveUsage())
+
+    expect(merged).toMatchObject({
+      inputTokens: 180,
+      outputTokens: 40,
+      reasoningTokens: 8,
+      cachedTokens: 150,
+      cacheMissTokens: 30,
+      cacheHitRate: 5 / 6,
+      totalTokens: 220,
+      costUsd: 0.02,
+      turns: 2,
+      avgTtftMs: 900,
+      avgTokensPerSecond: 45,
+      lastTurnCacheHitRate: 0.92,
+      lastTurnCacheableHitRate: 0.92,
+      lastTurnTotalInputHitRate: 0.6,
+      cacheMissReasons: ['cold_request'],
+      cacheSuggestions: ['Keep prompts stable.'],
+      valueEstimateUsd: 0.25,
+      valueEstimateCny: 1.8,
+      valueEstimateCoverage: 'complete'
+    })
+  })
+
+  it('constructs a summary from live usage when REST is unavailable', () => {
+    const merged = mergeLiveThreadUsage(null, liveUsage())
+
+    expect(merged).toMatchObject({
+      inputTokens: 180,
+      cacheHitRate: 5 / 6,
+      lastTurnCacheHitRate: 0.92,
+      valueEstimateUsd: null,
+      valueEstimateCny: null,
+      valueEstimateCoverage: 'unavailable'
+    })
+  })
+
+  it('returns the REST summary when no live snapshot is present', () => {
+    const rest = usageSummary()
+    expect(mergeLiveThreadUsage(rest, null)).toBe(rest)
+    expect(mergeLiveThreadUsage(null, null)).toBeNull()
+  })
+
+  it('keeps the REST last-turn rate when live lacks per-request telemetry', () => {
+    const rest = usageSummary({ lastTurnCacheHitRate: 0.9, cacheHitRate: 0.8 })
+    const merged = mergeLiveThreadUsage(rest, liveUsage({ lastRequestCacheHitRate: null }))
+
+    expect(merged?.lastTurnCacheHitRate).toBe(0.9)
+    expect(merged?.cacheHitRate).toBe(5 / 6)
   })
 
   it('derives the cumulative cache rate from tokens to match the overall usage panel (#654)', () => {

@@ -148,6 +148,7 @@ describe('shellSpawnEnv', () => {
       HOME: '/Users/test',
       LANG: 'en_US.UTF-8',
       LC_ALL: 'en_US.UTF-8',
+      KUN_RUNTIME_INSTANCE_ID: 'runtime-safe-identity',
       KUN_RUNTIME_TOKEN: 'runtime-secret',
       DEEPSEEK_API_KEY: 'model-secret',
       AWS_SECRET_ACCESS_KEY: 'cloud-secret'
@@ -156,7 +157,8 @@ describe('shellSpawnEnv', () => {
       PATH: '/usr/bin:/bin',
       HOME: '/Users/test',
       LANG: 'en_US.UTF-8',
-      LC_ALL: 'en_US.UTF-8'
+      LC_ALL: 'en_US.UTF-8',
+      KUN_RUNTIME_INSTANCE_ID: 'runtime-safe-identity'
     })
   })
 
@@ -188,6 +190,7 @@ describe('shellSpawnEnv', () => {
     const result = shellSpawnEnv({
       Path: 'C:\\Tools',
       SystemRoot: 'C:\\Windows',
+      KUN_RUNTIME_INSTANCE_ID: 'runtime-safe-identity',
       KUN_RUNTIME_TOKEN: 'runtime-secret',
       DEEPSEEK_API_KEY: 'model-secret',
       GITHUB_TOKEN: 'github-secret'
@@ -195,7 +198,10 @@ describe('shellSpawnEnv', () => {
     expect(result).not.toHaveProperty('KUN_RUNTIME_TOKEN')
     expect(result).not.toHaveProperty('DEEPSEEK_API_KEY')
     expect(result).not.toHaveProperty('GITHUB_TOKEN')
-    expect(result).toMatchObject({ SystemRoot: 'C:\\Windows' })
+    expect(result).toMatchObject({
+      SystemRoot: 'C:\\Windows',
+      KUN_RUNTIME_INSTANCE_ID: 'runtime-safe-identity'
+    })
   })
 })
 

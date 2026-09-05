@@ -17,11 +17,54 @@ concurrency:
 env:
   NODE_VERSION: '22'
   RELEASE_CHANNEL: stable
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
+  quality:
+    name: Release quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'master' &&
+      github.event.pull_request.head.ref == 'develop' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Check out merge commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production dependency audit
+        run: npm run audit:production
+
   prepare:
     name: Prepare release version
     runs-on: ubuntu-latest
+    needs:
+      - quality
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.base.ref == 'master' &&
@@ -52,7 +95,7 @@ jobs:
   build-macos:
     name: Build macOS
     runs-on: macos-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     needs:
       - prepare
     env:
@@ -159,7 +202,7 @@ jobs:
   build-windows:
     name: Build Windows
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 240
     needs:
       - prepare
     env:
@@ -207,9 +250,9 @@ jobs:
       - name: Build Windows installer
         run: npm run dist:win
 
-      - name: Smoke Windows installer migration
-        timeout-minutes: 60
-        run: npm run smoke:windows-installer-migration -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
+      - name: Smoke Windows installer
+        timeout-minutes: 180
+        run: npm run smoke:windows-installer -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
 
       - name: Smoke packaged update handoff (Windows)
         timeout-minutes: 20
@@ -291,7 +334,7 @@ jobs:
   build-linux-arm64:
     name: Build Linux (ARM64)
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 90
+    timeout-minutes: 180
     needs:
       - prepare
     env:
@@ -353,83 +396,8 @@ jobs:
             dist/Kun-*-linux-arm64.deb
             dist/latest-linux-arm64.yml
 
-  build-tui:
-    name: Build standalone TUI (${{ matrix.target }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    needs:
-      - prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            target: darwin-arm64
-          - runner: macos-15-intel
-            target: darwin-x64
-          - runner: windows-2025
-            target: win32-x64
-          - runner: ubuntu-22.04
-            target: linux-x64
-          - runner: ubuntu-24.04-arm
-            target: linux-arm64
-    env:
-      KUN_APP_VERSION: ${{ needs.prepare.outputs.version }}
-      KUN_ARTIFACT_VERSION: ${{ needs.prepare.outputs.version }}
-      KUN_UPDATE_CHANNEL: stable
-      RELEASE_CHANNEL: stable
-      TAG_NAME: ${{ needs.prepare.outputs.tag }}
-      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
-      R2_RELEASE_PREFIX: ${{ secrets.R2_RELEASE_PREFIX }}
-    steps:
-      - name: Check out merge commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-
-      - name: Set up packaged Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.23.1'
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            kun/package-lock.json
-
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix kun ci
-
-      - name: Build shared Kun runtime
-        run: npm run build:kun
-
-      - name: Package standalone TUI
-        run: >-
-          npm run package:tui --
-          --version "${{ needs.prepare.outputs.version }}"
-          --artifact-version "${{ needs.prepare.outputs.version }}"
-          --tag "${{ needs.prepare.outputs.tag }}"
-          --channel stable
-          --commit "${{ github.event.pull_request.merge_commit_sha }}"
-          --target "${{ matrix.target }}"
-          --output dist
-
-      - name: Upload standalone TUI artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-tui-${{ matrix.target }}
-          if-no-files-found: error
-          retention-days: 7
-          path: |
-            dist/Kun-TUI-*.tar.gz
-            dist/Kun-TUI-*.zip
-            dist/Kun-TUI-*.sha256
-            dist/Kun-TUI-*.json
-
   publish:
-    name: Publish GitHub Release and R2
+    name: Stage draft release and immutable R2 candidate
     runs-on: ubuntu-latest
     needs:
       - prepare
@@ -437,7 +405,6 @@ jobs:
       - build-windows
       - build-linux
       - build-linux-arm64
-      - build-tui
     env:
       GH_TOKEN: ${{ github.token }}
       TAG_NAME: ${{ needs.prepare.outputs.tag }}
@@ -477,13 +444,6 @@ jobs:
           path: release-artifacts
           merge-multiple: true
 
-      - name: Rebuild shared GUI/TUI runtime identity
-        env:
-          KUN_APP_VERSION: ${{ needs.prepare.outputs.version }}
-          KUN_ARTIFACT_VERSION: ${{ needs.prepare.outputs.version }}
-          KUN_UPDATE_CHANNEL: stable
-        run: npm run build:kun
-
       - name: Verify release artifacts
         run: |
           set -euo pipefail
@@ -501,11 +461,6 @@ jobs:
             "latest.yml"
             "latest-linux.yml"
             "latest-linux-arm64.yml"
-            "Kun-TUI-${RELEASE_VERSION}-mac-arm64.tar.gz"
-            "Kun-TUI-${RELEASE_VERSION}-mac-x64.tar.gz"
-            "Kun-TUI-${RELEASE_VERSION}-win-x64.zip"
-            "Kun-TUI-${RELEASE_VERSION}-linux-x64.tar.gz"
-            "Kun-TUI-${RELEASE_VERSION}-linux-arm64.tar.gz"
           )
 
           for pattern in "${required[@]}"; do
@@ -518,45 +473,8 @@ jobs:
 
           find release-artifacts -maxdepth 2 -type f -print | sort
 
-      - name: Assemble standalone TUI release contract
-        run: >-
-          npm run assemble:tui-release --
-          --directory release-artifacts
-          --version "${RELEASE_VERSION}"
-          --artifact-version "${RELEASE_VERSION}"
-          --tag "${TAG_NAME}"
-          --channel "${RELEASE_CHANNEL}"
-          --commit "$(git rev-parse HEAD)"
-          --expected-build-id "$(node -p "require('./kun/dist/runtime-build.json').buildId")"
-          --public-base-url "${R2_PUBLIC_BASE_URL}"
-          --release-prefix "${R2_RELEASE_PREFIX:-deepseek-gui}"
-
       - name: Generate release notes
-        run: |
-          set -euo pipefail
-          curated_notes="release/release-v${RELEASE_VERSION}.md"
-          if [[ -f "${curated_notes}" ]]; then
-            cp "${curated_notes}" release-notes.md
-          elif [[ -n "${PREVIOUS_TAG}" ]]; then
-            node ./scripts/generate-release-notes.cjs "${PREVIOUS_TAG}" > release-notes.md
-          else
-            node ./scripts/generate-release-notes.cjs > release-notes.md
-          fi
-
-          {
-            echo
-            echo "---"
-            echo
-            echo "### 构建信息"
-            echo
-            echo "- Release version: \`${RELEASE_VERSION}\`"
-            echo "- Release channel: \`${RELEASE_CHANNEL}\`"
-            echo "- Branch: \`master\`"
-            echo "- Commit: \`${GITHUB_SHA::7}\`"
-            echo "- macOS: Developer ID signed and notarized"
-            echo "- Platforms: macOS arm64/x64, Windows x64, Linux arm64/x64 AppImage/deb"
-            echo "- Standalone TUI: macOS arm64/x64, Windows x64, Linux arm64/x64"
-          } >> release-notes.md
+        run: node ./scripts/prepare-ci-release-notes.cjs
 
       - name: Ensure release tag
         run: |
@@ -597,7 +515,7 @@ jobs:
           set -euo pipefail
           mapfile -d '' assets < <(
             find release-artifacts -type f \
-              \( -name 'Kun-*' -o -name 'latest*.yml' -o -name 'release-tui.json' -o -name 'SHA256SUMS-tui.txt' \) \
+              \( -name 'Kun-*' -o -name 'latest*.yml' \) ! -name 'Kun-TUI-*' \
               -print0
           )
 
@@ -614,15 +532,12 @@ jobs:
           node ./scripts/publish-r2.mjs upload --platform mac --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
           node ./scripts/publish-r2.mjs upload --platform win --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
           node ./scripts/publish-r2.mjs upload --platform linux --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
-          node ./scripts/publish-r2.mjs upload-tui --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
 
-      - name: Promote R2 latest
-        run: >
-          node ./scripts/publish-r2.mjs promote
-          --tag "${TAG_NAME}"
-          --channel "${RELEASE_CHANNEL}"
-          --platforms mac,win,linux
-          --require-tui
-
-      - name: Publish GitHub Release
-        run: gh release edit "${TAG_NAME}" --draft=false --prerelease=false --latest
+  accept-and-publish:
+    needs: [prepare, publish]
+    uses: ./.github/workflows/release-gui-acceptance.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      tag: ${{ needs.prepare.outputs.tag }}
+      commit: ${{ github.event.pull_request.merge_commit_sha }}
+    secrets: inherit

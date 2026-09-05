@@ -1,0 +1,24 @@
+{
+  "id": "imf-data",
+  "name": "IMF Data",
+  "version": "1.0.0",
+  "description": "Retrieve and analyze IMF macroeconomic series, forecasts, and reserve-composition data.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/imf-data"
+    ],
+    "promptPatterns": [
+      "COFER",
+      "IMF",
+      "IMF Data",
+      "imf-data",
+      "WEO",
+      "宏观预测"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

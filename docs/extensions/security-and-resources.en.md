@@ -65,9 +65,10 @@ These windows mount no extension Webview, inject no content script, and render n
 | Global State | `storage.global` | extension ID | Cross-workspace preferences, lightweight cache metadata |
 | Workspace State | `storage.workspace` | extension ID + workspace | Project configuration/progress |
 | View State | `webview`/View contract | extension + contribution + workspace | UI expansion, filters, cursors |
+| Protected Extension Secrets | `storage.secrets` | profile + extension ID + key | Short Node-Host-owned service secrets |
 | Credential Store | Account Broker | Provider + account + credential reference | API keys, OAuth tokens, secrets |
 
-The first three accept only Schema-valid, quota-bounded structured data and are not secret stores. Binary blobs, large logs, complete prompts/attachments, and credentials are forbidden in state. Account secrets belong only in Credential Store.
+Global, Workspace, and View state accept only Schema-valid, quota-bounded structured data and are not secret stores. Protected Extension Secrets use the OS credential backend or authenticated encrypted fallback and are never exposed to Extension Views. Binary blobs, large logs, complete prompts/attachments, and credentials are forbidden in ordinary state.
 
 Package directories are immutable and are not state directories. Mutable data defaults to:
 

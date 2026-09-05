@@ -61,6 +61,7 @@ export type ProviderQuotaProbeProfile = {
   apiKey: string
   headers?: Record<string, string>
   credentialSourceId?: string
+  proxyUrl?: string
 }
 
 export type SubscriptionQuotaProbeKind =
@@ -106,11 +107,13 @@ export type SubscriptionQuotaRuntime = {
   resolveClaudeToken(provider: ProviderQuotaProbeProfile): Promise<string | undefined>
   resolveCodexCredential(
     provider: ProviderQuotaProbeProfile,
-    rejectedAccessToken?: string
+    rejectedAccessToken?: string,
+    context?: ProbeContext
   ): Promise<CodexCredential | undefined>
   resolveGrokCredential(
     provider: ProviderQuotaProbeProfile,
-    rejectedAccessToken?: string
+    rejectedAccessToken?: string,
+    context?: ProbeContext
   ): Promise<GrokCredential | undefined>
   resolveCursorSession(): Promise<CursorSession | undefined>
   resolveAntigravityCredential(context: ProbeContext): Promise<GoogleCredential | undefined>
@@ -167,7 +170,7 @@ export async function runSubscriptionQuotaProbe(
     }
   }
   if (kind === 'codex-subscription') {
-    let credential = await runtime.resolveCodexCredential(provider)
+    let credential = await runtime.resolveCodexCredential(provider, undefined, context)
     if (!credential) {
       throw new ProviderQuotaMissingCredentialError(
         'Connect the ChatGPT subscription or sign in with Codex CLI first.'
@@ -177,7 +180,11 @@ export async function runSubscriptionQuotaProbe(
       return parseCodexSubscriptionQuota(await requestCodexSubscriptionQuota(credential, context))
     } catch (error) {
       if (!(error instanceof ProviderQuotaAuthorizationError)) throw error
-      const refreshed = await runtime.resolveCodexCredential(provider, credential.accessToken)
+      const refreshed = await runtime.resolveCodexCredential(
+        provider,
+        credential.accessToken,
+        context
+      )
       if (!refreshed || refreshed.accessToken === credential.accessToken) {
         throw new ProviderQuotaMissingCredentialError(
           'The Codex login expired. Sign in to the ChatGPT subscription or Codex CLI again.'
@@ -188,7 +195,7 @@ export async function runSubscriptionQuotaProbe(
     }
   }
   if (kind === 'grok-subscription') {
-    let credential = await runtime.resolveGrokCredential(provider)
+    let credential = await runtime.resolveGrokCredential(provider, undefined, context)
     if (!credential) {
       throw new ProviderQuotaMissingCredentialError(
         'Connect Grok or run `grok login` before refreshing quota.'
@@ -201,7 +208,11 @@ export async function runSubscriptionQuotaProbe(
       }
     } catch (error) {
       if (!(error instanceof ProviderQuotaAuthorizationError)) throw error
-      const refreshed = await runtime.resolveGrokCredential(provider, credential.accessToken)
+      const refreshed = await runtime.resolveGrokCredential(
+        provider,
+        credential.accessToken,
+        context
+      )
       if (!refreshed || refreshed.accessToken === credential.accessToken) {
         throw new ProviderQuotaMissingCredentialError(
           'The Grok login expired. Connect Grok or run `grok login` again.'

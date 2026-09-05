@@ -349,6 +349,70 @@ describe('ExtensionViewSessionRegistry', () => {
     expect(event.preventDefault).not.toHaveBeenCalled()
   })
 
+  it('guards a workbench that already exists when the guards are installed', () => {
+    const registry = new ExtensionViewSessionRegistry()
+    const created = registry.create({
+      sessionId: '1234567890abcdef',
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'issues',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 10
+    })
+    let webContentsCreated: ((...args: never[]) => void) | undefined
+    const contentsListeners = new Map<string, (...args: never[]) => void>()
+    const on = vi.fn((event: string, listener: (...args: never[]) => void) => {
+      contentsListeners.set(event, listener)
+    })
+    const setWindowOpenHandler = vi.fn()
+    const existingWorkbench = {
+      id: 10,
+      on,
+      setWindowOpenHandler,
+      getType: () => 'window'
+    }
+    installWebviewSecurityGuards({
+      app: {
+        on: vi.fn((_event: string, listener: (...args: never[]) => void) => {
+          webContentsCreated = listener
+        })
+      } as never,
+      existingWebContents: [existingWorkbench as never],
+      sessions: registry,
+      extensionPreloadPath: '/kun/extension-view.cjs',
+      assertExtensionPartitionPrepared: vi.fn(),
+      isPreparedExtensionNavigation: () => false,
+      isTrustedWorkbench: (contents) => contents.id === existingWorkbench.id,
+      isAllowedDevPreviewUrl: () => false,
+      isAuthorizedPrototypeFileUrl: () => false
+    })
+    const event = { preventDefault: vi.fn() }
+    const preferences: Record<string, unknown> = {}
+    const params: Record<string, unknown> = { src: created.sourceUrl }
+
+    contentsListeners.get('will-attach-webview')?.(
+      event as never,
+      preferences as never,
+      params as never
+    )
+
+    expect(preferences).toMatchObject({
+      preload: '/kun/extension-view.cjs',
+      partition: created.partition,
+      sandbox: true,
+      additionalArguments: [
+        `--kun-extension-view-session=${created.sessionId}`,
+        expect.stringMatching(/^--kun-extension-view-nonce=.{32,}$/)
+      ]
+    })
+    expect(params.partition).toBe(created.partition)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+
+    webContentsCreated?.({} as never, existingWorkbench as never)
+    expect(on).toHaveBeenCalledTimes(3)
+    expect(setWindowOpenHandler).toHaveBeenCalledOnce()
+  })
+
   it('denies and disposes the View Session when isolated protocol setup fails', () => {
     const registry = new ExtensionViewSessionRegistry()
     const created = registry.create({

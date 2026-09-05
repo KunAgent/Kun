@@ -72,6 +72,11 @@ import {
   rememberTurnModel
 } from './chat-store-helpers'
 import {
+  codeRootsAfterRemoval,
+  rememberRootForRestore,
+  removedRegistryAfterRestore
+} from './chat-store-navigation-workspace-removal'
+import {
   clearedThreadSelection,
   collectAssistantTextForTurn,
   findLatestUserBlockId,
@@ -139,6 +144,10 @@ import {
   fallbackComposerProviderIdForSend,
   subscribeThreadEventsWithRecovery
 } from './chat-store-thread-action-helpers'
+import {
+  consumeThreadTimelineHydration,
+  runThreadRecovery
+} from './thread-recovery-coordinator'
 import { GitCheckpointAvailabilityCache } from '../lib/git-checkpoint-availability'
 import { primaryAgentAvailableOnSurface } from '../lib/subagent-profile-surface'
 import { isDesignThreadId, readDesignThreadRegistry } from '../design/design-thread-registry'
@@ -259,8 +268,13 @@ export function createThreadCreationActions(
         return null
       }
       if (!activationAllowed()) return null
-      const codeWorkspaceRoots = rememberCodeWorkspaceRoots(get().codeWorkspaceRoots, [workspaceRoot])
-      set({ codeWorkspaceRoots })
+      // Creating a thread here is an explicit re-add for a removed project.
+      const restoredRegistry = removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces)
+      const codeWorkspaceRoots = rememberRootForRestore(
+        codeRootsAfterRemoval(get().codeWorkspaceRoots, restoredRegistry),
+        workspaceRoot
+      )
+      set({ codeWorkspaceRoots, removedCodeWorkspaces: restoredRegistry })
       // Worktree pool mode always needs a fresh thread bound to a fresh pool
       // slot, so never reuse an existing main-workspace thread in that case.
       const reusableThreadId = options.forceNew || options.useWorktreePool || personaProfile
@@ -400,10 +414,14 @@ export function createThreadCreationActions(
     })
   },
 
-  recoverActiveTurn: async () => {
+  recoverActiveTurn: async (options) => {
     const state = get()
     if (!state.activeThreadId) return false
     const { activeThreadId } = state
+    return runThreadRecovery(
+      activeThreadId,
+      options?.reason ?? 'runtime_restart',
+      async (recoverySignal) => {
     // Recovery results are bound to the thread selected when the request
     // started. If the user switches to another thread or starts a newer turn
     // while the detail is in flight, never commit this stale projection.
@@ -417,6 +435,61 @@ export function createThreadCreationActions(
     clearBusyWatchdog()
     set({ error: runtimeStreamRecoveringMessage() })
     try {
+      const forceTimeline = options?.forceTimeline === true ||
+        consumeThreadTimelineHydration(activeThreadId)
+      if (!forceTimeline && state.blocks.length > 0 && state.lastSeq >= 0) {
+        try {
+          const runtimeState = await p.getThreadState(activeThreadId, { signal: recoverySignal })
+          recoverySignal.throwIfAborted()
+          if (!recoveryStillCurrent()) return state.busy
+          const latestTurnMatches = !state.currentTurnId || !runtimeState.latestTurnId ||
+            runtimeState.latestTurnId === state.currentTurnId
+          const cursorRetained = (runtimeState.replayFloorSeq ?? 0) <= state.lastSeq + 1
+          if (runtimeState.latestSeq >= state.lastSeq && latestTurnMatches && cursorRetained) {
+            const runtimeBusy = runtimeState.status === 'running' ||
+              runtimeState.latestTurnStatus === 'queued' ||
+              runtimeState.latestTurnStatus === 'running'
+            const replayPending = runtimeState.latestSeq > state.lastSeq
+            const busy = runtimeBusy || (state.busy && replayPending)
+            set((snapshot) => ({
+              busy,
+              busyUnconfirmed: busy,
+              ...(busy
+                ? {
+                    currentTurnId: runtimeState.latestTurnId ?? snapshot.currentTurnId,
+                    currentTurnOrchestration: runtimeState.latestTurnOrchestration ??
+                      snapshot.currentTurnOrchestration ?? 'direct'
+                  }
+                : {
+                    blocks: settlePendingRuntimeWorkAfterInterrupt(snapshot.blocks),
+                    threadLoadingId: snapshot.threadLoadingId === activeThreadId
+                      ? null : snapshot.threadLoadingId,
+                    currentTurnId: null,
+                    currentTurnOrchestration: null,
+                    currentTurnUserId: null,
+                    currentTurnStartedAtMs: null
+                  })
+            }))
+            const ac = new AbortController()
+            recoverySignal.addEventListener('abort', () => ac.abort(), { once: true })
+            sseAbortRef.current = ac
+            const sink = buildThreadEventSink(set, get, {
+              threadId: activeThreadId,
+              signal: ac.signal,
+              sinceSeq: state.lastSeq,
+              awaitReplaySynchronization: busy
+            })
+            subscribeThreadEventsWithRecovery(p, activeThreadId, state.lastSeq, sink, ac.signal, get)
+            if (busy) armBusyWatchdog(set, get)
+            else resetBusyRecoveryAttempts()
+            return busy
+          }
+        } catch (error) {
+          if (recoverySignal.aborted) return get().busy
+          // A lightweight state probe is an optimization. Fall through to one
+          // coordinated timeline hydration when it is unavailable or stale.
+        }
+      }
       const {
         blocks: rawBlocks,
         latestSeq,
@@ -432,7 +505,10 @@ export function createThreadCreationActions(
         historyCursor,
         hasMoreHistory = false,
         liveProjection
-      } = await p.getThreadDetail(activeThreadId)
+      } = await p.getThreadDetail(activeThreadId, {
+        signal: recoverySignal,
+        priority: 'foreground'
+      })
       if (!recoveryStillCurrent()) return state.busy
       const loaded = hydrateBlockModelLabels(activeThreadId, rawBlocks)
       const busy = threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
@@ -515,6 +591,7 @@ export function createThreadCreationActions(
       }
       return busy
     } catch (e) {
+      if (recoverySignal.aborted) return get().busy
       if (!recoveryStillCurrent()) return state.busy
       set({
         error: formatRuntimeError(e),
@@ -525,6 +602,8 @@ export function createThreadCreationActions(
       if (state.busy) armBusyWatchdog(set, get)
       return state.busy
     }
+      }
+    )
   },
   }
 }

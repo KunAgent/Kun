@@ -79,4 +79,86 @@ describe('GraphAttemptLeaseManager', () => {
     expect(writes.list).toHaveBeenCalledTimes(2)
     expect(writes.captureWorktree).not.toHaveBeenCalled()
   })
+
+  it('stops heartbeats when an accepted durable release fails', async () => {
+    vi.useFakeTimers()
+    try {
+      const lease = activeLeaseFixture()
+      const writes = {
+        list: vi.fn().mockResolvedValue({ leases: [lease], worktrees: [] }),
+        isActive: vi.fn().mockResolvedValue(true),
+        captureWorktree: vi.fn().mockResolvedValue(undefined),
+        integrate: vi.fn(),
+        renew: vi.fn().mockResolvedValue(undefined),
+        release: vi.fn().mockRejectedValue(new Error('durable release failed'))
+      }
+      const config = testGraphConfig({
+        writeIsolation: { mode: 'lease', leaseTtlMs: 3_000 }
+      })
+      const manager = new GraphAttemptLeaseManager({
+        writes: writes as unknown as FileGraphWriteCoordinator,
+        config: () => config
+      })
+      manager.track('attempt_1', lease)
+      manager.startHeartbeat({
+        runId: 'run_1',
+        attemptId: 'attempt_1',
+        lease,
+        abort: new AbortController(),
+        onRenewalFailure: vi.fn()
+      })
+
+      await expect(manager.integrate('attempt_1')).rejects.toThrow('durable release failed')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(writes.renew).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops heartbeats when a failed-attempt release cannot be persisted', async () => {
+    vi.useFakeTimers()
+    try {
+      const lease = activeLeaseFixture()
+      const writes = {
+        renew: vi.fn().mockResolvedValue(undefined),
+        release: vi.fn().mockRejectedValue(new Error('release unavailable'))
+      }
+      const config = testGraphConfig({
+        writeIsolation: { mode: 'lease', leaseTtlMs: 3_000 }
+      })
+      const manager = new GraphAttemptLeaseManager({
+        writes: writes as unknown as FileGraphWriteCoordinator,
+        config: () => config
+      })
+      manager.track('attempt_1', lease)
+      manager.startHeartbeat({
+        runId: 'run_1',
+        attemptId: 'attempt_1',
+        lease,
+        abort: new AbortController(),
+        onRenewalFailure: vi.fn()
+      })
+
+      await expect(manager.release('attempt_1', 'failed')).rejects.toThrow('release unavailable')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(writes.renew).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
+
+function activeLeaseFixture() {
+  return {
+    leaseId: 'lease_1',
+    runId: 'run_1',
+    nodeId: 'node_1',
+    attemptId: 'attempt_1',
+    workspaceRoot: '/workspace',
+    scopes: [],
+    state: 'active' as const,
+    acquiredAt: '2026-08-02T00:00:00.000Z',
+    expiresAt: '2026-08-02T01:00:00.000Z'
+  }
+}

@@ -123,6 +123,11 @@ export const ModelRequestTraceRecordSchema = z
   .object({
     schemaVersion: z.literal(MODEL_REQUEST_TRACE_SCHEMA_VERSION),
     id: z.string().min(1),
+    roundId: z.string().min(1).optional(),
+    step: z.number().int().nonnegative().optional(),
+    purpose: z.string().min(1).max(64).optional(),
+    captureMode: z.enum(['metadata', 'full']).optional(),
+    manifestId: z.string().min(1).optional(),
     sequence: z.number().int().positive(),
     threadId: z.string().min(1),
     turnId: z.string().min(1),
@@ -160,9 +165,15 @@ export const ModelRequestTraceRecordSchema = z
       'completed',
       'transport_error',
       'capture_error',
-      'not_started'
+      'not_started',
+      'failed',
+      'cancelled',
+      'interrupted'
     ]),
     startedAt: z.string(),
+    firstTokenAt: z.string().optional(),
+    receivedTextLength: z.number().int().nonnegative().optional(),
+    receivedReasoningLength: z.number().int().nonnegative().optional(),
     responseStartedAt: z.string().optional(),
     finishedAt: z.string().optional(),
     timeToHeadersMs: z.number().nonnegative().optional(),

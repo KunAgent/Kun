@@ -4,8 +4,11 @@ import type { ChatBlock, RuntimeConnectionStatus } from '../../agent/types'
 import type { RegisteredContribution } from '../../extensions/contribution-registry'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import type { GuiPlanToolMeta } from '../../plan/plan-tool'
-import type { EmptyTaskSurfaceControl } from './message-timeline-empty'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
+import type {
+  GeneratedDocumentArtifact,
+  GeneratedDocumentCollection
+} from './generated-document-artifacts'
 
 export type MessageTimelineProps = {
   blocks: ChatBlock[]
@@ -17,7 +20,6 @@ export type MessageTimelineProps = {
   onRetryConnection: () => void
   onOpenSettings: () => void
   onSelectSuggestion?: (prompt: string) => void
-  taskSurfaceControl?: EmptyTaskSurfaceControl
   focusModeEnabled?: boolean
   devPreviewCard?: ReactElement | null
   planActionsBusy?: boolean
@@ -27,6 +29,11 @@ export type MessageTimelineProps = {
   onOpenChanges?: () => void
   onReviewChanges?: () => void
   reviewChangesDisabled?: boolean
+  onPreviewGeneratedDocument?: (
+    file: GeneratedDocumentArtifact,
+    workspaceRoot: string
+  ) => void
+  onOpenGeneratedDocuments?: (collection: GeneratedDocumentCollection) => void
   compactCards?: boolean
   onOpenChildThread?: OpenChildThreadHandler
   onComponentPrototypePrompt?: (prompt: string) => void

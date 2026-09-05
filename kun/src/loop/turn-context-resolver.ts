@@ -12,6 +12,7 @@ import {
 } from '../contracts/policy.js'
 import type { InstructionRuntime, InstructionTurnResolution } from '../instructions/instruction-runtime.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../memory/memory-retrieval.js'
 import type { GuiPlanContext, PptWorkflowScope, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from './design-mode.js'
@@ -329,7 +330,7 @@ async function retrieveMemories(
   const memories = await memoryStore.retrieve({
     query: input.prompt,
     workspace: input.workspace,
-    limit: 8
+    limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
   })
   memoryStore.setLastInjected(memories.map((memory) => memory.id))
   return memories

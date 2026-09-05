@@ -41,7 +41,10 @@ vi.mock('electron', () => ({
     getPath: () => '/tmp/deepseek-gui-test-user-data'
   }
 }))
-
+vi.mock('../../kun/src/manager/manager-discovery.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../kun/src/manager/manager-discovery.js')>()),
+  defaultKunControlDir: () => join(tempRoot ?? tmpdir(), 'manager-control')
+}))
 let tempRoot: string | null = null
 let testKunPort = 18899
 
@@ -58,7 +61,7 @@ function createSettings(binaryPath: string): AppSettingsV1 {
       kun: {
         ...defaultKunRuntimeSettings(testKunPort),
         binaryPath,
-        autoStart: true
+        autoStart: true, dataDir: join(tempRoot ?? tmpdir(), 'runtime-data')
       }
     },
     workspaceRoot: '/tmp/workspace',
@@ -217,7 +220,18 @@ describe('Manager-owned Main data plane', () => {
         return Response.json({ snapshot: { revision: 2, value: null } })
       }
       if (url.endsWith('/release')) return Response.json({ released: true })
-      return Response.json({ acquired: true })
+      const now = Date.now()
+      return Response.json({
+        acquired: true,
+        lease: {
+          resource: 'main-registry',
+          ownerFlavor: 'production',
+          ownerInstanceId: 'main-one',
+          fencingToken: 1,
+          acquiredAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + 10_000).toISOString()
+        }
+      })
     }))
 
     await expect(existingClient.read()).resolves.toEqual({ revision: 2, value: null })
@@ -250,6 +264,21 @@ describe('Manager-owned Main data plane', () => {
 
     await expect(module.resolveKunManagerDataDirFromSettings(settingsPath)).resolves.toBe(customDataDir)
     expect(readFileSync(settingsPath, 'utf8')).toBe(before)
+  })
+
+  it('fails closed when selecting Manager data from a newer settings schema', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const settingsPath = join(tempRoot, 'future-settings.json')
+    writeFileSync(settingsPath, JSON.stringify({
+      version: 2,
+      agents: { kun: { dataDir: join(tempRoot, 'future-runtime-data') } }
+    }))
+    const module = await import('./kun-process')
+
+    await expect(module.resolveKunManagerDataDirFromSettings(settingsPath)).rejects.toMatchObject({
+      code: 'settings_schema_newer',
+      storedVersion: 2
+    })
   })
 
   it('safely hands a healthy old Manager from the default data directory to custom authority', async () => {

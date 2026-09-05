@@ -1,0 +1,13 @@
+{
+  "modelErrorSourceProvider": "공급자 응답",
+  "modelErrorSourceNoResponse": "공급자 응답 없음",
+  "modelErrorSourceNotSent": "요청이 전송되지 않음",
+  "modelErrorProviderSummaryUnavailable": "공급자가 일시적으로 이 요청을 처리할 수 없습니다",
+  "modelErrorProviderSummaryRateLimited": "공급자가 이 요청을 제한했습니다",
+  "modelErrorProviderSummaryRejected": "공급자가 이 요청을 거부했습니다",
+  "modelErrorProviderSummaryGeneric": "공급자가 오류를 반환했습니다",
+  "modelErrorNoResponseSummary": "모델 요청을 전송했지만 공급자가 응답하지 않았습니다",
+  "modelErrorNotSentSummary": "모델 요청이 전송되기 전에 실패했습니다",
+  "modelErrorProviderOriginalMessage": "공급자가 반환한 메시지",
+  "modelErrorFailureMessage": "실패 원인"
+}

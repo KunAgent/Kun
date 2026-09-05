@@ -116,6 +116,27 @@ describe('ModelConnectionOAuthService', () => {
       .rejects.toThrow('registry revision changed')
   })
 
+  it('fails closed before OAuth discovery when the selected proxy is invalid', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-oauth-invalid-proxy-'))
+    roots.push(dataDir)
+    const registry = new ModelConnectionRegistry({
+      dataDir,
+      credentials: new ExtensionCredentialStore({ dataDir, profileId: 'oauth-test' })
+    })
+    const snapshot = await registry.initialize([], {
+      proxy: { enabled: true, url: 'invalid-proxy' }
+    })
+    const fetchMock = vi.fn<typeof fetch>()
+    const service = new ModelConnectionOAuthService({ registry, fetch: fetchMock })
+
+    await expect(service.start({
+      expectedRevision: snapshot.revision,
+      provider: 'chatgpt',
+      useProxy: true
+    })).rejects.toMatchObject({ code: 'provider_proxy_invalid' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('accepts a pasted Grok callback URL and commits the shared GUI catalog without exposing tokens', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-oauth-grok-'))
     roots.push(dataDir)

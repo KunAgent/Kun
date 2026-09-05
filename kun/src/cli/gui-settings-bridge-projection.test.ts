@@ -84,6 +84,31 @@ describe('GUI settings bridge', () => {
       .toBe('gui-secret-codex')
   })
 
+  it('refuses to project into a newer GUI settings schema', async () => {
+    const fixture = await createFixture()
+    const raw = JSON.stringify({
+      version: 2,
+      agents: { kun: { dataDir: fixture.dataDir, providerId: 'old', model: 'old' } },
+      futureProviderState: { keep: true }
+    })
+    await writeFile(fixture.settingsPath, raw, 'utf8')
+    const settings = {
+      settingsPath: fixture.settingsPath,
+      dataDir: fixture.dataDir,
+      defaultProviderId: 'old',
+      defaultModel: 'old',
+      providers: [],
+      legacyRuntimePort: 19999,
+      legacyRuntimeToken: ''
+    }
+
+    await expect(projectModelSelectionToGuiSettings(settings, {
+      defaultProviderId: 'new',
+      defaultModel: 'new'
+    })).rejects.toMatchObject({ code: 'gui_settings_schema_newer' })
+    await expect(readFile(fixture.settingsPath, 'utf8')).resolves.toBe(raw)
+  })
+
   it('does not import GUI metadata into an unrelated explicit data dir', async () => {
     const fixture = await createFixture()
     const settings = await readGuiSharedSettings({

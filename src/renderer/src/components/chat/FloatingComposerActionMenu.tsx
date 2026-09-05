@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  Bot,
   Check,
   ChevronDown,
   ChevronUp,
@@ -23,8 +24,8 @@ import {
   Paperclip,
   Settings2,
   Share2,
-  Sparkles,
-  Target
+  Target,
+  UserRound
 } from 'lucide-react'
 import { LucideIconByName } from '../lucide-icon-by-name'
 import { currentComposerBodyZoom } from './floating-composer-popover-placement'
@@ -149,13 +150,13 @@ export function FloatingComposerActionMenu({
   const {
     attachmentUploadBusy, attachmentUploadEnabled, canCompose, canOpenGoalPanel,
     canPickAttachment, canPickDesignReference, canPickFileReference, canPickLocalFileReference,
-    canToggleGraphMode, canTogglePlanMode, codeAgentPresets, composerMenuButtonRef,
+    canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, codeAgentPresets, composerMenuButtonRef,
     composerMenuOpen, composerMenuPanelRef, composerPersonaId, composerShellRef,
     fileReferenceEnabled, graphEnabled, handleAttachmentMenuClick, handleDesignReferenceMenuClick,
     handleFileReferenceMenuClick, handleGoalMenuClick, handleGraphToolbarClick,
-    handleLocalFileReferenceMenuClick, handlePlanToolbarClick, mode, onComposerPersonaChange,
+    handleLocalFileReferenceMenuClick, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, mode, onComposerPersonaChange,
     onPickAttachments, openSettings, orchestration, resolvedCodeAgentPresets,
-    setComposerMenuOpen, showGoalMenuOption, showGraphMenuOption, showPlanMenuOption, t
+    setComposerMenuOpen, showAutoPlanBuildMenuOption, showGoalMenuOption, showGraphMenuOption, showPlanMenuOption, t
   } = context
   const [personaOpen, setPersonaOpen] = useState(false)
   const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' })
@@ -322,7 +323,7 @@ export function FloatingComposerActionMenu({
           </button>
         </>
       ) : null}
-      {(fileReferenceEnabled || attachmentUploadEnabled) && (showPlanMenuOption || showGraphMenuOption || showGoalMenuOption || personaAvailable)
+      {(fileReferenceEnabled || attachmentUploadEnabled) && (showPlanMenuOption || showAutoPlanBuildMenuOption || showGraphMenuOption || showGoalMenuOption || personaAvailable)
         ? <div className="my-1 h-px bg-ds-border-muted/70" />
         : null}
       {showPlanMenuOption ? (
@@ -330,6 +331,13 @@ export function FloatingComposerActionMenu({
           <ListTodo className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
           <span className="min-w-0 flex-1 truncate">{t('composerMenuPlanMode')}</span>
           <MenuSwitch checked={mode === 'plan'} />
+        </button>
+      ) : null}
+      {showAutoPlanBuildMenuOption ? (
+        <button role="menuitem" tabIndex={-1} type="button" data-composer-auto-plan-build-menu-item disabled={!canToggleAutoPlanBuildMode} onClick={handleAutoPlanBuildToolbarClick} className={rowClass}>
+          <Bot className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+          <span className="min-w-0 flex-1 truncate">{t('composerMenuAutoPlanBuild')}</span>
+          <MenuSwitch checked={mode === 'auto'} />
         </button>
       ) : null}
       {showGraphMenuOption ? (
@@ -374,7 +382,7 @@ export function FloatingComposerActionMenu({
       ) : null}
       {personaAvailable ? (
         <>
-          {(showPlanMenuOption || showGraphMenuOption || showGoalMenuOption) ? <div className="my-1 h-px bg-ds-border-muted/70" /> : null}
+          {(showPlanMenuOption || showAutoPlanBuildMenuOption || showGraphMenuOption || showGoalMenuOption) ? <div className="my-1 h-px bg-ds-border-muted/70" /> : null}
           <button
             ref={personaTriggerRef}
             role="menuitem"
@@ -390,9 +398,7 @@ export function FloatingComposerActionMenu({
             }}
             className={rowClass}
           >
-            {activePersona
-              ? <LucideIconByName name={activePersona.icon} className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-              : <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />}
+            <UserRound className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
             <span className="min-w-0 flex-1 truncate">{t('codeAgentPersonaLabel')}</span>
             <span className="max-w-24 truncate text-[12px] text-ds-faint">
               {activePersona?.name ?? t('codeAgentPersonaNone')}

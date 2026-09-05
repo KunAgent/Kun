@@ -57,6 +57,7 @@ export function isRightPanelContributionId(value: unknown): value is RightPanelC
  */
 export function normalizeStoredRightPanelId(value: unknown): RightPanelMode {
   if (typeof value !== 'string') return null
+  if (value === 'agent-perspective' || value === BUILTIN_RIGHT_PANEL_IDS.agentPerspective) return null
   return LEGACY_RIGHT_PANEL_IDS[value] ?? (isRightPanelContributionId(value) ? value : null)
 }
 

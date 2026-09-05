@@ -2,7 +2,10 @@ import type { AgentProvider } from '../agent/types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { describeRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import type { ChatState, ChatStoreGet, ChatStoreSet, QueuedUserMessage } from './chat-store-types'
-import { rememberTurnModel } from './chat-store-helpers'
+import {
+  rememberTurnModel,
+  toWriteTurnContext
+} from './chat-store-helpers'
 import { rememberPendingClawFeishuMirror } from './chat-store-runtime-notifications'
 import { ensureRuntimeProviderForSend } from './chat-store-thread-action-helpers'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
@@ -110,8 +113,12 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
     ...(message.guiDesignMode ? { guiDesignMode: true } : {}),
     ...(message.persona ? { persona: message.persona } : {}),
+    ...(message.approvalPolicy ? { approvalPolicy: message.approvalPolicy } : {}),
+    ...(message.sandboxMode ? { sandboxMode: message.sandboxMode } : {}),
+    ...(message.approvalReviewer ? { approvalReviewer: message.approvalReviewer } : {}),
     ...(message.designProfile ? { designProfile: message.designProfile } : {}),
     ...(message.designDocumentTarget ? { designDocumentTarget: message.designDocumentTarget } : {}),
+    ...(message.writeContext ? { writeContext: toWriteTurnContext(message.writeContext) } : {}),
     ...(message.designImagePlacementTarget
       ? { designImagePlacementTarget: message.designImagePlacementTarget }
       : {}),

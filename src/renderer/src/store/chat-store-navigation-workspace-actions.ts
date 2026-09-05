@@ -58,6 +58,14 @@ import {
   reconcileCodeWorkspaceRoots,
   saveCodeWorkspaceRoots
 } from './chat-store-helpers'
+import {
+  codeRootsAfterRemoval,
+  createRemoveWorkspaceAction,
+  preservedRootsForReconcile,
+  rememberRootForRestore,
+  removedRegistryAfterRestore,
+  threadBelongsToRemovedCodeProject
+} from './chat-store-navigation-workspace-removal'
 import { preserveListedDesignProfiles } from '../design/design-locked-profile'
 import {
   clearedThreadSelection,
@@ -108,7 +116,6 @@ import {
   stopTurnCompletionPoll
 } from './chat-store-schedulers'
 import { saveThreadListCache } from './thread-list-cache'
-import { scheduleRecentThreadPrewarm } from './thread-detail-prewarm'
 import {
   loadMoreThreads as loadMoreThreadsAction,
   mergeThreadPages,
@@ -148,10 +155,8 @@ import {
   watchTurnCompletionNotification
 } from './chat-store-runtime'
 import {
-  clearUnreadCompletion,
   completionOutcomeForTurnStatus,
-  completionIsCurrentlyVisible,
-  markUnreadCompletion,
+  resolveUnreadCompletionForTurn,
   retainUnreadCompletions
 } from './unread-completions'
 import { threadRefreshSelection } from './chat-store-thread-refresh-selection'
@@ -166,8 +171,11 @@ type StoreActionContext = {
 
 export function createNavigationWorkspaceActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'chooseWorkspace' | 'selectWorkspaceRoot' | 'clearWorkspace' | 'deleteWorkspace' | 'refreshThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
+): Pick<ChatState, 'chooseWorkspace' | 'selectWorkspaceRoot' | 'clearWorkspace' | 'removeWorkspace' | 'refreshThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
   let refreshInFlight = false
+  let refreshQueued = false
+  let indexRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  let latestIndexStatus: import('../agent/provider-types').ThreadIndexStatusInfo | undefined
   return {
   loadMoreThreads: (workspacePath) => loadMoreThreadsAction(workspacePath, set, get),
   chooseWorkspace: async ({ createThreadAfter = false, selectThreadAfter = true } = {}) => {
@@ -194,11 +202,20 @@ export function createNavigationWorkspaceActions(
       }
       const next = await rendererRuntimeClient.setSettings({ workspaceRoot: picked.path })
       const workspaceRoot = normalizeWorkspaceRoot(next.workspaceRoot)
-      const codeWorkspaceRoots = rememberCodeWorkspaceRoots(get().codeWorkspaceRoots, [workspaceRoot])
+      // Re-picking a previously removed directory is an explicit re-add: clear
+      // the hidden marker so the retained history reappears with this project.
+      const codeWorkspaceRoots = rememberRootForRestore(
+        codeRootsAfterRemoval(get().codeWorkspaceRoots, removedRegistryAfterRestore(
+          workspaceRoot,
+          get().removedCodeWorkspaces
+        )),
+        workspaceRoot
+      )
 
       set({
         workspaceRoot,
         codeWorkspaceRoots,
+        removedCodeWorkspaces: removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces),
         workspaceLabel: workspaceLabelFromPath(workspaceRoot),
         error: null
       })
@@ -260,12 +277,18 @@ export function createNavigationWorkspaceActions(
       sseAbortRef.current = null
       clearBusyWatchdog()
       resetBusyRecoveryAttempts()
+      // Selecting a removed project from the picker is an explicit re-add.
+      const restoredRegistry = removedRegistryAfterRestore(persisted, get().removedCodeWorkspaces)
       set((s) => ({
         ...clearedThreadSelection(),
         route: 'chat',
         workspaceRoot: persisted,
         workspaceLabel: workspaceLabelFromPath(persisted),
-        codeWorkspaceRoots: rememberCodeWorkspaceRoots(s.codeWorkspaceRoots, [persisted]),
+        removedCodeWorkspaces: restoredRegistry,
+        codeWorkspaceRoots: rememberRootForRestore(
+          codeRootsAfterRemoval(s.codeWorkspaceRoots, restoredRegistry),
+          persisted
+        ),
         error: null
       }))
       await get().refreshThreads()
@@ -294,83 +317,14 @@ export function createNavigationWorkspaceActions(
     }
   },
 
-  deleteWorkspace: async (workspacePath) => {
-    const normalizedPath = normalizeWorkspaceRoot(workspacePath)
-    if (!normalizedPath) return
-    if (get().runtimeConnection !== 'ready') {
-      set({ error: i18n.t('common:runtimeActionNeedsConnection') })
-      return
-    }
-    const { activeThreadId } = get()
-    const p = getProvider()
-    const workspaceThreads = get().threads.filter((thread) =>
-      threadBelongsToWorkspace(thread, normalizedPath)
-    )
-    const deletingActive = workspaceThreads.some((th) => th.id === activeThreadId)
-    if (deletingActive) {
-      sseAbortRef.current?.abort()
-      sseAbortRef.current = null
-      clearBusyWatchdog()
-    }
-    try {
-      const deletedIds = typeof p.deleteThreadsByWorkspace === 'function'
-        ? await p.deleteThreadsByWorkspace(normalizedPath)
-        : await Promise.all(workspaceThreads.map(async (thread) => {
-          await p.deleteThread(thread.id)
-          return thread.id
-        }))
-      for (const threadId of deletedIds) invalidateThreadSnapshot(threadId)
-      const removeIds = new Set(deletedIds)
-      const codeWorkspaceRoots = forgetCodeWorkspaceRoot(get().codeWorkspaceRoots, normalizedPath)
-      set((s) => {
-        const w = { ...s.watchTurnCompletion }
-        const u = { ...s.unreadThreadIds }
-        for (const tid of removeIds) {
-          delete w[tid]
-          delete u[tid]
-          clearWatchedCompletionNotification(tid)
-        }
-        return {
-          threads: s.threads.filter(
-            (thread) => !threadBelongsToWorkspace(thread, normalizedPath)
-          ),
-          codeWorkspaceRoots,
-          watchTurnCompletion: w,
-          unreadThreadIds: u,
-          ...(deletingActive ? clearedThreadSelection() : {}),
-          error: null
-        }
-      })
-      // If the deleted workspace is the current workspaceRoot, clear it.
-      if (normalizeWorkspaceRoot(get().workspaceRoot) === normalizedPath) {
-        try {
-          if (typeof window.kunGui?.setSettings === 'function') {
-            const next = await rendererRuntimeClient.setSettings({ workspaceRoot: '' })
-            set({
-              workspaceRoot: normalizeWorkspaceRoot(next.workspaceRoot),
-              codeWorkspaceRoots: get().codeWorkspaceRoots,
-              workspaceLabel: workspaceLabelFromPath('')
-            })
-          }
-        } catch {
-          /* silently keep workspaceRoot if settings clear fails */
-        }
-      }
-      await get().refreshThreads()
-    } catch (e) {
-      set({
-        error: formatRuntimeError(e),
-        ...(shouldOpenSettingsForError(e)
-          ? { route: 'settings' as const, settingsSection: 'agents' as const }
-          : {})
-      })
-      await get().refreshThreads()
-    }
-  },
+  removeWorkspace: createRemoveWorkspaceAction({ set, get, sseAbortRef, clearBusyWatchdog }),
 
   refreshThreads: async () => {
     if (get().runtimeConnection !== 'ready') return
-    if (refreshInFlight) return
+    if (refreshInFlight) {
+      refreshQueued = true
+      return
+    }
     refreshInFlight = true
     // Surface loading/refreshing before the first inventory lands. A
     // background refresh must keep the previous list visible (never clears
@@ -384,6 +338,7 @@ export function createNavigationWorkspaceActions(
       const p = getProvider()
       let rawThreads: NormalizedThread[]
       let firstPageHasMore = false
+      let firstPageIndexStatus: import('../agent/provider-types').ThreadIndexStatusInfo | undefined
       try {
         if (typeof p.listThreadsPage === 'function') {
           const page = await p.listThreadsPage({
@@ -394,6 +349,7 @@ export function createNavigationWorkspaceActions(
           })
           rawThreads = page.threads
           firstPageHasMore = page.hasMore
+          firstPageIndexStatus = page.indexStatus
         } else {
           rawThreads = await p.listThreads({
             includeArchived: true,
@@ -557,12 +513,16 @@ export function createNavigationWorkspaceActions(
           })
         })
         .filter(Boolean)
-      const codeWorkspaceRoots = reconcileCodeWorkspaceRoots({
-        currentRoots: get().codeWorkspaceRoots,
-        codeThreadWorkspaceRoots,
-        writeWorkspaceRoots,
-        preservedWorkspaceRoots: [get().workspaceRoot]
-      })
+      const latestRemovedRegistry = get().removedCodeWorkspaces
+      const codeWorkspaceRoots = codeRootsAfterRemoval(
+        reconcileCodeWorkspaceRoots({
+          currentRoots: get().codeWorkspaceRoots,
+          codeThreadWorkspaceRoots,
+          writeWorkspaceRoots,
+          preservedWorkspaceRoots: preservedRootsForReconcile(get(), latestRemovedRegistry)
+        }),
+        latestRemovedRegistry
+      )
       saveCodeWorkspaceRoots(codeWorkspaceRoots)
       const activeThreadId = get().activeThreadId
       const activeThread = activeThreadId
@@ -586,7 +546,12 @@ export function createNavigationWorkspaceActions(
       const rememberedCodeThreadId = get().lastCodeThreadId?.trim() ?? ''
       const staleCodeThreadMemory = Boolean(
         rememberedCodeThreadId &&
-        !threads.some((thread) => thread.id === rememberedCodeThreadId && thread.archived !== true)
+        (!threads.some((thread) => thread.id === rememberedCodeThreadId && thread.archived !== true) ||
+          threadBelongsToRemovedCodeProject(
+            threads.find((thread) => thread.id === rememberedCodeThreadId) ?? null,
+            latestRemovedRegistry,
+            threadWorktreeRegistry[rememberedCodeThreadId]
+          ))
       )
       const { validIds } = threadRefreshSelection(get(), displayThreads)
       const reconciledCompletedWatchIds = new Set(
@@ -609,7 +574,8 @@ export function createNavigationWorkspaceActions(
           id,
           notificationState,
           completionNotificationDedupeKeyForWatchedThread(id),
-          turnCompleteNotificationSource(id, notificationState)
+          turnCompleteNotificationSource(id, notificationState),
+          reconciledStateById.get(id)?.latestTurnId
         )
         clearWatchedCompletionNotification(id)
         invalidateThreadSnapshot(id)
@@ -634,10 +600,9 @@ export function createNavigationWorkspaceActions(
         }
         let u = retainUnreadCompletions(s.unreadThreadIds, validIds)
         for (const id of reconciledCompletedWatchIds) {
-          const outcome = completionOutcomeForTurnStatus(reconciledStateById.get(id)?.latestTurnStatus)
-          u = !outcome || completionIsCurrentlyVisible(s, id)
-            ? clearUnreadCompletion(u, id)
-            : markUnreadCompletion(u, id, outcome)
+          const stateById = reconciledStateById.get(id)
+          const outcome = completionOutcomeForTurnStatus(stateById?.latestTurnStatus)
+          u = resolveUnreadCompletionForTurn(u, s, id, stateById?.latestTurnId, outcome)
         }
         const pageMode = threadPageMode(s.showArchivedThreads)
         const workspacePaths = [
@@ -663,11 +628,23 @@ export function createNavigationWorkspaceActions(
         }
       })
       syncTurnCompletionPoll(set, get)
+      // While the rebuildable thread index is still running, poll a trailing
+      // refresh so the sidebar settles on the final indexed inventory as soon
+      // as the background backfill reaches `ready`.
+      latestIndexStatus = firstPageIndexStatus
+      if (indexRefreshTimer) clearTimeout(indexRefreshTimer)
+      if (firstPageIndexStatus?.status === 'running') {
+        indexRefreshTimer = setTimeout(() => {
+          indexRefreshTimer = null
+          if (get().runtimeConnection === 'ready' && latestIndexStatus?.status === 'running') {
+            void get().refreshThreads()
+          }
+        }, 1500)
+      }
       // Persist a lean summary cache after each successful refresh so the next
       // startup can paint the sidebar from local storage before the runtime
       // inventory arrives.
       saveThreadListCache(displayThreads)
-      scheduleRecentThreadPrewarm(get().threads, get().activeThreadId)
       if (activeThreadIsManagedInCodeRoute) {
         await get().openCode()
       }
@@ -684,6 +661,12 @@ export function createNavigationWorkspaceActions(
       })
     } finally {
       refreshInFlight = false
+      if (refreshQueued) {
+        refreshQueued = false
+        if (get().runtimeConnection === 'ready') {
+          queueMicrotask(() => void get().refreshThreads())
+        }
+      }
     }
   },
   setThreadSearch: (query) => {

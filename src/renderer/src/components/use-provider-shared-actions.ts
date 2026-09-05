@@ -1,4 +1,5 @@
 import type {
+  AppSettingsPatch,
   KunRuntimeSettingsPatchV1,
   ModelProviderProfileV1
 } from '@shared/app-settings'
@@ -164,14 +165,19 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
 
   const updateModelProviders = (
     providers: ModelProviderProfileV1[],
-    kunPatch?: KunRuntimeSettingsPatchV1
+    kunPatch?: KunRuntimeSettingsPatchV1,
+    additionalPatch?: Pick<AppSettingsPatch, 'write'>
   ): void => {
-    update(modelProvidersSettingsPatch({
-      provider,
-      providers,
-      kun: kunPatch,
-      currentKun: kun
-    }))
+    const current = sharedProjectionInput.current
+    current.update({
+      ...modelProvidersSettingsPatch({
+        provider: current.provider,
+        providers,
+        kun: kunPatch,
+        currentKun: current.kun
+      }),
+      ...(additionalPatch ?? {})
+    })
   }
 
   const drainSharedProviderProfile = async (providerId: string): Promise<void> => {
@@ -295,6 +301,7 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
       before.name === after.name &&
       before.baseUrl === after.baseUrl &&
       before.endpointFormat === after.endpointFormat &&
+      before.useProxy === after.useProxy &&
       before.kind === after.kind &&
       JSON.stringify(before.models) === JSON.stringify(after.models) &&
       JSON.stringify(before.modelProfiles) === JSON.stringify(after.modelProfiles)

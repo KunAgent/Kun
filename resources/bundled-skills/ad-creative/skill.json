@@ -1,0 +1,24 @@
+{
+  "id": "ad-creative",
+  "name": "Ad Creative",
+  "version": "1.0.0",
+  "description": "Plan and produce advertising concepts, copy variants, visual directions, and test matrices for paid campaigns.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/ad-creative"
+    ],
+    "promptPatterns": [
+      "Ad Creative",
+      "ad creative",
+      "ad-creative",
+      "campaign variants",
+      "广告创意",
+      "投放素材"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

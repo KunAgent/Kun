@@ -86,7 +86,7 @@ import {
 import { createHash } from 'node:crypto'
 
 
-import { FakeAgentService, FakeStorageService, FakeWorkspaceService } from './fake-basic-services.js'
+import { FakeAgentService, FakeSecretStorageService, FakeStorageService, FakeWorkspaceService } from './fake-basic-services.js'
 import { FakeJobService } from './fake-job-service.js'
 import { FakeMediaService } from './fake-media-service.js'
 import { FakeAccountService, FakeProviderService, FakeToolService, FakeWebviewService } from './fake-registration-services.js'
@@ -106,6 +106,7 @@ export class ExtensionTestHarness implements Disposable {
   readonly clock: FakeClock
   readonly transport: FakeHostTransport
   readonly storage = new FakeStorageService()
+  readonly secrets = new FakeSecretStorageService()
   readonly workspace = new FakeWorkspaceService()
   readonly agent: FakeAgentService
   readonly jobs: FakeJobService
@@ -149,14 +150,15 @@ export class ExtensionTestHarness implements Disposable {
       this.transport,
       {
         extension: this.identity,
-        apiVersion: '1.2.0',
+        apiVersion: '1.4.0',
         capabilities: [
           'artifacts.generated',
           'jobs.observe',
           'media.brokered',
           'media.analysis',
           'media.archive',
-          'media.documents'
+          'media.documents',
+          'storage.secrets'
         ],
         permissions: [...this.permissions],
         workspaceContext: options.workspace,
@@ -187,6 +189,7 @@ export class ExtensionTestHarness implements Disposable {
 
   #installServices(): void {
     this.storage.install(this.transport)
+    this.secrets.install(this.transport)
     this.workspace.install(this.transport)
     this.agent.install()
     this.jobs.install()
@@ -248,13 +251,18 @@ export class ExtensionTestHarness implements Disposable {
     this.transport.requirePermission('storage.set', storagePermission)
     this.transport.requirePermission('storage.delete', storagePermission)
     this.transport.requirePermission('storage.keys', storagePermission)
+    this.transport.requirePermission('secrets.get', 'storage.secrets')
+    this.transport.requirePermission('secrets.set', 'storage.secrets')
+    this.transport.requirePermission('secrets.delete', 'storage.secrets')
     this.transport.requirePermission('network.fetch', (params) => {
       const request = NetworkRequestSchema.parse(params)
       return `network:${new URL(request.url).hostname}`
     })
     for (const method of [
+      'agent.getRunOptions',
       'agent.createRun',
       'agent.getRun',
+      'agent.listRunEvents',
       'agent.subscribe',
       'agent.unsubscribe',
       'agent.steer',

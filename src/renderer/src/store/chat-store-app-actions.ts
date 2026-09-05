@@ -3,6 +3,10 @@ import type { AppSettingsV1, ModelReasoningEffort } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { extensionWorkbenchClient } from '../extensions/extension-workbench-client'
+import {
+  effectiveCodeWorkspaceRoot,
+  readRemovedCodeWorkspaces
+} from '../lib/removed-code-workspaces'
 import type { ChatState, ChatStoreGet, ChatStoreSet, InitialSetupMode, PluginHostRoute, SettingsRouteSection } from './chat-store-types'
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
@@ -19,6 +23,7 @@ import {
   rememberCatalogComposerSelection,
   resolveCatalogComposerSelection
 } from './chat-store-thread-composer-state'
+import { useProjectBoardStore } from '../project-board/project-board-store'
 type CreateAppActionsOptions = {
   set: ChatStoreSet
   get: ChatStoreGet
@@ -57,6 +62,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
   ChatState,
   | 'setError'
   | 'setComposerMode'
+  | 'setComposerExecutionSettings'
   | 'setComposerOrchestration'
   | 'setComposerModel'
   | 'setComposerReasoningEffort'
@@ -70,6 +76,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
   | 'closeSettings'
   | 'openPlugins'
   | 'openClaw'
+  | 'openBoard'
   | 'openSchedule'
   | 'openWorkflow'
   | 'openDesign'
@@ -124,6 +131,10 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
 
     setComposerOrchestration: (mode) => {
       set({ composerOrchestration: mode })
+    },
+
+    setComposerExecutionSettings: (settings) => {
+      set({ composerExecutionSettings: settings })
     },
 
     setComposerModel: (modelId, providerId) => {
@@ -331,6 +342,12 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       void get().refreshClawChannels()
     },
 
+    openBoard: (workspaceRoot?: string) => {
+      const target = normalizeWorkspaceRoot(workspaceRoot || get().workspaceRoot)
+      if (target) useProjectBoardStore.getState().selectWorkspace(target)
+      set({ route: 'board' })
+    },
+
     openSchedule: () => {
       set({ route: 'schedule' })
     },
@@ -357,7 +374,8 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
     reloadUiSettings: async () => {
       if (typeof window.kunGui === 'undefined') return
       const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
-      const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
+      const removedRegistry = readRemovedCodeWorkspaces()
+      const workspaceRoot = effectiveCodeWorkspaceRoot(settings.workspaceRoot, removedRegistry)
       applyTheme(settings.theme)
       applyUiFontScale(settings.uiFontScale)
       applyChatContentMaxWidth(settings.chatContentMaxWidthPx)
@@ -367,6 +385,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       if (settings.write?.typography) applyWriteTypography(settings.write.typography)
       set({
         workspaceRoot,
+        removedCodeWorkspaces: removedRegistry,
         workspaceLabel: workspaceLabelFromPath(workspaceRoot),
         conversationWorkspaceRoot: settings.conversationWorkspaceRoot || '',
         disabledSkillIds: settings.disabledSkillIds,

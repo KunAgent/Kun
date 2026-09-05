@@ -84,6 +84,9 @@ describe('background queued message delivery', () => {
         model: 'model-a',
         providerId: 'provider-a',
         reasoningEffort: 'high',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        approvalReviewer: 'agent',
         attachmentIds: ['att-a']
       }
     ])
@@ -119,6 +122,9 @@ describe('background queued message delivery', () => {
         model: 'model-a',
         providerId: 'provider-a',
         reasoningEffort: 'high',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        approvalReviewer: 'agent',
         attachmentIds: ['att-a']
       })
     )

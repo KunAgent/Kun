@@ -1,0 +1,24 @@
+{
+  "id": "scholar-research",
+  "name": "Scholarly Research",
+  "version": "1.0.0",
+  "description": "Search, screen, synthesize, and cite scholarly literature and author metadata.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/scholar-research"
+    ],
+    "promptPatterns": [
+      "Google Scholar",
+      "literature review",
+      "scholar-research",
+      "Scholarly Research",
+      "文献检索",
+      "论文搜索"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

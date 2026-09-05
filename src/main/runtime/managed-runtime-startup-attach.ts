@@ -3,7 +3,7 @@ export type ManagedRuntimeStartupAttachDeps<Settings> = {
   resolveExisting(settings: Settings): Promise<boolean>
 }
 
-/** Resolve a startup target without starting a daemon when auto-start is disabled. */
+/** Resolve an explicitly configured attach-only target when auto-start is disabled. */
 export async function resolveManagedRuntimeStartupTarget<Settings>(
   settings: Settings,
   autoStart: boolean,

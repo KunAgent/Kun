@@ -247,7 +247,7 @@ export async function extractExactBinary(archive: string, memberName: string, de
   if (!found || extractedSize <= 0) throw new Error('binary not found in tarball')
   const info = await stat(destination)
   if (!info.isFile() || info.size !== extractedSize) throw new Error('extracted binary size does not match archive header')
-  const handle = await open(destination, 'r')
+  const handle = await open(destination, 'r+')
   try { await handle.sync() } finally { await handle.close() }
   return extractedSize
 }

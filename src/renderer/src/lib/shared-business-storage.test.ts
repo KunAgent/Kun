@@ -3,14 +3,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   installSharedBusinessStorage,
   resetSharedBusinessStorageInstallForTests,
+  SHARED_BUSINESS_STORAGE_CHANGED_EVENT,
   syncSharedBusinessStorageOnce,
-  type SharedBusinessStorageCursor
+  type SharedBusinessStorageCursor,
+  type SharedBusinessStorageChangedDetail
 } from './shared-business-storage'
 
 import {
   SHARED_BUSINESS_STORAGE_JOURNAL_KEY,
   writeSharedBusinessStorageJournal
 } from './shared-business-storage-journal'
+
+import { REMOVED_CODE_WORKSPACES_STORAGE_KEY } from './removed-code-workspaces'
 
 const DESIGN_REGISTRY_KEY = 'kun.design.threadRegistry.v1'
 
@@ -379,5 +383,52 @@ describe('shared business storage synchronization', () => {
     expect(storage.getItem(DESIGN_REGISTRY_KEY)).toBe(latestLocalRegistry)
     expect(result.baseline[DESIGN_REGISTRY_KEY]).toBe(firstLocalRegistry)
     expect(result.retry).toBe(true)
+  })
+
+  it('uploads a removed-workspace tombstone written while the remote read is pending', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const tombstone = JSON.stringify({
+      version: 1,
+      removed: [{ projectPath: '/project', aliases: [], removedAt: 'now' }]
+    })
+    const pendingRead = deferred<{ revision: number; value: Record<string, string> }>()
+    const write = vi.fn(async (_revision: number, value: Record<string, string>) => ({ revision: 2, value }))
+    const syncing = syncSharedBusinessStorageOnce({ read: () => pendingRead.promise, write }, {
+      baseline: {},
+      revision: 1
+    })
+    storage.setItem(REMOVED_CODE_WORKSPACES_STORAGE_KEY, tombstone)
+    pendingRead.resolve({ revision: 1, value: {} })
+
+    await syncing
+
+    expect(write).toHaveBeenCalledWith(1, {
+      [REMOVED_CODE_WORKSPACES_STORAGE_KEY]: tombstone
+    })
+  })
+
+  it('dispatches changed keys when a remote tombstone is applied', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const tombstone = JSON.stringify({
+      version: 1,
+      removed: [{ projectPath: '/project', aliases: [], removedAt: 'now' }]
+    })
+    const changes: string[][] = []
+    window.addEventListener(SHARED_BUSINESS_STORAGE_CHANGED_EVENT, (event) => {
+      changes.push((event as CustomEvent<SharedBusinessStorageChangedDetail>).detail.keys)
+    }, { once: true })
+
+    await syncSharedBusinessStorageOnce({
+      read: vi.fn(async () => ({
+        revision: 1,
+        value: { [REMOVED_CODE_WORKSPACES_STORAGE_KEY]: tombstone }
+      })),
+      write: vi.fn()
+    }, { baseline: {}, revision: 0 })
+
+    expect(storage.getItem(REMOVED_CODE_WORKSPACES_STORAGE_KEY)).toBe(tombstone)
+    expect(changes).toEqual([[REMOVED_CODE_WORKSPACES_STORAGE_KEY]])
   })
 })

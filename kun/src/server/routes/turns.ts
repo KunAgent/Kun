@@ -17,6 +17,7 @@ import {
   StartTurnResponse,
   SteeringQueueResponse,
   SteerTurnRequest,
+  MoveQueuedTurnRequest,
   TurnSchema
 } from '../../contracts/turns.js'
 import { ThreadBusyDetailsSchema } from '../../contracts/errors.js'
@@ -29,11 +30,12 @@ import {
   ThreadClosingError,
   TurnCapacityError,
   TurnConflictError,
+  TurnInProgressError,
   type TurnService
 } from '../../services/turn-service.js'
 import { ThreadExecutionBusyError } from '../../ports/thread-execution-lease.js'
-import { isPublicTurnItem } from '../../contracts/items.js'
 import type { ToolCancellationService } from '../../services/tool-cancellation-service.js'
+import { projectPublicTurn } from './thread-projection.js'
 
 export async function startTurn(
   turns: TurnService,
@@ -56,7 +58,7 @@ export async function startTurn(
       threadId,
       request: parsed.data
     }, { onAdmitted: onStarted })
-    return jsonResponse(response, 202)
+    return jsonResponse(StartTurnResponse.parse(response), 202)
   } catch (error) {
     if (error instanceof ThreadExecutionBusyError) {
       return jsonResponse({
@@ -97,6 +99,65 @@ export async function startTurn(
     if (error instanceof Error && /not found/i.test(error.message)) {
       return ERRORS.notFound(error.message)
     }
+    throw error
+  }
+}
+
+export async function cancelQueuedTurn(
+  turns: TurnService,
+  threadId: string,
+  turnId: string
+): Promise<JsonResponse | Response> {
+  try {
+    const result = await turns.cancelQueuedTurn({ threadId, turnId })
+    return jsonResponse(result)
+  } catch (error) {
+    if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
+    if (error instanceof Error && /not found/i.test(error.message)) return ERRORS.notFound(error.message)
+    throw error
+  }
+}
+
+export async function moveQueuedTurn(
+  turns: TurnService,
+  threadId: string,
+  turnId: string,
+  request: Request
+): Promise<JsonResponse | Response> {
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = MoveQueuedTurnRequest.safeParse(body.value)
+  if (!parsed.success) {
+    return ERRORS.validation('invalid queue-position body', parsed.error.issues)
+  }
+  try {
+    const result = await turns.moveQueuedTurn({
+      threadId,
+      turnId,
+      ...(parsed.data.beforeTurnId ? { beforeTurnId: parsed.data.beforeTurnId } : {}),
+      ...(parsed.data.afterTurnId ? { afterTurnId: parsed.data.afterTurnId } : {})
+    })
+    return jsonResponse(result)
+  } catch (error) {
+    if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
+    if (error instanceof Error && /not found/i.test(error.message)) return ERRORS.notFound(error.message)
+    throw error
+  }
+}
+
+export async function resumeQueuedTurns(
+  turns: TurnService,
+  threadId: string,
+  onStarted: (threadId: string, turnId: string) => void
+): Promise<JsonResponse | Response> {
+  try {
+    const started = await turns.startNextQueuedTurn(threadId)
+    if (!started) return jsonResponse({ threadId, started: false as const })
+    onStarted(threadId, started.turnId)
+    return jsonResponse({ threadId, started: true as const, turnId: started.turnId }, 202)
+  } catch (error) {
+    if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
+    if (error instanceof Error && /not found/i.test(error.message)) return ERRORS.notFound(error.message)
     throw error
   }
 }
@@ -336,6 +397,7 @@ export async function rewindThread(
     })
     return jsonResponse(response)
   } catch (error) {
+    if (error instanceof TurnInProgressError) return ERRORS.turnInProgress(error.message)
     if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
     if (error instanceof Error && /not found/i.test(error.message)) {
       return ERRORS.notFound(error.message)
@@ -356,8 +418,5 @@ export async function getTurn(
       404
     )
   }
-  return jsonResponse(TurnSchema.parse({
-    ...turn,
-    items: turn.items.filter(isPublicTurnItem)
-  }))
+  return jsonResponse(TurnSchema.parse(projectPublicTurn(turn)))
 }

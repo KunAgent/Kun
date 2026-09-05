@@ -11,9 +11,12 @@ import type {
   AgentCancelRequest,
   AgentCreateRunRequest,
   AgentCreateRunResponse,
+  AgentListRunEventsRequest,
+  AgentListRunEventsResponse,
   AgentMutationResult,
   AgentRun,
   AgentRunEvent,
+  AgentRunOptions,
   AgentSubscribeRequest,
   AgentSteerRequest,
   ExtensionThreadProjection,
@@ -138,6 +141,18 @@ export interface ScopedStorageApi {
 export interface StorageApi {
   readonly global: ScopedStorageApi
   readonly workspace: ScopedStorageApi
+}
+
+/**
+ * Host-protected, extension-scoped secret storage.
+ *
+ * Secrets are available only to the Node Extension Host. Authenticated Views
+ * must route secret-dependent work through a declared command.
+ */
+export interface SecretStorageApi {
+  get(key: string): Promise<string | undefined>
+  set(key: string, value: string): Promise<void>
+  delete(key: string): Promise<boolean>
 }
 
 export const ConfigurationChangeEventSchema = z.strictObject({
@@ -266,8 +281,10 @@ export interface AgentRunSubscription extends Disposable {
 }
 
 export interface AgentApi {
+  getRunOptions(): Promise<AgentRunOptions>
   createRun(request: AgentCreateRunRequest): Promise<AgentCreateRunResponse>
   getRun(runId: string): Promise<AgentRun>
+  listRunEvents(request: AgentListRunEventsRequest): Promise<AgentListRunEventsResponse>
   subscribe(request: AgentSubscribeRequest): Promise<AgentRunSubscription>
   steer(request: AgentSteerRequest): Promise<AgentMutationResult>
   cancel(request: AgentCancelRequest): Promise<AgentMutationResult>

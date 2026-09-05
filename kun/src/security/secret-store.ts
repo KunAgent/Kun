@@ -11,7 +11,7 @@
  * keychain.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import type { Dirent } from 'node:fs'
 import { chmod, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
@@ -22,52 +22,15 @@ import {
   AtomicJsonFile,
   isManagerAtomicJsonPath
 } from '../extensions/atomic-json.js'
+import {
+  createAesEncryptor,
+  createCompatibleEncryptor,
+  isEncryptedEnvelope,
+  type SecretEncryptor
+} from './secret-encryptor.js'
 
-export type SecretEncryptor = {
-  encrypt: (plaintext: string, additionalAuthenticatedData?: string | Buffer) => string
-  decrypt: (blob: string, additionalAuthenticatedData?: string | Buffer) => string
-}
-
-const ALGORITHM = 'aes-256-gcm'
-const ENVELOPE_PREFIX = 'enc:v1:'
-
-/** Build an AES-256-GCM encryptor from a 32-byte key. */
-export function createAesEncryptor(key: Buffer): SecretEncryptor {
-  if (key.length !== 32) throw new Error('encryption key must be 32 bytes')
-  return {
-    encrypt: (plaintext: string, additionalAuthenticatedData?: string | Buffer): string => {
-      const iv = randomBytes(12)
-      const cipher = createCipheriv(ALGORITHM, key, iv)
-      if (additionalAuthenticatedData !== undefined) {
-        cipher.setAAD(asBuffer(additionalAuthenticatedData))
-      }
-      const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
-      const tag = cipher.getAuthTag()
-      return `${ENVELOPE_PREFIX}${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`
-    },
-    decrypt: (blob: string, additionalAuthenticatedData?: string | Buffer): string => {
-      if (!blob.startsWith(ENVELOPE_PREFIX)) return blob // legacy plaintext
-      const [, , ivB64, tagB64, dataB64] = blob.split(':')
-      const iv = Buffer.from(ivB64, 'base64')
-      const tag = Buffer.from(tagB64, 'base64')
-      const data = Buffer.from(dataB64, 'base64')
-      const decipher = createDecipheriv(ALGORITHM, key, iv)
-      if (additionalAuthenticatedData !== undefined) {
-        decipher.setAAD(asBuffer(additionalAuthenticatedData))
-      }
-      decipher.setAuthTag(tag)
-      return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8')
-    }
-  }
-}
-
-function asBuffer(value: string | Buffer): Buffer {
-  return typeof value === 'string' ? Buffer.from(value, 'utf8') : value
-}
-
-export function isEncryptedEnvelope(value: string): boolean {
-  return value.startsWith(ENVELOPE_PREFIX)
-}
+export { createAesEncryptor, isEncryptedEnvelope } from './secret-encryptor.js'
+export type { SecretEncryptor } from './secret-encryptor.js'
 
 /**
  * Reports whether a Kun data directory contains credentials that require the
@@ -228,7 +191,10 @@ async function tryWriteOsKey(platform: NodeJS.Platform, run: CommandRunner, key:
   const b64 = key.toString('base64')
   try {
     if (platform === 'darwin') {
-      const res = await run('security', ['add-generic-password', '-U', '-s', KEYCHAIN_SERVICE, '-a', KEYCHAIN_ACCOUNT, '-w', b64])
+      // The caller only writes after a confirmed-missing lookup. Do not use
+      // `-U`: another data directory or process may win the lookup/write race,
+      // and replacing its key would invalidate every credential it protects.
+      const res = await run('security', ['add-generic-password', '-s', KEYCHAIN_SERVICE, '-a', KEYCHAIN_ACCOUNT, '-w', b64])
       return res.code === 0
     }
     if (platform === 'linux') {
@@ -585,20 +551,47 @@ async function createSecretEncryptorWithoutManagerLease(
   const disableOsCredentialStore = options.disableOsKeychain ??
     environment[DISABLE_OS_CREDENTIAL_STORE_ENV] === '1'
   const useKeychain = !disableOsCredentialStore && run && (platform === 'darwin' || platform === 'linux')
-  // Migration rule: an existing raw key is authoritative because it may be the
-  // only key capable of decrypting already-persisted OAuth credentials. Never
-  // generate a fresh OS key before checking it.
+  // A raw key may be the only key capable of decrypting credentials written
+  // during a temporary OS-store outage. Resolve the OS key before migrating so
+  // an unrelated fallback key can never overwrite an established Keychain or
+  // Secret Service generation.
   const legacyFileKey = await readKeyFile(options.keyFilePath)
 
   if (useKeychain && run) {
+    const existing = await tryReadOsKey(platform, run)
     if (legacyFileKey) {
-      if (await tryWriteOsKey(platform, run, legacyFileKey)) {
+      if (existing.status === 'found') {
+        if (existing.key.equals(legacyFileKey)) {
+          await rm(options.keyFilePath, { force: true }).catch(() => undefined)
+          return {
+            encryptor: createAesEncryptor(existing.key),
+            osKeychain: true,
+            reason: 'matching key-file copy removed after OS keychain verification'
+          }
+        }
+        await chmod(options.keyFilePath, 0o600).catch(() => undefined)
+        return {
+          encryptor: createCompatibleEncryptor(
+            createAesEncryptor(existing.key),
+            createAesEncryptor(legacyFileKey)
+          ),
+          osKeychain: false,
+          reason: 'OS keychain and 0600 key file contain different credential generations; preserving both without replacing either key'
+        }
+      }
+      if (existing.status === 'missing' && await tryWriteOsKey(platform, run, legacyFileKey)) {
         await rm(options.keyFilePath, { force: true }).catch(() => undefined)
         return { encryptor: createAesEncryptor(legacyFileKey), osKeychain: true, reason: 'existing key migrated to OS keychain' }
       }
-      return { encryptor: createAesEncryptor(legacyFileKey), osKeychain: false, reason: 'OS keychain migration failed; existing 0600 key file preserved' }
+      const reason = existing.status === 'unavailable'
+        ? existing.reason
+        : 'OS keychain migration failed'
+      return {
+        encryptor: createAesEncryptor(legacyFileKey),
+        osKeychain: false,
+        reason: `${reason}; existing 0600 key file preserved`
+      }
     }
-    const existing = await tryReadOsKey(platform, run)
     if (existing.status === 'found') {
       return { encryptor: createAesEncryptor(existing.key), osKeychain: true, reason: 'key loaded from OS keychain' }
     }

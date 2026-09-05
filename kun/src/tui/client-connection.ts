@@ -57,7 +57,11 @@ import {
 import { createApprovalConsentToken, KUN_APPROVAL_CONSENT_HEADER } from '../server/approval-consent.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
 import { readRuntimeDiscovery, type RuntimeDiscoveryRecord } from '../server/runtime-discovery.js'
-import { ensureSharedRuntime, runtimeDiscoveryDirectory } from '../cli/shared-runtime.js'
+import { runtimeDiscoveryDirectory } from '../cli/shared-runtime.js'
+import {
+  startClientOwnedRuntime,
+  type ClientOwnedRuntimeHandle
+} from '../cli/client-owned-runtime.js'
 import {
   allowsDevelopmentManagerBootstrap,
   runtimeBuildIdForFlavor
@@ -75,7 +79,7 @@ export async function resolveTuiConnection(
   fetchImpl: typeof fetch = fetch,
   deps?: {
     expectedBuildId?: string
-    ensureRuntime?: typeof ensureSharedRuntime
+    startOwnedRuntime?: typeof startClientOwnedRuntime
   }
 ): Promise<TuiConnection> {
   if (options.url) {
@@ -92,11 +96,11 @@ export async function resolveTuiConnection(
     sourceBuildId,
     runtimeFlavor
   )
-  const ensureRuntime = deps?.ensureRuntime ?? ensureSharedRuntime
+  const startOwnedRuntime = deps?.startOwnedRuntime ?? startClientOwnedRuntime
   const controlDir = process.env.KUN_MANAGER_CONTROL_DIR?.trim() || defaultKunControlDir()
   const managerSettingsPath = process.env.KUN_MANAGER_SETTINGS_PATH?.trim()
   const startExpectedRuntime = async (): Promise<TuiConnection> => {
-    const manager = deps?.ensureRuntime
+    const manager = deps?.startOwnedRuntime
       ? undefined
       : await ensureServiceManager({
           flavor: runtimeFlavor,
@@ -109,25 +113,29 @@ export async function resolveTuiConnection(
           ...(managerSettingsPath ? { settingsPath: managerSettingsPath } : {}),
           fetch: fetchImpl
         })
-    const started = await ensureRuntime({
+    const owned: ClientOwnedRuntimeHandle = await startOwnedRuntime({
       dataDir: options.dataDir,
+      ownerKind: 'tui',
       fetch: fetchImpl,
       runtimeFlavor,
       controlDir,
       ...(manager ? { manager } : {}),
       ...(sourceBuildId ? { expectedBuildId: sourceBuildId } : {})
     })
+    const started = owned.connection
     return {
       baseUrl: started.discovery.baseUrl,
       runtimeToken: started.discovery.runtimeToken,
       runtimeInfo: started.info,
-      discovered: true
+      discovered: true,
+      ownedRuntime: owned
     }
   }
   const discoveryDir = runtimeDiscoveryDirectory(options.dataDir, runtimeFlavor, controlDir)
   const discovery = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
   if (discovery) {
     assertSafeDiscovery(discovery)
+    if (!options.noStart) return startExpectedRuntime()
     try {
       const connection = await validateConnection({
         baseUrl: discovery.baseUrl.replace(/\/$/, ''),
@@ -140,23 +148,17 @@ export async function resolveTuiConnection(
         connection.runtimeInfo.buildId === expectedBuildId
       )
       if (buildMatches) return connection
-      if (options.noStart) {
-        throw new TuiClientError(
-          'Kun runtime discovery belongs to an older application build; remove --no-start so this TUI can replace it.',
-          undefined,
-          'runtime_build_mismatch'
-        )
-      }
-      return startExpectedRuntime()
+      throw new TuiClientError(
+        'Kun runtime discovery belongs to a different application build; restart the owning client.',
+        undefined,
+        'runtime_build_mismatch'
+      )
     } catch (error) {
-      if (!options.noStart) {
-        return startExpectedRuntime()
-      }
       if (error instanceof TuiClientError && error.code === 'runtime_build_mismatch') {
         throw error
       }
       throw new TuiClientError(
-        `Kun runtime discovery is stale or unavailable in ${options.dataDir}. Run \`kun runtime restart\`, or remove --no-start so this client can start the shared runtime.`,
+        `Kun runtime discovery is stale or unavailable in ${options.dataDir}; restart the owning client or remove --no-start to start a TUI-owned Runtime.`,
         error instanceof TuiClientError ? error.status : undefined,
         'stale_runtime_discovery'
       )

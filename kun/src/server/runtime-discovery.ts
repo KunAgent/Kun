@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { RuntimeFlavorSchema, type RuntimeFlavor } from '../contracts/runtime-flavor.js'
+import { RuntimeClientOwnerKindSchema } from '../contracts/runtime-owner.js'
 import { isLoopbackHost } from './loopback-host.js'
 import { KUN_VERSION } from '../version.js'
 
@@ -15,10 +16,11 @@ const RUNTIME_DISCOVERY_LOCK_FILENAME = '.runtime-discovery.lock'
 const RUNTIME_START_LOCK_FILENAME = '.runtime-start.lock'
 const MAX_DISCOVERY_BYTES = 64 * 1024
 const LOCK_RETRY_MS = 20
-// A detached runtime may need several seconds to import dependencies, bind its
-// port, and publish discovery. Keep contenders waiting past the 30s startup
-// deadline so they can reuse the elected instance instead of failing early.
-const LOCK_ATTEMPTS = 2_000
+const DISCOVERY_LOCK_ATTEMPTS = 2_000
+// A detached managed runtime can use a 90-second Windows startup budget while
+// it reconciles a large profile. Keep contenders waiting beyond that budget so
+// they attach to the elected instance instead of timing out into another launch.
+const RUNTIME_START_LOCK_ATTEMPTS = 6_000
 const INVALID_LOCK_STALE_MS = 30_000
 
 export const RuntimeDiscoveryRecordSchema = z.object({
@@ -35,6 +37,7 @@ export const RuntimeDiscoveryRecordSchema = z.object({
   flavor: RuntimeFlavorSchema.optional(),
   buildId: RuntimeBuildIdSchema.optional(),
   launchMode: z.enum(['foreground', 'shared', 'gui']),
+  clientOwnerKind: RuntimeClientOwnerKindSchema.optional(),
   logPath: z.string().min(1).max(4_096).optional()
 })
 
@@ -55,6 +58,7 @@ export const RuntimeHandoffDiscoveryRecordSchema = z.object({
   runtimeToken: z.string().max(16_384),
   flavor: RuntimeFlavorSchema.optional(),
   buildId: RuntimeBuildIdSchema.optional(),
+  clientOwnerKind: RuntimeClientOwnerKindSchema.optional(),
   logPath: z.string().min(1).max(4_096).optional()
 }).passthrough()
 
@@ -223,7 +227,13 @@ export async function withRuntimeStartLock<T>(
   const filename = flavor === 'production'
     ? RUNTIME_START_LOCK_FILENAME
     : `.runtime-start.${flavor}.lock`
-  return withFileLock(dataDir, filename, randomUUID(), action)
+  return withFileLock(
+    dataDir,
+    filename,
+    randomUUID(),
+    action,
+    RUNTIME_START_LOCK_ATTEMPTS
+  )
 }
 
 async function withDiscoveryLock<T>(
@@ -238,7 +248,8 @@ async function withFileLock<T>(
   dataDir: string,
   filename: string,
   instanceId: string,
-  action: () => Promise<T>
+  action: () => Promise<T>,
+  attempts = DISCOVERY_LOCK_ATTEMPTS
 ): Promise<T> {
   await mkdir(dataDir, { recursive: true, mode: 0o700 })
   await chmod(dataDir, 0o700).catch((error) => {
@@ -246,7 +257,7 @@ async function withFileLock<T>(
   })
   const lockPath = join(dataDir, filename)
   const owner = JSON.stringify({ pid: process.pid, instanceId, acquiredAt: new Date().toISOString() })
-  for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const handle = await open(lockPath, 'wx', 0o600)
       try {

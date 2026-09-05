@@ -97,7 +97,7 @@ import {
 } from './main-runtime-settings'
 import {
   ensureRuntime,
-  restartAllKunServeProcesses,
+  restartGuiRuntime,
   restartRuntime
 } from './main-runtime-startup'
 import {
@@ -135,6 +135,9 @@ export function registerMainIpc(services: MainServices): void {
     }
     ipcMain.removeHandler('startup:state:get')
     ipcMain.handle('startup:state:get', () => mainState.startupState.payload())
+    const syncAppKeepAwake = (settings: AppSettingsV1): void => {
+      mainState.powerSaveController?.setAppKeepAwake(settings.appBehavior.keepAwake === true)
+    }
     const applySettingsPatch = async (partial: AppSettingsPatch): Promise<AppSettingsV1> => {
       const { previous, saved } = await runtimeSettingsIntents.serializePersistence(async () => {
         let committedPrevious: AppSettingsV1 | undefined
@@ -189,6 +192,7 @@ export function registerMainIpc(services: MainServices): void {
             })
           })
       }
+      syncAppKeepAwake(saved)
       try {
         mainState.scheduleRuntime?.sync(saved)
         mainState.workflowRuntime?.sync(saved)
@@ -291,6 +295,7 @@ export function registerMainIpc(services: MainServices): void {
         })
         return saved
       })
+      syncAppKeepAwake(saved)
       requestExtensionWorkbenchEnvironmentPublish()
       return saved
     }
@@ -310,9 +315,17 @@ export function registerMainIpc(services: MainServices): void {
         credentialMigration?.invalidateRuntime(dataDir)
         return { reset: true as const, ...result }
       },
-      runtimeRequest: async (path, method, body, headers) => {
+      runtimeRequest: async (path, method, body, headers, requestOptions) => {
         const settings = await mainState.store.load()
-        const result = await runtimeRequest(settings, path, { method, body, headers })
+        const priorityHeaders = requestOptions?.priority
+          ? { ...headers, 'X-Kun-Request-Priority': requestOptions.priority }
+          : headers
+        const result = await runtimeRequest(settings, path, {
+          method,
+          body,
+          headers: priorityHeaders,
+          signal: requestOptions?.signal
+        })
         const cleanup = result.ok
           ? browserUseCleanupForRuntimeRequest({ path, method, body })
           : undefined
@@ -335,7 +348,7 @@ export function registerMainIpc(services: MainServices): void {
       },
       restartKunServe: async () => {
         const settings = await mainState.store.load()
-        await restartAllKunServeProcesses(settings)
+        await restartGuiRuntime(settings)
       },
       fetchUpstreamModels: fetchModels,
       getClawRuntime: () => mainState.clawRuntime,

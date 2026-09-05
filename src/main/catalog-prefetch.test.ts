@@ -20,6 +20,7 @@ function settingsWithKimi(): AppSettingsV1 {
         apiKey: 'test-key',
         baseUrl: 'https://api.kimi.com/coding/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['k3', 'kimi-for-coding'],
         modelProfiles: {
           k3: {

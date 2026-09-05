@@ -379,13 +379,18 @@ export async function initializeMainServices(input: {
     const startDesktopBackgroundServices = async (): Promise<void> => {
       if (mainState.scheduleRuntime || mainState.workflowRuntime || mainState.clawRuntime || mainState.telegramRuntime || mainState.daemonRuntime) return
       ownsDesktopBackgroundServices = true
-      const settings = await mainState.store.load()
+      let settings = await mainState.store.load()
       await syncClawScheduleMcpConfig(settings, getClawScheduleMcpLaunchConfig()).catch((error) => {
         console.error('[claw-schedule-mcp] failed to sync config on desktop-host acquisition:', error)
       })
+      // The MCP sync above may overlap a settings save while this host has no
+      // controller yet. Reload before publishing the controller so an older
+      // keep-awake snapshot cannot overwrite the committed preference.
+      settings = await mainState.store.load()
       void runCheckpointCleanup(settings, { force: true, reason: 'startup' })
       syncCheckpointCleanupTimer(settings)
       mainState.powerSaveController = createPowerSaveController(powerSaveBlocker)
+      mainState.powerSaveController.setAppKeepAwake(settings.appBehavior.keepAwake === true)
       mainState.scheduleRuntime = createScheduleRuntime({
         store: mainState.store,
         withModelCredentials: withRegistryCredentials,
@@ -437,12 +442,13 @@ export async function initializeMainServices(input: {
     const stopDesktopBackgroundServices = async (): Promise<void> => {
       ownsDesktopBackgroundServices = false
       stopCheckpointCleanupTimer()
-      const [schedule, workflow, claw, telegram, daemon] = [
+      const [schedule, workflow, claw, telegram, daemon, powerSaveController] = [
         mainState.scheduleRuntime,
         mainState.workflowRuntime,
         mainState.clawRuntime,
         mainState.telegramRuntime,
-        mainState.daemonRuntime
+        mainState.daemonRuntime,
+        mainState.powerSaveController
       ] as const
       mainState.scheduleRuntime = null
       mainState.workflowRuntime = null
@@ -458,6 +464,7 @@ export async function initializeMainServices(input: {
         daemon?.stop(),
         stopWeixinBridgeRuntime()
       ])
+      powerSaveController?.reset()
     }
     const desktopResourceLeases = new ManagerResourceLeaseClient(
       serviceManager,

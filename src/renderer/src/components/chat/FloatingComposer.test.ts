@@ -51,8 +51,7 @@ import {
 } from './FloatingComposerExecutionPicker'
 import {
   FloatingComposerQueuedMessages,
-  calculateQueuedMessageMenuPlacement,
-  canEditQueuedComposerMessage
+  calculateQueuedMessageMenuPlacement
 } from './FloatingComposerQueuedMessages'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import { requestContextSnapshotMatchesSelection } from './FloatingComposerContextCapacity'
@@ -124,6 +123,40 @@ describe('FloatingComposer usage history visibility', () => {
       route: 'write',
       runtimeReady: true
     })).toBe(false)
+  })
+})
+
+describe('FloatingComposer automatic mode', () => {
+  it('renders the automatic mode badge with its icon', () => {
+    useChatStore.setState({
+      activeThreadId: null,
+      activeThreadGoal: null,
+      activeThreadTodos: null,
+      blocks: [],
+      route: 'chat',
+      workspaceRoot: '/Users/test/code/acme-project',
+      threads: []
+    })
+
+    const html = renderToStaticMarkup(createElement(FloatingComposer, {
+      input: '',
+      setInput: () => undefined,
+      mode: 'auto',
+      setMode: () => undefined,
+      busy: false,
+      runtimeReady: true,
+      hasActiveThread: false,
+      composerModel: 'test-model',
+      composerPickList: ['test-model'],
+      onComposerModelChange: () => undefined,
+      queuedMessages: [],
+      onRemoveQueuedMessage: () => undefined,
+      onSend: () => undefined,
+      onInterrupt: () => undefined
+    }))
+
+    expect(html).toContain('data-composer-auto-plan-build-mode-badge')
+    expect(html).toContain('lucide-bot')
   })
 })
 

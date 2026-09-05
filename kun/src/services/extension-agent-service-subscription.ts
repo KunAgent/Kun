@@ -17,7 +17,7 @@ import { TurnConflictError, type TurnService } from './turn-service.js'
 import type {
   ExtensionAgentProfileRegistry
 } from './extension-agent-profile-registry.js'
-import { type BufferedAgentEvent, type ExtensionAgentEvent, type ExtensionAgentSubscription, MAX_EVENT_BYTES, MAX_SUBSCRIPTION_QUEUE, MAX_SUBSCRIPTION_QUEUE_BYTES } from './extension-agent-service-core.js'
+import { type BufferedAgentEvent, type ExtensionAgentEvent, type ExtensionAgentSubscription, MAX_EVENT_BYTES, MAX_SUBSCRIPTION_QUEUE, MAX_SUBSCRIPTION_QUEUE_BYTES } from './extension-agent-service-contracts.js'
 import { compareBufferedEvents, serializedEventBytes } from './extension-agent-service-event-usage.js'
 
 export class ManagedSubscription implements ExtensionAgentSubscription {

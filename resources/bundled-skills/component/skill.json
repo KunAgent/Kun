@@ -1,0 +1,24 @@
+{
+  "id": "component",
+  "name": "Interactive Component",
+  "version": "1.0.0",
+  "description": "Create and publish one focused interactive UI component or choose a governed Kun visualization.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/component"
+    ],
+    "promptPatterns": [
+      "calculator",
+      "component",
+      "Interactive Component",
+      "prototype",
+      "UI component",
+      "交互组件"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

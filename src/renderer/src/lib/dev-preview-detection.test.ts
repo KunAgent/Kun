@@ -125,4 +125,30 @@ describe('dev preview detection', () => {
     expect(extractDetectedDevPreviewUrls(blocks)).toEqual([])
     expect(extractAutoOpenDevPreviewUrls(blocks)).toEqual([])
   })
+
+  it('does not auto-open a bare 127.0.0.1 mention without scheme or port', () => {
+    const blocks: ChatBlock[] = [
+      user('check the logs'),
+      commandExecutionBlock({
+        command: 'npm run dev',
+        status: 'success',
+        detail: 'ready in 200 ms\nproxy target 127.0.0.1 refused the connection'
+      })
+    ]
+
+    expect(extractAutoOpenDevPreviewUrls(blocks)).toEqual([])
+  })
+
+  it('does not auto-open when the command text only appears in tool meta', () => {
+    const blocks: ChatBlock[] = [
+      user('inspect runtime health'),
+      commandExecutionBlock({
+        command: 'curl http://127.0.0.1:18899/health',
+        status: 'success',
+        detail: '{"ok":true}'
+      })
+    ]
+
+    expect(extractAutoOpenDevPreviewUrls(blocks)).toEqual([])
+  })
 })

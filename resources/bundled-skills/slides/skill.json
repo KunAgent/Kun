@@ -1,0 +1,23 @@
+{
+  "id": "slides",
+  "name": "Kun Slides",
+  "version": "1.0.0",
+  "description": "Create, edit, review, and export native PowerPoint presentations through Kun's governed presentation workflow.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/slides"
+    ],
+    "promptPatterns": [
+      "Kun Slides",
+      "PowerPoint",
+      "PPT",
+      "slides",
+      "演示文稿"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

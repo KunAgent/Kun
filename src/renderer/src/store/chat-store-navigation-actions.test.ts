@@ -37,13 +37,19 @@ vi.mock('../agent/registry', () => ({
 const applyThemeLibMock = vi.hoisted(() => ({
   applyCursorSpotlight: vi.fn(),
   applyCursorSpotlightColor: vi.fn(),
+  applyDarkUiColors: vi.fn(),
   applyTheme: vi.fn(),
   applyUiFontScale: vi.fn(),
   applyChatContentMaxWidth: vi.fn(),
-  applyDocumentLocale: vi.fn()
+  applyDocumentLocale: vi.fn(),
+  applyWriteTypography: vi.fn()
 }))
 
 vi.mock('../lib/apply-theme', () => applyThemeLibMock)
+
+import {
+  REMOVED_CODE_WORKSPACES_STORAGE_KEY
+} from '../lib/removed-code-workspaces'
 
 import {
   createNavigationActions
@@ -326,6 +332,40 @@ describe('chat-store navigation workspace selection', () => {
     expect(workspaceDirectoryExists).not.toHaveBeenCalled()
     expect(alertDialog).not.toHaveBeenCalled()
     expect(harness.state.error).toBeNull()
+  })
+
+  it('does not restore a removed settings workspace during boot', async () => {
+    const storage = new MemoryStorage()
+    storage.setItem(REMOVED_CODE_WORKSPACES_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      removed: [{ projectPath: '/Users/zxy/removed', aliases: [], removedAt: 'now' }]
+    }))
+    vi.stubGlobal('window', {
+      localStorage: storage,
+      kunGui: {
+        getSettings: vi.fn(async () => ({
+          version: 1,
+          initialSetupCompleted: true,
+          workspaceRoot: '/Users/zxy/removed',
+          conversationWorkspaceRoot: '~/Documents/Kun',
+          write: { defaultWorkspaceRoot: '', activeWorkspaceRoot: '', workspaces: [] },
+          claw: { channels: [] },
+          theme: 'dark',
+          uiFontScale: 1,
+          chatContentMaxWidthPx: 896,
+          locale: 'en',
+          disabledSkillIds: [],
+          codeAgentPresets: [],
+          agents: { kun: { graph: { enabled: false, defaultStrategy: 'direct' } } }
+        }))
+      }
+    })
+    const harness = buildHarness()
+
+    await harness.actions.boot()
+
+    expect(harness.state.workspaceRoot).toBe('')
+    expect(harness.state.codeWorkspaceRoots).not.toContain('/Users/zxy/removed')
   })
 
   it('starts Kun without reopening completed onboarding when the active provider has no API key', async () => {

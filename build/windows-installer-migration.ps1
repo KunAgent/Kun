@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveUninstaller', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'PrepareUpdateTransaction', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
+  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'PrepareUpdateTransaction', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
   [string]$Action,
   [string]$ResultPath = ''
 )
@@ -13,6 +13,7 @@ Set-StrictMode -Version 2.0
 . (Join-Path $PSScriptRoot 'windows-installer-migration-journal.ps1')
 . (Join-Path $PSScriptRoot 'windows-installer-migration-filesystem.ps1')
 . (Join-Path $PSScriptRoot 'windows-installer-migration-actions.ps1')
+. (Join-Path $PSScriptRoot 'windows-installer-migration-recovery-env.ps1')
 . (Join-Path $PSScriptRoot 'windows-installer-migration-transaction.ps1')
 
 function Invoke-InstallerFaultPoint([string]$Point) {
@@ -98,11 +99,13 @@ function Write-AutomaticUpdateResult {
     'KUN_INSTALLER_INSTALL_MODE',
     'KUN_INSTALLER_INSTALL_REGISTRY_KEY',
     'KUN_INSTALLER_JOURNAL',
+    'KUN_INSTALLER_HEALTH_RESULT',
     'KUN_INSTALLER_PAYLOAD_BACKUP',
     'KUN_INSTALLER_PRESERVE_OTHER_SCOPE',
     'KUN_INSTALLER_PRODUCT_NAME',
     'KUN_INSTALLER_SECONDARY_SOURCE',
     'KUN_INSTALLER_SOURCE',
+    'KUN_INSTALLER_STAGE',
     'KUN_INSTALLER_TARGET',
     'KUN_INSTALLER_TRANSACTION',
     'KUN_INSTALLER_UNINSTALL_REGISTRY_KEY'
@@ -133,7 +136,9 @@ try {
   Write-InstallerDiagnostic (
     "START action=$Action source=$(Get-EnvironmentValue 'KUN_INSTALLER_SOURCE') " +
     "target=$(Get-EnvironmentValue 'KUN_INSTALLER_TARGET') " +
-    "journal=$(Get-EnvironmentValue 'KUN_INSTALLER_JOURNAL')"
+    "journal=$(Get-EnvironmentValue 'KUN_INSTALLER_JOURNAL') " +
+    "installMode=$(Get-EnvironmentValue 'KUN_INSTALLER_INSTALL_MODE') " +
+    "uacInner=$(Get-EnvironmentValue 'KUN_INSTALLER_UAC_INNER')"
   )
   switch ($Action) {
     'ResolvePath' {
@@ -144,9 +149,6 @@ try {
     }
     'ResolveUpdateScope' {
       Write-InstallerResult (Resolve-AutomaticUpdateScope)
-    }
-    'ResolveUninstaller' {
-      Write-InstallerResult (Resolve-TrustedAppUninstaller)
     }
     'ResolveRecoveryExecutable' {
       Write-InstallerResult (Resolve-RecoveryPayloadExecutable)
@@ -182,7 +184,7 @@ try {
       $stopResult = Stop-InstallRootProcesses
       if ($stopResult.Outcome -eq 'running') {
         $processIds = @($stopResult.ProcessIds | ForEach-Object { [string]$_ }) -join ','
-        Write-InstallerDiagnostic "STOP_PROCESSES outcome=running pids=$processIds"
+        Write-BlockingProcessDiagnostic $stopResult
         [Console]::Error.WriteLine("KUN_INSTALLER_STOP_RESULT=running pids=$processIds")
         exit 2
       }

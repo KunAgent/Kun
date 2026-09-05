@@ -59,6 +59,166 @@ describe('useWorkbenchComposerSubmitController', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps an Automatic draft until the configuration actually submits it', async () => {
+    useChatStore.setState({ route: 'chat', runtimeConnection: 'ready' })
+    const input = inputHarness('implement automatic mode')
+    let onSubmitting: (() => void) | undefined
+    let onStarted: (() => void) | undefined
+    const requestAutoPlanBuild = vi.fn(async (request: { onSubmitting?: () => void; onStarted: () => void }) => {
+      onSubmitting = request.onSubmitting
+      onStarted = request.onStarted
+      return 'dialog' as const
+    })
+    const clearComposerAttachments = vi.fn()
+    const clearComposerFileReferences = vi.fn()
+    const controller = useWorkbenchComposerSubmitController(controllerParams({
+      route: 'chat',
+      composerMode: 'auto',
+      input: input.getValue(),
+      setInput: input.setInput,
+      requestAutoPlanBuild,
+      clearComposerAttachments,
+      clearComposerFileReferences,
+      workspaceRoot: '/tmp/write'
+    }))
+
+    controller.handleSend()
+    await vi.waitFor(() => expect(requestAutoPlanBuild).toHaveBeenCalledOnce())
+    // While the confirmation dialog is open the draft must stay put.
+    expect(input.getValue()).toBe('implement automatic mode')
+    expect(clearComposerAttachments).not.toHaveBeenCalled()
+    expect(clearComposerFileReferences).not.toHaveBeenCalled()
+
+    // Submitting consumes the composer immediately, before admission/onStarted.
+    onSubmitting?.()
+    expect(input.getValue()).toBe('')
+    expect(clearComposerAttachments).toHaveBeenCalledOnce()
+    expect(clearComposerFileReferences).toHaveBeenCalledOnce()
+
+    // onStarted only confirms acceptance and must not clear anything again.
+    input.setInput('typed while waiting')
+    onStarted?.()
+    expect(input.getValue()).toBe('typed while waiting')
+  })
+
+  it('restores the Automatic snapshot when admission rejects it', async () => {
+    useChatStore.setState({ route: 'chat', runtimeConnection: 'ready', activeThreadId: 'thr_mapped' })
+    const input = inputHarness('automatic draft')
+    let onSubmitting: (() => void) | undefined
+    let onRejected: (() => void) | undefined
+    const requestAutoPlanBuild = vi.fn(async (request: { onSubmitting?: () => void; onRejected?: () => void }) => {
+      onSubmitting = request.onSubmitting
+      onRejected = request.onRejected
+      return 'dialog' as const
+    })
+    const controller = useWorkbenchComposerSubmitController(controllerParams({
+      route: 'chat',
+      composerMode: 'auto',
+      input: input.getValue(),
+      setInput: input.setInput,
+      requestAutoPlanBuild,
+      workspaceRoot: '/tmp/write'
+    }))
+
+    controller.handleSend()
+    await vi.waitFor(() => expect(requestAutoPlanBuild).toHaveBeenCalledOnce())
+    onSubmitting?.()
+    expect(input.getValue()).toBe('')
+
+    onRejected?.()
+    await vi.waitFor(() => expect(input.getValue()).toBe('automatic draft'))
+  })
+
+  it('merges text typed while an Automatic admission was pending', async () => {
+    useChatStore.setState({ route: 'chat', runtimeConnection: 'ready', activeThreadId: 'thr_mapped' })
+    const input = inputHarness('original draft')
+    let onSubmitting: (() => void) | undefined
+    let onRejected: (() => void) | undefined
+    const requestAutoPlanBuild = vi.fn(async (request: { onSubmitting?: () => void; onRejected?: () => void }) => {
+      onSubmitting = request.onSubmitting
+      onRejected = request.onRejected
+      return 'dialog' as const
+    })
+    const controller = useWorkbenchComposerSubmitController(controllerParams({
+      route: 'chat',
+      composerMode: 'auto',
+      input: input.getValue(),
+      setInput: input.setInput,
+      requestAutoPlanBuild,
+      workspaceRoot: '/tmp/write'
+    }))
+
+    controller.handleSend()
+    await vi.waitFor(() => expect(requestAutoPlanBuild).toHaveBeenCalledOnce())
+    onSubmitting?.()
+    expect(input.getValue()).toBe('')
+    input.setInput('typed while waiting')
+
+    onRejected?.()
+    await vi.waitFor(() => expect(input.getValue()).toBe('original draft\n\ntyped while waiting'))
+  })
+
+  it('does not restore a stale Automatic draft into a different thread', async () => {
+    useChatStore.setState({ route: 'chat', runtimeConnection: 'ready', activeThreadId: 'thr_mapped' })
+    const input = inputHarness('original draft')
+    let onSubmitting: (() => void) | undefined
+    let onRejected: (() => void) | undefined
+    const requestAutoPlanBuild = vi.fn(async (request: { onSubmitting?: () => void; onRejected?: () => void }) => {
+      onSubmitting = request.onSubmitting
+      onRejected = request.onRejected
+      return 'dialog' as const
+    })
+    const controller = useWorkbenchComposerSubmitController(controllerParams({
+      route: 'chat',
+      composerMode: 'auto',
+      input: input.getValue(),
+      setInput: input.setInput,
+      requestAutoPlanBuild,
+      workspaceRoot: '/tmp/write'
+    }))
+
+    controller.handleSend()
+    await vi.waitFor(() => expect(requestAutoPlanBuild).toHaveBeenCalledOnce())
+    onSubmitting?.()
+    useChatStore.setState({ activeThreadId: 'thr_other' })
+    input.setInput('new thread draft')
+
+    onRejected?.()
+    await vi.waitFor(() => expect(input.getValue()).toBe('new thread draft'))
+  })
+
+  it('restores captured attachments when admission rejects', async () => {
+    useChatStore.setState({ route: 'chat', runtimeConnection: 'ready', activeThreadId: 'thr_mapped' })
+    const input = inputHarness('')
+    let onSubmitting: (() => void) | undefined
+    let onRejected: (() => void) | undefined
+    const requestAutoPlanBuild = vi.fn(async (request: { onSubmitting?: () => void; onRejected?: () => void }) => {
+      onSubmitting = request.onSubmitting
+      onRejected = request.onRejected
+      return 'dialog' as const
+    })
+    const restoreComposerAttachments = vi.fn(async () => undefined)
+    const attachment = { id: 'attachment-1', kind: 'image' as const, name: 'pic.png', mimeType: 'image/png' }
+    const controller = useWorkbenchComposerSubmitController(controllerParams({
+      route: 'chat',
+      composerMode: 'auto',
+      input: input.getValue(),
+      setInput: input.setInput,
+      requestAutoPlanBuild,
+      restoreComposerAttachments,
+      composerAttachments: [attachment],
+      getAttachmentScope: () => 'chat',
+      workspaceRoot: '/tmp/write'
+    }))
+
+    controller.handleSend()
+    await vi.waitFor(() => expect(requestAutoPlanBuild).toHaveBeenCalledOnce())
+    onSubmitting?.()
+    onRejected?.()
+
+    await vi.waitFor(() => expect(restoreComposerAttachments).toHaveBeenCalledWith([attachment], 'chat'))
+  })
+
   it('restores the Write prompt when the send is rejected', async () => {
     const input = inputHarness('keep this prompt')
     const sendMessage = vi.fn(async () => false)

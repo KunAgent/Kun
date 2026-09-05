@@ -31,6 +31,7 @@ export {
   modelProviderModelProfile,
   modelProviderModelProfilesForProvider,
   modelProviderRequiresApiKey,
+  modelProviderSupportsAppProxy,
   modelProviderSettingsPatch,
   modelReasoningEfforts,
   modelSupportsImageInput,
@@ -40,7 +41,13 @@ export {
   resolveModelProviderApiKey,
   resolveModelProviderBaseUrl,
   resolveModelProviderProxyUrl,
+  resolveProviderProxyRoute,
+  resolveProviderProxyUrl,
   resolveModelRouteTargetReference
+} from './app-settings-provider-core'
+export {
+  ProviderProxyConfigurationError,
+  type ProviderProxyRoute
 } from './app-settings-provider-core'
 export {
   defaultMiniMaxMediaGenerationKunPatch,

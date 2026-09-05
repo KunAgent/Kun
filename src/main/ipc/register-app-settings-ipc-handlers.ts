@@ -25,6 +25,7 @@ import {
   cursorSubscriptionDiscoveryPayloadSchema,
   modelProviderCredentialRevealPayloadSchema,
   runtimeRequestPayloadSchema,
+  runtimeRequestCancelPayloadSchema,
   runtimeImageAttachmentUploadPayloadSchema,
   kunProtectedApprovalPayloadSchema,
   settingsPatchSchema
@@ -107,6 +108,24 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     logError,
     logInfo: logInfoHandler = () => undefined
   } = options
+  const runtimeRequestControllers = new Map<string, {
+    ownerId: number
+    controller: AbortController
+  }>()
+  const observedRuntimeRequestOwners = new Set<number>()
+  const runtimeRequestKey = (ownerId: number, requestId: string): string => `${ownerId}:${requestId}`
+  const observeRuntimeRequestOwner = (owner: IpcMainInvokeEvent['sender']): void => {
+    if (observedRuntimeRequestOwners.has(owner.id)) return
+    observedRuntimeRequestOwners.add(owner.id)
+    owner.once('destroyed', () => {
+      observedRuntimeRequestOwners.delete(owner.id)
+      for (const [key, pending] of runtimeRequestControllers) {
+        if (pending.ownerId !== owner.id) continue
+        pending.controller.abort()
+        runtimeRequestControllers.delete(key)
+      }
+    })
+  }
   const withRegistryCredentials = options.withRegistryCredentials ?? (async (settings) => settings)
   const nativeDialogs = options.nativeDialogs ?? new NativeDialogCoordinator()
   ipcMain.handle('settings:open-config-file', async () => {
@@ -382,7 +401,41 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
     const request = parseIpcPayload('runtime:request', runtimeRequestPayloadSchema, payload)
-    return runtimeRequest(request.path, request.method, request.body)
+    if (!request.requestId) {
+      return runtimeRequest(request.path, request.method, request.body, undefined, {
+        priority: request.priority
+      })
+    }
+    observeRuntimeRequestOwner(event.sender)
+    const key = runtimeRequestKey(event.sender.id, request.requestId)
+    runtimeRequestControllers.get(key)?.controller.abort()
+    const controller = new AbortController()
+    runtimeRequestControllers.set(key, { ownerId: event.sender.id, controller })
+    try {
+      return await runtimeRequest(request.path, request.method, request.body, undefined, {
+        signal: controller.signal,
+        priority: request.priority
+      })
+    } finally {
+      if (runtimeRequestControllers.get(key)?.controller === controller) {
+        runtimeRequestControllers.delete(key)
+      }
+    }
+  })
+
+  ipcMain.handle('runtime:request:cancel', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload(
+      'runtime:request:cancel',
+      runtimeRequestCancelPayloadSchema,
+      payload
+    )
+    const key = runtimeRequestKey(event.sender.id, request.requestId)
+    const pending = runtimeRequestControllers.get(key)
+    if (!pending) return false
+    pending.controller.abort()
+    runtimeRequestControllers.delete(key)
+    return true
   })
 
   ipcMain.handle('gateway:credential', async (event, action: unknown) => {
@@ -570,22 +623,22 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     const chinese = app.getLocale?.().toLowerCase().startsWith('zh') === true
     const confirmation = await showMainWindowMessageBox(parent, {
       type: 'warning',
-      title: chinese ? '重启所有 Kun 服务' : 'Restart all Kun services',
+      title: chinese ? '重启桌面 Runtime' : 'Restart desktop Runtime',
       message: chinese
-        ? '停止当前用户的所有 Kun 服务进程并启动新服务？'
-        : 'Stop all Kun service processes owned by the current user and start a new service?',
+        ? '停止并重新启动当前桌面应用拥有的 Runtime？'
+        : 'Stop and restart the Runtime owned by this desktop app?',
       detail: chinese
         ? [
-            '将停止当前用户下所有已识别的 Kun serve 进程，包括使用旧端口、旧数据目录或已成为遗留实例的服务。',
-            '运行中的 Agent 任务、工具调用、后台任务和待审批操作可能中断；可恢复任务可能在新服务启动后继续，但不保证无缝恢复。已经开始的工作区修改会原样保留，可能处于未完成状态。',
-            '已保存的会话和对话记录、记忆、归档、设置、日志及工作区文件不会被删除。本操作不会自动创建备份；桌面应用和 Kun Service Manager 不会被清理。'
+            '只会重启当前桌面应用拥有的 Kun Runtime；不会扫描或停止 TUI、其他数据目录的 Runtime 或 Kun Service Manager。',
+            '运行中的 Agent 任务、工具调用、后台任务和待审批操作可能中断。已经开始的工作区修改会原样保留，可能处于未完成状态。',
+            '已保存的会话和对话记录、记忆、归档、设置、日志及工作区文件不会被删除。'
           ].join('\n\n')
         : [
-            'Every identified Kun serve process owned by the current user will be stopped, including services using old ports or data directories and other stale instances.',
-            'Running Agent tasks, tool calls, background work, and pending approvals may be interrupted. Recoverable work may continue after the new service starts, but seamless recovery is not guaranteed. Workspace changes already in progress will remain and may be incomplete.',
-            'Saved sessions and conversations, memory, archives, settings, logs, and workspace files will not be deleted. No automatic backup is created; the desktop app and Kun Service Manager are not cleared.'
+            'Only the Kun Runtime owned by this desktop app will restart. TUI processes, Runtimes for other data directories, and Kun Service Manager will not be scanned or stopped.',
+            'Running Agent tasks, tool calls, background work, and pending approvals may be interrupted. Workspace changes already in progress will remain and may be incomplete.',
+            'Saved sessions and conversations, memory, archives, settings, logs, and workspace files will not be deleted.'
           ].join('\n\n'),
-      buttons: chinese ? ['重启所有服务', '取消'] : ['Restart all services', 'Cancel'],
+      buttons: chinese ? ['重启桌面 Runtime', '取消'] : ['Restart desktop Runtime', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
       noLink: true,
@@ -596,18 +649,18 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       await restartKunServe()
       return { accepted: true }
     } catch (error) {
-      logError('runtime-restart-serve', 'Failed to clear historical Kun serves and restart Kun', {
+      logError('runtime-restart-serve', 'Failed to restart the GUI-owned Kun Runtime', {
         message: error instanceof Error ? error.message : String(error)
       })
       await showMainWindowMessageBox(parent, {
         type: 'error',
         title: chinese ? 'Kun 重启失败' : 'Kun restart failed',
         message: chinese
-          ? '未能停止全部 Kun 服务并完成重启。'
-          : 'Kun could not stop every service and finish restarting.',
+          ? '桌面 Runtime 未能完成重启。'
+          : 'The desktop Runtime could not finish restarting.',
         detail: chinese
-          ? '部分服务可能已经停止。已保存的数据未被删除；请查看日志后重试。'
-          : 'Some services may already have stopped. Saved data was not deleted; check the logs and retry.',
+          ? '原桌面 Runtime 可能已经停止。已保存的数据未被删除；请查看日志后重试。'
+          : 'The previous desktop Runtime may already have stopped. Saved data was not deleted; check the logs and retry.',
         buttons: [chinese ? '知道了' : 'OK'],
         defaultId: 0,
         cancelId: 0,

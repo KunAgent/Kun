@@ -135,6 +135,7 @@ describe('busy watchdog re-arming on live ticks (#goal-recovering-banner)', () =
         }),
         onSseEnd: vi.fn(() => () => undefined),
         onSseError: vi.fn(() => () => undefined),
+        onSseOpen: vi.fn(() => () => undefined),
         startSse: vi.fn(async (_threadId: string, _sinceSeq: number, streamId: string) => {
           activeStreamId = streamId
           return { streamId }

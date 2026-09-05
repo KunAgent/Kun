@@ -89,7 +89,7 @@ npm run smoke:development-graph-workbench
 
 ### Windows
 
-- [ ] 原生 Graph、Extension public release gate 和 standalone TUI smoke 通过。
+- [ ] 原生 Graph、Extension public release gate 和 GUI 内置终端命令 smoke 通过。
 - [ ] NSIS 安装器构建成功。
 - [ ] 安装路径迁移 smoke 覆盖 current-user、all-users、旧产品名、带引号卸载命令和无未知内容的安装目录。
 - [ ] 迁移后旧 HKCU 卸载注册、旧用户桌面/开始菜单快捷方式和旧 PATH 项被精确清理。

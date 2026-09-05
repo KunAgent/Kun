@@ -60,6 +60,73 @@ describe('PowerSaveController', () => {
     expect(controller.isActive()).toBe(false)
   })
 
+  it('keeps the app preference idempotent and releases only its own reference', () => {
+    const { blocker } = makeBlocker()
+    const controller = new PowerSaveController(blocker)
+
+    controller.setAppKeepAwake(true)
+    controller.setAppKeepAwake(true)
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+
+    controller.acquire()
+    controller.setAppKeepAwake(false)
+    expect(blocker.stop).not.toHaveBeenCalled()
+    expect(controller.isActive()).toBe(true)
+
+    controller.release()
+    expect(blocker.stop).toHaveBeenCalledTimes(1)
+    expect(controller.isActive()).toBe(false)
+  })
+
+  it('clears the app preference holder on reset so it can be enabled again', () => {
+    const { blocker } = makeBlocker()
+    const controller = new PowerSaveController(blocker)
+
+    controller.setAppKeepAwake(true)
+    controller.reset()
+    controller.setAppKeepAwake(true)
+
+    expect(blocker.start).toHaveBeenCalledTimes(2)
+    expect(blocker.stop).toHaveBeenCalledTimes(1)
+    expect(controller.isActive()).toBe(true)
+  })
+
+  it('retries the app preference after a failing blocker start', () => {
+    const { blocker } = makeBlocker()
+    vi.mocked(blocker.start)
+      .mockImplementationOnce(() => {
+        throw new Error('blocked')
+      })
+
+    const controller = new PowerSaveController(blocker)
+    controller.setAppKeepAwake(true)
+    expect(controller.isActive()).toBe(false)
+
+    controller.setAppKeepAwake(true)
+    expect(blocker.start).toHaveBeenCalledTimes(2)
+    expect(controller.isActive()).toBe(true)
+  })
+
+  it('backfills the requested app reference when another owner recovers start', () => {
+    const { blocker } = makeBlocker()
+    vi.mocked(blocker.start)
+      .mockImplementationOnce(() => {
+        throw new Error('blocked')
+      })
+
+    const controller = new PowerSaveController(blocker)
+    controller.setAppKeepAwake(true)
+    expect(controller.acquire()).toBe(true)
+
+    controller.release()
+    expect(blocker.stop).not.toHaveBeenCalled()
+    expect(controller.isActive()).toBe(true)
+
+    controller.setAppKeepAwake(false)
+    expect(blocker.stop).toHaveBeenCalledTimes(1)
+    expect(controller.isActive()).toBe(false)
+  })
+
   it('survives a failing blocker start without leaving stale state', () => {
     const blocker: PowerSaveBlockerLike = {
       start: vi.fn(() => {

@@ -85,13 +85,45 @@ export type McpSearchCatalogState = {
 export type McpSearchProviderOptions = {
   config: McpSearchConfig
   state: McpSearchCatalogState
+  catalog: McpSearchCatalogController
   refreshCatalog: () => Promise<McpSearchCatalogRecord[]>
   isServerAvailable: (server: McpServerConfig, workspace: string) => boolean
 }
 
-type McpVirtualCatalogRuntime = {
-  live: VirtualToolCatalog<McpSearchCatalogRecord>
-  frozenByTurn: Map<string, FrozenToolCatalogView<McpSearchCatalogRecord>>
+/**
+ * The live search index plus its per-turn frozen views. The provider builder
+ * owns a single instance so every catalog replacement (startup, manual
+ * refresh, OAuth late-connect, background reconnect) goes through one
+ * `replaceAll` commit instead of being written by the search tools themselves.
+ */
+export class McpSearchCatalogController {
+  private readonly live: VirtualToolCatalog<McpSearchCatalogRecord>
+  private readonly frozenByTurn = new Map<string, FrozenToolCatalogView<McpSearchCatalogRecord>>()
+
+  constructor(records: McpSearchCatalogRecord[]) {
+    this.live = new VirtualToolCatalog(toVirtualCatalogEntries(records))
+  }
+
+  replaceAll(records: McpSearchCatalogRecord[]): string {
+    return this.live.replaceAll(toVirtualCatalogEntries(records))
+  }
+
+  currentVersion(): string {
+    return this.live.currentVersion()
+  }
+
+  frozenFor(context: ToolHostContext): FrozenToolCatalogView<McpSearchCatalogRecord> {
+    const key = JSON.stringify([context.threadId, context.turnId])
+    const existing = this.frozenByTurn.get(key)
+    if (existing) return existing
+    const frozen = this.live.freeze()
+    this.frozenByTurn.set(key, frozen)
+    if (this.frozenByTurn.size > MAX_FROZEN_MCP_CATALOGS) {
+      const oldest = this.frozenByTurn.keys().next().value
+      if (oldest !== undefined) this.frozenByTurn.delete(oldest)
+    }
+    return frozen
+  }
 }
 
 export { tokenizeMcpSearchText } from './mcp-tool-search-ranking.js'
@@ -100,16 +132,12 @@ export { tokenizeMcpSearchText } from './mcp-tool-search-ranking.js'
 export function createMcpSearchProvider(
   options: McpSearchProviderOptions
 ): CapabilityToolProvider {
-  const catalog: McpVirtualCatalogRuntime = {
-    live: new VirtualToolCatalog(toVirtualCatalogEntries(options.state.records)),
-    frozenByTurn: new Map()
-  }
   return {
     id: 'mcp:search',
     kind: 'mcp',
     enabled: true,
     available: true,
-    tools: createMcpSearchTools(options, catalog)
+    tools: createMcpSearchTools(options, options.catalog)
   }
 }
 
@@ -139,7 +167,7 @@ export function mcpSearchDiagnostic(input: {
 
 function createMcpSearchTools(
   options: McpSearchProviderOptions,
-  catalog: McpVirtualCatalogRuntime
+  catalog: McpSearchCatalogController
 ): LocalTool[] {
   return [
     LocalToolHost.defineTool({
@@ -161,7 +189,7 @@ function createMcpSearchTools(
         if (!query) return { output: { error: 'query is required' }, isError: true }
         const serverId = stringArg(args.serverId)
         const topK = clampPositiveInt(numberArg(args.topK), options.config.topKDefault, options.config.topKMax)
-        const view = frozenMcpCatalogView(options, catalog, context)
+        const view = catalog.frozenFor(context)
         const records = availableRecords(options, view, context)
           .filter((record) => !serverId || record.serverId === serverId)
         const results = searchRecords(records, query, topK, options.config)
@@ -285,18 +313,19 @@ function createMcpSearchTools(
       // not let such a turn contact any MCP server through this back door.
       shouldAdvertise: (context) => !context.blockedProviderIds?.some((id) => id.startsWith('mcp:')),
       execute: async (_args, context) => {
-        const visible = frozenMcpCatalogView(options, catalog, context)
-        const records = await options.refreshCatalog()
-        options.state.records = records
-        catalog.live.replaceAll(toVirtualCatalogEntries(records))
+        const visible = catalog.frozenFor(context)
+        // The provider builder owns the commit (records, direct wrappers,
+        // search index, exposure, fingerprint). The tool only triggers it and
+        // then reads the committed state back; it never rewrites the index.
+        await options.refreshCatalog()
         return {
           output: {
             refreshedAt: options.state.lastRefreshedAt,
-            totalIndexed: records.length,
+            totalIndexed: options.state.records.length,
             catalogFingerprint: options.state.catalogFingerprint,
             catalogDrift: options.state.catalogDrift === true,
             visibleCatalogVersion: visible.frozenVersion,
-            catalogVersion: catalog.live.currentVersion(),
+            catalogVersion: catalog.currentVersion(),
             catalogUpdatePending: visible.pendingUpdate()
           }
         }
@@ -324,31 +353,13 @@ function availableRecords(
 
 function resolveAvailableRecord(
   options: McpSearchProviderOptions,
-  catalog: McpVirtualCatalogRuntime,
+  catalog: McpSearchCatalogController,
   context: ToolHostContext,
   toolId: string
 ): McpSearchCatalogRecord | undefined {
   if (!toolId) return undefined
-  const view = frozenMcpCatalogView(options, catalog, context)
+  const view = catalog.frozenFor(context)
   return availableRecords(options, view, context).find((record) => record.toolId === toolId)
-}
-
-function frozenMcpCatalogView(
-  options: McpSearchProviderOptions,
-  catalog: McpVirtualCatalogRuntime,
-  context: ToolHostContext
-): FrozenToolCatalogView<McpSearchCatalogRecord> {
-  catalog.live.replaceAll(toVirtualCatalogEntries(options.state.records))
-  const key = JSON.stringify([context.threadId, context.turnId])
-  const existing = catalog.frozenByTurn.get(key)
-  if (existing) return existing
-  const frozen = catalog.live.freeze()
-  catalog.frozenByTurn.set(key, frozen)
-  if (catalog.frozenByTurn.size > MAX_FROZEN_MCP_CATALOGS) {
-    const oldest = catalog.frozenByTurn.keys().next().value
-    if (oldest !== undefined) catalog.frozenByTurn.delete(oldest)
-  }
-  return frozen
 }
 
 function toVirtualCatalogEntries(

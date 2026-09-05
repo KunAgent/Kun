@@ -1,79 +1,123 @@
-export const USAGE_CARRYOVER_DELAY_MS = 5_000
 export const ATTACHMENT_PRUNE_DELAY_MS = 30_000
 export const ATTACHMENT_PRUNE_INTERVAL_MS = 60 * 60 * 1_000
 export const THREAD_GUARDIAN_DELAY_MS = 45_000
 export const THREAD_GUARDIAN_INTERVAL_MS = 6 * 60 * 60 * 1_000
+export const EVENT_INDEX_REBUILD_DELAY_MS = 120_000
+export const EVENT_INDEX_REBUILD_INTERVAL_MS = 12 * 60 * 60 * 1_000
+export const MAINTENANCE_SLICE_RETRY_MS = 250
 
-type MaintenanceTask = () => Promise<void>
+type MaintenanceTask = () => Promise<boolean | void>
+type TaskName = 'attachment pruning' | 'thread guardian' | 'event index rebuild'
+
+type TaskEntry = {
+  name: TaskName
+  run: MaintenanceTask
+  delayMs: number
+  intervalMs: number
+  dueAt: number
+}
 
 export type RuntimeBackgroundMaintenance = {
   start(): void
   stop(): void
+  wake(): void
 }
 
 export function createRuntimeBackgroundMaintenance(input: {
-  seedUsage: MaintenanceTask
   pruneAttachments: MaintenanceTask
   inspectThreads: MaintenanceTask
-  onError: (task: 'usage carryover' | 'attachment pruning' | 'thread guardian', error: unknown) => void
-  usageDelayMs?: number
+  rebuildEventIndex?: MaintenanceTask
+  onError: (task: TaskName, error: unknown) => void
   attachmentDelayMs?: number
   attachmentIntervalMs?: number
   guardianDelayMs?: number
   guardianIntervalMs?: number
+  eventIndexRebuildDelayMs?: number
+  eventIndexRebuildIntervalMs?: number
+  sliceRetryMs?: number
 }): RuntimeBackgroundMaintenance {
   let started = false
   let stopped = false
-  let usageTimer: ReturnType<typeof setTimeout> | undefined
-  let attachmentTimer: ReturnType<typeof setTimeout> | undefined
-  let attachmentInterval: ReturnType<typeof setInterval> | undefined
-  let guardianTimer: ReturnType<typeof setTimeout> | undefined
-  let guardianInterval: ReturnType<typeof setInterval> | undefined
+  let running = false
+  let timer: ReturnType<typeof setTimeout> | undefined
 
-  const run = (task: 'usage carryover' | 'attachment pruning' | 'thread guardian', action: MaintenanceTask) => {
-    void action().catch((error) => input.onError(task, error))
+  const tasks: TaskEntry[] = [
+    {
+      name: 'attachment pruning',
+      run: input.pruneAttachments,
+      delayMs: input.attachmentDelayMs ?? ATTACHMENT_PRUNE_DELAY_MS,
+      intervalMs: input.attachmentIntervalMs ?? ATTACHMENT_PRUNE_INTERVAL_MS,
+      dueAt: Number.POSITIVE_INFINITY
+    },
+    {
+      name: 'thread guardian',
+      run: input.inspectThreads,
+      delayMs: input.guardianDelayMs ?? THREAD_GUARDIAN_DELAY_MS,
+      intervalMs: input.guardianIntervalMs ?? THREAD_GUARDIAN_INTERVAL_MS,
+      dueAt: Number.POSITIVE_INFINITY
+    }
+  ]
+  if (input.rebuildEventIndex) {
+    tasks.push({
+      name: 'event index rebuild',
+      run: input.rebuildEventIndex,
+      delayMs: input.eventIndexRebuildDelayMs ?? EVENT_INDEX_REBUILD_DELAY_MS,
+      intervalMs: input.eventIndexRebuildIntervalMs ?? EVENT_INDEX_REBUILD_INTERVAL_MS,
+      dueAt: Number.POSITIVE_INFINITY
+    })
   }
-  const start = () => {
+
+  const schedule = (): void => {
+    if (stopped || !started || running) return
+    if (timer) clearTimeout(timer)
+    const next = tasks.reduce((min, task) => (task.dueAt < min.dueAt ? task : min))
+    const delay = Math.max(0, next.dueAt - Date.now())
+    if (delay === 0) {
+      queueMicrotask(runNext)
+      return
+    }
+    timer = setTimeout(runNext, delay)
+    timer.unref?.()
+  }
+
+  const runNext = (): void => {
+    timer = undefined
+    if (stopped || running) return
+    const task = tasks.reduce((min, entry) => (entry.dueAt < min.dueAt ? entry : min))
+    running = true
+    void task.run().then((complete) => {
+      const retry = complete === false
+      task.dueAt = Date.now() + (retry
+        ? input.sliceRetryMs ?? MAINTENANCE_SLICE_RETRY_MS
+        : task.intervalMs)
+    }).catch((error) => {
+      input.onError(task.name, error)
+      task.dueAt = Date.now() + task.intervalMs
+    }).finally(() => {
+      running = false
+      schedule()
+    })
+  }
+
+  const start = (): void => {
     if (started || stopped) return
     started = true
-    usageTimer = setTimeout(() => {
-      usageTimer = undefined
-      if (!stopped) run('usage carryover', input.seedUsage)
-    }, input.usageDelayMs ?? USAGE_CARRYOVER_DELAY_MS)
-    usageTimer.unref?.()
-    attachmentTimer = setTimeout(() => {
-      attachmentTimer = undefined
-      if (stopped) return
-      run('attachment pruning', input.pruneAttachments)
-      attachmentInterval = setInterval(() => {
-        if (!stopped) run('attachment pruning', input.pruneAttachments)
-      }, input.attachmentIntervalMs ?? ATTACHMENT_PRUNE_INTERVAL_MS)
-      attachmentInterval.unref?.()
-    }, input.attachmentDelayMs ?? ATTACHMENT_PRUNE_DELAY_MS)
-    attachmentTimer.unref?.()
-    guardianTimer = setTimeout(() => {
-      guardianTimer = undefined
-      if (stopped) return
-      run('thread guardian', input.inspectThreads)
-      guardianInterval = setInterval(() => {
-        if (!stopped) run('thread guardian', input.inspectThreads)
-      }, input.guardianIntervalMs ?? THREAD_GUARDIAN_INTERVAL_MS)
-      guardianInterval.unref?.()
-    }, input.guardianDelayMs ?? THREAD_GUARDIAN_DELAY_MS)
-    guardianTimer.unref?.()
+    for (const task of tasks) task.dueAt = Date.now() + task.delayMs
+    schedule()
   }
-  const stop = () => {
+
+  const stop = (): void => {
     stopped = true
-    if (usageTimer) clearTimeout(usageTimer)
-    if (attachmentTimer) clearTimeout(attachmentTimer)
-    if (attachmentInterval) clearInterval(attachmentInterval)
-    if (guardianTimer) clearTimeout(guardianTimer)
-    if (guardianInterval) clearInterval(guardianInterval)
-    usageTimer = undefined
-    attachmentTimer = undefined
-    attachmentInterval = undefined
-    guardianTimer = undefined
-    guardianInterval = undefined
+    if (timer) clearTimeout(timer)
+    timer = undefined
   }
-  return { start, stop }
+
+  const wake = (): void => {
+    if (stopped || !started) return
+    const rebuild = tasks.find((task) => task.name === 'event index rebuild')
+    if (rebuild) rebuild.dueAt = Date.now()
+    schedule()
+  }
+
+  return { start, stop, wake }
 }

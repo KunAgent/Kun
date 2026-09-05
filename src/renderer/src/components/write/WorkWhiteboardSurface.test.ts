@@ -6,6 +6,8 @@ import { canvasDocumentKey } from '../../design/canvas/canvas-persistence'
 import { useCanvasShapeStore } from '../../design/canvas/canvas-shape-store'
 import { createDefaultShape, createEmptyDocument } from '../../design/canvas/canvas-types'
 import { resetWritableWorkCanvasForTests } from '../../design/canvas/work-canvas'
+import type { CanvasDocument } from '../../design/canvas/canvas-types'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { WorkWhiteboardSurface } from './WorkWhiteboardSurface'
 
 const mocks = vi.hoisted(() => ({
@@ -49,8 +51,11 @@ const baseProps = {
   activeThreadId: 'thread-1',
   title: 'Pitch review',
   workflowId: 'workflow-1',
+  childId: 'child-1',
   phase: 'review' as const
 }
+
+const originalUpdateWhiteboardPptState = useWriteWorkspaceStore.getState().updateWhiteboardPptState
 
 let renderer: ReactTestRenderer | null = null
 
@@ -66,6 +71,7 @@ afterEach(() => {
   if (renderer) act(() => renderer?.unmount())
   renderer = null
   resetWritableWorkCanvasForTests()
+  useWriteWorkspaceStore.setState({ updateWhiteboardPptState: originalUpdateWhiteboardPptState })
   vi.unstubAllGlobals()
 })
 
@@ -77,12 +83,38 @@ async function render(element: ReturnType<typeof createElement>): Promise<ReactT
   return renderer!
 }
 
+function addReviewProjection(document: CanvasDocument): void {
+  const frame = createDefaultShape('frame', 0, 0)
+  frame.id = 'review-frame'
+  frame.pptReviewRef = {
+    workflowId: 'workflow-1', childId: 'child-1', slideId: 'slide-1',
+    revision: 1, role: 'slide-frame'
+  }
+  const preview = createDefaultShape('image', 0, 0)
+  preview.id = 'review-preview'
+  preview.imageUrl = '.kun/images/slide-1.png'
+  preview.pptReviewRef = {
+    workflowId: 'workflow-1', childId: 'child-1', slideId: 'slide-1',
+    revision: 1, role: 'preview-image'
+  }
+  for (const shape of [frame, preview]) {
+    document.objects[shape.id] = { ...shape, parentId: document.rootId }
+    document.objects[document.rootId]!.children.push(shape.id)
+  }
+}
+
+function reviewDocument(): CanvasDocument {
+  const document = createEmptyDocument()
+  addReviewProjection(document)
+  return document
+}
+
 function markCanvasDocumentLoaded(view: ReactTestRenderer, boardId = 'board-1'): void {
   const canvas = view.root.findByProps({ 'data-mock-canvas': boardId })
   const expectedKey = canvasDocumentKey('/work', boardId, '.kun-whiteboards')
   act(() => {
     if (useCanvasShapeStore.getState().documentKey !== expectedKey) {
-      useCanvasShapeStore.getState().loadDocument(createEmptyDocument(), expectedKey)
+      useCanvasShapeStore.getState().loadDocument(reviewDocument(), expectedKey)
     }
     canvas.props.onDocumentLoadStateChange(true)
   })
@@ -146,6 +178,7 @@ describe('WorkWhiteboardSurface', () => {
 
   it('disables approval while the board has an unresolved blocking QA note', async () => {
     const document = createEmptyDocument()
+    addReviewProjection(document)
     const note = createDefaultShape('rect', 0, 0)
     note.agentNote = { kind: 'critique', body: 'Text overflow', severity: 'error' }
     note.pptReviewRef = {
@@ -191,6 +224,62 @@ describe('WorkWhiteboardSurface', () => {
     expect(settledApprove.props.disabled).toBe(false)
     act(() => settledApprove.props.onClick())
     expect(onRequestAssistant).toHaveBeenCalledOnce()
+  })
+
+  it('keeps approval disabled when review metadata still points at direction cards', async () => {
+    const document = createEmptyDocument()
+    const direction = createDefaultShape('frame', 0, 0)
+    direction.pptDirectionRef = {
+      workflowId: 'workflow-1', childId: 'child-1', directionId: 'direction-1',
+      revision: 1, role: 'direction-card'
+    }
+    document.objects[direction.id] = { ...direction, parentId: document.rootId }
+    document.objects[document.rootId]!.children.push(direction.id)
+    useCanvasShapeStore.getState().loadDocument(
+      document,
+      canvasDocumentKey('/work', 'board-1', '.kun-whiteboards')
+    )
+    const view = await render(createElement(WorkWhiteboardSurface, {
+      ...baseProps, writable: true, onRequestAssistant: vi.fn()
+    }))
+    markCanvasDocumentLoaded(view)
+
+    const approve = view.root.findByProps({
+      'data-work-whiteboard-action': 'workWhiteboardApproveExport'
+    })
+    expect(approve.props.disabled).toBe(true)
+    expect(approve.props.title).toContain('finish loading')
+  })
+
+  it('persists a projected review before committing whiteboard phase metadata', async () => {
+    const updateWhiteboardPptState = vi.fn(async () => true)
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: '/work', updateWhiteboardPptState
+    })
+    await render(createElement(WorkWhiteboardSurface, {
+      ...baseProps, phase: 'directions', writable: true
+    }))
+    mocks.flush.mockClear()
+    const projectionOptions = mocks.applyLive.mock.calls.at(-1)?.[9] as {
+      onOpenRequested: (request: Record<string, unknown>) => void
+    }
+
+    await act(async () => {
+      projectionOptions.onOpenRequested({
+        blockId: 'review-tool', workflowId: 'workflow-1', childId: 'child-1', phase: 'review',
+        pptState: { phase: 'review', revision: 2 }
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(mocks.flush).toHaveBeenCalledWith('/work')
+    expect(updateWhiteboardPptState).toHaveBeenCalledWith('board-1', {
+      phase: 'review', revision: 2, childId: 'child-1'
+    })
+    expect(mocks.flush.mock.invocationCallOrder[0]).toBeLessThan(
+      updateWhiteboardPptState.mock.invocationCallOrder[0]
+    )
   })
 
   it('keeps direction confirmation in chat when no whiteboard card is selected', async () => {

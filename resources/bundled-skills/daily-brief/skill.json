@@ -1,0 +1,24 @@
+{
+  "id": "daily-brief",
+  "name": "Daily Intelligence Brief",
+  "version": "1.0.0",
+  "description": "Produce a dated, source-linked daily brief with prioritized developments, implications, and watch items.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/daily-brief"
+    ],
+    "promptPatterns": [
+      "daily brief",
+      "Daily Intelligence Brief",
+      "daily-brief",
+      "morning brief",
+      "情报日报",
+      "每日简报"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

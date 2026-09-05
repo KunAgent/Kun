@@ -1,41 +1,37 @@
-import { resolve } from 'node:path'
-import { z } from 'zod'
 import type { RuntimeFlavor } from '../../../kun/src/contracts/runtime-flavor.js'
 import {
-  isSafeRuntimeHandoffDiscovery,
-  readRuntimeHandoffDiscoveryStrict,
-  type RuntimeHandoffDiscoveryRecord
-} from '../../../kun/src/server/runtime-discovery.js'
-import {
   defaultKunControlDir,
-  readManagerHandoffDiscoveryStrict,
-  withManagerStartLock,
-  type ManagerHandoffDiscoveryRecord
+  withManagerStartLock
 } from '../../../kun/src/manager/manager-discovery.js'
-import { sameCanonicalPath } from '../../../kun/src/manager/canonical-path.js'
-import { processAlive, runtimeDiscoveryDirectory } from '../../../kun/src/cli/shared-runtime-support.js'
 import { runtimeBuildIdForFlavor } from '../../../kun/src/cli/runtime-flavor.js'
 import {
-  stopExactSharedRuntimeForReplacement,
-  type KunServeReplacementReport,
-  type SharedRuntimeReplacementInspection
+  type KunServeReplacementReport
 } from './kun-serve-replacement'
-import {
-  stopServiceManagerForReplacement,
-  type KunManagerReplacementReport
-} from './kun-manager-replacement'
+import { type KunManagerReplacementReport } from './kun-manager-replacement'
 import { KunOwnerVerificationError } from './kun-replacement-error'
 import { recordVerifiedForcedRuntimeOwner } from '../../../kun/src/manager/forced-runtime-recovery.js'
+import {
+  defaultDiscoveryDependencies,
+  discoverHandoffOwnersSafely,
+  managerOwnerReport,
+  runtimeOwnerReport,
+  sameRuntimeIdentity,
+  settleStaleHandoffOwners,
+  type DiscoveredHandoffOwners,
+  type HandoffDependencies,
+  type RuntimeOwner
+} from './kun-installed-build-handoff-discovery'
 
 const MANAGED_RUNTIME_FLAVORS = ['production', 'development'] as const
 const MAX_RUNTIME_DRAIN_PASSES = 3
-const STATUS_TIMEOUT_MS = 2_000
+const MAX_STALE_OWNER_SETTLEMENT_PASSES = 3
 
 export type KunInstalledBuildProbe = 'matched' | 'mismatched' | 'unknown'
 
 export type KunHandoffReason =
   | 'in-app-update'
   | 'installed-build-change'
+  | 'startup-retry'
   | 'exclusive-data-migration'
 
 export type KunHandoffPhase =
@@ -49,6 +45,7 @@ export type KunHandoffPhase =
 export type KunHandoffErrorCode =
   | 'unsafe_scope'
   | 'probe_failed'
+  | 'identity_unverifiable'
   | 'target_build_id_missing'
   | 'runtime_stop_failed'
   | 'manager_stop_failed'
@@ -56,10 +53,12 @@ export type KunHandoffErrorCode =
 
 export type KunHandoffProbeClassification =
   | 'no-live-owner'
+  | 'stale-owner'
   | 'runtime-discovery-compatible'
   | 'manager-discovery-compatible'
   | 'manager-status-compatible'
   | 'manager-status-unavailable'
+  | 'identity-unverifiable'
 
 export type KunHandoffOwnerReport = {
   kind: 'runtime' | 'manager'
@@ -106,6 +105,22 @@ export class KunHandoffError extends Error {
   }
 }
 
+export class ClientRuntimeOwnerBusyError extends Error {
+  readonly name = 'ClientRuntimeOwnerBusyError'
+  readonly code = 'client_runtime_owner_busy'
+  readonly reason = 'installed-build-change'
+
+  constructor(
+    readonly ownerKind: 'gui' | 'tui',
+    readonly owner: Omit<KunHandoffOwnerReport, 'result'>
+  ) {
+    super(
+      `client_runtime_owner_busy: Kun Runtime is owned by ${ownerKind} process ${owner.pid}; ` +
+      `close the owning ${ownerKind === 'gui' ? 'GUI' : 'TUI'} before starting this installed GUI build`
+    )
+  }
+}
+
 export type KunInstalledBuildHandoffInput = {
   reason: KunHandoffReason
   dataDirs: readonly string[]
@@ -116,30 +131,9 @@ export type KunInstalledBuildHandoffInput = {
   onEvent?: (event: KunHandoffEvent) => void
 }
 
-type RuntimeOwner = {
-  dataDir: string
-  flavor: RuntimeFlavor
-  inspection: SharedRuntimeReplacementInspection
-}
-
-type HandoffDependencies = {
-  readManager: typeof readManagerHandoffDiscoveryStrict
-  readRuntime: typeof readRuntimeHandoffDiscoveryStrict
-  withManagerLock: <T>(controlDir: string, action: () => Promise<T>) => Promise<T>
-  stopRuntime: typeof stopExactSharedRuntimeForReplacement
-  stopManager: typeof stopServiceManagerForReplacement
-  processAlive: typeof processAlive
-  recordForcedOwner: typeof recordVerifiedForcedRuntimeOwner
-  now: () => number
-}
-
 const defaultDependencies: HandoffDependencies = {
-  readManager: readManagerHandoffDiscoveryStrict,
-  readRuntime: readRuntimeHandoffDiscoveryStrict,
+  ...defaultDiscoveryDependencies,
   withManagerLock: withManagerStartLock,
-  stopRuntime: stopExactSharedRuntimeForReplacement,
-  stopManager: stopServiceManagerForReplacement,
-  processAlive,
   recordForcedOwner: recordVerifiedForcedRuntimeOwner,
   now: Date.now
 }
@@ -155,9 +149,14 @@ export async function probeInstalledBuildHandoff(
   input: KunInstalledBuildHandoffInput,
   overrides: Partial<HandoffDependencies> = {}
 ): Promise<KunInstalledBuildProbe> {
-  if (!input.targetBuildId) return 'unknown'
   const deps = { ...defaultDependencies, ...overrides }
   const discovered = await discoverHandoffOwnersSafely(input, deps)
+  assertReplacementHasNoClientOwner(input, discovered)
+  if (discovered.unknownManager || discovered.unknownRuntimes.length > 0) {
+    throw identityUnverifiableError(input, discovered)
+  }
+  if (!input.targetBuildId) return 'unknown'
+  if (discovered.staleManager || discovered.staleRuntimes.length > 0) return 'mismatched'
   const targetBuildId = input.targetBuildId
   const identities: Array<{ actual: string | undefined; expected: string }> = [
     ...(discovered.manager
@@ -226,7 +225,7 @@ export async function drainKunOwnersForHandoffWithLock(
   owners.push({ kind: 'manager', result: 'not-found' })
 
   emit(input, startedAt, deps, { phase: 'discover' })
-  let discovered: Awaited<ReturnType<typeof discoverHandoffOwners>>
+  let discovered: DiscoveredHandoffOwners
   try {
     discovered = await discoverHandoffOwnersSafely(input, deps)
   } catch (error) {
@@ -239,6 +238,11 @@ export async function drainKunOwnersForHandoffWithLock(
       })
     }
     throw error
+  }
+  discovered = await settleAndRediscoverStaleOwners(input, discovered, deps)
+  assertReplacementHasNoClientOwner(input, discovered)
+  if (discovered.unknownManager || discovered.unknownRuntimes.length > 0) {
+    throw identityUnverifiableError(input, discovered)
   }
   for (const probeClassification of discovered.probeClassifications) {
     emit(input, startedAt, deps, { phase: 'discover', probeClassification })
@@ -299,8 +303,16 @@ export async function drainKunOwnersForHandoffWithLock(
       }
     }
     discovered = await discoverHandoffOwnersSafely(input, deps)
+    discovered = await settleAndRediscoverStaleOwners(input, discovered, deps)
+    assertReplacementHasNoClientOwner(input, discovered)
   }
 
+  // Recheck immediately before stopping the independent Manager. A client may
+  // have elected a Runtime after the preceding drain pass; ordinary installed
+  // startup has no authority to take either that Runtime or its Manager down.
+  discovered = await discoverHandoffOwnersSafely(input, deps)
+  discovered = await settleAndRediscoverStaleOwners(input, discovered, deps)
+  assertReplacementHasNoClientOwner(input, discovered)
   if (discovered.manager) {
     const managerOwner = managerOwnerReport(discovered.manager)
     try {
@@ -340,6 +352,8 @@ export async function drainKunOwnersForHandoffWithLock(
   // while this process holds the same start lock. Drain any owner that raced
   // with the first pass, then prove the scope is stable.
   discovered = await discoverHandoffOwnersSafely(input, deps)
+  discovered = await settleAndRediscoverStaleOwners(input, discovered, deps)
+  assertReplacementHasNoClientOwner(input, discovered)
   for (const runtime of discovered.runtimes) {
     const owner = runtimeOwnerReport(runtime)
     try {
@@ -388,7 +402,11 @@ export async function drainKunOwnersForHandoffWithLock(
     }
   }
 
-  const remaining = await discoverHandoffOwnersSafely(input, deps)
+  let remaining = await discoverHandoffOwnersSafely(input, deps)
+  remaining = await settleAndRediscoverStaleOwners(input, remaining, deps)
+  if (remaining.unknownManager || remaining.unknownRuntimes.length > 0) {
+    throw identityUnverifiableError(input, remaining)
+  }
   if (remaining.manager || remaining.runtimes.length > 0) {
     const owner = remaining.manager
       ? managerOwnerReport(remaining.manager)
@@ -422,211 +440,44 @@ export async function drainKunOwnersForHandoffWithLock(
   }
 }
 
-async function discoverHandoffOwnersSafely(
+function assertReplacementHasNoClientOwner(
   input: KunInstalledBuildHandoffInput,
-  deps: HandoffDependencies
-): ReturnType<typeof discoverHandoffOwners> {
-  try {
-    return await discoverHandoffOwners(input, deps)
-  } catch (error) {
-    if (error instanceof KunHandoffError) throw error
-    throw new KunHandoffError(
-      'unsafe_scope',
-      'discover',
-      input.reason,
-      false,
-      undefined,
-      'Kun update handoff could not safely read Runtime or Service Manager discovery',
-      { cause: error }
-    )
-  }
+  discovered: DiscoveredHandoffOwners
+): void {
+  if (input.reason !== 'installed-build-change' && input.reason !== 'startup-retry') return
+  const runtime = discovered.runtimes.find(
+    (candidate) => candidate.inspection.discovery.clientOwnerKind !== undefined
+  )
+  if (!runtime) return
+  const ownerKind = runtime.inspection.discovery.clientOwnerKind!
+  const owner = runtimeOwnerReport(runtime)
+  throw new ClientRuntimeOwnerBusyError(ownerKind, owner)
 }
 
-async function discoverHandoffOwners(
+async function settleAndRediscoverStaleOwners(
   input: KunInstalledBuildHandoffInput,
+  discovered: DiscoveredHandoffOwners,
   deps: HandoffDependencies
-): Promise<{
-  manager: ManagerHandoffDiscoveryRecord | null
-  runtimes: RuntimeOwner[]
-  probeClassifications: KunHandoffProbeClassification[]
-}> {
-  const controlDir = input.controlDir ?? defaultKunControlDir()
-  const manager = await deps.readManager(controlDir)
-  if (manager && input.settingsPath &&
-    !sameCanonicalPath(manager.settingsPath, input.settingsPath)) {
-    throw new KunHandoffError(
-      'unsafe_scope',
-      'discover',
-      input.reason,
-      false,
-      managerOwnerReport(manager),
-      'Kun Service Manager owns a different canonical settings scope'
-    )
+): Promise<DiscoveredHandoffOwners> {
+  let current = discovered
+  for (let pass = 0; pass < MAX_STALE_OWNER_SETTLEMENT_PASSES; pass += 1) {
+    await settleStaleHandoffOwners(input, current, deps)
+    if (!current.staleManager && current.staleRuntimes.length === 0) return current
+    current = await discoverHandoffOwnersSafely(input, deps)
   }
-  const dataDirs = canonicalDataDirs([
-    ...input.dataDirs,
-    ...(manager ? [manager.dataDir] : [])
-  ])
-  const runtimes: RuntimeOwner[] = []
-  for (const dataDir of dataDirs) {
-    const record = await deps.readRuntime(dataDir, 'production')
-    if (record && deps.processAlive(record.pid)) {
-      runtimes.push(runtimeOwner(dataDir, 'production', record))
-    }
-  }
-  const developmentDir = manager?.dataDir ?? dataDirs[0]
-  if (developmentDir) {
-    const record = await deps.readRuntime(controlDir, 'development')
-    if (record && deps.processAlive(record.pid)) {
-      runtimes.push(runtimeOwner(developmentDir, 'development', record))
-    }
-  }
-  const probeClassifications: KunHandoffProbeClassification[] = []
-  if (runtimes.length > 0) probeClassifications.push('runtime-discovery-compatible')
-  if (manager && deps.processAlive(manager.pid)) {
-    probeClassifications.push('manager-discovery-compatible')
-  }
-  if (manager && deps.processAlive(manager.pid)) {
-    const managerStatus = await readCompatibleManagerSlots(manager, input.fetch ?? fetch)
-    probeClassifications.push(managerStatus.classification)
-    for (const slot of managerStatus.records) {
-      if (!deps.processAlive(slot.pid)) continue
-      runtimes.push(runtimeOwner(manager.dataDir, slot.flavor, slot))
-    }
-  }
-  if (probeClassifications.length === 0) probeClassifications.push('no-live-owner')
-  return {
-    manager: manager && deps.processAlive(manager.pid) ? manager : null,
-    runtimes: deduplicateRuntimeOwners(runtimes),
-    probeClassifications
-  }
-}
-
-const RuntimeSlotSchema = z.object({
-  flavor: z.enum(MANAGED_RUNTIME_FLAVORS),
-  instanceId: z.string().min(1).max(256),
-  pid: z.number().int().positive(),
-  startedAt: z.string().datetime(),
-  host: z.string().min(1).max(512),
-  port: z.number().int().min(1).max(65_535),
-  baseUrl: z.string().url().max(2_048),
-  runtimeToken: z.string().max(16_384),
-  buildId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-  logPath: z.string().min(1).max(4_096).optional()
-}).passthrough()
-
-async function readCompatibleManagerSlots(
-  manager: ManagerHandoffDiscoveryRecord,
-  fetchImpl: typeof fetch
-): Promise<{
-  records: Array<RuntimeHandoffDiscoveryRecord & { flavor: RuntimeFlavor }>
-  classification: Extract<
-    KunHandoffProbeClassification,
-    'manager-status-compatible' | 'manager-status-unavailable'
-  >
-}> {
-  try {
-    const response = await fetchImpl(`${manager.baseUrl.replace(/\/$/u, '')}/v1/manager/status`, {
-      headers: { authorization: `Bearer ${manager.managerToken}` },
-      signal: AbortSignal.timeout(STATUS_TIMEOUT_MS)
-    })
-    if (!response.ok) return { records: [], classification: 'manager-status-unavailable' }
-    const body = z.object({
-      instanceId: z.string(),
-      pid: z.number().int().positive().optional(),
-      startedAt: z.string(),
-      slots: z.array(z.unknown())
-    }).passthrough().safeParse(await response.json())
-    if (!body.success ||
-      body.data.instanceId !== manager.instanceId ||
-      body.data.startedAt !== manager.startedAt ||
-      (body.data.pid !== undefined && body.data.pid !== manager.pid)) {
-      return { records: [], classification: 'manager-status-unavailable' }
-    }
-    const records: Array<RuntimeHandoffDiscoveryRecord & { flavor: RuntimeFlavor }> = []
-    for (const value of body.data.slots) {
-      const envelope = z.object({ registration: z.unknown() }).passthrough().safeParse(value)
-      const parsed = RuntimeSlotSchema.safeParse(envelope.success ? envelope.data.registration : value)
-      if (!parsed.success) return { records: [], classification: 'manager-status-unavailable' }
-      const record: RuntimeHandoffDiscoveryRecord & { flavor: RuntimeFlavor } = {
-        version: 1,
-        ...parsed.data,
-        flavor: parsed.data.flavor
-      }
-      if (!isSafeRuntimeHandoffDiscovery(record)) {
-        return { records: [], classification: 'manager-status-unavailable' }
-      }
-      records.push(record)
-    }
-    return { records, classification: 'manager-status-compatible' }
-  } catch {
-    return { records: [], classification: 'manager-status-unavailable' }
-  }
-}
-
-function runtimeOwner(
-  dataDir: string,
-  flavor: RuntimeFlavor,
-  record: RuntimeHandoffDiscoveryRecord
-): RuntimeOwner {
-  return {
-    dataDir,
-    flavor,
-    inspection: { discovery: record, connection: null }
-  }
-}
-
-function deduplicateRuntimeOwners(owners: RuntimeOwner[]): RuntimeOwner[] {
-  const seen = new Set<string>()
-  return owners.filter((owner) => {
-    const record = owner.inspection.discovery
-    const key = `${record.instanceId}:${record.pid}:${record.startedAt}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
-function canonicalDataDirs(values: readonly string[]): string[] {
-  const result: string[] = []
-  for (const value of values) {
-    if (!value.trim() || result.some((current) => sameCanonicalPath(current, value))) continue
-    result.push(resolve(value))
-  }
-  return result
-}
-
-function sameRuntimeIdentity(left: RuntimeOwner, right: RuntimeOwner): boolean {
-  const a = left.inspection.discovery
-  const b = right.inspection.discovery
-  return left.flavor === right.flavor &&
-    a.instanceId === b.instanceId &&
-    a.pid === b.pid &&
-    a.startedAt === b.startedAt
-}
-
-function runtimeOwnerReport(runtime: RuntimeOwner): Omit<KunHandoffOwnerReport, 'result'> {
-  const record = runtime.inspection.discovery
-  return {
-    kind: 'runtime',
-    flavor: runtime.flavor,
-    instanceId: record.instanceId,
-    pid: record.pid,
-    port: record.port,
-    ...(record.buildId ? { buildId: record.buildId } : {})
-  }
-}
-
-function managerOwnerReport(
-  manager: ManagerHandoffDiscoveryRecord
-): Omit<KunHandoffOwnerReport, 'result'> {
-  return {
-    kind: 'manager',
-    instanceId: manager.instanceId,
-    pid: manager.pid,
-    port: manager.port,
-    ...(manager.buildId ? { buildId: manager.buildId } : {})
-  }
+  const owner = current.staleManager
+    ? managerOwnerReport(current.staleManager)
+    : current.staleRuntimes[0]
+      ? runtimeOwnerReport(current.staleRuntimes[0])
+      : undefined
+  throw new KunHandoffError(
+    'probe_failed',
+    'discover',
+    input.reason,
+    true,
+    owner,
+    'Kun stale handoff ownership did not converge after cleanup'
+  )
 }
 
 function mergeOwnerReport(
@@ -670,6 +521,25 @@ function ownerLabel(owner: Omit<KunHandoffOwnerReport, 'result'>): string {
   return owner.kind === 'runtime'
     ? `${owner.flavor ?? 'unknown'} Runtime${owner.pid ? ` ${owner.pid}` : ''}`
     : `Service Manager${owner.pid ? ` ${owner.pid}` : ''}`
+}
+
+function identityUnverifiableError(
+  input: KunInstalledBuildHandoffInput,
+  discovered: DiscoveredHandoffOwners
+): KunHandoffError {
+  const owner = discovered.unknownManager
+    ? managerOwnerReport(discovered.unknownManager)
+    : discovered.unknownRuntimes.length > 0
+      ? runtimeOwnerReport(discovered.unknownRuntimes[0]!)
+      : undefined
+  return new KunHandoffError(
+    'identity_unverifiable',
+    'discover',
+    input.reason,
+    true,
+    owner,
+    'Kun could not verify the identity of the previous local owner, so it left the process, active work, and saved data untouched.'
+  )
 }
 
 function emit(

@@ -32,6 +32,10 @@ import {
 /** Legacy round projection retained for `/v1/debug/llm-rounds`. */
 export type LlmDebugRound = {
   id: number
+  roundId: string
+  step: number
+  purpose: 'assistant' | 'retry' | 'resume' | 'compaction' | 'subagent' | 'title'
+  captureContent: boolean
   threadId: string
   turnId: string
   provider: string
@@ -82,6 +86,11 @@ export type LlmDebugRoundMeta = {
   turnId: string
   provider: string
   model: string
+  roundId?: string
+  step?: number
+  purpose?: LlmDebugRound['purpose']
+  /** Resolved once at request start; metadata is recorded even when false. */
+  captureContent?: boolean
   toolCatalog?: readonly ModelRequestTraceToolCatalogEntry[]
   /** Exact model-only values that must never enter retained request traces. */
   redactedRequestValues?: readonly string[]
@@ -184,6 +193,7 @@ export type CaptureState = {
   text: StringBlockAccumulator
   reasoning: StringBlockAccumulator
   pendingCaptures: Promise<void>[]
+  lastCheckpointAt: number
 }
 
 export type StringBlockAccumulator = { blocks: string[]; parts: string[] }

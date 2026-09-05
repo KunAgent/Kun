@@ -76,6 +76,7 @@ import {
   mergeStreamFinishReason,
   mergeUsageSnapshots,
   modelPayloadError,
+  modelPayloadFailure,
   normalizeModelStreamLimits,
   normalizeStreamIdleTimeoutMs,
   readLimitedResponseText,
@@ -561,7 +562,8 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         chunks: [{
           kind: 'error',
           message: payloadError.message,
-          ...(payloadError.code ? { code: payloadError.code } : {})
+          ...(payloadError.code ? { code: payloadError.code } : {}),
+          failure: modelPayloadFailure(payloadError)
         }],
         sawTextDelta,
         finishReason: 'error',

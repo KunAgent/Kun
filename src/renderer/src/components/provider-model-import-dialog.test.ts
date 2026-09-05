@@ -63,6 +63,7 @@ function provider(overrides: Partial<ModelProviderProfileV1> = {}): ModelProvide
     apiKey: 'sk-test',
     baseUrl: 'https://api.example.com/v1',
     endpointFormat: 'chat_completions',
+    useProxy: false,
     models: [],
     modelProfiles: {},
     ...overrides

@@ -397,8 +397,8 @@ describe('AgentLoop interruption', () => {
     expect(modelRequestContextText(model.requests[1]!)).toContain('did not call `graph_define_plan`')
     expect(model.requests[2]?.requiredToolName).toBeUndefined()
     expect(model.requests[2]?.tools.map((tool) => tool.name)).toEqual([
-      'graph_define_plan',
       'graph_control_run',
+      'graph_define_plan',
       'graph_supervise_node'
     ])
     expect(modelRequestContextText(model.requests[2]!)).toContain(

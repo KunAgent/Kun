@@ -122,17 +122,18 @@ const options: TuiOptions = {
 function modelSnapshot(): ModelConnectionSnapshot {
   return {
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: 3,
     providers: [
       {
         id: 'deepseek', accountId: 'account:deepseek', name: 'DeepSeek', kind: 'http',
         authType: 'api-key', baseUrl: 'https://api.deepseek.com', endpointFormat: 'chat_completions',
-        configured: true, models: ['deepseek-v4-pro'], selectedModel: 'deepseek-v4-pro'
+        useProxy: false, configured: true, models: ['deepseek-v4-pro'], selectedModel: 'deepseek-v4-pro'
       },
       {
         id: 'kimi-code', accountId: 'account:kimi-code', name: 'Kimi Code', kind: 'http',
         authType: 'subscription', baseUrl: 'https://api.kimi.com/coding/v1', endpointFormat: 'chat_completions',
-        configured: true, models: ['kimi-k2.5', 'kimi-k2-thinking'], selectedModel: 'kimi-k2.5'
+        useProxy: false, configured: true, models: ['kimi-k2.5', 'kimi-k2-thinking'], selectedModel: 'kimi-k2.5'
       }
     ],
     defaultProviderId: 'deepseek', defaultAccountId: 'account:deepseek', defaultModel: 'deepseek-v4-pro',

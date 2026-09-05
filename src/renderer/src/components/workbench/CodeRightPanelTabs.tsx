@@ -98,11 +98,6 @@ export function CodeRightPanelTabs({
       label: t('rightPanelProviderQuotas'),
       icon: Gauge
     },
-    {
-      id: BUILTIN_RIGHT_PANEL_IDS.agentPerspective,
-      label: t('rightPanelAgentPerspective'),
-      icon: ScanSearch
-    }
   ], [t])
 
   const builtinById = useMemo(

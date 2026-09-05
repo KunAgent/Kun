@@ -9,6 +9,7 @@ export type UserInputAnswer = {
 export type UserInputOption = {
   label: string
   description: string
+  recommended?: boolean
 }
 
 export type UserInputQuestion = {

@@ -49,10 +49,14 @@ export class UsageService {
     const enriched = signature ? this.withCacheDiagnostics(threadId, usage, signature) : usage
     this.cache.ingest(threadId, enriched)
     const cumulative = this.counter.record(threadId, enriched)
-    if (turnId) {
-      return attachTurnAverages(cumulative, this.foldTurnTiming(threadId, turnId, enriched))
+    const withLastRequest = {
+      ...cumulative,
+      lastRequestCacheHitRate: enriched.cacheHitRate ?? null
     }
-    return cumulative
+    if (turnId) {
+      return attachTurnAverages(withLastRequest, this.foldTurnTiming(threadId, turnId, enriched))
+    }
+    return withLastRequest
   }
 
   recordTokenEconomySavings(
@@ -77,6 +81,10 @@ export class UsageService {
 
   forThread(threadId: string): UsageSnapshot {
     return this.counter.forThread(threadId)
+  }
+
+  snapshots(): Array<{ threadId: string; usage: UsageSnapshot }> {
+    return this.counter.snapshots()
   }
 
   total(): UsageSnapshot {

@@ -25,6 +25,10 @@ import {
   showSddAssistantThreadInSidebar
 } from '../sdd/sdd-thread-registry'
 import type { SddDraft } from '../sdd/sdd-draft-store'
+import {
+  emptyRemovedCodeWorkspacesRegistry,
+  rememberRemovedCodeWorkspace
+} from '../lib/removed-code-workspaces'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -587,6 +591,27 @@ describe('chat-store navigation workspace selection', () => {
     expect(harness.selectThread).toHaveBeenCalledWith('thr_only', {
       selectionGuard: expect.any(Function)
     })
+  })
+
+  it('openCode skips remembered and newer threads from a removed project', async () => {
+    const harness = buildHarness()
+    harness.state.activeThreadId = null
+    harness.state.lastCodeThreadId = 'thr_hidden'
+    harness.state.removedCodeWorkspaces = rememberRemovedCodeWorkspace(
+      { projectPath: '/Users/zxy/hidden' },
+      emptyRemovedCodeWorkspacesRegistry()
+    )
+    harness.state.threads = [
+      thread({ id: 'thr_hidden', workspace: '/Users/zxy/hidden', updatedAt: '2026-08-03T00:00:00.000Z' }),
+      thread({ id: 'thr_visible', workspace: '/Users/zxy/visible', updatedAt: '2026-08-01T00:00:00.000Z' })
+    ]
+
+    await harness.actions.openCode()
+
+    expect(harness.selectThread).toHaveBeenCalledWith('thr_visible', {
+      selectionGuard: expect.any(Function)
+    })
+    expect(harness.selectThread).not.toHaveBeenCalledWith('thr_hidden', expect.anything())
   })
 
 })

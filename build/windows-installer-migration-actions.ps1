@@ -221,7 +221,9 @@ function Invoke-Prepare {
     foreach ($directory in $knownDirectories) {
       Assert-NoReparsePointsInTree $directory 'Recognized application directory'
     }
-    $unknown = @($entries | Where-Object { -not (Test-KnownApplicationEntry $_) })
+    $unknown = @($entries | Where-Object {
+      -not (Test-KnownApplicationEntry $_) -and -not (Test-InstallerSelfEntry $_ $source)
+    })
     $stash = Get-PreservationRoot $source
     if ($unknown.Count -gt 0) {
       if (Test-Path -LiteralPath $stash) {
@@ -238,6 +240,7 @@ function Invoke-Prepare {
   Write-PrepareDiagnostic 'stop-processes'
   $stopResult = Stop-AppProcesses @($sources + $target)
   if ($stopResult.Outcome -ne 'stopped') {
+    Write-BlockingProcessDiagnostic $stopResult
     throw 'Unable to stop verified application processes before migration.'
   }
   if (Test-AutomaticUpdateRequested) {
@@ -308,7 +311,7 @@ function Invoke-FallbackCleanup {
   Assert-FallbackCleanupSource $source
 
   $knownEntries = @(Get-ChildItem -LiteralPath $source -Force | Where-Object {
-    Test-KnownApplicationEntry $_
+    (Test-KnownApplicationEntry $_) -and -not (Test-InstallerSelfEntry $_ $source)
   })
   foreach ($entry in $knownEntries) {
     if ($entry.PSIsContainer) {

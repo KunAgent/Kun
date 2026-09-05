@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppSettingsV1 } from '../shared/app-settings'
-import { CHATGPT_SUBSCRIPTION_MODEL_IDS, GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/app-settings'
+import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/app-settings'
 import {
   describeProviderProbeError,
   parseModelIds,
@@ -56,6 +56,8 @@ describe('provider probe network transport', () => {
     vi.stubGlobal('fetch', nodeFetch)
 
     await expect(probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://zenmux.ai/api/v1',
       apiKey: 'sk-ai-v1-test',
       endpointFormat: 'chat_completions'
@@ -74,6 +76,8 @@ describe('provider probe network transport', () => {
     }))
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://zenmux.ai/api/v1',
       apiKey: 'sk-ai-v1-test',
       endpointFormat: 'chat_completions'
@@ -92,6 +96,8 @@ describe('provider probe network transport', () => {
     })
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://zenmux.ai/api/v1',
       apiKey: 'sk-ai-v1-test',
       endpointFormat: 'chat_completions'
@@ -125,10 +131,15 @@ describe('provider probe network transport', () => {
 })
 
 describe('probeModelProvider', () => {
-  it('validates ChatGPT subscription OAuth locally and returns its shared catalog', async () => {
-    const fetchMock = vi.fn()
+  it('fetches the live ChatGPT subscription catalog including new model slugs', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ models: [
+      { slug: 'gpt-6-astra', visibility: 'list', context_window: 272000 },
+      { slug: 'gpt-reserve', visibility: 'hide' }
+    ] })))
     vi.stubGlobal('fetch', fetchMock)
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://chatgpt.com/backend-api/codex',
       apiKey: JSON.stringify({
         kind: 'codex-oauth',
@@ -140,14 +151,21 @@ describe('probeModelProvider', () => {
       endpointFormat: 'responses'
     })
 
-    expect(result).toEqual({ ok: true, latencyMs: 0, modelIds: [...CHATGPT_SUBSCRIPTION_MODEL_IDS] })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ ok: true, modelIds: ['gpt-6-astra'] })
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/chatgpt.com\/backend-api\/codex\/models\?client_version=/),
+      expect.objectContaining({ headers: expect.objectContaining({
+        Authorization: 'Bearer access', 'ChatGPT-Account-Id': 'account', originator: 'codex_cli_rs'
+      }) })
+    )
   })
 
   it('validates Grok subscription OAuth locally and returns its shared catalog', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://cli-chat-proxy.grok.com/v1',
       apiKey: JSON.stringify({
         kind: 'grok-oauth',
@@ -168,6 +186,8 @@ describe('probeModelProvider', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ id: 'remote-model' }] })))
     vi.stubGlobal('fetch', fetchMock)
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://attacker.example/cli-chat-proxy.grok.com/v1',
       apiKey: JSON.stringify({
         kind: 'grok-oauth',
@@ -188,6 +208,8 @@ describe('probeModelProvider', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'ftp://example.com',
       apiKey: '',
       endpointFormat: 'chat_completions'
@@ -207,6 +229,8 @@ describe('probeModelProvider', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://api.example.com',
       apiKey: 'sk-x',
       endpointFormat: 'chat_completions'
@@ -237,6 +261,8 @@ describe('probeModelProvider', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://ollama.com/v1',
       apiKey: 'ollama-secret',
       endpointFormat: 'chat_completions'
@@ -273,7 +299,9 @@ describe('probeModelProvider', () => {
 
     for (const apiKey of ['sk-ai-v1-api', 'sk-ss-v1-plan']) {
       await expect(probeModelProvider({
-        baseUrl: 'https://zenmux.ai/api/v1',
+      providerId: 'test-provider',
+      useProxy: false,
+      baseUrl: 'https://zenmux.ai/api/v1',
         apiKey,
         endpointFormat: 'chat_completions'
       })).resolves.toMatchObject({
@@ -318,6 +346,8 @@ describe('probeModelProvider', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://api.example.com',
       apiKey: 'sk-x',
       endpointFormat: 'chat_completions'
@@ -333,6 +363,8 @@ describe('probeModelProvider', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('unauthorized', { status: 401 })))
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'bad-key',
       endpointFormat: 'messages'
@@ -351,6 +383,8 @@ describe('probeModelProvider', () => {
     }))
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://api.example.com/v1',
       apiKey: '',
       endpointFormat: 'responses'
@@ -363,7 +397,7 @@ describe('probeModelProvider', () => {
     }
   })
 
-  it('identifies a broken configured proxy when direct connectivity works', async () => {
+  it('does not bypass an explicitly selected Provider proxy after a failure', async () => {
     const timeout = new Error('timed out')
     timeout.name = 'TimeoutError'
     const fetcher = vi.fn(async (_url: string | URL, _init: RequestInit | undefined, proxyUrl: string) => {
@@ -372,11 +406,14 @@ describe('probeModelProvider', () => {
     })
     const settings = {
       provider: {
-        proxy: { enabled: true, url: 'http://127.0.0.1:7890' }
+        proxy: { enabled: true, url: 'http://127.0.0.1:7890' },
+        providers: []
       }
     } as unknown as AppSettingsV1
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: true,
       baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk-test',
       endpointFormat: 'chat_completions'
@@ -385,12 +422,9 @@ describe('probeModelProvider', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.message).toContain('timed out after 10s')
-      expect(result.message).toContain('configured model-request proxy failed')
-      expect(result.message).toContain('direct connection reached the provider')
     }
     expect(fetcher.mock.calls.map((call) => call[2])).toEqual([
-      'http://127.0.0.1:7890/',
-      ''
+      'http://127.0.0.1:7890/'
     ])
   })
 
@@ -399,6 +433,8 @@ describe('probeModelProvider', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
       baseUrl: 'https://api.example.com/custom-path',
       apiKey: 'sk-x',
       endpointFormat: 'custom_endpoint'

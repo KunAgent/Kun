@@ -159,6 +159,7 @@ function createFetchTool(config: WebCapabilityConfig, provider: WebProvider) {
       additionalProperties: false
     },
     policy: 'untrusted',
+    sideEffect: 'read-only',
     execute: async (args, context) => {
       const startedAt = Date.now()
       const rawUrl = pickString(args.url)
@@ -223,6 +224,7 @@ function createSearchTool(config: WebCapabilityConfig, provider: WebProvider) {
       additionalProperties: false
     },
     policy: 'untrusted',
+    sideEffect: 'read-only',
     execute: async (args, context) => {
       const startedAt = Date.now()
       const query = pickString(args.query)

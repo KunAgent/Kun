@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import {
   ContextCompactionConfigSchema,
   GraphRuntimeConfigSchema,
@@ -47,6 +48,11 @@ import {
   type ModelReasoningEffort,
   type KunRuntimeSettingsV1
 } from '../../shared/app-settings'
+import {
+  BUILTIN_GITHUB_MCP_SERVER_ID,
+  buildBuiltinGitHubMcpServer,
+  isBuiltinGitHubMcpServer
+} from '../../shared/github-mcp'
 import { resolveCodexOAuthApiKey } from '../codex-auth'
 import {
   resolveKunMcpJsonPath,
@@ -107,6 +113,7 @@ export async function syncGuiManagedKunConfig(
     scheduleMcp?: { settings: AppSettingsV1; launch: ClawScheduleMcpLaunchConfig }
     mcpConfigPath?: string
     appSettings?: AppSettingsV1
+    builtinSkillsRoot?: string
     /** Internal bounded retry after a concurrent config.json commit. */
     retryAttempt?: number
   }
@@ -128,22 +135,35 @@ export async function syncGuiManagedKunConfig(
   const projectMcpServers = appSettings
     ? await approvedProjectMcpServers(appSettings)
     : {}
-  const hasImportedEnabledMcpServer = Object.values(importedMcpServers)
-    .some((server) => objectValue(server).enabled !== false)
   const serve = objectValue(existing?.serve)
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
+  const retainedMcpServers = stripGeneratedProjectMcpServers(objectValue(mcp.servers))
+  // Replace only the host-authored entry. A user-owned `github` id remains
+  // authoritative and never qualifies for Kun's ambient credential injection.
+  if (isBuiltinGitHubMcpServer(retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID])) {
+    delete retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID]
+  }
+  const hasUserGitHubServer = [retainedMcpServers, importedMcpServers, projectMcpServers]
+    .some((servers) => BUILTIN_GITHUB_MCP_SERVER_ID in servers)
+  const managedGitHubServer = hasUserGitHubServer
+    ? {}
+    : { [BUILTIN_GITHUB_MCP_SERVER_ID]: buildBuiltinGitHubMcpServer(runtime.githubMcp) }
   const search = objectValue(mcp.search)
   const skills = await skillCapabilityConfigForRuntime(
     objectValue(capabilities.skills),
-    appSettings
+    appSettings,
+    options?.builtinSkillsRoot
   )
   const providers = appSettings
     ? providersConfigForRuntime(appSettings)
     : undefined
   const routePools = appSettings ? routePoolsConfigForRuntime(appSettings) : undefined
   const localModelGateway = appSettings ? localModelGatewayConfigForRuntime(appSettings) : undefined
-  const defaultModelProxyUrl = appSettings
+  // The top-level value remains the shared Registry master/fallback. Every
+  // managed Provider below carries its own explicit effective route, so the
+  // selected compatibility client cannot inherit this value accidentally.
+  const appProxyUrl = appSettings
     ? resolveModelProviderProxyUrl(appSettings)
     : undefined
   const workflowHooks = buildWorkflowHookEntries(appSettings?.workflow)
@@ -164,7 +184,7 @@ export async function syncGuiManagedKunConfig(
       approvalPolicy: runtime.approvalPolicy,
       sandboxMode: runtime.sandboxMode,
       approvalReviewer: runtime.approvalReviewer,
-      modelProxyUrl: defaultModelProxyUrl || undefined,
+      modelProxyUrl: appProxyUrl,
       retry: runtime.retry,
       tokenEconomy: tokenEconomyConfigForRuntime(runtime.tokenEconomy, objectValue(serve.tokenEconomy)),
       toolOutputLimits: toolOutputLimitsConfigForRuntime(runtime.toolOutputLimits),
@@ -211,11 +231,10 @@ export async function syncGuiManagedKunConfig(
       ),
       mcp: {
         ...mcp,
-        ...(options?.scheduleMcp || runtime.mcpSearch.enabled || hasImportedEnabledMcpServer || Object.keys(projectMcpServers).length > 0
-          ? { enabled: mcp.enabled === false ? false : true }
-          : {}),
+        enabled: mcp.enabled === false ? false : true,
         servers: {
-          ...stripGeneratedProjectMcpServers(objectValue(mcp.servers)),
+          ...managedGitHubServer,
+          ...retainedMcpServers,
           ...importedMcpServers,
           ...projectMcpServers,
           ...(options?.scheduleMcp ? {
@@ -236,8 +255,19 @@ export async function syncGuiManagedKunConfig(
       `Refusing to write invalid GUI-managed Kun config at ${configPath}: ${JSON.stringify(parsed.error.issues, null, 2)}`
     )
   }
+  if (existing) {
+    const parsedExisting = KunConfigSchema.safeParse(existing)
+    if (
+      parsedExisting.success &&
+      isDeepStrictEqual(
+        JSON.parse(JSON.stringify(parsed.data)),
+        JSON.parse(JSON.stringify(parsedExisting.data))
+      )
+    ) {
+      return parsed.data
+    }
+  }
   const nextText = `${JSON.stringify(next, null, 2)}\n`
-  if (existing && nextText === `${JSON.stringify(existing, null, 2)}\n`) return parsed.data
   try {
     await atomicWriteFile(configPath, nextText, {
       beforeCommit: () => {
@@ -279,6 +309,9 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
     },
     conversationVisualization: {
       enabled: lab?.conversationVisualization?.enabled === true
+    },
+    projectBoard: {
+      enabled: lab?.projectBoard?.enabled === true
     }
   }
 }
@@ -316,13 +349,13 @@ function defaultCredentialSourceId(settings: AppSettingsV1): string | undefined 
 }
 
 type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
-  'apiKey' | 'baseUrl' | 'endpointFormat' | 'model' |
+  'apiKey' | 'baseUrl' | 'endpointFormat' | 'model' | 'providerId' |
   'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' |
   'mcpSearch' | 'retry' |
   'tokenEconomy' | 'toolOutputLimits' | 'storage' | 'contextCompaction' |
   'runtimeTuning' | 'llmDebug' | 'imageGeneration' | 'textToSpeech' | 'musicGeneration' |
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
-  'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'smallModel' |
+  'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
   'smallModelProviderId' | 'smallModelAccountId' |
   'titleModel' | 'titleProviderId' | 'titleAccountId' |
   'summaryModel' | 'summaryProviderId' | 'summaryAccountId' |

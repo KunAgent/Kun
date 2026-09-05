@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   type DailyUsageBucket,
   type DailyUsageRange,
   defaultDailyUsageRange
 } from './use-daily-usage'
-import { parseUsageResponse, withUsageRequestTimeout } from './usage-response'
+import { requestUsage } from './usage-request-cache'
+import { parseUsageResponse, usageRequestError } from './usage-response'
+import { readUsageSummaryCache, writeUsageSummaryCache } from './usage-summary-cache'
 
 export type ModelUsageBucket = Omit<DailyUsageBucket, 'date'> & {
   model: string
@@ -28,6 +30,8 @@ export type ModelUsageState = {
   loading: boolean
   loaded: boolean
   error: string | null
+  updatedAt?: string
+  stale?: boolean
 }
 
 type RawUsageCounters = {
@@ -159,14 +163,14 @@ export function normalizeModelUsageResponse(raw: RawModelUsageResponse): ModelUs
   }
 }
 
-export async function loadModelUsage(range: DailyUsageRange): Promise<ModelUsageSummary | null> {
+export async function loadModelUsage(
+  range: DailyUsageRange,
+  generation?: string | number
+): Promise<ModelUsageSummary | null> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return null
-  const response = await withUsageRequestTimeout(
-    window.kunGui.runtimeRequest(buildModelUsagePath(range), 'GET'),
-    'model usage'
-  )
+  const response = await requestUsage(buildModelUsagePath(range), 'model usage', generation)
   if (!response.ok || !response.body.trim()) {
-    throw new Error(`model usage request failed: ${response.status}`)
+    throw usageRequestError('model usage', response.status, response.body)
   }
   const parsed = parseUsageResponse<RawModelUsageResponse>(response.body, 'model usage')
   if (parsed.group_by !== 'model') {
@@ -180,25 +184,62 @@ export function useModelUsageState(enabled: boolean, refreshKey: unknown, days: 
     usage: null,
     loading: false,
     loaded: false,
-    error: null
+    error: null,
+    stale: false
   })
+  const previousRefreshKey = useRef(refreshKey)
 
   useEffect(() => {
     let cancelled = false
     if (!enabled) {
-      setState({ usage: null, loading: false, loaded: false, error: null })
+      setState((current) => ({ ...current, loading: false, error: null }))
       return
     }
-    setState({ usage: null, loading: true, loaded: false, error: null })
+    const explicitRefresh = previousRefreshKey.current !== refreshKey
+    previousRefreshKey.current = refreshKey
     const range = defaultDailyUsageRange(new Date(), days)
-    void loadModelUsage(range)
+    const path = buildModelUsagePath(range)
+    const cached = readUsageSummaryCache<ModelUsageSummary>(path)
+    if (cached) {
+      setState({
+        usage: cached.value,
+        loading: cached.stale || explicitRefresh,
+        loaded: true,
+        error: null,
+        updatedAt: cached.updatedAt,
+        stale: cached.stale
+      })
+      if (!cached.stale && !explicitRefresh) return
+    } else {
+      setState((current) => ({ ...current, loading: true, error: null }))
+    }
+    void loadModelUsage(range, String(refreshKey))
       .then((usage) => {
-        if (!cancelled) setState({ usage, loading: false, loaded: true, error: null })
+        if (cancelled) return
+        if (!usage) {
+          setState({ usage: null, loading: false, loaded: true, error: null, stale: false })
+          return
+        }
+        const stored = writeUsageSummaryCache(path, usage)
+        setState({
+          usage,
+          loading: false,
+          loaded: true,
+          error: null,
+          updatedAt: stored.updatedAt,
+          stale: false
+        })
       })
       .catch((error) => {
         if (!cancelled) {
           const message = error instanceof Error ? error.message : String(error)
-          setState({ usage: null, loading: false, loaded: true, error: message })
+          setState((current) => ({
+            ...current,
+            loading: false,
+            loaded: current.loaded,
+            error: message,
+            stale: Boolean(current.usage)
+          }))
         }
       })
     return () => {

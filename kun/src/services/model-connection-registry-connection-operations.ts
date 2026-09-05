@@ -35,7 +35,10 @@ async initialize(this: ModelConnectionRegistry,
       localModelGateway?: RegistryDocument['localModelGateway']
     }
   ): Promise<ModelConnectionSnapshot> {
-    let current = await this['file'].read(emptyDocument)
+    // AtomicJsonFile upgrades legacy documents while reading. Writing the
+    // canonical value here persists the routing marker and concrete booleans
+    // before any seed reconciliation or live materialization occurs.
+    let current = await this['file'].update(emptyDocument, (document) => document)
     if (repairRegistryModelCapabilityLimits(current)) {
       current = await this['file'].update(emptyDocument, (document) => {
         const repaired = repairRegistryModelCapabilityLimits(document)
@@ -51,8 +54,10 @@ async initialize(this: ModelConnectionRegistry,
       for (const input of seed) {
         const credentialSourceId = input.credentialSourceId?.trim() || undefined
         const { credentialSourceId: _credentialSourceId, ...publicInput } = input
+        const requestedUseProxy = publicInput.useProxy
         const request = ModelConnectionConnectRequestSchema.parse({
           ...publicInput,
+          useProxy: publicInput.useProxy ?? false,
           expectedRevision: current.revision,
           probe: false
         })
@@ -74,7 +79,11 @@ async initialize(this: ModelConnectionRegistry,
             request.kind === 'antigravity-cli' || request.kind === 'gemini-cli-api'
           )
         } else {
-          const reconciled = reconcileSeedProfile(existing, request)
+          const reconcileRequest = {
+            ...request,
+            useProxy: requestedUseProxy ?? existing.useProxy
+          }
+          const reconciled = reconcileSeedProfile(existing, reconcileRequest)
           if (!sameStoredProfile(existing, reconciled)) {
             current = await this['file'].update(emptyDocument, (document) => {
               assertRevision(
@@ -84,7 +93,7 @@ async initialize(this: ModelConnectionRegistry,
                 this['credentialHealth']
               )
               const profile = requireProfile(document, existing.id)
-              const nextProfile = reconcileSeedProfile(profile, request)
+              const nextProfile = reconcileSeedProfile(profile, reconcileRequest)
               const retiredCredentialRef = profile.credentialRef !== nextProfile.credentialRef
                 ? profile.credentialRef
                 : undefined
@@ -229,6 +238,7 @@ async connectAuthenticated(this: ModelConnectionRegistry,
       externalAuthVerified = false,
       ...connection
     } = raw
+    const requestedUseProxy = connection.useProxy
     const input = ModelConnectionConnectRequestSchema.parse({
       ...connection,
       probe: false
@@ -270,6 +280,7 @@ async connectAuthenticated(this: ModelConnectionRegistry,
         authType: input.authType,
         baseUrl: input.baseUrl,
         endpointFormat: input.endpointFormat,
+        useProxy: requestedUseProxy ?? existing?.useProxy ?? false,
         configured: true,
         incarnationId,
         credentialMutationHighWater:
@@ -493,6 +504,7 @@ async connectInternal(this: ModelConnectionRegistry,
             authType: input.authType,
             baseUrl: input.baseUrl,
             endpointFormat: input.endpointFormat,
+            useProxy: input.useProxy,
             configured: true,
             incarnationId,
             credentialMutationHighWater: deleted?.credentialMutationHighWater,
@@ -560,6 +572,7 @@ async connectInternal(this: ModelConnectionRegistry,
         authType: input.authType,
         baseUrl: input.baseUrl,
         endpointFormat: input.endpointFormat,
+        useProxy: input.useProxy,
         configured,
         incarnationId: randomUUID(),
         credentialMutationHighWater: deleted?.credentialMutationHighWater,

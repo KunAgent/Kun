@@ -61,7 +61,7 @@ export async function openWorkspaceFileWithSystemDefault(
     path: resolved.path,
     workspaceRoot: workspaceRoot.trim(),
     editorId: 'system',
-    openPolicy: 'presentation-artifact',
+    openPolicy: 'generated-document-artifact',
     ...(expectedSha256 ? { expectedSha256 } : {})
   })
 }
@@ -77,7 +77,7 @@ export async function revealWorkspaceFileInFileManager(
     path: resolved.path,
     workspaceRoot: workspaceRoot.trim(),
     editorId: 'file-manager',
-    openPolicy: 'presentation-artifact',
+    openPolicy: 'generated-document-artifact',
     ...(expectedSha256 ? { expectedSha256 } : {})
   })
 }

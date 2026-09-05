@@ -189,8 +189,9 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
     waitForBrowserUseHostLifecycle(),
     mainState.waitForRuntimeOperationsIdle?.() ?? Promise.resolve()
   ])
-  // The shared Kun service outlives ordinary GUI/TUI clients. Only an update
-  // install must stop it so old application files can be replaced safely.
+  // Update installation and storage relocation retain their stronger shared
+  // handoff paths. An ordinary desktop quit stops only the exact GUI-owned
+  // child below and leaves Service Manager and foreign clients untouched.
   if (runtimeShutdown.isUpdateInstallQuit || runtimeShutdown.isStorageRelocationQuit) {
     const settings = await mainState.store.load()
     if (runtimeShutdown.isUpdateInstallQuit) {
@@ -209,9 +210,8 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
       ])
     }
   } else {
-    // The shared Kun daemon intentionally outlives an ordinary desktop client.
-    // Revoke its ephemeral Browser host authority before freeing the loopback
-    // port so a stale launch binding cannot survive a graceful GUI exit.
+    // Revoke the ephemeral Browser host authority while the GUI-owned Runtime
+    // is still reachable, then await that exact child before Electron exits.
     try {
       const settings = await mainState.store.load()
       await revokeManagedRuntimeBrowserUseBinding(settings, browserUseBinding)
@@ -220,6 +220,7 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
         message: error instanceof Error ? error.message : String(error)
       })
     }
+    await kunRuntimeAdapter.stopAndWait()
   }
   await Promise.all([
     stopBrowserUseHost(),
@@ -295,6 +296,9 @@ export function installDevPreviewWebviewGuards(options: {
 }): void {
   installWebviewSecurityGuards({
     app,
+    existingWebContents: mainState.mainWindow && !mainState.mainWindow.isDestroyed()
+      ? [mainState.mainWindow.webContents]
+      : [],
     sessions: extensionViewSessions,
     extensionPreloadPath: resolveNamedPreloadPath(__dirname, 'extension-view'),
     assertExtensionPartitionPrepared: (record) => options.viewProtocols.assertPrepared(record),

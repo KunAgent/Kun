@@ -28,12 +28,14 @@ import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicke
 import { SubagentReturnBar } from '../chat/message-timeline-empty'
 import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
+import { WriteResourceConversationHistoryPopover } from './WriteResourceConversationHistoryPopover'
+import { useWriteResourceConversationHistory } from './useWriteResourceConversationHistory'
 
 type Props = {
   input: string
   setInput: (value: string) => void
-  mode: 'plan' | 'agent'
-  setMode: (value: 'plan' | 'agent') => void
+  mode: 'plan' | 'agent' | 'auto'
+  setMode: (value: 'plan' | 'agent' | 'auto') => void
   busy: boolean
   runtimeConnection: RuntimeConnectionStatus
   activeThreadId: string | null
@@ -147,7 +149,21 @@ export function WriteAssistantPanel({
   const [childLoading, setChildLoading] = useState(false)
   const [childError, setChildError] = useState<string | null>(null)
   const viewingChildThread = Boolean(childThreadId)
-  const canCreateConversation = runtimeConnection === 'ready' && !busy && !viewingChildThread
+  const conversationHistory = useWriteResourceConversationHistory(busy)
+  const canCreateConversation = runtimeConnection === 'ready' &&
+    !busy &&
+    !viewingChildThread &&
+    !conversationHistory?.running &&
+    !conversationHistory?.workflowLocked
+  const startNewConversation = (): void => {
+    if (!conversationHistory) {
+      onNewConversation()
+      return
+    }
+    void conversationHistory.canStartConversation().then((allowed) => {
+      if (allowed) onNewConversation()
+    })
+  }
   const hasParentTimeline =
     blocks.length > 0 || liveReasoning.trim().length > 0 || liveAssistant.trim().length > 0
   const selectionIsReadOnly = selection.sourceKind != null && selection.sourceKind !== 'text'
@@ -261,6 +277,13 @@ export function WriteAssistantPanel({
               {t('writeAssistant')}
             </span>
           </div>
+          {conversationHistory ? (
+            <WriteResourceConversationHistoryPopover
+              model={conversationHistory}
+              lockedExternally={viewingChildThread}
+              onNewConversation={startNewConversation}
+            />
+          ) : null}
           <button
             type="button"
             onClick={onPickWorkspace}
@@ -272,7 +295,7 @@ export function WriteAssistantPanel({
           </button>
           <button
             type="button"
-            onClick={onNewConversation}
+            onClick={startNewConversation}
             disabled={!canCreateConversation}
             className="ds-sidebar-toggle-button shrink-0 disabled:cursor-not-allowed disabled:opacity-45"
             aria-label={t('writeAssistantNewConversation')}

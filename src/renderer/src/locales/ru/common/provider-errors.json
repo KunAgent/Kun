@@ -1,0 +1,13 @@
+{
+  "modelErrorSourceProvider": "Ответ поставщика",
+  "modelErrorSourceNoResponse": "Нет ответа поставщика",
+  "modelErrorSourceNotSent": "Запрос не отправлен",
+  "modelErrorProviderSummaryUnavailable": "Поставщик временно не может обработать этот запрос",
+  "modelErrorProviderSummaryRateLimited": "Поставщик ограничил частоту этого запроса",
+  "modelErrorProviderSummaryRejected": "Поставщик отклонил этот запрос",
+  "modelErrorProviderSummaryGeneric": "Поставщик вернул ошибку",
+  "modelErrorNoResponseSummary": "Запрос модели отправлен, но поставщик не ответил",
+  "modelErrorNotSentSummary": "Запрос модели завершился ошибкой до отправки",
+  "modelErrorProviderOriginalMessage": "Сообщение, возвращённое поставщиком",
+  "modelErrorFailureMessage": "Причина ошибки"
+}

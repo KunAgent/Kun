@@ -5,6 +5,7 @@ import {
   AccountSchema,
   AgentCreateRunRequestSchema,
   AgentRunEventSchema,
+  AgentRunStateSchema,
   AgentRunSchema,
   AgentSteerRequestSchema,
   ExtensionContributionsSchema,
@@ -190,6 +191,8 @@ export async function createAgentRun(
     input: agentInputText(body.data.input),
     ...(body.data.threadId ? { threadId: body.data.threadId } : {}),
     ...(body.data.workspace ? { workspace: body.data.workspace } : {}),
+    ...(body.data.model ? { model: body.data.model } : {}),
+    ...(body.data.reasoningEffort ? { reasoningEffort: body.data.reasoningEffort } : {}),
     ...(body.data.profileId ? { profileId: body.data.profileId } : {}),
     ...(binding ? { providerBinding: binding } : {}),
     ...(body.data.budget ? {
@@ -252,7 +255,7 @@ export async function agentRunEvents(
   if (acceptsSse(request)) {
     return buildAgentEventStream(platform, principal, request, runId, cursor.cursor, cursor.limit)
   }
-  const afterSeq = Math.max(0, cursor.cursor - 1)
+  const afterSeq = cursor.cursor - 1
   const events: AgentRunEvent[] = []
   const subscription = await platform.agent.subscribe(principal, {
     runId,
@@ -287,7 +290,8 @@ export async function listOwnThreads(
   const parsed = parseQuery(request, z.strictObject({
     limit: z.coerce.number().int().min(1).max(100).default(25),
     cursor: z.string().max(512).optional(),
-    workspace: WorkspaceRootSchema.optional()
+    workspace: WorkspaceRootSchema.optional(),
+    state: AgentRunStateSchema.optional()
   }))
   if (!parsed.ok) return parsed.response
   const page = await platform.agent.listOwnThreads(principal, parsed.data)

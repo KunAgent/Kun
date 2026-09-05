@@ -1,0 +1,25 @@
+{
+  "id": "sec-edgar",
+  "name": "SEC EDGAR",
+  "version": "1.0.0",
+  "description": "Retrieve and analyze public SEC filings, company facts, XBRL data, and filing metadata.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/sec-edgar"
+    ],
+    "promptPatterns": [
+      "10-K",
+      "10-Q",
+      "EDGAR",
+      "SEC EDGAR",
+      "SEC filing",
+      "sec-edgar",
+      "XBRL"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

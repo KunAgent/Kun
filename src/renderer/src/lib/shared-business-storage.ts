@@ -11,6 +11,12 @@ import {
   type SharedEntries
 } from './shared-business-storage-journal'
 
+export const SHARED_BUSINESS_STORAGE_CHANGED_EVENT = 'kun-shared-business-storage-changed'
+
+export type SharedBusinessStorageChangedDetail = {
+  keys: string[]
+}
+
 type SharedClientStateSnapshot = {
   revision: number
   value: SharedEntries
@@ -237,14 +243,25 @@ function persistDirtyAgainstAcknowledgement(): void {
 }
 
 function applyEntries(entries: SharedEntries, protectedKeys: ReadonlySet<string> = new Set()): void {
+  const changedKeys: string[] = []
   for (const key of SHARED_BUSINESS_KEYS) {
     if (protectedKeys.has(key)) continue
     const next = entries[key]
     const previous = localStorage.getItem(key)
     if (next === undefined) {
-      if (previous !== null) localStorage.removeItem(key)
+      if (previous !== null) {
+        localStorage.removeItem(key)
+        changedKeys.push(key)
+      }
     } else if (previous !== next) {
       localStorage.setItem(key, next)
+      changedKeys.push(key)
     }
+  }
+  if (changedKeys.length > 0) {
+    window.dispatchEvent(new CustomEvent<SharedBusinessStorageChangedDetail>(
+      SHARED_BUSINESS_STORAGE_CHANGED_EVENT,
+      { detail: { keys: changedKeys } }
+    ))
   }
 }

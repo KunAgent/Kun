@@ -25,7 +25,10 @@ describe('delegate_task observability output', () => {
     expect(properties).toHaveProperty('expectedResumeCount')
     expect(properties?.resumeChildId?.description).toContain('Omit this field entirely for a new child')
     expect(properties?.expectedResumeCount?.description).toContain('omit it entirely for a new child')
+    expect(properties?.detach?.description).toContain('current turn does not wait for the result')
+    expect(properties?.detach?.description).toContain('before the final answer')
     expect(delegateTool?.description).toContain('omit resumeChildId and expectedResumeCount entirely')
+    expect(delegateTool?.description).toContain('Do not start a detached review and then a foreground review for the same scope')
     expect(properties).not.toHaveProperty('custom_agent')
     expect(delegateTool?.inputSchema.required).toEqual(['prompt'])
 
@@ -40,6 +43,8 @@ describe('delegate_task observability output', () => {
     expect(customTools.map((tool) => tool.name)).toEqual(['delegate_task', 'list_subagent_profiles'])
     expect(customModeProperties).not.toHaveProperty('profile')
     expect(customModeProperties?.custom_agent?.description).toContain('always inherits the current turn model/provider/reasoning strength')
+    expect(customModeProperties?.detach?.description).toContain('current turn does not wait for the result')
+    expect(customTool?.description).toContain('Do not start a detached review and then a foreground review for the same scope')
     expect(customTool?.inputSchema.required).toEqual(['prompt'])
     const customProperties = (customModeProperties?.custom_agent as { properties?: Record<string, unknown> })?.properties
     expect(customProperties).not.toHaveProperty('reasoning_effort')

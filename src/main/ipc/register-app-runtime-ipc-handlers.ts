@@ -21,7 +21,7 @@ import {
   type ScheduleTaskMutationResult,
   type ScheduleTaskUpdateInput,
   type ScheduleTaskFromTextResult,
-  resolveModelProviderProxyUrl,
+  resolveProviderProxyUrl,
   type WorkflowCodeCheckResult,
   type WorkflowNodeTestResult,
   type WorkflowRunResult,
@@ -93,6 +93,26 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     pollWeixinInstall
   } = options
   const withRegistryCredentials = options.withRegistryCredentials ?? (async (settings) => settings)
+  const scheduleRuntime = getScheduleRuntime()
+  if (typeof scheduleRuntime?.subscribeStatus === 'function') {
+    scheduleRuntime.subscribeStatus((status) => {
+      const window = getMainWindow()
+      if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return
+      window.webContents.send('schedule:status-changed', status)
+    })
+  }
+  const authProxySelectionSchema = z.object({
+    providerId: z.string().trim().min(1),
+    useProxy: z.boolean()
+  }).strict()
+  const resolveAuthProxyUrl = async (payload: unknown): Promise<string> => {
+    const selection = parseIpcPayload('provider:auth-proxy', authProxySelectionSchema, payload)
+    return resolveProviderProxyUrl(await store.load(), {
+      id: selection.providerId,
+      kind: 'http',
+      useProxy: selection.useProxy
+    })
+  }
   ipcMain.handle('upstream:models', async () => fetchUpstreamModels())
 
   ipcMain.handle('provider:probe', async (_, payload: unknown) => {
@@ -385,27 +405,41 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     }
   )
 
-  ipcMain.handle('codex:auth:start', async () => {
-    return startCodexDeviceAuth()
+  ipcMain.handle('codex:auth:start', async (_, payload: unknown) => {
+    const proxyUrl = await resolveAuthProxyUrl(payload)
+    return startCodexDeviceAuth({ fetcher: fetchWithOptionalProxy, proxyUrl })
   })
 
   ipcMain.handle('codex:auth:poll', async (_, payload: unknown) => {
     const request = parseIpcPayload(
       'codex:auth:poll',
-      z.object({ deviceCode: z.string().min(1), userCode: z.string().min(1) }).strict(),
+      z.object({
+        deviceCode: z.string().min(1),
+        userCode: z.string().min(1),
+        providerId: z.string().trim().min(1),
+        useProxy: z.boolean()
+      }).strict(),
       payload
     )
-    return pollCodexDeviceAuth(request.deviceCode, request.userCode)
-  })
-
-  ipcMain.handle('codex:auth:browser', async () => {
-    return startCodexBrowserAuth(async (url: string) => {
-      await shell.openExternal(url)
+    const proxyUrl = await resolveAuthProxyUrl({
+      providerId: request.providerId,
+      useProxy: request.useProxy
+    })
+    return pollCodexDeviceAuth(request.deviceCode, request.userCode, {
+      fetcher: fetchWithOptionalProxy,
+      proxyUrl
     })
   })
 
-  ipcMain.handle('grok:auth:browser', async () => {
-    const proxyUrl = resolveModelProviderProxyUrl(await store.load())
+  ipcMain.handle('codex:auth:browser', async (_, payload: unknown) => {
+    const proxyUrl = await resolveAuthProxyUrl(payload)
+    return startCodexBrowserAuth(async (url: string) => {
+      await shell.openExternal(url)
+    }, { fetcher: fetchWithOptionalProxy, proxyUrl })
+  })
+
+  ipcMain.handle('grok:auth:browser', async (_, payload: unknown) => {
+    const proxyUrl = await resolveAuthProxyUrl(payload)
     const result = await startGrokBrowserAuth(async (url: string) => {
       await shell.openExternal(url)
     }, { fetcher: fetchWithOptionalProxy, proxyUrl })

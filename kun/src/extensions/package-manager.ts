@@ -497,17 +497,51 @@ export class ExtensionPackageManager {
   }
 
   async resolveForActivation(extensionId: string, workspaceKey?: string): Promise<ResolvedExtension> {
-    return this.serializeExtension(
+    const { resolvedScopes } = await this.resolveActivation(
       extensionId,
-      () => this.resolveForActivationSerialized(extensionId, workspaceKey)
+      workspaceKey === undefined ? [] : [workspaceKey],
+      () => undefined
     )
+    return resolvedScopes[0]!
+  }
+
+  /** Recover, capture the lifecycle fence, and resolve every scope within one package lane. */
+  async resolveActivation<T>(
+    extensionId: string,
+    workspaceKeys: readonly string[],
+    captureFence: () => T
+  ): Promise<{ resolvedScopes: ResolvedExtension[]; fence: T }> {
+    return this.serializeExtension(extensionId, async () => {
+      await this.recover(extensionId)
+      const fence = captureFence()
+      const keys: readonly (string | undefined)[] = workspaceKeys.length > 0
+        ? workspaceKeys
+        : [undefined]
+      const resolvedScopes: ResolvedExtension[] = []
+      for (const workspaceKey of keys) {
+        resolvedScopes.push(await this.resolveForActivationSerialized(extensionId, workspaceKey))
+      }
+      return { resolvedScopes, fence }
+    })
+  }
+
+  /** Wait for the package or permission transaction currently fencing this extension. */
+  async waitForPendingOperation(extensionId: string): Promise<void> {
+    // A new transaction can be queued while the promise observed here is
+    // settling. Keep following the serialized tail until it is stable so an
+    // activation cannot slip between two adjacent lifecycle changes.
+    while (true) {
+      const pending = this.operations.get(extensionId)
+      if (pending === undefined) return
+      await pending
+      if (this.operations.get(extensionId) === pending) return
+    }
   }
 
   private async resolveForActivationSerialized(
     extensionId: string,
     workspaceKey?: string
   ): Promise<ResolvedExtension> {
-    await this.recover(extensionId)
     if (workspaceKey !== undefined && !(await this.registry.isWorkspaceTrusted(extensionId, workspaceKey))) {
       throw extensionError(
         'EXTENSION_WORKSPACE_UNTRUSTED',

@@ -28,5 +28,8 @@ describe('chat projection effects', () => {
       'release_worktree',
       'drain_queued_messages'
     ])
+
+    const notify = effects.find((effect) => effect.type === 'notify_turn_complete')
+    expect(notify).toMatchObject({ threadId: 'thread_1', turnId: 'turn_1' })
   })
 })

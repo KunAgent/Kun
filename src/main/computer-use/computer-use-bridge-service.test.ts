@@ -11,11 +11,23 @@ function fakeController(): HostControlController {
   return {
     ensureReady: vi.fn(async () => ({ available: true })),
     screenSize: vi.fn(async () => ({ width: 1280, height: 720 })),
-    capture: vi.fn(async () => ({
+    capture: vi.fn(async (context) => ({
       mimeType: 'image/png',
       dataBase64: 'cG5n',
       width: 1280,
-      height: 720
+      height: 720,
+      ...(context?.sessionId
+        ? {
+            frame: {
+              frameId: 'frame-1',
+              sessionId: context.sessionId,
+              capturedAtMs: 1,
+              image: { width: 1280, height: 720, mimeType: 'image/png' },
+              nativeDesktop: { width: 1280, height: 720, scaleX: 1, scaleY: 1 },
+              coordinateSpace: 'kun-frame-v1' as const
+            }
+          }
+        : {})
     })),
     cursorPosition: vi.fn(async () => ({ x: 10, y: 20 })),
     moveTo: vi.fn(async () => undefined),
@@ -76,8 +88,18 @@ describe('ComputerUseBridgeService', () => {
         width: 1280,
         height: 720
       })
-      await remote.click(32, 48, 'right', 2, ['Shift'])
-      expect(controller.click).toHaveBeenCalledWith(32, 48, 'right', 2, ['Shift'])
+      await remote.click(32, 48, 'right', 2, ['Shift'], {
+        sessionId: 'session-a',
+        frameId: 'frame-a'
+      })
+      expect(controller.click).toHaveBeenCalledWith(
+        32,
+        48,
+        'right',
+        2,
+        ['Shift'],
+        expect.objectContaining({ sessionId: 'session-a', frameId: 'frame-a' })
+      )
     } finally {
       await service.stop()
     }
@@ -86,6 +108,85 @@ describe('ComputerUseBridgeService', () => {
       available: false,
       reason: expect.stringContaining('initiating GUI computer-use bridge is unavailable')
     })
+  })
+
+  it('preserves v1 requests during the bridge v2 migration', async () => {
+    const controller = fakeController()
+    const service = new ComputerUseBridgeService(controller)
+    const launch = await service.start()
+    try {
+      const response = await fetch(`${launch.url}/v1/actions`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${launch.token}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          contractVersion: 1,
+          requestId: randomUUID(),
+          operation: 'capture'
+        })
+      })
+      expect(response.status).toBe(200)
+      const body = await response.json() as {
+        result: { frame?: { sessionId?: string } }
+      }
+      expect(body.result.frame?.sessionId).toMatch(/^legacy-/)
+      const click = await fetch(`${launch.url}/v1/actions`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${launch.token}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          contractVersion: 1,
+          requestId: randomUUID(),
+          operation: 'click',
+          button: 'left',
+          count: 1,
+          modifiers: []
+        })
+      })
+      expect(click.status).toBe(200)
+      expect(controller.click).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        'left',
+        1,
+        [],
+        expect.objectContaining({ sessionId: body.result.frame?.sessionId })
+      )
+    } finally {
+      await service.stop()
+    }
+  })
+
+  it('returns a completed request from the journal instead of replaying the side effect', async () => {
+    const controller = fakeController()
+    const service = new ComputerUseBridgeService(controller)
+    const launch = await service.start()
+    const requestId = randomUUID()
+    const call = () => fetch(`${launch.url}/v1/actions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${launch.token}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        contractVersion: 2,
+        requestId,
+        operation: 'type_text',
+        sessionId: 'session-a',
+        text: 'private text'
+      })
+    })
+    try {
+      expect((await call()).status).toBe(200)
+      expect((await call()).status).toBe(200)
+      expect(controller.typeText).toHaveBeenCalledTimes(1)
+    } finally {
+      await service.stop()
+    }
   })
 
   it('does not reflect its token in successful responses', async () => {

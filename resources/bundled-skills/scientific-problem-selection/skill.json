@@ -1,0 +1,24 @@
+{
+  "id": "scientific-problem-selection",
+  "name": "Scientific Problem Selection",
+  "version": "1.0.0",
+  "description": "Evaluate and prioritize research questions by importance, novelty, tractability, evidence, resources, ethics, and falsifiability.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/scientific-problem-selection"
+    ],
+    "promptPatterns": [
+      "hypothesis",
+      "research topic",
+      "Scientific Problem Selection",
+      "scientific-problem-selection",
+      "研究问题",
+      "科研选题"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

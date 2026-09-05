@@ -7,6 +7,7 @@ const test = require('node:test')
 const {
   NEGATIVE_SCENARIOS,
   POSITIVE_SCENARIOS,
+  RECYCLED_PID_SCENARIOS,
   buildSmokeSettings,
   parseSmokeMarker,
   predecessorBuildId,
@@ -35,11 +36,24 @@ test('release matrix covers both update paths, active work, and auto-start off',
 
 test('negative release matrix names every fail-closed ownership case', () => {
   assert.deepEqual(NEGATIVE_SCENARIOS, [
-    'pid-port-reuse',
-    'non-kun-command',
     'changed-discovery-identity',
     'inspection-denied'
   ])
+})
+
+test('recycled PID release matrix proves exact stale coordination cleanup', () => {
+  assert.deepEqual(RECYCLED_PID_SCENARIOS, [
+    'runtime-discovery-and-manager-slot'
+  ])
+})
+
+test('recycled PID helper does not advertise itself as a Runtime data-dir owner', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'scripts/smoke-packaged-update-handoff-recycled.cjs'),
+    'utf8'
+  )
+  assert.match(source, /'--fixture-data-dir', profile\.dataDir/u)
+  assert.doesNotMatch(source, /'--data-dir', profile\.dataDir/u)
 })
 
 test('synthetic predecessor and development flavor use distinct stable build IDs', () => {
@@ -95,7 +109,7 @@ test('handoff child early exit writes buffered output to stderr immediately', ()
   assert.match(source, /process\.stderr\.write\([\s\S]*desktop\.output\(\)/u)
 })
 
-test('positive handoff uses a normal GUI quit before probing shared owners', () => {
+test('positive handoff uses a normal GUI quit before checking owned process lifecycles', () => {
   const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
   const positiveScenario = source.slice(
     source.indexOf('async function runPositiveScenario'),
@@ -107,7 +121,7 @@ test('positive handoff uses a normal GUI quit before probing shared owners', () 
   assert.match(source, /window\.kunGui\.runDesktopCommand\('quit'\)/u)
   assert.match(source, /finally \{\s*processExit\.dispose\(\)\s*\}/u)
   assert.match(source, /managerJson\(current\.manager, '\/v1\/manager\/status'\)/u)
-  assert.match(source, /runtimeJson\(current\.runtime, '\/v1\/runtime\/info'\)/u)
+  assert.match(source, /waitForProcessExit\(current\.runtime\.pid/u)
 })
 
 test('Linux release handoff gates exercise the Chromium sandbox', () => {

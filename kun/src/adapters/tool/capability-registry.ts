@@ -7,7 +7,10 @@ import type {
 import type { LocalTool } from './local-tool-host.js'
 import { isToolAdvertisedInSandbox } from './sandbox-policy.js'
 import { isToolAllowedInOrchestration } from '../../graph/graph-tool-boundary.js'
-import { PLAN_MODE_ALLOWED_GENERATION_TOOL_NAMES } from './plan-mode-tool-policy.js'
+import {
+  isPlanModeToolAllowed,
+  isPlanModeToolContext
+} from './plan-mode-tool-policy.js'
 
 export type CapabilityToolRecord = {
   provider: ToolProviderPolicy
@@ -28,20 +31,6 @@ export type CapabilityToolSpec = {
   providerKind: ToolProviderKind
   effects?: ToolEffects
 }
-
-const PLAN_MODE_ALLOWED_TOOL_NAMES = new Set([
-  'read',
-  'grep',
-  'glob',
-  'find',
-  'ls',
-  'repo_map',
-  'git_inspect',
-  'lsp',
-  'create_plan',
-  'user_input',
-  'request_user_input'
-])
 
 const USER_INPUT_TOOL_NAME = 'user_input'
 const LEGACY_USER_INPUT_TOOL_NAME = 'request_user_input'
@@ -191,12 +180,7 @@ export class CapabilityRegistry {
 
   private canUseTool(tool: LocalTool, context?: ToolHostContext): boolean {
     const toolName = tool.name
-    if (
-      isPlanModeContext(context) &&
-      !PLAN_MODE_ALLOWED_TOOL_NAMES.has(toolName) &&
-      !PLAN_MODE_ALLOWED_GENERATION_TOOL_NAMES.has(toolName) &&
-      tool.sideEffect !== 'read-only'
-    ) {
+    if (context && isPlanModeToolContext(context) && !isPlanModeToolAllowed(tool)) {
       return false
     }
     if (context?.blockedToolNames?.includes(toolName)) return false
@@ -228,10 +212,6 @@ function effectiveClientSurface(context: ToolHostContext): NonNullable<ToolHostC
   ) return 'gui'
   if (context.imContext) return 'im'
   return 'api'
-}
-
-function isPlanModeContext(context: ToolHostContext | undefined): boolean {
-  return context?.threadMode === 'plan' || Boolean(context?.guiPlan)
 }
 
 function providerPolicy(provider: ToolProviderPolicy): ToolProviderPolicy {

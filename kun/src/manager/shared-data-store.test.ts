@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
 import { testGraphConfig, testGraphPlan } from '../graph/graph-test-fixtures.test-support.js'
@@ -9,14 +9,23 @@ import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
 import { startNodeHttpServer } from '../server/node-http-server.js'
 import type { ServiceManagerConnection } from './manager-client.js'
 import { ManagerRemoteThreadStore } from './remote-data-stores.js'
-import { buildServiceManagerRouter, ServiceManagerState } from './service-manager.js'
+import {
+  buildServiceManagerRouter,
+  ServiceManagerState,
+  StaleTurnFenceError
+} from './service-manager.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
 import { requiresAtomicReplace } from './shared-data-store-core.js'
 
 const roots: string[] = []
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map((root) => rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === 'win32' ? 5 : 0,
+    retryDelay: 50
+  })))
 })
 
 async function dataStore(): Promise<ManagerSharedDataStore> {
@@ -37,6 +46,108 @@ describe('manager atomic JSON policy', () => {
 })
 
 describe('manager shared data store', () => {
+  it('exposes bounded event pages plus trim floor through the manager protocol', async () => {
+    const store = await dataStore()
+    const threadId = 'thread-event-page-manager'
+    for (let seq = 1; seq <= 5; seq += 1) {
+      await store.executeSession('appendEvent', {
+        threadId,
+        event: { kind: 'heartbeat', seq, timestamp: `2026-08-29T00:00:0${seq}.000Z`, threadId }
+      })
+    }
+    const first = await store.executeSession('loadEventPage', {
+      threadId,
+      options: { sinceSeq: 0, maxEvents: 2 }
+    }) as { events: Array<{ seq: number }>; nextCursor?: string; hasMore: boolean }
+    expect(first.events.map((event) => event.seq)).toEqual([1, 2])
+    expect(first).toMatchObject({ hasMore: true, nextCursor: expect.any(String) })
+
+    await store.executeSession('trimEventsFromSeq', { threadId, fromSeqInclusive: 3 })
+    await expect(store.executeSession('eventReplayFloorSeq', { threadId })).resolves.toBe(3)
+    await store.close()
+  })
+
+  it('revalidates a turn fence after a queued mutation reaches the store', async () => {
+    const store = await dataStore()
+    const threadId = 'thread-fence-queue'
+    const originalAppend = store.sessionStore.appendItem.bind(store.sessionStore)
+    let entered!: () => void
+    let unblock!: () => void
+    const didEnter = new Promise<void>((resolve) => { entered = resolve })
+    const blocked = new Promise<void>((resolve) => { unblock = resolve })
+    vi.spyOn(store.sessionStore, 'appendItem').mockImplementation(async (...args) => {
+      entered()
+      await blocked
+      return originalAppend(...args)
+    })
+    const item = {
+      id: 'item-first',
+      turnId: 'turn-first',
+      threadId,
+      role: 'assistant' as const,
+      status: 'completed' as const,
+      createdAt: '2026-08-29T00:00:00.000Z',
+      kind: 'assistant_text' as const,
+      text: 'first'
+    }
+    const first = store.executeSession('appendItem', { threadId, item })
+    await didEnter
+    let current = true
+    const stale = store.executeSession('appendItem', {
+      threadId,
+      item: { ...item, id: 'item-stale', turnId: 'turn-stale', text: 'stale' }
+    }, () => {
+      if (!current) throw new StaleTurnFenceError()
+    })
+    current = false
+    unblock()
+
+    await first
+    await expect(stale).rejects.toBeInstanceOf(StaleTurnFenceError)
+    await expect(store.executeSession('loadItems', { threadId }))
+      .resolves.toMatchObject([{ id: 'item-first' }])
+    await store.close()
+  })
+
+  it('keeps live checkpoint and finalization behavior equivalent through the manager', async () => {
+    const store = await dataStore()
+    const threadId = 'thread-live-manager'
+    const running = {
+      id: 'assistant-live-manager',
+      turnId: 'turn-live-manager',
+      threadId,
+      role: 'assistant' as const,
+      status: 'running' as const,
+      createdAt: '2026-08-29T00:00:00.000Z',
+      kind: 'assistant_text' as const,
+      text: 'streaming'
+    }
+    await store.executeSession('checkpointLiveItem', {
+      threadId,
+      item: running,
+      representedSeq: 7
+    })
+
+    await expect(store.executeSession('loadItemSnapshot', { threadId })).resolves.toMatchObject({
+      replayAfterSeq: 7,
+      items: [{ id: running.id, text: 'streaming', status: 'running' }]
+    })
+
+    await store.executeSession('finalizeLiveItem', {
+      threadId,
+      item: { ...running, text: 'streaming complete', status: 'completed' }
+    })
+    const finalized = await store.executeSession('loadItemSnapshot', { threadId }) as {
+      replayAfterSeq?: number
+      items: Array<{ id: string; text: string; status: string }>
+    }
+    expect(finalized.replayAfterSeq).toBeUndefined()
+    expect(finalized.items).toMatchObject([
+      { id: running.id, text: 'streaming complete', status: 'completed' }
+    ])
+    await store.close()
+  })
+
   it('proxies the lock-free item text search so palette deep search works in shared mode', async () => {
     const store = await dataStore()
     const thread = createThreadRecord({
@@ -284,6 +395,35 @@ describe('manager shared data store', () => {
     await store.close()
   })
 
+  it('consumes a reserved transient sequence with a private cursor checkpoint', async () => {
+    const store = await dataStore()
+    const threadId = 'thread-transient-checkpoint'
+    const transientSeq = await store.executeSession('allocateEventSeq', { threadId }) as number
+    await store.executeSession('appendEvent', {
+      threadId,
+      event: {
+        kind: 'cursor_checkpoint',
+        transientKind: 'item_updated',
+        threadId,
+        seq: transientSeq,
+        timestamp: '2026-08-01T00:00:00.000Z'
+      }
+    })
+
+    const nextSeq = await store.executeSession('allocateEventSeq', { threadId }) as number
+    expect(nextSeq).toBe(transientSeq + 1)
+    await expect(store.executeSession('appendEvent', {
+      threadId,
+      event: {
+        kind: 'heartbeat',
+        threadId,
+        seq: nextSeq,
+        timestamp: '2026-08-01T00:00:01.000Z'
+      }
+    })).resolves.toBeNull()
+    await store.close()
+  })
+
   it('settles open session items exactly once when a runtime owner lease expires', async () => {
     const store = await dataStore()
     const thread = createThreadRecord({
@@ -331,6 +471,7 @@ describe('manager shared data store', () => {
       turnId: turn.id,
       ownerFlavor: 'production' as const,
       ownerInstanceId: 'runtime-dead',
+      fencingToken: 1,
       acquiredAt: '2026-08-06T00:00:00.000Z',
       expiresAt: '2026-08-06T00:01:00.000Z'
     }
@@ -353,9 +494,15 @@ describe('manager shared data store', () => {
       kind: 'error', code: 'owner_lease_expired'
     })
     const persisted = await store.executeThread('get', { threadId: thread.id }) as {
-      turns: Array<{ status: string }>
+      turns: Array<{ status: string; terminalCode?: string; managerLeaseSettlement?: unknown }>
     }
-    expect(persisted.turns[0]?.status).toBe('failed')
+    expect(persisted.turns[0]).toMatchObject({
+      status: 'failed',
+      terminalCode: 'owner_lease_expired',
+      managerLeaseSettlement: expect.objectContaining({
+        ownerInstanceId: 'runtime-dead', fencingToken: 1
+      })
+    })
     expect(await store.reconcileExpiredLease(lease)).toBe(false)
     const events = await store.executeSession('loadEventsSince', { threadId: thread.id, sinceSeq: 0 }) as Array<{
       kind: string
@@ -496,7 +643,7 @@ describe('manager shared data store', () => {
       const connection: ServiceManagerConnection = {
         discovery: {
           version: 1,
-          protocolVersion: 3,
+          protocolVersion: 5,
           instanceId: 'manager-a',
           pid: process.pid,
           startedAt: '2026-08-01T00:00:00.000Z',

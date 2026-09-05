@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { readFile, realpath, rm } from 'node:fs/promises'
+import { readFile, readdir, realpath, rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import { basename, dirname, join, resolve } from 'node:path'
 import { atomicWriteFile } from './atomic-json-file'
@@ -30,11 +30,13 @@ export const INSTALLER_RECOVERY_ENVIRONMENT_KEYS = [
   'KUN_INSTALLER_INSTALL_MODE',
   'KUN_INSTALLER_INSTALL_REGISTRY_KEY',
   'KUN_INSTALLER_JOURNAL',
+  'KUN_INSTALLER_HEALTH_RESULT',
   'KUN_INSTALLER_PAYLOAD_BACKUP',
   'KUN_INSTALLER_PRESERVE_OTHER_SCOPE',
   'KUN_INSTALLER_PRODUCT_NAME',
   'KUN_INSTALLER_SECONDARY_SOURCE',
   'KUN_INSTALLER_SOURCE',
+  'KUN_INSTALLER_STAGE',
   'KUN_INSTALLER_TARGET',
   'KUN_INSTALLER_TRANSACTION',
   'KUN_INSTALLER_UNINSTALL_REGISTRY_KEY'
@@ -70,6 +72,21 @@ export type PendingUpdateResult = {
   rollbackOutcome?: 'not_started' | 'succeeded' | 'failed' | ''
   recoveryEnvironment?: InstallerRecoveryEnvironment
   recoveryAttempts?: number
+  handoffFailureAttempts?: number
+  handoffBlocked?: { at: string; message: string }
+}
+
+/** On-disk shape of the installer-owned `<guid>-update.json` transaction. */
+export type InstallerUpdateTransaction = {
+  transactionPath: string
+  schemaVersion: number
+  phase: string
+  oldVersion: string
+  newVersion: string
+  backupDir: string
+  journalPath: string
+  transactionRoot: string
+  recoveryEnvironment: InstallerRecoveryEnvironment
 }
 
 export type GuiUpdateRecovery = {
@@ -87,6 +104,8 @@ export type GuiUpdateRecovery = {
   backupDir?: string
   backupExpiresAt: string
   lastError?: string
+  handoffFailureAttempts?: number
+  handoffBlocked?: { at: string; message: string }
 }
 
 export function pendingUpdatePath(userDataPath = app.getPath('userData')): string {
@@ -135,7 +154,9 @@ function isPendingUpdateResult(value: unknown): value is PendingUpdateResult {
     typeof record.code === 'string' &&
     typeof record.message === 'string' &&
     typeof record.at === 'string' &&
-    (record.recoveryEnvironment === undefined || isInstallerRecoveryEnvironment(record.recoveryEnvironment))
+    (record.recoveryEnvironment === undefined || isInstallerRecoveryEnvironment(record.recoveryEnvironment)) &&
+    (record.handoffFailureAttempts === undefined || typeof record.handoffFailureAttempts === 'number') &&
+    (record.handoffBlocked === undefined || isHandoffBlockedMarker(record.handoffBlocked))
 }
 
 function isGuiUpdateRecovery(value: unknown): value is GuiUpdateRecovery {
@@ -144,7 +165,15 @@ function isGuiUpdateRecovery(value: unknown): value is GuiUpdateRecovery {
   return (record.schemaVersion === 1 || record.schemaVersion === 2) && typeof record.installedVersion === 'string' &&
     (record.channel === 'stable' || record.channel === 'frontier') &&
     typeof record.verifiedAt === 'string' && typeof record.healthAttempts === 'number' &&
-    typeof record.backupExpiresAt === 'string'
+    typeof record.backupExpiresAt === 'string' &&
+    (record.handoffFailureAttempts === undefined || typeof record.handoffFailureAttempts === 'number') &&
+    (record.handoffBlocked === undefined || isHandoffBlockedMarker(record.handoffBlocked))
+}
+
+function isHandoffBlockedMarker(value: unknown): value is { at: string; message: string } {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return typeof record.at === 'string' && typeof record.message === 'string'
 }
 
 async function readJson(path: string): Promise<unknown | null> {
@@ -253,6 +282,133 @@ export async function writePendingUpdateResult(
 export async function readPendingUpdateResult(userDataPath?: string): Promise<PendingUpdateResult | null> {
   const result = await readJson(pendingUpdateResultPath(userDataPath))
   return isPendingUpdateResult(result) ? result : null
+}
+
+function installerRecoveryRoot(userDataPath = app.getPath('userData')): string {
+  // The installer writes recovery state under the roaming profile next to the
+  // per-flavor userData directory; mirror the path the installer uses.
+  return resolve(dirname(userDataPath), 'KunInstallerRecovery')
+}
+
+function mapTransactionFieldToEnvironmentKey(key: string): string | null {
+  switch (key) {
+    case 'KUN_INSTALLER_APP_EXECUTABLE': return 'AppExecutable'
+    case 'KUN_INSTALLER_APP_GUID': return 'AppGuid'
+    case 'KUN_INSTALLER_AUTOMATIC_UPDATE': return 'AutomaticUpdate'
+    case 'KUN_INSTALLER_CANONICAL_LEAF': return 'CanonicalLeaf'
+    case 'KUN_INSTALLER_COMMON_DESKTOP': return 'CommonDesktop'
+    case 'KUN_INSTALLER_COMMON_PROGRAMS': return 'CommonPrograms'
+    case 'KUN_INSTALLER_CURRENT_DESKTOP': return 'CurrentDesktop'
+    case 'KUN_INSTALLER_CURRENT_PROGRAMS': return 'CurrentPrograms'
+    case 'KUN_INSTALLER_INSTALL_MODE': return 'InstallMode'
+    case 'KUN_INSTALLER_INSTALL_REGISTRY_KEY': return 'InstallRegistryKey'
+    case 'KUN_INSTALLER_JOURNAL': return 'JournalPath'
+    case 'KUN_INSTALLER_HEALTH_RESULT': return 'HealthResult'
+    case 'KUN_INSTALLER_PAYLOAD_BACKUP': return 'BackupRoot'
+    case 'KUN_INSTALLER_PRESERVE_OTHER_SCOPE': return 'PreserveOtherScope'
+    case 'KUN_INSTALLER_PRODUCT_NAME': return 'ProductName'
+    case 'KUN_INSTALLER_SECONDARY_SOURCE': return 'SecondarySource'
+    case 'KUN_INSTALLER_SOURCE': return 'Source'
+    case 'KUN_INSTALLER_STAGE': return 'StageRoot'
+    case 'KUN_INSTALLER_TARGET': return 'Target'
+    case 'KUN_INSTALLER_TRANSACTION': return 'TransactionPath'
+    case 'KUN_INSTALLER_UNINSTALL_REGISTRY_KEY': return 'UninstallRegistryKey'
+    default: return null
+  }
+}
+
+function hasCompleteInstallerRecoveryEnvironment(
+  environment: InstallerRecoveryEnvironment,
+  transaction: Record<string, unknown>
+): boolean {
+  const required = [
+    'KUN_INSTALLER_APP_EXECUTABLE',
+    'KUN_INSTALLER_APP_GUID',
+    'KUN_INSTALLER_CANONICAL_LEAF',
+    'KUN_INSTALLER_INSTALL_MODE',
+    'KUN_INSTALLER_INSTALL_REGISTRY_KEY',
+    'KUN_INSTALLER_JOURNAL',
+    'KUN_INSTALLER_SOURCE',
+    'KUN_INSTALLER_STAGE',
+    'KUN_INSTALLER_TARGET',
+    'KUN_INSTALLER_TRANSACTION',
+    'KUN_INSTALLER_UNINSTALL_REGISTRY_KEY'
+  ] as const
+  if (required.some((key) => !environment[key])) return false
+  if (!Array.isArray(transaction.Shortcuts) || transaction.Shortcuts.length === 0) return true
+  const shortcutRoots = environment.KUN_INSTALLER_INSTALL_MODE === 'all'
+    ? ['KUN_INSTALLER_COMMON_DESKTOP', 'KUN_INSTALLER_COMMON_PROGRAMS'] as const
+    : ['KUN_INSTALLER_CURRENT_DESKTOP', 'KUN_INSTALLER_CURRENT_PROGRAMS'] as const
+  return shortcutRoots.every((key) => Boolean(environment[key]))
+}
+
+/**
+ * Read the installer-owned transaction journal. It is the authoritative
+ * rollback record: the GUI result file is only an execution summary and may
+ * be missing when the installer dies between the payload cutover and its
+ * result write. The transaction GUID is unknown at runtime, so candidates are
+ * matched by the old/new version pair recorded in the pending update.
+ */
+export async function readInstallerUpdateTransaction(
+  match: { oldVersion: string, newVersion: string },
+  options: {
+    recoveryRoot?: string
+    platform?: NodeJS.Platform
+    readdirApi?: (dir: string) => Promise<string[]>
+    readApi?: (path: string) => Promise<string>
+  } = {}
+): Promise<InstallerUpdateTransaction | null> {
+  if ((options.platform ?? process.platform) !== 'win32') return null
+  const root = options.recoveryRoot ?? installerRecoveryRoot()
+  const listDir = options.readdirApi ?? ((dir: string) => readdir(dir))
+  const readFileBound = options.readApi ?? ((filePath: string) => readFile(filePath, 'utf8'))
+  let entries: string[]
+  try {
+    entries = await listDir(root)
+  } catch {
+    return null
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith('-update.json')) continue
+    const transactionPath = join(root, entry)
+    let value: unknown
+    try {
+      value = JSON.parse((await readFileBound(transactionPath)).replace(/^\uFEFF/u, '')) as unknown
+    } catch {
+      continue
+    }
+    if (!value || typeof value !== 'object') continue
+    const record = value as Record<string, unknown>
+    if (String(record.OldVersion ?? '') !== match.oldVersion) continue
+    if (String(record.NewVersion ?? '') !== match.newVersion) continue
+
+    const recoveryEnvironment: InstallerRecoveryEnvironment = {}
+    for (const key of INSTALLER_RECOVERY_ENVIRONMENT_KEYS) {
+      const mapped = mapTransactionFieldToEnvironmentKey(key)
+      const raw = mapped ? record[mapped] : undefined
+      if (typeof raw === 'string' && raw.length > 0 && !raw.includes('\0')) {
+        recoveryEnvironment[key] = raw
+      }
+    }
+    recoveryEnvironment.KUN_INSTALLER_TRANSACTION = transactionPath
+    if (!hasCompleteInstallerRecoveryEnvironment(recoveryEnvironment, record)) continue
+    const journalPath = recoveryEnvironment.KUN_INSTALLER_JOURNAL
+    if (!journalPath) continue
+
+    return {
+      transactionPath,
+      schemaVersion: Number(record.SchemaVersion ?? 0),
+      phase: String(record.Phase ?? ''),
+      oldVersion: match.oldVersion,
+      newVersion: match.newVersion,
+      backupDir: typeof record.BackupRoot === 'string' ? record.BackupRoot : '',
+      journalPath,
+      transactionRoot: dirname(transactionPath),
+      recoveryEnvironment
+    }
+  }
+  return null
 }
 
 export async function clearPendingUpdateResult(userDataPath?: string): Promise<void> {

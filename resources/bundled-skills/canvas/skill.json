@@ -1,0 +1,23 @@
+{
+  "id": "canvas",
+  "name": "Kun Canvas",
+  "version": "1.0.0",
+  "description": "Create and edit Kun Design screens, editable shapes, diagrams, design systems, layouts, and motion.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/canvas"
+    ],
+    "promptPatterns": [
+      "canvas",
+      "editable design",
+      "Kun Canvas",
+      "whiteboard",
+      "画布"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

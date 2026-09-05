@@ -110,4 +110,26 @@ describe('ThreadHydrationLoading', () => {
     await act(async () => root.unmount())
     container.remove()
   })
+
+  it('keeps trusted content visible while replay catches up', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    useChatStore.setState({ activeThreadId: 'thread-cached' })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => root.render(createElement(ThreadHydrationGate, {
+      loading: true,
+      catchingUp: true,
+      trustedContentVisible: true,
+      presentationKey: 'thread-cached',
+      children: createElement('div', { 'data-testid': 'trusted-content' }, 'Cached history')
+    })))
+
+    expect(container.textContent).toContain('Cached history')
+    expect(container.querySelector('[data-testid="trusted-content"]')?.parentElement
+      ?.hasAttribute('aria-hidden')).toBe(false)
+    expect(container.querySelector('[data-testid="thread-hydration-loading"]')).not.toBeNull()
+    await act(async () => root.unmount())
+    container.remove()
+  })
 })

@@ -120,6 +120,17 @@ export function GeneralDesktopSettingsPanel({ view }: { view: Record<string, any
             collapsible
           >
           <SettingRow
+            title={t('desktopKeepAwake')}
+            description={t('desktopKeepAwakeDesc')}
+            control={
+              <Toggle
+                checked={desktopBehavior.keepAwake === true}
+                ariaLabel={t('desktopKeepAwake')}
+                onChange={(v) => update({ appBehavior: { keepAwake: v } })}
+              />
+            }
+          />
+          <SettingRow
             title={t('desktopOpenAtLogin')}
             description={
               openAtLoginSupported

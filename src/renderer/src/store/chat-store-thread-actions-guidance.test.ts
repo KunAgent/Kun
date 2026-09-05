@@ -313,7 +313,7 @@ describe('chat-store-thread-actions queued messages', () => {
     expect(state.error).toBeNull()
   })
 
-  it('queues and drains a busy Write send with frozen file and thread identity', async () => {
+  it('admits a busy Write send to the runtime queue with frozen file identity', async () => {
     const provider = {
       sendUserMessage: vi.fn(async () => ({
         threadId: 'thr_existing',
@@ -359,11 +359,28 @@ describe('chat-store-thread-actions queued messages', () => {
     })).resolves.toBe(true)
 
     expect(ensureWriteThreadForWorkspace).toHaveBeenCalledOnce()
+    // Write sends are admitted straight into the durable runtime queue with a
+    // mapped `writeContext` reference; the local entry only mirrors delivery.
+    expect(provider.sendUserMessage).toHaveBeenCalledWith(
+      'thr_existing',
+      'revise this',
+      expect.objectContaining({
+        enqueueIfBusy: true,
+        agentSurface: 'write',
+        writeContext: {
+          workspaceRoot: '/workspace/deepseek-gui',
+          documentPath: '/workspace/deepseek-gui/draft.md',
+          documentEpoch: 4,
+          contentRevision: 2
+        }
+      })
+    )
     expect(state.queuedMessages).toEqual([
       expect.objectContaining({
         text: 'revise this',
         mode: 'agent',
-        deliveryState: 'pending',
+        deliveryState: 'in_flight',
+        deliveryTurnId: 'turn_queued',
         writeContext: {
           workspaceRoot: '/workspace/deepseek-gui',
           activeFilePath: '/workspace/deepseek-gui/draft.md',
@@ -374,31 +391,6 @@ describe('chat-store-thread-actions queued messages', () => {
       })
     ])
     expect(state.error).toBeNull()
-
-    useWriteWorkspaceStore.setState({
-      contentRevision: 3,
-      fileContent: 'agent-updated draft',
-      persistedContent: 'agent-updated draft'
-    })
-    state.busy = false
-    await actions.drainQueuedMessages()
-
-    expect(ensureWriteThreadForWorkspace).toHaveBeenCalledTimes(2)
-    expect(ensureWriteThreadForWorkspace).toHaveBeenLastCalledWith(
-      '/workspace/deepseek-gui',
-      '/workspace/deepseek-gui/draft.md'
-    )
-    expect(provider.sendUserMessage).toHaveBeenCalledWith(
-      'thr_existing',
-      'revise this',
-      expect.objectContaining({ agentSurface: 'write' })
-    )
-    expect(state.queuedMessages).toEqual([
-      expect.objectContaining({
-        deliveryState: 'in_flight',
-        deliveryTurnId: 'turn_queued'
-      })
-    ])
   })
 
   it('rejects a Write send whose captured revision is no longer active', async () => {
@@ -594,7 +586,7 @@ describe('chat-store-thread-actions queued messages', () => {
     })
   })
 
-  it('keeps an in-flight queued item until its runtime turn settles', async () => {
+  it('consumes the started queued row while keeping the next item queued', async () => {
     const { actions, state } = buildHarness()
     const sendMessage = vi.fn(async () => false)
     state.sendMessage = sendMessage as unknown as ChatState['sendMessage']
@@ -615,7 +607,7 @@ describe('chat-store-thread-actions queued messages', () => {
     ]
 
     await actions.drainQueuedMessages()
-    expect(state.queuedMessages.map((message) => message.id)).toEqual(['q-running', 'q-next'])
+    expect(state.queuedMessages.map((message) => message.id)).toEqual(['q-next'])
     expect(sendMessage).not.toHaveBeenCalled()
 
     state.busy = false

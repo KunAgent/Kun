@@ -22,6 +22,10 @@ import {
   setThreadTodos,
   updateThread
 } from './threads.js'
+import { getQueuedTurns } from './thread-queued-turns.js'
+import { syncThreadTodosFromPlan } from './thread-todos-sync-plan.js'
+import { threadTimelineReadKey } from './thread-timeline-read-key.js'
+import { patchThreadTodoStatus } from './project-boards.js'
 import { deleteThreadsByWorkspace } from './threads-bulk-delete.js'
 import { contentSearchThreads } from './thread-content-search.js'
 import { summarizeThread } from './threads-summarize.js'
@@ -38,6 +42,9 @@ import {
   rewindThread,
   startTurn,
   steerTurn,
+  cancelQueuedTurn,
+  moveQueuedTurn,
+  resumeQueuedTurns,
   replaceSteeringQueue
 } from './turns.js'
 import { startReview } from './review.js'
@@ -50,11 +57,22 @@ import { usageJsonResponse } from './usage.js'
 import { listProviderQuotas } from './provider-quotas.js'
 import { llmDebugRoundsResponse } from './debug-llm.js'
 import { modelRequestsResponse } from './model-requests.js'
+import {
+  trajectoryDetailResponse,
+  trajectoryPageResponse,
+  trajectorySummaryResponse
+} from './trajectory.js'
+import { getThreadSummary } from './thread-summary.js'
+import { threadActivityResponse } from './thread-activity.js'
 import { jsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import type { ApprovalConsentVerifier } from '../approval-consent.js'
 import { authorize } from './route-auth.js'
+import {
+  ThreadReadCoordinator,
+  ThreadReadOverloadedError
+} from '../thread-read-coordinator.js'
 import {
   getThreadKnowledgeBases,
   reindexThreadKnowledgeBase
@@ -67,6 +85,12 @@ export function registerThreadRoutes(
   runtime: ServerRuntime,
   approvalConsent: ApprovalConsentVerifier
 ): void {
+  const timelineReads = new ThreadReadCoordinator()
+  router.add('GET', '/v1/thread-activity/events', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.threadActivity) return ERRORS.unavailable('thread activity is unavailable')
+    return threadActivityResponse(runtime.threadActivity, request)
+  })
   router.add('GET', '/v1/threads', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listThreads(runtime.threadService, request)
@@ -90,6 +114,11 @@ export function registerThreadRoutes(
     return getThreadStates(request, (threadId) =>
       loadOwnerAwareThreadState(runtime, request, threadId))
   })
+  // Static summary suffix must stay before the generic `/:id` detail route.
+  router.add('GET', '/v1/threads/:id/summary', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getThreadSummary(runtime.threadService, ctx.params.id, runtime.sessionStore)
+  })
   // This static suffix must be registered before `/:id`, because Router uses
   // first-match ordering for parameterized paths.
   router.add('GET', '/v1/threads/:id/state', async (request, ctx) => {
@@ -107,15 +136,29 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     const forwarded = await runtime.forwardThreadControl?.(request, ctx.params.id)
     if (forwarded) return forwarded
-    return getThreadTimeline(
-      runtime.threadService,
-      ctx.params.id,
-      request,
-      runtime.sessionStore,
-      runtime.userInputGate,
-      runtime.approvalGate,
-      runtime.delegationRuntime
-    )
+    const priority = request.headers.get('x-kun-request-priority') === 'background'
+      ? 'background' : 'foreground'
+    const key = threadTimelineReadKey(ctx.params.id, new URL(request.url))
+    try {
+      return await timelineReads.run(key, priority, () => getThreadTimeline(
+        runtime.threadService,
+        ctx.params.id,
+        request,
+        runtime.sessionStore,
+        runtime.userInputGate,
+        runtime.approvalGate,
+        runtime.delegationRuntime
+      ))
+    } catch (error) {
+      if (!(error instanceof ThreadReadOverloadedError)) throw error
+      const response = jsonResponse({
+        code: 'thread_read_overloaded',
+        message: error.message,
+        retryAfterSeconds: error.retryAfterSeconds
+      }, 503)
+      response.headers['retry-after'] = String(error.retryAfterSeconds)
+      return response
+    }
   })
   router.add('GET', '/v1/threads/:id/knowledge-bases', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -147,6 +190,18 @@ export function registerThreadRoutes(
   router.add('GET', '/v1/threads/:id/model-requests', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return modelRequestsResponse(runtime, ctx.params.id, request)
+  })
+  router.add('GET', '/v1/threads/:id/trajectory', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return trajectoryPageResponse(runtime, ctx.params.id, request)
+  })
+  router.add('GET', '/v1/threads/:id/trajectory/summary', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return trajectorySummaryResponse(runtime, ctx.params.id)
+  })
+  router.add('GET', '/v1/threads/:id/trajectory/:recordId/detail', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return trajectoryDetailResponse(runtime, ctx.params.id, ctx.params.recordId, request)
   })
   router.add('PATCH', '/v1/threads/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -184,6 +239,20 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return setThreadTodos(runtime.threadService, ctx.params.id, request)
   })
+  router.add('POST', '/v1/threads/:id/todos/sync-plan', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return syncThreadTodosFromPlan(runtime.threadService, ctx.params.id, request)
+  })
+  router.add('PATCH', '/v1/threads/:id/todos/:todoId', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return patchThreadTodoStatus(
+      runtime.threadService,
+      runtime.projectBoardService,
+      ctx.params.id,
+      ctx.params.todoId,
+      request
+    )
+  })
   router.add('DELETE', '/v1/threads/:id/todos', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return clearThreadTodos(runtime.threadService, ctx.params.id)
@@ -203,6 +272,26 @@ export function registerThreadRoutes(
   router.add('POST', '/v1/threads/:id/rewind', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return rewindThread(runtime.turnService, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/threads/:id/turns/:turnId/cancel-queued', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return cancelQueuedTurn(runtime.turnService, ctx.params.id, ctx.params.turnId)
+  })
+  router.add('PATCH', '/v1/threads/:id/turns/:turnId/queue-position', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return moveQueuedTurn(runtime.turnService, ctx.params.id, ctx.params.turnId, request)
+  })
+  router.add('POST', '/v1/threads/:id/queue/resume', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return resumeQueuedTurns(runtime.turnService, ctx.params.id, (threadId, turnId) => {
+      runtime.runTurn(threadId, turnId)
+    })
+  })
+  router.add('GET', '/v1/threads/:id/queued-turns', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const forwarded = await runtime.forwardThreadControl?.(request, ctx.params.id)
+    if (forwarded) return forwarded
+    return getQueuedTurns(runtime.threadService, ctx.params.id)
   })
   router.add('POST', '/v1/threads/:id/review', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -308,7 +397,7 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     const sinceSeq = parseEventCursor(request)
     if (sinceSeq === null) return ERRORS.validation('since_seq must be a non-negative safe integer')
-    if (!await runtime.threadService.get(ctx.params.id)) {
+    if (!await runtime.threadService.getMetadata(ctx.params.id)) {
       return ERRORS.notFound(`thread not found: ${ctx.params.id}`)
     }
     return buildEventStreamResponse({

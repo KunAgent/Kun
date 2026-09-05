@@ -6,6 +6,7 @@ const permissions = [
   'commands.register',
   'storage.global',
   'storage.workspace',
+  'storage.secrets',
   'agent.run',
   'agent.threads.readOwn',
   'tools.register',
@@ -34,6 +35,9 @@ describe('ExtensionTestHarness', () => {
 
     await harness.client.storage.global.set('answer', 42)
     expect(await harness.client.storage.global.get('answer')).toBe(42)
+    await harness.client.secrets.set('relay-key', 'protected')
+    expect(await harness.client.secrets.get('relay-key')).toBe('protected')
+    expect(harness.storage.global.has('relay-key')).toBe(false)
 
     harness.webview.respondToNextNotification('retry')
     expect(await harness.client.ui.showNotification({
@@ -48,12 +52,56 @@ describe('ExtensionTestHarness', () => {
       actions: [{ id: 'retry', title: 'Retry' }]
     })])
 
-    const { run } = await harness.client.agent.createRun({ input: 'hello' })
+    await expect(harness.client.agent.getRunOptions()).resolves.toEqual({
+      defaultModel: 'fake-model',
+      models: [{
+        id: 'fake-model',
+        displayName: 'Fake model',
+        selected: true,
+        reasoningEfforts: ['off', 'low', 'medium', 'high', 'max'],
+        defaultReasoningEffort: 'medium'
+      }]
+    })
+    const { run } = await harness.client.agent.createRun({
+      input: 'hello', model: 'fake-model', reasoningEffort: 'high'
+    })
+    expect(run).toMatchObject({
+      model: 'fake-model',
+      reasoningEffort: 'high'
+    })
+    await expect(harness.client.agent.createRun({
+      input: 'unknown model', model: 'unknown-model'
+    })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+    await expect(harness.client.agent.createRun({
+      input: 'unsupported effort', model: 'fake-model', reasoningEffort: 'auto'
+    })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+    await expect(harness.client.agent.createRun({
+      input: 'mixed binding',
+      model: 'fake-model',
+      providerBinding: { providerId: 'fake', accountId: 'account', modelId: 'fake-model' }
+    })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
     const subscription = await harness.client.agent.subscribe({ runId: run.id })
     const events: string[] = []
     subscription.onEvent((event) => events.push(event.type))
     harness.agent.emit(run.id, 'progress', { message: 'working' })
     expect(events).toEqual(['state', 'progress'])
+    harness.agent.emit(run.id, 'message', { role: 'user', content: 'hello from history' })
+    const firstHistoryPage = await harness.client.agent.listRunEvents({ runId: run.id, limit: 2 })
+    expect(firstHistoryPage).toMatchObject({
+      items: [expect.objectContaining({ type: 'state' }), expect.objectContaining({ type: 'progress' })],
+      cursor: 2,
+      hasMore: true,
+      historyIncomplete: false
+    })
+    await expect(harness.client.agent.listRunEvents({
+      runId: run.id,
+      afterSequence: firstHistoryPage.cursor
+    })).resolves.toMatchObject({
+      items: [expect.objectContaining({
+        type: 'message', role: 'user', messageId: 'message-3', phase: 'complete'
+      })],
+      hasMore: false
+    })
 
     const tool = await harness.client.tools.registerTool(
       { id: 'echo', description: 'Echo input', inputSchema: { type: 'object' }, sideEffects: 'none', idempotent: true },

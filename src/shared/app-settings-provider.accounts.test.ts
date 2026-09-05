@@ -75,6 +75,7 @@ describe('multi-account provider presets', () => {
       presetSource: { presetId: 'ollama', mode: 'api' },
       baseUrl: 'https://ollama.com/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: [...OLLAMA_CLOUD_MODEL_IDS]
     })
     expect(first.models).toContain('gpt-oss:120b')
@@ -203,6 +204,7 @@ describe('multi-account provider presets', () => {
         apiKey: 'sk-fake',
         baseUrl: 'https://fake.example/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['fake-model'],
         modelProfiles: {}
       }]

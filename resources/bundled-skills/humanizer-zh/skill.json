@@ -1,0 +1,24 @@
+{
+  "id": "humanizer-zh",
+  "name": "Chinese Natural Writing",
+  "version": "1.0.0",
+  "description": "Revise Chinese text to sound specific, fluent, restrained, and human while preserving facts and author intent.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/humanizer-zh"
+    ],
+    "promptPatterns": [
+      "Chinese Natural Writing",
+      "humanize Chinese",
+      "humanizer-zh",
+      "中文润色",
+      "去AI味",
+      "自然表达"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

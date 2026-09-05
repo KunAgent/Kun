@@ -30,7 +30,7 @@ import { SidebarIconButton, SidebarTreeRow } from '../sidebar/SidebarPrimitives'
 import type { SidebarThreadWorktreeRecord } from './sidebar-project-selectors'
 import type { ScheduledThreadActivity } from '../../store/chat-store-types'
 import type { SidebarDropPosition } from './sidebar-order'
-import { requestThreadPrewarm } from '../../store/thread-detail-prewarm'
+import { cancelThreadPrewarm, requestThreadPrewarm } from '../../store/thread-detail-prewarm'
 
 const DRAFT_HISTORY_PAGE_SIZE = 3
 
@@ -321,13 +321,17 @@ export function ThreadRow({
       onClick={onSelect}
       onContextMenu={onContextMenu}
       onMouseEnter={(event) => {
-        if (!active) requestThreadPrewarm(thread)
+        if (!active) requestThreadPrewarm(thread, { dwell: true })
         onPreviewOpen(event, worktreeRecord)
       }}
       onFocusCapture={() => {
-        if (!active) requestThreadPrewarm(thread)
+        if (!active) requestThreadPrewarm(thread, { dwell: true })
       }}
-      onMouseLeave={onPreviewClose}
+      onMouseLeave={(event) => {
+        cancelThreadPrewarm(thread.id)
+        onPreviewClose()
+      }}
+      onBlurCapture={() => cancelThreadPrewarm(thread.id)}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {pinned ? <Pin className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} /> : null}

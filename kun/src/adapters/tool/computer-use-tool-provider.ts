@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { KunCapabilitiesConfig } from '../../contracts/capabilities.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
@@ -93,6 +94,11 @@ const INPUT_SCHEMA = {
     duration: {
       type: 'number',
       description: 'Seconds to pause for the wait action (default 1, max 60).'
+    },
+    frame_id: {
+      type: 'string',
+      maxLength: 128,
+      description: 'Optional frameId from the most recent screenshot. Stale or cross-session frames are rejected.'
     }
   },
   required: ['action'],
@@ -119,12 +125,17 @@ function modifiersFromText(value: unknown): string[] {
     .filter(Boolean)
 }
 
+function sessionIdForTurn(threadId: string, turnId: string): string {
+  return `kun-${createHash('sha256').update(`${threadId}:${turnId}`).digest('hex').slice(0, 24)}`
+}
+
 function screenshotOutput(action: string, shot: HostScreenshot, note?: string): { output: unknown } {
   return {
     output: {
       kind: 'computer_screenshot',
       action,
       screen: { width: shot.width, height: shot.height },
+      ...(shot.frame ? { frame: shot.frame, frame_id: shot.frame.frameId } : {}),
       note:
         note ??
         `Screenshot is ${shot.width}x${shot.height}px. Coordinates for the next action use this pixel space (top-left is 0,0).`,
@@ -217,15 +228,20 @@ export async function buildComputerUseToolProviders(
         return toolError('computer_use_unavailable', ready.reason ?? 'computer-use backend is unavailable')
       }
 
+      const actionContext = {
+        sessionId: sessionIdForTurn(context.threadId, context.turnId),
+        frameId: typeof args.frame_id === 'string' ? args.frame_id : undefined,
+        signal: context.abortSignal
+      }
       const coordinate = readCoordinate(args.coordinate)
       try {
         switch (action) {
           case 'screenshot':
-            return screenshotOutput('screenshot', await controller.capture())
+            return screenshotOutput('screenshot', await controller.capture(actionContext))
 
           case 'cursor_position': {
-            const pos = await controller.cursorPosition()
-            const size = await controller.screenSize()
+            const pos = await controller.cursorPosition(actionContext)
+            const size = await controller.screenSize(actionContext)
             return {
               output: {
                 kind: 'computer_action',
@@ -238,8 +254,8 @@ export async function buildComputerUseToolProviders(
 
           case 'mouse_move': {
             if (!coordinate) return toolError('missing_coordinate', 'mouse_move requires coordinate [x,y]')
-            await controller.moveTo(coordinate[0], coordinate[1])
-            return screenshotOutput(action, await controller.capture())
+            await controller.moveTo(coordinate[0], coordinate[1], actionContext)
+            return screenshotOutput(action, await controller.capture(actionContext))
           }
 
           case 'left_click':
@@ -254,9 +270,10 @@ export async function buildComputerUseToolProviders(
               coordinate?.[1],
               button,
               count,
-              modifiersFromText(args.text)
+              modifiersFromText(args.text),
+              actionContext
             )
-            return screenshotOutput(action, await controller.capture())
+            return screenshotOutput(action, await controller.capture(actionContext))
           }
 
           case 'left_click_drag': {
@@ -264,8 +281,8 @@ export async function buildComputerUseToolProviders(
             if (!start || !coordinate) {
               return toolError('missing_coordinate', 'left_click_drag requires start_coordinate and coordinate')
             }
-            await controller.drag(start[0], start[1], coordinate[0], coordinate[1])
-            return screenshotOutput(action, await controller.capture())
+            await controller.drag(start[0], start[1], coordinate[0], coordinate[1], actionContext)
+            return screenshotOutput(action, await controller.capture(actionContext))
           }
 
           case 'scroll': {
@@ -274,39 +291,58 @@ export async function buildComputerUseToolProviders(
               return toolError('missing_scroll_direction', 'scroll requires scroll_direction (up/down/left/right)')
             }
             const amount = Number.isFinite(Number(args.scroll_amount)) ? Number(args.scroll_amount) : 3
-            await controller.scroll(coordinate?.[0], coordinate?.[1], direction as ScrollDirection, amount)
-            return screenshotOutput(action, await controller.capture())
+            await controller.scroll(
+              coordinate?.[0],
+              coordinate?.[1],
+              direction as ScrollDirection,
+              amount,
+              actionContext
+            )
+            return screenshotOutput(action, await controller.capture(actionContext))
           }
 
           case 'type': {
             const text = typeof args.text === 'string' ? args.text : ''
             if (!text) return toolError('missing_text', 'type requires text')
-            await controller.typeText(text)
-            return screenshotOutput(action, await controller.capture())
+            await controller.typeText(text, actionContext)
+            return screenshotOutput(action, await controller.capture(actionContext))
           }
 
           case 'key': {
             const text = typeof args.text === 'string' ? args.text : ''
             if (!text) return toolError('missing_text', 'key requires text (e.g. "ctrl+c")')
-            await controller.pressHotkey(text)
-            return screenshotOutput(action, await controller.capture())
+            await controller.pressHotkey(text, actionContext)
+            return screenshotOutput(action, await controller.capture(actionContext))
           }
 
           case 'wait': {
             const seconds = Number.isFinite(Number(args.duration)) ? Number(args.duration) : 1
             await controller.wait(Math.max(0, seconds) * 1000, context.abortSignal)
-            return screenshotOutput(action, await controller.capture())
+            return screenshotOutput(action, await controller.capture(actionContext))
           }
 
           default:
             return toolError('unsupported_action', `unsupported computer_use action: ${action}`)
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return toolError(
-          'execution_failed',
-          `computer_use ${action} failed: ${message}. On macOS this usually means Screen Recording and Accessibility permission have not been granted to the app.`
-        )
+        const candidate = error as {
+          code?: unknown
+          message?: unknown
+          retryable?: unknown
+          needsFreshFrame?: unknown
+        }
+        const code = typeof candidate.code === 'string' ? candidate.code : 'execution_failed'
+        const message = typeof candidate.message === 'string' ? candidate.message : String(error)
+        return {
+          output: {
+            kind: 'computer_action',
+            error: code,
+            message: `computer_use ${action} failed: ${message}`,
+            retryable: candidate.retryable === true,
+            needsFreshFrame: candidate.needsFreshFrame === true
+          },
+          isError: true
+        }
       }
     }
   })

@@ -63,6 +63,7 @@ function credentialSnapshot(
 ): ModelConnectionSnapshot {
   return {
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: 9,
     providers: [{
       id: 'legacy-provider',
@@ -71,6 +72,7 @@ function credentialSnapshot(
       kind: 'http',
       authType: 'api-key',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       configured: true,
       ...(credentialStatus ? { credentialStatus } : {}),
       models: ['model-a'],
@@ -103,6 +105,7 @@ describe("TuiController reasoning and session lifecycle", () => {
       await controller.start()
       controller.applyModelSelection({
         schemaVersion: 1,
+        proxyRoutingVersion: 1,
         revision: 1,
         defaultProviderId: 'provider-a',
         defaultAccountId: 'account-a',
@@ -112,7 +115,7 @@ describe("TuiController reasoning and session lifecycle", () => {
         localModelGateway: { enabled: false },
         providers: [{
           id: 'provider-a', accountId: 'account-a', name: 'Provider A', kind: 'http',
-          authType: 'api-key', endpointFormat: 'chat_completions', configured: true,
+          authType: 'api-key', endpointFormat: 'chat_completions', useProxy: false, configured: true,
           models: ['reasoning-model'], selectedModel: 'reasoning-model',
           modelCapabilities: {
             'reasoning-model': {
@@ -168,6 +171,7 @@ describe("TuiController reasoning and session lifecycle", () => {
       await controller.start()
       controller.applyModelSelection({
         schemaVersion: 1,
+        proxyRoutingVersion: 1,
         revision: 0,
         defaultProviderId: 'opencode-go',
         defaultAccountId: 'account:opencode-go',
@@ -182,6 +186,7 @@ describe("TuiController reasoning and session lifecycle", () => {
           kind: 'http',
           authType: 'subscription',
           endpointFormat: 'chat_completions',
+          useProxy: false,
           configured: true,
           models: ['glm-5.2'],
           selectedModel: 'glm-5.2',
@@ -246,6 +251,7 @@ describe("TuiController reasoning and session lifecycle", () => {
       await controller.start()
       controller.applyModelSelection({
         schemaVersion: 1,
+        proxyRoutingVersion: 1,
         revision: 0,
         defaultProviderId: 'codex',
         defaultAccountId: 'account:codex',
@@ -260,6 +266,7 @@ describe("TuiController reasoning and session lifecycle", () => {
           kind: 'http',
           authType: 'subscription',
           endpointFormat: 'custom_endpoint',
+          useProxy: false,
           configured: true,
           models: ['gpt-5.6-luna'],
           selectedModel: 'gpt-5.6-luna'

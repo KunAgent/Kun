@@ -39,11 +39,9 @@ export class ExtensionManager extends ExtensionManagerCore {
     this.cancelIdleDeactivation(instanceKey)
     await this.waitForLifecycleTransition(instanceKey)
     const workspaceContextSignature = JSON.stringify(options.workspaceContext ?? null)
-    const epoch = this.activationEpoch(extensionId, workspaceRoots)
     const existing = this.activations.get(instanceKey)
     if (existing !== undefined) {
       if (
-        existing.epoch === epoch &&
         existing.event === event &&
         existing.workspaceContextSignature === workspaceContextSignature &&
         sameWorkspaceRoots(existing.workspaceRoots, workspaceRoots)
@@ -54,10 +52,9 @@ export class ExtensionManager extends ExtensionManagerCore {
       await existing.promise.catch(() => undefined)
       return this.activate(extensionId, event, options)
     }
-    const activation = this.activateInternal(extensionId, event, options, epoch, instanceKey)
+    const activation = this.activateInternal(extensionId, event, options, instanceKey)
     this.activations.set(instanceKey, {
       extensionId,
-      epoch,
       event,
       workspaceRoots,
       workspaceContextSignature,

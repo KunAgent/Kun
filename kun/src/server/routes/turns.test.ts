@@ -12,7 +12,7 @@ import { SteeringQueue } from '../../loop/steering-queue.js'
 import { SequentialIdGenerator } from '../../ports/id-generator.js'
 import { ThreadExecutionBusyError } from '../../ports/thread-execution-lease.js'
 import { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
-import { ThreadClosingError, TurnService } from '../../services/turn-service.js'
+import { ThreadClosingError, TurnConflictError, TurnService } from '../../services/turn-service.js'
 import type { JsonResponse } from '../response.js'
 import { cancelToolCall, getTurn, rewindThread, startTurn, steerTurn } from './turns.js'
 
@@ -213,6 +213,7 @@ describe('POST /v1/threads/:id/turns admission', () => {
       turnId: admittedBody.turnId,
       ownerFlavor: 'production' as const,
       ownerInstanceId: 'foreign-runtime-instance',
+      fencingToken: 1,
       acquiredAt: '2026-08-09T10:00:00.000Z',
       expiresAt: '2026-08-09T10:00:30.000Z'
     }
@@ -279,6 +280,7 @@ describe('POST /v1/threads/:id/turns admission', () => {
       turnId: 'turn_active',
       ownerFlavor: 'production' as const,
       ownerInstanceId: 'private-runtime-instance',
+      fencingToken: 1,
       acquiredAt: '2026-08-09T10:00:00.000Z',
       expiresAt: '2026-08-09T10:00:30.000Z'
     }
@@ -465,7 +467,7 @@ describe('POST /v1/threads/:id/turns admission', () => {
     await turns.interruptTurn({ threadId: 'thr_route_capacity_a', turnId: first.turnId })
   })
 
-  it('maps an active rewind attempt to a structured conflict', async () => {
+  it('maps an active rewind attempt to the stable in-progress conflict', async () => {
     const threadStore = new InMemoryThreadStore()
     const sessionStore = new InMemorySessionStore()
     const eventBus = new InMemoryEventBus()
@@ -506,9 +508,34 @@ describe('POST /v1/threads/:id/turns admission', () => {
 
     expect(response.status).toBe(409)
     expect(JSON.parse(response.body)).toEqual({
-      code: 'conflict',
+      code: 'turn_in_progress',
       message: `cannot rewind while a turn is active: ${threadId}`
     })
     await turns.interruptTurn({ threadId, turnId: started.turnId })
+  })
+
+  it('retains generic conflict for non-active rewind races', async () => {
+    const threadId = 'thr_route_rewind_changed'
+    const turns = {
+      rewindThread: vi.fn(async () => {
+        throw new TurnConflictError(`history changed while rewinding: ${threadId}`)
+      })
+    } as unknown as TurnService
+
+    const response = await rewindThread(
+      turns,
+      threadId,
+      new Request(`http://kun.local/v1/threads/${threadId}/rewind`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ turnId: 'turn_changed' })
+      })
+    ) as JsonResponse
+
+    expect(response.status).toBe(409)
+    expect(JSON.parse(response.body)).toEqual({
+      code: 'conflict',
+      message: `history changed while rewinding: ${threadId}`
+    })
   })
 })

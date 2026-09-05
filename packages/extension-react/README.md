@@ -8,9 +8,9 @@ In this repository, use `npm ci` at the root and build the
 packages before installing by name:
 
 ```sh
-npm view @kun/extension-api@1.2.0 version
-npm view @kun/extension-react@1.2.0 version
-npm install @kun/extension-api@^1.2.0 @kun/extension-react@^1.2.0
+npm view @kun/extension-api@1.4.0 version
+npm view @kun/extension-react@1.4.0 version
+npm install @kun/extension-api@^1.4.0 @kun/extension-react@^1.4.0
 ```
 
 Do not continue after `E404`; use the repository workflow until the configured

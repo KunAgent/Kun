@@ -1,4 +1,5 @@
 import type { ThreadRecord, ThreadSummary } from '../contracts/threads.js'
+import type { ThreadIndexStatusInfo } from '../contracts/thread-index-status.js'
 
 export type ThreadStoreConditionalWrite = {
   applied: boolean
@@ -30,6 +31,8 @@ export type ThreadStoreListPage = {
   nextCursor?: string
   hasMore: boolean
   total?: number
+  /** Rebuildable index progress, present when the store exposes it. */
+  indexStatus?: ThreadIndexStatusInfo
 }
 
 /**
@@ -41,6 +44,8 @@ export interface ThreadStore {
   list(options?: ThreadStoreListOptions): Promise<ThreadSummary[]>
   /** Read a stable keyset page when the backing store supports pagination. */
   listPage?(options?: ThreadStoreListOptions): Promise<ThreadStoreListPage>
+  /** Rebuildable index lifecycle/progress; `unavailable` when no index exists. */
+  indexStatus?(): ThreadIndexStatusInfo
   get(threadId: string): Promise<ThreadRecord | null>
   /** Read the durable Thread/Turn projection without hydrating item history. */
   getMetadata?(threadId: string): Promise<ThreadRecord | null>

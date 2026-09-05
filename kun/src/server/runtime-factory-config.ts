@@ -115,9 +115,15 @@ export async function persistSharedMcpConfig(
   target: string,
   mcp: KunCapabilitiesConfig['mcp']
 ): Promise<void> {
+  const userManagedServers = Object.fromEntries(
+    Object.entries(mcp.servers).filter(([, server]) => !server.managedBy)
+  )
   await updateRuntimeJson(target, (current) => ({
     ...current,
-    servers: structuredClone(mcp.servers)
+    // Shared mcp.json is user-owned input. System-managed descriptors belong
+    // only in runtime config; copying them here would turn them into user
+    // overrides on the next GUI synchronization and strip host ownership.
+    servers: structuredClone(userManagedServers)
   }))
 }
 

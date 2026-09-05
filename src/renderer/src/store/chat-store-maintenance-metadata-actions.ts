@@ -31,6 +31,7 @@ import {
 } from '../lib/thread-worktree-registry'
 import {
   forgetQueuedMessagesForThread,
+  pauseQueuedMessagesForInterrupt,
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
@@ -139,12 +140,7 @@ import {
   createForkActiveThreadWithOptions,
   type CloneDesignDocumentForFork
 } from './chat-store-maintenance-fork-action'
-import {
-  extractPlanTodos,
-  mergePlanTodosForRenderer,
-  sameTodoWriteItems,
-  threadTodoWriteItems
-} from '../plan/plan-todo-sync'
+import { threadTodoWriteItems } from '../plan/plan-todo-sync'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -206,13 +202,9 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
       delete watchTurnCompletion[threadId]
       delete unreadThreadIds[threadId]
     }
-    const queuedMessages = s.queuedMessages.map((message) => {
-      if (message.deliveryState && message.deliveryState !== 'pending') return message
-      const paused = { ...message, deliveryState: 'paused' as const }
-      delete paused.deliveryTurnId
-      delete paused.deliveryUserMessageItemId
-      return paused
-    })
+    // Interrupted turns never auto-drain the runtime queue; undelivered
+    // entries pause until the user resumes the queue explicitly.
+    const queuedMessages = pauseQueuedMessagesForInterrupt(s.queuedMessages)
     const blocks = settlePendingRuntimeWorkAfterInterrupt(out.blocks ?? s.blocks)
     return {
       ...out,
@@ -643,40 +635,29 @@ export function createMaintenanceMetadataActions(
     }
   },
 
-  syncPlanTodosFromMarkdown: async (plan, markdown) => {
-    const { activeThreadId, activeThreadTodos } = get()
-    if (!activeThreadId) return false
+  syncPlanTodosFromMarkdown: async (threadId, plan, markdown) => {
+    if (!threadId || get().activeThreadId !== threadId) return false
     if (get().runtimeConnection !== 'ready') return false
     const p = getProvider()
-    if (typeof p.setThreadTodos !== 'function') return false
-    const now = new Date().toISOString()
-    const planItems = extractPlanTodos({
-      markdown,
-      threadId: activeThreadId,
-      planId: plan.id,
-      relativePath: plan.relativePath,
-      now
-    })
-    const nextTodos = mergePlanTodosForRenderer({
-      threadId: activeThreadId,
-      existing: activeThreadTodos,
-      planItems,
-      now
-    })
-    const currentWriteItems = activeThreadTodos ? threadTodoWriteItems(activeThreadTodos) : []
-    const nextWriteItems = threadTodoWriteItems(nextTodos)
-    if (sameTodoWriteItems(currentWriteItems, nextWriteItems)) return true
+    if (typeof p.syncThreadTodosFromPlan !== 'function') return false
     try {
-      const todos = await p.setThreadTodos(activeThreadId, nextWriteItems)
-      applyTodosSnapshot(set, activeThreadId, todos)
+      const todos = await p.syncThreadTodosFromPlan(threadId, {
+        planId: plan.id,
+        relativePath: plan.relativePath,
+        markdown
+      })
+      if (get().activeThreadId !== threadId) return false
+      applyTodosSnapshot(set, threadId, todos)
       return true
     } catch (e) {
-      set({
-        error: formatRuntimeError(e),
-        ...(shouldOpenSettingsForError(e)
-          ? { route: 'settings' as const, settingsSection: 'agents' as const }
-          : {})
-      })
+      if (get().activeThreadId === threadId) {
+        set({
+          error: formatRuntimeError(e),
+          ...(shouldOpenSettingsForError(e)
+            ? { route: 'settings' as const, settingsSection: 'agents' as const }
+            : {})
+        })
+      }
       return false
     }
   },

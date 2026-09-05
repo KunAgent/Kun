@@ -254,6 +254,7 @@ describe('Work whiteboard registry', () => {
 
     await expect(state.renameWhiteboard(board.id, 'Q3 review')).resolves.toBe(true)
     await expect(state.bindWhiteboardThread(board.id, 'thread-1')).resolves.toBe(true)
+    await expect(state.bindWhiteboardThread(board.id, 'thread-2')).resolves.toBe(true)
     await expect(state.updateWhiteboardPptState(board.id, {
       phase: 'complete', outputPath: '/work/q3.pptx', childId: 'child-1', revision: 4
     })).resolves.toBe(true)
@@ -261,8 +262,14 @@ describe('Work whiteboard registry', () => {
 
     state = useWriteWorkspaceStore.getState()
     expect(state.whiteboards[board.id]).toMatchObject({
-      title: 'Q3 review', threadId: 'thread-1', phase: 'complete',
+      title: 'Q3 review', threadId: 'thread-2', threadIds: ['thread-2', 'thread-1'], phase: 'complete',
       outputPath: '/work/q3.pptx', childId: 'child-1', revision: 4
+    })
+
+    await expect(state.forgetWhiteboardThread('thread-2')).resolves.toBe(true)
+    state = useWriteWorkspaceStore.getState()
+    expect(state.whiteboards[board.id]).toMatchObject({
+      threadId: 'thread-1', threadIds: ['thread-1']
     })
 
     await expect(state.deleteWhiteboard(board.id)).resolves.toBe(true)
@@ -299,7 +306,8 @@ describe('Work whiteboard registry', () => {
     })).resolves.toBeNull()
 
     expect(useWriteWorkspaceStore.getState().whiteboards[board.id]).toMatchObject({
-      threadId: 'thread-original', phase: 'review', childId: 'child-a', revision: 4
+      threadId: 'thread-original', threadIds: ['thread-original'],
+      phase: 'review', childId: 'child-a', revision: 4
     })
   })
 

@@ -11,6 +11,7 @@ import { DEV_PREVIEW_PARTITION } from '../../shared/dev-preview-capture'
 
 type WebviewSecurityOptions = {
   app: Pick<App, 'on'>
+  existingWebContents?: Iterable<WebContents>
   sessions: ExtensionViewSessionRegistry
   extensionPreloadPath: string
   assertExtensionPartitionPrepared(record: ExtensionViewSessionRecord): void
@@ -24,7 +25,11 @@ type WebviewSecurityOptions = {
 const hardenedExternalSessions = new WeakSet<Session>()
 
 export function installWebviewSecurityGuards(options: WebviewSecurityOptions): void {
-  options.app.on('web-contents-created', (_event, contents) => {
+  const guardedContents = new WeakSet<WebContents>()
+  const guardContents = (contents: WebContents): void => {
+    if (guardedContents.has(contents)) return
+    guardedContents.add(contents)
+
     contents.on('will-attach-webview', (event, webPreferences, params) => {
       const src = typeof params.src === 'string' ? params.src : ''
       if (src.startsWith('kun-extension:')) {
@@ -120,7 +125,12 @@ export function installWebviewSecurityGuards(options: WebviewSecurityOptions): v
       if (options.sessions.findByGuest(contents.id)) return { action: 'deny' }
       return options.isAllowedDevPreviewUrl(url) ? { action: 'allow' } : { action: 'deny' }
     })
+  }
+
+  options.app.on('web-contents-created', (_event, contents) => {
+    guardContents(contents)
   })
+  for (const contents of options.existingWebContents ?? []) guardContents(contents)
 }
 
 export function hardenExtensionWebPreferences(

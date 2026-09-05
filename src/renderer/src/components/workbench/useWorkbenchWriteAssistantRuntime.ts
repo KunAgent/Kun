@@ -10,6 +10,7 @@ import {
   activeWriteThreadForWorkspace,
   readWriteThreadRegistry
 } from '../../write/write-thread-registry'
+import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
 
 type WorkbenchWriteAssistantRuntimeOptions = {
   composerPickList: string[]
@@ -58,16 +59,30 @@ export function useWorkbenchWriteAssistantRuntime({
         if (activeThreadId) chatState.clearActiveThreadSelection()
         return
       }
-      const boundThread = activeWhiteboard.threadId
-        ? threads.find((thread) => thread.id === activeWhiteboard.threadId) ?? null
-        : null
-      if (boundThread?.id === activeThreadId) return
-      if (boundThread) {
-        if (pendingThreadIdRef.current === boundThread.id) return
-        pendingThreadIdRef.current = boundThread.id
-        void chatState.selectWriteThread(boundThread.id, writeWorkspaceRoot).finally(() => {
-          if (pendingThreadIdRef.current === boundThread.id) pendingThreadIdRef.current = null
+      const associatedThreadIds = workWhiteboardThreadIds(activeWhiteboard)
+      const availableThreads = associatedThreadIds
+        .map((threadId) => threads.find((thread) => thread.id === threadId) ?? null)
+        .filter((thread): thread is NonNullable<typeof thread> => Boolean(thread))
+        .filter((thread) => thread.archived !== true)
+      const targetThread = availableThreads.find((thread) => thread.id === activeWhiteboard.threadId) ??
+        availableThreads[0] ?? null
+      if (targetThread?.id === activeThreadId) return
+      if (targetThread) {
+        if (pendingThreadIdRef.current === targetThread.id) return
+        pendingThreadIdRef.current = targetThread.id
+        const bind = targetThread.id !== activeWhiteboard.threadId && !activeWhiteboard.workflowId
+          ? useWriteWorkspaceStore.getState().bindWhiteboardThread(activeWhiteboardId, targetThread.id)
+          : Promise.resolve(true)
+        void bind.then((bound) => {
+          if (!bound) return
+          return chatState.selectWriteThread(targetThread.id, writeWorkspaceRoot)
+        }).finally(() => {
+          if (pendingThreadIdRef.current === targetThread.id) pendingThreadIdRef.current = null
         })
+        return
+      }
+      if (associatedThreadIds.length > 0) {
+        if (activeThreadId) chatState.clearActiveThreadSelection()
         return
       }
       if (pendingBoardIdRef.current === activeWhiteboardId) return
@@ -106,7 +121,7 @@ export function useWorkbenchWriteAssistantRuntime({
     if (target) {
       if (pendingThreadIdRef.current === target.id) return
       pendingThreadIdRef.current = target.id
-      void chatState.selectWriteThread(target.id, writeWorkspaceRoot).finally(() => {
+      void chatState.selectWriteThread(target.id, writeWorkspaceRoot, activeWriteFilePath).finally(() => {
         if (pendingThreadIdRef.current === target.id) pendingThreadIdRef.current = null
       })
     } else if (activeThreadId) {

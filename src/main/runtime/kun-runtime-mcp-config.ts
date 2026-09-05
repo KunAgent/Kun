@@ -37,7 +37,8 @@ export function buildGuiScheduleKunMcpServer(
 
 export async function skillCapabilityConfigForRuntime(
   existing: Record<string, unknown>,
-  settings?: AppSettingsV1
+  settings?: AppSettingsV1,
+  builtinRoot?: string
 ): Promise<Record<string, unknown>> {
   const managed = guiSkillManagedComparablePaths(settings)
   const keepManual = (value: unknown): string[] => stringArrayValue(value)
@@ -55,12 +56,16 @@ export async function skillCapabilityConfigForRuntime(
     ...keepManual(existing.globalRoots),
     ...guiRoots.filter((root) => root.scope === 'global').map((root) => root.path)
   ])
+  const builtinRoots = uniqueStrings([
+    ...(builtinRoot?.trim() ? [normalizeSkillRootPath(builtinRoot)] : [])
+  ])
   return {
     ...existing,
-    enabled: roots.length > 0 || globalRoots.length > 0 || existing.enabled === true,
+    enabled: roots.length > 0 || globalRoots.length > 0 || builtinRoots.length > 0 || existing.enabled === true,
     roots,
     workspaceRoots: guiSkillWorkspaceRootsForRuntime(settings),
     globalRoots,
+    builtinRoots,
     disabledIds: settings?.disabledSkillIds ?? stringArrayValue(existing.disabledIds),
     legacySkillMd: existing.legacySkillMd === false ? false : true
   }

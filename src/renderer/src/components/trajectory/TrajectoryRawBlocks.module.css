@@ -1,0 +1,13 @@
+.root { display: flex; min-width: 0; flex-direction: column; padding: 12px 14px; gap: 14px; color: var(--trajectory-label-1); }
+.block { min-width: 0; }
+.blockHeader, .blockJump { display: flex; height: 16px; align-items: center; margin: 0 0 4px; padding: 0; gap: 4px; border: 0; color: var(--trajectory-label-3); background: transparent; font: 11px/16px var(--ds-font-family-code, monospace); letter-spacing: .01em; }
+.blockJump { cursor: pointer; }
+.blockJump:hover { color: var(--trajectory-accent); }
+.blockJump svg { width: 12px; height: 12px; }
+.text, .structured { box-sizing: border-box; width: 100%; margin: 0; overflow: auto; color: var(--trajectory-label-1); font: 12px/19px var(--ds-font-family-code, monospace); overflow-wrap: anywhere; tab-size: 2; white-space: pre-wrap; word-break: break-word; }
+.reasoning { color: var(--trajectory-label-2); }
+.structured { font-size: 12px; line-height: 19px; }
+.attachment { display: flex; min-width: 0; min-height: 34px; align-items: center; padding: 0 10px; gap: 8px; border: 1px solid var(--trajectory-border-1); border-radius: 5px; background: var(--trajectory-bg-2); }
+.attachment svg { width: 14px; height: 14px; flex: none; color: var(--trajectory-accent); }
+.attachment code { overflow: hidden; color: var(--trajectory-label-2); font: 11px/16px var(--ds-font-family-code, monospace); text-overflow: ellipsis; white-space: nowrap; }
+.empty { padding: 18px 14px; color: var(--trajectory-label-3); font-size: 12px; }

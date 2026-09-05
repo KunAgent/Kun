@@ -23,6 +23,7 @@ import {
   todoContinuationInstruction
 } from '../../loop/agent-loop.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
+import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
 import type { ApprovalGate } from '../../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../../ports/approval-review.js'
 import type {
@@ -86,6 +87,8 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
   nowIso?: () => string
   toolContextBoundary?: Pick<
     ToolHostContext,
+    | 'allowedModelProviderIds'
+    | 'allowedModelIds'
     | 'allowedProviderIds'
     | 'allowedToolNames'
     | 'allowedSkillIds'
@@ -451,7 +454,7 @@ export function createCursorSdkRuntime(
         const memories = await memoryStore.retrieve({
           query: userText,
           workspace: thread.workspace,
-          limit: 8
+          limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
         })
         memoryStore.setLastInjected(memories.map((memory) => memory.id))
         memoryBlocks = memoryInstructions(memories)

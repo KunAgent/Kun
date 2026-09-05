@@ -1,37 +1,583 @@
 import {
   useEffect,
+  useId,
+  useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement
 } from 'react'
 import {
-  CornerDownRight,
+  ArrowUp,
+  ChevronDown,
+  ChevronUp,
   GripVertical,
   ImageIcon,
-  ListPlus,
   Loader2,
-  MoreHorizontal,
+  MessageCircle,
   Pencil,
   Trash2
 } from 'lucide-react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
 import { queuedMessageGuidancePayload } from '../../store/queued-message-guidance'
+import { QueuedMessageSnapshotBadges } from './FloatingComposerQueuedMessageBadges'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
+import {
+  calculateComposerPopoverPlacement,
+  type ComposerPopoverAnchorRect,
+  type ComposerPopoverPlacement
+} from './floating-composer-popover-placement'
+import css from './FloatingComposerQueuedMessages.module.css'
 
-const QUEUED_MENU_WIDTH = 176
-const QUEUED_MENU_HEIGHT = 48
-const QUEUED_MENU_MARGIN = 8
-const QUEUED_MENU_GAP = 6
+const LEGACY_MENU_WIDTH = 176
+const LEGACY_MENU_HEIGHT = 48
+const LEGACY_MENU_MARGIN = 8
+const LEGACY_MENU_GAP = 6
+const LEGACY_POPOVER_WIDTH = 640
+const LEGACY_POPOVER_MAX_HEIGHT = 360
+const LEGACY_POPOVER_MARGIN = 12
+const LEGACY_POPOVER_GAP = 8
 
-export type QueuedMessageMenuPlacement = {
-  left: number
-  top: number
-  width: number
+export type QueuedComposerMessage = {
+  id: string
+  text: string
+  deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
+  deliveryTurnId?: string
+  deliveryUserMessageItemId?: string
+  waitForRuntimeAdmission?: boolean
+  displayText?: string
+  errorCode?: string
+  errorMessage?: string
+  guidanceEligible?: boolean
+  mode?: string
+  agentSurface?: 'code' | 'write' | 'design'
+  model?: string
+  reasoningEffort?: string
+  approvalPolicy?: ApprovalPolicy
+  sandboxMode?: SandboxMode
+  approvalReviewer?: ApprovalReviewer
+  attachmentIds?: readonly string[]
+  attachments?: readonly { name?: string; kind?: 'image' | 'document' }[]
+  fileReferences?: readonly unknown[]
+  composerContexts?: readonly unknown[]
+  subagentResume?: unknown
+  messageSource?: unknown
+  guiPlan?: unknown
+  guiDesignCanvas?: boolean
+  guiDesignMode?: boolean
+  guiDesignArtifact?: unknown
+  designProfile?: unknown
+  designDocumentTarget?: unknown
+  designImagePlacementTarget?: unknown
+  writeContext?: unknown
+  composerRestoreEligible?: boolean
 }
+
+type QueueActionKind = 'edit' | 'remove' | 'guide'
+type QueueDropPosition = 'before' | 'after'
+
+type QueueDragState = {
+  sourceId: string
+  targetId?: string
+  position?: QueueDropPosition
+}
+
+type Props = {
+  messages: QueuedComposerMessage[]
+  running?: boolean
+  guidanceTarget?: 'turn' | 'graph'
+  onRemove: (id: string) => void
+  onGuide?: (id: string) => void | Promise<unknown>
+  onRestoreToComposer?: (id: string) => boolean | void | Promise<boolean | void>
+  onReorder?: (id: string, targetId: string, position: QueueDropPosition) => void
+}
+
+/** True when the steer contract can preserve the whole queued payload. */
+export function canGuideQueuedComposerMessage(message: QueuedComposerMessage): boolean {
+  return queuedMessageGuidancePayload(message) !== null
+}
+
+const QUEUED_MESSAGE_LABEL_SUMMARY_LIMIT = 24
+
+function queuedComposerMessageDisplayText(message: QueuedComposerMessage): string {
+  const displayText = message.displayText?.trim()
+  if (displayText) return displayText
+  if (message.writeContext) {
+    const userInput = parseWritePromptForDisplay(message.text)?.userInput.trim()
+    if (userInput) return userInput
+  }
+  return message.text
+}
+
+function queuedMessageSummary(message: QueuedComposerMessage): string {
+  const text = queuedComposerMessageDisplayText(message).replace(/\s+/g, ' ').trim()
+  return text.length > QUEUED_MESSAGE_LABEL_SUMMARY_LIMIT
+    ? `${text.slice(0, QUEUED_MESSAGE_LABEL_SUMMARY_LIMIT)}...`
+    : text
+}
+
+function visibleQueue(messages: QueuedComposerMessage[]): QueuedComposerMessage[] {
+  return messages.filter((message) => (
+    !message.deliveryState ||
+    message.deliveryState === 'pending' ||
+    message.deliveryState === 'paused' ||
+    message.deliveryState === 'failed' ||
+    // Admitted to the durable runtime queue: visible so the user can still
+    // edit, remove, or reorder it while it waits for the running turn.
+    message.deliveryState === 'in_flight'
+  ))
+}
+
+/**
+ * The DSH-style composer queue dock: one row is direct, while multiple rows
+ * start behind a compact count header and expand in place for interaction.
+ */
+export function FloatingComposerQueuedMessages({
+  messages,
+  running = false,
+  guidanceTarget = 'turn',
+  onRemove,
+  onGuide,
+  onRestoreToComposer,
+  onReorder
+}: Props): ReactElement | null {
+  const { t } = useTranslation('common')
+  const queue = useMemo(() => visibleQueue(messages), [messages])
+  const [collapsed, setCollapsed] = useState(true)
+  const [busy, setBusy] = useState<{ id: string; kind: QueueActionKind } | null>(null)
+  const [dragState, setDragState] = useState<QueueDragState | null>(null)
+  const [moveAnnouncement, setMoveAnnouncement] = useState('')
+  const reorderHandleRefs = useRef(new Map<string, HTMLButtonElement>())
+  const listId = useId()
+  const reorderHintId = useId()
+  const queueRevision = useMemo(() => JSON.stringify(queue.map((message) => [
+    message.id,
+    message.deliveryState,
+    message.text
+  ])), [queue])
+
+  useEffect(() => {
+    if (queue.length === 0) setCollapsed(true)
+  }, [queue])
+
+  useEffect(() => {
+    setDragState(null)
+  }, [queueRevision])
+
+  useEffect(() => {
+    if (busy) setDragState(null)
+  }, [busy])
+
+  if (queue.length === 0) return null
+
+  const interactionActive = busy !== null
+  const expanded = queue.length === 1 || !collapsed || interactionActive
+  const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive)
+
+  const focusReorderHandle = (id: string): void => {
+    queueMicrotask(() => reorderHandleRefs.current.get(id)?.focus())
+  }
+
+  const reorderWithKeyboard = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    id: string
+  ): void => {
+    if (!reorderEnabled || !onReorder || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) {
+      return
+    }
+    const sourceIndex = queue.findIndex((message) => message.id === id)
+    const targetIndex = event.key === 'ArrowUp' ? sourceIndex - 1 : sourceIndex + 1
+    const target = queue[targetIndex]
+    if (sourceIndex < 0 || !target) return
+    event.preventDefault()
+    event.stopPropagation()
+    onReorder(id, target.id, event.key === 'ArrowUp' ? 'before' : 'after')
+    setMoveAnnouncement(t('queuedMessageMovedToPosition', { position: targetIndex + 1 }))
+    focusReorderHandle(id)
+  }
+
+  const startDragging = (event: ReactDragEvent<HTMLButtonElement>, id: string): void => {
+    if (!reorderEnabled) {
+      event.preventDefault()
+      return
+    }
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', id)
+    setDragState({ sourceId: id })
+  }
+
+  const updateDropTarget = (
+    event: ReactDragEvent<HTMLLIElement>,
+    targetId: string
+  ): void => {
+    if (!reorderEnabled || !dragState || dragState.sourceId === targetId) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const position: QueueDropPosition = event.clientY < bounds.top + bounds.height / 2
+      ? 'before'
+      : 'after'
+    setDragState((current) => current
+      ? { sourceId: current.sourceId, targetId, position }
+      : null)
+  }
+
+  const dropQueuedMessage = (
+    event: ReactDragEvent<HTMLLIElement>,
+    targetId: string
+  ): void => {
+    event.preventDefault()
+    const sourceId = dragState?.sourceId || event.dataTransfer.getData('text/plain')
+    const position = dragState?.targetId === targetId ? dragState.position : undefined
+    const ids = new Set(queue.map((message) => message.id))
+    if (
+      reorderEnabled &&
+      onReorder &&
+      sourceId &&
+      sourceId !== targetId &&
+      position &&
+      ids.has(sourceId) &&
+      ids.has(targetId)
+    ) {
+      onReorder(sourceId, targetId, position)
+    }
+    setDragState(null)
+  }
+  const applyAction = async (
+    id: string,
+    kind: QueueActionKind,
+    action: () => unknown | Promise<unknown>
+  ): Promise<boolean> => {
+    if (busy) return false
+    setBusy({ id, kind })
+    try {
+      return (await action()) !== false
+    } catch {
+      return false
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div
+      className={css.dock}
+      data-composer-stack-item="queue"
+      data-composer-queue
+      data-queue-dock
+      data-queued-message-count={queue.length}
+      data-busy-message-id={busy?.id}
+      data-queue-reorder-enabled={reorderEnabled || undefined}
+    >
+      <div className={css.panel}>
+        {queue.length > 1 ? (
+          <button
+            type="button"
+            className={css.header}
+            data-queued-message-header
+            aria-controls={listId}
+            aria-expanded={expanded}
+            disabled={interactionActive}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            <span className={css.lead} aria-hidden="true">
+              <MessageCircle size={14} strokeWidth={1.7} />
+            </span>
+            <span className={css.count}>{t('queuedMessagesTitle', { count: queue.length })}</span>
+            <span className={css.chevron} aria-hidden="true">
+              {expanded
+                ? <ChevronUp size={14} strokeWidth={1.7} />
+                : <ChevronDown size={14} strokeWidth={1.7} />}
+            </span>
+          </button>
+        ) : null}
+
+        <span id={reorderHintId} className={css.assistiveText}>
+          {t('queuedMessageReorder')}
+        </span>
+        <span
+          className={css.assistiveText}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {moveAnnouncement}
+        </span>
+
+        <ul
+          id={listId}
+          className={css.list}
+          aria-label={t('queuedMessagesTitle', { count: queue.length })}
+          hidden={!expanded}
+        >
+          {expanded ? queue.map((message, index) => {
+            const isBusy = busy?.id === message.id
+            const paused = message.deliveryState === 'paused'
+            const failed = message.deliveryState === 'failed'
+            const inFlight = message.deliveryState === 'in_flight'
+            const recoverable = paused || failed
+            const imageCount = attachmentImageCount(message)
+            const imageNames = imageCount > 0 ? attachmentImageNames(message) : ''
+            const canRestore = Boolean(onRestoreToComposer && message.composerRestoreEligible)
+            const canGuide = Boolean(onGuide && (recoverable
+              ? !running && !message.waitForRuntimeAdmission
+              : (
+                running &&
+                message.guidanceEligible !== false &&
+                canGuideQueuedComposerMessage(message)
+              )))
+            const guideLabel = recoverable
+              ? t('queuedMessageRetry')
+              : t('queuedMessageSteer')
+            const reorderLabel = t('queuedMessageReorderHandle', {
+              index: index + 1,
+              count: queue.length,
+              summary: queuedMessageSummary(message)
+            })
+            const guideTitle = failed
+              ? message.waitForRuntimeAdmission
+                ? t('queuedMessageRetryUnavailable')
+                : message.errorMessage || message.errorCode || guideLabel
+              : paused
+                ? message.waitForRuntimeAdmission
+                  ? t('queuedMessageRetryUnavailable')
+                  : t('queuedMessageRetry')
+                : !running
+                  ? t('guideQueuedMessageNoActiveTurn')
+                  : message.guidanceEligible === false || !canGuideQueuedComposerMessage(message)
+                    ? t('guideQueuedMessageTextOnly')
+                : guidanceTarget === 'graph'
+                  ? t('guideQueuedMessageGraphHint')
+                  : t('guideQueuedMessageHint')
+
+            return (
+              <li
+                key={message.id}
+                className={css.row}
+                data-queued-message-id={message.id}
+                data-delivery-state={message.deliveryState ?? 'pending'}
+                data-queue-dragging={dragState?.sourceId === message.id || undefined}
+                data-drop-position={dragState?.targetId === message.id
+                  ? dragState.position
+                  : undefined}
+                onDragOver={(event) => updateDropTarget(event, message.id)}
+                onDragLeave={(event) => {
+                  if (
+                    event.currentTarget.contains(event.relatedTarget as Node | null) ||
+                    dragState?.targetId !== message.id
+                  ) return
+                  setDragState((current) => current ? { sourceId: current.sourceId } : null)
+                }}
+                onDrop={(event) => dropQueuedMessage(event, message.id)}
+              >
+                {queue.length === 1 ? (
+                  <span className={css.lead} aria-hidden="true">
+                    <MessageCircle size={14} strokeWidth={1.7} />
+                  </span>
+                ) : null}
+
+                {reorderEnabled ? (
+                  <button
+                    type="button"
+                    className={css.dragHandle}
+                    data-queued-message-drag-handle
+                    data-queued-message-drag-id={message.id}
+                    draggable={reorderEnabled}
+                    aria-label={reorderLabel}
+                    aria-describedby={reorderHintId}
+                    title={reorderLabel}
+                    ref={(node) => {
+                      if (node) reorderHandleRefs.current.set(message.id, node)
+                      else reorderHandleRefs.current.delete(message.id)
+                    }}
+                    onKeyDown={(event) => reorderWithKeyboard(event, message.id)}
+                    onDragStart={(event) => startDragging(event, message.id)}
+                    onDragEnd={() => setDragState(null)}
+                  >
+                    <GripVertical size={15} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                ) : null}
+
+                <span
+                  className={css.preview}
+                  title={queuedComposerMessageDisplayText(message)}
+                >
+                  {queuedComposerMessageDisplayText(message)}
+                </span>
+
+                {imageCount > 0 ? (
+                  <span
+                    className={css.imageMeta}
+                    data-queued-message-images={imageCount}
+                    title={imageNames || undefined}
+                  >
+                    <ImageIcon size={12} strokeWidth={1.8} aria-hidden="true" />
+                    {imageCount}
+                  </span>
+                ) : null}
+
+                <QueuedMessageSnapshotBadges message={message} />
+
+                {paused ? (
+                  <span className={`${css.status} ${css.paused}`}>
+                    {t('queuedMessagePaused')}
+                  </span>
+                ) : null}
+                {inFlight ? (
+                  <span className={`${css.status} ${css.queued}`}>
+                    {t('queuedMessageInFlight')}
+                  </span>
+                ) : null}
+                {failed ? (
+                  <span
+                    className={`${css.status} ${css.failed}`}
+                    title={message.errorMessage || message.errorCode}
+                  >
+                    {message.errorMessage || message.errorCode || t('queuedMessageFailed')}
+                  </span>
+                ) : null}
+
+                <div className={css.actions}>
+                  {onRestoreToComposer ? (
+                    <QueueActionButton
+                      action="edit"
+                      label={canRestore
+                        ? t('queuedMessageEditInComposer')
+                        : t('queuedMessageEditUnsupported')}
+                      title={canRestore
+                        ? t('queuedMessageEditInComposer')
+                        : t('queuedMessageEditUnsupported')}
+                      disabled={busy !== null || !canRestore}
+                      onClick={() => void applyAction(
+                        message.id,
+                        'edit',
+                        () => onRestoreToComposer(message.id)
+                      )}
+                    >
+                      {isBusy && busy?.kind === 'edit'
+                        ? <Loader2 className={css.spinner} size={14} />
+                        : <Pencil size={14} strokeWidth={1.8} />}
+                    </QueueActionButton>
+                  ) : null}
+                  <QueueActionButton
+                    action="remove"
+                    label={t('queuedMessageRemove')}
+                    disabled={busy !== null}
+                    onClick={() => void applyAction(
+                      message.id,
+                      'remove',
+                      () => onRemove(message.id)
+                    )}
+                  >
+                    {isBusy && busy?.kind === 'remove'
+                      ? <Loader2 className={css.spinner} size={14} />
+                      : <Trash2 size={14} strokeWidth={1.8} />}
+                  </QueueActionButton>
+                  {onGuide ? (
+                    <QueueActionButton
+                      action="guide"
+                      label={canGuide ? guideLabel : guideTitle}
+                      title={guideTitle}
+                      disabled={busy !== null || !canGuide}
+                      onClick={() => void applyAction(
+                        message.id,
+                        'guide',
+                        () => onGuide(message.id)
+                      )}
+                    >
+                      {isBusy && busy?.kind === 'guide'
+                        ? <Loader2 className={css.spinner} size={14} />
+                        : <ArrowUp size={15} strokeWidth={1.8} />}
+                    </QueueActionButton>
+                  ) : null}
+                </div>
+              </li>
+            )
+          }) : null}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+function attachmentImageCount(message: QueuedComposerMessage): number {
+  const images = message.attachments?.filter((attachment) => attachment.kind !== 'document')
+  if (images?.length) return images.length
+  if (message.attachments?.length) return 0
+  return message.attachmentIds?.length ?? 0
+}
+
+function attachmentImageNames(message: QueuedComposerMessage): string {
+  return message.attachments
+    ?.filter((attachment) => attachment.kind !== 'document')
+    .map((attachment) => attachment.name?.trim())
+    .filter((name): name is string => Boolean(name))
+    .join(', ') ?? ''
+}
+
+function QueueActionButton({
+  action,
+  label,
+  title = label,
+  disabled,
+  onClick,
+  children
+}: {
+  action: 'edit' | 'remove' | 'guide'
+  label: string
+  title?: string
+  disabled: boolean
+  onClick: () => void
+  children: ReactElement
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      className={css.action}
+      data-queued-message-action={action}
+      aria-label={label}
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  )
+}
+
+/* Retained pure exports keep downstream placement callers source-compatible;
+   the dock itself is now inline and never creates a body portal. */
+export type QueuedMessagesPopoverPlacement = ComposerPopoverPlacement
+
+export function calculateQueuedMessagesPopoverPlacement({
+  anchorRect,
+  popoverHeight,
+  viewportHeight,
+  viewportWidth,
+  coordinateScale = 1
+}: {
+  anchorRect: ComposerPopoverAnchorRect
+  popoverHeight: number
+  viewportHeight: number
+  viewportWidth: number
+  coordinateScale?: number
+}): QueuedMessagesPopoverPlacement {
+  return calculateComposerPopoverPlacement({
+    anchorRect,
+    popoverHeight,
+    viewportHeight,
+    viewportWidth,
+    coordinateScale,
+    preferredWidth: LEGACY_POPOVER_WIDTH,
+    maximumHeight: LEGACY_POPOVER_MAX_HEIGHT,
+    margin: LEGACY_POPOVER_MARGIN,
+    gap: LEGACY_POPOVER_GAP
+  })
+}
+
+export type QueuedMessageMenuPlacement = { left: number; top: number; width: number }
 
 export function calculateQueuedMessageMenuPlacement({
   anchorRect,
@@ -51,415 +597,16 @@ export function calculateQueuedMessageMenuPlacement({
   const normalizedTop = anchorRect.top / scale
   const normalizedBottom = anchorRect.bottom / scale
   const width = Math.min(
-    QUEUED_MENU_WIDTH,
-    Math.max(1, normalizedViewportWidth - QUEUED_MENU_MARGIN * 2)
+    LEGACY_MENU_WIDTH,
+    Math.max(1, normalizedViewportWidth - LEGACY_MENU_MARGIN * 2)
   )
   const left = Math.min(
-    Math.max(QUEUED_MENU_MARGIN, normalizedRight - width),
-    Math.max(QUEUED_MENU_MARGIN, normalizedViewportWidth - QUEUED_MENU_MARGIN - width)
+    Math.max(LEGACY_MENU_MARGIN, normalizedRight - width),
+    Math.max(LEGACY_MENU_MARGIN, normalizedViewportWidth - LEGACY_MENU_MARGIN - width)
   )
-  const belowTop = normalizedBottom + QUEUED_MENU_GAP
-  const top = belowTop + QUEUED_MENU_HEIGHT <= normalizedViewportHeight - QUEUED_MENU_MARGIN
+  const belowTop = normalizedBottom + LEGACY_MENU_GAP
+  const top = belowTop + LEGACY_MENU_HEIGHT <= normalizedViewportHeight - LEGACY_MENU_MARGIN
     ? belowTop
-    : Math.max(QUEUED_MENU_MARGIN, normalizedTop - QUEUED_MENU_GAP - QUEUED_MENU_HEIGHT)
+    : Math.max(LEGACY_MENU_MARGIN, normalizedTop - LEGACY_MENU_GAP - LEGACY_MENU_HEIGHT)
   return { left, top, width }
-}
-
-function currentBodyZoom(): number {
-  if (typeof window === 'undefined') return 1
-  const parsed = Number.parseFloat(window.getComputedStyle(document.body).zoom)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
-}
-
-export type QueuedComposerMessage = {
-  id: string
-  text: string
-  deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
-  deliveryTurnId?: string
-  deliveryUserMessageItemId?: string
-  displayText?: string
-  errorCode?: string
-  errorMessage?: string
-  guidanceEligible?: boolean
-  mode?: string
-  attachmentIds?: readonly string[]
-  attachments?: readonly { name?: string; kind?: 'image' | 'document' }[]
-  fileReferences?: readonly unknown[]
-  composerContexts?: readonly unknown[]
-  guiPlan?: unknown
-  guiDesignCanvas?: boolean
-  guiDesignMode?: boolean
-  guiDesignArtifact?: unknown
-  writeContext?: unknown
-}
-
-/** True when the steer contract can preserve the whole queued payload. */
-export function canGuideQueuedComposerMessage(message: QueuedComposerMessage): boolean {
-  return queuedMessageGuidancePayload(message) !== null
-}
-
-/** Editing dequeues the item, so only payloads that can be fully restored as text are eligible. */
-export function canEditQueuedComposerMessage(message: QueuedComposerMessage): boolean {
-  return Boolean(
-    message.guidanceEligible !== false &&
-    message.mode !== 'plan' &&
-    !message.attachmentIds?.length &&
-    !message.attachments?.length &&
-    canGuideQueuedComposerMessage(message)
-  )
-}
-
-function queuedComposerMessageDisplayText(message: QueuedComposerMessage): string {
-  const displayText = message.displayText?.trim()
-  if (displayText) return displayText
-  if (message.writeContext) {
-    const userInput = parseWritePromptForDisplay(message.text)?.userInput.trim()
-    if (userInput) return userInput
-  }
-  return message.text
-}
-
-type Props = {
-  messages: QueuedComposerMessage[]
-  guidanceTarget?: 'turn' | 'graph'
-  onRemove: (id: string) => void
-  onGuide?: (id: string) => void | Promise<unknown>
-  onEdit?: (message: QueuedComposerMessage) => void
-  onReorder?: (id: string, targetId: string, position: 'before' | 'after') => void
-}
-
-export function FloatingComposerQueuedMessages({
-  messages,
-  guidanceTarget = 'turn',
-  onRemove,
-  onGuide,
-  onEdit,
-  onReorder
-}: Props): ReactElement | null {
-  const { t } = useTranslation('common')
-  const visibleMessages = messages.filter(
-    (message) => !message.deliveryState || message.deliveryState === 'pending' || message.deliveryState === 'paused'
-  )
-  const rootRef = useRef<HTMLDivElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  const menuButtonRefs = useRef(new Map<string, HTMLButtonElement>())
-  const guidingIdsRef = useRef(new Set<string>())
-  const [guidingIds, setGuidingIds] = useState<Set<string>>(() => new Set())
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
-  const [menuPlacement, setMenuPlacement] = useState<QueuedMessageMenuPlacement | null>(null)
-  const [draggedMessageId, setDraggedMessageId] = useState<string | null>(null)
-  const [dropTarget, setDropTarget] = useState<{
-    id: string
-    position: 'before' | 'after'
-  } | null>(null)
-
-  useEffect(() => {
-    if (!openMenuId || typeof window === 'undefined') return
-    const closeOnOutsidePointer = (event: PointerEvent): void => {
-      const target = event.target
-      if (target instanceof Node && (
-        rootRef.current?.contains(target) || menuRef.current?.contains(target)
-      )) return
-      setOpenMenuId(null)
-    }
-    const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpenMenuId(null)
-    }
-    window.addEventListener('pointerdown', closeOnOutsidePointer)
-    window.addEventListener('keydown', closeOnEscape)
-    return () => {
-      window.removeEventListener('pointerdown', closeOnOutsidePointer)
-      window.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [openMenuId])
-
-  useEffect(() => {
-    if (!openMenuId || typeof window === 'undefined') {
-      setMenuPlacement(null)
-      return
-    }
-    const updatePlacement = (): void => {
-      const button = menuButtonRefs.current.get(openMenuId)
-      if (!button) return
-      setMenuPlacement(calculateQueuedMessageMenuPlacement({
-        anchorRect: button.getBoundingClientRect(),
-        viewportHeight: window.innerHeight,
-        viewportWidth: window.innerWidth,
-        coordinateScale: currentBodyZoom()
-      }))
-    }
-    updatePlacement()
-    const frame = window.requestAnimationFrame(updatePlacement)
-    window.addEventListener('resize', updatePlacement)
-    window.addEventListener('scroll', updatePlacement, true)
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.removeEventListener('resize', updatePlacement)
-      window.removeEventListener('scroll', updatePlacement, true)
-    }
-  }, [openMenuId])
-
-  if (visibleMessages.length === 0) return null
-
-  const guide = async (id: string): Promise<void> => {
-    if (!onGuide || guidingIdsRef.current.has(id)) return
-    guidingIdsRef.current.add(id)
-    setGuidingIds(new Set(guidingIdsRef.current))
-    try {
-      await onGuide(id)
-    } finally {
-      guidingIdsRef.current.delete(id)
-      setGuidingIds(new Set(guidingIdsRef.current))
-    }
-  }
-
-  const clearDragState = (): void => {
-    setDraggedMessageId(null)
-    setDropTarget(null)
-  }
-
-  const dragOverMessage = (
-    event: ReactDragEvent<HTMLDivElement>,
-    targetId: string
-  ): void => {
-    if (!draggedMessageId || draggedMessageId === targetId || !onReorder) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    const rect = event.currentTarget.getBoundingClientRect()
-    const position = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-    setDropTarget((current) => current?.id === targetId && current.position === position
-      ? current
-      : { id: targetId, position })
-  }
-
-  const dropMessage = (
-    event: ReactDragEvent<HTMLDivElement>,
-    targetId: string
-  ): void => {
-    if (!draggedMessageId || draggedMessageId === targetId || !onReorder) {
-      clearDragState()
-      return
-    }
-    event.preventDefault()
-    const position = dropTarget?.id === targetId ? dropTarget.position : 'before'
-    onReorder(draggedMessageId, targetId, position)
-    clearDragState()
-  }
-
-  const moveMessageWithKeyboard = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-    messageId: string,
-    messageIndex: number
-  ): void => {
-    if (!onReorder) return
-    if (event.key === 'ArrowUp' && messageIndex > 0) {
-      event.preventDefault()
-      onReorder(messageId, visibleMessages[messageIndex - 1]!.id, 'before')
-    } else if (event.key === 'ArrowDown' && messageIndex < visibleMessages.length - 1) {
-      event.preventDefault()
-      onReorder(messageId, visibleMessages[messageIndex + 1]!.id, 'after')
-    }
-  }
-
-  const openMenuMessage = openMenuId
-    ? visibleMessages.find((message) => message.id === openMenuId) ?? null
-    : null
-  const menuStyle: CSSProperties = menuPlacement
-    ? {
-        left: `${menuPlacement.left}px`,
-        top: `${menuPlacement.top}px`,
-        width: `${menuPlacement.width}px`
-      }
-    : {
-        left: 0,
-        top: 0,
-        width: `${QUEUED_MENU_WIDTH}px`,
-        visibility: 'hidden'
-      }
-  const editMenu = openMenuMessage && onEdit && canEditQueuedComposerMessage(openMenuMessage) ? (
-    <div
-      ref={menuRef}
-      role="menu"
-      data-queued-message-menu
-      style={menuStyle}
-      className="ds-no-drag fixed z-[1000] overflow-hidden rounded-[16px] border border-ds-border bg-white p-1.5 text-[13px] text-ds-ink shadow-[0_18px_48px_rgba(20,47,95,0.16)] dark:bg-ds-card"
-    >
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => {
-          setOpenMenuId(null)
-          onEdit(openMenuMessage)
-        }}
-        className="flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left font-medium transition hover:bg-ds-hover"
-      >
-        <Pencil className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-        <span>{t('queuedMessageEdit')}</span>
-      </button>
-    </div>
-  ) : null
-
-  return (
-    <>
-      <div
-        ref={rootRef}
-        data-composer-queue
-        className="w-full space-y-2"
-        aria-label={t('queuedMessagesTitle', { count: visibleMessages.length })}
-      >
-        {visibleMessages.map((message, messageIndex) => {
-          const guiding = guidingIds.has(message.id)
-          const guidanceEligible =
-            message.guidanceEligible !== false && canGuideQueuedComposerMessage(message)
-          const paused = message.deliveryState === 'paused'
-          const guideLabel = paused
-            ? t('sendPausedQueuedMessage')
-            : guidanceTarget === 'graph'
-              ? t('guideQueuedMessageGraph')
-              : t('guideQueuedMessage')
-          const guideTitle = paused
-            ? t('sendPausedQueuedMessage')
-            : guidanceEligible
-              ? guidanceTarget === 'graph'
-                ? t('guideQueuedMessageGraphHint')
-                : t('guideQueuedMessageHint')
-              : t('guideQueuedMessageTextOnly')
-          const editMessage = onEdit && canEditQueuedComposerMessage(message) ? onEdit : null
-          const imageAttachments = message.attachments?.filter(
-            (attachment) => attachment.kind !== 'document'
-          ) ?? []
-          const imageCount = imageAttachments.length > 0
-            ? imageAttachments.length
-            : message.attachments?.length
-              ? 0
-              : message.attachmentIds?.length ?? 0
-          const imageNames = imageAttachments
-            ?.map((attachment) => attachment.name?.trim())
-            .filter((name): name is string => Boolean(name)) ?? []
-          const canReorder = Boolean(onReorder && visibleMessages.length > 1 && !guiding)
-          const messageDropTarget = dropTarget?.id === message.id ? dropTarget : null
-          return (
-            <div
-              key={message.id}
-              data-queued-message-id={message.id}
-              onDragOver={(event) => dragOverMessage(event, message.id)}
-              onDrop={(event) => dropMessage(event, message.id)}
-              className={`group relative flex min-h-12 min-w-0 items-center gap-2 rounded-[20px] border border-ds-border bg-white/92 px-3 py-2 shadow-[0_8px_26px_rgba(20,47,95,0.07)] backdrop-blur-xl transition-[opacity,transform] dark:bg-ds-card/94 ${draggedMessageId === message.id ? 'opacity-60' : ''}`}
-            >
-              {messageDropTarget ? (
-                <span
-                  data-queued-message-drop-indicator={messageDropTarget.position}
-                  className={`pointer-events-none absolute left-4 right-4 z-10 h-0.5 rounded-full bg-ds-ink ${messageDropTarget.position === 'before' ? '-top-[5px]' : '-bottom-[5px]'}`}
-                  aria-hidden="true"
-                />
-              ) : null}
-              {canReorder ? (
-                <button
-                  type="button"
-                  draggable
-                  data-queued-message-drag-handle
-                  onDragStart={(event) => {
-                    setOpenMenuId(null)
-                    setDraggedMessageId(message.id)
-                    event.dataTransfer.effectAllowed = 'move'
-                    event.dataTransfer.setData('text/plain', message.id)
-                  }}
-                  onDragEnd={clearDragState}
-                  onKeyDown={(event) => moveMessageWithKeyboard(event, message.id, messageIndex)}
-                  className="ds-no-drag flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink active:cursor-grabbing"
-                  aria-label={t('queuedMessageReorder')}
-                  title={t('queuedMessageReorder')}
-                >
-                  <GripVertical className="h-4 w-4" strokeWidth={1.8} />
-                </button>
-              ) : (
-                <span
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ds-faint"
-                  aria-hidden="true"
-                >
-                  <ListPlus className="h-4 w-4" strokeWidth={1.8} />
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] leading-5 text-ds-ink">
-                  {queuedComposerMessageDisplayText(message)}
-                </div>
-                {imageCount > 0 ? (
-                  <div
-                    data-queued-message-images={imageCount}
-                    className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-4 text-ds-faint"
-                    aria-label={`${t('composerImageOnlyDisplay')} (${imageCount})`}
-                    title={imageNames.join(', ') || undefined}
-                  >
-                    <ImageIcon className="h-3 w-3 shrink-0" strokeWidth={1.8} />
-                    <span>{imageCount}</span>
-                    {imageNames[0] ? <span className="truncate">{imageNames[0]}</span> : null}
-                  </div>
-                ) : null}
-                {paused ? (
-                  <div className="truncate text-[11px] leading-4 text-ds-faint">
-                    {t('queuedMessagePaused')}
-                  </div>
-                ) : guidanceTarget === 'graph' ? (
-                  <div className="truncate text-[11px] leading-4 text-ds-faint">
-                    {t('queuedMessageAfterGraph')}
-                  </div>
-                ) : null}
-              </div>
-              {onGuide ? (
-                <button
-                  type="button"
-                  onClick={() => void guide(message.id)}
-                  disabled={(!guidanceEligible && !paused) || guiding}
-                  className="ds-no-drag inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-ds-muted"
-                  aria-label={guiding ? t('guideQueuedMessagePending') : guideLabel}
-                  title={guiding ? t('guideQueuedMessagePending') : guideTitle}
-                >
-                  {guiding ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
-                  ) : (
-                    <CornerDownRight className="h-3.5 w-3.5" strokeWidth={1.9} />
-                  )}
-                  <span>{guiding ? t('guideQueuedMessagePending') : guideLabel}</span>
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => onRemove(message.id)}
-                disabled={guiding}
-                className="ds-no-drag flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
-                aria-label={t('queuedMessageRemove')}
-                title={t('queuedMessageRemove')}
-              >
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-              </button>
-              {editMessage ? (
-                <div className="shrink-0">
-                  <button
-                    ref={(node) => {
-                      if (node) menuButtonRefs.current.set(message.id, node)
-                      else menuButtonRefs.current.delete(message.id)
-                    }}
-                    type="button"
-                    onClick={() => setOpenMenuId((current) => current === message.id ? null : message.id)}
-                    disabled={guiding}
-                    className="ds-no-drag flex h-8 w-8 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
-                    aria-label={t('queuedMessageMoreActions')}
-                    title={t('queuedMessageMoreActions')}
-                    aria-haspopup="menu"
-                    aria-expanded={openMenuId === message.id}
-                  >
-                    <MoreHorizontal className="h-4 w-4" strokeWidth={1.8} />
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
-      {editMenu && typeof document !== 'undefined'
-        ? createPortal(editMenu, document.body)
-        : editMenu}
-    </>
-  )
 }

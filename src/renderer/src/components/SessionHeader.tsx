@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronRight, CircleHelp, FileText, Folder, GitBranch, GitFork } from 'lucide-react'
+import { Activity, ChevronRight, CircleHelp, FileText, Folder, GitBranch, GitFork } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../store/chat-store'
 import { hasLivePendingUserInput } from '../store/chat-store-runtime-helpers'
@@ -14,6 +14,7 @@ import {
   formatCacheMissReason,
   formatCost,
   formatPercent,
+  mergeLiveThreadUsage,
   primaryCacheHitRate,
   useThreadUsage
 } from '../hooks/use-thread-usage'
@@ -22,6 +23,11 @@ type Props = {
   compact?: boolean
   className?: string
   onOpenRequirementDraft?: () => void
+  trajectoryEnabled?: boolean
+  trajectoryOpen?: boolean
+  trajectoryRunning?: boolean
+  trajectoryFailed?: boolean
+  onToggleTrajectory?: () => void
 }
 
 const COMPACT_BRANCH_LABEL_MAX_LENGTH = 30
@@ -100,7 +106,12 @@ function CompactGitBranch({ workspaceRoot }: { workspaceRoot: string }): ReactEl
 export function SessionHeader({
   compact = false,
   className = '',
-  onOpenRequirementDraft
+  onOpenRequirementDraft,
+  trajectoryEnabled = false,
+  trajectoryOpen = false,
+  trajectoryRunning = false,
+  trajectoryFailed = false,
+  onToggleTrajectory
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const threads = useChatStore((s) => s.threads)
@@ -109,6 +120,11 @@ export function SessionHeader({
   const blocks = useChatStore((s) => s.blocks)
   const currentTurnId = useChatStore((s) => s.currentTurnId)
   const currentTurnUserId = useChatStore((s) => s.currentTurnUserId)
+  const liveThreadUsage = useChatStore((s) =>
+    s.lastTurnUsage && s.lastTurnUsage.threadId === s.activeThreadId
+      ? s.lastTurnUsage.snapshot
+      : null
+  )
   const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const workspaceLabel = useChatStore((s) => s.workspaceLabel)
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
@@ -123,11 +139,12 @@ export function SessionHeader({
   const [draftTitle, setDraftTitle] = useState('')
   // Usage stats are no longer shown in compact mode (the composer footer
   // already shows them in the chat route), so skip fetching there.
-  const threadUsage = useThreadUsage(
+  const restThreadUsage = useThreadUsage(
     activeThreadId,
     runtimeConnection === 'ready' && !compact,
     `${active?.updatedAt ?? ''}:${busy ? 'busy' : 'idle'}`
   )
+  const threadUsage = mergeLiveThreadUsage(restThreadUsage, liveThreadUsage)
   const latestCacheHitRate = threadUsage ? primaryCacheHitRate(threadUsage) : null
   const forkedFromTitle = active?.forkedFromTitle?.trim() ?? ''
   const forkLabel =
@@ -187,6 +204,28 @@ export function SessionHeader({
               >
                 {active.title}
               </div>
+              {trajectoryEnabled && onToggleTrajectory ? (
+                <button
+                  type="button"
+                  className={`session-header-compact-trajectory ds-no-drag relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--ds-radius-control)] border px-2 text-[11.5px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
+                    trajectoryOpen
+                      ? 'border-ds-border-strong bg-ds-card text-ds-ink'
+                      : 'border-ds-border-muted bg-ds-card text-ds-muted hover:border-ds-border-strong hover:bg-ds-hover hover:text-ds-ink'
+                  }`}
+                  onClick={onToggleTrajectory}
+                  data-tooltip={t('trajectoryButtonTooltip')}
+                  aria-label={t('trajectoryButtonTooltip')}
+                  aria-pressed={trajectoryOpen}
+                >
+                  <Activity className="h-3.5 w-3.5 shrink-0" strokeWidth={1.85} aria-hidden="true" />
+                  <span>{t('trajectoryButton')}</span>
+                  {trajectoryRunning ? (
+                    <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
+                  ) : trajectoryFailed ? (
+                    <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+                  ) : null}
+                </button>
+              ) : null}
               {onOpenRequirementDraft ? (
                 <button
                   type="button"

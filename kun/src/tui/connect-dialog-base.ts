@@ -526,10 +526,11 @@ export abstract class ConnectDialogBase implements Component, Focusable {
       entries.length > 14 ? ` ${dim(`${this.catalogIndex + 1}/${entries.length}`)}` : ''
     )
     const subscriptions = entries.filter((entry) => entry.category === 'Subscription').length
+    const free = entries.filter((entry) => entry.category === 'Free').length
     const apis = entries.filter((entry) => entry.category === 'API' && entry.id !== 'custom').length
     return pageFrame({
       path: ['KUN', 'Connect', 'Add provider'],
-      right: `${subscriptions} subscriptions · ${apis} APIs`,
+      right: `${free} free · ${subscriptions} subscriptions · ${apis} APIs`,
       description: 'Choose the same built-in provider catalog available in GUI, or define a compatible endpoint.',
       body: body.filter((line): line is string => line !== ''),
       footer: [

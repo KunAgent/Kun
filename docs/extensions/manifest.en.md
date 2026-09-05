@@ -303,6 +303,7 @@ v1 permissions are exact strings:
 | `network:<hostname>` / `network:*.example.com` | Reach an exact hostname, or explicitly accepted subdomain wildcard, through the Network Broker |
 | `storage.global` | Use identity-isolated global state |
 | `storage.workspace` | Use identity-isolated workspace state |
+| `storage.secrets` | Let the Node Host use protected, extension-isolated secret strings; Views cannot call it |
 | `workspace.read` | Read an allowed workspace through the broker |
 | `workspace.write` | Write an allowed workspace through the broker, still subject to policy/approval |
 

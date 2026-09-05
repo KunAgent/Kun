@@ -9,7 +9,7 @@ import {
 
 function controlProps(overrides: Partial<SidebarProjectExpansionControlProps> = {}): SidebarProjectExpansionControlProps {
   return {
-    hiddenThreadCount: 0,
+    nextThreadCount: 0,
     canLoadMore: false,
     loading: false,
     canCollapse: false,
@@ -52,7 +52,7 @@ function findButtonByLabel(root: ReactTestRenderer['root'], label: string) {
 describe('SidebarProjectExpansionControl', () => {
   it('renders only the primary action at the initial stage', () => {
     const html = renderToStaticMarkup(createElement(SidebarProjectExpansionControl, controlProps({
-      hiddenThreadCount: 3
+      nextThreadCount: 3
     })))
     expect(html).toContain('sidebarWorkspaceShowMore')
     expect(html).not.toContain('sidebarWorkspaceShowLess')
@@ -63,9 +63,17 @@ describe('SidebarProjectExpansionControl', () => {
     expect(html).toBe('')
   })
 
-  it('pairs show-more with collapse while hidden loaded threads remain', () => {
+  it('labels the primary action with the next batch size, not the cached backlog', () => {
     const html = renderToStaticMarkup(createElement(SidebarProjectExpansionControl, controlProps({
-      hiddenThreadCount: 4,
+      nextThreadCount: 5
+    })))
+    expect(html).toContain('sidebarWorkspaceShowMore')
+    expect(html).not.toContain('17')
+  })
+
+  it('pairs show-more with collapse while a next batch remains', () => {
+    const html = renderToStaticMarkup(createElement(SidebarProjectExpansionControl, controlProps({
+      nextThreadCount: 2,
       canCollapse: true
     })))
     expect(html).toContain('sidebarWorkspaceShowMore')
@@ -118,7 +126,7 @@ describe('SidebarProjectExpansionControl', () => {
       const onCollapse = vi.fn()
       await act(async () => {
         renderer = createRenderer(createElement(SidebarProjectExpansionControl, controlProps({
-          hiddenThreadCount: 2,
+          nextThreadCount: 2,
           canLoadMore: true,
           canCollapse: true,
           onShowMore,

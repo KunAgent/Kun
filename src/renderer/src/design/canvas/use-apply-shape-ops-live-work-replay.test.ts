@@ -9,6 +9,7 @@ import { useCanvasSelectionStore } from './canvas-selection-store'
 import { useCanvasShapeStore } from './canvas-shape-store'
 import { createDefaultShape, createEmptyDocument } from './canvas-types'
 import { useApplyShapeOpsLive } from './use-apply-shape-ops-live'
+import type { PptCanvasProjectionOpenRequest } from './ppt-canvas-projection'
 
 const mocks = vi.hoisted(() => ({ sendReceipt: vi.fn() }))
 
@@ -26,6 +27,52 @@ function WorkReplayHarness(): null {
     documentKey, undefined, 'work'
   )
   return null
+}
+
+function WorkPptReplayHarness({
+  onOpenRequested
+}: {
+  onOpenRequested: (request: PptCanvasProjectionOpenRequest) => void
+}): null {
+  useApplyShapeOpsLive(
+    true, undefined, { screenFallback: 'plain-frame', shapePreset: 'diagram' },
+    'work-canvas:board-1', threadId, undefined, undefined, undefined,
+    documentKey, {
+      workflowId: 'workflow-a', childId: 'child-a', onOpenRequested
+    }, 'work'
+  )
+  return null
+}
+
+function directionBundle(): Record<string, unknown> {
+  return {
+    schemaVersion: 1, workflowId: 'workflow-a', childId: 'child-a',
+    manifestPath: 'deck/.kun-ppt-review/manifest.json', previewMode: 'image-first',
+    deckTitle: 'Direction deck', phase: 'awaiting_direction', recommendedDirectionId: 'signal',
+    slides: [{ slideId: 'slide-1', index: 0, title: 'Opening' }],
+    directions: ['editorial', 'signal', 'warm'].map((directionId, index) => ({
+      directionId, name: `${directionId} direction`, rationale: `${directionId} rationale`,
+      revision: 1, recommended: directionId === 'signal',
+      fonts: [`Display ${index}`, `Body ${index}`],
+      colors: ['#0F172A', '#F8FAFC', '#22C55E', '#F59E0B'],
+      layout: `${index + 2}-column grid`, background: 'solid', imagery: 'photography',
+      previews: ['cover', 'representative', 'complex'].map((role) => ({
+        role, imagePath: `.kun/images/${directionId}-${role}.png`
+      }))
+    }))
+  }
+}
+
+function reviewBundle(): Record<string, unknown> {
+  return {
+    workflowId: 'workflow-a', childId: 'child-a',
+    manifestPath: 'deck/.kun-ppt-review/manifest.json', deckTitle: 'Review deck',
+    styleFingerprint: 'style-a', phase: 'awaiting_review',
+    slides: [{
+      slideId: 'slide-1', index: 0, title: 'Opening',
+      previewPath: '.kun/images/opening.png', revision: 1, status: 'ready'
+    }]
+  }
 }
 
 function completedTextUpdateTurn(): ChatBlock[] {
@@ -144,6 +191,54 @@ describe('useApplyShapeOpsLive Work replay', () => {
       errors: []
     })
 
+    await act(async () => renderer?.unmount())
+  })
+
+  it('repairs a review projection even when its turn watermark already advanced', async () => {
+    const document = createEmptyDocument()
+    const staleDirection = createDefaultShape('frame', 0, 0)
+    staleDirection.pptDirectionRef = {
+      workflowId: 'workflow-a', childId: 'child-a', directionId: 'signal',
+      revision: 1, role: 'direction-card'
+    }
+    document.objects[staleDirection.id] = { ...staleDirection, parentId: document.rootId }
+    document.objects[document.rootId]!.children.push(staleDirection.id)
+    document.rendererReplayWatermarkTurnId = 'turn-review'
+    useCanvasShapeStore.getState().loadDocument(document, documentKey)
+    const pptTool = (id: string, turnId: string, detail: Record<string, unknown>): ChatBlock => ({
+      kind: 'tool', id, turnId, summary: 'PPT output', status: 'success',
+      meta: { toolName: 'ppt_agent', sourceItemKind: 'tool_result' },
+      detail: JSON.stringify(detail)
+    })
+    useChatStore.setState({
+      activeThreadId: threadId, currentTurnId: null, busy: false,
+      blocks: [
+        { kind: 'user', id: 'user-direction', turnId: 'turn-direction', text: 'Choose direction' },
+        pptTool('tool-direction', 'turn-direction', { directionBundle: directionBundle() }),
+        { kind: 'user', id: 'user-review', turnId: 'turn-review', text: 'Continue to review' },
+        pptTool('tool-review', 'turn-review', { reviewBundle: reviewBundle() })
+      ]
+    })
+    const onOpenRequested = vi.fn()
+
+    let renderer: ReturnType<typeof create> | undefined
+    await act(async () => {
+      renderer = create(createElement(WorkPptReplayHarness, { onOpenRequested }))
+    })
+    const projected = () => Object.values(useCanvasShapeStore.getState().document.objects)
+    expect(projected().filter((shape) => shape.pptDirectionRef)).toHaveLength(0)
+    expect(projected().filter((shape) => shape.pptReviewRef)).toHaveLength(2)
+    expect(onOpenRequested).toHaveBeenLastCalledWith(expect.objectContaining({
+      blockId: 'tool-review', phase: 'review',
+      pptState: { phase: 'review', revision: 1 }
+    }))
+
+    await act(async () => {
+      renderer?.unmount()
+      renderer = create(createElement(WorkPptReplayHarness, { onOpenRequested }))
+    })
+    expect(projected().filter((shape) => shape.pptDirectionRef)).toHaveLength(0)
+    expect(projected().filter((shape) => shape.pptReviewRef)).toHaveLength(2)
     await act(async () => renderer?.unmount())
   })
 })

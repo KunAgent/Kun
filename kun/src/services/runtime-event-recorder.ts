@@ -5,6 +5,10 @@ import {
 import type { EventBus } from '../ports/event-bus.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadLifecycleFence, ThreadLifecycleLease } from './thread-lifecycle-fence.js'
+import {
+  currentTurnMutationFence,
+  runWithTurnMutationFence
+} from '../manager/turn-mutation-context.js'
 
 type RuntimeEventWithoutStamp<Event extends RuntimeEvent> = Omit<Event, 'seq' | 'timestamp'> &
   Partial<Pick<Event, 'seq' | 'timestamp'>>
@@ -58,11 +62,14 @@ export class RuntimeEventRecorder {
     // behind another event must stay stale even if the same id is later
     // recreated after deletion.
     const lease = this.options.lifecycleFence?.acquire(draft.threadId) ?? undefined
+    const turnFence = currentTurnMutationFence()
     if (this.options.lifecycleFence && !lease) {
       return this.makeEvent(draft)
     }
     try {
-      return await this.enqueue(draft.threadId, async () => this.recordCommitted(draft, lease))
+      return await this.enqueue(draft.threadId, () => turnFence
+        ? runWithTurnMutationFence(turnFence, () => this.recordCommitted(draft, lease))
+        : this.recordCommitted(draft, lease))
     } finally {
       lease?.release()
     }
@@ -71,20 +78,35 @@ export class RuntimeEventRecorder {
   /**
    * Publish best-effort live state without adding it to durable replay.
    *
-   * Transient events still share the per-thread sequence allocator and commit
-   * queue with durable events, so a later persisted event is always newer.
+   * A small private checkpoint consumes the sequence durably before the full
+   * live payload is published. Without it a crash can reuse a sequence already
+   * acknowledged by clients, causing the next durable event to be deduplicated.
    */
   async publishTransient(draft: RuntimeEventDraft): Promise<RuntimeEvent> {
     const lease = this.options.lifecycleFence?.acquire(draft.threadId) ?? undefined
+    const turnFence = currentTurnMutationFence()
     if (this.options.lifecycleFence && !lease) {
       return this.makeEvent(draft)
     }
     try {
-      return await this.enqueue(draft.threadId, async () => {
+      return await this.enqueue(draft.threadId, () => {
+        const publish = async () => {
         const event = await this.makeEvent(draft)
+        if (lease && !lease.isCurrent()) return event
+        await this.options.sessionStore.appendEvent(event.threadId, {
+          kind: 'cursor_checkpoint',
+          seq: event.seq,
+          timestamp: event.timestamp,
+          threadId: event.threadId,
+          ...(event.turnId ? { turnId: event.turnId } : {}),
+          ...(event.itemId ? { itemId: event.itemId } : {}),
+          transientKind: event.kind
+        })
         if (lease && !lease.isCurrent()) return event
         this.options.eventBus.publish(event)
         return event
+        }
+        return turnFence ? runWithTurnMutationFence(turnFence, publish) : publish()
       })
     } finally {
       lease?.release()

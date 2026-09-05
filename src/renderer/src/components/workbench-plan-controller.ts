@@ -1,15 +1,16 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { ChatBlock } from '../agent/types'
+import type { ChatBlock, ThreadTodoList } from '../agent/types'
 import { useChatStore } from '../store/chat-store'
 import type { ChatState } from '../store/chat-store-types'
 import { buildRefinePlanPrompt } from '../plan/plan-prompts'
 import { preparePlanBuild } from '../plan/prepare-plan-build'
+import { normalizePlanTaskPath, planHasTaskCheckboxes } from '../plan/plan-task-checkboxes'
 import { buildSddVerifyPrompt } from '../sdd/sdd-verify-prompt'
 import { sddDraftRelativePathForPlanPath, sddDraftTraceRelativePath } from '@shared/sdd'
 import { buildSddTraceSnapshot, parseSddRequirementBlocks } from '@shared/sdd-trace'
 import {
-  CODE_PANEL_PREFERRED
+  PLAN_BOARD_PREFERRED
 } from './workbench-layout'
 import {
   createGuiPlanArtifact,
@@ -42,12 +43,14 @@ type PlanTurnOverrides = Pick<
   SendMessageOverrides,
   | 'attachmentIds'
   | 'attachments'
+  | 'clientRequestId'
   | 'displayText'
   | 'fileReferences'
   | 'guiPlan'
   | 'model'
   | 'providerId'
   | 'reasoningEffort'
+  | 'waitForRuntimeAdmission'
 > & {
   workspaceRoot?: string
 }
@@ -55,7 +58,7 @@ type PlanTurnOverrides = Pick<
 type WorkbenchPlanControllerOptions = {
   blocks: ChatBlock[]
   busy: boolean
-  mode: 'plan' | 'agent'
+  mode: 'plan' | 'agent' | 'auto'
   route: ChatState['route']
   sendMessage: ChatState['sendMessage']
   setError: ChatState['setError']
@@ -87,6 +90,20 @@ export function resolvePlanTurnWorkspaceRoot(
 
 function normalizePlanWorkspaceRoot(value: string | undefined): string {
   return normalizeWorkspaceRoot(value).replaceAll('\\', '/').replace(/\/+$/, '')
+}
+
+export function planTodosForBuild(
+  plan: GuiPlanArtifact,
+  todos: ThreadTodoList | null
+): Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> {
+  const planPath = normalizePlanTaskPath(plan.relativePath)
+  return (todos?.items ?? [])
+    .filter((item) =>
+      item.source?.kind === 'plan' &&
+      item.source.planId === plan.id &&
+      normalizePlanTaskPath(item.source.relativePath) === planPath
+    )
+    .map(({ id, content, status }) => ({ id, content, status }))
 }
 
 export function resolveAssociatedGuiPlan(
@@ -184,7 +201,7 @@ export function useWorkbenchPlanController({
   const lastLoadedPlanBlockIdRef = useRef<string | null>(null)
 
   const openGuiPlanPanel = useCallback((meta?: GuiPlanToolMeta): void => {
-    setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+    setRightSidebarWidth((width) => Math.max(width, PLAN_BOARD_PREFERRED))
     setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.plan)
     // Card "open plan" must recover the plan when the store lost it (app
     // restart, another thread's plan taking over the registry); otherwise
@@ -205,7 +222,9 @@ export function useWorkbenchPlanController({
     contentToSave: string
   ): Promise<boolean> => {
     const planStore = useGuiPlanStore.getState()
-    planStore.setSaveStatus('saving')
+    const planId = plan.id
+    const threadId = plan.threadId?.trim() || null
+    planStore.setSaveStatusForPlan(planId, threadId, 'saving')
     try {
       const result = await window.kunGui.writeWorkspaceFile({
         workspaceRoot: plan.workspaceRoot,
@@ -213,16 +232,38 @@ export function useWorkbenchPlanController({
         content: contentToSave
       })
       if (!result.ok) {
-        useGuiPlanStore.getState().setSaveStatus('error', result.message)
+        useGuiPlanStore.getState().setSaveStatusForPlan(planId, threadId, 'error', result.message)
         return false
       }
-      const latest = useGuiPlanStore.getState()
-      if (latest.activePlan?.id === plan.id) {
-        latest.markSaved(contentToSave)
+      const chatState = useChatStore.getState()
+      if (threadId && chatState.activeThreadId !== threadId) return false
+      const hasLinkedTodos = (chatState.activeThreadTodos?.items ?? []).some((item) =>
+        item.source?.kind === 'plan' && item.source.planId === plan.id
+      )
+      if (
+        threadId &&
+        chatState.activeThreadId === threadId &&
+        chatState.runtimeConnection === 'ready' &&
+        (hasLinkedTodos || planHasTaskCheckboxes(contentToSave))
+      ) {
+        const synced = await chatState.syncPlanTodosFromMarkdown(threadId, plan, contentToSave)
+        if (!synced) {
+          useGuiPlanStore.getState().setSaveStatusForPlan(
+            planId,
+            threadId,
+            'error',
+            t('planTodoSyncFailed')
+          )
+          return false
+        }
       }
+      const latest = useGuiPlanStore.getState()
+      latest.markSavedForPlan(planId, threadId, contentToSave)
       return true
     } catch (error) {
-      useGuiPlanStore.getState().setSaveStatus(
+      useGuiPlanStore.getState().setSaveStatusForPlan(
+        planId,
+        threadId,
         'error',
         error instanceof Error ? error.message : String(error)
       )
@@ -360,6 +401,9 @@ export function useWorkbenchPlanController({
           preference.usePromptWorktree,
         branchPrefix: preference?.branchPrefix ?? 'codex/',
         activeThreadId: chatState.activeThreadId,
+        getPlanTodos: orchestration === 'direct'
+          ? () => planTodosForBuild(plan, useChatStore.getState().activeThreadTodos)
+          : undefined,
         save: savePlanContentToDisk,
         currentPlanId: () => useGuiPlanStore.getState().activePlan?.id,
         currentThreadId: () => useChatStore.getState().activeThreadId,
@@ -487,7 +531,7 @@ export function useWorkbenchPlanController({
   }
 
   useEffect(() => {
-    if (route !== 'chat' && mode === 'plan') {
+    if (route !== 'chat' && (mode === 'plan' || mode === 'auto')) {
       setComposerMode('agent')
     }
   }, [mode, route, setComposerMode])

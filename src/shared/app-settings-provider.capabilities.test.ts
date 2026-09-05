@@ -136,6 +136,7 @@ it('backfills preset model capabilities for stale stored providers', () => {
             apiKey: 'tp-key',
             baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
             endpointFormat: 'chat_completions',
+            useProxy: false,
             models: ['mimo-v2-omni', 'mimo-v2.5', 'mimo-v2.5-pro'],
             modelProfiles: {}
           }

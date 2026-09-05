@@ -4,6 +4,7 @@ import { KEYBOARD_SHORTCUT_COMMANDS } from '@shared/keyboard-shortcuts'
 import {
   Archive,
   Clock3,
+  Columns3,
   Code2,
   Command,
   Cpu,
@@ -84,6 +85,8 @@ export type PaletteSourcesInput = {
   /** Configured provider groups; the palette lists every model they expose. */
   composerModelGroups: readonly ModelProviderModelGroup[]
   activeThreadPinned: boolean
+  /** Laboratory project board gate; the board route entry is hidden while off. */
+  projectBoardEnabled?: boolean
 }
 
 /**
@@ -98,6 +101,7 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   plugins: 'plugins',
   extensions: 'extensions',
   claw: 'claw',
+  board: 'projectBoardNav',
   schedule: 'schedule',
   workflow: 'workflowCreate'
 }
@@ -110,6 +114,7 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   plugins: LayoutGrid,
   extensions: Puzzle,
   claw: Smartphone,
+  board: Columns3,
   schedule: Clock3,
   workflow: Workflow
 }
@@ -241,17 +246,19 @@ function shortcutCommandEntries(input: PaletteSourcesInput): PaletteEntry[] {
 
 function routeEntries(input: PaletteSourcesInput): PaletteEntry[] {
   const { t } = input
-  return (Object.keys(ROUTE_LABEL_KEYS) as AppRoute[]).map((route) => {
-    const title = t(ROUTE_LABEL_KEYS[route])
-    return {
-      id: 'route:' + route,
-      source: 'route' as const,
-      title,
-      keywords: [route, title],
-      icon: { kind: 'lucide' as const, icon: ROUTE_ICONS[route] },
-      activation: { kind: 'route' as const, route }
-    }
-  })
+  return (Object.keys(ROUTE_LABEL_KEYS) as AppRoute[])
+    .filter((route) => route !== 'board' || input.projectBoardEnabled === true)
+    .map((route) => {
+      const title = t(ROUTE_LABEL_KEYS[route])
+      return {
+        id: 'route:' + route,
+        source: 'route' as const,
+        title,
+        keywords: [route, title],
+        icon: { kind: 'lucide' as const, icon: ROUTE_ICONS[route] },
+        activation: { kind: 'route' as const, route }
+      }
+    })
 }
 
 function settingsEntries(input: PaletteSourcesInput): PaletteEntry[] {

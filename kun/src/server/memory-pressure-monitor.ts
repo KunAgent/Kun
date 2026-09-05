@@ -2,6 +2,7 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { TurnService } from '../services/turn-service.js'
+import { totalmem } from 'node:os'
 
 /**
  * kun serve memory-pressure monitor.
@@ -41,6 +42,9 @@ export type MemoryPressureMonitorDeps = {
   instanceId: string
   requestShutdown: (instanceId: string) => Promise<boolean>
   setSubagentParallelLimit?: (limit?: number) => void
+  /** Clamp all root, child, and Graph turn admission while pressure is elevated. */
+  setAdmissionParallelLimit?: (limit?: number) => void
+  totalMemoryBytes?: () => number
   log?: (message: string) => void
 }
 
@@ -49,6 +53,9 @@ export const DEFAULT_MEMORY_PRESSURE_WARN_RSS_BYTES = 6_442_450_944 // 6 GiB
 export const DEFAULT_MEMORY_PRESSURE_CRITICAL_RSS_BYTES = 10_737_418_240 // 10 GiB
 export const DEFAULT_MEMORY_PRESSURE_MAX_COMPACTIONS_PER_SWEEP = 3
 export const DEFAULT_MEMORY_PRESSURE_SUBAGENT_PARALLEL_LIMIT = 2
+export const DEFAULT_MEMORY_PRESSURE_WARN_HOST_FRACTION = 0.65
+export const DEFAULT_MEMORY_PRESSURE_CRITICAL_HOST_FRACTION = 0.8
+const MEMORY_PRESSURE_RECOVERY_FRACTION = 0.85
 
 export type MemoryPressureMonitor = {
   stop: () => void
@@ -95,21 +102,30 @@ export function startMemoryPressureMonitor(deps: MemoryPressureMonitorDeps): Mem
     config.pollIntervalMs ??
     envNumber('KUN_MEMORY_POLL_INTERVAL_MS') ??
     DEFAULT_MEMORY_PRESSURE_POLL_INTERVAL_MS
+  const hostBytes = deps.totalMemoryBytes?.() ?? totalmem()
+  const relativeWarn = Number.isFinite(hostBytes) && hostBytes > 0
+    ? Math.floor(hostBytes * DEFAULT_MEMORY_PRESSURE_WARN_HOST_FRACTION)
+    : DEFAULT_MEMORY_PRESSURE_WARN_RSS_BYTES
+  const relativeCritical = Number.isFinite(hostBytes) && hostBytes > 0
+    ? Math.floor(hostBytes * DEFAULT_MEMORY_PRESSURE_CRITICAL_HOST_FRACTION)
+    : DEFAULT_MEMORY_PRESSURE_CRITICAL_RSS_BYTES
   const warnRssBytes =
     config.warnRssBytes ??
     envNumber('KUN_MEMORY_WARN_RSS_BYTES') ??
-    DEFAULT_MEMORY_PRESSURE_WARN_RSS_BYTES
-  const criticalRssBytes =
+    Math.min(DEFAULT_MEMORY_PRESSURE_WARN_RSS_BYTES, relativeWarn)
+  const criticalRssBytes = Math.max(warnRssBytes + 1,
     config.criticalRssBytes ??
     envNumber('KUN_MEMORY_CRITICAL_RSS_BYTES') ??
-    DEFAULT_MEMORY_PRESSURE_CRITICAL_RSS_BYTES
+    Math.min(DEFAULT_MEMORY_PRESSURE_CRITICAL_RSS_BYTES, relativeCritical))
   const maxCompactionsPerSweep =
     config.maxCompactionsPerSweep ?? DEFAULT_MEMORY_PRESSURE_MAX_COMPACTIONS_PER_SWEEP
 
   let stopped = false
   let currentLevel: 'ok' | 'warn' | 'critical' = 'ok'
   let sweeping = false
+  let warningHandling = false
   let criticalExitRequested = false
+  const sweptIdleThreads = new Set<string>()
 
   const log = deps.log ?? ((message: string) => console.warn(`[kun] ${message}`))
 
@@ -117,21 +133,19 @@ export function startMemoryPressureMonitor(deps: MemoryPressureMonitorDeps): Mem
     if (stopped) return
     try {
       const rss = process.memoryUsage().rss
-      const nextLevel: 'ok' | 'warn' | 'critical' =
-        rss >= criticalRssBytes ? 'critical' : rss >= warnRssBytes ? 'warn' : 'ok'
-      // Edge-trigger on upward transitions only, so a steady high watermark
-      // logs once instead of spamming every poll.
-      if (nextLevel === currentLevel) return
+      const nextLevel = memoryPressureLevel({ rss, currentLevel, warnRssBytes, criticalRssBytes })
       const previous = currentLevel
       currentLevel = nextLevel
-      deps.setSubagentParallelLimit?.(
-        nextLevel === 'ok'
-          ? undefined
-          : nextLevel === 'critical'
-            ? 1
-            : DEFAULT_MEMORY_PRESSURE_SUBAGENT_PARALLEL_LIMIT
-      )
-      if (nextLevel === 'ok') return
+      if (nextLevel !== previous) {
+        const limit = nextLevel === 'ok' ? undefined : nextLevel === 'critical'
+          ? 1 : DEFAULT_MEMORY_PRESSURE_SUBAGENT_PARALLEL_LIMIT
+        deps.setSubagentParallelLimit?.(limit)
+        deps.setAdmissionParallelLimit?.(limit)
+      }
+      if (nextLevel === 'ok') {
+        sweptIdleThreads.clear()
+        return
+      }
 
       const memory = memorySnapshot()
       if (nextLevel === 'critical') {
@@ -142,7 +156,9 @@ export function startMemoryPressureMonitor(deps: MemoryPressureMonitorDeps): Mem
         return
       }
 
-      if (previous === 'ok') void handleWarning(memory)
+      // Keep reclaiming a bounded new batch on every warning poll. The
+      // handler is single-flight and remembers already attempted threads.
+      void handleWarning(memory, previous !== 'warn')
     } catch (error) {
       log(`memory pressure check failed: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -211,14 +227,18 @@ export function startMemoryPressureMonitor(deps: MemoryPressureMonitorDeps): Mem
     }
   }
 
-  const handleWarning = async (memory: MemorySnapshot): Promise<void> => {
+  const handleWarning = async (memory: MemorySnapshot, announce: boolean): Promise<void> => {
+    if (warningHandling || stopped) return
+    warningHandling = true
     try {
       const { active, summaries } = await listActiveWork()
-      await recordPressure('warning', memory, active)
+      if (announce) await recordPressure('warning', memory, active)
       await deps.sessionStore.resetMemory()
       await sweepIdleThreads(summaries)
     } catch (error) {
       log(`memory pressure warning handling failed: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      warningHandling = false
     }
   }
 
@@ -229,11 +249,13 @@ export function startMemoryPressureMonitor(deps: MemoryPressureMonitorDeps): Mem
     sweeping = true
     try {
       const idle = summaries
-        .filter((summary) => summary.status !== 'running' && summary.relation !== 'side')
-        .sort((left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? ''))
+        .filter((summary) => summary.status !== 'running' && summary.relation !== 'side' &&
+          !sweptIdleThreads.has(summary.id))
+        .sort((left, right) => (left.updatedAt ?? '').localeCompare(right.updatedAt ?? ''))
         .slice(0, maxCompactionsPerSweep)
       let compacted = 0
       for (const summary of idle) {
+        sweptIdleThreads.add(summary.id)
         try {
           const result = await deps.turnService.compact({
             threadId: summary.id,
@@ -264,7 +286,27 @@ export function startMemoryPressureMonitor(deps: MemoryPressureMonitorDeps): Mem
     stop: () => {
       stopped = true
       deps.setSubagentParallelLimit?.(undefined)
+      deps.setAdmissionParallelLimit?.(undefined)
       clearInterval(handle)
     }
   }
+}
+
+function memoryPressureLevel(input: {
+  rss: number
+  currentLevel: 'ok' | 'warn' | 'critical'
+  warnRssBytes: number
+  criticalRssBytes: number
+}): 'ok' | 'warn' | 'critical' {
+  if (input.rss >= input.criticalRssBytes) return 'critical'
+  if (
+    input.currentLevel === 'critical' &&
+    input.rss >= input.criticalRssBytes * MEMORY_PRESSURE_RECOVERY_FRACTION
+  ) return 'critical'
+  if (input.rss >= input.warnRssBytes) return 'warn'
+  if (
+    input.currentLevel !== 'ok' &&
+    input.rss >= input.warnRssBytes * MEMORY_PRESSURE_RECOVERY_FRACTION
+  ) return 'warn'
+  return 'ok'
 }

@@ -218,7 +218,7 @@ describe('materializeLegacyProviderCredential', () => {
       originator: 'codex_cli_rs',
       'OpenAI-Beta': 'responses=experimental'
     })
-    expect(material.headers?.['User-Agent']).toMatch(/^codex_cli_rs\/0\.145\.0 \(.+; .+\)$/)
+    expect(material.headers?.['User-Agent']).toMatch(/^codex_cli_rs\/0\.153\.3 \(.+; .+\)$/)
     expect(material.headers?.['User-Agent']).not.toMatch(/deepseekgui|kun/i)
     expect(material.headers?.['x-grok-client-identifier']).toBeUndefined()
   })

@@ -1,7 +1,9 @@
 import type { BrowserStorageMutation } from './browser-storage'
+import { REMOVED_CODE_WORKSPACES_STORAGE_KEY } from './removed-code-workspaces'
 
 export const SHARED_BUSINESS_KEYS = [
   'kun.codeWorkspaceRoots.v1',
+  REMOVED_CODE_WORKSPACES_STORAGE_KEY,
   'kun.write.threadRegistry.v1',
   'kun.design.threadRegistry.v1',
   'kun.design-assistant.threadRegistry.v1',

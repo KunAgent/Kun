@@ -1,11 +1,14 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RUNTIME_DATA_DIR_OWNER_FILE } from '../../kun/src/server/runtime-data-dir-lease.js'
 import {
+  WINDOWS_PROCESS_COMMAND_SCRIPT,
+  WINDOWS_PROCESS_COMMAND_TIMEOUT_MS,
   activeKunRuntimePidsForDataDir,
-  commandUsesKunDataDir
+  commandUsesKunDataDir,
+  windowsProcessCommands
 } from './runtime-data-dir-ownership'
 
 const tempRoots: string[] = []
@@ -18,6 +21,63 @@ afterEach(async () => {
 })
 
 describe('Runtime data directory ownership detection', () => {
+  it('filters the production Windows inventory while preserving shell-hosted Kun commands', () => {
+    const dataDir = 'C:\\Users\\Zoe\\.deepseekgui\\kun'
+    const run = vi.fn(() => JSON.stringify([
+      {
+        ProcessId: 4_242,
+        CommandLine: `cmd.exe /d /s /c kun serve --data-dir ${dataDir}`
+      },
+      {
+        ProcessId: 4_243,
+        CommandLine: 'node C:\\tools\\dev-server.js'
+      }
+    ]))
+
+    const commands = windowsProcessCommands(run)
+
+    expect(activeKunRuntimePidsForDataDir(dataDir, {
+      platform: 'win32',
+      processCommands: () => commands
+    })).toEqual([4_242])
+    expect(WINDOWS_PROCESS_COMMAND_SCRIPT).toContain(
+      `-Filter "CommandLine LIKE '%serve%'"`
+    )
+    expect(WINDOWS_PROCESS_COMMAND_SCRIPT).not.toContain(
+      'Get-CimInstance Win32_Process |'
+    )
+    expect(run).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PROCESS_COMMAND_SCRIPT],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: WINDOWS_PROCESS_COMMAND_TIMEOUT_MS,
+        maxBuffer: 32 * 1024 * 1024
+      }
+    )
+    expect(WINDOWS_PROCESS_COMMAND_TIMEOUT_MS).toBe(300_000)
+  })
+
+  it('fails closed when the production Windows inventory times out', () => {
+    const timeout = Object.assign(
+      new Error('spawnSync powershell.exe ETIMEDOUT'),
+      { code: 'ETIMEDOUT' }
+    )
+    const run = vi.fn(() => {
+      throw timeout
+    })
+
+    expect(() => activeKunRuntimePidsForDataDir('C:\\Users\\Zoe\\.kun\\data', {
+      platform: 'win32',
+      processCommands: () => windowsProcessCommands(run)
+    })).toThrow(/ETIMEDOUT/)
+  })
+
+  it('fails closed when the production Windows inventory is malformed', () => {
+    expect(() => windowsProcessCommands(() => '{broken')).toThrow(SyntaxError)
+  })
+
   it('recognizes managed and standalone Kun serve commands using the legacy directory', () => {
     expect(commandUsesKunDataDir(
       '/Applications/Kun.app/Contents/MacOS/Kun /app/serve-entry.js serve --data-dir /Users/zoe/.deepseekgui/kun',

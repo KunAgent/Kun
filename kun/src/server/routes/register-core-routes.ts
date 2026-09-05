@@ -25,6 +25,7 @@ import {
   streamMigrationExport
 } from './migrations.js'
 import { runtimeInfoJsonResponse, runtimeToolDiagnosticsJsonResponse } from './runtime-info.js'
+import { runtimeIdentityJsonResponse } from './runtime-identity.js'
 import { jsonResponse } from '../response.js'
 import { shutdownRuntime } from './runtime-shutdown.js'
 import {
@@ -149,6 +150,10 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/v1/runtime/info', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return runtimeInfoJsonResponse(runtime)
+  })
+  router.add('GET', '/v1/runtime/identity', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return runtimeIdentityJsonResponse(runtime, request)
   })
   router.add('GET', '/v1/runtime/tools', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

@@ -170,8 +170,8 @@ test('automated release workflows use build gates while local release paths reta
 
   if (buildOnlyCi) {
     for (const [label, workflow, jobs] of [
-      ['stable release', release, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64', 'build-tui']],
-      ['daily prerelease', daily, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64', 'build-tui']]
+      ['stable release', release, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64']],
+      ['daily prerelease', daily, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64']]
     ]) {
       assert.equal(workflow.jobs.validate, undefined, `${label} must not define a validation job`)
       assert.equal(workflow.jobs['verify-macos-x64'], undefined, `${label} must not define a macOS verification job`)
@@ -606,8 +606,7 @@ function assertPublishDependencies(workflow, label) {
     'build-macos',
     'build-windows',
     'build-linux',
-    'build-linux-arm64',
-    'build-tui'
+    'build-linux-arm64'
   ]) {
     assert.ok(needs.includes(dependency), `${label} publish job must depend on ${dependency}`)
   }

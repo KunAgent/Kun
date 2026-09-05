@@ -1,13 +1,14 @@
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from 'react'
 import type { NormalizedThread } from '../../agent/types'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
-import { workspaceRootIdentityKey } from '../../lib/workspace-path'
+import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../../lib/workspace-path'
 import {
   sidebarWorkspacePathForThread,
   sidebarWorkspaceResolutionCandidates,
   worktreeRecordForSidebarThread,
   type SidebarThreadWorktrees
 } from './sidebar-project-selectors'
+import { resolveProjectWorkspacePath } from '../../lib/worktree-project-path'
 import type { SidebarVirtualFolder } from './sidebar-folders'
 import type {
   FolderContextMenuState,
@@ -27,7 +28,7 @@ type Params = {
   setFolderContextMenu: Dispatch<SetStateAction<FolderContextMenuState | null>>
   setDeletingThreadIds: Dispatch<SetStateAction<Record<string, boolean>>>
   openActionDialog: (dialog: Omit<SidebarActionDialogState, 'submitting'>) => void
-  onRemoveWorkspace: (workspacePath: string) => Promise<void>
+  onRemoveWorkspace: (workspacePath: string, relatedPaths?: string[]) => Promise<void>
   onArchiveThread: (threadId: string) => Promise<void>
 }
 
@@ -106,6 +107,48 @@ export function createSidebarProjectWorkspaceActions({
     }).catch(() => undefined)
   }
 
+  /**
+   * Every path that displays as this project: the display path, worktree paths
+   * from the sidebar registries, thread workspaces and remembered roots that
+   * resolve back to the same project identity.
+   */
+  const relatedProjectPaths = (workspacePath: string): string[] => {
+    const targetKey = workspaceRootIdentityKey(workspacePath)
+    if (!targetKey) return []
+    const candidateProjectPaths = sidebarWorkspaceResolutionCandidates({
+      workspaceRoot,
+      workspaceRoots,
+      threadWorktrees,
+      threads
+    })
+    const aliases = new Set<string>([normalizeWorkspaceRoot(workspacePath)])
+    for (const record of Object.values(threadWorktrees)) {
+      if (workspaceRootIdentityKey(record.projectPath) === targetKey) {
+        aliases.add(normalizeWorkspaceRoot(record.worktreePath))
+      }
+    }
+    for (const thread of threads) {
+      const workspace = normalizeWorkspaceRoot(thread.workspace)
+      if (!workspace) continue
+      const resolved = resolveProjectWorkspacePath(workspace, {
+        threadWorktrees,
+        candidateProjectPaths
+      }) || workspace
+      if (workspaceRootIdentityKey(resolved) === targetKey) aliases.add(workspace)
+    }
+    for (const root of [...workspaceRoots, workspaceRoot]) {
+      const normalized = normalizeWorkspaceRoot(root)
+      if (!normalized) continue
+      const resolved = resolveProjectWorkspacePath(normalized, {
+        threadWorktrees,
+        candidateProjectPaths
+      }) || normalized
+      if (workspaceRootIdentityKey(resolved) === targetKey) aliases.add(normalized)
+    }
+    aliases.delete('')
+    return [...aliases]
+  }
+
   const handleRemoveWorkspace = async (workspacePath: string): Promise<void> => {
     openActionDialog({
       title: t('sidebarWorkspaceRemoveDialogTitle', { name: workspaceLabelFromPath(workspacePath) }),
@@ -113,7 +156,7 @@ export function createSidebarProjectWorkspaceActions({
       detail: t('sidebarWorkspaceRemoveDialogDetail'),
       confirmLabel: t('sidebarWorkspaceRemoveConfirmButton'),
       danger: true,
-      onConfirm: () => onRemoveWorkspace(workspacePath)
+      onConfirm: () => onRemoveWorkspace(workspacePath, relatedProjectPaths(workspacePath))
     })
   }
 

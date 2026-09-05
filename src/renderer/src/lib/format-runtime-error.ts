@@ -6,6 +6,7 @@ type RuntimeErrorPayload = {
   error?: string | { message?: string; status?: number }
   message?: string
   details?: unknown
+  modelRequestFailure?: import('../agent/kun-contract').CoreModelRequestFailureJson
   severity?: 'info' | 'warning' | 'error'
 }
 

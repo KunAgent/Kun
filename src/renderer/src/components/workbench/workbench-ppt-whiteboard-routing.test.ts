@@ -65,6 +65,7 @@ describe('PPT canvas open routing', () => {
       target: 'write', reason: 'ppt-direction', blockId: 'tool-a', workspaceRoot: '/work',
       threadId: 'thread-a', workflowId: 'workflow-a', childId: 'child-a', sourcePath: '/work/brief.md',
       title: 'Direction deck',
+      pptProjectionRequired: true,
       pptState: { phase: 'directions', revision: 1 }
     })
   })
@@ -127,9 +128,7 @@ describe('PPT canvas open routing', () => {
       childId: 'child-a', workflowId: 'workflow-a', phase: 'completed'
     }), {
       route: 'write', workspaceRoot: '/work', threadId: 'thread-a'
-    })).toMatchObject({
-      title: 'Presentation review'
-    })
+    })).toBeNull()
   })
 
   it('projects completed output metadata onto the bound Work whiteboard', () => {

@@ -45,11 +45,11 @@ export async function probeRuntimeApi(settings: AppSettingsV1): Promise<
       await res.text(),
       'The local runtime returned an unexpected error.'
     )
-    if (res.status === 401 && /bearer token required/i.test(info.message)) {
+    if (res.status === 401) {
       return {
         ok: false,
         error: 'runtime_auth_required',
-        message: 'The local runtime requires a bearer token for thread APIs.'
+        message: 'The local Kun Runtime rejected the desktop access credential.'
       }
     }
     return {

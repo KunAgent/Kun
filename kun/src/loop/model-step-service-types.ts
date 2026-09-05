@@ -37,6 +37,7 @@ export type ModelStepServiceDeps = {
   tokenEconomy?: TokenEconomyConfig
   toolArgumentRepair?: { maxStringBytes?: number }
   turnLimits?: TurnLimitsConfig
+  finalAnswerOnlyStep?: number
   modelRouting: ModelRoutingService
   budgetGate: TurnBudgetGate
   goalTurns: Pick<GoalTurnCoordinator, 'suppressResume'>

@@ -199,6 +199,83 @@ describe('Fast Context settings', () => {
     expect(bad.lab.pptAgent.reasoningEffort).toBeUndefined()
   })
 
+  it('defaults and merges GUI-only Automatic plan-build settings independently', () => {
+    const defaults = defaultKunRuntimeSettings().lab.autoPlanBuild
+    expect(defaults).toEqual({
+      enabled: false,
+      confirmation: 'always',
+      defaultBuildMode: 'direct',
+      useWorktreeByDefault: true,
+      scheduledDefaults: {
+        providerId: '',
+        model: '',
+        reasoningEffort: 'auto',
+        timeZone: ''
+      }
+    })
+
+    const configured = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
+      lab: {
+        autoPlanBuild: {
+          enabled: true,
+          confirmation: 'defaults',
+          defaultBuildMode: 'scheduled',
+          useWorktreeByDefault: false,
+          scheduledDefaults: {
+            providerId: 'codex',
+            model: 'gpt-5.4',
+            reasoningEffort: 'high',
+            timeZone: 'Asia/Shanghai'
+          }
+        }
+      }
+    })
+    expect(configured.lab.autoPlanBuild).toEqual({
+      enabled: true,
+      confirmation: 'defaults',
+      defaultBuildMode: 'scheduled',
+      useWorktreeByDefault: false,
+      scheduledDefaults: {
+        providerId: 'codex',
+        model: 'gpt-5.4',
+        reasoningEffort: 'high',
+        timeZone: 'Asia/Shanghai'
+      }
+    })
+    expect(configured.planExecution.useWorktreeByDefault).toBe(true)
+
+    const partial = mergeKunRuntimeSettings(configured, {
+      lab: { autoPlanBuild: { scheduledDefaults: { reasoningEffort: 'low' } } }
+    })
+    expect(partial.lab.autoPlanBuild.scheduledDefaults).toEqual({
+      providerId: 'codex',
+      model: 'gpt-5.4',
+      reasoningEffort: 'low',
+      timeZone: 'Asia/Shanghai'
+    })
+
+    const invalid = mergeKunRuntimeSettings({
+      ...defaultKunRuntimeSettings(),
+      lab: {
+        ...defaultKunRuntimeSettings().lab,
+        autoPlanBuild: {
+          ...defaults,
+          confirmation: 'never' as never,
+          defaultBuildMode: 'graph' as never,
+          scheduledDefaults: {
+            ...defaults.scheduledDefaults,
+            reasoningEffort: 'ultra' as never
+          }
+        }
+      }
+    }, undefined)
+    expect(invalid.lab.autoPlanBuild).toMatchObject({
+      confirmation: 'always',
+      defaultBuildMode: 'direct',
+      scheduledDefaults: { reasoningEffort: 'auto' }
+    })
+  })
+
   it('merges top-level Fast Context patches field by field', () => {
     const current = defaultKunRuntimeSettings()
     const next = mergeKunRuntimeSettings(current, {
@@ -265,6 +342,30 @@ describe('Fast Context settings', () => {
     expect(next.fastContext.reasoningEffort).toBeUndefined()
   })
 
+  it('clears invalid Fast Context Codex Fast settings during normalization', () => {
+    const codex = modelProviderPresetProfile(getModelProviderPreset('codex')!)
+    codex.id = 'codex-2'
+    const priorityModel = codex.models[0]!
+    codex.modelProfiles[priorityModel] = {
+      ...codex.modelProfiles[priorityModel],
+      serviceTiers: ['priority']
+    }
+
+    const normalizeFastContext = (providerId: string, model: string) => normalizeAppSettings({
+      ...settings(),
+      provider: { ...settings().provider, providers: [codex] },
+      agents: {
+        kun: mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
+          fastContext: { providerId, model, fast: true }
+        })
+      }
+    }).agents.kun.fastContext.fast
+
+    expect(normalizeFastContext('deepseek', 'deepseek-v4-flash')).toBe(false)
+    expect(normalizeFastContext('codex-2', priorityModel)).toBe(true)
+    expect(normalizeFastContext('', '')).toBe(false)
+  })
+
   it('normalizes Fast Context through the full settings envelope', () => {
     const runtime = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       fastContext: {
@@ -281,7 +382,7 @@ describe('Fast Context settings', () => {
       enabled: true,
       model: 'deepseek-v4-flash',
       providerId: 'deepseek',
-      fast: true
+      fast: false
     })
   })
 })

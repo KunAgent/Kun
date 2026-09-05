@@ -5,6 +5,7 @@ import { ThreadSchema, ThreadSchemaReadable } from '../../contracts/threads.js'
 import type { TurnItem } from '../../contracts/items.js'
 import { readJsonl } from '../file/file-thread-store.js'
 import { readLatestItemsFromJsonl } from '../file/file-session-store.js'
+import { JsonlFileAccessCoordinator } from '../file/jsonl-file-access.js'
 import {
   hydrateThreadItems,
   normalizeThreadMetadata,
@@ -18,6 +19,7 @@ const DEFAULT_THREAD_RECORD_CACHE_MAX_BYTES = 16 * 1024 * 1024
 export class HybridThreadDocumentRepository {
   private readonly dataDir: string
   private readonly cacheMaxBytes: number
+  private readonly fileAccess: JsonlFileAccessCoordinator
   private cacheBytes = 0
   private readonly cache = new Map<string, {
     metadataSig: string
@@ -26,8 +28,12 @@ export class HybridThreadDocumentRepository {
     bytes: number
   }>()
 
-  constructor(dataDir: string, options: { cacheMaxBytes?: number } = {}) {
+  constructor(dataDir: string, options: {
+    cacheMaxBytes?: number
+    fileAccess?: JsonlFileAccessCoordinator
+  } = {}) {
     this.dataDir = resolve(dataDir, 'threads')
+    this.fileAccess = options.fileAccess ?? new JsonlFileAccessCoordinator()
     this.cacheMaxBytes = Math.max(
       1,
       Math.floor(options.cacheMaxBytes ?? DEFAULT_THREAD_RECORD_CACHE_MAX_BYTES)
@@ -67,7 +73,8 @@ export class HybridThreadDocumentRepository {
   }
 
   async readLatestMetadata(threadId: string): Promise<ThreadRecord | null> {
-    const entries = await readJsonl<ThreadMetadataLine>(this.metadataPath(threadId))
+    const path = this.metadataPath(threadId)
+    const entries = await this.fileAccess.withRead(path, () => readJsonl<ThreadMetadataLine>(path))
     for (let index = entries.length - 1; index >= 0; index -= 1) {
       const entry = entries[index]
       if (entry?.kind !== 'thread_metadata' || entry.thread?.id !== threadId) continue
@@ -97,7 +104,8 @@ export class HybridThreadDocumentRepository {
   }
 
   private async loadItems(threadId: string): Promise<TurnItem[]> {
-    return (await readLatestItemsFromJsonl(this.messagesPath(threadId))).items
+    const path = this.messagesPath(threadId)
+    return (await this.fileAccess.withRead(path, () => readLatestItemsFromJsonl(path))).items
   }
 
   private cacheRecord(

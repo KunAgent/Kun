@@ -46,7 +46,8 @@ export type RegisterAppIpcHandlersOptions = {
     path: string,
     method?: string,
     body?: string,
-    headers?: Record<string, string>
+    headers?: Record<string, string>,
+    options?: { signal?: AbortSignal; priority?: 'foreground' | 'background' }
   ) => Promise<RuntimeRequestResult>
   acquireRuntimeRequestLease: () => Promise<ProtectedRuntimeRequestLease>
   getRuntimeSettingsSyncStatus: () => KunRuntimeSettingsSyncStatusPayload

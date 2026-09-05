@@ -63,7 +63,8 @@ export async function activeWorkWhiteboardComposerContexts(
         workWhiteboardArtifactId(board.id),
         workWhiteboardBaseDir()
       ),
-      workflowId: board.workflowId
+      workflowId: board.workflowId,
+      phase: board.phase
     }
   )
   return [whiteboard, ...ppt]

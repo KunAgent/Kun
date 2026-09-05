@@ -408,7 +408,7 @@ describe('requestWriteInlineCompletion', () => {
     settings.provider.providers.push({
       id: 'codex', name: 'ChatGPT 订阅', apiKey: credentials,
       baseUrl: 'https://chatgpt.com/backend-api/codex', endpointFormat: 'responses',
-      models: ['gpt-5.6-sol'], modelProfiles: {
+      useProxy: false, models: ['gpt-5.6-sol'], modelProfiles: {
         'gpt-5.6-sol': {
           inputModalities: ['text', 'image'], outputModalities: ['text'], supportsToolCalling: true,
           messageParts: ['text', 'image_url'], responsesMode: 'lite'

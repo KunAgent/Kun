@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
+import type { GeneratedDocumentCollection } from '../chat/generated-document-artifacts'
 import {
   closeFilePreviewTarget,
   closeOtherFilePreviewTargets,
@@ -35,6 +36,16 @@ const targets: WorkspaceFileTarget[] = [
   { path: '/repo/docs/two.md', workspaceRoot: '/repo' },
   { path: '/repo/docs/three.md', workspaceRoot: '/repo' }
 ]
+
+const generatedDocuments: GeneratedDocumentCollection = {
+  threadId: 'thread-a',
+  turnId: 'turn-generated-a',
+  workspaceRoot: '/repo',
+  files: [
+    { path: 'reports/summary.docx', name: 'summary.docx', kind: 'word', extension: 'DOCX' },
+    { path: 'reports/data.xlsx', name: 'data.xlsx', kind: 'spreadsheet', extension: 'XLSX' }
+  ]
+}
 
 describe('file preview tab lifecycle helpers', () => {
   it('preserves POSIX case while folding Windows drive and UNC targets', () => {
@@ -353,5 +364,70 @@ describe('useWorkbenchFileTreeController thread transitions', () => {
     expect(latestController.openFilePreviewTargets).toEqual([
       { path: 'reports/brief.docx', workspaceRoot: '/repo' }
     ])
+  })
+
+  it('opens a turn-scoped generated collection in the existing Files panel', async () => {
+    await act(async () => latestController.openGeneratedDocuments(generatedDocuments))
+
+    expect(latestController.generatedDocumentCollection).toEqual(generatedDocuments)
+    expect(latestController.fileTreeSidePanelView).toBe('generated')
+    expect(latestController.fileTreeSidePanelOpen).toBe(true)
+    expect(setRightPanelMode).toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.files)
+  })
+
+  it('previews generated rows in the existing multi-tab file preview', async () => {
+    await act(async () => {
+      latestController.openGeneratedDocumentPreview(generatedDocuments.files[0], '/repo')
+      latestController.openGeneratedDocumentPreview(generatedDocuments.files[1], '/repo')
+    })
+
+    expect(latestController.openFilePreviewTargets).toEqual([
+      { path: 'reports/summary.docx', workspaceRoot: '/repo' },
+      { path: 'reports/data.xlsx', workspaceRoot: '/repo' }
+    ])
+    expect(setRightPanelMode).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+  })
+
+  it('rejects collections and previews that do not belong to the active thread workspace', async () => {
+    await act(async () => {
+      latestController.openGeneratedDocuments({
+        ...generatedDocuments,
+        threadId: 'thread-b'
+      })
+      latestController.openGeneratedDocuments({
+        ...generatedDocuments,
+        workspaceRoot: '/other'
+      })
+      latestController.openGeneratedDocumentPreview(generatedDocuments.files[0], '/other')
+    })
+
+    expect(latestController.generatedDocumentCollection).toBeNull()
+    expect(latestController.openFilePreviewTargets).toEqual([])
+    expect(setRightPanelMode).not.toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.files)
+    expect(setRightPanelMode).not.toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+  })
+
+  it('clears the transient collection on thread change and restores workspace navigation', async () => {
+    await act(async () => latestController.openGeneratedDocuments(generatedDocuments))
+    expect(latestController.fileTreeSidePanelView).toBe('generated')
+
+    await act(async () => {
+      renderer.update(createElement(ControllerHarness, {
+        activeThreadId: 'thread-b',
+        rightPanelMode: BUILTIN_RIGHT_PANEL_IDS.files,
+        onSetRightPanelMode: setRightPanelMode
+      }))
+    })
+
+    expect(latestController.generatedDocumentCollection).toBeNull()
+    expect(latestController.fileTreeSidePanelView).toBe('workspace')
+  })
+
+  it('lets the standard Files action leave a generated collection view', async () => {
+    await act(async () => latestController.openGeneratedDocuments(generatedDocuments))
+    await act(async () => latestController.openFileTreeSidePanel())
+
+    expect(latestController.fileTreeSidePanelView).toBe('workspace')
+    expect(latestController.fileTreeSidePanelOpen).toBe(true)
   })
 })

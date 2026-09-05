@@ -10,6 +10,7 @@ export type McpSkillsPanelEntry = {
   description: string
   enabled: boolean
   sourceScope: 'project' | 'global'
+  builtin?: boolean
 }
 
 export const MCP_SKILLS_PAGE_SIZE = 5
@@ -74,7 +75,8 @@ export function mcpEntriesFromConfig(
       name: id,
       description: redactedMcpTarget(server),
       enabled: serverEnabled(server),
-      sourceScope: scope
+      sourceScope: scope,
+      builtin: false
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
 }
@@ -124,7 +126,14 @@ export function setMcpEntryEnabled(
 }
 
 export function normalizeSkillId(id: string): string {
-  return id.trim().replace(/^\/?skill:/i, '').trim()
+  return id
+    .trim()
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/^[\s/$@]*skill:/i, '')
+    .trim()
+    .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+    .replace(/^-+|-+$/g, '') || 'skill'
 }
 
 export function normalizeDisabledSkillIds(value: unknown): string[] {
@@ -178,7 +187,8 @@ export function skillEntries(
       name: skill.name || normalizeSkillId(skill.id),
       description: skill.description?.trim() || skill.root,
       enabled: !disabled.has(normalizeSkillId(skill.id)),
-      sourceScope: skill.scope
+      sourceScope: skill.scope,
+      builtin: skill.builtin === true
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
 }

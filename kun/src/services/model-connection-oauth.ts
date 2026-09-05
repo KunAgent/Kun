@@ -9,6 +9,8 @@ import {
 } from '../contracts/model-connections.js'
 import type { ModelConnectionRegistry } from './model-connection-registry.js'
 import type { ClaudeConnectionService } from './claude-connection-service.js'
+import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
+import { resolveRegistryProfileProxyUrl } from './model-connection-registry-proxy.js'
 
 const CHATGPT_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const CHATGPT_ISSUER = 'https://auth.openai.com'
@@ -50,6 +52,7 @@ type OAuthSession = {
   snapshot?: ModelConnectionOAuthStatus['snapshot']
   server?: Server
   grok?: { tokenEndpoint: string; redirectUri: string; verifier: string; state: string }
+  fetch?: typeof fetch
 }
 
 /** Runtime-owned OAuth coordinator. Tokens never cross the HTTP boundary. */
@@ -93,7 +96,7 @@ export class ModelConnectionOAuthService {
     }
     const parsed = parsePastedCode(code)
     if (parsed.state && parsed.state !== session.grok.state) throw new Error('OAuth state mismatch')
-    session.credentials = await this.exchangeGrok(session.grok, parsed.code)
+    session.credentials = await this.exchangeGrok(session.grok, parsed.code, session.fetch)
     await this.commit(session)
     return project(session)
   }
@@ -135,7 +138,8 @@ export class ModelConnectionOAuthService {
   }
 
   private async startChatGpt(input: ModelConnectionOAuthStartRequest): Promise<ModelConnectionOAuthStatus> {
-    const data = await postJson(this.fetch, `${CHATGPT_ISSUER}/api/accounts/deviceauth/usercode`, {
+    const fetcher = await this.fetchFor(input, 'codex')
+    const data = await postJson(fetcher, `${CHATGPT_ISSUER}/api/accounts/deviceauth/usercode`, {
       client_id: CHATGPT_CLIENT_ID
     })
     const deviceCode = stringValue(data.device_auth_id)
@@ -145,13 +149,15 @@ export class ModelConnectionOAuthService {
       url: `${CHATGPT_ISSUER}/codex/device`,
       userCode,
       interval: Math.max(1, Number(data.interval) || 5),
-      deviceCode
+      deviceCode,
+      fetch: fetcher
     })
     return project(session)
   }
 
   private async pollChatGpt(session: OAuthSession): Promise<void> {
-    const response = await this.fetch(`${CHATGPT_ISSUER}/api/accounts/deviceauth/token`, {
+    const fetcher = session.fetch ?? this.fetch
+    const response = await fetcher(`${CHATGPT_ISSUER}/api/accounts/deviceauth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ device_auth_id: session.deviceCode, user_code: session.userCode })
@@ -162,7 +168,7 @@ export class ModelConnectionOAuthService {
     const authorizationCode = stringValue(authorization.authorization_code)
     const verifier = stringValue(authorization.code_verifier)
     if (!authorizationCode || !verifier) throw new Error('ChatGPT authorization response is incomplete')
-    const tokens = await postForm(this.fetch, `${CHATGPT_ISSUER}/oauth/token`, {
+    const tokens = await postForm(fetcher, `${CHATGPT_ISSUER}/oauth/token`, {
       grant_type: 'authorization_code', code: authorizationCode,
       redirect_uri: CHATGPT_DEVICE_CALLBACK, client_id: CHATGPT_CLIENT_ID, code_verifier: verifier
     })
@@ -179,7 +185,8 @@ export class ModelConnectionOAuthService {
   }
 
   private async startGrok(input: ModelConnectionOAuthStartRequest): Promise<ModelConnectionOAuthStatus> {
-    const discovery = await getJson(this.fetch, `${GROK_ISSUER}/.well-known/openid-configuration`)
+    const fetcher = await this.fetchFor(input, 'grok-subscription')
+    const discovery = await getJson(fetcher, `${GROK_ISSUER}/.well-known/openid-configuration`)
     const authorizationEndpoint = stringValue(discovery.authorization_endpoint)
     const tokenEndpoint = stringValue(discovery.token_endpoint)
     if (!authorizationEndpoint || !tokenEndpoint) throw new Error('Grok OIDC discovery is incomplete')
@@ -187,7 +194,7 @@ export class ModelConnectionOAuthService {
     const challenge = createHash('sha256').update(verifier).digest('base64url')
     const state = randomBytes(32).toString('base64url')
     const nonce = randomBytes(16).toString('base64url')
-    const session = this.createSession(input)
+    const session = this.createSession(input, { fetch: fetcher })
     const server = createServer((request, response) => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1')
       if (url.pathname !== '/callback') { response.writeHead(404).end('Not found'); return }
@@ -196,7 +203,7 @@ export class ModelConnectionOAuthService {
         response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }).end('Invalid OAuth callback.')
         return
       }
-      void this.exchangeGrok(session.grok!, code).then((credentials) => {
+      void this.exchangeGrok(session.grok!, code, session.fetch).then((credentials) => {
         session.credentials = credentials
         response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
           .end('Kun connected to Grok. You can close this page and return to the terminal.')
@@ -220,9 +227,10 @@ export class ModelConnectionOAuthService {
 
   private async exchangeGrok(
     session: { tokenEndpoint: string; redirectUri: string; verifier: string },
-    code: string
+    code: string,
+    fetcher?: typeof fetch
   ): Promise<OAuthCredentials> {
-    const tokens = await postForm(this.fetch, session.tokenEndpoint, {
+    const tokens = await postForm(fetcher ?? this.fetch, session.tokenEndpoint, {
       grant_type: 'authorization_code', code, redirect_uri: session.redirectUri,
       client_id: GROK_CLIENT_ID, code_verifier: session.verifier
     }, { 'x-grok-client-version': GROK_CLIENT_VERSION })
@@ -253,6 +261,7 @@ export class ModelConnectionOAuthService {
           authType: preset.authType,
           ...(preset.baseUrl ? { baseUrl: preset.baseUrl } : {}),
           endpointFormat: preset.endpointFormat,
+          useProxy: session.input.useProxy,
           credential: session.claudeToken,
           models: [...preset.models],
           selectedModel: catalogModel(preset, session.input.model),
@@ -272,6 +281,7 @@ export class ModelConnectionOAuthService {
         authType: preset.authType,
         ...(preset.baseUrl ? { baseUrl: preset.baseUrl } : {}),
         endpointFormat: preset.endpointFormat,
+        useProxy: session.input.useProxy,
         credential: JSON.stringify(session.credentials),
         models: [...preset.models],
         selectedModel: catalogModel(preset, session.input.model),
@@ -309,6 +319,15 @@ export class ModelConnectionOAuthService {
     const session = this.sessions.get(id)
     if (!session) throw new Error('OAuth session not found')
     return session
+  }
+
+  private async fetchFor(input: ModelConnectionOAuthStartRequest, providerId: string): Promise<typeof fetch> {
+    const snapshot = await this.options.registry.snapshot()
+    const proxyUrl = resolveRegistryProfileProxyUrl(
+      { proxy: snapshot.proxy },
+      { id: providerId, kind: 'http', useProxy: input.useProxy }
+    )
+    return createProxyFetch(proxyUrl) ?? this.fetch
   }
 
   private expireSessions(): void {

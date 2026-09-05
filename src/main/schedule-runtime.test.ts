@@ -294,6 +294,7 @@ describe('ScheduleRuntime', () => {
       apiKey: 'sk-secondary',
       baseUrl: 'https://secondary.example/v1',
       endpointFormat: 'messages',
+      useProxy: false,
       models: ['secondary-model'],
       modelProfiles: {}
     })

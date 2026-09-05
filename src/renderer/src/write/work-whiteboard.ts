@@ -21,6 +21,7 @@ import { cancelPendingCanvasDocument } from '../design/canvas/canvas-persistence
 
 export const WORK_WHITEBOARD_DIR = '.kun-whiteboards'
 export const WORK_WHITEBOARD_INDEX = `${WORK_WHITEBOARD_DIR}/index.json`
+export const MAX_WORK_WHITEBOARD_THREAD_IDS = 20
 
 type WorkWhiteboardRegistryV1 = {
   version: 1
@@ -51,11 +52,21 @@ function normalizeBoard(value: unknown, workspaceRoot: string): WorkWhiteboard |
     : 'blank'
   const createdAt = typeof raw.createdAt === 'string' && raw.createdAt ? raw.createdAt : new Date(0).toISOString()
   const updatedAt = typeof raw.updatedAt === 'string' && raw.updatedAt ? raw.updatedAt : createdAt
+  const threadId = typeof raw.threadId === 'string' && raw.threadId.trim() ? raw.threadId.trim() : null
+  const threadIds = [
+    ...(threadId ? [threadId] : []),
+    ...(Array.isArray(raw.threadIds) ? raw.threadIds : []).flatMap((candidate) => {
+      const id = typeof candidate === 'string' ? candidate.trim() : ''
+      return id && id !== threadId ? [id] : []
+    })
+  ].filter((id, index, ids) => ids.indexOf(id) === index)
+    .slice(0, MAX_WORK_WHITEBOARD_THREAD_IDS)
   return {
     id,
     title,
     workspaceRoot: normalizePath(workspaceRoot),
-    threadId: typeof raw.threadId === 'string' && raw.threadId.trim() ? raw.threadId.trim() : null,
+    threadId,
+    ...(threadIds.length > 0 ? { threadIds } : {}),
     ...(typeof raw.sourcePath === 'string' && raw.sourcePath.trim() ? { sourcePath: normalizePath(raw.sourcePath) } : {}),
     ...(typeof raw.workflowId === 'string' && raw.workflowId.trim() ? { workflowId: raw.workflowId.trim() } : {}),
     ...(typeof raw.childId === 'string' && raw.childId.trim() ? { childId: raw.childId.trim() } : {}),
@@ -69,6 +80,17 @@ function normalizeBoard(value: unknown, workspaceRoot: string): WorkWhiteboard |
 
 export function workWhiteboardArtifactId(boardId: string): string {
   return boardId.trim()
+}
+
+export function workWhiteboardThreadIds(board: Pick<WorkWhiteboard, 'threadId' | 'threadIds'>): string[] {
+  return [
+    ...(board.threadId?.trim() ? [board.threadId.trim()] : []),
+    ...(board.threadIds ?? []).flatMap((candidate) => {
+      const id = candidate.trim()
+      return id && id !== board.threadId?.trim() ? [id] : []
+    })
+  ].filter((id, index, ids) => ids.indexOf(id) === index)
+    .slice(0, MAX_WORK_WHITEBOARD_THREAD_IDS)
 }
 
 /** Unified whiteboard title rule: trimmed, non-empty, at most 160 chars. */
@@ -233,6 +255,7 @@ type WhiteboardActions = Pick<WriteWorkspaceState,
   | 'renameWhiteboard'
   | 'deleteWhiteboard'
   | 'bindWhiteboardThread'
+  | 'forgetWhiteboardThread'
   | 'updateWhiteboardPptState'
 >
 
@@ -284,6 +307,7 @@ export function createWorkWhiteboardActions(set: WriteWorkspaceSet, get: WriteWo
         title,
         workspaceRoot: normalizedWorkspaceRoot,
         threadId: options.threadId?.trim() || null,
+        ...(options.threadId?.trim() ? { threadIds: [options.threadId.trim()] } : {}),
         ...(options.sourcePath?.trim() ? { sourcePath: normalizePath(options.sourcePath) } : {}),
         ...(options.workflowId?.trim() ? { workflowId: options.workflowId.trim() } : {}),
         ...(options.childId?.trim() ? { childId: options.childId.trim() } : {}),
@@ -364,14 +388,56 @@ export function createWorkWhiteboardActions(set: WriteWorkspaceSet, get: WriteWo
       updatedAt: new Date().toISOString()
     })),
 
-    bindWhiteboardThread: (boardId, threadId) => updateBoard(boardId, (board) => ({
-      ...board,
+    bindWhiteboardThread: (boardId, threadId) => updateBoard(boardId, (board) => {
       // PPT board refs are tied to their originating parent thread. Normal
       // boards may move to a new conversation; canonical workflow boards may
       // not be rebound after their identity has been established.
-      threadId: board.workflowId && board.threadId ? board.threadId : threadId.trim() || board.threadId,
-      updatedAt: new Date().toISOString()
-    })),
+      const nextThreadId = board.workflowId && board.threadId
+        ? board.threadId
+        : threadId.trim() || board.threadId
+      const threadIds = nextThreadId
+        ? [
+            nextThreadId,
+            ...workWhiteboardThreadIds(board).filter((id) => id !== nextThreadId)
+          ].slice(0, MAX_WORK_WHITEBOARD_THREAD_IDS)
+        : workWhiteboardThreadIds(board)
+      return {
+        ...board,
+        threadId: nextThreadId,
+        ...(threadIds.length > 0 ? { threadIds } : {}),
+        updatedAt: new Date().toISOString()
+      }
+    }),
+
+    forgetWhiteboardThread: async (threadId) => {
+      const targetId = threadId.trim()
+      const state = get()
+      const workspaceRoot = normalizePath(state.workspaceRoot)
+      if (!targetId || !workspaceRoot) return false
+      let changed = false
+      const whiteboards = Object.fromEntries(Object.entries(state.whiteboards).map(([boardId, board]) => {
+        if (!boardBelongsToWorkspace(board, workspaceRoot)) return [boardId, board]
+        const currentIds = workWhiteboardThreadIds(board)
+        if (!currentIds.includes(targetId)) return [boardId, board]
+        changed = true
+        const threadIds = currentIds.filter((id) => id !== targetId)
+        return [boardId, {
+          ...board,
+          threadId: board.threadId === targetId ? threadIds[0] ?? null : board.threadId,
+          threadIds,
+          updatedAt: new Date().toISOString()
+        }]
+      }))
+      if (!changed) return true
+      const persisted = await persistRegistry(workspaceRoot, whiteboards)
+      if (!workspaceIsCurrent(get, workspaceRoot)) return false
+      if (!persisted.ok) {
+        set({ fileError: persisted.message })
+        return false
+      }
+      set({ whiteboards })
+      return true
+    },
 
     updateWhiteboardPptState: (boardId, patch) => updateBoard(boardId, (board) => {
       const incomingChildId = patch.childId?.trim()

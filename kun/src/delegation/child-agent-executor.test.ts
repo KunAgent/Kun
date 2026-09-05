@@ -591,8 +591,8 @@ describe('createChildAgentExecutor', () => {
       skillsEnabled: false,
       security: {
         sandboxRoot: '/tmp/workspace',
-        allowedToolNames: ['read', 'web_search'],
-        allowedProviderIds: ['builtin'],
+        allowedToolNames: ['read', 'web_search', 'fast_context'],
+        allowedProviderIds: ['builtin', 'fast-context'],
         allowedSkillIds: ['safe-skill'],
         blockedToolNames: ['write'],
         blockedProviderIds: ['mcp:blocked'],
@@ -605,8 +605,8 @@ describe('createChildAgentExecutor', () => {
     expect(nativeModelCalled).toBe(false)
     expect(capturedBoundary).toMatchObject({
       toolPolicy: 'readOnly',
-      allowedToolNames: ['read'],
-      allowedProviderIds: ['builtin'],
+      allowedToolNames: ['read', 'fast_context'],
+      allowedProviderIds: ['builtin', 'fast-context'],
       allowedSkillIds: ['safe-skill'],
       blockedToolNames: ['write', 'grep'],
       blockedProviderIds: ['mcp:blocked', 'mcp:private'],

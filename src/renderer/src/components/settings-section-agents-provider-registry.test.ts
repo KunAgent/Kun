@@ -390,6 +390,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         baseUrl: 'https://api.example.com/v1',
         endpointFormat: 'chat_completions',
         kind: 'http',
+        useProxy: false,
         models: ['custom-model'],
         modelProfiles: {}
       } satisfies ModelProviderProfileV1
@@ -535,9 +536,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       })
 
       expect(probeModelProvider).toHaveBeenCalledWith({
+        providerId: 'ollama',
         baseUrl: 'https://ollama.com/v1',
         apiKey: 'ollama-secret',
-        endpointFormat: 'chat_completions'
+        endpointFormat: 'chat_completions',
+        useProxy: false
       })
       expect(fetchModelsDevCatalog).toHaveBeenCalledWith({
         providerId: 'ollama',

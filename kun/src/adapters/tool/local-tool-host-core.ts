@@ -14,6 +14,10 @@ import { createToolOperationIdentity, ToolOperationJournal } from '../../reliabi
 import { planModeToolBlock } from './plan-mode-tool-policy.js'
 import { normalizeRawToolArgumentsEnvelope } from '../../domain/tool-argument-envelope.js'
 import { hookContext, hookErrorMessage, isUnknownOutcomeError, offloadLargeToolOutput } from './local-tool-host-runtime.js'
+import {
+  awaitLeaseAuthorityForSideEffectingTool,
+  type ToolDispatchLeaseAuthority
+} from './lease-grace-gate.js'
 import type { LocalTool, LocalToolHostOptions } from './local-tool-host-types.js'
 
 const KUN_ACTION_APPROVAL_GRANT_TTL_MS = 2 * 60 * 1_000
@@ -26,6 +30,7 @@ export class LocalToolHost implements ToolHost {
   private readonly readTracker: ReadTracker
   private readonly operationJournal: ToolOperationJournal
   private prepare?: (context?: ToolHostContext) => Promise<void> | void
+  private readonly leaseAuthority?: ToolDispatchLeaseAuthority
   private generation = 0
   private readonly turnComponents = new Map<string, {
     registry: CapabilityRegistry
@@ -43,6 +48,7 @@ export class LocalToolHost implements ToolHost {
     this.readTracker = new ReadTracker(normalizeReadTrackerOptions(options.readTracker))
     this.operationJournal = options.operationJournal ?? new ToolOperationJournal()
     this.prepare = options.prepare
+    this.leaseAuthority = options.leaseAuthority
   }
 
   replaceRuntimeComponents(input: {
@@ -83,6 +89,21 @@ export class LocalToolHost implements ToolHost {
     )
     if (tool.policy === 'never') {
       throw new Error(`tool ${call.toolName} is disabled by policy`)
+    }
+    // While the thread execution lease is inside its unilateral renewal grace
+    // window, this runtime is no longer provably the Manager-recognized
+    // owner. Pause side-effecting tools until renewal resolves; read-only
+    // tools proceed so the turn can keep observing state. A `lost` outcome
+    // means the turn is being aborted through the lease-lost path.
+    if (tool.sideEffect !== 'read-only' && this.leaseAuthority) {
+      const authority = await awaitLeaseAuthorityForSideEffectingTool({
+        authority: this.leaseAuthority,
+        threadId: context.threadId,
+        signal: context.abortSignal
+      })
+      if (authority === 'lost') {
+        throw context.abortSignal.reason ?? new Error('thread execution lease lost during renewal grace')
+      }
     }
     const sandboxBlock = sandboxBlockForTool(tool, context)
     if (sandboxBlock) {

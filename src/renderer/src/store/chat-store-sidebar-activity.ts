@@ -9,6 +9,7 @@ import type {
   ScheduledThreadActivity
 } from './chat-store-types'
 import {
+  filterThreadsForSidebar,
   shouldHideThreadFromSidebarByTitle,
   shouldInspectThreadForSidebarVisibility
 } from '../lib/thread-sidebar-visibility'
@@ -16,7 +17,8 @@ import {
   clearUnreadCompletion,
   completionOutcomeForTurnStatus,
   completionIsCurrentlyVisible,
-  markUnreadCompletion
+  markUnreadCompletion,
+  resolveUnreadCompletionForTurn
 } from './unread-completions'
 import { threadLooksRunning } from './chat-store-runtime-helpers'
 import {
@@ -37,6 +39,18 @@ import {
 export const SIDEBAR_ACTIVITY_PAGE_LIMIT = 200
 let syncGeneration = 0
 let inFlight: Promise<boolean> | null = null
+const pendingThreadIds = new Set<string>()
+const pendingDeletedThreadIds = new Set<string>()
+let pendingLegacyScan = false
+let pendingSchedule = false
+let pendingScheduleStatus: ScheduleRuntimeStatus | undefined
+
+type SyncOptions = {
+threadIds?: string[]
+deletedThreadIds?: string[]
+includeSchedule?: boolean
+scheduleStatus?: ScheduleRuntimeStatus
+}
 
 function fallbackFingerprint(thread: Pick<NormalizedThread, 'updatedAt' | 'status'>): string {
   return `${thread.updatedAt}|${thread.status ?? ''}`
@@ -132,27 +146,54 @@ async function loadRecentThreads(): Promise<NormalizedThread[]> {
   return provider.listThreads({ limit: SIDEBAR_ACTIVITY_PAGE_LIMIT, includeSide: false })
 }
 
-async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number): Promise<void> {
+async function loadTargetThreads(ids: string[], state: ChatState): Promise<NormalizedThread[]> {
+  const provider = getProvider()
+  const local = new Map(state.threads.map((thread) => [thread.id, thread]))
+  const summaries = await Promise.all(ids.map(async (id) => {
+    if (typeof provider.getThreadSummary === 'function') {
+      return provider.getThreadSummary(id)
+    }
+    return local.get(id) ?? null
+  }))
+  const available = summaries.filter((thread): thread is NormalizedThread => thread !== null)
+  const knownIds = new Set(state.threads.map((thread) => thread.id))
+  const known = available.filter((thread) => knownIds.has(thread.id))
+  const unknown = available.filter((thread) => !knownIds.has(thread.id))
+  return [...known, ...await filterThreadsForSidebar(unknown, provider)]
+}
+
+async function runSync(
+  set: ChatStoreSet,
+  get: ChatStoreGet,
+  generation: number,
+  options: SyncOptions
+): Promise<void> {
   if (get().runtimeConnection !== 'ready') return
   const provider = getProvider()
-  const [recentThreads, scheduleStatus] = await Promise.all([
-    loadRecentThreads(),
-    typeof window.kunGui?.getScheduleStatus === 'function'
-      ? window.kunGui.getScheduleStatus().catch(() => null)
-      : Promise.resolve(null)
-  ])
+  const targeted = options.threadIds !== undefined || options.deletedThreadIds !== undefined ||
+    options.scheduleStatus !== undefined
+  const recentThreads = targeted
+    ? await loadTargetThreads([...new Set(options.threadIds ?? [])], get())
+    : await loadRecentThreads()
+  const scheduleStatus = options.scheduleStatus ?? (
+    options.includeSchedule !== false && typeof window.kunGui?.getScheduleStatus === 'function'
+      ? await window.kunGui.getScheduleStatus().catch(() => null)
+      : null
+  )
   if (generation !== syncGeneration || get().runtimeConnection !== 'ready') return
 
   const checkpoints = readSidebarActivityCheckpoints()
   const baselineEstablished = checkpoints.initialized
   const stateAtStart = get()
   const localById = new Map(stateAtStart.threads.map((thread) => [thread.id, thread]))
+  const candidateSet = new Set(options.threadIds ?? [])
   const candidates = recentThreads.filter((thread) => {
+    if (targeted) return candidateSet.has(thread.id)
     const local = localById.get(thread.id)
     return !local || threadLooksRunning(thread) ||
       stateAtStart.watchTurnCompletion[thread.id] === true ||
       stateAtStart.awaitingUserInputThreadIds[thread.id] === true ||
-      (baselineEstablished && checkpointChanged(checkpoints.threads[thread.id], thread))
+      (baselineEstablished && checkpointChanged(checkpoints.threads[thread.id]?.checkpoint, thread))
   })
   const runtimeStates = new Map<string, Awaited<ReturnType<typeof provider.getThreadState>>>()
   const missingRuntimeStateIds = new Set<string>()
@@ -166,6 +207,7 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
   }
   if (generation !== syncGeneration) return
 
+  const checkpointUpdatedAt = Date.now()
   const nextCheckpoints: SidebarActivityCheckpoints = {
     initialized: true,
     threads: { ...checkpoints.threads },
@@ -176,23 +218,28 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
       candidateIds.has(thread.id) &&
       !runtimeStates.has(thread.id)
     ) continue
-    nextCheckpoints.threads[thread.id] = checkpointForThread(thread)
+    nextCheckpoints.threads[thread.id] = {
+      checkpoint: checkpointForThread(thread),
+      updatedAt: checkpointUpdatedAt
+    }
   }
   const boundTasks = scheduleStatus?.boundThreadTasks ?? []
   for (const task of boundTasks) {
     const key = scheduleRunKey(task)
-    if (key) nextCheckpoints.scheduleRuns[task.taskId] = key
+    if (key) {
+      nextCheckpoints.scheduleRuns[task.taskId] = { checkpoint: key, updatedAt: checkpointUpdatedAt }
+    }
   }
 
-  let discoveredUnknownThread = false
+  const directlyVisibleUnknownThreads = recentThreads.filter((thread) =>
+    !localById.has(thread.id) &&
+    thread.relation !== 'side' &&
+    !shouldHideThreadFromSidebarByTitle(thread) &&
+    (!shouldInspectThreadForSidebarVisibility(thread) || targeted)
+  )
   set((state) => {
     const recentById = new Map(recentThreads.map((thread) => [thread.id, thread]))
     const knownIds = new Set(state.threads.map((thread) => thread.id))
-    discoveredUnknownThread = recentThreads.some((thread) =>
-      !knownIds.has(thread.id) &&
-      !shouldHideThreadFromSidebarByTitle(thread) &&
-      !shouldInspectThreadForSidebarVisibility(thread)
-    )
     let unreadThreadIds = state.unreadThreadIds
     let watchTurnCompletion = state.watchTurnCompletion
     let awaitingUserInputThreadIds = state.awaitingUserInputThreadIds
@@ -207,7 +254,8 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
       watchTurnCompletion = next
     }
     let threadsChanged = false
-    const threads = state.threads.map((thread) => {
+    const deletedIds = new Set(options.deletedThreadIds ?? [])
+    let threads = state.threads.filter((thread) => !deletedIds.has(thread.id)).map((thread) => {
       const summary = recentById.get(thread.id)
       const runtimeState = runtimeStates.get(thread.id)
       if (!summary) return thread
@@ -216,7 +264,10 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
         typeof summary.latestSeq === 'number' &&
         thread.latestSeq > summary.latestSeq
       ) return thread
-      const changed = baselineEstablished && checkpointChanged(checkpoints.threads[thread.id], summary)
+      const changed = baselineEstablished && checkpointChanged(
+        checkpoints.threads[thread.id]?.checkpoint,
+        summary
+      )
       const running = runtimeState ? threadLooksRunning(runtimeState) : threadLooksRunning(summary)
       const latestTurnStatus = runtimeState?.latestTurnStatus
       if (running && thread.id !== state.activeThreadId && watchTurnCompletion[thread.id] !== true) {
@@ -232,9 +283,13 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
         clearWatchedCompletionNotification(thread.id)
         const outcome = completionOutcomeForTurnStatus(latestTurnStatus)
         if (outcome) {
-          unreadThreadIds = completionIsCurrentlyVisible(state, thread.id)
-            ? clearUnreadCompletion(unreadThreadIds, thread.id)
-            : markUnreadCompletion(unreadThreadIds, thread.id, outcome)
+          unreadThreadIds = resolveUnreadCompletionForTurn(
+            unreadThreadIds,
+            state,
+            thread.id,
+            runtimeState.latestTurnId,
+            outcome
+          )
         }
       }
       const updatedAt = summary.updatedAt
@@ -261,6 +316,37 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
         ...(nextLatestTurnStatus ? { latestTurnStatus: nextLatestTurnStatus } : {})
       }
     })
+    if (threads.length !== state.threads.length) threadsChanged = true
+    for (const summary of directlyVisibleUnknownThreads) {
+      if (threads.some((thread) => thread.id === summary.id)) continue
+      const runtimeState = runtimeStates.get(summary.id)
+      const running = runtimeState ? threadLooksRunning(runtimeState) : threadLooksRunning(summary)
+      threads.push({
+        ...summary,
+        status: summary.archived ? summary.status : running ? 'running' : 'idle',
+        ...(runtimeState?.latestTurnId ? { latestTurnId: runtimeState.latestTurnId } : {}),
+        ...(runtimeState?.latestTurnStatus ? { latestTurnStatus: runtimeState.latestTurnStatus } : {})
+      })
+      threadsChanged = true
+    }
+    if (threadsChanged) {
+      threads = [...threads].sort((left, right) =>
+        Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || left.id.localeCompare(right.id))
+    }
+
+    for (const id of deletedIds) {
+      clearWatched(id)
+      if (awaitingUserInputThreadIds[id]) {
+        const next = { ...awaitingUserInputThreadIds }
+        delete next[id]
+        awaitingUserInputThreadIds = next
+      }
+      if (unreadThreadIds[id]) {
+        const next = { ...unreadThreadIds }
+        delete next[id]
+        unreadThreadIds = next
+      }
+    }
 
     for (const [id, runtimeState] of runtimeStates) {
       if (runtimeState.pendingUserInputIds === undefined) continue
@@ -288,7 +374,7 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
     for (const task of boundTasks) {
       if (!knownIds.has(task.threadId)) continue
       const key = scheduleRunKey(task)
-      if (!baselineEstablished || !key || checkpoints.scheduleRuns[task.taskId] === key) continue
+      if (!baselineEstablished || !key || checkpoints.scheduleRuns[task.taskId]?.checkpoint === key) continue
       const outcome = completionOutcomeForTurnStatus(task.status)
       if (!outcome) continue
       unreadThreadIds = completionIsCurrentlyVisible(state, task.threadId)
@@ -331,9 +417,10 @@ async function runSync(set: ChatStoreSet, get: ChatStoreGet, generation: number)
     }
   })
 
+  const deletedActiveThread = options.deletedThreadIds?.includes(get().activeThreadId ?? '') === true
   persistSidebarActivityCheckpoints(nextCheckpoints)
   syncTurnCompletionPoll(set, get)
-  if (discoveredUnknownThread) void get().refreshThreads()
+  if (deletedActiveThread) get().clearActiveThreadSelection()
 }
 
 export function createSidebarActivityActions(
@@ -341,15 +428,48 @@ export function createSidebarActivityActions(
   get: ChatStoreGet
 ): Pick<ChatState, 'syncSidebarActivity'> {
   return {
-    syncSidebarActivity: async () => {
+    syncSidebarActivity: async (options = {}) => {
+      for (const id of options.threadIds ?? []) pendingThreadIds.add(id)
+      for (const id of options.deletedThreadIds ?? []) pendingDeletedThreadIds.add(id)
+      if (!options.threadIds && !options.deletedThreadIds && !options.scheduleStatus) {
+        pendingLegacyScan = true
+      }
+      if (options.scheduleStatus) pendingScheduleStatus = options.scheduleStatus
+      if (options.includeSchedule !== false || options.scheduleStatus) pendingSchedule = true
       if (inFlight) return inFlight
-      const generation = ++syncGeneration
-      const task = runSync(set, get, generation).then(() => true).catch((error) => {
-        void window.kunGui?.logError?.('sidebar-activity', 'Failed to reconcile sidebar activity', {
-          message: error instanceof Error ? error.message : String(error)
-        }).catch(() => undefined)
-        return false
-      })
+
+      const task = (async (): Promise<boolean> => {
+        let ok = true
+        while (
+          pendingLegacyScan || pendingSchedule ||
+          pendingThreadIds.size > 0 || pendingDeletedThreadIds.size > 0
+        ) {
+          const deletedThreadIds = [...pendingDeletedThreadIds]
+          const syncOptions: SyncOptions = {
+            ...(pendingLegacyScan ? {} : { threadIds: [...pendingThreadIds] }),
+            ...(deletedThreadIds.length > 0 ? { deletedThreadIds } : {}),
+            includeSchedule: pendingSchedule,
+            ...(pendingScheduleStatus ? { scheduleStatus: pendingScheduleStatus } : {})
+          }
+          pendingLegacyScan = false
+          pendingSchedule = false
+          pendingScheduleStatus = undefined
+          pendingThreadIds.clear()
+          pendingDeletedThreadIds.clear()
+          const generation = ++syncGeneration
+          try {
+            await runSync(set, get, generation, syncOptions)
+          } catch (error) {
+            ok = false
+            void window.kunGui?.logError?.(
+              'sidebar-activity',
+              'Failed to reconcile sidebar activity',
+              { message: error instanceof Error ? error.message : String(error) }
+            ).catch(() => undefined)
+          }
+        }
+        return ok
+      })()
       const flight = task.finally(() => {
         if (inFlight === flight) inFlight = null
       })

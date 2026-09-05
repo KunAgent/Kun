@@ -1,0 +1,13 @@
+{
+  "modelErrorSourceProvider": "การตอบกลับจากผู้ให้บริการ",
+  "modelErrorSourceNoResponse": "ไม่มีการตอบกลับจากผู้ให้บริการ",
+  "modelErrorSourceNotSent": "ยังไม่ได้ส่งคำขอ",
+  "modelErrorProviderSummaryUnavailable": "ผู้ให้บริการไม่สามารถประมวลผลคำขอนี้ได้ชั่วคราว",
+  "modelErrorProviderSummaryRateLimited": "ผู้ให้บริการจำกัดอัตราคำขอนี้",
+  "modelErrorProviderSummaryRejected": "ผู้ให้บริการปฏิเสธคำขอนี้",
+  "modelErrorProviderSummaryGeneric": "ผู้ให้บริการส่งข้อผิดพลาดกลับมา",
+  "modelErrorNoResponseSummary": "ส่งคำขอโมเดลแล้ว แต่ผู้ให้บริการไม่ตอบกลับ",
+  "modelErrorNotSentSummary": "คำขอโมเดลล้มเหลวก่อนส่ง",
+  "modelErrorProviderOriginalMessage": "ข้อความที่ผู้ให้บริการส่งกลับ",
+  "modelErrorFailureMessage": "สาเหตุความล้มเหลว"
+}

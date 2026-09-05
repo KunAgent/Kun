@@ -14,7 +14,7 @@ describe('structured terminal user input', () => {
       inputId: 'input_1',
       prompt: 'Questions',
       questions: [
-        { header: 'Mode', id: 'mode', question: 'Choose mode', options: [{ label: 'Fast', description: '' }] },
+        { header: 'Mode', id: 'mode', question: 'Choose mode', options: [{ label: 'Fast', description: '', recommended: true }] },
         {
           header: 'Targets',
           id: 'targets',

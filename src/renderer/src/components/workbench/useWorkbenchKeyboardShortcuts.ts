@@ -29,7 +29,7 @@ const DESKTOP_SHORTCUT_COMMANDS: Partial<Record<KeyboardShortcutCommandId, Deskt
   'toggle-maximize': 'toggleMaximize'
 }
 
-type ComposerMode = 'agent' | 'plan'
+type ComposerMode = 'agent' | 'plan' | 'auto'
 
 export function isWorkbenchNavigationShortcutLocked(
   commandId: KeyboardShortcutCommandId,

@@ -1,5 +1,6 @@
-import type { ThreadStoreListOptions, ThreadStoreListPage } from '../../ports/thread-store.js'
 import type { ThreadSummary } from '../../contracts/threads.js'
+import type { ThreadIndexStatusInfo } from '../../contracts/thread-index-status.js'
+import type { ThreadStoreListOptions, ThreadStoreListPage } from '../../ports/thread-store.js'
 import type { ThreadRow } from './hybrid-thread-index-mapping.js'
 import {
   applyThreadCursor,
@@ -15,11 +16,16 @@ import { summaryFromRow } from './hybrid-thread-index-mapping.js'
  */
 export interface HybridThreadListPageSource {
   hasDb(): boolean
+  isIndexReady(): boolean
+  hasDirtyIndexThreads(): boolean
   queryThreadRows(options: ThreadStoreListOptions): ThreadRow[]
   rowHasReadableJsonl(row: ThreadRow): Promise<boolean>
   ensureRowAgentSurface(row: ThreadRow): Promise<ThreadRow>
   deleteIndexRow(threadId: string): void
   listFromFilesystem(): Promise<ThreadSummary[]>
+  filesystemThreadIds(): Promise<string[]>
+  readDeltaSummaries(ids: string[]): Promise<ThreadSummary[]>
+  indexStatus(): ThreadIndexStatusInfo
   indexCount(options: ThreadStoreListOptions): number | undefined
   markSqliteDegraded(action: string, error: unknown): void
   markSqliteHealthy(): void
@@ -66,7 +72,7 @@ export async function hybridThreadStoreListPage(
   options: ThreadStoreListOptions
 ): Promise<ThreadStoreListPage> {
   const source = asSource(store)
-  if (source.hasDb()) {
+  if (source.hasDb() && source.isIndexReady() && !source.hasDirtyIndexThreads()) {
     try {
       const pageSize = typeof options.limit === 'number' ? Math.max(1, Math.floor(options.limit)) : 0
       const wanted = pageSize > 0 ? pageSize + 1 : 0
@@ -90,7 +96,20 @@ export async function hybridThreadStoreListPage(
         () => source.indexCount(options)
       )
       source.markSqliteHealthy()
-      return result
+      return { ...result, indexStatus: source.indexStatus() }
+    } catch (error) {
+      source.markSqliteDegraded('listPage', error)
+    }
+  }
+  // During a cold index, the SQLite table is only partially populated. Merge
+  // its readable rows with the not-yet-indexed filesystem threads (read in
+  // parallel, bounded by the summary cache) so the first page answers without
+  // waiting for the sequential reindex to finish.
+  if (source.hasDb() && !source.isIndexReady()) {
+    try {
+      const result = await transitionPage(source, options)
+      source.markSqliteHealthy()
+      return { ...result, indexStatus: source.indexStatus() }
     } catch (error) {
       source.markSqliteDegraded('listPage', error)
     }
@@ -99,7 +118,33 @@ export async function hybridThreadStoreListPage(
     await source.listFromFilesystem(),
     { ...options, limit: undefined }
   )
-  return pageFromSummaries(applyThreadCursor(filtered, options.cursor), options, () => filtered.length)
+  const result = pageFromSummaries(applyThreadCursor(filtered, options.cursor), options, () => filtered.length)
+  return { ...result, indexStatus: source.indexStatus() }
+}
+
+/** Merge partial SQLite rows with the dirty filesystem delta before paging. */
+async function transitionPage(
+  source: HybridThreadListPageSource,
+  options: ThreadStoreListOptions
+): Promise<ThreadStoreListPage> {
+  // Read every indexed row (across status and relation) so the merge below
+  // re-applies request filters uniformly over SQLite + dirty filesystem delta.
+  const rows = source.queryThreadRows({ includeArchived: true, includeSide: true })
+  const indexedSummaries = await summariesFromRows(source, rows)
+  const filesystemIds = await source.filesystemThreadIds()
+  const indexedIds = new Set(indexedSummaries.map((summary) => summary.id))
+  const dirtyIds = filesystemIds.filter((id) => !indexedIds.has(id))
+  const deltaSummaries = await source.readDeltaSummaries(dirtyIds)
+  // Canonical JSONL metadata wins when a thread appears in both sources.
+  const byId = new Map<string, ThreadSummary>()
+  for (const summary of indexedSummaries) byId.set(summary.id, summary)
+  for (const summary of deltaSummaries) byId.set(summary.id, summary)
+  const filtered = filterThreadSummaries([...byId.values()], { ...options, limit: undefined })
+  return pageFromSummaries(
+    applyThreadCursor(filtered, options.cursor),
+    options,
+    () => filtered.length
+  )
 }
 
 /** Structural assertion from the store to the pagination access surface. */

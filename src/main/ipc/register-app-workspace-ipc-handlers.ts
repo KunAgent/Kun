@@ -19,6 +19,7 @@ import {
 } from 'zod'
 import type {
   ConversationWorkspaceCreateResult,
+  WorkspaceCreationTimeEntry,
   WorkspacePickResult
 } from '../../shared/kun-gui-api'
 import {
@@ -29,6 +30,7 @@ import {
   skillGithubImportPayloadSchema,
   skillListPayloadSchema,
   skillSaveFilePayloadSchema,
+  workspaceCreationTimesPayloadSchema,
   workspaceRootSchema
 } from './app-ipc-schemas'
 import {
@@ -49,6 +51,7 @@ import {
   listGuiSkills
 } from '../services/skill-service'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
+import { bundledSkillsDirectory } from '../bundled-skill-resources'
 import { parseIpcPayload, pathExists } from './app-ipc-handler-utils'
 
 export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
@@ -94,6 +97,32 @@ export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersO
       return false
     }
   })
+
+  ipcMain.handle(
+    'workspace:creation-times',
+    async (_, payload: unknown): Promise<WorkspaceCreationTimeEntry[]> => {
+      const request = parseIpcPayload(
+        'workspace:creation-times',
+        workspaceCreationTimesPayloadSchema,
+        payload
+      )
+      return Promise.all(request.workspaceRoots.map(async (workspaceRoot) => {
+        const target = expandHomePath(workspaceRoot)
+        if (!target) return { path: workspaceRoot, createdAtMs: null }
+        try {
+          const stats = await stat(target)
+          // Some Linux filesystems report no birthtime (0); fall back to mtime
+          // so the sidebar still gets a usable creation ordering there.
+          const createdAtMs = stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.mtimeMs
+          return Number.isFinite(createdAtMs) && createdAtMs > 0
+            ? { path: workspaceRoot, createdAtMs }
+            : { path: workspaceRoot, createdAtMs: null }
+        } catch {
+          return { path: workspaceRoot, createdAtMs: null }
+        }
+      }))
+    }
+  )
 
   ipcMain.handle('file:pick-local-files', async (_, defaultPath: unknown) => {
     const normalizedDefaultPath = parseIpcPayload(
@@ -227,7 +256,7 @@ export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersO
   ipcMain.handle('skill:list', async (_, payload: unknown) => {
     const request = parseIpcPayload('skill:list', skillListPayloadSchema, payload)
     const settings = await store.load()
-    return listGuiSkills(settings, request.workspaceRoot)
+    return listGuiSkills(settings, request.workspaceRoot, bundledSkillsDirectory())
   })
 
   ipcMain.handle('skill:list-roots', async (_, payload: unknown) => {

@@ -201,7 +201,7 @@ export function buildAgentEventStream(
   let closed = false
   let delivered = 0
   let highWater = cursor
-  const afterSeq = Math.max(0, cursor - 1)
+  const afterSeq = cursor - 1
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const close = () => {

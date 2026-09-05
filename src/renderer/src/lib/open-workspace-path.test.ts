@@ -92,7 +92,7 @@ describe('exact workspace file actions', () => {
       path: '/tmp/workspace/presentations/brief.pptx',
       workspaceRoot: '/tmp/workspace',
       editorId: 'system',
-      openPolicy: 'presentation-artifact'
+      openPolicy: 'generated-document-artifact'
     })
   })
 
@@ -134,7 +134,7 @@ describe('exact workspace file actions', () => {
       path: '/tmp/workspace/brief.kun-ppt.html',
       workspaceRoot: '/tmp/workspace',
       editorId: 'file-manager',
-      openPolicy: 'presentation-artifact'
+      openPolicy: 'generated-document-artifact'
     })
   })
 
@@ -164,7 +164,7 @@ describe('exact workspace file actions', () => {
       path: '/tmp/workspace/brief.kun-ppt.html',
       workspaceRoot: '/tmp/workspace',
       editorId: 'system',
-      openPolicy: 'presentation-artifact',
+      openPolicy: 'generated-document-artifact',
       expectedSha256: contentSha256
     })
   })

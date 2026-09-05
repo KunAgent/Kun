@@ -179,6 +179,7 @@ export const MAX_BUFFERED_JOB_EVENTS = 256
 export const MAX_ORPHAN_JOB_SUBSCRIPTIONS = 32
 export const StorageValueResponseSchema = z.strictObject({ found: z.boolean(), value: JsonValueSchema.optional() })
 export const StorageDeleteResponseSchema = z.strictObject({ deleted: z.boolean() })
+export const SecretValueResponseSchema = z.strictObject({ found: z.boolean(), value: z.string().optional() })
 export const StringArraySchema = z.array(z.string())
 export const OptionalStringResponseSchema = z.strictObject({ value: z.string().optional() })
 export const SecretResponseSchema = z.strictObject({ secret: z.string() })

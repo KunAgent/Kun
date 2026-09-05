@@ -9,12 +9,8 @@ import {
   homedir
 } from 'node:os'
 import {
-  dirname,
   join
 } from 'node:path'
-import {
-  fileURLToPath
-} from 'node:url'
 import {
   JsonSettingsStore,
   devServerHintUrl
@@ -132,8 +128,9 @@ import {
   isTrustedRendererUrl,
   normalizeRendererPathname
 } from './renderer-trust-policy'
+import { mainBundleDirectory } from './main-bundle-path'
 
-export const __dirname = dirname(fileURLToPath(import.meta.url))
+export const __dirname = mainBundleDirectory(import.meta.url)
 
 /** Compare only the immutable renderer origin and entry document; query/hash are UI state. */
 export function isTrustedWorkbenchUrl(candidate: string, trustedRendererUrl: string): boolean {

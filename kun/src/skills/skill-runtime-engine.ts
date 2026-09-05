@@ -89,6 +89,7 @@ export class SkillRuntime {
       roots: [],
       workspaceRoots: [],
       globalRoots: [],
+      builtinRoots: [],
       projectConfigEnabled: false,
       disabledIds: [],
       legacySkillMd: true
@@ -301,10 +302,12 @@ export class SkillRuntime {
   diagnostics(): SkillRuntimeDiagnostics {
     const projectRoots = this.config.roots ?? []
     const globalRoots = this.config.globalRoots ?? []
+    const builtinRoots = this.config.builtinRoots ?? []
     return {
       enabled: skillsRuntimeEnabled(this.config),
       roots: [...projectRoots],
       globalRoots: [...globalRoots],
+      builtinRoots: [...builtinRoots],
       skills: this.skills.map((skill) => ({
         id: skill.id,
         name: skill.name,
@@ -335,6 +338,7 @@ export class SkillRuntime {
       ...base,
       roots: uniqueRoots(skills.filter((skill) => skill.source === 'project').map((skill) => skill.root)),
       globalRoots: uniqueRoots(skills.filter((skill) => skill.source === 'global').map((skill) => skill.root)),
+      builtinRoots: uniqueRoots(skills.filter((skill) => skill.source === 'builtin').map((skill) => skill.root)),
       skills: skills.map((skill) => ({
         id: skill.id,
         name: skill.name,
@@ -434,7 +438,8 @@ export class SkillRuntime {
       ...(this.config.workspaceRoots ?? []).map(normalizeRoot)
     ].filter(Boolean)
     const staticSkills = this.skills.filter((skill) => {
-      if (!skillVisibleForWorkspace(skill.root, workspaceRoot, knownWorkspaceRoots)) return false
+      if (skill.source === 'project' &&
+        !skillVisibleForWorkspace(skill.root, workspaceRoot, knownWorkspaceRoots)) return false
       if (projectConfig?.status !== 'valid') return true
       const projectLocal = skill.source === 'project' && isSameOrInside(workspaceRoot, normalizeRoot(skill.root))
       if (!projectLocal) return true

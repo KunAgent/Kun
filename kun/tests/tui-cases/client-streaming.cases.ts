@@ -75,12 +75,13 @@ function options(overrides: Partial<TuiOptions> = {}): TuiOptions {
 function modelSnapshot(revision = 1) {
   return {
     schemaVersion: 1 as const,
+    proxyRoutingVersion: 1 as const,
     revision,
     providers: [{
       id: 'provider-a', accountId: 'account:provider-a', name: 'Provider A',
       kind: 'http' as const, authType: 'api-key' as const,
       baseUrl: 'https://example.com/v1', endpointFormat: 'chat_completions' as const,
-      configured: true, models: ['model-a'], selectedModel: 'model-a'
+      useProxy: false, configured: true, models: ['model-a'], selectedModel: 'model-a'
     }],
     defaultProviderId: 'provider-a',
     defaultAccountId: 'account:provider-a',
@@ -174,6 +175,44 @@ describe('KunTuiClient streaming and model connections', () => {
 
     expect(cursors).toEqual(['0', '1'])
     expect(seqs).toEqual([1, 2])
+  })
+
+  it('hydrates state and reconnects from a replay reset cursor without delay', async () => {
+    const cursors: string[] = []
+    const abort = new AbortController()
+    let request = 0
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      cursors.push(new URL(String(url)).searchParams.get('since_seq') ?? '')
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const frame = request++ === 0
+            ? 'event: replay_reset_required\ndata: {"threadId":"thr_1","floorSeq":80}\n\n'
+            : 'id: 121\nevent: turn_completed\ndata: {"kind":"turn_completed","seq":121,"timestamp":"2026-07-22T00:00:01.000Z","threadId":"thr_1","turnId":"turn_1","status":"completed"}\n\n'
+          controller.enqueue(new TextEncoder().encode(frame))
+          controller.close()
+        }
+      })
+      return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
+    }) as unknown as typeof fetch
+    const client = new KunTuiClient({ baseUrl: 'http://127.0.0.1:18899', fetch: fetchImpl })
+    const reset = vi.fn(async () => 120)
+    const seqs: number[] = []
+
+    await client.subscribeThreadEvents({
+      threadId: 'thr_1',
+      sinceSeq: 7,
+      signal: abort.signal,
+      onReplayResetRequired: reset,
+      onEvent: (event) => {
+        seqs.push(event.seq)
+        abort.abort()
+      },
+      sleep: async () => { throw new Error('replay reset must reconnect immediately') }
+    })
+
+    expect(reset).toHaveBeenCalledWith({ threadId: 'thr_1', floorSeq: 80 })
+    expect(cursors).toEqual(['7', '120'])
+    expect(seqs).toEqual([121])
   })
 
   it('defers runtime discovery until an SSE retry and reports reconnection states', async () => {

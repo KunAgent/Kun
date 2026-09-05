@@ -1,5 +1,6 @@
 import { app, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
+import { disposeProxyAgents } from './proxy-fetch'
 import { maybePromptCliInstall } from './cli-install-service'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { kunRuntimeAdapter } from './runtime/kun-adapter'
@@ -26,6 +27,7 @@ import {
 import {
   ensureKunServeFreshOnStartup,
   ensureRuntime,
+  prepareGuiRuntimeForStartupRetry,
   reconcileBundledRuntimeAfterInstall,
   restartRuntime
 } from './main-runtime-startup'
@@ -47,6 +49,7 @@ import { sanitizeStartupFailureMessage } from './startup-failure-content'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
 import { prefetchCatalogPricing } from './catalog-prefetch'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
+import { installHostPowerRecovery } from './host-power-recovery'
 
 export function startMainApp(): Promise<void> {
   mainState.createWindow = createWindow
@@ -82,7 +85,6 @@ export function startMainApp(): Promise<void> {
       }
     }
     const earlyWindow = mainState.mainWindow
-    if (earlyWindow && !earlyWindow.isDestroyed()) earlyWindow.destroy()
     const message = sanitizeStartupFailureMessage(error)
     console.error('[kun-gui] startup failed:', message)
     logError('startup', 'Desktop startup failed.', {
@@ -94,7 +96,11 @@ export function startMainApp(): Promise<void> {
     const recoveryWindow = showStartupFailureWindow(
       error,
       mainState.logDir,
-      recoverHandoff ? { recoverHandoff } : {}
+      {
+        ...(recoverHandoff ? { recoverHandoff } : {}),
+        recoverRetry: () => prepareGuiRuntimeForStartupRetry(error),
+        replaceWindow: earlyWindow
+      }
     )
     if (recoveryWindow) {
       mainState.mainWindow = recoveryWindow
@@ -123,6 +129,9 @@ export function startMainApp(): Promise<void> {
   return app.whenReady().then(async () => {
     traceStartup('app.whenReady:start')
     if (!gotSingleInstanceLock) return
+    const disposeHostPowerRecovery = installHostPowerRecovery()
+    app.once('before-quit', disposeHostPowerRecovery)
+    app.once('before-quit', () => disposeProxyAgents())
     if (await recoverUpdateBeforeRuntimeStart()) return
 
     const startup = await startWindowFirstStartup({
@@ -139,13 +148,7 @@ export function startMainApp(): Promise<void> {
       windowAvailable: () => activation.windowAvailable(),
       syncTray,
       startBackground: async (shell) => {
-        mainState.startupState.transition('services_starting', 'Checking for an existing Kun runtime...')
-        const attached = await kunRuntimeAdapter.resolveConnection(shell.shellSettings).catch(() => false)
-        if (attached) {
-          mainState.startupState.noteDetail(
-            'Connected to the existing Kun runtime; keeping active work available during startup.'
-          )
-        }
+        mainState.startupState.transition('services_starting', 'Preparing the desktop-owned Kun Runtime...')
         return initializeMainServices({
           productionSettingsPath: shell.productionSettingsPath,
           onPhase: (phase, detail) => {

@@ -249,6 +249,7 @@ describe('model provider settings', () => {
         apiKey: 'sk-custom',
         baseUrl: 'https://custom.example/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['writer'],
         modelProfiles: {
           writer: {
@@ -276,6 +277,7 @@ describe('model provider settings', () => {
       name: 'Xiaomi',
       baseUrl: 'https://api.xiaomimimo.com/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: expect.arrayContaining(['mimo-v2.5-pro']),
       modelProfiles: {
         'mimo-v2.5': expect.objectContaining({
@@ -301,6 +303,7 @@ describe('model provider settings', () => {
       name: 'MiniMax',
       baseUrl: 'https://api.minimaxi.com/anthropic',
       endpointFormat: 'messages',
+      useProxy: false,
       models: expect.arrayContaining(['MiniMax-M2.5', 'MiniMax-M3']),
       image: {
         protocol: 'minimax-image',
@@ -449,6 +452,7 @@ describe('model provider settings', () => {
       apiKey: 'sk-minimax',
       baseUrl: 'https://api.minimaxi.com/anthropic',
       endpointFormat: 'messages' as const,
+      useProxy: false,
       models: ['MiniMax-M3'],
       modelProfiles: {}
     }
@@ -486,6 +490,7 @@ describe('model provider settings', () => {
       apiKey: 'sk-minimax',
       baseUrl: 'https://api.minimaxi.com/anthropic',
       endpointFormat: 'messages' as const,
+      useProxy: false,
       models: ['MiniMax-M3'],
       modelProfiles: {}
     }

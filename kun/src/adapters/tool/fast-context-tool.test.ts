@@ -78,6 +78,12 @@ describe('fast_context Fast Context provider', () => {
     expect(provider.id).toBe(FAST_CONTEXT_PROVIDER_ID)
     expect(provider.tools[0]?.name).toBe(FAST_CONTEXT_TOOL_NAME)
     expect(provider.tools[0]?.sideEffect).toBe('read-only')
+    expect(provider.effects).toEqual({
+      network: false,
+      externalWrite: false,
+      processExecution: false,
+      guiAutomation: false
+    })
     expect(provider.tools[0]?.shouldAdvertise?.(baseContext)).toBe(true)
     expect(provider.tools[0]?.description).toContain('one budgeted child')
     expect(provider.tools[0]?.inputSchema).toMatchObject({
@@ -111,7 +117,11 @@ describe('fast_context Fast Context provider', () => {
     })
     const tool = buildFastContextToolProvider(runtime, () => ({ enabled: true }))[0]!.tools[0]!
     const updates: Record<string, unknown>[] = []
-    const result = await tool.execute({ tasks: tasks(), workspace: '/' }, baseContext, async (update) => { updates.push(update.output as Record<string, unknown>) })
+    const result = await tool.execute(
+      { tasks: tasks(), workspace: '/' },
+      { ...baseContext, allowedModelProviderIds: ['deepseek'], allowedModelIds: ['main-model'] },
+      async (update) => { updates.push(update.output as Record<string, unknown>) }
+    )
 
     expect(runs).toBe(1)
     expect(result.isError).toBeFalsy()
@@ -137,7 +147,10 @@ describe('fast_context Fast Context provider', () => {
       label: 'Fast Context retrieval', profile: 'explore', fastContext: true,
       fastContextTasks: tasks(), model: 'main-model', providerId: 'deepseek', reasoningEffort: 'high',
       serviceTier: 'priority', toolPolicy: 'readOnly', allowedTools: ['grep', 'glob', 'read'], returnFormat: 'summary',
-      workspace: '/workspace', security: { sandboxRoot: '/workspace', allowedReadPaths: ['.'] }
+      workspace: '/workspace', security: {
+        sandboxRoot: '/workspace', allowedModelProviderIds: ['deepseek'],
+        allowedModelIds: ['main-model'], allowedReadPaths: ['.']
+      }
     })
     expect(received?.prompt).toContain('Task 1: Scope 1')
     expect(received?.prompt).toContain('Task 2: Scope 2')
@@ -178,6 +191,31 @@ describe('fast_context Fast Context provider', () => {
       fastContext: true, allowedTools: ['grep', 'glob', 'read']
     })
     expect(received?.serviceTier).toBe('priority')
+  })
+
+  it('rejects a Lab model route that exceeds a delegated parent model ceiling', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'fast-context-tool-'))
+    let runs = 0
+    const runtime = makeRuntime(dir, async () => {
+      runs += 1
+      return { summary: 'unreachable' }
+    })
+    const tool = buildFastContextToolProvider(runtime, () => ({
+      enabled: true,
+      model: 'gpt-5.4',
+      providerId: 'codex'
+    }))[0]!.tools[0]!
+
+    const result = await tool.execute({ tasks: tasks(1) }, {
+      ...baseContext,
+      allowedModelProviderIds: ['deepseek'],
+      allowedModelIds: ['main-model']
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.output).toMatchObject({ status: 'failed' })
+    expect((result.output as { error?: string }).error).toContain('expands parent authority')
+    expect(runs).toBe(0)
   })
 
   it('projects one aborted child with grouped uncertainties instead of a synthetic failed task batch', async () => {

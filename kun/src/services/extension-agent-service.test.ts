@@ -1,103 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolve } from 'node:path'
-import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
-import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
-import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
-import { ContextCompactor } from '../loop/context-compactor.js'
-import { InflightTracker } from '../loop/inflight-tracker.js'
-import { SteeringQueue } from '../loop/steering-queue.js'
 import { makeGoalContextItem } from '../domain/item.js'
-import { SequentialIdGenerator } from '../ports/id-generator.js'
-import { RuntimeEventRecorder } from './runtime-event-recorder.js'
-import { ThreadService } from './thread-service.js'
-import { TurnService } from './turn-service.js'
 import {
-  ExtensionAgentService,
   ExtensionBrokerError,
-  type ExtensionAgentEvent,
-  type ExtensionPrincipal
+  type ExtensionAgentEvent
 } from './extension-agent-service.js'
-import { ExtensionAgentProfileRegistry } from './extension-agent-profile-registry.js'
-
-const workspace = resolve('/tmp/kun-extension-workspace')
-
-function createHarness(headless = false) {
-  const threadStore = new InMemoryThreadStore()
-  const sessions = new InMemorySessionStore()
-  const eventBus = new InMemoryEventBus()
-  const ids = new SequentialIdGenerator()
-  const nowIso = () => '2026-07-11T08:00:00.000Z'
-  const events = new RuntimeEventRecorder({
-    eventBus,
-    sessionStore: sessions,
-    allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
-    nowIso
-  })
-  const threads = new ThreadService({ threadStore, sessionStore: sessions, events, ids, nowIso })
-  const turns = new TurnService({
-    threadStore,
-    sessionStore: sessions,
-    events,
-    inflight: new InflightTracker(),
-    steering: new SteeringQueue(),
-    compactor: new ContextCompactor(),
-    ids,
-    nowIso
-  })
-  const profiles = new ExtensionAgentProfileRegistry()
-  profiles.register({
-    extensionId: 'com.example.agent',
-    extensionVersion: '1.2.3',
-    profiles: [{
-      id: 'reviewer',
-      displayName: 'Reviewer',
-      instructionOverlay: 'Review carefully. Do not change Kun policy.',
-      providerBinding: {
-        providerId: 'example-provider',
-        accountId: 'account_1',
-        modelId: 'example-model'
-      },
-      allowedToolScopes: ['read'],
-      defaultBudget: { maxTokens: 800_000 },
-      visibility: 'workspace'
-    }]
-  })
-  const launched: Array<{ threadId: string; turnId: string }> = []
-  const service = new ExtensionAgentService({
-    threads,
-    turns,
-    sessions,
-    eventBus,
-    profiles,
-    runTurn: (threadId, turnId) => { launched.push({ threadId, turnId }) },
-    defaultBinding: { providerId: 'default-provider', modelId: 'default-model' },
-    headless,
-    maximumBudget: { maxTokens: 500_000 },
-    resolveToolCatalogEpoch: async () => ({
-      id: 'epoch_1',
-      fingerprint: 'sha256:catalog',
-      toolCount: 1,
-      canonicalToolIds: ['extension:com.example.agent/read'],
-      schemaDigests: { 'extension:com.example.agent/read': 'sha256:read' },
-      createdAt: nowIso()
-    })
-  })
-  return { service, threads, turns, sessions, events, launched }
-}
-
-function principal(extensionId = 'com.example.agent'): ExtensionPrincipal {
-  return {
-    extensionId,
-    extensionVersion: '1.2.3',
-    permissions: [
-      'agent.run',
-      'agent.threads.readOwn',
-      'accounts.use:example-provider'
-    ],
-    workspaceRoots: [workspace],
-    workspaceTrusted: true
-  }
-}
+import {
+  createExtensionAgentHarness as createHarness,
+  extensionAgentPrincipal as principal,
+  workspace
+} from './extension-agent-service.test-support.js'
 
 describe('ExtensionAgentService', () => {
   it('creates an owned run with a clamped immutable profile snapshot', async () => {
@@ -160,6 +71,71 @@ describe('ExtensionAgentService', () => {
     await expect(h.service.getOwnThread(principal('com.example.foreign'), run.threadId)).rejects.toBeInstanceOf(
       ExtensionBrokerError
     )
+  })
+
+  it('pages owned threads with a safe latest run and filters completed conversations', async () => {
+    const h = createHarness()
+    const completedRun = await h.service.createRun(principal(), {
+      input: 'Completed conversation',
+      workspace
+    })
+    await h.turns.finishTurn({
+      threadId: completedRun.threadId,
+      turnId: completedRun.id,
+      status: 'completed'
+    })
+    const activeRun = await h.service.createRun(principal(), {
+      input: 'Active conversation',
+      workspace
+    })
+    await h.events.record({
+      kind: 'approval_requested',
+      threadId: activeRun.threadId,
+      turnId: activeRun.id,
+      approvalId: 'approval-listing',
+      toolName: 'write',
+      status: 'pending'
+    })
+    const getThread = vi.spyOn(h.threads, 'get')
+    const iterateEvents = vi.spyOn(h.sessions, 'iterateEventsSince')
+
+    const first = await h.service.listOwnThreads(principal(), { limit: 1 })
+    expect(getThread).toHaveBeenCalledTimes(1)
+    expect(iterateEvents).toHaveBeenCalledTimes(1)
+    const second = await h.service.listOwnThreads(principal(), {
+      limit: 1,
+      cursor: first.nextCursor
+    })
+    const items = [...first.items, ...second.items]
+
+    expect(first.nextCursor).toBeDefined()
+    expect(second.nextCursor).toBeUndefined()
+    expect(items.map((thread) => thread.latestRun?.id).sort()).toEqual(
+      [activeRun.id, completedRun.id].sort()
+    )
+    expect(items.find((thread) => thread.id === completedRun.threadId)?.latestRun).toMatchObject({
+      id: completedRun.id,
+      status: 'completed',
+      finishedAt: expect.any(String),
+      ownerExtensionId: 'com.example.agent'
+    })
+    expect(items.find((thread) => thread.id === activeRun.threadId)?.latestRun).toMatchObject({
+      id: activeRun.id,
+      status: 'waiting-approval'
+    })
+    await expect(h.service.getOwnThread(principal(), completedRun.threadId)).resolves.toMatchObject({
+      latestRun: { id: completedRun.id, status: 'completed' }
+    })
+    getThread.mockClear()
+    iterateEvents.mockClear()
+    await expect(h.service.listOwnThreads(principal(), { state: 'completed' })).resolves.toMatchObject({
+      items: [{ id: completedRun.threadId, latestRun: { id: completedRun.id, status: 'completed' } }]
+    })
+    expect(getThread).toHaveBeenCalledTimes(2)
+    expect(iterateEvents).toHaveBeenCalledTimes(2)
+    await expect(h.service.listOwnThreads(principal(), { state: 'waiting-approval' })).resolves.toMatchObject({
+      items: [{ id: activeRun.threadId, latestRun: { id: activeRun.id, status: 'waiting-approval' } }]
+    })
   })
 
   it('enforces permission, workspace, account, steering, and idempotent cancellation', async () => {
@@ -283,6 +259,119 @@ describe('ExtensionAgentService', () => {
     replay.close()
   })
 
+  it('treats public afterSequence zero as the point before runtime sequence zero', async () => {
+    const h = createHarness()
+    const run = await h.service.createRun(principal(), { input: 'Sequence zero boundary', workspace })
+    const iterate = vi.spyOn(h.sessions, 'iterateEventsSince').mockImplementation(async function* (
+      threadId,
+      afterSeq
+    ) {
+      expect(threadId).toBe(run.threadId)
+      expect(afterSeq).toBe(-1)
+      yield {
+        seq: 0,
+        timestamp: '2026-07-11T08:00:01.000Z',
+        kind: 'turn_steered',
+        threadId: run.threadId,
+        turnId: run.id,
+        text: 'First durable message'
+      }
+    })
+
+    const page = await h.service.listRunEvents(principal(), {
+      runId: run.id,
+      afterSequence: 0
+    })
+
+    expect(iterate).toHaveBeenCalledWith(
+      run.threadId,
+      -1,
+      expect.objectContaining({ maxRecordBytes: expect.any(Number) })
+    )
+    expect(page).toMatchObject({ cursor: 1, hasMore: false, historyIncomplete: false })
+    expect(page.items).toEqual([
+      expect.objectContaining({ seq: 0, payload: expect.objectContaining({ content: 'First durable message' }) })
+    ])
+  })
+
+  it('continues a paged history with live subscription without duplicate or missing events', async () => {
+    const h = createHarness()
+    const run = await h.service.createRun(principal(), { input: 'History to live handoff', workspace })
+    const afterSequence = (await h.sessions.highestSeq(run.threadId)) + 1
+    const durable = []
+    for (const text of ['First', 'Second', 'Third']) {
+      durable.push(await h.events.record({
+        kind: 'turn_steered',
+        threadId: run.threadId,
+        turnId: run.id,
+        text
+      }))
+    }
+
+    const page = await h.service.listRunEvents(principal(), {
+      runId: run.id,
+      afterSequence,
+      limit: 2
+    })
+    const replayed: ExtensionAgentEvent[] = []
+    const subscription = await h.service.subscribe(principal(), {
+      runId: run.id,
+      afterSeq: page.cursor - 1
+    }, (event) => {
+      replayed.push(event)
+    })
+
+    expect(page.hasMore).toBe(true)
+    expect([...page.items, ...replayed].map(({ seq }) => seq)).toEqual(durable.map(({ seq }) => seq))
+    expect(new Set([...page.items, ...replayed].map(({ seq }) => seq)).size).toBe(durable.length)
+    subscription.close()
+  })
+
+  it('marks an incomplete durable history and bounds each page by bytes', async () => {
+    const h = createHarness()
+    const run = await h.service.createRun(principal(), { input: 'Bound history', workspace })
+    const afterSequence = (await h.sessions.highestSeq(run.threadId)) + 1
+    for (let index = 0; index < 10; index += 1) {
+      await h.events.record({
+        kind: 'item_completed',
+        threadId: run.threadId,
+        turnId: run.id,
+        item: {
+          kind: 'assistant_text', id: `large-assistant-${index}`, threadId: run.threadId, turnId: run.id,
+          role: 'assistant', status: 'completed', createdAt: '2026-07-11T08:00:02.000Z',
+          text: `${index}:${'x'.repeat(70 * 1024)}`
+        }
+      })
+    }
+    const eventReplayFloorSeq = vi.fn(async () => afterSequence + 5)
+    Object.defineProperty(h.sessions, 'eventReplayFloorSeq', {
+      configurable: true,
+      value: eventReplayFloorSeq
+    })
+
+    const page = await h.service.listRunEvents(principal(), { runId: run.id, afterSequence, limit: 200 })
+
+    expect(page.historyIncomplete).toBe(true)
+    expect(page.hasMore).toBe(true)
+    expect(page.items.length).toBeGreaterThan(0)
+    expect(page.items.length).toBeLessThan(10)
+    expect(Buffer.byteLength(JSON.stringify(page.items), 'utf8')).toBeLessThanOrEqual(512 * 1024 + 1024)
+
+    eventReplayFloorSeq.mockResolvedValue(afterSequence)
+    await expect(h.service.listRunEvents(principal(), {
+      runId: run.id,
+      afterSequence,
+      limit: 1
+    })).resolves.toMatchObject({ historyIncomplete: false })
+
+    eventReplayFloorSeq.mockResolvedValue(1)
+    await expect(h.service.listRunEvents(principal(), {
+      runId: run.id,
+      afterSequence: 0,
+      limit: 1
+    })).resolves.toMatchObject({ historyIncomplete: false })
+  })
+
   it('summarizes run status with forward-only event iteration', async () => {
     const h = createHarness()
     const run = await h.service.createRun(principal(), { input: 'Inspect status', workspace })
@@ -301,7 +390,7 @@ describe('ExtensionAgentService', () => {
     expect(projected.status).toBe('budget-exhausted')
     expect(iterateEventsSince).toHaveBeenCalledWith(
       run.threadId,
-      0,
+      -1,
       expect.objectContaining({ maxRecordBytes: expect.any(Number) })
     )
     expect(loadEventsSince).not.toHaveBeenCalled()

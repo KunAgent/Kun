@@ -11,6 +11,25 @@ export type InitialWorkbenchPreparationDeps = {
   loadInitialSetupDialog: () => Promise<unknown>
 }
 
+const MAX_STABILITY_ATTEMPTS = 3
+
+function sameSnapshot(
+  before: InitialWorkbenchPreparationSnapshot,
+  after: InitialWorkbenchPreparationSnapshot
+): boolean {
+  return before.route === after.route && before.initialSetupOpen === after.initialSetupOpen
+}
+
+async function preloadSnapshot(
+  deps: InitialWorkbenchPreparationDeps,
+  snapshot: InitialWorkbenchPreparationSnapshot
+): Promise<void> {
+  await Promise.all([
+    snapshot.route === 'settings' ? deps.loadSettingsView() : deps.loadWorkbench(),
+    snapshot.initialSetupOpen ? deps.loadInitialSetupDialog() : Promise.resolve()
+  ])
+}
+
 export function createInitialWorkbenchPreparer(
   deps: InitialWorkbenchPreparationDeps
 ): () => Promise<void> {
@@ -19,20 +38,10 @@ export function createInitialWorkbenchPreparer(
     if (activePreparation) return activePreparation
     const preparation = (async () => {
       await deps.boot()
-      const { route, initialSetupOpen } = deps.getSnapshot()
-      const routeComponent = route === 'settings'
-        ? deps.loadSettingsView()
-        : deps.loadWorkbench()
-      const setupComponent = initialSetupOpen
-        ? deps.loadInitialSetupDialog()
-        : Promise.resolve()
-      await Promise.all([routeComponent, setupComponent])
-      const finalSnapshot = deps.getSnapshot()
-      if (finalSnapshot.route !== route || finalSnapshot.initialSetupOpen !== initialSetupOpen) {
-        await Promise.all([
-          finalSnapshot.route === 'settings' ? deps.loadSettingsView() : deps.loadWorkbench(),
-          finalSnapshot.initialSetupOpen ? deps.loadInitialSetupDialog() : Promise.resolve()
-        ])
+      for (let attempt = 0; attempt < MAX_STABILITY_ATTEMPTS; attempt += 1) {
+        const before = deps.getSnapshot()
+        await preloadSnapshot(deps, before)
+        if (sameSnapshot(before, deps.getSnapshot())) return
       }
     })()
     activePreparation = preparation

@@ -114,6 +114,7 @@ class FailOnceAppendSessionStore extends InMemorySessionStore {
     }
     await super.appendItem(threadId, item)
   }
+
 }
 
 class BlockingGoalContextSessionStore extends InMemorySessionStore {
@@ -175,6 +176,15 @@ class BlockingDeltaEventSessionStore extends InMemorySessionStore {
   override async appendItem(threadId: string, item: TurnItem): Promise<void> {
     this.order.push('item')
     await super.appendItem(threadId, item)
+  }
+
+  override async checkpointLiveItem(
+    threadId: string,
+    item: TurnItem,
+    representedSeq: number
+  ): Promise<void> {
+    this.order.push('checkpoint')
+    await super.checkpointLiveItem(threadId, item, representedSeq)
   }
 
   override async appendEvent(threadId: string, event: RuntimeEvent): Promise<void> {
@@ -239,14 +249,14 @@ describe('TurnService assistant delta persistence (#1087)', () => {
       const recording = service.applyAssistantDelta('thr_stream', item, 'prefix', 0)
       await sessionStore.eventAppendStarted
 
-      expect(sessionStore.order).toEqual(['item', 'event-start'])
+      expect(sessionStore.order).toEqual(['checkpoint', 'event-start'])
       expect(await sessionStore.loadItems('thr_stream')).toEqual([item])
       expect(await sessionStore.highestSeq('thr_stream')).toBe(0)
 
       sessionStore.releaseEvent()
       await recording
 
-      expect(sessionStore.order).toEqual(['item', 'event-start', 'event-commit'])
+      expect(sessionStore.order).toEqual(['checkpoint', 'event-start', 'event-commit'])
       expect(await sessionStore.loadEventsSince('thr_stream', 0)).toEqual([
         expect.objectContaining({
           kind: 'assistant_text_delta',

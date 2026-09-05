@@ -177,7 +177,7 @@ export function createLsLocalTool(options: LsLocalToolOptions = {}): LocalTool {
       required: [],
       additionalProperties: false
     },
-    policy: 'auto',
+    policy: 'auto', sideEffect: 'read-only',
     execute: async (args, context) => withToolBoundary(async () => {
       const rawPath = typeof args.path === 'string' && args.path.trim() ? args.path : '.'
       const limit = normalizePositiveInteger(args.limit, options.defaultLimit ?? DEFAULT_LIST_LIMIT)
@@ -237,7 +237,7 @@ function createFileGlobLocalTool(name: 'glob' | 'find', options: FindLocalToolOp
       required: ['pattern'],
       additionalProperties: false
     },
-    policy: 'auto',
+    policy: 'auto', sideEffect: 'read-only',
     ...(advertised ? {} : { modelAdvertised: false }),
     execute: async (args, context) => withToolBoundary(async () => {
       const pattern = typeof args.pattern === 'string' ? args.pattern.trim() : ''
@@ -456,7 +456,7 @@ export function createGrepLocalTool(options: GrepLocalToolOptions = {}): LocalTo
       required: ['pattern'],
       additionalProperties: false
     },
-    policy: 'auto',
+    policy: 'auto', sideEffect: 'read-only',
     execute: async (args, context) => withToolBoundary(async () => {
       const pattern = typeof args.pattern === 'string' ? args.pattern : ''
       if (!pattern.trim()) return { output: { error: 'pattern is required' }, isError: true }

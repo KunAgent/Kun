@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import type { RuntimeFlavor } from '../../kun/src/contracts/runtime-flavor.js'
+import type { ManagerHandoffDiscoveryRecord } from '../../kun/src/manager/manager-discovery.js'
 import type { RuntimeHandoffDiscoveryRecord } from '../../kun/src/server/runtime-discovery.js'
 import type { ProcessIdentity } from './kun-process-ports'
 
@@ -10,16 +11,41 @@ export function identityMatchesExpectedRuntime(
   discovery: RuntimeHandoffDiscoveryRecord,
   dataDir: string,
   flavor: RuntimeFlavor,
-  expectedServeEntryPath?: string
+  expectedServeEntryPath?: string,
+  platform: NodeJS.Platform = process.platform
 ): boolean {
   if (!identity || identity.pid !== discovery.pid) return false
   if (!commandLooksLikeExpectedServe(identity.commandLine, dataDir, flavor, expectedServeEntryPath)) {
     return false
   }
-  if (process.platform === 'win32' && !looksLikeRuntimeExecutable(identity.executablePath)) return false
+  if (platform === 'win32' && !looksLikeRuntimeExecutable(identity.executablePath)) return false
   const discoveryStartedAtMs = Date.parse(discovery.startedAt)
   return Number.isFinite(discoveryStartedAtMs) && identity.startedAtMs !== null &&
     Math.abs(identity.startedAtMs - discoveryStartedAtMs) <= MAX_RUNTIME_STARTED_AT_DIFFERENCE_MS
+}
+
+export function identityMatchesExpectedManager(
+  identity: ProcessIdentity | null,
+  discovery: ManagerHandoffDiscoveryRecord,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (!identity || identity.pid !== discovery.pid) return false
+  if (!commandLooksLikeExpectedManager(identity.commandLine)) return false
+  if (platform === 'win32' && !looksLikeRuntimeExecutable(identity.executablePath)) return false
+  const discoveryStartedAtMs = Date.parse(discovery.startedAt)
+  return Number.isFinite(discoveryStartedAtMs) && identity.startedAtMs !== null &&
+    Math.abs(identity.startedAtMs - discoveryStartedAtMs) <= MAX_RUNTIME_STARTED_AT_DIFFERENCE_MS
+}
+
+export function commandLooksLikeExpectedManager(command: string): boolean {
+  const normalized = command.trim()
+  const normalizedTitle = normalized.toLocaleLowerCase('en-US')
+  if (normalizedTitle === 'kun-service-manager' || normalizedTitle.startsWith('kun-service-manager ')) {
+    return true
+  }
+  return splitCommandLine(normalized).some((token) =>
+    !token.startsWith('-') && /(?:^|[/\\])manager-entry\.js$/iu.test(token)
+  )
 }
 
 export function commandLooksLikeExpectedServe(

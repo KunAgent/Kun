@@ -123,7 +123,7 @@
         Return
       ${endif}
       IntOp $KunInstallerHealthAttempt $KunInstallerHealthAttempt + 1
-      ${if} $KunInstallerHealthAttempt >= 60
+      ${if} $KunInstallerHealthAttempt >= 180
         StrCpy $KunInstallerHelperExitCode 1
         StrCpy $KunInstallerHelperOutput "The candidate application health check timed out."
         Return

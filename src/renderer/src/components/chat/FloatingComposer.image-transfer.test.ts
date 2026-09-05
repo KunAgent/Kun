@@ -18,6 +18,7 @@ import {
   parseReviewCommand,
   returnQueuedMessageToComposer,
   shouldCaptureFileMentionCommitKey,
+  shouldOpenAttachmentPickerOnKeyDown,
   shouldShowVoiceDictation,
   shouldShowGoalFloater,
   shouldShowUsageHistory,
@@ -51,8 +52,7 @@ import {
 } from './FloatingComposerExecutionPicker'
 import {
   FloatingComposerQueuedMessages,
-  calculateQueuedMessageMenuPlacement,
-  canEditQueuedComposerMessage
+  calculateQueuedMessageMenuPlacement
 } from './FloatingComposerQueuedMessages'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import { requestContextSnapshotMatchesSelection } from './FloatingComposerContextCapacity'
@@ -240,5 +240,55 @@ describe('FloatingComposer image transfer helpers', () => {
     expect(handled).toBe(true)
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(onPasteClipboardImage).toHaveBeenCalledWith({ silentNoImage: false })
+  })
+})
+
+describe('composer attachment shortcut', () => {
+  const modifiers = {
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false
+  }
+
+  it('triggers for Ctrl+U and Cmd+U when attachments are available', () => {
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'u', ctrlKey: true },
+      { composing: false, canPickAttachment: true }
+    )).toBe(true)
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'U', metaKey: true },
+      { composing: false, canPickAttachment: true }
+    )).toBe(true)
+  })
+
+  it('does not trigger while composing, with Alt/Shift modifiers, or without capability', () => {
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'u', ctrlKey: true },
+      { composing: true, canPickAttachment: true }
+    )).toBe(false)
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'u', ctrlKey: true, altKey: true },
+      { composing: false, canPickAttachment: true }
+    )).toBe(false)
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'u', ctrlKey: true, shiftKey: true },
+      { composing: false, canPickAttachment: true }
+    )).toBe(false)
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'u', ctrlKey: true },
+      { composing: false, canPickAttachment: false }
+    )).toBe(false)
+  })
+
+  it('ignores plain U, Enter, and unrelated keys', () => {
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'u' },
+      { composing: false, canPickAttachment: true }
+    )).toBe(false)
+    expect(shouldOpenAttachmentPickerOnKeyDown(
+      { ...modifiers, key: 'Enter', ctrlKey: true },
+      { composing: false, canPickAttachment: true }
+    )).toBe(false)
   })
 })

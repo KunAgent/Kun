@@ -151,6 +151,15 @@ export function buildToolPreferenceInstruction(
       'Use `delegate_task` when a substantial task benefits from specialist expertise, a fresh independent review, or parallel investigation of independent workstreams. Delegate a clear bounded outcome with enough context; keep integration and final verification in the parent agent.'
     )
     bullets.push(
+      'Before delegating, decide whether the child result is required for the current final answer. If it is required, run the child in the foreground and do not set detach=true; detached children report back asynchronously after the current turn and are not a final-answer quality gate.'
+    )
+    bullets.push(
+      'For the same parent turn, code-change scope, and review purpose, launch only one reviewer. If a matching detached reviewer is already queued or running, do not start an overlapping foreground reviewer. Multiple reviewers are allowed only for explicitly distinct, independent scopes recorded in their labels and prompts.'
+    )
+    bullets.push(
+      'Do not claim that a detached review passed until its settled result has actually been observed.'
+    )
+    bullets.push(
       'Do not delegate trivial work, tightly coupled sequential steps, or tasks the parent can complete faster directly. Issue multiple child calls together only when they are genuinely independent.'
     )
     bullets.push(
@@ -211,7 +220,7 @@ export function buildToolPreferenceInstruction(
       'Use `ppt_agent(action="start", title="...")` for presentation/PPT tasks that require native PPTX or do not request another explicit presentation format. `title` is required on start: pass a short 2-6 word UI title (at most 160 characters) naming the task; it becomes the review whiteboard title and is never sent as presentation content. When the user explicitly asks for Presentation Studio or `.kun-ppt.html` and its direct extension tools are advertised, keep that HTML workflow separate. Apart from the title, pass only workflow control. Never rewrite, summarize, supplement, or invent the presentation request in tool arguments: the host forwards the exact active user turn and its attachments to the PPT child. Inspect the structured phase instead of assuming one call always returns a PPTX.'
     )
     bullets.push(
-      'When `ppt_agent` returns `phase="awaiting_review"`, the visual bundle is opened automatically on the parent whiteboard: stop final export, invite the user to review, and retain its childId/workflowId. For changes or failed pages, call `ppt_agent(action="revise_previews"|"retry_failed", childId, workflowId)`; after explicit approval, call `ppt_agent(action="approve_and_build", childId, workflowId)` so the same PPT child builds the editable deliverable. Review feedback is taken from the exact active turn and structured canvas context; do not copy it into tool arguments. Never replace an active review workflow with a new PPT child.'
+      'When `ppt_agent` returns `phase="awaiting_review"`, the visual bundle is opened automatically on the parent whiteboard: stop final export, invite the user to review, and retain its childId/workflowId. For changes or failed pages, call `ppt_agent(action="revise_previews"|"retry_failed", childId, workflowId)`; after explicit approval, call `ppt_agent(action="approve_and_build", childId, workflowId)` so the same PPT child builds the editable deliverable. Review feedback is taken from the exact active turn and structured canvas context; do not copy it into tool arguments. If a review action returns `phase="source_unavailable"`, keep the same workflow, report that its structured review board must be restored, and never bypass governance by constructing or exporting a replacement deck with shell/file tools. Never replace an active review workflow with a new PPT child.'
     )
     const directionInputTool = names.has('user_input') ? '`user_input`' : names.has('request_user_input') ? '`request_user_input`' : ''
     bullets.push(directionInputTool

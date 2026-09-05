@@ -61,6 +61,7 @@ describe('ChatGPT subscription migration', () => {
         apiKey: 'oauth-json',
         baseUrl: 'https://chatgpt.com/backend-api/codex',
         endpointFormat: 'responses',
+        useProxy: false,
         models: ['gpt-5.4-mini', 'gpt-5.5', 'gpt-5.3-codex-spark', 'gpt-5.4'],
         modelProfiles: {}
       }]
@@ -98,6 +99,7 @@ describe('ChatGPT subscription migration', () => {
         apiKey: 'oauth-json',
         baseUrl: 'https://chatgpt.com/backend-api/codex',
         endpointFormat: 'custom_endpoint',
+        useProxy: false,
         models: ['gpt-5.4-mini'],
         modelProfiles: {
           'gpt-5.4-mini': {
@@ -125,6 +127,7 @@ describe('ChatGPT subscription migration', () => {
         apiKey: 'oauth-json',
         baseUrl: 'https://chatgpt.com/backend-api/codex',
         endpointFormat: 'responses',
+        useProxy: false,
         models: ['gpt-5.5', 'team-model'],
         modelProfiles: {}
       }]
@@ -236,6 +239,7 @@ describe('Grok subscription media capabilities', () => {
         apiKey: 'sk-custom',
         baseUrl: 'https://chat.example/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['custom-chat'],
         modelProfiles: {},
         image,
@@ -421,6 +425,25 @@ describe('active model provider API-key status', () => {
     state.agents.kun.providerId = 'deepseek'
 
     expect(activeModelProviderNeedsApiKey(state)).toBe(false)
+  })
+
+  it('requires an API key for a custom HTTP provider without a preset source', () => {
+    const state = settings()
+    const customProvider = {
+      ...state.provider.providers[0]!,
+      id: 'custom-provider-2',
+      name: 'Custom provider',
+      presetSource: undefined,
+      kind: 'http' as const,
+      apiKey: '',
+      baseUrl: 'https://api.example.com/v1'
+    }
+    state.provider.providers.push(customProvider)
+    state.agents.kun.providerId = customProvider.id
+    state.agents.kun.apiKey = ''
+
+    expect(modelProviderRequiresApiKey(customProvider)).toBe(true)
+    expect(activeModelProviderNeedsApiKey(state)).toBe(true)
   })
 
   it.each([

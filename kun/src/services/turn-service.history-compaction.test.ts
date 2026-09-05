@@ -313,7 +313,9 @@ describe('TurnService bounded history operations', () => {
         nowIso
       })
 
-      await expect(service.reconcileOrphanedTurns()).resolves.toEqual([activeId])
+      await expect(service.reconcileOrphanedTurns()).resolves.toEqual([
+        { threadId: activeId, turnId: 'turn_active' }
+      ])
 
       expect(threadStore.metadataGets).toEqual(expect.arrayContaining([idleId, activeId]))
       expect(threadStore.hydratedGets).not.toContain(idleId)

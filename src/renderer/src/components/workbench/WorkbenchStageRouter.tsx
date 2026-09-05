@@ -8,6 +8,9 @@ const PluginMarketplaceView = lazy(() =>
 const ScheduleTasksView = lazy(() =>
   import('../schedule/ScheduleTasksView').then((module) => ({ default: module.ScheduleTasksView }))
 )
+const ProjectBoardView = lazy(() =>
+  import('../project-board/ProjectBoardView').then((module) => ({ default: module.ProjectBoardView }))
+)
 const WorkflowView = lazy(() =>
   import('../workflow/WorkflowView').then((module) => ({ default: module.WorkflowView }))
 )
@@ -100,6 +103,13 @@ export function WorkbenchStageRouter({
               onToggleLeftSidebar={onToggleLeftSidebar}
               onOpenThread={onOpenThread}
               onConnectWeixin={onConnectWeixin}
+            />
+          </Suspense>
+        ) : normalizedRoute === 'board' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <ProjectBoardView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
             />
           </Suspense>
         ) : normalizedRoute === 'workflow' ? (

@@ -4,7 +4,8 @@ import type {
   RuntimeRequestResult,
   SseEndPayload,
   SseErrorPayload,
-  SseEventPayload
+  SseEventPayload,
+  SseOpenPayload
 } from '@shared/kun-gui-api'
 
 class RendererRuntimeClient {
@@ -47,12 +48,41 @@ class RendererRuntimeClient {
     this.settingsPromise = null
   }
 
-  runtimeRequest(path: string, method?: string, body?: string): Promise<RuntimeRequestResult> {
-    if (body === undefined) {
-      if (method === undefined) return window.kunGui.runtimeRequest(path)
-      return window.kunGui.runtimeRequest(path, method)
+  async runtimeRequest(
+    path: string,
+    method?: string,
+    body?: string,
+    options: {
+      signal?: AbortSignal
+      priority?: 'foreground' | 'background'
+    } = {}
+  ): Promise<RuntimeRequestResult> {
+    options.signal?.throwIfAborted()
+    const requestId = options.signal
+      ? `renderer-${Date.now().toString(36)}-${(++runtimeRequestSequence).toString(36)}`
+      : undefined
+    const requestOptions = requestId || options.priority
+      ? { ...(requestId ? { requestId } : {}), ...(options.priority ? { priority: options.priority } : {}) }
+      : undefined
+    const cancel = (): void => {
+      if (!requestId || typeof window.kunGui.cancelRuntimeRequest !== 'function') return
+      void window.kunGui.cancelRuntimeRequest(requestId).catch(() => false)
     }
-    return window.kunGui.runtimeRequest(path, method, body)
+    options.signal?.addEventListener('abort', cancel, { once: true })
+    try {
+      const response = requestOptions
+        ? window.kunGui.runtimeRequest(path, method, body, requestOptions)
+        : body === undefined
+          ? method === undefined
+            ? window.kunGui.runtimeRequest(path)
+            : window.kunGui.runtimeRequest(path, method)
+          : window.kunGui.runtimeRequest(path, method, body)
+      const result = await response
+      options.signal?.throwIfAborted()
+      return result
+    } finally {
+      options.signal?.removeEventListener('abort', cancel)
+    }
   }
 
   restartRuntime(): Promise<void> {
@@ -80,6 +110,10 @@ class RendererRuntimeClient {
     return window.kunGui.onSseEvent(handler)
   }
 
+  onSseOpen(handler: (payload: SseOpenPayload) => void): () => void {
+    return window.kunGui.onSseOpen(handler)
+  }
+
   onSseEnd(handler: (payload: SseEndPayload) => void): () => void {
     return window.kunGui.onSseEnd(handler)
   }
@@ -88,5 +122,7 @@ class RendererRuntimeClient {
     return window.kunGui.onSseError(handler)
   }
 }
+
+let runtimeRequestSequence = 0
 
 export const rendererRuntimeClient = new RendererRuntimeClient()

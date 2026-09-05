@@ -11,6 +11,7 @@ import {
   executeCreatePlanTool,
   isPlanToolContextActive
 } from '../src/adapters/tool/create-plan-tool.js'
+import { buildGuiPlanId } from '../src/shared/gui-plan.js'
 import type { ToolHostContext } from '../src/ports/tool-host.js'
 
 function buildContext(overrides: Partial<ToolHostContext> = {}): ToolHostContext {
@@ -98,7 +99,6 @@ describe('create_plan tool: advertisement', () => {
       'repo_map',
       'git_inspect',
       'user_input',
-      'request_user_input',
       CREATE_PLAN_TOOL_NAME
     ])
     expect(names).not.toEqual(expect.arrayContaining(['write', 'edit', 'bash', 'verify_changes', 'echo']))
@@ -118,7 +118,6 @@ describe('create_plan tool: advertisement', () => {
       'repo_map',
       'git_inspect',
       'user_input',
-      'request_user_input',
       CREATE_PLAN_TOOL_NAME
     ])
   })
@@ -539,7 +538,7 @@ describe('create_plan tool: success and atomic write', () => {
     expect(result.isError).toBeFalsy()
     expect(result.output).toMatchObject({
       relative_path: '.kunsdd/plan/thr-plan-fallback.md',
-      plan_id: `${workspace}:.kunsdd/plan/thr-plan-fallback.md`
+      plan_id: buildGuiPlanId(workspace, '.kunsdd/plan/thr-plan-fallback.md')
     })
   })
 

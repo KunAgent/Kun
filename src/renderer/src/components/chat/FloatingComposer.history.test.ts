@@ -51,8 +51,7 @@ import {
 } from './FloatingComposerExecutionPicker'
 import {
   FloatingComposerQueuedMessages,
-  calculateQueuedMessageMenuPlacement,
-  canEditQueuedComposerMessage
+  calculateQueuedMessageMenuPlacement
 } from './FloatingComposerQueuedMessages'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import { requestContextSnapshotMatchesSelection } from './FloatingComposerContextCapacity'
@@ -247,7 +246,22 @@ describe('FloatingComposer input history and footer hints', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Send"/)
   })
 
-  it('removes the Code/Design selector from a locked conversation', () => {
+  it('renders the Code/Design picker after add and before Plan', () => {
+    const html = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
+      taskSurface: 'code',
+      mode: 'plan',
+      designTaskProfile: { outputMedium: 'html', target: 'web', preset: 'none' },
+      onTaskSurfaceChange: vi.fn()
+    })))
+
+    expect(html).toContain('data-task-surface-trigger="true"')
+    expect(html.match(/data-task-surface-trigger/g)).toHaveLength(1)
+    expect(html.indexOf('ds-composer-menu-button')).toBeLessThan(html.indexOf('data-task-surface-trigger'))
+    expect(html.indexOf('data-task-surface-trigger')).toBeLessThan(html.indexOf('data-composer-plan-mode-badge'))
+    expect(html).not.toContain('data-task-surface-selector')
+  })
+
+  it('removes the Code/Design picker from a locked conversation', () => {
     const lockedCode = renderToStaticMarkup(createElement(FloatingComposer, baseComposerProps({
       taskSurface: 'code',
       taskSurfaceLocked: true,
@@ -260,9 +274,9 @@ describe('FloatingComposer input history and footer hints', () => {
       designTaskProfile: { outputMedium: 'html', target: 'web', preset: 'none' }
     })))
 
-    expect(lockedCode).not.toContain('data-task-surface-selector')
+    expect(lockedCode).not.toContain('data-task-surface-trigger')
     expect(lockedCode).not.toContain('ds-composer-task-profile')
-    expect(lockedDesign).not.toContain('data-task-surface-selector')
+    expect(lockedDesign).not.toContain('data-task-surface-trigger')
     expect(lockedDesign).toContain('ds-composer-task-profile')
     expect(lockedDesign).toContain('data-task-surface="design"')
   })

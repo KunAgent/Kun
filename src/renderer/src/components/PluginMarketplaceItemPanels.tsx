@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { Check, Info, Loader2, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { BUILTIN_GITHUB_MCP_SERVER_ID } from '@shared/github-mcp'
 import {
   PERMISSION_LABELS,
   isAllowedDocsUrl,
@@ -201,9 +202,11 @@ export function PluginSection({
             const canToggleSkill = item.kind === 'skill' && item.group === 'personal' && onToggleSkillEnabled
             const toggleBusy = skillToggleBusyId === normalizedSkillId
             const mcpConfig = item.kind === 'mcp' ? mcpServerConfigFromText(mcpConfigText, item.id) : undefined
-            const mcpDisabled = item.kind === 'mcp' && !mcpServerEnabledFromConfig(mcpConfig)
+            const mcpDisabled = item.kind === 'mcp' && !item.systemManaged && !mcpServerEnabledFromConfig(mcpConfig)
             const canToggleMcp = item.kind === 'mcp' && item.group === 'personal' && !!mcpConfig && onToggleMcpEnabled
             const mcpBusy = mcpToggleBusyId === item.id
+            const isManagedGitHub = item.kind === 'mcp' &&
+              item.systemManaged === true && item.id === BUILTIN_GITHUB_MCP_SERVER_ID
             return (
               <div
                 key={itemKey}
@@ -251,7 +254,16 @@ export function PluginSection({
                     </p>
                   ) : null}
                 </div>
-                {canToggleSkill ? (
+                {isManagedGitHub ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onAdd(item)}
+                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-ds-subtle px-3 text-[12px] font-semibold text-ds-ink transition hover:bg-ds-hover disabled:opacity-60"
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('pluginGithubManageButton')}
+                  </button>
+                ) : canToggleSkill ? (
                   <button
                     type="button"
                     disabled={toggleBusy}

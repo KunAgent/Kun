@@ -1,4 +1,22 @@
-export const USAGE_REQUEST_TIMEOUT_MS = 65_000
+export function usageRequestError(
+  label: string,
+  status: number,
+  body: string
+): Error {
+  const fallback = `${label} request failed: ${status}`
+  if (!body.trim()) return new Error(fallback)
+  try {
+    const parsed = JSON.parse(body) as { code?: unknown; message?: unknown }
+    const code = typeof parsed.code === 'string' ? parsed.code.trim() : ''
+    const message = typeof parsed.message === 'string' ? parsed.message.trim() : ''
+    if (code && message) return new Error(`${fallback} (${code}: ${message})`)
+    if (code) return new Error(`${fallback} (${code})`)
+    if (message) return new Error(`${fallback} (${message})`)
+  } catch {
+    // Preserve the stable status-only fallback for non-JSON error bodies.
+  }
+  return new Error(fallback)
+}
 
 export function parseUsageResponse<T>(body: string, label: string): T {
   try {
@@ -6,21 +24,4 @@ export function parseUsageResponse<T>(body: string, label: string): T {
   } catch {
     throw new Error(`${label} response was not valid JSON`)
   }
-}
-
-export function withUsageRequestTimeout<T>(
-  request: Promise<T>,
-  label: string,
-  timeoutMs = USAGE_REQUEST_TIMEOUT_MS
-): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => {
-      reject(new Error(`${label} request timed out after ${timeoutMs}ms`))
-    }, timeoutMs)
-  })
-
-  return Promise.race([request, timeoutPromise]).finally(() => {
-    if (timeout !== undefined) clearTimeout(timeout)
-  })
 }

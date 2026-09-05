@@ -39,6 +39,7 @@ export const ModelConnectionProfileSchema = z.object({
   authType: z.enum(['api-key', 'oauth', 'subscription']),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS),
+  useProxy: z.boolean(),
   configured: z.boolean(),
   credentialStatus: ModelConnectionCredentialStatusSchema.optional(),
   credentialErrorCode: ModelConnectionCredentialErrorCodeSchema.optional(),
@@ -49,6 +50,7 @@ export const ModelConnectionProfileSchema = z.object({
 
 export const ModelConnectionSnapshotSchema = z.object({
   schemaVersion: z.literal(1),
+  proxyRoutingVersion: z.literal(1),
   revision: z.number().int().nonnegative(),
   providers: z.array(ModelConnectionProfileSchema),
   defaultProviderId: z.string().min(1).optional(),
@@ -83,6 +85,7 @@ export const ModelConnectionConnectRequestSchema = z.object({
   authType: z.enum(['api-key', 'oauth', 'subscription']).default('api-key'),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).default('chat_completions'),
+  useProxy: z.boolean().default(false),
   credential: z.string().max(64 * 1024).optional(),
   models: z.array(z.string().min(1).max(512)).max(500).default([]),
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),
@@ -142,6 +145,7 @@ export const ModelConnectionPatchRequestSchema = z.object({
   authType: z.enum(['api-key', 'oauth', 'subscription']).optional(),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).optional(),
+  useProxy: z.boolean().optional(),
   models: z.array(z.string().min(1).max(512)).max(500).optional(),
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),
   selectedModel: z.string().min(1).max(512).optional()
@@ -150,6 +154,7 @@ export const ModelConnectionPatchRequestSchema = z.object({
 export const ModelConnectionOAuthStartRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   provider: z.enum(['chatgpt', 'grok', 'claude']),
+  useProxy: z.boolean().default(false),
   select: z.boolean().default(true),
   model: z.string().min(1).max(512).optional()
 }).strict()

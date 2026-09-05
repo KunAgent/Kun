@@ -37,6 +37,7 @@ export type SharedModelConnection = {
   authType: 'api-key' | 'oauth' | 'subscription'
   baseUrl?: string
   endpointFormat: ModelEndpointFormat
+  useProxy: boolean
   configured: boolean
   credentialStatus?: 'ready' | 'missing' | 'unreadable'
   credentialErrorCode?: 'credential_missing' | 'credential_unreadable'
@@ -47,6 +48,7 @@ export type SharedModelConnection = {
 
 export type SharedModelConnectionsSnapshot = {
   schemaVersion: 1
+  proxyRoutingVersion: 1
   revision: number
   providers: SharedModelConnection[]
   defaultProviderId?: string

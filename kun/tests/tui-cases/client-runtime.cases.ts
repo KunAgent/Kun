@@ -80,7 +80,7 @@ function modelSnapshot(revision = 1) {
       id: 'provider-a', accountId: 'account:provider-a', name: 'Provider A',
       kind: 'http' as const, authType: 'api-key' as const,
       baseUrl: 'https://example.com/v1', endpointFormat: 'chat_completions' as const,
-      configured: true, models: ['model-a'], selectedModel: 'model-a'
+      useProxy: false, configured: true, models: ['model-a'], selectedModel: 'model-a'
     }],
     defaultProviderId: 'provider-a',
     defaultAccountId: 'account:provider-a',

@@ -1,14 +1,12 @@
-import { lstat, readdir, rm, stat } from 'node:fs/promises'
+import { lstat, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isSafeThreadId } from '../contracts/thread-id.js'
 
 /**
  * Session Guardian: bounded, read-mostly health scans over thread storage.
  *
- * The scan never loads a full log into memory: file sizes come from stat,
- * and item/event counts come from streaming JSONL line iteration with a
- * cap. Warnings are advisory — the guardian never prunes user history on
- * its own.
+ * Startup scans only file metadata and small derived index summaries. Deep
+ * canonical-log inspection is delegated to post-readiness repair work.
  */
 
 export type ThreadHealthReport = {
@@ -79,28 +77,25 @@ export class SessionGuardian {
   async scanThread(threadId: string): Promise<ThreadHealthReport> {
     const dir = join(this.dataDir, 'threads', threadId)
     const warnings: string[] = []
-    const [messagesBytes, eventsBytes, metadataBytes, archivesBytes, snapshotsBytes, staleTmp] =
+    const [messagesBytes, eventsBytes, metadataBytes, itemIndex, staleTmp] =
       await Promise.all([
         fileSize(join(dir, 'messages.jsonl')),
         fileSize(join(dir, 'events.jsonl')),
         fileSize(join(dir, 'metadata.jsonl')),
-        dirSize(join(dir, 'archives')),
-        dirSize(join(dir, 'snapshots')),
+        readItemIndexSummary(join(dir, 'messages-index.state.json')),
         this.findStaleTmp(dir)
       ])
-    const [eventCount, itemCount, compactionCount, modelContextCount, baselineCount] =
-      await Promise.all([
-        countJsonlLines(join(dir, 'events.jsonl')),
-        countJsonlLines(join(dir, 'messages.jsonl')),
-        countKindOccurrences(join(dir, 'messages.jsonl'), '"kind":"compaction"'),
-        countKindOccurrences(join(dir, 'messages.jsonl'), '"kind":"model_context"'),
-        countKindOccurrences(join(dir, 'messages.jsonl'), '"baseline":true')
-      ])
+    const eventCount = 0
+    const itemCount = itemIndex?.rowCount ?? 0
+    const compactionCount = itemIndex?.kindCounts.compaction ?? 0
+    const modelContextCount = itemIndex?.kindCounts.model_context ?? 0
+    const baselineCount = itemIndex?.baselineCount ?? 0
     if (eventsBytes > this.thresholds.maxEventsBytes!) {
       warnings.push(`events.jsonl ${formatBytes(eventsBytes)} exceeds ${formatBytes(this.thresholds.maxEventsBytes!)}`)
     }
     if (messagesBytes > this.thresholds.maxMessagesBytes!) {
       warnings.push(`messages.jsonl ${formatBytes(messagesBytes)} exceeds ${formatBytes(this.thresholds.maxMessagesBytes!)}`)
+      if (!itemIndex) warnings.push('message index is pending rebuild')
     }
     if (metadataBytes > this.thresholds.maxMetadataBytes!) {
       warnings.push(`metadata.jsonl ${formatBytes(metadataBytes)} exceeds ${formatBytes(this.thresholds.maxMetadataBytes!)}`)
@@ -122,8 +117,8 @@ export class SessionGuardian {
       messagesBytes,
       eventsBytes,
       metadataBytes,
-      archivesBytes,
-      snapshotsBytes,
+      archivesBytes: 0,
+      snapshotsBytes: 0,
       staleTmpCount: staleTmp.length,
       staleTmpOldestAgeMs: staleTmp[0]?.ageMs ?? null,
       eventCount,
@@ -181,76 +176,28 @@ async function fileSize(path: string): Promise<number> {
   return info?.size ?? 0
 }
 
-async function dirSize(path: string): Promise<number> {
-  const entries = await readdir(path, { withFileTypes: true }).catch(() => [])
-  let total = 0
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      total += await dirSize(join(path, entry.name))
-    } else {
-      total += await fileSize(join(path, entry.name))
+type ItemIndexSummary = {
+  rowCount: number
+  kindCounts: Record<string, number>
+  baselineCount: number
+}
+
+async function readItemIndexSummary(path: string): Promise<ItemIndexSummary | null> {
+  const info = await stat(path).catch(() => null)
+  if (!info || info.size > 256 * 1024) return null
+  try {
+    const value = JSON.parse(await readFile(path, 'utf8')) as Partial<ItemIndexSummary>
+    if (!Number.isSafeInteger(value.rowCount) || !value.kindCounts || typeof value.kindCounts !== 'object') {
+      return null
     }
+    return {
+      rowCount: value.rowCount!,
+      kindCounts: value.kindCounts,
+      baselineCount: Number.isSafeInteger(value.baselineCount) ? value.baselineCount! : 0
+    }
+  } catch {
+    return null
   }
-  return total
-}
-
-/**
- * Stream-count JSONL lines without materializing the file. A hard line cap
- * bounds work on pathological logs; the exact count beyond it is irrelevant
- * because any threshold it could influence is already exceeded.
- */
-async function countJsonlLines(path: string, cap = 500_000): Promise<number> {
-  const { createReadStream } = await import('node:fs')
-  return new Promise((resolve, reject) => {
-    const stream = createReadStream(path, { encoding: 'utf-8', highWaterMark: 64 * 1024 })
-    let count = 0
-    let remainder = ''
-    stream.on('data', (chunk: string | Buffer) => {
-      remainder += String(chunk)
-      let index = remainder.indexOf('\n')
-      while (index >= 0) {
-        count += 1
-        if (count >= cap) { stream.destroy(); resolve(count); return }
-        remainder = remainder.slice(index + 1)
-        index = remainder.indexOf('\n')
-      }
-    })
-    stream.on('end', () => {
-      if (remainder.trim()) count += 1
-      resolve(count)
-    })
-    stream.on('error', (error) => {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') resolve(0)
-      else reject(error)
-    })
-  })
-}
-
-async function countKindOccurrences(path: string, needle: string, cap = 500_000): Promise<number> {
-  const { createReadStream } = await import('node:fs')
-  return new Promise((resolve, reject) => {
-    const stream = createReadStream(path, { encoding: 'utf-8', highWaterMark: 64 * 1024 })
-    let count = 0
-    let remainder = ''
-    stream.on('data', (chunk: string | Buffer) => {
-      remainder += String(chunk)
-      let index = remainder.indexOf('\n')
-      while (index >= 0) {
-        if (remainder.slice(0, index).includes(needle)) count += 1
-        if (count >= cap) { stream.destroy(); resolve(count); return }
-        remainder = remainder.slice(index + 1)
-        index = remainder.indexOf('\n')
-      }
-    })
-    stream.on('end', () => {
-      if (remainder.includes(needle)) count += 1
-      resolve(count)
-    })
-    stream.on('error', (error) => {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') resolve(0)
-      else reject(error)
-    })
-  })
 }
 
 function formatBytes(bytes: number): string {

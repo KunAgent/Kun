@@ -434,8 +434,9 @@ export class UserInputDialog implements Component, Focusable {
       const mark = question.selectionMode === 'multiple'
         ? (selected.has(option.label) ? '[x]' : '[ ]')
         : `${index + 1}.`
+      const recommendation = option.recommended ? '[recommended] ' : ''
       return selectionRow(
-        `${mark} ${sanitizeTerminalText(option.label)}`,
+        `${mark} ${recommendation}${sanitizeTerminalText(option.label)}`,
         option.description ? sanitizeTerminalText(option.description) : '',
         width - 2,
         index === this.session.optionIndex

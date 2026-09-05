@@ -81,6 +81,18 @@ export {
 
 
 
+export function mergeProviderDraftForDisplay(
+  providers: readonly ModelProviderProfileV1[],
+  draftProvider: ModelProviderProfileV1 | null
+): ModelProviderProfileV1[] {
+  if (!draftProvider) return [...providers]
+  const existingIndex = providers.findIndex((provider) => provider.id === draftProvider.id)
+  if (existingIndex < 0) return [...providers, draftProvider]
+  return providers.map((provider, index) =>
+    index === existingIndex ? draftProvider : provider
+  )
+}
+
 export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const {
     t,
@@ -198,6 +210,12 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const cursorMetadataRepairAttempts = useRef(new Set<string>())
   // 新增供应商先停留在本地草稿,点「添加」才写入设置,避免半配置状态被持久化。
   const [draftProvider, setDraftProvider] = useState<ModelProviderProfileV1 | null>(null)
+  useEffect(() => {
+    if (!draftProvider || !modelProviders.some((item) => item.id === draftProvider.id)) return
+    previousProviderSelectionRef.current = null
+    setDraftProvider(null)
+    setSelectedProviderId(draftProvider.id)
+  }, [draftProvider, modelProviders])
   const displayProviders = useMemo(() => {
     const providersWithCredentialDrafts = modelProviders
       .filter((item) => pendingSharedProviderDeletions.current.get(item.id)?.committedRevision === null ||
@@ -219,7 +237,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
             : {})
         }
       })
-    return draftProvider ? [...providersWithCredentialDrafts, draftProvider] : providersWithCredentialDrafts
+    return mergeProviderDraftForDisplay(providersWithCredentialDrafts, draftProvider)
   }, [credentialDrafts, draftProvider, modelProviders])
   const activeProvider =
     displayProviders.find((item) => item.id === selectedProviderId) ??
@@ -304,6 +322,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames,
     pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers,
     credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation,
+    sharedProjectionInput,
     selectedProviderId, setSelectedProviderId, activeTab, setActiveTab,
     previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts,
     draftProvider, setDraftProvider, displayProviders, activeProvider, activeKunProviderId,
@@ -311,14 +330,14 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
 
   const { runProbe, importPickedModels } = useProviderProbeOperations({ t, setProbeStates,
     setCursorAccounts, sharedConnectionFor, patchProviderProfile, fetchModelsDevCatalogFor,
-    openModelImport, flushSharedProviderCatalog })
+    openModelImport, flushSharedProviderCatalog, providerProxy })
 
   const { activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = buildProvidersViewModel({ t, showApiKey, modelProviders,
     sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId,
     addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts,
     pendingImport, draftProvider, displayProviders, activeProvider, sharedConnectionFor,
     hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider,
-    updateProviderProxy, setGlobalNetworkOpen })
+    updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe })
 
   const openSettingsConfigFile = async (): Promise<void> => {
     setSettingsConfigOpenError('')

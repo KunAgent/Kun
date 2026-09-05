@@ -12,8 +12,14 @@ import type {
   GraphPlanningLifecycle,
   TurnStatus
 } from '../contracts/turns.js'
-import type { TurnItem, UserMessageSource } from '../contracts/items.js'
+import type {
+  InterruptionNoteTurnItem,
+  TurnItem,
+  UserMessageSource
+} from '../contracts/items.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
+import type { RestartRecoverySource } from '../loop/restart-recovery-source.js'
+import { runWithTurnMutationFence } from '../manager/turn-mutation-context.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { MigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
@@ -59,6 +65,17 @@ import {
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
 export const turnServiceRuntimeStateOperations = {
+withTurnMutationFence<T>(this: TurnService,
+    threadId: string,
+    turnId: string,
+    operation: () => T
+  ): T {
+    const lease = this['leasedTurns'].get(turnId)
+    return lease && lease.threadId === threadId
+      ? runWithTurnMutationFence(lease, operation)
+      : operation()
+  },
+
 isTurnExecutionActive(this: TurnService, turnId: string): boolean {
     return this['inflightTurns'].has(turnId)
   },
@@ -68,10 +85,10 @@ getAbortController(this: TurnService, turnId: string): AbortSignal | undefined {
   },
 
 /** Abort active turn work without changing its persisted lifecycle state. */
-abortTurnExecution(this: TurnService, turnId: string): boolean {
+abortTurnExecution(this: TurnService, turnId: string, reason?: unknown): boolean {
     const controller = this['inflightTurns'].get(turnId)
     if (!controller || controller.signal.aborted) return false
-    controller.abort()
+    controller.abort(reason)
     return true
   },
 
@@ -101,13 +118,13 @@ abortThreadExecution(this: TurnService, threadId: string): number {
    * Returns the ids of threads that had at least one turn reconciled, so the
    * caller can resume goals that were interrupted mid-run (KunAgent/Kun#370).
    */
-async reconcileOrphanedTurns(this: TurnService): Promise<string[]> {
+async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]> {
     // Include `side` threads: a delegated subagent runs on a hidden side thread
     // whose own turn is left `running` when the runtime is interrupted. Without
     // includeSide it is never swept, so its turn (and the parent's delegate_task
     // tool item) stay pending forever, wedging the thread (KunAgent/Kun#621).
     const summaries = await this['deps'].threadStore.list({ includeSide: true })
-    const reconciledThreadIds = new Set<string>()
+    const reconciledSources = new Map<string, RestartRecoverySource>()
     for (const summary of summaries) {
       const metadata = await (
         this['deps'].threadStore.getMetadata?.(summary.id) ??
@@ -146,6 +163,30 @@ async reconcileOrphanedTurns(this: TurnService): Promise<string[]> {
       for (const turn of thread.turns) {
         if (turn.status !== 'running' && turn.status !== 'queued') continue
         if (this['inflightTurns'].has(turn.id)) continue
+        if (turn.status === 'queued') {
+          if (!turn.admissionPending) {
+            // Committed durable queue entries never execute in-process, so
+            // they cannot be orphaned. The queued-turn dispatcher drains
+            // them after reconciliation.
+            continue
+          }
+          // Crash window: metadata was written but the session user item
+          // (the commit boundary) or the commit marker is missing. If the
+          // user item exists, finish the admission commit; otherwise roll
+          // back so a retry with the same clientRequestId re-enqueues cleanly.
+          const hasUserItem = sessionItems.some((item) =>
+            item.turnId === turn.id && item.kind === 'user_message'
+          )
+          if (hasUserItem) {
+            await this['markTurnAdmissionCompleted'](thread.id, turn.id, {}).catch(() => undefined)
+          } else {
+            const rolledBack = await this['rollbackPendingAdmission'](thread.id, turn.id).catch(() => false)
+            if (!rolledBack) {
+              await this.interruptTurn({ threadId: thread.id, turnId: turn.id }).catch(() => undefined)
+            }
+          }
+          continue
+        }
         if (
           turn.admissionPending ||
           (!turn.admissionCompletedAt && thread.designProfile?.lockedAtTurnId === turn.id)
@@ -219,21 +260,87 @@ async reconcileOrphanedTurns(this: TurnService): Promise<string[]> {
             code: 'orphaned_after_restart',
             severity: 'warning'
           })
-          reconciledThreadIds.add(thread.id)
           // Persist a model-visible checkpoint so the auto-resumed turn can
           // pick up where the work stopped without the user repeating it.
-          await recordInterruptionCheckpoint(this, {
+          const checkpointed = await recordInterruptionCheckpoint(this, {
             threadId: thread.id,
             turnId: turn.id,
             fallbackPrompt: turn.prompt,
             sessionItems
           })
+          if (checkpointed) {
+            reconciledSources.set(thread.id, { threadId: thread.id, turnId: turn.id })
+          }
         } catch {
           // Best-effort sweep; one unreadable thread must not stop the rest.
         }
       }
     }
-    return [...reconciledThreadIds]
+    return [...reconciledSources.values()]
+  },
+
+/**
+ * Recover turns the Manager settled after their Runtime owner disappeared.
+ * New turns carry Manager-authored settlement provenance. The exact canonical
+ * error item is a compatibility bridge only for records predating that field.
+ */
+async reconcileManagerSettledInterruptions(this: TurnService, input: {
+    settledAfter?: string
+  } = {}): Promise<RestartRecoverySource[]> {
+    const summaries = await this['deps'].threadStore.list({ includeSide: true })
+    const candidateSources = new Map<string, RestartRecoverySource>()
+    for (const summary of summaries) {
+      if (
+        summary.status !== 'idle' ||
+        (summary.relation !== 'primary' && summary.relation !== 'fork')
+      ) continue
+      try {
+        const thread = await this['deps'].threadStore.get(summary.id)
+        if (
+          !thread ||
+          thread.status !== 'idle' ||
+          (thread.relation !== 'primary' && thread.relation !== 'fork') ||
+          thread.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')
+        ) continue
+        const latest = thread.turns.at(-1)
+        if (!latest || latest.status !== 'failed') continue
+
+        let sessionItems: TurnItem[] | undefined
+        const managerSettlement = latest.managerLeaseSettlement
+        let recoverable = Boolean(
+          managerSettlement?.code === 'owner_lease_expired' &&
+          timestampAtOrAfter(managerSettlement.settledAt, input.settledAfter)
+        )
+        if (!managerSettlement && latest.terminalCode === undefined) {
+          sessionItems = await this['deps'].sessionStore.loadItems(thread.id)
+          const canonicalItemId = `item_${latest.id}_owner_lease_expired`
+          recoverable = timestampAtOrAfter(latest.finishedAt, input.settledAfter) &&
+            sessionItems.some((item) =>
+              item.id === canonicalItemId &&
+              item.turnId === latest.id &&
+              item.kind === 'error' &&
+              item.code === 'owner_lease_expired'
+            )
+        }
+        if (!recoverable) continue
+        sessionItems ??= await this['deps'].sessionStore.loadItems(thread.id)
+        const checkpointed = await recordInterruptionCheckpoint(this, {
+          threadId: thread.id,
+          turnId: latest.id,
+          fallbackPrompt: latest.prompt,
+          sessionItems
+        })
+        if (checkpointed) {
+          candidateSources.set(thread.id, { threadId: thread.id, turnId: latest.id })
+        }
+      } catch (error) {
+        console.warn(
+          `[kun] Manager-settled interruption reconciliation skipped ${summary.id}: ` +
+          `${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    }
+    return [...candidateSources.values()]
   },
 
 async getTurn(this: TurnService, threadId: string, turnId: string): Promise<Turn | null> {
@@ -369,9 +476,9 @@ async function recordInterruptionCheckpoint(
     fallbackPrompt: string
     sessionItems: TurnItem[]
   }
-): Promise<void> {
+): Promise<boolean> {
   const noteText = buildInterruptionNoteText(extractInterruptionSummary(input))
-  if (!noteText.trim()) return
+  if (!noteText.trim()) return false
   const now = service['deps'].nowIso()
   const note = makeInterruptionNoteItem({
     id: `item_${input.turnId}_interruption_note`,
@@ -380,27 +487,47 @@ async function recordInterruptionCheckpoint(
     sourceTurnId: input.turnId,
     text: noteText,
     createdAt: now
-  })
+  }) as InterruptionNoteTurnItem
   try {
-    await rewriteItemHistoryWithRetry({
+    const result = await rewriteItemHistoryWithRetry({
       sessionStore: service['deps'].sessionStore,
       threadId: input.threadId,
       maxAttempts: 2,
       build: (snapshot) => {
+        const notes = snapshot.items.filter(
+          (item): item is InterruptionNoteTurnItem => item.kind === 'interruption_note'
+        )
+        const alreadyCanonical = notes.length === 1 &&
+          notes[0].id === note.id &&
+          notes[0].sourceTurnId === note.sourceTurnId &&
+          notes[0].text === note.text
+        if (alreadyCanonical) {
+          return { changed: false, items: snapshot.items, value: undefined }
+        }
         const withoutNotes = snapshot.items.filter((item) => item.kind !== 'interruption_note')
         return {
-          changed: withoutNotes.length !== snapshot.items.length,
+          changed: true,
           items: [...withoutNotes, note],
           value: undefined
         }
       }
     })
+    return result.status === 'applied' || result.status === 'unchanged'
   } catch (error) {
     console.warn(
       `[kun] interruption checkpoint write failed for ${input.threadId}: ` +
       `${error instanceof Error ? error.message : String(error)}`
     )
+    return false
   }
+}
+
+function timestampAtOrAfter(value: string | undefined, threshold: string | undefined): boolean {
+  if (!threshold) return true
+  if (!value) return false
+  const valueMs = Date.parse(value)
+  const thresholdMs = Date.parse(threshold)
+  return Number.isFinite(valueMs) && Number.isFinite(thresholdMs) && valueMs >= thresholdMs
 }
 
 const MAX_INTERRUPTION_TOOL_DETAIL_CHARS = 240

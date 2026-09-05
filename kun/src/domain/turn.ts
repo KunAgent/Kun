@@ -22,6 +22,7 @@ import type {
   DesignDocumentTarget,
   DesignTaskProfile
 } from '../contracts/design-task-profile.js'
+import type { WriteTurnContext } from '../contracts/write-turn-context.js'
 
 export type TurnEntity = Turn
 
@@ -52,6 +53,7 @@ export function createTurnRecord(input: {
   agentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
   designDocumentTarget?: DesignDocumentTarget
+  writeContext?: WriteTurnContext
   /** Turn-scoped persona text; stored so replay reconstructs the same request. */
   persona?: string
   guiDesignArtifact?: GuiDesignArtifactContextJson
@@ -108,6 +110,7 @@ export function createTurnRecord(input: {
     ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),
     ...(input.designProfile ? { designProfile: input.designProfile } : {}),
     ...(input.designDocumentTarget ? { designDocumentTarget: input.designDocumentTarget } : {}),
+    ...(input.writeContext ? { writeContext: input.writeContext } : {}),
     ...(input.persona?.trim() ? { persona: input.persona.trim() } : {}),
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
     ...(input.mode ? { mode: input.mode } : {}),

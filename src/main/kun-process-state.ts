@@ -1,10 +1,10 @@
-import { execFile } from 'node:child_process'
+import { execFile, type ChildProcess } from 'node:child_process'
 import { promisify } from 'node:util'
 import { appendManagedLogLine } from './logger'
 import { KunProcessController } from './runtime/kun-process-controller'
 
 export const execFileAsync = promisify(execFile)
-export const KUN_STOP_GRACE_MS = 5_000
+export const KUN_STOP_GRACE_MS = 15_000
 export const KUN_STOP_FORCE_MS = 1_000
 export const STDERR_TAIL_MAX_CHARS = 32_768
 export const MAX_TCP_PORT = 65_535
@@ -40,6 +40,30 @@ export function formatKunLogLine(
 
 export function normalizeCapturedChunk(chunk: Buffer | string): string {
   return String(chunk).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
+export function waitForKunChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    let settled = false
+    const settle = (exited: boolean): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      child.removeListener('exit', onExit)
+      child.removeListener('error', onError)
+      resolve(exited)
+    }
+    const onExit = (): void => settle(true)
+    // `error` can mean signal delivery failed. Only a never-spawned or already
+    // exited child is safe to release; a live PID must continue to hard-stop.
+    const onError = (): void => settle(
+      child.pid === undefined || child.exitCode !== null || child.signalCode !== null
+    )
+    const timer = setTimeout(() => settle(false), timeoutMs)
+    child.once('exit', onExit)
+    child.once('error', onError)
+  })
 }
 
 export function createKunChildLogCapture(pid: number | undefined): KunChildLogCapture {

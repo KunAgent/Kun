@@ -29,6 +29,7 @@ export function settings(): AppSettingsV1 {
           apiKey: 'sk-custom',
           baseUrl: 'https://custom.example/v1',
           endpointFormat: 'messages',
+          useProxy: false,
           models: ['custom-model'],
           modelProfiles: {}
         }

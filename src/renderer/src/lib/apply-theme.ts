@@ -50,6 +50,22 @@ export function applyTheme(pref: ThemePreference): void {
   apply()
 }
 
+/**
+ * Gives the renderer a theme before the workbench store boots. The system
+ * preference is an immediate fallback; saved settings replace it as soon as
+ * the existing settings IPC responds without delaying the first React render.
+ */
+export function initializeStartupTheme(
+  readSettings?: () => Promise<{ theme: ThemePreference }>
+): void {
+  applyTheme('system')
+  if (!readSettings) return
+  void readSettings().then(
+    (settings) => applyTheme(settings.theme),
+    () => undefined
+  )
+}
+
 export function applyDarkUiColors(colors?: DarkUiColorsPatchV1 | null): void {
   const normalized = normalizeDarkUiColors(colors)
   const root = document.documentElement.style

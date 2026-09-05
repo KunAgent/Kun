@@ -216,11 +216,22 @@ function Remove-KnownApplicationEntry([IO.FileSystemInfo]$Entry) {
   }
 }
 
+function Test-InstallerSelfEntry([IO.FileSystemInfo]$Entry, [string]$Source) {
+  $selfPath = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_SELF_PATH')
+  if ([string]::IsNullOrWhiteSpace($selfPath) -or $Entry.PSIsContainer) {
+    return $false
+  }
+  $parent = Normalize-FullPath (Split-Path -Parent $selfPath)
+  return (Test-PathEqual $parent $Source) -and (Test-PathEqual $Entry.FullName $selfPath)
+}
+
 function Remove-RetiredApplicationPayload([string]$Source) {
   Assert-SafeInstallRoot $Source 'Retired application directory'
   if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
   $cleanupCount = 0
-  foreach ($entry in @(Get-ChildItem -LiteralPath $Source -Force | Where-Object { Test-KnownApplicationEntry $_ })) {
+  foreach ($entry in @(Get-ChildItem -LiteralPath $Source -Force | Where-Object {
+    (Test-KnownApplicationEntry $_) -and -not (Test-InstallerSelfEntry $_ $Source)
+  })) {
     if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Retired application directory' }
     Remove-KnownApplicationEntry $entry
     $cleanupCount += 1
@@ -269,7 +280,7 @@ function Stop-AppProcesses([string[]]$Roots) {
   for ($attempt = 0; $attempt -lt 6; $attempt += 1) {
     $processes = @(Get-VerifiedAppProcesses $Roots $currentPid)
     if ($processes.Count -eq 0) {
-      return @{ Outcome = 'stopped'; ProcessIds = @() }
+      return @{ Outcome = 'stopped'; ProcessIds = @(); Processes = @() }
     }
 
     foreach ($process in $processes) {
@@ -283,9 +294,27 @@ function Stop-AppProcesses([string[]]$Roots) {
     return @{
       Outcome = 'running'
       ProcessIds = @($remaining | ForEach-Object { [int]($_.ProcessId) })
+      Processes = @($remaining | ForEach-Object { ConvertTo-BlockingProcessDiagnostic $_ })
     }
   }
-  return @{ Outcome = 'stopped'; ProcessIds = @() }
+  return @{ Outcome = 'stopped'; ProcessIds = @(); Processes = @() }
+}
+
+function ConvertTo-BlockingProcessDiagnostic($Process) {
+  return [ordered]@{
+    processId = [int]$Process.ProcessId
+    parentProcessId = [int]$Process.ParentProcessId
+    name = [string]$Process.Name
+    executablePath = [string]$Process.ExecutablePath
+  }
+}
+
+function Write-BlockingProcessDiagnostic($StopResult) {
+  if ($null -eq $StopResult -or $StopResult.Outcome -ne 'running') {
+    return
+  }
+  $processJson = ConvertTo-Json -InputObject @($StopResult.Processes) -Compress -Depth 3
+  Write-InstallerDiagnostic "STOP_PROCESSES outcome=running processes=$processJson"
 }
 
 function Get-VerifiedAppProcesses([string[]]$Roots, [int]$CurrentPid) {
@@ -314,7 +343,7 @@ function Get-VerifiedAppProcesses([string[]]$Roots, [int]$CurrentPid) {
 function Stop-InstallRootProcesses {
   $root = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_APP_ROOT')
   if ([string]::IsNullOrWhiteSpace($root)) {
-    return @{ Outcome = 'stopped'; ProcessIds = @() }
+    return @{ Outcome = 'stopped'; ProcessIds = @(); Processes = @() }
   }
   Assert-SafeInstallRoot $root 'Application root'
   Stop-AppProcesses @($root)
@@ -596,7 +625,9 @@ function Invoke-CleanupInPlaceLeftovers {
   Assert-PackagedInstallPayload
 
   $legacyEntries = @(Get-ChildItem -LiteralPath $target -Force | Where-Object {
-    (Test-KnownApplicationEntry $_) -and -not (Test-RetainedInPlaceKnownEntry $_)
+    (Test-KnownApplicationEntry $_) -and
+      -not (Test-RetainedInPlaceKnownEntry $_) -and
+      -not (Test-InstallerSelfEntry $_ $target)
   })
   foreach ($entry in $legacyEntries) {
     if ($entry.PSIsContainer) {

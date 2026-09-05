@@ -51,6 +51,7 @@ import {
   type FastContextEvidencePack,
   type FastContextTask
 } from './fast-context-evidence.js'
+import { DetachedChildHandoffStore } from './detached-child-handoff-store.js'
 
 const ChildRunUsage = z.object({
   promptTokens: z.number().int().nonnegative().default(0),
@@ -428,7 +429,11 @@ export type ChildRunAggregate = {
 }
 
 export class FileDelegationStore {
-  constructor(private readonly rootDir: string) {}
+  readonly handoffs: DetachedChildHandoffStore
+
+  constructor(private readonly rootDir: string) {
+    this.handoffs = new DetachedChildHandoffStore(rootDir)
+  }
 
   async upsert(record: ChildRunRecord): Promise<void> {
     await this.ensureRoot()

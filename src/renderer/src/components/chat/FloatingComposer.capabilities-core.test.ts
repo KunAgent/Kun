@@ -52,8 +52,7 @@ import {
 } from './FloatingComposerExecutionPicker'
 import {
   FloatingComposerQueuedMessages,
-  calculateQueuedMessageMenuPlacement,
-  canEditQueuedComposerMessage
+  calculateQueuedMessageMenuPlacement
 } from './FloatingComposerQueuedMessages'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import { requestContextSnapshotMatchesSelection } from './FloatingComposerContextCapacity'

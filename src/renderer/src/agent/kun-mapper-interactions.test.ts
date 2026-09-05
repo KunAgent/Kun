@@ -178,7 +178,7 @@ describe('user input mapping', () => {
           id: 'choice',
           question: 'Pick one',
           options: [
-            { label: 'Yes', description: 'Continue' },
+            { label: 'Yes', description: 'Continue', recommended: true },
             { label: 'No', description: 'Stop' }
           ]
         }
@@ -193,7 +193,7 @@ describe('user input mapping', () => {
           id: 'choice',
           question: 'Pick one',
           options: [
-            { label: 'Yes', description: 'Continue' },
+            { label: 'Yes', description: 'Continue', recommended: true },
             { label: 'No', description: 'Stop' }
           ]
         }
@@ -276,7 +276,7 @@ describe('user input mapping', () => {
             header: 'Mode',
             id: 'mode',
             question: 'Choose',
-            options: [{ label: 'Fast', description: 'Use the faster path' }]
+            options: [{ label: 'Fast', description: 'Use the faster path', recommended: true }]
           }
         ]
       },
@@ -291,7 +291,7 @@ describe('user input mapping', () => {
           header: 'Mode',
           id: 'mode',
           question: 'Choose',
-          options: [{ label: 'Fast', description: 'Use the faster path' }]
+          options: [{ label: 'Fast', description: 'Use the faster path', recommended: true }]
         }
       ]
     })

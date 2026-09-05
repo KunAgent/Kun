@@ -49,6 +49,7 @@ describe('selectBridgeableTools', () => {
       tool('generate_image'),
       tool('memory_create'),
       tool('delegate_task'),
+      tool('fast_context'),
       tool('web_search'),
       tool('render_chart')
     ]
@@ -60,6 +61,7 @@ describe('selectBridgeableTools', () => {
       'generate_image',
       'memory_create',
       'delegate_task',
+      'fast_context',
       'web_search',
       'render_chart'
     ])

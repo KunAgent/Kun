@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NormalizedThread, RuntimeConnectionStatus } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
 import type { DesignDocument } from '../../design/design-types'
@@ -15,6 +15,7 @@ import { designDocKey, readDesignThreadRegistry } from '../../design/design-thre
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 
 type Options = {
+  enabled: boolean
   workspaceRoot: string
   documents: readonly DesignDocument[]
   threads: readonly NormalizedThread[]
@@ -22,16 +23,25 @@ type Options = {
 }
 
 export function useDesignDrawingTitleBackfill({
+  enabled,
   workspaceRoot,
   documents,
   threads,
   runtimeConnection
 }: Options): void {
   const [retryNonce, setRetryNonce] = useState(0)
+  const threadsRef = useRef(threads)
+  const documentsRef = useRef(documents)
+  threadsRef.current = threads
+  documentsRef.current = documents
+  const candidateKey = useMemo(() => documents
+    .filter(drawingTitleNeedsBackfill)
+    .map((document) => `${document.id}\u0000${document.title}\u0000${document.titleOrigin ?? ''}`)
+    .join('\u0001'), [documents])
 
   useEffect(() => {
-    if (!workspaceRoot) return
-    const candidates = documents.filter(drawingTitleNeedsBackfill)
+    if (!enabled || !workspaceRoot) return
+    const candidates = documentsRef.current.filter(drawingTitleNeedsBackfill)
     if (candidates.length === 0) return
     let cancelled = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -42,7 +52,7 @@ export function useDesignDrawingTitleBackfill({
         .map((id, index) => ({
           id,
           index,
-          updatedAt: Date.parse(threads.find((thread) => thread.id === id)?.updatedAt ?? '')
+          updatedAt: Date.parse(threadsRef.current.find((thread) => thread.id === id)?.updatedAt ?? '')
         }))
         .sort((left, right) => {
           const leftHasTime = Number.isFinite(left.updatedAt)
@@ -58,7 +68,7 @@ export function useDesignDrawingTitleBackfill({
         .map(({ id }) => id)
     }
 
-    const tasks = candidates.map(async (document) => {
+    const backfillDocument = async (document: DesignDocument): Promise<void> => {
       let record = readDesignThreadRegistry().workspaces[
         designDocKey(workspaceRoot, document.id)
       ]
@@ -108,19 +118,29 @@ export function useDesignDrawingTitleBackfill({
       } catch {
         if (!cancelled) retryNeeded = true
       }
-    })
+    }
 
-    void Promise.allSettled(tasks).then(() => {
+    const run = async (): Promise<void> => {
+      for (const document of candidates) {
+        if (cancelled) return
+        try {
+          await backfillDocument(document)
+        } catch {
+          if (!cancelled) retryNeeded = true
+        }
+      }
+    }
+    void run().then(() => {
       if (cancelled || !retryNeeded || retryTimer) return
       retryTimer = setTimeout(() => {
         retryTimer = null
         setRetryNonce((value) => value + 1)
-      }, 5_000)
+      }, Math.min(60_000, 5_000 * (2 ** Math.min(retryNonce, 4))))
     })
 
     return () => {
       cancelled = true
       if (retryTimer) clearTimeout(retryTimer)
     }
-  }, [documents, retryNonce, runtimeConnection, threads, workspaceRoot])
+  }, [candidateKey, enabled, retryNonce, runtimeConnection, workspaceRoot])
 }

@@ -28,6 +28,19 @@ function manager(
   }
 }
 
+function processIdentityFor(
+  target: ManagerHandoffDiscoveryRecord,
+  commandLine = 'kun-service-manager',
+  startedAtMs = Date.parse(target.startedAt)
+) {
+  return {
+    pid: target.pid,
+    commandLine,
+    executablePath: 'C:\\Program Files\\nodejs\\node.exe',
+    startedAtMs
+  }
+}
+
 describe('stopServiceManagerForReplacement', () => {
   it('gracefully stops an exact authenticated Manager without full health parsing', async () => {
     const target = manager({ version: 7, protocolVersion: 3 })
@@ -42,8 +55,8 @@ describe('stopServiceManagerForReplacement', () => {
       {
         readDiscovery: vi.fn(async () => target),
         waitForExit: vi.fn(async () => ++waitCalls > 1),
-        commandLine: vi.fn(),
-        listenerPids: vi.fn(),
+        processIdentity: vi.fn(async () => processIdentityFor(target)),
+        listenerPids: vi.fn(async () => [target.pid]),
         terminate: vi.fn(),
         removeDiscovery
       }
@@ -77,7 +90,10 @@ describe('stopServiceManagerForReplacement', () => {
       readDiscovery: vi.fn(async () => current),
       requestShutdown: vi.fn(async () => { throw new Error('shutdown timed out') }),
       waitForExit: vi.fn(async () => current === null),
-      commandLine: vi.fn(async () => '/Applications/Kun.app/manager-entry.js'),
+      processIdentity: vi.fn(async () => processIdentityFor(
+        target,
+        'node /Applications/Kun.app/manager-entry.js'
+      )),
       listenerPids: vi.fn(async () => [target.pid]),
       terminate,
       removeDiscovery
@@ -87,10 +103,59 @@ describe('stopServiceManagerForReplacement', () => {
     expect(removeDiscovery).not.toHaveBeenCalled()
   })
 
+  it('forces an exact Manager that removed discovery before its process finished exiting', async () => {
+    const target = manager()
+    let current: ManagerHandoffDiscoveryRecord | null = target
+    let alive = true
+    const terminate = vi.fn(async (_pid: number, verify: () => Promise<boolean>) => {
+      expect(await verify()).toBe(true)
+      alive = false
+      return true
+    })
+    const removeDiscovery = vi.fn(async () => true)
+
+    await expect(stopServiceManagerForReplacement(controlDir, scope, fetch, {
+      readDiscovery: vi.fn(async () => current),
+      requestShutdown: vi.fn(async () => { current = null }),
+      waitForExit: vi.fn(async () => !alive),
+      processIdentity: vi.fn(async () => processIdentityFor(target)),
+      listenerPids: vi.fn(async () => current ? [target.pid] : []),
+      terminate,
+      removeDiscovery
+    })).resolves.toEqual({ stopped: true, forced: true })
+
+    expect(terminate).toHaveBeenCalledOnce()
+    expect(removeDiscovery).not.toHaveBeenCalled()
+  })
+
+  it('refuses to signal a recycled PID after Manager discovery disappears', async () => {
+    const target = manager()
+    let current: ManagerHandoffDiscoveryRecord | null = target
+    let identityReads = 0
+    const terminate = vi.fn(async (_pid: number, verify: () => Promise<boolean>) => verify())
+
+    await expect(stopServiceManagerForReplacement(controlDir, scope, fetch, {
+      readDiscovery: vi.fn(async () => current),
+      requestShutdown: vi.fn(async () => { current = null }),
+      waitForExit: vi.fn(async () => false),
+      processIdentity: vi.fn(async () => processIdentityFor(
+        target,
+        'kun-service-manager',
+        Date.parse(target.startedAt) + (identityReads++ === 0 ? 0 : 1_000)
+      )),
+      listenerPids: vi.fn(async () => [target.pid]),
+      terminate,
+      removeDiscovery: vi.fn(async () => true)
+    })).rejects.toThrow(/could not be safely replaced/)
+
+    expect(terminate).toHaveBeenCalledOnce()
+  })
+
   it.each([
     ['command mismatch', 'node unrelated.js', [901]],
     ['listener mismatch', 'kun-service-manager', [902]],
-    ['process inspection denied', '', []]
+    ['process inspection denied', '', []],
+    ['start-time mismatch', 'stale-start', [901]]
   ])('refuses force replacement on %s', async (_label, command, listeners) => {
     const target = manager()
     let signalSent = false
@@ -104,7 +169,13 @@ describe('stopServiceManagerForReplacement', () => {
       readDiscovery: vi.fn(async () => target),
       requestShutdown: vi.fn(async () => { throw new Error('shutdown unavailable') }),
       waitForExit: vi.fn(async () => false),
-      commandLine: vi.fn(async () => command),
+      processIdentity: vi.fn(async () => command === ''
+        ? null
+        : processIdentityFor(
+            target,
+            command === 'stale-start' ? 'kun-service-manager' : command,
+            Date.parse(target.startedAt) + (command === 'stale-start' ? 60_001 : 0)
+          )),
       listenerPids: vi.fn(async () => listeners),
       terminate,
       removeDiscovery: vi.fn(async () => true)
@@ -132,7 +203,7 @@ describe('stopServiceManagerForReplacement', () => {
       readDiscovery: vi.fn(async () => ++reads === 1 ? target : replacement),
       requestShutdown,
       waitForExit: vi.fn(async () => false),
-      commandLine: vi.fn(),
+      processIdentity: vi.fn(),
       listenerPids: vi.fn(),
       terminate,
       removeDiscovery
@@ -158,7 +229,7 @@ describe('stopServiceManagerForReplacement', () => {
       readDiscovery: vi.fn(async () => ++reads === 1 ? target : replacement),
       requestShutdown: vi.fn(),
       waitForExit: vi.fn(async () => ++waits > 1),
-      commandLine: vi.fn(),
+      processIdentity: vi.fn(),
       listenerPids: vi.fn(),
       terminate: vi.fn(),
       removeDiscovery

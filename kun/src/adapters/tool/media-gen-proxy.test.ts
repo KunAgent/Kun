@@ -17,6 +17,7 @@ const { createSpeechGenClient, createMusicGenClient } = await import('./media-ge
 const { createVideoGenClient } = await import('./media-gen-video-clients.js')
 const { createMediaFetch } = await import('./media-gen-client-support.js')
 const { buildImageGenToolProviders } = await import('./image-gen-tool-provider.js')
+const { buildSpeechGenToolProviders } = await import('./media-gen-tool-provider.js')
 
 const fakeGeneratedImage = {
   // Smallest detectable PNG payload so detectImage() accepts it and the tool
@@ -127,6 +128,95 @@ describe('media generation proxy fetch wiring', () => {
 
     const clientConfig = createImageGenClientMock.mock.calls[0][0] as Record<string, unknown>
     expect(clientConfig).not.toHaveProperty('proxyUrl')
+  })
+
+  it('falls back to the provider-level proxy for inline image configs without a providerId', async () => {
+    const { providers, available } = buildImageGenToolProviders({
+      ...imageGenConfigDefaults,
+      enabled: true,
+      protocol: 'openai-images',
+      baseUrl: 'https://images.example.test/v1',
+      apiKey: 'sk-inline',
+      model: 'test-model'
+    }, {
+      proxyUrl: 'http://proxy.lan:8080'
+    })
+
+    expect(available).toBe(true)
+    const tool = providers[0].tools.find((candidate) => candidate.name === 'generate_image')
+    const result = await tool!.execute({ prompt: 'a cat' }, minimalContext())
+    expect(result.isError).toBeFalsy()
+
+    const clientConfig = createImageGenClientMock.mock.calls[0][0] as Record<string, unknown>
+    expect(clientConfig.proxyUrl).toBe('http://proxy.lan:8080')
+    expect(clientConfig.apiKey).toBe('sk-inline')
+  })
+
+  it('prefers the resolved credential proxy over the provider-level fallback', async () => {
+    const { providers } = buildImageGenToolProviders({
+      ...imageGenConfigDefaults,
+      enabled: true,
+      protocol: 'openai-images',
+      baseUrl: 'https://images.example.test/v1',
+      model: 'test-model',
+      providerId: 'prov-1'
+    }, {
+      proxyUrl: 'http://fallback.lan:8080',
+      resolveCredential: async () => ({
+        apiKey: 'sk-test',
+        proxyUrl: 'http://proxy.lan:8080'
+      })
+    })
+
+    const tool = providers[0].tools.find((candidate) => candidate.name === 'generate_image')
+    await tool!.execute({ prompt: 'a cat' }, minimalContext())
+
+    const clientConfig = createImageGenClientMock.mock.calls[0][0] as Record<string, unknown>
+    expect(clientConfig.proxyUrl).toBe('http://proxy.lan:8080')
+  })
+
+  it('honors a connection that explicitly bypasses the proxy instead of falling back', async () => {
+    const { providers } = buildImageGenToolProviders({
+      ...imageGenConfigDefaults,
+      enabled: true,
+      protocol: 'openai-images',
+      baseUrl: 'https://images.example.test/v1',
+      model: 'test-model',
+      providerId: 'prov-direct'
+    }, {
+      proxyUrl: 'http://fallback.lan:8080',
+      resolveCredential: async () => ({ apiKey: 'sk-test' })
+    })
+
+    const tool = providers[0].tools.find((candidate) => candidate.name === 'generate_image')
+    await tool!.execute({ prompt: 'a cat' }, minimalContext())
+
+    const clientConfig = createImageGenClientMock.mock.calls[0][0] as Record<string, unknown>
+    expect(clientConfig).not.toHaveProperty('proxyUrl')
+  })
+
+  it('falls back to the provider-level proxy for inline speech configs without a providerId', async () => {
+    createProxyFetchMock.mockReturnValue(async () => {
+      throw new Error('proxied fetch invoked')
+    })
+    const { providers, available } = buildSpeechGenToolProviders({
+      enabled: true,
+      protocol: 'openai-speech',
+      baseUrl: 'https://speech.example.test/v1',
+      apiKey: 'sk-inline',
+      model: 'tts-test',
+      format: 'mp3',
+      timeoutMs: 30_000
+    }, {
+      proxyUrl: 'http://proxy.lan:8080'
+    })
+
+    expect(available).toBe(true)
+    const tool = providers[0].tools.find((candidate) => candidate.name === 'generate_speech')
+    const result = await tool!.execute({ text: 'hello' }, minimalContext())
+    expect(result.isError).toBe(true)
+
+    expect(createProxyFetchMock).toHaveBeenCalledWith('http://proxy.lan:8080')
   })
 })
 

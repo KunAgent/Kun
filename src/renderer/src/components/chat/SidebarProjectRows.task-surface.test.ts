@@ -6,6 +6,7 @@ import type { NormalizedThread } from '../../agent/types'
 import { ThreadRow } from './SidebarProjectRows'
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: vi.fn() },
   useTranslation: () => ({ t: (key: string) => key })
 }))
 

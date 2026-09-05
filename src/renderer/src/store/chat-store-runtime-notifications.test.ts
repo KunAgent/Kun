@@ -12,11 +12,18 @@ import {
   isCodeThread,
   MAX_PENDING_CLAW_FEISHU_MIRRORS,
   MAX_WATCHED_COMPLETION_NOTIFICATIONS,
+  notifyTurnComplete,
   rememberPendingClawFeishuMirror,
   takePendingClawFeishuMirror,
   turnCompleteNotificationSource,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
+import {
+  createAutoPlanBuildIntent,
+  patchAutoPlanBuildIntent,
+  removeAutoPlanBuildIntent,
+  saveAutoPlanBuildIntent
+} from '../plan/auto-plan-build-intents'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
 import type { ChatState, ChatStoreSet } from './chat-store-types'
 import { emptyDesignThreadRegistry, markDesignThread } from '../design/design-thread-registry'
@@ -139,5 +146,42 @@ describe('watched completion notifications', () => {
 
     expect(completionNotificationDedupeKeyForWatchedThread('thread-1', 999)).toBe('watch:thread-1:999')
     expect(completionNotificationDedupeKeyForWatchedThread('thread-0', 999)).toBe('watch:thread-0:1000')
+  })
+
+  it('suppresses the completion notification for an intermediate auto-plan turn', () => {
+    const values = new Map<string, string>()
+    const showTurnCompleteNotification = vi.fn(async () => ({ ok: true }))
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key)
+      },
+      kunGui: { showTurnCompleteNotification }
+    })
+    const intent = createAutoPlanBuildIntent({
+      planId: '/repo:.kunsdd/plan/auto.md',
+      relativePath: '.kunsdd/plan/auto.md',
+      workspaceRoot: '/repo',
+      threadId: 'thread-1',
+      selection: { buildMode: 'direct', useWorktree: false }
+    })
+    saveAutoPlanBuildIntent(intent)
+    patchAutoPlanBuildIntent(intent.id, { planTurnId: 'turn-plan', status: 'planning' })
+
+    const state = {
+      threads: [makeThread({ id: 'thread-1', title: 'Auto task' })],
+      activeThreadId: null,
+      activeThreadRelation: null,
+      sideConversations: {}
+    } as never
+
+    notifyTurnComplete('thread-1', state, 'turn:turn-plan', undefined, 'turn-plan')
+    expect(showTurnCompleteNotification).not.toHaveBeenCalled()
+
+    removeAutoPlanBuildIntent(intent.id)
+    notifyTurnComplete('thread-1', state, 'turn:turn-build', undefined, 'turn-build')
+    expect(showTurnCompleteNotification).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
   })
 })

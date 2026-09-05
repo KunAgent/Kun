@@ -211,21 +211,33 @@ export function serializeActivePptReviewContexts(
   shapes: readonly CanvasShape[],
   parentThreadId?: string
 ): SerializedPptReviewContext[] {
-  const workflows = new Map<string, { childId: string; slides: Map<string, { frame?: CanvasShape; preview?: CanvasShape }> }>()
+  const workflows = new Map<string, {
+    childId: string
+    invalidChild: boolean
+    slides: Map<string, { frame?: CanvasShape; preview?: CanvasShape }>
+  }>()
   for (const shape of shapes) {
     const ref = shape.pptReviewRef
     if (!ref || ref.role === 'annotation' || (parentThreadId && ref.parentThreadId !== parentThreadId)) continue
-    const workflow = workflows.get(ref.workflowId) ?? { childId: ref.childId, slides: new Map() }
+    const workflow = workflows.get(ref.workflowId) ?? {
+      childId: ref.childId,
+      invalidChild: false,
+      slides: new Map()
+    }
+    if (workflow.childId !== ref.childId) workflow.invalidChild = true
     const slide = workflow.slides.get(ref.slideId) ?? {}
     if (ref.role === 'slide-frame') slide.frame = shape
     if (ref.role === 'preview-image') slide.preview = shape
     workflow.slides.set(ref.slideId, slide)
     workflows.set(ref.workflowId, workflow)
   }
-  return [...workflows.entries()].map(([workflowId, workflow]) => ({
-    workflowId,
-    childId: workflow.childId,
-    slides: [...workflow.slides.entries()].map(([slideId, slide]) => {
+  return [...workflows.entries()].flatMap(([workflowId, workflow]) => {
+    if (workflow.invalidChild) return []
+    const slides = [...workflow.slides.entries()].flatMap(([slideId, slide]) => {
+      if (!slide.frame?.pptReviewRef || !slide.preview?.pptReviewRef ||
+        slide.frame.pptReviewRef.childId !== slide.preview.pptReviewRef.childId ||
+        slide.frame.pptReviewRef.revision !== slide.preview.pptReviewRef.revision ||
+        slide.preview.type !== 'image' || !slide.preview.imageUrl?.trim()) return []
       const revision = slide.preview?.pptReviewRef?.revision ?? slide.frame?.pptReviewRef?.revision ?? 0
       const annotations = slide.frame
         ? shapes
@@ -240,14 +252,17 @@ export function serializeActivePptReviewContexts(
             .map((shape) => shape.textContent?.trim() ?? '')
             .filter(Boolean)
         : []
-      return {
+      return [{
         slideId,
         revision,
         ...(slide.preview?.type === 'image' && slide.preview.imageUrl ? { imagePath: slide.preview.imageUrl } : {}),
         ...(annotations.length ? { annotations } : {})
-      }
+      }]
     })
-  }))
+    return slides.length === workflow.slides.size && slides.length > 0
+      ? [{ workflowId, childId: workflow.childId, slides }]
+      : []
+  })
 }
 
 export function serializePptReviewContext(

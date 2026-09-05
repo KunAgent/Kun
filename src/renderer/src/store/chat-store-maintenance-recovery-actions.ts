@@ -36,6 +36,7 @@ import {
 } from '../lib/thread-worktree-registry'
 import {
   forgetQueuedMessagesForThread,
+  pauseQueuedMessagesForInterrupt,
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
@@ -101,6 +102,7 @@ import {
   writeThreadBelongsToWorkspace,
   writeWorkspaceForThreadId
 } from '../write/write-thread-registry'
+import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import {
   designDocKey,
   forgetDesignThread,
@@ -143,12 +145,7 @@ import {
   syncTurnCompletionPoll,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
-import {
-  extractPlanTodos,
-  mergePlanTodosForRenderer,
-  sameTodoWriteItems,
-  threadTodoWriteItems
-} from '../plan/plan-todo-sync'
+import { threadTodoWriteItems } from '../plan/plan-todo-sync'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -211,13 +208,9 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
       delete watchTurnCompletion[threadId]
       delete unreadThreadIds[threadId]
     }
-    const queuedMessages = s.queuedMessages.map((message) => {
-      if (message.deliveryState && message.deliveryState !== 'pending') return message
-      const paused = { ...message, deliveryState: 'paused' as const }
-      delete paused.deliveryTurnId
-      delete paused.deliveryUserMessageItemId
-      return paused
-    })
+    // Interrupted turns never auto-drain the runtime queue; undelivered
+    // entries pause until the user resumes the queue explicitly.
+    const queuedMessages = pauseQueuedMessagesForInterrupt(s.queuedMessages)
     const blocks = settlePendingRuntimeWorkAfterInterrupt(out.blocks ?? s.blocks)
     return {
       ...out,
@@ -270,6 +263,7 @@ export function createMaintenanceRecoveryActions(
   { set, get, sseAbortRef }: StoreActionContext,
   dependencies: MaintenanceActionDependencies = {}
 ): Pick<ChatState, 'deleteThread' | 'rewindAndResend' | 'rollbackWorkspaceToCheckpoint'> {
+  const rewindAndResendInFlight = new Set<string>()
   const prepareCanvasResend = dependencies.prepareCodeCanvasResend ?? prepareCodeCanvasResend
     const openCodeCanvasPanel =
       dependencies.requestCodeCanvasPanelOpen ?? requestCodeCanvasPanelOpen
@@ -357,6 +351,7 @@ export function createMaintenanceRecoveryActions(
       invalidateThreadSnapshot(targetId)
       forgetQueuedMessagesForThread(targetId)
       saveWriteThreadRegistry(forgetWriteThread(targetId))
+      await useWriteWorkspaceStore.getState().forgetWhiteboardThread(targetId)
       saveDesignThreadRegistry(forgetDesignThread(targetId))
       saveThreadForkRegistry(forgetThreadFork(targetId))
       forgetStoredThreadRightPanelExpansion(targetId)
@@ -413,59 +408,63 @@ export function createMaintenanceRecoveryActions(
       set({ error: i18n.t('common:runtimeFeatureUnsupported') })
       return
     }
-    const checkpointId = targetBlock.meta?.workspaceCheckpointId
-    if (checkpointId) {
-      const expectedWorkspaceRoot = resolveCheckpointExpectedWorkspaceRoot(state)
-      const restored = await window.kunGui.restoreGitCheckpoint({
-        checkpointId,
-        ...(state.activeThreadId ? { expectedThreadId: state.activeThreadId } : {}),
-        ...(expectedWorkspaceRoot ? { expectedWorkspaceRoot } : {})
-      }).catch((error) => ({
-        ok: false as const,
-        reason: 'error' as const,
-        message: error instanceof Error ? error.message : String(error)
-      }))
-      if (!restored.ok) {
-        set({ error: restored.message })
-        return
-      }
-    }
-
-    const trimmedBlocks = state.blocks.slice(0, idx)
-    const attachmentIds = [...new Set([
-      ...(targetBlock.meta?.attachmentIds ?? []),
-      ...(targetBlock.meta?.attachments ?? []).map((attachment) => attachment.id)
-    ].map((id) => id.trim()).filter(Boolean))]
-    const attachments = (targetBlock.meta?.attachments ?? []).filter((attachment) =>
-      attachment.id.trim().length > 0
-    )
-    const composerContexts = targetBlock.meta?.composerContexts ?? []
-    const attachmentOverrides = {
-      ...(attachmentIds.length ? { attachmentIds } : {}),
-      ...(attachments.length ? { attachments } : {}),
-      ...(composerContexts.length ? { composerContexts } : {})
-    }
-
-    const droppedUserIds = state.blocks
-      .slice(idx)
-      .filter((b) => b.kind === 'user')
-      .map((b) => b.id)
-    const turnStartedAtByUserId = { ...state.turnStartedAtByUserId }
-    const turnDurationByUserId = { ...state.turnDurationByUserId }
-    const turnReasoningFirstAtByUserId = { ...state.turnReasoningFirstAtByUserId }
-    const turnReasoningLastAtByUserId = { ...state.turnReasoningLastAtByUserId }
-    for (const id of droppedUserIds) {
-      delete turnStartedAtByUserId[id]
-      delete turnDurationByUserId[id]
-      delete turnReasoningFirstAtByUserId[id]
-      delete turnReasoningLastAtByUserId[id]
-    }
-
-    sseAbortRef.current?.abort()
-    sseAbortRef.current = null
-    clearBusyWatchdog()
-
+    const threadId = state.activeThreadId
+    const operationKey = JSON.stringify([threadId, targetBlock.id])
+    if (rewindAndResendInFlight.has(operationKey)) return
+    rewindAndResendInFlight.add(operationKey)
     try {
+      const checkpointId = targetBlock.meta?.workspaceCheckpointId
+      if (checkpointId) {
+        const expectedWorkspaceRoot = resolveCheckpointExpectedWorkspaceRoot(state)
+        const restored = await window.kunGui.restoreGitCheckpoint({
+          checkpointId,
+          expectedThreadId: threadId,
+          ...(expectedWorkspaceRoot ? { expectedWorkspaceRoot } : {})
+        }).catch((error) => ({
+          ok: false as const,
+          reason: 'error' as const,
+          message: error instanceof Error ? error.message : String(error)
+        }))
+        if (!restored.ok) {
+          set({ error: restored.message })
+          return
+        }
+      }
+
+      const trimmedBlocks = state.blocks.slice(0, idx)
+      const attachmentIds = [...new Set([
+        ...(targetBlock.meta?.attachmentIds ?? []),
+        ...(targetBlock.meta?.attachments ?? []).map((attachment) => attachment.id)
+      ].map((id) => id.trim()).filter(Boolean))]
+      const attachments = (targetBlock.meta?.attachments ?? []).filter((attachment) =>
+        attachment.id.trim().length > 0
+      )
+      const composerContexts = targetBlock.meta?.composerContexts ?? []
+      const attachmentOverrides = {
+        ...(attachmentIds.length ? { attachmentIds } : {}),
+        ...(attachments.length ? { attachments } : {}),
+        ...(composerContexts.length ? { composerContexts } : {})
+      }
+
+      const droppedUserIds = state.blocks
+        .slice(idx)
+        .filter((b) => b.kind === 'user')
+        .map((b) => b.id)
+      const turnStartedAtByUserId = { ...state.turnStartedAtByUserId }
+      const turnDurationByUserId = { ...state.turnDurationByUserId }
+      const turnReasoningFirstAtByUserId = { ...state.turnReasoningFirstAtByUserId }
+      const turnReasoningLastAtByUserId = { ...state.turnReasoningLastAtByUserId }
+      for (const id of droppedUserIds) {
+        delete turnStartedAtByUserId[id]
+        delete turnDurationByUserId[id]
+        delete turnReasoningFirstAtByUserId[id]
+        delete turnReasoningLastAtByUserId[id]
+      }
+
+      sseAbortRef.current?.abort()
+      sseAbortRef.current = null
+      clearBusyWatchdog()
+
       const canvasResend = await prepareCanvasResend({
         route: state.route,
         text: trimmed,
@@ -474,11 +473,11 @@ export function createMaintenanceRecoveryActions(
         threadWorkspaceRoot: state.threads.find(
           (thread) => thread.id === state.activeThreadId
         )?.workspace,
-        threadId: state.activeThreadId
+        threadId
       })
       if (canvasResend) openCodeCanvasPanel()
-      await p.rewindThread(state.activeThreadId, turnId)
-      invalidateThreadSnapshot(state.activeThreadId)
+      await p.rewindThread(threadId, turnId)
+      invalidateThreadSnapshot(threadId)
       set({
         blocks: trimmedBlocks,
         ...emptyLiveProjection(state.lastSeq),
@@ -504,7 +503,16 @@ export function createMaintenanceRecoveryActions(
         await get().sendMessage(trimmed)
       }
     } catch (e) {
-      set({ error: formatRuntimeError(e) })
+      const message = formatRuntimeError(e)
+      // Rewind can lose a race with a server-started continuation. The SSE
+      // stream was stopped before the mutation, so rehydrate the authoritative
+      // turn and resubscribe before surfacing the localized conflict.
+      if (get().activeThreadId === threadId) {
+        await get().recoverActiveTurn().catch(() => false)
+      }
+      set({ error: message })
+    } finally {
+      rewindAndResendInFlight.delete(operationKey)
     }
   },
 

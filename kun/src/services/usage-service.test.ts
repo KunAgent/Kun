@@ -51,6 +51,34 @@ describe('usage cache diagnostics', () => {
     expect(current.cacheMissReasons).toContain('cold_request')
   })
 
+  it('attaches the per-request cache hit rate to the live snapshot only', () => {
+    const usage = new UsageService()
+
+    const withTelemetry = usage.record('thread-a', {
+      promptTokens: 1_000,
+      completionTokens: 20,
+      totalTokens: 1_020,
+      cacheHitTokens: 600,
+      cacheMissTokens: 200,
+      cacheHitRate: 0.75,
+      turns: 1
+    }, signature)
+
+    expect(withTelemetry.lastRequestCacheHitRate).toBe(0.75)
+    // The persisted cumulative counter must not carry the per-request field.
+    expect(usage.forThread('thread-a').lastRequestCacheHitRate).toBeUndefined()
+
+    const withoutTelemetry = usage.record('thread-a', {
+      promptTokens: 100,
+      completionTokens: 10,
+      totalTokens: 110,
+      cacheHitRate: null,
+      turns: 1
+    }, signature)
+
+    expect(withoutTelemetry.lastRequestCacheHitRate).toBeNull()
+  })
+
   it('explains a hit-rate regression once a thread has a warm baseline', () => {
     const usage = new UsageService()
     const warm = (hit: number, miss: number) => ({

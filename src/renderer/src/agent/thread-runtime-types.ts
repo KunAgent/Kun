@@ -11,6 +11,16 @@ export type ThreadUsageSnapshot = {
   costCny: number | null
   tokenEconomySavingsTokens: number
   turns: number
+  /** Cacheable-token hit rate of the most recent request. */
+  cacheableTokenHitRate?: number | null
+  /** Total-input hit rate of the most recent request. */
+  totalInputTokenHitRate?: number | null
+  /** Cache miss reasons for the most recent request. */
+  cacheMissReasons?: string[]
+  /** Cache improvement suggestions for the most recent request. */
+  cacheSuggestions?: string[]
+  /** Hit rate of the single request that produced this live snapshot. */
+  lastRequestCacheHitRate?: number | null
   /** Thread-cumulative average time-to-first-token across model calls (ms). */
   avgTtftMs: number | null
   /** Thread-cumulative average tokens-per-second across model calls. */

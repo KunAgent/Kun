@@ -14,6 +14,38 @@ export async function shutdownGraphExecutionForHost(input: {
   await input.graphRuntime.stop()
 }
 
+/**
+ * Preserve the shutdown ownership boundary even when one execution phase
+ * fails: active runs get their bounded unwind window and Manager leases are
+ * drained before persistent services are allowed to close.
+ */
+export async function shutdownRuntimeExecutionForHost(input: {
+  prepare: () => Promise<void> | void
+  graphRuntime: Pick<GraphRuntimeComposition, 'quiesceExecution' | 'stop'>
+  turnService: Pick<TurnService, 'suspendActiveTurnsForShutdown'>
+  activeRuntimeRuns: ReadonlySet<Promise<unknown>>
+  shutdownLeases: () => Promise<void>
+}): Promise<void> {
+  const errors: unknown[] = []
+  const run = async (step: () => Promise<void>): Promise<void> => {
+    try {
+      await step()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  await run(async () => { await input.prepare() })
+  await run(() => input.graphRuntime.quiesceExecution())
+  await run(async () => { await input.turnService.suspendActiveTurnsForShutdown() })
+  await run(() => input.graphRuntime.stop())
+  await run(() => waitForActiveRuns(input.activeRuntimeRuns))
+  await run(input.shutdownLeases)
+  if (errors.length === 1) throw errors[0]
+  if (errors.length > 1) {
+    throw new AggregateError(errors, 'multiple runtime execution shutdown phases failed')
+  }
+}
+
 export async function resumeInterruptedGraphPlanning(input: {
   graphRuntime: Pick<GraphRuntimeComposition, 'drafts'>
   turnService: Pick<
@@ -66,10 +98,17 @@ export async function waitForActiveRuns(
   if (pending.length === 0) return
   let timeout: ReturnType<typeof setTimeout> | undefined
   try {
-    await Promise.race([
+    const results = await Promise.race([
       Promise.allSettled(pending),
-      new Promise<void>((resolve) => { timeout = setTimeout(resolve, timeoutMs) })
+      new Promise<null>((resolve) => { timeout = setTimeout(() => resolve(null), timeoutMs) })
     ])
+    if (results) {
+      const errors = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : []
+      )
+      if (errors.length === 1) throw errors[0]
+      if (errors.length > 1) throw new AggregateError(errors, 'multiple runtime runs failed during shutdown')
+    }
   } finally {
     if (timeout) clearTimeout(timeout)
   }

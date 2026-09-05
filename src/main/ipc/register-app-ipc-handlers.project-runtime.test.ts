@@ -35,6 +35,10 @@ import {
   registerAppIpcHandlers
 } from './register-app-ipc-handlers'
 
+vi.mock('../main-window', () => ({
+  trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html'
+}))
+
 const electronMock = getAppIpcElectronMock()
 
 describe('registerAppIpcHandlers project config and runtime routing', () => {

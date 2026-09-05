@@ -10,9 +10,11 @@ import {
   clawImInstallPollPayloadSchema,
   conversationExportPayloadSchema,
   isSafeOpenExternalUrl,
+  openEditorPathPayloadSchema,
   shellOpenExternalUrlSchema,
   sseAckPayloadSchema,
   sseStartPayloadSchema,
+  workspaceCreationTimesPayloadSchema,
   workspaceDirectoryCreatePayloadSchema,
   workspaceDirectoryTargetPayloadSchema,
   workspaceEntryDeletePayloadSchema,
@@ -100,6 +102,18 @@ describe('app-ipc-schemas workspace and system', () => {
     })
 
     expect(payload.path).toBe('/tmp/workspace/draft.md')
+  })
+
+  it('accepts generated-document open policy and rejects unknown policies', () => {
+    expect(openEditorPathPayloadSchema.parse({
+      path: '/tmp/workspace/report.docx',
+      workspaceRoot: '/tmp/workspace',
+      openPolicy: 'generated-document-artifact'
+    }).openPolicy).toBe('generated-document-artifact')
+    expect(() => openEditorPathPayloadSchema.parse({
+      path: '/tmp/workspace/report.docx',
+      openPolicy: 'any-generated-file'
+    })).toThrow()
   })
 
   it('accepts structured inline completion payloads', () => {
@@ -270,5 +284,18 @@ describe('app-ipc-schemas workspace and system', () => {
     })).toMatchObject({
       fileName: 'architecture-a1b2c3.png'
     })
+  })
+
+  it('validates workspace creation time payloads', () => {
+    expect(workspaceCreationTimesPayloadSchema.parse({
+      workspaceRoots: ['D:/kun', '/tmp/project']
+    })).toEqual({ workspaceRoots: ['D:/kun', '/tmp/project'] })
+    expect(() =>
+      workspaceCreationTimesPayloadSchema.parse({ workspaceRoots: ['/tmp/a'], extra: true })
+    ).toThrow()
+    expect(() => workspaceCreationTimesPayloadSchema.parse({ workspaceRoots: [42] })).toThrow()
+    expect(() =>
+      workspaceCreationTimesPayloadSchema.parse({ workspaceRoots: Array.from({ length: 257 }, () => '/tmp/a') })
+    ).toThrow()
   })
 })

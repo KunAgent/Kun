@@ -70,7 +70,7 @@ describe('useWorkbenchPptWhiteboardRouter', () => {
     })
   })
 
-  it('routes every recovered PPT result and updates each canonical board', async () => {
+  it('opens every recovered PPT board without committing phase before canvas projection', async () => {
     const findOrCreatePptWhiteboard = vi.fn(async (input: FindPptBoardInput) => ({
       id: `board-${input.workflowId}`, title: 'Review', workspaceRoot: '/work',
       threadId: input.threadId, workflowId: input.workflowId, childId: input.childId,
@@ -90,7 +90,7 @@ describe('useWorkbenchPptWhiteboardRouter', () => {
 
     let renderer: ReturnType<typeof create> | undefined
     await act(async () => { renderer = create(createElement(RouterHarness, { blocks })) })
-    await vi.waitFor(() => expect(updateWhiteboardPptState).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(findOrCreatePptWhiteboard).toHaveBeenCalledTimes(2))
 
     expect(findOrCreatePptWhiteboard.mock.calls.map(([input]) => input.workflowId)).toEqual([
       'workflow-a', 'workflow-b'
@@ -98,9 +98,7 @@ describe('useWorkbenchPptWhiteboardRouter', () => {
     expect(findOrCreatePptWhiteboard.mock.calls.map(([input]) => input.title)).toEqual([
       'Direction deck', 'Direction deck'
     ])
-    expect(updateWhiteboardPptState).toHaveBeenNthCalledWith(
-      1, 'board-workflow-a', expect.objectContaining({ phase: 'directions', revision: 3 })
-    )
+    expect(updateWhiteboardPptState).not.toHaveBeenCalled()
     await act(async () => renderer?.unmount())
   })
 
@@ -124,11 +122,12 @@ describe('useWorkbenchPptWhiteboardRouter', () => {
 
     let renderer: ReturnType<typeof create> | undefined
     await act(async () => { renderer = create(createElement(RouterHarness, { blocks })) })
-    await vi.waitFor(() => expect(updateWhiteboardPptState).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(findOrCreatePptWhiteboard).toHaveBeenCalledTimes(1))
 
     expect(findOrCreatePptWhiteboard).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Text completion landscape'
     }))
+    expect(updateWhiteboardPptState).not.toHaveBeenCalled()
     await act(async () => renderer?.unmount())
   })
 
@@ -156,6 +155,49 @@ describe('useWorkbenchPptWhiteboardRouter', () => {
     })
     await act(async () => { await Promise.resolve() })
 
+    expect(updateWhiteboardPptState).not.toHaveBeenCalled()
+    await act(async () => renderer?.unmount())
+  })
+
+  it('commits a validated completed artifact that has no pending canvas projection', async () => {
+    const findOrCreatePptWhiteboard = vi.fn(async (input: FindPptBoardInput) => ({
+      id: 'board-workflow-a', title: input.title, workspaceRoot: '/work',
+      threadId: input.threadId, workflowId: input.workflowId, childId: input.childId,
+      phase: 'review' as const, revision: 2,
+      createdAt: '2026-08-13T00:00:00.000Z', updatedAt: '2026-08-13T00:00:00.000Z'
+    }))
+    const updateWhiteboardPptState = vi.fn(async () => true)
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: '/work', findOrCreatePptWhiteboard, updateWhiteboardPptState
+    })
+    const blocks = [tool('complete-a', {
+      phase: 'completed', workflowId: 'workflow-a', childId: 'child-workflow-a',
+      deckArtifact: { output: 'presentations/final.pptx' }
+    })]
+
+    let renderer: ReturnType<typeof create> | undefined
+    await act(async () => { renderer = create(createElement(RouterHarness, { blocks })) })
+    await vi.waitFor(() => expect(updateWhiteboardPptState).toHaveBeenCalledWith(
+      'board-workflow-a', expect.objectContaining({
+        phase: 'complete', outputPath: 'presentations/final.pptx'
+      })
+    ))
+    await act(async () => renderer?.unmount())
+  })
+
+  it('ignores a completed payload without a governed deck artifact', async () => {
+    const findOrCreatePptWhiteboard = vi.fn()
+    const updateWhiteboardPptState = vi.fn()
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: '/work', findOrCreatePptWhiteboard, updateWhiteboardPptState
+    })
+    const blocks = [tool('complete-a', {
+      phase: 'completed', workflowId: 'workflow-a', childId: 'child-workflow-a'
+    })]
+
+    let renderer: ReturnType<typeof create> | undefined
+    await act(async () => { renderer = create(createElement(RouterHarness, { blocks })) })
+    expect(findOrCreatePptWhiteboard).not.toHaveBeenCalled()
     expect(updateWhiteboardPptState).not.toHaveBeenCalled()
     await act(async () => renderer?.unmount())
   })

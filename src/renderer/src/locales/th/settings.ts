@@ -12,6 +12,7 @@ const settings = {
   ...mcpMigration,
   ...migrationSystem,
   ...codePersonas,
+  guiUpdateErrFeedUnavailable: 'ขณะนี้ไม่สามารถเข้าถึงแหล่งอัปเดตได้ โปรดลองอีกครั้งภายหลังหรือใช้หน้าดาวน์โหลด',
 }
 
 export default settings

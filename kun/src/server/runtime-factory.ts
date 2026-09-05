@@ -6,7 +6,11 @@ export { createKunServeRuntime } from './runtime-composition.js'
 export { startKunServe } from './runtime-server-start.js'
 export {
   resumeInterruptedGraphPlanning,
-  shutdownGraphExecutionForHost
+  shutdownGraphExecutionForHost,
+  shutdownRuntimeExecutionForHost
 } from './runtime-graph-lifecycle.js'
 export { seedUsageCarryover } from './runtime-factory-storage.js'
-export { activeModelConnectionProviderId } from './runtime-factory-model.js'
+export {
+  activeModelConnectionProviderId,
+  extensionAgentRunOptionsForOptions
+} from './runtime-factory-model.js'

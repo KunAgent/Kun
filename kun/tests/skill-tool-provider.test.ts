@@ -153,7 +153,9 @@ describe('buildSkillToolProviders', () => {
       awaitApproval: async () => 'allow' as const
     }
 
-    expect((await host.listTools(baseContext)).map((spec) => spec.name)).toEqual(['load_skill'])
+    expect((await host.listTools(baseContext)).map((spec) => spec.name)).toEqual([
+      'load_skill', 'load_skill_asset'
+    ])
     await host.execute({
       callId: 'call_load',
       toolName: 'load_skill',
@@ -168,7 +170,7 @@ describe('buildSkillToolProviders', () => {
     })
     const nextContext = { ...baseContext, activeSkillIds: nextResolution.activeSkillIds }
     expect((await host.listTools(nextContext)).map((spec) => spec.name)).toEqual([
-      'load_skill', 'demo_run'
+      'load_skill', 'load_skill_asset', 'demo_run'
     ])
     await expect(host.execute({
       callId: 'call_run',

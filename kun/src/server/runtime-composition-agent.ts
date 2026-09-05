@@ -1,3 +1,4 @@
+import { QueuedTurnDispatcher } from './queued-turn-dispatcher.js'
 import {
   type AttachmentStore,
   CapabilityRegistry,
@@ -30,7 +31,8 @@ import type { createRuntimeRegistry } from './runtime-composition-registry.js'
 import {
   agentSdkProviderIdsForOptions,
   antigravityProviderIdsForOptions,
-  cursorSdkProviderIdsForOptions
+  cursorSdkProviderIdsForOptions,
+  extensionAgentRunOptionsForOptions
 } from './runtime-factory-model.js'
 import { resumeInterruptedGraphPlanning } from './runtime-graph-lifecycle.js'
 import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
@@ -85,6 +87,7 @@ export async function createRuntimeAgentComposition(
     registry: registryComposition.registry,
     readTracker: true,
     prepare: (context) => prepareExtensionContributions?.(context),
+    ...(services.executionLeases ? { leaseAuthority: services.executionLeases } : {}),
     ...(services.resolvedHooks.length ? { hooks: services.resolvedHooks } : {})
   })
   const extensionTools = new ExtensionToolRegistry({ registry: registryComposition.registry })
@@ -92,16 +95,42 @@ export async function createRuntimeAgentComposition(
   // npx cold start eventually shows up as connected instead of staying "error"
   // until the next runtime restart (issue #342). Both registries advertise the
   // MCP providers, so a late connection must be registered into each.
-  void services.mcpProviders.startBackgroundReconnect((provider) => {
-    try {
-      registryComposition.registry.registerProvider(provider)
-    } catch {
-      // ignore duplicate/colliding registration
-    }
-    try {
-      services.childRegistry.registerProvider(provider)
-    } catch {
-      // ignore duplicate/colliding registration
+  void services.mcpProviders.startBackgroundReconnect({
+    register: (provider) => {
+      try {
+        registryComposition.registry.registerProvider(provider)
+      } catch {
+        // ignore duplicate/colliding registration
+      }
+      try {
+        services.childRegistry.registerProvider(provider)
+      } catch {
+        // ignore duplicate/colliding registration
+      }
+    },
+    unregister: (providerId) => {
+      try {
+        registryComposition.registry.unregisterProvider(providerId)
+      } catch {
+        // ignore missing/colliding removal
+      }
+      try {
+        services.childRegistry.unregisterProvider(providerId)
+      } catch {
+        // ignore missing/colliding removal
+      }
+    },
+    replace: (provider) => {
+      try {
+        registryComposition.registry.replaceProvider(provider)
+      } catch {
+        // ignore missing/colliding replacement
+      }
+      try {
+        services.childRegistry.replaceProvider(provider)
+      } catch {
+        // ignore missing/colliding replacement
+      }
     }
   })
   // Provider-native subscription engines own whole turns and share the same
@@ -257,6 +286,35 @@ export async function createRuntimeAgentComposition(
 	    events,
 	    nowIso
 	  })
+	  const activeRuntimeRuns = new Set<Promise<TurnRunOutcome>>()
+	  let shuttingDown = false
+	  let loop!: AgentLoop
+	  const trackRuntimeRun = <T extends TurnRunOutcome>(run: Promise<T>): Promise<T> => {
+	    activeRuntimeRuns.add(run)
+	    void run.then(
+	      () => activeRuntimeRuns.delete(run),
+	      () => activeRuntimeRuns.delete(run)
+	    )
+	    return run
+	  }
+	  const runAgentTurn = (threadId: string, turnId: string): Promise<TurnRunOutcome> => {
+	    if (shuttingDown) {
+	      return trackRuntimeRun(
+	        turnService.suspendTurnForHostShutdown({ threadId, turnId })
+	          .then(() => 'suspended' as const)
+	      )
+	    }
+	    return trackRuntimeRun(loop.runTurn(threadId, turnId).then(async (outcome) => {
+	      if (
+	        outcome !== 'suspended' &&
+	        outcome !== 'suspended_pending_supervision' &&
+	        !shuttingDown
+	      ) {
+	        await graphRuntime.handleSourceTurnTerminal(threadId, turnId, outcome)
+	      }
+	      return outcome
+	    }))
+	  }
 	  let loopOptions: AgentLoopOptions = {
 	    threadStore,
 	    sessionStore,
@@ -275,7 +333,8 @@ export async function createRuntimeAgentComposition(
     compactor,
     prefix,
     ids,
-    nowIso,
+	    nowIso,
+	    runContinuationTurn: runAgentTurn,
 	    receipts: canvasReceipts,
 	    modelCapabilities,
 		    skillRuntime: services.skillRuntime,
@@ -301,39 +360,22 @@ export async function createRuntimeAgentComposition(
 	        planId,
         relativePath,
         markdown,
-	        preserveCompleted: true
+	        mode: 'plan_write'
 	      })
 	    }
 	  }
-	  let loop = new AgentLoop(loopOptions)
-	  const activeRuntimeRuns = new Set<Promise<TurnRunOutcome>>()
-	  let shuttingDown = false
-	  const trackRuntimeRun = <T extends TurnRunOutcome>(run: Promise<T>): Promise<T> => {
-	    activeRuntimeRuns.add(run)
-	    void run.then(
-	      () => activeRuntimeRuns.delete(run),
-	      () => activeRuntimeRuns.delete(run)
-	    )
-	    return run
-	  }
-	  const runAgentTurn = (threadId: string, turnId: string): Promise<TurnRunOutcome> => {
+	  loop = new AgentLoop(loopOptions)
+	  const runReview = (input: Parameters<typeof reviewService.runReview>[0]) => {
 	    if (shuttingDown) {
-	      return turnService.suspendTurnForHostShutdown({ threadId, turnId })
-	        .then(() => 'suspended' as const)
+	      return trackRuntimeRun(
+	        turnService.suspendTurnForHostShutdown({
+	          threadId: input.threadId,
+	          turnId: input.turnId
+	        }).then(() => 'aborted' as const)
+	      )
 	    }
-	    return trackRuntimeRun(loop.runTurn(threadId, turnId).then(async (outcome) => {
-	      if (
-	        outcome !== 'suspended' &&
-	        outcome !== 'suspended_pending_supervision' &&
-	        !shuttingDown
-	      ) {
-	        await graphRuntime.handleSourceTurnTerminal(threadId, turnId, outcome)
-	      }
-	      return outcome
-	    }))
+	    return trackRuntimeRun(reviewService.runReview(input))
 	  }
-	  const runReview = (input: Parameters<typeof reviewService.runReview>[0]) =>
-	    trackRuntimeRun(reviewService.runReview(input))
 	  await graphRuntime.start(createGraphRuntimeStartOptions({
 	    delegation: () => delegationRuntime,
 	    threads: threadStore,
@@ -365,6 +407,17 @@ export async function createRuntimeAgentComposition(
 	    turnService,
 	    runTurn: runAgentTurn
 	  })
+	  const queuedTurnDispatcher = new QueuedTurnDispatcher({
+	    turns: turnService,
+	    threadStore,
+	    runTurn: runAgentTurn
+	  })
+	  turnService.setTurnSettledHook((threadId, status) =>
+	    queuedTurnDispatcher.onTurnSettled(threadId, status)
+	  )
+	  // A queue commit may race the running turn's settlement; this trigger
+	  // covers the window where settle fired before the record was durable.
+	  turnService.setTurnQueuedHook((threadId) => queuedTurnDispatcher.requestDrain(threadId))
 	  const extensionProfiles = new ExtensionAgentProfileRegistry()
 	  const extensionAgent = new ExtensionAgentService({
 	    threads: threadService,
@@ -374,6 +427,7 @@ export async function createRuntimeAgentComposition(
 	    profiles: extensionProfiles,
 	    runTurn: runAgentTurn,
 	    defaultBinding: { providerId: 'default', modelId: core.activeOptions.model },
+	    resolveRunOptions: () => extensionAgentRunOptionsForOptions(core.activeOptions),
 	    headless: true,
 	    resolveToolCatalogEpoch: async ({ principal, workspace, allowedTools }) => {
 	      const owned = extensionTools.list(principal.extensionId, workspace)
@@ -398,6 +452,7 @@ export async function createRuntimeAgentComposition(
     trackRuntimeRun,
     runAgentTurn,
     runReview,
+    queuedTurnDispatcher,
     extensionProfiles,
     extensionAgent,
     get prepareExtensionContributions() { return prepareExtensionContributions },

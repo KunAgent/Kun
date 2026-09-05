@@ -62,6 +62,7 @@ import type {
   GuiProviderCatalog,
   GuiSharedSettings
 } from './gui-settings-bridge-catalog.js'
+import { assertSupportedGuiSettingsVersion } from './gui-settings-schema.js'
 
 export async function projectModelConnectionsToGuiSettings(
   settings: GuiSharedSettings,
@@ -74,6 +75,7 @@ export async function projectModelConnectionsToGuiSettings(
   }
   const parsed = JSON.parse(await readFile(settings.settingsPath, 'utf8')) as unknown
   if (!isRecordValue(parsed)) throw new Error('GUI settings must be a JSON object')
+  assertSupportedGuiSettingsVersion(parsed, settings.settingsPath)
   const providerSettings = isRecordValue(parsed.provider) ? { ...parsed.provider } : {}
   const existingProviders = Array.isArray(providerSettings.providers)
     ? providerSettings.providers.filter(isRecordValue)
@@ -169,6 +171,7 @@ export async function projectModelSelectionToGuiSettings(
   }
   const parsed = JSON.parse(await readFile(settings.settingsPath, 'utf8')) as unknown
   if (!isRecordValue(parsed)) throw new Error('GUI settings must be a JSON object')
+  assertSupportedGuiSettingsVersion(parsed, settings.settingsPath)
   const agents = isRecordValue(parsed.agents) ? { ...parsed.agents } : {}
   const kun = isRecordValue(agents.kun) ? { ...agents.kun } : {}
   const currentProviderId = typeof kun.providerId === 'string' ? kun.providerId : ''

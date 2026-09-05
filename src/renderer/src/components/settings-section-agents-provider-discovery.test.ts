@@ -481,6 +481,38 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
           proxy: { enabled: true, url: 'http://127.0.0.1:10808/' }
         }
       })
+      expect(update.mock.calls.some(([patch]) => JSON.stringify(patch).includes(
+        `"id":"${zenmux.id}","name"`
+      ) && JSON.stringify(patch).includes('"useProxy":true'))).toBe(true)
+    })
+
+    it('saves the Provider proxy switch while retaining an inactive selection', async () => {
+      const settings = defaultModelProviderSettings()
+      const zenmux = {
+        ...modelProviderPresetProfile(getModelProviderPreset('zenmux')!, 'sk-ai-v1-test'),
+        useProxy: true
+      }
+      const update = vi.fn()
+      const renderer = await mountProviders({
+        ...baseCtx(),
+        provider: {
+          ...settings,
+          proxy: { enabled: false, url: 'http://127.0.0.1:7890' },
+          providers: [...settings.providers, zenmux]
+        },
+        kun: { ...defaultKunRuntimeSettings(), providerId: zenmux.id, model: 'auto' },
+        update
+      })
+
+      expect(rendererText(renderer)).toContain('Selected but inactive because the global proxy is disabled.')
+      expect(rendererText(renderer)).toContain('delegated SDK/CLI traffic uses its own network settings.')
+      const toggle = renderer.root.findByProps({ 'aria-label': 'Use configured app proxy' })
+      expect(toggle.props['aria-checked']).toBe(true)
+
+      await act(async () => toggle.props.onClick())
+      expect(update.mock.calls.some(([patch]) => JSON.stringify(patch).includes(
+        `"id":"${zenmux.id}","name"`
+      ) && JSON.stringify(patch).includes('"useProxy":false'))).toBe(true)
     })
 
     it('imports Cursor mixed-vendor context, vision, and SDK aliases', async () => {

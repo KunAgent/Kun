@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export const MEMORY_IMPORT_PROFILE_PROMPT = `请帮我整理一份我的个人使用画像，用途是让我在不同 AI 工具之间保持一致的协作体验。请基于你当前能访问到的、与我相关的长期信息和本次会话上下文进行整理。在涉及我的指令和偏好时，请尽量保留我原本的表述方式，不要过度改写。
 
 分类（按以下顺序输出）
@@ -42,7 +44,64 @@ export type MemoryImportEntry = {
   tags: string[]
 }
 
+const MemoryPortableSourceSchema = z.object({
+  id: z.string().min(1).max(128),
+  kind: z.enum(['user', 'tool', 'inference', 'file', 'web', 'imported', 'legacy']),
+  threadId: z.string().min(1).max(256).optional(),
+  turnId: z.string().min(1).max(256).optional(),
+  itemId: z.string().min(1).max(256).optional(),
+  locator: z.string().min(1).max(1_024).optional(),
+  excerpt: z.string().min(1).max(512).optional(),
+  contentHash: z.string().min(1).max(128).optional(),
+  trust: z.enum(['explicit-user', 'observed', 'inferred', 'imported', 'legacy'])
+}).strict()
+
+const MemoryPortableRecordSchema = z.object({
+  schemaVersion: z.literal(2),
+  content: z.string().min(1),
+  scope: z.enum(['user', 'workspace', 'project']),
+  workspace: z.string().min(1).optional(),
+  project: z.string().min(1).optional(),
+  tags: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  type: z.enum(['fact', 'preference', 'decision', 'episode', 'relationship', 'insight']),
+  authority: z.literal('reference'),
+  importance: z.number().min(0).max(1),
+  observedAt: z.string().datetime(),
+  validFrom: z.string().datetime().optional(),
+  validTo: z.string().datetime().optional(),
+  expiresAt: z.string().datetime().optional(),
+  sources: z.array(MemoryPortableSourceSchema).max(8),
+  disabled: z.boolean()
+}).strict().superRefine((record, context) => {
+  if (record.validFrom && record.validTo && Date.parse(record.validFrom) > Date.parse(record.validTo)) {
+    context.addIssue({ code: 'custom', path: ['validTo'], message: 'validFrom must not be after validTo' })
+  }
+  const sourceIds = new Set<string>()
+  for (let index = 0; index < record.sources.length; index += 1) {
+    const id = record.sources[index].id
+    if (sourceIds.has(id)) {
+      context.addIssue({ code: 'custom', path: ['sources', index, 'id'], message: 'source ids must be unique' })
+    }
+    sourceIds.add(id)
+  }
+})
+
+const MemoryPortableArchiveSchema = z.object({
+  format: z.literal('kun-memory-v2'),
+  version: z.literal(1),
+  exportedAt: z.string().datetime(),
+  records: z.array(MemoryPortableRecordSchema)
+}).strict()
+
+export type MemoryPortableRecord = z.infer<typeof MemoryPortableRecordSchema>
+export type MemoryImportParseResult =
+  | { kind: 'portable'; records: MemoryPortableRecord[] }
+  | { kind: 'profile'; entries: MemoryImportEntry[] }
+  | { kind: 'invalid-portable'; message: string }
+
 export type MemoryExportRecord = {
+  schemaVersion?: 2
   id: string
   content: string
   scope: 'user' | 'workspace' | 'project'
@@ -50,6 +109,24 @@ export type MemoryExportRecord = {
   project?: string
   tags?: string[]
   confidence?: number
+  type?: 'fact' | 'preference' | 'decision' | 'episode' | 'relationship' | 'insight'
+  authority?: 'reference'
+  importance?: number
+  observedAt?: string
+  validFrom?: string
+  validTo?: string
+  expiresAt?: string
+  sources?: Array<{
+    id: string
+    kind: 'user' | 'tool' | 'inference' | 'file' | 'web' | 'imported' | 'legacy'
+    threadId?: string
+    turnId?: string
+    itemId?: string
+    locator?: string
+    excerpt?: string
+    contentHash?: string
+    trust: 'explicit-user' | 'observed' | 'inferred' | 'imported' | 'legacy'
+  }>
   createdAt: string
   updatedAt: string
   disabledAt?: string
@@ -73,6 +150,8 @@ export type MemoryMarkdownExportSaveResult =
 
 const IMPORT_LINE_PATTERN = /^\[([0-9]{4}-[0-9]{2}-[0-9]{2}|unknown)\]\s*[-－]\s*(.+)$/
 const CODE_BLOCK_PATTERN = /```(?:[a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/m
+const PORTABLE_CODE_BLOCK_PATTERN = /```kun-memory-v2\s*\r?\n([\s\S]*?)```/im
+const PORTABLE_CODE_BLOCK_MARKER_PATTERN = /```kun-memory-[^\s`]*/i
 
 export function extractMemoryImportText(raw: string): string {
   const match = CODE_BLOCK_PATTERN.exec(raw)
@@ -111,8 +190,34 @@ export function parseMemoryProfileImport(raw: string): MemoryImportEntry[] {
   return entries
 }
 
+export function parseMemoryImport(raw: string): MemoryImportParseResult {
+  const portableBlock = PORTABLE_CODE_BLOCK_PATTERN.exec(raw)
+  if (portableBlock) {
+    try {
+      const parsed = MemoryPortableArchiveSchema.safeParse(JSON.parse(portableBlock[1]))
+      if (parsed.success) return { kind: 'portable', records: parsed.data.records }
+      return { kind: 'invalid-portable', message: 'Invalid kun-memory-v2 archive.' }
+    } catch {
+      return { kind: 'invalid-portable', message: 'Invalid kun-memory-v2 archive.' }
+    }
+  }
+  if (PORTABLE_CODE_BLOCK_MARKER_PATTERN.test(raw)) {
+    return { kind: 'invalid-portable', message: 'Unsupported Kun memory archive version.' }
+  }
+  return { kind: 'profile', entries: parseMemoryProfileImport(raw) }
+}
+
 export function buildMemoryImportContent(entry: MemoryImportEntry): string {
   return `[${entry.date}] ${entry.category}: ${entry.content}`
+}
+
+export function memoryImportObservedAt(date: string): string | undefined {
+  if (date === 'unknown') return undefined
+  const candidate = `${date}T00:00:00.000Z`
+  const parsed = new Date(candidate)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date
+    ? parsed.toISOString()
+    : undefined
 }
 
 export function defaultMemoryExportFileName(now = new Date()): string {
@@ -143,7 +248,46 @@ export function buildMemoryMarkdownExport({ records, exportedAt = new Date().toI
     lines.push('')
   }
 
+  const archive = MemoryPortableArchiveSchema.parse({
+    format: 'kun-memory-v2',
+    version: 1,
+    exportedAt,
+    records: activeRecords.map(toPortableRecord)
+  })
+  lines.push('## Kun Memory V2', '', '```kun-memory-v2', JSON.stringify(archive, null, 2), '```', '')
+
   return `${lines.join('\n').trimEnd()}\n`
+}
+
+function toPortableRecord(record: MemoryExportRecord): MemoryPortableRecord {
+  return MemoryPortableRecordSchema.parse({
+    schemaVersion: 2,
+    content: record.content,
+    scope: record.scope,
+    ...(record.workspace ? { workspace: record.workspace } : {}),
+    ...(record.project ? { project: record.project } : {}),
+    tags: record.tags ?? [],
+    confidence: record.confidence ?? 1,
+    type: record.type ?? inferPortableType(record),
+    authority: 'reference',
+    importance: record.importance ?? 0.5,
+    observedAt: record.observedAt ?? record.updatedAt ?? record.createdAt,
+    ...(record.validFrom ? { validFrom: record.validFrom } : {}),
+    ...(record.validTo ? { validTo: record.validTo } : {}),
+    ...(record.expiresAt ? { expiresAt: record.expiresAt } : {}),
+    sources: record.sources ?? [],
+    disabled: Boolean(record.disabledAt)
+  })
+}
+
+function inferPortableType(record: MemoryExportRecord): MemoryPortableRecord['type'] {
+  const tags = new Set((record.tags ?? []).map((tag) => tag.trim().toLowerCase()))
+  if (tags.has('preference') || tags.has('preferences') || tags.has('偏好')) return 'preference'
+  if (tags.has('decision') || tags.has('决定')) return 'decision'
+  if (tags.has('episode') || tags.has('经历')) return 'episode'
+  if (tags.has('relationship') || tags.has('关系')) return 'relationship'
+  if (tags.has('insight') || tags.has('洞察')) return 'insight'
+  return 'fact'
 }
 
 function normalizeCategoryHeading(value: string): MemoryImportEntry['category'] | null {

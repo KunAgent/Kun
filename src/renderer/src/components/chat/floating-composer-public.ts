@@ -19,6 +19,7 @@ export type {
 } from './FloatingComposerAttachments'
 export { calculateComposerMenuScrollTop } from './composer-menu-scroll'
 export { shouldCaptureFileMentionCommitKey } from './use-composer-file-mentions'
+export { shouldOpenAttachmentPickerOnKeyDown } from './use-floating-composer-actions'
 export type { ComposerFileReference } from '../../lib/composer-file-references'
 export type { ComposerExecutionSettings } from './FloatingComposerExecutionPicker'
 export {

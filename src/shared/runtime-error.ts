@@ -25,6 +25,7 @@ export type KunErrorCode =
   | 'thread_busy'
   | 'turn_in_progress'
   | 'turn_not_running'
+  | 'thread_read_overloaded'
   | 'approval_not_pending'
   | 'capability_unavailable'
   | 'provider_unavailable'
@@ -75,6 +76,7 @@ const KNOWN_KUN_CODES: ReadonlySet<KunErrorCode> = new Set<KunErrorCode>([
   'thread_busy',
   'turn_in_progress',
   'turn_not_running',
+  'thread_read_overloaded',
   'approval_not_pending',
   'capability_unavailable',
   'provider_unavailable',

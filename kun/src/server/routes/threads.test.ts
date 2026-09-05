@@ -6,6 +6,7 @@ import {
   getThreadTimeline,
   updateThread
 } from './threads.js'
+import { getQueuedTurns } from './thread-queued-turns.js'
 import { buildRouter } from './index.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { createThreadRecord } from '../../domain/thread.js'
@@ -74,6 +75,44 @@ describe('getThread pendingUserInputIds (#606)', () => {
     const body = JSON.parse(response.body)
     expect(body.pendingUserInputIds).toEqual([])
     expect(body).not.toHaveProperty('pendingApprovalIds')
+  })
+})
+
+describe('getQueuedTurns', () => {
+  function serviceWithQueued(threadId: string, turns: ReturnType<typeof createTurnRecord>[]): ThreadService {
+    const record = createThreadRecord({
+      id: threadId,
+      title: 'Queued',
+      workspace: '/tmp',
+      model: 'deepseek-chat',
+      status: 'running'
+    })
+    record.turns = turns
+    return {
+      get: async (id: string) => (id === threadId ? record : null)
+    } as unknown as ThreadService
+  }
+
+  it('returns queued turns in queue order with clientRequestId and position', async () => {
+    const turns = [
+      createTurnRecord({ id: 'turn_running', threadId: 'thr_q', prompt: 'live', status: 'running' }),
+      createTurnRecord({ id: 'turn_q1', threadId: 'thr_q', prompt: 'first', status: 'queued', clientRequestId: 'req-1', createdAt: '2026-01-01T00:00:00.000Z' }),
+      createTurnRecord({ id: 'turn_done', threadId: 'thr_q', prompt: 'done', status: 'completed' }),
+      createTurnRecord({ id: 'turn_q2', threadId: 'thr_q', prompt: 'second', status: 'queued', createdAt: '2026-01-02T00:00:00.000Z' })
+    ]
+    const response = await getQueuedTurns(serviceWithQueued('thr_q', turns), 'thr_q')
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      queuedTurns: [
+        { turnId: 'turn_q1', clientRequestId: 'req-1', position: 0, createdAt: '2026-01-01T00:00:00.000Z' },
+        { turnId: 'turn_q2', position: 1, createdAt: '2026-01-02T00:00:00.000Z' }
+      ]
+    })
+  })
+
+  it('returns 404 for a missing thread', async () => {
+    const response = await getQueuedTurns(serviceWithQueued('thr_q', []), 'thr_missing')
+    expect(response.status).toBe(404)
   })
 })
 
@@ -153,6 +192,7 @@ describe('getThreadState', () => {
       status: 'running',
       updatedAt: record.updatedAt,
       latestSeq: 73,
+      replayFloorSeq: 0,
       pendingUserInputIds: [],
       latestTurn: { id: 'turn_state', status: 'running', orchestration: 'direct' }
     })

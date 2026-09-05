@@ -1,6 +1,8 @@
 import {
   lazy,
   Suspense,
+  useEffect,
+  useRef,
   type ComponentProps,
   type PointerEventHandler,
   type ReactElement
@@ -32,6 +34,13 @@ import { useChatStore } from '../../store/chat-store'
 import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
 import { shouldUseEmptyTaskLayout } from './workbench-chat-layout'
 import { CircleHelp, Loader2 } from 'lucide-react'
+import type {
+  GeneratedDocumentArtifact,
+  GeneratedDocumentCollection
+} from '../chat/generated-document-artifacts'
+import { trajectoryUiState, useTrajectoryUiStore } from '../../store/trajectory-ui-store'
+import { useTrajectoryData } from '../trajectory/useTrajectoryData'
+import { TrajectoryView } from '../trajectory/TrajectoryView'
 
 const TerminalPanel = lazy(() =>
   import('../terminal/TerminalPanel').then((module) => ({ default: module.TerminalPanel }))
@@ -75,6 +84,11 @@ export type WorkbenchChatStageProps = {
   onOpenChanges: () => void
   onReviewChanges: () => void
   reviewChangesDisabled: boolean
+  onPreviewGeneratedDocument: (
+    file: GeneratedDocumentArtifact,
+    workspaceRoot: string
+  ) => void
+  onOpenGeneratedDocuments: (collection: GeneratedDocumentCollection) => void
   onOpenDevPreview: () => void
   onBackToParent: () => void
   onBeginTerminalResize: PointerEventHandler<HTMLDivElement>
@@ -138,6 +152,8 @@ export function WorkbenchChatStage({
   onOpenChanges,
   onReviewChanges,
   reviewChangesDisabled,
+  onPreviewGeneratedDocument,
+  onOpenGeneratedDocuments,
   onOpenDevPreview,
   onBackToParent,
   onBeginTerminalResize,
@@ -158,6 +174,30 @@ export function WorkbenchChatStage({
   const { t } = useTranslation('common')
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const threadRefreshingId = useChatStore((state) => state.threadRefreshingId)
+  const trajectoryByThread = useTrajectoryUiStore((state) => state.byThread)
+  const updateTrajectoryUi = useTrajectoryUiStore((state) => state.update)
+  const trajectoryUi = trajectoryUiState(trajectoryByThread, activeThreadId)
+  const trajectoryOpen = trajectoryUi.view === 'trajectory' && Boolean(activeThreadId)
+  const trajectoryData = useTrajectoryData({
+    threadId: activeThreadId,
+    visible: trajectoryOpen,
+    threadRunning: busy,
+    filter: trajectoryUi.filter,
+    query: trajectoryUi.query
+  })
+  const mainStackRef = useRef<HTMLDivElement>(null)
+  const composerDockRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const stack = mainStackRef.current
+    if (!stack || !trajectoryOpen) return
+    // DSH keeps the Composer state resident while its Trajectory view owns the
+    // interaction surface. Remove the hidden seat from hit-testing and from
+    // the ledger's bottom clearance without unmounting the draft/model state.
+    stack.style.setProperty('--trajectory-composer-height', '0px')
+    return () => {
+      stack.style.removeProperty('--trajectory-composer-height')
+    }
+  }, [trajectoryOpen])
   const effectiveConversationDropWorkspaceRoot = normalizeWorkspaceRoot(conversationDropWorkspaceRoot)
   const canComposeForConversationDrop =
     composerProps.fileReferenceEnabled === true &&
@@ -215,6 +255,21 @@ export function WorkbenchChatStage({
                 compact
                 className="min-w-0 flex-1"
                 onOpenRequirementDraft={onOpenRequirementDraft}
+                trajectoryEnabled={Boolean(activeThreadId)}
+                trajectoryOpen={trajectoryOpen}
+                trajectoryRunning={trajectoryData.summary.runningCount > 0}
+                trajectoryFailed={trajectoryData.summary.lastStatus === 'failed'}
+                onToggleTrajectory={() => {
+                  if (!activeThreadId) return
+                  updateTrajectoryUi(activeThreadId, trajectoryOpen
+                    ? { view: 'chat' }
+                    : {
+                        view: 'trajectory',
+                        selectedRecordId: null,
+                        selectedRequestId: null,
+                        timelineRange: null
+                      })
+                }}
               />
             </div>
             <div className="chat-topbar-actions flex min-w-0 flex-wrap items-center justify-end gap-2 self-center">
@@ -262,6 +317,7 @@ export function WorkbenchChatStage({
           <GraphChildSessionBar context={graphChildContext} onBack={onBackToParent} />
         ) : null}
         <div
+          ref={mainStackRef}
           className={`ds-chat-main-stack relative flex min-h-0 min-w-0 flex-1 flex-col ${
             emptyTaskLayout
               ? 'justify-center overflow-y-auto pb-[clamp(4rem,12vh,8rem)]'
@@ -269,7 +325,7 @@ export function WorkbenchChatStage({
           }`}
         >
           <ConversationFileDropZone
-            className={`flex min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}
+            className={`${trajectoryOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}
             options={conversationFileDropOptions}
           >
             <LazyMessageTimeline
@@ -283,11 +339,6 @@ export function WorkbenchChatStage({
               onRetryConnection={onRetryConnection}
               onOpenSettings={onOpenSettings}
               onSelectSuggestion={onSelectSuggestion}
-              taskSurfaceControl={composerProps.taskSurface ? {
-                surface: composerProps.taskSurface,
-                locked: composerProps.taskSurfaceLocked,
-                onChange: composerProps.onTaskSurfaceChange
-              } : undefined}
               focusModeEnabled={focusModeEnabled}
               planActionsBusy={planActionsBusy}
               graphEnabled={graphEnabled}
@@ -296,6 +347,8 @@ export function WorkbenchChatStage({
               onOpenChanges={onOpenChanges}
               onReviewChanges={onReviewChanges}
               reviewChangesDisabled={reviewChangesDisabled}
+              onPreviewGeneratedDocument={onPreviewGeneratedDocument}
+              onOpenGeneratedDocuments={onOpenGeneratedDocuments}
               onComponentPrototypePrompt={composerProps.setInput}
               devPreviewCard={
                 devPreviewVisible && devPreviewUrl ? (
@@ -317,10 +370,17 @@ export function WorkbenchChatStage({
             {uiModeCameosEnabled && !focusModeEnabled && !emptyTaskLayout ? <IkunCameoLayer /> : null}
             {!focusModeEnabled ? <KunCelebrationLayer active={busy} suppressed={Boolean(runtimeError)} /> : null}
           </ConversationFileDropZone>
+          {trajectoryOpen && activeThreadId ? (
+            <TrajectoryView threadId={activeThreadId} data={trajectoryData} />
+          ) : null}
           <div
-            className={`ds-composer-dock ds-no-drag relative flex shrink-0 justify-center px-2 pt-0 sm:px-4 md:px-6 lg:px-8 ${
+            ref={composerDockRef}
+            className={`ds-composer-dock ds-no-drag flex justify-center px-2 pt-0 sm:px-4 md:px-6 lg:px-8 ${trajectoryOpen ? 'pointer-events-none invisible absolute inset-x-0 bottom-0 z-20' : 'relative shrink-0'} ${
               emptyTaskLayout ? 'pb-0' : 'pb-3'
             }`}
+            aria-hidden={trajectoryOpen || undefined}
+            inert={trajectoryOpen || undefined}
+            data-trajectory-composer-hidden={trajectoryOpen || undefined}
             data-primary-floating-composer
             data-usage-history-boundary
           >

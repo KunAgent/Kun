@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { win32 as win32Path } from 'node:path'
+import { updateHealthCheckRequested } from './update-health-argv'
 
 const runMinimalUpdateProbe = vi.fn()
 const mkdir = vi.fn()
@@ -41,8 +42,29 @@ describe('update health request', () => {
     })
   })
 
+  it('parses the combined quoted parameter string used by ExecShellAsUser', () => {
+    expect(readUpdateHealthRequest([
+      'Kun.exe',
+      '--kun-update-health-check="C:\\Temp\\health.json" ' +
+        '--kun-update-health-token="token-123" ' +
+        '--kun-update-target="C:\\Program Files\\Kun"'
+    ])).toEqual({
+      resultPath: 'C:\\Temp\\health.json',
+      token: 'token-123',
+      target: 'C:\\Program Files\\Kun'
+    })
+  })
+
   it('returns null outside update health mode', () => {
     expect(readUpdateHealthRequest(['Kun.exe'])).toBeNull()
+  })
+
+  it('identifies health-only startup before desktop single-instance setup', () => {
+    expect(updateHealthCheckRequested([
+      'Kun.exe',
+      '--kun-update-health-check=C:\\Temp\\health.json'
+    ])).toBe(true)
+    expect(updateHealthCheckRequested(['Kun.exe'])).toBe(false)
   })
 
   it('rejects an incomplete health request', () => {
@@ -53,14 +75,41 @@ describe('update health request', () => {
   })
 
   it('runs only the side-effect-free probe', async () => {
+    const reportProgress = vi.fn()
     await runUpdateHealthCheck({
       resultPath: 'C:\\Temp\\health.json',
       token: 'token',
       target: win32Path.dirname(process.execPath)
+    }, {
+      deadlineAt: 123_456,
+      diagnosticBasePath: 'C:\\Temp\\health',
+      reportProgress
     })
 
     expect(runMinimalUpdateProbe).toHaveBeenCalledOnce()
+    expect(runMinimalUpdateProbe).toHaveBeenCalledWith(undefined, {
+      deadlineAt: 123_456,
+      diagnosticBasePath: 'C:\\Temp\\health',
+      reportProgress
+    })
     expect(writeFile).toHaveBeenCalledOnce()
+    expect(reportProgress).toHaveBeenLastCalledWith('complete')
+  })
+
+  it('writes and reports a terminal failure from the probe', async () => {
+    const reportProgress = vi.fn()
+    runMinimalUpdateProbe.mockRejectedValueOnce(new Error('runtime exited'))
+
+    await expect(runUpdateHealthCheck({
+      resultPath: 'C:\\Temp\\health.json',
+      token: 'token',
+      target: win32Path.dirname(process.execPath)
+    }, { reportProgress })).rejects.toThrow('runtime exited')
+
+    expect(writeFile).toHaveBeenCalledOnce()
+    expect(reportProgress).toHaveBeenLastCalledWith('failed', {
+      message: 'runtime exited'
+    })
   })
 })
 

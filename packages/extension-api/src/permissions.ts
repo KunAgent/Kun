@@ -15,6 +15,7 @@ export const STATIC_PERMISSIONS = [
   'accounts.read',
   'storage.global',
   'storage.workspace',
+  'storage.secrets',
   'workspace.read',
   'workspace.write',
   'media.read',

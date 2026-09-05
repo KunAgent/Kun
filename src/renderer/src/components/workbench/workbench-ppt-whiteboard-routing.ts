@@ -58,20 +58,20 @@ export function pptCanvasOpenRequestForBlock(
   const deckArtifact = record(payload.deckArtifact)
   const outputPath = nonEmptyString(deckArtifact?.output) ? deckArtifact.output.trim() : undefined
   const completed = payload.phase === 'completed' &&
-    nonEmptyString(payload.workflowId) && nonEmptyString(payload.childId)
+    nonEmptyString(payload.workflowId) && nonEmptyString(payload.childId) && outputPath
       ? {
           workflowId: payload.workflowId,
           childId: payload.childId,
           phase: 'complete' as const,
           revision: 0,
-          ...(outputPath ? { outputPath } : {})
+          outputPath
         }
       : null
   const bundle: PptBundleIdentity | null = review
     ? {
         workflowId: review.workflowId,
         childId: review.childId,
-        phase: review.phase === 'completed' ? 'complete' : 'review',
+        phase: review.phase === 'completed' && outputPath ? 'complete' : 'review',
         revision: Math.max(0, ...review.slides.map((slide) => slide.revision)),
         ...(outputPath ? { outputPath } : {})
       }
@@ -109,6 +109,7 @@ export function pptCanvasOpenRequestForBlock(
       workspaceRoot,
       title,
       ...(input.sourcePath?.trim() ? { sourcePath: input.sourcePath.trim() } : {}),
+      pptProjectionRequired: Boolean(review || direction),
       pptState: {
         phase: bundle.phase,
         revision: bundle.revision,

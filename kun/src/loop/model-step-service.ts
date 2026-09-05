@@ -162,7 +162,7 @@ export class ModelStepService extends ModelStepPreparationService {
       hardRequiredToolName,
       softRequiredToolName,
       forceToolSuppressionFinalAnswerRecovery,
-      fastContextFinalSynthesis,
+      boundedFinalSynthesis,
       requestToolSpecs,
       promptCachePhase,
       svgCompletion,
@@ -447,7 +447,10 @@ export class ModelStepService extends ModelStepPreparationService {
       fallbackCompactionAttempted,
       fallbackCompactionApplied
     })
-    const { request, rawInputTokens, sentInputTokens, tokenEconomy } = composedRequest
+    const { request: composedModelRequest, rawInputTokens, sentInputTokens, tokenEconomy } = composedRequest
+    const request = { ...composedModelRequest, trace: {
+      roundId: this.deps.ids.next('round_model'), step: stepIndex, purpose: 'assistant' as const
+    } }
     const requestContext = estimateModelRequestInputTokenBreakdown(request, {
       skillContextInstructions
     })
@@ -644,7 +647,7 @@ export class ModelStepService extends ModelStepPreparationService {
       ...(softRequiredToolName && !forceToolSuppressionFinalAnswerRecovery
         ? { softRequiredToolName }
         : {}),
-      ...(forceToolSuppressionFinalAnswerRecovery || fastContextFinalSynthesis
+      ...(forceToolSuppressionFinalAnswerRecovery || boundedFinalSynthesis
         ? { toolCallsDisabled: true }
         : {}),
       turn,
@@ -671,7 +674,7 @@ export class ModelStepService extends ModelStepPreparationService {
     const key = `${turnId}:${checkpointRequestId}`
     let gate = this.workspaceCheckpointGates.get(key)
     if (!gate) {
-      gate = (async () => {
+      const pending = (async () => {
         const checkpointId = await this.deps.awaitWorkspaceCheckpoint!(checkpointRequestId, signal)
         if (!checkpointId) return
         await this.deps.turns.updateTurnMetadata(threadId, turnId, {
@@ -681,6 +684,12 @@ export class ModelStepService extends ModelStepPreparationService {
           workspaceCheckpointId: checkpointId
         })
       })()
+      const tracked = pending.finally(() => {
+        if (this.workspaceCheckpointGates.get(key) === tracked) {
+          this.workspaceCheckpointGates.delete(key)
+        }
+      })
+      gate = tracked
       this.workspaceCheckpointGates.set(key, gate)
     }
     await gate

@@ -4,7 +4,9 @@ import {
   type AttachmentStore,
   FileSessionStore,
   FileThreadStore,
+  JsonlFileAccessCoordinator,
   HybridSessionStore,
+  HybridMemoryStore,
   HybridThreadStore,
   createManagerRemoteStores,
   ManagerRemoteAttachmentStore,
@@ -31,26 +33,36 @@ export async function createPersistentStores(input: {
   if (input.serviceManager) return createManagerRemoteStores(input.serviceManager)
   const storage = input.storage ?? DEFAULT_STORAGE_CONFIG
   if (storage.backend === 'file') {
+    const sessionStore = new FileSessionStore({ dataDir: input.dataDir })
     return {
-      sessionStore: new FileSessionStore({ dataDir: input.dataDir }),
-      threadStore: new FileThreadStore({ dataDir: input.dataDir })
+      sessionStore,
+      threadStore: new FileThreadStore({ dataDir: input.dataDir }),
+      shutdown: () => sessionStore.close()
     }
   }
 
+  const fileAccess = new JsonlFileAccessCoordinator()
   const threadStore = new HybridThreadStore({
     dataDir: input.dataDir,
     sqlitePath: storage.sqlitePath ? expandHomePath(storage.sqlitePath) : undefined,
-    nowIso: input.nowIso
+    nowIso: input.nowIso,
+    fileAccess
   })
   await threadStore.ready()
+  const sessionStore = new HybridSessionStore({
+    dataDir: input.dataDir,
+    index: threadStore,
+    fileAccess
+  })
   return {
     threadStore,
-    sessionStore: new HybridSessionStore({
-      dataDir: input.dataDir,
-      index: threadStore
-    }),
+    sessionStore,
     shutdown: async () => {
-      await threadStore.shutdown()
+      try {
+        await sessionStore.close()
+      } finally {
+        await threadStore.shutdown()
+      }
     }
   }
 }
@@ -88,11 +100,17 @@ export function createPersistentMemoryStore(
   if (!config?.enabled) return undefined
   return options.serviceManager
     ? new ManagerRemoteMemoryStore(options.serviceManager, config)
-    : new FileMemoryStore({
-        rootDir: join(options.dataDir, 'memory'),
-        config,
-        nowIso
-      })
+    : process.env.KUN_MEMORY_STORE_BACKEND === 'file'
+      ? new FileMemoryStore({
+          rootDir: join(options.dataDir, 'memory'),
+          config,
+          nowIso
+        })
+      : new HybridMemoryStore({
+          dataDir: options.dataDir,
+          config,
+          nowIso
+        })
 }
 
 export function createPersistentAttachmentStore(

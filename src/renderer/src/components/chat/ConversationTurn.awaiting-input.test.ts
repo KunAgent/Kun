@@ -44,7 +44,7 @@ describe('ConversationTurn awaiting-input progress row', () => {
     })
   })
 
-  it('shows the awaiting label instead of thinking while a live user_input is pending', () => {
+  it('lets the live user-input card own status without a duplicate trailing row', () => {
     const html = renderTurn(
       {
         turnId: 'turn_1',
@@ -64,7 +64,9 @@ describe('ConversationTurn awaiting-input progress row', () => {
       },
       true
     )
-    expect(html).toContain('Awaiting your input')
+    expect(html).toContain('Waiting for your answer')
+    expect(html).not.toContain('data-turn-live-status-owner="generic"')
+    expect(html).not.toContain('data-work-meta-row="true"')
     expect(html).not.toContain('Thinking')
   })
 
@@ -87,6 +89,53 @@ describe('ConversationTurn awaiting-input progress row', () => {
       },
       true
     )
+    expect(html).toContain('data-turn-live-status-owner="generic"')
     expect(html).not.toContain('Awaiting your input')
+  })
+
+  it('lets a running child card own the live status and timer', () => {
+    const html = renderTurn({
+      turnId: 'turn_child',
+      user: { kind: 'user', id: 'user_child', turnId: 'turn_child', text: 'Continue child' },
+      blocks: [{
+        kind: 'tool', id: 'tool_child', turnId: 'turn_child', summary: 'ppt_agent',
+        status: 'running', detail: JSON.stringify({ childId: 'child_1', status: 'running' }),
+        meta: {
+          toolName: 'ppt_agent',
+          child: {
+            parentThreadId: 'thr_1', parentTurnId: 'turn_child', childId: 'child_1',
+            childStatus: 'running', childSeq: 1
+          }
+        }
+      }]
+    }, true)
+
+    expect(html).toContain('data-testid="subagent-call-card"')
+    expect(html).not.toContain('data-turn-live-status-owner="generic"')
+    expect(html).not.toContain('data-work-meta-row="true"')
+  })
+
+  it('shows completed work metadata and puts archive after the final result', () => {
+    const html = renderTurn({
+      turnId: 'turn_done',
+      user: { kind: 'user', id: 'user_done', turnId: 'turn_done', text: 'Finish' },
+      blocks: [
+        { kind: 'reasoning', id: 'reasoning_done', turnId: 'turn_done', text: 'Worked' },
+        { kind: 'assistant', id: 'assistant_done', turnId: 'turn_done', text: 'Finished result' }
+      ]
+    }, false)
+
+    expect(html).toContain('data-work-meta-row="true"')
+    expect(html.indexOf('Finished result')).toBeLessThan(html.indexOf('data-archive-history-action'))
+  })
+
+  it('does not offer archive for a settled user-only turn', () => {
+    const html = renderTurn({
+      turnId: 'turn_empty',
+      user: { kind: 'user', id: 'user_empty', turnId: 'turn_empty', text: 'No result yet' },
+      blocks: []
+    }, false)
+
+    expect(html).not.toContain('data-archive-history-action')
   })
 })

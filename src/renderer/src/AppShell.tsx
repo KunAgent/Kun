@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
 import { MAX_APP_BADGE_COUNT } from '@shared/kun-gui-api'
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
+import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
 import { supportsDesktopTitleBar, WindowsTitleBar } from './components/WindowsTitleBar'
 import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
@@ -85,36 +86,7 @@ export default function AppShell(): React.ReactElement {
   const SettingsRouteView = preparedSettingsView ?? SettingsView
   const InitialSetupView = preparedInitialSetupDialog ?? InitialSetupDialog
 
-  useEffect(() => {
-    let disposed = false
-    let timer: number | null = null
-    let tickGeneration = 0
-    let consecutiveFailures = 0
-    const scheduleNext = (): void => {
-      if (disposed) return
-      const baseDelay = document.visibilityState === 'visible' ? 2_500 : 15_000
-      const delay = Math.min(60_000, baseDelay * (2 ** Math.min(4, consecutiveFailures)))
-      timer = window.setTimeout(() => { void tick() }, delay)
-    }
-    const tick = async (): Promise<void> => {
-      const generation = ++tickGeneration
-      if (timer !== null) window.clearTimeout(timer)
-      timer = null
-      const ok = await useChatStore.getState().syncSidebarActivity()
-      consecutiveFailures = ok ? 0 : consecutiveFailures + 1
-      if (generation === tickGeneration) scheduleNext()
-    }
-    const reconcileNow = (): void => { void tick() }
-    void tick()
-    window.addEventListener('focus', reconcileNow)
-    document.addEventListener('visibilitychange', reconcileNow)
-    return () => {
-      disposed = true
-      if (timer !== null) window.clearTimeout(timer)
-      window.removeEventListener('focus', reconcileNow)
-      document.removeEventListener('visibilitychange', reconcileNow)
-    }
-  }, [])
+  useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
 
   useEffect(() => {
     let previousUnread = useChatStore.getState().unreadThreadIds

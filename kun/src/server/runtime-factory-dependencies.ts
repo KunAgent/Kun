@@ -18,8 +18,13 @@ export { FileAttachmentStore, type AttachmentStore } from '../attachments/attach
 export { InMemoryApprovalGate } from '../adapters/in-memory-approval-gate.js'
 export { InMemoryUserInputGate } from '../adapters/in-memory-user-input-gate.js'
 export { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
-export { FileSessionStore, FileThreadStore } from '../adapters/file/index.js'
-export { HybridSessionStore, HybridThreadStore } from '../adapters/hybrid/index.js'
+export {
+  FileProjectBoardStore,
+  FileSessionStore,
+  FileThreadStore,
+  JsonlFileAccessCoordinator
+} from '../adapters/file/index.js'
+export { HybridMemoryStore, HybridSessionStore, HybridThreadStore } from '../adapters/hybrid/index.js'
 export {
   createManagerRemoteStores,
   ManagerRemoteAttachmentStore,
@@ -165,6 +170,7 @@ export type { ToolHostContext } from '../ports/tool-host.js'
 export { ScopedMigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
 export { KUN_SYSTEM_PROMPT } from '../prompt/kun-system-prompt.js'
 export { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
+export { ThreadActivityRegistry } from '../services/thread-activity-registry.js'
 export { ToolCancellationService } from '../services/tool-cancellation-service.js'
 export { GraphRuntimeComposition } from './graph-runtime-factory.js'
 export { createGraphRuntimeStartOptions } from './graph-runtime-bootstrap.js'
@@ -176,7 +182,8 @@ export {
 export { LlmDebugRecorder } from '../services/llm-debug-recorder.js'
 export { waitForWorkspaceCheckpoint } from '../services/workspace-checkpoint-gate.js'
 export { ThreadService } from '../services/thread-service.js'
-export { TurnService } from '../services/turn-service.js'
+export { ProjectBoardService } from '../services/project-board-service.js'
+export { TurnService, ownerLeaseExpiredTurnAbortReason } from '../services/turn-service.js'
 export { ReviewService } from '../services/review-service.js'
 export { UsageService } from '../services/usage-service.js'
 export { ProviderQuotaService } from '../services/provider-quota-service.js'
@@ -219,6 +226,7 @@ export {
 export type { LocalTool } from '../adapters/tool/local-tool-host.js'
 export type { FaultInjectionController } from '../services/fault-injection-controller.js'
 export type { RuntimeFlavor } from '../contracts/runtime-flavor.js'
+export type { RuntimeClientOwnerKind } from '../contracts/runtime-owner.js'
 export { InMemoryPublisherTrustStore } from '../supplychain/publisher-trust-store.js'
 export {
   CURRENT_MANIFEST_VERSION,
@@ -251,6 +259,7 @@ export {
   materializeLegacyProviderCredential
 } from '../services/legacy-provider-credential-migration.js'
 export { CodexOAuthCredentialRefresher } from '../services/codex-oauth-credential-refresher.js'
+export { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 export { GrokOAuthCredentialRefresher } from '../services/grok-oauth-credential-refresher.js'
 export { ExtensionViewSessionService } from '../services/extension-view-session-service.js'
 export { ExtensionViewHostGenerationTracker } from '../extensions/view-host-generation-tracker.js'

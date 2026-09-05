@@ -9,9 +9,12 @@ Var /GLOBAL KunInstallerTransactionPath
 Var /GLOBAL KunInstallerResultPath
 Var /GLOBAL KunInstallerResultHandle
 Var /GLOBAL KunInstallerMigrationPrepared
+Var /GLOBAL KunInstallerPreparedSourceMask
 Var /GLOBAL KunInstallerSnapshotMode
 Var /GLOBAL KunInstallerPrimarySourceStale
 Var /GLOBAL KunInstallerSecondarySourceStale
+Var /GLOBAL KunInstallerPrimaryPreparedCleanup
+Var /GLOBAL KunInstallerSecondaryPreparedCleanup
 Var /GLOBAL KunInstallerCandidateExplicit
 Var /GLOBAL KunInstallerPresentedTargetDir
 Var /GLOBAL KunInstallerUpdateSourceDir
@@ -29,6 +32,8 @@ Var /GLOBAL KunInstallerPendingResultPath
 Var /GLOBAL KunInstallerHealthResultPath
 Var /GLOBAL KunInstallerHealthToken
 Var /GLOBAL KunInstallerHealthAttempt
+Var /GLOBAL KunInstallerDiagnosticPath
+Var /GLOBAL KunInstallerDiagnosticExternal
 !endif
 Var /GLOBAL KunInstallerHelperPath
 Var /GLOBAL KunInstallerJournalPath
@@ -53,6 +58,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
 !macroend
 
 !include "${PROJECT_DIR}\build\installer-automatic-update.nsh"
+!include "${PROJECT_DIR}\build\installer-manual-upgrade.nsh"
 !include "${PROJECT_DIR}\build\installer-process-check.nsh"
 
 !macro kunSetEnvironmentFromRegister NAME REGISTER
@@ -80,15 +86,33 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
   File /oname=$PLUGINSDIR\windows-installer-migration-journal.ps1 "${PROJECT_DIR}\build\windows-installer-migration-journal.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-filesystem.ps1 "${PROJECT_DIR}\build\windows-installer-migration-filesystem.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-actions.ps1 "${PROJECT_DIR}\build\windows-installer-migration-actions.ps1"
+  File /oname=$PLUGINSDIR\windows-installer-migration-recovery-env.ps1 "${PROJECT_DIR}\build\windows-installer-migration-recovery-env.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-transaction.ps1 "${PROJECT_DIR}\build\windows-installer-migration-transaction.ps1"
   StrCpy $KunInstallerHelperPath "$PLUGINSDIR\kun-windows-installer-migration.ps1"
   StrCpy $KunInstallerResultPath "$PLUGINSDIR\kun-windows-installer-result.txt"
   System::Call 'kernel32::GetCurrentProcessId() i .r0'
   StrCpy $KunInstallerCurrentPid $0
+  ReadEnvStr $KunInstallerDiagnosticPath "KUN_INSTALLER_DIAGNOSTIC_PATH"
+  ${if} $KunInstallerDiagnosticPath == ""
+    StrCpy $KunInstallerDiagnosticExternal 0
+    StrCpy $KunInstallerDiagnosticPath "$TEMP\Kun-installer-migration-$KunInstallerCurrentPid.log"
+  ${else}
+    StrCpy $KunInstallerDiagnosticExternal 1
+  ${endif}
+  System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_DIAGNOSTIC_PATH", "$KunInstallerDiagnosticPath").r0'
+  System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_SELF_PATH", "$EXEPATH").r0'
+  ${if} ${UAC_IsInnerInstance}
+    System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_UAC_INNER", "1").r0'
+  ${else}
+    System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_UAC_INNER", "0").r0'
+  ${endif}
   StrCpy $KunInstallerMigrationPrepared 0
+  StrCpy $KunInstallerPreparedSourceMask 0
   StrCpy $KunInstallerSnapshotMode ""
   StrCpy $KunInstallerPrimarySourceStale 0
   StrCpy $KunInstallerSecondarySourceStale 0
+  StrCpy $KunInstallerPrimaryPreparedCleanup 0
+  StrCpy $KunInstallerSecondaryPreparedCleanup 0
   StrCpy $KunInstallerCandidateExplicit 0
   StrCpy $KunInstallerPresentedTargetDir ""
   StrCpy $KunInstallerFinalTargetDir ""
@@ -133,10 +157,11 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     ClearErrors
     StrCpy $R0 0
     DetailPrint "Automatic update; deferring removal of $KunInstallerPrimarySourceDir until commit."
-  ${elseIf} $KunInstallerPrimarySourceStale != 1
-    StrCpy $KunInstallerSourceDir $KunInstallerPrimarySourceDir
-    Call KunHandleOldUninstallerResult
   ${else}
+    ${if} $KunInstallerPrimaryPreparedCleanup != 1
+      DetailPrint "Manual overwrite reached the builder hook before selected-scope cleanup completed."
+      !insertmacro KunAbortAutomaticUpdate cleanup_not_prepared cleanup "Selected-scope manual cleanup was not prepared."
+    ${endif}
     ClearErrors
     StrCpy $R0 0
   ${endif}
@@ -166,18 +191,12 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     Call KunRestoreInteractiveInstaller
     Return
   ${endif}
-  ${if} $KunInstallerSecondarySourceStale != 1
-    StrCpy $KunInstallerSourceDir $KunInstallerSecondarySourceDir
-    Call KunHandleOldUninstallerResult
-  ${else}
-    ClearErrors
-    StrCpy $R0 0
+  ${if} $KunInstallerSecondaryPreparedCleanup != 1
+    DetailPrint "Manual overwrite reached the builder hook before current-user cleanup completed."
+    !insertmacro KunAbortAutomaticUpdate cleanup_not_prepared cleanup "Current-user manual cleanup was not prepared."
   ${endif}
-  # installSection invokes this callback only while an all-users install is
-  # retiring an existing current-user registration. The old uninstaller usually
-  # removes this shell state itself; fallback cleanup must finish the same scoped
-  # transition after the validated application payload is gone.
-  Call KunRetireCurrentUserShellState
+  ClearErrors
+  StrCpy $R0 0
   StrCpy $KunInstallerSourceDir $KunInstallerPrimarySourceDir
   Call KunRestoreInteractiveInstaller
 !macroend
@@ -233,6 +252,9 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     ${endif}
   ${endif}
   !insertmacro KunCompleteAutomaticUpdate
+  ${if} $KunInstallerDiagnosticExternal != 1
+    Delete "$KunInstallerDiagnosticPath"
+  ${endif}
 !macroend
 
 !macro customUnInstall
@@ -259,6 +281,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
 !macro customHeader
 !ifndef BUILD_UNINSTALLER
 !insertmacro KunAutomaticUpdateFunctions
+!insertmacro KunManualUpgradeFunctions
   Function KunSetProductEnvironment
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_CANONICAL_LEAF", "${APP_FILENAME}").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_APP_EXECUTABLE", "${APP_EXECUTABLE_FILENAME}").r0'
@@ -275,6 +298,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_TARGET", "$KunInstallerTargetDir").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_JOURNAL", "$KunInstallerJournalPath").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_SELF_PID", "$KunInstallerCurrentPid").r0'
+    System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_SELF_PATH", "$EXEPATH").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_PRIMARY_SOURCE_STALE", "$KunInstallerPrimarySourceStale").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_SECONDARY_SOURCE_STALE", "$KunInstallerSecondarySourceStale").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_CANDIDATE_EXPLICIT", "$KunInstallerCandidateExplicit").r0'
@@ -421,6 +445,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
 
     DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"
     DeleteRegKey SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}"
+    Call KunAssertSelectedUninstallCommandSuppressed
   FunctionEnd
 
   Function KunRetireCurrentUserShellState
@@ -448,6 +473,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
 
     DeleteRegKey HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}"
     DeleteRegKey HKEY_CURRENT_USER "${INSTALL_REGISTRY_KEY}"
+    Call KunAssertCurrentUserUninstallCommandSuppressed
     SetShellVarContext all
   FunctionEnd
 
@@ -497,8 +523,8 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
   FunctionEnd
 
   Function KunRefreshInstallPaths
-    # The old uninstaller removes its registration. Keep the first source snapshot
-    # for the selected mode and only refresh it if the user changes install mode.
+    # Manual cleanup retires the source registration. Keep the first source
+    # snapshot for the selected mode and refresh it only after an explicit mode change.
     ${if} $KunInstallerSnapshotMode != $installMode
       Call KunReadRegisteredSource
       StrCpy $KunInstallerSnapshotMode $installMode
@@ -550,7 +576,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     Delete "$KunInstallerResultPath"
     !insertmacro kunRunMigrationHelper Prepare
     ${if} $KunInstallerHelperExitCode != 0
-      MessageBox MB_OK|MB_ICONSTOP "Kun kept the existing installation unchanged because it could not migrate the program directory safely.$\r$\n$KunInstallerHelperOutput" /SD IDOK
+      MessageBox MB_OK|MB_ICONSTOP "Kun kept the existing installation unchanged because it could not migrate the program directory safely.$\r$\n$KunInstallerHelperOutput$\r$\nDiagnostic log: $KunInstallerDiagnosticPath" /SD IDOK
       !insertmacro KunAbortAutomaticUpdate prepare_failed prepare "The program directory migration could not be prepared safely."
     ${endif}
     Call KunReadMigrationResult
@@ -558,25 +584,43 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
       MessageBox MB_OK|MB_ICONSTOP "Kun kept the existing installation unchanged because it could not classify the registered program directory safely.$\r$\n$KunInstallerHelperOutput" /SD IDOK
       !insertmacro KunAbortAutomaticUpdate prepare_classification_failed prepare "The program directory migration result could not be classified."
     ${endif}
+    StrCpy $KunInstallerPreparedSourceMask $KunInstallerHelperOutput
 
-    ${if} $KunInstallerHelperOutput == "1"
-    ${orIf} $KunInstallerHelperOutput == "3"
+    ${if} $KunInstallerPreparedSourceMask == "1"
+    ${orIf} $KunInstallerPreparedSourceMask == "3"
       StrCpy $KunInstallerPrimarySourceStale 1
       DetailPrint "Retiring stale selected-scope Kun registration without modifying $KunInstallerPrimarySourceDir."
       Call KunRetireSelectedShellState
     ${else}
       StrCpy $KunInstallerSourceDir $KunInstallerPrimarySourceDir
-      Call KunMarkInPlaceAutomaticUpdate
-      Call KunSecureSelectedUninstallRegistration
+      ${if} ${isUpdated}
+        Call KunMarkInPlaceAutomaticUpdate
+        Call KunSuppressSelectedUninstallRegistrationForAutomaticUpdate
+      ${else}
+        Call KunCleanupPreparedSource
+        Call KunRetireSelectedShellState
+      ${endif}
     ${endif}
-    ${if} $KunInstallerHelperOutput == "2"
-    ${orIf} $KunInstallerHelperOutput == "3"
+    ${ifNot} ${isUpdated}
+      StrCpy $KunInstallerPrimaryPreparedCleanup 1
+    ${endif}
+
+    ${if} $KunInstallerPreparedSourceMask == "2"
+    ${orIf} $KunInstallerPreparedSourceMask == "3"
       StrCpy $KunInstallerSecondarySourceStale 1
       DetailPrint "Retiring stale current-user Kun registration without modifying $KunInstallerSecondarySourceDir."
       Call KunRetireCurrentUserShellState
     ${elseIf} $KunInstallerSecondarySourceDir != ""
       StrCpy $KunInstallerSourceDir $KunInstallerSecondarySourceDir
-      Call KunSecureCurrentUserUninstallRegistration
+      ${if} ${isUpdated}
+        DetailPrint "Automatic update; leaving the unrelated current-user installation unchanged."
+      ${else}
+        Call KunCleanupPreparedSource
+        Call KunRetireCurrentUserShellState
+      ${endif}
+    ${endif}
+    ${ifNot} ${isUpdated}
+      StrCpy $KunInstallerSecondaryPreparedCleanup 1
     ${endif}
     StrCpy $KunInstallerSourceDir $KunInstallerPrimarySourceDir
     StrCpy $KunInstallerMigrationPrepared 1
@@ -605,6 +649,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     ReadRegStr $KunInstallerOtherQuietUninstallString HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
     DeleteRegValue HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" UninstallString
     DeleteRegValue HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
+    Call KunAssertCurrentUserUninstallCommandSuppressed
     DetailPrint "Preserving the unrelated current-user ${PRODUCT_NAME} registration during an all-users automatic update."
   FunctionEnd
 
@@ -617,72 +662,16 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     ${endif}
   FunctionEnd
 
-  Function KunResolveTrustedUninstaller
-    System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_SOURCE", "$KunInstallerSourceDir").r0'
-    Delete "$KunInstallerResultPath"
-    !insertmacro kunRunMigrationHelper ResolveUninstaller
-    ${if} $KunInstallerHelperExitCode == 0
-      Call KunReadMigrationResult
-    ${endif}
-    ${if} $KunInstallerHelperExitCode != 0
-      MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} could not validate the old application uninstaller.$\r$\n$KunInstallerHelperOutput" /SD IDOK
-      !insertmacro KunAbortAutomaticUpdate uninstaller_invalid uninstaller "The old application uninstaller could not be validated."
-    ${endif}
-  FunctionEnd
-
-  Function KunSecureSelectedUninstallRegistration
-    ${if} ${isUpdated}
-      # Never expose the old uninstaller during an automatic update. The old
-      # payload is the recovery source for both in-place and brand migrations.
-      DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString
-      DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
-      DetailPrint "Automatic update; suppressed the selected-scope uninstaller until commit."
+  Function KunSuppressSelectedUninstallRegistrationForAutomaticUpdate
+    ${ifNot} ${isUpdated}
       Return
     ${endif}
-    Call KunResolveTrustedUninstaller
-    ${if} $KunInstallerHelperOutput == ""
-      DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString
-      DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
-      DetailPrint "The old ${PRODUCT_NAME} uninstaller is unavailable; conservative cleanup will be used."
-      Return
-    ${endif}
-    ${if} $installMode == "all"
-      StrCpy $R8 "/allusers"
-    ${else}
-      StrCpy $R8 "/currentuser"
-    ${endif}
-    WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString '"$KunInstallerHelperOutput" $R8'
-    WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString '"$KunInstallerHelperOutput" $R8 /S'
-  FunctionEnd
-
-  Function KunSecureCurrentUserUninstallRegistration
-    Call KunResolveTrustedUninstaller
-    ${if} $KunInstallerHelperOutput == ""
-      DeleteRegValue HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" UninstallString
-      DeleteRegValue HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
-      DetailPrint "The old current-user ${PRODUCT_NAME} uninstaller is unavailable; conservative cleanup will be used."
-      Return
-    ${endif}
-    WriteRegStr HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" UninstallString '"$KunInstallerHelperOutput" /currentuser'
-    WriteRegStr HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString '"$KunInstallerHelperOutput" /currentuser /S'
-  FunctionEnd
-
-  Function KunHandleOldUninstallerResult
-    IfErrors KunOldUninstallerFailed KunOldUninstallerFinished
-
-    KunOldUninstallerFailed:
-      DetailPrint "Old ${PRODUCT_NAME} uninstaller was unavailable or failed for $KunInstallerSourceDir."
-
-    KunOldUninstallerFinished:
-      DetailPrint "Cleaning only recognized application payload left in $KunInstallerSourceDir."
-      Call KunSetMigrationEnvironment
-      !insertmacro kunRunMigrationHelper FallbackCleanup
-      ${if} $KunInstallerHelperExitCode != 0
-        MessageBox MB_OK|MB_ICONSTOP "Kun could not clean the old program files safely.$\r$\n$KunInstallerHelperOutput" /SD IDOK
-        !insertmacro KunAbortAutomaticUpdate cleanup_failed cleanup "The old program files could not be cleaned safely."
-      ${endif}
-      ClearErrors
-      StrCpy $R0 0
+    # Never expose the old uninstaller during an automatic update. The old
+    # payload is the recovery source for both in-place and brand migrations.
+    DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString
+    DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
+    Call KunAssertSelectedUninstallCommandSuppressed
+    DetailPrint "Automatic update; suppressed the selected-scope uninstaller until commit."
   FunctionEnd
 
   Function KunRestoreInteractiveInstaller

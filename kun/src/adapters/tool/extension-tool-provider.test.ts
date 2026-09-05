@@ -410,7 +410,7 @@ describe('ExtensionToolRegistry', () => {
     )
 
     firstB.dispose()
-    expect(() => firstHost.listTools(context({ extensionToolCatalogEpoch: firstEpoch }))).toThrow(
+    await expect(firstHost.listTools(context({ extensionToolCatalogEpoch: firstEpoch }))).rejects.toThrow(
       ExtensionToolCatalogDriftError
     )
   })

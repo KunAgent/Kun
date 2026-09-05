@@ -1,4 +1,4 @@
-import { cp, mkdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**
@@ -10,7 +10,6 @@ import { join } from 'node:path'
  */
 
 const BUNDLED_SEED_MARKER = '.bundled-skills-seed-v2'
-const DIAGRAM_SEED_MARKER = '.bundled-diagram-design-seed-v1'
 const SKILL_ID = 'design-system'
 
 const SKILL_MANIFEST = {
@@ -70,12 +69,8 @@ These read as "AI made this" — do not ship them:
 
 let seedPromise: Promise<void> | null = null
 
-export function ensureBundledSkills(kunHomeDir: string, bundledResourcesRoot?: string): Promise<void> {
-  seedPromise ??= (async () => {
-    const skillsRoot = join(kunHomeDir, 'skills')
-    await seedDesignSystemSkill(skillsRoot)
-    await seedDiagramSkill(skillsRoot, bundledResourcesRoot)
-  })()
+export function ensureBundledSkills(kunHomeDir: string): Promise<void> {
+  seedPromise ??= seedDesignSystemSkill(join(kunHomeDir, 'skills'))
   return seedPromise
 }
 
@@ -100,31 +95,5 @@ async function seedDesignSystemSkill(skillsRoot: string): Promise<void> {
   if (seeded) {
     await mkdir(skillsRoot, { recursive: true })
     await writeFile(markerPath, `${SKILL_ID}\n`, 'utf8').catch(() => undefined)
-  }
-}
-
-async function seedDiagramSkill(skillsRoot: string, bundledResourcesRoot?: string): Promise<void> {
-  const markerPath = join(skillsRoot, DIAGRAM_SEED_MARKER)
-  try {
-    await stat(markerPath)
-    return
-  } catch {
-    // not seeded yet
-  }
-  const resourceRoot = bundledResourcesRoot?.trim()
-  if (!resourceRoot) return
-  const source = join(resourceRoot, 'bundled-skills', 'diagram-design')
-  try {
-    const sourceInfo = await stat(source)
-    if (!sourceInfo.isDirectory()) return
-    await mkdir(skillsRoot, { recursive: true })
-    await cp(source, join(skillsRoot, 'diagram-design'), {
-      recursive: true,
-      errorOnExist: true,
-      force: false
-    })
-    await writeFile(markerPath, 'diagram-design\n', 'utf8')
-  } catch (error) {
-    console.error('[skill] failed to seed bundled diagram skill:', error)
   }
 }

@@ -62,6 +62,12 @@ export type ModelStreamChunk = (
 export type ModelRequest = {
   threadId: string
   turnId: string
+  /** Internal correlation carried through every concrete Provider attempt. */
+  trace?: {
+    roundId: string
+    step: number
+    purpose: 'assistant' | 'retry' | 'resume' | 'compaction' | 'subagent' | 'title'
+  }
   model: string
   /**
    * Optional provider id override. Routed by `MultiProviderModelClient`

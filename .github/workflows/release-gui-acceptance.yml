@@ -1,0 +1,107 @@
+name: Accept candidate and publish stable latest
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      commit:
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  accept:
+    name: Published GUI upgrade (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-latest, target: win32-x64, pattern: 'Kun-*-win-x64*', manifest: latest.yml }
+          - { runner: macos-15, target: darwin-arm64, pattern: 'Kun-*-mac-*', manifest: latest-mac.yml }
+          - { runner: macos-15-intel, target: darwin-x64, pattern: 'Kun-*-mac-*', manifest: latest-mac.yml }
+    env:
+      GH_TOKEN: ${{ github.token }}
+      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+      R2_RELEASE_PREFIX: ${{ secrets.R2_RELEASE_PREFIX }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
+      CANDIDATE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - name: Download final uploaded GUI artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$CANDIDATE_TAG" -R "$GITHUB_REPOSITORY" -p '${{ matrix.pattern }}' -p '${{ matrix.manifest }}' -D candidate
+      - name: Exercise the released GUI against the isolated version feed
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${R2_PUBLIC_BASE_URL:-https://www.kun-agent.com/api/r2}"
+          feed="${base%/}/${R2_RELEASE_PREFIX:-deepseek-gui}/channels/stable/releases/${CANDIDATE_TAG}/"
+          node scripts/smoke-gui-upgrade.cjs --directory candidate --version "$CANDIDATE_VERSION" --feed-url "$feed" --report gui-upgrade-${{ matrix.target }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gui-upgrade-${{ matrix.target }}
+          path: |
+            gui-upgrade-*.json*
+            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/**
+            !${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/installed/**
+            !${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/**/*.exe
+          if-no-files-found: error
+          retention-days: 14
+  promote:
+    name: Promote verified stable release
+    runs-on: ubuntu-latest
+    needs: accept
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG_NAME: ${{ inputs.tag }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      CANDIDATE_COMMIT: ${{ inputs.commit }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+      R2_RELEASE_PREFIX: ${{ secrets.R2_RELEASE_PREFIX }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gui-upgrade-*
+          path: upgrade-evidence
+      - name: Verify candidate bytes and save previous public manifests
+        run: node scripts/verify-public-release.mjs candidate
+      - name: Promote R2 latest
+        run: node scripts/publish-r2.mjs promote --tag "$TAG_NAME" --channel stable --platforms mac,win,linux --require-all-platforms
+      - name: Read back public stable feeds and download their artifacts
+        run: node scripts/verify-public-release.mjs latest
+      - name: Publish GitHub Release
+        run: gh release edit "$TAG_NAME" --draft=false --prerelease=false --latest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stable-promotion-evidence
+          path: public-release-evidence/**
+          if-no-files-found: error
+          retention-days: 30

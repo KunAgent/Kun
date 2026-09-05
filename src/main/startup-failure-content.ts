@@ -32,15 +32,35 @@ export function sanitizeStartupFailureMessage(error: unknown): string {
 
 export function startupFailurePresentation(error: unknown): StartupFailurePresentation {
   if (!(error instanceof KunHandoffError)) {
+    const sanitized = sanitizeStartupFailureMessage(error)
+    const parsed = parseStartupRuntimeError(error)
+    if (parsed.code === 'runtime_auth_required' || parsed.code === 'unauthorized') {
+      return {
+        message: 'The local Kun Runtime rejected the desktop access credential. Retry will stop only this desktop app\'s Runtime and start it again with the saved credential.',
+        handoff: false,
+        retryable: true
+      }
+    }
+    if (parsed.code === 'client_runtime_owner_busy') {
+      return {
+        message: `${parsed.message || 'Another Kun client owns this Runtime.'}\nClose the other Kun GUI or TUI, then retry. Kun will not stop another client automatically because it may have active work.`,
+        handoff: false,
+        retryable: true
+      }
+    }
     return {
-      message: sanitizeStartupFailureMessage(error),
+      message: sanitized,
       handoff: false,
       retryable: true
     }
   }
   const owner = error.owner
+  const unverifiable = error.code === 'identity_unverifiable'
   const detail = [
     error.message,
+    ...(unverifiable
+      ? ['Kun failed closed and left the process, active work, and saved data untouched. Close the other Kun process or retry once the system process-inspection (WMI/CIM) is available.']
+      : []),
     `Phase: ${error.phase}`,
     ...(owner?.kind ? [`Owner: ${owner.kind}${owner.flavor ? `/${owner.flavor}` : ''}`] : []),
     ...(owner?.pid ? [`PID: ${owner.pid}`] : []),
@@ -50,6 +70,22 @@ export function startupFailurePresentation(error: unknown): StartupFailurePresen
     message: sanitizeStartupFailureMessage(detail),
     handoff: true,
     retryable: error.retryable
+  }
+}
+
+function parseStartupRuntimeError(error: unknown): { code: string; message: string } {
+  const record = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : {}
+  const directCode = typeof record.code === 'string' ? record.code : ''
+  const rawMessage = typeof record.message === 'string' ? record.message : String(error)
+  if (directCode) return { code: directCode, message: sanitizeStartupFailureMessage(rawMessage) }
+  try {
+    const parsed = JSON.parse(rawMessage) as { code?: unknown; message?: unknown }
+    return {
+      code: typeof parsed.code === 'string' ? parsed.code : '',
+      message: typeof parsed.message === 'string' ? sanitizeStartupFailureMessage(parsed.message) : ''
+    }
+  } catch {
+    return { code: '', message: '' }
   }
 }
 
@@ -78,7 +114,7 @@ export function startupFailureHtml(
       : 'Kun could not safely verify the previous local owner, so it left the process, active work, and saved data untouched.'
     : 'The application is still running so you can inspect the failure or retry. The diagnostic detail is:'
   const primaryAction = busy
-    ? '<span class="working">Safely stopping old Kun…</span>'
+    ? `<span class="working">${handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
     : retryable
       ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
       : ''

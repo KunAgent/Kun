@@ -14,6 +14,7 @@ type UsageQuotaTab = 'usage' | 'quota'
 
 type Props = {
   activeThreadId: string | null
+  active?: boolean
 }
 
 type TabStatus = {
@@ -23,7 +24,7 @@ type TabStatus = {
 
 const EMPTY_STATUS: TabStatus = { loading: false }
 
-export function UsageQuotaPanel({ activeThreadId }: Props): ReactElement {
+export function UsageQuotaPanel({ activeThreadId, active = true }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const [activeTab, setActiveTab] = useState<UsageQuotaTab>('usage')
   const [usageRefreshKey, setUsageRefreshKey] = useState(0)
@@ -114,6 +115,7 @@ export function UsageQuotaPanel({ activeThreadId }: Props): ReactElement {
         {activeTab === 'usage' ? (
           <SidebarUsagePanel
             activeThreadId={activeThreadId}
+            enabled={active}
             refreshKey={usageRefreshKey}
             onStatusChange={handleUsageStatus}
           />

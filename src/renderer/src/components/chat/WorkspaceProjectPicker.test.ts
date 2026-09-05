@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildWorkspaceProjectPickerOptions } from './WorkspaceProjectPicker'
+import { filterRemovedCodeWorkspaceRoots } from '../../lib/removed-code-workspaces'
 
 describe('buildWorkspaceProjectPickerOptions', () => {
   it('groups remembered worktree roots under their source project', () => {
@@ -119,5 +120,58 @@ describe('buildWorkspaceProjectPickerOptions', () => {
     const optionRoots = result.options.map((opt) => opt.root)
     expect(optionRoots.filter((r) => r === '/Users/zxy/project-a')).toHaveLength(1)
     expect(optionRoots).toContain('/Users/zxy/project-b')
+  })
+
+  it('hides removed projects from candidates until they are re-added', () => {
+    const projectA = '/Users/zxy/project-a'
+    const projectB = '/Users/zxy/project-b'
+    const registry = {
+      version: 1 as const,
+      removed: [
+        {
+          projectPath: projectA,
+          aliases: [] as string[],
+          removedAt: '2026-08-28T00:00:00.000Z'
+        }
+      ]
+    }
+
+    // Store keeps the removed root out of `codeWorkspaceRoots` after removal;
+    // the picker options derive from the filtered list, so re-add via picker's
+    // "Add workspace" restores it (filterRemovedCodeWorkspaceRoots reflects the
+    // post-restoration list which no longer matches the removed identity).
+    const candidateRoots = filterRemovedCodeWorkspaceRoots([projectA, projectB], registry)
+    expect(candidateRoots).toEqual([projectB])
+
+    const options = buildWorkspaceProjectPickerOptions({
+      currentWorkspaceRoot: projectB,
+      workspaceRoots: candidateRoots
+    })
+    expect(options.options.map((option) => option.root)).toEqual([projectB])
+
+    // After an explicit re-add the marker is cleared and the project returns.
+    const restoredRoots = filterRemovedCodeWorkspaceRoots([projectA, projectB], {
+      version: 1,
+      removed: []
+    })
+    expect(restoredRoots).toEqual([projectA, projectB])
+  })
+
+  it('does not reinsert a removed current root or its custom worktree alias', () => {
+    const project = '/Users/zxy/project-a'
+    const worktree = '/Users/zxy/project-a.worktrees/feature'
+    const registry = {
+      version: 1 as const,
+      removed: [{ projectPath: project, aliases: [worktree], removedAt: 'now' }]
+    }
+
+    const result = buildWorkspaceProjectPickerOptions({
+      currentWorkspaceRoot: worktree,
+      workspaceRoots: [project, worktree, '/Users/zxy/project-b'],
+      removedCodeWorkspaces: registry
+    })
+
+    expect(result.currentRoot).toBe('')
+    expect(result.options.map((option) => option.root)).toEqual(['/Users/zxy/project-b'])
   })
 })

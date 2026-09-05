@@ -5,7 +5,7 @@ import type { AttachmentReference, ChatBlock, GeneratedFileReference, RuntimeDis
 import { useChatStore } from '../../store/chat-store'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { ImagePreviewLightbox } from './ImagePreviewLightbox'
-import { isPresentationArtifactPath } from './presentation-file-artifacts'
+import { isGeneratedDocumentArtifactPath } from './generated-document-artifacts'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { useDeferredRender } from '../../hooks/use-deferred-render'
 import { metaAttachmentReferences, metaStringArray } from './message-timeline-bubble-meta'
@@ -515,7 +515,7 @@ export function GeneratedFilesPanel({
       generatedFiles.push(...metaGeneratedFileReferences(block.meta))
     }
     return mergeMediaReferences(attachments, generatedFiles).filter(
-      (file) => !isPresentationArtifactPath(mediaPath(file))
+      (file) => !isGeneratedDocumentArtifactPath(mediaPath(file))
     )
   }, [blocks])
 

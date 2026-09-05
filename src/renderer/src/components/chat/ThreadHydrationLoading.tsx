@@ -5,8 +5,16 @@ import { useChatStore } from '../../store/chat-store'
 
 export const THREAD_HYDRATION_SLOW_MS = 15_000
 
-export function ThreadHydrationGate({ loading, presentationKey = null, children }: {
+export function ThreadHydrationGate({
+  loading,
+  catchingUp = false,
+  trustedContentVisible = false,
+  presentationKey = null,
+  children
+}: {
   loading: boolean
+  catchingUp?: boolean
+  trustedContentVisible?: boolean
   presentationKey?: string | null
   children: ReactNode
 }): ReactElement {
@@ -14,7 +22,9 @@ export function ThreadHydrationGate({ loading, presentationKey = null, children 
     loading ? null : presentationKey
   )
   const committedKeyRef = useRef(presentationKey)
-  const waitingForPaint = loading || Boolean(presentationKey && revealedKey !== presentationKey)
+  const waitingForPaint = !trustedContentVisible && (
+    loading || Boolean(presentationKey && revealedKey !== presentationKey)
+  )
 
   useLayoutEffect(() => {
     const keyChanged = committedKeyRef.current !== presentationKey
@@ -51,11 +61,12 @@ export function ThreadHydrationGate({ loading, presentationKey = null, children 
         {children}
       </div>
       {waitingForPaint ? <ThreadHydrationLoading /> : null}
+      {!waitingForPaint && catchingUp ? <ThreadHydrationLoading compact /> : null}
     </div>
   )
 }
 
-export function ThreadHydrationLoading(): ReactElement {
+export function ThreadHydrationLoading({ compact = false }: { compact?: boolean } = {}): ReactElement {
   const { t } = useTranslation('common')
   const activeThreadId = useChatStore((state) => state.activeThreadId)
   const recoverActiveTurn = useChatStore((state) => state.recoverActiveTurn)
@@ -70,7 +81,7 @@ export function ThreadHydrationLoading(): ReactElement {
 
   const retry = (): void => {
     setRetryNonce((value) => value + 1)
-    void recoverActiveTurn?.()
+    void recoverActiveTurn?.({ reason: 'manual_retry' })
   }
 
   return (
@@ -79,20 +90,26 @@ export function ThreadHydrationLoading(): ReactElement {
       role="status"
       aria-busy="true"
       aria-live="polite"
-      className="pointer-events-auto absolute inset-0 z-20 flex min-h-[18rem] select-none items-center justify-center bg-white px-6 dark:bg-ds-main"
+      className={compact
+        ? 'pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4'
+        : 'pointer-events-auto absolute inset-0 z-20 flex min-h-[18rem] select-none items-center justify-center bg-white px-6 dark:bg-ds-main'}
     >
-      <div className="flex max-w-sm flex-col items-center text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-ds-border-muted bg-ds-card shadow-sm">
+      <div className={compact
+        ? 'pointer-events-auto flex items-center gap-2 rounded-full border border-ds-border bg-ds-card/95 px-3 py-1.5 text-left shadow-sm backdrop-blur'
+        : 'flex max-w-sm flex-col items-center text-center'}>
+        <div className={compact
+          ? 'flex h-5 w-5 items-center justify-center'
+          : 'flex h-12 w-12 items-center justify-center rounded-full border border-ds-border-muted bg-ds-card shadow-sm'}>
           <Loader2
             aria-hidden="true"
-            className="h-5 w-5 animate-spin text-accent motion-reduce:animate-none"
+            className={`${compact ? 'h-3.5 w-3.5' : 'h-5 w-5'} animate-spin text-accent motion-reduce:animate-none`}
             strokeWidth={2}
           />
         </div>
-        <p className="mt-4 text-[14px] font-medium text-ds-ink">
+        <p className={compact ? 'text-[12px] font-medium text-ds-ink' : 'mt-4 text-[14px] font-medium text-ds-ink'}>
           {t(takingLong ? 'threadHydrationTakingLongTitle' : 'threadHydrationLoadingTitle')}
         </p>
-        <p className="mt-1.5 text-[12.5px] leading-5 text-ds-muted">
+        <p className={compact ? 'hidden' : 'mt-1.5 text-[12.5px] leading-5 text-ds-muted'}>
           {t(takingLong ? 'threadHydrationTakingLongDescription' : 'threadHydrationLoadingDescription')}
         </p>
         {takingLong && activeThreadId ? (
@@ -100,7 +117,9 @@ export function ThreadHydrationLoading(): ReactElement {
             type="button"
             data-testid="thread-hydration-retry"
             onClick={retry}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-ds-border px-3 py-1.5 text-[12.5px] font-medium text-ds-ink transition-colors hover:bg-ds-hover"
+            className={compact
+              ? 'inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[11px] font-medium text-ds-ink hover:bg-ds-hover'
+              : 'mt-4 inline-flex items-center gap-1.5 rounded-md border border-ds-border px-3 py-1.5 text-[12.5px] font-medium text-ds-ink transition-colors hover:bg-ds-hover'}
           >
             <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
             {t('threadHydrationRetry')}

@@ -53,6 +53,41 @@ describe('GUI settings bridge', () => {
     })
   })
 
+  it('ignores GUI settings from a newer schema without rewriting them', async () => {
+    const fixture = await createFixture()
+    const raw = JSON.stringify({
+      version: 2,
+      agents: { kun: { dataDir: fixture.dataDir } },
+      futureProviderState: { keep: true }
+    })
+    await writeFile(fixture.settingsPath, raw, 'utf8')
+
+    await expect(readGuiSharedSettings({
+      env: { KUN_GUI_SETTINGS_PATH: fixture.settingsPath },
+      platform: 'darwin',
+      homeDir: fixture.home
+    })).resolves.toBeNull()
+    await expect(readFile(fixture.settingsPath, 'utf8')).resolves.toBe(raw)
+  })
+
+  it('fails closed instead of falling back when the primary candidate is newer', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'kun-gui-settings-newer-primary-'))
+    roots.push(home)
+    const supportDir = join(home, 'Library', 'Application Support')
+    const currentPath = join(supportDir, 'Kun', 'kun-settings.json')
+    const stalePath = join(supportDir, 'DeepSeek GUI', 'kun-settings.json')
+    await mkdir(join(supportDir, 'Kun'), { recursive: true })
+    await mkdir(join(supportDir, 'DeepSeek GUI'), { recursive: true })
+    await writeFile(currentPath, JSON.stringify({ version: 2, future: true }), 'utf8')
+    await writeFile(stalePath, JSON.stringify({
+      provider: { providers: [] },
+      agents: { kun: { dataDir: join(home, '.kun', 'data') } }
+    }), 'utf8')
+
+    await expect(readGuiSharedSettings({ env: {}, platform: 'darwin', homeDir: home }))
+      .resolves.toBeNull()
+  })
+
   it('keeps the current GUI profile authoritative when it contains a newer provider transport', async () => {
     const home = await mkdtemp(join(tmpdir(), 'kun-gui-settings-forward-compatible-'))
     roots.push(home)

@@ -12,14 +12,6 @@ import {
 import { resolveChatWelcomeTitle, type ClawImChannelV1 } from '@shared/app-settings'
 import { useChatWelcomeMessageSetting } from '../../lib/chat-welcome-message-settings'
 import { KunStateFigure } from './AnimatedWorkLogo'
-import { TaskSurfaceSelector, type ComposerTaskSurface } from './FloatingComposerTaskProfile'
-
-export type EmptyTaskSurfaceControl = {
-  surface: ComposerTaskSurface
-  locked?: boolean
-  onChange?: (surface: ComposerTaskSurface) => void
-}
-
 /**
  * Empty / hero states rendered by `MessageTimeline` when there is no
  * turn content yet. Lifted out of the timeline component so the main
@@ -186,17 +178,11 @@ function RuntimeHomeStatus({
 }
 
 function ChatEmptyHero({
-  taskSurface,
-  taskSurfaceLocked,
-  onTaskSurfaceChange,
   runtimeReady,
   runtimeError,
   onRetry,
   onOpenSettings
 }: {
-  taskSurface: ComposerTaskSurface
-  taskSurfaceLocked: boolean
-  onTaskSurfaceChange?: (surface: ComposerTaskSurface) => void
   runtimeReady: boolean
   runtimeError?: string | null
   onRetry: () => void
@@ -221,15 +207,6 @@ function ChatEmptyHero({
         <p className="mt-3 max-w-[680px] text-[13px] leading-6 text-ds-muted">
           {t('unifiedTaskHeroSub')}
         </p>
-        {!taskSurfaceLocked ? <div className="mt-6">
-          <TaskSurfaceSelector
-            surface={taskSurface}
-            locked={false}
-            disabled={false}
-            onSurfaceChange={onTaskSurfaceChange}
-            prominent
-          />
-        </div> : null}
         {!runtimeReady ? (
           <RuntimeHomeStatus
             runtimeError={runtimeError}
@@ -251,8 +228,7 @@ export function MessageTimelineEmptyHero({
   onPickWorkspace,
   onRetry,
   onOpenSettings,
-  onSelectSuggestion,
-  taskSurfaceControl
+  onSelectSuggestion
 }: {
   route: 'chat' | 'claw'
   ready: boolean
@@ -263,11 +239,9 @@ export function MessageTimelineEmptyHero({
   onRetry: () => void
   onOpenSettings: () => void
   onSelectSuggestion?: (prompt: string) => void
-  taskSurfaceControl?: EmptyTaskSurfaceControl
   focusModeEnabled?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
-  const taskSurface = taskSurfaceControl?.surface ?? 'code'
 
   if (!ready && route === 'claw') {
     return <RuntimeWakeHero runtimeError={runtimeError} onRetry={onRetry} onOpenSettings={onOpenSettings} />
@@ -305,9 +279,6 @@ export function MessageTimelineEmptyHero({
 
   return (
     <ChatEmptyHero
-      taskSurface={taskSurface}
-      taskSurfaceLocked={taskSurfaceControl?.locked === true}
-      onTaskSurfaceChange={taskSurfaceControl?.onChange}
       runtimeReady={ready}
       runtimeError={runtimeError}
       onRetry={onRetry}

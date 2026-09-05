@@ -108,6 +108,8 @@ function exactProvenance(entry: ModelRequestTraceToolCatalogEntry): ToolProvenan
     const providerName = providerId?.startsWith('mcp:')
       ? providerId.slice('mcp:'.length) || undefined
       : providerId
+    // `github` is deliberately not inferred here: a user override has the
+    // same provider id, so ownership must not be guessed from its name alone.
     const management = providerName === 'gui_schedule'
       ? 'kun-managed'
       : providerName === 'search' || providerName === 'facade'

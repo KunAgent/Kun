@@ -27,8 +27,8 @@ export const GRAPH_WORKER_REPORT_TOOL_NAME = 'report_to_parent' as const
  * Ordinary orchestration surfaces conflict with host-owned Graph scheduling.
  * Provider-kind filtering covers current and future delegation tools; exact
  * names cover legacy DAG state and built-in wrappers that can spawn a child.
- * Lab `fast_context` is exempt from Lead listing (read-only investigation)
- * but is still stripped from Worker assignment snapshots below.
+ * Lab `fast_context` is a host-owned, read-only retrieval capability. It is
+ * available to Leads and workers without reopening ordinary child fan-out.
  */
 export const GRAPH_INCOMPATIBLE_TOOL_NAMES = [
   'delegate_task',
@@ -83,7 +83,6 @@ export function isToolAllowedInOrchestration(
  */
 export function graphParentAuthorityToolNames(toolNames: readonly string[]): string[] {
   return [...new Set(toolNames.filter((name) =>
-    name !== FAST_CONTEXT_TOOL_NAME &&
     !INCOMPATIBLE_TOOL_NAMES.has(name) &&
     !LEAD_TOOL_NAMES.has(name) &&
     !WORKER_TOOL_NAMES.has(name) &&
@@ -94,7 +93,6 @@ export function graphParentAuthorityToolNames(toolNames: readonly string[]): str
 export function graphWorkerToolNamesWithin(
   allowedToolNames: readonly string[]
 ): string[] {
-  return allowedToolNames.includes(GRAPH_WORKER_REPORT_TOOL_NAME)
-    ? [GRAPH_WORKER_REPORT_TOOL_NAME]
-    : []
+  return [FAST_CONTEXT_TOOL_NAME, GRAPH_WORKER_REPORT_TOOL_NAME]
+    .filter((name) => allowedToolNames.includes(name))
 }

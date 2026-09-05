@@ -46,6 +46,10 @@ import {
 import { MemoMessageTurn } from './message-timeline-conversation-turn'
 import type { MessageTimelineProps } from './message-timeline-props'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
+import {
+  timelineTurnAllowsRecoveryContinue,
+  timelineTurnIsProcessing
+} from './message-timeline-runtime-state'
 
 export {
   TimelineJumpPreviewTitle,
@@ -63,33 +67,11 @@ export {
 export type { TimelineJumpPreviewMetadata } from './message-timeline-jump-preview'
 export { ConversationTurn } from './message-timeline-conversation-turn'
 export type { ConversationTurnProps } from './message-timeline-conversation-turn'
-
 export { summarizeToolBlock } from './message-timeline-process'
-
-export function timelineTurnIsProcessing(input: {
-  busy: boolean
-  busyUnconfirmed?: boolean
-  isLatestTurn: boolean
-  isActiveTurn?: boolean
-  turnPending: boolean
-  hasLiveStream: boolean
-  turnId?: string
-  graphPlanningCorrectionTurnId?: string | null
-}): boolean {
-  if (
-    input.graphPlanningCorrectionTurnId &&
-    input.turnId === input.graphPlanningCorrectionTurnId
-  ) {
-    return false
-  }
-  // An unconfirmed busy flag comes from a persisted snapshot that claims a
-  // running turn; until live events confirm it, render the history settled
-  // instead of replaying live-progress UI over a finished conversation.
-  if (input.busyUnconfirmed && input.busy) return input.turnPending || input.hasLiveStream
-  return (input.busy && (input.isActiveTurn ?? input.isLatestTurn)) ||
-    input.turnPending ||
-    input.hasLiveStream
-}
+export {
+  timelineTurnAllowsRecoveryContinue,
+  timelineTurnIsProcessing
+} from './message-timeline-runtime-state'
 
 const TURN_PAGE_SIZE = 18
 export function MessageTimeline({
@@ -102,7 +84,6 @@ export function MessageTimeline({
   onRetryConnection,
   onOpenSettings,
   onSelectSuggestion,
-  taskSurfaceControl,
   focusModeEnabled = false,
   devPreviewCard,
   planActionsBusy,
@@ -112,6 +93,8 @@ export function MessageTimeline({
   onOpenChanges,
   onReviewChanges,
   reviewChangesDisabled = false,
+  onPreviewGeneratedDocument,
+  onOpenGeneratedDocuments,
   compactCards = false,
   onOpenChildThread,
   onComponentPrototypePrompt,
@@ -163,7 +146,7 @@ export function MessageTimeline({
   const heroRoute: 'chat' | 'claw' = route === 'claw' ? 'claw' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
   const endRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null), contentRef = useRef<HTMLDivElement>(null)
   const turnRefMap = useRef(new Map<string, HTMLDivElement>())
   const [activeTurnKey, setActiveTurnKey] = useState<string | null>(null)
   const [jumpRailLayout, setJumpRailLayout] = useState<{
@@ -199,8 +182,7 @@ export function MessageTimeline({
     loadEarlierTurns,
     collapseEarlierTurns
   } = useTimelineScroll({
-    containerRef,
-    endRef,
+    containerRef, contentRef, endRef,
     activeThreadId,
     pageSize: TURN_PAGE_SIZE,
     totalTurns: turns.length,
@@ -444,7 +426,7 @@ export function MessageTimeline({
           ) : null}
         </div>
       ) : null}
-      <div className={`ds-message-timeline-content ds-chat-column-inset ds-chat-content-max-width mx-auto flex w-full min-w-0 flex-col ${compactCards ? 'gap-5' : 'gap-8'} pt-8 ${
+      <div ref={contentRef} className={`ds-message-timeline-content ds-chat-column-inset ds-chat-content-max-width mx-auto flex w-full min-w-0 flex-col ${compactCards ? 'gap-5' : 'gap-8'} pt-8 ${
         timelineBottomPaddingClass()
       }`}>
         {!hasContent || !activeThreadId ? (
@@ -458,7 +440,6 @@ export function MessageTimeline({
             onRetry={onRetryConnection}
             onOpenSettings={onOpenSettings}
             onSelectSuggestion={onSelectSuggestion}
-            taskSurfaceControl={taskSurfaceControl}
             focusModeEnabled={focusModeEnabled}
           />
         ) : null}
@@ -466,7 +447,6 @@ export function MessageTimeline({
         {activeThread?.forkedFromThreadId ? (
           <ThreadForkBanner parentTitle={forkedFromTitle} />
         ) : null}
-
         {hasEarlierTurns ? (
           <div className="flex items-center justify-center">
             <button
@@ -579,12 +559,20 @@ export function MessageTimeline({
                 onOpenChanges={onOpenChanges}
                 onReviewChanges={onReviewChanges}
                 reviewChangesDisabled={reviewChangesDisabled}
+                threadId={activeThreadId ?? undefined}
+                onPreviewGeneratedDocument={onPreviewGeneratedDocument}
+                onOpenGeneratedDocuments={onOpenGeneratedDocuments}
                 onOpenChildThread={onOpenChildThread}
                 onCancelToolCall={activeThreadId ? handleCancelToolCall : undefined}
                 onComponentPrototypePrompt={onComponentPrototypePrompt}
                 filePreviewWorkspaceRoot={filePreviewWorkspaceRoot}
                 viewportRef={containerRef}
                 compactCards={compactCards}
+                allowRecoveryContinue={timelineTurnAllowsRecoveryContinue({
+                  busy,
+                  busyUnconfirmed,
+                  isLatestTurn
+                })}
                 turnUsage={turn.turnId ? turnUsage.byTurnId.get(turn.turnId) : undefined}
                 turnUsageStale={turnUsage.stale}
               />
@@ -648,7 +636,11 @@ export function MessageTimeline({
             onOpenChildThread={onOpenChildThread}
             onCancelToolCall={undefined}
             onComponentPrototypePrompt={onComponentPrototypePrompt}
+            threadId={activeThreadId ?? undefined}
+            onPreviewGeneratedDocument={onPreviewGeneratedDocument}
+            onOpenGeneratedDocuments={onOpenGeneratedDocuments}
             compactCards={compactCards}
+            allowRecoveryContinue={!busy && !busyUnconfirmed}
             durationMs={
               currentTurnUserId && typeof turnStartedAtByUserId[currentTurnUserId] === 'number'
                 ? Math.max(0, tickNow - turnStartedAtByUserId[currentTurnUserId])

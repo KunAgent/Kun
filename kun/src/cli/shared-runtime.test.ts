@@ -37,7 +37,7 @@ function managerConnection(dataDir: string): ServiceManagerConnection {
   return {
     discovery: {
       version: 1,
-      protocolVersion: 3,
+      protocolVersion: 5,
       instanceId: 'manager-a',
       pid: process.pid,
       startedAt: '2026-07-22T00:00:00.000Z',
@@ -160,11 +160,39 @@ describe('shared runtime discovery validation', () => {
     await expect(probeRuntimeDiscovery(record({
       host: 'example.com',
       baseUrl: 'http://example.com:18899'
-    }), fetchImpl as unknown as typeof fetch)).resolves.toBeNull()
+    }), '/tmp/kun-data', fetchImpl as unknown as typeof fetch)).resolves.toBeNull()
     await expect(probeRuntimeDiscovery(record({
       baseUrl: 'http://127.0.0.1:18900'
-    }), fetchImpl as unknown as typeof fetch)).resolves.toBeNull()
+    }), '/tmp/kun-data', fetchImpl as unknown as typeof fetch)).resolves.toBeNull()
     expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a different canonical data directory', '/tmp/kun-other-data', 'shared'],
+    ['a launch mode that differs from discovery', '/tmp/kun-expected-data', 'gui']
+  ] as const)('rejects live Runtime info with %s', async (_case, infoDataDir, launchMode) => {
+    const expectedDataDir = '/tmp/kun-expected-data'
+    const discovery = record()
+    const capabilities = buildRuntimeCapabilityManifest({
+      model: modelCapabilitiesForModel('fixture')
+    })
+    const fetchImpl = vi.fn(async () => Response.json({
+      instanceId: discovery.instanceId,
+      serviceVersion: discovery.serviceVersion,
+      launchMode,
+      host: discovery.host,
+      port: discovery.port,
+      dataDir: infoDataDir,
+      startedAt: discovery.startedAt,
+      pid: discovery.pid,
+      capabilities
+    })) as unknown as typeof fetch
+
+    await expect(probeRuntimeDiscovery(
+      discovery,
+      expectedDataDir,
+      fetchImpl
+    )).resolves.toBeNull()
   })
 
   it('preserves discovery when its live process temporarily misses HTTP probes', async () => {
@@ -241,7 +269,7 @@ describe('shared runtime discovery validation', () => {
     }
   })
 
-  it('reuses a healthy manager owner when filesystem discovery is missing', async () => {
+  it('waits for a healthy manager owner to publish matching discovery before reuse', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-manager-runtime-owner-'))
     const buildId = 'a'.repeat(64)
     const managed = record({ buildId, flavor: 'production' })
@@ -285,10 +313,11 @@ describe('shared runtime discovery validation', () => {
       return new Response('', { status: 404 })
     })
     try {
-      const connection = await ensureSharedRuntime({
+      const pending = ensureSharedRuntime({
         dataDir,
         manager,
         expectedBuildId: buildId,
+        timeoutMs: 1_000,
         fetch: fetchMock as unknown as typeof fetch,
         launch: {
           command: process.execPath,
@@ -296,16 +325,20 @@ describe('shared runtime discovery validation', () => {
           runAsNode: false
         }
       })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await writeFile(
+        join(dataDir, 'runtime.json'),
+        `${JSON.stringify(managed, null, 2)}\n`,
+        'utf8'
+      )
+      const connection = await pending
 
       expect(connection.discovery).toMatchObject({
         instanceId: managed.instanceId,
         pid: managed.pid,
         buildId
       })
-      expect(fetchMock).toHaveBeenCalledTimes(2)
-      await expect(readFile(join(dataDir, 'runtime.json'), 'utf8')).rejects.toMatchObject({
-        code: 'ENOENT'
-      })
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(2)
     } finally {
       await rm(dataDir, { recursive: true, force: true })
     }

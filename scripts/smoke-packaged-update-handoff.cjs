@@ -32,6 +32,7 @@ const {
   CHAT_MARKER,
   NEGATIVE_SCENARIOS,
   POSITIVE_SCENARIOS,
+  RECYCLED_PID_SCENARIOS,
   SAVED_THREAD_TITLE,
   buildSmokeSettings,
   childState,
@@ -52,6 +53,11 @@ const {
   waitForTurn,
   writeSmokeSettings
 } = require('./smoke-packaged-update-handoff-support.cjs')
+const {
+  managerJson,
+  runRecycledPidScenario,
+  stopCurrentOwners
+} = require('./smoke-packaged-update-handoff-recycled.cjs')
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const READY_PREFIX = 'KUN_UPDATE_HANDOFF_SMOKE_READY '
@@ -77,8 +83,11 @@ async function main() {
   const candidate = await readPackagedBuild(resourcesDir)
   const selection = argumentValue('--cases') ?? 'all'
   const runPositive = selection === 'all' || selection === 'positive'
+  const runRecycled = runPositive || selection === 'recycled'
   const runNegative = selection === 'all' || selection === 'negative'
-  if (!runPositive && !runNegative) throw new Error('--cases must be all, positive, or negative')
+  if (!runPositive && !runRecycled && !runNegative) {
+    throw new Error('--cases must be all, positive, recycled, or negative')
+  }
 
   for (const scenario of runPositive ? POSITIVE_SCENARIOS : []) {
     await runPositiveScenario({
@@ -91,6 +100,27 @@ async function main() {
       timeoutMs
     })
   }
+  for (const scenario of runRecycled ? RECYCLED_PID_SCENARIOS : []) {
+    await runRecycledPidScenario({
+      scenario,
+      resourcesDir,
+      oldResourcesDir,
+      candidateRuntimeExecutable,
+      desktop,
+      candidateBuildId: candidate.buildId,
+      timeoutMs
+    }, {
+      assertChatRoundTrip,
+      cleanupProfile,
+      cleanupTracked,
+      createProfileRoot,
+      desktopExitGuard,
+      initializeProfile,
+      launchCandidate,
+      quitDesktopNormally,
+      waitForCurrentOwners
+    })
+  }
   for (const scenario of runNegative ? NEGATIVE_SCENARIOS : []) {
     await runNegativeScenario({
       scenario,
@@ -101,7 +131,7 @@ async function main() {
   }
   process.stdout.write(
     `Packaged update handoff smoke OK (${process.platform}/${process.arch}): ` +
-    `${runPositive ? POSITIVE_SCENARIOS.length : 0} update paths and ` +
+    `${(runPositive ? POSITIVE_SCENARIOS.length : 0) + (runRecycled ? RECYCLED_PID_SCENARIOS.length : 0)} update paths and ` +
     `${runNegative ? NEGATIVE_SCENARIOS.length : 0} fail-closed owner cases passed.\n`
   )
 }
@@ -222,17 +252,14 @@ async function runPositiveScenario(input) {
 
     await quitDesktopNormally(candidateDesktop, debuggingPort, input.timeoutMs)
     tracked.splice(tracked.indexOf(candidateDesktop), 1)
+    if (current.runtime &&
+      !await waitForProcessExit(current.runtime.pid, Math.min(input.timeoutMs, 20_000))) {
+      throw new Error('Ordinary GUI quit left the GUI-owned Runtime running')
+    }
     const managerStatus = await managerJson(current.manager, '/v1/manager/status')
     if (managerStatus.instanceId !== current.manager.instanceId ||
       managerStatus.pid !== current.manager.pid) {
       throw new Error('Ordinary GUI quit unexpectedly stopped the current Service Manager')
-    }
-    if (current.runtime) {
-      const runtimeInfo = await runtimeJson(current.runtime, '/v1/runtime/info')
-      if (runtimeInfo.instanceId !== current.runtime.instanceId ||
-        runtimeInfo.pid !== current.runtime.pid) {
-        throw new Error('Ordinary GUI quit unexpectedly stopped the shared Runtime')
-      }
     }
     await stopCurrentOwners(current, input.timeoutMs)
   } catch (error) {
@@ -259,7 +286,8 @@ async function runNegativeScenario(input) {
   try {
     const profile = await initializeProfile(root, 'http://127.0.0.1:9', false)
     const fixture = spawnTracked(process.execPath, [
-      join(__dirname, 'fixtures', 'update-handoff-owner.cjs'),
+      join(__dirname, 'fixtures', 'update-handoff', 'serve-entry.cjs'),
+      'serve',
       '--data-dir', profile.dataDir,
       '--scenario', input.scenario,
       '--build-id', 'a'.repeat(64)
@@ -284,7 +312,8 @@ async function runNegativeScenario(input) {
     tracked.splice(tracked.indexOf(preflight), 1)
     if (result.code === 0) throw new Error(`Unsafe ${input.scenario} owner was accepted`)
     const failure = parseSmokeMarker(result.output, FAILED_PREFIX)
-    if (!failure || failure.retryable !== false || failure.owner?.pid !== owner.pid) {
+    const expectedRetryable = input.scenario === 'inspection-denied'
+    if (!failure || failure.retryable !== expectedRetryable || failure.owner?.pid !== owner.pid) {
       throw new Error(`Unsafe ${input.scenario} did not expose actionable fail-closed metadata: ${result.output}`)
     }
     if (!processIsAlive(owner.pid)) {
@@ -460,16 +489,6 @@ async function quitDesktopNormally(desktop, debuggingPort, timeoutMs) {
   }
 }
 
-async function managerJson(discovery, path) {
-  const response = await fetch(`${discovery.baseUrl}${path}`, {
-    headers: { authorization: `Bearer ${discovery.managerToken}` },
-    signal: AbortSignal.timeout(10_000)
-  })
-  const body = await response.text()
-  if (!response.ok) throw new Error(`GET ${path} failed (${response.status}): ${body}`)
-  return body ? JSON.parse(body) : undefined
-}
-
 function desktopExitGuard(child) {
   return new Promise((_, reject) => {
     child.once('error', reject)
@@ -583,35 +602,6 @@ async function assertNoRuntimeDiscovery(profile) {
     } catch (error) {
       if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error
     }
-  }
-}
-
-async function stopCurrentOwners(current, timeoutMs) {
-  if (current.runtime) {
-    await fetch(`${current.runtime.baseUrl}/v1/runtime/shutdown`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${current.runtime.runtimeToken}`,
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({ instanceId: current.runtime.instanceId }),
-      signal: AbortSignal.timeout(10_000)
-    }).catch(() => undefined)
-    if (!await waitForProcessExit(current.runtime.pid, Math.min(timeoutMs, 20_000))) {
-      throw new Error(`Current Runtime PID ${current.runtime.pid} did not stop through its authenticated API`)
-    }
-  }
-  await fetch(`${current.manager.baseUrl}/v1/manager/shutdown`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${current.manager.managerToken}`,
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify({ instanceId: current.manager.instanceId }),
-    signal: AbortSignal.timeout(10_000)
-  }).catch(() => undefined)
-  if (!await waitForProcessExit(current.manager.pid, Math.min(timeoutMs, 20_000))) {
-    throw new Error(`Current Manager PID ${current.manager.pid} did not stop through its authenticated API`)
   }
 }
 

@@ -1,0 +1,24 @@
+{
+  "id": "media-video",
+  "name": "Video Generation",
+  "version": "1.0.0",
+  "description": "Generate a short Kun video from text or an authorized first-frame image.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/media-video"
+    ],
+    "promptPatterns": [
+      "generate video",
+      "image to video",
+      "media-video",
+      "Video Generation",
+      "短视频",
+      "视频生成"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

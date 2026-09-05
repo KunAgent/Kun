@@ -103,6 +103,8 @@ describe('HybridThreadStore', () => {
     const summaries = await reopened.threadStore.list({ includeArchived: true })
     expect(summaries.find((thread) => thread.id === legacyDesign.id)?.agentSurface).toBe('design')
     expect(summaries.find((thread) => thread.id === legacyCode.id)?.agentSurface).toBe('code')
+    await reopened.threadStore.waitForBackfill()
+    await reopened.threadStore.list({ includeArchived: true })
 
     const indexed = new Database(join(dataDir, 'index.sqlite3'), { readonly: true })
     const rows = indexed.prepare(`
@@ -183,6 +185,8 @@ describe('HybridThreadStore', () => {
     const reopened = await createHybridStores()
     const summaries = await reopened.threadStore.list({ search: 'Hybrid demo' })
     expect(summaries.map((thread) => thread.id)).toEqual([record.id])
+    await reopened.threadStore.waitForBackfill()
+    await reopened.threadStore.list({ search: 'Hybrid demo' })
     reopened.threadStore.close()
 
     const repaired = new Database(join(dataDir, 'index.sqlite3'), { readonly: true })

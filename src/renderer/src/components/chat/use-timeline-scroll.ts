@@ -9,6 +9,7 @@ const STICK_TO_BOTTOM_PX = 96
 
 type UseTimelineScrollOptions = {
   containerRef: RefObject<HTMLDivElement | null>
+  contentRef: RefObject<HTMLDivElement | null>
   endRef: RefObject<HTMLDivElement | null>
   activeThreadId: string | null
   pageSize: number
@@ -97,6 +98,7 @@ export function deriveTimelineVisibleTurnCount({
  */
 export function useTimelineScroll({
   containerRef,
+  contentRef,
   endRef,
   activeThreadId,
   pageSize,
@@ -137,13 +139,48 @@ export function useTimelineScroll({
 
   const stickToBottomRef = useRef(true)
   const lastUserTurnKeyRef = useRef(userTurnKey)
-  const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
+  const pendingPrependRef = useRef<{
+    scrollHeight: number
+    scrollTop: number
+    generation: number
+  } | null>(null)
   const prependInFlightRef = useRef(false)
   const remoteLoadStartTotalRef = useRef<number | null>(null)
   const remoteLoadSettledRef = useRef(false)
   const remoteLoadProgressedRef = useRef(false)
   const [remoteLoadCompletionRevision, setRemoteLoadCompletionRevision] = useState(0)
   const scrollFrameRef = useRef<number | null>(null)
+  const scrollGenerationRef = useRef(0)
+
+  const cancelScheduledScroll = useCallback((): void => {
+    if (scrollFrameRef.current === null) return
+    window.cancelAnimationFrame(scrollFrameRef.current)
+    scrollFrameRef.current = null
+  }, [])
+
+  const invalidateScrollOperations = useCallback((): void => {
+    scrollGenerationRef.current += 1
+    cancelScheduledScroll()
+    pendingPrependRef.current = null
+    prependInFlightRef.current = false
+    remoteLoadStartTotalRef.current = null
+    remoteLoadSettledRef.current = false
+    remoteLoadProgressedRef.current = false
+  }, [cancelScheduledScroll])
+
+  const scheduleBottomSnap = useCallback((): void => {
+    const generation = scrollGenerationRef.current
+    cancelScheduledScroll()
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null
+      if (
+        generation !== scrollGenerationRef.current ||
+        !stickToBottomRef.current ||
+        prependInFlightRef.current
+      ) return
+      endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+    })
+  }, [cancelScheduledScroll, endRef])
 
   const loadEarlierTurns = useCallback(
     (options?: { userInitiated?: boolean }): void => {
@@ -156,9 +193,11 @@ export function useTimelineScroll({
       if (el) {
         pendingPrependRef.current = {
           scrollHeight: el.scrollHeight,
-          scrollTop: el.scrollTop
+          scrollTop: el.scrollTop,
+          generation: scrollGenerationRef.current
         }
       }
+      const generation = scrollGenerationRef.current
       prependInFlightRef.current = true
       if (hiddenTurnCount > 0) {
         setVisibleTurnCount((count) => Math.min(totalTurns, count + pageSize))
@@ -168,9 +207,11 @@ export function useTimelineScroll({
       remoteLoadSettledRef.current = false
       remoteLoadProgressedRef.current = false
       void loadRemoteHistory!().then((progressed) => {
+        if (generation !== scrollGenerationRef.current) return
         remoteLoadProgressedRef.current = progressed
         if (!progressed) historyExpansionRequestedRef.current = false
       }).finally(() => {
+        if (generation !== scrollGenerationRef.current) return
         // Keep the prepend snapshot until React has committed the store update.
         // Promise settlement normally precedes the totalTurns/content effects.
         remoteLoadSettledRef.current = true
@@ -200,8 +241,20 @@ export function useTimelineScroll({
   useLayoutEffect(() => {
     if (!userTurnKey || lastUserTurnKeyRef.current === userTurnKey) return
     lastUserTurnKeyRef.current = userTurnKey
+    invalidateScrollOperations()
+    historyExpansionRequestedRef.current = false
     stickToBottomRef.current = true
-  }, [userTurnKey])
+  }, [invalidateScrollOperations, userTurnKey])
+
+  // Invalidate every delayed write before the new thread can reuse the same
+  // DOM nodes. This layout effect intentionally runs before the snap effect.
+  useLayoutEffect(() => {
+    invalidateScrollOperations()
+    stickToBottomRef.current = true
+    historyExpansionRequestedRef.current = false
+    lastUserTurnKeyRef.current = userTurnKey
+    endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+  }, [activeThreadId, endRef, invalidateScrollOperations])
 
   // Scroll listener: tracks stick-to-bottom + triggers lazy load.
   useEffect(() => {
@@ -231,39 +284,43 @@ export function useTimelineScroll({
     if (!streaming) {
       endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
     }
-    if (scrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(scrollFrameRef.current)
-    }
-    scrollFrameRef.current = window.requestAnimationFrame(() => {
-      scrollFrameRef.current = null
-      endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
-    })
-  }, [contentKey, visibleTurnCount, streaming, endRef])
+    scheduleBottomSnap()
+  }, [contentKey, visibleTurnCount, streaming, endRef, scheduleBottomSnap])
 
-  // Hard reset on thread switch.
+  // Reset history bookkeeping on thread switch; delayed scroll writes were
+  // already fenced synchronously by the layout effect above.
   useEffect(() => {
-    stickToBottomRef.current = true
     historyExpansionRequestedRef.current = false
-    pendingPrependRef.current = null
-    prependInFlightRef.current = false
-    remoteLoadStartTotalRef.current = null
-    remoteLoadSettledRef.current = false
-    remoteLoadProgressedRef.current = false
-    if (scrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(scrollFrameRef.current)
-      scrollFrameRef.current = null
-    }
-    endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
-  }, [activeThreadId, endRef])
+  }, [activeThreadId])
+
+  // Images, expanded cards, Markdown, and Office previews can change height
+  // without changing the timeline's block stamp. Follow that growth only
+  // while the reader's scroll intent remains pinned to the latest content.
+  useEffect(() => {
+    const content = contentRef.current
+    if (!content || typeof ResizeObserver === 'undefined') return
+    let previousHeight: number | undefined
+    const observer = new ResizeObserver((entries) => {
+      const nextHeight = entries[0]?.contentRect.height ?? content.getBoundingClientRect().height
+      if (previousHeight === undefined) {
+        previousHeight = nextHeight
+        return
+      }
+      const grew = nextHeight > previousHeight
+      previousHeight = nextHeight
+      if (!grew || !stickToBottomRef.current || prependInFlightRef.current) return
+      scheduleBottomSnap()
+    })
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [activeThreadId, contentRef, scheduleBottomSnap, userTurnKey])
 
   // Cleanup any pending rAF on unmount.
   useEffect(
     () => () => {
-      if (scrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(scrollFrameRef.current)
-      }
+      cancelScheduledScroll()
     },
-    []
+    [cancelScheduledScroll]
   )
 
   // Re-derive visible count when the thread / collapse flag / total
@@ -307,15 +364,20 @@ export function useTimelineScroll({
     const snapshot = pendingPrependRef.current
     const el = containerRef.current
     if (!snapshot || !el) return
+    if (snapshot.generation !== scrollGenerationRef.current) return
 
     pendingPrependRef.current = null
     prependInFlightRef.current = false
 
-    requestAnimationFrame(() => {
+    const generation = snapshot.generation
+    cancelScheduledScroll()
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null
+      if (generation !== scrollGenerationRef.current) return
       const addedHeight = el.scrollHeight - snapshot.scrollHeight
       el.scrollTop = snapshot.scrollTop + Math.max(0, addedHeight)
     })
-  }, [containerRef, visibleTurnCount])
+  }, [cancelScheduledScroll, containerRef, visibleTurnCount])
 
   // A successful page can contain only more blocks for an already-rendered
   // turn (for example a tool call split from its result), so totalTurns may not
@@ -331,13 +393,17 @@ export function useTimelineScroll({
     remoteLoadStartTotalRef.current = null
     pendingPrependRef.current = null
     prependInFlightRef.current = false
-    if (snapshot && el) {
-      requestAnimationFrame(() => {
+    if (snapshot && el && snapshot.generation === scrollGenerationRef.current) {
+      const generation = snapshot.generation
+      cancelScheduledScroll()
+      scrollFrameRef.current = requestAnimationFrame(() => {
+        scrollFrameRef.current = null
+        if (generation !== scrollGenerationRef.current) return
         const addedHeight = el.scrollHeight - snapshot.scrollHeight
         el.scrollTop = snapshot.scrollTop + Math.max(0, addedHeight)
       })
     }
-  }, [containerRef, remoteLoadCompletionRevision, totalTurns])
+  }, [cancelScheduledScroll, containerRef, remoteLoadCompletionRevision, totalTurns])
 
   // If the user explicitly asked to expand history and the container
   // still has room, keep loading earlier turns until it overflows.

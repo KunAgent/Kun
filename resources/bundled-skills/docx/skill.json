@@ -1,0 +1,25 @@
+{
+  "id": "docx",
+  "name": "DOCX Documents",
+  "version": "1.0.0",
+  "description": "Inspect, edit, validate, and preview existing Word documents while preserving structure and unrelated content.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/docx"
+    ],
+    "promptPatterns": [
+      "DOCX",
+      "docx",
+      "DOCX Documents",
+      "Word",
+      "写文档"
+    ],
+    "fileTypes": [
+      ".docx"
+    ]
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

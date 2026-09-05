@@ -210,7 +210,7 @@ export function sameWorkspaceRoots(left: readonly string[], right: readonly stri
   return left.length === right.length && left.every((root, index) => root === right[index])
 }
 
-export function intersectWorkspaceResolutions(scopes: ResolvedExtension[]): ResolvedExtension {
+export function intersectWorkspaceResolutions(scopes: readonly ResolvedExtension[]): ResolvedExtension {
   const first = scopes[0]
   if (first === undefined) {
     throw extensionError(

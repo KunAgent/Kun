@@ -148,9 +148,22 @@ kun exec --data-dir ~/.kun/data --workspace "$PWD" read --args '{"path":"README.
 
 - `kun run` creates a thread, runs one turn, streams assistant text, and exits.
 - `kun chat` starts a line-oriented REPL. Use `/exit`, `/quit`, or an empty line to stop.
-- Bare `kun` (or its `kun tui` alias) attaches to or starts the shared background runtime. Its inline pi-tui interface preserves terminal scrollback and shares live HTTP/SSE state with the GUI. See [the TUI guide](../docs/kun-tui.en.md).
+- Bare `kun` (or its `kun tui` alias) starts a Runtime owned by that TUI session when the slot is free. Use `kun tui --no-start` to share live HTTP/SSE state with a Runtime already owned by the GUI. Its inline pi-tui interface preserves terminal scrollback. See [the TUI guide](../docs/kun-tui.en.md).
 - `kun exec --list-tools` prints the effective dynamic tool registry for the chosen config/workspace.
 - `kun exec <tool> --args <json>` invokes one tool directly. Use `--json` on `run` or `exec` for machine-readable output.
+
+### Desktop-bundled terminal distribution
+
+Starting with 0.3.8, Stable and Daily distribute desktop packages only.
+The GUI still bundles the full Kun runtime and terminal commands (`kun` /
+`kun tui`), which update with the desktop application. No standalone TUI
+archive, separate Node.js runtime archive, or new standalone update manifest
+is published.
+
+Historical standalone archives and their user data are preserved. Existing
+0.3.7 standalone installations must move to the desktop distribution for
+0.3.8 and later; their updater cannot install a GUI package. Runtime-level
+legacy layout parsing remains for compatibility, not as a new release path.
 
 ## Environment variables
 
@@ -237,17 +250,18 @@ Shape:
   },
   "capabilities": {
     "mcp": {
-      "enabled": false,
+      "enabled": true,
       "servers": {
         "github": {
           "enabled": true,
-          "transport": "stdio",
-          "command": "npx",
-          "cwd": "/path/to/workspace",
-          "args": ["-y", "@modelcontextprotocol/server-github"],
-          "env": { "GITHUB_TOKEN": "<github-token>" },
-          "trustScope": "workspace",
-          "trustedWorkspaceRoots": ["/path/to/workspace"],
+          "transport": "streamable-http",
+          "url": "https://api.githubcopilot.com/mcp/readonly",
+          "headers": {
+            "Authorization": "Bearer ${GITHUB_PAT_TOKEN}",
+            "X-MCP-Toolsets": "context,repos,issues,pull_requests,users",
+            "X-MCP-Readonly": "true"
+          },
+          "trustScope": "user",
           "timeoutMs": 30000
         },
         "remote-docs": {
@@ -321,6 +335,7 @@ See `../docs/KUN_CONFIG.md` for the detailed file layout and examples.
 Feature flags are intentionally explicit:
 
 - `capabilities.mcp` starts configured MCP clients and imports their tools into the dynamic registry. Workspace-scoped servers require `trustedWorkspaceRoots`. Remote HTTP/SSE servers can use `oauth`; Kun stores OAuth tokens under the data directory instead of the config file. Use `GET /v1/mcp/oauth` to inspect redacted OAuth state and `DELETE /v1/mcp/oauth/{serverId}` to clear a server's saved authorization.
+- The GUI materializes the official read-only GitHub MCP server as a system-managed default. At connection time Kun uses `GITHUB_PAT_TOKEN`, then falls back to the credential from `gh auth token`; run `gh auth login` if neither is available. Kun resolves a verified `gh` from standard locations, then `PATH` (including tools such as Nix, asdf, mise, Devbox, and custom prefixes); it resolves symlinks, requires a regular executable file, and never passes the original `PATH` to the child process. Kun materializes the token only in process memory—the persisted header keeps an environment reference and never contains the token itself. A user-defined `github` server in `~/.kun/mcp.json` takes precedence.
 - `serve.mcpSearch` can collapse a large MCP catalog into four entry points: `mcp_search`, `mcp_describe`, `mcp_call`, and `mcp_refresh_catalog`. When the catalog is too large, the model searches for relevant tools first, then describes and calls the exact tool instead of carrying every MCP schema on every turn.
 - `serve.tokenEconomy` / `tokenEconomyMode` compresses tool descriptions, tool results, and history context while preserving code, paths, commands, URLs, errors, and other high-value signals.
 - `contextCompaction` controls fallback long-thread compaction thresholds and summary behavior. Per-model thresholds live in `models.profiles`. Compaction preserves goals, constraints, decisions, touched files, tool outcomes, and unresolved next steps.
@@ -431,6 +446,7 @@ payloads, result fields, failure semantics, and example hook scripts.
   config.json      # Optional Kun runtime config
   attachments/     # Image metadata + content blobs when enabled
   memory/          # Long-term memory records and tombstones when enabled
+  memory-index.sqlite3 # Rebuildable FTS5 projection when memory is enabled
   child-runs/      # Delegated child run records when subagents are enabled
   threads/
     index.json
@@ -446,6 +462,9 @@ Atomic JSON writes are used for `index.json`, `thread.json`, and
 `session.json`. JSONL streams are append-only and tolerate malformed
 lines (the next replay skips them). The renderer can re-read a
 thread by listing `index.json` and replaying the per-thread JSONL.
+Memory JSON remains canonical while the SQLite index is disposable; see
+[`docs/memory-foundation.en.md`](../docs/memory-foundation.en.md) for migration,
+fallback, diagnostics, and validation details.
 
 ## HTTP API
 
@@ -474,7 +493,7 @@ The HTTP server exposes the following routes under `/v1/*`:
 | GET | `/v1/attachments/diagnostics` | attachment store status |
 | GET | `/v1/attachments/{id}` | attachment metadata |
 | GET | `/v1/attachments/{id}/content?thread_id=...&workspace=...` | authorized attachment bytes as base64 |
-| GET | `/v1/memory?workspace=...&include_deleted=false` | list memory records in scope |
+| GET | `/v1/memory?workspace=...&project=...&include_deleted=false` | list memory records in scope |
 | POST | `/v1/memory` | create a memory record |
 | GET | `/v1/memory/diagnostics` | memory store status |
 | PATCH | `/v1/memory/{id}` | update, disable, or retag a memory record |

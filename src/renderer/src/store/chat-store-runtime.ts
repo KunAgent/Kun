@@ -26,7 +26,7 @@ import type { TurnCompleteNotificationSource } from '@shared/kun-gui-api'
 import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
 import type { ChatState } from './chat-store-types'
 import { drainBackgroundQueuedMessage } from './chat-store-background-queue'
-import { isPendingQueuedMessage } from './queued-message-persistence'
+import { isPendingQueuedMessage, saveQueuedMessagesForThread } from './queued-message-persistence'
 import {
   clearThreadAwaitingUserInput,
   markThreadAwaitingUserInput,
@@ -47,7 +47,8 @@ import {
   clearUnreadCompletion,
   completionOutcomeForTurnStatus,
   completionIsCurrentlyVisible,
-  markUnreadCompletion
+  markUnreadCompletion,
+  resolveUnreadCompletionForTurn
 } from './unread-completions'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import {
@@ -66,10 +67,10 @@ import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { recordCanvasTurnTerminal } from '../design/canvas/canvas-turn-terminal-registry'
 import {
   flushLiveProjection,
+  findMatchingToolBlockIndex,
   mergeToolProjectionEvents,
   reduceChatProjection,
-  toolBlockChildId,
-  toolEventChildId
+  toolEventChildProjectionKey
 } from './chat-projection-reducer'
 import {
   completionProjectionEffects,
@@ -217,9 +218,7 @@ export function syncTurnCompletionPoll(
         for (const { id } of accepted) {
           delete watchTurnCompletion[id]
           const outcome = completionOutcomeForTurnStatus(completedById.get(id)?.latestTurnStatus)
-          unreadThreadIds = !outcome || completionIsCurrentlyVisible(snapshot, id)
-            ? clearUnreadCompletion(unreadThreadIds, id)
-            : markUnreadCompletion(unreadThreadIds, id, outcome)
+          unreadThreadIds = resolveUnreadCompletionForTurn(unreadThreadIds, snapshot, id, completedById.get(id)?.latestTurnId, outcome)
         }
         return {
           watchTurnCompletion,
@@ -244,7 +243,8 @@ export function syncTurnCompletionPoll(
           id,
           notificationState,
           completionWatchKey ?? completionNotificationDedupeKeyForWatchedThread(id),
-          notificationSource
+          notificationSource,
+          latestTurnId
         )
         clearWatchedCompletionNotification(id)
         invalidateThreadSnapshot(id)
@@ -344,7 +344,7 @@ export function buildThreadEventSink(
           }
           break
         case 'notify_turn_complete':
-          notifyTurnComplete(effect.threadId, effect.state, effect.dedupeKey)
+          notifyTurnComplete(effect.threadId, effect.state, effect.dedupeKey, undefined, effect.turnId)
           break
         case 'mirror_sdd_transcript':
           notifySddChatTranscriptMirror(get)
@@ -398,12 +398,18 @@ export function buildThreadEventSink(
         error: clearRuntimeStreamRecoveringError(state.error)
       }))
     },
-    onUserMessage: (event) => {
+    onUserMessage: (event, seq) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
       armBusyWatchdog(set, get)
       confirmBusyOnce()
-      set((state) => reduce(state, { type: 'user_message_received', payload: event }))
+      set((state) => reduce(state, {
+        type: 'user_message_received',
+        payload: event,
+        ...(typeof seq === 'number' ? { seq } : {})
+      }))
+      const threadId = boundThreadId || get().activeThreadId
+      if (threadId) saveQueuedMessagesForThread(threadId, get().queuedMessages)
     },
     onDeltas: (rawDeltas) => {
       if (!isCurrentStream()) return
@@ -436,30 +442,25 @@ export function buildThreadEventSink(
         armBusyWatchdog(set, get)
       }
       set((state) => {
-        const eventChildId = toolEventChildId(event)
-        const existing = state.blocks.some((block) =>
-          block.kind === 'tool' && (
-            block.id === event.itemId ||
-            Boolean(eventChildId && toolBlockChildId(block) === eventChildId)
-          )
-        )
+        const eventChildKey = toolEventChildProjectionKey(event)
+        const existing = findMatchingToolBlockIndex(state.blocks, event) >= 0
         if (!existing && event.updateOnly) {
-          if (eventChildId) {
-            pendingChildToolUpdates.delete(eventChildId)
-            pendingChildToolUpdates.set(eventChildId, event)
+          if (eventChildKey) {
+            pendingChildToolUpdates.delete(eventChildKey)
+            pendingChildToolUpdates.set(eventChildKey, event)
             while (pendingChildToolUpdates.size > MAX_PENDING_CHILD_TOOL_UPDATES) {
-              const oldestChildId = pendingChildToolUpdates.keys().next().value
-              if (!oldestChildId) break
-              pendingChildToolUpdates.delete(oldestChildId)
+              const oldestChildKey = pendingChildToolUpdates.keys().next().value
+              if (!oldestChildKey) break
+              pendingChildToolUpdates.delete(oldestChildKey)
             }
           }
           return {}
         }
         let projectedEvent = event
-        if (!existing && eventChildId) {
-          const pending = pendingChildToolUpdates.get(eventChildId)
+        if (eventChildKey) {
+          const pending = pendingChildToolUpdates.get(eventChildKey)
           if (pending) {
-            pendingChildToolUpdates.delete(eventChildId)
+            pendingChildToolUpdates.delete(eventChildKey)
             projectedEvent = mergeToolProjectionEvents(event, pending)
           }
         }
@@ -598,9 +599,9 @@ export function buildThreadEventSink(
             state.awaitingUserInputThreadIds,
             completedThreadId
           ),
-          unreadThreadIds: status === 'aborted' || completionIsCurrentlyVisible(state, completedThreadId)
+          unreadThreadIds: status === 'aborted'
             ? clearUnreadCompletion(state.unreadThreadIds, completedThreadId)
-            : markUnreadCompletion(state.unreadThreadIds, completedThreadId)
+            : resolveUnreadCompletionForTurn(state.unreadThreadIds, state, completedThreadId, completedTurnId, 'completed')
         }
       })
       if (completedThreadId) clearWatchedCompletionNotification(completedThreadId)

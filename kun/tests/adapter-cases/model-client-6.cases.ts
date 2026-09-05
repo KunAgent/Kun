@@ -149,7 +149,8 @@ it('fails a streamed response that goes idle without DONE', async () => {
       apiKey: 'k',
       model: 'deepseek-chat',
       fetchImpl,
-      streamIdleTimeoutMs: 5
+      streamIdleTimeoutMs: 5,
+      retry: { maxAttempts: 0 }
     })
     const chunks = []
     for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {

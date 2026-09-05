@@ -1,5 +1,6 @@
 import type { CacheRequestSignature } from '../cache/cache-diagnostics.js'
 import { utf8PrefixWithinBytes } from '../shared/utf8-text-blocks.js'
+import { redactSecretText } from '../config/secret-redaction.js'
 import type { PipelineStage } from '../contracts/events.js'
 import type {
   ModelClient,
@@ -23,6 +24,7 @@ import {
 } from './model-stream-collector.js'
 import type { LoopTelemetry } from './loop-telemetry.js'
 import type { TurnExecutionFailure } from './turn-execution-types.js'
+import { modelRequestFailureContext, recordModelPreflightFailure } from './model-request-failure-context.js'
 import { rewriteStreamDisconnectFailure } from './stream-disconnection-failure.js'
 import {
   modelContextOverflowError,
@@ -406,15 +408,20 @@ export class ModelRoundEngine {
               // Drop the raw transport error; the aborted outcome below owns
               // settlement.
               if (input.signal.aborted) break
+              const modelErrorMessage = redactSecretText(intent.message)
               const rewritten = rewriteStreamDisconnectFailure({
-                error: intent.message,
+                error: modelErrorMessage,
                 ...(intent.code ? { code: intent.code } : {}),
                 ...(intent.failure ? { details: { modelFailure: intent.failure } } : {})
               })
-              this.deps.rememberFailure(input.turnId, rewritten ?? {
-                error: intent.message,
+              const modelRequestFailure = modelRequestFailureContext({
+                request: input.request, failure: intent.failure, code: intent.code
+              })
+              this.deps.rememberFailure(input.turnId, rewritten ? { ...rewritten, ...(modelRequestFailure ? { modelRequestFailure } : {}) } : {
+                error: modelErrorMessage,
                 ...(intent.code ? { code: intent.code } : {}),
                 ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
+                ...(modelRequestFailure ? { modelRequestFailure } : {}),
                 severity: 'error'
               })
               // Disconnects are terminal-only diagnostics. If a stop races
@@ -426,9 +433,10 @@ export class ModelRoundEngine {
                   kind: 'error',
                   threadId: input.threadId,
                   turnId: input.turnId,
-                  message: intent.message,
+                  message: modelErrorMessage,
                   code: intent.code,
                   ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
+                  ...(modelRequestFailure ? { modelRequestFailure } : {}),
                   severity: 'error'
                 })
               }
@@ -453,6 +461,11 @@ export class ModelRoundEngine {
           partialOutput: Boolean(collector.text || collector.reasoning || collector.toolCallCount)
         }
       }
+      if (await recordModelPreflightFailure({
+        error: streamFailure, request: input.request,
+        threadId: input.threadId, turnId: input.turnId,
+        rememberFailure: this.deps.rememberFailure, events: this.deps.events
+      })) return { kind: 'failed' }
       throw streamFailure
     } finally {
       deltaEvents.dispose()

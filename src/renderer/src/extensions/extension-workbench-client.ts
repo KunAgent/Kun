@@ -15,7 +15,8 @@ import type {
   ExtensionListProviderModelsRequest,
   ExtensionRuntimeRequestResult,
   ExtensionWorkspaceRequest,
-  ExtensionViewSessionDescriptor
+  ExtensionViewSessionDescriptor,
+  ExtensionViewSessionInvalidatedEvent
 } from '@shared/extension-ipc'
 import {
   ExtensionWorkbenchSnapshotSchema,
@@ -525,6 +526,10 @@ export class ExtensionWorkbenchClient {
 
   async disposeViewSession(sessionId: string): Promise<void> {
     await window.kunGui.extensionDisposeViewSession({ sessionId })
+  }
+
+  onViewSessionInvalidated(handler: (event: ExtensionViewSessionInvalidatedEvent) => void): () => void {
+    return window.kunGui?.onExtensionViewSessionInvalidated?.(handler) ?? (() => undefined)
   }
 
   async postViewMessage(sessionId: string, message: {

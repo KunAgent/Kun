@@ -119,7 +119,7 @@ describe('ProviderQuotaService', () => {
     const service = new ProviderQuotaService({
       loadSource: async () => ({
         profiles: [
-          profile(),
+          profile({ proxyUrl: 'http://127.0.0.1:7890' }),
           profile({
             id: 'moonshot',
             name: 'Moonshot',
@@ -140,7 +140,7 @@ describe('ProviderQuotaService', () => {
             apiKey: ''
           })
         ],
-        proxyUrl: 'http://127.0.0.1:7890'
+        proxyUrl: 'http://legacy-global-must-not-apply:9999'
       }),
       fetcher,
       nowIso: () => '2026-07-28T01:31:00.000Z'
@@ -159,7 +159,10 @@ describe('ProviderQuotaService', () => {
     ]))
     expect(JSON.stringify(result)).not.toContain('quota-secret')
     expect(fetcher).toHaveBeenCalledTimes(2)
-    expect(fetcher.mock.calls.every((call) => call[2] === 'http://127.0.0.1:7890')).toBe(true)
+    expect(fetcher.mock.calls.map((call) => call[2])).toEqual(expect.arrayContaining([
+      'http://127.0.0.1:7890',
+      ''
+    ]))
   })
 
   it('shows OpenCode Go local usage in the TUI quota service without an API key', async () => {
@@ -398,7 +401,8 @@ describe('ProviderQuotaService', () => {
     expect(resolveCodexCredential).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
-      'codex-rejected-access'
+      'codex-rejected-access',
+      expect.objectContaining({ fetcher, proxyUrl: '' })
     )
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
@@ -448,7 +452,8 @@ describe('ProviderQuotaService', () => {
     expect(resolveGrokCredential).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
-      'grok-rejected-access'
+      'grok-rejected-access',
+      expect.objectContaining({ fetcher, proxyUrl: '' })
     )
     expect(fetcher).toHaveBeenCalledTimes(2)
   })

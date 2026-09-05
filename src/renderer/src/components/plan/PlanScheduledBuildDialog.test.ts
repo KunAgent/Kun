@@ -177,7 +177,7 @@ describe('PlanScheduledBuildDialog i18n', () => {
     expect(text).toContain('需要保持 Kun 运行。')
     expect(text).toContain('26小时后')
     expect(text).toContain('空闲时段价格减半')
-    expect(text).toContain('每天 09:00–12:00、14:00–18:00（北京时间）')
+    expect(text).toContain('高峰期：周一至周五 09:00–12:00、14:00–18:00（北京时间）')
     const reasoningText = renderer.root
       .findAllByType('select')
       .map((select) => dialogTextChildren(select))

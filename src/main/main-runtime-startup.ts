@@ -1,4 +1,6 @@
+import { randomBytes } from 'node:crypto'
 import {
+  applyKunRuntimePatch,
   getKunRuntimeSettings,
   type AppSettingsV1
 } from '../shared/app-settings'
@@ -10,12 +12,16 @@ import {
   waitForKunStartupSettled
 } from './kun-process'
 import { clearHistoricalKunServeProcesses } from './runtime/kun-serve-process-cleanup'
+import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { logWarn } from './logger'
+import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
 import {
   mainState,
   runtimeJsonError
 } from './main-app-context'
+import { drainKunOwnersForHandoff } from './runtime/kun-installed-build-handoff'
+import { logKunHandoffEvent } from './runtime/kun-handoff-logging'
 import {
   kunRuntimeHealthMonitor,
   noteRuntimeHealthy,
@@ -50,16 +56,75 @@ async function ensureRuntimeOnce(settings: AppSettingsV1): Promise<AppSettingsV1
 
 export async function resolveManagedKunLaunchSettings(
   settings: AppSettingsV1,
-  _source: string
+  source: string
 ): Promise<AppSettingsV1> {
-  // Shared runtimes bind an ephemeral loopback port while holding the
-  // data-directory election lock. The configured port is a legacy preference,
-  // not the address or bearer token of the currently resolved daemon.
+  const token = await ensureManagedKunRuntimeToken(settings, source)
+  return resolveManagedKunPort(token.settings, source, 0)
+}
+
+function generateKunRuntimeToken(): string {
+  return randomBytes(32).toString('base64url')
+}
+
+export async function ensureManagedKunRuntimeToken(
+  settings: AppSettingsV1,
+  source: string
+): Promise<{ settings: AppSettingsV1; generated: boolean }> {
+  if (getKunRuntimeSettings(settings).runtimeToken.trim()) {
+    return { settings, generated: false }
+  }
+  const candidate = generateKunRuntimeToken()
+  const result = await mainState.store.updateIf(
+    (current) => !getKunRuntimeSettings(current).runtimeToken.trim(),
+    (current) => applyKunRuntimePatch(current, { runtimeToken: candidate })
+  )
+  runtimeSupervisor.noteLatest(result.settings)
+  if (result.applied) {
+    logWarn(source, 'Generated a local access token for the GUI-owned Kun Runtime.')
+  }
+  return { settings: result.settings, generated: result.applied }
+}
+
+async function resolveManagedKunPort(
+  settings: AppSettingsV1,
+  source: string,
+  retry: number
+): Promise<AppSettingsV1> {
+  const runtime = getKunRuntimeSettings(settings)
+  const resolved = await kunRuntimeAdapter.resolveAvailablePort(runtime.port)
+  if (!resolved.changed) return settings
+  const result = await mainState.store.updateIf(
+    (current) => getKunRuntimeSettings(current).port === runtime.port,
+    (current) => applyKunRuntimePatch(current, { port: resolved.port })
+  )
+  runtimeSupervisor.noteLatest(result.settings)
+  if (result.applied) {
+    logWarn(source, `Kun port ${runtime.port} is unavailable; using ${resolved.port}.`, {
+      previousPort: runtime.port,
+      port: resolved.port,
+      message: resolved.message
+    })
+    return result.settings
+  }
+  return retry === 0
+    ? resolveManagedKunPort(result.settings, source, 1)
+    : result.settings
+}
+
+function noteSuccessfulRuntimeSettings(source: string, settings: AppSettingsV1): AppSettingsV1 {
+  mainState.settledRuntimeSettings = settings
+  runtimeSupervisor.noteLatest(settings)
+  noteRuntimeHealthy(source, settings)
   return settings
 }
 
 export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1> {
-  const currentSettings = settings
+  const token = await ensureManagedKunRuntimeToken(settings, 'runtime-start')
+  const currentSettings = token.settings
+  if (token.generated && kunRuntimeAdapter.isChildRunning()) {
+    // Only stop the controller-held child that inherited the old empty token.
+    await kunRuntimeAdapter.stopAndWait()
+  }
   const connectionResolved = await kunRuntimeAdapter.resolveConnection(currentSettings)
 
   const runtime = getKunRuntimeSettings(currentSettings)
@@ -72,8 +137,7 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
   if (healthy) {
     const runtimeApi = await probeRuntimeApi(currentSettings)
     if (runtimeApi.ok) {
-      noteRuntimeHealthy('ensure', currentSettings)
-      return currentSettings
+      return noteSuccessfulRuntimeSettings('ensure', currentSettings)
     }
     throw runtimeJsonError(runtimeApi.error, runtimeApi.message)
   }
@@ -85,9 +149,8 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
     )
   }
 
-  // A process that is alive but failed the probe may only be busy or waking
-  // from system sleep. Give it a real recovery window before deciding what to
-  // do; replacing a shared runtime here would orphan its in-flight turn.
+  // A GUI-owned child that failed the probe may only be busy or waking from
+  // system sleep. Give it a real recovery window before replacing it.
   if (kunRuntimeAdapter.isChildRunning()) {
     // Never tear down a child still inside its (deliberately generous) startup
     // window — interrupting a slow-but-healthy boot is the #544 restart storm.
@@ -99,8 +162,7 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
       if (recovered) {
         const runtimeApi = await probeRuntimeApi(currentSettings)
         if (runtimeApi.ok) {
-          noteRuntimeHealthy('ensure', currentSettings)
-          return currentSettings
+          return noteSuccessfulRuntimeSettings('ensure', currentSettings)
         }
         throw runtimeJsonError(runtimeApi.error, runtimeApi.message)
       }
@@ -110,8 +172,7 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
           'Kun is still running but temporarily unresponsive. Its active runtime was preserved; retry after it recovers.'
         )
       }
-      // The legacy GUI-private child can be replaced safely in place. Shared
-      // daemons are never stopped by an ordinary ensure request.
+      // The controller-held GUI child can be replaced safely in place.
       logWarn(
         'runtime-start',
         `GUI-private Kun child stopped responding on port ${runtime.port}; restarting it in place`
@@ -120,13 +181,29 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
     }
   }
 
-  const launchSettings = await resolveManagedKunLaunchSettings(currentSettings, 'runtime-start')
+  let launchSettings = await resolveManagedKunLaunchSettings(currentSettings, 'runtime-start')
   const adapter = kunRuntimeAdapter
   try {
     await adapter.ensureRunning(launchSettings)
-  } catch (e) {
-    console.error('[kun-gui] failed to start kun:', e)
-    throw e
+  } catch (error) {
+    if (!isRuntimePortConflict(error)) {
+      if (isClientRuntimeOwnerConflict(error)) {
+        runtimeSupervisor.setManagedRuntimeExpected(false)
+      }
+      console.error('[kun-gui] failed to start kun:', error)
+      throw error
+    }
+    launchSettings = await resolveManagedKunPort(
+      runtimeSupervisor.latestOr(launchSettings),
+      'runtime-start-retry',
+      1
+    )
+    try {
+      await adapter.ensureRunning(launchSettings)
+    } catch (retryError) {
+      console.error('[kun-gui] failed to start kun after selecting another port:', retryError)
+      throw retryError
+    }
   }
   const started = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
   if (!started) {
@@ -140,15 +217,60 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
   if (!runtimeApi.ok) {
     throw runtimeJsonError(runtimeApi.error, runtimeApi.message)
   }
-  noteRuntimeHealthy('ensure', launchSettings)
-  return launchSettings
+  return noteSuccessfulRuntimeSettings('ensure', launchSettings)
+}
+
+function isRuntimePortConflict(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const code = String((error as Error & { code?: unknown }).code ?? '')
+  return code === 'EADDRINUSE' ||
+    code === 'runtime_port_conflict' ||
+    /(?:EADDRINUSE|address already in use|port \d+ is in use)/i.test(error.message)
+}
+
+function isClientRuntimeOwnerConflict(error: unknown): boolean {
+  return error instanceof Error &&
+    String((error as Error & { code?: unknown }).code ?? '') === 'client_runtime_owner_busy'
+}
+
+export async function prepareGuiRuntimeForStartupRetry(error?: unknown): Promise<void> {
+  // Fence the watchdog before cleanup so it cannot launch a replacement while
+  // the recovery window is preparing a new Electron instance.
+  runtimeSupervisor.setManagedRuntimeExpected(false)
+  await runtimeSupervisor.waitForIdle()
+  await kunRuntimeAdapter.stopAndWait()
+  if (!isServiceManagerDataMutexFailure(error)) return
+
+  // A Manager state-write failure is sticky for the lifetime of that Manager:
+  // relaunching only the Runtime reconnects to the same poisoned write queue
+  // and repeats the HTTP 500. Retry is an explicit recovery action, so replace
+  // the exact authenticated Manager after proving that no other client-owned
+  // Runtime would be interrupted.
+  const manager = mainState.activeServiceManager
+  if (!manager) {
+    throw new Error('Kun Service Manager recovery is unavailable; quit Kun and start it again.')
+  }
+  await drainKunOwnersForHandoff({
+    reason: 'startup-retry',
+    dataDirs: [manager.discovery.dataDir],
+    settingsPath: manager.discovery.settingsPath,
+    controlDir: defaultKunControlDir(),
+    fetch,
+    onEvent: logKunHandoffEvent
+  })
+  if (mainState.activeServiceManager === manager) {
+    mainState.activeServiceManager = null
+  }
+}
+
+export function isServiceManagerDataMutexFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /Kun Service Manager data mutex failed with HTTP 500\b/i.test(message)
 }
 
 /**
- * Startup attach policy: a GUI is one client of the data-directory scoped
- * Runtime, so a normal launch must reuse a healthy shared owner. The retained
- * function name keeps the existing startup wiring stable; replacement remains
- * reserved for explicit restart and bundled-build update paths.
+ * Startup policy: the GUI starts its own supervised child and never adopts a
+ * TUI/foreign owner. The retained name keeps startup wiring stable.
  *
  * Automatic-startup disabled: attach-only, exactly like a plain ensure.
  */
@@ -173,6 +295,17 @@ export async function restartRuntime(settings: AppSettingsV1): Promise<void> {
 }
 
 async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
+  const idle = kunRuntimeAdapter.isChildRunning()
+    ? await waitForRuntimeTurnsIdle({ settings })
+    : 'idle'
+  if (idle !== 'idle') {
+    throw runtimeJsonError(
+      'runtime_busy',
+      idle === 'timeout'
+        ? 'Kun still has active tasks; restart was deferred.'
+        : 'Kun task state could not be verified; restart was deferred.'
+    )
+  }
   await restartRuntimeAfterStopping(
     settings,
     () => kunRuntimeAdapter.stopSharedAndWait(settings)
@@ -215,6 +348,24 @@ export async function restartAllKunServeProcesses(
   )
 }
 
+/**
+ * Explicit desktop control: restart only the child owned by this Electron
+ * process. Unlike the conservative automatic restart, this confirmed action
+ * may interrupt active work. It never scans for or stops foreign Kun serves.
+ */
+export async function restartGuiRuntime(settings: AppSettingsV1): Promise<void> {
+  const requested = runtimeSupervisor.latestOr(settings)
+  if (!managedKunHostCanAutoStart(requested)) {
+    runtimeSupervisor.setManagedRuntimeExpected(false)
+  }
+  return runtimeSupervisor.replace(
+    () => restartRuntimeAfterStopping(
+      requested,
+      () => kunRuntimeAdapter.stopAndWait()
+    )
+  )
+}
+
 async function restartAllKunServeProcessesOnce(settings: AppSettingsV1): Promise<void> {
   await restartRuntimeAfterStopping(
     settings,
@@ -247,14 +398,10 @@ export async function reconcileBundledRuntimeAfterInstall(
   const probe = await kunRuntimeAdapter.probeBundledBuildReplacement(requested)
   if (probe.state === 'matched') return
   if (probe.state === 'unknown') throw probe.error
-  if (getKunRuntimeSettings(requested).autoStart) {
-    await replaceKunServe(requested)
-    return
-  }
-  await runtimeSupervisor.replace(async () => {
-    await waitForKunStartupSettled()
-    await kunRuntimeAdapter.stopSharedForReplacementAndWait(requested)
-  })
+  // Ordinary packaged startup never replaces an already registered client
+  // owner. A GUI/TUI-owned Runtime must survive until its owner exits, while an
+  // exact legacy shared daemon is retired narrowly by the client-owned election
+  // immediately before spawn. Ambiguous ownerless evidence also fails there.
 }
 
 async function restartRuntimeAfterStopping(
@@ -300,5 +447,5 @@ async function restartRuntimeAfterStopping(
   if (!runtimeApi.ok) {
     throw runtimeJsonError(runtimeApi.error, runtimeApi.message)
   }
-  noteRuntimeHealthy('restart', launchSettings)
+  noteSuccessfulRuntimeSettings('restart', launchSettings)
 }

@@ -405,7 +405,7 @@ export function mcpServerStatus(diagnostic: JsonRecord | undefined, config: Json
 export function mcpStatusTone(status: string): MarketplaceItem['statusTone'] {
   if (status === 'connected' || status === 'available') return 'success'
   if (status === 'error' || status === 'unavailable') return 'error'
-  if (status === 'disabled') return 'warning'
+  if (status === 'disabled' || status === 'authorization_required') return 'warning'
   return 'default'
 }
 

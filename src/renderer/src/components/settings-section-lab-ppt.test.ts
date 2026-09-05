@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { KunLabSettingsV1 } from '@shared/app-settings'
+import { defaultKunLabSettings, type KunLabSettingsV1 } from '@shared/app-settings'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 
 const labels: Record<string, string> = {
@@ -37,6 +37,7 @@ const t = (key: string): string => labels[key] ?? key
 
 function settings(imageFirst: boolean): KunLabSettingsV1 {
   return {
+    ...defaultKunLabSettings(),
     pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst },
       conversationVisualization: { enabled: false }
   }

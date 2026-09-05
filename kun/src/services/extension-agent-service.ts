@@ -1,2 +1,3 @@
-export { EXTENSION_AGENT_PERMISSIONS, type ExtensionPrincipal, type ExtensionAuthorizationRequest, type ExtensionAgentAuthorizer, type ExtensionAgentCreateRunRequest, type ExtensionAgentRunStatus, type ExtensionAgentRun, type ExtensionOwnedThread, type ExtensionAgentEvent, type ExtensionAgentSubscription, type ExtensionAgentServiceOptions, ExtensionAgentService } from './extension-agent-service-core.js'
+export * from './extension-agent-service-contracts.js'
+export { ExtensionAgentService } from './extension-agent-service-core.js'
 export { ManifestExtensionAgentAuthorizer, ExtensionBrokerError } from './extension-agent-service-event-usage.js'

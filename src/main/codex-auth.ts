@@ -7,6 +7,7 @@ import {
   codexCliUserAgent
 } from '../../kun/src/adapters/model/provider-cli-identity.js'
 import { grokRequestHeaders } from './grok-auth'
+import { fetchWithOptionalProxy } from './proxy-fetch'
 
 const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const CODEX_ISSUER = 'https://auth.openai.com'
@@ -42,6 +43,11 @@ export type CodexBrowserAuthErrorCode = 'port_in_use'
 export type CodexBrowserAuthResult =
   | { ok: true; credentials: CodexOAuthCredentials }
   | { ok: false; message: string; code?: CodexBrowserAuthErrorCode }
+
+export type CodexAuthTransport = {
+  fetcher?: typeof fetchWithOptionalProxy
+  proxyUrl?: string
+}
 
 class CodexBrowserAuthError extends Error {
   constructor(
@@ -98,12 +104,26 @@ function extractEmail(idToken?: string, accessToken?: string): string | undefine
   return undefined
 }
 
-async function postJson(url: string, body: Record<string, string>): Promise<Record<string, unknown>> {
-  const res = await fetch(url, {
+async function authFetch(
+  url: string,
+  init: RequestInit,
+  transport: CodexAuthTransport
+): Promise<Response> {
+  return transport.fetcher
+    ? transport.fetcher(url, init, transport.proxyUrl ?? '')
+    : fetch(url, init)
+}
+
+async function postJson(
+  url: string,
+  body: Record<string, string>,
+  transport: CodexAuthTransport
+): Promise<Record<string, unknown>> {
+  const res = await authFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
-  })
+  }, transport)
   const text = await res.text()
   try {
     return JSON.parse(text) as Record<string, unknown>
@@ -112,12 +132,16 @@ async function postJson(url: string, body: Record<string, string>): Promise<Reco
   }
 }
 
-async function postForm(url: string, body: Record<string, string>): Promise<Record<string, unknown>> {
-  const res = await fetch(url, {
+async function postForm(
+  url: string,
+  body: Record<string, string>,
+  transport: CodexAuthTransport
+): Promise<Record<string, unknown>> {
+  const res = await authFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(body).toString()
-  })
+  }, transport)
   const text = await res.text()
   if (!res.ok) {
     const detail = summarizeAuthErrorBody(text)
@@ -145,11 +169,13 @@ function summarizeAuthErrorBody(text: string): string {
   return compact.slice(0, 300)
 }
 
-export async function startCodexDeviceAuth(): Promise<CodexAuthStartResult> {
+export async function startCodexDeviceAuth(
+  transport: CodexAuthTransport = {}
+): Promise<CodexAuthStartResult> {
   try {
     const data = await postJson(`${CODEX_ISSUER}/api/accounts/deviceauth/usercode`, {
       client_id: CODEX_CLIENT_ID
-    })
+    }, transport)
     const deviceCode = data.device_auth_id as string | undefined
     const userCode = data.user_code as string | undefined
     const interval = Math.max(Number(data.interval) || 5, 1)
@@ -168,13 +194,17 @@ export async function startCodexDeviceAuth(): Promise<CodexAuthStartResult> {
   }
 }
 
-export async function pollCodexDeviceAuth(deviceCode: string, userCode: string): Promise<CodexAuthPollResult> {
+export async function pollCodexDeviceAuth(
+  deviceCode: string,
+  userCode: string,
+  transport: CodexAuthTransport = {}
+): Promise<CodexAuthPollResult> {
   try {
-    const res = await fetch(`${CODEX_ISSUER}/api/accounts/deviceauth/token`, {
+    const res = await authFetch(`${CODEX_ISSUER}/api/accounts/deviceauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_auth_id: deviceCode, user_code: userCode })
-    })
+    }, transport)
     if (!res.ok) {
       if (res.status === 403 || res.status === 404) return { done: false }
       return { done: false, error: `Device authorization failed: ${res.status}` }
@@ -192,7 +222,7 @@ export async function pollCodexDeviceAuth(deviceCode: string, userCode: string):
       redirect_uri: CODEX_DEVICE_CALLBACK,
       client_id: CODEX_CLIENT_ID,
       code_verifier: codeVerifier
-    })
+    }, transport)
 
     const accessToken = tokens.access_token as string | undefined
     const refreshToken = tokens.refresh_token as string | undefined
@@ -221,14 +251,15 @@ export async function pollCodexDeviceAuth(deviceCode: string, userCode: string):
 }
 
 export async function refreshCodexToken(
-  credentials: CodexOAuthCredentials
+  credentials: CodexOAuthCredentials,
+  transport: CodexAuthTransport = {}
 ): Promise<CodexOAuthCredentials | null> {
   try {
     const tokens = await postForm(`${CODEX_ISSUER}/oauth/token`, {
       grant_type: 'refresh_token',
       refresh_token: credentials.refreshToken,
       client_id: CODEX_CLIENT_ID
-    })
+    }, transport)
     const accessToken = tokens.access_token as string | undefined
     const refreshToken = tokens.refresh_token as string | undefined
     const expiresIn = Number(tokens.expires_in) || 3600
@@ -313,7 +344,8 @@ function renderCodexErrorHtml(message: string): string {
  * callback URL ports are fixed by OpenAI's app registration.
  */
 export async function startCodexBrowserAuth(
-  openBrowser: (url: string) => void | Promise<void>
+  openBrowser: (url: string) => void | Promise<void>,
+  transport: CodexAuthTransport = {}
 ): Promise<CodexBrowserAuthResult> {
   const pkce = generatePkce()
   const state = base64UrlEncode(randomBytes(32))
@@ -381,7 +413,7 @@ export async function startCodexBrowserAuth(
           redirect_uri: codexOAuthRedirect(activePort),
           client_id: CODEX_CLIENT_ID,
           code_verifier: pkce.verifier
-        })
+        }, transport)
           .then((tokens) => {
             const creds = credentialsFromTokens(tokens)
             if (!creds) throw new Error('令牌交换返回的数据不完整')

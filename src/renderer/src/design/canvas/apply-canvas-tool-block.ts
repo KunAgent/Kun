@@ -126,8 +126,7 @@ export function applyCanvasToolBlock(
       ctx.appliedToolBlockIds.add(block.id)
       return
     }
-    ctx.appliedToolBlockIds.add(block.id)
-    if (projectPptCanvasBundle({
+    const projectionResult = projectPptCanvasBundle({
       blockId: block.id,
       projection: pptCanvasProjection,
       targetThreadId: ctx.targetThreadId,
@@ -135,7 +134,9 @@ export function applyCanvasToolBlock(
       affectedThisTurn: ctx.affectedThisTurn,
       errorsThisTurn: ctx.errorsThisTurn,
       onOpenRequested: ctx.onPptProjectionOpenRequested
-    })) ctx.framedThisTurn.value = true
+    })
+    if (projectionResult !== 'retry') ctx.appliedToolBlockIds.add(block.id)
+    if (projectionResult === 'applied') ctx.framedThisTurn.value = true
     return
   }
   const chatState = useChatStore.getState()

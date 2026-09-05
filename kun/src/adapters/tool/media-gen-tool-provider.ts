@@ -146,6 +146,12 @@ export type MediaGenToolProviderOptions = {
   videoClient?: VideoGenClient
   nowIso?: () => string
   resolveCredential?: ProviderCredentialResolver
+  /**
+   * Provider-level model proxy. Custom inline configs have no provider
+   * credential to resolve, so without this fallback their requests would
+   * bypass the proxy that chat model requests honor.
+   */
+  proxyUrl?: string
 }
 
 export type SpeechGenToolProviderBuildResult = {
@@ -214,7 +220,7 @@ export function buildSpeechGenToolProviders(
       const requestTelemetry = () => telemetry(startedAt, client?.id ?? 'speech-provider')
       try {
         if (!client) {
-          client = createSpeechGenClient(await resolveProviderCredential(config, options.resolveCredential))
+          client = createSpeechGenClient(await resolveProviderCredential(config, options.resolveCredential, options.proxyUrl))
         }
         const media = await client.generate({
           text,
@@ -308,7 +314,7 @@ export function buildMusicGenToolProviders(
       const requestTelemetry = () => telemetry(startedAt, client?.id ?? 'music-provider')
       try {
         if (!client) {
-          client = createMusicGenClient(await resolveProviderCredential(config, options.resolveCredential))
+          client = createMusicGenClient(await resolveProviderCredential(config, options.resolveCredential, options.proxyUrl))
         }
         const media = await client.generate({
           ...(prompt ? { prompt } : {}),
@@ -447,7 +453,7 @@ export function buildVideoGenToolProviders(
       const requestTelemetry = () => telemetry(startedAt, client?.id ?? 'video-provider')
       try {
         if (!client) {
-          client = createVideoGenClient(await resolveProviderCredential(config, options.resolveCredential))
+          client = createVideoGenClient(await resolveProviderCredential(config, options.resolveCredential, options.proxyUrl))
         }
         const media = await client.generate({
           prompt,
@@ -508,18 +514,28 @@ async function resolveProviderCredential<T extends {
   providerId?: string
   apiKey?: string
   headers?: Record<string, string>
-}>(config: T, resolveCredential?: ProviderCredentialResolver): Promise<T & {
+}>(
+  config: T,
+  resolveCredential?: ProviderCredentialResolver,
+  fallbackProxyUrl?: string
+): Promise<T & {
   apiKey?: string
   headers?: Record<string, string>
   proxyUrl?: string
 }> {
-  if (!config.providerId || !resolveCredential) return config
+  const fallbackProxy = fallbackProxyUrl?.trim() ?? ''
+  if (!config.providerId || !resolveCredential) {
+    return fallbackProxy ? { ...config, proxyUrl: fallbackProxy } : config
+  }
   const credential = await resolveCredential(config.providerId)
+  // A resolved connection credential is authoritative: an empty proxyUrl means
+  // the connection explicitly bypasses the app proxy, so do not fall back here.
+  const proxyUrl = credential.proxyUrl?.trim() || ''
   return {
     ...config,
     apiKey: credential.apiKey,
     headers: { ...(config.headers ?? {}), ...(credential.headers ?? {}) },
-    ...(credential.proxyUrl ? { proxyUrl: credential.proxyUrl } : {})
+    ...(proxyUrl ? { proxyUrl } : {})
   }
 }
 

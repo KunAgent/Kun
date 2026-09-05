@@ -50,7 +50,7 @@ describe('ContributionRegistry', () => {
     expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.terminal)).toBe(true)
     expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.files)).toBe(true)
     expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.sideConversations)).toBe(true)
-    expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.agentPerspective)).toBe(true)
+    expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.agentPerspective)).toBe(false)
     const view = registry.get('extension:acme.issues/issues')
     expect(view?.owner).toMatchObject({ kind: 'extension', extensionId: 'acme.issues' })
     expect(view?.point).toBe('views.rightSidebar')

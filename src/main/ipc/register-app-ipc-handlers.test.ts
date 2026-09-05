@@ -439,6 +439,48 @@ describe('registerAppIpcHandlers security and provider', () => {
     expect(runtimeRequest).not.toHaveBeenCalled()
   })
 
+  it('aborts an owned cancellable Runtime request through the narrow cancel channel', async () => {
+    const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
+    const contents = { id: 7, mainFrame, once: vi.fn() }
+    const runtimeRequest = vi.fn(async (
+      _path: string,
+      _method?: string,
+      _body?: string,
+      _headers?: Record<string, string>,
+      options?: { signal?: AbortSignal }
+    ) => {
+      await new Promise<void>((resolve) => {
+        if (options?.signal?.aborted) resolve()
+        else options?.signal?.addEventListener('abort', () => resolve(), { once: true })
+      })
+      return { ok: false, status: 0, body: '{}' }
+    })
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => ({ isDestroyed: () => false, webContents: contents }) as never,
+      runtimeRequest: runtimeRequest as never,
+      assertRendererRuntimeReady: vi.fn()
+    }))
+    const event = { sender: contents, senderFrame: mainFrame }
+    const pending = handlers.get('runtime:request')?.(event, {
+      path: '/v1/threads/thread-1/state',
+      method: 'GET',
+      requestId: 'request-1',
+      priority: 'foreground'
+    })
+    await Promise.resolve()
+
+    await expect(handlers.get('runtime:request:cancel')?.(event, { requestId: 'request-1' }))
+      .resolves.toBe(true)
+    await expect(pending).resolves.toMatchObject({ status: 0 })
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thread-1/state',
+      'GET',
+      undefined,
+      undefined,
+      expect.objectContaining({ signal: expect.any(AbortSignal), priority: 'foreground' })
+    )
+  })
+
   it('copies gateway plaintext in Main without returning it to renderer', async () => {
     const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame }

@@ -292,26 +292,6 @@ if ($Publish -or $PromoteR2) {
     Write-Err 'Complete three-platform release verification failed.'
     exit 1
   }
-  $releaseAssets = @(& gh release view $TagName --json assets --jq '.assets[].name')
-  if ($LASTEXITCODE -ne 0) {
-    Write-Err "Could not inspect GitHub release assets for $TagName."
-    exit 1
-  }
-  $requiredTuiAssets = @(
-    "Kun-TUI-$ReleaseVersion-mac-arm64.tar.gz",
-    "Kun-TUI-$ReleaseVersion-mac-x64.tar.gz",
-    "Kun-TUI-$ReleaseVersion-win-x64.zip",
-    "Kun-TUI-$ReleaseVersion-linux-arm64.tar.gz",
-    "Kun-TUI-$ReleaseVersion-linux-x64.tar.gz",
-    'release-tui.json',
-    'SHA256SUMS-tui.txt'
-  )
-  foreach ($requiredTuiAsset in $requiredTuiAssets) {
-    if ($releaseAssets -notcontains $requiredTuiAsset) {
-      Write-Err "Joint release is missing GitHub TUI asset: $requiredTuiAsset"
-      exit 1
-    }
-  }
 }
 
 if ($R2 -or $PromoteR2) {
@@ -325,7 +305,7 @@ if ($R2 -or $PromoteR2) {
 
 if ($PromoteR2) {
   Write-Info "Promoting $TagName as R2 latest..."
-  & node (Join-Path $Root 'scripts\publish-r2.mjs') promote --tag $TagName --channel $ReleaseChannel --platforms mac,win,linux --require-tui
+  & node (Join-Path $Root 'scripts\publish-r2.mjs') promote --tag $TagName --channel $ReleaseChannel --platforms mac,win,linux --require-all-platforms
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'R2 promote failed.'
     exit 1

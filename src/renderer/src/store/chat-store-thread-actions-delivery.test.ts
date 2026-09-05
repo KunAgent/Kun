@@ -456,29 +456,22 @@ describe('chat-store-thread-actions queued messages', () => {
 
     await expect(actions.sendMessage('Queued edit', 'agent')).resolves.toBe(true)
     expect(state.extensionComposerContexts).toEqual([])
-    expect(state.queuedMessages[0]?.composerContexts).toEqual([composerContext])
-
-    state.busy = false
-    const queued = state.queuedMessages[0]!
-    await expect(actions.sendMessage(queued.text, queued.mode, { queued })).resolves.toBe(true)
-
+    // Busy sends are admitted directly to the runtime queue with their
+    // composer context snapshot; the local entry only mirrors delivery.
     expect(provider.sendUserMessage).toHaveBeenCalledWith(
       'thr_existing',
       'Queued edit',
-      expect.objectContaining({ composerContexts: [composerContext] })
-    )
-    expect(state.queuedMessages).toEqual([
       expect.objectContaining({
-        id: queued.id,
-        deliveryState: 'in_flight',
-        deliveryTurnId: 'turn_queued'
+        enqueueIfBusy: true,
+        composerContexts: [composerContext]
       })
-    ])
-
-    state.busy = false
-    state.currentTurnId = null
-    await actions.drainQueuedMessages()
-    expect(state.queuedMessages).toEqual([])
+    )
+    const queued = state.queuedMessages[0]!
+    expect(queued).toEqual(expect.objectContaining({
+      deliveryState: 'in_flight',
+      deliveryTurnId: 'turn_queued',
+      composerContexts: [composerContext]
+    }))
   })
 
   it('sends an override provider from the write route without switching the global runtime provider', async () => {

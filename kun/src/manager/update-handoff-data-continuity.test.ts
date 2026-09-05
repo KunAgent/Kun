@@ -143,7 +143,12 @@ describe('update handoff data continuity', () => {
     expect(await store.executeThread('get', { threadId })).toMatchObject({
       turns: [
         { id: committed.id, status: 'completed' },
-        { id: active.id, status: 'failed' }
+        {
+          id: active.id,
+          status: 'failed',
+          terminalCode: 'owner_lease_expired',
+          managerLeaseSettlement: expect.objectContaining({ ownerInstanceId: oldOwner.instanceId })
+        }
       ]
     })
     const items = await store.executeSession('loadItems', { threadId }) as Array<{

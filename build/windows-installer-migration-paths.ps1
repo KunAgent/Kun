@@ -1,5 +1,9 @@
 function Get-EnvironmentValue([string]$Name) {
-  return [Environment]::GetEnvironmentVariable($Name, 'Process')
+  $value = [Environment]::GetEnvironmentVariable($Name, 'Process')
+  if ($null -eq $value) {
+    return ''
+  }
+  return [string]$value
 }
 
 function Get-CanonicalLeaf {
@@ -290,23 +294,4 @@ function Resolve-AutomaticUpdateScope {
     throw "The automatic update source did not match exactly one verified Kun registration: $runningSource"
   }
   return $matches[0]
-}
-
-function Resolve-TrustedAppUninstaller {
-  $source = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_SOURCE')
-  if ([string]::IsNullOrWhiteSpace($source)) {
-    return ''
-  }
-  Assert-SafeInstallRoot $source 'Uninstaller source'
-  Assert-RecoverableApplicationSource $source
-  foreach ($name in (Get-AppSpecificUninstallerFiles)) {
-    $candidate = Join-Path $source $name
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-      if (Test-ReparsePoint $candidate) {
-        throw "The app-specific uninstaller is a reparse point: $candidate"
-      }
-      return Normalize-FullPath $candidate
-    }
-  }
-  return ''
 }

@@ -2,18 +2,17 @@ import { session } from 'electron'
 import {
   isCustomModelEndpointFormat,
   normalizeModelEndpointFormat,
-  resolveModelProviderProxyUrl,
+  ProviderProxyConfigurationError,
+  resolveProviderProxyUrl,
   type AppSettingsV1,
   type ModelEndpointFormat
 } from '../shared/app-settings'
 import type { ModelProviderProbeRequest, ModelProviderProbeResult } from '../shared/kun-gui-api'
 import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
-import {
-  CHATGPT_SUBSCRIPTION_MODEL_IDS,
-  GROK_SUBSCRIPTION_MODEL_IDS
-} from '../shared/model-provider-presets'
+import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/model-provider-presets'
 import { fetchWithOptionalProxy } from './proxy-fetch'
-import { isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { CODEX_CLI_VERSION, codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { parseCodexModelCatalog } from './codex-model-catalog'
 import {
   ensureFreshGrokCredentials,
   isGrokOAuthCredentials,
@@ -87,10 +86,29 @@ export async function probeModelProvider(
   fetcher: ProviderProbeFetch = fetchProviderProbe
 ): Promise<ModelProviderProbeResult> {
   const baseUrl = request.baseUrl.trim()
-  const proxyUrl = settings ? resolveModelProviderProxyUrl(settings) : ''
+  let proxyUrl = ''
+  if (settings) {
+    const stored = settings.provider.providers.find((provider) => provider.id === request.providerId)
+    try {
+      proxyUrl = resolveProviderProxyUrl(settings, {
+        id: request.providerId,
+        kind: stored?.kind ?? 'http',
+        useProxy: request.useProxy
+      })
+    } catch (error) {
+      if (error instanceof ProviderProxyConfigurationError) {
+        return {
+          ok: false,
+          message: 'This provider selected the app proxy, but its global proxy configuration is invalid. Open Global network proxy and correct it.'
+        }
+      }
+      throw error
+    }
+  }
   if (!/^https?:\/\//i.test(baseUrl)) {
     return { ok: false, message: 'Base URL must start with http:// or https://.' }
   }
+  let codexHeaders: Record<string, string> | undefined
   if (isCodexBaseUrl(baseUrl)) {
     const rawKey = request.apiKey.trim()
     if (!rawKey) {
@@ -106,7 +124,11 @@ export async function probeModelProvider(
     if (creds.expiresAt < Date.now()) {
       return { ok: false, message: 'ChatGPT 订阅凭据已过期，请重新登录。' }
     }
-    return { ok: true, latencyMs: 0, modelIds: [...CHATGPT_SUBSCRIPTION_MODEL_IDS] }
+    codexHeaders = {
+      Accept: 'application/json',
+      ...codexRequestHeaders(creds),
+      Authorization: `Bearer ${creds.accessToken}`
+    }
   }
   if (isGrokSubscriptionBaseUrl(baseUrl)) {
     const rawKey = request.apiKey.trim()
@@ -127,20 +149,23 @@ export async function probeModelProvider(
     return { ok: true, latencyMs: 0, modelIds: [...GROK_SUBSCRIPTION_MODEL_IDS] }
   }
   const endpointFormat = normalizeModelEndpointFormat(request.endpointFormat)
-  if (isCustomModelEndpointFormat(endpointFormat)) {
+  if (!codexHeaders && isCustomModelEndpointFormat(endpointFormat)) {
     return {
       ok: false,
       message: 'Custom full endpoint mode does not support /models probing. Add model IDs manually.'
     }
   }
-  const url = upstreamOpenAiModelsUrl(baseUrl)
+  const url = codexHeaders
+    ? `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`
+    : upstreamOpenAiModelsUrl(baseUrl)
+  const headers = codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey)
   const startedAt = Date.now()
   let res: Response
   let text: string
   try {
     res = await fetcher(url, {
       method: 'GET',
-      headers: providerProbeHeaders(endpointFormat, request.apiKey),
+      headers,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
     }, proxyUrl)
     const body = await readBoundedResponseText(res, MAX_MODEL_LIST_RESPONSE_BYTES)
@@ -155,17 +180,11 @@ export async function probeModelProvider(
       usingConfiguredProxy: Boolean(proxyUrl),
       message: describeProviderProbeError(e)
     })
-    if (proxyUrl && await directProviderReachable(url, endpointFormat, request.apiKey, fetcher)) {
-      return {
-        ok: false,
-        message: `${message} The configured model-request proxy failed, but a direct connection reached the provider. Disable or update the proxy in Settings > Providers.`
-      }
-    }
     if (!proxyUrl) {
       const systemProxyUrl = await resolveElectronSystemProxyUrl(url)
       if (
         systemProxyUrl &&
-        await providerReachable(url, endpointFormat, request.apiKey, fetcher, systemProxyUrl)
+        await providerReachable(url, headers, fetcher, systemProxyUrl)
       ) {
         return { ok: false, message, suggestedProxyUrl: systemProxyUrl }
       }
@@ -175,6 +194,13 @@ export async function probeModelProvider(
   const latencyMs = Date.now() - startedAt
   if (!res.ok) {
     return { ok: false, message: `${url} responded ${res.status}: ${text.slice(0, 300)}` }
+  }
+  if (codexHeaders) {
+    try {
+      return { ok: true, latencyMs, ...parseCodexModelCatalog(text) }
+    } catch {
+      return { ok: false, message: 'Codex returned an invalid model catalog.' }
+    }
   }
   return { ok: true, latencyMs, modelIds: parseModelIds(text) }
 }
@@ -216,26 +242,16 @@ export function describeProviderProbeError(error: unknown): string {
   return unique.join(': ') || 'unknown network error'
 }
 
-async function directProviderReachable(
-  url: string,
-  endpointFormat: ModelEndpointFormat,
-  apiKey: string,
-  fetcher: ProviderProbeFetch
-): Promise<boolean> {
-  return providerReachable(url, endpointFormat, apiKey, fetcher, '')
-}
-
 async function providerReachable(
   url: string,
-  endpointFormat: ModelEndpointFormat,
-  apiKey: string,
+  headers: Record<string, string>,
   fetcher: ProviderProbeFetch,
   proxyUrl: string
 ): Promise<boolean> {
   try {
     const response = await fetcher(url, {
       method: 'GET',
-      headers: providerProbeHeaders(endpointFormat, apiKey),
+      headers,
       signal: AbortSignal.timeout(DIRECT_PROBE_TIMEOUT_MS)
     }, proxyUrl)
     await response.body?.cancel().catch(() => undefined)

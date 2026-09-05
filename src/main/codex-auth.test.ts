@@ -1,7 +1,12 @@
 import { createServer, get as httpGet, type Server } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_CLI_VERSION } from '../../kun/src/adapters/model/provider-cli-identity.js'
-import { codexRequestHeaders, codexUserAgent, startCodexBrowserAuth } from './codex-auth'
+import {
+  codexRequestHeaders,
+  codexUserAgent,
+  startCodexBrowserAuth,
+  startCodexDeviceAuth
+} from './codex-auth'
 
 const CODEX_OAUTH_PORTS = [1455, 1457] as const
 const CODEX_OAUTH_SCOPE = 'openid profile email offline_access api.connectors.read api.connectors.invoke'
@@ -177,5 +182,26 @@ describe('startCodexBrowserAuth', () => {
     if (!result.ok) {
       expect(result.message).toContain('returned 403: access_denied: workspace disallowed')
     }
+  })
+})
+
+describe('Codex auth transport', () => {
+  it('uses the Provider-scoped proxy transport for device discovery', async () => {
+    const proxyUrl = 'socks5://127.0.0.1:1080'
+    const fetcher = vi.fn(async () => Response.json({
+      device_auth_id: 'device-1',
+      user_code: 'ABCD',
+      interval: 2
+    }))
+
+    await expect(startCodexDeviceAuth({ fetcher, proxyUrl })).resolves.toMatchObject({
+      ok: true,
+      deviceCode: 'device-1'
+    })
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://auth.openai.com/api/accounts/deviceauth/usercode',
+      expect.objectContaining({ method: 'POST' }),
+      proxyUrl
+    )
   })
 })

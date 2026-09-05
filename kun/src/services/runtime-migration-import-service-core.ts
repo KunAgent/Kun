@@ -28,6 +28,7 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import { sanitizeMigrationValue } from './runtime-migration-service.js'
 import { iterateSnapshotFile, parseImportState, rewriteImportedSession, rewriteImportedValue } from './runtime-migration-import-service-request-state.js'
 import { appendHistoricalProvider, type ArtifactMigrationMetadata, canonicalLine, decodeBase64, increment, isSafeImportedThreadId, isThreadOwnedRecord, parseArtifactMetadata, parseChunkedContentDescriptor, parseContentChunk, rewriteWorkspace, startPendingContent, verifyChunkedContent } from './runtime-migration-import-service-content-support.js'
+import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
 
 export const MAX_IMPORT_RECORD_BYTES = 8 * 1024 * 1024
 
@@ -452,7 +453,13 @@ export class RuntimeMigrationImportService {
           sourceTurnId: rewritten.sourceTurnId,
           provenance: rewritten.provenance,
           tags: rewritten.tags,
-          confidence: rewritten.confidence
+          confidence: rewritten.confidence,
+          type: rewritten.type,
+          importance: rewritten.importance,
+          observedAt: rewritten.observedAt,
+          validFrom: rewritten.validFrom,
+          validTo: rewritten.validTo,
+          sources: rewritten.sources
         }))
         state.memoryAfter[created.id] = created
         increment(state.counts, 'memories')
@@ -579,7 +586,7 @@ export class RuntimeMigrationImportService {
       const expected = state.memoryAfter[id]
       const current = (await memoryStore?.list({ includeDeleted: true, all: true }))?.find((record) => record.id === id)
       if (!current) continue
-      if (expected && canonicalLine('memory', current) === canonicalLine('memory', expected) && memoryStore?.purge) {
+      if (expected && canonicalMemoryHash(current) === canonicalMemoryHash(expected) && memoryStore?.purge) {
         await memoryStore.purge(id)
       } else {
         state.warnings.push(`Preserved memory modified after migration import: ${id}`)

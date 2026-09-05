@@ -318,8 +318,8 @@ test('CI workflows publish after builds while local media smokes remain availabl
   if (buildOnlyCi) {
     const buildWorkflows = [
       ['PR', '.github/workflows/pr-checks.yml', ['package', 'package-macos', 'package-windows']],
-      ['release', '.github/workflows/release.yml', ['build-macos', 'build-windows', 'build-linux', 'build-tui']],
-      ['daily', '.github/workflows/daily-dev-prerelease.yml', ['build-macos', 'build-windows', 'build-linux', 'build-tui']]
+      ['release', '.github/workflows/release.yml', ['build-macos', 'build-windows', 'build-linux']],
+      ['daily', '.github/workflows/daily-dev-prerelease.yml', ['build-macos', 'build-windows', 'build-linux']]
     ]
     for (const [label, path, jobIds] of buildWorkflows) {
       const source = await readFile(join(root, path), 'utf8')

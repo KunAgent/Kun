@@ -171,6 +171,23 @@ afterEach(async () => {
 })
 
 describe('canonical Kun Runtime data migration', () => {
+  it('blocks migration without moving data when settings use a newer schema', async () => {
+    const test = await fixture('~/.deepseekgui/kun')
+    await mkdir(test.legacy, { recursive: true })
+    await writeThread(test.legacy, 'future-thread', 'future')
+    await writeFile(test.settingsPath, JSON.stringify({ version: 2, agents: { kun: { dataDir: '~/.deepseekgui/kun' } }, futureState: { keep: true } }), 'utf8')
+    const result = runCanonicalKunRuntimeDataMigration({
+      userDataPath: test.userData,
+      homeDir: test.home,
+      sleep: () => undefined
+    })
+    expect(result.status).toBe('blocked')
+    expect(await readSettingsDataDir(test.settingsPath)).toBe('~/.deepseekgui/kun')
+    expect(await readFile(join(test.legacy, 'threads', 'future-thread', 'metadata.jsonl'), 'utf8'))
+      .toContain('future')
+    await expect(lstat(test.current)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('promotes the complete legacy store and makes the new config authoritative', async () => {
     const test = await fixture()
     await mkdir(test.legacy, { recursive: true })

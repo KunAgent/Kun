@@ -19,6 +19,7 @@ import {
 } from 'node:events'
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -108,6 +109,31 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
         mimeType: 'image/png'
       })).resolves.toEqual({ ok: true, path: target })
       expect(readFileSync(target, 'utf8')).toBe('generated-image')
+    } finally {
+      rmSync(temp, { recursive: true, force: true })
+    }
+  })
+
+  it('returns workspace folder creation times for sidebar ordering', async () => {
+    const temp = mkdtempSync(join(tmpdir(), 'kun-creation-times-'))
+    const existing = join(temp, 'existing-project')
+    mkdirSync(existing)
+    const missing = join(temp, 'missing-project')
+    try {
+      registerAppIpcHandlers(registerOptions())
+
+      const handler = handlers.get('workspace:creation-times')
+      const result = await handler?.({}, { workspaceRoots: [existing, missing] }) as Array<{
+        path: string
+        createdAtMs: number | null
+      }>
+      expect(result).toHaveLength(2)
+      expect(result[0]?.path).toBe(existing)
+      expect(result[0]?.createdAtMs).toBeGreaterThan(0)
+      expect(result[1]).toEqual({ path: missing, createdAtMs: null })
+
+      await expect(handler?.({}, { workspaceRoots: [42] })).rejects.toThrow()
+      await expect(handler?.({}, { workspaceRoots: [existing], extra: true })).rejects.toThrow()
     } finally {
       rmSync(temp, { recursive: true, force: true })
     }
@@ -231,7 +257,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     const temp = mkdtempSync(join(tmpdir(), 'kun-watch-signal-'))
     const target = join(temp, 'report.docx')
     writeFileSync(target, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff]))
-    const resolvedTarget = realpathSync(target)
+    const resolvedTarget = realpathSync.native(target)
     const sender = Object.assign(new EventEmitter(), {
       id: 74,
       send: vi.fn(),
@@ -297,7 +323,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     const temp = mkdtempSync(join(tmpdir(), 'kun-office-preview-'))
     const target = join(temp, 'report.docx')
     writeFileSync(target, 'office-preview-source')
-    const resolvedTarget = realpathSync(target)
+    const resolvedTarget = realpathSync.native(target)
     const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const sender = Object.assign(new EventEmitter(), {
       id: 76,
@@ -369,7 +395,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
     const temp = mkdtempSync(join(tmpdir(), 'kun-office-semantic-'))
     const target = join(temp, 'report.docx')
     writeFileSync(target, 'office-semantic-source')
-    const resolvedTarget = realpathSync(target)
+    const resolvedTarget = realpathSync.native(target)
     const mainFrame = { processId: 10, routingId: 20, url: 'http://127.0.0.1:5173/index.html' }
     const sender = Object.assign(new EventEmitter(), {
       id: 77,
@@ -435,7 +461,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
       officeCliResourceMocks.resolveOfficeCliBinary.mockReturnValue('/tmp/officecli')
       spreadsheetServiceMocks.saveWorkspaceSpreadsheet.mockResolvedValue({
         ok: true,
-        path: realpathSync(xlsxPath),
+        path: realpathSync.native(xlsxPath),
         sourceSha256: 'b'.repeat(64),
         size: 12,
         mtimeMs: 2,
@@ -465,7 +491,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
       }
       await expect(saveHandler({ sender, senderFrame: mainFrame }, savePayload)).resolves.toMatchObject({ ok: true })
       expect(spreadsheetServiceMocks.saveWorkspaceSpreadsheet).toHaveBeenCalledWith({
-        path: realpathSync(xlsxPath),
+        path: realpathSync.native(xlsxPath),
         expectedSha256,
         mutations: savePayload.mutations
       }, expect.objectContaining({ binaryPath: '/tmp/officecli', signal: expect.any(AbortSignal) }))
@@ -475,7 +501,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
         path: 'legacy.xls', workspaceRoot: temp, expectedSha256
       })).resolves.toMatchObject({ ok: true, name: 'legacy.xlsx' })
       expect(spreadsheetServiceMocks.convertWorkspaceSpreadsheet).toHaveBeenCalledWith({
-        path: realpathSync(xlsPath), expectedSha256
+        path: realpathSync.native(xlsPath), expectedSha256
       }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
 
       await expect(saveHandler({ sender, senderFrame: mainFrame }, {

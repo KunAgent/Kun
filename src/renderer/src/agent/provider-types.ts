@@ -5,6 +5,7 @@ import type {
   CoreMemoryDiagnosticsJson,
   CoreMemoryRecordJson,
   CoreMcpOAuthDiagnosticJson,
+  CoreQueuedTurnsResponseJson,
   CoreResumeSessionMetadataJson,
   CoreRuntimeInfoJson,
   CoreRuntimeSkillJson,
@@ -57,6 +58,7 @@ import type {
   UserInputStatusPayload,
   UserMessageEventPayload
 } from './types'
+import type { WriteTurnContext } from './write-turn-context'
 
 export type ThreadListOptions = {
   limit?: number
@@ -70,18 +72,28 @@ export type ThreadListOptions = {
   lean?: boolean
 }
 
+/** Rebuildable thread-index lifecycle exposed by the runtime. */
+export type ThreadIndexStatus = 'not_started' | 'running' | 'ready' | 'failed' | 'unavailable'
+export type ThreadIndexStatusInfo = {
+  status: ThreadIndexStatus
+  indexed: number
+  total: number
+}
+
 /** Paginated sidebar thread listing result. */
 export type ThreadListPage = {
   threads: NormalizedThread[]
   nextCursor?: string
   hasMore: boolean
   total?: number
+  indexStatus?: ThreadIndexStatusInfo
 }
 
 export type ThreadRuntimeState = {
   status: string
   updatedAt: string
   latestSeq: number
+  replayFloorSeq?: number
   latestTurnId?: string
   latestTurnStatus?: string
   latestTurnOrchestration?: 'direct' | 'graph'
@@ -143,7 +155,7 @@ export type ThreadEventSink = {
   onSeq(seq: number): void
   onDeltas(deltas: ThreadDeltaEvent[]): void
   onAssistantItem?(item: AssistantItemSnapshotPayload): void
-  onUserMessage(ev: UserMessageEventPayload): void
+  onUserMessage(ev: UserMessageEventPayload, seq?: number): void
   onTool(ev: ToolEventPayload): void
   onCompaction(ev: CompactionEventPayload): void
   onReview?(ev: ReviewEventPayload): void
@@ -196,8 +208,14 @@ export interface AgentProvider {
   /** Optional paginated listing used by the sidebar "show more" flow. */
   listThreadsPage?(options?: ThreadListOptions): Promise<ThreadListPage>
   createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string }): Promise<NormalizedThread>
-  getThreadDetail(threadId: string, options?: { before?: string }): Promise<ThreadDetail>
-  getThreadState(threadId: string): Promise<ThreadRuntimeState>
+  getThreadDetail(threadId: string, options?: {
+    before?: string
+    signal?: AbortSignal
+    priority?: 'foreground' | 'background'
+  }): Promise<ThreadDetail>
+  /** Lean single-thread projection for targeted sidebar hydration. */
+  getThreadSummary?(threadId: string): Promise<NormalizedThread>
+  getThreadState(threadId: string, options?: { signal?: AbortSignal }): Promise<ThreadRuntimeState>
   /** Optional bounded bulk capability for background observers. */
   getThreadStates?(threadIds: string[]): Promise<ThreadRuntimeStateBatchResult[]>
   sendUserMessage(
@@ -205,6 +223,8 @@ export interface AgentProvider {
     text: string,
     options?: {
       clientRequestId?: string
+      /** Queue this turn durably when the thread already has an active turn. */
+      enqueueIfBusy?: boolean
       mode?: string
       orchestration?: 'direct' | 'graph'
       model?: string
@@ -227,6 +247,9 @@ export interface AgentProvider {
       guiDesignMode?: boolean
       persona?: string
       agentSurface?: 'code' | 'write' | 'design'
+      approvalPolicy?: ApprovalPolicy
+      sandboxMode?: SandboxMode
+      approvalReviewer?: ApprovalReviewer
       designProfile?: DesignTaskProfileInput
       designDocumentTarget?: DesignDocumentTarget
       designImagePlacementTarget?: DesignImagePlacementTarget
@@ -240,6 +263,7 @@ export interface AgentProvider {
       workspaceCheckpointRequestId?: string
       fileReferences?: UserFileReference[]
       composerContexts?: ComposerContextAttachment[]
+      writeContext?: WriteTurnContext
     }
   ): Promise<{
     turnId: string
@@ -286,7 +310,7 @@ export interface AgentProvider {
     attachmentId: string,
     options?: { threadId?: string; workspace?: string }
   ): Promise<CoreAttachmentContentResponseJson>
-  listMemories?(options?: { workspace?: string; includeDeleted?: boolean; all?: boolean }): Promise<CoreMemoryRecordJson[]>
+  listMemories?(options?: { workspace?: string; project?: string; includeDeleted?: boolean; all?: boolean }): Promise<CoreMemoryRecordJson[]>
   createMemory?(input: {
     content: string
     scope?: 'user' | 'workspace' | 'project'
@@ -294,13 +318,21 @@ export interface AgentProvider {
     project?: string
     tags?: string[]
     confidence?: number
+    type?: CoreMemoryRecordJson['type']
+    importance?: number
+    observedAt?: string
+    validFrom?: string
+    validTo?: string
+    expiresAt?: string
+    disabled?: boolean
+    sources?: Array<Omit<NonNullable<CoreMemoryRecordJson['sources']>[number], 'id'> & { id?: string }>
   }): Promise<CoreMemoryRecordJson>
   updateMemory?(
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; disabled?: boolean },
-    options?: { workspace?: string }
+    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; disabled?: boolean },
+    options?: { workspace?: string; project?: string }
   ): Promise<CoreMemoryRecordJson>
-  deleteMemory?(memoryId: string, options?: { workspace?: string }): Promise<CoreMemoryRecordJson>
+  deleteMemory?(memoryId: string, options?: { workspace?: string; project?: string }): Promise<CoreMemoryRecordJson>
   getMemoryDiagnostics?(): Promise<CoreMemoryDiagnosticsJson>
   steerUserMessage?(
     threadId: string,
@@ -309,6 +341,13 @@ export interface AgentProvider {
     options?: { displayText?: string; attachmentIds?: string[] }
   ): Promise<void>
   interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void>
+  cancelQueuedTurn?(threadId: string, turnId: string): Promise<void>
+  moveQueuedTurn?(
+    threadId: string,
+    turnId: string,
+    position: { beforeTurnId?: string; afterTurnId?: string }
+  ): Promise<void>
+  resumeQueuedTurns?(threadId: string): Promise<{ started: boolean; turnId?: string }>
   cancelToolCall?(
     threadId: string,
     turnId: string,
@@ -354,6 +393,10 @@ export interface AgentProvider {
       source?: ThreadTodoSource
     }>
   ): Promise<ThreadTodoList>
+  syncThreadTodosFromPlan?(
+    threadId: string,
+    plan: { planId: string; relativePath: string; markdown: string }
+  ): Promise<ThreadTodoList>
   clearThreadTodos?(threadId: string): Promise<boolean>
   forkThread?(
     threadId: string,
@@ -367,6 +410,7 @@ export interface AgentProvider {
     }
   ): Promise<NormalizedThread>
   getResumeSessionMetadata?(sessionId: string): Promise<CoreResumeSessionMetadataJson>
+  getQueuedTurns?(threadId: string): Promise<CoreQueuedTurnsResponseJson>
   resumeSession?(
     sessionId: string,
     options?: {

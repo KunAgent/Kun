@@ -130,4 +130,54 @@ describe('gui updater pending state', () => {
     restore()
     expect(environment).toEqual({ KUN_PENDING_UPDATE_PATH: 'old-path' })
   })
+
+  it('round-trips BOM-prefixed recovery fields and rejects incomplete transactions', async () => {
+    const pending = await import('./gui-updater-pending')
+    const root = 'C:\\Users\\test\\AppData\\Roaming\\KunInstallerRecovery'
+    const path = join(root, 'abc-update.json')
+    const record = {
+      OldVersion: '0.1.0', NewVersion: '0.2.0', Shortcuts: [],
+      AppExecutable: 'Kun.exe', AppGuid: 'kun-guid', AutomaticUpdate: '1', CanonicalLeaf: 'Kun',
+      CommonDesktop: 'C:\\Public\\Desktop', CommonPrograms: 'C:\\Public\\Programs',
+      CurrentDesktop: 'C:\\Users\\test\\Desktop', CurrentPrograms: 'C:\\Users\\test\\Programs',
+      InstallMode: 'current', InstallRegistryKey: 'Software\\Kun\\Install', JournalPath: `${root}\\abc.json`,
+      HealthResult: `${root}\\abc-health.json`, BackupRoot: `${root}\\backup`, PreserveOtherScope: '0',
+      ProductName: 'Kun', SecondarySource: 'C:\\Legacy', Source: 'C:\\Legacy',
+      StageRoot: 'C:\\Kun.kun-stage-1', Target: 'C:\\Kun',
+      UninstallRegistryKey: 'Software\\Kun\\Uninstall'
+    }
+    const options = {
+      platform: 'win32' as const, recoveryRoot: root, readdirApi: async () => ['abc-update.json'],
+      readApi: async () => `\uFEFF${JSON.stringify(record)}`
+    }
+    const transaction = await pending.readInstallerUpdateTransaction({ oldVersion: '0.1.0', newVersion: '0.2.0' }, options)
+    expect(transaction?.recoveryEnvironment).toEqual({
+      KUN_INSTALLER_APP_EXECUTABLE: record.AppExecutable,
+      KUN_INSTALLER_APP_GUID: record.AppGuid,
+      KUN_INSTALLER_AUTOMATIC_UPDATE: record.AutomaticUpdate,
+      KUN_INSTALLER_CANONICAL_LEAF: record.CanonicalLeaf,
+      KUN_INSTALLER_COMMON_DESKTOP: record.CommonDesktop,
+      KUN_INSTALLER_COMMON_PROGRAMS: record.CommonPrograms,
+      KUN_INSTALLER_CURRENT_DESKTOP: record.CurrentDesktop,
+      KUN_INSTALLER_CURRENT_PROGRAMS: record.CurrentPrograms,
+      KUN_INSTALLER_INSTALL_MODE: record.InstallMode,
+      KUN_INSTALLER_INSTALL_REGISTRY_KEY: record.InstallRegistryKey,
+      KUN_INSTALLER_JOURNAL: record.JournalPath,
+      KUN_INSTALLER_HEALTH_RESULT: record.HealthResult,
+      KUN_INSTALLER_PAYLOAD_BACKUP: record.BackupRoot,
+      KUN_INSTALLER_PRESERVE_OTHER_SCOPE: record.PreserveOtherScope,
+      KUN_INSTALLER_PRODUCT_NAME: record.ProductName,
+      KUN_INSTALLER_SECONDARY_SOURCE: record.SecondarySource,
+      KUN_INSTALLER_SOURCE: record.Source,
+      KUN_INSTALLER_STAGE: record.StageRoot,
+      KUN_INSTALLER_TARGET: record.Target,
+      KUN_INSTALLER_TRANSACTION: path,
+      KUN_INSTALLER_UNINSTALL_REGISTRY_KEY: record.UninstallRegistryKey
+    })
+    const incomplete = await pending.readInstallerUpdateTransaction(
+      { oldVersion: '0.1.0', newVersion: '0.2.0' },
+      { ...options, readApi: async () => JSON.stringify({ ...record, InstallRegistryKey: '' }) }
+    )
+    expect(incomplete).toBeNull()
+  })
 })

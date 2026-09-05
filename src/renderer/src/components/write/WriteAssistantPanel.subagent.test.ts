@@ -61,6 +61,7 @@ function panelProps(overrides: Partial<PanelProps> = {}): PanelProps {
 function timelineNodeMock() {
   return {
     style: {},
+    closest: vi.fn(() => null),
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     scrollIntoView: vi.fn(),

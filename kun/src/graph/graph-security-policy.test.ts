@@ -10,12 +10,13 @@ describe('Graph scoped tool policy', () => {
         'bash',
         'background_shell',
         'repo_map',
+        'fast_context',
         'graph_control_run',
         'graph_worker_progress'
       ],
       ['src'],
       ['src/generated']
-    )).toEqual(['read', 'write'])
+    )).toEqual(['read', 'write', 'fast_context'])
   })
 
   it('preserves the authorized tool snapshot for a full-workspace assignment', () => {
@@ -25,11 +26,12 @@ describe('Graph scoped tool policy', () => {
         'bash',
         'background_shell',
         'repo_map',
+        'fast_context',
         'graph_supervise_node',
         'graph_worker_submit_result'
       ],
       ['.'],
       ['.']
-    )).toEqual(['read', 'bash', 'background_shell', 'repo_map'])
+    )).toEqual(['read', 'bash', 'background_shell', 'repo_map', 'fast_context'])
   })
 })

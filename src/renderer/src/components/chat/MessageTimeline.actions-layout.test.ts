@@ -110,14 +110,27 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(liveTurnProgressClass()).not.toContain('mb-16 md:mb-20')
   })
 
-  it('keeps user actions attached to the message bubble', () => {
+  it('keeps user actions in a reserved, shrinkable layout slot', () => {
+    const modelLabel = 'gpt-5.6-terra-with-an-intentionally-long-provider-identifier'
     const html = renderToStaticMarkup(createElement(MessageBubble, {
-      block: { kind: 'user', id: 'user_1', text: 'Create a spreadsheet' }
+      block: {
+        kind: 'user',
+        id: 'user_1',
+        text: 'Create a spreadsheet',
+        modelLabel
+      }
     }))
     expect(html).toContain('data-user-message-actions="inline"')
     expect(html.indexOf('ds-user-message-bubble')).toBeLessThan(
       html.indexOf('data-user-message-actions="inline"')
     )
+    expect(html).toContain('min-h-7')
+    expect(html).toContain('min-w-0 max-w-full')
+    expect(html).not.toMatch(/absolute right-0 top-full/)
+    expect(html).not.toContain('translate-y-0.5')
+    expect(html).toContain(modelLabel)
+    expect(html).toContain('aria-label="Copy message"')
+    expect(html).toContain('aria-label="Edit &amp; resend"')
   })
 
   it('labels an active turn as processing even after timing starts', () => {

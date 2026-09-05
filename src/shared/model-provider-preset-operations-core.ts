@@ -69,6 +69,7 @@ export function modelProviderPresetProfile(
     apiKey: apiKey.trim(),
     baseUrl: preset.baseUrl,
     endpointFormat: preset.endpointFormat,
+    useProxy: false,
     // Subscription and API transports share the same bounded default. An
     // explicit provider setting can still reduce or disable retries.
     retry: defaultPresetRetrySettings(preset),
@@ -104,6 +105,7 @@ export function modelProviderTokenPlanProfile(
     apiKey: apiKey.trim(),
     baseUrl: resolvedBaseUrl,
     endpointFormat: tokenPlan.endpointFormat,
+    useProxy: false,
     retry: defaultPresetRetrySettings(preset),
     models: [...tokenPlan.models],
     modelProfiles: copyModelProfiles(tokenPlan.modelProfiles),

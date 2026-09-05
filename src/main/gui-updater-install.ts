@@ -2,7 +2,12 @@ import { app } from 'electron'
 import { win32 as win32Path } from 'node:path'
 import type { GuiUpdateChannel, GuiUpdateInfo, GuiUpdateInstallResult, GuiUpdateState } from '../shared/gui-update'
 import { setWindowsInstallerUpdateSource } from './gui-updater-support'
-import { runUpdateTransactionHelper, scheduleUpdateRollbackAfterExit } from './update-transaction-helper'
+import { handoffFailureKind } from './runtime/kun-handoff-failure'
+import {
+  finalizeUpdateTransactionAndCleanup,
+  runUpdateTransactionHelper,
+  scheduleUpdateRollbackAfterExit
+} from './update-transaction-helper'
 import {
   GUI_UPDATE_BACKUP_GRACE_MS,
   GUI_UPDATE_HEALTH_RETRY_MS,
@@ -12,13 +17,17 @@ import {
   clearPendingUpdateResult,
   cleanupPendingUpdateBackup,
   readGuiUpdateRecovery,
+  readInstallerUpdateTransaction,
   readPendingUpdate,
   readPendingUpdateResult,
   setPendingUpdateEnvironment,
   writeGuiUpdateRecovery,
   writePendingUpdate,
-  writePendingUpdateResult
+  writePendingUpdateResult,
+  type GuiUpdateRecovery,
+  type InstallerRecoveryEnvironment
 } from './gui-updater-pending'
+import { resolveUpdateTransactionFacts, transactionCountsAsInstalled } from './update-transaction-states'
 
 type InstallerDetails = {
   hasDownloaded: boolean
@@ -50,6 +59,8 @@ export class GuiUpdateInstaller {
   private healthCheck?: () => Promise<boolean>
   private installerPath = ''
   private installerSha512 = ''
+  private blockedForMissingRollbackRecord = false
+  private handoffFailureAttempts = 0
 
   constructor(private readonly deps: GuiUpdateInstallerDeps) {}
 
@@ -65,6 +76,11 @@ export class GuiUpdateInstaller {
 
   install(): Promise<GuiUpdateInstallResult> {
     if (this.installPromise) return this.installPromise
+    if (this.blockedForMissingRollbackRecord) {
+      return Promise.resolve(failedResult(
+        'A previous update left an unresolved transaction. Reinstall Kun before updating again.'
+      ))
+    }
     if (this.attemptActive || this.handoffPending || this.handoffStarted) return Promise.resolve({ ok: true })
     const operation = this.deps.runExclusive(() => this.installOnce())
     this.installPromise = operation
@@ -103,13 +119,15 @@ export class GuiUpdateInstaller {
 
     if (pending && result?.outcome === 'success') {
       const installed = app.getVersion() === pending.newVersion
-      const completedStates = new Set(['committed', 'cleanup_pending', 'payload_switched', 'awaiting_health'])
-      const committed = result.schemaVersion === 1 || completedStates.has(result.transactionState ?? '')
+      const committed = transactionCountsAsInstalled(result)
       if (installed && committed) {
         if (result.transactionState !== 'committed' && result.schemaVersion !== 1) {
           console.warn('[kun-gui updater] reconciling incomplete installer cleanup:', result.transactionState)
         }
-        recovery ??= await this.startHealthRecovery(pending, result)
+        recovery ??= await this.startHealthRecovery(pending, {
+          backupDir: result.backupDir,
+          recoveryEnvironment: result.recoveryEnvironment
+        })
         // Keep both records through the first complete Runtime health check.
         // Bootstrap needs the installer-authored recovery environment if the
         // next startup crashes before this updater is initialized.
@@ -120,19 +138,32 @@ export class GuiUpdateInstaller {
     }
 
     if (result?.outcome === 'aborted') {
-      const rollbackComplete = result.transactionState === 'rolled_back' && result.rollbackOutcome === 'succeeded'
+      const rollbackComplete = result.transactionState === 'rolled_back' &&
+        result.rollbackOutcome === 'succeeded'
+      // A running old version is only a diagnostic signal: the payload,
+      // resources, and runtime files may still be the new (broken) ones.
       const oldVersionRunning = pending && app.getVersion() === pending.oldVersion
-      if (rollbackComplete || oldVersionRunning) {
-        await this.cleanupBackup(result.backupDir)
-        await this.removeTransactionRecords()
-      } else if (pending) {
+      if (oldVersionRunning && !rollbackComplete) {
+        console.warn(
+          '[kun-gui updater] old version is running but the rollback is not confirmed:',
+          result.transactionState
+        )
+      }
+      if (rollbackComplete) {
+        await this.finalizeTransaction({
+          recoveryEnvironment: result.recoveryEnvironment,
+          backupDir: result.backupDir
+        })
+        return
+      }
+      if (pending) {
         const attempts = (result.recoveryAttempts ?? 0) + 1
         const message = result.message || `The update installer stopped during ${result.phase ?? result.code}.`
         if (attempts >= GUI_UPDATE_MAX_HEALTH_ATTEMPTS) {
-          await this.removeTransactionRecords()
-        } else {
-          await writePendingUpdateResult({ ...result, recoveryAttempts: attempts })
+          await this.rollbackOrBlockAfterAbandonment(result)
+          return
         }
+        await writePendingUpdateResult({ ...result, recoveryAttempts: attempts })
         this.emitInstallFailure(message)
         return
       }
@@ -147,9 +178,23 @@ export class GuiUpdateInstaller {
         return
       }
       if (app.getVersion() === pending.newVersion) {
+        // The installer died between the payload cutover and its result write.
+        // The transaction file is the authoritative rollback record; use it to
+        // build a recovery that can still roll back or finalize (#1).
+        const transaction = await readInstallerUpdateTransaction(pending)
+        if (!transaction || !resolveUpdateTransactionFacts(transaction.phase).countsAsInstalled) {
+          console.error(
+            '[kun-gui updater] no authoritative rollback record for a switched payload; blocking updates'
+          )
+          this.blockedForMissingRollbackRecord = true
+          this.emitInstallFailure(
+            'The update transaction record is missing. Reinstall Kun to recover rollback safety.'
+          )
+          return
+        }
         recovery ??= await this.startHealthRecovery(pending, {
-          backupDir: pending.backupDir,
-          recoveryEnvironment: undefined
+          backupDir: transaction.backupDir || undefined,
+          recoveryEnvironment: transaction.recoveryEnvironment
         })
       }
     }
@@ -157,8 +202,7 @@ export class GuiUpdateInstaller {
     if (!recovery) return
     if (Date.now() >= Date.parse(recovery.backupExpiresAt)) {
       this.clearHealthRetry()
-      await this.cleanupBackup(recovery.backupDir)
-      await clearGuiUpdateRecovery()
+      await this.handleGraceExpiry(recovery)
       return
     }
     const retryAt = recovery.nextHealthCheckAt ? Date.parse(recovery.nextHealthCheckAt) : 0
@@ -175,12 +219,15 @@ export class GuiUpdateInstaller {
     const healthy = await (this.healthCheck?.() ?? Promise.resolve(true)).catch(() => false)
     if (healthy) {
       this.clearHealthRetry()
-      if (recovery.recoveryEnvironment) {
-        await runUpdateTransactionHelper('FinalizeUpdateTransaction', recovery.recoveryEnvironment)
+      const outcome = await this.finalizeTransaction({
+        recoveryEnvironment: recovery.recoveryEnvironment,
+        backupDir: recovery.backupDir
+      })
+      if (outcome === 'unconfirmed') {
+        // Keep every recovery artifact so a later run can finalize or roll
+        // back; never delete the backup while the transaction is unresolved.
+        this.emitDegraded(recovery.healthAttempts, undefined)
       }
-      await this.cleanupBackup(recovery.backupDir)
-      await clearGuiUpdateRecovery()
-      await this.removeTransactionRecords()
       return
     }
     const attempts = recovery.healthAttempts + 1
@@ -196,7 +243,7 @@ export class GuiUpdateInstaller {
     this.emitDegraded(attempts, message)
   }
 
-  private async rollbackAfterHealthFailure(recovery: import('./gui-updater-pending').GuiUpdateRecovery): Promise<void> {
+  private async rollbackAfterHealthFailure(recovery: GuiUpdateRecovery): Promise<void> {
     if (!recovery.recoveryEnvironment) {
       this.emitDegraded(recovery.healthAttempts, recovery.lastError)
       return
@@ -210,6 +257,87 @@ export class GuiUpdateInstaller {
       console.error('[kun-gui updater] failed to schedule update rollback:', error)
       this.emitDegraded(recovery.healthAttempts, recovery.lastError)
     }
+  }
+
+  /**
+   * Converge the installer transaction and GUI records atomically. Returns
+   * 'unconfirmed' when every recovery artifact must be kept.
+   */
+  private async finalizeTransaction(input: {
+    recoveryEnvironment?: InstallerRecoveryEnvironment
+    backupDir?: string
+  }): Promise<'finalized' | 'already-finalized' | 'unconfirmed'> {
+    if (!input.recoveryEnvironment) {
+      // No installer context: nothing to finalize, converge GUI records only.
+      await this.cleanupBackup(input.backupDir)
+      await this.removeTransactionRecords()
+      return 'finalized'
+    }
+    const outcome = await finalizeUpdateTransactionAndCleanup({
+      environment: input.recoveryEnvironment,
+      backupDir: input.backupDir
+    })
+    if (outcome.kind === 'unconfirmed') {
+      console.warn('[kun-gui updater] update transaction finalize unconfirmed:', outcome.reason)
+      return 'unconfirmed'
+    }
+    return outcome.kind
+  }
+
+  /**
+   * Grace-window expiry decision: finalize only with a confirmed transaction,
+   * roll back when no health proof exists, and block updates when the helper
+   * cannot confirm the transaction state (#3).
+   */
+  private async handleGraceExpiry(recovery: GuiUpdateRecovery): Promise<void> {
+    if (!recovery.recoveryEnvironment) {
+      console.error(
+        '[kun-gui updater] backup grace window expired without rollback capability; blocking updates'
+      )
+      this.blockedForMissingRollbackRecord = true
+      this.emitInstallFailure(
+        'The update recovery record is incomplete. Reinstall Kun to restore rollback safety.'
+      )
+      return
+    }
+    const healthy = await (this.healthCheck?.() ?? Promise.resolve(false)).catch(() => false)
+    if (healthy) {
+      const outcome = await this.finalizeTransaction({
+        recoveryEnvironment: recovery.recoveryEnvironment,
+        backupDir: recovery.backupDir
+      })
+      if (outcome !== 'unconfirmed') return
+    }
+    // No persisted health proof (or finalize could not be confirmed): roll
+    // back to the previous version instead of silently deleting the backup.
+    console.warn(
+      '[kun-gui updater] backup grace window expired without health proof; rolling back'
+    )
+    await this.rollbackAfterHealthFailure(recovery)
+  }
+
+  /**
+   * Repeated aborted-recovery attempts no longer drop the records: roll back
+   * through the installer transaction, or block updates when that is
+   * impossible, so the PowerShell side never keeps an orphan transaction (#2).
+   */
+  private async rollbackOrBlockAfterAbandonment(
+    result: { recoveryEnvironment?: InstallerRecoveryEnvironment, backupDir?: string, message?: string }
+  ): Promise<void> {
+    if (result.recoveryEnvironment) {
+      await this.finalizeTransaction({
+        recoveryEnvironment: result.recoveryEnvironment,
+        backupDir: result.backupDir
+      })
+      return
+    }
+    console.error(
+      '[kun-gui updater] repeated aborted update has no recovery environment; blocking updates'
+    )
+    this.blockedForMissingRollbackRecord = true
+    this.emitInstallFailure(
+      result.message || 'The update installer stopped repeatedly. Reinstall Kun to recover.'
+    )
   }
 
   private async startHealthRecovery(
@@ -318,6 +446,7 @@ export class GuiUpdateInstaller {
       return { ok: true }
     } catch (error) {
       const deferred = (error as { code?: unknown })?.code === 'install_deferred'
+      this.recordHandoffFailure(error)
       restoreEnvironment()
       this.reset()
       if (quittingMarked) {
@@ -337,6 +466,19 @@ export class GuiUpdateInstaller {
     this.handoffPending = false
     this.handoffStarted = false
     this.launchError = null
+  }
+
+  private recordHandoffFailure(error: unknown): void {
+    const kind = handoffFailureKind(error)
+    if (!kind) return
+    this.handoffFailureAttempts += 1
+    if (this.handoffFailureAttempts < GUI_UPDATE_MAX_HEALTH_ATTEMPTS) return
+    this.deps.emit({
+      status: 'error',
+      info: this.deps.stateInfo(),
+      code: 'install_failed',
+      message: `Kun could not verify the previous owner before updating (${kind}); stopping automatic retries.`
+    })
   }
 
   private scheduleRecovery(): void {

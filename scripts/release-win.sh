@@ -157,29 +157,10 @@ for asset in "${ASSETS[@]}"; do
     || die "gh release upload failed for ${asset}"
 done
 
-verify_tui_github_assets() {
-  local names
-  local expected
-  names="$(gh release view "${TAG_NAME}" --json assets --jq '.assets[].name')" \
-    || die "Could not inspect GitHub release assets for ${TAG_NAME}"
-  for expected in \
-    "Kun-TUI-${RELEASE_VERSION}-mac-arm64.tar.gz" \
-    "Kun-TUI-${RELEASE_VERSION}-mac-x64.tar.gz" \
-    "Kun-TUI-${RELEASE_VERSION}-win-x64.zip" \
-    "Kun-TUI-${RELEASE_VERSION}-linux-arm64.tar.gz" \
-    "Kun-TUI-${RELEASE_VERSION}-linux-x64.tar.gz" \
-    "release-tui.json" \
-    "SHA256SUMS-tui.txt"; do
-    grep -Fxq "${expected}" <<<"${names}" \
-      || die "Joint release is missing GitHub TUI asset: ${expected}"
-  done
-}
-
 if $PUBLISH || [[ "${R2_PROMOTE}" == "true" ]]; then
   cyan "Downloading and verifying the complete three-platform release bundle before publication or R2 promotion..."
   npm run verify:manual-extension-release -- --tag "${TAG_NAME}" --version "${RELEASE_VERSION}" \
     || die "Complete three-platform release verification failed"
-  verify_tui_github_assets
 fi
 
 if [[ "${R2_UPLOAD}" == "true" ]]; then
@@ -190,7 +171,7 @@ fi
 
 if [[ "${R2_PROMOTE}" == "true" ]]; then
   cyan "Promoting ${TAG_NAME} as R2 latest..."
-  node "${ROOT}/scripts/publish-r2.mjs" promote --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}" --platforms mac,win,linux --require-tui \
+  node "${ROOT}/scripts/publish-r2.mjs" promote --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}" --platforms mac,win,linux --require-all-platforms \
     || die "R2 promote failed"
 fi
 

@@ -30,6 +30,7 @@ export function createReadArtifactTool(): LocalTool {
       additionalProperties: false
     },
     policy: 'auto',
+    sideEffect: 'read-only',
     execute: async (args, context) => {
       if (!context.artifactStore) {
         return { output: { error: 'artifact store is not available in this runtime' }, isError: true }

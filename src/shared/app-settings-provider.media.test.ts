@@ -315,6 +315,7 @@ describe('model provider settings', () => {
             apiKey: 'sk-voice',
             baseUrl: 'https://voice.example/v1',
             endpointFormat: 'chat_completions',
+            useProxy: false,
             models: ['voice-chat', 'mimo-v2.5-asr', 'whisper-1'],
             modelProfiles: {},
             speech: {
@@ -363,6 +364,7 @@ describe('model provider settings', () => {
             apiKey: 'sk-art',
             baseUrl: 'https://art.example/v1',
             endpointFormat: 'chat_completions',
+            useProxy: false,
             models: [
               'art-chat',
               'paint-house',

@@ -64,6 +64,10 @@ export function useGraphThreadObserver(
         if (useGraphStore.getState().threadId !== ownedThreadId) return
         receiveGraphPlanningRuntimeEvent(event)
       },
+      onReplayResetRequired: async () => {
+        const detail = await getProvider().getThreadDetail(ownedThreadId)
+        return detail.latestSeq
+      },
       subscribe: (id, sinceSeq, sink, signal) =>
         getProvider().subscribeThreadEvents(id, sinceSeq, sink, signal),
       shouldReconnect: () => useGraphStore.getState().threadId === ownedThreadId

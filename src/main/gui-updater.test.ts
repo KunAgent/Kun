@@ -57,6 +57,13 @@ beforeEach(() => {
   appListeners = new Map()
   vi.doMock('node:fs/promises', () => ({
     mkdir: vi.fn().mockResolvedValue(undefined),
+    open: vi.fn(async (path: string) => ({
+      writeFile: vi.fn(async (value: string) => {
+        mockedFiles.set(String(path), String(value))
+      }),
+      sync: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined)
+    })),
     readFile: vi.fn(async (path: string) => {
       const value = mockedFiles.get(String(path))
       if (value === undefined) throw Object.assign(new Error('not found'), { code: 'ENOENT' })

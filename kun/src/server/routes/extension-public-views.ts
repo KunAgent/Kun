@@ -114,6 +114,7 @@ import {
   activationEvent,
   authenticateSession,
   parseBody,
+  parseQualifiedContributionId,
   resolveViewTarget,
   viewActivationOptions
 } from './extension-public-common.js'
@@ -130,7 +131,27 @@ export async function createViewSession(
   const body = await parseBody(request, CreateViewSessionSchema, MAX_EXTENSION_VIEW_BODY_BYTES)
   if (!body.ok) return body.response
   const workspaceRoot = body.data.workspaceRoot ? resolve(body.data.workspaceRoot) : undefined
-  const target = await resolveViewTarget(platform, body.data.contributionId, workspaceRoot)
+  const identity = parseQualifiedContributionId(body.data.contributionId)
+  // Do not bind a session while an install, permission, or enablement change is
+  // between its lifecycle fence and durable registry commit.
+  await platform.packageManager.waitForPendingOperation(identity.extensionId)
+  return createActivatedViewSession(
+    platform,
+    body.data.contributionId,
+    workspaceRoot,
+    MAX_CANCELLED_ACTIVATION_RETRIES
+  )
+}
+
+const MAX_CANCELLED_ACTIVATION_RETRIES = 3
+
+async function createActivatedViewSession(
+  platform: ExtensionPlatformRuntime,
+  contributionId: string,
+  workspaceRoot: string | undefined,
+  cancelledActivationRetries: number
+): Promise<JsonResponse> {
+  const target = await resolveViewTarget(platform, contributionId, workspaceRoot)
   // Create the runtime-owned session first. Its synchronous lifecycle event
   // cancels a pending idle deactivation before asynchronous Host activation.
   const session = platform.viewSessions.create(target.target)
@@ -146,8 +167,26 @@ export async function createViewSession(
     return jsonResponse(session, 201)
   } catch (error) {
     platform.viewSessions.disposeSession(session.sessionId)
+    if (cancelledActivationRetries > 0 && isActivationCancelled(error)) {
+      // Permission, enablement, and version changes are serialized by the
+      // package manager. Wait for the transaction that fenced this Host, then
+      // resolve a new target so the replacement session cannot retain stale
+      // workspace grants or package metadata.
+      await platform.packageManager.waitForPendingOperation(target.target.extensionId)
+      return createActivatedViewSession(
+        platform,
+        contributionId,
+        workspaceRoot,
+        cancelledActivationRetries - 1
+      )
+    }
     throw error
   }
+}
+
+function isActivationCancelled(error: unknown): boolean {
+  return typeof error === 'object' && error !== null &&
+    (error as { code?: unknown }).code === 'EXTENSION_ACTIVATION_CANCELLED'
 }
 
 export async function setWorkbenchEnvironment(

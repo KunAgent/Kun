@@ -38,6 +38,7 @@ import {
 } from '../lib/thread-worktree-registry'
 import {
   forgetQueuedMessagesForThread,
+  pauseQueuedMessagesForInterrupt,
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
@@ -145,12 +146,7 @@ import {
   syncTurnCompletionPoll,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
-import {
-  extractPlanTodos,
-  mergePlanTodosForRenderer,
-  sameTodoWriteItems,
-  threadTodoWriteItems
-} from '../plan/plan-todo-sync'
+import { threadTodoWriteItems } from '../plan/plan-todo-sync'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -212,13 +208,9 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
       delete watchTurnCompletion[threadId]
       delete unreadThreadIds[threadId]
     }
-    const queuedMessages = s.queuedMessages.map((message) => {
-      if (message.deliveryState && message.deliveryState !== 'pending') return message
-      const paused = { ...message, deliveryState: 'paused' as const }
-      delete paused.deliveryTurnId
-      delete paused.deliveryUserMessageItemId
-      return paused
-    })
+    // Interrupted turns never auto-drain the runtime queue; undelivered
+    // entries pause until the user resumes the queue explicitly.
+    const queuedMessages = pauseQueuedMessagesForInterrupt(s.queuedMessages)
     const blocks = settlePendingRuntimeWorkAfterInterrupt(out.blocks ?? s.blocks)
     return {
       ...out,

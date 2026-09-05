@@ -60,6 +60,8 @@ export type ModelFailureCategory =
 
 export type ModelFailureMetadata = {
   category: ModelFailureCategory
+  /** True only when the provider supplied an HTTP or protocol-level error response. */
+  responseReceived?: boolean
   httpStatus?: number
   providerCode?: string
   retryAfterMs?: number

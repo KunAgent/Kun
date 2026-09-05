@@ -8,6 +8,11 @@ import {
   syncTurnCompletionPoll,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
+import {
+  createAutoPlanBuildIntent,
+  patchAutoPlanBuildIntent,
+  saveAutoPlanBuildIntent
+} from '../plan/auto-plan-build-intents'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -207,6 +212,56 @@ describe('background completion poll turn-identity race', () => {
     // A second poll tick after the claim sees no watch and must not notify again.
     await vi.advanceTimersByTimeAsync(2_500)
     expect(showTurnCompleteNotification).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+
+  it('claims a watched auto-plan completion without unread or notification', async () => {
+    const showTurnCompleteNotification = vi.fn(async () => ({ ok: true }))
+    const values = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key)
+      },
+      kunGui: { showTurnCompleteNotification }
+    })
+    const intent = createAutoPlanBuildIntent({
+      planId: '/repo:.kunsdd/plan/auto.md',
+      relativePath: '.kunsdd/plan/auto.md',
+      workspaceRoot: '/repo',
+      threadId: 'thr_auto',
+      selection: { buildMode: 'direct', useWorktree: false }
+    })
+    saveAutoPlanBuildIntent(intent)
+    patchAutoPlanBuildIntent(intent.id, { planTurnId: 'turn_plan_auto', status: 'planning' })
+
+    watchTurnCompletionNotification('thr_auto', 1_000)
+    registryMock.getProvider.mockReturnValue({
+      getThreadState: vi.fn(async () => ({
+        status: 'running',
+        latestTurnId: 'turn_plan_auto',
+        latestTurnStatus: 'completed'
+      }))
+    })
+    const h = makeHarness({
+      runtimeConnection: 'ready',
+      watchTurnCompletion: { thr_auto: true },
+      threads: [{
+        id: 'thr_auto',
+        title: 'Auto',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+        model: 'deepseek-v4-pro',
+        mode: 'agent',
+        status: 'running'
+      }]
+    })
+    syncTurnCompletionPoll(h.set, h.get)
+    await vi.advanceTimersByTimeAsync(2_500)
+
+    expect(h.getState().watchTurnCompletion).toEqual({})
+    expect(h.getState().unreadThreadIds).toEqual({})
+    expect(showTurnCompleteNotification).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 })

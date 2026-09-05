@@ -20,6 +20,9 @@ describe('plan-prompts', () => {
     expect(prompt).toContain('The GUI will save your answer')
     expect(prompt).toContain('create_plan')
     expect(prompt).toContain('Do not call any other tools')
+    expect(prompt).toContain('MUST be a short task checkbox')
+    expect(prompt).toContain('- [ ] <one independently executable task>')
+    expect(prompt).toContain('Do not use task checkboxes in Summary')
     expect(prompt).toContain('<gui_plan>')
     expect(prompt).toContain('Add auth')
   })
@@ -61,6 +64,7 @@ describe('plan-prompts', () => {
     expect(prompt).toContain('create_plan')
     expect(prompt).toContain('Make it smaller')
     expect(prompt).toContain('# Old')
+    expect(prompt).toContain('Keep existing task checkbox completion semantics')
   })
 
   it('embeds an authoritative plan for self-contained Graph creation', () => {
@@ -147,6 +151,15 @@ describe('plan-prompts', () => {
 
     expect(prompt).not.toContain('<prompt_managed_worktree_protocol>')
     expect(prompt).toContain('using Graph orchestration')
+  })
+
+  it('injects stable plan todos only for direct execution', () => {
+    const todos = [{ id: 'todo_plan_1', content: 'Build board', status: 'in_progress' as const }]
+    const direct = buildPlanBuildPrompt('.kunsdd/plan/demo.md', '# Demo', 'direct', undefined, todos)
+    const graph = buildPlanBuildPrompt('.kunsdd/plan/demo.md', '# Demo', 'graph', undefined, todos)
+    expect(direct).toContain('"id": "todo_plan_1"')
+    expect(direct).toContain('todo_list and todo_write')
+    expect(graph).not.toContain('todo_plan_1')
   })
 
   it('extracts tagged and fenced plan markdown', () => {

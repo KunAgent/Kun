@@ -125,6 +125,7 @@ import {
   type ModelProvidersApi,
   type NetworkApi,
   type ScopedStorageApi,
+  type SecretStorageApi,
   type StorageApi,
   type ThreadsApi,
   type ToolsApi,
@@ -144,6 +145,8 @@ import {
   RegistrationResponseSchema,
   ScopedStorageClient,
   StorageValueResponseSchema,
+  SecretValueResponseSchema,
+  StorageDeleteResponseSchema,
   StringArraySchema,
   requestParsed,
   toWire
@@ -181,6 +184,33 @@ export function createStorageApi(
       global: new ScopedStorageClient(transport, 'global'),
       workspace: new ScopedStorageClient(transport, 'workspace')
     }
+}
+
+export function createSecretStorageApi(
+  transport: HostTransport
+): SecretStorageApi {
+  return {
+    get: async (key) => {
+      const response = await requestParsed(
+        transport,
+        'secrets.get',
+        { key },
+        SecretValueResponseSchema
+      )
+      return response.found ? response.value : undefined
+    },
+    set: async (key, value) => {
+      await transport.request('secrets.set', toWire({ key, value }))
+    },
+    delete: async (key) => (
+      await requestParsed(
+        transport,
+        'secrets.delete',
+        { key },
+        StorageDeleteResponseSchema
+      )
+    ).deleted
+  }
 }
 
 export function createConfigurationApi(

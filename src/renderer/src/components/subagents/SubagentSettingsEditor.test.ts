@@ -254,7 +254,7 @@ describe('SubagentSettingsEditor', () => {
     })
     const patch = onPatch.mock.calls.at(-1)?.[0] as KunRuntimeSettingsPatchV1
     const extensionProfiles = (patch.subagents?.profiles ?? []).filter((profile) => profile.id !== 'researcher')
-    expect(extensionProfiles).toHaveLength(37)
+    expect(extensionProfiles).toHaveLength(38)
     expect(extensionProfiles.every((profile) => (profile.surfaces?.length ?? 0) > 0)).toBe(true)
     expect(extensionProfiles.filter((profile) => profile.id.startsWith('write-'))
       .every((profile) => profile.surfaces?.join() === 'write')).toBe(true)
@@ -395,7 +395,7 @@ describe('SubagentSettingsEditor', () => {
       'security-auditor',
       'web-performance-auditor'
     ].includes(profile.id))
-    expect(extensionProfiles).toHaveLength(37)
+    expect(extensionProfiles).toHaveLength(38)
     expect(extensionProfiles.every((profile) => (profile.surfaces?.length ?? 0) > 0)).toBe(true)
     expect(profiles.some((profile) => profile.id === 'general')).toBe(false)
   })

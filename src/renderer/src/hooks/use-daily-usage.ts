@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
-import { parseUsageResponse, withUsageRequestTimeout } from './usage-response'
+import { useEffect, useRef, useState } from 'react'
+import { requestUsage } from './usage-request-cache'
+import { parseUsageResponse, usageRequestError } from './usage-response'
+import { readUsageSummaryCache, writeUsageSummaryCache } from './usage-summary-cache'
 
 export const DEFAULT_USAGE_HEATMAP_DAYS = 90
 
@@ -43,6 +45,8 @@ export type DailyUsageState = {
   loading: boolean
   loaded: boolean
   error: string | null
+  updatedAt?: string
+  stale?: boolean
 }
 
 type RawDailyUsageBucket = {
@@ -210,14 +214,14 @@ export function normalizeDailyUsageResponse(raw: RawDailyUsageResponse): DailyUs
   }
 }
 
-export async function loadDailyUsage(range: DailyUsageRange): Promise<DailyUsageSummary | null> {
+export async function loadDailyUsage(
+  range: DailyUsageRange,
+  generation?: string | number
+): Promise<DailyUsageSummary | null> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return null
-  const response = await withUsageRequestTimeout(
-    window.kunGui.runtimeRequest(buildDailyUsagePath(range), 'GET'),
-    'daily usage'
-  )
+  const response = await requestUsage(buildDailyUsagePath(range), 'daily usage', generation)
   if (!response.ok || !response.body.trim()) {
-    throw new Error(`daily usage request failed: ${response.status}`)
+    throw usageRequestError('daily usage', response.status, response.body)
   }
   const parsed = parseUsageResponse<RawDailyUsageResponse>(response.body, 'daily usage')
   if (parsed.group_by !== 'day') {
@@ -236,25 +240,62 @@ export function useDailyUsageState(
     usage: null,
     loading: false,
     loaded: false,
-    error: null
+    error: null,
+    stale: false
   })
+  const previousRefreshKey = useRef(refreshKey)
 
   useEffect(() => {
     let cancelled = false
     if (!shouldLoad) {
-      setState({ usage: null, loading: false, loaded: false, error: null })
+      setState((current) => ({ ...current, loading: false, error: null }))
       return
     }
-    setState((current) => ({ ...current, loading: true, error: null }))
+    const explicitRefresh = previousRefreshKey.current !== refreshKey
+    previousRefreshKey.current = refreshKey
     const range = defaultDailyUsageRange(new Date(), days)
-    void loadDailyUsage(range)
+    const path = buildDailyUsagePath(range)
+    const cached = readUsageSummaryCache<DailyUsageSummary>(path)
+    if (cached) {
+      setState({
+        usage: cached.value,
+        loading: cached.stale || explicitRefresh,
+        loaded: true,
+        error: null,
+        updatedAt: cached.updatedAt,
+        stale: cached.stale
+      })
+      if (!cached.stale && !explicitRefresh) return
+    } else {
+      setState((current) => ({ ...current, loading: true, error: null }))
+    }
+    void loadDailyUsage(range, String(refreshKey))
       .then((usage) => {
-        if (!cancelled) setState({ usage, loading: false, loaded: true, error: null })
+        if (cancelled) return
+        if (!usage) {
+          setState({ usage: null, loading: false, loaded: true, error: null, stale: false })
+          return
+        }
+        const stored = writeUsageSummaryCache(path, usage)
+        setState({
+          usage,
+          loading: false,
+          loaded: true,
+          error: null,
+          updatedAt: stored.updatedAt,
+          stale: false
+        })
       })
       .catch((error) => {
         if (!cancelled) {
           const message = error instanceof Error ? error.message : String(error)
-          setState({ usage: null, loading: false, loaded: true, error: message })
+          setState((current) => ({
+            ...current,
+            loading: false,
+            loaded: current.loaded,
+            error: message,
+            stale: Boolean(current.usage)
+          }))
         }
       })
     return () => {

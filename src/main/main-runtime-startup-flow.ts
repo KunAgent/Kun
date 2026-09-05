@@ -72,7 +72,7 @@ export function createStartupSettingsApply(
     applyManagedRuntimeSettingsHot: (
       settings: AppSettingsV1,
       source: string
-    ) => Promise<'applied' | 'restart_required' | 'skipped' | 'superseded'>
+    ) => Promise<'applied' | 'restart_required' | 'skipped' | 'superseded' | 'failed'>
     logWarn: (category: string, message: string, detail?: unknown) => void
   }
 ): Promise<void> {

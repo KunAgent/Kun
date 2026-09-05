@@ -96,7 +96,8 @@ describe('ThreadService todos', () => {
       const synced = await service.syncTodosFromPlan('thr_todos', {
         planId: 'plan_1',
         relativePath,
-        markdown: originalMarkdown
+        markdown: originalMarkdown,
+        mode: 'document_edit'
       })
       expect(synced.items.map((item) => [item.content, item.status])).toEqual([
         ['Build UI', 'pending'],
@@ -118,12 +119,11 @@ describe('ThreadService todos', () => {
       const rewritten = await service.syncTodosFromPlan('thr_todos', {
         planId: 'plan_1',
         relativePath,
-        markdown: rewrittenMarkdown
+        markdown: rewrittenMarkdown,
+        mode: 'document_edit'
       })
-      const removed = rewritten.items.find((item) => item.content === 'Build UI')
-      expect(removed?.status).toBe('completed')
-      expect(removed?.source).toBeUndefined()
-      expect(rewritten.items.find((item) => item.content === 'Add tests')?.status).toBe('completed')
+      expect(rewritten.items.find((item) => item.content === 'Build UI')).toBeUndefined()
+      expect(rewritten.items.find((item) => item.content === 'Add tests')?.status).toBe('pending')
 
       const events = await sessionStore.loadEventsSince('thr_todos', 0)
       expect(events.some((event) => event.kind === 'todos_updated')).toBe(true)
@@ -151,7 +151,8 @@ describe('ThreadService todos', () => {
       const synced = await service.syncTodosFromPlan('thr_todos_symlink', {
         planId: 'plan_1',
         relativePath,
-        markdown
+        markdown,
+        mode: 'document_edit'
       })
 
       const outsidePlan = join(outside, 'demo.md')

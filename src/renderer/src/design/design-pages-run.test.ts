@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../store/chat-store'
 import { useDesignWorkspaceStore } from './design-workspace-store'
-import { runDesignPages } from './design-pages-run'
+import { interruptDesignPagesRun, isDesignPagesRunActive, runDesignPages } from './design-pages-run'
+import { beginDesignPagesRun, finishDesignPagesRun } from './design-pages-run/orchestration-support'
 import type { ChatBlock } from '../agent/types'
 import type { DesignArtifact, DesignDocument } from './design-types'
 import type { SendMessageOverrides } from '../store/chat-store-types'
@@ -83,6 +84,65 @@ describe('runDesignPages parallel fanout', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('cancels the local orchestration before interrupting the runtime turn', () => {
+    const signal = { cancelled: false }
+    expect(beginDesignPagesRun(signal)).toBe(true)
+    const order: string[] = []
+    try {
+      interruptDesignPagesRun(() => {
+        order.push('runtime-interrupt')
+        expect(signal.cancelled).toBe(true)
+      })
+      expect(order).toEqual(['runtime-interrupt'])
+      expect(signal.cancelled).toBe(true)
+    } finally {
+      finishDesignPagesRun(signal)
+    }
+  })
+
+  it('stops a live fanout without scheduling another design turn', async () => {
+    let fanoutStarted!: () => void
+    const fanoutReady = new Promise<void>((resolve) => {
+      fanoutStarted = resolve
+    })
+    const sendMessage = vi.fn(async (prompt: string) => {
+      if (prompt.includes('PLAN a multi-page')) {
+        pushRuntimeTurn(prompt, [{
+          kind: 'assistant',
+          id: 'assistant_cancel_plan',
+          text: '```pages\n[{"title":"Home","brief":"Home page"},{"title":"Settings","brief":"Settings page"}]\n```',
+          createdAt
+        }])
+        return true
+      }
+      fanoutStarted()
+      useChatStore.setState({ currentTurnId: 'turn_fanout', busy: true })
+      return true
+    })
+
+    const runPromise = runDesignPages({
+      brief: 'Cancelable project',
+      workspaceRoot: '/workspace',
+      sendMessage,
+      foundation: false,
+      expectedThreadId: 'thr_design'
+    })
+    await fanoutReady
+    expect(isDesignPagesRunActive()).toBe(true)
+
+    interruptDesignPagesRun(() => {
+      useChatStore.setState({ currentTurnId: null, busy: false })
+    })
+    await runPromise
+
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(isDesignPagesRunActive()).toBe(false)
+    expect(useDesignWorkspaceStore.getState().pagesRun).toBeNull()
+    expect(writeWorkspaceFile.mock.calls.some((call) => (
+      call[0] as { path?: string } | undefined
+    )?.path === '.kun-design/HANDOFF.md')).toBe(false)
   })
 
   it('pre-creates all pages and sends one fanout turn for page generation', async () => {

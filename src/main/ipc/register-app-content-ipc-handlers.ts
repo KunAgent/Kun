@@ -4,8 +4,18 @@ import {
   shell
 } from 'electron'
 import {
-  mkdir
+  mkdir,
+  readFile
 } from 'node:fs/promises'
+import {
+  createHash
+} from 'node:crypto'
+import {
+  isAbsolute,
+  relative,
+  resolve,
+  sep
+} from 'node:path'
 import {
   z
 } from 'zod'
@@ -32,6 +42,7 @@ import {
   memoryMarkdownExportPayloadSchema,
   designExportPayloadSchema,
   writeRichClipboardPayloadSchema,
+  writeDocumentSha256PayloadSchema,
   writeInfographicPayloadSchema,
   writeInlineCompletionPayloadSchema,
   writePrototypeFilePayloadSchema,
@@ -89,6 +100,15 @@ import {
   parseIpcPayload,
   runDesktopCommand
 } from './app-ipc-handler-utils'
+
+function resolveWriteDocumentPath(workspaceRoot: string, filePath: string): string | null {
+  if (!isAbsolute(workspaceRoot)) return null
+  const root = resolve(workspaceRoot)
+  const candidate = isAbsolute(filePath) ? resolve(filePath) : resolve(root, filePath)
+  const rel = relative(root, candidate)
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null
+  return candidate
+}
 
 export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const {
@@ -150,6 +170,26 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
         parseIpcPayload('write:retrieve-context', writeRetrievalPayloadSchema, payload)
       )
       return { ok: true as const, context }
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+  ipcMain.handle('write:read-document-sha256', async (_, payload: unknown) => {
+    try {
+      const request = parseIpcPayload(
+        'write:read-document-sha256',
+        writeDocumentSha256PayloadSchema,
+        payload
+      )
+      const absolutePath = resolveWriteDocumentPath(request.workspaceRoot, request.filePath)
+      if (!absolutePath) {
+        return { ok: false as const, message: 'write document path escapes the workspace' }
+      }
+      const bytes = await readFile(absolutePath)
+      return { ok: true as const, sha256: createHash('sha256').update(bytes).digest('hex') }
     } catch (error) {
       return {
         ok: false as const,

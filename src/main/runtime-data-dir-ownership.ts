@@ -11,6 +11,25 @@ export type ProcessCommand = {
   environment?: Record<string, string | undefined>
 }
 
+export type WindowsProcessCommandRunner = (
+  command: string,
+  args: string[],
+  options: {
+    encoding: 'utf8'
+    windowsHide: boolean
+    timeout: number
+    maxBuffer: number
+  }
+) => string
+
+export const WINDOWS_PROCESS_COMMAND_TIMEOUT_MS = 300_000
+export const WINDOWS_PROCESS_COMMAND_SCRIPT =
+  `Get-CimInstance Win32_Process -Filter "CommandLine LIKE '%serve%'" | ` +
+  'Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress'
+
+const defaultWindowsProcessCommandRunner: WindowsProcessCommandRunner =
+  (command, args, options) => execFileSync(command, args, options)
+
 type CommandUseOptions = Pick<ProcessCommand, 'cwd' | 'environment'>
 
 function pathApi(platform: NodeJS.Platform): typeof posix | typeof win32 {
@@ -290,19 +309,21 @@ function posixProcessCommands(platform: NodeJS.Platform): ProcessCommand[] {
   return commands
 }
 
-function windowsProcessCommands(): ProcessCommand[] {
-  const stdout = execFileSync(
-    'powershell',
+export function windowsProcessCommands(
+  run: WindowsProcessCommandRunner = defaultWindowsProcessCommandRunner
+): ProcessCommand[] {
+  const stdout = run(
+    'powershell.exe',
     [
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      'Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress'
+      WINDOWS_PROCESS_COMMAND_SCRIPT
     ],
     {
       encoding: 'utf8',
       windowsHide: true,
-      timeout: 8_000,
+      timeout: WINDOWS_PROCESS_COMMAND_TIMEOUT_MS,
       maxBuffer: 32 * 1024 * 1024
     }
   ).trim()

@@ -259,7 +259,11 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
   })
 
   it('migrates Windows install roots without changing identity or touching user data', () => {
-    const installerScript = ['installer.nsh', 'installer-process-check.nsh'].map((fileName) =>
+    const installerScript = [
+      'installer.nsh',
+      'installer-manual-upgrade.nsh',
+      'installer-process-check.nsh'
+    ].map((fileName) =>
       readFileSync(join(process.cwd(), 'build', fileName), 'utf8').replace(/\r\n/g, '\n')
     ).join('\n')
     const automaticUpdateScript = readFileSync(
@@ -272,6 +276,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
       'windows-installer-migration-journal.ps1',
       'windows-installer-migration-filesystem.ps1',
       'windows-installer-migration-actions.ps1',
+      'windows-installer-migration-recovery-env.ps1',
       'windows-installer-migration-transaction.ps1'
     ].map((fileName) =>
       readFileSync(join(process.cwd(), 'build', fileName), 'utf8')
@@ -286,6 +291,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(builderConfig.nsis.allowToChangeInstallationDirectory).toBe(false)
     expect(builderConfig.nsis.deleteAppDataOnUninstall).toBe(false)
     expect(builderConfig.nsis.createDesktopShortcut).toBe('always')
+    expect(installerScript).toContain('!include "${PROJECT_DIR}\\build\\installer-manual-upgrade.nsh"')
     expect(installerScript).toContain('!include "${PROJECT_DIR}\\build\\installer-process-check.nsh"')
     expect(installerScript).toContain('!macro customInit')
     expect(installerScript).toContain('${if} ${isUpdated}')
@@ -375,7 +381,15 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(installerScript).toContain(
       'DeleteRegKey HKEY_CURRENT_USER "${INSTALL_REGISTRY_KEY}"'
     )
-    expect(installerScript).toContain('KunHandleOldUninstallerResult')
+    expect(installerScript).not.toContain('KunHandleOldUninstallerResult')
+    expect(installerScript).toContain('Function KunCleanupPreparedSource')
+    expect(installerScript).toContain('Call KunCleanupPreparedSource')
+    expect(installerScript).toContain('StrCpy $KunInstallerPreparedSourceMask $KunInstallerHelperOutput')
+    expect(
+      installerScript.indexOf('StrCpy $KunInstallerPreparedSourceMask $KunInstallerHelperOutput')
+    ).toBeLessThan(installerScript.indexOf('Call KunCleanupPreparedSource'))
+    expect(installerScript).toContain('Call KunRetireSelectedShellState')
+    expect(installerScript).toContain('Call KunRetireCurrentUserShellState')
     expect(installerScript).toContain('Var /GLOBAL KunInstallerInPlaceUpdate')
     expect(installerScript).toContain('Function KunMarkInPlaceAutomaticUpdate')
     expect(installerScript).toContain('# Automatic updates retain the old payload through candidate health validation.')
@@ -384,6 +398,9 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     )
     expect(installerScript).toContain(
       'Automatic update; suppressed the selected-scope uninstaller until commit.'
+    )
+    expect(installerScript).toContain(
+      'Automatic update; leaving the unrelated current-user installation unchanged.'
     )
     expect(installerScript).toContain('!insertmacro kunRunMigrationHelper CleanupInPlaceLeftovers')
     expect(installerScript).toContain('!insertmacro addDesktopLink "false"')
@@ -396,12 +413,14 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(automaticUpdateScript.indexOf('SetOutPath "$PLUGINSDIR"')).toBeLessThan(
       automaticUpdateScript.indexOf('!insertmacro kunRunMigrationHelper SwitchUpdatePayload')
     )
-    expect(installerScript).toContain('Function KunSecureSelectedUninstallRegistration')
-    expect(installerScript).toContain('Function KunSecureCurrentUserUninstallRegistration')
-    expect(installerScript).toContain('!insertmacro kunRunMigrationHelper ResolveUninstaller')
     expect(installerScript).toContain(
-      'WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString'
+      'Function KunSuppressSelectedUninstallRegistrationForAutomaticUpdate'
     )
+    expect(installerScript).toContain('Function KunAssertSelectedUninstallCommandSuppressed')
+    expect(installerScript).toContain('Function KunAssertCurrentUserUninstallCommandSuppressed')
+    expect(installerScript).not.toContain('Function KunSecureSelectedUninstallRegistration')
+    expect(installerScript).not.toContain('Function KunSecureCurrentUserUninstallRegistration')
+    expect(installerScript).not.toContain('ResolveUninstaller')
     expect(installerScript).toContain('FallbackCleanup')
     expect(installerScript).toContain('Restore')
     expect(installerScript).toContain('UpdatePath')
@@ -411,11 +430,16 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
       'StrCpy $KunInstallerStopDiagnosticPath "$TEMP\\Kun-installer-process-check-$KunInstallerCurrentPid.log"'
     )
     expect(installerScript).toContain('KUN_INSTALLER_DIAGNOSTIC_PATH')
+    expect(installerScript).toContain('KUN_INSTALLER_UAC_INNER')
+    expect(installerScript).toContain('Diagnostic log: $KunInstallerDiagnosticPath')
+    expect(installerScript).toContain('Var /GLOBAL KunInstallerDiagnosticExternal')
+    expect(installerScript).not.toContain('!define UNINSTALL_REGISTRY_KEY_2')
     expect(installerScript).toContain('${elseIf} $KunInstallerStopResult == 2')
     expect(installerScript).toContain('windows-installer-migration-paths.ps1')
     expect(installerScript).toContain('windows-installer-migration-journal.ps1')
     expect(installerScript).toContain('windows-installer-migration-filesystem.ps1')
     expect(installerScript).toContain('windows-installer-migration-actions.ps1')
+    expect(installerScript).toContain('windows-installer-migration-recovery-env.ps1')
     expect(installerScript).toContain('!ifdef BUILD_UNINSTALLER')
     expect(installerScript).toContain('${ifNot} ${isUpdated}')
     expect(installerScript).toContain('MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)"')
@@ -426,8 +450,8 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(installerScript).not.toContain('RMDir /r "$INSTDIR"')
     expect(installerScript).toContain('DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"')
     expect(installerScript).toContain('DeleteRegKey SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}"')
-    expect(installerScript).toContain('$KunInstallerPrimarySourceStale != 1')
-    expect(installerScript).toContain('$KunInstallerSecondarySourceStale != 1')
+    expect(installerScript).toContain('$KunInstallerPreparedSourceMask == "1"')
+    expect(installerScript).toContain('$KunInstallerPreparedSourceMask == "2"')
     expect(installerScript).toContain('without modifying $KunInstallerPrimarySourceDir')
     expect(installerScript).toContain('KUN_INSTALLER_PRIMARY_SOURCE_STALE')
     expect(installerScript).toContain('KUN_INSTALLER_SECONDARY_SOURCE_STALE')
@@ -439,6 +463,10 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(migrationScript).toContain('function Test-RetainedInPlaceKnownEntry')
     expect(migrationScript).toContain("Get-EnvironmentValue 'KUN_INSTALLER_IN_PLACE_UPDATE'")
     expect(migrationScript).toContain("Get-EnvironmentValue 'KUN_INSTALLER_AUTOMATIC_UPDATE'")
+    expect(migrationScript).toContain('function Get-InstallerRecoveryFieldMap')
+    expect(migrationScript).toContain("AppExecutable = 'KUN_INSTALLER_APP_EXECUTABLE'")
+    expect(migrationScript).toContain("InstallRegistryKey = 'KUN_INSTALLER_INSTALL_REGISTRY_KEY'")
+    expect(migrationScript).not.toContain('KUN_INSTALLER_" + $name.ToUpper()')
     expect(migrationScript).toContain('function Resolve-RecoveryPayloadExecutable')
     expect(migrationScript).toContain('function Initialize-UpdateTransaction')
     expect(migrationScript).toContain('function Invoke-RollbackUpdateTransaction')
@@ -490,7 +518,8 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(migrationScript).toContain("Get-EnvironmentValue 'KUN_INSTALLER_SECONDARY_SOURCE'")
     expect(migrationScript).toContain('Invoke-RestoreJournal')
     expect(migrationScript).toContain('function Resolve-AutomaticUpdateScope')
-    expect(migrationScript).toContain('function Resolve-TrustedAppUninstaller')
+    expect(migrationScript).not.toContain('Resolve-TrustedAppUninstaller')
+    expect(migrationScript).not.toContain("'ResolveUninstaller'")
     expect(migrationScript).toContain('function Assert-TargetVolumeReadyAndWritable')
     expect(migrationScript).toContain('Assert-TargetVolumeReadyAndWritable $target')
     expect(migrationScript).toContain('function Assert-JournalStorageTrusted')

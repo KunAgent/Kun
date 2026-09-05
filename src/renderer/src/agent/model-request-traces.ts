@@ -65,6 +65,11 @@ export type ModelRequestTraceFailureOrigin =
 export type ModelRequestTraceRecord = {
   schemaVersion: 1
   id: string
+  roundId?: string
+  step?: number
+  purpose?: string
+  captureMode?: 'metadata' | 'full'
+  manifestId?: string
   sequence: number
   threadId: string
   turnId: string
@@ -78,8 +83,19 @@ export type ModelRequestTraceRecord = {
   endpointFormat: string
   attempt: number
   attemptReason: 'initial' | 'transport_retry' | 'credential_refresh' | 'stream_options_fallback'
-  status: 'pending' | 'completed' | 'transport_error' | 'capture_error' | 'not_started'
+  status:
+    | 'pending'
+    | 'completed'
+    | 'transport_error'
+    | 'capture_error'
+    | 'not_started'
+    | 'failed'
+    | 'cancelled'
+    | 'interrupted'
   startedAt: string
+  firstTokenAt?: string
+  receivedTextLength?: number
+  receivedReasoningLength?: number
   responseStartedAt?: string
   finishedAt?: string
   timeToHeadersMs?: number
@@ -178,7 +194,8 @@ function parseRecord(value: unknown, label: string): ModelRequestTraceRecord {
     'initial', 'transport_retry', 'credential_refresh', 'stream_options_fallback'
   ] as const)
   const status = oneOf(input.status, `${label}.status`, [
-    'pending', 'completed', 'transport_error', 'capture_error', 'not_started'
+    'pending', 'completed', 'transport_error', 'capture_error', 'not_started',
+    'failed', 'cancelled', 'interrupted'
   ] as const)
   const transport = input.transport === undefined
     ? undefined
@@ -200,6 +217,15 @@ function parseRecord(value: unknown, label: string): ModelRequestTraceRecord {
   const parsed: ModelRequestTraceRecord = {
     schemaVersion: TRACE_SCHEMA_VERSION,
     id: text(input.id, `${label}.id`, 256),
+    ...(input.roundId === undefined ? {} : { roundId: text(input.roundId, `${label}.roundId`, 256) }),
+    ...(input.step === undefined ? {} : { step: integer(input.step, `${label}.step`, 0) }),
+    ...(input.purpose === undefined ? {} : { purpose: text(input.purpose, `${label}.purpose`, 64) }),
+    ...(input.captureMode === undefined
+      ? {}
+      : { captureMode: oneOf(input.captureMode, `${label}.captureMode`, ['metadata', 'full'] as const) }),
+    ...(input.manifestId === undefined
+      ? {}
+      : { manifestId: text(input.manifestId, `${label}.manifestId`, 256) }),
     sequence: integer(input.sequence, `${label}.sequence`, 1),
     threadId: text(input.threadId, `${label}.threadId`, 512),
     turnId: text(input.turnId, `${label}.turnId`, 512),
@@ -229,6 +255,9 @@ function parseRecord(value: unknown, label: string): ModelRequestTraceRecord {
         })
   }
   if (input.responseStartedAt !== undefined) parsed.responseStartedAt = text(input.responseStartedAt, `${label}.responseStartedAt`, 128)
+  if (input.firstTokenAt !== undefined) parsed.firstTokenAt = text(input.firstTokenAt, `${label}.firstTokenAt`, 128)
+  if (input.receivedTextLength !== undefined) parsed.receivedTextLength = integer(input.receivedTextLength, `${label}.receivedTextLength`, 0)
+  if (input.receivedReasoningLength !== undefined) parsed.receivedReasoningLength = integer(input.receivedReasoningLength, `${label}.receivedReasoningLength`, 0)
   if (input.finishedAt !== undefined) parsed.finishedAt = text(input.finishedAt, `${label}.finishedAt`, 128)
   if (input.error !== undefined) parsed.error = text(input.error, `${label}.error`, 4_096)
   if (input.timeToHeadersMs !== undefined) parsed.timeToHeadersMs = finiteNumber(input.timeToHeadersMs, `${label}.timeToHeadersMs`)

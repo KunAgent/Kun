@@ -138,30 +138,76 @@ export function reconcileSidebarThreadOrder<T extends { id: string }>(
     items: threads,
     savedKeys: savedThreadIds,
     itemKey: (thread) => thread.id.trim(),
-    savedKey: (threadId) => threadId.trim()
+    savedKey: (threadId) => threadId.trim(),
+    unsavedPlacement: 'byNeighbor'
   })
 }
+
+type UnsavedPlacement = 'append' | 'byNeighbor'
 
 function reconcileSavedOrder<T>(options: {
   items: readonly T[]
   savedKeys: readonly string[]
   itemKey: (item: T) => string
   savedKey: (key: string) => string
+  unsavedPlacement?: UnsavedPlacement
 }): T[] {
   const remainingByKey = new Map<string, T>()
+  const itemKeys: string[] = []
   for (const item of options.items) {
     const key = options.itemKey(item)
-    if (key && !remainingByKey.has(key)) remainingByKey.set(key, item)
+    if (key && !remainingByKey.has(key)) {
+      remainingByKey.set(key, item)
+      itemKeys.push(key)
+    }
   }
+
   const result: T[] = []
-  for (const saved of options.savedKeys) {
-    const key = options.savedKey(saved)
+  const placed = new Set<string>()
+
+  const place = (key: string): void => {
     const item = remainingByKey.get(key)
-    if (!item) continue
+    if (!item) return
     result.push(item)
+    placed.add(key)
     remainingByKey.delete(key)
   }
-  result.push(...remainingByKey.values())
+
+  for (const saved of options.savedKeys) {
+    place(options.savedKey(saved))
+  }
+
+  if (options.unsavedPlacement !== 'byNeighbor') {
+    result.push(...remainingByKey.values())
+    return result
+  }
+
+  // Insert unsaved entries beside their nearest neighbor from the current
+  // (already sorted) order, so a freshly created thread stays near the top
+  // while the user's saved relative order is preserved.
+  const indexOfPlaced = (key: string): number =>
+    result.findIndex((item) => options.itemKey(item) === key)
+
+  for (let index = 0; index < itemKeys.length; index += 1) {
+    const key = itemKeys[index]!
+    if (placed.has(key)) continue
+    const item = remainingByKey.get(key)
+    if (!item) continue
+    const following = itemKeys.slice(index + 1).find((candidate) => placed.has(candidate))
+    if (following) {
+      result.splice(indexOfPlaced(following), 0, item)
+    } else {
+      const preceding = itemKeys.slice(0, index).reverse().find((candidate) => placed.has(candidate))
+      if (preceding) {
+        result.splice(indexOfPlaced(preceding) + 1, 0, item)
+      } else {
+        result.push(item)
+      }
+    }
+    placed.add(key)
+    remainingByKey.delete(key)
+  }
+
   return result
 }
 

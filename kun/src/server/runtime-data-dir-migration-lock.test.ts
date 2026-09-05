@@ -124,19 +124,24 @@ describe('Runtime data migration lock', () => {
     await lock.release()
   })
 
-  it('fails closed on unknown or non-regular claim entries', async () => {
+  it('ignores non-canonical claim names but fails closed on canonical directories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-runtime-migration-lock-'))
     roots.push(root)
     const dataDir = join(root, 'runtime')
     const claimsPath = runtimeDataDirClaimsPath(dataDir)
     await mkdir(claimsPath, { recursive: true })
-    const unknown = join(claimsPath, 'claim-unknown.json')
+    const unknown = join(
+      claimsPath,
+      'claim-461-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.json.stale'
+    )
     await writeFile(unknown, '{}')
 
-    await expect(acquireRuntimeDataDirLease(dataDir, {
+    const lease = await acquireRuntimeDataDirLease(dataDir, {
       pid: 461,
       processIsAlive: () => false
-    })).rejects.toThrow(/claim name is invalid/)
+    })
+    await expect(readFile(unknown, 'utf8')).resolves.toBe('{}')
+    await lease.release()
 
     await rm(unknown, { force: true })
     await mkdir(join(

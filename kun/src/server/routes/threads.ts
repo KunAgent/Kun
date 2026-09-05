@@ -19,7 +19,6 @@ import {
   ThreadTimelineResponseSchema,
   ThreadTodosResponse,
   THREAD_TIMELINE_MAX_ITEM_BYTES,
-  THREAD_TIMELINE_MAX_ITEMS,
   THREAD_RUNTIME_STATE_BATCH_CONCURRENCY,
   THREAD_RUNTIME_STATE_SCHEMA_VERSION,
   UpdateThreadRequest,
@@ -28,6 +27,7 @@ import {
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { threadStateLoadFailure } from './thread-state-error.js'
+import { parseThreadTimelineQuery } from './thread-timeline-read-key.js'
 import type { ForkThreadOptions, ListThreadsOptions, ThreadService } from '../../services/thread-service.js'
 import type { RuntimeError } from './runtime-error.js'
 import type { SessionStore } from '../../ports/session-store.js'
@@ -101,7 +101,8 @@ export async function listThreads(
     threads,
     ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
     ...(page.hasMore ? { hasMore: page.hasMore } : {}),
-    ...(page.total != null ? { total: page.total } : {})
+    ...(page.total != null ? { total: page.total } : {}),
+    ...(page.indexStatus ? { indexStatus: page.indexStatus } : {})
   }
   return jsonResponse(payload)
 }
@@ -136,6 +137,7 @@ export async function getThread(
   // replayable without creating either an old-state/new-cursor gap or duplicate
   // assistant text.
   const latestSeq = sessionStore ? await sessionStore.highestSeq(threadId) : 0
+  let replayFloor = latestSeq
   // With a durable session store, the thread metadata and items are separate
   // projections. Read only metadata here, then hydrate item history once
   // below; `service.get()` would otherwise transfer the same history first.
@@ -144,10 +146,16 @@ export async function getThread(
   if (sessionStore) {
     const loaded = await Promise.all([
       loadThreadMetadata(service, threadId),
-      sessionStore.loadItems(threadId)
+      typeof sessionStore.loadItemSnapshot === 'function'
+        ? sessionStore.loadItemSnapshot(threadId)
+        : sessionStore.loadItems(threadId).then((items) => ({ revision: 0, items }))
     ])
     thread = loaded[0]
-    loadedSessionItems = loaded[1]
+    loadedSessionItems = loaded[1].items
+    const replayAfterSeq = 'replayAfterSeq' in loaded[1] ? loaded[1].replayAfterSeq : undefined
+    if (typeof replayAfterSeq === 'number') {
+      replayFloor = Math.min(replayFloor, replayAfterSeq)
+    }
   } else {
     thread = await service.get(threadId)
   }
@@ -189,7 +197,7 @@ export async function getThread(
     : undefined
   return jsonResponse({
     ...ThreadSchemaReadable.parse(hydratedThread),
-    latestSeq,
+    latestSeq: replayFloor,
     pendingUserInputIds,
     ...(pendingApprovalIds ? { pendingApprovalIds } : {})
   })
@@ -222,8 +230,9 @@ export async function loadThreadRuntimeState(
   sessionStore?: SessionStore,
   userInputGate?: UserInputGate
 ): Promise<z.infer<typeof ThreadRuntimeStateSchema> | null> {
-  const [latestSeq, thread] = await Promise.all([
+  const [latestSeq, replayFloorSeq, thread] = await Promise.all([
     sessionStore ? sessionStore.highestSeq(threadId) : Promise.resolve(0),
+    sessionStore?.eventReplayFloorSeq?.(threadId) ?? Promise.resolve(0),
     loadThreadMetadata(service, threadId)
   ])
   if (!thread) {
@@ -236,6 +245,7 @@ export async function loadThreadRuntimeState(
     status: thread.status,
     updatedAt: thread.updatedAt,
     latestSeq,
+    replayFloorSeq,
     pendingUserInputIds: userInputGate?.pending(threadId).map((request) => request.id) ?? [],
     latestTurn: latestTurn
       ? {
@@ -318,16 +328,7 @@ export async function getThreadTimeline(
   delegationRuntime?: DelegationRuntime
 ): Promise<JsonResponse> {
   const url = new URL(request.url)
-  const parsedQuery = z.object({
-    before: z.string().min(1).max(256).optional(),
-    limit: z.preprocess((value) => {
-      if (typeof value !== 'string' || value.trim() === '') return THREAD_TIMELINE_MAX_ITEMS
-      return Number(value)
-    }, z.number().int().positive().max(THREAD_TIMELINE_MAX_ITEMS))
-  }).safeParse({
-    before: url.searchParams.get('before') ?? undefined,
-    limit: url.searchParams.get('limit') ?? undefined
-  })
+  const parsedQuery = parseThreadTimelineQuery(url)
   if (!parsedQuery.success) {
     return validationError('invalid thread timeline query', parsedQuery.error.issues)
   }
@@ -356,6 +357,9 @@ export async function getThreadTimeline(
   const page = sessionStore.loadItemPage
     ? await sessionStore.loadItemPage(threadId, pageOptions)
     : buildPublicItemHistoryPage(await sessionStore.loadItems(threadId), pageOptions)
+  if (page.replayAfterSeq !== undefined) {
+    replayFloor = Math.min(replayFloor, page.replayAfterSeq)
+  }
 
   const pendingApprovals = approvalGate?.pending(threadId) ?? []
   let sessionItems = await healSessionItemsForFinishedTurns(

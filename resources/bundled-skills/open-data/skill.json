@@ -1,0 +1,25 @@
+{
+  "id": "open-data",
+  "name": "Official Open Data",
+  "version": "1.0.0",
+  "description": "Retrieve official statistics from public international organizations and economic-data providers.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/open-data"
+    ],
+    "promptPatterns": [
+      "Eurostat",
+      "FRED",
+      "OECD",
+      "Official Open Data",
+      "open-data",
+      "WHO data",
+      "开放数据"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

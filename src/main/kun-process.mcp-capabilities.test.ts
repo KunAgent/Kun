@@ -150,8 +150,74 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   configureManagerAtomicJsonClient(null)
 })
-
 describe('syncGuiManagedKunConfig', () => {
+  it('injects the explicitly enabled built-in GitHub MCP without persisting its PAT', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    vi.stubEnv('GITHUB_PAT_TOKEN', 'github-secret-for-test')
+    const module = await import('./kun-process')
+    const runtime = defaultKunRuntimeSettings()
+    runtime.githubMcp = { ...runtime.githubMcp, enabled: true,
+      authorization: { source: 'GITHUB_PAT_TOKEN', host: 'github.com', login: 'octocat', scopes: ['repo'], fingerprint: 'a'.repeat(64) } }
+    await module.syncGuiManagedKunConfig(tempRoot, runtime, {
+      mcpConfigPath: join(tempRoot, 'missing-mcp.json')
+    })
+
+    const configPath = join(tempRoot, 'config.json')
+    const configText = readFileSync(configPath, 'utf8')
+    const config = JSON.parse(configText) as any
+    expect(config.capabilities.mcp.enabled).toBe(true)
+    expect(config.capabilities.mcp.servers.github).toMatchObject({
+      enabled: true,
+      managedBy: 'kun:github',
+      transport: 'streamable-http',
+      url: 'https://api.githubcopilot.com/mcp/readonly',
+      headers: {
+        Authorization: 'Bearer ${GITHUB_PAT_TOKEN}',
+        'X-MCP-Readonly': 'true'
+      }
+    })
+    expect(configText).not.toContain('github-secret-for-test')
+  }, 15_000)
+
+  it('preserves a user-owned GitHub server that uses the official URL', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    writeFileSync(configPath, JSON.stringify({
+      capabilities: {
+        mcp: {
+          enabled: true,
+          servers: {
+            github: {
+              enabled: false,
+              transport: 'streamable-http',
+              url: 'https://api.githubcopilot.com/mcp/readonly',
+              headers: {
+                Authorization: 'Bearer ${MY_GITHUB_TOKEN}',
+                'X-MCP-Readonly': 'true'
+              },
+              trustScope: 'user',
+              timeoutMs: 12_345
+            }
+          }
+        }
+      }
+    }), 'utf8')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), {
+      mcpConfigPath: join(tempRoot, 'missing-mcp.json')
+    })
+
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(config.capabilities.mcp.servers.github).toMatchObject({
+      enabled: false,
+      url: 'https://api.githubcopilot.com/mcp/readonly',
+      headers: { Authorization: 'Bearer ${MY_GITHUB_TOKEN}' },
+      timeoutMs: 12_345
+    })
+    expect(config.capabilities.mcp.servers.github).not.toHaveProperty('managedBy')
+  }, 15_000)
+
   it('writes GUI-managed MCP search settings without removing existing servers', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
     const configPath = join(tempRoot, 'config.json')

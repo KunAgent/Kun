@@ -1,5 +1,13 @@
 # Agent Request Observability
 
+> **Current product surface:** Agent Perspective has moved from the right rail
+> into the conversation center as **Trace**. New durable records contain compact
+> lifecycle metadata and optional content-addressed Prompt Manifests; raw HTTP
+> request/response payloads are no longer appended to persistent trace JSONL.
+> See [`conversation-trajectory.md`](./conversation-trajectory.md) for the
+> current UI, storage, API, and retention contract. The wire-inspection details
+> below document the bounded in-memory/legacy schema-v1 compatibility path.
+
 Kun's **Agent Perspective** is a local, thread-scoped HTTP inspector for model requests. It captures the effective request assembled by `CompatModelClient`, each retry or compatibility fallback, the HTTP response, the bounded raw response stream, and Kun's decoded output. The feature is for inspecting a conversation; it is not a runtime/process diagnostics panel and has no provider controls or replay action.
 
 ## Framework review
@@ -59,7 +67,7 @@ Capture is not retroactive. Requests that start while the conversation switch or
 
 ## Security and local storage
 
-Completed exchange records are append-only JSONL files at:
+Legacy schema-v1 completed exchange records were append-only JSONL files at:
 
 ```text
 <Kun dataDir>/observability/model-http/<base64url-thread-id>.jsonl
@@ -76,7 +84,7 @@ Credential values are removed **before** a record enters memory or storage:
 
 Header names are retained so request construction remains diagnosable. Request and response **bodies are intentionally not redacted**, because prompts and provider output are the data the inspector exists to show. Treat the trace directory as sensitive user data; do not attach it to an issue without reviewing its bodies.
 
-The default capture limit is 4 MiB for each request body and each response body. Records expose captured/original byte counts and an explicit truncation flag. Truncation affects only the retained copy, not the provider request or primary response parser. Disk JSONL currently has no age-based automatic eviction; it follows the conversation lifetime.
+The default in-memory capture limit is 4 MiB for each request body and each response body. New durable trajectory records omit these bodies and retain optional prompt detail through the bounded content-addressed store. Legacy JSONL remains readable and follows its existing retention policy.
 
 ## API
 

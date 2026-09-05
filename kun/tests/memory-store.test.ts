@@ -7,6 +7,7 @@ import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
 import { buildMemoryToolProviders } from '../src/adapters/tool/memory-tool-provider.js'
 import { KunCapabilitiesConfig, type MemoryCapabilityConfig } from '../src/contracts/capabilities.js'
 import { effectiveMemoryConfidence, FileMemoryStore } from '../src/memory/memory-store.js'
+import { memoryFreshness } from '../src/memory/memory-ranking.js'
 import type { ModelClient, ModelRequest } from '../src/ports/model-client.js'
 import { modelRequestContextText } from '../src/loop/model-request-context.js'
 import { dispatchRequest } from '../src/server/http-server.js'
@@ -64,14 +65,13 @@ describe('Memory store and recall', () => {
     }
   })
 
-  it('tracks provenance, expiry, confidence decay, and legacy records', async () => {
+  it('tracks provenance, expiry, independent freshness, and legacy records', async () => {
     let now = '2026-06-03T00:00:00.000Z'
     const store = new FileMemoryStore({
       rootDir: join(dir, 'memory'),
       config: memoryConfig(),
       nowIso: () => now,
-      idGenerator: () => `mem_${nextId++}`,
-      confidenceHalfLifeMs: 1_000
+      idGenerator: () => `mem_${nextId++}`
     })
     const memory = await store.create({
       content: 'Observed build uses a generated manifest',
@@ -85,7 +85,8 @@ describe('Memory store and recall', () => {
       provenance: { kind: 'inference', turnId: 'turn_1', origin: 'analysis' },
       expiresAt: '2026-06-03T00:00:02.000Z'
     })
-    expect(effectiveMemoryConfidence(memory, Date.parse(now) + 1_000, 1_000)).toBeCloseTo(0.2)
+    expect(effectiveMemoryConfidence(memory)).toBe(0.4)
+    expect(memoryFreshness(memory, Date.parse(now) + 1_000, 1_000)).toBeCloseTo(0.5)
     expect(await store.retrieve({ query: 'generated manifest', workspace: '/tmp/ws', limit: 3 })).toHaveLength(1)
 
     now = '2026-06-03T00:00:03.000Z'

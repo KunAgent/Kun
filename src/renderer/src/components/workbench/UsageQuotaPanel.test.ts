@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create as createRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetUsageRequestCacheForTests } from '../../hooks/usage-request-cache'
+import { resetUsageSummaryCacheForTests } from '../../hooks/usage-summary-cache'
 import i18n from '../../i18n'
 import { UsageQuotaPanel } from './UsageQuotaPanel'
 
@@ -25,8 +27,13 @@ function usageResponse(
           cached_tokens: 720,
           cache_miss_tokens: 180,
           total_tokens: 1000,
-          cost_usd: 0.01,
-          cost_cny: 0.072,
+          cost_usd: 1.3583333333,
+          cost_cny: 9.78,
+          value_estimate_usd: 2344.4486111111,
+          value_estimate_cny: 16880.03,
+          value_estimate_coverage: 'complete',
+          value_estimate_priced_requests: 2,
+          value_estimate_unpriced_requests: 0,
           token_economy_savings_tokens: 100,
           turns: 2,
           thread_count: 1,
@@ -72,8 +79,13 @@ function usageResponse(
         cached_tokens: 720,
         cache_miss_tokens: 180,
         total_tokens: 1000,
-        cost_usd: 0.01,
-        cost_cny: 0.072,
+        cost_usd: 1.3583333333,
+        cost_cny: 9.78,
+        value_estimate_usd: 2344.4486111111,
+        value_estimate_cny: 16880.03,
+        value_estimate_coverage: 'complete',
+        value_estimate_priced_requests: 2,
+        value_estimate_unpriced_requests: 0,
         token_economy_savings_tokens: 100,
         turns: 2,
         cache_hit_rate: 0.8,
@@ -91,13 +103,27 @@ function inclusiveRangeDays(path: string): number {
   return Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1
 }
 
+function expectUsageRange(
+  runtimeRequest: ReturnType<typeof vi.fn>,
+  groupBy: 'day' | 'model',
+  days: number
+): void {
+  const path = runtimeRequest.mock.calls
+    .filter(([path]) => path.includes(`group_by=${groupBy}`))
+    .at(-1)?.[0]
+  expect(path).toBeTypeOf('string')
+  expect(inclusiveRangeDays(path as string)).toBe(days)
+}
 describe('UsageQuotaPanel', () => {
   beforeEach(async () => {
+    resetUsageRequestCacheForTests()
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     await i18n.changeLanguage('en')
   })
 
   afterEach(() => {
+    resetUsageRequestCacheForTests()
+    resetUsageSummaryCacheForTests()
     vi.unstubAllGlobals()
   })
 
@@ -126,13 +152,12 @@ describe('UsageQuotaPanel', () => {
     expect(renderer.root.findByProps({ id: 'usage-quota-tab-usage' }).props['data-active']).toBe('true')
     expect(renderer.root.findByProps({ id: 'usage-quota-tab-quota' }).props['data-active']).toBe('false')
     expect(renderer.root.findByProps({ 'data-sidebar-usage-panel': true })).toBeTruthy()
-    expect(renderer.root.findByProps({ 'data-usage-range': '7d' }).props['aria-pressed']).toBe(false)
+    expect(renderer.root.findByProps({ 'data-usage-range': '7d' }).props['aria-pressed']).toBe(true)
     expect(renderer.root.findByProps({ 'data-usage-range': '30d' }).props['aria-pressed']).toBe(false)
-    expect(renderer.root.findByProps({ 'data-usage-range': '90d' }).props['aria-pressed']).toBe(true)
+    expect(renderer.root.findByProps({ 'data-usage-range': '90d' }).props['aria-pressed']).toBe(false)
     expect(renderer.root.findByProps({ 'data-usage-range': 'all' }).props['aria-pressed']).toBe(false)
-    expect(inclusiveRangeDays(
-      runtimeRequest.mock.calls.find(([path]) => path.includes('group_by=model'))![0]
-    )).toBe(90)
+    expectUsageRange(runtimeRequest, 'day', 365)
+    expectUsageRange(runtimeRequest, 'model', 7)
     expect(listProviderQuotas).not.toHaveBeenCalled()
     const output = JSON.stringify(renderer.toJSON())
     expect(output).toContain('1.0k')
@@ -164,27 +189,22 @@ describe('UsageQuotaPanel', () => {
     expect(renderer.root.findByProps({ 'aria-label': 'Next page' }).props.disabled).toBe(true)
 
     await act(async () => {
-      renderer.root.findByProps({ 'data-usage-range': '7d' }).props.onClick()
-    })
-
-    expect(renderer.root.findByProps({ 'data-usage-range': '7d' }).props['aria-pressed']).toBe(true)
-    expect(inclusiveRangeDays(
-      runtimeRequest.mock.calls.filter(([path]) => path.includes('group_by=model')).at(-1)![0]
-    )).toBe(7)
-
-    await act(async () => {
       renderer.root.findByProps({ 'data-usage-range': '30d' }).props.onClick()
     })
-    expect(inclusiveRangeDays(
-      runtimeRequest.mock.calls.filter(([path]) => path.includes('group_by=model')).at(-1)![0]
-    )).toBe(30)
+    expectUsageRange(runtimeRequest, 'day', 365)
+    expectUsageRange(runtimeRequest, 'model', 30)
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-usage-range': '90d' }).props.onClick()
+    })
+    expectUsageRange(runtimeRequest, 'day', 365)
+    expectUsageRange(runtimeRequest, 'model', 90)
 
     await act(async () => {
       renderer.root.findByProps({ 'data-usage-range': 'all' }).props.onClick()
     })
-    expect(inclusiveRangeDays(
-      runtimeRequest.mock.calls.filter(([path]) => path.includes('group_by=model')).at(-1)![0]
-    )).toBe(365)
+    expectUsageRange(runtimeRequest, 'day', 365)
+    expectUsageRange(runtimeRequest, 'model', 365)
 
     const resetPage = JSON.stringify(renderer.toJSON())
     expect(resetPage).toContain('Showing 1–5 / 6')
@@ -235,6 +255,26 @@ describe('UsageQuotaPanel', () => {
     expect(output).not.toContain('deepseek-v4-idle')
     expect(output).not.toContain('0.0%')
     expect(listProviderQuotas).not.toHaveBeenCalled()
+    act(() => renderer.unmount())
+  })
+
+  it('labels Chinese reference estimates separately from recorded cost', async () => {
+    await i18n.changeLanguage('zh')
+    const runtimeRequest = vi.fn(async (path: string) => usageResponse(path))
+    vi.stubGlobal('window', {
+      kunGui: { runtimeRequest, listProviderQuotas: vi.fn(async () => ({ entries: [] })) }
+    })
+
+    let renderer!: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
+    })
+
+    const output = JSON.stringify(renderer.toJSON())
+    expect(output).toContain('￥9.78')
+    expect(output).toContain('参考估值 ≈￥16,880.03')
+    expect(output).toContain('按参考 API 价格和参考汇率估算，并非订阅账户的实际扣费。')
+    expect(output).not.toContain('￥9.78 · ≈￥16880.03')
     act(() => renderer.unmount())
   })
 

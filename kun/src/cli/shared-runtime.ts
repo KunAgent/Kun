@@ -6,7 +6,6 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { RuntimeInfoResponse, type RuntimeInfoResponse as RuntimeInfo } from '../contracts/runtime-info.js'
-import { isLoopbackHost } from '../server/loopback-host.js'
 import {
   createRuntimeDiscoveryRecord,
   type RuntimeDiscoveryRecord,
@@ -16,12 +15,15 @@ import {
 } from '../server/runtime-discovery.js'
 import {
   hasUnpublishedGuiRuntime,
-  readGuiSharedSettings,
-  syncGuiProviderCatalogToConfig
+  readGuiSharedSettings
 } from './gui-settings-bridge.js'
 import { readRuntimeBuildIdForEntry } from '../server/runtime-build-identity.js'
 import { DEFAULT_FRESH_SERVE_PERMISSIONS } from './cli-options.js'
 import type { RuntimeFlavor, RuntimeRegistration } from '../contracts/runtime-flavor.js'
+import {
+  KUN_RUNTIME_CLIENT_OWNER_KIND_ENV,
+  type RuntimeClientOwnerKind
+} from '../contracts/runtime-owner.js'
 import { defaultKunControlDir } from '../manager/manager-discovery.js'
 import {
   readManagerRuntime,
@@ -40,14 +42,29 @@ import {
   withRuntimeDataDirConfigWriter
 } from '../server/runtime-data-dir-lease.js'
 import { requestExactRuntimeShutdown } from './runtime-shutdown-client.js'
+import {
+  probeRuntimeDiscovery,
+  waitForSpawnedSharedRuntime,
+  waitForStartingSharedRuntime
+} from './shared-runtime-launch.js'
+import { createSharedRuntimeReadiness } from './shared-runtime-readiness.js'
+import {
+  assertOneShotRuntimeControlAllowed,
+  assertRuntimeSelfControlAllowed,
+  sameInspectedRuntimeOwner
+} from './shared-runtime-command-guard.js'
 
-const START_TIMEOUT_MS = 30_000
+export { probeRuntimeDiscovery } from './shared-runtime-launch.js'
+
+const START_TIMEOUT_MS = process.platform === 'win32' ? 90_000 : 60_000
 const STOP_TIMEOUT_MS = 15_000
 const POLL_MS = 100
 
 export type SharedRuntimeConnection = {
   discovery: RuntimeDiscoveryRecord
   info: RuntimeInfo
+  /** Keeps a client-owned child/IPC channel alive for its owner session. */
+  ownerProcess?: import('node:child_process').ChildProcess
   activeTurnCount?: number
   managerProtocolVersion?: number
 }
@@ -55,12 +72,16 @@ export type SharedRuntimeConnection = {
 export type SharedRuntimeInspection = {
   discovery: RuntimeDiscoveryRecord
   connection: SharedRuntimeConnection | null
+  /** False while Manager owns the slot but the same instance has not published discovery. */
+  published?: boolean
 }
 
 export type SharedRuntimeScope = {
   runtimeFlavor?: RuntimeFlavor
   controlDir?: string
   manager?: ServiceManagerConnection
+  /** Non-secret identity of a Runtime hosting this CLI invocation. */
+  callerRuntimeInstanceId?: string
 }
 
 export async function runRuntimeCommand(
@@ -98,10 +119,12 @@ export async function runRuntimeCommand(
   const manager = resolvedManager && sameCanonicalPath(resolvedManager.discovery.dataDir, dataDir)
     ? resolvedManager
     : undefined
+  const hostedInstanceId = environment.KUN_RUNTIME_INSTANCE_ID?.trim()
   const scope: SharedRuntimeScope = {
     runtimeFlavor,
     controlDir,
-    ...(manager ? { manager } : {})
+    ...(manager ? { manager } : {}),
+    ...(hostedInstanceId ? { callerRuntimeInstanceId: hostedInstanceId } : {})
   }
   const unpublishedGuiRuntime = guiSettings && dataDir === guiSettings.dataDir
     ? await hasUnpublishedGuiRuntime(guiSettings, fetchImpl)
@@ -135,72 +158,24 @@ export async function runRuntimeCommand(
     if (unpublishedGuiRuntime) {
       throw new Error('an older GUI runtime is using this data directory; close or update the GUI before stop/restart')
     }
+    const target = await inspectSharedRuntime(dataDir, fetchImpl, scope)
+    assertOneShotRuntimeControlAllowed(target, hostedInstanceId)
     if (command === 'stop') {
-      const stopped = await stopSharedRuntime(dataDir, fetchImpl, scope)
+      const confirmed = await inspectSharedRuntime(dataDir, fetchImpl, scope)
+      assertOneShotRuntimeControlAllowed(confirmed, hostedInstanceId)
+      if (!sameInspectedRuntimeOwner(target, confirmed)) {
+        throw new Error('runtime owner changed while stop was being confirmed; retry the command')
+      }
+      const stopped = confirmed
+        ? await stopInspectedSharedRuntime(dataDir, confirmed, fetchImpl, scope)
+        : false
       io.stdout.write(stopped ? `${runtimeLabel} stopped.\n` : `${runtimeLabel} is not running.\n`)
       return 0
     }
-    await stopSharedRuntime(dataDir, fetchImpl, scope)
-    // A managed Runtime's registry is already Manager-owned, and this CLI
-    // process does not hold the Manager's writer authority. Never borrow that
-    // cross-process lease for a legacy config-file rewrite. Unmanaged restart
-    // has just stopped its sole Runtime owner, so the sync can take a bounded
-    // config claim before the replacement Runtime starts.
-    if (guiSettings && !manager) {
-      await syncGuiProviderCatalogToConfig(dataDir, guiSettings)
-    }
-    const restarted = await ensureSharedRuntime({
-      dataDir,
-      env: io.env,
-      fetch: fetchImpl,
-      runtimeFlavor,
-      controlDir,
-      ...(manager ? { manager } : {})
-    })
-    io.stdout.write(`${runtimeLabel} restarted at ${restarted.discovery.baseUrl}.\n`)
-    return 0
+    throw new Error('runtime restart must be performed by the owning GUI or TUI; use `kun serve` for a foreground Runtime')
   } catch (error) {
     io.stderr.write(`kun runtime: ${error instanceof Error ? error.message : String(error)}\n`)
     return 70
-  }
-}
-
-export async function probeRuntimeDiscovery(
-  record: RuntimeDiscoveryRecord,
-  fetchImpl: typeof fetch = fetch
-): Promise<SharedRuntimeConnection | null> {
-  if (!safeDiscoveryUrl(record)) return null
-  if (!processAlive(record.pid)) return null
-  try {
-    const response = await fetchImpl(`${record.baseUrl.replace(/\/$/u, '')}/v1/runtime/info`, {
-      headers: record.runtimeToken
-        ? { authorization: `Bearer ${record.runtimeToken}` }
-        : {},
-      signal: AbortSignal.timeout(2_000)
-    })
-    if (!response.ok) return null
-    const info = RuntimeInfoResponse.parse(await response.json())
-    if (
-      info.instanceId !== record.instanceId ||
-      info.pid !== record.pid ||
-      info.startedAt !== record.startedAt ||
-      info.serviceVersion !== record.serviceVersion ||
-      info.buildId !== record.buildId
-    ) return null
-    const activeTurnCount = parseActiveTurnCount(
-      response.headers.get('x-kun-active-turn-count')
-    )
-    const managerProtocolVersion = parsePositiveIntegerHeader(
-      response.headers.get('x-kun-manager-protocol-version')
-    )
-    return {
-      discovery: record,
-      info,
-      ...(activeTurnCount !== undefined ? { activeTurnCount } : {}),
-      ...(managerProtocolVersion !== undefined ? { managerProtocolVersion } : {})
-    }
-  } catch {
-    return null
   }
 }
 
@@ -228,7 +203,8 @@ export async function inspectSharedRuntime(
       dataDir,
       scope.manager,
       flavor,
-      fetchImpl
+      fetchImpl,
+      scope.controlDir
     )
     if (managed) return managed
   }
@@ -239,7 +215,8 @@ export async function inspectSharedRuntime(
   }
   return {
     discovery,
-    connection: await probeRuntimeDiscovery(discovery, fetchImpl)
+    connection: await probeRuntimeDiscovery(discovery, dataDir, fetchImpl),
+    published: true
   }
 }
 
@@ -258,6 +235,8 @@ export async function ensureSharedRuntime(input: {
   env?: Record<string, string | undefined>
   fetch?: typeof fetch
   timeoutMs?: number
+  clientOwnerKind?: RuntimeClientOwnerKind
+  runtimeStartLockHeld?: boolean
   launch?: {
     command: string
     args: string[]
@@ -275,20 +254,42 @@ export async function ensureSharedRuntime(input: {
     sourceBuildId,
     runtimeFlavor
   )
+  const readiness = createSharedRuntimeReadiness({
+    inspect: () => inspectSharedRuntime(input.dataDir, fetchImpl, scope),
+    reusable: (inspected) => reusableRuntimeConnection(inspected, expectedBuildId),
+    compatibleStarting: (inspected) =>
+      inspected?.published === false &&
+      runtimeDiscoveryMatchesExpectedBuild(inspected.discovery, expectedBuildId)
+  })
   const existing = await inspectSharedRuntime(input.dataDir, fetchImpl, scope)
-  const reusable = input.forceReplace
-    ? null
-    : reusableRuntimeConnection(existing, expectedBuildId)
+  if (input.clientOwnerKind && existing) throw clientOwnedConflict(existing, input.dataDir)
+  const reusable = input.forceReplace || input.clientOwnerKind ? null : await readiness.published()
   if (reusable) return reusable
-  assertRuntimeCanBeReplaced(existing)
-  const launch = () => withRuntimeStartLock(discoveryDir, async () => {
-    const elected = await inspectSharedRuntime(input.dataDir, fetchImpl, scope)
-    const electedReusable = input.forceReplace
-      ? null
-      : reusableRuntimeConnection(elected, expectedBuildId)
+  if (!readiness.canFinish(existing) && !(input.forceReplace && existing?.published === false)) {
+    assertRuntimeCanBeReplaced(existing)
+  }
+  const launch = async () => {
+    const deadline = Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
+    let elected = await inspectSharedRuntime(input.dataDir, fetchImpl, scope)
+    if (input.clientOwnerKind && elected) throw clientOwnedConflict(elected, input.dataDir)
+    const electedReusable = input.forceReplace || input.clientOwnerKind ? null : await readiness.published()
     if (electedReusable) return electedReusable
-    assertRuntimeCanBeReplaced(elected)
-    if (elected?.connection) {
+    if (!input.forceReplace && !input.clientOwnerKind && readiness.canFinish(elected)) {
+      const attached = await waitForStartingSharedRuntime({
+        deadline,
+        pollMs: POLL_MS,
+        observe: readiness.observe,
+        timeoutError: () => new Error(
+          'Kun shared runtime owner did not publish readiness before the startup deadline'
+        )
+      })
+      if (attached.kind === 'ready') return attached.value
+      elected = await inspectSharedRuntime(input.dataDir, fetchImpl, scope)
+    }
+    if (!(input.forceReplace && elected?.published === false)) {
+      assertRuntimeCanBeReplaced(elected)
+    }
+    if (elected?.connection || (input.forceReplace && elected?.published === false)) {
       await stopInspectedSharedRuntime(input.dataDir, elected, fetchImpl, scope)
     }
     const stale = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
@@ -344,6 +345,7 @@ export async function ensureSharedRuntime(input: {
       KUN_RUNTIME_FLAVOR: runtimeFlavor,
       KUN_RUNTIME_DISCOVERY_DIR: discoveryDir,
       KUN_RUNTIME_LOG_PATH: logPath,
+      ...(input.clientOwnerKind ? { [KUN_RUNTIME_CLIENT_OWNER_KIND_ENV]: input.clientOwnerKind } : {}),
       ...(input.manager
         ? {
             KUN_MANAGER_CONTROL_DIR: controlDir,
@@ -366,28 +368,32 @@ export async function ensureSharedRuntime(input: {
       child = spawn(command, args, {
         detached: true,
         windowsHide: true,
-        stdio: ['ignore', logFd, logFd],
+        stdio: input.clientOwnerKind ? ['ignore', logFd, logFd, 'ipc'] : ['ignore', logFd, logFd],
         env
       })
       child.unref()
+      if (input.clientOwnerKind) child.channel?.unref()
     } finally {
       closeSync(logFd)
     }
+    const connection = await waitForSpawnedSharedRuntime({
+      child,
+      deadline,
+      pollMs: POLL_MS,
+      observe: readiness.observe,
+      allowWinningOwner: input.clientOwnerKind === undefined,
+      timeoutError: () => new Error(`Kun shared runtime did not become ready; inspect ${logPath}`)
+    })
+    return input.clientOwnerKind ? { ...connection, ownerProcess: child } : connection
+  }
+  const electedLaunch = input.runtimeStartLockHeld
+    ? launch
+    : () => withRuntimeStartLock(discoveryDir, launch, runtimeFlavor)
+  return input.manager ? electedLaunch() : withRuntimeDataDirAncillaryWriter(input.dataDir, electedLaunch)
+}
 
-    const deadline = Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
-    while (Date.now() < deadline) {
-      const connection = await resolveSharedRuntime(input.dataDir, fetchImpl, scope)
-      if (connection && runtimeMatchesExpectedBuild(connection, expectedBuildId)) {
-        return connection
-      }
-      if (child.exitCode !== null) break
-      await delay(POLL_MS)
-    }
-    throw new Error(`Kun shared runtime did not become ready; inspect ${logPath}`)
-  }, runtimeFlavor)
-  return input.manager
-    ? launch()
-    : withRuntimeDataDirAncillaryWriter(input.dataDir, launch)
+function clientOwnedConflict(existing: SharedRuntimeInspection, dataDir: string): Error {
+  return new Error(`Kun Runtime process ${existing.discovery.pid} already owns ${dataDir}`)
 }
 
 function reusableRuntimeConnection(
@@ -434,6 +440,13 @@ export function runtimeMatchesExpectedBuild(
   if (!expectedBuildId) return true
   return connection.discovery.buildId === expectedBuildId &&
     connection.info.buildId === expectedBuildId
+}
+
+function runtimeDiscoveryMatchesExpectedBuild(
+  discovery: RuntimeDiscoveryRecord,
+  expectedBuildId: string | undefined
+): boolean {
+  return !expectedBuildId || discovery.buildId === expectedBuildId
 }
 
 async function prepareFreshSharedRuntimeCapabilities(dataDir: string): Promise<void> {
@@ -533,7 +546,7 @@ export async function stopSharedRuntime(
   return stopInspectedSharedRuntime(dataDir, inspected, fetchImpl, scope)
 }
 
-async function stopInspectedSharedRuntime(
+export async function stopInspectedSharedRuntime(
   dataDir: string,
   inspected: SharedRuntimeInspection,
   fetchImpl: typeof fetch,
@@ -543,6 +556,7 @@ async function stopInspectedSharedRuntime(
   const discoveryDir = runtimeDiscoveryDirectory(dataDir, runtimeFlavor, scope.controlDir)
   const record = inspected.discovery
   const live = inspected.connection
+  assertRuntimeSelfControlAllowed(inspected, scope.callerRuntimeInstanceId)
   try {
     await requestExactRuntimeShutdown(record, fetchImpl)
   } catch (error) {
@@ -581,7 +595,8 @@ async function inspectManagerRuntime(
   dataDir: string,
   manager: ServiceManagerConnection,
   flavor: RuntimeFlavor,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  controlDir = defaultKunControlDir()
 ): Promise<SharedRuntimeInspection | null> {
   const registration = await readManagerRuntime(manager, flavor, fetchImpl)
   if (!registration) return null
@@ -595,14 +610,28 @@ async function inspectManagerRuntime(
     return null
   }
   const fallback = discoveryFromManagerRegistration(registration)
-  return {
-    discovery: fallback,
-    connection: await probeManagerRuntimeRegistration(
-      dataDir,
-      registration,
-      fetchImpl
-    )
+  const discoveryDir = runtimeDiscoveryDirectory(dataDir, flavor, controlDir)
+  const published = await readRuntimeDiscovery(discoveryDir, flavor).catch(() => null)
+  if (!published || !samePublishedRuntimeOwner(registration, published)) {
+    return { discovery: fallback, connection: null, published: false }
   }
+  const connection = await probeManagerRuntimeRegistration(dataDir, registration, fetchImpl)
+  return {
+    discovery: published,
+    connection: connection ? { ...connection, discovery: published } : null,
+    published: true
+  }
+}
+
+function samePublishedRuntimeOwner(
+  registration: RuntimeRegistration,
+  discovery: RuntimeDiscoveryRecord
+): boolean {
+  return registration.instanceId === discovery.instanceId &&
+    registration.pid === discovery.pid &&
+    registration.startedAt === discovery.startedAt &&
+    registration.buildId === discovery.buildId &&
+    registration.clientOwnerKind === discovery.clientOwnerKind
 }
 
 async function probeManagerRuntimeRegistration(

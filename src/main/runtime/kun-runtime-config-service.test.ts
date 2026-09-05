@@ -232,6 +232,30 @@ describe('Kun runtime config service', () => {
     }
   })
 
+  it('does not project GUI-only Automatic plan-build defaults into Kun config', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-auto-plan-build-'))
+    const defaults = defaultKunRuntimeSettings()
+    const runtime = {
+      ...defaults,
+      lab: {
+        ...defaults.lab,
+        autoPlanBuild: {
+          ...defaults.lab.autoPlanBuild,
+          enabled: true,
+          confirmation: 'defaults' as const,
+          defaultBuildMode: 'scheduled' as const
+        }
+      }
+    }
+    try {
+      const config = await syncGuiManagedKunConfig(dataDir, runtime)
+      expect(config.lab).not.toHaveProperty('autoPlanBuild')
+      expect(config.lab?.pptAgent).toBeDefined()
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('persists only provider ids for Registry-backed media capabilities', () => {
     const defaults = defaultKunRuntimeSettings()
     const capabilities = {

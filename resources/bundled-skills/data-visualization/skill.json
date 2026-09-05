@@ -1,0 +1,25 @@
+{
+  "id": "data-visualization",
+  "name": "Data Visualization",
+  "version": "1.0.0",
+  "description": "Design and generate accurate statistical visualizations with readable scales, labels, annotations, and source context.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/data-visualization"
+    ],
+    "promptPatterns": [
+      "chart",
+      "Data Visualization",
+      "data-visualization",
+      "matplotlib",
+      "plot",
+      "seaborn",
+      "数据可视化"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

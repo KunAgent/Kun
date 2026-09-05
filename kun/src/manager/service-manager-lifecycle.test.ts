@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -28,6 +28,43 @@ async function fixture() {
 }
 
 describe('Service Manager data-directory lease lifecycle', () => {
+  it('backs up corrupt persisted state and remains restartable', async () => {
+    const test = await fixture()
+    const statePath = join(test.controlDir, 'manager-state.json')
+    await mkdir(test.controlDir, { recursive: true })
+    await writeFile(statePath, '\0'.repeat(1_692))
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const first = await startServiceManager({
+      controlDir: test.controlDir,
+      managerToken: 'manager-token',
+      instanceId: 'manager-recovered',
+      startedAt: '2026-08-31T00:00:00.000Z',
+      dataDir: test.dataDir,
+      settingsPath: test.settingsPath
+    })
+    await expect(fetch(`${first.discovery.baseUrl}/health`)).resolves.toMatchObject({ ok: true })
+    await first.close()
+
+    const entries = await readdir(test.controlDir)
+    expect(entries.filter((name) => name.startsWith('manager-state.json.corrupt-'))).toHaveLength(1)
+    expect(JSON.parse(await readFile(statePath, 'utf8'))).toMatchObject({ version: 5, slots: [] })
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('recovered corrupt manager state'))
+
+    const second = await startServiceManager({
+      controlDir: test.controlDir,
+      managerToken: 'manager-token',
+      instanceId: 'manager-restarted',
+      startedAt: '2026-08-31T00:01:00.000Z',
+      dataDir: test.dataDir,
+      settingsPath: test.settingsPath
+    })
+    await expect(fetch(`${second.discovery.baseUrl}/health`)).resolves.toMatchObject({ ok: true })
+    await second.close()
+    expect((await readdir(test.controlDir))
+      .filter((name) => name.startsWith('manager-state.json.corrupt-'))).toHaveLength(1)
+  })
+
   it('remains the sole writer-claim owner for managed Runtime compositions', async () => {
     const test = await fixture()
     const manager = await startServiceManager({

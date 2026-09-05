@@ -117,7 +117,7 @@ import {
   type ExtensionJsonSchemaValidator
 } from '../extensions/json-schema-validator.js'
 import { extensionError } from '../extensions/errors.js'
-import { type ExtensionHostBroker, RegistrationIdSchema, RegistrationRequestSchema, RunIdSchema, ThreadIdSchema, SubscriptionIdSchema, StorageRequestSchema, StorageKeysRequestSchema, StorageSetRequestSchema, ConfigurationSectionSchema, ConfigurationRequestSchema, ConfigurationUpdateRequestSchema, CommandRegisterSchema, CommandExecuteSchema, ModelStreamNotificationSchema, ModelStreamEnvelopePayloadSchema, DEFAULT_PROVIDER_STREAM_QUEUE_EVENTS, DEFAULT_PROVIDER_STREAM_QUEUE_BYTES, type ExtensionHostBrokerOptions, type ToolRegistration, type ProviderRegistration, type AgentSubscription, type JobSubscription, type CommandRegistration, type StoredAccountSession, type ExtensionBrokerDispatchRequest, type ProviderStreamEntry, requiredExtensionBrokerPermission, publicMediaMetadata, cacheFormat, publicMediaCapability, jobCaller, hostOwnsRegistration, registrationOwnedByPrincipal, normalizedRegistrationWorkspaceRoots, registrationIncludesWorkspace, sameRegistrationWorkspace, hostPrincipal, publicAgentRun, publicAgentEvent, publicOwnedThread, publicBudget, publicUsage, publicRunState, publicAccount, publicAccountSession, boundedError, providerCapabilities, resolveAuthentication, effectiveAuthenticationScopes, internalAuthenticationType, toolSideEffect, activationEventFor, requireManifestContribution, assertManifestDeclarationMatches, canonicalizeJson, expandProviderPermissions, requiredWorkspaceKey, viewStateKey, confinedWorkspacePath, verifyWorkspaceTarget, inside, assertNetworkPermission, responseProjection, readBoundedResponseBody, linkedAbortController, agentInputText, cancellationSignal, providerStreamKey, providerQueueLimitError, serializedQueueBytes, positiveQueueLimit, safeJsonObject, toPublicJson, toJson, isObject, AsyncEventQueue } from './extension-host-broker-core.js'
+import { type ExtensionHostBroker, RegistrationIdSchema, RegistrationRequestSchema, RunIdSchema, ThreadIdSchema, SubscriptionIdSchema, StorageRequestSchema, StorageKeysRequestSchema, StorageSetRequestSchema, SecretRequestSchema, SecretSetRequestSchema, ConfigurationSectionSchema, ConfigurationRequestSchema, ConfigurationUpdateRequestSchema, CommandRegisterSchema, CommandExecuteSchema, ModelStreamNotificationSchema, ModelStreamEnvelopePayloadSchema, DEFAULT_PROVIDER_STREAM_QUEUE_EVENTS, DEFAULT_PROVIDER_STREAM_QUEUE_BYTES, type ExtensionHostBrokerOptions, type ToolRegistration, type ProviderRegistration, type AgentSubscription, type JobSubscription, type CommandRegistration, type StoredAccountSession, type ExtensionBrokerDispatchRequest, type ProviderStreamEntry, requiredExtensionBrokerPermission, publicMediaMetadata, cacheFormat, publicMediaCapability, jobCaller, hostOwnsRegistration, registrationOwnedByPrincipal, normalizedRegistrationWorkspaceRoots, registrationIncludesWorkspace, sameRegistrationWorkspace, hostPrincipal, publicAgentRun, publicAgentEvent, publicOwnedThread, publicBudget, publicUsage, publicRunState, publicAccount, publicAccountSession, boundedError, providerCapabilities, resolveAuthentication, effectiveAuthenticationScopes, internalAuthenticationType, toolSideEffect, activationEventFor, requireManifestContribution, assertManifestDeclarationMatches, canonicalizeJson, expandProviderPermissions, requiredWorkspaceKey, viewStateKey, confinedWorkspacePath, verifyWorkspaceTarget, inside, assertNetworkPermission, responseProjection, readBoundedResponseBody, linkedAbortController, agentInputText, cancellationSignal, providerStreamKey, providerQueueLimitError, serializedQueueBytes, positiveQueueLimit, safeJsonObject, toPublicJson, toJson, isObject, AsyncEventQueue } from './extension-host-broker-core.js'
 
 export const extensionHostBrokerJobsUiStorageOperations = {
 async jobsGet(this: ExtensionHostBroker, principal: ExtensionPrincipal, params: JsonValue) {
@@ -339,6 +339,31 @@ async storage(this: ExtensionHostBroker, principal: ExtensionPrincipal, method: 
     throw new Error(`unsupported storage broker method: ${method}`)
   },
 
+async secrets(this: ExtensionHostBroker, principal: ExtensionPrincipal, method: string, params: JsonValue) {
+    const input = method === 'secrets.set'
+      ? SecretSetRequestSchema.parse(params)
+      : SecretRequestSchema.parse(params)
+    const reference = extensionSecretReference(principal.extensionId, input.key)
+    if (method === 'secrets.get') {
+      const stored = await this['options'].credentials.get(reference)
+      return stored?.clientSecret === undefined
+        ? { found: false }
+        : { found: true, value: stored.clientSecret }
+    }
+    if (method === 'secrets.set') {
+      await this['options'].credentials.set(reference, {
+        clientSecret: SecretSetRequestSchema.parse(params).value
+      })
+      return null
+    }
+    if (method === 'secrets.delete') {
+      const existed = (await this['options'].credentials.get(reference)) !== null
+      if (existed) await this['options'].credentials.delete(reference)
+      return { deleted: existed }
+    }
+    throw new Error(`unsupported secrets broker method: ${method}`)
+  },
+
 async configuration(this: ExtensionHostBroker, principal: ExtensionPrincipal, method: string, params: JsonValue) {
     const manifest = await this['options'].resolveManifest?.(principal.extensionId)
     if (!manifest || manifest.version !== principal.extensionVersion) {
@@ -419,4 +444,14 @@ async networkFetch(this: ExtensionHostBroker, principal: ExtensionPrincipal, par
       controller.dispose()
     }
   },
+}
+
+function extensionSecretReference(extensionId: string, key: string): string {
+  const digest = createHash('sha256')
+    .update('kun-extension-secret\0')
+    .update(extensionId)
+    .update('\0')
+    .update(key)
+    .digest('hex')
+  return `cred_${digest}`
 }

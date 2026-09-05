@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import type { SkillRootListItem } from '@shared/kun-gui-api'
+import { RECOMMENDED_ITEMS } from './plugin-marketplace-catalog'
 import {
   buildMcpConfig,
   buildRemoteMcpConfig,
   customMcpConfigFragment,
   auditMcpConfigSupplyChain,
   auditMarketplaceInstall,
+  hasUserConfiguredGitHubMcp,
   isAllowedDocsUrl,
   isHttpsUrl,
+  isSystemManagedMcpServerId,
   mcpConfigHasServer,
   mcpConfigHasServers,
   mcpMarketplaceItemsFromConfigAndDiagnostics,
   mergeMcpJsonConfig,
+  overlaySystemManagedMcpDiagnostics,
+  recommendedMarketplaceItemsForMcpConfig,
   recommendedMarketplaceItemIds,
   setMcpServerEnabled,
   skillMarketplaceItemsFromDiscoveredSkills,
@@ -31,6 +36,82 @@ describe('PluginMarketplaceView MCP config helpers', () => {
       'vercel'
     ]))
     expect(recommendedMarketplaceItemIds()).not.toContain('google-workspace')
+  })
+
+  it('ships GitHub as a system-managed remote MCP instead of the deprecated npm server', () => {
+    const github = RECOMMENDED_ITEMS.find((item) => item.id === 'github')
+
+    expect(github).toMatchObject({
+      kind: 'mcp',
+      systemManaged: true,
+      serverIds: ['github'],
+      supplyChain: { source: 'remote-mcp', permissions: ['network', 'secret'] }
+    })
+    expect(github?.mcpConfig).toBeUndefined()
+  })
+
+  it('treats a user-configured github server as personal instead of system-managed', () => {
+    const configText = JSON.stringify({
+      servers: {
+        github: {
+          enabled: false,
+          transport: 'stdio',
+          command: 'custom-github-mcp'
+        }
+      }
+    })
+
+    expect(hasUserConfiguredGitHubMcp(configText)).toBe(true)
+    expect(isSystemManagedMcpServerId('github', configText)).toBe(false)
+    expect(recommendedMarketplaceItemsForMcpConfig(configText)
+      .some((item) => item.kind === 'mcp' && item.id === 'github')).toBe(false)
+    expect(mcpMarketplaceItemsFromConfigAndDiagnostics(configText, null, {
+      configured: 'Configured',
+      connected: 'Connected',
+      error: 'Error',
+      disabled: 'Disabled'
+    })).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'github',
+        group: 'personal',
+        sourceLabel: 'Disabled'
+      })
+    ]))
+
+    const projectOverrideDiagnostics = {
+      mcpServers: [{ id: 'github', status: 'connected', toolCount: 3 }]
+    }
+    expect(isSystemManagedMcpServerId('github', '', projectOverrideDiagnostics)).toBe(false)
+    expect(recommendedMarketplaceItemsForMcpConfig('', projectOverrideDiagnostics)
+      .some((item) => item.kind === 'mcp' && item.id === 'github')).toBe(false)
+  })
+
+  it('surfaces built-in GitHub credential guidance on its marketplace card', () => {
+    const items = overlaySystemManagedMcpDiagnostics(RECOMMENDED_ITEMS, {
+      mcpServers: [{
+        id: 'github',
+        managedBy: 'kun:github',
+        status: 'authorization_required',
+        toolCount: 0,
+        lastError: 'Run "gh auth login" or set GITHUB_PAT_TOKEN.'
+      }]
+    }, {
+      configured: 'Configured',
+      connected: 'Connected',
+      error: 'Error',
+      disabled: 'Disabled'
+    })
+    const github = items.find((item) => item.kind === 'mcp' && item.id === 'github')
+
+    expect(github).toMatchObject({
+      systemManaged: true,
+      sourceLabel: 'Error',
+      statusTone: 'warning',
+      detail: expect.stringContaining('gh auth login')
+    })
+    expect(isSystemManagedMcpServerId('github', '', {
+      mcpServers: [{ id: 'github', managedBy: 'kun:github' }]
+    })).toBe(true)
   })
 
   it('builds remote OAuth MCP server config using Kun-supported transport fields', () => {

@@ -7,6 +7,7 @@ import {
   DEFAULT_MODEL_REQUEST_RETRY_HTTP_STATUS_CODES,
   DEFAULT_MODEL_REQUEST_RETRY_INITIAL_DELAY_MS,
   DEFAULT_MODEL_REQUEST_RETRY_MAX_ATTEMPTS,
+  PROVIDER_PROXY_ROUTING_VERSION,
   NETWORK_PROXY_PROTOCOLS,
   DEFAULT_SPEECH_TO_TEXT_PROTOCOL,
   DEFAULT_TEXT_TO_SPEECH_PROTOCOL,
@@ -140,6 +141,7 @@ export function defaultModelProviderSettings(): ModelProviderSettingsV1 {
     apiKey: defaultProvider.apiKey,
     baseUrl: defaultProvider.baseUrl,
     proxy: defaultNetworkProxySettings(),
+    proxyRoutingVersion: PROVIDER_PROXY_ROUTING_VERSION,
     providers: [defaultProvider, openCodeFreeProvider],
     routePools: [],
     localGateway: { enabled: false, name: 'Kun API' }
@@ -152,16 +154,23 @@ export function normalizeModelProviderSettings(
   const defaults = defaultModelProviderSettings()
   const apiKey = typeof input?.apiKey === 'string' ? input.apiKey.trim() : defaults.apiKey
   const baseUrl = normalizeModelProviderBaseUrl(input?.baseUrl, defaults.baseUrl)
+  const proxy = normalizeNetworkProxySettings(input?.proxy)
+  const legacyProxyRouting = input?.proxyRoutingVersion !== PROVIDER_PROXY_ROUTING_VERSION
+  const missingUseProxy = legacyProxyRouting && proxy.enabled
   const rawProviders = Array.isArray(input?.providers) ? input.providers : []
   const providersById = new Map<string, ModelProviderProfileV1>()
-  const defaultProvider = defaultModelProviderProfile(apiKey, baseUrl)
+  const defaultProvider = {
+    ...defaultModelProviderProfile(apiKey, baseUrl),
+    useProxy: missingUseProxy
+  }
   const openCodeFreeProvider = modelProviderPresetProfile(
     getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
   )
+  openCodeFreeProvider.useProxy = missingUseProxy
   providersById.set(defaultProvider.id, defaultProvider)
   providersById.set(openCodeFreeProvider.id, openCodeFreeProvider)
   for (const rawProvider of rawProviders) {
-    const provider = normalizeModelProviderProfile(rawProvider)
+    const provider = normalizeModelProviderProfile(rawProvider, missingUseProxy)
     if (!provider) continue
     providersById.set(provider.id, provider.id === DEFAULT_MODEL_PROVIDER_ID
       ? {
@@ -181,7 +190,8 @@ export function normalizeModelProviderSettings(
   return {
     apiKey,
     baseUrl,
-    proxy: normalizeNetworkProxySettings(input?.proxy),
+    proxy,
+    proxyRoutingVersion: PROVIDER_PROXY_ROUTING_VERSION,
     providers,
     routePools,
     localGateway: {
@@ -355,6 +365,59 @@ export function resolveModelProviderProxyUrl(settings: AppSettingsV1): string {
   return normalizeProxyUrl(proxy.url)
 }
 
+export type ProviderProxyRoute =
+  | { mode: 'direct'; reason: 'not-selected' | 'master-disabled' | 'unsupported' }
+  | { mode: 'proxy'; url: string }
+  | { mode: 'invalid'; reason: 'invalid-enabled-proxy' }
+
+export class ProviderProxyConfigurationError extends Error {
+  readonly code = 'provider_proxy_invalid'
+
+  constructor(readonly providerId: string) {
+    super(`Provider ${providerId} selected the app proxy, but the proxy configuration is invalid.`)
+    this.name = 'ProviderProxyConfigurationError'
+  }
+}
+
+export function modelProviderSupportsAppProxy(
+  provider: Pick<ModelProviderProfileV1, 'kind'>
+): boolean {
+  return provider.kind !== 'agent-sdk' &&
+    provider.kind !== 'antigravity-cli' &&
+    provider.kind !== 'cursor-sdk'
+}
+
+export function resolveProviderProxyRoute(
+  settings: AppSettingsV1,
+  providerOrId: Pick<ModelProviderProfileV1, 'id' | 'kind' | 'useProxy'> | string
+): ProviderProxyRoute {
+  const provider = typeof providerOrId === 'string'
+    ? getModelProviderSettings(settings).providers.find(
+      (candidate) => candidate.id === normalizeModelProviderId(providerOrId)
+    ) ?? { id: providerOrId, kind: 'http' as const, useProxy: false }
+    : providerOrId
+  if (!modelProviderSupportsAppProxy(provider)) return { mode: 'direct', reason: 'unsupported' }
+  if (provider.useProxy !== true) return { mode: 'direct', reason: 'not-selected' }
+  const proxy = getModelProviderSettings(settings).proxy
+  if (!proxy.enabled) return { mode: 'direct', reason: 'master-disabled' }
+  const url = normalizeProxyUrl(proxy.url)
+  return url ? { mode: 'proxy', url } : { mode: 'invalid', reason: 'invalid-enabled-proxy' }
+}
+
+export function resolveProviderProxyUrl(
+  settings: AppSettingsV1,
+  providerOrId: Pick<ModelProviderProfileV1, 'id' | 'kind' | 'useProxy'> | string
+): string {
+  const provider = typeof providerOrId === 'string'
+    ? getModelProviderSettings(settings).providers.find(
+      (candidate) => candidate.id === normalizeModelProviderId(providerOrId)
+    ) ?? { id: providerOrId, kind: 'http' as const, useProxy: false }
+    : providerOrId
+  const route = resolveProviderProxyRoute(settings, provider)
+  if (route.mode === 'invalid') throw new ProviderProxyConfigurationError(provider.id)
+  return route.mode === 'proxy' ? route.url : ''
+}
+
 export function getDefaultModelProviderProfile(settings: AppSettingsV1): ModelProviderProfileV1 {
   return getModelProviderProfile(settings, DEFAULT_MODEL_PROVIDER_ID)
 }
@@ -386,8 +449,10 @@ export function modelProviderRequiresApiKey(
     source?.preset.id === 'litellm' ||
     source?.preset.id === OPENCODE_FREE_PROVIDER_ID
   ) return false
-  if (provider.id === DEFAULT_MODEL_PROVIDER_ID) return true
-  return Boolean(source)
+  // Every remaining profile uses API-key authentication. In particular,
+  // manually created HTTP providers have no presetSource, which must not make
+  // the credential field disappear from Settings (#1245).
+  return true
 }
 
 export function activeModelProviderNeedsApiKey(settings: AppSettingsV1): boolean {

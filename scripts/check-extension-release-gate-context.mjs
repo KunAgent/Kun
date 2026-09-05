@@ -242,8 +242,7 @@ export function requirePublishDependencies(document, workflowLabel) {
     'build-macos',
     'build-windows',
     'build-linux',
-    'build-linux-arm64',
-    'build-tui'
+    'build-linux-arm64'
   ]) {
     check(
       needs.includes(dependency),

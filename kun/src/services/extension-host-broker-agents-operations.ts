@@ -8,6 +8,7 @@ import {
   ArtifactHostActionResultSchema,
   AgentCancelRequestSchema,
   AgentCreateRunRequestSchema,
+  AgentListRunEventsRequestSchema,
   AgentRunEventSchema,
   AgentRunSchema,
   AgentSteerRequestSchema,
@@ -120,6 +121,10 @@ import { extensionError } from '../extensions/errors.js'
 import { type ExtensionHostBroker, RegistrationIdSchema, RegistrationRequestSchema, RunIdSchema, ThreadIdSchema, SubscriptionIdSchema, StorageRequestSchema, StorageKeysRequestSchema, StorageSetRequestSchema, ConfigurationSectionSchema, ConfigurationRequestSchema, ConfigurationUpdateRequestSchema, CommandRegisterSchema, CommandExecuteSchema, ModelStreamNotificationSchema, ModelStreamEnvelopePayloadSchema, DEFAULT_PROVIDER_STREAM_QUEUE_EVENTS, DEFAULT_PROVIDER_STREAM_QUEUE_BYTES, type ExtensionHostBrokerOptions, type ToolRegistration, type ProviderRegistration, type AgentSubscription, type JobSubscription, type CommandRegistration, type StoredAccountSession, type ExtensionBrokerDispatchRequest, type ProviderStreamEntry, requiredExtensionBrokerPermission, publicMediaMetadata, cacheFormat, publicMediaCapability, jobCaller, hostOwnsRegistration, registrationOwnedByPrincipal, normalizedRegistrationWorkspaceRoots, registrationIncludesWorkspace, sameRegistrationWorkspace, hostPrincipal, publicAgentRun, publicAgentEvent, publicOwnedThread, publicBudget, publicUsage, publicRunState, publicAccount, publicAccountSession, boundedError, providerCapabilities, resolveAuthentication, effectiveAuthenticationScopes, internalAuthenticationType, toolSideEffect, activationEventFor, requireManifestContribution, assertManifestDeclarationMatches, canonicalizeJson, expandProviderPermissions, requiredWorkspaceKey, viewStateKey, confinedWorkspacePath, verifyWorkspaceTarget, inside, assertNetworkPermission, responseProjection, readBoundedResponseBody, linkedAbortController, agentInputText, cancellationSignal, providerStreamKey, providerQueueLimitError, serializedQueueBytes, positiveQueueLimit, safeJsonObject, toPublicJson, toJson, isObject, AsyncEventQueue } from './extension-host-broker-core.js'
 
 export const extensionHostBrokerAgentsOperations = {
+async agentGetRunOptions(this: ExtensionHostBroker, principal: ExtensionPrincipal) {
+    return this['options'].agent.getRunOptions(principal)
+  },
+
 async agentCreateRun(this: ExtensionHostBroker, principal: ExtensionPrincipal, params: JsonValue) {
     const input = AgentCreateRunRequestSchema.parse(params)
     let normalizedBinding = input.providerBinding
@@ -162,6 +167,8 @@ async agentCreateRun(this: ExtensionHostBroker, principal: ExtensionPrincipal, p
       input: agentInputText(input.input),
       ...(input.threadId ? { threadId: input.threadId } : {}),
       ...(input.workspace ? { workspace: input.workspace } : {}),
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
       ...(input.profileId ? { profileId: input.profileId } : {}),
       ...(normalizedBinding ? { providerBinding: normalizedBinding } : {}),
       ...(input.budget ? { budget: {
@@ -177,6 +184,17 @@ async agentCreateRun(this: ExtensionHostBroker, principal: ExtensionPrincipal, p
 async agentGetRun(this: ExtensionHostBroker, principal: ExtensionPrincipal, params: JsonValue) {
     const { runId } = RunIdSchema.parse(params)
     return publicAgentRun(await this['options'].agent.getRun(principal, runId))
+  },
+
+async agentListRunEvents(this: ExtensionHostBroker, principal: ExtensionPrincipal, params: JsonValue) {
+    const input = AgentListRunEventsRequestSchema.parse(params)
+    const page = await this['options'].agent.listRunEvents(principal, input)
+    return {
+      items: page.items.map(publicAgentEvent),
+      cursor: page.cursor,
+      hasMore: page.hasMore,
+      historyIncomplete: page.historyIncomplete
+    }
   },
 
 async agentSubscribe(this: ExtensionHostBroker, principal: ExtensionPrincipal, params: JsonValue) {
@@ -225,7 +243,7 @@ async agentSubscribe(this: ExtensionHostBroker, principal: ExtensionPrincipal, p
     }
     const subscription = await this['options'].agent.subscribe(principal, {
       runId: input.runId,
-      afterSeq: Math.max(0, input.afterSequence - 1)
+      afterSeq: input.afterSequence - 1
     }, listener)
     if (terminalSeen) subscription.close()
     else this['subscriptions'].set(subscriptionId, {
@@ -267,7 +285,8 @@ async threadsListOwn(this: ExtensionHostBroker, principal: ExtensionPrincipal, p
     const response = await this['options'].agent.listOwnThreads(principal, {
       limit: input.limit,
       cursor: input.cursor,
-      ...(input.workspace ? { workspace: input.workspace } : {})
+      ...(input.workspace ? { workspace: input.workspace } : {}),
+      ...(input.state ? { state: input.state } : {})
     })
     return {
       items: response.items.map((thread) => publicOwnedThread(principal, thread)),

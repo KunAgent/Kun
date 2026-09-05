@@ -65,6 +65,7 @@ describe('provider presets', () => {
       name: 'LiteLLM',
       baseUrl: 'http://localhost:4000',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: []
     })
 
@@ -74,6 +75,7 @@ describe('provider presets', () => {
       name: 'Vercel AI Gateway',
       baseUrl: 'https://ai-gateway.vercel.sh/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: []
     })
     expect(vercel?.docsUrl).toBe(
@@ -94,6 +96,7 @@ describe('provider presets', () => {
       name: 'LongCat',
       baseUrl: 'https://api.longcat.chat/openai',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: ['LongCat-2.0-Preview'],
       modelProfiles: {
         'LongCat-2.0-Preview': expect.objectContaining({
@@ -109,6 +112,7 @@ describe('provider presets', () => {
       name: 'Zhipu Coding Plan',
       baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
       endpointFormat: 'custom_endpoint',
+      useProxy: false,
       models: ['glm-5.3', 'glm-5.3-flash', 'glm-5.2', 'glm-5.1', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
       modelProfiles: {
         'glm-5.3': expect.objectContaining({
@@ -145,6 +149,7 @@ describe('provider presets', () => {
       name: 'Z.ai Coding Plan',
       baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
       endpointFormat: 'custom_endpoint',
+      useProxy: false,
       models: ['glm-5.3', 'glm-5.2', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.7', 'glm-4.5-air'],
       modelProfiles: {
         'glm-5.3': expect.objectContaining({
@@ -176,6 +181,7 @@ describe('provider presets', () => {
       name: 'Kimi Code',
       baseUrl: 'https://api.kimi.com/coding/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: ['k3', 'kimi-for-coding', 'kimi-for-coding-highspeed'],
       modelProfiles: {
         k3: expect.objectContaining({
@@ -198,6 +204,7 @@ describe('provider presets', () => {
       const profile = preset && modelProviderPresetProfile(preset)
       expect(profile).toMatchObject({
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: [
           'kimi-k2.7-code',
           'kimi-k2.6',
@@ -284,9 +291,9 @@ describe('provider presets', () => {
 
     const profile = modelProviderPresetProfile(preset!)
     expect(profile.retry?.maxAttempts).toBe(10)
-    expect(profile.modelProfiles['kimi-k2.5-free']).toMatchObject({
-      contextWindowTokens: 262_144,
-      maxOutputTokens: 262_144,
+    expect(profile.modelProfiles['mimo-v2.5-free']).toMatchObject({
+      contextWindowTokens: 200_000,
+      maxOutputTokens: 32_000,
       inputModalities: ['text', 'image']
     })
     expect(modelProviderRequiresApiKey(profile)).toBe(false)
@@ -308,6 +315,7 @@ describe('provider presets', () => {
         apiKey: '',
         baseUrl: 'https://opencode.ai/zen/v1',
         endpointFormat: 'chat_completions',
+        useProxy: false,
         models: ['gpt-5-nano'],
         modelProfiles: {}
       }]

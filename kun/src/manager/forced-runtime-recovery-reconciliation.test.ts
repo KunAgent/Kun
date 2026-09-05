@@ -55,6 +55,7 @@ function lease(threadId: string, owner: ReturnType<typeof registration>): Thread
     turnId: `turn-${threadId}`,
     ownerFlavor: owner.flavor,
     ownerInstanceId: owner.instanceId,
+    fencingToken: 1,
     acquiredAt: '2026-08-21T00:00:00.000Z',
     expiresAt: '2026-08-21T00:01:00.000Z'
   }

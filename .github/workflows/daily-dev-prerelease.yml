@@ -1,17 +1,10 @@
-name: Daily Dev Prerelease
+name: Daily Dev Prerelease Implementation
 
 on:
-  workflow_dispatch:
-  schedule:
-    # GitHub cron 使用 UTC,对应 Asia/Shanghai 的 12:00 和次日 00:00。
-    - cron: '0 4,16 * * *'
+  workflow_call:
 
 permissions:
   contents: write
-
-concurrency:
-  group: daily-dev-prerelease
-  cancel-in-progress: false
 
 env:
   NODE_VERSION: '22'
@@ -47,11 +40,10 @@ jobs:
           head_sha="$(git rev-parse HEAD)"
 
           node -e '
-            const semver = require("semver")
             const [appVersion, devVersion] = process.argv.slice(1)
             if (!/^\d{8}\.\d{4}$/.test(devVersion)) throw new Error(`invalid daily dev version: ${devVersion}`)
-            if (!semver.valid(appVersion)) throw new Error(`invalid daily app SemVer: ${appVersion}`)
-            if (!semver.prerelease(appVersion)?.some((part) => String(part).startsWith("dev-"))) throw new Error(`daily app version is not a dev prerelease: ${appVersion}`)
+            const expectedAppVersion = `0.0.0-dev-${devVersion.replace(".", "-")}`
+            if (appVersion !== expectedAppVersion) throw new Error(`invalid daily app version: ${appVersion}`)
           ' "${app_version}" "${dev_version}"
 
           {
@@ -69,7 +61,7 @@ jobs:
   build-macos:
     name: Build macOS
     runs-on: macos-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     needs:
       - prepare
     env:
@@ -130,7 +122,7 @@ jobs:
   build-windows:
     name: Build Windows
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 240
     needs:
       - prepare
     env:
@@ -180,9 +172,9 @@ jobs:
       - name: Build Windows installer
         run: npm run dist:win
 
-      - name: Smoke Windows installer migration
-        timeout-minutes: 60
-        run: npm run smoke:windows-installer-migration -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
+      - name: Smoke Windows installer
+        timeout-minutes: 180
+        run: npm run smoke:windows-installer -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
 
       - name: Smoke packaged update handoff (Windows)
         timeout-minutes: 20
@@ -327,81 +319,6 @@ jobs:
             dist/Kun-*-linux-arm64.deb
             dist/latest-linux-arm64.yml
 
-  build-tui:
-    name: Build standalone TUI prerelease (${{ matrix.target }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    needs:
-      - prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            target: darwin-arm64
-          - runner: macos-15-intel
-            target: darwin-x64
-          - runner: windows-2025
-            target: win32-x64
-          - runner: ubuntu-22.04
-            target: linux-x64
-          - runner: ubuntu-24.04-arm
-            target: linux-arm64
-    env:
-      KUN_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
-      KUN_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
-      KUN_UPDATE_CHANNEL: frontier
-      RELEASE_CHANNEL: frontier
-      TAG_NAME: ${{ needs.prepare.outputs.tag }}
-      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
-      R2_RELEASE_PREFIX: ${{ secrets.R2_RELEASE_PREFIX }}
-    steps:
-      - name: Check out develop commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.prepare.outputs.head_sha }}
-
-      - name: Set up packaged Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.23.1'
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            kun/package-lock.json
-
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix kun ci
-
-      - name: Build shared Kun runtime
-        run: npm run build:kun
-
-      - name: Package standalone TUI prerelease
-        run: >-
-          npm run package:tui --
-          --version "${{ needs.prepare.outputs.app_version }}"
-          --artifact-version "${{ needs.prepare.outputs.dev_version }}"
-          --tag "${{ needs.prepare.outputs.tag }}"
-          --channel frontier
-          --commit "${{ needs.prepare.outputs.head_sha }}"
-          --target "${{ matrix.target }}"
-          --output dist
-
-      - name: Upload standalone TUI prerelease artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: daily-dev-tui-${{ matrix.target }}
-          if-no-files-found: error
-          retention-days: 7
-          path: |
-            dist/Kun-TUI-*.tar.gz
-            dist/Kun-TUI-*.zip
-            dist/Kun-TUI-*.sha256
-            dist/Kun-TUI-*.json
-
   publish:
     name: Publish prerelease
     runs-on: ubuntu-latest
@@ -411,7 +328,6 @@ jobs:
       - build-windows
       - build-linux
       - build-linux-arm64
-      - build-tui
     env:
       GH_TOKEN: ${{ github.token }}
       DEV_VERSION: ${{ needs.prepare.outputs.dev_version }}
@@ -450,13 +366,6 @@ jobs:
           path: release-artifacts
           merge-multiple: true
 
-      - name: Rebuild shared GUI/TUI runtime identity
-        env:
-          KUN_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
-          KUN_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
-          KUN_UPDATE_CHANNEL: frontier
-        run: npm run build:kun
-
       - name: Verify daily dev artifacts
         run: |
           set -euo pipefail
@@ -474,11 +383,6 @@ jobs:
             "latest.yml"
             "latest-linux.yml"
             "latest-linux-arm64.yml"
-            "Kun-TUI-${DEV_VERSION}-mac-arm64.tar.gz"
-            "Kun-TUI-${DEV_VERSION}-mac-x64.tar.gz"
-            "Kun-TUI-${DEV_VERSION}-win-x64.zip"
-            "Kun-TUI-${DEV_VERSION}-linux-x64.tar.gz"
-            "Kun-TUI-${DEV_VERSION}-linux-arm64.tar.gz"
           )
 
           for file in "${required[@]}"; do
@@ -490,19 +394,6 @@ jobs:
           done
 
           find release-artifacts -maxdepth 2 -type f -print | sort
-
-      - name: Assemble standalone TUI prerelease contract
-        run: >-
-          npm run assemble:tui-release --
-          --directory release-artifacts
-          --version "${APP_VERSION}"
-          --artifact-version "${DEV_VERSION}"
-          --tag "${TAG_NAME}"
-          --channel "${RELEASE_CHANNEL}"
-          --commit "${HEAD_SHA}"
-          --expected-build-id "$(node -p "require('./kun/dist/runtime-build.json').buildId")"
-          --public-base-url "${R2_PUBLIC_BASE_URL}"
-          --release-prefix "${R2_RELEASE_PREFIX:-deepseek-gui}"
 
       - name: Generate prerelease notes
         run: |
@@ -518,7 +409,6 @@ jobs:
           - Branch: \`develop\`
           - Commit: \`${short_sha}\`
           - Platforms: macOS arm64/x64, Windows x64, Linux arm64/x64 AppImage/deb
-          - Standalone TUI: macOS arm64/x64, Windows x64, Linux arm64/x64
           EOF
 
       - name: Ensure prerelease tag
@@ -562,7 +452,7 @@ jobs:
           set -euo pipefail
           mapfile -d '' assets < <(
             find release-artifacts -type f \
-              \( -name 'Kun-*' -o -name 'latest*.yml' -o -name 'release-tui.json' -o -name 'SHA256SUMS-tui.txt' \) \
+              \( -name 'Kun-*' -o -name 'latest*.yml' \) ! -name 'Kun-TUI-*' \
               -print0
           )
 
@@ -579,7 +469,6 @@ jobs:
           node ./scripts/publish-r2.mjs upload --platform mac --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
           node ./scripts/publish-r2.mjs upload --platform win --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
           node ./scripts/publish-r2.mjs upload --platform linux --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
-          node ./scripts/publish-r2.mjs upload-tui --dist release-artifacts --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}"
 
       - name: Promote unified prerelease on R2
         run: >-
@@ -587,7 +476,7 @@ jobs:
           --tag "${TAG_NAME}"
           --channel "${RELEASE_CHANNEL}"
           --platforms mac,win,linux
-          --require-tui
+          --require-all-platforms
 
       - name: Publish GitHub prerelease
         run: gh release edit "${TAG_NAME}" --draft=false --prerelease --latest=false

@@ -56,6 +56,7 @@ type Harness = {
   refreshThreads: ReturnType<typeof vi.fn>
   selectThread: ReturnType<typeof vi.fn>
   sendMessage: ReturnType<typeof vi.fn>
+  sseAbortRef: { current: AbortController | null }
   state: ChatState
 }
 
@@ -216,10 +217,11 @@ function buildHarness(options: {
     Object.assign(state, update)
   }
   const get: ChatStoreGet = () => state
+  const sseAbortRef = { current: null as AbortController | null }
   const actions = createMaintenanceActions({
     set,
     get,
-    sseAbortRef: { current: null }
+    sseAbortRef
   }, options.maintenanceDependencies)
 
   return {
@@ -233,6 +235,7 @@ function buildHarness(options: {
     refreshThreads,
     selectThread,
     sendMessage,
+    sseAbortRef,
     state
   }
 }
@@ -515,5 +518,153 @@ describe('chat-store-maintenance-actions rewind and resend', () => {
     } finally {
       ;(globalThis as { window?: unknown }).window = previousWindow
     }
+  })
+
+  it('coalesces repeated activation before checkpoint restore completes', async () => {
+    const previousWindow = globalThis.window
+    const restore = deferred<{
+      ok: true
+      checkpointId: string
+      repositoryRoot: string
+      head: string
+      currentBranch: string
+      rescueCheckpointId: null
+    }>()
+    const restoreGitCheckpoint = vi.fn(() => restore.promise)
+    ;(globalThis as { window?: unknown }).window = {
+      kunGui: { restoreGitCheckpoint }
+    }
+    try {
+      const prepareCodeCanvasResend = vi.fn(async () => null)
+      const { actions, provider, sendMessage, state } = buildHarness({
+        maintenanceDependencies: { prepareCodeCanvasResend }
+      })
+      Object.assign(state, {
+        route: 'chat',
+        busy: false,
+        blocks: [{
+          kind: 'user', id: 'user_1', text: 'old prompt',
+          meta: { turnId: 'turn_1', workspaceCheckpointId: 'gcp_1' }
+        }],
+        queuedMessages: [],
+        turnStartedAtByUserId: {},
+        turnDurationByUserId: {},
+        turnReasoningFirstAtByUserId: {},
+        turnReasoningLastAtByUserId: {}
+      })
+
+      const first = actions.rewindAndResend('user_1', 'Edited once')
+      const duplicate = actions.rewindAndResend('user_1', 'Edited twice')
+
+      expect(restoreGitCheckpoint).toHaveBeenCalledOnce()
+      restore.resolve({
+        ok: true,
+        checkpointId: 'gcp_1',
+        repositoryRoot: '/workspace/deepseek-gui',
+        head: 'abc123',
+        currentBranch: 'develop',
+        rescueCheckpointId: null
+      })
+      await Promise.all([first, duplicate])
+
+      expect(prepareCodeCanvasResend).toHaveBeenCalledOnce()
+      expect(provider.rewindThread).toHaveBeenCalledOnce()
+      expect(provider.rewindThread).toHaveBeenCalledWith('thr_existing', 'turn_1')
+      expect(sendMessage).toHaveBeenCalledOnce()
+      expect(sendMessage).toHaveBeenCalledWith('Edited once')
+    } finally {
+      ;(globalThis as { window?: unknown }).window = previousWindow
+    }
+  })
+
+  it('releases the resend guard when checkpoint restoration returns early', async () => {
+    const previousWindow = globalThis.window
+    const restoreGitCheckpoint = vi.fn()
+      .mockResolvedValueOnce({ ok: false, reason: 'error', message: 'restore failed' })
+      .mockResolvedValueOnce({
+        ok: true, checkpointId: 'gcp_1', repositoryRoot: '/workspace/deepseek-gui',
+        head: 'abc123', currentBranch: 'develop', rescueCheckpointId: null
+      })
+    ;(globalThis as { window?: unknown }).window = { kunGui: { restoreGitCheckpoint } }
+    try {
+      const { actions, provider, sendMessage, state } = buildHarness({
+        maintenanceDependencies: { prepareCodeCanvasResend: vi.fn(async () => null) }
+      })
+      Object.assign(state, {
+        route: 'chat', busy: false,
+        blocks: [{ kind: 'user', id: 'user_1', text: 'old prompt', meta: {
+          turnId: 'turn_1', workspaceCheckpointId: 'gcp_1'
+        } }],
+        queuedMessages: [], turnStartedAtByUserId: {}, turnDurationByUserId: {},
+        turnReasoningFirstAtByUserId: {}, turnReasoningLastAtByUserId: {}
+      })
+
+      await actions.rewindAndResend('user_1', 'Edited prompt')
+      expect(provider.rewindThread).not.toHaveBeenCalled()
+      expect(state.error).toBe('restore failed')
+
+      await actions.rewindAndResend('user_1', 'Edited prompt')
+      expect(restoreGitCheckpoint).toHaveBeenCalledTimes(2)
+      expect(provider.rewindThread).toHaveBeenCalledOnce()
+      expect(sendMessage).toHaveBeenCalledWith('Edited prompt')
+    } finally {
+      ;(globalThis as { window?: unknown }).window = previousWindow
+    }
+  })
+
+  it('recovers canonical turn state and releases the guard after rewind fails', async () => {
+    const prepareCodeCanvasResend = vi.fn(async () => null)
+    const {
+      actions,
+      provider,
+      recoverActiveTurn,
+      sendMessage,
+      sseAbortRef,
+      state
+    } = buildHarness({ maintenanceDependencies: { prepareCodeCanvasResend } })
+    const originalBlocks: ChatBlock[] = [
+      { kind: 'user', id: 'user_1', text: 'old prompt', meta: { turnId: 'turn_1' } },
+      { kind: 'assistant', id: 'assistant_1', text: 'old answer' }
+    ]
+    Object.assign(state, {
+      route: 'chat',
+      busy: false,
+      blocks: originalBlocks,
+      queuedMessages: [],
+      turnStartedAtByUserId: {},
+      turnDurationByUserId: {},
+      turnReasoningFirstAtByUserId: {},
+      turnReasoningLastAtByUserId: {}
+    })
+    const staleStream = new AbortController()
+    const abortSpy = vi.spyOn(staleStream, 'abort')
+    sseAbortRef.current = staleStream
+    const recoveredStream = new AbortController()
+    recoverActiveTurn.mockImplementationOnce(async () => {
+      state.busy = true
+      sseAbortRef.current = recoveredStream
+      return true
+    })
+    provider.rewindThread.mockRejectedValueOnce(new Error(JSON.stringify({
+      code: 'turn_in_progress',
+      message: 'cannot rewind while a turn is active: thr_existing'
+    })))
+
+    await actions.rewindAndResend('user_1', 'Retry after recovery')
+
+    expect(abortSpy).toHaveBeenCalledOnce()
+    expect(recoverActiveTurn).toHaveBeenCalledOnce()
+    expect(sseAbortRef.current).toBe(recoveredStream)
+    expect(state.blocks).toEqual(originalBlocks)
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(state.error).toBeTruthy()
+    expect(state.error).not.toContain('cannot rewind while a turn is active')
+
+    state.busy = false
+    await actions.rewindAndResend('user_1', 'Retry after recovery')
+
+    expect(provider.rewindThread).toHaveBeenCalledTimes(2)
+    expect(sendMessage).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledWith('Retry after recovery')
   })
 })

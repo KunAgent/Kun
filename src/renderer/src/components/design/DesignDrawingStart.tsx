@@ -8,6 +8,7 @@ import type {
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
+import { interruptDesignPagesRun } from '../../design/design-pages-run'
 import { FloatingComposer, type DesignComposerContext } from '../chat/FloatingComposer'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
@@ -19,8 +20,8 @@ export type DesignDrawingStartProps = {
   workspaceRoot: string
   input: string
   setInput: (value: string) => void
-  mode: 'plan' | 'agent'
-  setMode: (value: 'plan' | 'agent') => void
+  mode: 'plan' | 'agent' | 'auto'
+  setMode: (value: 'plan' | 'agent' | 'auto') => void
   busy: boolean
   runtimeConnection: RuntimeConnectionStatus
   composerModel: string
@@ -181,7 +182,7 @@ export function DesignDrawingStart({
               onRemoveAttachment={onRemoveAttachment}
               onRemoveContextChip={onRemoveContextChip}
               onSend={onSend}
-              onInterrupt={onInterrupt}
+              onInterrupt={(options) => interruptDesignPagesRun(onInterrupt, options)}
               onConfigureProviders={onConfigureProviders}
             />
           </div>

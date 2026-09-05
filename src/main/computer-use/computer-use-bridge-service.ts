@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import {
   createServer,
   type IncomingMessage,
@@ -6,10 +6,12 @@ import {
   type ServerResponse
 } from 'node:http'
 import {
+  AnyComputerUseBridgeRequest,
   COMPUTER_USE_BRIDGE_CONTRACT_VERSION,
-  ComputerUseBridgeRequest,
   ComputerUseBridgeResponse,
-  type ComputerUseBridgeRequest as ComputerUseBridgeRequestValue
+  LEGACY_COMPUTER_USE_BRIDGE_CONTRACT_VERSION,
+  LegacyComputerUseBridgeResponse,
+  type AnyComputerUseBridgeRequest as ComputerUseBridgeRequestValue
 } from '../../../kun/src/contracts/computer-use-bridge.js'
 import type { HostControlController } from '../../../kun/src/adapters/computer-use/host-control.js'
 
@@ -26,10 +28,18 @@ export type ComputerUseBridgeLaunch = {
  * capture and input automation stay in this process, so the headless Runtime
  * never acquires an Electron/Dock application identity or OS privacy grants.
  */
+type RequestJournalEntry = {
+  digest: string
+  state: 'started' | 'completed' | 'unknown'
+  response?: unknown
+}
+
 export class ComputerUseBridgeService {
   private server?: Server
   private launch?: ComputerUseBridgeLaunch
   private activeRequest = false
+  private legacySessionId = ''
+  private readonly requestJournal = new Map<string, RequestJournalEntry>()
   private readonly abortControllers = new Set<AbortController>()
 
   constructor(private readonly controller: HostControlController) {}
@@ -37,6 +47,8 @@ export class ComputerUseBridgeService {
   async start(): Promise<ComputerUseBridgeLaunch> {
     if (this.launch) return this.launch
     const token = randomBytes(32).toString('base64url')
+    this.legacySessionId = `legacy-${randomBytes(12).toString('hex')}`
+    this.requestJournal.clear()
     const server = createServer((request, response) => {
       void this.handle(request, response)
     })
@@ -74,8 +86,12 @@ export class ComputerUseBridgeService {
     for (const controller of this.abortControllers) controller.abort()
     this.abortControllers.clear()
     this.activeRequest = false
-    if (!server) return
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    this.legacySessionId = ''
+    this.requestJournal.clear()
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+    await this.controller.shutdown?.()
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -113,26 +129,52 @@ export class ComputerUseBridgeService {
     const controller = new AbortController()
     this.abortControllers.add(controller)
     request.once('aborted', () => controller.abort())
+    let journalRequestId: string | undefined
     try {
       const body = await readBoundedJson(request, MAX_REQUEST_BYTES)
-      const parsed = ComputerUseBridgeRequest.safeParse(body)
+      const parsed = AnyComputerUseBridgeRequest.safeParse(body)
       if (!parsed.success) {
         this.json(response, 400, { error: 'invalid_request' })
         return
       }
+      journalRequestId = parsed.data.requestId
+      const digest = createHash('sha256')
+        .update(JSON.stringify(parsed.data))
+        .digest('hex')
+      const journaled = this.requestJournal.get(parsed.data.requestId)
+      if (journaled) {
+        if (journaled.digest !== digest) {
+          this.json(response, 409, { error: 'request_id_conflict' })
+          return
+        }
+        if (journaled.state === 'completed') {
+          this.writeBridgeSuccess(response, parsed.data, journaled.response)
+          return
+        }
+        this.json(response, 409, { error: 'request_outcome_unknown' })
+        return
+      }
+      this.requestJournal.set(parsed.data.requestId, { digest, state: 'started' })
+      this.evictRequestJournal()
       const result = await this.execute(parsed.data, controller.signal)
-      this.json(response, 200, ComputerUseBridgeResponse.parse({
-        contractVersion: COMPUTER_USE_BRIDGE_CONTRACT_VERSION,
-        requestId: parsed.data.requestId,
-        result
-      }))
+      this.requestJournal.set(parsed.data.requestId, {
+        digest,
+        state: 'completed',
+        response: result
+      })
+      this.writeBridgeSuccess(response, parsed.data, result)
     } catch (error) {
+      if (journalRequestId) {
+        const entry = this.requestJournal.get(journalRequestId)
+        if (entry?.state === 'started') entry.state = 'unknown'
+      }
       if (error instanceof RequestBodyError) {
         this.json(response, error.status, { error: error.code })
       } else if (controller.signal.aborted) {
         this.json(response, 499, { error: 'request_aborted' })
       } else {
-        this.json(response, 500, { error: 'bridge_failed_closed' })
+        const structured = structuredBridgeError(error)
+        this.json(response, structured.status, structured.body)
       }
     } finally {
       this.abortControllers.delete(controller)
@@ -144,47 +186,77 @@ export class ComputerUseBridgeService {
     request: ComputerUseBridgeRequestValue,
     signal: AbortSignal
   ): Promise<unknown> {
+    const sessionId = 'sessionId' in request ? request.sessionId : undefined
+    const frameId = 'frameId' in request ? request.frameId : undefined
+    const context = request.contractVersion === COMPUTER_USE_BRIDGE_CONTRACT_VERSION
+      ? { sessionId, frameId, signal }
+      : { sessionId: this.legacySessionId, signal }
     switch (request.operation) {
       case 'ready':
         return this.controller.ensureReady()
       case 'capture':
-        return this.controller.capture()
+        return this.controller.capture(context)
       case 'screen_size':
-        return this.controller.screenSize()
+        return this.controller.screenSize(context)
       case 'cursor_position':
-        return this.controller.cursorPosition()
+        return this.controller.cursorPosition(context)
       case 'move_to':
-        await this.controller.moveTo(request.x, request.y)
-        return { ok: true }
+        return actionResult(await this.controller.moveTo(request.x, request.y, context))
       case 'click':
-        await this.controller.click(
+        return actionResult(await this.controller.click(
           request.x,
           request.y,
           request.button,
           request.count,
-          request.modifiers
-        )
-        return { ok: true }
+          request.modifiers,
+          context
+        ))
       case 'drag':
-        await this.controller.drag(request.x1, request.y1, request.x2, request.y2)
-        return { ok: true }
+        return actionResult(await this.controller.drag(
+          request.x1,
+          request.y1,
+          request.x2,
+          request.y2,
+          context
+        ))
       case 'scroll':
-        await this.controller.scroll(
+        return actionResult(await this.controller.scroll(
           request.x,
           request.y,
           request.direction,
-          request.amount
-        )
-        return { ok: true }
+          request.amount,
+          context
+        ))
       case 'type_text':
-        await this.controller.typeText(request.text)
-        return { ok: true }
+        return actionResult(await this.controller.typeText(request.text, context))
       case 'press_hotkey':
-        await this.controller.pressHotkey(request.key)
-        return { ok: true }
+        return actionResult(await this.controller.pressHotkey(request.key, context))
       case 'wait':
         await this.controller.wait(request.ms, signal)
         return { ok: true }
+    }
+  }
+
+  private writeBridgeSuccess(
+    response: ServerResponse,
+    request: ComputerUseBridgeRequestValue,
+    result: unknown
+  ): void {
+    const responseContract = request.contractVersion === LEGACY_COMPUTER_USE_BRIDGE_CONTRACT_VERSION
+      ? LegacyComputerUseBridgeResponse
+      : ComputerUseBridgeResponse
+    this.json(response, 200, responseContract.parse({
+      contractVersion: request.contractVersion,
+      requestId: request.requestId,
+      result
+    }))
+  }
+
+  private evictRequestJournal(): void {
+    while (this.requestJournal.size > 256) {
+      const oldest = this.requestJournal.keys().next().value as string | undefined
+      if (!oldest) return
+      this.requestJournal.delete(oldest)
     }
   }
 
@@ -214,6 +286,46 @@ export class ComputerUseBridgeService {
       'x-content-type-options': 'nosniff'
     })
     response.end(payload)
+  }
+}
+
+function actionResult(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object') return { ok: true }
+  return { ok: true, ...(value as Record<string, unknown>) }
+}
+
+function structuredBridgeError(error: unknown): {
+  status: number
+  body: Record<string, unknown>
+} {
+  const candidate = error as {
+    code?: unknown
+    message?: unknown
+    retryable?: unknown
+    needsFreshFrame?: unknown
+  }
+  const code = typeof candidate?.code === 'string'
+    ? candidate.code.slice(0, 128)
+    : 'bridge_failed_closed'
+  const safeCodes = new Set([
+    'stale_frame',
+    'unsupported_modifier_click',
+    'driver_unavailable',
+    'driver_error',
+    'authorization_refused',
+    'background_unavailable',
+    'background_occluded'
+  ])
+  return {
+    status: code === 'stale_frame' ? 409 : code === 'unsupported_modifier_click' ? 422 : 500,
+    body: {
+      error: safeCodes.has(code) ? code : 'bridge_failed_closed',
+      ...(safeCodes.has(code) && typeof candidate.message === 'string'
+        ? { message: candidate.message.slice(0, 1_024) }
+        : {}),
+      retryable: candidate.retryable === true,
+      needsFreshFrame: candidate.needsFreshFrame === true
+    }
   }
 }
 

@@ -3,7 +3,7 @@ import {
   DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
   isCustomModelEndpointFormat,
   modelEndpointPath,
-  resolveModelProviderProxyUrl,
+  resolveProviderProxyUrl,
   resolveWriteInlineCompletionEndpointFormat,
   resolveWriteInlineCompletionApiKey,
   resolveWriteInlineCompletionBaseUrl,
@@ -153,7 +153,7 @@ export async function requestWriteInlineCompletion(
       headers: buildProviderHeaders(auth.apiKey, responseFormat, auth.headers, responsesLite),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(INLINE_COMPLETION_TIMEOUT_MS)
-    }, resolveModelProviderProxyUrl(settings))
+    }, resolveProviderProxyUrl(settings, provider))
     const text = await response.text()
     if (!response.ok) {
       appendInlineCompletionDebugEntry({

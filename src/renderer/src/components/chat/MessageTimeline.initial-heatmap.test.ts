@@ -35,7 +35,7 @@ describe('MessageTimeline empty hero routing', () => {
 
     expect(html).toContain('What would you like to do with Kun today?')
     expect(html).toContain('Start with an idea, build it with code, or explore a design.')
-    expect(html).toContain('data-task-surface-selector="hero"')
+    expect(html).not.toContain('data-task-surface-selector')
     expect(html).not.toContain('ds-initial-usage-heatmap')
     expect(html).not.toContain('Expand calendar')
   })

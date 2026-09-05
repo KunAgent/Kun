@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { KUN_MANAGED_GITHUB_MCP_MARKER } from './builtin-mcp.js'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
 
 export const RUNTIME_CAPABILITY_CONTRACT_VERSION = 1
@@ -157,6 +158,8 @@ export type McpSearchConfig = z.infer<typeof McpSearchConfig>
 export const McpServerConfig = z
   .object({
     enabled: z.boolean().default(true),
+    /** Host ownership marker; user-imported MCP config never receives this field. */
+    managedBy: z.literal(KUN_MANAGED_GITHUB_MCP_MARKER).optional(),
     transport: McpTransportKind,
     command: z.string().min(1).optional(),
     args: z.array(z.string()).default([]),
@@ -164,6 +167,20 @@ export const McpServerConfig = z
     url: z.string().min(1).optional(),
     headers: StringRecord.default({}),
     env: StringRecord.default({}),
+    /** Non-secret authorization identity and host/resource policy for the managed GitHub MCP. */
+    githubPolicy: z.object({
+      host: z.string().min(1),
+      allowedHosts: z.array(z.string().min(1)).min(1),
+      allowedOrganizations: z.array(z.string().min(1)).default([]),
+      allowedRepositories: z.array(z.string().min(1)).default([]),
+      authorization: z.object({
+        source: z.enum(['GITHUB_PAT_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'github-cli']),
+        host: z.string().min(1),
+        login: z.string().min(1),
+        scopes: z.array(z.string().min(1)).default([]),
+        fingerprint: z.string().regex(/^[0-9a-f]{64}$/i)
+      }).strict().optional()
+    }).strict().optional(),
     // Visibility scope: empty means globally visible; otherwise the server is
     // advertised only when ToolHostContext.workspace is under one of these roots.
     workspaceRoots: z.array(z.string().min(1)).default([]),
@@ -243,6 +260,8 @@ export const SkillsCapabilityConfig = CapabilityToggleConfig.extend({
   workspaceRoots: z.array(z.string().min(1)).default([]),
   /** Global skill roots (e.g. ~/.kun/skills). Scanned after project roots. */
   globalRoots: z.array(z.string().min(1)).default([]),
+  /** Bundled skill roots. Scanned last so project and global ids override them. */
+  builtinRoots: z.array(z.string().min(1)).default([]),
   /** Read workspace-local `.kun/project.json` Skill policy on demand. */
   projectConfigEnabled: z.boolean().default(true),
   /**
@@ -255,8 +274,12 @@ export const SkillsCapabilityConfig = CapabilityToggleConfig.extend({
   legacySkillMd: z.boolean().default(true)
 }).strict()
 export type ParsedSkillsCapabilityConfig = z.infer<typeof SkillsCapabilityConfig>
-export type SkillsCapabilityConfig = Omit<ParsedSkillsCapabilityConfig, 'projectConfigEnabled'> & {
+export type SkillsCapabilityConfig = Omit<
+  ParsedSkillsCapabilityConfig,
+  'projectConfigEnabled' | 'builtinRoots'
+> & {
   projectConfigEnabled?: boolean
+  builtinRoots?: string[]
 }
 
 export const InstructionsCapabilityConfig = CapabilityToggleConfig.extend({
@@ -280,8 +303,8 @@ export type SubagentSurface = z.infer<typeof SubagentSurface>
  * Tools a `readOnly` subagent may call. The list is enforced twice: the
  * child loop advertises only these names (schema filter) and the
  * capability registry re-checks them at execute time (backstop). Keep it
- * to side-effect-free investigation tools — no bash/edit/write, and no
- * nested `delegate_task`.
+ * to side-effect-free investigation tools, including the host-owned
+ * `fast_context` retriever — no bash/edit/write, and no nested `delegate_task`.
  */
 /**
  * Host-enforced upper bound for read-only subagents. Profile `allowedTools`
@@ -294,6 +317,7 @@ export const SUBAGENT_READ_ONLY_TOOL_NAMES = [
   'glob',
   'ls',
   'repo_map',
+  'fast_context',
   'web_fetch',
   'web_search'
 ] as const

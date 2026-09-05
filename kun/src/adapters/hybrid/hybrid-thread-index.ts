@@ -1,4 +1,4 @@
-import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
+import type { Database as BetterSqliteDatabase, Statement } from 'better-sqlite3'
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
 import { decodeThreadCursor } from '../../domain/thread-list-query.js'
 import {
@@ -8,6 +8,8 @@ import {
 } from './hybrid-thread-index-mapping.js'
 
 export class HybridThreadIndexRepository {
+  private upsertStatement: Statement | null = null
+
   constructor(
     private readonly db: BetterSqliteDatabase,
     private readonly paths: (threadId: string) => { metadataPath: string; messagesPath: string; eventsPath: string },
@@ -72,9 +74,24 @@ export class HybridThreadIndexRepository {
   }
 
   upsert(record: ThreadIndexRecord): void {
-    try {
-      const row = rowFromIndexRecord(record, this.paths(record.thread.id))
-      this.db.prepare(`
+    this.preparedUpsert().run(rowFromIndexRecord(record, this.paths(record.thread.id)))
+  }
+
+  /** Write a whole backfill batch inside a single transaction; throws on failure. */
+  upsertMany(records: ThreadIndexRecord[]): void {
+    if (records.length === 0) return
+    const statement = this.preparedUpsert()
+    const write = this.db.transaction((items: ThreadIndexRecord[]) => {
+      for (const record of items) {
+        statement.run(rowFromIndexRecord(record, this.paths(record.thread.id)))
+      }
+    })
+    write(records)
+  }
+
+  private preparedUpsert(): Statement {
+    if (!this.upsertStatement) {
+      this.upsertStatement = this.db.prepare(`
         INSERT INTO threads (
           id, title, workspace, model, agent_surface, mode, status, approval_policy, sandbox_mode, approval_reviewer,
           model_request_capture_enabled,
@@ -109,8 +126,9 @@ export class HybridThreadIndexRepository {
           event_seq_high_water=MAX(threads.event_seq_high_water, excluded.event_seq_high_water),
           metadata_path=excluded.metadata_path, messages_path=excluded.messages_path,
           events_path=excluded.events_path, search_text=excluded.search_text
-      `).run(row)
-    } catch (error) { this.warn('upsert index', error) }
+      `)
+    }
+    return this.upsertStatement
   }
 
   delete(threadId: string): void {

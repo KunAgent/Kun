@@ -6,7 +6,6 @@ import {
   Braces,
   Check,
   ChevronDown,
-  Code2,
   Component,
   Grid3X3,
   Hexagon,
@@ -35,7 +34,8 @@ import {
   type ComposerProfileSelectOption
 } from './FloatingComposerProfileSelect'
 
-export type ComposerTaskSurface = 'code' | 'design'
+import type { ComposerTaskSurface } from './FloatingComposerTaskSurfacePicker'
+
 export type DesignTaskOutputMedium = 'html' | 'image'
 
 export type DesignTaskComposerProfile = {
@@ -51,8 +51,6 @@ type Props = {
   surface: ComposerTaskSurface
   locked: boolean
   profileLocked?: boolean
-  showSurfaceSelector?: boolean
-  variant?: 'controls' | 'summary'
   disabled?: boolean
   profile: DesignTaskComposerProfile
   imageGenerationEnabled?: boolean
@@ -61,18 +59,6 @@ type Props = {
   onSurfaceChange?: (surface: ComposerTaskSurface) => void
   onProfileChange?: (patch: Partial<DesignTaskComposerProfile>) => void
   onConfigureImageGeneration?: () => void
-}
-
-function segmentClass(active: boolean, prominent: boolean): string {
-  return `inline-flex items-center justify-center gap-2 rounded-full font-semibold transition ${
-    prominent ? 'h-12 min-w-[144px] px-6 text-[14px]' : 'h-8 px-3 text-[12.5px]'
-  } ${
-    active
-      ? prominent
-        ? 'bg-ds-ink text-ds-main shadow-[0_6px_18px_rgba(15,23,42,0.16)]'
-        : 'bg-ds-card text-ds-ink shadow-sm ring-1 ring-inset ring-ds-border-muted'
-      : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-  }`
 }
 
 const DESIGN_STYLE_MARKS: Record<DesignSystemPreset, { icon: LucideIcon; className: string }> = {
@@ -509,66 +495,11 @@ function DesignStylePicker({
   )
 }
 
-export function TaskSurfaceSelector({
-  surface,
-  locked,
-  disabled = false,
-  prominent = false,
-  onSurfaceChange
-}: Pick<Props, 'surface' | 'locked' | 'disabled' | 'onSurfaceChange'> & {
-  prominent?: boolean
-}): ReactElement {
-  const { t } = useTranslation('common')
-  const selectorDisabled = disabled || locked
-
-  return (
-    <div
-      role="radiogroup"
-      aria-label={`${t('taskTypeCode', { defaultValue: 'Code' })} / ${t('taskTypeDesign', { defaultValue: 'Design' })}`}
-      onKeyDown={(event) => {
-        if (selectorDisabled || !onSurfaceChange) return
-        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-        event.preventDefault()
-        const next = event.key === 'ArrowLeft' || event.key === 'Home' ? 'code' : 'design'
-        onSurfaceChange(next)
-        event.currentTarget.querySelector<HTMLButtonElement>(`[aria-checked="${next === surface ? 'true' : 'false'}"]`)?.focus()
-      }}
-      className={`inline-flex shrink-0 items-center rounded-full bg-ds-surface-subtle ${prominent ? 'p-1' : 'p-0.5'}`}
-      data-task-surface-selector={prominent ? 'hero' : 'compact'}
-    >
-      <button
-        type="button"
-        role="radio"
-        aria-checked={surface === 'code'}
-        disabled={selectorDisabled || !onSurfaceChange}
-        onClick={() => onSurfaceChange?.('code')}
-        className={segmentClass(surface === 'code', prominent)}
-      >
-        <Code2 className={prominent ? 'h-4 w-4' : 'h-3.5 w-3.5'} strokeWidth={1.9} />
-        {t('taskTypeCode', { defaultValue: 'Code' })}
-      </button>
-      <button
-        type="button"
-        role="radio"
-        aria-checked={surface === 'design'}
-        disabled={selectorDisabled || !onSurfaceChange}
-        onClick={() => onSurfaceChange?.('design')}
-        className={segmentClass(surface === 'design', prominent)}
-      >
-        <Palette className={prominent ? 'h-4 w-4' : 'h-3.5 w-3.5'} strokeWidth={1.9} />
-        {t('taskTypeDesign', { defaultValue: 'Design' })}
-      </button>
-    </div>
-  )
-}
-
 /** Turn intent and immutable Design profile controls rendered outside the input surface. */
 export function FloatingComposerTaskProfile({
   surface,
   locked,
   profileLocked = false,
-  showSurfaceSelector = true,
-  variant = 'controls',
   disabled = false,
   profile,
   imageGenerationEnabled,
@@ -640,15 +571,6 @@ export function FloatingComposerTaskProfile({
       data-task-surface={surface}
       data-task-surface-locked={locked ? 'true' : 'false'}
     >
-      {showSurfaceSelector ? (
-        <TaskSurfaceSelector
-          surface={surface}
-          locked={locked}
-          disabled={disabled}
-          onSurfaceChange={onSurfaceChange}
-        />
-      ) : null}
-
       {surface === 'design' ? (
         <DesignProfileSummary
           disabled={disabled}

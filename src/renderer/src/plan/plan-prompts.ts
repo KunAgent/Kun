@@ -47,17 +47,20 @@ export function buildDraftPlanPrompt(options: {
     options.request.trim(),
     '',
     'Suggested Markdown structure (write the full plan into the tool call):',
+    'Every independently executable implementation or test step MUST be a short task checkbox. Use one task per checkbox. Do not use task checkboxes in Summary. Put supporting detail in indented paragraphs below its task.',
     GUI_PLAN_OPEN,
     '# <short feature title>',
     '',
     '## Summary',
-    '- ...',
+    '<goal and scope in prose>',
     '',
     '## Implementation',
-    '- ...',
+    '### Phase one',
+    '- [ ] <one independently executable task>',
+    '- [ ] <one independently executable task>',
     '',
     '## Tests',
-    '- ...',
+    '- [ ] <one test task>',
     GUI_PLAN_CLOSE
   ].join('\n')
 }
@@ -88,17 +91,25 @@ export function buildRefinePlanPrompt(options: {
     '```',
     '',
     'Suggested revised Markdown (write the full revised plan into the tool call):',
+    'Keep existing task checkbox completion semantics. Every independently executable implementation or test step MUST be a short task checkbox; do not add task checkboxes to Summary.',
     GUI_PLAN_OPEN,
     '<complete revised markdown plan>',
     GUI_PLAN_CLOSE
   ].join('\n')
 }
 
+export type PromptPlanTodo = {
+  id: string
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
 export function buildPlanBuildPrompt(
   planRelativePath: string,
   planMarkdown?: string,
   orchestration: 'direct' | 'graph' = 'direct',
-  promptWorktree?: PromptManagedPlanWorktree
+  promptWorktree?: PromptManagedPlanWorktree,
+  planTodos?: PromptPlanTodo[]
 ): string {
   const normalizedPlan = planMarkdown?.trim() ?? ''
   const worktreeProtocol = promptWorktree && orchestration === 'direct'
@@ -109,8 +120,14 @@ export function buildPlanBuildPrompt(
       ? BUILD_GRAPH_PLAN_INTRO
       : BUILD_PLAN_INTRO,
     '<plan_execution_context>',
-    jsonForPrompt({ planRelativePath }),
+    jsonForPrompt({
+      planRelativePath,
+      ...(orchestration === 'direct' && planTodos?.length ? { todos: planTodos } : {})
+    }),
     '</plan_execution_context>',
+    orchestration === 'direct' && planTodos?.length
+      ? 'Track execution with todo_list and todo_write. Reuse the stable todo IDs in plan_execution_context, replace the full list without deleting unrelated todos, mark a task in_progress before work, and completed only after verification.'
+      : '',
     ...worktreeProtocol,
     normalizedPlan
       ? 'The verbatim Markdown embedded below is the authoritative implementation plan.'

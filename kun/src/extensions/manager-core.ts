@@ -47,7 +47,6 @@ export class ExtensionManagerCore {
   protected readonly workspaceActivationEpochs = new Map<string, number>()
   protected readonly activations = new Map<string, {
     extensionId: string
-    epoch: string
     event: string
     workspaceRoots: string[]
     workspaceContextSignature: string
@@ -197,29 +196,20 @@ export class ExtensionManagerCore {
     extensionId: string,
     event: string,
     options: ExtensionHostWorkspaceScope,
-    activationEpoch: string,
     instanceKey: string
   ): Promise<ExtensionHostProcess | undefined> {
     const workspaceRoots = normalizedWorkspaceRoots(options)
     const workspaceKeys = workspaceRoots.map((root) => this.options.paths.workspaceKey(root))
     let extension: ResolvedExtension
+    let activationEpoch: string
     try {
-      const resolvedScopes: ResolvedExtension[] = []
-      if (workspaceKeys.length === 0) {
-        resolvedScopes.push(await this.options.packageManager.resolveForActivation(extensionId))
-      } else {
-        // Every root is an independent trust/enablement boundary. Resolving
-        // only `workspaceRoot` while passing additional `workspaceRoots` to
-        // the Host would let callers smuggle an unreviewed root into the
-        // principal. The Host receives the intersection of all grants.
-        for (const workspaceKey of workspaceKeys) {
-          resolvedScopes.push(await this.options.packageManager.resolveForActivation(
-            extensionId,
-            workspaceKey
-          ))
-        }
-      }
-      extension = intersectWorkspaceResolutions(resolvedScopes)
+      const admission = await this.options.packageManager.resolveActivation(
+        extensionId,
+        workspaceKeys,
+        () => this.activationEpoch(extensionId, workspaceRoots)
+      )
+      extension = intersectWorkspaceResolutions(admission.resolvedScopes)
+      activationEpoch = admission.fence
       this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
     } catch (error) {
       if ((error as { code?: string }).code === 'EXTENSION_ACTIVATION_CANCELLED') throw error

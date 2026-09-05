@@ -99,6 +99,7 @@ const darkUiColorsPatchSchema = z.object({
 const appBehaviorPatchSchema = z.object({
   openAtLogin: z.boolean().optional(),
   startMinimized: z.boolean().optional(),
+  keepAwake: z.boolean().optional(),
   useSystemTitleBar: z.boolean().optional(),
   closeAction: z.enum(WINDOW_CLOSE_ACTIONS).optional(),
   closeToTray: z.boolean().optional()

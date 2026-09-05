@@ -34,6 +34,13 @@ const tools: CursorBridgeTool[] = [{
   providerId: 'chart',
   providerKind: 'gui'
 }, {
+  name: 'fast_context',
+  description: 'Run bounded repository retrieval',
+  toolKind: 'tool_call',
+  inputSchema: { type: 'object' },
+  providerId: 'fast-context',
+  providerKind: 'delegation'
+}, {
   name: 'read',
   description: 'Overlaps Cursor built-in read',
   toolKind: 'tool_call',
@@ -135,6 +142,7 @@ describe('Cursor SDK Kun custom-tool bridge', () => {
       ['mcp_call_tool', 'tool_call', 'mcp:facade', 'mcp'],
       ['extension_render', 'tool_call', 'extension:render', 'extension'],
       ['render_chart', 'tool_call', 'chart', 'gui'],
+      ['fast_context', 'tool_call', 'fast-context', 'delegation'],
       ['  padded_tool  ', 'command_execution', 'builtin', 'built-in']
     ])
   })
@@ -160,6 +168,7 @@ describe('Cursor SDK Kun custom-tool bridge', () => {
     expect(customTools.mcp_call_tool).toBeDefined()
     expect(customTools.extension_render).toBeDefined()
     expect(customTools.render_chart).toBeDefined()
+    expect(customTools.fast_context).toBeDefined()
   })
 
   test('maps Cursor callbacks to Kun execution and preserves call identity and provenance', async () => {

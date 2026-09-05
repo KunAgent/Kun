@@ -9,7 +9,8 @@ vi.mock('react-dom', () => ({
 
 import {
   BackgroundShellOverlay,
-  calculateBackgroundShellPopoverPlacement
+  calculateBackgroundShellPopoverPlacement,
+  stripAnsiSequences
 } from './BackgroundShellOverlay'
 
 type RuntimeRequestResult = { ok: boolean; status: number; body: string }
@@ -138,6 +139,49 @@ describe('BackgroundShellOverlay', () => {
     await openOverlay(renderer)
     expect(renderer.root.findByProps({ 'data-background-shell-popover': true }).props.role).toBe('dialog')
     expect(root.findByType('button').props['aria-expanded']).toBe(true)
+    act(() => renderer.unmount())
+  })
+
+  it('strips ANSI escape sequences from rendered shell output', async () => {
+    const runtimeRequest = vi.fn(async () => response([
+      backgroundShell('shell-a', 'thread-a', 'npm run test', {
+        output: '\u001B[32m✓\u001B[39m passed \u001B[2m(4 tests)\u001B[22m'
+      })
+    ]))
+    const renderer = await renderOverlay(runtimeRequest)
+    await openOverlay(renderer)
+    const text = renderedText(renderer)
+    expect(text).toContain('✓ passed (4 tests)')
+    expect(text).not.toContain('[32m')
+    expect(text).not.toContain('[2m')
+    act(() => renderer.unmount())
+  })
+
+  it('leaves plain text untouched when no escape sequences exist', () => {
+    expect(stripAnsiSequences('plain output line')).toBe('plain output line')
+  })
+
+  it('keeps long commands and output inside the popover without clipping', async () => {
+    const runtimeRequest = vi.fn(async () => response([
+      backgroundShell('shell-a', 'thread-a', `cd /very/long/path && npx vitest run ${'x'.repeat(200)}`, {
+        output: 'line with long content'
+      })
+    ]))
+    const renderer = await renderOverlay(runtimeRequest)
+    await openOverlay(renderer)
+    const grid = renderer.root.findAllByType('div').find((node) => (
+      typeof node.props.className === 'string' && node.props.className.includes('grid-cols-[minmax(0,1fr)]')
+    ))
+    expect(grid).toBeDefined()
+    const pre = renderer.root.findByType('pre')
+    expect(pre.props.className).toContain('overflow-y-auto')
+    expect(pre.props.className).toContain('overflow-x-hidden')
+    expect(pre.props.className).toContain('whitespace-pre-wrap')
+    const commandParagraphs = renderer.root.findAllByType('p').filter((node) => (
+      node.children.some((child) => typeof child === 'string' && child.includes('npx vitest run'))
+    ))
+    expect(commandParagraphs.some((node) => node.props.className.includes('whitespace-pre-wrap'))).toBe(true)
+    expect(commandParagraphs.every((node) => !node.props.className.includes('truncate'))).toBe(true)
     act(() => renderer.unmount())
   })
 

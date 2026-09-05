@@ -16,6 +16,10 @@ import {
   reconcileOptimisticUserBlock,
   upsertUserBlock
 } from './chat-store-runtime-helpers'
+import {
+  consumeQueuedMessagesStartedByRuntime,
+  userMessageItemIdsFromBlocks
+} from './queued-message-persistence'
 
 export type ChatProjectionReducerContext = {
   now: number
@@ -46,22 +50,25 @@ import { reduceLateChatProjection } from './chat-projection-reducer-late'
 import { reduceEarlyChatProjection } from './chat-projection-reducer-early'
 import {
   flushLiveProjection,
+  findMatchingToolBlockIndex,
   isDetachedSubagentToolEvent,
   isUserInputInterruptError,
   mergeToolProjectionEvents,
   runtimeEventStartedAt,
-  toolBlockChildId,
-  toolEventChildId,
   unseenDeltaText,
+  updateProjectedThreadStatus,
   upsertProjectedTimelineBlock,
   upsertTimelineBlock
 } from './chat-projection-reducer-support'
 
 export {
   flushLiveProjection,
+  findMatchingToolBlockIndex,
   mergeToolProjectionEvents,
   monotonicToolStatus,
   toolBlockChildId,
+  toolBlockMatchesToolEvent,
+  toolEventChildProjectionKey,
   toolEventChildId
 } from './chat-projection-reducer-support'
 
@@ -125,9 +132,32 @@ export function reduceChatProjection(
           ? event.itemId
           : optimisticUserId ?? event.itemId
       const startedAt = runtimeEventStartedAt(event.createdAt, context.now)
+      const statusThreads = !backgroundNotice && event.turnId && state.activeThreadId
+        ? updateProjectedThreadStatus(
+            state.threads,
+            state.activeThreadId,
+            'running',
+            'running',
+            event.turnId
+          )
+        : state.threads
+      const observedSeq = action.seq
+      const threads = typeof observedSeq === 'number' && state.activeThreadId
+        ? statusThreads.map((thread) =>
+            thread.id === state.activeThreadId &&
+            (thread.latestSeq === undefined || thread.latestSeq < observedSeq)
+              ? { ...thread, latestSeq: observedSeq }
+              : thread
+          )
+        : statusThreads
+      const blocks = upsertUserBlock(reconciledBlocks, event)
+      const queuedMessages = consumeQueuedMessagesStartedByRuntime(state.queuedMessages, {
+        turnId: event.turnId ?? state.currentTurnId,
+        userMessageItemIds: userMessageItemIdsFromBlocks(blocks)
+      })
       return {
         ...flushed,
-        blocks: upsertUserBlock(reconciledBlocks, event),
+        blocks,
         busy: true,
         // A live user_message event is direct runtime evidence; any pending
         // unconfirmed flag from hydration is now resolved.
@@ -144,6 +174,10 @@ export function reduceChatProjection(
               ...state.turnStartedAtByUserId,
               [event.itemId]: state.turnStartedAtByUserId[event.itemId] ?? startedAt
             },
+        ...(threads !== state.threads ? { threads } : {}),
+        ...(queuedMessages !== state.queuedMessages && queuedMessages !== undefined
+          ? { queuedMessages }
+          : {}),
         error: context.clearRecoveringError(state.error)
       }
     }
@@ -343,7 +377,6 @@ export function reduceChatProjection(
         !state.busy && !event.updateOnly && !isDetachedSubagentToolEvent(event)
           ? { busy: true, busyUnconfirmed: false }
           : {}
-      const childId = toolEventChildId(event)
       const chartSpec = parseRendererChartSpec(event.meta?.chartSpec)
       const chartIndex = state.blocks.findIndex((block) => block.id === event.itemId)
       if (chartSpec) {
@@ -358,11 +391,7 @@ export function reduceChatProjection(
         }
         return { ...base, blocks: upsertProjectedTimelineBlock(state, chartBlock), error: context.clearRecoveringError(state.error) }
       }
-      const index = state.blocks.findIndex((block) =>
-        block.kind === 'tool' && (
-          block.id === event.itemId || Boolean(childId && toolBlockChildId(block) === childId)
-        )
-      )
+      const index = findMatchingToolBlockIndex(state.blocks, event)
       if (index >= 0) {
         const current = state.blocks[index]
         if (current.kind !== 'tool') return base

@@ -3,6 +3,8 @@ import {
   buildMemoryImportContent,
   buildMemoryMarkdownExport,
   defaultMemoryExportFileName,
+  memoryImportObservedAt,
+  parseMemoryImport,
   parseMemoryProfileImport
 } from './memory-import-export'
 
@@ -68,6 +70,9 @@ describe('parseMemoryProfileImport', () => {
       content: 'Kun: 桌面 AI 应用。',
       tags: []
     })).toBe('[unknown] 项目: Kun: 桌面 AI 应用。')
+    expect(memoryImportObservedAt('2026-07-01')).toBe('2026-07-01T00:00:00.000Z')
+    expect(memoryImportObservedAt('2026-02-30')).toBeUndefined()
+    expect(memoryImportObservedAt('unknown')).toBeUndefined()
   })
 })
 
@@ -118,5 +123,81 @@ describe('buildMemoryMarkdownExport', () => {
 
   it('uses a dated default export filename', () => {
     expect(defaultMemoryExportFileName(new Date('2026-07-03T12:00:00.000Z'))).toBe('kun-memory-export-2026-07-03.md')
+  })
+
+  it('round-trips portable V2 business fields without identity or audit timestamps', () => {
+    const markdown = buildMemoryMarkdownExport({
+      exportedAt: '2026-07-03T00:00:00.000Z',
+      records: [{
+        schemaVersion: 2,
+        id: 'mem_original',
+        content: 'Portable workspace fact',
+        scope: 'workspace',
+        workspace: 'D:/workspace-a',
+        tags: ['portable', 'fact'],
+        confidence: 0.7,
+        type: 'fact',
+        authority: 'reference',
+        importance: 0.8,
+        observedAt: '2026-06-01T00:00:00.000Z',
+        validFrom: '2026-06-01T00:00:00.000Z',
+        validTo: '2026-12-01T00:00:00.000Z',
+        expiresAt: '2027-01-01T00:00:00.000Z',
+        sources: [{
+          id: 'source_1',
+          kind: 'user',
+          threadId: 'thread_1',
+          turnId: 'turn_1',
+          itemId: 'item_1',
+          locator: 'memory-settings',
+          excerpt: 'bounded evidence',
+          contentHash: 'sha256:test',
+          trust: 'explicit-user'
+        }],
+        createdAt: '2026-06-02T00:00:00.000Z',
+        updatedAt: '2026-06-03T00:00:00.000Z',
+        disabledAt: '2026-06-04T00:00:00.000Z'
+      }]
+    })
+
+    const parsed = parseMemoryImport(markdown)
+    expect(parsed.kind).toBe('portable')
+    if (parsed.kind !== 'portable') throw new Error('expected portable memory archive')
+    expect(parsed.records).toEqual([{
+      schemaVersion: 2,
+      content: 'Portable workspace fact',
+      scope: 'workspace',
+      workspace: 'D:/workspace-a',
+      tags: ['portable', 'fact'],
+      confidence: 0.7,
+      type: 'fact',
+      authority: 'reference',
+      importance: 0.8,
+      observedAt: '2026-06-01T00:00:00.000Z',
+      validFrom: '2026-06-01T00:00:00.000Z',
+      validTo: '2026-12-01T00:00:00.000Z',
+      expiresAt: '2027-01-01T00:00:00.000Z',
+      sources: [{
+        id: 'source_1',
+        kind: 'user',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        itemId: 'item_1',
+        locator: 'memory-settings',
+        excerpt: 'bounded evidence',
+        contentHash: 'sha256:test',
+        trust: 'explicit-user'
+      }],
+      disabled: true
+    }])
+    expect(parsed.records[0]).not.toHaveProperty('id')
+    expect(parsed.records[0]).not.toHaveProperty('createdAt')
+    expect(parsed.records[0]).not.toHaveProperty('updatedAt')
+  })
+
+  it('rejects malformed or unsupported portable archives without profile fallback', () => {
+    expect(parseMemoryImport('```kun-memory-v2\n{"format":"kun-memory-v2","version":2}\n```').kind)
+      .toBe('invalid-portable')
+    expect(parseMemoryImport('```kun-memory-v3\n{}\n```').kind).toBe('invalid-portable')
   })
 })

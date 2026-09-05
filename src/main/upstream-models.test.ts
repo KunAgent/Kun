@@ -42,6 +42,7 @@ function settings(dataDir: string, model = 'settings-model'): AppSettingsV1 {
           apiKey: 'sk-custom',
           baseUrl: 'https://custom.example/v1',
           endpointFormat: 'responses',
+          useProxy: false,
           models: ['custom-provider-model'],
           modelProfiles: {}
         }
@@ -394,6 +395,7 @@ describe('upstream model picker list', () => {
       apiKey: 'sk-speech',
       baseUrl: 'https://speech.example/v1',
       endpointFormat: 'chat_completions',
+      useProxy: false,
       models: ['speech-model'],
       modelProfiles: {},
       speech: {

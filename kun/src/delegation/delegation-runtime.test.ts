@@ -398,7 +398,9 @@ describe('DelegationRuntime model provider selection', () => {
           childModel: 'gpt-5.6-sol',
           childProviderId: 'openai',
           childProfile: 'auditor',
-          childProfileName: 'Security Auditor'
+          childProfileName: 'Security Auditor',
+          attemptStartedAt: expect.any(String),
+          attemptDurationMs: expect.any(Number)
         })
       }))
     } finally {

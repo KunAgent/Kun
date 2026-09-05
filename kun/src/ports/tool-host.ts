@@ -226,6 +226,10 @@ export type ToolHostContext = {
     enabled: boolean
     maxParallel?: number
   }
+  /** Optional model-provider allow-list captured at a delegated child boundary. */
+  allowedModelProviderIds?: readonly string[]
+  /** Optional model allow-list captured at a delegated child boundary. */
+  allowedModelIds?: readonly string[]
   /** Optional provider allow-list. When set, other providers are not advertised or executed. */
   allowedProviderIds?: readonly string[]
   /** Optional tool-name allow-list. When set, other tools are not advertised or executed. */

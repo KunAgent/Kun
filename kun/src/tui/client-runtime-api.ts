@@ -165,9 +165,10 @@ export class KunTuiClientRuntimeApi extends KunTuiClientCore {
     return this.request(`/v1/attachments/${segment(attachmentId)}`, AttachmentUploadResponse)
   }
 
-  listMemories(input: { workspace?: string; includeDeleted?: boolean; all?: boolean } = {}) {
+  listMemories(input: { workspace?: string; project?: string; includeDeleted?: boolean; all?: boolean } = {}) {
     const query = new URLSearchParams()
     if (input.workspace) query.set('workspace', input.workspace)
+    if (input.project) query.set('project', input.project)
     if (input.includeDeleted) query.set('include_deleted', 'true')
     if (input.all) query.set('all', 'true')
     return this.request(`/v1/memory${query.size ? `?${query}` : ''}`, MemoryListResponse)
@@ -180,16 +181,27 @@ export class KunTuiClientRuntimeApi extends KunTuiClientCore {
     })
   }
 
-  updateMemory(id: string, workspace: string | undefined, input: z.input<typeof MemoryUpdateRequest>) {
-    const query = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+  updateMemory(
+    id: string,
+    workspace: string | undefined,
+    input: z.input<typeof MemoryUpdateRequest>,
+    project?: string
+  ) {
+    const params = new URLSearchParams()
+    if (workspace) params.set('workspace', workspace)
+    if (project) params.set('project', project)
+    const query = params.size ? `?${params}` : ''
     return this.request(`/v1/memory/${segment(id)}${query}`, MemoryResponse, {
       method: 'PATCH',
       body: MemoryUpdateRequest.parse(input)
     })
   }
 
-  deleteMemory(id: string, workspace?: string) {
-    const query = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+  deleteMemory(id: string, workspace?: string, project?: string) {
+    const params = new URLSearchParams()
+    if (workspace) params.set('workspace', workspace)
+    if (project) params.set('project', project)
+    const query = params.size ? `?${params}` : ''
     return this.request(`/v1/memory/${segment(id)}${query}`, MemoryResponse, { method: 'DELETE' })
   }
 

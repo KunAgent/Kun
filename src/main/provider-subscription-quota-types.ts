@@ -90,7 +90,8 @@ export type SubscriptionQuotaRuntime = {
   resolveClaudeToken(provider: ModelProviderProfileV1): Promise<string | undefined>
   resolveCodexCredential(
     provider: ModelProviderProfileV1,
-    rejectedAccessToken?: string
+    rejectedAccessToken?: string,
+    context?: SubscriptionProbeContext
   ): Promise<CodexQuotaCredential | undefined>
   resolveGrokCredential(
     provider: ModelProviderProfileV1,

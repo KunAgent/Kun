@@ -5,6 +5,11 @@ import { FileText, FolderOpen } from 'lucide-react'
 import type { DesignDocument } from '../../design/design-types'
 import { ChatDesignTreePanel } from '../chat/ChatDesignTreePanel'
 import { ChatFileTreePanel, type ChatFileTreeReference } from '../chat/ChatFileTreePanel'
+import type {
+  GeneratedDocumentArtifact,
+  GeneratedDocumentCollection
+} from '../chat/generated-document-artifacts'
+import { GeneratedDocumentFilesList } from './GeneratedDocumentFilesList'
 import type { WorkbenchFileTreeSidePanelView } from './useWorkbenchFileTreeController'
 
 export type WorkbenchFileTreeSidePanelProps = {
@@ -17,8 +22,10 @@ export type WorkbenchFileTreeSidePanelProps = {
   designDocuments: readonly DesignDocument[]
   activeDesignDocumentId?: string | null
   selectedTarget?: WorkspaceFileTarget | null
+  generatedDocumentCollection?: GeneratedDocumentCollection | null
   onViewChange: (view: WorkbenchFileTreeSidePanelView) => void
   onPreviewFile: (path: string) => void
+  onPreviewGeneratedDocument?: (file: GeneratedDocumentArtifact, workspaceRoot: string) => void
   onAddReference: (reference: ChatFileTreeReference) => void
   onOpenDesignInWhiteboard?: (documentId: string) => void
 }
@@ -33,8 +40,10 @@ export function WorkbenchFileTreeSidePanel({
   designDocuments,
   activeDesignDocumentId,
   selectedTarget,
+  generatedDocumentCollection,
   onViewChange,
   onPreviewFile,
+  onPreviewGeneratedDocument,
   onAddReference,
   onOpenDesignInWhiteboard
 }: WorkbenchFileTreeSidePanelProps): ReactElement | null {
@@ -54,64 +63,76 @@ export function WorkbenchFileTreeSidePanel({
         style={embedded ? undefined : { width }}
       >
         <div className="flex h-full min-h-0 flex-col">
-          <div className="flex shrink-0 gap-1 border-b border-ds-border-muted/70 p-2">
-            <button
-              type="button"
-              onClick={() => onViewChange('workspace')}
-              className={`inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12.5px] font-semibold transition ${
-                view === 'workspace'
-                  ? 'bg-ds-card text-ds-ink shadow-sm'
-                  : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-              }`}
-            >
-              <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-              <span className="truncate">{t('fileTreeWorkspaceTab')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onViewChange('design')}
-              className={`inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12.5px] font-semibold transition ${
-                view === 'design'
-                  ? 'bg-ds-card text-ds-ink shadow-sm'
-                  : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-              }`}
-            >
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-              <span className="truncate">{t('fileTreeDesignTab')}</span>
-            </button>
-          </div>
-          <div className="min-h-0 flex-1">
-            {view === 'design' ? (
-              designWorkspaceRoot ? (
-                <ChatDesignTreePanel
-                  workspaceRoot={designWorkspaceRoot}
-                  documents={designDocuments}
-                  activeDocumentId={activeDesignDocumentId}
-                  onAddReference={onAddReference}
-                  onOpenInWhiteboard={onOpenDesignInWhiteboard}
-                  t={t}
-                  fill
-                />
-              ) : (
-                <div className="px-4 py-3 text-[12px] leading-5 text-ds-muted">
-                  {t('workspaceRequiredToCreateThread')}
-                </div>
-              )
-            ) : workspaceRoot ? (
-              <ChatFileTreePanel
-                workspaceRoot={workspaceRoot}
-                selectedPath={selectedTarget?.path}
-                onPreviewFile={onPreviewFile}
-                onAddReference={onAddReference}
-                t={t}
-                fill
-              />
-            ) : (
-              <div className="px-4 py-3 text-[12px] leading-5 text-ds-muted">
-                {t('workspaceRequiredToCreateThread')}
+          {view === 'generated' && generatedDocumentCollection && onPreviewGeneratedDocument ? (
+            <GeneratedDocumentFilesList
+              collection={generatedDocumentCollection}
+              selectedPath={selectedTarget?.path}
+              onPreview={(file) =>
+                onPreviewGeneratedDocument(file, generatedDocumentCollection.workspaceRoot)}
+              onBackToWorkspace={() => onViewChange('workspace')}
+            />
+          ) : (
+            <>
+              <div className="flex shrink-0 gap-1 border-b border-ds-border-muted/70 p-2">
+                <button
+                  type="button"
+                  onClick={() => onViewChange('workspace')}
+                  className={`inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12.5px] font-semibold transition ${
+                    view === 'workspace'
+                      ? 'bg-ds-card text-ds-ink shadow-sm'
+                      : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+                  }`}
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                  <span className="truncate">{t('fileTreeWorkspaceTab')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onViewChange('design')}
+                  className={`inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12.5px] font-semibold transition ${
+                    view === 'design'
+                      ? 'bg-ds-card text-ds-ink shadow-sm'
+                      : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+                  }`}
+                >
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                  <span className="truncate">{t('fileTreeDesignTab')}</span>
+                </button>
               </div>
-            )}
-          </div>
+              <div className="min-h-0 flex-1">
+                {view === 'design' ? (
+                  designWorkspaceRoot ? (
+                    <ChatDesignTreePanel
+                      workspaceRoot={designWorkspaceRoot}
+                      documents={designDocuments}
+                      activeDocumentId={activeDesignDocumentId}
+                      onAddReference={onAddReference}
+                      onOpenInWhiteboard={onOpenDesignInWhiteboard}
+                      t={t}
+                      fill
+                    />
+                  ) : (
+                    <div className="px-4 py-3 text-[12px] leading-5 text-ds-muted">
+                      {t('workspaceRequiredToCreateThread')}
+                    </div>
+                  )
+                ) : workspaceRoot ? (
+                  <ChatFileTreePanel
+                    workspaceRoot={workspaceRoot}
+                    selectedPath={selectedTarget?.path}
+                    onPreviewFile={onPreviewFile}
+                    onAddReference={onAddReference}
+                    t={t}
+                    fill
+                  />
+                ) : (
+                  <div className="px-4 py-3 text-[12px] leading-5 text-ds-muted">
+                    {t('workspaceRequiredToCreateThread')}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </aside>
     </>

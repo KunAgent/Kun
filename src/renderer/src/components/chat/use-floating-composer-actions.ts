@@ -10,6 +10,29 @@ import type { SlashCommand, SlashCommandId } from './floating-composer-commands'
 import type { ComposerFileDropOptions } from './composer-file-drop'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
+/**
+ * True when a keydown should open the attachment picker: `Ctrl+U` on
+ * Windows/Linux or `Cmd+U` on macOS. IME composition, Alt/Shift modifiers, or
+ * an unavailable attachment capability suppress the shortcut so it cannot
+ * collide with input-method text or other accelerators.
+ */
+export function shouldOpenAttachmentPickerOnKeyDown(
+  event: {
+    key: string
+    ctrlKey: boolean
+    metaKey: boolean
+    altKey: boolean
+    shiftKey: boolean
+  },
+  options: { composing: boolean; canPickAttachment: boolean }
+): boolean {
+  if (options.composing) return false
+  if (!options.canPickAttachment) return false
+  if (event.key !== 'u' && event.key !== 'U') return false
+  if (event.altKey || event.shiftKey) return false
+  return event.ctrlKey || event.metaKey
+}
+
 export function useFloatingComposerActions(
   context: FloatingComposerRenderContext
 ): FloatingComposerRenderContext {
@@ -17,7 +40,7 @@ export function useFloatingComposerActions(
     activeThreadId, archiveThread, buildResearchPrompt, canAcceptComposerFileDrop,
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
     canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
-    canPickLocalFileReference, canSetGoalPanelDraft, canToggleGraphMode, canTogglePlanMode,
+    canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode,
     clearActiveThreadGoal, compact, compactActiveThread, composerRootRef, composerSendKey,
     dictationPrimaryActionRef, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
     forkActiveThread, goalInputMode, goalPanelDraftObjective, handleComposerImagePaste,
@@ -208,6 +231,19 @@ export function useFloatingComposerActions(
     draft.focusComposer()
   }
 
+  const handleAutoPlanBuildToolbarClick = (): void => {
+    if (!canToggleAutoPlanBuildMode) return
+    setComposerMenuOpen(false)
+    if (mode === 'auto') {
+      setMode('agent')
+    } else {
+      setGoalInputMode(false)
+      onOrchestrationChange?.('direct')
+      setMode('auto')
+    }
+    draft.focusComposer()
+  }
+
   const handleGraphToolbarClick = (): void => {
     if (!canToggleGraphMode || !onOrchestrationChange) return
     setComposerMenuOpen(false)
@@ -363,6 +399,12 @@ export function useFloatingComposerActions(
 
     if (inputHistory.handleKeyDown(event, { input, setInput, composing })) return
 
+    if (shouldOpenAttachmentPickerOnKeyDown(event, { composing, canPickAttachment })) {
+      event.preventDefault()
+      fileInputRef.current?.click()
+      return
+    }
+
     // Esc cancels a pending ask-user request. (Option picking is click-only:
     // a bare-digit accelerator would hijack the first character of a
     // digit-leading custom answer, which the type-to-answer design must allow.)
@@ -469,6 +511,7 @@ export function useFloatingComposerActions(
     handleGoalMenuClick,
     handleGraphToolbarClick,
     handleLocalFileReferenceMenuClick,
+    handleAutoPlanBuildToolbarClick,
     handlePlanToolbarClick,
     handlePrimaryAction,
     handlePromptOptimizationClick,

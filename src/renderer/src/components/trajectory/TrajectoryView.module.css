@@ -1,0 +1,48 @@
+.root {
+  --trajectory-bg-1: var(--ds-bg-main);
+  --trajectory-bg-2: var(--ds-surface-subtle);
+  --trajectory-sidebar: var(--ds-bg-sidebar);
+  --trajectory-module: var(--ds-surface-subtle);
+  --trajectory-border-1: color-mix(in srgb, var(--ds-border-muted) 72%, transparent);
+  --trajectory-border-2: var(--ds-border-muted);
+  --trajectory-label-1: var(--ds-text);
+  --trajectory-label-2: var(--ds-text-muted);
+  --trajectory-label-3: var(--ds-text-faint);
+  --trajectory-label-caption: color-mix(in srgb, var(--ds-text-faint) 72%, transparent);
+  --trajectory-hover: var(--ds-surface-hover);
+  --trajectory-active: color-mix(in srgb, var(--ds-accent) 10%, var(--trajectory-bg-1));
+  --trajectory-accent: var(--ds-accent);
+  --trajectory-turn-accent: color-mix(in srgb, var(--ds-accent) 22%, var(--trajectory-bg-1));
+  --trajectory-error: var(--ds-danger);
+  --trajectory-success: var(--ds-success);
+  --trajectory-user: var(--ds-accent);
+  --trajectory-context: color-mix(in srgb, var(--ds-success) 68%, var(--ds-text-muted));
+  --trajectory-assistant: var(--ds-skill);
+  --trajectory-warning: color-mix(in srgb, #dd8629 78%, var(--ds-text) 22%);
+  --trajectory-subtool: color-mix(in srgb, var(--trajectory-warning) 62%, var(--ds-text-faint));
+  --trajectory-system-span: var(--ds-text-muted);
+  --trajectory-user-span: var(--trajectory-user);
+  --trajectory-context-span: var(--trajectory-context);
+  --trajectory-assistant-span: var(--trajectory-assistant);
+  --trajectory-assistant-ttft: color-mix(in srgb, var(--trajectory-assistant-span) 54%, var(--trajectory-bg-2));
+  --trajectory-tool-span: var(--trajectory-warning);
+  --trajectory-success-soft: var(--ds-success-soft);
+  --trajectory-warning-soft: var(--ds-warning-soft);
+  --trajectory-business-soft: var(--ds-accent-soft);
+  --trajectory-assistant-soft: var(--ds-skill-soft);
+  --trajectory-subtool-soft: color-mix(in srgb, var(--ds-warning-soft) 58%, var(--trajectory-bg-1));
+  --trajectory-bottom-clearance: calc(var(--trajectory-composer-height, 152px) + 16px);
+
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--trajectory-label-1);
+  background: var(--trajectory-bg-1);
+  -webkit-app-region: no-drag;
+}
+.ledger { position: relative; isolation: isolate; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--trajectory-label-3); font-size: 12px; }
+.empty svg { width: 24px; height: 24px; } .empty strong { color: var(--trajectory-label-1); font-size: 13px; }

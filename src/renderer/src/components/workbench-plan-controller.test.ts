@@ -14,6 +14,7 @@ import { rendererRuntimeClient } from '../agent/runtime-client'
 import {
   buildDraftGuiPlanTurnOverrides,
   buildGuiPlanTurnOverrides,
+  planTodosForBuild,
   resolveAssociatedGuiPlan,
   resolvePlanTurnWorkspaceRoot,
   shouldAutoOpenPlanPanel,
@@ -74,6 +75,23 @@ describe('workbench plan controller helpers', () => {
     // Thread reload / no plan turn in flight → do not open.
     expect(shouldAutoOpenPlanPanel(null, 'thread-a')).toBe(false)
     expect(shouldAutoOpenPlanPanel(null, null)).toBe(false)
+  })
+
+  it('matches plan todos after normalizing source path separators', () => {
+    const plan = createGuiPlanArtifact({
+      workspaceRoot: '/Users/codex/app', threadId: 'thread-current',
+      relativePath: '.kunsdd\\plan\\checkout.md', sourceRequest: 'Checkout', now: 1
+    })
+    const now = '2026-01-01T00:00:00.000Z'
+    expect(planTodosForBuild(plan, {
+      threadId: 'thread-current', updatedAt: now, items: [{
+        id: 'todo_1', content: 'Build checkout', status: 'in_progress', createdAt: now, updatedAt: now,
+        source: {
+          kind: 'plan', planId: plan.id, relativePath: '.kunsdd/plan/checkout.md',
+          ordinal: 0, contentHash: 'hash'
+        }
+      }]
+    })).toEqual([{ id: 'todo_1', content: 'Build checkout', status: 'in_progress' }])
   })
 
   it('builds draft context for first-class GUI plan turns', () => {

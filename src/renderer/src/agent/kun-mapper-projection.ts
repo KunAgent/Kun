@@ -132,7 +132,8 @@ export function normalizeUserInputOption(option: unknown): UserInputQuestion['op
   if (!label) return null
   return {
     label,
-    description: typeof raw.description === 'string' ? raw.description : ''
+    description: typeof raw.description === 'string' ? raw.description : '',
+    ...(raw.recommended === true ? { recommended: true } : {})
   }
 }
 
@@ -183,7 +184,7 @@ export function usageFromCore(usage: CoreUsageSnapshotJson, turnId?: string): Th
   return {
     inputTokens,
     outputTokens,
-    reasoningTokens: 0,
+    reasoningTokens: usage.reasoningTokens ?? 0,
     cachedTokens,
     cacheMissTokens,
     cacheHitRate,
@@ -196,6 +197,11 @@ export function usageFromCore(usage: CoreUsageSnapshotJson, turnId?: string): Th
     avgTokensPerSecond: nullableFinite(usage.avgTokensPerSecond),
     turnAvgTtftMs: nullableFinite(usage.turnAvgTtftMs),
     turnAvgTokensPerSecond: nullableFinite(usage.turnAvgTokensPerSecond),
+    ...(usage.cacheableTokenHitRate != null ? { cacheableTokenHitRate: usage.cacheableTokenHitRate } : {}),
+    ...(usage.totalInputTokenHitRate != null ? { totalInputTokenHitRate: usage.totalInputTokenHitRate } : {}),
+    ...(usage.cacheMissReasons ? { cacheMissReasons: usage.cacheMissReasons } : {}),
+    ...(usage.cacheSuggestions ? { cacheSuggestions: usage.cacheSuggestions } : {}),
+    ...(usage.lastRequestCacheHitRate != null ? { lastRequestCacheHitRate: usage.lastRequestCacheHitRate } : {}),
     ...(turnId ? { turnId } : {})
   }
 }
@@ -603,6 +609,7 @@ export function systemErrorBlockFromItem(item: CoreTurnItemJson): ChatBlock {
     text: redactSecretText(message),
     ...(item.code ? { code: item.code } : {}),
     ...(detail ? { detail } : {}),
+    ...(item.modelRequestFailure ? { modelRequestFailure: item.modelRequestFailure } : {}),
     severity: errorSeverity(item.severity, item.code),
     runtimeError: true
   }
@@ -617,6 +624,7 @@ export function runtimeErrorFromItem(item: CoreTurnItemJson): RuntimeErrorEventP
     message: redactSecretText(message),
     ...(item.code ? { code: item.code } : {}),
     ...(item.details !== undefined ? { details: item.details } : {}),
+    ...(item.modelRequestFailure ? { modelRequestFailure: item.modelRequestFailure } : {}),
     severity: errorSeverity(item.severity, item.code)
   }
 }
@@ -634,6 +642,7 @@ export function runtimeErrorFromEvent(
     message: redactSecretText(message),
     ...(event.code ? { code: event.code } : {}),
     ...(event.details !== undefined ? { details: event.details } : {}),
+    ...(event.modelRequestFailure ? { modelRequestFailure: event.modelRequestFailure } : {}),
     severity: errorSeverity(event.severity, event.code)
   }
 }
@@ -643,6 +652,7 @@ export function errorForRuntimeEvent(payload: RuntimeErrorEventPayload): Error {
     ...(payload.code ? { code: payload.code } : {}),
     message: payload.message,
     ...(payload.details !== undefined ? { details: payload.details } : {}),
+    ...(payload.modelRequestFailure ? { modelRequestFailure: payload.modelRequestFailure } : {}),
     ...(payload.severity ? { severity: payload.severity } : {})
   }))
 }

@@ -19,6 +19,7 @@ import {
   KUN_CONTEXT_COMPACTION_DEFAULTS_VERSION,
   KUN_RUNTIME_TUNING_DEFAULTS_VERSION,
   MODEL_REQUEST_RETRY_DEFAULTS_VERSION,
+  PROVIDER_PROXY_ROUTING_VERSION,
   SCHEDULE_MODEL_IDS,
   SCHEDULE_REASONING_EFFORT_IDS,
   SPEECH_TO_TEXT_PROTOCOLS,
@@ -147,6 +148,7 @@ export const modelProviderPatchSchema = z.object({
     enabled: z.boolean().optional(),
     url: z.string().trim().max(MAX_URL_LENGTH).optional()
   }).strict().optional(),
+  proxyRoutingVersion: z.number().int().min(0).max(PROVIDER_PROXY_ROUTING_VERSION).optional(),
   providers: z.array(z.object({
     id: z.string().trim().min(1).max(64).optional(),
     name: z.string().trim().min(1).max(80).optional(),
@@ -157,6 +159,7 @@ export const modelProviderPatchSchema = z.object({
     apiKey: z.string().max(MAX_BODY_BYTES).optional(),
     baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     endpointFormat: modelEndpointFormatSchema.optional(),
+    useProxy: z.boolean().optional(),
     retry: z.object({
       maxAttempts: z.number().int().min(0).max(10).optional(),
       initialDelayMs: z.number().int().min(0).max(600_000).optional(),
@@ -333,6 +336,20 @@ export const kunRuntimePatchSchema = z.object({
     topKDefault: z.number().int().positive().optional(),
     topKMax: z.number().int().positive().optional(),
     minScore: z.number().nonnegative().optional()
+  }).strict().optional(),
+  githubMcp: z.object({
+    enabled: z.boolean().optional(),
+    githubHost: trimmedString(253).optional(),
+    allowedHosts: z.array(trimmedString(253)).max(64).optional(),
+    allowedOrganizations: z.array(trimmedString(64)).max(128).optional(),
+    allowedRepositories: z.array(trimmedString(256)).max(256).optional(),
+    authorization: z.object({
+      source: z.enum(['GITHUB_PAT_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'github-cli']),
+      host: trimmedString(253),
+      login: trimmedString(256),
+      scopes: z.array(trimmedString(256)).max(256),
+      fingerprint: z.string().trim().regex(/^[0-9a-fA-F]{64}$/)
+    }).strict().nullable().optional()
   }).strict().optional(),
   projectConfig: z.object({
     grants: z.array(z.object({

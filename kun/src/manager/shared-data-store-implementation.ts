@@ -35,6 +35,7 @@ import {
 } from '../contracts/memory.js'
 import { ThreadSchema } from '../contracts/threads.js'
 import type { ThreadExecutionLease } from '../contracts/runtime-flavor.js'
+import { SessionUsageAggregateRequestSchema } from '../contracts/usage-query.js'
 import type { AgentSession } from '../domain/session.js'
 import { makeErrorItem } from '../domain/item.js'
 import { finishTurn } from '../domain/turn.js'
@@ -56,6 +57,7 @@ import type {
 } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
+import { JsonlFileAccessCoordinator } from '../adapters/file/jsonl-file-access.js'
 import { RevisionConflictError } from './revisioned-document-store.js'
 import { buildPublicItemHistoryPage } from '../services/item-history-page.js'
 
@@ -85,19 +87,27 @@ import type {
 
 export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
   static async create(dataDir: string): Promise<ManagerSharedDataStore> {
-    const threadStore = new HybridThreadStore({ dataDir })
+    const fileAccess = new JsonlFileAccessCoordinator()
+    const threadStore = new HybridThreadStore({ dataDir, fileAccess })
     await threadStore.ready()
     return new ManagerSharedDataStore({
       dataDir,
       threadStore,
-      sessionStore: new HybridSessionStore({ dataDir, index: threadStore })
+      sessionStore: new HybridSessionStore({ dataDir, index: threadStore, fileAccess })
     })
   }
 
-  async executeThread(operation: ManagerThreadStoreOperation, value: unknown): Promise<unknown> {
+  async executeThread(
+    operation: ManagerThreadStoreOperation,
+    value: unknown,
+    assertCurrent?: () => void
+  ): Promise<unknown> {
     const threadId = mutationThreadId(value)
     if (threadId && isThreadMutation(operation)) {
-      return this.enqueueMutation(threadId, () => this.executeThreadNow(operation, value))
+      return this.enqueueMutation(threadId, () => {
+        assertCurrent?.()
+        return this.executeThreadNow(operation, value)
+      })
     }
     return this.executeThreadNow(operation, value)
   }
@@ -151,12 +161,19 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     }
   }
 
-  async executeSession(operation: ManagerSessionStoreOperation, value: unknown): Promise<unknown> {
+  async executeSession(
+    operation: ManagerSessionStoreOperation,
+    value: unknown,
+    assertCurrent?: () => void
+  ): Promise<unknown> {
     const threadId = mutationThreadId(value)
     if (threadId && isSessionMutation(operation)) {
-      return this.enqueueMutation(threadId, () => this.executeSessionNow(operation, value))
+      return this.enqueueMutation(threadId, () => {
+        assertCurrent?.()
+        return this.executeSessionNow(operation, value, assertCurrent)
+      })
     }
-    return this.executeSessionNow(operation, value)
+    return this.executeSessionNow(operation, value, assertCurrent)
   }
 
   async executeArtifact(operation: ManagerArtifactStoreOperation, value: unknown): Promise<unknown> {
@@ -226,14 +243,14 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           const request = z.object({
             id: z.string().min(1),
             patch: MemoryUpdateRequest,
-            access: z.object({ workspace: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), project: z.string().optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.update(request.id, request.patch, request.access)
         }
         case 'delete': {
           const request = z.object({
             id: z.string().min(1),
-            access: z.object({ workspace: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), project: z.string().optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.delete(request.id, request.access)
         }
@@ -245,6 +262,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         case 'list': {
           const filter = z.object({
             workspace: z.string().optional(),
+            project: z.string().optional(),
             includeDeleted: z.boolean().optional(),
             all: z.boolean().optional()
           }).strict().parse(body.value ?? {})
@@ -254,12 +272,14 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           const request = z.object({
             query: z.string(),
             workspace: z.string().optional(),
-            limit: z.number().int().positive()
+            project: z.string().optional(),
+            limit: z.number().int().positive(),
+            promptCharacterBudget: z.number().int().nonnegative().optional()
           }).strict().parse(body.value)
-          return store.retrieve(request)
+          return store.retrieve({ ...request, policy: body.config })
         }
         case 'diagnostics':
-          return store.diagnostics()
+          return store.diagnostics(body.config)
       }
     })
     this.memoryQueue = run.then(() => undefined, () => undefined)
@@ -408,7 +428,8 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
 
   protected async executeSessionNow(
     operation: ManagerSessionStoreOperation,
-    value: unknown
+    value: unknown,
+    assertCurrent?: () => void
   ): Promise<unknown> {
     switch (operation) {
       case 'appendEvent': {
@@ -435,6 +456,30 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         const body = z.object({ threadId: ThreadIdSchema, item: TurnItem }).strict().parse(value)
         if (body.item.threadId !== body.threadId) throw new Error('item threadId does not match request')
         await this.sessionStore.appendItem(body.threadId, body.item)
+        return null
+      }
+      case 'checkpointLiveItem': {
+        const body = z.object({
+          threadId: ThreadIdSchema,
+          item: TurnItem,
+          representedSeq: z.number().int().nonnegative()
+        }).strict().parse(value)
+        if (body.item.threadId !== body.threadId) throw new Error('item threadId does not match request')
+        if (this.sessionStore.checkpointLiveItem) {
+          await this.sessionStore.checkpointLiveItem(body.threadId, body.item, body.representedSeq)
+        } else {
+          await this.sessionStore.appendItem(body.threadId, body.item)
+        }
+        return null
+      }
+      case 'finalizeLiveItem': {
+        const body = z.object({ threadId: ThreadIdSchema, item: TurnItem }).strict().parse(value)
+        if (body.item.threadId !== body.threadId) throw new Error('item threadId does not match request')
+        if (this.sessionStore.finalizeLiveItem) {
+          await this.sessionStore.finalizeLiveItem(body.threadId, body.item)
+        } else {
+          await this.sessionStore.appendItem(body.threadId, body.item)
+        }
         return null
       }
       case 'rewriteItems': {
@@ -478,12 +523,47 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           itemCount: (await this.sessionStore.loadItems(body.threadId)).length
         }
       }
+      case 'scheduleItemHistoryCompaction': {
+        const { threadId } = parseThreadId(value)
+        this.sessionStore.scheduleItemHistoryCompaction?.(threadId)
+        return null
+      }
       case 'loadEventsSince': {
         const body = z.object({
           threadId: ThreadIdSchema,
-          sinceSeq: z.number().int().nonnegative()
+          sinceSeq: z.number().int().min(-1)
         }).strict().parse(value)
         return this.sessionStore.loadEventsSince(body.threadId, body.sinceSeq)
+      }
+      case 'loadEventPage': {
+        const body = z.object({
+          threadId: ThreadIdSchema,
+          options: z.object({
+            sinceSeq: z.number().int().min(-1),
+            cursor: z.string().max(256).optional(),
+            maxEvents: z.number().int().positive().max(4_096).optional(),
+            maxBytes: z.number().int().positive().max(16 * 1024 * 1024).optional(),
+            maxRecordBytes: z.number().int().positive().max(16 * 1024 * 1024).optional()
+          }).strict()
+        }).strict().parse(value)
+        if (this.sessionStore.loadEventPage) {
+          return this.sessionStore.loadEventPage(body.threadId, body.options)
+        }
+        const events = await this.sessionStore.loadEventsSince(body.threadId, body.options.sinceSeq)
+        const maxEvents = body.options.maxEvents ?? 256
+        const page = events.slice(0, maxEvents)
+        return { events: page, eventBytes: Buffer.byteLength(JSON.stringify(page)), hasMore: events.length > page.length }
+      }
+      case 'trimEventsFromSeq': {
+        const body = z.object({
+          threadId: ThreadIdSchema,
+          fromSeqInclusive: z.number().int().nonnegative()
+        }).strict().parse(value)
+        return this.sessionStore.trimEventsFromSeq?.(body.threadId, body.fromSeqInclusive) ?? { afterBytes: 0 }
+      }
+      case 'eventReplayFloorSeq': {
+        const { threadId } = parseThreadId(value)
+        return this.sessionStore.eventReplayFloorSeq?.(threadId) ?? 0
       }
       case 'loadItems': {
         const { threadId } = parseThreadId(value)
@@ -545,11 +625,18 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
       }
       case 'allocateEventSeq': {
         const { threadId } = parseThreadId(value)
-        return this.allocateEventSeq(threadId)
+        return this.allocateEventSeq(threadId, assertCurrent)
       }
       case 'loadUsageRecords': {
         const body = SessionUsageQuerySchema.parse(value ?? {})
         return this.sessionStore.loadUsageRecords?.(body) ?? []
+      }
+      case 'aggregateUsage': {
+        const request = SessionUsageAggregateRequestSchema.parse(value)
+        if (!this.sessionStore.aggregateUsage) {
+          throw new Error('usage_index_unavailable: aggregate usage is unsupported')
+        }
+        return this.sessionStore.aggregateUsage(request.query, request.liveRecords)
       }
       case 'loadLatestUsageSnapshots': {
         const body = z.object({ threadIds: z.array(ThreadIdSchema).optional() }).strict().parse(value ?? {})

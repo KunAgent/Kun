@@ -6,10 +6,14 @@ import {
   clearPendingUpdate,
   clearPendingUpdateResult,
   readGuiUpdateRecovery,
+  readInstallerUpdateTransaction,
   readPendingUpdate,
   readPendingUpdateResult,
-  writeGuiUpdateRecovery
+  writeGuiUpdateRecovery,
+  type InstallerRecoveryEnvironment,
+  type InstallerUpdateTransaction
 } from './gui-updater-pending'
+import { resolveUpdateTransactionFacts } from './update-transaction-states'
 import { scheduleUpdateRollbackAfterExit } from './update-transaction-helper'
 
 export type UpdateBootstrapRecoveryDeps = {
@@ -18,6 +22,8 @@ export type UpdateBootstrapRecoveryDeps = {
   scheduleRollback: typeof scheduleUpdateRollbackAfterExit
   relaunch: () => void
   exit: (code: number) => void
+  readTransaction?: (match: { oldVersion: string, newVersion: string }) => Promise<InstallerUpdateTransaction | null>
+  log?: (message: string) => void
 }
 
 const defaultDeps: UpdateBootstrapRecoveryDeps = {
@@ -28,11 +34,48 @@ const defaultDeps: UpdateBootstrapRecoveryDeps = {
   exit: (code) => app.exit(code)
 }
 
+type InstallerRecoveryContext = {
+  recoveryEnvironment: InstallerRecoveryEnvironment
+  backupDir?: string
+  transactionState: string
+}
+
+/**
+ * Resolve the authoritative rollback context. The installer transaction file
+ * wins over the GUI result file: a crash between the payload cutover and the
+ * installer result write leaves the transaction as the only rollback record.
+ */
+async function resolveInstallerRecoveryContext(
+  deps: UpdateBootstrapRecoveryDeps,
+  pending: { oldVersion: string, newVersion: string }
+): Promise<InstallerRecoveryContext | null> {
+  const result = await readPendingUpdateResult()
+  const resultState = result?.outcome === 'success' ? result.transactionState : undefined
+  if (result?.outcome === 'success' && result.recoveryEnvironment) {
+    return {
+      recoveryEnvironment: result.recoveryEnvironment,
+      backupDir: result.backupDir,
+      transactionState: resultState ?? ''
+    }
+  }
+
+  const transaction = await (deps.readTransaction ?? readInstallerUpdateTransaction)(pending)
+  if (transaction && resolveUpdateTransactionFacts(transaction.phase).countsAsInstalled) {
+    return {
+      recoveryEnvironment: transaction.recoveryEnvironment,
+      backupDir: transaction.backupDir || undefined,
+      transactionState: transaction.phase
+    }
+  }
+  return null
+}
+
 async function startRecoveryFromCommittedUpdate(deps: UpdateBootstrapRecoveryDeps) {
-  const [pending, result] = await Promise.all([readPendingUpdate(), readPendingUpdateResult()])
-  if (!pending || !result?.recoveryEnvironment || result.outcome !== 'success' ||
-      !['cleanup_pending', 'committed'].includes(result.transactionState ?? '') ||
-      deps.version() !== pending.newVersion) return null
+  const pending = await readPendingUpdate()
+  if (!pending || deps.version() !== pending.newVersion) return null
+  const context = await resolveInstallerRecoveryContext(deps, pending)
+  if (!context) return null
+  if (!resolveUpdateTransactionFacts(context.transactionState).countsAsInstalled) return null
   return writeGuiUpdateRecovery({
     installedVersion: pending.newVersion,
     oldVersion: pending.oldVersion,
@@ -40,8 +83,10 @@ async function startRecoveryFromCommittedUpdate(deps: UpdateBootstrapRecoveryDep
     verifiedAt: new Date().toISOString(),
     healthAttempts: 0,
     bootAttempts: 0,
-    backupDir: result.backupDir,
-    recoveryEnvironment: result.recoveryEnvironment,
+    backupDir: context.backupDir,
+    transactionRoot: undefined,
+    journalPath: undefined,
+    recoveryEnvironment: context.recoveryEnvironment,
     backupExpiresAt: new Date(Date.now() + GUI_UPDATE_BACKUP_GRACE_MS).toISOString()
   })
 }
@@ -57,7 +102,16 @@ export async function recoverUpdateBeforeRuntimeStart(
     return false
   }
   const recovery = await readGuiUpdateRecovery() ?? await startRecoveryFromCommittedUpdate(deps)
-  if (!recovery || Date.now() >= Date.parse(recovery.backupExpiresAt)) return false
+  if (!recovery) return false
+
+  if (Date.now() >= Date.parse(recovery.backupExpiresAt)) {
+    // An expired grace window must not silently drop the recovery record:
+    // without it the running payload loses its only rollback owner. Log and
+    // keep the record so runtime reconciliation performs the expiry decision
+    // (finalize, rollback, or block) with the full helper available.
+    deps.log?.('[kun-gui updater] update backup grace window expired before runtime start')
+    return false
+  }
 
   const bootAttempts = (recovery.bootAttempts ?? 0) + 1
   await writeGuiUpdateRecovery({ ...recovery, bootAttempts })

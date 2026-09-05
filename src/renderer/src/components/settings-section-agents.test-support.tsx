@@ -37,6 +37,7 @@ import {
 import { FastContextSettingsPanel } from './settings-section-assistant-fast-context'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { ProviderModelsManager } from './settings-section-provider-models'
+import { providerProxyTestLabels } from './provider-proxy-test-labels'
 import {
   ProvidersSettingsSection,
   antigravityProviderCatalogPatch
@@ -53,9 +54,9 @@ const labels: Record<string, string> = {
   agentsQuickMcp: 'MCP',
   agentsQuickPermissions: 'Permissions',
   agentsQuickLaboratory: 'Laboratory',
-  labComposerPersonaTitle: 'Personas',
-  labComposerPersonaEnabled: 'Enable composer personas',
-  labComposerPersonaEnabledDesc: 'Composer persona description',
+  composerPersonaTitle: 'Personas',
+  composerPersonaEnabled: 'Enable composer personas',
+  composerPersonaEnabledDesc: 'Composer persona description',
   labConversationVisualizationTitle: 'Conversation visualization',
   labPlanWorktreeTitle: 'Prompt-managed worktree',
   labPlanWorktreeDescription: 'Experimental Agent-managed Direct plan worktrees',
@@ -78,7 +79,7 @@ const labels: Record<string, string> = {
   fastContextFast: 'Codex Fast mode',
   fastContextFastDesc: 'Fast description',
   fastContextFastUnsupportedHint: 'Fast unsupported hint',
-  labPptTitle: 'PPT agent',
+  labPptTitle: 'PPT agent', labProjectBoardTitle: 'Project board', labProjectBoardDescription: 'Project board description', labProjectBoardEnabled: 'Enable project board',
   labPptDescription: 'PPT tool description',
   labPptEnabled: 'Enable ppt_agent',
   labPptEnabledDesc: 'Enable description',
@@ -152,6 +153,7 @@ const labels: Record<string, string> = {
   modelProviderTestFailed: 'Connection failed: {{message}}',
   modelProviderSystemProxyDetected: 'System proxy {{proxy}} can reach this provider.',
   modelProviderUseDetectedProxy: 'Use detected proxy',
+  ...providerProxyTestLabels,
   modelProviderCopyError: 'Copy error',
   modelProviderErrorCopied: 'Copied',
   modelProviderPresetMissingKeyForProbe: 'Enter this provider API key first.',

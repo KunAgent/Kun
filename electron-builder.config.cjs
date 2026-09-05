@@ -146,6 +146,10 @@ module.exports = {
     // binding + node-mac-permissions) ships prebuilt .node files that must
     // live outside the asar archive to load.
     '**/node_modules/@computer-use/**/*',
+    // CUA Driver is a Rust/UniFFI native SDK. Keep the generated JS, selected
+    // platform library, and Node runtime outside ASAR for Electron Main.
+    '**/node_modules/@trycua/**/*',
+    '**/node_modules/@ubjs/**/*',
     // OCR fallback loads native canvas bindings plus Tesseract worker/core
     // wasm and language data by filesystem path at runtime.
     '**/node_modules/@napi-rs/canvas*/**/*',

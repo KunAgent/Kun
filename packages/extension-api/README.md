@@ -17,8 +17,8 @@ For a standalone project, first require a real public-registry result, then
 install the package by name:
 
 ```sh
-npm view @kun/extension-api@1.2.0 version
-npm install @kun/extension-api@^1.2.0
+npm view @kun/extension-api@1.4.0 version
+npm install @kun/extension-api@^1.4.0
 ```
 
 Only run the install when the first command returns a version. `E404` means the

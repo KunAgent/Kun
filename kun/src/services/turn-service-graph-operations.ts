@@ -73,6 +73,8 @@ async suspendGraphLeadTurn(this: TurnService, input: {
     preserveDeliveryCursor?: boolean
     /** Permit parking while durable Graph review/supervision work remains pending. */
     allowPendingSupervision?: boolean
+    /** Host shutdown retains ownership until AgentLoop finishes suspended accounting. */
+    releaseLease?: boolean
   }): Promise<GraphLeadSuspensionResult> {
     const turn = await this.getTurn(input.threadId, input.turnId)
     if (!turn || turn.status !== 'running' || turn.orchestration !== 'graph') return 'not_graph'
@@ -129,7 +131,9 @@ async suspendGraphLeadTurn(this: TurnService, input: {
             : candidate),
         updatedAt: now
       })
-      this['releaseRuntimeTurnExecution'](input.threadId, input.turnId)
+      this['releaseRuntimeTurnExecution'](input.threadId, input.turnId, {
+        releaseLease: input.releaseLease
+      })
       return attached.supervisionPending
         ? 'suspended_pending_supervision'
         : 'suspended'
@@ -141,6 +145,8 @@ async suspendGraphPlanningTurn(this: TurnService, input: {
     turnId: string
     /** Host shutdown must park even when in-memory steering is pending. */
     force?: boolean
+    /** Host shutdown retains ownership until AgentLoop finishes suspended accounting. */
+    releaseLease?: boolean
   }): Promise<GraphLeadSuspensionResult> {
     let lifecycle = await this['deps'].transitionGraphPlanningDraft?.({
       threadId: input.threadId,
@@ -193,7 +199,9 @@ async suspendGraphPlanningTurn(this: TurnService, input: {
             : candidate),
         updatedAt: this['deps'].nowIso()
       })
-      this['releaseRuntimeTurnExecution'](input.threadId, input.turnId)
+      this['releaseRuntimeTurnExecution'](input.threadId, input.turnId, {
+        releaseLease: input.releaseLease
+      })
       return 'suspended'
     })
   },
@@ -202,7 +210,9 @@ async resumeGraphPlanningTurn(this: TurnService, input: {
     threadId: string
     turnId: string
   }): Promise<GraphLeadResumeResult> {
-    return this['withThreadMutation'](input.threadId, async () => {
+    const finishAdmission = this['beginExecutionAdmission']()
+    try {
+      return await this['withThreadMutation'](input.threadId, async () => {
       const current = await this['deps'].threadStore.get(input.threadId)
       const turn = current?.turns.find((candidate) => candidate.id === input.turnId)
       let correctionRestored = false
@@ -216,27 +226,27 @@ async resumeGraphPlanningTurn(this: TurnService, input: {
             sourceTurnId: input.turnId,
             action: 'suspend'
           })
+          if (
+            current &&
+            turn?.status === 'running' &&
+            turn.orchestration === 'graph' &&
+            lifecycle?.state === 'needs_correction'
+          ) {
+            await this['deps'].threadStore.upsert({
+              ...current,
+              turns: current.turns.map((candidate) =>
+                candidate.id === input.turnId
+                  ? {
+                      ...candidate,
+                      graphPlanningLifecycle: lifecycle ?? undefined,
+                      requiredToolGate: undefined
+                    }
+                  : candidate),
+              updatedAt: this['deps'].nowIso()
+            })
+          }
         } finally {
           this['releaseRuntimeTurnExecution'](input.threadId, input.turnId)
-        }
-        if (
-          current &&
-          turn?.status === 'running' &&
-          turn.orchestration === 'graph' &&
-          lifecycle?.state === 'needs_correction'
-        ) {
-          await this['deps'].threadStore.upsert({
-            ...current,
-            turns: current.turns.map((candidate) =>
-              candidate.id === input.turnId
-                ? {
-                    ...candidate,
-                    graphPlanningLifecycle: lifecycle,
-                    requiredToolGate: undefined
-                  }
-                : candidate),
-            updatedAt: this['deps'].nowIso()
-          })
         }
       }
 
@@ -248,6 +258,10 @@ async resumeGraphPlanningTurn(this: TurnService, input: {
         if (this['inflightTurns'].has(input.turnId)) return 'already_running'
         if (!this['tryAdmitTurn'](input.turnId, input.threadId)) {
           throw new TurnCapacityError(this['maxConcurrentTurns'])
+        }
+        if (this['deps'].executionLeases) {
+          const lease = await this['deps'].executionLeases.acquire(input.threadId, input.turnId)
+          this['leasedTurns'].set(input.turnId, lease)
         }
         const lifecycle = await this['deps'].transitionGraphPlanningDraft?.({
           threadId: input.threadId,
@@ -282,7 +296,10 @@ async resumeGraphPlanningTurn(this: TurnService, input: {
         await restoreCorrection()
         throw error
       }
-    })
+      })
+    } finally {
+      finishAdmission()
+    }
   },
 
 /**
@@ -313,11 +330,13 @@ async resumeGraphLeadTurn(this: TurnService, input: {
     lastDeliveredSeq: number
     terminal: boolean
   }): Promise<GraphLeadResumeResult> {
-    const planningLifecycle = await this['deps'].resolveGraphPlanningDraft?.({
-      threadId: input.threadId,
-      sourceTurnId: input.turnId
-    })
-    return this['withThreadMutation'](input.threadId, async () => {
+    const finishAdmission = this['beginExecutionAdmission']()
+    try {
+      const planningLifecycle = await this['deps'].resolveGraphPlanningDraft?.({
+        threadId: input.threadId,
+        sourceTurnId: input.turnId
+      })
+      return await this['withThreadMutation'](input.threadId, async () => {
       const current = await this['deps'].threadStore.get(input.threadId)
       const turn = current?.turns.find((candidate) => candidate.id === input.turnId)
       if (!current || !turn) throw new Error(`turn not found: ${input.turnId}`)
@@ -366,6 +385,10 @@ async resumeGraphLeadTurn(this: TurnService, input: {
         throw new TurnCapacityError(this['maxConcurrentTurns'])
       }
       try {
+        if (this['deps'].executionLeases) {
+          const lease = await this['deps'].executionLeases.acquire(input.threadId, input.turnId)
+          this['leasedTurns'].set(input.turnId, lease)
+        }
         const now = this['deps'].nowIso()
         const controller = new AbortController()
         this['inflightTurns'].set(input.turnId, controller)
@@ -407,6 +430,9 @@ async resumeGraphLeadTurn(this: TurnService, input: {
         this['releaseRuntimeTurnExecution'](input.threadId, input.turnId)
         throw error
       }
-    })
+      })
+    } finally {
+      finishAdmission()
+    }
   },
 }

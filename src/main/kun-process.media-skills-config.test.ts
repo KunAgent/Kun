@@ -502,6 +502,31 @@ describe('syncGuiManagedKunConfig', () => {
     expect(parsed.capabilities.skills.roots).toContain(manualRoot)
   })
 
+  it('writes the current bundled skill root and replaces a stale app path', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const bundledRoot = join(tempRoot, 'current-app', 'bundled-skills')
+    writeFileSync(configPath, JSON.stringify({
+      capabilities: {
+        skills: {
+          enabled: true,
+          roots: [],
+          globalRoots: [],
+          builtinRoots: [join(tempRoot, 'old-app', 'bundled-skills')]
+        }
+      }
+    }), 'utf8')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), {
+      builtinSkillsRoot: bundledRoot
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.capabilities.skills.builtinRoots).toEqual([bundledRoot])
+    expect(parsed.capabilities.skills.enabled).toBe(true)
+  })
+
   it('forwards GUI disabledSkillIds into the runtime skills capability', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
     const configPath = join(tempRoot, 'config.json')

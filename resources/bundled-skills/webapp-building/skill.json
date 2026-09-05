@@ -1,0 +1,24 @@
+{
+  "id": "webapp-building",
+  "name": "Web Application Building",
+  "version": "1.0.0",
+  "description": "Build or modify production-oriented web applications by following the repository architecture and validating real user flows.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/webapp-building"
+    ],
+    "promptPatterns": [
+      "React app",
+      "web app",
+      "Web Application Building",
+      "webapp-building",
+      "前端应用",
+      "网站开发"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

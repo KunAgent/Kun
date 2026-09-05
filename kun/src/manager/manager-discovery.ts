@@ -7,7 +7,7 @@ import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
 
-export const KUN_MANAGER_PROTOCOL_VERSION = 3 as const
+export const KUN_MANAGER_PROTOCOL_VERSION = 5 as const
 export const KUN_MANAGER_DISCOVERY_VERSION = 1 as const
 export const KUN_MANAGER_DISCOVERY_FILENAME = 'manager.json'
 const MANAGER_START_LOCK_FILENAME = '.manager-start.lock'

@@ -1,0 +1,24 @@
+{
+  "id": "process-doc",
+  "name": "Process Documentation",
+  "version": "1.0.0",
+  "description": "Turn an operational process into a clear SOP, role model, control map, and improvement backlog.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/process-doc"
+    ],
+    "promptPatterns": [
+      "Process Documentation",
+      "process map",
+      "process-doc",
+      "RACI",
+      "SOP",
+      "流程文档"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

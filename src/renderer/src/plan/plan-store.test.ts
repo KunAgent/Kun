@@ -138,6 +138,45 @@ describe('plan-store', () => {
     expect(readRememberedGuiPlan('/tmp/app', 'thread-a')?.updatedAt).toBe(savedAt.toISOString())
   })
 
+  it('keeps identical workspace paths isolated across threads', () => {
+    const planA = createGuiPlanArtifact({
+      workspaceRoot: '/tmp/app', threadId: 'thread-a',
+      relativePath: '.kunsdd/plan/shared.md', sourceRequest: 'A', now: 1
+    })
+    const planB = createGuiPlanArtifact({
+      workspaceRoot: '/tmp/app', threadId: 'thread-b',
+      relativePath: '.kunsdd/plan/shared.md', sourceRequest: 'B', now: 2
+    })
+
+    useGuiPlanStore.getState().setActivePlan(planA, '# A')
+    useGuiPlanStore.getState().setActivePlan(planB, '# B')
+
+    expect(readRememberedGuiPlan('/tmp/app', 'thread-a')).toMatchObject({ threadId: 'thread-a', sourceRequest: 'A' })
+    expect(readRememberedGuiPlan('/tmp/app', 'thread-b')).toMatchObject({ threadId: 'thread-b', sourceRequest: 'B' })
+  })
+
+  it('ignores stale save results from another plan identity', () => {
+    const planA = createGuiPlanArtifact({
+      workspaceRoot: '/tmp/app', threadId: 'thread-a', relativePath: '.kunsdd/plan/a.md',
+      sourceRequest: 'A', now: 1
+    })
+    const planB = createGuiPlanArtifact({
+      workspaceRoot: '/tmp/app', threadId: 'thread-b', relativePath: '.kunsdd/plan/b.md',
+      sourceRequest: 'B', now: 2
+    })
+    useGuiPlanStore.getState().setActivePlan(planB, '# B')
+
+    useGuiPlanStore.getState().setSaveStatusForPlan(planA.id, 'thread-a', 'error', 'stale')
+    useGuiPlanStore.getState().markSavedForPlan(planA.id, 'thread-a', '# stale')
+
+    expect(useGuiPlanStore.getState()).toMatchObject({
+      activePlan: { id: planB.id, threadId: 'thread-b' },
+      content: '# B',
+      saveStatus: 'saved',
+      error: null
+    })
+  })
+
   it('matches active plans to the current workspace and thread', () => {
     const plan = createGuiPlanArtifact({
       workspaceRoot: '/tmp/app',

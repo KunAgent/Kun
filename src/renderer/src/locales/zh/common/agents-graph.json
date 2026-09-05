@@ -81,6 +81,10 @@
         "name": "组件设计师",
         "desc": "聚焦交互组件原型"
       },
+      "diagram-designer": {
+        "name": "图表设计师",
+        "desc": "可访问的内联 SVG 图表"
+      },
       "design-reviewer": {
         "name": "设计审查",
         "desc": "视觉层级与可访问性 · 只读"

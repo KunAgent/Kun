@@ -202,19 +202,24 @@ describe('canonical Runtime migration startup lock', () => {
     migration.release()
   })
 
-  it('fails closed on unknown or non-regular common claim entries', async () => {
+  it('ignores non-canonical common claim names but fails closed on canonical directories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-main-migration-lock-'))
     roots.push(root)
     const dataDir = join(root, '.kun', 'data')
     const claimsPath = runtimeDataDirClaimsPath(dataDir)
     await mkdir(claimsPath, { recursive: true })
-    const unknown = join(claimsPath, 'claim-unknown.json')
+    const unknown = join(
+      claimsPath,
+      'claim-551-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.json.stale'
+    )
     await writeFile(unknown, '{}')
 
-    expect(() => acquireCanonicalRuntimeMigrationLock([dataDir], {
+    const migration = acquireCanonicalRuntimeMigrationLock([dataDir], {
       pid: 551,
       processIsAlive: () => false
-    })).toThrow(/claim name is invalid/)
+    })
+    await expect(readFile(unknown, 'utf8')).resolves.toBe('{}')
+    migration.release()
 
     await rm(unknown, { force: true })
     await mkdir(join(

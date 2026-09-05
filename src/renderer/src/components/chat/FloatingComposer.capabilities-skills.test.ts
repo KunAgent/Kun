@@ -51,8 +51,7 @@ import {
 } from './FloatingComposerExecutionPicker'
 import {
   FloatingComposerQueuedMessages,
-  calculateQueuedMessageMenuPlacement,
-  canEditQueuedComposerMessage
+  calculateQueuedMessageMenuPlacement
 } from './FloatingComposerQueuedMessages'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import { requestContextSnapshotMatchesSelection } from './FloatingComposerContextCapacity'
@@ -339,7 +338,7 @@ describe('FloatingComposer capability controls', () => {
     )
 
     expect(html).toContain('deepseek-v4-pro')
-    expect(html).toContain('Stop')
+    expect(html).toContain('Queue message')
     const modelTrigger = html.match(/<button[^>]*aria-label="Model: DeepSeek \/ deepseek-v4-pro"[^>]*>/)?.[0]
     const reasoningTrigger = html.match(/<button[^>]*aria-label="Reasoning: High"[^>]*>/)?.[0]
     expect(modelTrigger).toBeDefined()

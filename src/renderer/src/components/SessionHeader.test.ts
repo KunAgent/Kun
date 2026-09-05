@@ -108,6 +108,69 @@ describe('SessionHeader', () => {
     act(() => renderer!.unmount())
   })
 
+  it('renders the trajectory toggle with visible text next to the compact conversation title', async () => {
+    const onToggleTrajectory = vi.fn()
+    let renderer: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(SessionHeader, {
+        compact: true,
+        trajectoryEnabled: true,
+        trajectoryOpen: true,
+        trajectoryRunning: true,
+        onToggleTrajectory
+      }))
+    })
+    const html = JSON.stringify(renderer!.toJSON())
+
+    const button = renderer!.root.findByProps({
+      'aria-label': "View this conversation's model and tool trajectory"
+    })
+    expect(button.props.className).toContain('session-header-compact-trajectory')
+    expect(button.props.className).toContain('ds-no-drag')
+    expect(button.props['aria-pressed']).toBe(true)
+    expect(html).toContain('Trace')
+    expect(html).toContain('animate-pulse rounded-full bg-violet-500')
+
+    act(() => button.props.onClick())
+    expect(onToggleTrajectory).toHaveBeenCalledTimes(1)
+    act(() => renderer!.unmount())
+  })
+
+  it('renders the trajectory toggle with Chinese text and a failed status dot', async () => {
+    await i18n.changeLanguage('zh')
+    let renderer: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(SessionHeader, {
+        compact: true,
+        trajectoryEnabled: true,
+        trajectoryOpen: false,
+        trajectoryRunning: false,
+        trajectoryFailed: true,
+        onToggleTrajectory: vi.fn()
+      }))
+    })
+    const html = JSON.stringify(renderer!.toJSON())
+
+    expect(html).toContain('轨迹')
+    expect(html).toContain('查看本会话的模型调用与工具轨迹')
+    expect(html).toContain('"aria-pressed":false')
+    expect(html).toContain('rounded-full bg-red-500')
+    expect(html).not.toContain('bg-violet-500')
+    await i18n.changeLanguage('en')
+    act(() => renderer!.unmount())
+  })
+
+  it('does not render the trajectory toggle without trajectory props', async () => {
+    let renderer: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(SessionHeader, { compact: true }))
+    })
+    const html = JSON.stringify(renderer!.toJSON())
+
+    expect(html).not.toContain('session-header-compact-trajectory')
+    act(() => renderer!.unmount())
+  })
+
   it('hides the branch badge when the workspace is not a Git repository', async () => {
     vi.mocked(window.kunGui.getGitBranches).mockResolvedValue({
       ok: false,

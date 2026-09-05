@@ -89,10 +89,6 @@ function targetNativeModuleGroups(arch) {
       label: 'sharp',
       pattern: new RegExp(`/node_modules/@img/sharp-linux-${arch}/lib/[^/]+\\.node$`, 'u')
     },
-    {
-      label: 'keytar',
-      pattern: new RegExp(`/node_modules/@github/keytar/prebuilds/linux-${arch}/keytar\\.node$`, 'u')
-    },
     ...(arch === 'x64'
       ? [{
           label: '@computer-use/libnut-linux',

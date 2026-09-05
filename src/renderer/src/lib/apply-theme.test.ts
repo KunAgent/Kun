@@ -4,8 +4,86 @@ import {
   applyCursorSpotlight,
   applyCursorSpotlightColor,
   applyDarkUiColors,
-  applyDocumentLocale
+  applyDocumentLocale,
+  applyTheme,
+  initializeStartupTheme
 } from './apply-theme'
+
+function installThemeEnvironment(initiallyDark: boolean): {
+  attributes: Map<string, string>
+  setSystemDark: (dark: boolean) => void
+} {
+  const attributes = new Map<string, string>()
+  const listeners = new Set<() => void>()
+  let matches = initiallyDark
+  const mediaQuery = {
+    get matches() {
+      return matches
+    },
+    addEventListener: vi.fn((_type: string, listener: () => void) => listeners.add(listener)),
+    removeEventListener: vi.fn((_type: string, listener: () => void) => listeners.delete(listener))
+  }
+  vi.stubGlobal('document', {
+    documentElement: {
+      setAttribute: (name: string, value: string) => attributes.set(name, value)
+    }
+  })
+  vi.stubGlobal('window', { matchMedia: vi.fn(() => mediaQuery) })
+  return {
+    attributes,
+    setSystemDark: (dark: boolean) => {
+      matches = dark
+      listeners.forEach((listener) => listener())
+    }
+  }
+}
+
+describe('initializeStartupTheme', () => {
+  afterEach(() => {
+    applyTheme('light')
+    vi.unstubAllGlobals()
+  })
+
+  it('uses the system theme immediately and then applies the saved theme', async () => {
+    const { attributes } = installThemeEnvironment(false)
+    let resolveSettings!: (settings: { theme: 'dark' }) => void
+    const settings = new Promise<{ theme: 'dark' }>((resolve) => {
+      resolveSettings = resolve
+    })
+
+    initializeStartupTheme(() => settings)
+    expect(attributes.get('data-theme')).toBe('light')
+
+    resolveSettings({ theme: 'dark' })
+    await settings
+    await Promise.resolve()
+    expect(attributes.get('data-theme')).toBe('dark')
+  })
+
+  it('keeps following the OS when the saved theme is system', async () => {
+    const { attributes, setSystemDark } = installThemeEnvironment(false)
+
+    initializeStartupTheme(async () => ({ theme: 'system' }))
+    await Promise.resolve()
+    expect(attributes.get('data-theme')).toBe('light')
+
+    setSystemDark(true)
+    expect(attributes.get('data-theme')).toBe('dark')
+  })
+
+  it('keeps the system fallback when saved settings cannot be read', async () => {
+    const { attributes, setSystemDark } = installThemeEnvironment(true)
+
+    initializeStartupTheme(async () => {
+      throw new Error('settings unavailable')
+    })
+    await Promise.resolve()
+    expect(attributes.get('data-theme')).toBe('dark')
+
+    setSystemDark(false)
+    expect(attributes.get('data-theme')).toBe('light')
+  })
+})
 
 describe('applyDocumentLocale', () => {
   afterEach(() => {

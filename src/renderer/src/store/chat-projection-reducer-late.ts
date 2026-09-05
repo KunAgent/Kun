@@ -53,9 +53,10 @@ export function reduceLateChatProjection(
         id: event.itemId,
         ...(event.turnId ? { turnId: event.turnId } : {}),
         createdAt: event.createdAt ?? new Date(context.now).toISOString(),
-        text: view.message,
+        text: event.modelRequestFailure ? event.message : view.message,
         ...(view.code ? { code: view.code } : {}),
         ...(view.detail ? { detail: view.detail } : {}),
+        ...(event.modelRequestFailure ? { modelRequestFailure: event.modelRequestFailure } : {}),
         severity: event.severity ?? 'error',
         runtimeError: true
       }
@@ -230,7 +231,6 @@ export function reduceLateChatProjection(
         }
       }
       return {
-        usageRefreshKey: state.usageRefreshKey + 1,
         lastTurnUsage: { threadId, snapshot: action.payload },
         turnTimingMetrics
       }
@@ -247,10 +247,32 @@ export function reduceLateChatProjection(
       // snapshot for an older turn must never settle the sidebar projection,
       // clear live text, or settle blocks of a newer turn that is still
       // running locally.
+      const projectedThread = state.threads.find(
+        (thread) => thread.id === snapshot.threadId
+      )
+      const projectedLatestTurnId = projectedThread?.latestTurnId
+      const projectedLastSeq = Number.isFinite(state.lastSeq) ? state.lastSeq : 0
+      const snapshotProvesNewerThanProjection = Boolean(
+        snapshot.turnId &&
+        snapshot.latestTurnId === snapshot.turnId &&
+        projectedThread?.status?.trim().toLowerCase() !== 'running' &&
+        typeof projectedThread?.latestSeq === 'number' &&
+        snapshot.latestSeq > projectedThread.latestSeq
+      )
       const snapshotTurnIsCurrent = (
-        !snapshot.turnId ||
-        !state.currentTurnId ||
-        state.currentTurnId === snapshot.turnId
+        snapshot.latestSeq >= projectedLastSeq &&
+        (
+          !snapshot.turnId ||
+          !snapshot.latestTurnId ||
+          snapshot.turnId === snapshot.latestTurnId
+        ) &&
+        (
+          !snapshot.turnId ||
+          !projectedLatestTurnId ||
+          snapshot.turnId === projectedLatestTurnId ||
+          snapshotProvesNewerThanProjection
+        ) &&
+        (!snapshot.turnId || !state.currentTurnId || state.currentTurnId === snapshot.turnId)
       )
       const terminalIdle = !busy && snapshotTurnIsCurrent
       const reconciledStatus = snapshot.threadStatus
@@ -260,7 +282,7 @@ export function reduceLateChatProjection(
               : snapshot.threadStatus
           )
         : undefined
-      const threads = snapshotTurnIsCurrent && (
+      const statusThreads = snapshotTurnIsCurrent && (
         reconciledStatus || snapshot.latestTurnId || snapshot.latestTurnStatus
       )
         ? updateProjectedThreadStatus(
@@ -271,14 +293,30 @@ export function reduceLateChatProjection(
             snapshot.latestTurnId
           )
         : state.threads
+      let threads = statusThreads
+      if (
+        snapshotTurnIsCurrent &&
+        (snapshot.goal !== undefined || snapshot.todos !== undefined)
+      ) {
+        let canonicalStateChanged = false
+        const canonicalThreads = statusThreads.map((thread) => {
+          if (thread.id !== snapshot.threadId) return thread
+          const goalMatches = snapshot.goal === undefined || thread.goal === snapshot.goal
+          const todosMatch = snapshot.todos === undefined || thread.todos === snapshot.todos
+          if (goalMatches && todosMatch) return thread
+          canonicalStateChanged = true
+          return {
+            ...thread,
+            ...(snapshot.goal !== undefined ? { goal: snapshot.goal } : {}),
+            ...(snapshot.todos !== undefined ? { todos: snapshot.todos } : {})
+          }
+        })
+        if (canonicalStateChanged) threads = canonicalThreads
+      }
       const canonicalBlocks = busy || !snapshotTurnIsCurrent
         ? snapshot.blocks
         : context.settlePendingRuntimeWork(snapshot.blocks)
-      const shouldClearLive = (
-        !snapshot.turnId ||
-        !state.currentTurnId ||
-        state.currentTurnId === snapshot.turnId
-      )
+      const shouldClearLive = snapshotTurnIsCurrent
       return {
         blocks: snapshot.turnId
           ? reconcileSnapshotTurn(
@@ -288,7 +326,12 @@ export function reduceLateChatProjection(
               snapshot.userBlockId
             )
           : reconcileSnapshotBlocks(state.blocks, canonicalBlocks),
-        lastSeq: Math.max(state.lastSeq, snapshot.latestSeq),
+        // A tagged detail fetch can observe a newer stream high-water while
+        // still being merged only into its older turn. Advancing the cursor in
+        // that case would skip the newer turn's events on reconnect.
+        lastSeq: snapshotTurnIsCurrent
+          ? Math.max(projectedLastSeq, snapshot.latestSeq)
+          : state.lastSeq,
         ...(shouldClearLive
           ? {
               liveReasoning: '',
@@ -306,11 +349,28 @@ export function reduceLateChatProjection(
             ? snapshot.latestTurnStartedAtMs ?? state.currentTurnStartedAtMs
             : null
           : state.currentTurnStartedAtMs,
+        // Merge server-derived durations from the reconciled turn records; the
+        // durable record is authoritative, but keep locally recorded durations
+        // for turns the snapshot page does not cover.
+        ...(snapshot.turnDurationByUserId
+          ? {
+              turnDurationByUserId: {
+                ...state.turnDurationByUserId,
+                ...snapshot.turnDurationByUserId
+              }
+            }
+          : {}),
         ...(state.lastTurnUsage && state.lastTurnUsage.threadId !== snapshot.threadId
           ? { turnTimingMetrics: new Map() }
           : {}),
-        activeThreadGoal: snapshot.goal ?? state.activeThreadGoal,
-        activeThreadTodos: snapshot.todos ?? state.activeThreadTodos,
+        activeThreadGoal:
+          !snapshotTurnIsCurrent || snapshot.goal === undefined
+            ? state.activeThreadGoal
+            : snapshot.goal,
+        activeThreadTodos:
+          !snapshotTurnIsCurrent || snapshot.todos === undefined
+            ? state.activeThreadTodos
+            : snapshot.todos,
         ...(threads !== state.threads ? { threads } : {}),
         error: context.clearRecoveringError(state.error)
       }
@@ -318,6 +378,7 @@ export function reduceLateChatProjection(
     case 'turn_completed':
     case 'turn_aborted': {
       const aborted = action.type === 'turn_aborted'
+      const settledCurrentTurn = state.busy || state.currentTurnId === action.payload.turnId
       const threadId = state.activeThreadId
       const threads = threadId
         ? settleProjectedThreadStatus(
@@ -338,6 +399,7 @@ export function reduceLateChatProjection(
           blocks: context.settlePendingRuntimeWork(state.blocks)
         } : {}),
         ...(state.busy ? { busy: false, busyUnconfirmed: false } : {}),
+        ...(settledCurrentTurn ? { usageRefreshKey: state.usageRefreshKey + 1 } : {}),
         ...(threads !== state.threads ? { threads } : {})
       })
       if (!threadId) return patch
@@ -359,12 +421,14 @@ export function reduceLateChatProjection(
       const conversationScoped = options?.scope === 'conversation'
       const interrupted = context.isInterruptSettledError(error, message)
       const shouldSettle = terminal || !state.busy || interrupted
+      const settledCurrentTurn = state.busy || Boolean(state.currentTurnId)
       const patch = flushLiveProjection(state, context.now, {
         ...finalizeTurnTimingAt(state, context.now),
         error: interrupted || conversationScoped ? null : message,
         runtimeErrorDetail: interrupted || conversationScoped ? null : detail || null
       })
       if (!shouldSettle) return patch
+      if (settledCurrentTurn) patch.usageRefreshKey = state.usageRefreshKey + 1
       patch.busy = false
       patch.busyUnconfirmed = false
       patch.currentTurnId = null

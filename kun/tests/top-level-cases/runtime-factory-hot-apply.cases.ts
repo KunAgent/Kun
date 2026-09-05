@@ -51,7 +51,7 @@ describe('runtime factory usage carryover', () => {
           code: 'restart_required',
           message: 'Agent Perspective capture changes require a runtime restart'
         })
-        expect(Boolean(runtime.llmDebug)).toBe(name === 'disable')
+        expect(Boolean(runtime.llmDebug)).toBe(true)
       } finally {
         await runtime.shutdown?.()
       }

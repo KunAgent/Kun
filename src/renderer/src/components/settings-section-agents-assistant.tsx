@@ -13,6 +13,7 @@ import { isKunRuntimeInsecure } from '@shared/app-settings-kun-migration'
 import { type ReactElement } from 'react'
 import { formatCompactNumber } from '../hooks/use-thread-usage'
 import { FastContextSettingsPanel } from './settings-section-assistant-fast-context'
+import { ComposerPersonaSettingsPanel } from './settings-section-assistant-persona'
 import {
   AdvancedSettingsDisclosure,
   ModelSelect,
@@ -325,6 +326,13 @@ export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, an
                         </div>
                       </div>
                     }
+                  />
+                  <ComposerPersonaSettingsPanel
+                    t={t}
+                    enabled={form.codeAgentPersonaEnabled !== false}
+                    presets={form.codeAgentPresets ?? []}
+                    onEnabledChange={(enabled) => update({ codeAgentPersonaEnabled: enabled })}
+                    onPresetsChange={(next) => update({ codeAgentPresets: next })}
                   />
                   <FastContextSettingsPanel
                     t={t}

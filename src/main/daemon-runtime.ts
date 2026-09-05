@@ -504,8 +504,7 @@ export class DaemonRuntime {
     if (!controller) return
     if (anyActive) {
       if (!this.keepAwakeHeld) {
-        controller.acquire()
-        this.keepAwakeHeld = true
+        this.keepAwakeHeld = controller.acquire()
       }
     } else if (this.keepAwakeHeld) {
       controller.release()

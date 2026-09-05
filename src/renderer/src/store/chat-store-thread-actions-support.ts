@@ -209,6 +209,8 @@ export type StoreActionContext = {
 export const threadActionSharedState = {
   drainingQueuedMessageThreadIds: new Set<string>(),
   guidingQueuedMessageIds: new Set<string>(),
+  /** Queued-message ids removed/restored mid-drain; the drain loop cancels any turn admitted for them. */
+  removedQueuedMessageIds: new Set<string>(),
   expandedHistoryThreadIds: new Set<string>(),
   checkpointGitAvailability: new GitCheckpointAvailabilityCache()
 }
@@ -254,6 +256,21 @@ export function createClientTurnRequestId(): string {
   const random = globalThis.crypto?.randomUUID?.() ??
     `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
   return `turn_${random}`
+}
+
+/**
+ * Per-turn execution settings frozen at enqueue time. Empty fields stay unset
+ * so the runtime falls back to its configured defaults.
+ */
+export function executionSnapshotOverrides(message: Pick<
+  QueuedUserMessage,
+  'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'
+>) {
+  return {
+    ...(message.approvalPolicy ? { approvalPolicy: message.approvalPolicy } : {}),
+    ...(message.sandboxMode ? { sandboxMode: message.sandboxMode } : {}),
+    ...(message.approvalReviewer ? { approvalReviewer: message.approvalReviewer } : {})
+  }
 }
 
 export function pendingQueuedMessage(message: QueuedUserMessage): QueuedUserMessage {
@@ -465,5 +482,7 @@ export function activeWriteMessageContextMatches(context: WriteAssistantMessageC
 
 export type ThreadActionRuntime = {
   threadSelectionGeneration: number
+  threadHydrationAbort?: AbortController
+  fenceThreadMutation: (threadId?: string) => number
   persistActiveQueuedMessages: () => void
 }

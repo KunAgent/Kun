@@ -29,13 +29,13 @@ describe('mergeBuiltinSubagentProfiles', () => {
       profiles: { mine: { mode: 'subagent', toolPolicy: 'readOnly' } }
     })
     const merged = mergeBuiltinSubagentProfiles(config)
-    expect(Object.keys(BUILTIN_SUBAGENT_PROFILES)).toHaveLength(45)
+    expect(Object.keys(BUILTIN_SUBAGENT_PROFILES)).toHaveLength(46)
     expect(Object.keys(merged.profiles).sort()).toEqual([...Object.keys(BUILTIN_SUBAGENT_PROFILES), 'mine'].sort())
   })
 
   it('uses the canonical catalog for every runtime display and default policy field', () => {
-    expect(BUILTIN_AGENT_CATALOG).toHaveLength(45)
-    expect(new Set(BUILTIN_AGENT_CATALOG.map((entry) => entry.id)).size).toBe(45)
+    expect(BUILTIN_AGENT_CATALOG).toHaveLength(46)
+    expect(new Set(BUILTIN_AGENT_CATALOG.map((entry) => entry.id)).size).toBe(46)
     expect(Object.keys(BUILTIN_SUBAGENT_PROFILES).sort()).toEqual(
       BUILTIN_AGENT_CATALOG.map((entry) => entry.id).sort()
     )
@@ -97,7 +97,7 @@ describe('mergeBuiltinSubagentProfiles', () => {
   })
 
   it('keeps every fixed builtin standalone, skill-free, and unable to recurse', () => {
-    expect(Object.keys(BUILTIN_SUBAGENT_PROFILES)).toHaveLength(45)
+    expect(Object.keys(BUILTIN_SUBAGENT_PROFILES)).toHaveLength(46)
     for (const [id, profile] of Object.entries(BUILTIN_SUBAGENT_PROFILES)) {
       expect(profile.systemPrompt, `${id} systemPrompt`).toBeTruthy()
       expect(profile.skillsEnabled, `${id} skillsEnabled`).toBe(false)

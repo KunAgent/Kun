@@ -84,6 +84,7 @@ import {
   LOCAL_WHISPER_DEFAULT_DOWNLOAD_SOURCE_ID,
   isLocalWhisperDownloadSourceId
 } from './local-whisper'
+import { normalizeGitHubMcpSettings } from './github-mcp-authorization'
 
 import {
   LEGACY_COREAGENT_DATA_DIR,
@@ -467,6 +468,7 @@ export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partia
     ),
     toolOutputLimits: normalizeKunToolOutputLimitsSettings(explicitKun.toolOutputLimits),
     mcpSearch: normalizeKunMcpSearchSettings(explicitKun.mcpSearch),
+    githubMcp: normalizeGitHubMcpSettings(explicitKun.githubMcp),
     projectConfig: normalizeKunProjectConfigSettings(explicitKun.projectConfig),
     storage: normalizeKunStorageSettings(explicitKun.storage),
     contextCompaction: normalizeKunContextCompactionSettings(explicitKun.contextCompaction),

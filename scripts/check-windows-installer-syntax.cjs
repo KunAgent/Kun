@@ -2,7 +2,7 @@
 
 const { spawnSync } = require('node:child_process')
 const { existsSync } = require('node:fs')
-const { join } = require('node:path')
+const { isAbsolute, join } = require('node:path')
 
 const installerHelperPath = join(
   __dirname,
@@ -10,14 +10,17 @@ const installerHelperPath = join(
   'build',
   'windows-installer-migration.ps1'
 )
+const installerSmokePath = join(__dirname, 'smoke-windows-installer.ps1')
 const installerHelperPaths = [
   installerHelperPath,
+  installerSmokePath,
   'windows-installer-migration-paths.ps1',
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
   'windows-installer-migration-actions.ps1',
+  'windows-installer-migration-recovery-env.ps1',
   'windows-installer-migration-transaction.ps1'
-].map((path) => path === installerHelperPath ? path : join(__dirname, '..', 'build', path))
+].map((path) => isAbsolute(path) ? path : join(__dirname, '..', 'build', path))
 
 function getWindowsPowerShellPath(env = process.env) {
   const systemRoot = env.SystemRoot || env.WINDIR
@@ -112,5 +115,6 @@ module.exports = {
   getWindowsPowerShellPath,
   installerHelperPath,
   installerHelperPaths,
+  installerSmokePath,
   validateWindowsInstallerSyntax
 }

@@ -26,10 +26,12 @@ import {
   releaseWritableWorkCanvas,
   resolveWorkCanvasIdentity,
   workCanvasHasBlockingQaNotes,
+  workCanvasHasCompletePptReviewProjection,
   workCanvasPptSelectionState,
   workCanvasPptWorkflowGate
 } from '../../design/canvas/work-canvas'
 import { useWorkWhiteboardRenameLive } from './use-work-whiteboard-rename-live'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 
 export type WorkWhiteboardSurfaceProps = {
   workspaceRoot: string
@@ -249,7 +251,13 @@ function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement 
   useWorkWhiteboardRenameLive({ boardId: props.boardId, threadId: props.activeThreadId })
   const activeDocument = documentKey === identity.documentKey
   const approveBlocked = activeDocument && workCanvasHasBlockingQaNotes(document, props.workflowId)
-  const approvalReady = canvasDocumentLoaded && activeDocument
+  const reviewProjectionReady = activeDocument && workCanvasHasCompletePptReviewProjection(
+    document,
+    props.workflowId,
+    props.childId
+  )
+  const approvalReady = canvasDocumentLoaded && activeDocument &&
+    (phase !== 'review' || reviewProjectionReady)
   useEffect(() => {
     setCanvasDocumentLoaded(false)
   }, [identity.documentKey])
@@ -271,6 +279,20 @@ function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement 
   const handleDocumentLoadStateChange = useCallback((loaded: boolean) => {
     setCanvasDocumentLoaded(loaded)
   }, [])
+  const projectionOpenRequested = props.onPptProjectionOpenRequested
+  const reportProjectionError = props.onError
+  const projectionBoardId = props.boardId
+  const handlePptProjectionOpenRequested = useCallback((request: PptCanvasProjectionOpenRequest) => {
+    projectionOpenRequested?.(request)
+    void flushPendingCanvasDocuments(identity.workspaceRoot).then(async () => {
+      await useWriteWorkspaceStore.getState().updateWhiteboardPptState(
+        projectionBoardId,
+        { ...request.pptState, childId: request.childId }
+      )
+    }).catch((error: unknown) => {
+      reportProjectionError?.(error instanceof Error ? error.message : String(error))
+    })
+  }, [identity.workspaceRoot, projectionBoardId, projectionOpenRequested, reportProjectionError])
   useApplyShapeOpsLive(
     Boolean(props.activeThreadId),
     undefined,
@@ -284,7 +306,7 @@ function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement 
     {
       workflowId: workCanvasPptWorkflowGate(props.boardId, props.workflowId),
       childId: props.childId,
-      onOpenRequested: props.onPptProjectionOpenRequested
+      onOpenRequested: handlePptProjectionOpenRequested
     },
     'work'
   )

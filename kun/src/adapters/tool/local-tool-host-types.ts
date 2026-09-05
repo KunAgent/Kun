@@ -3,6 +3,7 @@ import type { ResolvedHook } from '../../hooks/hook-engine.js'
 import type { ToolOperationJournal } from '../../reliability/operation-journal.js'
 import type { CapabilityRegistry } from './capability-registry.js'
 import type { ReadTrackerOptions } from './read-tracker.js'
+import type { ToolDispatchLeaseAuthority } from './lease-grace-gate.js'
 
 export type ToolSideEffect = 'read-only' | 'unknown'
 
@@ -77,4 +78,9 @@ export type LocalToolHostOptions = {
   operationJournal?: ToolOperationJournal
   /** Lazy runtime preparation hook (for example, activating declared extension providers). */
   prepare?: (context?: ToolHostContext) => Promise<void> | void
+  /**
+   * Thread execution lease authority used to pause side-effecting tool
+   * dispatch during a renewal grace window. Omitted for embedded runtimes.
+   */
+  leaseAuthority?: ToolDispatchLeaseAuthority
 }

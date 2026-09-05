@@ -42,31 +42,35 @@ export async function startReview(
         reasoningEffort: parsed.data.reasoningEffort,
         mode: 'agent'
       }
+    }, {
+      onAdmitted: async (admitted) => {
+        const reviewItemId = `item_${admitted.turnId}_review`
+        await turns.applyItem(
+          threadId,
+          makeReviewItem({
+            id: reviewItemId,
+            threadId,
+            turnId: admitted.turnId,
+            target: parsed.data.target,
+            title,
+            status: 'running'
+          })
+        )
+        onStarted?.(
+          { ...admitted, reviewItemId },
+          parsed.data.target,
+          parsed.data.model,
+          parsed.data.providerId,
+          parsed.data.accountId,
+          parsed.data.reasoningEffort
+        )
+      }
     })
     const reviewItemId = `item_${started.turnId}_review`
-    await turns.applyItem(
-      threadId,
-      makeReviewItem({
-        id: reviewItemId,
-        threadId,
-        turnId: started.turnId,
-        target: parsed.data.target,
-        title,
-        status: 'running'
-      })
-    )
     const response: StartReviewResponse = {
       ...started,
       reviewItemId
     }
-    onStarted?.(
-      response,
-      parsed.data.target,
-      parsed.data.model,
-      parsed.data.providerId,
-      parsed.data.accountId,
-      parsed.data.reasoningEffort
-    )
     return jsonResponse(response, 202)
   } catch (error) {
     if (error instanceof TurnCapacityError) {

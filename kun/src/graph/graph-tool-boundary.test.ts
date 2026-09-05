@@ -47,7 +47,7 @@ describe('Graph tool boundary', () => {
     }, { messageSource: 'graph_runtime' })).toBe(true)
   })
 
-  it('builds executor authority without ordinary or Graph orchestration tools', () => {
+  it('builds executor authority with Fast Context but without orchestration tools', () => {
     const names = graphParentAuthorityToolNames([
       'read',
       'report_to_parent',
@@ -60,9 +60,9 @@ describe('Graph tool boundary', () => {
       'fast_context'
     ])
 
-    expect(names).toEqual(['read'])
-    expect(graphWorkerToolNamesWithin(names)).toEqual([])
-    expect(graphWorkerToolNamesWithin(['read', 'report_to_parent']))
-      .toEqual(['report_to_parent'])
+    expect(names).toEqual(['fast_context', 'read'])
+    expect(graphWorkerToolNamesWithin(names)).toEqual(['fast_context'])
+    expect(graphWorkerToolNamesWithin(['read', 'fast_context', 'report_to_parent']))
+      .toEqual(['fast_context', 'report_to_parent'])
   })
 })

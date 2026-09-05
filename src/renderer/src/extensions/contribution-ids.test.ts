@@ -6,7 +6,7 @@ import {
 } from './contribution-ids'
 
 describe('right panel contribution identity migration', () => {
-  it('migrates every legacy short mode to a stable builtin identity', () => {
+  it('migrates supported legacy modes and drops the retired perspective panel', () => {
     expect(normalizeStoredRightPanelId('changes')).toBe(BUILTIN_RIGHT_PANEL_IDS.changes)
     expect(normalizeStoredRightPanelId('browser')).toBe(BUILTIN_RIGHT_PANEL_IDS.browser)
     expect(normalizeStoredRightPanelId('terminal')).toBe(BUILTIN_RIGHT_PANEL_IDS.terminal)
@@ -16,9 +16,7 @@ describe('right panel contribution identity migration', () => {
     )
     expect(normalizeStoredRightPanelId('sdd-ai')).toBe(BUILTIN_RIGHT_PANEL_IDS.sddAi)
     expect(normalizeStoredRightPanelId('canvas')).toBe(BUILTIN_RIGHT_PANEL_IDS.canvas)
-    expect(normalizeStoredRightPanelId('agent-perspective')).toBe(
-      BUILTIN_RIGHT_PANEL_IDS.agentPerspective
-    )
+    expect(normalizeStoredRightPanelId('agent-perspective')).toBeNull()
   })
 
   it('preserves valid extension IDs and ignores stale or malformed layout values', () => {

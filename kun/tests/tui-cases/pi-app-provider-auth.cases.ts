@@ -122,17 +122,18 @@ const options: TuiOptions = {
 function modelSnapshot(): ModelConnectionSnapshot {
   return {
     schemaVersion: 1,
+    proxyRoutingVersion: 1,
     revision: 3,
     providers: [
       {
         id: 'deepseek', accountId: 'account:deepseek', name: 'DeepSeek', kind: 'http',
         authType: 'api-key', baseUrl: 'https://api.deepseek.com', endpointFormat: 'chat_completions',
-        configured: true, models: ['deepseek-v4-pro'], selectedModel: 'deepseek-v4-pro'
+        useProxy: false, configured: true, models: ['deepseek-v4-pro'], selectedModel: 'deepseek-v4-pro'
       },
       {
         id: 'kimi-code', accountId: 'account:kimi-code', name: 'Kimi Code', kind: 'http',
         authType: 'subscription', baseUrl: 'https://api.kimi.com/coding/v1', endpointFormat: 'chat_completions',
-        configured: true, models: ['kimi-k2.5', 'kimi-k2-thinking'], selectedModel: 'kimi-k2.5'
+        useProxy: false, configured: true, models: ['kimi-k2.5', 'kimi-k2-thinking'], selectedModel: 'kimi-k2.5'
       }
     ],
     defaultProviderId: 'deepseek', defaultAccountId: 'account:deepseek', defaultModel: 'deepseek-v4-pro',
@@ -223,7 +224,7 @@ describe("PiTuiApplication shared provider authentication", () => {
         revision: initial.revision + 1,
         providers: [...initial.providers, {
           id: 'claude', accountId: 'account:claude', name: 'Claude', kind: 'http',
-          authType: 'api-key', endpointFormat: 'messages', configured: true,
+          authType: 'api-key', endpointFormat: 'messages', useProxy: false, configured: true,
           models: ['claude-opus-4-6'], selectedModel: 'claude-opus-4-6'
         }]
       }
@@ -243,8 +244,9 @@ describe("PiTuiApplication shared provider authentication", () => {
     const current = detail()
     const initial = modelSnapshot()
     const catalog = providerCatalogEntries()
-    const subscriptionCount = catalog.filter((entry) => entry.authType !== 'api-key').length
-    const apiCount = catalog.filter((entry) => entry.authType === 'api-key').length
+    const freeCount = catalog.filter((entry) => entry.category === 'free').length
+    const subscriptionCount = catalog.filter((entry) => entry.category === 'subscription').length
+    const apiCount = catalog.filter((entry) => entry.category === 'api').length
     const grokProfile = {
       id: 'grok-subscription',
       accountId: 'account:grok-subscription',
@@ -254,6 +256,7 @@ describe("PiTuiApplication shared provider authentication", () => {
       authType: 'oauth' as const,
       baseUrl: 'https://cli-chat-proxy.grok.com/v1',
       endpointFormat: 'responses' as const,
+      useProxy: false,
       configured: true,
       models: [
         'grok-4.5',
@@ -320,6 +323,7 @@ describe("PiTuiApplication shared provider authentication", () => {
       await waitFor(() => sanitizeTerminalText(outputText).includes('KUN / Connect'))
       input.emit('data', '\r')
       await waitFor(() =>
+        outputText.includes(`${freeCount} free`) &&
         outputText.includes(`${subscriptionCount} subscriptions`) &&
         outputText.includes(`${apiCount} APIs`) &&
         outputText.includes('Google Antigravity 订阅') &&
@@ -365,6 +369,7 @@ describe("PiTuiApplication shared provider authentication", () => {
       kind: 'gemini-cli-api' as const,
       authType: 'subscription' as const,
       endpointFormat: 'custom_endpoint' as const,
+      useProxy: false,
       configured: true,
       models: ['gemini-3.1-pro-preview', 'gemini-3-flash-preview'],
       selectedModel: 'gemini-3.1-pro-preview'
@@ -420,7 +425,7 @@ describe("PiTuiApplication shared provider authentication", () => {
       expect(completeModelCliAuth).toHaveBeenCalledWith({
         expectedRevision: initial.revision,
         provider: 'gemini-cli',
-        model: 'gemini-3.1-pro-preview',
+        model: 'gemini-3.7-pro-preview',
         select: true
       })
       await waitFor(() =>
@@ -447,6 +452,7 @@ describe("PiTuiApplication shared provider authentication", () => {
         kind: 'gemini-cli-api',
         authType: 'subscription',
         endpointFormat: 'custom_endpoint',
+        useProxy: false,
         configured: true,
         models: ['gemini-3.1-pro-preview'],
         selectedModel: 'gemini-3.1-pro-preview'
@@ -540,6 +546,7 @@ describe("PiTuiApplication shared provider authentication", () => {
         authType: 'api-key',
         baseUrl: 'https://models.acme.test/v1',
         endpointFormat: 'responses',
+        useProxy: false,
         configured: true,
         models: ['acme-fast', 'acme-reasoning'],
         selectedModel: 'acme-fast'

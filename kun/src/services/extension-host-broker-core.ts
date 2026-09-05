@@ -142,6 +142,12 @@ export const StorageRequestSchema = z.strictObject({
 })
 export const StorageKeysRequestSchema = z.strictObject({ scope: z.enum(['global', 'workspace']) })
 export const StorageSetRequestSchema = StorageRequestSchema.extend({ value: JsonValueSchema }).strict()
+export const SecretRequestSchema = z.strictObject({
+  key: z.string().min(1).max(128)
+})
+export const SecretSetRequestSchema = SecretRequestSchema.extend({
+  value: z.string().min(1).max(16 * 1024)
+}).strict()
 export const ConfigurationSectionSchema = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/)
 export const ConfigurationRequestSchema = z.strictObject({
   sectionId: ConfigurationSectionSchema,
@@ -346,12 +352,15 @@ export class ExtensionHostBroker {
   declare private unregisterCommand: (typeof extensionHostBrokerJobsUiStorageOperations)['unregisterCommand']
   declare private executeCommand: (typeof extensionHostBrokerJobsUiStorageOperations)['executeCommand']
   declare private storage: (typeof extensionHostBrokerJobsUiStorageOperations)['storage']
+  declare private secrets: (typeof extensionHostBrokerJobsUiStorageOperations)['secrets']
   declare private configuration: (typeof extensionHostBrokerJobsUiStorageOperations)['configuration']
   declare private viewStateGet: (typeof extensionHostBrokerJobsUiStorageOperations)['viewStateGet']
   declare private viewStateSet: (typeof extensionHostBrokerJobsUiStorageOperations)['viewStateSet']
   declare private networkFetch: (typeof extensionHostBrokerJobsUiStorageOperations)['networkFetch']
+  declare private agentGetRunOptions: (typeof extensionHostBrokerAgentsOperations)['agentGetRunOptions']
   declare private agentCreateRun: (typeof extensionHostBrokerAgentsOperations)['agentCreateRun']
   declare private agentGetRun: (typeof extensionHostBrokerAgentsOperations)['agentGetRun']
+  declare private agentListRunEvents: (typeof extensionHostBrokerAgentsOperations)['agentListRunEvents']
   declare private agentSubscribe: (typeof extensionHostBrokerAgentsOperations)['agentSubscribe']
   declare private agentUnsubscribe: (typeof extensionHostBrokerAgentsOperations)['agentUnsubscribe']
   declare private agentSteer: (typeof extensionHostBrokerAgentsOperations)['agentSteer']

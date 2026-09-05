@@ -429,7 +429,11 @@ it('downloads a URL result from Seedream and surfaces provider errors', async ()
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       error: { code: 'InvalidParameter', message: 'unsupported size' }
     }), { status: 200, headers: { 'content-type': 'application/json' } })))
-    await expect(client.generate(request)).rejects.toThrow(
+    const errorClient = new VolcengineArkImageClient(
+      'https://ark.cn-beijing.volces.com/api/v3',
+      'ark-key'
+    )
+    await expect(errorClient.generate(request)).rejects.toThrow(
       /Volcano Ark image provider returned no image data: unsupported size/
     )
   })

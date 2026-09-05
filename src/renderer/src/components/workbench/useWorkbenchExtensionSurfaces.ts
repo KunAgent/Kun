@@ -31,7 +31,8 @@ import {
 } from '../../extensions/contribution-registry'
 import { readBrowserStorageItem, removeBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 import type { useWorkbenchChatStoreState } from './useWorkbenchChatStoreState'
-import type { ComposerTaskSurface } from '../chat/FloatingComposerTaskProfile'
+import type { ComposerTaskSurface } from '../chat/FloatingComposerTaskSurfacePicker'
+import { resolveCodeRightToolClick } from './useWorkbenchRightTools'
 
 type WorkbenchState = ReturnType<typeof useWorkbenchChatStoreState>
 const extensionSurfaceLayoutStorage = {
@@ -205,7 +206,14 @@ export function useWorkbenchExtensionSurfaces({
   const selectRightRailExtension = useCallback((entry: ExtensionRightRailViewEntry): boolean => {
     const runnable = workbenchContributionRegistry.get(entry.id, contributionContext)
     if (isExtensionWorkbenchView(runnable) && runnable.point === 'views.rightSidebar') {
-      openExtensionSurface(runnable)
+      if (
+        isExtensionContributionId(entry.id) &&
+        resolveCodeRightToolClick(entry.id, rightPanelMode) === 'collapse'
+      ) {
+        setRightPanelMode(null)
+      } else {
+        openExtensionSurface(runnable)
+      }
       return true
     }
     if (entry.owner.kind !== 'extension' || entry.workspaceTrusted || !extensionWorkspaceRoot) {
@@ -254,7 +262,7 @@ export function useWorkbenchExtensionSurfaces({
     return true
   }, [
     contributionContext, extensionContributionLoadContext, extensionContributionLoadContextRef,
-    extensionWorkspaceRoot, openExtensionSurface, setError, t
+    extensionWorkspaceRoot, openExtensionSurface, rightPanelMode, setError, setRightPanelMode, t
   ])
 
   const openManagedExtensionView = useCallback(async (contributionId: string): Promise<void> => {

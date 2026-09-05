@@ -31,6 +31,7 @@ import type { ToolStormBreakerOptions } from './tool-storm-breaker.js'
 import type { TurnLimitsConfig } from './turn-limits.js'
 import type { GoalTurnCoordinatorOptions } from './goal-turn-coordinator.js'
 import type { InterruptedTurnResumeOptions } from './interrupted-turn-coordinator.js'
+import type { TurnRunOutcome } from './turn-execution-types.js'
 
 export type AgentLoopOptions = {
   threadStore: ThreadStore
@@ -67,6 +68,8 @@ export type AgentLoopOptions = {
   receipts?: CanvasReceiptRegistry
   toolStorm?: ToolStormBreakerOptions & { enabled?: boolean }
   turnLimits?: TurnLimitsConfig
+  /** Zero-based model step at which tools are withheld for bounded final synthesis. */
+  finalAnswerOnlyStep?: number
   /** Internal retrieval-child marker propagated into discovery and execution contexts. */
   fastContext?: boolean
   /** Parent chat thread used to isolate Fast Context scheduling and source-tool slots. */
@@ -101,11 +104,21 @@ export type AgentLoopOptions = {
    */
   interruptedResume?: InterruptedTurnResumeOptions
   /**
+   * Host-owned continuation runner. Serve mode uses this to put goal and
+   * restart auto-resume work in the same shutdown-wait registry as HTTP,
+   * Graph, review, and extension launches.
+   */
+  runContinuationTurn?: (threadId: string, turnId: string) => Promise<TurnRunOutcome>
+  /**
    * Hard allow-list intersected into every tool context for this loop. Used
    * by read-only subagents to clamp the inherited tool host to investigation
    * tools — enforced at both the schema (listTools) and execute layers.
    */
   forcedAllowedToolNames?: readonly string[]
+  /** Model-provider allow-list inherited from the parent turn for delegated loops. */
+  allowedModelProviderIds?: readonly string[]
+  /** Model allow-list inherited from the parent turn for delegated loops. */
+  allowedModelIds?: readonly string[]
   /** Provider allow-list inherited from the parent turn for delegated loops. */
   allowedProviderIds?: readonly string[]
   /** Skill allow-list captured at the delegated child boundary. */

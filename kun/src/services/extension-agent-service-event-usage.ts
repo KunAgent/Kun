@@ -17,7 +17,7 @@ import { TurnConflictError, type TurnService } from './turn-service.js'
 import type {
   ExtensionAgentProfileRegistry
 } from './extension-agent-profile-registry.js'
-import { type BufferedAgentEvent, type ExtensionAgentAuthorizer, type ExtensionAgentEvent, type ExtensionAuthorizationRequest, type ExtensionPrincipal, MAX_REPLAY_RECORD_BYTES } from './extension-agent-service-core.js'
+import { type BufferedAgentEvent, type ExtensionAgentAuthorizer, type ExtensionAgentEvent, type ExtensionAuthorizationRequest, type ExtensionPrincipal, MAX_REPLAY_RECORD_BYTES } from './extension-agent-service-contracts.js'
 import { ManagedSubscription } from './extension-agent-service-subscription.js'
 import { normalizeOwnedWorkspace, projectEvent } from './extension-agent-service-projection.js'
 
@@ -63,17 +63,35 @@ export async function* iterateSessionEventsSince(
   yield* sessions.iterateEventsSince(threadId, afterSeq, { maxRecordBytes: MAX_REPLAY_RECORD_BYTES })
 }
 
+export async function loadLatestUsageTokens(sessions: SessionStore, threadId: string): Promise<number> {
+  if (sessions.loadLatestUsageSnapshots) {
+    const snapshots = await sessions.loadLatestUsageSnapshots({ threadIds: [threadId] })
+    const snapshot = snapshots.find((candidate) => candidate.threadId === threadId)
+    if (snapshot) return snapshot.usage.totalTokens
+  }
+  let totalTokens = 0
+  for await (const event of iterateSessionEventsSince(sessions, threadId, -1)) {
+    if (event.kind === 'usage') totalTokens = event.usage.totalTokens
+  }
+  return totalTokens
+}
+
 export async function summarizeRunEvents(
   sessions: SessionStore,
   threadId: string,
   runId: string
-): Promise<{ usage?: UsageSnapshot; budgetExhausted: boolean }> {
+): Promise<{
+  usage?: UsageSnapshot
+  budgetExhausted: boolean
+  waitingState?: 'waiting-approval' | 'waiting-user-input'
+}> {
   let baseline: UsageSnapshot | undefined
   let cumulativeUsage: UsageSnapshot | undefined
   const runUsageMetadata: RunUsageMetadata = {}
   let budgetExhausted = false
+  let waitingState: 'waiting-approval' | 'waiting-user-input' | undefined
   let reachedRun = false
-  for await (const event of iterateSessionEventsSince(sessions, threadId, 0)) {
+  for await (const event of iterateSessionEventsSince(sessions, threadId, -1)) {
     if (event.turnId !== runId) {
       if (!reachedRun && event.kind === 'usage') baseline = event.usage
       continue
@@ -83,6 +101,12 @@ export async function summarizeRunEvents(
       cumulativeUsage = event.usage
       mergeRunUsageMetadata(runUsageMetadata, event.usage)
     }
+    if (event.kind === 'approval_requested') waitingState = 'waiting-approval'
+    if (event.kind === 'user_input_requested') waitingState = 'waiting-user-input'
+    if (
+      event.kind === 'approval_resolved' || event.kind === 'user_input_resolved' ||
+      event.kind === 'turn_completed' || event.kind === 'turn_failed' || event.kind === 'turn_aborted'
+    ) waitingState = undefined
     if (
       event.kind === 'error' &&
       /budget|limit/i.test(`${event.code ?? ''} ${event.message ?? ''}`)
@@ -93,7 +117,7 @@ export async function summarizeRunEvents(
   const usage = cumulativeUsage
     ? subtractCumulativeUsage(cumulativeUsage, baseline, runUsageMetadata)
     : undefined
-  return { ...(usage ? { usage } : {}), budgetExhausted }
+  return { ...(usage ? { usage } : {}), budgetExhausted, ...(waitingState ? { waitingState } : {}) }
 }
 
 export type RunUsageMetadata = Pick<

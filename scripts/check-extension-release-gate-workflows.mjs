@@ -442,21 +442,9 @@ requireStepRunMarkers(releasePublishJob, 'release publish', 'Upload GitHub Relea
   'extension-native-evidence-*.json',
   'gh release upload'
 ])
-for (const marker of [
-  'node-version: \'22.23.1\'',
-  'darwin-arm64',
-  'darwin-x64',
-  'linux-x64',
-  'win32-x64',
-  'npm run package:tui',
-  'npm run assemble:tui-release',
-  'publish-r2.mjs upload-tui',
-  '--require-tui',
-  '--expected-build-id'
-]) {
-  check(releaseWorkflow.includes(marker), `Release workflow omits joint GUI/TUI gate: ${marker}`)
-}
-
+const releasePromotion = await text('.github/workflows/release-gui-acceptance.yml')
+check(releasePromotion.includes('--require-all-platforms'), 'Stable promotion requires every GUI platform')
+check(!releaseWorkflow.includes('npm run package:tui'), 'Stable must not build standalone TUI archives')
 const dailyWorkflow = await text('.github/workflows/daily-dev-prerelease.yml')
 const dailyWorkflowDocument = parseYaml(dailyWorkflow)
 check(
@@ -608,21 +596,8 @@ requireStepRunMarkers(dailyPublishJob, 'daily publish', 'Upload GitHub prereleas
   'extension-native-evidence-*.json',
   'gh release upload'
 ])
-for (const marker of [
-  'node-version: \'22.23.1\'',
-  'darwin-arm64',
-  'darwin-x64',
-  'linux-x64',
-  'win32-x64',
-  'npm run package:tui',
-  'npm run assemble:tui-release',
-  'publish-r2.mjs upload-tui',
-  '--require-tui',
-  '--expected-build-id'
-]) {
-  check(dailyWorkflow.includes(marker), `Daily workflow omits joint GUI/TUI gate: ${marker}`)
-}
-
+check(dailyWorkflow.includes('--require-all-platforms'), 'Daily promotion requires every GUI platform')
+check(!dailyWorkflow.includes('npm run package:tui'), 'Daily must not build standalone TUI archives')
 }
 
 if (buildOnlyCi) {
@@ -653,8 +628,8 @@ if (buildOnlyCi) {
   const release = parseYaml(releaseWorkflow)
   const daily = parseYaml(dailyWorkflow)
   for (const [label, workflow, buildJobs] of [
-    ['Stable release', release, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64', 'build-tui']],
-    ['Daily prerelease', daily, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64', 'build-tui']]
+    ['Stable release', release, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64']],
+    ['Daily prerelease', daily, ['build-macos', 'build-windows', 'build-linux', 'build-linux-arm64']]
   ]) {
     check(!workflow.jobs.validate, `${label} must not define a validation job`)
     check(!workflow.jobs['verify-macos-x64'], `${label} must not define a macOS artifact verification job`)

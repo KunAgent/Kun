@@ -1,6 +1,6 @@
 import type { AppSettingsV1, KunComputerUseSettingsV1 } from '../../shared/app-settings'
 import { resolveKunRuntimeSettings } from '../../shared/app-settings'
-import { HostController } from '../../../kun/src/adapters/computer-use/host-control.js'
+import { CuaDriverController } from './cua-driver-controller'
 import {
   ComputerUseBridgeService,
   type ComputerUseBridgeLaunch
@@ -39,7 +39,7 @@ export async function prepareComputerUseHostForKunLaunch(): Promise<
     if (!bridge || bridgeMaxImageDimension !== settings.maxImageDimension) {
       await stopCurrentBridge()
       bridgeMaxImageDimension = settings.maxImageDimension
-      bridge = new ComputerUseBridgeService(new HostController({
+      bridge = new ComputerUseBridgeService(new CuaDriverController({
         maxImageDimension: settings.maxImageDimension
       }))
     }

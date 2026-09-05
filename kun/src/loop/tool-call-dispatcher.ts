@@ -1,4 +1,4 @@
-import type { ToolCallLike, ToolHostContext } from '../ports/tool-host.js'
+import type { ToolCallLike, ToolHostContext, ToolHostResult } from '../ports/tool-host.js'
 import type { ToolDispatchInput, ToolDispatchOutcome } from './turn-execution-types.js'
 import { collectParallelToolDispatchCandidates } from './tool-dispatch-policy.js'
 import type { ToolStormBreaker } from './tool-storm-breaker.js'
@@ -12,7 +12,7 @@ export type ToolCallDispatcherInput = {
   dispatch: ToolDispatchInput
   context: ToolHostContext
   stormBreaker?: Pick<ToolStormBreaker, 'inspect'>
-  onToolExecuted?: (toolName: string) => void
+  onToolExecuted?: (toolName: string, result: ToolHostResult) => void
 }
 
 /**
@@ -82,8 +82,8 @@ export class ToolCallDispatcher {
           context
         })
         executedAny = true
-        input.onToolExecuted?.(call.toolName)
         await this.toolExecution.persistResult(dispatch.threadId, dispatch.turnId, call, result)
+        input.onToolExecuted?.(call.toolName, result)
         index += 1
         continue
       }
@@ -119,8 +119,8 @@ export class ToolCallDispatcher {
         const batchCall = batch[batchIndex]
         if (!result || !batchCall) continue
         if (result.status === 'rejected') throw result.reason
-        input.onToolExecuted?.(batchCall.toolName)
         await this.toolExecution.persistResult(dispatch.threadId, dispatch.turnId, batchCall, result.value)
+        input.onToolExecuted?.(batchCall.toolName, result.value)
       }
 
       if (suppressedAfterBatch) {

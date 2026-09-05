@@ -147,6 +147,10 @@ export type ExtensionViewSessionDescriptor = {
   partition: string
 }
 
+export type ExtensionViewSessionInvalidatedEvent = {
+  sessionId: string
+}
+
 export type ExtensionViewSessionRequest = {
   sessionId: string
 }
@@ -461,6 +465,9 @@ export type ExtensionIpcApi = {
   extensionDisposeViewSession: (
     request: ExtensionViewSessionRequest | string
   ) => Promise<boolean>
+  onExtensionViewSessionInvalidated: (
+    handler: (event: ExtensionViewSessionInvalidatedEvent) => void
+  ) => () => void
   extensionExternalBrowserControl: (
     request: ExtensionExternalBrowserControlRequest
   ) => Promise<ExtensionExternalBrowserState>

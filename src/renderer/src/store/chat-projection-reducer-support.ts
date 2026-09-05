@@ -211,7 +211,10 @@ export function runtimeEventStartedAt(createdAt: string | undefined, now: number
 export function finalizeTurnTimingAt(state: ChatState, now: number): Partial<ChatState> {
   const userId = state.currentTurnUserId
   if (!userId) return {}
-  const startedAt = state.turnStartedAtByUserId[userId]
+  // A mid-turn hydration resets turnStartedAtByUserId to {} but keeps the
+  // persisted turn start in currentTurnStartedAtMs; fall back to it so the
+  // duration is still recorded when the turn settles.
+  const startedAt = state.turnStartedAtByUserId[userId] ?? state.currentTurnStartedAtMs ?? undefined
   if (typeof startedAt !== 'number') return { currentTurnUserId: null }
   return {
     currentTurnUserId: null,
@@ -257,6 +260,66 @@ export function toolEventChildId(event: ToolEventPayload): string | undefined {
     if (typeof nested === 'string' && nested.trim()) return nested.trim()
   }
   return childIdFromDetail(event.detail)
+}
+
+type ChildToolProjectionScope = { childId: string; parentTurnId: string }
+
+function childToolProjectionScope(
+  value: Pick<ToolEventPayload, 'turnId' | 'meta' | 'detail'>
+): ChildToolProjectionScope | undefined {
+  const child = value.meta?.child
+  const childRecord = child && typeof child === 'object' && !Array.isArray(child)
+    ? child as Record<string, unknown>
+    : undefined
+  const detail = detailRecord(value.detail)
+  const childIds = uniqueProjectionStrings(childRecord?.childId, detail?.childId)
+  const parentTurnIds = uniqueProjectionStrings(
+    childRecord?.parentTurnId,
+    detail?.parentTurnId,
+    value.turnId
+  )
+  if (childIds.length !== 1 || parentTurnIds.length !== 1) return undefined
+  return { childId: childIds[0]!, parentTurnId: parentTurnIds[0]! }
+}
+
+function uniqueProjectionStrings(...values: unknown[]): string[] {
+  return [...new Set(values.flatMap((value) =>
+    typeof value === 'string' && value.trim() ? [value.trim()] : []
+  ))]
+}
+
+export function toolEventChildProjectionKey(event: ToolEventPayload): string | undefined {
+  const scope = childToolProjectionScope(event)
+  return scope ? JSON.stringify([scope.parentTurnId, scope.childId]) : undefined
+}
+
+export function toolBlockMatchesToolEvent(block: ToolBlock, event: ToolEventPayload): boolean {
+  const blockScope = childToolProjectionScope(block)
+  const eventScope = childToolProjectionScope(event)
+  if (block.id === event.itemId) {
+    return !blockScope || !eventScope || (
+      blockScope.childId === eventScope.childId &&
+      blockScope.parentTurnId === eventScope.parentTurnId
+    )
+  }
+  return Boolean(
+    blockScope && eventScope &&
+    blockScope.childId === eventScope.childId &&
+    blockScope.parentTurnId === eventScope.parentTurnId
+  )
+}
+
+export function findMatchingToolBlockIndex(
+  blocks: readonly ChatBlock[],
+  event: ToolEventPayload
+): number {
+  const exactIndex = blocks.findIndex((block) =>
+    block.kind === 'tool' && block.id === event.itemId && toolBlockMatchesToolEvent(block, event)
+  )
+  if (exactIndex >= 0) return exactIndex
+  return blocks.findIndex((block) =>
+    block.kind === 'tool' && toolBlockMatchesToolEvent(block, event)
+  )
 }
 
 export function mergeToolProjectionEvents(
@@ -390,7 +453,7 @@ function mergeChildMetadata(
 
 const CHILD_ATTEMPT_SCOPED_KEYS = [
   'detached', 'childTerminationReason', 'resumable', 'failure', 'proactiveRetry',
-  'activity', 'toolInvocations', 'durationMs', 'queuedMs', 'totalTokens',
+  'activity', 'toolInvocations', 'attemptStartedAt', 'attemptDurationMs', 'durationMs', 'queuedMs', 'totalTokens',
   'summaryTruncated', 'resultRef', 'resultUnavailableReason'
 ] as const
 

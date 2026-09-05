@@ -83,11 +83,32 @@ describe('sidebar order reconciliation', () => {
     )).toEqual(['/Users/zxy/project-b', '/Users/zxy/project-a', '/Users/zxy/project-c'])
   })
 
-  it('keeps saved threads first, drops removed ids, and appends new threads', () => {
+  it('keeps saved threads first and inserts unsaved threads beside their nearest neighbor', () => {
     const threads = [{ id: 'new' }, { id: 'saved-a' }, { id: 'saved-b' }]
 
     expect(reconcileSidebarThreadOrder(threads, ['removed', 'saved-b', 'saved-a']))
-      .toEqual([{ id: 'saved-b' }, { id: 'saved-a' }, { id: 'new' }])
+      .toEqual([{ id: 'saved-b' }, { id: 'new' }, { id: 'saved-a' }])
+  })
+
+  it('inserts a freshly created thread at the top beside saved older threads', () => {
+    const threads = [
+      { id: 'new' },
+      { id: 'heatmap' },
+      { id: 'old-1' },
+      { id: 'old-2' },
+      { id: 'old-3' },
+      { id: 'old-4' }
+    ]
+
+    expect(reconcileSidebarThreadOrder(threads, ['old-1', 'old-2', 'old-3', 'old-4']))
+      .toEqual([
+        { id: 'new' },
+        { id: 'heatmap' },
+        { id: 'old-1' },
+        { id: 'old-2' },
+        { id: 'old-3' },
+        { id: 'old-4' }
+      ])
   })
 })
 
