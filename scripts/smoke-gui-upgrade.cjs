@@ -58,6 +58,10 @@ async function request(page, path, method = 'GET', body) {
   }, { path, method, body })
 }
 
+function parseInstallerJson(text) {
+  return JSON.parse(text.replace(/^\uFEFF/u, ''))
+}
+
 async function startGui(executable, env, userData, launch = electron.launch.bind(electron), observation) {
   const app = await launch({ executablePath: executable, env,
     args: [], timeout: TIMEOUT })
@@ -214,9 +218,9 @@ async function scenario(input, name, record, persistReport) {
       TIMEOUT, 'active model request before upgrade')
     }
     await gui.page.screenshot({ path: join(root, 'before.png') })
-    const oldRuntime = JSON.parse(await readFile(join(dataDir, 'runtime.json'), 'utf8'))
+    const oldRuntime = parseInstallerJson(await readFile(join(dataDir, 'runtime.json'), 'utf8'))
     const oldPid = record.baselinePid
-    const oldManager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(JSON.parse).catch(() => null)
+    const oldManager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(parseInstallerJson).catch(() => null)
     await writeFile(join(root, 'upgrade-source.json'), JSON.stringify({ oldPid, oldRuntime, oldManager, executable }, null, 2))
     if (name === 'manual') {
       journal.phase('manual_installation')
@@ -266,7 +270,7 @@ async function scenario(input, name, record, persistReport) {
       if (process.platform === 'win32') {
         journal.phase('installer_result')
         const result = await pollInstalling(async () => {
-          const value = JSON.parse(await readFile(join(userData, 'pending-update-result.json'), 'utf8'))
+          const value = parseInstallerJson(await readFile(join(userData, 'pending-update-result.json'), 'utf8'))
           return value.outcome ? value : undefined
         }, 10 * 60_000, 'installer-authored transaction result')
         await writeFile(join(root, 'installer-result.json'), JSON.stringify(result, null, 2))
@@ -289,7 +293,7 @@ async function scenario(input, name, record, persistReport) {
             'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
             'if($p -and $p.MainWindowHandle -ne 0){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle}} }); ' +
             'ConvertTo-Json -Compress -InputObject $rows')
-          return JSON.parse(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.mainWindowHandle > 0)
+          return parseInstallerJson(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.mainWindowHandle > 0)
         }, 10 * 60_000, 'installer relaunch with a real GUI window')
         record.automaticRelaunch = { ...relaunched, source: 'CIM/MainWindowHandle', guiWindowObserved: true,
           observedAt: new Date().toISOString(), beforeHarnessLaunch: true }
@@ -356,7 +360,7 @@ async function scenario(input, name, record, persistReport) {
         if (gui?.processInfo?.pid && processIsAlive(gui.processInfo.pid)) await gui.app.close()
       }],
       ['stop-owned-manager', async () => {
-        const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(JSON.parse).catch(() => null)
+        const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(parseInstallerJson).catch(() => null)
         if (!manager) return
         assert.equal(resolve(manager.dataDir), resolve(dataDir), 'Manager must belong to this scenario')
         await fetch(`${manager.baseUrl}/v1/manager/shutdown`, {
@@ -478,4 +482,4 @@ async function main() {
 
 if (require.main === module) main().catch((error) => { console.error(error); process.exitCode = 1 })
 
-module.exports = { startGui, prepareReleasedGuiUpdate }
+module.exports = { startGui, prepareReleasedGuiUpdate, parseInstallerJson }

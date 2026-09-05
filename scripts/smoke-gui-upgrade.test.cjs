@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict')
 const { resolve } = require('node:path')
 const test = require('node:test')
-const { startGui, prepareReleasedGuiUpdate } = require('./smoke-gui-upgrade.cjs')
+const { startGui, prepareReleasedGuiUpdate, parseInstallerJson } = require('./smoke-gui-upgrade.cjs')
 
 function fixture(profile, phases = ['ready']) {
   const state = { closed: false, options: undefined, startupReads: 0 }
@@ -89,4 +89,13 @@ test('failure to open the legacy Providers view fails the upgrade preparation', 
   const page = { getByRole: () => ({ click: async () => { throw new Error('Settings is unavailable') } }) }
   await assert.rejects(prepareReleasedGuiUpdate(page, '0.3.7', record), /Settings is unavailable/)
   assert.deepEqual(record, {})
+})
+
+
+test('installer JSON accepts the UTF-8 BOM emitted by Windows PowerShell', () => {
+  const result = { schemaVersion: 2, outcome: 'success', transactionState: 'committed' }
+  assert.deepEqual(parseInstallerJson(`\uFEFF${JSON.stringify(result)}`), result)
+  assert.deepEqual(parseInstallerJson(JSON.stringify(result)), result)
+  assert.deepEqual(parseInstallerJson('\uFEFF[]'), [])
+  assert.throws(() => parseInstallerJson('\uFEFF{broken'), SyntaxError)
 })
