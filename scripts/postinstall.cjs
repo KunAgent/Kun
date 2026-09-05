@@ -1,4 +1,7 @@
 const { spawnSync } = require('node:child_process')
+const { patchElectronBuilderKeychain } = require('./patch-electron-builder-keychain.cjs')
+
+patchElectronBuilderKeychain()
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
