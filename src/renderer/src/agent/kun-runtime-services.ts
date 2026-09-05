@@ -56,7 +56,6 @@ import type {
   CoreAttachmentTextFallbackJson,
   CoreAttachmentUploadResponseJson,
   CoreMemoryDiagnosticsJson,
-  CorePendingMemoryCandidateJson,
   CoreMemoryListResponseJson,
   CoreMemoryRecordJson,
   CoreMcpOAuthClearResponseJson,
@@ -376,19 +375,9 @@ export class KunRuntimeProviderServices {
     )
   }
 
-  async listMemoryDistillationCandidates(
-    workspace: string
-  ): Promise<CorePendingMemoryCandidateJson[]> {
-    return listRuntimeMemoryCandidates(workspace)
-  }
+  listMemoryDistillationCandidates = listRuntimeMemoryCandidates
 
-  async decideMemoryDistillationCandidate(
-    candidateId: string,
-    decision: 'allow' | 'deny' | 'withdraw',
-    workspace: string
-  ): Promise<CorePendingMemoryCandidateJson> {
-    return decideRuntimeMemoryCandidate(candidateId, decision, workspace)
-  }
+  decideMemoryDistillationCandidate = decideRuntimeMemoryCandidate
 
   async forkThread(
     threadId: string,
