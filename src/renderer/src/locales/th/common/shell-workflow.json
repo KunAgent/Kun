@@ -29,6 +29,7 @@
   "windowsMenuDevTools": "เครื่องมือสำหรับนักพัฒนา",
   "windowsMenuMinimize": "ย่อเล็กสุด",
   "windowsMenuToggleMaximize": "ขยายใหญ่สุด/คืนค่า",
+  "windowsMenuToggleMini": "บานหน้าต่างย่อ",
   "windowsMenuClose": "ปิดหน้าต่าง",
   "windowsMenuAbout": "เกี่ยวกับ คุน",
   "windowsMenuOpenLogDir": "เปิดโฟลเดอร์บันทึก",
@@ -648,5 +649,7 @@
   "workflowEnableShort": "เปิดใช้งานแล้ว",
   "workflowEnableHint": "เมื่อเปิด โฟลว์นี้จะเริ่มทำงานตามกำหนดเวลา / webhook / API ภายในเครื่อง",
   "workflowCallableShort": "สามารถเรียก AI ได้",
-  "workflowCallableHint": "ปล่อยให้เอเจนต์โหมดโค้ดรันโดยตรงผ่าน run_workflow"
+  "workflowCallableHint": "ปล่อยให้เอเจนต์โหมดโค้ดรันโดยตรงผ่าน run_workflow",
+  "miniWindowRestore": "คืนขนาดหน้าต่าง",
+  "miniWindowDragHint": "ลากเพื่อย้ายตำแหน่ง"
 }

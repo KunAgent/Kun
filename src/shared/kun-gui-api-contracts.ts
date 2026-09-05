@@ -230,6 +230,7 @@ export const DESKTOP_COMMANDS = [
   'toggleDevTools',
   'minimize',
   'toggleMaximize',
+  'toggleMini',
   'close',
   'quit'
 ] as const

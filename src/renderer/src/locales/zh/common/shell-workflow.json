@@ -29,6 +29,7 @@
   "windowsMenuDevTools": "开发者工具",
   "windowsMenuMinimize": "最小化",
   "windowsMenuToggleMaximize": "最大化/还原",
+  "windowsMenuToggleMini": "小窗格",
   "windowsMenuClose": "关闭窗口",
   "windowsMenuAbout": "关于 Kun",
   "windowsMenuOpenLogDir": "打开日志目录",
@@ -659,5 +660,7 @@
   "designCanvasConversationResetPosition": "恢复默认位置",
   "designCanvasConversationResize": "拖动调整面板大小",
   "designCanvasConversationRunning": "会话正在运行",
-  "designCanvasConversationPanelLabel": "设计会话：{{title}}"
+  "designCanvasConversationPanelLabel": "设计会话：{{title}}",
+  "miniWindowRestore": "恢复窗口",
+  "miniWindowDragHint": "按住空白处拖动可移动位置"
 }

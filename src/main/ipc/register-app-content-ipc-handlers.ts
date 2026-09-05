@@ -98,7 +98,8 @@ import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import {
   assertTrustedWorkbenchSender,
   parseIpcPayload,
-  runDesktopCommand
+  runDesktopCommand,
+  isMiniWindowMode
 } from './app-ipc-handler-utils'
 
 function resolveWriteDocumentPath(workspaceRoot: string, filePath: string): string | null {
@@ -244,6 +245,10 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   ipcMain.handle('write:inline-completion-debug:clear', async () => {
     clearWriteInlineCompletionDebugEntries()
     return true
+  })
+  ipcMain.handle('window:mini-mode:get', (event) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    return isMiniWindowMode(getMainWindow())
   })
   ipcMain.handle('desktop:command', async (event, command: unknown) => {
     runDesktopCommand(

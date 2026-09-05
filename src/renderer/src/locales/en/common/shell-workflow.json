@@ -29,6 +29,7 @@
   "windowsMenuDevTools": "Developer tools",
   "windowsMenuMinimize": "Minimize",
   "windowsMenuToggleMaximize": "Maximize/restore",
+  "windowsMenuToggleMini": "Mini pane",
   "windowsMenuClose": "Close window",
   "windowsMenuAbout": "About Kun",
   "windowsMenuOpenLogDir": "Open logs folder",
@@ -659,5 +660,7 @@
   "designCanvasConversationResetPosition": "Reset panel position",
   "designCanvasConversationResize": "Drag to resize the panel",
   "designCanvasConversationRunning": "Conversation is running",
-  "designCanvasConversationPanelLabel": "Design conversation: {{title}}"
+  "designCanvasConversationPanelLabel": "Design conversation: {{title}}",
+  "miniWindowRestore": "Restore window",
+  "miniWindowDragHint": "Drag anywhere to move"
 }

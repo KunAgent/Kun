@@ -5,6 +5,8 @@ import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
 import { supportsDesktopTitleBar, WindowsTitleBar } from './components/WindowsTitleBar'
+import { MiniWindowOverlay } from './components/MiniWindowOverlay'
+import { useWindowMiniMode } from './lib/use-window-mini-mode'
 import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
 import i18n from './i18n'
 import { ExtensionWorkbenchLifecycle } from './extensions/ExtensionWorkbenchLifecycle'
@@ -82,6 +84,7 @@ export default function AppShell(): React.ReactElement {
     ? window.kunGui?.desktopTitleBarMode ?? resolveDesktopTitleBarMode(platform, false)
     : resolveDesktopTitleBarMode(platform, false)
   const hasDesktopTitleBar = supportsDesktopTitleBar(platform, desktopTitleBarMode)
+  const miniWindowMode = useWindowMiniMode()
   const WorkbenchView = preparedWorkbench ?? Workbench
   const SettingsRouteView = preparedSettingsView ?? SettingsView
   const InitialSetupView = preparedInitialSetupDialog ?? InitialSetupDialog
@@ -156,6 +159,7 @@ export default function AppShell(): React.ReactElement {
             ) : <WorkbenchView />}
           </Suspense>
         </div>
+        {miniWindowMode ? <MiniWindowOverlay /> : null}
         <ExtensionWorkbenchLifecycle />
         {initialSetupOpen ? (
           <ProtectedRendererSurface

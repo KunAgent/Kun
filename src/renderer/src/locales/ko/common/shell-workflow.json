@@ -29,6 +29,7 @@
   "windowsMenuDevTools": "개발자 도구",
   "windowsMenuMinimize": "최소화",
   "windowsMenuToggleMaximize": "최대화/복원",
+  "windowsMenuToggleMini": "미니 창",
   "windowsMenuClose": "창 닫기",
   "windowsMenuAbout": "쿤 소개",
   "windowsMenuOpenLogDir": "로그 폴더 열기",
@@ -648,5 +649,7 @@
   "workflowEnableShort": "활성화됨",
   "workflowEnableHint": "켜져 있으면 이 흐름은 해당 일정/웹훅/로컬 API에 따라 실행됩니다.",
   "workflowCallableShort": "AI 호출 가능",
-  "workflowCallableHint": "코드 모드 에이전트가 run_workflow를 통해 직접 실행하도록 합니다."
+  "workflowCallableHint": "코드 모드 에이전트가 run_workflow를 통해 직접 실행하도록 합니다.",
+  "miniWindowRestore": "창 복원",
+  "miniWindowDragHint": "드래그하여 위치 이동"
 }
