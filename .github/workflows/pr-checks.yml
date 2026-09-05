@@ -267,6 +267,11 @@ jobs:
         timeout-minutes: 20
         run: npm run smoke:packaged-update-handoff -- --resources dist/win-unpacked/resources
 
+      - name: Bind PR installer to its tested source
+        run: |
+          $version = node -p "require('./package.json').version"
+          node scripts/pr-gui-candidate-source.cjs --directory dist --version $version
+
       - name: Upload Windows PR package
         uses: actions/upload-artifact@v4
         with:
@@ -277,6 +282,7 @@ jobs:
             dist/Kun-*-win-x64.exe
             dist/Kun-*-win-x64.exe.blockmap
             dist/latest.yml
+            dist/pr-candidate-source.json
 
   gui-upgrade-windows:
     name: GUI upgrade from released 0.3.7 (Windows)
@@ -294,10 +300,16 @@ jobs:
           name: pr-windows-nsis-package
           path: dist
       - name: Verify GUI upgrade from the published 0.3.7 installer
+        env:
+          GUI_UPGRADE_SOURCE: pull-request
         timeout-minutes: 60
         run: |
           $version = node -p "require('./package.json').version"
           node scripts/smoke-gui-upgrade.cjs --directory dist --version $version --report gui-upgrade-win32.json
+
+      - name: Collect GUI upgrade diagnostics
+        if: always()
+        run: node scripts/gui-upgrade-diagnostics.cjs
 
       - name: Upload GUI upgrade evidence
         if: always()
@@ -306,9 +318,7 @@ jobs:
           name: pr-gui-upgrade-windows
           path: |
             gui-upgrade-win32.json*
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/**
-            !${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/installed/**
-            !${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/**/*.exe
+            gui-upgrade-evidence/**
           if-no-files-found: warn
 
   pr-gate:

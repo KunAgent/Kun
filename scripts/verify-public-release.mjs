@@ -54,6 +54,7 @@ if (mode === 'candidate') {
     const report = JSON.parse(await readFile(join('upgrade-evidence', `gui-upgrade-${target}`, `gui-upgrade-${target}.json`), 'utf8'))
     assert.equal(report.status, 'passed', target)
     assert.equal(report.version, version, target)
+    assert.notEqual(report.source, 'pull-request', `${target}: PR evidence cannot authorize a release`)
     assert.equal(report.commit, process.env.CANDIDATE_COMMIT, `${target}: evidence for another commit`)
     assert.equal(`${report.platform}-${report.arch}`, target)
     const expectedScenarios = target.startsWith('win32') ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']
