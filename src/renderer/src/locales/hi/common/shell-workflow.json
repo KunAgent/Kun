@@ -29,6 +29,7 @@
   "windowsMenuDevTools": "डेवलपर उपकरण",
   "windowsMenuMinimize": "न्यूनतम करें",
   "windowsMenuToggleMaximize": "अधिकतमीकरण/पुनर्स्थापना",
+  "windowsMenuToggleMini": "मिनी पैन",
   "windowsMenuClose": "विंडो बंद करें",
   "windowsMenuAbout": "कुं के बारे में",
   "windowsMenuOpenLogDir": "लॉग फ़ोल्डर खोलें",
@@ -648,5 +649,7 @@
   "workflowEnableShort": "सक्षम",
   "workflowEnableHint": "चालू होने पर, यह प्रवाह अपने शेड्यूल/वेबहुक/स्थानीय एपीआई पर सक्रिय होता है।",
   "workflowCallableShort": "एआई-कॉल करने योग्य",
-  "workflowCallableHint": "कोड-मोड एजेंट को इसे सीधे run_workflow के माध्यम से चलाने दें।"
+  "workflowCallableHint": "कोड-मोड एजेंट को इसे सीधे run_workflow के माध्यम से चलाने दें।",
+  "miniWindowRestore": "विंडो पुनर्स्थापित करें",
+  "miniWindowDragHint": "खींचकर कहीं भी ले जाएँ"
 }

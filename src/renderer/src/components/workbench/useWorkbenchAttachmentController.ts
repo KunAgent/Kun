@@ -96,6 +96,12 @@ export function useWorkbenchAttachmentController({
         const localFilePath =
           options.localFilePaths?.[index] ||
           (typeof window.kunGui?.getPathForFile === 'function' ? window.kunGui.getPathForFile(file) : '')
+        // When the desktop document bridge handles the upload, the main
+        // process reads the bytes from localFilePath, so skip the renderer
+        // base64 copy of potentially large documents.
+        const uploadViaDocumentBridge =
+          Boolean(localFilePath) &&
+          typeof window.kunGui?.uploadRuntimeDocumentAttachment === 'function'
         if (isOfficeAttachmentFile(file)) {
           const fallbackOfficeReference = (message: string): boolean => {
             if (!localFilePath || !onFallbackToFileReference) return false
@@ -130,7 +136,7 @@ export function useWorkbenchAttachmentController({
           const attachment = await uploadRuntimeAttachment({
             name: file.name || result.name,
             mimeType: result.mimeType,
-            dataBase64: arrayBufferToBase64(await file.arrayBuffer()),
+            dataBase64: uploadViaDocumentBridge ? '' : arrayBufferToBase64(await file.arrayBuffer()),
             documentText: result.documentText,
             documentFormat: result.format,
             sourceSha256: result.sourceSha256,
@@ -170,7 +176,7 @@ export function useWorkbenchAttachmentController({
           const attachment = await uploadRuntimeAttachment({
             name: file.name || fileNameFromPath(result.path),
             mimeType: 'application/pdf',
-            dataBase64: arrayBufferToBase64(await file.arrayBuffer()),
+            dataBase64: uploadViaDocumentBridge ? '' : arrayBufferToBase64(await file.arrayBuffer()),
             documentText,
             pageCount: result.pageCount,
             localFilePath,

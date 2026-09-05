@@ -27,12 +27,16 @@ import {
   runtimeRequestPayloadSchema,
   runtimeRequestCancelPayloadSchema,
   runtimeImageAttachmentUploadPayloadSchema,
+  runtimeDocumentAttachmentUploadPayloadSchema,
   kunProtectedApprovalPayloadSchema,
   settingsPatchSchema
 } from './app-ipc-schemas'
 import {
   uploadRuntimeImageAttachment
 } from '../services/runtime-image-attachment-service'
+import {
+  uploadRuntimeDocumentAttachment
+} from '../services/runtime-document-attachment-service'
 import {
   createApprovalConsentToken,
   KUN_APPROVAL_CONSENT_HEADER
@@ -485,6 +489,17 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       payload
     )
     return uploadRuntimeImageAttachment(request, { runtimeRequest })
+  })
+
+  ipcMain.handle('runtime:attachment:upload-document', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    options.assertRendererRuntimeReady()
+    const request = parseIpcPayload(
+      'runtime:attachment:upload-document',
+      runtimeDocumentAttachmentUploadPayloadSchema,
+      payload
+    )
+    return uploadRuntimeDocumentAttachment(request, { runtimeRequest })
   })
 
   ipcMain.handle('approval:decide', async (event, payload: unknown) => {

@@ -98,7 +98,7 @@ const attachmentMetadataSchema: z.ZodType<RuntimeImageAttachmentMetadata> = z.ob
   updatedAt: z.string()
 })
 
-const attachmentUploadResponseSchema = z.object({ attachment: attachmentMetadataSchema })
+export const attachmentUploadResponseSchema = z.object({ attachment: attachmentMetadataSchema })
 
 export async function uploadRuntimeImageAttachment(
   request: RuntimeImageAttachmentUploadRequest,
@@ -368,7 +368,7 @@ export function assertSourceByteLength(byteLength: number): void {
   }
 }
 
-function runtimeResponseError(response: RuntimeRequestResult, fallback: string): string {
+export function runtimeResponseError(response: RuntimeRequestResult, fallback: string): string {
   try {
     const body = JSON.parse(response.body) as { message?: unknown; error?: unknown }
     if (typeof body.message === 'string' && body.message.trim()) return body.message

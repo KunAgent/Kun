@@ -309,6 +309,58 @@ describe('KunRuntimeProvider', () => {
     expect(runtimeRequest).not.toHaveBeenCalled()
   })
 
+  it('routes document uploads through the dedicated desktop bridge when available', async () => {
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    const uploadRuntimeDocumentAttachment = vi.fn(async () => ({
+      ok: true as const,
+      attachment: {
+        id: 'att_doc',
+        name: 'spec.pdf',
+        kind: 'document' as const,
+        mimeType: 'application/pdf',
+        byteSize: 2048,
+        hash: 'hash',
+        createdAt: 't0',
+        updatedAt: 't0'
+      }
+    }))
+    installDsGui({ runtimeRequest, uploadRuntimeDocumentAttachment })
+    const provider = new KunRuntimeProvider()
+
+    await expect(provider.uploadAttachment({
+      name: 'spec.pdf',
+      mimeType: 'application/pdf',
+      dataBase64: '',
+      documentText: 'PDF body',
+      pageCount: 2,
+      localFilePath: 'C:\\Users\\tester\\Desktop\\spec.pdf',
+      workspace: 'D:\\kun'
+    })).resolves.toMatchObject({ id: 'att_doc', mimeType: 'application/pdf' })
+    expect(uploadRuntimeDocumentAttachment).toHaveBeenCalledWith({
+      path: 'C:\\Users\\tester\\Desktop\\spec.pdf',
+      name: 'spec.pdf',
+      mimeType: 'application/pdf',
+      documentText: 'PDF body',
+      pageCount: 2,
+      workspace: 'D:\\kun'
+    })
+    expect(runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('rejects document uploads without bytes when the desktop bridge is missing', async () => {
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+
+    await expect(provider.uploadAttachment({
+      name: 'spec.pdf',
+      mimeType: 'application/pdf',
+      dataBase64: '',
+      localFilePath: '/tmp/picked/spec.pdf'
+    })).rejects.toThrow(/unavailable/)
+    expect(runtimeRequest).not.toHaveBeenCalled()
+  })
+
   it('lists, toggles, and deletes memory records through Kun endpoints', async () => {
     const memoryPatches: string[] = []
     const runtimeRequest = vi.fn(async (path: string, method?: string, body?: string) => {

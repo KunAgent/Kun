@@ -99,6 +99,7 @@ const api = {
     ipcRenderer.invoke('runtime:settings-sync-status:get'),
   uploadRuntimeImageAttachment: (request) =>
     ipcRenderer.invoke('runtime:attachment:upload-image', request),
+  uploadRuntimeDocumentAttachment: (request) => ipcRenderer.invoke('runtime:attachment:upload-document', request),
   captureDevPreviewRegion: (request) =>
     ipcRenderer.invoke('dev-preview:capture-region', request),
   readLocalOfficeDocument: (options) => ipcRenderer.invoke('file:read-local-office-document', options),
@@ -460,6 +461,15 @@ const api = {
     }),
   runDesktopCommand: (command) =>
     ipcRenderer.invoke('desktop:command', command),
+  getWindowMiniMode: () => ipcRenderer.invoke('window:mini-mode:get'),
+  onWindowMiniMode: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('window:mini-mode', wrapped)
+    return () => ipcRenderer.removeListener('window:mini-mode', wrapped)
+  },
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   getComputerUsePermissions: () => ipcRenderer.invoke('computer-use:permissions'),
   requestComputerUsePermission: (kind) =>

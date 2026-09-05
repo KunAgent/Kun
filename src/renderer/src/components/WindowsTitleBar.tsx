@@ -174,6 +174,15 @@ function RestoreIcon(): ReactElement {
   )
 }
 
+function MiniPaneIcon(): ReactElement {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <rect x="1" y="1" width="8" height="8" rx="1.2" stroke="currentColor" strokeWidth="1.1" />
+      <rect x="5.4" y="5.4" width="2.8" height="2.8" rx="0.6" fill="currentColor" />
+    </svg>
+  )
+}
+
 function CloseIcon(): ReactElement {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
@@ -273,6 +282,10 @@ export function WindowsTitleBar({ platform, actions }: Props): ReactElement | nu
     void resolvedActions.runDesktopCommand('toggleMaximize')
   }, [resolvedActions])
 
+  const handleToggleMini = useCallback((): void => {
+    void resolvedActions.runDesktopCommand('toggleMini')
+  }, [resolvedActions])
+
   const handleClose = useCallback((): void => {
     void resolvedActions.runDesktopCommand('close')
   }, [resolvedActions])
@@ -334,6 +347,16 @@ export function WindowsTitleBar({ platform, actions }: Props): ReactElement | nu
         </nav>
       </div>
       <div className="ds-window-controls ds-no-drag">
+        <button
+          type="button"
+          data-cursor-spotlight-target
+          className="ds-window-control-btn"
+          aria-label={t('windowsMenuToggleMini')}
+          title={t('windowsMenuToggleMini')}
+          onClick={handleToggleMini}
+        >
+          <MiniPaneIcon />
+        </button>
         <button
           type="button"
           data-cursor-spotlight-target

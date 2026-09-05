@@ -189,6 +189,7 @@ import type {
   RuntimeImageAttachmentUploadRequest,
   RuntimeImageAttachmentUploadResult
 } from './runtime-image-attachment'
+import type { RuntimeDocumentAttachmentUploadRequest, RuntimeDocumentAttachmentUploadResult } from './runtime-document-attachment'
 import type { CliInstallAction, CliInstallResult, CliInstallStatus } from './cli-install'
 import type { ProviderQuotaListResult } from './provider-quota'
 import type {
@@ -371,6 +372,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   uploadRuntimeImageAttachment: (
     request: RuntimeImageAttachmentUploadRequest
   ) => Promise<RuntimeImageAttachmentUploadResult>
+  uploadRuntimeDocumentAttachment: (request: RuntimeDocumentAttachmentUploadRequest) => Promise<RuntimeDocumentAttachmentUploadResult>
   captureDevPreviewRegion: (
     request: DevPreviewCaptureRequest
   ) => Promise<DevPreviewCaptureResult>
@@ -648,6 +650,8 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
     options?: { workspaceRoot?: string; clawChannelId?: string; providerId?: string; modelHint?: string; reasoningEffort?: string; mode?: 'agent' | 'plan' }
   ) => Promise<ScheduleTaskFromTextResult>
   runDesktopCommand: (command: DesktopCommand) => Promise<void>
+  getWindowMiniMode: () => Promise<boolean>
+  onWindowMiniMode: (handler: (mini: boolean) => void) => () => void
   openExternal: (url: string) => Promise<void>
   getComputerUsePermissions: () => Promise<ComputerUsePermissions>
   requestComputerUsePermission: (

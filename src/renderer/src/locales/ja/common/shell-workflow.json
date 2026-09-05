@@ -29,6 +29,7 @@
   "windowsMenuDevTools": "開発者ツール",
   "windowsMenuMinimize": "最小化する",
   "windowsMenuToggleMaximize": "最大化/復元",
+  "windowsMenuToggleMini": "ミニペイン",
   "windowsMenuClose": "ウィンドウを閉じる",
   "windowsMenuAbout": "クンについて",
   "windowsMenuOpenLogDir": "ログフォルダーを開く",
@@ -648,5 +649,7 @@
   "workflowEnableShort": "有効",
   "workflowEnableHint": "オンの場合、このフローはスケジュール/Webhook/ローカル API で起動します。",
   "workflowCallableShort": "AI呼び出し可能",
-  "workflowCallableHint": "コードモード エージェントが run_workflow 経由で直接実行できるようにします。"
+  "workflowCallableHint": "コードモード エージェントが run_workflow 経由で直接実行できるようにします。",
+  "miniWindowRestore": "ウィンドウを復元",
+  "miniWindowDragHint": "ドラッグで移動できます"
 }

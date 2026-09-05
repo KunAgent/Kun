@@ -1,0 +1,74 @@
+/* Mini-pane window mode: collapse secondary chrome so the shrunken window
+   keeps the conversation area usable, and reveal a restore control on hover.
+   The dimmed layer doubles as a window drag region so the pane can be moved
+   freely; the restore badge opts out via -webkit-app-region: no-drag. */
+
+[data-kun-mini='on'] aside,
+[data-kun-mini='on'] nav.ds-windows-menu {
+  display: none !important;
+}
+
+.ds-mini-restore {
+  position: fixed;
+  inset: 0;
+  /* Above workbench overlays/dialogs so the restore control stays reachable. */
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  background: color-mix(in srgb, var(--ds-bg-main, #10141f) 62%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  -webkit-app-region: drag;
+  transition: opacity 140ms ease;
+}
+
+.ds-mini-restore:active {
+  cursor: grabbing;
+}
+
+/* pointer-events: none elements never receive :hover, so visibility is
+   driven by hovering anywhere inside the mini window instead. */
+[data-kun-mini='on'] body:hover .ds-mini-restore,
+.ds-mini-restore:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-mini-restore {
+    transition: none;
+  }
+}
+
+.ds-mini-restore-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ds-mini-restore-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #ffffff;
+  background: rgba(15, 20, 33, 0.86);
+  box-shadow: 0 8px 28px rgba(8, 12, 22, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-app-region: no-drag;
+}
+
+.ds-mini-restore-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 4px rgba(8, 12, 22, 0.6);
+  pointer-events: none;
+}

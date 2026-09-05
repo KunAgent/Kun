@@ -29,6 +29,7 @@
   "windowsMenuDevTools": "Инструменты разработчика",
   "windowsMenuMinimize": "Свернуть",
   "windowsMenuToggleMaximize": "Развернуть/восстановить",
+  "windowsMenuToggleMini": "Мини-панель",
   "windowsMenuClose": "Закрыть окно",
   "windowsMenuAbout": "О программе Kun",
   "windowsMenuOpenLogDir": "Открыть папку с логами",
@@ -648,5 +649,7 @@
   "workflowEnableShort": "Включено",
   "workflowEnableHint": "Когда этот поток включен, он срабатывает по своему расписанию/вебхуку/локальному API.",
   "workflowCallableShort": "AI-вызываемый",
-  "workflowCallableHint": "Позвольте агенту режима кода запустить его напрямую через run_workflow."
+  "workflowCallableHint": "Позвольте агенту режима кода запустить его напрямую через run_workflow.",
+  "miniWindowRestore": "Восстановить окно",
+  "miniWindowDragHint": "Перетащите, чтобы переместить"
 }
