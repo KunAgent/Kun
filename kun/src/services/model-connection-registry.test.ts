@@ -295,8 +295,10 @@ describe('ModelConnectionRegistry', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     })
 
-  it('probes Codex with configured models without requesting a models URL', async () => {
-      const fetchMock = vi.fn()
+  it('discovers live Codex models using the Registry OAuth credential', async () => {
+      const fetchMock = vi.fn(async () => Response.json({
+        models: [{ slug: 'gpt-6-astra', visibility: 'list' }]
+      }))
       vi.stubGlobal('fetch', fetchMock)
       const { value } = await registry()
       await value.connect({
@@ -322,9 +324,16 @@ describe('ModelConnectionRegistry', () => {
 
       await expect(value.probe('codex')).resolves.toEqual({
         ok: true,
-        models: ['gpt-5.5', 'gpt-5.4']
+        models: ['gpt-6-astra']
       })
-      expect(fetchMock).not.toHaveBeenCalled()
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('https://chatgpt.com/backend-api/codex/models?client_version='),
+        expect.objectContaining({ headers: expect.objectContaining({
+          authorization: 'Bearer access-token',
+          'ChatGPT-Account-Id': 'account-1',
+          originator: 'codex_cli_rs'
+        }) })
+      )
     })
 
   it('probes Messages providers with the Registry credential and Anthropic headers', async () => {

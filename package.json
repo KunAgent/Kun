@@ -22,7 +22,7 @@
     "build:kun": "npm run build --workspace @kun/provider-catalog && npm run build --workspace @kun/extension-api && node ./scripts/ensure-kun-install.cjs && npm --prefix kun run build",
     "smoke:dual-runtime": "npm run build:kun && node ./scripts/smoke-dual-runtime.mjs",
     "test:packaging": "node --test ./scripts/publish-r2.test.mjs ./scripts/smoke-packaged-cli.test.cjs",
-    "test:release-workflows": "node --test ./scripts/daily-dev-prerelease-workflow.test.cjs ./scripts/release-workflow-guardrails.test.cjs ./scripts/gui-upgrade-feed.test.cjs ./scripts/verify-public-release.test.mjs ./scripts/smoke-gui-upgrade.test.cjs",
+    "test:release-workflows": "node --test ./scripts/daily-dev-prerelease-workflow.test.cjs ./scripts/release-workflow-guardrails.test.cjs ./scripts/node-gyp-download.test.cjs ./scripts/gui-upgrade-feed.test.cjs ./scripts/verify-public-release.test.mjs ./scripts/smoke-gui-upgrade.test.cjs",
     "build:extensions": "npm run build --workspace @kun/provider-catalog && npm run build --workspace @kun/extension-api && npm run build --workspace @kun/extension-react && npm run build --workspace @kun/extension-test && npm run build --workspace create-kun-extension",
     "test:extensions": "npm run test --workspace @kun/provider-catalog && npm run test --workspace @kun/extension-api && npm run test --workspace @kun/extension-react && npm run test --workspace @kun/extension-test && npm run test --workspace create-kun-extension",
     "check:extension-schema": "npm run schema:check --workspace @kun/extension-api",
@@ -212,6 +212,9 @@
     "hono": "4.13.0",
     "ip-address": "10.4.0",
     "js-yaml": "4.3.1",
+    "node-gyp": {
+      "undici": "8.10.2"
+    },
     "qs": "6.16.0"
   },
   "author": "Kun Contributors",

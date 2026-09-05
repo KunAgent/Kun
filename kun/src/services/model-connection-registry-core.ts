@@ -23,7 +23,7 @@ import {
 } from '../contracts/model-connections.js'
 import { materializeLegacyProviderCredential } from './legacy-provider-credential-migration.js'
 import type { ExtensionCredentialStore } from './extension-credential-store.js'
-import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
+export { probeModels, modelsUrl } from './model-connection-probe.js'
 import { installServiceOperations } from './service-operation-install.js'
 import { modelConnectionRegistryConnectionOperations } from './model-connection-registry-connection-operations.js'
 import { modelConnectionRegistryCredentialMutationOperations } from './model-connection-registry-credential-mutation-operations.js'
@@ -615,86 +615,4 @@ export function uniqueModels(models: readonly string[]): string[] {
 
 export function sameModels(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((model, index) => model === right[index])
-}
-
-export async function probeModels(input: {
-  kind: ModelConnectionProfile['kind']
-  baseUrl?: string
-  endpointFormat?: ModelConnectionProfile['endpointFormat']
-  apiKey: string
-  headers?: Record<string, string>
-  fallbackModels: readonly string[]
-  proxyUrl: string
-}): Promise<string[]> {
-  if (input.kind !== 'http') return uniqueModels(input.fallbackModels)
-  if (!input.baseUrl) throw new Error('provider probe failed: HTTP provider has no base URL')
-  // Custom full inference endpoints have no discoverable /models URL. When the
-  // profile already lists models (Codex, coding-plan gateways, user custom
-  // paths), treat an explicit credential + catalog as a successful probe.
-  if (input.endpointFormat === 'custom_endpoint') {
-    const configured = uniqueModels(input.fallbackModels)
-    if (configured.length === 0) {
-      throw new Error(
-        'provider probe failed: custom_endpoint does not define a models URL; configure models explicitly with probe disabled'
-      )
-    }
-    if (!input.apiKey.trim()) {
-      throw new Error('provider probe failed: custom_endpoint requires a credential when probing configured models')
-    }
-    return configured
-  }
-  const url = modelsUrl(input.baseUrl, input.endpointFormat)
-  const usesAnthropicHeaders = input.endpointFormat === 'messages'
-  const authHeaders: Record<string, string> = input.apiKey
-    ? usesAnthropicHeaders
-      ? { 'x-api-key': input.apiKey, 'anthropic-version': '2023-06-01' }
-      : { authorization: `Bearer ${input.apiKey}` }
-    : {}
-  const fetchImpl = createProxyFetch(input.proxyUrl) ?? fetch
-  const response = await fetchImpl(url, {
-    headers: { ...(input.headers ?? {}), ...authHeaders },
-    signal: AbortSignal.timeout(15_000)
-  })
-  if (!response.ok) throw new Error(`provider probe failed with HTTP ${response.status}`)
-  const value = await response.json().catch(() => ({})) as { data?: Array<{ id?: unknown }>; models?: unknown[] }
-  const discovered = Array.isArray(value.data)
-    ? value.data.flatMap((entry) => typeof entry?.id === 'string' ? [entry.id] : [])
-    : Array.isArray(value.models)
-      ? value.models.flatMap((entry) => typeof entry === 'string' ? [entry] : [])
-      : []
-  return uniqueModels([...discovered, ...input.fallbackModels])
-}
-
-export function modelsUrl(
-  baseUrl: string,
-  endpointFormat: ModelConnectionProfile['endpointFormat'] | undefined
-): string {
-  if (endpointFormat === 'custom_endpoint') {
-    throw new Error(
-      'provider probe failed: custom_endpoint does not define a models URL; configure models explicitly with probe disabled'
-    )
-  }
-  const url = new URL(baseUrl)
-  url.search = ''
-  url.hash = ''
-  const segments = url.pathname.split('/').filter(Boolean)
-  const last = segments.at(-1)?.toLowerCase()
-  if (last === 'models') {
-    url.pathname = `/${segments.join('/')}`
-    return url.toString()
-  }
-  if (last === 'responses' || last === 'messages') {
-    segments.pop()
-  } else if (last === 'completions' && segments.at(-2)?.toLowerCase() === 'chat') {
-    segments.splice(-2)
-  }
-  const version = segments.at(-1)?.toLowerCase()
-  if (version === 'beta') {
-    segments[segments.length - 1] = 'v1'
-  } else if (!version || !/^v\d+$/u.test(version)) {
-    segments.push('v1')
-  }
-  if (segments.at(-1)?.toLowerCase() !== 'models') segments.push('models')
-  url.pathname = `/${segments.join('/')}`
-  return url.toString()
 }
