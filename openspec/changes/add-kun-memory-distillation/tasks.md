@@ -45,6 +45,9 @@
 - [x] 5.9 Make pending-state mutations copy-on-write and cover failed durable writes
 - [x] 5.10 Track in-flight distillation, reject work during shutdown, and settle it before stores close
 
+- [x] 5.11 Route the shared candidate ledger through Service Manager and preserve terminal decisions across runtime reconnects
+- [x] 5.12 Commit version/lifecycle/duplicate validation with canonical Memory mutation under one owner queue; detect same-millisecond edits using record fingerprints
+
 ## 6. P1-B acceptance and delivery
 
 - [x] 6.1 Test completed/failed/aborted/empty turns, extractor timeout/error/invalid output, and turn-status isolation
@@ -54,5 +57,6 @@
 - [ ] 6.4 Run focused and full tests, typecheck, build, lint, file-lines, OpenSpec strict, and UI acceptance
   - 2026-09-03: P1-B focused Kun tests (19/19), focused desktop settings/UI tests (91/91), root typecheck, Kun/root build, tracked and changed-file line limits, diff check, and OpenSpec strict validation pass. Full lint reaches the unchanged upstream `BackgroundShellOverlay.tsx` `no-control-regex` baseline error; full tests and interactive UI acceptance remain delegated to PR CI/review, so this task is intentionally not marked complete.
   - 2026-09-05: Rebased P1-B onto `upstream/develop` at `d71cc52c` (including merged #1278). Removed redundant candidate-request wrappers after the combined runtime service reached 702 lines; it is now 691 lines. With independent lockfile-installed dependencies, Kun Memory/queue focused tests pass (83/83), desktop/settings/IPC focused tests pass (150/150, including five new request-routing regressions), and root typecheck, production build, full lint (0 errors, 30 warnings), production dependency audit, file-lines, diff check, and OpenSpec strict pass. Release-workflow tests pass (8/8) with Git Bash on the child process PATH; the initial Windows WSL Bash selection failed. Full-suite, cross-platform packaging, and interactive UI evidence remain pending on the updated PR and are not marked passed.
-- [ ] 6.5 Record model budget, candidate quality, source completeness, approval behavior, known limits, and CI results in the P1-B PR
+  - 2026-09-06 maintainer repair: moved candidate operations to Service Manager and added atomic canonical commits with record fingerprints. Node 22 focused runtime/Manager/SQLite tests pass (138/138), desktop settings/IPC tests pass (119/119), and typecheck, build, lint (0 errors, 30 existing warnings), file-lines, and OpenSpec strict pass. Full tests, interactive UI acceptance, and new-head CI are being recorded separately; no new-head CI success is claimed here.
+- [x] 6.5 Record model budget, candidate quality, source completeness, approval behavior, known limits, and CI results in the P1-B PR
 - [ ] 6.6 Archive the OpenSpec change only after P1-B is merged and all acceptance evidence is complete

@@ -1,3 +1,4 @@
+import type { PendingMemoryCandidate } from '../../contracts/memory-distillation-runtime.js'
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
@@ -97,6 +98,18 @@ export class HybridMemoryStore implements MemoryStore {
     this.backfill?.stop()
     await this.backfill?.wait()
     try { this.db?.close() } finally { this.db = null; this.index = null }
+  }
+
+  async commitDistillation(candidate: PendingMemoryCandidate): Promise<MemoryRecord> {
+    return this.enqueueMutation(async () => {
+      this.mutationGeneration += 1
+      await this.ready()
+      const record = await this.canonical.commitDistillation(candidate)
+      const superseded = candidate.proposedAction.action === 'supersede'
+        ? [candidate.proposedAction.memoryId] : []
+      await this.projectCanonicalIds([record.id, ...superseded])
+      return record
+    })
   }
 
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {

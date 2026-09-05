@@ -179,6 +179,8 @@ export type ManagerArtifactStoreOperation =
   | 'stat'
 
 export type ManagerMemoryStoreOperation =
+  | 'distillationPending'
+  | 'commitDistillation'
   | 'create'
   | 'createWithId'
   | 'update'

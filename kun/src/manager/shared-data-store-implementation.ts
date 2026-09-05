@@ -1,3 +1,5 @@
+import { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
+import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
 import { readFile, rm } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -227,12 +229,31 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
   }
 
   async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown): Promise<unknown> {
+    if (operation === 'distillationPending') {
+      const body = z.object({ value: z.unknown() }).strict().parse(value)
+      const run = this.memoryQueue.catch(() => undefined)
+        .then(() => this.memoryDistillationPending.execute(body.value))
+      this.memoryQueue = run.then(() => undefined, () => undefined)
+      return run
+    }
     const body = z.object({ config: MemoryCapabilityConfig, value: z.unknown().optional() })
       .strict()
       .parse(value)
     const store = this.memoryStore(body.config)
     const run = this.memoryQueue.catch(() => undefined).then(async () => {
       switch (operation) {
+        case 'commitDistillation': {
+          const candidate = PendingMemoryCandidate.parse(body.value)
+          if (!store.commitDistillation) throw new Error('atomic memory distillation is unavailable')
+          try {
+            return { ok: true, record: await store.commitDistillation(candidate) }
+          } catch (error) {
+            if (error instanceof MemoryDistillationConflictError) {
+              return { ok: false, conflict: error.message }
+            }
+            throw error
+          }
+        }
         case 'create':
           return store.create(MemoryCreateRequest.parse(body.value))
         case 'createWithId': {

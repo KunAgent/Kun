@@ -40,12 +40,14 @@ export const MemoryDistillationProposedAction = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('update'),
     memoryId: z.string().min(1),
-    targetUpdatedAt: z.string().min(1).max(128)
+    targetUpdatedAt: z.string().min(1).max(128),
+    targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional()
   }).strict(),
   z.object({
     action: z.literal('supersede'),
     memoryId: z.string().min(1),
-    targetUpdatedAt: z.string().min(1).max(128)
+    targetUpdatedAt: z.string().min(1).max(128),
+    targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional()
   }).strict()
 ])
 export type MemoryDistillationProposedAction = z.infer<

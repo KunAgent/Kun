@@ -1,3 +1,4 @@
+import { canonicalMemoryHash } from './memory-record-normalizer.js'
 import { createHash } from 'node:crypto'
 import type { TurnItem } from '../contracts/items.js'
 import {
@@ -20,7 +21,7 @@ import {
   validateMemoryDistillationApplyIntent
 } from './memory-distillation-apply.js'
 import {
-  MemoryDistillationPendingStore,
+  type MemoryDistillationPendingStorePort,
   type PendingMemoryCandidateInsert
 } from './memory-distillation-pending-store.js'
 import type { MemoryStore } from './memory-store.js'
@@ -40,7 +41,7 @@ Return at most 8 candidates. If none qualify, return {"candidates":[]}.`
 export type MemoryDistillationCoordinatorOptions = {
   threads: ThreadStore
   model: ModelClient
-  pending: MemoryDistillationPendingStore
+  pending: MemoryDistillationPendingStorePort
   memoryStore: () => MemoryStore | undefined
   enabled: () => boolean
   nowIso?: () => string
@@ -152,7 +153,8 @@ export class MemoryDistillationCoordinator {
             : {
                 action: decision.action,
                 memoryId: decision.memoryId,
-                targetUpdatedAt: authorizedTarget(authorized, decision.memoryId).updatedAt
+                targetUpdatedAt: authorizedTarget(authorized, decision.memoryId).updatedAt,
+                targetFingerprint: canonicalMemoryHash(authorizedTarget(authorized, decision.memoryId))
               }
           inserts.push({
             threadId,
@@ -184,6 +186,7 @@ export class MemoryDistillationCoordinator {
     request: MemoryDistillationDecisionRequest,
     workspace: string
   ): Promise<PendingMemoryCandidate> {
+    if (this.shuttingDown) throw new Error('memory distillation is shutting down')
     return this.withApprovalMutation(async () => {
       const current = await this.options.pending.get(id)
       if (!current || current.target.workspace !== workspace) {
@@ -241,7 +244,7 @@ export class MemoryDistillationCoordinator {
     this.shuttingDown = true
     const reason = new Error('runtime is shutting down during memory distillation')
     for (const controller of this.extractionControllers) controller.abort(reason)
-    await Promise.allSettled([...this.activeRuns])
+    await Promise.allSettled([...this.activeRuns, this.approvalMutation])
   }
 
   private async reconcileApplying(

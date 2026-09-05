@@ -207,3 +207,39 @@ The P1-A delivery SHALL contain only OpenSpec artifacts, candidate contracts, no
 - **WHEN** the P1-A branch is compared with its develop base
 - **THEN** no production lifecycle, settings, renderer, approval, or store integration file is changed
 - **AND** importing or not importing the new pure modules leaves existing application behavior unchanged
+
+### Requirement: Candidate decisions share one canonical owner across runtimes
+
+When Service Manager is present, the system SHALL send candidate-ledger reads and
+mutations through its shared data plane. A runtime SHALL NOT overwrite shared
+approval state from a private cache. Runtime reconnects SHALL NOT recover another
+live runtime's extraction as interrupted.
+
+#### Scenario: A second runtime writes after a denial
+
+- **WHEN** one runtime denies a candidate and another runtime creates a new extraction run
+- **THEN** the denied candidate remains denied for both runtimes and after restart
+- **AND** subsequent allow requests cannot write it
+
+#### Scenario: A runtime reconnects during extraction
+
+- **WHEN** a second runtime initializes while the first runtime is extracting candidates
+- **THEN** the first runtime can complete its existing run exactly once
+
+### Requirement: Approval validation and canonical mutation are atomic
+
+The owning Memory store SHALL validate target lifecycle, timestamp, record fingerprint,
+and exact scoped duplicates under the same mutation queue as the canonical write.
+Conflicts SHALL retain user edits and return an explicit conflict outcome. A lost
+commit response SHALL reconcile using the persisted receipt without a duplicate write.
+
+#### Scenario: A user edits between approval checks and commit
+
+- **WHEN** a user changes a target after preliminary approval validation but before commit
+- **THEN** update and supersede candidates become conflicted without overwriting the edit
+- **AND** this also applies when both edits share a timestamp millisecond
+
+#### Scenario: Separate runtimes approve equivalent creates
+
+- **WHEN** two runtimes concurrently approve candidates containing the same normalized fact
+- **THEN** only one Memory record is created and the other candidate is conflicted

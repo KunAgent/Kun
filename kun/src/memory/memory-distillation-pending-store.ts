@@ -6,9 +6,7 @@ import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import {
   MEMORY_DISTILLATION_PENDING_TTL_MS,
   MEMORY_DISTILLATION_STORE_VERSION,
-  MemoryDistillationProposedAction,
   MemoryDistillationStoreState,
-  MemoryDistillationTarget,
   PendingMemoryCandidate,
   type MemoryDistillationApplyReceipt,
   type MemoryDistillationCandidateStatus,
@@ -16,21 +14,14 @@ import {
   type MemoryDistillationStoreState as MemoryDistillationStoreStateValue,
   type PendingMemoryCandidate as PendingMemoryCandidateValue
 } from '../contracts/memory-distillation-runtime.js'
-import { MemoryCandidate } from '../contracts/memory-distillation.js'
-
-const CandidateInsert = z.object({
-  threadId: z.string().min(1),
-  turnId: z.string().min(1),
-  target: MemoryDistillationTarget,
-  candidate: MemoryCandidate,
-  proposedAction: MemoryDistillationProposedAction
-}).strict()
+import type { MemoryCandidate } from '../contracts/memory-distillation.js'
+import { MemoryDistillationCandidateInsert as CandidateInsert } from '../contracts/memory-distillation-storage.js'
+import { withMemoryMutation } from './memory-mutation-queue.js'
 
 export type PendingMemoryCandidateInsert = z.input<typeof CandidateInsert>
 
 export class MemoryDistillationPendingStore {
   private state: MemoryDistillationStoreStateValue | undefined
-  private mutation = Promise.resolve()
 
   constructor(private readonly options: {
     dataDir: string
@@ -269,9 +260,11 @@ export class MemoryDistillationPendingStore {
   }
 
   private withMutation<T>(operation: () => Promise<T>): Promise<T> {
-    const run = this.mutation.then(operation, operation)
-    this.mutation = run.then(() => undefined, () => undefined)
-    return run
+    return withMemoryMutation(this.path(), async () => {
+      // Another adapter in this owner may have committed since our last read.
+      this.state = undefined
+      return operation()
+    })
   }
 }
 
@@ -317,3 +310,6 @@ function candidatesForTurn(
     candidate.threadId === threadId && candidate.turnId === turnId
   )
 }
+
+export type MemoryDistillationPendingStorePort = Pick<MemoryDistillationPendingStore,
+  'ready' | 'beginRun' | 'completeRun' | 'failRun' | 'list' | 'get' | 'transition' | 'expireDue'>

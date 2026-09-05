@@ -217,7 +217,7 @@ export type CorePendingMemoryCandidateJson = {
   }
   proposedAction:
     | { action: 'create' }
-    | { action: 'update' | 'supersede'; memoryId: string; targetUpdatedAt: string }
+    | { action: 'update' | 'supersede'; memoryId: string; targetUpdatedAt: string; targetFingerprint?: string }
   status: 'pending' | 'applying' | 'allowed' | 'denied' | 'timed-out' |
     'expired' | 'withdrawn' | 'conflicted' | 'failed'
   createdAt: string

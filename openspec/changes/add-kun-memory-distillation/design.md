@@ -111,6 +111,23 @@ Only completed turns without an internal `messageSource` are eligible for P1 dis
 
 The coordinator tracks accepted background work and its abort controllers. Once shutdown starts it accepts no new work, aborts model extraction, and waits for tracked tasks to settle before shared stores close. Unexpectedly interrupted extraction remains a bounded failed run in P1; a persistent retry queue, model-role routing, batching, and hourly/daily budgets remain follow-up work.
 
+### 12. Share approvals and atomically commit validated Memory intents
+
+When Service Manager is configured, all candidate-ledger operations go through its
+Memory data API. One manager-owned ledger handles both runtime flavors; startup
+recovery runs once per Manager lifetime, so a runtime reconnect cannot fail another
+runtime's live extraction. Local fallback adapters serialize operations by canonical
+file path within their owning process and refresh state before each transaction.
+
+Canonical Memory commits validate the target timestamp and full record fingerprint,
+active lifecycle, and exact duplicates inside the same mutation queue as create,
+update, delete, and supersede. A durable apply receipt is still written first; the
+subsequent atomic commit revalidates instead of trusting the earlier snapshot.
+File and hybrid stores share the canonical queue, and remote stores invoke this
+operation over the Manager API. Old unapplied update/supersede candidates without
+a fingerprint fail closed as conflicted; already committed matching receipts can
+still reconcile. This also detects edits made within the same timestamp millisecond.
+
 ## Open Questions
 
 None for P1-B implementation. Bulk approval, citation offsets, persistent extraction retries, model-role routing, batching/budgets, and terminal-history compaction remain possible follow-up work, not part of this change.

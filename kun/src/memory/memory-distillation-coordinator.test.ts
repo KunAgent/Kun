@@ -319,10 +319,10 @@ describe('MemoryDistillationCoordinator', () => {
   it('reconciles a Memory write that completed before the apply receipt was committed', async () => {
     const harness = await createHarness()
     const [pending] = await harness.coordinator.distill('thread_1', 'turn_1')
-    const createWithId = harness.memory.createWithId.bind(harness.memory)
+    const commitDistillation = harness.memory.commitDistillation.bind(harness.memory)
     let failAfterWrite = true
-    harness.memory.createWithId = async (id, input) => {
-      const record = await createWithId(id, input)
+    harness.memory.commitDistillation = async (candidate) => {
+      const record = await commitDistillation(candidate)
       if (failAfterWrite) {
         failAfterWrite = false
         throw new Error('simulated crash after canonical write')

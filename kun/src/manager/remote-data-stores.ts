@@ -1,3 +1,6 @@
+import type { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
+import { MemoryDistillationCommitResult } from '../contracts/memory-distillation-storage.js'
+import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
 import { z } from 'zod'
 import type {
   ArtifactStore,
@@ -499,6 +502,12 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     private readonly manager: ServiceManagerConnection,
     private readonly config: MemoryCapabilityConfig
   ) {}
+
+  async commitDistillation(candidate: PendingMemoryCandidate): Promise<MemoryRecord> {
+    const result = MemoryDistillationCommitResult.parse(await this.call('commitDistillation', candidate))
+    if (!result.ok) throw new MemoryDistillationConflictError(result.conflict)
+    return result.record
+  }
 
   async create(input: MemoryCreateRequest) {
     return MemoryRecord.parse(await this.call('create', input))

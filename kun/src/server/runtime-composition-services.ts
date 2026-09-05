@@ -1,3 +1,4 @@
+import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
 import {
   join,
   type AttachmentStore,
@@ -286,10 +287,9 @@ export async function createRuntimeServices(
   })
   sessionStore.setEventIndexRebuildWake?.(() => backgroundMaintenance.wake())
   let memoryStore = createPersistentMemoryStore(core.activeOptions, nowIso)
-  const memoryDistillationPending = new MemoryDistillationPendingStore({
-    dataDir: core.activeOptions.dataDir,
-    nowIso
-  })
+  const memoryDistillationPending = core.activeOptions.serviceManager
+    ? new ManagerRemoteMemoryDistillationPendingStore(core.activeOptions.serviceManager)
+    : new MemoryDistillationPendingStore({ dataDir: core.activeOptions.dataDir, nowIso })
   const memoryDistillation = new MemoryDistillationCoordinator({
     threads: threadStore,
     model: timedModelClient,

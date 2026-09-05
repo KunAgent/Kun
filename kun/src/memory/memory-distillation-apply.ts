@@ -1,3 +1,4 @@
+import { canonicalMemoryHash } from './memory-record-normalizer.js'
 import { normalizeMemoryCandidateContent } from '../contracts/memory-distillation.js'
 import type {
   MemoryDistillationApplyReceipt,
@@ -5,6 +6,8 @@ import type {
 } from '../contracts/memory-distillation-runtime.js'
 import type { MemoryRecord, MemorySourceEvidence } from '../contracts/memory.js'
 import { isMemoryActive, type MemoryStore } from './memory-store.js'
+
+type DistillationWriteStore = Pick<MemoryStore, 'list' | 'update' | 'createWithId'>
 
 export class MemoryDistillationConflictError extends Error {
   constructor(message: string) {
@@ -29,7 +32,7 @@ export function buildMemoryDistillationApplyReceipt(
 }
 
 export async function validateMemoryDistillationApplyIntent(
-  store: MemoryStore,
+  store: DistillationWriteStore,
   current: PendingMemoryCandidate,
   nowMs: number
 ): Promise<MemoryRecord | undefined> {
@@ -47,7 +50,7 @@ export async function validateMemoryDistillationApplyIntent(
     if (!target) {
       throw new MemoryDistillationConflictError('the proposed Memory target is no longer active')
     }
-    if (target.updatedAt !== action.targetUpdatedAt) {
+    if (target.updatedAt !== action.targetUpdatedAt || canonicalMemoryHash(target) !== action.targetFingerprint) {
       throw new MemoryDistillationConflictError('the proposed Memory target changed after extraction')
     }
   }
@@ -62,8 +65,8 @@ export async function validateMemoryDistillationApplyIntent(
   return target
 }
 
-export async function applyMemoryDistillationCandidate(
-  store: MemoryStore,
+async function writeMemoryDistillationCandidate(
+  store: DistillationWriteStore,
   current: PendingMemoryCandidate,
   target: MemoryRecord | undefined
 ): Promise<MemoryRecord> {
@@ -107,6 +110,49 @@ export async function applyMemoryDistillationCandidate(
     ...input,
     ...(supersedes ? { supersedes } : {})
   })
+}
+
+/** Every backend must validate and write under the same canonical mutation queue. */
+export async function applyMemoryDistillationCandidate(
+  store: MemoryStore,
+  current: PendingMemoryCandidate,
+  _target?: MemoryRecord
+): Promise<MemoryRecord> {
+  if (!store.commitDistillation) throw new Error('atomic memory distillation is unavailable')
+  return store.commitDistillation(current)
+}
+
+/** Called only while the owning backend holds its mutation queue. */
+export async function commitMemoryDistillationCandidate(
+  store: DistillationWriteStore,
+  current: PendingMemoryCandidate,
+  nowMs: number
+): Promise<MemoryRecord> {
+  if (current.status !== 'applying' || !current.applyReceipt) {
+    throw new MemoryDistillationConflictError('memory candidate has no approved apply receipt')
+  }
+  const records = await store.list({ workspace: current.target.workspace, includeDeleted: true })
+  const expected = records.find((record) => record.id === current.applyReceipt!.expectedMemoryId)
+  if (expected && memoryRecordMatchesDistillationCandidate(expected, current)) {
+    if (current.proposedAction.action === 'supersede') {
+      const action = current.proposedAction
+      const target = records.find((record) => record.id === action.memoryId)
+      if (!target) throw new MemoryDistillationConflictError('the supersede target is unavailable')
+      if (!target.supersededAt) {
+        // Recover an interrupted two-record write only if its old target is unchanged.
+        if (target.updatedAt !== action.targetUpdatedAt || canonicalMemoryHash(target) !== action.targetFingerprint) {
+          throw new MemoryDistillationConflictError('the proposed Memory target changed after extraction')
+        }
+        return writeMemoryDistillationCandidate(store, current, target)
+      }
+    }
+    return expected
+  }
+  if (expected && current.proposedAction.action !== 'update') {
+    throw new MemoryDistillationConflictError('the expected Memory record changed')
+  }
+  const target = await validateMemoryDistillationApplyIntent(store, current, nowMs)
+  return writeMemoryDistillationCandidate(store, current, target)
 }
 
 export function memoryRecordMatchesDistillationCandidate(
