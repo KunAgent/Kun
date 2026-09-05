@@ -24,7 +24,7 @@ import {
   type MemoryDistillationPendingStorePort,
   type PendingMemoryCandidateInsert
 } from './memory-distillation-pending-store.js'
-import type { MemoryStore } from './memory-store.js'
+import { isMemoryActive, type MemoryStore } from './memory-store.js'
 
 export const MEMORY_DISTILLATION_MAX_INPUT_CHARS = 24_000
 export const MEMORY_DISTILLATION_MAX_OUTPUT_TOKENS = 2_048
@@ -102,12 +102,20 @@ export class MemoryDistillationCoordinator {
     }
 
     try {
-      const authorized = (await memoryStore.retrieve({
+      const retrieved = (await memoryStore.retrieve({
         query: `${userText}\n${assistantText}`.slice(0, 4_096),
         workspace: thread.workspace,
         limit: 8,
         promptCharacterBudget: 8_192
       })).filter((record) => record.scope === 'workspace')
+      // Retrieval may truncate content to its context budget. Bind versions and
+      // comparison inputs to canonical records, while retaining the authorized IDs.
+      const comparisonIds = new Set(retrieved.map((record) => record.id))
+      const authorized = comparisonIds.size === 0 ? [] :
+        (await memoryStore.list({ workspace: thread.workspace })).filter((record) =>
+          comparisonIds.has(record.id) && record.scope === 'workspace' &&
+          isMemoryActive(record, Date.parse(this.now()))
+        )
       const route = turn.actingModelRoute ?? {
         model: turn.model ?? thread.model,
         providerId: turn.providerId ?? thread.providerId,

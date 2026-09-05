@@ -1,3 +1,4 @@
+import { canonicalMemoryHash } from './memory-record-normalizer.js'
 import { createHash } from 'node:crypto'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -238,6 +239,26 @@ describe('MemoryDistillationCoordinator', () => {
       expect(await harness.coordinator.distill('thread_1', 'turn_1')).toEqual([])
       expect(await harness.memory.list({ all: true })).toHaveLength(0)
     }
+  })
+
+  it('binds approval versions to canonical records when retrieval truncates content', async () => {
+    const harness = await createHarness({
+      output: extraction({ comparisons: [{ memoryId: 'existing', relation: 'update' }] })
+    })
+    const original = await harness.memory.createWithId('existing', {
+      content: 'The user prefers long release notes with detailed background and migration instructions.',
+      scope: 'workspace', workspace
+    })
+    const retrieve = harness.memory.retrieve.bind(harness.memory)
+    vi.spyOn(harness.memory, 'retrieve').mockImplementation(async (input) =>
+      (await retrieve(input)).map((record) => ({ ...record, content: record.content.slice(0, 25) }))
+    )
+    const [pending] = await harness.coordinator.distill('thread_1', 'turn_1')
+    expect(pending?.proposedAction).toMatchObject({
+      action: 'update', targetFingerprint: canonicalMemoryHash(original)
+    })
+    await expect(harness.coordinator.decide(pending!.id, { decision: 'allow' }, workspace))
+      .resolves.toMatchObject({ status: 'allowed' })
   })
 
   it('applies update and supersede actions while preserving candidate sources', async () => {
