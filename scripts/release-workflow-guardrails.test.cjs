@@ -49,7 +49,7 @@ test('stable release reruns quality gates on the merge commit before preparation
 
   const checkout = stepByName(quality, 'Check out merge commit')
   assert.equal(checkout.uses, 'actions/checkout@v4')
-  assert.equal(checkout.with.ref, '${{ github.event.pull_request.merge_commit_sha }}')
+  assert.equal(checkout.with.ref, "${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}")
   assert.equal(checkout.with['fetch-depth'], 0)
 
   const commands = quality.steps.filter((step) => step.run).map((step) => step.run)
@@ -60,6 +60,20 @@ test('stable release reruns quality gates on the merge commit before preparation
     'npm test',
     'npm run audit:production'
   ])
+})
+
+test('manual candidate builds run quality and packaging without touching published state', () => {
+  const workflow = readWorkflow('release.yml')
+  assert.ok(Object.hasOwn(workflow.on, 'workflow_dispatch'))
+  assert.equal(workflow.jobs.publish.if, "github.event_name != 'workflow_dispatch'")
+  assert.equal(workflow.jobs['accept-and-publish'].if, "github.event_name != 'workflow_dispatch'")
+  const source = "${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}"
+  for (const name of ['quality', 'prepare', 'build-macos', 'build-windows', 'build-linux', 'build-linux-arm64']) {
+    const checkout = workflow.jobs[name].steps.find(step => step.uses === 'actions/checkout@v4')
+    assert.equal(checkout.with.ref, source)
+  }
+  assert.match(stepByName(workflow.jobs.prepare, 'Compute release version').run, /--candidate-only/)
+  assert.deepEqual(workflow.jobs.prepare.needs, ['quality'])
 })
 
 test('PR quality catches production advisories before the stable release merge', () => {

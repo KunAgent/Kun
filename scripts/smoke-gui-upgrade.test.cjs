@@ -4,9 +4,14 @@ const { resolve } = require('node:path')
 const test = require('node:test')
 const { startGui } = require('./smoke-gui-upgrade.cjs')
 
-function fixture(profile) {
-  const state = { closed: false, options: undefined }
-  const page = { evaluate: async () => true }
+function fixture(profile, phases = ['ready']) {
+  const state = { closed: false, options: undefined, startupReads: 0 }
+  let bridgeRead = false
+  const page = { evaluate: async () => {
+    if (!bridgeRead) { bridgeRead = true; return true }
+    state.startupReads++
+    return { phase: phases.shift() || 'ready' }
+  } }
   const app = {
     evaluate: async (operation) => operation({ app: { getPath: () => profile } }),
     windows: () => [page],
@@ -32,4 +37,19 @@ test('GUI acceptance rejects and closes an app using another profile', async () 
   await assert.rejects(startGui('fixture-executable', {}, resolve('expected-profile'), stub.launch),
     /same default profile/)
   assert.equal(stub.state.closed, true)
+})
+
+test('GUI acceptance waits for Runtime startup after the preload bridge appears', async () => {
+  const profile = resolve('fixture-default-profile')
+  const stub = fixture(profile, ['runtime_starting', 'ready'])
+  await startGui('fixture-executable', {}, profile, stub.launch)
+  assert.equal(stub.state.startupReads, 2)
+})
+
+test('startup recovery is reported immediately and the launched fixture is closed', async () => {
+  const profile = resolve('fixture-default-profile')
+  const stub = fixture(profile, ['recovery_required'])
+  await assert.rejects(startGui('fixture-executable', {}, profile, stub.launch), /startup requires recovery/)
+  assert.equal(stub.state.closed, true)
+  assert.equal(stub.state.startupReads, 1)
 })

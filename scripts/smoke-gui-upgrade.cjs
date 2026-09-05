@@ -70,9 +70,33 @@ async function startGui(executable, env, userData, launch = electron.launch.bind
       }
       return undefined
     }, TIMEOUT, 'GUI workbench bridge')
+    observation?.journal.phase('desktop_startup', { label: observation.label })
+    let startupFailure
+    let lastPhase
+    await poll(async () => {
+      const state = await page.evaluate(() => window.kunGui.startup.getState())
+      if (observation) {
+        observation.journal.record.desktopStartup = state
+        if (state.phase !== lastPhase) observation.journal.event('desktop_startup_state', { label: observation.label, ...state })
+      }
+      lastPhase = state.phase
+      if (state.phase === 'recovery_required') startupFailure = new Error(`Desktop startup requires recovery: ${state.detail || ''}`)
+      return state.phase === 'ready'
+    }, TIMEOUT, 'desktop startup readiness', () => { if (startupFailure) throw startupFailure })
     return { app, page, processInfo }
   } catch (error) {
-    await app.close().catch(() => undefined)
+    let timer
+    try {
+      await Promise.race([app.close(), new Promise((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('Launched fixture did not close')), 5000)
+      })])
+    } catch (cleanupError) {
+      if (observation) {
+        observation.journal.record.cleanupErrors.push({ name: 'close-startup-fixture', error: cleanupError.message })
+        observation.journal.event('cleanup_failed', { error: cleanupError.message })
+      }
+      await stopInstalledGui(executable).catch(() => undefined)
+    } finally { clearTimeout(timer) }
     throw error
   }
 }
