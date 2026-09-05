@@ -40,6 +40,7 @@ type GuiUpdateInstallerDeps = {
   details: () => InstallerDetails
   stateInfo: () => Extract<GuiUpdateInfo, { ok: true }> | undefined
   emit: (state: GuiUpdateState) => void
+  preflight: () => Promise<void>
   prepare: () => Promise<void>
   clearPreparation: () => void
   setQuitting: (active: boolean) => void
@@ -399,24 +400,33 @@ export class GuiUpdateInstaller {
     const details = this.deps.details()
     if (!details.hasDownloaded) return failedResult('The update has not finished downloading yet.')
     this.deps.emit({ status: 'installing', info: this.deps.stateInfo() })
-    this.deps.setQuitting(true)
-    let quittingMarked = true
+    let quittingMarked = false
+    let resourceStopStarted = false
+    let resourceStopComplete = false
+    let pendingRecordWritten = false
+    let nativeHandoffRequested = false
     let restoreEnvironment = (): void => undefined
     try {
+      // Save checks cannot shut down the GUI or its Runtime. A rejected save
+      // stays retryable in the current window without entering recovery quit.
+      await this.deps.preflight()
+      if (!this.deps.details().hasDownloaded) throw new Error('The selected update is no longer eligible for installation.')
+      if (!this.installerPath) throw new Error('The downloaded installer path is unavailable.')
+      if (this.deps.isSessionEnding()) throw Object.assign(new Error('Windows is ending this session.'), { code: 'install_deferred' })
+      this.deps.setQuitting(true)
+      quittingMarked = true
+      resourceStopStarted = true
       await this.deps.prepare()
+      resourceStopComplete = true
       const current = this.deps.details()
       if (!current.hasDownloaded) {
-        this.deps.clearPreparation()
-        this.deps.setQuitting(false)
-        quittingMarked = false
-        return failedResult('The selected update is no longer eligible for installation.')
+        throw new Error('The selected update is no longer eligible for installation.')
       }
       if (this.deps.isSessionEnding()) {
         throw Object.assign(new Error('Windows is ending this session. The downloaded update will remain available next launch.'), {
           code: 'install_deferred'
         })
       }
-      if (!this.installerPath) throw new Error('The downloaded installer path is unavailable.')
       const restoreUpdateSource = setWindowsInstallerUpdateSource()
       const restorePendingEnvironment = setPendingUpdateEnvironment(
         undefined,
@@ -437,26 +447,35 @@ export class GuiUpdateInstaller {
         installerSha512: this.installerSha512 || undefined,
         channel: current.channel
       })
+      pendingRecordWritten = true
       this.attemptActive = true
       this.handoffPending = true
       this.handoffStarted = false
       this.launchError = null
+      nativeHandoffRequested = true
       this.deps.quitAndInstall()
       if (this.launchError) throw this.launchError
       return { ok: true }
     } catch (error) {
       const deferred = (error as { code?: unknown })?.code === 'install_deferred'
-      this.recordHandoffFailure(error)
+      if (resourceStopStarted) this.recordHandoffFailure(error)
+      console.warn('[kun-gui updater] installation stopped', {
+        phase: !resourceStopStarted ? 'preflight' : nativeHandoffRequested ? 'native-handoff' : 'runtime-shutdown',
+        resourceStopStarted, resourceStopComplete, nativeHandoffRequested,
+        error: error instanceof Error ? error.message : String(error)
+      })
       restoreEnvironment()
       this.reset()
       if (quittingMarked) {
         this.deps.clearPreparation()
         this.deps.setQuitting(false)
       }
-      if (!deferred) await clearPendingUpdate()
+      if (!deferred && pendingRecordWritten) await clearPendingUpdate()
       const message = error instanceof Error ? error.message : String(error)
       this.deps.emit({ status: 'error', info: this.deps.stateInfo(), message, code: deferred ? 'install_deferred' : 'install_failed' })
-      if (quittingMarked && !deferred) this.scheduleRecovery()
+      // Once resource shutdown started, an error may leave a partial stop.
+      // Only that phase (or a native handoff) needs the existing relaunch path.
+      if (resourceStopStarted && !deferred) this.scheduleRecovery()
       return deferred ? deferredResult() : failedResult(message)
     }
   }

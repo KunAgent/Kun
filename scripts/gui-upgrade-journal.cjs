@@ -26,6 +26,8 @@ function createScenarioJournal(record, root, persistReport = () => {}) {
     },
     fail(error) {
       record.status = 'failed'
+      if (typeof error.phase === 'string') record.phase = error.phase
+      if (typeof error.code === 'string') record.code = error.code
       record.error = error.message || String(error)
       record.errorStack = error.stack
       event('scenario_failed', { error: record.error })

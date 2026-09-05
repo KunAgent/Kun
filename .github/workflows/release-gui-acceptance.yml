@@ -58,7 +58,7 @@ jobs:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - name: Test candidate acceptance helpers
-        run: node --test scripts/gui-upgrade-diagnostics.test.cjs scripts/gui-upgrade-journal.test.cjs scripts/mac-upgrade-observation.test.cjs scripts/release-candidate-source.test.cjs scripts/smoke-gui-upgrade.test.cjs scripts/gui-upgrade-feed.test.cjs scripts/verify-public-release.test.mjs
+        run: node --test scripts/gui-upgrade-diagnostics.test.cjs scripts/gui-upgrade-journal.test.cjs scripts/mac-upgrade-observation.test.cjs scripts/release-candidate-source.test.cjs scripts/smoke-gui-upgrade.test.cjs scripts/install-request-control.test.cjs scripts/gui-upgrade-feed.test.cjs scripts/verify-public-release.test.mjs
       - name: Download final uploaded GUI artifacts
         shell: bash
         run: |

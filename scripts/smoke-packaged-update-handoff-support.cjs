@@ -330,18 +330,22 @@ async function waitForJson(path, predicate, timeoutMs, state = () => '') {
   }, timeoutMs, `${path}; ${state()}`)
 }
 
-async function poll(operation, timeoutMs, description) {
+async function poll(operation, timeoutMs, description, checkTerminalFailure = () => {}) {
   const deadline = Date.now() + timeoutMs
   let lastError
   while (Date.now() < deadline) {
+    checkTerminalFailure()
     try {
       const value = await operation()
+      checkTerminalFailure()
       if (value !== undefined && value !== false) return value
     } catch (error) {
+      checkTerminalFailure()
       lastError = error
     }
     await delay(100)
   }
+  checkTerminalFailure()
   throw new Error(`Timed out waiting for ${description}${lastError ? `: ${lastError.message}` : ''}`)
 }
 

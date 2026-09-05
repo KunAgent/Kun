@@ -14,6 +14,7 @@ const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
 const { attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
 const { createScenarioJournal, cleanupScenario, recordScenario } = require('./gui-upgrade-journal.cjs')
+const { createInstallRequestControl } = require('./install-request-control.cjs')
 const { inspectSignedBundle, verifyMacCandidate, waitForBundleReplacement, waitForMacRelaunch } = require('./mac-upgrade-observation.cjs')
 const {
   buildSmokeSettings, startModelFixture, MODEL_NAME, poll, processIsAlive
@@ -103,6 +104,8 @@ async function scenario(input, name, record, persistReport) {
   const temporaryParent = process.platform === 'win32' ? process.env.APPDATA : tmpdir()
   const root = await mkdtemp(join(temporaryParent, `kun-gui-upgrade-${name}-`))
   const journal = createScenarioJournal(record, root, persistReport)
+  const installControl = createInstallRequestControl(journal)
+  const pollInstalling = (operation, timeout, description) => poll(operation, timeout, description, installControl.check)
   journal.phase('setup')
   // The real updater relaunches without custom CLI arguments. Use the clean
   // CI account's default profile, never a --user-data-dir-only test profile.
@@ -198,10 +201,7 @@ async function scenario(input, name, record, persistReport) {
         })
       }
       await captureMacProcesses(root, 'before-install')
-      await gui.page.exposeFunction('__kunRecordUpgradeResult', (result) => {
-        record.installResult = result
-        journal.event('install_result', { result })
-      })
+      await gui.page.exposeFunction('__kunRecordUpgradeResult', installControl.recordResult)
       journal.phase('install_requested', { pid: oldPid, version: '0.3.7', executable })
       await gui.page.evaluate(() => {
         void window.kunGui.installGuiUpdate().then((result) => {
@@ -209,10 +209,10 @@ async function scenario(input, name, record, persistReport) {
           return window.__kunRecordUpgradeResult(result)
         }).catch(error => window.__kunRecordUpgradeResult({ ok: false, error: error.message }).catch(() => undefined))
       })
-      await poll(() => !processIsAlive(oldPid), TIMEOUT, 'old GUI exit after update')
+      await pollInstalling(() => !processIsAlive(oldPid), TIMEOUT, 'old GUI exit after update')
       await captureMacProcesses(root, 'after-gui-exit')
       if (process.platform === 'darwin') {
-        const exit = await poll(() => record.baselineLauncherExit, TIMEOUT, 'old GUI exit status')
+        const exit = await pollInstalling(() => record.baselineLauncherExit, TIMEOUT, 'old GUI exit status')
         assert.equal(exit.pid, oldPid)
         assert.equal(exit.exitCode, 0, 'Old GUI exited abnormally during update handoff')
         assert.equal(exit.signal, null, 'Old GUI was killed during update handoff')
@@ -222,7 +222,7 @@ async function scenario(input, name, record, persistReport) {
       gui = undefined
       if (process.platform === 'win32') {
         journal.phase('installer_result')
-        const result = await poll(async () => {
+        const result = await pollInstalling(async () => {
           const value = JSON.parse(await readFile(join(userData, 'pending-update-result.json'), 'utf8'))
           return value.outcome ? value : undefined
         }, 10 * 60_000, 'installer-authored transaction result')
@@ -241,7 +241,7 @@ async function scenario(input, name, record, persistReport) {
       // anything. A background Runtime with the same executable is insufficient.
       if (process.platform === 'win32') {
         journal.phase('automatic_relaunch')
-        const relaunched = await poll(async () => {
+        const relaunched = await pollInstalling(async () => {
           const result = await ps(`$rows=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq ${q(executable)} } | ` +
             'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
             'if($p -and $p.MainWindowHandle -ne 0){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle}} }); ' +
@@ -255,17 +255,18 @@ async function scenario(input, name, record, persistReport) {
         await waitForBundleReplacement(async () => {
           const result = await run('/usr/libexec/PlistBuddy', ['-c', 'Print CFBundleShortVersionString', join(bundle, 'Contents', 'Info.plist')])
           return result.stdout.trim()
-        }, input.version, poll, journal)
+        }, input.version, pollInstalling, journal)
         journal.phase('replacement_signature_verification')
         record.replacedSignature = await inspectSignedBundle(bundle)
         assert.equal(record.replacedSignature.version, input.version)
         assert.equal(record.replacedSignature.teamId, record.signatures.baseline.teamId)
         assert.equal(record.replacedSignature.bundleId, record.signatures.baseline.bundleId)
         assert.equal(record.replacedSignature.cdHash, record.signatures.candidate.cdHash)
-        await waitForMacRelaunch(bundle, executable, oldPid, record.signatures.baseline.bundleId, poll, journal)
+        await waitForMacRelaunch(bundle, executable, oldPid, record.signatures.baseline.bundleId, pollInstalling, journal)
       }
     }
     model.state.mode = 'complete'
+    installControl.check()
     record.inspectionStartedAt = new Date().toISOString()
     journal.phase('inspection_started')
     await stopInstalledGui(executable)
@@ -305,8 +306,12 @@ async function scenario(input, name, record, persistReport) {
     await writeFile(join(root, 'failure.txt'), error.stack ?? String(error)).catch(() => undefined)
   } finally {
     await cleanupScenario(journal, [
-      ['close-gui', async () => gui?.app.close()],
+      // A failed baseline may already have exited and relaunched itself.
+      // Stop only this scenario's executable before waiting on Playwright.
       ['stop-installed-gui', () => stopInstalledGui(executable)],
+      ['close-gui', async () => {
+        if (gui?.processInfo?.pid && processIsAlive(gui.processInfo.pid)) await gui.app.close()
+      }],
       ['stop-owned-manager', async () => {
         const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(JSON.parse).catch(() => null)
         if (!manager) return
@@ -317,6 +322,7 @@ async function scenario(input, name, record, persistReport) {
         }).catch(() => undefined)
         await poll(() => !processIsAlive(manager.pid), TIMEOUT, 'isolated manager shutdown')
       }],
+      ['stop-recovery-gui', () => stopInstalledGui(executable)],
       ['uninstall-windows-fixture', async () => {
         if (process.platform !== 'win32') return
         const uninstaller = join(installParent, 'Kun', 'Uninstall Kun.exe')
