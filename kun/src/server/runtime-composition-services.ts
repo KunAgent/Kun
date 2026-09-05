@@ -1,3 +1,4 @@
+import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
 import {
   join,
   type AttachmentStore,
@@ -64,6 +65,10 @@ import { createRuntimeMaintenanceSlices } from './runtime-maintenance-slices.js'
 import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
 import { SessionGuardian } from '../services/session-guardian.js'
+import {
+  MemoryDistillationCoordinator,
+  MemoryDistillationPendingStore
+} from '../memory/index.js'
 import { createWriteDocumentGuard } from './runtime-write-document-guard.js'
 
 export async function createRuntimeServices(
@@ -282,6 +287,24 @@ export async function createRuntimeServices(
   })
   sessionStore.setEventIndexRebuildWake?.(() => backgroundMaintenance.wake())
   let memoryStore = createPersistentMemoryStore(core.activeOptions, nowIso)
+  const memoryDistillationPending = core.activeOptions.serviceManager
+    ? new ManagerRemoteMemoryDistillationPendingStore(core.activeOptions.serviceManager)
+    : new MemoryDistillationPendingStore({ dataDir: core.activeOptions.dataDir, nowIso })
+  const memoryDistillation = new MemoryDistillationCoordinator({
+    threads: threadStore,
+    model: timedModelClient,
+    pending: memoryDistillationPending,
+    memoryStore: () => memoryStore,
+    usage: usageService,
+    events,
+    enabled: () => core.activeOptions.capabilities?.memory.enabled === true &&
+      core.activeOptions.capabilities.memory.distillation.enabled === true,
+    nowIso,
+    onDiagnostic: ({ threadId, turnId, message }) => {
+      console.warn('[kun] memory distillation failed', { threadId, turnId, message })
+    }
+  })
+  await memoryDistillation.ready()
   const officeCliRunner = createConfiguredOfficeCliRunner({
     binaryPath: process.env.KUN_OFFICECLI_BINARY,
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile')
@@ -474,6 +497,7 @@ export async function createRuntimeServices(
     migrationService,
     migrationImportService,
     knowledgeBaseService,
+    memoryDistillation,
     designCanvasProvider,
     officeCliProviders,
     taskGraphTool,

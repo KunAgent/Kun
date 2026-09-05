@@ -1,3 +1,4 @@
+import { ManagerMemoryDistillationPendingOwner } from './memory-distillation-pending-owner.js'
 import { readFile, rm } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
@@ -79,6 +80,7 @@ export abstract class ManagerSharedDataStoreCore {
   protected graphConfig: GraphRuntimeConfig = DEFAULT_GRAPH_RUNTIME_CONFIG
   protected graphQueue: Promise<unknown> = Promise.resolve()
   protected memoryRepository: MemoryStore | undefined
+  protected readonly memoryDistillationPending: ManagerMemoryDistillationPendingOwner
   protected memoryQueue: Promise<unknown> = Promise.resolve()
   protected readonly seqFloors = new Map<string, number>()
   protected readonly reservedSeqs = new Map<string, Set<number>>()
@@ -99,6 +101,7 @@ export abstract class ManagerSharedDataStoreCore {
     sessionStore: HybridSessionStore
   }) {
     this.dataDir = resolve(input.dataDir)
+    this.memoryDistillationPending = new ManagerMemoryDistillationPendingOwner(this.dataDir)
     this.hybridThreadStore = input.threadStore
     this.threadStore = input.threadStore
     this.sessionStore = input.sessionStore
@@ -179,6 +182,7 @@ export abstract class ManagerSharedDataStoreCore {
   }
 
   async close(): Promise<void> {
+    await this.memoryQueue.catch(() => undefined)
     try {
       await (this.sessionStore as HybridSessionStore).close()
     } finally {

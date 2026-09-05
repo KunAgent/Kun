@@ -351,7 +351,8 @@ export async function createRuntimeAgentComposition(
 	    ...(services.resolvedHooks.length ? { hooks: services.resolvedHooks } : {}),
 		    ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
 	    artifactStore,
-		    ...(services.memoryStore ? { memoryStore: services.memoryStore } : {}),
+	    ...(services.memoryStore ? { memoryStore: services.memoryStore } : {}),
+	    memoryDistillation: services.memoryDistillation,
 	    runtimeDataDir: core.activeOptions.dataDir,
 	    awaitWorkspaceCheckpoint: (checkpointRequestId, signal) =>
 	      waitForWorkspaceCheckpoint(core.activeOptions.dataDir, checkpointRequestId, signal),

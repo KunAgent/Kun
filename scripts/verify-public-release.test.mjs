@@ -50,6 +50,7 @@ async function fixture(options, action) {
         designatedRequirementAccepted: true
       }
       await writeFile(path, JSON.stringify({ version, commit: options.stale ? 'b'.repeat(40) : commit,
+        source: options.prEvidence ? 'pull-request' : 'release-candidate',
         platform, arch, sha512, status: options.skipped ? 'skipped' : 'passed',
         baseline: { version: '0.3.7', artifact: baselineName, sha512 },
         artifact: platform === 'win32' ? 'Kun-0.3.8-win-x64.exe' : `Kun-0.3.8-mac-${arch}.zip`,
@@ -92,7 +93,7 @@ test('public candidate verification hashes downloads and saves previous feeds wi
 })
 
 for (const [name, options] of [['altered artifact bytes', { tamper: true }],
-  ['another commit', { stale: true }], ['skipped native acceptance', { skipped: true }],
+  ['PR-only acceptance', { prEvidence: true }], ['another commit', { stale: true }], ['skipped native acceptance', { skipped: true }],
   ['missing automatic relaunch', { noRelaunch: true }], ['a background process only', { backgroundOnly: true }],
   ['a harness-started application', { harnessOnly: true }]]) {
   test(`public candidate rejects ${name}`, async () => {

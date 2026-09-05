@@ -30,6 +30,7 @@ function resolveElectronExecutable() {
 
 const vitest = join(dirname(fileURLToPath(import.meta.url)), '..', 'node_modules', 'vitest', 'vitest.mjs')
 const doctorFiles = [
+  'src/adapters/hybrid/hybrid-memory-distillation.test.ts',
   'src/adapters/hybrid/hybrid-memory-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-index-write-failure.test.ts',

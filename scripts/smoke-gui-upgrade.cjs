@@ -12,6 +12,7 @@ const { _electron: electron } = require('playwright-core')
 const { parse } = require('yaml')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
+const { verifyPrCandidateSource } = require('./pr-gui-candidate-source.cjs')
 const { attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
 const { createScenarioJournal, cleanupScenario, recordScenario } = require('./gui-upgrade-journal.cjs')
 const { createInstallRequestControl } = require('./install-request-control.cjs')
@@ -57,6 +58,10 @@ async function request(page, path, method = 'GET', body) {
   }, { path, method, body })
 }
 
+function parseInstallerJson(text) {
+  return JSON.parse(text.replace(/^\uFEFF/u, ''))
+}
+
 async function startGui(executable, env, userData, launch = electron.launch.bind(electron), observation) {
   const app = await launch({ executablePath: executable, env,
     args: [], timeout: TIMEOUT })
@@ -99,6 +104,19 @@ async function startGui(executable, env, userData, launch = electron.launch.bind
     } finally { clearTimeout(timer) }
     throw error
   }
+}
+
+async function prepareReleasedGuiUpdate(page, version, record) {
+  if (version !== '0.3.7') return false
+  // The released 0.3.7 flush listener has no drain operations outside Providers.
+  // Use its real UI to mount those operations; never patch the binary or forge
+  // a successful flush acknowledgement. New versions use the global service.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click({ timeout: TIMEOUT })
+  await page.locator('[data-settings-category="providers"]').click({ timeout: TIMEOUT })
+  await page.getByTestId('provider-workspace-meta').waitFor({ state: 'visible', timeout: TIMEOUT })
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  record.legacyUpdatePreparation = { sourceVersion: version, settingsCategory: 'providers' }
+  return true
 }
 
 async function chat(page, workspace, title) {
@@ -185,6 +203,11 @@ async function scenario(input, name, record, persistReport) {
     journal.phase('baseline_started', gui.processInfo)
     const saved = await chat(gui.page, workspace, `upgrade-history-${name}`)
     await settle(gui.page, saved)
+    if (name !== 'manual') {
+      journal.phase('legacy_provider_settings')
+      await prepareReleasedGuiUpdate(gui.page, '0.3.7', record)
+      journal.persist()
+    }
     const before = await gui.page.evaluate(() => window.kunGui.getSettings())
     let active
     if (name === 'busy') {
@@ -195,9 +218,9 @@ async function scenario(input, name, record, persistReport) {
       TIMEOUT, 'active model request before upgrade')
     }
     await gui.page.screenshot({ path: join(root, 'before.png') })
-    const oldRuntime = JSON.parse(await readFile(join(dataDir, 'runtime.json'), 'utf8'))
+    const oldRuntime = parseInstallerJson(await readFile(join(dataDir, 'runtime.json'), 'utf8'))
     const oldPid = record.baselinePid
-    const oldManager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(JSON.parse).catch(() => null)
+    const oldManager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(parseInstallerJson).catch(() => null)
     await writeFile(join(root, 'upgrade-source.json'), JSON.stringify({ oldPid, oldRuntime, oldManager, executable }, null, 2))
     if (name === 'manual') {
       journal.phase('manual_installation')
@@ -247,7 +270,7 @@ async function scenario(input, name, record, persistReport) {
       if (process.platform === 'win32') {
         journal.phase('installer_result')
         const result = await pollInstalling(async () => {
-          const value = JSON.parse(await readFile(join(userData, 'pending-update-result.json'), 'utf8'))
+          const value = parseInstallerJson(await readFile(join(userData, 'pending-update-result.json'), 'utf8'))
           return value.outcome ? value : undefined
         }, 10 * 60_000, 'installer-authored transaction result')
         await writeFile(join(root, 'installer-result.json'), JSON.stringify(result, null, 2))
@@ -270,7 +293,7 @@ async function scenario(input, name, record, persistReport) {
             'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
             'if($p -and $p.MainWindowHandle -ne 0){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle}} }); ' +
             'ConvertTo-Json -Compress -InputObject $rows')
-          return JSON.parse(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.mainWindowHandle > 0)
+          return parseInstallerJson(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.mainWindowHandle > 0)
         }, 10 * 60_000, 'installer relaunch with a real GUI window')
         record.automaticRelaunch = { ...relaunched, source: 'CIM/MainWindowHandle', guiWindowObserved: true,
           observedAt: new Date().toISOString(), beforeHarnessLaunch: true }
@@ -337,7 +360,7 @@ async function scenario(input, name, record, persistReport) {
         if (gui?.processInfo?.pid && processIsAlive(gui.processInfo.pid)) await gui.app.close()
       }],
       ['stop-owned-manager', async () => {
-        const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(JSON.parse).catch(() => null)
+        const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(parseInstallerJson).catch(() => null)
         if (!manager) return
         assert.equal(resolve(manager.dataDir), resolve(dataDir), 'Manager must belong to this scenario')
         await fetch(`${manager.baseUrl}/v1/manager/shutdown`, {
@@ -395,15 +418,19 @@ async function main() {
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('--version is required')
   const checkout = await run('git', ['rev-parse', 'HEAD'])
   const harnessCommit = checkout.stdout.trim()
-  const candidateCommit = await verifyCandidateSource(version, process.env.CANDIDATE_TAG || `v${version}`,
-    process.env.CANDIDATE_COMMIT || harnessCommit)
+  const source = process.env.GUI_UPGRADE_SOURCE || 'release-candidate'
+  assert.ok(['pull-request', 'release-candidate'].includes(source), 'Unknown GUI upgrade candidate source')
+  const candidateCommit = source === 'pull-request'
+    ? await verifyPrCandidateSource(directory, version, harnessCommit)
+    : await verifyCandidateSource(version, process.env.CANDIDATE_TAG || `v${version}`,
+      process.env.CANDIDATE_COMMIT || harnessCommit)
   const manifestName = process.platform === 'win32' ? 'latest.yml' : 'latest-mac.yml'
   const { metadata } = await validateFeed(directory, manifestName, version)
   const candidateName = process.platform === 'win32' ? `Kun-${version}-win-x64.exe` : `Kun-${version}-mac-${process.arch}.zip`
   assert.ok(metadata.files.some((file) => file.url === candidateName))
   const downloads = await mkdtemp(join(tmpdir(), 'kun-upgrade-baseline-'))
   const baselineName = process.platform === 'win32' ? 'Kun-0.3.7-win-x64.exe' : `Kun-0.3.7-mac-${process.arch}.zip`
-  const report = { version, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
+  const report = { version, source, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
     artifact: candidateName, sha512: await digest(join(directory, candidateName)), scenarios: [],
     status: 'running', phase: 'baseline_download', cleanupErrors: [] }
   const output = resolve(flags.get('--report') || `gui-upgrade-${process.platform}.json`)
@@ -455,4 +482,4 @@ async function main() {
 
 if (require.main === module) main().catch((error) => { console.error(error); process.exitCode = 1 })
 
-module.exports = { startGui }
+module.exports = { startGui, prepareReleasedGuiUpdate, parseInstallerJson }

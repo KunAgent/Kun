@@ -365,6 +365,23 @@ function processIsAlive(pid) {
   }
 }
 
+async function waitForPredecessorOwners(owners, timeoutMs) {
+  const predecessors = [owners.manager, ...owners.runtimes]
+  try {
+    // These are children we spawned, so their exit state identifies the exact
+    // process. A numeric PID can belong to a different process after handoff.
+    await poll(() => predecessors.every((owner) => {
+      const child = owner.process.child
+      return child.exitCode !== null || child.signalCode !== null
+    }), timeoutMs, 'the predecessor Manager and Runtimes to exit')
+  } catch (error) {
+    const states = predecessors.map((owner) =>
+      `${owner.flavor ?? 'manager'} PID ${owner.discovery.pid}: ${childState(owner.process.child)}`
+    )
+    throw new Error(`${error.message}; ${states.join('; ')}`)
+  }
+}
+
 async function waitForProcessExit(pid, timeoutMs) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -407,6 +424,7 @@ module.exports = {
   startModelFixture,
   startSmokeTurn,
   waitForJson,
+  waitForPredecessorOwners,
   waitForProcessExit,
   waitForTurn,
   writeSmokeSettings

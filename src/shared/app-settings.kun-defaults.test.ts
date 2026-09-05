@@ -120,6 +120,10 @@ describe('kun defaults', () => {
     })
   })
 
+  it('defaults automatic Memory distillation off', () => {
+    expect(defaultKunRuntimeSettings().memoryDistillationEnabled).toBe(false)
+  })
+
   it('maps unified tool permission modes to complete authority settings', () => {
     expect(kunToolPermissionModeSettings('ask-for-approval')).toEqual({
       approvalPolicy: 'on-request',

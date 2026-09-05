@@ -221,7 +221,14 @@ export async function syncGuiManagedKunConfig(
       videoGen: videoGenConfigForRuntime(runtime.videoGeneration, objectValue(capabilities.videoGen)),
       computerUse: computerUseConfigForRuntime(runtime.computerUse, objectValue(capabilities.computerUse)),
       browserUse: browserUseConfigForRuntime(runtime.browserUse, objectValue(capabilities.browserUse)),
-      memory: { ...objectValue(capabilities.memory), enabled: runtime.memoryEnabled },
+      memory: {
+        ...objectValue(capabilities.memory),
+        enabled: runtime.memoryEnabled,
+        distillation: {
+          ...objectValue(objectValue(capabilities.memory).distillation),
+          enabled: runtime.memoryDistillationEnabled
+        }
+      },
       instructions: {
         ...objectValue(capabilities.instructions),
         enabled: runtime.instructions?.enabled ?? true
@@ -355,6 +362,7 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'tokenEconomy' | 'toolOutputLimits' | 'storage' | 'contextCompaction' |
   'runtimeTuning' | 'llmDebug' | 'imageGeneration' | 'textToSpeech' | 'musicGeneration' |
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
+  'memoryDistillationEnabled' |
   'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
   'smallModelProviderId' | 'smallModelAccountId' |
   'titleModel' | 'titleProviderId' | 'titleAccountId' |
@@ -387,6 +395,17 @@ export function buildManagedRuntimeHotApplyBody(
   return RuntimeConfigApplyRequest.parse({
     ...config,
     ...(browserUseHostBinding !== undefined ? { browserUseHostBinding } : {}),
+    capabilities: {
+      ...config.capabilities,
+      memory: {
+        ...config.capabilities?.memory,
+        enabled: runtime.memoryEnabled,
+        distillation: {
+          ...config.capabilities?.memory?.distillation,
+          enabled: runtime.memoryDistillationEnabled
+        }
+      }
+    },
     serve: {
       ...hotServe,
       apiKey: defaultClientApiKey || runtime.apiKey,

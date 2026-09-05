@@ -199,6 +199,34 @@ export type CoreMemorySourceEvidenceJson = {
   trust: 'explicit-user' | 'observed' | 'inferred' | 'imported' | 'legacy'
 }
 
+export type CorePendingMemoryCandidateJson = {
+  schemaVersion: 1
+  id: string
+  fingerprint: string
+  threadId: string
+  turnId: string
+  target: { scope: 'workspace'; workspace: string }
+  candidate: {
+    content: string
+    type: NonNullable<CoreMemoryRecordJson['type']>
+    confidence: number
+    importance: number
+    observedAt: string
+    tags: string[]
+    sources: CoreMemorySourceEvidenceJson[]
+  }
+  proposedAction:
+    | { action: 'create' }
+    | { action: 'update' | 'supersede'; memoryId: string; targetUpdatedAt: string; targetFingerprint?: string }
+  status: 'pending' | 'applying' | 'allowed' | 'denied' | 'timed-out' |
+    'expired' | 'withdrawn' | 'conflicted' | 'failed'
+  createdAt: string
+  expiresAt: string
+  history: Array<{ status: string; at: string; reason?: string }>
+  applyReceipt?: { operationId: string; expectedMemoryId: string; targetUpdatedAt?: string }
+  memoryId?: string
+}
+
 export type CoreThreadGoalStatusJson =
   | 'active'
   | 'paused'

@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict')
 const { resolve } = require('node:path')
 const test = require('node:test')
-const { startGui } = require('./smoke-gui-upgrade.cjs')
+const { startGui, prepareReleasedGuiUpdate, parseInstallerJson } = require('./smoke-gui-upgrade.cjs')
 
 function fixture(profile, phases = ['ready']) {
   const state = { closed: false, options: undefined, startupReads: 0 }
@@ -52,4 +52,50 @@ test('startup recovery is reported immediately and the launched fixture is close
   await assert.rejects(startGui('fixture-executable', {}, profile, stub.launch), /startup requires recovery/)
   assert.equal(stub.state.closed, true)
   assert.equal(stub.state.startupReads, 1)
+})
+
+
+test('released 0.3.7 uses the real Providers view before requesting an upgrade', async () => {
+  const calls = []
+  const record = {}
+  const page = {
+    getByRole: (role, options) => ({ click: async () => calls.push([role, options.name]) }),
+    locator: selector => ({ click: async () => calls.push(['click', selector]) }),
+    getByTestId: id => ({ waitFor: async options => calls.push(['visible', id, options.state]) }),
+    evaluate: async operation => {
+      const { runInNewContext } = require('node:vm')
+      let frames = 0
+      await runInNewContext(`(${operation.toString()})()`, {
+        requestAnimationFrame: callback => { frames++; callback() }
+      })
+      assert.equal(frames, 2)
+      calls.push(['effects-settled'])
+    }
+  }
+  assert.equal(await prepareReleasedGuiUpdate(page, '0.3.7', record), true)
+  assert.deepEqual(calls, [['button', 'Settings'], ['click', '[data-settings-category="providers"]'],
+    ['visible', 'provider-workspace-meta', 'visible'], ['effects-settled']])
+  assert.deepEqual(record.legacyUpdatePreparation, { sourceVersion: '0.3.7', settingsCategory: 'providers' })
+})
+
+test('new GUI versions do not acquire a legacy settings-view prerequisite', async () => {
+  const record = {}
+  assert.equal(await prepareReleasedGuiUpdate({}, '0.3.8', record), false)
+  assert.deepEqual(record, {})
+})
+
+test('failure to open the legacy Providers view fails the upgrade preparation', async () => {
+  const record = {}
+  const page = { getByRole: () => ({ click: async () => { throw new Error('Settings is unavailable') } }) }
+  await assert.rejects(prepareReleasedGuiUpdate(page, '0.3.7', record), /Settings is unavailable/)
+  assert.deepEqual(record, {})
+})
+
+
+test('installer JSON accepts the UTF-8 BOM emitted by Windows PowerShell', () => {
+  const result = { schemaVersion: 2, outcome: 'success', transactionState: 'committed' }
+  assert.deepEqual(parseInstallerJson(`\uFEFF${JSON.stringify(result)}`), result)
+  assert.deepEqual(parseInstallerJson(JSON.stringify(result)), result)
+  assert.deepEqual(parseInstallerJson('\uFEFF[]'), [])
+  assert.throws(() => parseInstallerJson('\uFEFF{broken'), SyntaxError)
 })
