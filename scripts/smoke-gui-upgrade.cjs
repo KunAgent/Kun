@@ -10,6 +10,8 @@ const { join, resolve } = require('node:path')
 const { _electron: electron } = require('playwright-core')
 const { parse } = require('yaml')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
+const { verifyCandidateSource } = require('./release-candidate-source.cjs')
+const { attachGuiDiagnostics, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
 const {
   buildSmokeSettings, startModelFixture, MODEL_NAME, poll, processIsAlive
 } = require('./smoke-packaged-update-handoff-support.cjs')
@@ -149,6 +151,7 @@ async function scenario(input, name) {
       baselineTeam = await signedTeam(bundle)
     }
     gui = await startGui(executable, environment, userData)
+    attachGuiDiagnostics(gui, root)
     assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), '0.3.7')
     const saved = await chat(gui.page, workspace, `upgrade-history-${name}`)
     await settle(gui.page, saved)
@@ -164,6 +167,7 @@ async function scenario(input, name) {
     await gui.page.screenshot({ path: join(root, 'before.png') })
     const oldRuntime = JSON.parse(await readFile(join(dataDir, 'runtime.json'), 'utf8'))
     const oldPid = gui.app.process().pid
+    await writeFile(join(root, 'upgrade-source.json'), JSON.stringify({ oldPid, oldRuntime, executable }, null, 2))
     if (name === 'manual') {
       await gui.app.close()
       gui = undefined
@@ -225,6 +229,7 @@ async function scenario(input, name) {
     if (process.platform === 'darwin') assert.equal(await signedTeam(bundle), baselineTeam)
     await stopInstalledGui(executable)
     gui = await startGui(executable, environment, userData)
+    attachGuiDiagnostics(gui, root)
     const expectedVersion = name === 'rollback' ? '0.3.7' : input.version
     assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), expectedVersion)
     const after = await gui.page.evaluate(() => window.kunGui.getSettings())
@@ -248,6 +253,9 @@ async function scenario(input, name) {
     gui = undefined
     return { name, status: 'passed', version: expectedVersion, evidence: root }
   } catch (error) {
+    await captureMacUpdateDiagnostics(root, bundle).catch(async (diagnosticError) => {
+      await writeFile(join(root, 'diagnostic-error.txt'), diagnosticError.stack || String(diagnosticError))
+    })
     await gui?.page.screenshot({ path: join(root, 'failure.png') }).catch(() => undefined)
     await writeFile(join(root, 'failure.txt'), error.stack ?? String(error))
     throw new Error(`${name}: ${error.message}; evidence: ${root}`)
@@ -301,6 +309,10 @@ async function main() {
   const directory = resolve(flags.get('--directory') || 'dist')
   const version = flags.get('--version')
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('--version is required')
+  const checkout = await run('git', ['rev-parse', 'HEAD'])
+  const harnessCommit = checkout.stdout.trim()
+  const candidateCommit = await verifyCandidateSource(version, process.env.CANDIDATE_TAG || `v${version}`,
+    process.env.CANDIDATE_COMMIT || harnessCommit)
   const manifestName = process.platform === 'win32' ? 'latest.yml' : 'latest-mac.yml'
   const { metadata } = await validateFeed(directory, manifestName, version)
   const candidateName = process.platform === 'win32' ? `Kun-${version}-win-x64.exe` : `Kun-${version}-mac-${process.arch}.zip`
@@ -314,8 +326,7 @@ async function main() {
   assert.ok(baselineFile)
   assert.equal(await digest(join(downloads, baselineName)), baselineFile.sha512)
   const feed = flags.has('--feed-url') ? null : await startCandidateFeed(directory, manifestName, version)
-  const checkout = await run('git', ['rev-parse', 'HEAD'])
-  const report = { version, commit: checkout.stdout.trim(), platform: process.platform, arch: process.arch,
+  const report = { version, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
     artifact: candidateName, sha512: await digest(join(directory, candidateName)), scenarios: [] }
   try {
     for (const name of process.platform === 'win32' ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']) {

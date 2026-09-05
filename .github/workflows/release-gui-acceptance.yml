@@ -1,5 +1,19 @@
 name: Accept candidate and publish stable latest
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing unpublished candidate version
+        required: true
+        type: string
+      tag:
+        description: Existing unpublished candidate tag
+        required: true
+        type: string
+      commit:
+        description: Exact commit referenced by the candidate tag
+        required: true
+        type: string
   workflow_call:
     inputs:
       version:
@@ -13,6 +27,9 @@ on:
         type: string
 permissions:
   contents: write
+concurrency:
+  group: stable-candidate-${{ inputs.tag }}
+  cancel-in-progress: false
 jobs:
   accept:
     name: Published GUI upgrade (${{ matrix.target }})
@@ -31,14 +48,17 @@ jobs:
       R2_RELEASE_PREFIX: ${{ secrets.R2_RELEASE_PREFIX }}
       CANDIDATE_VERSION: ${{ inputs.version }}
       CANDIDATE_TAG: ${{ inputs.tag }}
+      CANDIDATE_COMMIT: ${{ inputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.commit }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || inputs.commit }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
+      - name: Test candidate acceptance helpers
+        run: node --test scripts/gui-upgrade-diagnostics.test.cjs scripts/release-candidate-source.test.cjs scripts/smoke-gui-upgrade.test.cjs scripts/gui-upgrade-feed.test.cjs scripts/verify-public-release.test.mjs
       - name: Download final uploaded GUI artifacts
         shell: bash
         run: |
@@ -51,15 +71,16 @@ jobs:
           base="${R2_PUBLIC_BASE_URL:-https://www.kun-agent.com/api/r2}"
           feed="${base%/}/${R2_RELEASE_PREFIX:-deepseek-gui}/channels/stable/releases/${CANDIDATE_TAG}/"
           node scripts/smoke-gui-upgrade.cjs --directory candidate --version "$CANDIDATE_VERSION" --feed-url "$feed" --report gui-upgrade-${{ matrix.target }}.json
+      - name: Archive GUI upgrade diagnostics
+        if: always()
+        run: node scripts/gui-upgrade-diagnostics.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: gui-upgrade-${{ matrix.target }}
           path: |
             gui-upgrade-*.json*
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/**
-            !${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/installed/**
-            !${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/**/*.exe
+            gui-upgrade-evidence.tar.gz*
           if-no-files-found: error
           retention-days: 14
   promote:
@@ -81,11 +102,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.commit }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || inputs.commit }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
+      - name: Verify candidate tag and draft before promotion
+        run: node scripts/release-candidate-source.cjs
       - uses: actions/download-artifact@v4
         with:
           pattern: gui-upgrade-*

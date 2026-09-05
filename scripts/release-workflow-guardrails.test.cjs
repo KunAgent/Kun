@@ -96,6 +96,32 @@ test('stable latest can only advance after native GUI candidate acceptance', () 
   assert.ok(steps.every((step) => step['continue-on-error'] !== true))
 })
 
+test('an existing candidate can be revalidated without rebuilding or moving its tag', () => {
+  const workflow = readWorkflow('release-gui-acceptance.yml')
+  assert.deepEqual(Object.keys(workflow.on.workflow_dispatch.inputs).sort(), ['commit', 'tag', 'version'])
+  assert.equal(workflow.concurrency['cancel-in-progress'], false)
+  const checkoutRef = "${{ github.event_name == 'workflow_dispatch' && github.sha || inputs.commit }}"
+  for (const job of Object.values(workflow.jobs)) {
+    assert.equal(job.steps[0].with.ref, checkoutRef)
+    assert.equal(job.env.CANDIDATE_COMMIT, '${{ inputs.commit }}')
+    assert.ok(job.steps.every(step => !/git (?:tag|push)|npm run dist/.test(step.run ?? '')))
+  }
+  const promotion = workflow.jobs.promote.steps
+  const binding = promotion.findIndex(step => step.run === 'node scripts/release-candidate-source.cjs')
+  const verify = promotion.findIndex(step => step.run === 'node scripts/verify-public-release.mjs candidate')
+  assert.ok(binding >= 0 && binding < verify)
+})
+
+test('GUI evidence is archived before upload so dangling profile links cannot lose diagnostics', () => {
+  const steps = readWorkflow('release-gui-acceptance.yml').jobs.accept.steps
+  const archive = steps.findIndex(step => step.name === 'Archive GUI upgrade diagnostics')
+  const upload = steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
+  assert.ok(archive >= 0 && archive < upload)
+  assert.equal(steps[archive].if, 'always()')
+  assert.match(steps[upload].with.path, /gui-upgrade-evidence\.tar\.gz/)
+  assert.doesNotMatch(steps[upload].with.path, /kun-gui-upgrade-\*\/\*\*/)
+})
+
 test('standalone TUI distribution is removed while GUI upgrade gates stay required', () => {
   const workflow = readWorkflow('pr-checks.yml')
   assert.ok(workflow.jobs['pr-gate'].needs.includes('gui-upgrade-windows'))
