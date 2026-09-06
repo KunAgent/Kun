@@ -582,6 +582,33 @@ describe('installGuiUpdate', () => {
 })
 
 describe('downloadGuiUpdate recovery', () => {
+  it('downloads from the checked feed even when a different mirror becomes faster', async () => {
+    process.env.DEEPSEEK_GUI_ALLOW_UNSIGNED_UPDATES = '1'
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+    updater.checkForUpdates.mockResolvedValue({
+      updateInfo: { version: '0.3.9' }, isUpdateAvailable: true
+    })
+    const module = await import('./gui-updater')
+    module.initializeGuiUpdater(() => null, () => 'stable')
+    await expect(module.checkGuiUpdate('stable')).resolves.toMatchObject({ ok: true, hasUpdate: true })
+    const checkedFeed = updater.setFeedURL.mock.lastCall?.[0]
+    fetchMock.mockImplementation(async (url: string) => ({
+      ok: !url.startsWith(checkedFeed.url), status: 503
+    }))
+    updater.setFeedURL.mockClear()
+    updater.downloadUpdate.mockImplementation(async () => {
+      expect(module.getGuiUpdateState()).toMatchObject({
+        status: 'downloading', info: { latestVersion: '0.3.9' }, progress: { percent: 0 }
+      })
+      return ['/tmp/Kun-0.3.9.zip']
+    })
+
+    await expect(module.downloadGuiUpdate('stable')).resolves.toEqual({ ok: true, paths: ['/tmp/Kun-0.3.9.zip'] })
+    expect(updater.downloadUpdate).toHaveBeenCalledOnce()
+    expect(updater.setFeedURL).not.toHaveBeenCalled()
+  })
+
   it('clears stale download state so an interrupted download can be retried', async () => {
     process.env.KUN_UPDATE_URL = 'https://updates.example.test/'
     process.env.DEEPSEEK_GUI_ALLOW_UNSIGNED_UPDATES = '1'
