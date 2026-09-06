@@ -29,6 +29,43 @@ import {
 } from './kun-runtime-capability-config'
 
 describe('Kun runtime config service', () => {
+  it('projects the Memory distillation opt-in without changing approval policy', () => {
+    const base = normalizeAppSettings({} as AppSettingsV1)
+    const settings = normalizeAppSettings({
+      ...base,
+      agents: {
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          memoryEnabled: true,
+          memoryDistillationEnabled: true,
+          approvalPolicy: 'auto',
+          approvalReviewer: 'agent'
+        }
+      }
+    })
+    const body = buildManagedRuntimeHotApplyBody(settings, KunConfigSchema.parse({
+      serve: {
+        host: '127.0.0.1',
+        port: 18899,
+        dataDir: '/tmp/kun-data',
+        runtimeToken: 'runtime-token',
+        insecure: false,
+        storage: { backend: 'hybrid' },
+        providers: {}
+      }
+    }), {
+      bridgeUrl: 'http://127.0.0.1:23456',
+      bridgeToken: 'b'.repeat(43),
+      approvalSigningKey: 's'.repeat(43)
+    })
+
+    expect(body.capabilities?.memory).toMatchObject({
+      enabled: true,
+      distillation: { enabled: true }
+    })
+    expect(body.serve).toMatchObject({ approvalPolicy: 'auto', approvalReviewer: 'agent' })
+  })
+
   it('projects Fast Context without registry-owned gateway state in the hot-apply body', async () => {
     const fixedFastContext = {
       enabled: true,

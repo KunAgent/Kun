@@ -2,6 +2,19 @@
 
 const { appendFileSync, writeFileSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
+const { mkdir, writeFile, readFile, rename } = require('node:fs/promises')
+const assert = require('node:assert/strict')
+
+async function claimScenarioDirectory(path, root) {
+  await mkdir(path)
+  await writeFile(join(path, '.upgrade-acceptance-owner'), root)
+}
+
+async function preserveScenarioDirectory(path, root, name) {
+  assert.equal(await readFile(join(path, '.upgrade-acceptance-owner'), 'utf8'), root,
+    'Refusing to move a directory not owned by this acceptance scenario')
+  await rename(path, join(root, name))
+}
 
 function createScenarioJournal(record, root, persistReport = () => {}) {
   record.evidence = root
@@ -74,4 +87,5 @@ async function recordScenario(report, name, action, persist) {
   }
 }
 
-module.exports = { createScenarioJournal, cleanupScenario, recordScenario }
+module.exports = { createScenarioJournal, cleanupScenario, recordScenario,
+  claimScenarioDirectory, preserveScenarioDirectory }

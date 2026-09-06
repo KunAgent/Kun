@@ -24,6 +24,18 @@ const labels: Record<string, string> = {
   memoryEnabled: 'Status',
   memoryOn: 'On',
   memoryOff: 'Off',
+  memoryDistillationEnable: 'Suggest memories after turns',
+  memoryDistillationEnableDesc: 'Requires approval',
+  memoryCandidates: 'Suggestions',
+  memoryCandidatesDesc: 'Review independently',
+  memoryCandidatesEmpty: 'No suggestions',
+  memoryCandidateImportance: 'Importance',
+  memoryCandidateTarget: 'Workspace',
+  memoryCandidateExisting: 'Existing memory',
+  memoryCandidateSources: 'Sources',
+  memoryCandidateAllow: 'Allow',
+  memoryCandidateDeny: 'Deny',
+  memoryCandidateAction_create: 'Create',
   memoryRecords: 'Memory records',
   memoryRecordsDesc: 'Memory records description',
   memoryImport: 'Import',
@@ -104,11 +116,13 @@ function baseCtx(overrides: Record<string, any> = {}): Record<string, any> {
       lastInjectedIds: []
     },
     memoryRecords: [],
+    memoryCandidates: [],
     createMemoryRecord: async () => true,
     updateMemoryRecord: async () => true,
     disableMemoryRecord: async () => undefined,
     restoreMemoryRecord: async () => undefined,
     deleteMemoryRecord: async () => undefined,
+    decideMemoryCandidate: async () => true,
     ...overrides
   }
 }
@@ -143,6 +157,46 @@ function memoryDraft(overrides: Partial<MemoryDraft> = {}): MemoryDraft {
 }
 
 describe('MemorySettingsSection', () => {
+  it('renders a per-candidate approval with action, target, importance, and sources', () => {
+    const html = renderToStaticMarkup(createElement(MemorySettingsSection, {
+      ctx: baseCtx({
+        memoryCandidates: [{
+          schemaVersion: 1,
+          id: 'mdc_1',
+          fingerprint: 'a'.repeat(64),
+          threadId: 'thread_1',
+          turnId: 'turn_1',
+          target: { scope: 'workspace', workspace: 'D:/workspace-a' },
+          candidate: {
+            content: 'The user prefers concise release notes.',
+            type: 'preference',
+            confidence: 0.9,
+            importance: 0.7,
+            observedAt: '2026-09-03T01:00:00.000Z',
+            tags: ['release'],
+            sources: [{
+              id: 'src_1',
+              kind: 'user',
+              trust: 'explicit-user',
+              excerpt: 'I prefer concise release notes.'
+            }]
+          },
+          proposedAction: { action: 'create' },
+          status: 'pending',
+          createdAt: '2026-09-03T01:00:00.000Z',
+          expiresAt: '2026-09-10T01:00:00.000Z',
+          history: [{ status: 'pending', at: '2026-09-03T01:00:00.000Z' }]
+        }]
+      })
+    }))
+
+    expect(html).toContain('The user prefers concise release notes.')
+    expect(html).toContain('D:/workspace-a')
+    expect(html).toContain('Importance 0.70')
+    expect(html).toContain('explicit-user')
+    expect(html).toContain('Allow')
+    expect(html).toContain('Deny')
+  })
   it('renders a compact list row with tags and the scoped directory', () => {
     const projectPath = '/Users/mothra/data/code/kook-bot'
     const html = renderToStaticMarkup(createElement(MemorySettingsSection, {

@@ -1,11 +1,39 @@
 'use strict'
 
 const assert = require('node:assert/strict')
-const { mkdtemp, readFile, rm } = require('node:fs/promises')
+const { mkdtemp, readFile, rm, mkdir, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 const test = require('node:test')
-const { createScenarioJournal, cleanupScenario, recordScenario } = require('./gui-upgrade-journal.cjs')
+const { createScenarioJournal, cleanupScenario, recordScenario,
+  claimScenarioDirectory, preserveScenarioDirectory } = require('./gui-upgrade-journal.cjs')
+
+test('sequential scenarios preserve recovery evidence without reusing another install transaction', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'kun-recovery-isolation-'))
+  const recovery = join(parent, 'KunInstallerRecovery')
+  try {
+    for (const name of ['normal', 'busy']) {
+      const root = join(parent, name)
+      await mkdir(root)
+      await claimScenarioDirectory(recovery, root)
+      await assert.rejects(readFile(join(recovery, 'app-update.json')), { code: 'ENOENT' })
+      await writeFile(join(recovery, 'app-update.json'), JSON.stringify({ target: root }))
+      await preserveScenarioDirectory(recovery, root, 'installer-recovery')
+      assert.equal(JSON.parse(await readFile(join(root, 'installer-recovery', 'app-update.json'))).target, root)
+    }
+  } finally { await rm(parent, { recursive: true, force: true }) }
+})
+
+test('recovery isolation refuses existing directories and mismatched ownership', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'kun-recovery-owner-'))
+  const recovery = join(parent, 'KunInstallerRecovery')
+  try {
+    await claimScenarioDirectory(recovery, 'first-scenario')
+    await assert.rejects(claimScenarioDirectory(recovery, 'second-scenario'), { code: 'EEXIST' })
+    await assert.rejects(preserveScenarioDirectory(recovery, parent, 'evidence'), /not owned/)
+    assert.equal(await readFile(join(recovery, '.upgrade-acceptance-owner'), 'utf8'), 'first-scenario')
+  } finally { await rm(parent, { recursive: true, force: true }) }
+})
 
 test('failure phase is persisted and cleanup errors never replace the original upgrade error', async () => {
   const root = await mkdtemp(join(tmpdir(), 'kun-journal-'))

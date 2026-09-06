@@ -157,3 +157,32 @@ test('standalone TUI distribution is removed while GUI upgrade gates stay requir
     .find((step) => step.run?.includes('publish-r2.mjs promote'))
   assert.match(promotion.run, /--require-all-platforms/)
 })
+
+
+test('PR GUI upgrades verify same-run artifact provenance without using a release tag', () => {
+  const workflow = readWorkflow('pr-checks.yml')
+  const packaging = workflow.jobs['package-windows'].steps
+  const binding = packaging.findIndex(step => step.name === 'Bind PR installer to its tested source')
+  const upload = packaging.findIndex(step => step.name === 'Upload Windows PR package')
+  assert.ok(binding >= 0 && binding < upload)
+  assert.ok(packaging[upload].with.path.includes('dist/pr-candidate-source.json'))
+  const upgrades = workflow.jobs['gui-upgrade-windows'].steps
+  const download = upgrades.find(step => step.uses === 'actions/download-artifact@v4')
+  assert.equal(download.with.name, packaging[upload].with.name)
+  assert.equal(download.with['run-id'], undefined)
+  assert.equal(download.with.repository, undefined)
+  assert.equal(stepByName(workflow.jobs['gui-upgrade-windows'],
+    'Verify GUI upgrade from the published 0.3.7 installer').env.GUI_UPGRADE_SOURCE, 'pull-request')
+})
+
+
+test('PR GUI upgrade evidence is collected into the workspace before cross-drive upload', () => {
+  const steps = readWorkflow('pr-checks.yml').jobs['gui-upgrade-windows'].steps
+  const collect = steps.findIndex(step => step.name === 'Collect GUI upgrade diagnostics')
+  const upload = steps.findIndex(step => step.name === 'Upload GUI upgrade evidence')
+  assert.ok(collect >= 0 && collect < upload)
+  assert.equal(steps[collect].if, 'always()')
+  assert.equal(steps[collect].run, 'node scripts/gui-upgrade-diagnostics.cjs')
+  assert.ok(steps[upload].with.path.includes('gui-upgrade-evidence/**'))
+  assert.doesNotMatch(steps[upload].with.path, /env.GUI_UPGRADE_EVIDENCE/)
+})

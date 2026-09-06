@@ -378,6 +378,15 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
             status: finalStatus ?? 'failed',
             ...(finalError ? { error: finalError } : {})
           })
+          try {
+            this.opts.memoryDistillation?.schedule({
+              threadId,
+              turnId,
+              status: finalStatus ?? 'failed'
+            })
+          } catch {
+            // Post-turn distillation is best-effort and cannot alter settlement.
+          }
         }
       }
     }

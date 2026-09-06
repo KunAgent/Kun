@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
   Upload
 } from 'lucide-react'
@@ -27,13 +28,14 @@ import {
 } from './settings-controls'
 import { MemoryImportDialog, MemoryRecordDialog } from './settings-section-memory-dialogs'
 import { MemoryDiagnosticsPanel } from './settings-section-memory-diagnostics'
+import { MemoryCandidatesPanel } from './settings-section-memory-candidates'
 import {
   filterDuplicateMemoryImports,
   prepareMemoryImport,
   type MemoryScope
 } from './settings-section-memory-import'
 
-type MemorySettingsTab = 'overview' | 'records'
+type MemorySettingsTab = 'overview' | 'records' | 'candidates'
 
 export type MemoryDraft = {
   content: string
@@ -171,12 +173,14 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     updateKun,
     expandHomePath,
     memoryRecords,
+    memoryCandidates,
     memoryDiagnostics,
     createMemoryRecord,
     updateMemoryRecord,
     disableMemoryRecord,
     restoreMemoryRecord,
-    deleteMemoryRecord
+    deleteMemoryRecord,
+    decideMemoryCandidate
   } = ctx
 
   const [dialog, setDialog] = useState<MemoryDialogState | null>(null)
@@ -349,7 +353,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
         ariaLabel={t('sectionMemory')}
         items={[
           { id: 'overview', label: t('memoryOverview'), icon: LayoutDashboard },
-          { id: 'records', label: t('memoryRecords'), icon: Database }
+          { id: 'records', label: t('memoryRecords'), icon: Database },
+          { id: 'candidates', label: t('memoryCandidates'), icon: Sparkles }
         ]}
         value={activeTab}
         onChange={setActiveTab}
@@ -371,10 +376,44 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
               />
             }
           />
+          <SettingRow
+            title={t('memoryDistillationEnable')}
+            description={t('memoryDistillationEnableDesc')}
+            control={
+              <Toggle
+                checked={kun?.memoryDistillationEnabled ?? false}
+                disabled={!(kun?.memoryEnabled ?? false)}
+                onChange={(checked: boolean) => updateKun({
+                  memoryDistillationEnabled: checked
+                })}
+              />
+            }
+          />
           <MemoryDiagnosticsPanel
             diagnostics={memoryDiagnostics}
             fallbackRecordCount={memoryRecords?.length ?? 0}
             t={t}
+          />
+        </SettingsCard>
+      </SettingsTabPanel>
+
+      <SettingsTabPanel
+        baseId="memory-settings"
+        tabId="candidates"
+        active={activeTab === 'candidates'}
+      >
+        <SettingsCard title={t('memoryCandidates')}>
+          <SettingRow
+            title={t('memoryCandidates')}
+            description={t('memoryCandidatesDesc')}
+            wideControl
+            control={
+              <MemoryCandidatesPanel
+                candidates={memoryCandidates ?? []}
+                decide={decideMemoryCandidate}
+                t={t}
+              />
+            }
           />
         </SettingsCard>
       </SettingsTabPanel>

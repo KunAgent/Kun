@@ -1,13 +1,15 @@
 'use strict'
 
 const { execFile } = require('node:child_process')
+const { randomUUID } = require('node:crypto')
 const { createWriteStream } = require('node:fs')
-const { copyFile, lstat, mkdir, readdir, writeFile } = require('node:fs/promises')
+const { copyFile, lstat, mkdir, readFile, readdir, writeFile } = require('node:fs/promises')
 const { homedir, tmpdir } = require('node:os')
 const { dirname, join, resolve } = require('node:path')
 const { promisify } = require('node:util')
 
 const run = promisify(execFile)
+const { poll } = require('./smoke-packaged-update-handoff-support.cjs')
 
 async function attachGuiDiagnostics(app, journal, label) {
   const child = app.process()
@@ -30,9 +32,9 @@ async function attachGuiDiagnostics(app, journal, label) {
       output.end()
     }
   })
-  return app.evaluate(({ app, autoUpdater }, { eventPath, label }) => {
+  return app.evaluate(({ app, autoUpdater }, { eventPath, label, captureId }) => {
     const fs = process.getBuiltinModule('fs')
-    const metadata = { pid: process.pid, version: app.getVersion(), executable: process.execPath }
+    const metadata = { pid: process.pid, version: app.getVersion(), executable: process.execPath, captureId }
     const write = (event, details = {}) => {
       try {
         fs.appendFileSync(eventPath, JSON.stringify({ time: new Date().toISOString(), event, label,
@@ -46,7 +48,43 @@ async function attachGuiDiagnostics(app, journal, label) {
     autoUpdater.on('error', error => write('native_updater_error', { error: error.message }))
     process.once('exit', exitCode => write('gui_exited', { exitCode }))
     return metadata
-  }, { eventPath: journal.eventPath, label })
+  }, { eventPath: journal.eventPath, label, captureId: randomUUID() })
+}
+
+async function closeGuiWithExitEvidence(gui, eventPath, timeoutMs = 180_000) {
+  const metadata = gui.processInfo
+  if (!metadata?.captureId) throw new Error('GUI close requires its native capture identity')
+  const child = gui.app.process()
+  let closeError
+  let terminalFailure
+  // Electron/Playwright may wait on a pipe inherited by the independent Manager
+  // after both original GUI processes exit. Do not wait for that transport here.
+  void Promise.resolve().then(() => gui.app.close()).catch(error => { closeError = error })
+  const proof = await poll(async () => {
+    if (child.signalCode || (child.exitCode != null && child.exitCode !== 0)) {
+      terminalFailure = new Error(`GUI launcher exited abnormally: ${child.signalCode || child.exitCode}`)
+      throw terminalFailure
+    }
+    const contents = await readFile(eventPath, 'utf8').catch(error => {
+      if (error.code === 'ENOENT') return ''
+      throw error
+    })
+    // Ignore only the incomplete final append, not malformed complete records.
+    const events = contents.split('\n').slice(0, -1).filter(Boolean).map(line => JSON.parse(line))
+    const exited = events.find(event => event.event === 'gui_exited' &&
+      event.captureId === metadata.captureId && event.pid === metadata.pid)
+    if (exited && exited.exitCode !== 0) {
+      terminalFailure = new Error(`GUI exited abnormally: ${exited.exitCode}`)
+      throw terminalFailure
+    }
+    if (exited && child.exitCode === 0) {
+      return { captureId: metadata.captureId, pid: metadata.pid, exitCode: 0,
+        launcherPid: child.pid, launcherExitCode: child.exitCode }
+    }
+    if (closeError) throw closeError
+    return undefined
+  }, timeoutMs, 'original GUI and launcher exit', () => { if (terminalFailure) throw terminalFailure })
+  return proof
 }
 
 async function captureMacProcesses(root, stage) {
@@ -128,4 +166,4 @@ if (require.main === module) {
     .catch(error => { console.error(error); process.exitCode = 1 })
 }
 
-module.exports = { attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics, collectGuiUpgradeEvidence }
+module.exports = { closeGuiWithExitEvidence, attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics, collectGuiUpgradeEvidence }

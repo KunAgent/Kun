@@ -6,7 +6,7 @@ const { createServer } = require('node:net')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 const test = require('node:test')
-const { collectGuiUpgradeEvidence } = require('./gui-upgrade-diagnostics.cjs')
+const { closeGuiWithExitEvidence, collectGuiUpgradeEvidence } = require('./gui-upgrade-diagnostics.cjs')
 
 async function collectionFixture(withLinks) {
   const root = await mkdtemp(join(tmpdir(), 'kun-evidence-test-'))
@@ -98,4 +98,72 @@ test('a file that disappears during collection is recorded without losing other 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+
+async function closeFixture(action) {
+  const root = await mkdtemp(join(tmpdir(), 'kun-close-evidence-'))
+  try {
+    const path = join(root, 'events.jsonl')
+    const child = { pid: 20, exitCode: null, signalCode: null }
+    const metadata = { pid: 30, captureId: 'capture-original' }
+    const gui = { processInfo: metadata, app: { process: () => child, close: async () => {} } }
+    const record = async (overrides = {}) => writeFile(path, `${JSON.stringify({
+      event: 'gui_exited', pid: metadata.pid, captureId: metadata.captureId, exitCode: 0, ...overrides
+    })}\n`)
+    await action({ path, child, gui, record })
+  } finally { await rm(root, { recursive: true, force: true }) }
+}
+
+test('GUI close completes from original exit evidence when Playwright close never settles', async () => {
+  await closeFixture(async ({ path, child, gui, record }) => {
+    gui.app.close = async () => {
+      await record()
+      child.exitCode = 0
+      await new Promise(() => {})
+    }
+    assert.deepEqual(await closeGuiWithExitEvidence(gui, path, 2000), {
+      captureId: 'capture-original', pid: 30, exitCode: 0, launcherPid: 20, launcherExitCode: 0
+    })
+  })
+})
+
+test('a resolved Playwright close is insufficient without both process exits', async () => {
+  await closeFixture(async ({ path, gui }) => {
+    await assert.rejects(closeGuiWithExitEvidence(gui, path, 10), /original GUI and launcher exit/)
+  })
+})
+
+test('a reused PID cannot substitute for the captured GUI exit', async () => {
+  await closeFixture(async ({ path, child, gui, record }) => {
+    child.exitCode = 0
+    await record({ captureId: 'another-process' })
+    await assert.rejects(closeGuiWithExitEvidence(gui, path, 10), /original GUI and launcher exit/)
+  })
+})
+
+test('abnormal native GUI exits fail even when the launcher exits successfully', async () => {
+  await closeFixture(async ({ path, child, gui, record }) => {
+    child.exitCode = 0
+    await record({ exitCode: 1 })
+    await assert.rejects(closeGuiWithExitEvidence(gui, path, 2000), /GUI exited abnormally/)
+  })
+})
+
+test('a signaled launcher exit cannot pass graceful GUI shutdown', async () => {
+  await closeFixture(async ({ path, child, gui }) => {
+    child.signalCode = 'SIGTERM'
+    await assert.rejects(closeGuiWithExitEvidence(gui, path, 2000), /launcher exited abnormally/)
+  })
+})
+
+test('closed transport errors do not override recorded successful process exits', async () => {
+  await closeFixture(async ({ path, child, gui, record }) => {
+    gui.app.close = async () => {
+      await record()
+      child.exitCode = 0
+      throw new Error('transport already closed')
+    }
+    assert.equal((await closeGuiWithExitEvidence(gui, path, 2000)).exitCode, 0)
+  })
 })

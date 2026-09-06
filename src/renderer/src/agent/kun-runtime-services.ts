@@ -83,6 +83,10 @@ import type {
   CoreThreadTodosResponseJson
 } from './kun-contract'
 import {
+  decideRuntimeMemoryCandidate,
+  listRuntimeMemoryCandidates
+} from './kun-runtime-memory-distillation'
+import {
   buildQuery,
   chatBlockFromItem,
   dispatchKunRuntimeEvents,
@@ -370,6 +374,10 @@ export class KunRuntimeProviderServices {
       'runtime returned an invalid memory diagnostics response'
     )
   }
+
+  listMemoryDistillationCandidates = listRuntimeMemoryCandidates
+
+  decideMemoryDistillationCandidate = decideRuntimeMemoryCandidate
 
   async forkThread(
     threadId: string,

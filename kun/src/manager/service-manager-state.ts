@@ -87,6 +87,7 @@ export const ArtifactStoreOperationSchema = z.enum([
   'put', 'releaseOwner', 'delete', 'list', 'get', 'readRange', 'stat'
 ])
 export const MemoryStoreOperationSchema = z.enum([
+  'distillationPending', 'commitDistillation',
   'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'retrieve', 'diagnostics'
 ])
 export const GraphStoreOperationSchema = z.enum([
