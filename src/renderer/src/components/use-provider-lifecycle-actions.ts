@@ -8,6 +8,7 @@ import {
   OPENCODE_FREE_MODEL_IDS,
   OPENCODE_FREE_PROVIDER_ID,
   defaultModelRequestRetrySettings,
+  defaultModelProviderSettings,
   isMultiAccountProviderPreset,
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
@@ -25,7 +26,8 @@ import type {
 } from '@shared/model-provider-presets'
 import {
   useEffect,
-  useRef
+  useRef,
+  useState
 } from 'react'
 import {
   enrichCursorProviderModelProfiles,
@@ -81,6 +83,8 @@ export function catalogResultForProviderImport(
 }
 
 export function useProviderLifecycleActions(scope: Record<string, any>): Record<string, any> {
+  const deletionInFlight = useRef(false)
+  const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null)
   const { t, form, kun, provider, setSharedConnections, setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers, credentialMutationTimers, mounted, setCredentialDrafts, enqueueSharedMutation, selectedProviderId, setSelectedProviderId, activeTab, setActiveTab, previousProviderSelectionRef, setProbeStates, setPendingImport, cursorMetadataRepairAttempts, setDraftProvider, activeKunProviderId, confirmAction, updateModelProviders, sharedProjectionInput } = scope
   const modelProviders = scope.modelProviders as ModelProviderProfileV1[]
   const displayProviders = scope.displayProviders as ModelProviderProfileV1[]
@@ -168,6 +172,11 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     previousProviderSelectionRef.current = null
   }
 
+  const addDefaultModelProvider = (): void => {
+    if (displayProviders.some((item) => item.id === DEFAULT_MODEL_PROVIDER_ID)) return
+    startProviderDraft(defaultModelProviderSettings().providers[0])
+  }
+
   const addModelProvider = (): void => {
     const baseId = 'custom-provider'
     let index = modelProviders.length + 1
@@ -249,10 +258,7 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     )
   }
 
-  const removeModelProvider = async (id: string): Promise<void> => {
-    // The bundled default providers are always available fallbacks. Keeping
-    // both prevents users from losing their no-key model path.
-    if (id === DEFAULT_MODEL_PROVIDER_ID || id === OPENCODE_FREE_PROVIDER_ID) return
+  const performProviderDeletion = async (id: string): Promise<void> => {
     const target = modelProviders.find((item) => item.id === id)
     if (!target) return
     const usedByChat = activeKunProviderId === id
@@ -344,6 +350,22 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
         setSharedConnectionsError(error instanceof Error ? error.message : String(error))
       }
       return
+    }
+  }
+
+  const removeModelProvider = async (id: string): Promise<void> => {
+    if (deletionInFlight.current) return
+    deletionInFlight.current = true
+    setDeletingProviderId(id)
+    try {
+      await performProviderDeletion(id)
+    } catch (error) {
+      if (mounted.current) {
+        setSharedConnectionsError(error instanceof Error ? error.message : String(error))
+      }
+    } finally {
+      deletionInFlight.current = false
+      if (mounted.current) setDeletingProviderId(null)
     }
   }
 
@@ -487,5 +509,5 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       ...(input.authoritative ? { authoritative: true } : {})
     })
   }
-  return { updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addPresetModelProvider, removeModelProvider, fetchModelsDevCatalogFor, openModelImport }
+  return { updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, addPresetModelProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport }
 }

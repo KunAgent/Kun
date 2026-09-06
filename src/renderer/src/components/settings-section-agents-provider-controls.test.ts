@@ -375,7 +375,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(customIdInput?.props.readOnly).toBe(true)
       expect(activePanelText(renderer)).toContain('Provider identity')
       expect(activePanelText(renderer)).toContain('Failure retry')
-      expect(rendererText(renderer)).toContain('Danger zone')
+      expect(rendererText(renderer)).not.toContain('Danger zone')
       expect(findButton(renderer, 'Remove provider')).toBeTruthy()
 
       await act(async () => findButtonContaining(renderer, 'DeepSeek').props.onClick())
@@ -386,7 +386,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         .find((input) => input.props.value === DEFAULT_MODEL_PROVIDER_ID)?.props.readOnly).toBe(true)
       expect(rendererText(renderer)).not.toContain('Danger zone')
       expect(renderer.root.findAllByType('button')
-        .some((button) => instanceText(button).trim() === 'Remove provider')).toBe(false)
+        .some((button) => instanceText(button).trim() === 'Remove provider')).toBe(true)
     })
 
     it('renders and persists provider retry controls in the Advanced tab', async () => {
@@ -517,13 +517,13 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         .find((input) => input.props.value === 'xiaomi')
       expect(providerIdInput?.props.readOnly).toBe(true)
       expect(rendererText(renderer)).toContain('Provider ID locked')
-      expect(rendererText(renderer)).toContain('Danger zone')
+      expect(rendererText(renderer)).not.toContain('Danger zone')
       expect(findButton(renderer, 'Remove provider')).toBeTruthy()
 
       await act(async () => findButtonContaining(renderer, 'DeepSeek').props.onClick())
       expect(rendererText(renderer)).not.toContain('Danger zone')
       expect(renderer.root.findAllByType('button')
-        .some((button) => instanceText(button).trim() === 'Remove provider')).toBe(false)
+        .some((button) => instanceText(button).trim() === 'Remove provider')).toBe(true)
       expect(rendererText(renderer)).toContain('Needs configuration')
       expect(findButton(renderer, 'Test connection').props.disabled).toBe(true)
     })

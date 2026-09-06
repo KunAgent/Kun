@@ -1,4 +1,5 @@
 import {
+  DEFAULT_MODEL_PROVIDER_ID,
   getKunRuntimeSettings,
   type AppSettingsPatch,
   type AppSettingsV1
@@ -20,6 +21,11 @@ export function preserveRedactedProviderCredentials(
   const previousById = new Map(
     previousProviders.map((provider) => [provider.id, provider])
   )
+  const deletedProviderIds = new Set(Array.isArray(partial.provider?.providers)
+    ? previousProviders.filter((previous) =>
+        !partial.provider!.providers!.some((provider) => provider.id === previous.id)
+      ).map((provider) => provider.id)
+    : [])
 
   if (Array.isArray(partial.provider?.providers)) {
     const providers = partial.provider.providers.map((provider) => {
@@ -33,7 +39,8 @@ export function preserveRedactedProviderCredentials(
     const topLevelApiKey =
       typeof partial.provider.apiKey === 'string' &&
       !partial.provider.apiKey.trim() &&
-      previousTopLevelApiKey.trim()
+      previousTopLevelApiKey.trim() &&
+      !deletedProviderIds.has(DEFAULT_MODEL_PROVIDER_ID)
         ? previousTopLevelApiKey
         : partial.provider.apiKey
     next = {
@@ -71,7 +78,8 @@ export function preserveRedactedProviderCredentials(
         : incoming]
     }))
     const apiKey = typeof incomingKun.apiKey === 'string' &&
-      !incomingKun.apiKey.trim() && previousKun.apiKey.trim()
+      !incomingKun.apiKey.trim() && previousKun.apiKey.trim() &&
+      !deletedProviderIds.has(previousKun.providerId?.trim() || DEFAULT_MODEL_PROVIDER_ID)
       ? previousKun.apiKey
       : incomingKun.apiKey
     next = {

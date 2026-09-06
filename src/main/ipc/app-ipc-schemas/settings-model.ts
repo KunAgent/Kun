@@ -142,6 +142,7 @@ const modelProfilePatchShape = {
 const modelProfilePatchSchema = z.object(modelProfilePatchShape).strict()
 
 export const modelProviderPatchSchema = z.object({
+  excludedBuiltinProviderIds: z.array(z.enum(['deepseek', 'opencode-free'])).max(2).optional(),
   apiKey: z.string().max(MAX_BODY_BYTES).optional(),
   baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
   proxy: z.object({

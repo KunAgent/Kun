@@ -526,6 +526,8 @@ export type ModelProviderSettingsV1 = {
   proxy: NetworkProxySettingsV1
   proxyRoutingVersion: number
   providers: ModelProviderProfileV1[]
+  /** Built-in profiles explicitly removed by the user; do not seed them again. */
+  excludedBuiltinProviderIds?: string[]
   routePools: ModelRoutePoolV1[]
   localGateway: LocalModelGatewaySettingsV1
 }

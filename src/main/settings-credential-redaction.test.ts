@@ -43,6 +43,18 @@ function settingsWithSecrets(): AppSettingsV1 {
 }
 
 describe('preserveRedactedProviderCredentials', () => {
+  it.each(['opencode-go', ''])('does not restore credentials for deleted selection "%s"', (providerId) => {
+    const prev = settingsWithSecrets()
+    prev.agents.kun.providerId = providerId
+    const patch = preserveRedactedProviderCredentials(prev, {
+      provider: { providers: [], apiKey: '', excludedBuiltinProviderIds: ['deepseek', 'opencode-free'] },
+      agents: { kun: { providerId: '', apiKey: '', baseUrl: '' } }
+    })
+    expect(patch.provider?.apiKey).toBe('')
+    expect(patch.agents?.kun?.apiKey).toBe('')
+    expect(patch.provider?.providers).toEqual([])
+  })
+
   it('restores hydrated provider secrets when the renderer sends redacted empty apiKeys', () => {
     const prev = settingsWithSecrets()
     const preserved = preserveRedactedProviderCredentials(prev, {
