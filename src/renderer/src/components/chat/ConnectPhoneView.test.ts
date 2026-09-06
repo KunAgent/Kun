@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ClawImChannelV1 } from '@shared/app-settings'
 import i18n from '../../i18n'
@@ -37,6 +38,16 @@ function channel(enabled: boolean, provider: ClawImChannelV1['provider'] = 'feis
     createdAt: '2026-06-03T00:00:00.000Z',
     updatedAt: '2026-06-03T00:00:00.000Z'
   }
+}
+
+function collectText(node: unknown): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(collectText).join('')
+  if (node && typeof node === 'object') {
+    const children = (node as { children?: unknown }).children
+    return children ? collectText(children) : ''
+  }
+  return ''
 }
 
 describe('ConnectPhoneView', () => {
@@ -162,7 +173,7 @@ describe('ConnectPhoneView', () => {
     expect(hasClawPhoneChannel([channel(true, 'weixin')], 'weixin')).toBe(true)
   })
 
-  it('shows settings and disconnect actions for an existing phone connection', () => {
+  it('hides the connection details panel until a connection is opened', () => {
     const html = renderToStaticMarkup(
       createElement(ConnectPhoneSidebarPanel, {
         channels: [channel(true)],
@@ -172,8 +183,10 @@ describe('ConnectPhoneView', () => {
       })
     )
 
+    expect(html).toContain('IM')
     expect(html).toContain('Phone connection settings')
-    expect(html).toContain('Disconnect phone')
+    expect(html).not.toContain('Disconnect phone')
+    expect(html).not.toContain('Generate authorization QR')
   })
 
   it('uses themed surface buttons instead of hard-coded black hover states', () => {
@@ -197,7 +210,7 @@ describe('ConnectPhoneView', () => {
     expect(pageHtml).not.toContain('hover:bg-black')
     expect(sidebarHtml).not.toContain('hover:bg-black')
     expect(sidebarHtml).toContain('hover:bg-ds-hover')
-    expect(sidebarHtml).toContain('TELE')
+    expect(sidebarHtml).not.toContain('TELE')
   })
 
   it('keeps the IM list above the phone connection panel in the sidebar', () => {
@@ -211,8 +224,69 @@ describe('ConnectPhoneView', () => {
     )
 
     expect(html).toContain('IM')
-    expect(html).toContain('Connect phone')
+    expect(html).not.toContain('Connect phone')
     expect(html).toContain('Feishu / Lark')
     expect(html).toContain('WeChat')
+  })
+
+  it('reveals the add panel only after clicking the plus button', async () => {
+    let renderer!: ReturnType<typeof create>
+    await act(async () => {
+      renderer = create(
+        createElement(ConnectPhoneSidebarPanel, {
+          channels: [],
+          onAddProvider: async () => undefined,
+          onDisconnect: async () => undefined,
+          onOpenSettings: () => undefined
+        })
+      )
+    })
+
+    expect(collectText(renderer.toJSON())).not.toContain('Generate authorization QR')
+    expect(collectText(renderer.toJSON())).not.toContain('Connect phone')
+
+    const plusButton = renderer.root.findAllByType('button').find(
+      (node) => node.props['aria-label'] === 'Add IM'
+    )
+    expect(plusButton).toBeTruthy()
+
+    await act(async () => {
+      plusButton!.props.onClick()
+    })
+
+    const text = collectText(renderer.toJSON())
+    expect(text).toContain('Generate authorization QR')
+    expect(text).toContain('Connect phone')
+    expect(text).toContain('TELE')
+  })
+
+  it('opens an existing connection for management without showing the scan card', async () => {
+    let renderer!: ReturnType<typeof create>
+    await act(async () => {
+      renderer = create(
+        createElement(ConnectPhoneSidebarPanel, {
+          channels: [channel(true)],
+          onAddProvider: async () => undefined,
+          onDisconnect: async () => undefined,
+          onOpenSettings: () => undefined
+        })
+      )
+    })
+
+    expect(collectText(renderer.toJSON())).not.toContain('Disconnect phone')
+
+    const listButton = renderer.root.findAllByType('button').find(
+      (node) => node.props.title === 'Enabled'
+    )
+    expect(listButton).toBeTruthy()
+
+    await act(async () => {
+      listButton!.props.onClick()
+    })
+
+    const text = collectText(renderer.toJSON())
+    expect(text).toContain('Disconnect phone')
+    expect(text).toContain('Phone connection settings')
+    expect(text).not.toContain('Generate authorization QR')
   })
 })
