@@ -8,6 +8,7 @@ Kun's P0 Memory foundation can safely persist, retrieve, explain, and recover ex
 - Add deterministic candidate normalization and eligibility checks that reject low-confidence, non-durable, credential-like, malformed, or source-less candidates.
 - Bind source provenance and observation time from host-owned turn evidence, compare eligible candidates with authorized existing memories, and produce an explainable `create`, `update`, `supersede`, or `skip` decision without writing data.
 - In a follow-up delivery within this change, run distillation only after a successful, durably completed turn, keep it off by default, and require the existing user approval flow before any MemoryStore mutation.
+- Keep internal/runtime-generated turns out of explicit-user evidence, revalidate delayed approvals, and make candidate-ledger/apply transitions crash-consistent and shutdown-aware.
 - Add anonymous multilingual fixtures and metrics for pre-approval writes, rejection behavior, duplicate creation, transient/sensitive false positives, source completeness, replay idempotency, scope isolation, and authority safety.
 - Deliver the change in two reviewable slices: P1-A contains the candidate contract and pure decision core with no production wiring; P1-B adds TurnEnd coordination, settings, approval UI, persistence, and end-to-end acceptance.
 - Keep embeddings, semantic reranking, memory relations, Working Memory, communities, Crystal generation, and silent autonomous writes out of this change.
@@ -27,4 +28,4 @@ None.
 - Adds contracts and pure decision modules under `kun/src/contracts/` and `kun/src/memory/` in P1-A.
 - Later P1-B work will extend the existing Kun turn lifecycle, approval/event surfaces, Memory settings, and `agents.kun` configuration without introducing a second runtime or Memory service.
 - Reuses the P0 `MemoryRecord`, `MemoryType`, `MemorySourceEvidence`, scoped retrieval, lifecycle, and MemoryStore contracts; canonical JSON remains authoritative.
-- Adds no production model call, automatic write, external service, embedding dependency, or schema migration in P1-A.
+- Adds no production model call, automatic write, external service, embedding dependency, or schema migration in P1-A. P1-B may evolve its new, not-yet-released pending-state schema while preserving canonical Memory V2 JSON.

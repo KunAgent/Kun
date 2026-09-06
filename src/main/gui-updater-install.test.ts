@@ -71,12 +71,32 @@ async function installer() {
     details: () => ({ hasDownloaded: false, targetVersion: '0.2.0', channel: 'stable' }),
     stateInfo: () => undefined,
     emit,
+    preflight: async () => undefined,
     prepare: async () => undefined,
     clearPreparation: vi.fn(),
     setQuitting: vi.fn(),
     quitAndInstall: vi.fn(),
     isSessionEnding: () => false
   })
+}
+
+async function readyInstaller() {
+  const { GuiUpdateInstaller } = await import('./gui-updater-install')
+  const dependencies = {
+    runExclusive: async <T>(task: () => Promise<T>) => task(),
+    details: () => ({ hasDownloaded: true, targetVersion: '0.3.8', channel: 'stable' as const }),
+    stateInfo: () => undefined,
+    emit,
+    preflight: vi.fn(async () => undefined),
+    prepare: vi.fn(async () => undefined),
+    clearPreparation: vi.fn(),
+    setQuitting: vi.fn(),
+    quitAndInstall: vi.fn(),
+    isSessionEnding: () => false
+  }
+  const instance = new GuiUpdateInstaller(dependencies)
+  instance.setDownloadedInstaller(['candidate-installer'], 'candidate-digest')
+  return { instance, dependencies }
 }
 
 beforeEach(() => {
@@ -97,6 +117,46 @@ beforeEach(() => {
     pending = null
     recovery = null
     return { kind: 'finalized', phase: 'finalized' }
+  })
+})
+
+describe('GuiUpdateInstaller preflight', () => {
+  it('keeps the current GUI and Runtime alive when provider saving fails', async () => {
+    const { app } = await import('electron')
+    const { instance, dependencies } = await readyInstaller()
+    dependencies.preflight.mockRejectedValueOnce(new Error('Provider save failed'))
+    await expect(instance.install()).resolves.toMatchObject({ ok: false, code: 'install_failed', message: 'Provider save failed' })
+    expect(dependencies.prepare).not.toHaveBeenCalled()
+    expect(dependencies.setQuitting).not.toHaveBeenCalled()
+    expect(dependencies.quitAndInstall).not.toHaveBeenCalled()
+    expect(app.relaunch).not.toHaveBeenCalled()
+    expect(app.exit).not.toHaveBeenCalled()
+    expect(clearPending).not.toHaveBeenCalled()
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'error', message: 'Provider save failed' }))
+  })
+
+  it('can retry the same downloaded update after a failed save check', async () => {
+    const { app } = await import('electron')
+    const { instance, dependencies } = await readyInstaller()
+    dependencies.preflight.mockRejectedValueOnce(new Error('Save failed'))
+    await expect(instance.install()).resolves.toMatchObject({ ok: false })
+    await expect(instance.install()).resolves.toEqual({ ok: true })
+    expect(dependencies.prepare).toHaveBeenCalledOnce()
+    expect(dependencies.quitAndInstall).toHaveBeenCalledOnce()
+    expect(dependencies.preflight.mock.invocationCallOrder[1]).toBeLessThan(dependencies.setQuitting.mock.invocationCallOrder[0])
+    expect(dependencies.setQuitting.mock.invocationCallOrder[0]).toBeLessThan(dependencies.prepare.mock.invocationCallOrder[0])
+    expect(app.relaunch).not.toHaveBeenCalled()
+    expect(app.exit).not.toHaveBeenCalled()
+  })
+
+  it('retains recovery after resource shutdown has started and partially fails', async () => {
+    const { app } = await import('electron')
+    const { instance, dependencies } = await readyInstaller()
+    dependencies.prepare.mockRejectedValueOnce(new Error('Runtime stop failed'))
+    await expect(instance.install()).resolves.toMatchObject({ ok: false, message: 'Runtime stop failed' })
+    await vi.waitFor(() => expect(app.relaunch).toHaveBeenCalledOnce())
+    expect(app.exit).toHaveBeenCalledWith(0)
+    expect(dependencies.quitAndInstall).not.toHaveBeenCalled()
   })
 })
 

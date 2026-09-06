@@ -77,13 +77,33 @@ export const sharedProviderMutationCoordinator = {
 }
 
 let mutationTail: Promise<void> = Promise.resolve()
+let queuedMutations = 0
+let mutationFailureRevision = 0
+let mutationQueueEpoch = 0
 const catalogDrains = new Map<string, { generation: number; promise: Promise<unknown> }>()
 const credentialMutationClientId = createCredentialMutationClientId()
 
 export function enqueueSharedModelMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const epoch = mutationQueueEpoch
+  queuedMutations += 1
   const result = mutationTail.then(operation, operation)
-  mutationTail = result.then(() => undefined, () => undefined)
+  mutationTail = result.then(() => {
+    if (epoch === mutationQueueEpoch) queuedMutations -= 1
+  }, () => {
+    if (epoch === mutationQueueEpoch) {
+      queuedMutations -= 1
+      mutationFailureRevision += 1
+    }
+  })
   return result
+}
+
+export function sharedModelMutationQueueState(): {
+  pending: number
+  failureRevision: number
+  settled: Promise<void>
+} {
+  return { pending: queuedMutations, failureRevision: mutationFailureRevision, settled: mutationTail }
 }
 
 export function drainSharedProviderCatalogMutation<T>(
@@ -213,5 +233,8 @@ export function resetSharedProviderMutationCoordinatorForTests(): void {
   sharedProviderMutationCoordinator.catalogGeneration = 0
   sharedProviderMutationCoordinator.credentialGeneration = 0
   catalogDrains.clear()
+  mutationQueueEpoch += 1
+  queuedMutations = 0
+  mutationFailureRevision = 0
   mutationTail = Promise.resolve()
 }

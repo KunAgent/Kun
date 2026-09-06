@@ -51,6 +51,7 @@ let configuredFeedUrl = ''
 let getSelectedChannel: (() => GuiUpdateChannel | Promise<GuiUpdateChannel>) | null = null
 let getSelectedLocale: (() => AppLocale | Promise<AppLocale>) | null = null
 let beforeInstallUpdate: (() => void | Promise<void>) | null = null
+let checkBeforeInstallUpdate: (() => void | Promise<void>) | null = null
 let beforeInstallUpdatePromise: Promise<void> | null = null
 let beforeInstallUpdatePrepared = false
 let setUpdateInstallQuitting: ((active: boolean) => void) | null = null
@@ -134,6 +135,7 @@ const updateInstaller = new GuiUpdateInstaller({
   }),
   stateInfo: () => lastInfo ?? undefined,
   emit: emitGuiUpdateState,
+  preflight: async () => { await checkBeforeInstallUpdate?.() },
   prepare: runBeforeInstallUpdate,
   clearPreparation: clearBeforeInstallUpdatePreparation,
   setQuitting: markUpdateInstallQuitting,
@@ -276,11 +278,13 @@ export function initializeGuiUpdater(
   beforeInstall?: () => void | Promise<void>,
   localeGetter?: () => AppLocale | Promise<AppLocale>,
   updateInstallQuittingSetter?: (active: boolean) => void,
-  healthCheck?: () => Promise<boolean>
+  healthCheck?: () => Promise<boolean>,
+  beforeInstallCheck?: () => void | Promise<void>
 ): void {
   getMainWindow = windowGetter
   getSelectedChannel = channelGetter ?? null
   beforeInstallUpdate = beforeInstall ?? null
+  checkBeforeInstallUpdate = beforeInstallCheck ?? null
   getSelectedLocale = localeGetter ?? null
   setUpdateInstallQuitting = updateInstallQuittingSetter ?? null
   pendingUpdateHealthCheck = healthCheck ?? null

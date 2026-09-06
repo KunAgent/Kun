@@ -396,6 +396,8 @@ export type KunRuntimeSettingsV1 = {
   modelProfiles: Record<string, ModelProviderModelProfileV1>
   /** Whether long-term memory is enabled in the Kun runtime. */
   memoryEnabled: boolean
+  /** Opt-in post-turn Memory candidate extraction; approval remains mandatory. */
+  memoryDistillationEnabled: boolean
   /** Native Kun AGENTS.md instructions injected into every turn. */
   instructions: KunInstructionSettingsV1
   /** Host computer-use (screenshot + mouse/keyboard control) settings. */

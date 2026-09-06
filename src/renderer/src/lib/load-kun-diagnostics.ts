@@ -1,26 +1,32 @@
 import type {
   CoreMemoryRecordJson,
+  CorePendingMemoryCandidateJson,
   CoreRuntimeInfoJson,
   CoreRuntimeToolDiagnosticsJson
 } from '../agent/kun-contract'
 import type { AgentProvider } from '../agent/types'
 import { describeRuntimeError } from './format-runtime-error'
 
-type DiagnosticsProvider = Pick<AgentProvider, 'getRuntimeInfo' | 'getToolDiagnostics' | 'listMemories'>
+type DiagnosticsProvider = Pick<
+  AgentProvider,
+  'getRuntimeInfo' | 'getToolDiagnostics' | 'listMemories' |
+  'listMemoryDistillationCandidates'
+>
 
 export type LoadedKunDiagnostics = {
   runtimeInfo?: CoreRuntimeInfoJson | null
   toolDiagnostics?: CoreRuntimeToolDiagnosticsJson | null
   memoryRecords?: CoreMemoryRecordJson[]
+  memoryCandidates?: CorePendingMemoryCandidateJson[]
   errors: string[]
 }
 
 export async function loadKunDiagnostics(
   provider: DiagnosticsProvider,
-  options: { listAllMemories?: boolean } = {}
+  options: { listAllMemories?: boolean; workspace?: string } = {}
 ): Promise<LoadedKunDiagnostics> {
   const listAllMemories = options.listAllMemories !== false
-  const [runtimeInfo, toolDiagnostics, memoryRecords] = await Promise.allSettled([
+  const [runtimeInfo, toolDiagnostics, memoryRecords, memoryCandidates] = await Promise.allSettled([
     provider.getRuntimeInfo ? provider.getRuntimeInfo() : Promise.resolve(null),
     provider.getToolDiagnostics ? provider.getToolDiagnostics() : Promise.resolve(null),
     provider.listMemories
@@ -29,6 +35,9 @@ export async function loadKunDiagnostics(
             ? { all: true, includeDeleted: false }
             : { includeDeleted: false }
         )
+      : Promise.resolve([]),
+    provider.listMemoryDistillationCandidates && options.workspace
+      ? provider.listMemoryDistillationCandidates(options.workspace)
       : Promise.resolve([])
   ])
 
@@ -50,6 +59,12 @@ export async function loadKunDiagnostics(
     loaded.memoryRecords = memoryRecords.value ?? []
   } else {
     loaded.errors.push(`Memory: ${errorMessage(memoryRecords.reason)}`)
+  }
+
+  if (memoryCandidates.status === 'fulfilled') {
+    loaded.memoryCandidates = memoryCandidates.value ?? []
+  } else {
+    loaded.errors.push(`Memory candidates: ${errorMessage(memoryCandidates.reason)}`)
   }
 
   loaded.errors = [...new Set(loaded.errors)]

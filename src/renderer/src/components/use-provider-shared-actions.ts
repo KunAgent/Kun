@@ -52,7 +52,9 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
   const { kun, update, provider, setSharedConnections, setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames, pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers, credentialMutationTimers, mutationOwner, mounted, drainCatalogRef, drainCredentialRef, enqueueSharedMutation, sharedProjectionInput, setAddMenuOpen, setAddProviderQuery, setSubscriptionRegion, providerProxy } = scope
   const setCredentialDrafts = scope.setCredentialDrafts as Dispatch<SetStateAction<Record<string, string>>>
   const setCredentialSyncVersion = scope.setCredentialSyncVersion as Dispatch<SetStateAction<number>>
-  const refreshCredentialSyncState = (): void => setCredentialSyncVersion((version) => version + 1)
+  const refreshCredentialSyncState = (): void => {
+    if (mounted.current) setCredentialSyncVersion((version) => version + 1)
+  }
   const setExpandedCapabilities = scope.setExpandedCapabilities as Dispatch<SetStateAction<Set<ProviderCapability>>>
   const addProviderButtonRef = scope.addProviderButtonRef as RefObject<HTMLButtonElement | null>
   const addProviderDialogRef = scope.addProviderDialogRef as RefObject<HTMLElement | null>
@@ -194,7 +196,7 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
     const current = pendingSharedProviderNames.current.get(providerId)
     if (current?.generation === pending.generation) {
       pendingSharedProviderNames.current.set(providerId, { ...current, committedRevision: snapshot.revision })
-      setSharedConnections(snapshot)
+      if (mounted.current) setSharedConnections(snapshot)
     }
   }
 

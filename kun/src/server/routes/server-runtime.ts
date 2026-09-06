@@ -43,6 +43,7 @@ import type { AttachmentDiagnostics } from '../../contracts/attachments.js'
 import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { MemoryDiagnostics } from '../../contracts/memory.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
+import type { MemoryDistillationCoordinator } from '../../memory/memory-distillation-coordinator.js'
 import type { ReviewTarget } from '../../contracts/review.js'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import type { BackgroundShellRuntime } from '../../services/background-shell-runtime.js'
@@ -198,6 +199,7 @@ export type ServerRuntime = {
   toolHost?: ToolHost
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  memoryDistillation?: MemoryDistillationCoordinator
   knowledgeBaseService?: KnowledgeBaseService
   migrationService?: RuntimeMigrationService
   migrationImportService?: RuntimeMigrationImportService

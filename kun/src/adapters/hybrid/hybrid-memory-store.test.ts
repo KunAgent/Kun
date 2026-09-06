@@ -10,7 +10,8 @@ const roots: string[] = []
 const policy: MemoryCapabilityConfig = {
   enabled: true,
   scopes: ['user', 'workspace', 'project'],
-  maxInjectedRecords: 8
+  maxInjectedRecords: 8,
+  distillation: { enabled: false }
 }
 
 afterEach(async () => {

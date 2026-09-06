@@ -93,6 +93,12 @@ function computeReleaseVersion({ allTags = [], headTags = [], packageVersion }) 
   }
 }
 
+function computeCandidateVersion(packageVersion) {
+  const { version } = parseSemverVersion(packageVersion)
+  return { version, tag: `v${version}`, releaseName: `${PRODUCT_NAME} ${version}`,
+    previousTag: '', existingTag: false }
+}
+
 function gitLines(args) {
   const output = execFileSync('git', args, {
     cwd: ROOT,
@@ -139,10 +145,11 @@ function writeGitHubOutputs(result) {
 }
 
 function main() {
+  const candidateOnly = process.argv.includes('--candidate-only')
   const noFetch = process.argv.includes('--no-fetch') || process.env.CI_RELEASE_NO_FETCH === '1'
-  if (!noFetch) fetchTags()
+  if (!noFetch && !candidateOnly) fetchTags()
 
-  const result = computeReleaseVersion({
+  const result = candidateOnly ? computeCandidateVersion(readPackageVersion()) : computeReleaseVersion({
     allTags: gitLines(['tag', '--list', 'v*']),
     headTags: gitLines(['tag', '--points-at', 'HEAD', '--list', 'v*']),
     packageVersion: readPackageVersion()
@@ -162,6 +169,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  computeCandidateVersion,
   computeReleaseVersion,
   newestSemverTag,
   parseSemverTag

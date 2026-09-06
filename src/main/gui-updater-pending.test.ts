@@ -84,6 +84,20 @@ describe('gui updater pending state', () => {
     await expect(pending.readPendingUpdateResult(directory)).resolves.toBeNull()
   })
 
+  it('reads and consumes a BOM-prefixed Windows installer result', async () => {
+    const directory = await tempDir()
+    directories.push(directory)
+    const pending = await import('./gui-updater-pending')
+    const result = await pending.writePendingUpdateResult({
+      outcome: 'success', code: 'success', phase: 'committed',
+      message: 'Updated successfully.', transactionState: 'committed'
+    }, directory)
+    await writeFile(pending.pendingUpdateResultPath(directory), `\uFEFF${JSON.stringify(result)}`, 'utf8')
+    await expect(pending.readPendingUpdateResult(directory)).resolves.toEqual(result)
+    await expect(pending.consumePendingUpdateResult(directory)).resolves.toEqual(result)
+    await expect(pending.readPendingUpdateResult(directory)).resolves.toBeNull()
+  })
+
   it('persists recovery separately from the installer handoff', async () => {
     const directory = await tempDir()
     directories.push(directory)

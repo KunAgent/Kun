@@ -21,10 +21,7 @@ import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
 import { StartupGate } from './StartupGate'
-import {
-  installProviderMutationFlushHandler,
-  registerProviderMutationFlushOperations
-} from './components/provider-mutation-flush'
+import { installProviderMutationFlushHandler } from './services/provider-mutation-flush-service'
 
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode

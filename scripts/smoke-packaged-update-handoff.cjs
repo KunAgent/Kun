@@ -49,6 +49,7 @@ const {
   startModelFixture,
   startSmokeTurn,
   waitForJson,
+  waitForPredecessorOwners,
   waitForProcessExit,
   waitForTurn,
   writeSmokeSettings
@@ -202,6 +203,8 @@ async function runPositiveScenario(input) {
       if (marker?.postcondition !== 'drained' || marker?.targetBuildId !== input.candidateBuildId) {
         throw new Error(`Packaged in-app handoff omitted its drained acceptance marker: ${result.output}`)
       }
+      process.stdout.write(`${READY_PREFIX}${JSON.stringify(marker)}\n`)
+      await waitForPredecessorOwners(owners, input.timeoutMs)
     }
 
     const debuggingPort = await availablePort()
@@ -219,10 +222,6 @@ async function runPositiveScenario(input) {
       timeoutMs: input.timeoutMs
     })
 
-    for (const owner of [owners.manager, ...owners.runtimes]) {
-      const pid = owner.discovery.pid
-      if (processIsAlive(pid)) throw new Error(`Candidate left predecessor PID ${pid} alive`)
-    }
     if (input.scenario.autoStart) {
       modelFixture.state.mode = 'complete'
       const listed = await runtimeJson(current.runtime, '/v1/threads?include_archived=true&include=side')
@@ -555,18 +554,8 @@ async function waitForCurrentOwners(input) {
         processExit.promise
       ])
       await runtimeJson(runtime, '/v1/runtime/info')
-    } else {
-      await poll(
-        () => input.oldOwners.runtimes.every((entry) => !processIsAlive(entry.discovery.pid)),
-        input.timeoutMs,
-        'all predecessor Runtimes to exit with autoStart disabled'
-      )
     }
-    await poll(
-      () => !processIsAlive(input.oldOwners.manager.discovery.pid),
-      input.timeoutMs,
-      'the predecessor Manager to exit'
-    )
+    await waitForPredecessorOwners(input.oldOwners, input.timeoutMs)
     return { manager, runtime }
   } finally {
     processExit.dispose()

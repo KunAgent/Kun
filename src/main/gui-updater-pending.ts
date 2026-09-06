@@ -178,7 +178,7 @@ function isHandoffBlockedMarker(value: unknown): value is { at: string; message:
 
 async function readJson(path: string): Promise<unknown | null> {
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as unknown
+    return JSON.parse((await readFile(path, 'utf8')).replace(/^\uFEFF/u, '')) as unknown
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.warn('[kun-gui updater] ignored malformed pending update state:', error)

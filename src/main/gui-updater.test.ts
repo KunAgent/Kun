@@ -314,6 +314,22 @@ describe('installGuiUpdate', () => {
     expect(emptyEnv.KUN_INSTALLER_UPDATE_SOURCE).toBeUndefined()
   })
 
+  it('wires the provider save check before quit intent and runtime cleanup', async () => {
+    const module = await import('./gui-updater')
+    const preflight = vi.fn(async () => { throw new Error('Provider save rejected') })
+    const beforeInstall = vi.fn(async () => undefined)
+    const quitting = vi.fn()
+    module.initializeGuiUpdater(() => null, () => 'stable', beforeInstall, undefined, quitting, undefined, preflight)
+    await downloadInstallEligibleUpdate(module)
+    await expect(module.installGuiUpdate()).resolves.toMatchObject({ ok: false, message: 'Provider save rejected' })
+    expect(preflight).toHaveBeenCalledOnce()
+    expect(beforeInstall).not.toHaveBeenCalled()
+    expect(quitting).not.toHaveBeenCalled()
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+    expect(relaunchApp).not.toHaveBeenCalled()
+    expect(exitApp).not.toHaveBeenCalled()
+  })
+
   it('waits for managed runtime cleanup before asking the updater to quit and install', async () => {
     const module = await import('./gui-updater')
     let finishCleanup = (): void => {
@@ -334,7 +350,7 @@ describe('installGuiUpdate', () => {
     await downloadInstallEligibleUpdate(module)
 
     const installing = module.installGuiUpdate()
-    for (let index = 0; index < 3; index += 1) await Promise.resolve()
+    await vi.waitFor(() => expect(beforeInstall).toHaveBeenCalledOnce())
 
     expect(beforeInstall).toHaveBeenCalledTimes(1)
     expect(setUpdateInstallQuitting).toHaveBeenCalledWith(true)
@@ -355,7 +371,7 @@ describe('installGuiUpdate', () => {
 
   it('rejects installation when the channel changes during cleanup', async () => {
     const module = await import('./gui-updater')
-    let finishCleanup = (): void => undefined
+    let finishCleanup: (() => void) | undefined
     module.initializeGuiUpdater(
       () => null,
       () => 'stable',
@@ -364,9 +380,9 @@ describe('installGuiUpdate', () => {
     await downloadInstallEligibleUpdate(module)
 
     const installing = module.installGuiUpdate()
-    for (let index = 0; index < 3; index += 1) await Promise.resolve()
+    await vi.waitFor(() => expect(finishCleanup).toBeTypeOf('function'))
     module.setGuiUpdateChannel('frontier')
-    finishCleanup()
+    finishCleanup?.()
 
     await expect(installing).resolves.toMatchObject({
       ok: false,
@@ -546,9 +562,7 @@ describe('installGuiUpdate', () => {
 
   it('shares one install operation when the action is triggered twice', async () => {
     const module = await import('./gui-updater')
-    let finishCleanup = (): void => {
-      throw new Error('cleanup resolver was not set')
-    }
+    let finishCleanup: (() => void) | undefined
     module.initializeGuiUpdater(
       () => null,
       () => 'stable',
@@ -560,8 +574,8 @@ describe('installGuiUpdate', () => {
     const second = module.installGuiUpdate()
     expect(second).toBe(first)
 
-    for (let index = 0; index < 3; index += 1) await Promise.resolve()
-    finishCleanup()
+    await vi.waitFor(() => expect(finishCleanup).toBeTypeOf('function'))
+    finishCleanup?.()
     await expect(first).resolves.toEqual({ ok: true })
     expect(updater.quitAndInstall).toHaveBeenCalledTimes(1)
   })

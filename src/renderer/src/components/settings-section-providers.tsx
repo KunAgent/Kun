@@ -41,7 +41,7 @@ import { useProviderProfileMutations } from './use-provider-profile-mutations'
 import { useProviderSharedActions } from './use-provider-shared-actions'
 import { useProviderSharedSynchronization } from './use-provider-shared-synchronization'
 import { settingsSaveIssueMessage } from './settings-save-error'
-import { registerProviderMutationFlushOperations } from './provider-mutation-flush'
+import { useProviderMutationFlushOperations } from './provider-mutation-flush'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 export {
@@ -298,12 +298,13 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     setSubscriptionRegion, setExpandedCapabilities, addProviderButtonRef, addProviderDialogRef,
     providerProxy })
 
-  useEffect(() => registerProviderMutationFlushOperations({
+  useProviderMutationFlushOperations({
     drainProfile: drainSharedProviderProfile,
     drainCatalog: drainSharedProviderCatalog,
     drainCredential: drainSharedProviderCredential,
+    // Deletions are submitted immediately to the shared mutation queue.
     drainDeletion: async () => undefined
-  }), [drainSharedProviderProfile, drainSharedProviderCatalog, drainSharedProviderCredential])
+  })
 
   const { patchProviderProfile, updateModelProvider, updateActiveProviderCredential,
     toggleActiveProviderCredentialVisibility, updateModelProviderImage, removeModelProviderImage,

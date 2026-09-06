@@ -1,3 +1,6 @@
+import type { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
+import { commitMemoryDistillationCandidate } from './memory-distillation-apply.js'
+import { withMemoryMutation } from './memory-mutation-queue.js'
 import { readFile } from 'node:fs/promises'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
@@ -34,6 +37,7 @@ import {
 
 export interface MemoryStore {
   create(input: MemoryCreateRequest): Promise<MemoryRecord>
+  commitDistillation?(candidate: PendingMemoryCandidate): Promise<MemoryRecord>
   createWithId?(id: string, input: MemoryCreateRequest): Promise<MemoryRecord>
   update(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord>
   delete(id: string, access?: MemoryAccess): Promise<MemoryRecord>
@@ -64,13 +68,17 @@ export class FileMemoryStore implements MemoryStore {
   ) {}
 
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {
-    return this.createRecord(
+    return withMemoryMutation(this.options.rootDir, () => this.createRecord(
       this.options.idGenerator?.() ?? `mem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
       input
-    )
+    ))
   }
 
   async createWithId(id: string, input: MemoryCreateRequest): Promise<MemoryRecord> {
+    return withMemoryMutation(this.options.rootDir, () => this.createWithIdNow(id, input))
+  }
+
+  private async createWithIdNow(id: string, input: MemoryCreateRequest): Promise<MemoryRecord> {
     const existing = await this.get(id)
     if (existing) {
       if (input.supersedes && existing.supersedes === input.supersedes) {
@@ -152,6 +160,10 @@ export class FileMemoryStore implements MemoryStore {
   }
 
   async update(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord> {
+    return withMemoryMutation(this.options.rootDir, () => this.updateNow(id, patch, access))
+  }
+
+  private async updateNow(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord> {
     const current = await this.mustGet(id, access)
     const now = this.now()
     const corrected = patch.content !== undefined && patch.content !== current.content
@@ -181,6 +193,10 @@ export class FileMemoryStore implements MemoryStore {
   }
 
   async delete(id: string, access?: MemoryAccess): Promise<MemoryRecord> {
+    return withMemoryMutation(this.options.rootDir, () => this.deleteNow(id, access))
+  }
+
+  private async deleteNow(id: string, access?: MemoryAccess): Promise<MemoryRecord> {
     const current = await this.mustGet(id, access)
     const now = this.now()
     const next = MemoryRecord.parse({
@@ -193,7 +209,15 @@ export class FileMemoryStore implements MemoryStore {
   }
 
   async purge(id: string): Promise<void> {
-    await purgeCanonicalMemoryRecord(this.options.rootDir, id)
+    await withMemoryMutation(this.options.rootDir, () => purgeCanonicalMemoryRecord(this.options.rootDir, id))
+  }
+
+  async commitDistillation(candidate: PendingMemoryCandidate): Promise<MemoryRecord> {
+    return withMemoryMutation(this.options.rootDir, () => commitMemoryDistillationCandidate({
+      list: (filter) => this.list(filter),
+      update: (id, patch, access) => this.updateNow(id, patch, access),
+      createWithId: (id, input) => this.createWithIdNow(id, input)
+    }, candidate, Date.parse(this.now())))
   }
 
   async list(filter: MemoryListFilter = {}): Promise<MemoryRecord[]> {

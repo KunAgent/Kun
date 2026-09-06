@@ -49,7 +49,7 @@ test('stable release reruns quality gates on the merge commit before preparation
 
   const checkout = stepByName(quality, 'Check out merge commit')
   assert.equal(checkout.uses, 'actions/checkout@v4')
-  assert.equal(checkout.with.ref, '${{ github.event.pull_request.merge_commit_sha }}')
+  assert.equal(checkout.with.ref, "${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}")
   assert.equal(checkout.with['fetch-depth'], 0)
 
   const commands = quality.steps.filter((step) => step.run).map((step) => step.run)
@@ -60,6 +60,20 @@ test('stable release reruns quality gates on the merge commit before preparation
     'npm test',
     'npm run audit:production'
   ])
+})
+
+test('manual candidate builds run quality and packaging without touching published state', () => {
+  const workflow = readWorkflow('release.yml')
+  assert.ok(Object.hasOwn(workflow.on, 'workflow_dispatch'))
+  assert.equal(workflow.jobs.publish.if, "github.event_name != 'workflow_dispatch'")
+  assert.equal(workflow.jobs['accept-and-publish'].if, "github.event_name != 'workflow_dispatch'")
+  const source = "${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}"
+  for (const name of ['quality', 'prepare', 'build-macos', 'build-windows', 'build-linux', 'build-linux-arm64']) {
+    const checkout = workflow.jobs[name].steps.find(step => step.uses === 'actions/checkout@v4')
+    assert.equal(checkout.with.ref, source)
+  }
+  assert.match(stepByName(workflow.jobs.prepare, 'Compute release version').run, /--candidate-only/)
+  assert.deepEqual(workflow.jobs.prepare.needs, ['quality'])
 })
 
 test('PR quality catches production advisories before the stable release merge', () => {
@@ -96,6 +110,34 @@ test('stable latest can only advance after native GUI candidate acceptance', () 
   assert.ok(steps.every((step) => step['continue-on-error'] !== true))
 })
 
+test('an existing candidate can be revalidated without rebuilding or moving its tag', () => {
+  const workflow = readWorkflow('release-gui-acceptance.yml')
+  assert.deepEqual(Object.keys(workflow.on.workflow_dispatch.inputs).sort(), ['commit', 'tag', 'version'])
+  assert.equal(workflow.concurrency['cancel-in-progress'], false)
+  const checkoutRef = "${{ github.event_name == 'workflow_dispatch' && github.sha || inputs.commit }}"
+  for (const job of Object.values(workflow.jobs)) {
+    assert.equal(job.steps[0].with.ref, checkoutRef)
+    assert.equal(job.env.CANDIDATE_COMMIT, '${{ inputs.commit }}')
+    assert.ok(job.steps.every(step => !/git (?:tag|push)|npm run dist/.test(step.run ?? '')))
+  }
+  const promotion = workflow.jobs.promote.steps
+  const binding = promotion.findIndex(step => step.run === 'node scripts/release-candidate-source.cjs')
+  const verify = promotion.findIndex(step => step.run === 'node scripts/verify-public-release.mjs candidate')
+  assert.ok(binding >= 0 && binding < verify)
+})
+
+test('GUI evidence is collected before upload so special profile files cannot lose diagnostics', () => {
+  const steps = readWorkflow('release-gui-acceptance.yml').jobs.accept.steps
+  const archive = steps.findIndex(step => step.name === 'Collect GUI upgrade diagnostics')
+  const upload = steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
+  assert.ok(archive >= 0 && archive < upload)
+  assert.equal(steps[archive].if, 'always()')
+  assert.ok(steps[upload].with.path.includes('gui-upgrade-evidence/**'))
+  assert.doesNotMatch(steps[upload].with.path, /kun-gui-upgrade-\*\/\*\*/)
+  assert.ok(stepByName(readWorkflow('release-gui-acceptance.yml').jobs.accept,
+    'Exercise the released GUI against the isolated version feed')['timeout-minutes'] < 90)
+})
+
 test('standalone TUI distribution is removed while GUI upgrade gates stay required', () => {
   const workflow = readWorkflow('pr-checks.yml')
   assert.ok(workflow.jobs['pr-gate'].needs.includes('gui-upgrade-windows'))
@@ -114,4 +156,33 @@ test('standalone TUI distribution is removed while GUI upgrade gates stay requir
   const promotion = readWorkflow('release-gui-acceptance.yml').jobs.promote.steps
     .find((step) => step.run?.includes('publish-r2.mjs promote'))
   assert.match(promotion.run, /--require-all-platforms/)
+})
+
+
+test('PR GUI upgrades verify same-run artifact provenance without using a release tag', () => {
+  const workflow = readWorkflow('pr-checks.yml')
+  const packaging = workflow.jobs['package-windows'].steps
+  const binding = packaging.findIndex(step => step.name === 'Bind PR installer to its tested source')
+  const upload = packaging.findIndex(step => step.name === 'Upload Windows PR package')
+  assert.ok(binding >= 0 && binding < upload)
+  assert.ok(packaging[upload].with.path.includes('dist/pr-candidate-source.json'))
+  const upgrades = workflow.jobs['gui-upgrade-windows'].steps
+  const download = upgrades.find(step => step.uses === 'actions/download-artifact@v4')
+  assert.equal(download.with.name, packaging[upload].with.name)
+  assert.equal(download.with['run-id'], undefined)
+  assert.equal(download.with.repository, undefined)
+  assert.equal(stepByName(workflow.jobs['gui-upgrade-windows'],
+    'Verify GUI upgrade from the published 0.3.7 installer').env.GUI_UPGRADE_SOURCE, 'pull-request')
+})
+
+
+test('PR GUI upgrade evidence is collected into the workspace before cross-drive upload', () => {
+  const steps = readWorkflow('pr-checks.yml').jobs['gui-upgrade-windows'].steps
+  const collect = steps.findIndex(step => step.name === 'Collect GUI upgrade diagnostics')
+  const upload = steps.findIndex(step => step.name === 'Upload GUI upgrade evidence')
+  assert.ok(collect >= 0 && collect < upload)
+  assert.equal(steps[collect].if, 'always()')
+  assert.equal(steps[collect].run, 'node scripts/gui-upgrade-diagnostics.cjs')
+  assert.ok(steps[upload].with.path.includes('gui-upgrade-evidence/**'))
+  assert.doesNotMatch(steps[upload].with.path, /env.GUI_UPGRADE_EVIDENCE/)
 })

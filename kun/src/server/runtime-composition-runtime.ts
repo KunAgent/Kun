@@ -152,6 +152,7 @@ export function createServerRuntimeComposition(
 	    get memoryStore() {
 	      return services.memoryStore
 	    },
+	    memoryDistillation: services.memoryDistillation,
 	    migrationService,
 	    migrationImportService,
 	    knowledgeBaseService,
@@ -402,6 +403,7 @@ export function createServerRuntimeComposition(
             shutdownLeases: async () => { await executionLeases?.shutdown() }
           })
         },
+        async () => { await services.memoryDistillation.shutdown() },
         async () => {
           try {
             await backgroundShellRuntime.shutdown()

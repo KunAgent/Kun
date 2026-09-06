@@ -57,6 +57,13 @@ export type AgentLoopOptions = {
   instructionRuntime?: InstructionRuntime
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  memoryDistillation?: {
+    schedule(input: {
+      threadId: string
+      turnId: string
+      status: 'completed' | 'failed' | 'aborted'
+    }): void
+  }
   artifactStore?: ArtifactStore
   /** Kun runtime data root for sandbox-safe background shell output reads. */
   runtimeDataDir?: string

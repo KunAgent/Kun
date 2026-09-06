@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import type {
   CoreMemoryDiagnosticsJson,
   CoreMemoryRecordJson,
+  CorePendingMemoryCandidateJson,
   CoreRuntimeInfoJson,
   CoreRuntimeToolDiagnosticsJson
 } from '../agent/kun-contract'
@@ -125,6 +126,7 @@ export function SettingsView(): ReactElement {
   const [runtimeInfo, setRuntimeInfo] = useState<CoreRuntimeInfoJson | null>(null)
   const [toolDiagnostics, setToolDiagnostics] = useState<CoreRuntimeToolDiagnosticsJson | null>(null)
   const [memoryRecords, setMemoryRecords] = useState<CoreMemoryRecordJson[]>([])
+  const [memoryCandidates, setMemoryCandidates] = useState<CorePendingMemoryCandidateJson[]>([])
   const [memoryDiagnostics, setMemoryDiagnostics] = useState<CoreMemoryDiagnosticsJson | null>(null)
   const [runtimeDiagnosticsBusy, setRuntimeDiagnosticsBusy] = useState(false)
   const [runtimeDiagnosticsNotice, setRuntimeDiagnosticsNotice] = useState<InlineNotice | null>(null)
@@ -266,7 +268,7 @@ export function SettingsView(): ReactElement {
     loadMcpConfig, openSkillRoot, toggleSkillRoot, saveMcpConfig, openMcpConfigDir,
     loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir,
     refreshKunDiagnostics, createMemoryRecord, updateMemoryRecord, disableMemoryRecord,
-    restoreMemoryRecord, deleteMemoryRecord, scrollToAgentSection
+    restoreMemoryRecord, deleteMemoryRecord, decideMemoryCandidate, scrollToAgentSection
   } = useSettingsDomainOperations({
     t, reloadUiSettings, category, form, setForm, setSkillRoots, setSkillRootsLoading,
     setSkillNotice, setMcpConfigPath, mcpConfigText, setMcpConfigText, setMcpConfigExists,
@@ -274,6 +276,7 @@ export function SettingsView(): ReactElement {
     projectConfig, setProjectConfig, projectConfigText, setProjectConfigText,
     setProjectConfigLoading, setProjectConfigBusy, setProjectConfigNotice, runtimeInfo,
     setRuntimeInfo, toolDiagnostics, setToolDiagnostics, memoryRecords, setMemoryRecords,
+    setMemoryCandidates,
     setMemoryDiagnostics, setRuntimeDiagnosticsBusy, runtimeDiagnosticsNotice,
     setRuntimeDiagnosticsNotice, persistedSettingsRef, agentsSectionRef, skillSectionRef,
     mcpSectionRef, permissionsSectionRef, compactHomePath, expandHomePath,
@@ -542,6 +545,7 @@ export function SettingsView(): ReactElement {
     runtimeInfo,
     toolDiagnostics,
     memoryRecords,
+    memoryCandidates,
     memoryDiagnostics,
     runtimeDiagnosticsBusy,
     runtimeDiagnosticsNotice,
@@ -551,6 +555,7 @@ export function SettingsView(): ReactElement {
     disableMemoryRecord,
     restoreMemoryRecord,
     deleteMemoryRecord,
+    decideMemoryCandidate,
     pickClawWorkspace,
     resetClawWorkspaceToDefault,
     clawWorkspacePickerError,

@@ -12,6 +12,7 @@ type ReleaseVersionResult = {
 }
 
 type ReleaseVersionModule = {
+  computeCandidateVersion(packageVersion: string): ReleaseVersionResult
   computeReleaseVersion(input: {
     allTags?: string[]
     headTags?: string[]
@@ -23,6 +24,11 @@ type ReleaseVersionModule = {
 const releaseVersion = require('../../scripts/compute-ci-release-version.cjs') as ReleaseVersionModule
 
 describe('CI release version computation', () => {
+  it('builds an unpublished candidate at the package version without advancing or reusing a tag', () => {
+    expect(releaseVersion.computeCandidateVersion('0.3.8')).toEqual({ version: '0.3.8', tag: 'v0.3.8',
+      releaseName: 'Kun 0.3.8', previousTag: '', existingTag: false })
+    expect(() => releaseVersion.computeCandidateVersion('invalid')).toThrow()
+  })
   it('bumps package.json patch version when no release tags exist', () => {
     expect(
       releaseVersion.computeReleaseVersion({

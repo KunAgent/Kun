@@ -236,11 +236,14 @@ export function stopManagedRuntimes(): Promise<void> {
   return runtimeShutdown.stop()
 }
 
-export async function prepareManagedRuntimesForUpdate(): Promise<void> {
+export async function checkProviderMutationsBeforeUpdate(): Promise<void> {
   const mutationFlush = await requestProviderMutationFlush(() => mainState.mainWindow)
   if (!mutationFlush.ok) {
     throw new Error(`Provider mutations could not be flushed before update (${mutationFlush.errorCode ?? 'unknown'})`)
   }
+}
+
+export function prepareManagedRuntimesForUpdate(): Promise<void> {
   return runtimeShutdown.prepareForUpdate()
 }
 
@@ -262,7 +265,8 @@ export async function loadGuiUpdaterModule(): Promise<GuiUpdaterModule> {
             prepareManagedRuntimesForUpdate,
             async () => (await mainState.store.load()).locale,
             setUpdateInstallQuitting,
-            async () => (await probeRuntimeApi(await mainState.store.load())).ok
+            async () => (await probeRuntimeApi(await mainState.store.load())).ok,
+            checkProviderMutationsBeforeUpdate
           )
           mainState.guiUpdaterInitialized = true
         }

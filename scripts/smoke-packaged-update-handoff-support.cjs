@@ -330,18 +330,22 @@ async function waitForJson(path, predicate, timeoutMs, state = () => '') {
   }, timeoutMs, `${path}; ${state()}`)
 }
 
-async function poll(operation, timeoutMs, description) {
+async function poll(operation, timeoutMs, description, checkTerminalFailure = () => {}) {
   const deadline = Date.now() + timeoutMs
   let lastError
   while (Date.now() < deadline) {
+    checkTerminalFailure()
     try {
       const value = await operation()
+      checkTerminalFailure()
       if (value !== undefined && value !== false) return value
     } catch (error) {
+      checkTerminalFailure()
       lastError = error
     }
     await delay(100)
   }
+  checkTerminalFailure()
   throw new Error(`Timed out waiting for ${description}${lastError ? `: ${lastError.message}` : ''}`)
 }
 
@@ -358,6 +362,23 @@ function processIsAlive(pid) {
     return true
   } catch (error) {
     return error?.code === 'EPERM'
+  }
+}
+
+async function waitForPredecessorOwners(owners, timeoutMs) {
+  const predecessors = [owners.manager, ...owners.runtimes]
+  try {
+    // These are children we spawned, so their exit state identifies the exact
+    // process. A numeric PID can belong to a different process after handoff.
+    await poll(() => predecessors.every((owner) => {
+      const child = owner.process.child
+      return child.exitCode !== null || child.signalCode !== null
+    }), timeoutMs, 'the predecessor Manager and Runtimes to exit')
+  } catch (error) {
+    const states = predecessors.map((owner) =>
+      `${owner.flavor ?? 'manager'} PID ${owner.discovery.pid}: ${childState(owner.process.child)}`
+    )
+    throw new Error(`${error.message}; ${states.join('; ')}`)
   }
 }
 
@@ -403,6 +424,7 @@ module.exports = {
   startModelFixture,
   startSmokeTurn,
   waitForJson,
+  waitForPredecessorOwners,
   waitForProcessExit,
   waitForTurn,
   writeSmokeSettings

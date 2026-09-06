@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const { EventEmitter, once } = require('node:events')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const test = require('node:test')
@@ -11,7 +12,10 @@ const {
   buildSmokeSettings,
   parseSmokeMarker,
   predecessorBuildId,
-  runtimeBuildIdForFlavor
+  processIsAlive,
+  runtimeBuildIdForFlavor,
+  spawnTracked,
+  waitForPredecessorOwners
 } = require('./smoke-packaged-update-handoff-support.cjs')
 const {
   FAILED_PREFIX,
@@ -64,6 +68,108 @@ test('synthetic predecessor and development flavor use distinct stable build IDs
   assert.equal(runtimeBuildIdForFlavor(predecessor, 'production'), predecessor)
   assert.match(runtimeBuildIdForFlavor(predecessor, 'development'), /^[a-f0-9]{64}$/u)
   assert.notEqual(runtimeBuildIdForFlavor(predecessor, 'development'), predecessor)
+})
+
+function predecessorOwners() {
+  const owner = (flavor) => ({
+    ...(flavor ? { flavor } : {}),
+    discovery: { pid: process.pid },
+    process: {
+      child: Object.assign(new EventEmitter(), {
+        pid: process.pid,
+        exitCode: 0,
+        signalCode: null,
+        killed: false
+      })
+    }
+  })
+  return { manager: owner(), runtimes: [owner('production'), owner('development')] }
+}
+
+test('predecessor exit uses the original child even when its PID is occupied again', async () => {
+  const owners = predecessorOwners()
+  // Deterministically model PID reuse with the still-live test runner's PID.
+  assert.equal(processIsAlive(owners.runtimes[1].discovery.pid), true)
+  await waitForPredecessorOwners(owners, 1_000)
+})
+
+for (const role of ['manager', 'production', 'development']) {
+  test(`handoff still rejects a live predecessor ${role}`, async () => {
+    const owners = predecessorOwners()
+    const owner = role === 'manager'
+      ? owners.manager
+      : owners.runtimes.find((entry) => entry.flavor === role)
+    owner.process.child.exitCode = null
+    // Sending a signal is not proof that the process has exited.
+    owner.process.child.killed = true
+    await assert.rejects(waitForPredecessorOwners(owners, 10), (error) => {
+      assert.match(error.message, /Timed out waiting for the predecessor Manager and Runtimes to exit/u)
+      assert(error.message.includes(`${role} PID ${process.pid}: running`))
+      return true
+    })
+  })
+}
+
+test('handoff waits for a delayed original child exit without requiring stream closure', async () => {
+  const owners = predecessorOwners()
+  const child = owners.runtimes[1].process.child
+  child.exitCode = null
+  const result = waitForPredecessorOwners(owners, 1_000)
+  queueMicrotask(() => {
+    child.exitCode = 0
+    child.emit('exit', 0, null)
+  })
+  await result
+})
+
+test('handoff accepts a recorded signal exit and nonzero exit as terminated', async () => {
+  const owners = predecessorOwners()
+  owners.manager.process.child.exitCode = 1
+  owners.runtimes[1].process.child.exitCode = null
+  owners.runtimes[1].process.child.signalCode = 'SIGTERM'
+  await waitForPredecessorOwners(owners, 1_000)
+})
+
+test('handoff observes a real child exit without stopping it on behalf of the candidate', async (t) => {
+  const tracked = spawnTracked(process.execPath, ['-e',
+    "process.stdin.resume(); process.stdout.write('ready'); process.stdin.once('data', () => process.exit(0))"
+  ], { stdio: ['pipe', 'pipe', 'pipe'] })
+  const child = tracked.child
+  t.after(async () => {
+    if (child.exitCode !== null || child.signalCode !== null) return
+    const exited = once(child, 'exit')
+    child.kill()
+    await exited
+  })
+  await once(child.stdout, 'data')
+  const owners = predecessorOwners()
+  owners.runtimes[1] = { flavor: 'development', discovery: { pid: child.pid }, process: tracked }
+  let completed = false
+  const result = waitForPredecessorOwners(owners, 5_000).then(() => { completed = true })
+  await Promise.resolve()
+  assert.equal(completed, false)
+  child.stdin.end('stop')
+  await result
+  assert.equal(child.exitCode, 0)
+  assert.equal(child.killed, false)
+})
+
+test('both update paths verify the exact predecessors instead of probing reusable PIDs', () => {
+  const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
+  const positive = source.slice(
+    source.indexOf('async function runPositiveScenario'),
+    source.indexOf('async function runNegativeScenario')
+  )
+  const preflightCheck = positive.indexOf('await waitForPredecessorOwners(owners, input.timeoutMs)')
+  assert(preflightCheck > positive.indexOf("marker?.postcondition !== 'drained'"))
+  assert(preflightCheck < positive.indexOf('const candidateDesktop = launchCandidate'))
+  assert.doesNotMatch(positive, /processIsAlive\(pid\)/u)
+  const wait = source.slice(
+    source.indexOf('async function waitForCurrentOwners'),
+    source.indexOf('async function assertChatRoundTrip')
+  )
+  assert.match(wait, /await waitForPredecessorOwners\(input.oldOwners, input.timeoutMs\)/u)
+  assert.doesNotMatch(wait, /processIsAlive/u)
 })
 
 test('profile settings preserve explicit auto-start policy and canonical data scope', () => {

@@ -94,6 +94,14 @@ function settings(): AppSettingsV1 {
 }
 
 describe('mergeKunRuntimeSettings', () => {
+  it('preserves and independently patches the Memory distillation opt-in', () => {
+    const current = defaultKunRuntimeSettings()
+    const enabled = mergeKunRuntimeSettings(current, { memoryDistillationEnabled: true })
+    expect(enabled.memoryDistillationEnabled).toBe(true)
+    expect(enabled.memoryEnabled).toBe(current.memoryEnabled)
+    expect(mergeKunRuntimeSettings(enabled, {}).memoryDistillationEnabled).toBe(true)
+  })
+
   it('does not let an empty primary model wipe the current chat model', () => {
     const current = defaultKunRuntimeSettings()
     expect(current.model.trim().length).toBeGreaterThan(0)
