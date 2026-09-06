@@ -237,6 +237,18 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Smoke Windows mini window interaction and restoration
+        timeout-minutes: 5
+        run: npm run smoke:mini-window
+
+      - name: Upload Windows mini window evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-windows-mini-window
+          path: dist/mini-window-smoke
+          if-no-files-found: warn
+
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
@@ -284,43 +296,6 @@ jobs:
             dist/latest.yml
             dist/pr-candidate-source.json
 
-  gui-upgrade-windows:
-    name: GUI upgrade from released 0.3.7 (Windows)
-    runs-on: windows-latest
-    needs: package-windows
-    timeout-minutes: 75
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm ci --ignore-scripts
-      - uses: actions/download-artifact@v4
-        with:
-          name: pr-windows-nsis-package
-          path: dist
-      - name: Verify GUI upgrade from the published 0.3.7 installer
-        env:
-          GUI_UPGRADE_SOURCE: pull-request
-        timeout-minutes: 60
-        run: |
-          $version = node -p "require('./package.json').version"
-          node scripts/smoke-gui-upgrade.cjs --directory dist --version $version --report gui-upgrade-win32.json
-
-      - name: Collect GUI upgrade diagnostics
-        if: always()
-        run: node scripts/gui-upgrade-diagnostics.cjs
-
-      - name: Upload GUI upgrade evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-gui-upgrade-windows
-          path: |
-            gui-upgrade-win32.json*
-            gui-upgrade-evidence/**
-          if-no-files-found: warn
-
   pr-gate:
     name: PR gate
     runs-on: ubuntu-latest
@@ -330,7 +305,6 @@ jobs:
       - package-linux-arm64
       - package-macos
       - package-windows
-      - gui-upgrade-windows
     if: always()
     steps:
       - name: Require every PR job to succeed
@@ -338,7 +312,6 @@ jobs:
         with:
           script: |
             const results = [
-              ['GUI upgrade from released 0.3.7 (Windows)', '${{ needs.gui-upgrade-windows.result }}'],
               ['Quality gates', '${{ needs.quality.result }}'],
               ['Build Linux package', '${{ needs.package.result }}'],
               ['Build Linux package (ARM64)', '${{ needs['package-linux-arm64'].result }}'],

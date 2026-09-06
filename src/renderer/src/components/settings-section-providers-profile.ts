@@ -21,6 +21,7 @@ import type {
 import {
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
   DEFAULT_MODEL_PROVIDER_ID,
+  OPENCODE_FREE_PROVIDER_ID,
   DEFAULT_MUSIC_GENERATION_PROTOCOL,
   DEFAULT_SPEECH_TO_TEXT_PROTOCOL,
   DEFAULT_TEXT_TO_SPEECH_PROTOCOL,
@@ -237,11 +238,11 @@ export function modelProviderDeletionKunPatch(input: {
   const matches = (value: string | undefined): boolean =>
     typeof value === 'string' && deletedProviderIds.has(value.trim())
 
-  if (matches(currentKun.providerId) && fallbackProvider) {
-    Object.assign(patch, kunProviderSelectionPatch({
+  if (matches(currentKun.providerId?.trim() || DEFAULT_MODEL_PROVIDER_ID)) {
+    Object.assign(patch, fallbackProvider ? kunProviderSelectionPatch({
       providerId: fallbackProvider.id,
       model: nonEmptyModelId(fallbackProvider.models[0])
-    }))
+    }) : { providerId: '', apiKey: '', baseUrl: '' })
   }
   for (const key of [
     'imageGeneration',
@@ -329,6 +330,10 @@ export function modelProvidersSettingsPatch(input: {
   currentKun?: Partial<KunRuntimeSettingsV1>
 }): AppSettingsPatch {
   const defaultProvider = input.providers.find((item) => item.id === DEFAULT_MODEL_PROVIDER_ID)
+  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID, OPENCODE_FREE_PROVIDER_ID]
+    .filter((id) => !input.providers.some((item) => item.id === id) &&
+      (input.provider.excludedBuiltinProviderIds?.includes(id) ||
+        input.provider.providers.some((item) => item.id === id)))
   const miniMaxMediaDefaults = defaultMiniMaxMediaGenerationKunPatch({
     providers: input.providers,
     currentKun: input.currentKun,
@@ -348,10 +353,11 @@ export function modelProvidersSettingsPatch(input: {
   }
   return {
     provider: {
-      apiKey: defaultProvider?.apiKey ?? input.provider.apiKey,
+      apiKey: defaultProvider?.apiKey ?? '',
       baseUrl: defaultProvider?.baseUrl ?? input.provider.baseUrl,
       proxy: input.provider.proxy,
       providers: input.providers,
+      excludedBuiltinProviderIds,
       routePools: input.provider.routePools,
       localGateway: input.provider.localGateway
     },

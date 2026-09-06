@@ -1,74 +1,64 @@
-/* Mini-pane window mode: collapse secondary chrome so the shrunken window
-   keeps the conversation area usable, and reveal a restore control on hover.
-   The dimmed layer doubles as a window drag region so the pane can be moved
-   freely; the restore badge opts out via -webkit-app-region: no-drag. */
-
+/* Keep mini mode interactive. Only this toolbar is a drag region; sidebar
+   wrappers and dividers collapse without changing the saved workbench layout. */
+[data-kun-mini='on'] [data-workbench-left-sidebar],
+[data-kun-mini='on'] [data-workbench-right-panel],
+[data-kun-mini='on'] .ds-workbench-divider,
 [data-kun-mini='on'] aside,
 [data-kun-mini='on'] nav.ds-windows-menu {
   display: none !important;
 }
 
 .ds-mini-restore {
-  position: fixed;
-  inset: 0;
-  /* Above workbench overlays/dialogs so the restore control stays reachable. */
+  position: relative;
   z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: grab;
-  background: color-mix(in srgb, var(--ds-bg-main, #10141f) 62%, transparent);
-  opacity: 0;
-  pointer-events: none;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--ds-border-muted);
+  color: var(--ds-text-muted);
+  background: var(--ds-bg-main);
   -webkit-app-region: drag;
-  transition: opacity 140ms ease;
-}
-
-.ds-mini-restore:active {
-  cursor: grabbing;
-}
-
-/* pointer-events: none elements never receive :hover, so visibility is
-   driven by hovering anywhere inside the mini window instead. */
-[data-kun-mini='on'] body:hover .ds-mini-restore,
-.ds-mini-restore:focus-within {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ds-mini-restore {
-    transition: none;
-  }
+  user-select: none;
 }
 
 .ds-mini-restore-controls {
   display: flex;
-  flex-direction: column;
+  min-width: 0;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .ds-mini-restore-badge {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 8px;
-  border: none;
-  border-radius: 999px;
-  padding: 10px 18px;
-  font-size: 13px;
+  gap: 5px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  color: #ffffff;
-  background: rgba(15, 20, 33, 0.86);
-  box-shadow: 0 8px 28px rgba(8, 12, 22, 0.45);
-  backdrop-filter: blur(6px);
+  color: var(--ds-text);
+  background: var(--ds-surface-card);
   -webkit-app-region: no-drag;
 }
 
+.ds-mini-restore-badge:hover {
+  background: var(--ds-surface-hover);
+}
+
+.ds-mini-restore-badge:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 2px;
+}
+
 .ds-mini-restore-hint {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.82);
-  text-shadow: 0 1px 4px rgba(8, 12, 22, 0.6);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
   pointer-events: none;
 }

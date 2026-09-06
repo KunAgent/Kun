@@ -651,5 +651,5 @@
   "workflowCallableShort": "एआई-कॉल करने योग्य",
   "workflowCallableHint": "कोड-मोड एजेंट को इसे सीधे run_workflow के माध्यम से चलाने दें।",
   "miniWindowRestore": "विंडो पुनर्स्थापित करें",
-  "miniWindowDragHint": "खींचकर कहीं भी ले जाएँ"
+  "miniWindowDragHint": "विंडो खिसकाने के लिए इस पट्टी को खींचें"
 }

@@ -662,5 +662,5 @@
   "designCanvasConversationRunning": "Conversation is running",
   "designCanvasConversationPanelLabel": "Design conversation: {{title}}",
   "miniWindowRestore": "Restore window",
-  "miniWindowDragHint": "Drag anywhere to move"
+  "miniWindowDragHint": "Drag this bar to move"
 }

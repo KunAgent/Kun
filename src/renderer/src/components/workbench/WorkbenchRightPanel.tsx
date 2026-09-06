@@ -175,7 +175,7 @@ export function WorkbenchRightPanel({
         className={workbenchDividerClassName(route)}
         onPointerDown={onBeginResize}
       />
-      <div className="ds-sidebar-surface h-full min-h-0 shrink-0" style={{ width }}>
+      <div data-workbench-right-panel className="ds-sidebar-surface h-full min-h-0 shrink-0" style={{ width }}>
         <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
           {design.panelMode !== 'hidden' ? (
             <DesignRightPanelContent {...design} />
@@ -378,6 +378,7 @@ function CodeRightPanelWorkspace({
         onPointerDown={onBeginResize}
       />
       <div
+        data-workbench-right-panel
         className={`${visible ? 'flex' : 'hidden'} ds-sidebar-surface h-full min-h-0 shrink-0 flex-col`}
         style={{ width }}
       >

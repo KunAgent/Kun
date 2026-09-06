@@ -16,9 +16,8 @@ function ExpandIcon(): ReactElement {
   )
 }
 
-// Hover overlay shown while the window is in mini-pane mode. The dimmed layer
-// itself is a window drag region so the pane can be moved freely; clicking
-// the expand badge (or the title-bar mini button) restores the normal size.
+// A dedicated drag strip keeps window movement separate from chat interaction.
+// It participates in the app layout instead of covering the conversation.
 export function MiniWindowOverlay(): ReactElement {
   const { t } = useTranslation('common')
   const restore = (): void => {
@@ -27,8 +26,9 @@ export function MiniWindowOverlay(): ReactElement {
     }
   }
   return (
-    <div className="ds-mini-restore">
+    <div className="ds-mini-restore" data-mini-window-toolbar>
       <div className="ds-mini-restore-controls">
+        <span className="ds-mini-restore-hint">{t('miniWindowDragHint')}</span>
         <button
           type="button"
           className="ds-mini-restore-badge"
@@ -39,7 +39,6 @@ export function MiniWindowOverlay(): ReactElement {
           <ExpandIcon />
           <span>{t('miniWindowRestore')}</span>
         </button>
-        <span className="ds-mini-restore-hint">{t('miniWindowDragHint')}</span>
       </div>
     </div>
   )

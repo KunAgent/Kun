@@ -24,6 +24,19 @@ function normalizedExpression(value) {
   return value.replace(/\s+/gu, ' ').trim()
 }
 
+test('Windows PR and stable builds verify native mini window interaction', () => {
+  for (const [file, jobName] of [['pr-checks.yml', 'package-windows'], ['release.yml', 'build-windows']]) {
+    const job = readWorkflow(file).jobs[jobName]
+    assert.equal(job['runs-on'], 'windows-latest')
+    const smoke = stepByName(job, 'Smoke Windows mini window interaction and restoration')
+    assert.equal(smoke.run, 'npm run smoke:mini-window')
+    assert.equal(smoke['timeout-minutes'], 5)
+    const evidence = stepByName(job, 'Upload Windows mini window evidence')
+    assert.equal(evidence.if, 'always()')
+    assert.equal(evidence.with.path, 'dist/mini-window-smoke')
+  }
+})
+
 test('Windows release jobs outlive their installer smoke timeout', () => {
   for (const file of ['pr-checks.yml', 'release.yml', 'daily-dev-prerelease.yml']) {
     const workflow = readWorkflow(file)
@@ -94,19 +107,21 @@ test('Windows installer syntax checks include the smoke script by absolute path'
   assert.ok(installerHelperPaths.every(isAbsolute))
 })
 
-test('stable latest can only advance after native GUI candidate acceptance', () => {
+test('stable latest advances only after candidate integrity checks and public readback', () => {
   const release = readWorkflow('release.yml')
   assert.deepEqual(release.jobs['accept-and-publish'].needs, ['prepare', 'publish'])
   assert.equal(release.jobs['accept-and-publish'].uses, './.github/workflows/release-gui-acceptance.yml')
   assert.ok(release.jobs.publish.steps.every((step) => !step.run?.includes('promote')))
   const acceptance = readWorkflow('release-gui-acceptance.yml')
-  assert.equal(acceptance.jobs.promote.needs, 'accept')
+  assert.equal(acceptance.jobs.accept, undefined)
+  assert.equal(acceptance.jobs.promote.needs, undefined)
   const steps = acceptance.jobs.promote.steps
   const verify = steps.findIndex((step) => step.run?.includes('verify-public-release.mjs candidate'))
   const promote = steps.findIndex((step) => step.run?.includes('publish-r2.mjs promote'))
   const readback = steps.findIndex((step) => step.run?.includes('verify-public-release.mjs latest'))
   const publish = steps.findIndex((step) => step.name === 'Publish GitHub Release')
-  assert.ok(verify >= 0 && promote > verify && readback > promote && publish > readback)
+  const metadata = steps.findIndex(step => step.run?.includes('--json assets,tagName,isDraft'))
+  assert.ok(metadata >= 0 && verify > metadata && promote > verify && readback > promote && publish > readback)
   assert.ok(steps.every((step) => step['continue-on-error'] !== true))
 })
 
@@ -126,22 +141,21 @@ test('an existing candidate can be revalidated without rebuilding or moving its 
   assert.ok(binding >= 0 && binding < verify)
 })
 
-test('GUI evidence is collected before upload so special profile files cannot lose diagnostics', () => {
-  const steps = readWorkflow('release-gui-acceptance.yml').jobs.accept.steps
-  const archive = steps.findIndex(step => step.name === 'Collect GUI upgrade diagnostics')
-  const upload = steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
-  assert.ok(archive >= 0 && archive < upload)
-  assert.equal(steps[archive].if, 'always()')
-  assert.ok(steps[upload].with.path.includes('gui-upgrade-evidence/**'))
-  assert.doesNotMatch(steps[upload].with.path, /kun-gui-upgrade-\*\/\*\*/)
-  assert.ok(stepByName(readWorkflow('release-gui-acceptance.yml').jobs.accept,
-    'Exercise the released GUI against the isolated version feed')['timeout-minutes'] < 90)
+test('release verification retains artifact evidence without launching GUI upgrade tests', () => {
+  const workflow = readWorkflow('release-gui-acceptance.yml')
+  assert.deepEqual(Object.keys(workflow.jobs), ['promote'])
+  const steps = workflow.jobs.promote.steps
+  assert.ok(steps.every(step => !step.run?.includes('smoke-gui-upgrade.cjs')))
+  const upload = steps.find(step => step.uses === 'actions/upload-artifact@v4')
+  assert.equal(upload.if, 'always()')
+  assert.equal(upload.with.path, 'public-release-evidence/**')
 })
 
-test('standalone TUI distribution is removed while GUI upgrade gates stay required', () => {
+test('standalone TUI distribution is removed while cross-platform packaging remains required', () => {
   const workflow = readWorkflow('pr-checks.yml')
-  assert.ok(workflow.jobs['pr-gate'].needs.includes('gui-upgrade-windows'))
-  assert.ok(workflow.jobs['pr-gate'].steps[0].with.script.includes('needs.gui-upgrade-windows.result'))
+  assert.equal(workflow.jobs['gui-upgrade-windows'], undefined)
+  assert.ok(workflow.jobs['pr-gate'].needs.includes('package-windows'))
+  assert.ok(workflow.jobs['pr-gate'].needs.includes('package-macos'))
   for (const file of ['pr-checks.yml', 'release.yml', 'daily-dev-prerelease.yml']) {
     const current = readWorkflow(file)
     assert.equal(current.jobs['build-tui'], undefined)
@@ -159,30 +173,11 @@ test('standalone TUI distribution is removed while GUI upgrade gates stay requir
 })
 
 
-test('PR GUI upgrades verify same-run artifact provenance without using a release tag', () => {
+test('PR installers retain source provenance for optional manual upgrade verification', () => {
   const workflow = readWorkflow('pr-checks.yml')
   const packaging = workflow.jobs['package-windows'].steps
   const binding = packaging.findIndex(step => step.name === 'Bind PR installer to its tested source')
   const upload = packaging.findIndex(step => step.name === 'Upload Windows PR package')
   assert.ok(binding >= 0 && binding < upload)
   assert.ok(packaging[upload].with.path.includes('dist/pr-candidate-source.json'))
-  const upgrades = workflow.jobs['gui-upgrade-windows'].steps
-  const download = upgrades.find(step => step.uses === 'actions/download-artifact@v4')
-  assert.equal(download.with.name, packaging[upload].with.name)
-  assert.equal(download.with['run-id'], undefined)
-  assert.equal(download.with.repository, undefined)
-  assert.equal(stepByName(workflow.jobs['gui-upgrade-windows'],
-    'Verify GUI upgrade from the published 0.3.7 installer').env.GUI_UPGRADE_SOURCE, 'pull-request')
-})
-
-
-test('PR GUI upgrade evidence is collected into the workspace before cross-drive upload', () => {
-  const steps = readWorkflow('pr-checks.yml').jobs['gui-upgrade-windows'].steps
-  const collect = steps.findIndex(step => step.name === 'Collect GUI upgrade diagnostics')
-  const upload = steps.findIndex(step => step.name === 'Upload GUI upgrade evidence')
-  assert.ok(collect >= 0 && collect < upload)
-  assert.equal(steps[collect].if, 'always()')
-  assert.equal(steps[collect].run, 'node scripts/gui-upgrade-diagnostics.cjs')
-  assert.ok(steps[upload].with.path.includes('gui-upgrade-evidence/**'))
-  assert.doesNotMatch(steps[upload].with.path, /env.GUI_UPGRADE_EVIDENCE/)
 })

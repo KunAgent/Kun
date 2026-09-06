@@ -158,6 +158,10 @@ export function normalizeModelProviderSettings(
   const legacyProxyRouting = input?.proxyRoutingVersion !== PROVIDER_PROXY_ROUTING_VERSION
   const missingUseProxy = legacyProxyRouting && proxy.enabled
   const rawProviders = Array.isArray(input?.providers) ? input.providers : []
+  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID, OPENCODE_FREE_PROVIDER_ID]
+    .filter((id) => Array.isArray(input?.excludedBuiltinProviderIds) &&
+      input.excludedBuiltinProviderIds.includes(id) &&
+      !rawProviders.some((provider) => normalizeModelProviderId(provider?.id) === id))
   const providersById = new Map<string, ModelProviderProfileV1>()
   const defaultProvider = {
     ...defaultModelProviderProfile(apiKey, baseUrl),
@@ -167,8 +171,12 @@ export function normalizeModelProviderSettings(
     getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
   )
   openCodeFreeProvider.useProxy = missingUseProxy
-  providersById.set(defaultProvider.id, defaultProvider)
-  providersById.set(openCodeFreeProvider.id, openCodeFreeProvider)
+  if (!excludedBuiltinProviderIds.includes(defaultProvider.id)) {
+    providersById.set(defaultProvider.id, defaultProvider)
+  }
+  if (!excludedBuiltinProviderIds.includes(openCodeFreeProvider.id)) {
+    providersById.set(openCodeFreeProvider.id, openCodeFreeProvider)
+  }
   for (const rawProvider of rawProviders) {
     const provider = normalizeModelProviderProfile(rawProvider, missingUseProxy)
     if (!provider) continue
@@ -188,11 +196,12 @@ export function normalizeModelProviderSettings(
   const providers = [...providersById.values()]
   const routePools = normalizeModelRoutePools(input?.routePools, providers)
   return {
-    apiKey,
+    apiKey: excludedBuiltinProviderIds.includes(DEFAULT_MODEL_PROVIDER_ID) ? '' : apiKey,
     baseUrl,
     proxy,
     proxyRoutingVersion: PROVIDER_PROXY_ROUTING_VERSION,
     providers,
+    ...(excludedBuiltinProviderIds.length > 0 ? { excludedBuiltinProviderIds } : {}),
     routePools,
     localGateway: {
       enabled: input?.localGateway?.enabled === true,

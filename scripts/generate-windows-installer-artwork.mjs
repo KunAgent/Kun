@@ -114,9 +114,9 @@ function headerSvg() {
   `)
 }
 
-async function write24BitBmp(input, width, height, outputPath) {
+async function write24BitBmp(input, width, height, outputPath, flattenColor = '#ffffff') {
   const { data, info } = await sharp(input)
-    .flatten({ background: '#ffffff' })
+    .flatten({ background: flattenColor })
     .resize(width, height, { kernel: sharp.kernel.lanczos3 })
     .ensureAlpha()
     .raw()
@@ -132,7 +132,7 @@ async function renderSidebar(characterCutout) {
       height: 243 * renderScale,
       fit: 'contain',
       position: 'south',
-      background: { r: 255, g: 255, b: 255, alpha: 0 }
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
     })
     .png()
     .toBuffer()
@@ -141,7 +141,7 @@ async function renderSidebar(characterCutout) {
     .png()
     .toBuffer()
 
-  await write24BitBmp(sidebar, 164, 314, sidebarPath)
+  await write24BitBmp(sidebar, 164, 314, sidebarPath, '#0b4fae')
 }
 
 const characterCutout = await createInstallerCharacterCutout(characterPath)

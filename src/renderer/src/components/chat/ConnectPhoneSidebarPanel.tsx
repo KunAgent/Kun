@@ -57,6 +57,7 @@ export function ConnectPhoneSidebarPanel({
   const [saving, setSaving] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [disconnectError, setDisconnectError] = useState('')
+  const [bottomPanelOpen, setBottomPanelOpen] = useState(false)
   const installPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const installCountdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const installRequestInFlightRef = useRef(false)
@@ -301,6 +302,7 @@ export function ConnectPhoneSidebarPanel({
     setDisconnecting(true)
     try {
       await onDisconnect(connectedChannel.id)
+      setBottomPanelOpen(false)
     } catch (error) {
       setDisconnectError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -320,10 +322,13 @@ export function ConnectPhoneSidebarPanel({
               type="button"
               disabled={!firstAvailableTarget}
               onClick={() => {
+                setBottomPanelOpen(true)
                 if (firstAvailableTarget) setTarget(firstAvailableTarget)
               }}
               className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={t('clawAddIm')}
+              aria-expanded={bottomPanelOpen}
+              aria-controls="connect-phone-add-panel"
               title={t('clawAddIm')}
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
@@ -369,7 +374,10 @@ export function ConnectPhoneSidebarPanel({
                   <button
                     key={channel.id}
                     type="button"
-                    onClick={() => setTarget(providerTarget)}
+                    onClick={() => {
+                      setBottomPanelOpen(true)
+                      setTarget(providerTarget)
+                    }}
                     className={`group flex min-h-[64px] w-full items-center gap-2 rounded-[12px] border px-2.5 py-2 text-left transition ${
                       active
                         ? 'border-accent/20 bg-accent/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)]'
@@ -402,7 +410,11 @@ export function ConnectPhoneSidebarPanel({
         </div>
       </div>
 
-      <div className="mx-1 shrink-0 border-t border-ds-border-muted/70 pt-3">
+      {bottomPanelOpen ? (
+        <div
+          id="connect-phone-add-panel"
+          className="mx-1 shrink-0 border-t border-ds-border-muted/70 pt-3"
+        >
         <div className="mb-3 flex items-center gap-2 px-1 text-[12px] font-semibold text-[#9aa5b5] dark:text-white/40">
           <ClawProviderLogo provider={targetProvider} className="h-4 w-4" />
           <span>{t('claw')}</span>
@@ -587,7 +599,8 @@ export function ConnectPhoneSidebarPanel({
             </div>
           )
         )}
-      </div>
+        </div>
+      ) : null}
     </div>
   )
 }

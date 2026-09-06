@@ -8,8 +8,21 @@ import { createThreadRecord } from '../../domain/thread.js'
 import type { ThreadIndexRecord } from './hybrid-thread-index-mapping.js'
 
 const roots: string[] = []
+const storeCleanups: Array<() => Promise<void>> = []
+
+function trackStore(store: HybridThreadStore): HybridThreadStore {
+  const writes = vi.spyOn(internals(store).dirtyIndex, 'persist')
+  storeCleanups.push(async () => {
+    await store.shutdown()
+    // Closing SQLite does not finish the asynchronous dirty-journal writes.
+    await Promise.all(writes.mock.results.map((result) => result.value))
+    writes.mockRestore()
+  })
+  return store
+}
 
 afterEach(async () => {
+  for (const cleanup of storeCleanups.splice(0)) await cleanup()
   for (const root of roots.splice(0)) {
     await rm(root, { recursive: true, force: true })
   }
@@ -18,13 +31,13 @@ afterEach(async () => {
 async function createStore(): Promise<{ root: string; store: HybridThreadStore }> {
   const root = await mkdtemp(join(tmpdir(), 'kun-hybrid-index-write-'))
   roots.push(root)
-  return { root, store: new HybridThreadStore({ dataDir: root }) }
+  return { root, store: trackStore(new HybridThreadStore({ dataDir: root })) }
 }
 
 type StoreInternals = {
   db: BetterSqliteDatabase | null
   index: { upsert(record: ThreadIndexRecord): void } | null
-  dirtyIndex: { size: number; has(threadId: string): boolean; ids(): string[] }
+  dirtyIndex: { size: number; has(threadId: string): boolean; ids(): string[]; persist(): Promise<void> }
   backfill: { wait(): Promise<void>; isIndexReady(): boolean } | null
 }
 
@@ -83,7 +96,7 @@ describe('HybridThreadStore index write failure fallback', () => {
     expect(row?.title).toBe('Updated')
     expect(intern.dirtyIndex.has(original.id)).toBe(false)
 
-    store.close()
+    await store.shutdown()
   })
 
   it('degrades and falls back when the INSERT statement throws at the repository level', async () => {
@@ -124,7 +137,7 @@ describe('HybridThreadStore index write failure fallback', () => {
     await first.upsert(record)
     await first.shutdown()
 
-    const second = new HybridThreadStore({ dataDir: root })
+    const second = trackStore(new HybridThreadStore({ dataDir: root }))
     await second.ready()
     const secondInternals = internals(second)
     expect(secondInternals.db).not.toBeNull()
@@ -136,7 +149,7 @@ describe('HybridThreadStore index write failure fallback', () => {
 
     await waitForJournal(root, (ids) => ids.includes(record.id))
 
-    const third = new HybridThreadStore({ dataDir: root })
+    const third = trackStore(new HybridThreadStore({ dataDir: root }))
     try {
       const summaries = await third.list({ includeArchived: true })
       expect(summaries.find((summary) => summary.id === record.id)?.title).toBe('Second')

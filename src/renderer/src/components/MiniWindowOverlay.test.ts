@@ -9,15 +9,13 @@ describe('MiniWindowOverlay', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('renders a draggable layer with a restore badge and a drag hint', () => {
+  it('renders a dedicated toolbar with a restore button and a scoped drag hint', () => {
     const html = renderToStaticMarkup(createElement(MiniWindowOverlay))
-    // The root stays a plain div so it can act as a window drag region; the
-    // clickable restore control is the nested badge button.
-    expect(html).toContain('ds-mini-restore')
+    expect(html).toContain('data-mini-window-toolbar')
     expect(html).not.toContain('<button class="ds-mini-restore"')
     expect(html).toContain('ds-mini-restore-badge')
     expect(html).toContain('Restore window')
     expect(html).toContain('ds-mini-restore-hint')
-    expect(html).toContain('Drag anywhere to move')
+    expect(html).toContain('Drag this bar to move')
   })
 })

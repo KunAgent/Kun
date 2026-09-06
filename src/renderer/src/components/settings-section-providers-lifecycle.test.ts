@@ -289,7 +289,7 @@ describe('provider mutation lifecycle across settings remounts', () => {
       .toBeGreaterThanOrEqual(1)
   })
 
-  it('hides the delete action for the default API provider', async () => {
+  it('keeps the delete action visible for the default API provider across tabs', async () => {
     const { settings, provider } = providerFixture('deepseek')
     const runtimeRequest = vi.fn(async (path: string) => {
       if (path.includes('/events?')) return new Promise<never>(() => undefined)
@@ -301,7 +301,7 @@ describe('provider mutation lifecycle across settings remounts', () => {
     await flush()
     await clickTab(renderer, 'modelProviderTabAdvanced')
 
-    expect(rendererText(renderer)).not.toContain('modelProviderRemove')
+    expect(rendererText(renderer)).toContain('modelProviderRemove')
     expect(rendererText(renderer)).not.toContain('modelProviderSectionDanger')
   })
 

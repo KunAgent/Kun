@@ -1,6 +1,5 @@
 import {
   DEFAULT_MODEL_PROVIDER_ID,
-  OPENCODE_FREE_PROVIDER_ID,
   isLocalModelProxyPort,
   localModelProxyPort,
   localModelProxyUrl,
@@ -33,7 +32,6 @@ import {
   Toggle
 } from './settings-controls'
 import {
-  DetailSection,
   ProviderListGroup,
   StatusPill,
   providerSelectControlClass,
@@ -59,12 +57,15 @@ import { ProviderConnectionAdvancedPanels } from './settings-section-providers-c
 import { ProviderModelsCapabilitiesPanels } from './settings-section-providers-model-panels'
 
 export function ProvidersSettingsView({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, removeModelProvider, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = view
+  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = view
   const activeProvider = view.activeProvider as ModelProviderProfileV1 | undefined
   const freeProviders = (view.freeProviders as ModelProviderProfileV1[] | undefined) ?? []
   const freeAddEntries = (view.freeAddEntries as any[] | undefined) ?? []
   const planProviders = view.planProviders as ModelProviderProfileV1[]
   const apiProviders = view.apiProviders as ModelProviderProfileV1[]
+  const showDefaultProviderEntry = !displayProviders.some((item: ModelProviderProfileV1) =>
+    item.id === DEFAULT_MODEL_PROVIDER_ID
+  ) && (!addProviderQuery.trim() || 'deepseek'.includes(addProviderQuery.trim().toLowerCase()))
   const providerProxyPort = localModelProxyPort(providerProxy.url)
   const providerProxyInvalid = providerProxy.enabled === true && !isLocalModelProxyPort(providerProxyPort)
   return (
@@ -193,7 +194,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               ) : (
                 <div className="grid gap-2">{apiProviders.map(renderProviderButton)}</div>
               )}
-              {filteredProviders.length === 0 ? (
+              {filteredProviders.length === 0 && displayProviders.length > 0 ? (
                 <p className="rounded-xl border border-dashed border-ds-border-muted px-3 py-6 text-center text-[12px] text-ds-faint">
                   {t('modelProviderSearchEmpty', { query: providerListQuery.trim() })}
                 </p>
@@ -295,6 +296,23 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                         : <PlugZap className="h-3.5 w-3.5" strokeWidth={1.9} />}
                       {t('modelProviderTestConnection')}
                     </button>
+                    {!isDraftActive ? (
+                      <button
+                        type="button"
+                        data-testid="provider-delete"
+                        disabled={Boolean(deletingProviderId)}
+                        aria-busy={deletingProviderId === activeProvider.id}
+                        onClick={() => void removeModelProvider(activeProvider.id)}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-red-200/70 bg-red-50 px-3 text-[12.5px] font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55 dark:border-red-900/70 dark:bg-red-950/25 dark:text-red-200 dark:hover:bg-red-950/40"
+                      >
+                        {deletingProviderId === activeProvider.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
+                          : <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />}
+                        {deletingProviderId === activeProvider.id
+                          ? t('modelProviderDeleting', { defaultValue: 'Deleting...' })
+                          : t('modelProviderRemove')}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <SettingsSubTabs<ProviderTaskTab>
@@ -314,24 +332,6 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 {probeNotice ? <InlineNoticeView notice={probeNotice} /> : null}
                 <ProviderConnectionAdvancedPanels view={view} />
                 <ProviderModelsCapabilitiesPanels view={view} />
-                {!isDraftActive &&
-                activeTab === 'advanced' &&
-                activeProvider.id !== DEFAULT_MODEL_PROVIDER_ID &&
-                activeProvider.id !== OPENCODE_FREE_PROVIDER_ID ? (
-                  <DetailSection title={t('modelProviderSectionDanger')}>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => void removeModelProvider(activeProvider.id)}
-                        className="inline-flex h-9 w-fit items-center gap-2 rounded-full border border-red-200/70 bg-red-50 px-3 text-[12.5px] font-medium text-red-700 transition hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/25 dark:text-red-200 dark:hover:bg-red-950/40"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-                        {t('modelProviderRemove')}
-                      </button>
-                      <span className="text-[12px] text-ds-faint">{t('modelProviderDangerHint')}</span>
-                    </div>
-                  </DetailSection>
-                ) : null}
                 {isDraftActive ? (
                   <div className="sticky bottom-0 z-10 -mx-1 mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-ds-card/95 px-4 py-3 shadow-lg backdrop-blur">
                     <div className="min-w-0">
@@ -362,7 +362,21 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                   </div>
                 ) : null}
               </div>
-            ) : null}
+            ) : (
+              <div className="grid min-w-0 content-center justify-items-center gap-3 px-6 py-12 text-center">
+                <p className="text-[13px] text-ds-muted">
+                  {t('modelProviderEmpty', { defaultValue: 'Add a provider to configure models and start chatting.' })}
+                </p>
+                <button
+                  type="button"
+                  onClick={openAddProviderDialog}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-3 text-[13px] font-medium text-white"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2} />
+                  {t('modelProviderAdd')}
+                </button>
+              </div>
+            )}
           </div>
           </div>
         </SettingsTabPanel>
@@ -496,6 +510,18 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 </span>
                 <Plus className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
               </button>
+              {showDefaultProviderEntry ? (
+                <button
+                  type="button"
+                  data-testid="provider-add-deepseek"
+                  onClick={() => { closeAddProviderDialog(); addDefaultModelProvider() }}
+                  className="mb-4 flex w-full items-center gap-3 rounded-xl border border-ds-border bg-ds-card px-4 py-3 text-left transition hover:bg-ds-hover"
+                >
+                  <ProviderIcon providerId="deepseek" className="h-5 w-5" />
+                  <span className="flex-1 text-[13.5px] font-semibold text-ds-ink">DeepSeek</span>
+                  <Plus className="h-4 w-4 text-accent" strokeWidth={2} />
+                </button>
+              ) : null}
               {freeAddEntries.length > 0 ? (
                 <div className="mb-5 grid gap-2">
                   <div className="flex items-center gap-2 px-1">
@@ -554,7 +580,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                   <div className="grid gap-2 sm:grid-cols-2">{apiAddEntries.map(renderAddEntry)}</div>
                 </div>
               ) : null}
-              {freeAddEntries.length === 0 && planAddEntries.length === 0 && apiAddEntries.length === 0 ? (
+              {!showDefaultProviderEntry && freeAddEntries.length === 0 && planAddEntries.length === 0 && apiAddEntries.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-ds-border-muted px-4 py-8 text-center text-[12.5px] text-ds-faint">
                   {t('modelProviderAddDialogEmpty', { query: addProviderQuery.trim() })}
                 </p>

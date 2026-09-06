@@ -144,6 +144,7 @@ export default function AppShell(): React.ReactElement {
     <ExtensionSettingsServiceProvider service={extensionSettingsService}>
       <div className={hasDesktopTitleBar ? 'ds-windows-app-frame flex h-full min-h-0 flex-col bg-ds-main' : 'flex h-full min-h-0 flex-col bg-transparent'}>
         {hasDesktopTitleBar ? <WindowsTitleBar platform={platform} /> : null}
+        {miniWindowMode ? <MiniWindowOverlay /> : null}
         <div className="flex min-h-0 flex-1 flex-col">
           <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
@@ -159,7 +160,6 @@ export default function AppShell(): React.ReactElement {
             ) : <WorkbenchView />}
           </Suspense>
         </div>
-        {miniWindowMode ? <MiniWindowOverlay /> : null}
         <ExtensionWorkbenchLifecycle />
         {initialSetupOpen ? (
           <ProtectedRendererSurface
