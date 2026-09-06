@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'yaml'
+import { downloadPublicRelease } from './public-release-download.mjs'
 
 const mode = process.argv[2]
 if (!['candidate', 'latest'].includes(mode)) throw new Error('Expected candidate or latest')
@@ -24,15 +25,9 @@ assert.equal(github.tagName, tag, 'GitHub candidate tag differs')
 assert.equal(github.isDraft, true, 'Only an unpublished candidate may be promoted')
 const githubAssets = new Map(github.assets.map(asset => [asset.name, asset]))
 
-async function response(url) {
-  const result = await fetch(url, { signal: AbortSignal.timeout(10 * 60_000), cache: 'no-store' })
-  if (!result.ok) throw new Error(`${url} returned HTTP ${result.status}`)
-  return result
-}
-
 for (const feedBase of mode === 'candidate' ? [base] : [base, `${root}latest/`]) {
 for (const manifest of manifests) {
-  const text = await (await response(`${feedBase}${manifest}`)).text()
+  const text = await downloadPublicRelease(`${feedBase}${manifest}`, response => response.text())
   const metadata = parse(text)
   assert.equal(metadata.version, version, manifest)
   assert.ok(Array.isArray(metadata.files) && metadata.files.length, manifest)
@@ -60,7 +55,7 @@ if (mode === 'candidate') {
   // Persist the actual previous feeds before any stable pointer changes.
   for (const [label, previousBase] of [['stable', `${stable}latest/`], ['legacy', `${root}latest/`]]) {
     for (const manifest of [...manifests, 'latest.json']) {
-      const text = await (await response(`${previousBase}${manifest}`)).text()
+      const text = await downloadPublicRelease(`${previousBase}${manifest}`, response => response.text())
       await writeFile(join(evidence, `previous-${label}-${manifest}`), text)
     }
   }
@@ -73,22 +68,29 @@ for (const [url, file] of downloads) {
   assert.equal(githubAsset?.state, 'uploaded', `${name}: missing GitHub asset`)
   assert.equal(githubAsset.size, file.size, `${name}: GitHub asset size differs`)
   assert.match(githubAsset.digest ?? '', /^sha256:[a-f0-9]{64}$/, `${name}: missing GitHub digest`)
-  const result = await response(url)
   const algorithm = 'sha512'
-  const hash = createHash(algorithm)
-  const githubHash = createHash('sha256')
-  let size = 0
-  for await (const chunk of result.body) { size += chunk.length; hash.update(chunk); githubHash.update(chunk) }
+  const { size, checksum, sha256 } = await downloadPublicRelease(url, async result => {
+    const hash = createHash(algorithm)
+    const githubHash = createHash('sha256')
+    let size = 0
+    for await (const chunk of result.body) {
+      size += chunk.length
+      hash.update(chunk)
+      githubHash.update(chunk)
+    }
+    return { size, checksum: hash.digest('base64'), sha256: githubHash.digest('hex') }
+  })
   assert.equal(size, file.size, url)
-  const checksum = hash.digest('base64')
   assert.equal(checksum, file[algorithm], url)
-  const sha256 = githubHash.digest('hex')
   assert.equal(`sha256:${sha256}`, githubAsset.digest, `${name}: GitHub and R2 bytes differ`)
   verified.push({ url, size, [algorithm]: checksum, sha256 })
+  console.log(`[public-release] Verified ${url} (${size} bytes, SHA-512 and GitHub SHA-256)`)
 }
 if (mode === 'latest') {
-  const legacy = await (await response(`${root}latest/latest.json`)).json()
-  assert.equal(legacy.version, version)
+  for (const feedBase of [base, `${root}latest/`]) {
+    const metadata = await downloadPublicRelease(`${feedBase}latest.json`, response => response.json())
+    assert.equal(metadata.version, version)
+  }
 }
 await writeFile(join(evidence, `${mode}-verified.json`), JSON.stringify({ verification: 'artifact-integrity', version, tag, commit: candidateCommit, verified }, null, 2))
 console.log(`Verified ${mode} public GUI feeds and ${verified.length} artifact downloads for ${version}`)
