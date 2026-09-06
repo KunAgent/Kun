@@ -512,16 +512,9 @@ export async function downloadGuiUpdate(channel?: GuiUpdateChannel): Promise<Gui
         message: 'The update channel changed before download.'
       }
     }
-    const feedConfiguration = await resolveConfiguredUpdateChannel(selectedChannel, requestGeneration)
-    if (feedConfiguration !== 'configured') {
-      if (feedConfiguration !== 'stale') return feedConfiguration
-      return {
-        ok: false,
-        currentVersion: app.getVersion(),
-        code: 'download_failed',
-        message: 'The update channel changed before download.'
-      }
-    }
+    // The checked metadata belongs to configuredFeedUrl. Racing mirrors again here
+    // can select another URL, invalidate lastInfo, and silently cancel the update.
+    // Keep that source for the download; a later check can discover another mirror.
     if (!macAutoUpdateAllowed()) {
       return { ok: false, currentVersion: app.getVersion(), code: 'unsupported', message: unsupportedMessage() }
     }
@@ -532,6 +525,11 @@ export async function downloadGuiUpdate(channel?: GuiUpdateChannel): Promise<Gui
     operation.targetVersion = lastInfo.latestVersion
     eventOperation = operation
     clearDownloadedInstaller()
+    emitGuiUpdateState({
+      status: 'downloading',
+      info: lastInfo,
+      progress: { total: 0, delta: 0, transferred: 0, percent: 0, bytesPerSecond: 0 }
+    })
     try {
       let tracked: Promise<string[]>
       tracked = autoUpdater.downloadUpdate().finally(() => {
