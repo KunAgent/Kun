@@ -81,16 +81,36 @@ function findRelaunchedGui(applications, expected) {
     app.bundleId === expected.bundleId && app.finishedLaunching === true && app.guiWindowObserved === true)
 }
 
+async function findCanonicalRelaunchedGui(applications, expected, canonicalize = realpath) {
+  for (const application of applications) {
+    let canonical
+    try {
+      canonical = { ...application,
+        bundlePath: await canonicalize(application.bundlePath),
+        executablePath: await canonicalize(application.executablePath) }
+    } catch {
+      // A missing or inaccessible path cannot prove this installed GUI relaunched.
+      continue
+    }
+    const found = findRelaunchedGui([canonical], expected)
+    if (found) return found
+  }
+  return undefined
+}
+
 async function waitForMacRelaunch(bundle, executable, oldPid, bundleId, poll, journal) {
   const observer = join(journal.record.evidence, 'installed', 'observe-macos-gui')
   await run('swiftc', [join(__dirname, 'observe-macos-gui.swift'), '-o', observer], { timeout: 60_000 })
   const expected = { bundlePath: await realpath(bundle), executablePath: await realpath(executable), oldPid, bundleId }
+  journal.record.expectedRelaunch = expected
   journal.phase('automatic_relaunch')
   const found = await poll(async () => {
     const result = await run(observer, [expected.bundlePath, expected.executablePath], { timeout: 10_000 })
     const applications = JSON.parse(result.stdout)
     journal.record.lastRelaunchObservation = applications
-    return findRelaunchedGui(applications, expected)
+    // Foundation can report /var even when Node realpath returns /private/var.
+    // Resolve both identities with Node before enforcing the exact path match.
+    return findCanonicalRelaunchedGui(applications, expected)
   }, 10 * 60_000, 'native macOS GUI relaunch with a visible window')
   journal.record.automaticRelaunch = { ...found, source: 'NSWorkspace/CGWindowList',
     observedAt: new Date().toISOString(), beforeHarnessLaunch: true }
@@ -98,4 +118,4 @@ async function waitForMacRelaunch(bundle, executable, oldPid, bundleId, poll, jo
 }
 
 module.exports = { inspectSignedBundle, verifyMacCandidate, waitForBundleReplacement,
-  findRelaunchedGui, waitForMacRelaunch }
+  findRelaunchedGui, findCanonicalRelaunchedGui, waitForMacRelaunch }
