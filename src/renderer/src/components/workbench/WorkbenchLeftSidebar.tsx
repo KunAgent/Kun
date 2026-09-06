@@ -99,7 +99,7 @@ export function WorkbenchLeftSidebar({
   const normalizedRoute = normalizeWorkbenchRoute(route)
   return (
     <>
-      <div className="min-h-0 shrink-0" style={{ width }}>
+      <div data-workbench-left-sidebar className="min-h-0 shrink-0" style={{ width }}>
         {extensionView ? (
           <ExtensionViewOutlet
             contribution={extensionView}

@@ -204,7 +204,7 @@ describe('DelegationRuntime', () => {
     release.resolve()
     await waitFor(async () => {
       const latest = await runtime.diagnostics('thr_dynamic_detach')
-      return latest.childRuns[0]?.status === 'completed'
+      return latest.childRuns[0]?.status === 'completed' && latest.active === 0
     })
     const completed = (await runtime.diagnostics('thr_dynamic_detach')).childRuns[0]
     expect(completed).toMatchObject({

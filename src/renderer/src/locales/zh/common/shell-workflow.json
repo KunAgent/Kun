@@ -662,5 +662,5 @@
   "designCanvasConversationRunning": "会话正在运行",
   "designCanvasConversationPanelLabel": "设计会话：{{title}}",
   "miniWindowRestore": "恢复窗口",
-  "miniWindowDragHint": "按住空白处拖动可移动位置"
+  "miniWindowDragHint": "拖动此栏移动窗口"
 }

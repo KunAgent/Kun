@@ -651,5 +651,5 @@
   "workflowCallableShort": "AI-вызываемый",
   "workflowCallableHint": "Позвольте агенту режима кода запустить его напрямую через run_workflow.",
   "miniWindowRestore": "Восстановить окно",
-  "miniWindowDragHint": "Перетащите, чтобы переместить"
+  "miniWindowDragHint": "Перетащите эту панель, чтобы переместить окно"
 }

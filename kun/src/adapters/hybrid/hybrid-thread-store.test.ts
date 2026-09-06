@@ -318,7 +318,8 @@ describe('HybridThreadStore SQLite pagination', () => {
 describe('HybridThreadStore usage backfill scan failures', () => {
   it('leaves the thread eligible for a later backfill when events.jsonl is unreadable', async () => {
     if (process.platform === 'win32' || process.getuid?.() === 0) return
-    const { root, store } = await createStore()
+    const root = await mkdtemp(join(tmpdir(), 'kun-hybrid-usage-'))
+    roots.push(root)
     const thread = createThreadRecord({
       id: 'thread_unreadable_events',
       title: 'Unreadable events',
@@ -336,6 +337,8 @@ describe('HybridThreadStore usage backfill scan failures', () => {
     }))}\n`)
     await chmod(eventsPath, 0o000)
 
+    // Construction starts backfill; seed the unreadable fixture first.
+    const store = new HybridThreadStore({ dataDir: root })
     try {
       await store.ready()
       const internals = backfillInternals(store)
@@ -349,7 +352,7 @@ describe('HybridThreadStore usage backfill scan failures', () => {
       expect(await store.loadUsageRecords({ threadId: thread.id })).toHaveLength(0)
     } finally {
       await chmod(eventsPath, 0o600).catch(() => undefined)
-      store.close()
+      await store.shutdown()
     }
   })
 })

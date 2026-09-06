@@ -651,5 +651,5 @@
   "workflowCallableShort": "AI呼び出し可能",
   "workflowCallableHint": "コードモード エージェントが run_workflow 経由で直接実行できるようにします。",
   "miniWindowRestore": "ウィンドウを復元",
-  "miniWindowDragHint": "ドラッグで移動できます"
+  "miniWindowDragHint": "このバーをドラッグしてウィンドウを移動"
 }

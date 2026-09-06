@@ -24,6 +24,19 @@ function normalizedExpression(value) {
   return value.replace(/\s+/gu, ' ').trim()
 }
 
+test('Windows PR and stable builds verify native mini window interaction', () => {
+  for (const [file, jobName] of [['pr-checks.yml', 'package-windows'], ['release.yml', 'build-windows']]) {
+    const job = readWorkflow(file).jobs[jobName]
+    assert.equal(job['runs-on'], 'windows-latest')
+    const smoke = stepByName(job, 'Smoke Windows mini window interaction and restoration')
+    assert.equal(smoke.run, 'npm run smoke:mini-window')
+    assert.equal(smoke['timeout-minutes'], 5)
+    const evidence = stepByName(job, 'Upload Windows mini window evidence')
+    assert.equal(evidence.if, 'always()')
+    assert.equal(evidence.with.path, 'dist/mini-window-smoke')
+  }
+})
+
 test('Windows release jobs outlive their installer smoke timeout', () => {
   for (const file of ['pr-checks.yml', 'release.yml', 'daily-dev-prerelease.yml']) {
     const workflow = readWorkflow(file)

@@ -1,7 +1,7 @@
 {
   "name": "kun-gui",
   "productName": "Kun",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Electron workbench for the Kun runtime (HTTP/SSE)",
   "engines": {
     "node": ">=22.19.0"
@@ -56,6 +56,7 @@
     "smoke:development-session-summary": "node ./scripts/smoke-development-session-summary.cjs",
     "smoke:development-trajectory-layout": "node ./scripts/smoke-development-trajectory-layout.cjs",
     "smoke:development-composer-queue": "node ./scripts/smoke-development-composer-queue.cjs",
+    "smoke:mini-window": "node ./scripts/smoke-mini-window.cjs",
     "evidence:extension-native": "node ./scripts/write-extension-native-evidence.mjs",
     "verify:extension-native-evidence": "node ./scripts/verify-extension-native-evidence.mjs",
     "verify:manual-extension-release": "node ./scripts/verify-manual-extension-release.mjs",

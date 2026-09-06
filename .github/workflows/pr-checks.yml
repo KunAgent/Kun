@@ -237,6 +237,18 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Smoke Windows mini window interaction and restoration
+        timeout-minutes: 5
+        run: npm run smoke:mini-window
+
+      - name: Upload Windows mini window evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-windows-mini-window
+          path: dist/mini-window-smoke
+          if-no-files-found: warn
+
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction

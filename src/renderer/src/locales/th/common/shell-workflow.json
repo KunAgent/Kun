@@ -651,5 +651,5 @@
   "workflowCallableShort": "สามารถเรียก AI ได้",
   "workflowCallableHint": "ปล่อยให้เอเจนต์โหมดโค้ดรันโดยตรงผ่าน run_workflow",
   "miniWindowRestore": "คืนขนาดหน้าต่าง",
-  "miniWindowDragHint": "ลากเพื่อย้ายตำแหน่ง"
+  "miniWindowDragHint": "ลากแถบนี้เพื่อย้ายหน้าต่าง"
 }

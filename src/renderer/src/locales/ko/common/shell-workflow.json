@@ -651,5 +651,5 @@
   "workflowCallableShort": "AI 호출 가능",
   "workflowCallableHint": "코드 모드 에이전트가 run_workflow를 통해 직접 실행하도록 합니다.",
   "miniWindowRestore": "창 복원",
-  "miniWindowDragHint": "드래그하여 위치 이동"
+  "miniWindowDragHint": "이 표시줄을 드래그하여 창 이동"
 }
