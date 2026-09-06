@@ -56,7 +56,7 @@ jobs:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - name: Test artifact verification helpers
-        run: node --test scripts/release-candidate-source.test.cjs scripts/verify-public-release.test.mjs
+        run: node --test scripts/release-candidate-source.test.cjs scripts/public-release-download.test.mjs scripts/verify-public-release.test.mjs
       - name: Verify candidate tag and draft before promotion
         run: node scripts/release-candidate-source.cjs
       - name: Read GitHub candidate metadata
