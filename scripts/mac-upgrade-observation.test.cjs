@@ -2,7 +2,10 @@
 
 const assert = require('node:assert/strict')
 const test = require('node:test')
-const { findRelaunchedGui, waitForBundleReplacement } = require('./mac-upgrade-observation.cjs')
+const { mkdtemp, mkdir, writeFile, symlink, realpath, rm } = require('node:fs/promises')
+const { tmpdir } = require('node:os')
+const { join } = require('node:path')
+const { findRelaunchedGui, findCanonicalRelaunchedGui, waitForBundleReplacement } = require('./mac-upgrade-observation.cjs')
 
 const expected = { oldPid: 10, bundlePath: '/installed/Kun.app',
   executablePath: '/installed/Kun.app/Contents/MacOS/Kun', bundleId: 'app.kun' }
@@ -16,6 +19,32 @@ test('automatic relaunch requires a new GUI window belonging to the exact instal
     assert.equal(findRelaunchedGui([{ ...application, ...change }], expected), undefined)
   }
   assert.equal(findRelaunchedGui([], expected), undefined)
+})
+
+test('native relaunch accepts filesystem aliases while preserving GUI identity checks', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-relaunch-path-'))
+  try {
+    const bundle = join(root, 'installed', 'Kun.app')
+    const executable = join(bundle, 'Contents', 'MacOS', 'Kun')
+    await mkdir(join(bundle, 'Contents', 'MacOS'), { recursive: true })
+    await writeFile(executable, 'fixture')
+    const alias = join(root, 'alias')
+    await symlink(join(root, 'installed'), alias, process.platform === 'win32' ? 'junction' : 'dir')
+    const target = { ...expected, bundlePath: await realpath(bundle), executablePath: await realpath(executable) }
+    const observed = { ...application, bundlePath: join(alias, 'Kun.app'),
+      executablePath: join(alias, 'Kun.app', 'Contents', 'MacOS', 'Kun') }
+    const found = await findCanonicalRelaunchedGui([observed], target)
+    assert.equal(found.pid, 11)
+    assert.equal(found.bundlePath, target.bundlePath)
+    assert.equal(found.executablePath, target.executablePath)
+    for (const change of [{ pid: 10 }, { guiWindowObserved: false }, { finishedLaunching: false },
+      { bundleId: 'another.app' }, { bundlePath: root }, { executablePath: root },
+      { bundlePath: join(root, 'missing') }, { executablePath: undefined }]) {
+      assert.equal(await findCanonicalRelaunchedGui([{ ...observed, ...change }], target), undefined)
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('replacement timeout preserves the last version and the last plist read error', async () => {

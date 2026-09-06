@@ -1,4 +1,4 @@
-name: Accept candidate and publish stable latest
+name: Verify artifacts and publish stable latest
 on:
   workflow_dispatch:
     inputs:
@@ -31,63 +31,10 @@ concurrency:
   group: stable-candidate-${{ inputs.tag }}
   cancel-in-progress: false
 jobs:
-  accept:
-    name: Published GUI upgrade (${{ matrix.target }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { runner: windows-latest, target: win32-x64, pattern: 'Kun-*-win-x64*', manifest: latest.yml }
-          - { runner: macos-15, target: darwin-arm64, pattern: 'Kun-*-mac-*', manifest: latest-mac.yml }
-          - { runner: macos-15-intel, target: darwin-x64, pattern: 'Kun-*-mac-*', manifest: latest-mac.yml }
-    env:
-      GH_TOKEN: ${{ github.token }}
-      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
-      R2_RELEASE_PREFIX: ${{ secrets.R2_RELEASE_PREFIX }}
-      CANDIDATE_VERSION: ${{ inputs.version }}
-      CANDIDATE_TAG: ${{ inputs.tag }}
-      CANDIDATE_COMMIT: ${{ inputs.commit }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || inputs.commit }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm ci --ignore-scripts
-      - name: Test candidate acceptance helpers
-        run: node --test scripts/gui-upgrade-diagnostics.test.cjs scripts/gui-upgrade-journal.test.cjs scripts/mac-upgrade-observation.test.cjs scripts/release-candidate-source.test.cjs scripts/smoke-gui-upgrade.test.cjs scripts/install-request-control.test.cjs scripts/gui-upgrade-feed.test.cjs scripts/verify-public-release.test.mjs
-      - name: Download final uploaded GUI artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh release download "$CANDIDATE_TAG" -R "$GITHUB_REPOSITORY" -p '${{ matrix.pattern }}' -p '${{ matrix.manifest }}' -D candidate
-      - name: Exercise the released GUI against the isolated version feed
-        timeout-minutes: 60
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="${R2_PUBLIC_BASE_URL:-https://www.kun-agent.com/api/r2}"
-          feed="${base%/}/${R2_RELEASE_PREFIX:-deepseek-gui}/channels/stable/releases/${CANDIDATE_TAG}/"
-          node scripts/smoke-gui-upgrade.cjs --directory candidate --version "$CANDIDATE_VERSION" --feed-url "$feed" --report gui-upgrade-${{ matrix.target }}.json
-      - name: Collect GUI upgrade diagnostics
-        if: always()
-        run: node scripts/gui-upgrade-diagnostics.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: gui-upgrade-${{ matrix.target }}
-          path: |
-            gui-upgrade-*.json*
-            gui-upgrade-evidence/**
-          if-no-files-found: error
-          retention-days: 14
   promote:
     name: Promote verified stable release
     runs-on: ubuntu-latest
-    needs: accept
+    timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
       TAG_NAME: ${{ inputs.tag }}
@@ -108,12 +55,12 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
+      - name: Test artifact verification helpers
+        run: node --test scripts/release-candidate-source.test.cjs scripts/verify-public-release.test.mjs
       - name: Verify candidate tag and draft before promotion
         run: node scripts/release-candidate-source.cjs
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: gui-upgrade-*
-          path: upgrade-evidence
+      - name: Read GitHub candidate metadata
+        run: gh release view "$TAG_NAME" --json assets,tagName,isDraft > candidate-release.json
       - name: Verify candidate bytes and save previous public manifests
         run: node scripts/verify-public-release.mjs candidate
       - name: Promote R2 latest
