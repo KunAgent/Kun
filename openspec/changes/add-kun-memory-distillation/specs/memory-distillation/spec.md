@@ -121,6 +121,13 @@ When enabled, the coordinator SHALL asynchronously consider only a durably persi
 - **THEN** the failure is recorded with sanitized bounded diagnostics
 - **AND** the already completed turn remains completed
 
+#### Scenario: Post-turn usage accounting crosses a turn lease boundary
+
+- **WHEN** distillation reports usage after the initiating turn has completed and released its execution lease
+- **THEN** the background task does not reuse the completed turn's mutation fence
+- **AND** it attempts to persist the usage event without weakening Manager fencing
+- **AND** if another same-thread turn owns the lease and Manager rejects that event, live usage remains counted, the persistence failure is recorded with sanitized bounded diagnostics, and otherwise valid candidates remain independently eligible for approval
+
 ### Requirement: Model use is bounded and reuses the Kun route
 
 The runtime coordinator SHALL reuse the initiating turn's resolved Kun provider and model through the existing `ModelClient` path, without separate credentials or a renderer-side request implementation. It SHALL send only bounded current-turn user and assistant text plus opaque allowed source ids, expose no tools, request strict JSON with deterministic sampling, reject model-supplied full evidence or observation time, cap input at 24,000 characters, cap output at 2,048 tokens and eight candidates, enforce a 15-second timeout, and perform at most one provider request per eligible turn.

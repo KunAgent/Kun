@@ -34,6 +34,10 @@ export function runWithTurnMutationFence<T>(
   return storage.run(toFence(fence), operation)
 }
 
+export function runOutsideTurnMutationFence<T>(operation: () => T): T {
+  return storage.exit(operation)
+}
+
 export function mutationFenceForValue(value: unknown): TurnMutationFence | undefined {
   const contextual = currentTurnMutationFence()
   const threadId = mutationThreadId(value) ?? undefined

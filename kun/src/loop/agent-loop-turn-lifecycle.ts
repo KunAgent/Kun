@@ -23,6 +23,7 @@ import {
 } from './turn-lifecycle-hooks.js'
 import type { GoalElapsedTimer } from './goal-turn-coordinator.js'
 import { AgentLoopBase } from './agent-loop-base.js'
+import { runOutsideTurnMutationFence } from '../manager/turn-mutation-context.js'
 
 export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
   protected abstract loop(
@@ -392,10 +393,12 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
             ...(finalError ? { error: finalError } : {})
           })
           try {
-            this.opts.memoryDistillation?.schedule({
-              threadId,
-              turnId,
-              status: finalStatus ?? 'failed'
+            runOutsideTurnMutationFence(() => {
+              this.opts.memoryDistillation?.schedule({
+                threadId,
+                turnId,
+                status: finalStatus ?? 'failed'
+              })
             })
           } catch {
             // Post-turn distillation is best-effort and cannot alter settlement.

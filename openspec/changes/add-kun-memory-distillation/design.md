@@ -67,6 +67,8 @@ P1-B will call the existing runtime `ModelClient` using the provider/model route
 
 The call is scheduled only after the turn is durably persisted as completed. It is asynchronous and cannot delay or reverse completion. Timeouts, provider errors, invalid JSON, and invalid candidates become sanitized bounded diagnostics and zero pending candidates. This bounds both incremental cost and failure impact to at most one short provider request per eligible opted-in turn.
 
+The scheduled task leaves the completed turn's mutation-fence context before starting. Distillation usage is still added to the live cumulative `UsageService` and its durable event is attempted through the normal Manager-backed recorder. If a new same-thread turn owns the lease before that event is written, Manager continues to reject the unfenced mutation; the coordinator records a sanitized diagnostic instead of claiming durable persistence, while candidate extraction and approval-ledger persistence proceed independently. P1-B does not add a persistent retry queue or relax the Manager fence.
+
 ### 6. Persist pending approvals and terminal rejections independently
 
 P1-B will store pending candidate envelopes outside canonical Memory records. The idempotency key is a SHA-256 fingerprint over thread id, turn id, and the normalized candidate. Pending entries survive restart. Each candidate has its own state. The first UI presents a list with per-candidate allow and deny controls only; it intentionally has no bulk approval controls so one action cannot silently authorize unrelated memories.
