@@ -20,6 +20,7 @@ export async function callManagerStore(
     : undefined
   const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
     method: 'POST',
+    retrySafe: isManagerStoreRead(store, operation),
     body: store === 'thread' || store === 'session'
       ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}) }
       : value ?? {},
@@ -48,4 +49,19 @@ export function resolveManagerDataRequestTimeoutMs(
     return MANAGER_TIMELINE_DATA_REQUEST_TIMEOUT_MS
   }
   return MANAGER_USAGE_REQUEST_TIMEOUT_MS
+}
+
+/** Explicit read allowlist: new/unknown RPCs fail closed rather than replay writes. */
+export function isManagerStoreRead(store: ManagerStore, operation: string): boolean {
+  const reads: Record<ManagerStore, readonly string[]> = {
+    thread: ['list', 'listPage', 'get', 'getMetadata'],
+    session: ['loadItemSnapshot', 'loadEventsSince', 'loadEventPage', 'eventReplayFloorSeq',
+      'loadItems', 'searchItemText', 'loadItemPage', 'loadSession', 'highestSeq',
+      'loadUsageRecords', 'aggregateUsage', 'loadLatestUsageSnapshots'],
+    artifact: ['list', 'get', 'readRange', 'stat'],
+    memory: ['list', 'retrieve', 'diagnostics', 'distillationPending'],
+    graph: ['get', 'list', 'events', 'eventReplay', 'snapshot', 'diagnostics'],
+    attachment: ['get', 'resolveContent', 'diagnostics']
+  }
+  return reads[store].includes(operation)
 }

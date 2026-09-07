@@ -409,10 +409,13 @@ export class ModelRoundEngine {
               // settlement.
               if (input.signal.aborted) break
               const modelErrorMessage = redactSecretText(intent.message)
+              // Even older extension adapters can prove that this error came
+              // from the model stream without supplying a detailed category.
+              const modelFailureDetails = { modelFailure: intent.failure ?? { category: 'unknown' } }
               const rewritten = rewriteStreamDisconnectFailure({
                 error: modelErrorMessage,
                 ...(intent.code ? { code: intent.code } : {}),
-                ...(intent.failure ? { details: { modelFailure: intent.failure } } : {})
+                details: modelFailureDetails
               })
               const modelRequestFailure = modelRequestFailureContext({
                 request: input.request, failure: intent.failure, code: intent.code
@@ -420,7 +423,7 @@ export class ModelRoundEngine {
               this.deps.rememberFailure(input.turnId, rewritten ? { ...rewritten, ...(modelRequestFailure ? { modelRequestFailure } : {}) } : {
                 error: modelErrorMessage,
                 ...(intent.code ? { code: intent.code } : {}),
-                ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
+                details: modelFailureDetails,
                 ...(modelRequestFailure ? { modelRequestFailure } : {}),
                 severity: 'error'
               })
@@ -435,7 +438,7 @@ export class ModelRoundEngine {
                   turnId: input.turnId,
                   message: modelErrorMessage,
                   code: intent.code,
-                  ...(intent.failure ? { details: { modelFailure: intent.failure } } : {}),
+                  details: modelFailureDetails,
                   ...(modelRequestFailure ? { modelRequestFailure } : {}),
                   severity: 'error'
                 })

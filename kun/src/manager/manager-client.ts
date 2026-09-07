@@ -1,3 +1,4 @@
+import { ServiceManagerHttpError } from './usage-errors.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -602,7 +603,8 @@ import {
   delay,
   processIsAlive,
   requestManagerResponse,
-  requireManagerJson
+  requireManagerJson,
+  requestManagerJson as requestManagerJsonWithRetry
 } from './manager-client-support.js'
 export {
   defaultManagerControlDirForTests,
@@ -614,13 +616,15 @@ export async function requestManagerJson(
   path: string,
   options: ManagerRequestOptions
 ): Promise<unknown> {
-  const response = await requestManagerResponse(manager, path, options)
-  if (response.status === 409) {
-    const conflict = z.object({
-      code: z.literal('graph_run_conflict'),
-      message: z.string()
-    }).safeParse(await response.clone().json().catch(() => null))
-    if (conflict.success) throw new GraphRunConflictError(conflict.data.message)
+  try {
+    return await requestManagerJsonWithRetry(manager, path, options)
+  } catch (error) {
+    if (error instanceof ServiceManagerHttpError && error.status === 409) {
+      let body: unknown
+      try { body = JSON.parse(error.detail) } catch { body = null }
+      const parsed = z.object({ code: z.literal('graph_run_conflict'), message: z.string() }).safeParse(body)
+      if (parsed.success) throw new GraphRunConflictError(parsed.data.message)
+    }
+    throw error
   }
-  return requireManagerJson(response)
 }

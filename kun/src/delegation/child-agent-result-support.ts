@@ -63,3 +63,10 @@ function toolEvidenceTarget(args: Record<string, unknown>): string {
   }
   return ''
 }
+
+/** Evidence already gathered before a provider switch is still valid. */
+export function childContinuationEvidence(items: readonly TurnItem[]): string[] {
+  return [...new Set(items.map((item) => item.turnId))]
+    .flatMap((turnId) => childToolEvidence(items, turnId))
+    .slice(-32)
+}

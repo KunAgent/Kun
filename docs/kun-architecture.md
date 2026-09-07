@@ -186,6 +186,20 @@ provider 原生缓存字段；这些历史数据只能作为旧实现的证据�
 
 ## Subagent 召回与派发
 
+子代理的独立模型供应商发生请求、认证、额度、限流、网络或可用性故障时，宿主最多自动
+回退一次，使用派发时主会话实际选中的 provider/model/account，并继承主会话的推理强度
+和服务等级。恢复请求会更新该主会话快照；已经回退的子代理不会再次循环回退。回退继续
+同一 child thread，保留已有工具结果和证据，分别结算两条路由的用量，并持久化安全的
+`providerFallback` 原因和路由信息。原 profile 设置保持不变。普通和 Fast Context 子代理
+共用此机制；Fast Context 仍只开放 grep/glob/read。权限边界、用户停止、运行时故障、
+步数/时长上限和工具错误不会触发供应商回退；主会话路由缺失或不在允许范围时原样失败。
+
+Service Manager 短暂断连时，同一认证实例上的读取请求（包括 POST 数据读取）最多尝试
+三次，所有尝试共享原超时和取消信号。响应体中途断开也受此规则保护。写请求只有在连接
+被拒绝、确认尚未收到响应时才允许重试；不重放可能已经落盘的写入，不盲目更换 Manager
+实例。持久化不可用导致回合异常退出时，仍释放本地执行占用与租约心跳，由 Manager 的
+既有租约恢复流程核对持久化状态。GUI 将此类故障显示为本地数据服务断连。
+
 `delegate_task` 是创建普通 child run 的唯一模型入口，`list_subagent_profiles` 是主代理专用的
 只读发现工具。`fast_context` 是例外的 host-owned 全局只读检索能力：支持 Kun ToolHost
 的普通 agent、subagent 和 Graph Worker 都可以启动它的受管 retrieval child，但这不会

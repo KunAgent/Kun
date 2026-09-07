@@ -299,6 +299,7 @@
   "continueInterruptedTask": "Continue task",
   "continueInterruptedTaskPrompt": "Continue the task that was interrupted. Review the conversation history and the interruption note, verify the current state, and finish the original request.",
   "runtimeActionNeedsConnection": "Connect to the runtime before using AI actions.",
+  "runtimeServiceManagerUnavailable": "Kun cannot reach its local data service. Retry shortly; if the connection does not recover, restart Kun and continue the task.",
   "runtimeFetchFailed": "Could not reach Kun. Make sure `kun serve` is running, or enable auto-start in Settings.",
   "runtimeModelRequestFailed": "Kun could not reach the model provider. Check your network, proxy settings, and provider configuration (Base URL, Endpoint format).",
   "runtimeModelProviderNoResponse": "The model provider did not return a response. Expand details to see the connection failure.",

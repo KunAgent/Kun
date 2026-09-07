@@ -299,6 +299,7 @@
   "continueInterruptedTask": "继续任务",
   "continueInterruptedTaskPrompt": "继续之前被中断的任务：检查对话历史与中断说明，核实当前状态，完成最初的请求。",
   "runtimeActionNeedsConnection": "请先连接运行时后再使用 AI。",
+  "runtimeServiceManagerUnavailable": "Kun 与本地数据服务的连接中断。请稍后重试；若连接持续无法恢复，请重启 Kun 后继续任务。",
   "runtimeFetchFailed": "无法连接到 Kun。请确认 `kun serve` 已启动，或在设置中开启自动启动。",
   "runtimeModelRequestFailed": "Kun 无法连接到模型供应商。请检查网络、代理设置以及供应商配置（Base URL、Endpoint format）。",
   "runtimeModelProviderNoResponse": "模型供应商没有返回响应。展开详情可查看连接失败的具体原因。",

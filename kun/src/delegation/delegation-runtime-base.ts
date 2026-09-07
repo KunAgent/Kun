@@ -78,6 +78,7 @@ import {
 import { ChildQueueTimeoutError } from './delegation-slot-waiter.js'
 import { ChildAdmissionScheduler, type SlotLease } from './delegation-child-admission.js'
 import { DetachedChildHandoffCoordinator } from './delegation-detached-handoff.js'
+import { executeWithProviderFallback, type ChildExecutionArgs } from './child-provider-fallback.js'
 
 export type RunTurnFn = (threadId: string, turnId: string) => Promise<unknown>
 
@@ -413,47 +414,7 @@ export abstract class DelegationRuntimeBase {
     return this.options.nowIso?.() ?? new Date().toISOString()
   }
 
-  protected async executeChild(args: {
-    state: ChildExecutionState
-    queuedAt: string
-    profileName: string | undefined
-    toolPolicy: SubagentToolPolicy
-    resolvedModel: string | undefined
-    resolvedProviderId: string | undefined
-    resolvedAccountId: string | undefined
-    resolvedSystemPrompt: string | undefined
-    resolvedOmitBasePrompt: boolean
-    resolvedAllowedTools: string[] | undefined
-    resolvedBlockedTools: string[] | undefined
-    resolvedBlockedMcpServers: string[] | undefined
-    resolvedBlockedSkills: string[] | undefined
-    skillsEnabled: boolean
-    promptPreamble: string | undefined
-    approvalPolicy: ApprovalPolicy | undefined
-    sandboxMode: SandboxMode | undefined
-    approvalReviewer: ApprovalReviewer
-    clientSurface: TurnClientSurface | undefined
-    agentSurface: 'code' | 'write' | 'design' | undefined
-    guiDesignCanvas: boolean
-    resolvedReasoningEffort: string | undefined
-    resolvedServiceTier: 'priority' | undefined
-    returnFormat: ChildReturnFormat
-    fastContext: boolean
-    fastContextTasks: readonly import('./fast-context-evidence.js').FastContextTask[] | undefined
-    queueTimeoutMs: number | undefined
-    workspace: string | undefined
-    security: ChildSecuritySnapshot | undefined
-    onRunning: ((childId: string, profile?: string, metadata?: ChildRunLifecycleMetadata) => Promise<void> | void) | undefined
-    label: string | undefined
-    parentThreadId: string
-    parentTurnId: string
-    prompt: string
-    source: ChildSourceEnvelope | undefined
-    controlPrompt: string | undefined
-    pptWorkflowScope: PptWorkflowScope | undefined
-    resumeChild?: boolean
-    signal: AbortSignal
-  }): Promise<ChildRunRecord> {
+  protected async executeChild(args: ChildExecutionArgs): Promise<ChildRunRecord> {
     let record = args.state.record
     let releaseSlot: SlotLease | undefined
     const parentAdmission = this.activeAdmissionOwners.get(args.parentThreadId)
@@ -514,7 +475,7 @@ export abstract class DelegationRuntimeBase {
       })
       usageBeforeRun = record.usage
       const executor: ChildRunExecutor = this.options.executor ?? defaultExecutor
-      const result = await executeWithParentSignal(args.signal, (signal) => executor({
+      const result = await executeWithParentSignal(args.signal, (signal) => executeWithProviderFallback(executor, {
           ...(args.resumeChild ? { resumeChild: true } : {}),
           childId: record.id,
           parentThreadId: args.parentThreadId,
@@ -551,6 +512,32 @@ export abstract class DelegationRuntimeBase {
           ...(args.fastContext ? { fastContext: true } : {}),
           ...(args.fastContextTasks?.length ? { fastContextTasks: args.fastContextTasks } : {}),
           signal
+      }, record, async (failure, route) => {
+        // Settle the original provider before switching attribution. Executor
+        // usage is cumulative for this same child thread, including resumes.
+        if (failure.usage) {
+          const failedRecord = { ...args.state.record, usage: failure.usage }
+          await this.recordExternalUsage(failedRecord, subtractChildUsage(failure.usage, usageBeforeRun ?? record.usage))
+          usageBeforeRun = failure.usage
+        }
+        record = await this.commitChildState(args.state, (current) => ChildRunRecord.parse({
+          ...current,
+          ...route,
+          accountId: route.accountId,
+          reasoningEffort: route.reasoningEffort,
+          serviceTier: route.serviceTier,
+          usage: failure.usage ?? current.usage,
+          toolInvocations: failure.toolInvocations ?? current.toolInvocations,
+          providerFallback: {
+            from: { model: current.model, providerId: current.providerId },
+            to: { model: route.model, providerId: route.providerId },
+            failure: failure.failure,
+            timestamp: this.now()
+          },
+          activity: undefined,
+          updatedAt: this.now()
+        }))
+        await notifyLifecycle(args.onRunning, record)
       }))
       const finishedAt = this.now()
       const contractError = childContractError(args.returnFormat, result.evidence)
