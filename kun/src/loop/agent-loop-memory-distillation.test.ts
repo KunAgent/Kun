@@ -7,6 +7,8 @@ import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { createThreadRecord } from '../domain/thread.js'
 import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
 import { SequentialIdGenerator } from '../ports/id-generator.js'
+import type { ThreadExecutionLeasePort } from '../ports/thread-execution-lease.js'
+import { currentTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { TurnService } from '../services/turn-service.js'
 import { UsageService } from '../services/usage-service.js'
@@ -95,6 +97,17 @@ describe('AgentLoop Memory distillation lifecycle', () => {
     await expect(harness.loop.runTurn('thread_2', harness.turnId)).resolves.toBe('completed')
     expect((await harness.threadStore.get('thread_2'))?.turns.at(-1)?.status).toBe('completed')
   })
+
+  it('does not pass a completed turn fence into scheduled distillation work', async () => {
+    let scheduledFence = currentTurnMutationFence()
+    const schedule = vi.fn(() => { scheduledFence = currentTurnMutationFence() })
+    const harness = await createMinimalLoop(schedule)
+
+    await expect(harness.loop.runTurn('thread_2', harness.turnId)).resolves.toBe('completed')
+
+    expect(schedule).toHaveBeenCalledOnce()
+    expect(scheduledFence).toBeUndefined()
+  })
 })
 
 async function createMinimalLoop(schedule: () => void) {
@@ -110,7 +123,8 @@ async function createMinimalLoop(schedule: () => void) {
   })
   const compactor = new ContextCompactor()
   const turns = new TurnService({
-    threadStore, sessionStore, events, inflight, steering, compactor, ids, nowIso
+    threadStore, sessionStore, events, inflight, steering, compactor, ids, nowIso,
+    executionLeases: testExecutionLeases()
   })
   const model: ModelClient = {
     provider: 'test', model: 'test-model',
@@ -135,4 +149,20 @@ async function createMinimalLoop(schedule: () => void) {
     threadId: 'thread_2', request: { prompt: 'Remember this.', model: model.model }
   })
   return { loop, threadStore, turnId: started.turnId }
+}
+
+function testExecutionLeases(): ThreadExecutionLeasePort {
+  return {
+    acquire: async (threadId, turnId) => ({
+      threadId,
+      turnId,
+      ownerFlavor: 'production',
+      ownerInstanceId: 'memory-distillation-test',
+      fencingToken: 1,
+      acquiredAt: '2026-09-03T00:59:30.000Z',
+      expiresAt: '2026-09-03T01:00:30.000Z'
+    }),
+    release: async () => undefined,
+    owner: async () => null
+  }
 }
