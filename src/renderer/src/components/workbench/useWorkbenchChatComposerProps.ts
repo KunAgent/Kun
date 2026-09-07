@@ -269,6 +269,7 @@ export function useWorkbenchChatComposerProps({
     queuedMessages: queuedMessages.map((message) => ({
       id: message.id,
       text: message.text,
+      ...(message.steeringRequest ? { steeringRequest: message.steeringRequest } : {}),
       ...(message.deliveryState ? { deliveryState: message.deliveryState } : {}),
       ...(message.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
       ...(message.deliveryTurnId ? { deliveryTurnId: message.deliveryTurnId } : {}),

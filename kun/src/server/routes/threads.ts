@@ -197,6 +197,8 @@ export async function getThread(
     : undefined
   return jsonResponse({
     ...ThreadSchemaReadable.parse(hydratedThread),
+    activeTurn: thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)
+      ? omitTurnItems(projectTimelineTurn(thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)!, [])) : null,
     latestSeq: replayFloor,
     pendingUserInputIds,
     ...(pendingApprovalIds ? { pendingApprovalIds } : {})

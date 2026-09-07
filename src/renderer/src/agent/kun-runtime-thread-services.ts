@@ -214,7 +214,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     threadId: string,
     turnId: string,
     text: string,
-    options?: { displayText?: string; attachmentIds?: string[] }
+    options?: { displayText?: string; attachmentIds?: string[]; operationId?: string; sourceTurnId?: string }
   ): Promise<void> {
     const displayText = options?.displayText?.trim()
     const attachmentIds = options?.attachmentIds?.map((id) => id.trim()).filter(Boolean) ?? []
@@ -223,6 +223,8 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
       'POST',
       JSON.stringify({
         text,
+        ...(options?.operationId ? { operationId: options.operationId } : {}),
+        ...(options?.sourceTurnId ? { sourceTurnId: options.sourceTurnId } : {}),
         ...(displayText ? { displayText } : {}),
         ...(attachmentIds.length ? { attachmentIds } : {})
       })

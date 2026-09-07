@@ -350,6 +350,7 @@ export function queuedMessageStartedByRuntime(
   message: QueuedUserMessage,
   runtime: { turnId?: string | null; userMessageItemIds?: ReadonlySet<string> }
 ): boolean {
+  if (message.steeringRequest) return false
   const state = message.deliveryState
   if (state !== 'starting' && state !== 'in_flight') return false
   const liveTurnId = normalizedString(runtime.turnId)
@@ -399,6 +400,7 @@ export function reconcileQueuedMessages(
   const queuedTurnByClientRequestId = new Map<string, string>()
   const queuedTurnIds = new Set<string>()
   for (const turn of runtimeQueuedTurns ?? []) {
+    if (turn.status && turn.status !== 'queued') continue
     queuedTurnIds.add(turn.turnId)
     const requestId = normalizedString(turn.clientRequestId)
     if (requestId) queuedTurnByClientRequestId.set(requestId, turn.turnId)
@@ -406,6 +408,9 @@ export function reconcileQueuedMessages(
   const reconciled: QueuedUserMessage[] = []
   for (const message of messages) {
     const state = message.deliveryState ?? 'pending'
+    if (message.steeringRequest) { reconciled.push(message); continue }
+    if (runtimeQueuedTurns?.some((turn) => turn.status && turn.status !== 'queued' &&
+      (turn.turnId === message.deliveryTurnId || (message.clientRequestId && turn.clientRequestId === message.clientRequestId)))) continue
     // A terminal failure stays failed across reconciliation; only an explicit
     // user retry or removal moves it.
     if (state === 'failed') {
@@ -524,6 +529,14 @@ export function reconcileQueuedMessages(
         : {})
     })
   }
+  if (runtimeQueuedTurns) {
+    const position = new Map(runtimeQueuedTurns.filter((turn) => !turn.status || turn.status === 'queued')
+      .map((turn, index) => [turn.turnId, turn.position ?? index]))
+    const owned = reconciled.filter((row) => row.deliveryTurnId && position.has(row.deliveryTurnId))
+      .sort((a, b) => position.get(a.deliveryTurnId!)! - position.get(b.deliveryTurnId!)!)
+    let index = 0
+    return reconciled.map((row) => row.deliveryTurnId && position.has(row.deliveryTurnId) ? owned[index++] : row)
+  }
   return reconciled
 }
 
@@ -535,6 +548,7 @@ export type RuntimeQueuedTurnRef = {
   turnId: string
   clientRequestId?: string
   position?: number
+  status?: string
 }
 
 /**
@@ -544,14 +558,14 @@ export type RuntimeQueuedTurnRef = {
  */
 export async function fetchRuntimeQueuedTurnsBestEffort(
   provider: {
-    getQueuedTurns?: (threadId: string) => Promise<{ queuedTurns: readonly RuntimeQueuedTurnRef[] }>
+    getQueuedTurns?: (threadId: string) => Promise<{ queuedTurns: readonly RuntimeQueuedTurnRef[]; settledTurns?: readonly RuntimeQueuedTurnRef[] }>
   },
   threadId: string
 ): Promise<readonly RuntimeQueuedTurnRef[] | undefined> {
   if (typeof provider.getQueuedTurns !== 'function') return undefined
   try {
     const response = await provider.getQueuedTurns(threadId)
-    return response.queuedTurns
+    return [...response.queuedTurns, ...(response.settledTurns ?? [])]
   } catch {
     return undefined
   }

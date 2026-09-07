@@ -1,3 +1,4 @@
+import { flushDurableSteering } from '../services/durable-steering.js'
 import { createImmutablePrefix, type ImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { PipelineStage } from '../contracts/events.js'
 import { makeUserItem } from '../domain/item.js'
@@ -319,6 +320,8 @@ export abstract class AgentLoopBase {
 
 
   protected async drainSteering(threadId: string, turnId: string, signal: AbortSignal): Promise<void> {
+    await this.opts.steering.waitForAdmissions(turnId)
+    await flushDurableSteering(this.opts.turns, threadId, turnId)
     const pending = this.opts.steering.drain(turnId)
     if (pending.length === 0) return
     for (const entry of pending) {

@@ -50,6 +50,7 @@ import type {
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
+  fetchRuntimeQueuedTurnsBestEffort,
   isPendingQueuedMessage,
   queuedMessagesForThread,
   reconcileQueuedMessages,
@@ -486,7 +487,10 @@ export function createThreadCreationActions(
             })
             subscribeThreadEventsWithRecovery(p, activeThreadId, state.lastSeq, sink, ac.signal, get)
             if (busy) armBusyWatchdog(set, get)
-            else resetBusyRecoveryAttempts()
+            else {
+              resetBusyRecoveryAttempts()
+              void get().drainQueuedMessages?.()
+            }
             return busy
           }
         } catch (error) {
@@ -530,10 +534,11 @@ export function createThreadCreationActions(
       // currentTurnId from a previous recovery attempt must not win over it.
       const currentTurnId = activeTurn !== undefined
         ? activeTurn?.id ?? null : busy ? latestTurnId ?? state.currentTurnId ?? null : null
-      const durableQueuedMessages = queuedMessagesForThread(activeThreadId)
+      const runtimeQueue = await fetchRuntimeQueuedTurnsBestEffort(p, activeThreadId)
+      if (!recoveryStillCurrent()) return get().busy
       const queuedMessages = reconcileQueuedMessages(
-        state.queuedMessages.length > 0 ? state.queuedMessages : durableQueuedMessages,
-        { busy, turnId: currentTurnId, blocks }
+        get().queuedMessages,
+        { busy, turnId: currentTurnId, blocks }, runtimeQueue
       )
 
       set((snapshot) => {

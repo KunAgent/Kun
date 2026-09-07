@@ -607,7 +607,7 @@ describe('chat-store-thread-actions queued messages', () => {
       'thr_existing',
       'turn_graph_planning',
       'Continue building the Graph.',
-      undefined
+      { operationId: expect.stringMatching(/^guide-q-/) }
     )
     expect(state.queuedMessages).toEqual([])
     expect(state.blocks).toContainEqual(expect.objectContaining({

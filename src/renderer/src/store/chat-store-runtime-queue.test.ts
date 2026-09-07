@@ -42,6 +42,23 @@ beforeEach(() => {
 })
 
 describe('runtime queue store actions', () => {
+  it('converts runtime-owned input with its source identity and retries an unknown outcome against the original target', async () => {
+    const steerUserMessage = vi.fn().mockRejectedValueOnce(new Error('network timeout')).mockResolvedValueOnce(undefined)
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness({
+      busy: true, currentTurnId: 'turn_a',
+      queuedMessages: [{ id: 'q-b', text: 'B', deliveryState: 'in_flight', deliveryTurnId: 'turn_b' }]
+    })
+    await expect(actions.guideQueuedMessage('q-b')).resolves.toBe(false)
+    expect(state.queuedMessages[0].steeringRequest).toEqual({ operationId: 'guide-q-b', turnId: 'turn_a' })
+    state.currentTurnId = 'turn_new'
+    await expect(actions.guideQueuedMessage('q-b')).resolves.toBe(true)
+    expect(steerUserMessage).toHaveBeenNthCalledWith(2, 'thr_existing', 'turn_a', 'B', {
+      operationId: 'guide-q-b', sourceTurnId: 'turn_b'
+    })
+    expect(state.queuedMessages).toEqual([])
+  })
+
   it('does not drain a message while its steering request is pending', async () => {
     const sendMessage = vi.fn(async () => false)
     const { actions, state } = buildHarness({

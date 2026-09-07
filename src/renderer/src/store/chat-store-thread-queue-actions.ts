@@ -1,3 +1,5 @@
+import { queueMutationPending, withQueueMutation } from './queue-mutation-fence'
+import { awaitQueueAdmission, queueAdmissionPending } from './queue-admission-fence'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -201,14 +203,17 @@ export function createThreadQueueActions(
     const threadId = get().activeThreadId?.trim()
     if (!threadId || threadActionSharedState.drainingQueuedMessageThreadIds.has(threadId)) return
     threadActionSharedState.drainingQueuedMessageThreadIds.add(threadId)
-    // Tombstones only matter while a drain is mid-send. Message ids are unique
-    // per submission and this thread has no concurrent drain, so stale markers
-    // from earlier rounds can be discarded safely.
-    threadActionSharedState.removedQueuedMessageIds.clear()
     try {
       while (true) {
         let state = get()
-        if (state.activeThreadId !== threadId) return
+        if (state.activeThreadId !== threadId || queueMutationPending(threadId)) return
+        const uncertain = state.queuedMessages.find((row) => row.steeringRequest)
+        if (uncertain) {
+          if (threadActionSharedState.guidingQueuedMessageIds.has(uncertain.id)) return
+          await get().guideQueuedMessage(uncertain.id)
+          if (get().queuedMessages.some((row) => row.id === uncertain.id)) return
+          continue
+        }
         const queuedMessages = reconcileQueuedMessages(state.queuedMessages, {
           busy: state.busy,
           turnId: state.currentTurnId,
@@ -265,10 +270,16 @@ export function createThreadQueueActions(
     }
   },
 
-  removeQueuedMessage: async (id) => {
+  removeQueuedMessage: async (id) => withQueueMutation(get().activeThreadId, undefined, async () => {
     if (threadActionSharedState.guidingQueuedMessageIds.has(id)) return
-    const removed = get().queuedMessages.find((message) => message.id === id)
+    let removed = get().queuedMessages.find((message) => message.id === id)
     const threadId = get().activeThreadId
+    if (removed?.deliveryState === 'starting' && queueAdmissionPending(id)) {
+      await awaitQueueAdmission(removed)
+      if (get().activeThreadId !== threadId) return
+      removed = get().queuedMessages.find((row) => row.id === id)
+    }
+    if (removed?.steeringRequest || removed?.deliveryState === 'starting') return
     if (removed?.deliveryTurnId) {
       const provider = getProvider()
       if (!threadId || !provider.cancelQueuedTurn) return
@@ -293,13 +304,18 @@ export function createThreadQueueActions(
     if (removed?.waitForRuntimeAdmission) {
       settleRuntimeTurnAdmission(removed.clientRequestId, false)
     }
-  },
+  }),
 
-  restoreQueuedMessage: async (id) => {
+  restoreQueuedMessage: async (id) => withQueueMutation(get().activeThreadId, null, async () => {
     if (threadActionSharedState.guidingQueuedMessageIds.has(id)) return null
-    const restored = restoreQueuedMessageFromQueue(get().queuedMessages, id)
-    if (!restored.restored) return null
     const threadId = get().activeThreadId
+    const pending = get().queuedMessages.find((row) => row.id === id)
+    if (pending?.deliveryState === 'starting' && queueAdmissionPending(id)) {
+      await awaitQueueAdmission(pending)
+      if (get().activeThreadId !== threadId) return null
+    }
+    const restored = restoreQueuedMessageFromQueue(get().queuedMessages, id)
+    if (!restored.restored || restored.restored.steeringRequest || restored.restored.deliveryState === 'starting') return null
     const provider = getProvider()
     if (restored.restored.deliveryTurnId) {
       if (!threadId || !provider.cancelQueuedTurn) return null
@@ -320,9 +336,9 @@ export function createThreadQueueActions(
     set((current) => ({ queuedMessages: current.queuedMessages.filter((row) => row.id !== id) }))
     runtime.persistActiveQueuedMessages()
     return restored.restored
-  },
+  }),
 
-  reorderQueuedMessage: async (id, targetId, position) => {
+  reorderQueuedMessage: async (id, targetId, position) => withQueueMutation(get().activeThreadId, undefined, async () => {
     const moving = get().queuedMessages.find((message) => message.id === id)
     const anchor = get().queuedMessages.find((message) => message.id === targetId)
     const anchorTurnId = anchor?.deliveryTurnId
@@ -358,7 +374,7 @@ export function createThreadQueueActions(
       return { queuedMessages }
     })
     runtime.persistActiveQueuedMessages()
-  },
+  }),
 
   resumeQueuedTurns: async () => {
     const state = get()
@@ -368,6 +384,7 @@ export function createThreadQueueActions(
     if (typeof provider.resumeQueuedTurns !== 'function') return false
     const result = await provider.resumeQueuedTurns(threadId)
     if (!result.started) return false
+    if (get().activeThreadId !== threadId) { invalidateThreadSnapshot(threadId); return true }
     // The interrupt paused locally parked entries; the runtime queue kept
     // them queued, so resume them locally too. Paused entries that never
     // reached the runtime stay local and keep their paused state.
@@ -384,10 +401,10 @@ export function createThreadQueueActions(
   },
 
   guideQueuedMessage: async (id) => {
-    if (threadActionSharedState.guidingQueuedMessageIds.has(id)) return false
+    if (queueMutationPending(get().activeThreadId) || threadActionSharedState.guidingQueuedMessageIds.has(id)) return false
     const state = get()
     const message = state.queuedMessages.find((candidate) => candidate.id === id)
-    if (!message) return false
+    if (!message || message.deliveryState === 'starting') return false
     if (message.deliveryState === 'paused' || message.deliveryState === 'failed') {
       if (message.waitForRuntimeAdmission) {
         set({ error: i18n.t('common:queuedMessageRetryUnavailable') })
@@ -418,7 +435,7 @@ export function createThreadQueueActions(
       set({ error: i18n.t('common:guideQueuedMessageTextOnly') })
       return false
     }
-    if (!state.busy || !state.activeThreadId || !state.currentTurnId) {
+    if (!state.activeThreadId || (!message.steeringRequest && (!state.busy || !state.currentTurnId))) {
       set({ error: i18n.t('common:guideQueuedMessageNoActiveTurn') })
       if (!state.busy) void get().drainQueuedMessages()
       return false
@@ -444,7 +461,7 @@ export function createThreadQueueActions(
             designDocumentTarget: message.designDocumentTarget
           }
         })()
-    if (!queuedMessageMatchesRunningTurn(
+    if (!message.steeringRequest && !queuedMessageMatchesRunningTurn(
       message,
       runningRouting
     )) {
@@ -452,7 +469,7 @@ export function createThreadQueueActions(
       return false
     }
     const guidanceThreadId = state.activeThreadId
-    const guidanceTurnId = state.currentTurnId
+    const guidanceTurnId = message.steeringRequest?.turnId ?? state.currentTurnId!
     const guidingGraphTurn = state.currentTurnOrchestration === 'graph'
     const delegated = state.lastDelegatedRuntimeState
     if (
@@ -461,6 +478,10 @@ export function createThreadQueueActions(
       delegated.turnId === guidanceTurnId &&
       delegated.capabilities.liveSteering === false
     ) {
+      set({ error: i18n.t('common:guideQueuedMessageUnsupported') })
+      return false
+    }
+    if (guidingGraphTurn && message.deliveryTurnId) {
       set({ error: i18n.t('common:guideQueuedMessageUnsupported') })
       return false
     }
@@ -486,7 +507,12 @@ export function createThreadQueueActions(
           set({ error: i18n.t('common:guideQueuedMessageUnsupported') })
           return false
         }
+        const steeringRequest = message.steeringRequest ?? { operationId: `guide-${message.id}`, turnId: guidanceTurnId }
+        set((current) => ({ queuedMessages: current.queuedMessages.map((row) => row.id === id ? { ...row, steeringRequest } : row) }))
+        runtime.persistActiveQueuedMessages()
         const steerOptions = {
+          operationId: steeringRequest.operationId,
+          ...(message.deliveryTurnId ? { sourceTurnId: message.deliveryTurnId } : {}),
           ...(guidance.displayText ? { displayText: guidance.displayText } : {}),
           ...(guidance.attachmentIds?.length ? { attachmentIds: guidance.attachmentIds } : {})
         }
@@ -556,7 +582,11 @@ export function createThreadQueueActions(
     } catch (error) {
       if (get().activeThreadId !== guidanceThreadId) return false
       const messageText = formatRuntimeError(error)
-      if (/turn is not active|turn is no longer accepting steering/.test(messageText)) {
+      if (!turnAdmissionOutcomeMayBeUnknown(error) || /^(steering_|turn is not active|turn is no longer accepting steering)/.test(messageText)) {
+        set((current) => ({ queuedMessages: current.queuedMessages.map((row) => row.id === id ? { ...row, steeringRequest: undefined } : row) }))
+        runtime.persistActiveQueuedMessages()
+      }
+      if (/steering_target_(inactive|closed|missing)|steering_source_not_queued|turn is not active|turn is no longer accepting steering/.test(messageText)) {
         threadActionSharedState.guidingQueuedMessageIds.delete(id)
         await get().recoverActiveTurn({ forceTimeline: true })
         return false
@@ -567,6 +597,8 @@ export function createThreadQueueActions(
       return false
     } finally {
       threadActionSharedState.guidingQueuedMessageIds.delete(id)
+      if (get().activeThreadId === guidanceThreadId && !get().busy &&
+        !get().queuedMessages.some((row) => row.steeringRequest)) void get().drainQueuedMessages?.()
     }
   },
   }

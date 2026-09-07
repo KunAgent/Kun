@@ -51,9 +51,9 @@ export type QueuedUserMessage = {
   text: string
   /** Stable idempotency key reused while this user submission is retried. */
   clientRequestId?: string
-  /** First Design document remains provisional until Kun accepts this queued turn. */
+  steeringRequest?: { operationId: string; turnId: string }
   waitForRuntimeAdmission?: boolean
-  /** Pending/paused items are visible and waiting; starting/in-flight items stay durable while they wait in the server queue and are removed once their turn starts executing (the runtime timeline takes over); failed items are terminal until retried or deleted. */
+  /** Pending/paused items wait locally; admitted items remain until runtime execution starts. */
   deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
   deliveryTurnId?: string
   deliveryUserMessageItemId?: string

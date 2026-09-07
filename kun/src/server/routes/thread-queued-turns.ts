@@ -28,5 +28,7 @@ export async function getQueuedTurns(
       position: index,
       createdAt: turn.createdAt
     }))
-  return jsonResponse(QueuedTurnsResponseSchema.parse({ queuedTurns }))
+  const settledTurns = thread.turns.filter((turn) => turn.status !== 'queued' && turn.clientRequestId)
+    .map((turn) => ({ turnId: turn.id, clientRequestId: turn.clientRequestId, status: turn.status }))
+  return jsonResponse(QueuedTurnsResponseSchema.parse({ queuedTurns, ...(settledTurns.length ? { settledTurns } : {}) }))
 }

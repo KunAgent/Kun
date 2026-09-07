@@ -44,6 +44,7 @@ export type QueuedComposerMessage = {
   id: string
   text: string
   deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
+  steeringRequest?: { operationId: string; turnId: string }
   deliveryTurnId?: string
   deliveryUserMessageItemId?: string
   waitForRuntimeAdmission?: boolean
@@ -320,14 +321,14 @@ export function FloatingComposerQueuedMessages({
             const recoverable = paused || failed
             const imageCount = attachmentImageCount(message)
             const imageNames = imageCount > 0 ? attachmentImageNames(message) : ''
-            const canRestore = Boolean(onRestoreToComposer && message.composerRestoreEligible)
-            const canGuide = Boolean(onGuide && (recoverable
+            const canRestore = Boolean(onRestoreToComposer && message.composerRestoreEligible && !message.steeringRequest && message.deliveryState !== 'starting')
+            const canGuide = Boolean(onGuide && message.deliveryState !== 'starting' && (message.steeringRequest || (recoverable
               ? !running && !message.waitForRuntimeAdmission
               : (
                 running &&
                 message.guidanceEligible !== false &&
                 canGuideQueuedComposerMessage(message)
-              )))
+              ))))
             const guideLabel = recoverable
               ? t('queuedMessageRetry')
               : t('queuedMessageSteer')
@@ -464,7 +465,7 @@ export function FloatingComposerQueuedMessages({
                   <QueueActionButton
                     action="remove"
                     label={t('queuedMessageRemove')}
-                    disabled={busy !== null}
+                    disabled={busy !== null || message.deliveryState === 'starting' || Boolean(message.steeringRequest)}
                     onClick={() => void applyAction(
                       message.id,
                       'remove',

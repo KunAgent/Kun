@@ -1,3 +1,4 @@
+import { admitDurableSteering, flushDurableSteering } from './durable-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -60,6 +61,8 @@ import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacity
 
 export const turnServiceSteeringOperations = {
 async steerTurn(this: TurnService, input: {
+    operationId?: string
+    sourceTurnId?: string
     threadId: string
     turnId: string
     text: string
@@ -69,6 +72,20 @@ async steerTurn(this: TurnService, input: {
   }): Promise<void> {
     const finishAdmission = this['beginExecutionAdmission']()
     try {
+    if (input.operationId) {
+      const turn = await this.getTurn(input.threadId, input.turnId)
+      if (turn?.orchestration === 'graph' && turn.status === 'running' && !this.isTurnExecutionActive(input.turnId)) {
+        this['beginGraphSteeringResume'](input.turnId)
+        try {
+          await this['resumeGraphTurnForSteering'](input)
+          await admitDurableSteering(this, { ...input, operationId: input.operationId })
+        } finally { this['endGraphSteeringResume'](input.turnId) }
+        return
+      }
+      await admitDurableSteering(this, { ...input, operationId: input.operationId })
+      return
+    }
+    if (input.sourceTurnId) throw new TurnConflictError('steering_operation_required')
     const requestedAttachmentIds = (input.attachmentIds ?? []).map((id) => id.trim())
     let acceptedAttachmentIds: string[] = []
     let holdsGraphResumeFence = false
@@ -256,6 +273,9 @@ async replaceSteering(this: TurnService, input: {
 
 async interruptTurn(this: TurnService, input: { threadId: string; turnId: string; discard?: boolean }): Promise<{ status: TurnStatus }> {
     let transition: boolean
+    this['deps'].steering.closeAdmission(input.turnId)
+    await this['deps'].steering.waitForAdmissions(input.turnId)
+    await flushDurableSteering(this, input.threadId, input.turnId)
     try {
       transition = await this['withThreadMutation'](input.threadId, async () => {
         const current = await this['deps'].threadStore.get(input.threadId)

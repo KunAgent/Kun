@@ -104,7 +104,7 @@ describe('chat store image guidance', () => {
       'thread_image_guidance',
       'turn_active',
       queuedImage.text,
-      { attachmentIds: queuedImage.attachmentIds }
+      { attachmentIds: queuedImage.attachmentIds, operationId: 'guide-q-image' }
     )
     expect(state.queuedMessages).toEqual([])
     expect(state.blocks).toContainEqual(expect.objectContaining({
@@ -120,7 +120,9 @@ describe('chat store image guidance', () => {
     state.queuedMessages = [failedImage]
     steerUserMessage.mockRejectedValueOnce(new Error('runtime offline'))
     await expect(actions.guideQueuedMessage(failedImage.id)).resolves.toBe(false)
-    expect(state.queuedMessages).toEqual([failedImage])
+    expect(state.queuedMessages).toEqual([{ ...failedImage, steeringRequest: {
+      operationId: 'guide-q-image-failed', turnId: 'turn_active'
+    } }])
   })
 
   it('guides a GUI plan image only into an active Plan turn', async () => {
@@ -150,7 +152,7 @@ describe('chat store image guidance', () => {
       'thread_image_guidance',
       'turn_active',
       planImage.text,
-      { attachmentIds: planImage.attachmentIds }
+      { attachmentIds: planImage.attachmentIds, operationId: 'guide-q-plan-image' }
     )
     expect(state.queuedMessages).toEqual([])
 
@@ -194,7 +196,7 @@ describe('chat store image guidance', () => {
       'thread_image_guidance',
       'turn_active',
       queuedImage.text,
-      { attachmentIds: queuedImage.attachmentIds }
+      { attachmentIds: queuedImage.attachmentIds, operationId: 'guide-q-image' }
     )
   })
 })

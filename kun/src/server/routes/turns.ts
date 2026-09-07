@@ -177,6 +177,8 @@ export async function steerTurn(
   }
   try {
     await turns.steerTurn({
+      ...(parsed.data.operationId ? { operationId: parsed.data.operationId } : {}),
+      ...(parsed.data.sourceTurnId ? { sourceTurnId: parsed.data.sourceTurnId } : {}),
       threadId,
       turnId,
       text: parsed.data.text,

@@ -347,7 +347,7 @@ export interface AgentProvider {
     threadId: string,
     turnId: string,
     text: string,
-    options?: { displayText?: string; attachmentIds?: string[] }
+    options?: { displayText?: string; attachmentIds?: string[]; operationId?: string; sourceTurnId?: string }
   ): Promise<void>
   interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void>
   cancelQueuedTurn?(threadId: string, turnId: string): Promise<void>

@@ -226,7 +226,7 @@ describe('chat-store-thread-actions queued messages', () => {
       'thr_existing',
       'turn_active',
       'inspect this image',
-      { attachmentIds: ['attachment-1'] }
+      { attachmentIds: ['attachment-1'], operationId: 'guide-q-attachment' }
     )
     expect(state.queuedMessages).toHaveLength(0)
     expect(state.error).toBeNull()

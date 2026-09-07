@@ -59,7 +59,7 @@ describe('AgentLoop image steering', () => {
     root = undefined
   })
 
-  it('persists guided image ids and sends the image at the next model boundary', async () => {
+  it.each([false, true])('persists guided image ids at the next model boundary (durable=%s)', async (durable) => {
     root = await mkdtemp(join(tmpdir(), 'kun-image-steering-'))
     const sessionStore = new InMemorySessionStore()
     const threadStore = new InMemoryThreadStore()
@@ -130,6 +130,7 @@ describe('AgentLoop image steering', () => {
     await turns.steerTurn({
       threadId,
       turnId: started.turnId,
+      ...(durable ? { operationId: 'image-guidance' } : {}),
       text: 'Use this image as the reference.',
       attachmentIds: [image.id]
     })
@@ -157,7 +158,7 @@ describe('AgentLoop image steering', () => {
       text: 'Use this image as the reference.',
       attachmentIds: [image.id]
     }))
-    expect(eventBus.snapshotSince(threadId, 0)).toContainEqual(expect.objectContaining({
+    if (!durable) expect(eventBus.snapshotSince(threadId, 0)).toContainEqual(expect.objectContaining({
       kind: 'turn_steered',
       attachmentIds: [image.id]
     }))

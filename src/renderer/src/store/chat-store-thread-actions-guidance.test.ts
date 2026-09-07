@@ -273,7 +273,7 @@ describe('chat-store-thread-actions queued messages', () => {
     expect(state.composerProviderId).toBe('gemini-cli-subscription')
   })
 
-  it('reorders queued messages in the order they will be sent', () => {
+  it('reorders queued messages in the order they will be sent', async () => {
     const { actions, state } = buildHarness()
     state.queuedMessages = [
       { id: 'q-1', text: 'first' },
@@ -281,10 +281,10 @@ describe('chat-store-thread-actions queued messages', () => {
       { id: 'q-3', text: 'third' }
     ]
 
-    actions.reorderQueuedMessage('q-3', 'q-1', 'before')
+    await actions.reorderQueuedMessage('q-3', 'q-1', 'before')
     expect(state.queuedMessages.map((message) => message.id)).toEqual(['q-3', 'q-1', 'q-2'])
 
-    actions.reorderQueuedMessage('q-3', 'q-2', 'after')
+    await actions.reorderQueuedMessage('q-3', 'q-2', 'after')
     expect(state.queuedMessages.map((message) => message.id)).toEqual(['q-1', 'q-2', 'q-3'])
   })
 
@@ -641,7 +641,7 @@ describe('chat-store-thread-actions queued messages', () => {
       'thr_existing',
       'turn_active',
       'use the compact logo instead',
-      { displayText: 'Use the compact logo instead' }
+      { displayText: 'Use the compact logo instead', operationId: 'guide-q-guide' }
     )
     expect(state.queuedMessages).toEqual([])
     expect(state.blocks).toContainEqual(expect.objectContaining({
@@ -677,7 +677,7 @@ describe('chat-store-thread-actions queued messages', () => {
       'thr_existing',
       'turn_design_active',
       'Make the title smaller',
-      { displayText: 'Make the title smaller' }
+      { displayText: 'Make the title smaller', operationId: 'guide-q-design-guide' }
     )
     expect(state.queuedMessages).toEqual([])
     expect(state.blocks).toContainEqual(expect.objectContaining({

@@ -19,6 +19,32 @@ export const DEFAULT_MAX_STEERING_BYTES_PER_TURN = 64 * 1024
 
 export class SteeringQueue {
   private readonly buffers = new Map<string, SteeringBuffer>()
+  private readonly admissions = new Map<string, Set<Promise<void>>>()
+  private readonly durablePending = new Set<string>()
+
+  markDurablePending(turnId: string): void { this.durablePending.add(turnId) }
+  clearDurablePending(turnId: string): void { this.durablePending.delete(turnId) }
+
+  /** Prevent final sealing while a durable admission crosses its commit boundary. */
+  holdAdmission(turnId: string): () => void {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => { release = resolve })
+    const holds = this.admissions.get(turnId) ?? new Set<Promise<void>>()
+    holds.add(pending)
+    this.admissions.set(turnId, holds)
+    return () => {
+      holds.delete(pending)
+      if (holds.size === 0) this.admissions.delete(turnId)
+      release()
+    }
+  }
+
+  async waitForAdmissions(turnId: string): Promise<void> {
+    while (this.admissions.get(turnId)?.size) {
+      await Promise.all([...this.admissions.get(turnId)!])
+    }
+  }
+
   /** Attachment ids already drained but retained for cumulative turn admission checks. */
   private readonly drainedAttachments = new Map<string, Set<string>>()
   private readonly sealedTurns = new Set<string>()
@@ -125,10 +151,13 @@ export class SteeringQueue {
    * can drain it and perform another model step.
    */
   sealIfEmpty(turnId: string): boolean {
+    if (this.admissions.get(turnId)?.size || this.durablePending.has(turnId)) return false
     if ((this.buffers.get(turnId)?.entries.length ?? 0) > 0) return false
     this.sealedTurns.add(turnId)
     return true
   }
+
+  closeAdmission(turnId: string): void { this.sealedTurns.add(turnId) }
 
   isSealed(turnId: string): boolean {
     return this.sealedTurns.has(turnId)
@@ -141,6 +170,7 @@ export class SteeringQueue {
 
   clear(turnId: string): void {
     this.buffers.delete(turnId)
+    this.durablePending.delete(turnId)
     this.drainedAttachments.delete(turnId)
     this.sealedTurns.delete(turnId)
   }

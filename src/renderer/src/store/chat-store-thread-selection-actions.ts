@@ -613,6 +613,7 @@ export function createThreadSelectionActions(
     }
     try {
       const {
+        activeTurn,
         blocks: rawBlocks,
         latestSeq,
         liveProjection,
@@ -639,7 +640,7 @@ export function createThreadSelectionActions(
         : null
       const queuedMessages = reconcileQueuedMessages(get().queuedMessages, {
         busy,
-        turnId: latestTurnId,
+        turnId: activeTurn !== undefined ? activeTurn?.id : latestTurnId,
         blocks
       })
       set({
@@ -656,8 +657,8 @@ export function createThreadSelectionActions(
         busy,
         // Replay synchronization confirms the restored running claim.
         busyUnconfirmed: busy,
-        currentTurnId: busy ? latestTurnId ?? null : null,
-        currentTurnOrchestration: busy ? latestTurnOrchestration ?? 'direct' : null,
+        currentTurnId: activeTurn !== undefined ? activeTurn?.id ?? null : busy ? latestTurnId ?? null : null,
+        currentTurnOrchestration: activeTurn !== undefined ? activeTurn?.orchestration ?? null : busy ? latestTurnOrchestration ?? 'direct' : null,
         currentTurnUserId,
         currentTurnStartedAtMs: busy ? latestTurnStartedAtMs ?? null : null,
         turnDurationByUserId,

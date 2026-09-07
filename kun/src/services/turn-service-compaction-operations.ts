@@ -1,3 +1,4 @@
+import { flushDurableSteering } from './durable-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -410,6 +411,9 @@ async finishTurn(this: TurnService, input: {
     modelRequestFailure?: ModelRequestFailureContext
     severity?: RuntimeErrorSeverity
   }): Promise<TurnSettlement> {
+    this['deps'].steering.closeAdmission(input.turnId)
+    await this['deps'].steering.waitForAdmissions(input.turnId)
+    await flushDurableSteering(this, input.threadId, input.turnId)
     let settlement: TurnSettlement
     try {
       settlement = await this['withThreadMutation'](input.threadId, async () => {

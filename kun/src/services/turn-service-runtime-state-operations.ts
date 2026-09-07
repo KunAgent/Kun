@@ -1,3 +1,4 @@
+import { flushDurableSteering } from './durable-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -130,7 +131,8 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
         this['deps'].threadStore.getMetadata?.(summary.id) ??
         this['deps'].threadStore.get(summary.id)
       ).catch(() => null)
-      if (!metadata?.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')) {
+      if (!metadata?.turns.some((turn) => turn.status === 'running' || turn.status === 'queued' ||
+        turn.steeringDeliveries?.some((entry) => !entry.delivered))) {
         continue
       }
       if (this['deps'].executionLeases) {
@@ -157,6 +159,11 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
       }
       const thread = await this['deps'].threadStore.get(summary.id).catch(() => null)
       if (!thread) continue
+      for (const turn of thread.turns) {
+        if (turn.steeringDeliveries?.some((entry) => !entry.delivered)) {
+          await flushDurableSteering(this, summary.id, turn.id)
+        }
+      }
       // Load once per thread: the interrupted turn's checkpoint is derived
       // from its persisted items (intent, progress, completed tool work).
       const sessionItems = await this['deps'].sessionStore.loadItems(summary.id).catch(() => [])

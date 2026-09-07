@@ -1,3 +1,4 @@
+import { beginQueueAdmission } from './queue-admission-fence'
 import type { AgentProvider } from '../agent/types'
 import type { AttachmentReference } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet, QueuedUserMessage, SendMessageOverrides } from './chat-store-types'
@@ -83,6 +84,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     invalidateThreadSnapshot(activeThreadId)
   }
   const queuedId = queued?.id ?? `q-${clientRequestId}`
+  const finishAdmission = beginQueueAdmission(queuedId)
   try {
     const channel = initialState.route === 'claw' ? activeClawChannel(initialState) : null
     await ensureRuntimeProviderForSend({
@@ -209,7 +211,10 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         deliveryTurnId: accepted.turnId,
         deliveryUserMessageItemId: accepted.userMessageItemId ?? queuedRow.id
       }
-      const queuedMessages = existingIndex < 0
+      const queuedMessages = s.currentTurnId === accepted.turnId ||
+        s.blocks.some((block) => block.kind === 'user' && block.id === accepted.userMessageItemId)
+        ? s.queuedMessages.filter((row) => row.id !== queuedRow.id)
+        : existingIndex < 0
         ? [...s.queuedMessages, admittedRow]
         : s.queuedMessages.map((message, index) => index === existingIndex
             ? { ...message, ...admittedRow, id: message.id }
@@ -255,6 +260,11 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       if (get().activeThreadId === activeThreadId) input.persistActiveQueuedMessages()
       return false
     }
+    if (get().activeThreadId !== activeThreadId) {
+      set((snapshot) => ({ queuedMessages: snapshot.queuedMessages.map((row) => row.id === queuedId
+        ? { ...row, deliveryState: 'pending' as const } : row) }))
+      return true
+    }
     return null
-  }
+  } finally { finishAdmission() }
 }
