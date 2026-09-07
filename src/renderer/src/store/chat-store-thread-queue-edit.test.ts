@@ -112,7 +112,7 @@ describe('chat store queued message edit', () => {
     expect(harness.get().queuedMessages).toEqual([])
   })
 
-  it('swallows a not-found cancel error when the queued turn already started', async () => {
+  it('does not restore a message whose runtime cancellation was not confirmed', async () => {
     registryMock.getProvider.mockReturnValue({
       cancelQueuedTurn: vi.fn().mockRejectedValue(new Error('queued turn not found'))
     })
@@ -127,9 +127,9 @@ describe('chat store queued message edit', () => {
     ], { activeThreadId: 'thr-1' })
     const actions = makeActions(harness)
 
-    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeTruthy()
-    expect(harness.get().error).toBeFalsy()
-    expect(harness.get().queuedMessages).toEqual([])
+    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeNull()
+    expect(harness.get().error).toBe('queued turn not found')
+    expect(harness.get().queuedMessages).toHaveLength(1)
   })
 
   it('surfaces a non-not-found cancel failure', async () => {
@@ -147,9 +147,9 @@ describe('chat store queued message edit', () => {
     ], { activeThreadId: 'thr-1' })
     const actions = makeActions(harness)
 
-    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeTruthy()
+    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeNull()
     expect(harness.get().error).toBe('boom')
-    expect(harness.get().queuedMessages).toEqual([])
+    expect(harness.get().queuedMessages).toHaveLength(1)
   })
 
   it('cancels the server-side queued turn when removing a runtime-owned paused message', async () => {

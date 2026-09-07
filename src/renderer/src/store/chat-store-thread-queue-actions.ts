@@ -266,7 +266,24 @@ export function createThreadQueueActions(
   },
 
   removeQueuedMessage: async (id) => {
+    if (threadActionSharedState.guidingQueuedMessageIds.has(id)) return
     const removed = get().queuedMessages.find((message) => message.id === id)
+    const threadId = get().activeThreadId
+    if (removed?.deliveryTurnId) {
+      const provider = getProvider()
+      if (!threadId || !provider.cancelQueuedTurn) return
+      try {
+        await provider.cancelQueuedTurn(threadId, removed.deliveryTurnId)
+      } catch (error) {
+        if (get().activeThreadId === threadId) set({ error: describeRuntimeError(error).message })
+        return
+      }
+      if (get().activeThreadId !== threadId) {
+        saveQueuedMessagesForThread(threadId, queuedMessagesForThread(threadId).filter((row) => row.id !== id))
+        invalidateThreadSnapshot(threadId)
+        return
+      }
+    }
     // Tombstone before the local removal so a concurrent drain loop sees it.
     threadActionSharedState.removedQueuedMessageIds.add(id)
     set((s) => ({
@@ -276,22 +293,32 @@ export function createThreadQueueActions(
     if (removed?.waitForRuntimeAdmission) {
       settleRuntimeTurnAdmission(removed.clientRequestId, false)
     }
-    // In-flight entries are admitted to the durable runtime queue; removing
-    // them locally must also cancel the server-side queued turn or it would
-    // still execute later.
-    await cancelRuntimeQueuedTurn(removed)
   },
 
   restoreQueuedMessage: async (id) => {
+    if (threadActionSharedState.guidingQueuedMessageIds.has(id)) return null
     const restored = restoreQueuedMessageFromQueue(get().queuedMessages, id)
     if (!restored.restored) return null
+    const threadId = get().activeThreadId
+    const provider = getProvider()
+    if (restored.restored.deliveryTurnId) {
+      if (!threadId || !provider.cancelQueuedTurn) return null
+      try {
+        await provider.cancelQueuedTurn(threadId, restored.restored.deliveryTurnId)
+      } catch (error) {
+        if (get().activeThreadId === threadId) set({ error: describeRuntimeError(error).message })
+        return null
+      }
+      if (get().activeThreadId !== threadId) {
+        saveQueuedMessagesForThread(threadId, queuedMessagesForThread(threadId).filter((row) => row.id !== id))
+        invalidateThreadSnapshot(threadId)
+        return null
+      }
+    }
     // Tombstone before the local removal so a concurrent drain loop sees it.
     threadActionSharedState.removedQueuedMessageIds.add(id)
-    set({ queuedMessages: restored.messages })
+    set((current) => ({ queuedMessages: current.queuedMessages.filter((row) => row.id !== id) }))
     runtime.persistActiveQueuedMessages()
-    // Editing an already-admitted queued turn cancels its server-side entry
-    // so it does not keep executing after the composer re-send.
-    await cancelRuntimeQueuedTurn(restored.restored)
     return restored.restored
   },
 
