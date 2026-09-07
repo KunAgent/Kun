@@ -374,12 +374,6 @@ function Test-PackagedApplicationPayload([string]$Source) {
   return (Test-Path -LiteralPath $packagedPayload -PathType Leaf)
 }
 
-function Assert-PackagedApplicationPayload([string]$Source) {
-  if (-not (Test-PackagedApplicationPayload $Source)) {
-    throw "The external current-user installation source is not a recognized packaged Kun installation: $Source"
-  }
-}
-
 function Get-ExpectedApplicationExecutable {
   $configured = (Get-EnvironmentValue 'KUN_INSTALLER_APP_EXECUTABLE').Trim()
   $executable = if ([string]::IsNullOrWhiteSpace($configured)) {
@@ -664,19 +658,4 @@ function Assert-RecoverableApplicationSource([string]$Source) {
       'No files or registration were changed.'
     )
   }
-}
-
-function Assert-TrustedSecondarySource([string]$Source) {
-  $profile = Normalize-FullPath $env:USERPROFILE
-  if (-not [string]::IsNullOrWhiteSpace($profile) -and (Test-PathWithin $Source $profile) -and
-      -not (Test-PathEqual $Source $profile)) {
-    return
-  }
-
-  Assert-SafeInstallRoot $Source 'External current-user installation source'
-  if (@(Get-ChildItem -LiteralPath $Source -Force).Count -eq 0) {
-    return
-  }
-  Assert-RecoverableApplicationSource $Source
-  Assert-PackagedApplicationPayload $Source
 }

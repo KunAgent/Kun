@@ -155,6 +155,9 @@ jobs:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
         run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
 
+      - name: Test Windows installer recovery safety
+        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts
+
       - name: Upload Windows transaction diagnostics
         if: always()
         uses: actions/upload-artifact@v4

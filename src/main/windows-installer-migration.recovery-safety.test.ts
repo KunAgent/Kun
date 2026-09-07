@@ -293,8 +293,9 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
     const secondary = join(root, 'User Kun')
     const journal = join(root, 'recovery', 'journal.json')
     for (const directory of [source, secondary]) {
-      mkdirSync(directory, { recursive: true })
+      mkdirSync(join(directory, 'resources'), { recursive: true })
       writeFileSync(join(directory, 'Kun.exe'), 'app')
+      writeFileSync(join(directory, 'resources', 'app.asar'), 'packaged app')
       writeFileSync(join(directory, 'personal.txt'), directory)
     }
 
@@ -348,27 +349,62 @@ it('preserves unknown top-level content and restores it after fallback cleanup',
     expect(existsSync(journal)).toBe(false)
   })
 
-  it('rejects a misleading external current-user source without packaged payload', () => {
+  it('retires an unverifiable current-user source as a stale registration', () => {
     const root = makeTempRoot()
     const userProfile = join(root, 'profile')
     const source = join(root, 'Machine Kun')
     const secondary = join(root, 'other-app')
     const journal = join(root, 'recovery', 'journal.json')
+    const resultPath = join(root, 'prepare-result.txt')
     mkdirSync(userProfile, { recursive: true })
-    for (const directory of [source, secondary]) {
-      mkdirSync(join(directory, 'resources'), { recursive: true })
-      writeFileSync(join(directory, 'Kun.exe'), 'app')
-      writeFileSync(join(directory, 'resources', 'keep.txt'), 'keep')
-    }
+    mkdirSync(join(source, 'resources'), { recursive: true })
+    writeFileSync(join(source, 'Kun.exe'), 'app')
+    writeFileSync(join(source, 'resources', 'app.asar'), 'packaged app')
+    mkdirSync(join(secondary, 'resources'), { recursive: true })
+    writeFileSync(join(secondary, 'Kun.exe'), 'app')
+    writeFileSync(join(secondary, 'resources', 'keep.txt'), 'keep')
 
     const result = runHelper({
-      action: 'Prepare', source, target: source, journal, secondary, userProfile
+      action: 'Prepare', source, target: source, journal, secondary, userProfile, resultPath
     })
 
-    expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('not a recognized packaged Kun installation')
+    expect(result.status, processError(result)).toBe(0)
+    expect(readFileSync(resultPath, 'utf16le')).toBe('2')
+    expect(readFileSync(join(secondary, 'Kun.exe'), 'utf8')).toBe('app')
     expect(readFileSync(join(secondary, 'resources', 'keep.txt'), 'utf8')).toBe('keep')
-    expect(existsSync(journal)).toBe(false)
+  })
+
+  it('keeps primary-source validation when primary and secondary share one directory', () => {
+    const root = makeTempRoot()
+    const userProfile = join(root, 'profile')
+    const source = join(root, 'Shared Kun')
+    const journal = join(root, 'recovery', 'journal.json')
+    const resultPath = join(root, 'prepare-result.txt')
+    mkdirSync(userProfile, { recursive: true })
+    mkdirSync(source, { recursive: true })
+    writeFileSync(join(source, 'Kun.exe'), 'app')
+    writeFileSync(join(source, 'personal.txt'), 'keep shared content')
+
+    const prepared = runHelper({
+      action: 'Prepare',
+      source,
+      secondary: source,
+      target: source,
+      journal,
+      userProfile,
+      resultPath
+    })
+
+    expect(prepared.status, processError(prepared)).toBe(0)
+    expect(readFileSync(resultPath, 'utf16le')).toBe('0')
+    expect(existsSync(join(source, 'personal.txt'))).toBe(false)
+    expect(readFileSync(join(source, 'Kun.exe'), 'utf8')).toBe('app')
+
+    const restored = runHelper({
+      action: 'Restore', source, secondary: source, target: source, journal, userProfile
+    })
+    expect(restored.status, processError(restored)).toBe(0)
+    expect(readFileSync(join(source, 'personal.txt'), 'utf8')).toBe('keep shared content')
   })
 
   it('rejects a verified-looking external secondary source reached through a reparse point', () => {
