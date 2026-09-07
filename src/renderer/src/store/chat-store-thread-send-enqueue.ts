@@ -19,6 +19,8 @@ import {
   turnAdmissionOutcomeMayBeUnknown,
   withoutConsumedComposerContexts
 } from './chat-store-thread-actions-support'
+import { queuedMessagesForThread, saveQueuedMessagesForThread } from './queued-message-persistence'
+import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 
 export type RuntimeQueueSendInput = {
@@ -67,11 +69,22 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     composerAccountId, userModelChip, displayText, reasoningEffort, serviceTier,
     subagentResume, messageSource, persona, designProfile, designDocumentTarget,
     designImagePlacementTarget, attachmentIds, attachments, fileReferences, composerContexts,
-    queued, overrides, set, get
+    queued, overrides, set: setStore, get
   } = input
+  const initialState = { ...get() }
+  const set: ChatStoreSet = (partial) => {
+    if (get().activeThreadId === activeThreadId) {
+      setStore(partial)
+      return
+    }
+    const parked = { ...initialState, queuedMessages: queuedMessagesForThread(activeThreadId) }
+    const patch = typeof partial === 'function' ? partial(parked) : partial
+    if (patch.queuedMessages) saveQueuedMessagesForThread(activeThreadId, patch.queuedMessages)
+    invalidateThreadSnapshot(activeThreadId)
+  }
   const queuedId = queued?.id ?? `q-${clientRequestId}`
   try {
-    const channel = get().route === 'claw' ? activeClawChannel(get()) : null
+    const channel = initialState.route === 'claw' ? activeClawChannel(initialState) : null
     await ensureRuntimeProviderForSend({
       providerId: channel ? undefined : composerProviderId,
       model: composerModel
@@ -86,7 +99,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     })
     const checkpointRequestId = startWorkspaceCheckpointSnapshot({
       settings,
-      threads: get().threads,
+      threads: initialState.threads,
       activeThreadId,
       fallbackWorkspaceRoot: settings.workspaceRoot
     })
@@ -95,9 +108,9 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(mode ? { mode } : {}),
       orchestration,
       agentSurface: requestedAgentSurface ??
-        (writeContext || get().route === 'write'
+        (writeContext || initialState.route === 'write'
           ? 'write' as const
-          : queued?.guiDesignMode || get().route === 'design' ? 'design' as const : 'code' as const),
+          : queued?.guiDesignMode || initialState.route === 'design' ? 'design' as const : 'code' as const),
       ...(composerModel ? { model: composerModel } : {}),
       ...(!channel && composerProviderId ? { providerId: composerProviderId } : {}),
       ...(!channel && composerAccountId ? { accountId: composerAccountId } : {}),
@@ -138,6 +151,14 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(displayText ? { displayText } : {}),
       ...(mode ? { mode } : {}),
       orchestration,
+      agentSurface: sendOptions.agentSurface,
+      ...(composerProviderId ? { providerId: composerProviderId } : {}),
+      ...(composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+      ...(serviceTier ? { serviceTier } : {}),
+      ...(subagentResume ? { subagentResume } : {}),
+      ...(messageSource ? { messageSource } : {}),
+      ...(persona ? { persona } : {}),
       ...(composerModel ? { model: composerModel } : {}),
       ...(userModelChip ? { modelLabel: userModelChip } : {})
     })
@@ -161,7 +182,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         error: null
       }
     })
-    input.persistActiveQueuedMessages()
+    if (get().activeThreadId === activeThreadId) input.persistActiveQueuedMessages()
 
     try {
       accepted = await p.sendUserMessage(activeThreadId, runtimeText, {
@@ -199,7 +220,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         error: null
       }
     })
-    input.persistActiveQueuedMessages()
+    if (get().activeThreadId === activeThreadId) input.persistActiveQueuedMessages()
     if (accepted.userMessageItemId && userModelChip) {
       rememberTurnModel(activeThreadId, accepted.userMessageItemId, userModelChip)
     }
@@ -231,7 +252,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         ),
         error: view.message
       }))
-      input.persistActiveQueuedMessages()
+      if (get().activeThreadId === activeThreadId) input.persistActiveQueuedMessages()
       return false
     }
     return null
