@@ -420,6 +420,11 @@ export function reconcileQueuedMessages(
       })
       continue
     }
+    if (state === 'starting' && message.clientRequestId && !message.deliveryTurnId &&
+      !queuedTurnByClientRequestId.has(message.clientRequestId) && runtime.busy) {
+      reconciled.push(message)
+      continue
+    }
     // Admission persists user items before execution. The authoritative queue
     // wins over stale active-turn ids and timeline item presence. Preserve
     // explicit interrupt state while retaining the server-side identity.
