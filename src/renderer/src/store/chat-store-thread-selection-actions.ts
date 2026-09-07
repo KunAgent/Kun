@@ -409,7 +409,7 @@ export function createThreadSelectionActions(
       })
       const queuedMessages = reconcileQueuedMessages(durableQueuedMessages, {
         busy,
-        turnId: latestTurnId,
+        turnId: detail.activeTurn !== undefined ? detail.activeTurn?.id : latestTurnId,
         blocks
       }, await fetchRuntimeQueuedTurnsBestEffort(p, id))
       if (refreshingActiveThread) {
@@ -452,8 +452,8 @@ export function createThreadSelectionActions(
         busyUnconfirmed: busy,
         ...hydratedTurnTimingPatch({
           busy,
-          latestTurnId,
-          latestTurnOrchestration,
+          latestTurnId: detail.activeTurn !== undefined ? detail.activeTurn?.id : latestTurnId,
+          latestTurnOrchestration: detail.activeTurn !== undefined ? detail.activeTurn?.orchestration : latestTurnOrchestration,
           currentTurnUserId,
           latestTurnStartedAtMs,
           turnDurationByUserId

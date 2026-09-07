@@ -442,8 +442,10 @@ export function createThreadCreationActions(
           const runtimeState = await p.getThreadState(activeThreadId, { signal: recoverySignal })
           recoverySignal.throwIfAborted()
           if (!recoveryStillCurrent()) return state.busy
-          const latestTurnMatches = !state.currentTurnId || !runtimeState.latestTurnId ||
-            runtimeState.latestTurnId === state.currentTurnId
+          const executionTurnId = runtimeState.activeTurn !== undefined
+            ? runtimeState.activeTurn?.id ?? null : runtimeState.latestTurnId
+          const latestTurnMatches = !state.currentTurnId || !executionTurnId ||
+            executionTurnId === state.currentTurnId
           const cursorRetained = (runtimeState.replayFloorSeq ?? 0) <= state.lastSeq + 1
           if (runtimeState.latestSeq >= state.lastSeq && latestTurnMatches && cursorRetained) {
             const runtimeBusy = runtimeState.status === 'running' ||
@@ -456,9 +458,12 @@ export function createThreadCreationActions(
               busyUnconfirmed: busy,
               ...(busy
                 ? {
-                    currentTurnId: runtimeState.latestTurnId ?? snapshot.currentTurnId,
-                    currentTurnOrchestration: runtimeState.latestTurnOrchestration ??
-                      snapshot.currentTurnOrchestration ?? 'direct'
+                    currentTurnId: runtimeState.activeTurn !== undefined
+                      ? runtimeState.activeTurn?.id ?? null
+                      : runtimeState.latestTurnId ?? snapshot.currentTurnId,
+                    currentTurnOrchestration: runtimeState.activeTurn !== undefined
+                      ? runtimeState.activeTurn?.orchestration ?? null
+                      : runtimeState.latestTurnOrchestration ?? snapshot.currentTurnOrchestration ?? 'direct'
                   }
                 : {
                     blocks: settlePendingRuntimeWorkAfterInterrupt(snapshot.blocks),
@@ -491,6 +496,7 @@ export function createThreadCreationActions(
         }
       }
       const {
+        activeTurn,
         blocks: rawBlocks,
         latestSeq,
         threadStatus,
@@ -522,7 +528,8 @@ export function createThreadCreationActions(
         : null
       // The detail response is authoritative for the running turn; a stale local
       // currentTurnId from a previous recovery attempt must not win over it.
-      const currentTurnId = busy ? latestTurnId ?? state.currentTurnId ?? null : null
+      const currentTurnId = activeTurn !== undefined
+        ? activeTurn?.id ?? null : busy ? latestTurnId ?? state.currentTurnId ?? null : null
       const durableQueuedMessages = queuedMessagesForThread(activeThreadId)
       const queuedMessages = reconcileQueuedMessages(
         state.queuedMessages.length > 0 ? state.queuedMessages : durableQueuedMessages,
@@ -554,7 +561,8 @@ export function createThreadCreationActions(
           // unconfirmed until the live stream proves the turn is alive.
           busyUnconfirmed: busy,
           currentTurnId,
-          currentTurnOrchestration: busy ? latestTurnOrchestration ?? 'direct' : null,
+          currentTurnOrchestration: activeTurn !== undefined
+            ? activeTurn?.orchestration ?? null : busy ? latestTurnOrchestration ?? 'direct' : null,
           currentTurnUserId,
           currentTurnStartedAtMs: busy ? latestTurnStartedAtMs ?? null : null,
           turnDurationByUserId,

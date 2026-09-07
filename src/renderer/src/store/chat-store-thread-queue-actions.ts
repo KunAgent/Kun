@@ -208,6 +208,7 @@ export function createThreadQueueActions(
     try {
       while (true) {
         let state = get()
+        if (state.activeThreadId !== threadId) return
         const queuedMessages = reconcileQueuedMessages(state.queuedMessages, {
           busy: state.busy,
           turnId: state.currentTurnId,
@@ -222,7 +223,7 @@ export function createThreadQueueActions(
           state = get()
         }
         const next = queuedMessages.find(isPendingQueuedMessage)
-        if (!next || state.busy) return
+        if (!next || state.busy || threadActionSharedState.guidingQueuedMessageIds.has(next.id)) return
         if (
           next.waitForRuntimeAdmission &&
           !hasRuntimeTurnAdmissionWaiter(next.clientRequestId)
@@ -529,11 +530,16 @@ export function createThreadQueueActions(
       runtime.persistActiveQueuedMessages()
       return true
     } catch (error) {
+      if (get().activeThreadId !== guidanceThreadId) return false
       const messageText = formatRuntimeError(error)
+      if (/turn is not active|turn is no longer accepting steering/.test(messageText)) {
+        threadActionSharedState.guidingQueuedMessageIds.delete(id)
+        await get().recoverActiveTurn({ forceTimeline: true })
+        return false
+      }
       set({
         error: i18n.t('common:guideQueuedMessageFailed', { message: messageText })
       })
-      if (!get().busy) void get().drainQueuedMessages()
       return false
     } finally {
       threadActionSharedState.guidingQueuedMessageIds.delete(id)

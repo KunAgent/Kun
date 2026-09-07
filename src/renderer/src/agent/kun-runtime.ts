@@ -402,7 +402,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       'runtime returned an invalid thread response'
     )
     const turns = Array.isArray(thread.turns) ? thread.turns : []
-    const items = turns.flatMap((turn) =>
+    const items = turns.filter((turn) => turn.status !== 'queued').flatMap((turn) =>
       (turn.items ?? []).map((item) => ({
         ...item,
         attachmentIds: turn.attachmentIds,
@@ -421,10 +421,12 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       }))
     )
     const latestTurn = thread.latestTurn ?? turns.at(-1)
+    const activeTurn = thread.activeTurn === undefined
+      ? turns.find((turn) => turn.status === 'running') : thread.activeTurn
     const restoredLive = restoredThreadLiveProjection(
       items,
-      latestTurn?.id,
-      latestTurn?.status
+      activeTurn?.id,
+      activeTurn?.status
     )
     const blocks = mergeChatBlocks(items.flatMap((item) => {
       if (restoredLive.liveItemIds.has(item.id)) return []
@@ -461,7 +463,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         }
       }
     }
-    const latestTurnId = latestTurn?.id
+    const latestTurnId = activeTurn?.id ?? latestTurn?.id
     // Prefer the active turn's opening user message: a long running turn may
     // push its own prompt to the front of the page (timeline anchor) while
     // later background/steering user items are appended after it. The anchor
@@ -475,6 +477,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     const resolvedLatestUserMessageId =
       latestUserMessageId ?? [...items].reverse().find((item) => item.kind === 'user_message')?.id
     return {
+      ...(thread.activeTurn !== undefined ? { activeTurn: thread.activeTurn ? {
+        id: thread.activeTurn.id, status: thread.activeTurn.status,
+        orchestration: thread.activeTurn.orchestration === 'graph' ? 'graph' as const : 'direct' as const
+      } : null } : {}),
       blocks,
       latestSeq: thread.latestSeq ?? 0,
       ...(restoredLive.liveProjection ? { liveProjection: restoredLive.liveProjection } : {}),
