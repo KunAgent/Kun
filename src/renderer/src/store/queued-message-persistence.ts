@@ -406,15 +406,6 @@ export function reconcileQueuedMessages(
   const reconciled: QueuedUserMessage[] = []
   for (const message of messages) {
     const state = message.deliveryState ?? 'pending'
-    // A runtime-started item no longer waits in the local queue: its user
-    // message is already rendered in the timeline, so keeping it would show a
-    // duplicate and expose edit/remove on an in-flight turn.
-    if (queuedMessageStartedByRuntime(message, {
-      turnId: activeTurnId || null,
-      userMessageItemIds: liveUserItemIds
-    })) {
-      continue
-    }
     // A terminal failure stays failed across reconciliation; only an explicit
     // user retry or removal moves it.
     if (state === 'failed') {
@@ -424,23 +415,27 @@ export function reconcileQueuedMessages(
       })
       continue
     }
-    // Runtime-queue ownership is authoritative: when the runtime still holds a
-    // queued turn for this row's idempotency key (or its admitted turn id), keep
-    // it in_flight with the server turn identity so cancel/reorder keeps working
-    // even when the local busy projection is stale after a crash. Paused rows
-    // keep their explicit interrupt state and are intentionally not matched.
+    // Admission persists user items before execution. The authoritative queue
+    // wins over stale active-turn ids and timeline item presence. Preserve
+    // explicit interrupt state while retaining the server-side identity.
     const rowClientRequestId = normalizedString(message.clientRequestId)
     const runtimeTurnId =
       (rowClientRequestId && queuedTurnByClientRequestId.get(rowClientRequestId)) ||
       (message.deliveryTurnId && queuedTurnIds.has(message.deliveryTurnId)
         ? message.deliveryTurnId
         : undefined)
-    if (state !== 'paused' && runtimeTurnId) {
+    if (runtimeTurnId) {
       reconciled.push({
         ...message,
-        deliveryState: 'in_flight',
+        deliveryState: state === 'paused' ? 'paused' : 'in_flight',
         deliveryTurnId: runtimeTurnId
       })
+      continue
+    }
+    if (queuedMessageStartedByRuntime(message, {
+      turnId: activeTurnId || null,
+      userMessageItemIds: liveUserItemIds
+    })) {
       continue
     }
     if (state === 'pending' || state === 'paused') {
