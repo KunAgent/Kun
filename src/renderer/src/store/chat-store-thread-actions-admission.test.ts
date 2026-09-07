@@ -263,7 +263,7 @@ describe('chat-store-thread-actions queued messages', () => {
       expect.objectContaining({ id: 'q-race', text: 'do not lose this follow-up' })
     ])
     expect(state.blocks).toEqual([])
-    expect(state.error).toContain('turn is no longer accepting steering')
+    expect(state.recoverActiveTurn).toHaveBeenCalledWith({ forceTimeline: true })
   })
 
   it('sends the selected composer provider with the turn without switching the global runtime provider', async () => {
