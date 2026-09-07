@@ -411,11 +411,11 @@ async finishTurn(this: TurnService, input: {
     modelRequestFailure?: ModelRequestFailureContext
     severity?: RuntimeErrorSeverity
   }): Promise<TurnSettlement> {
-    this['deps'].steering.closeAdmission(input.turnId)
-    await this['deps'].steering.waitForAdmissions(input.turnId)
-    await flushDurableSteering(this, input.threadId, input.turnId)
     let settlement: TurnSettlement
     try {
+      this['deps'].steering.closeAdmission(input.turnId)
+      await this['deps'].steering.waitForAdmissions(input.turnId)
+      await flushDurableSteering(this, input.threadId, input.turnId)
       settlement = await this['withThreadMutation'](input.threadId, async () => {
         const current = await this['deps'].threadStore.get(input.threadId)
         if (!current) return { kind: 'missing' }
