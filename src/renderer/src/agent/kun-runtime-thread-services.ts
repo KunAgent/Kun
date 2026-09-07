@@ -649,6 +649,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
 
 function runtimeStateFromCore(state: CoreThreadRuntimeStateJson): ThreadRuntimeState {
   return {
+    ...(state.activeTurn !== undefined ? { activeTurn: state.activeTurn } : {}),
     status: state.status,
     updatedAt: state.updatedAt,
     latestSeq: state.latestSeq,

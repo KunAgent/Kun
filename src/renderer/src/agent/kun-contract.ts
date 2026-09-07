@@ -80,6 +80,7 @@ export type CoreThreadJson = CoreThreadSummaryJson & {
 }
 
 export type CoreThreadTimelineJson = CoreThreadJson & {
+  activeTurn?: Omit<CoreTurnJson, 'items'> | null
   latestTurn?: Omit<CoreTurnJson, 'items'> | null
   timeline: {
     nextCursor?: string
@@ -98,6 +99,7 @@ export type CoreThreadRuntimeStateJson = {
   replayFloorSeq?: number
   /** Omitted by legacy owners; do not confuse omission with a live empty gate. */
   pendingUserInputIds?: string[]
+  activeTurn?: { id: string; status: string; orchestration: 'direct' | 'graph' } | null
   latestTurn: {
     id: string
     status: string

@@ -91,6 +91,7 @@ export type ThreadListPage = {
 }
 
 export type ThreadRuntimeState = {
+  activeTurn?: { id: string; status: string; orchestration: 'direct' | 'graph' } | null
   status: string
   updatedAt: string
   latestSeq: number
@@ -123,6 +124,7 @@ export type ThreadLiveProjection = {
 }
 
 export type ThreadDetail = {
+  activeTurn?: { id: string; status: string; orchestration: 'direct' | 'graph' } | null
   blocks: ChatBlock[]
   latestSeq: number
   /** Cumulative unfinished text restored separately from settled timeline blocks. */
