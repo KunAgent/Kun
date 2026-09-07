@@ -326,6 +326,20 @@ export function createThreadQueueActions(
     const moving = get().queuedMessages.find((message) => message.id === id)
     const anchor = get().queuedMessages.find((message) => message.id === targetId)
     const anchorTurnId = anchor?.deliveryTurnId
+    const threadId = get().activeThreadId
+    if (moving?.deliveryTurnId || anchorTurnId) {
+      const provider = getProvider()
+      if (!threadId || !moving?.deliveryTurnId || !anchorTurnId || !provider.moveQueuedTurn) return
+      try {
+        await provider.moveQueuedTurn(threadId, moving.deliveryTurnId, {
+          [position === 'before' ? 'beforeTurnId' : 'afterTurnId']: anchorTurnId
+        })
+      } catch (error) {
+        if (get().activeThreadId === threadId) set({ error: describeRuntimeError(error).message })
+        return
+      }
+      if (get().activeThreadId !== threadId) { invalidateThreadSnapshot(threadId); return }
+    }
     set((state) => {
       if (id === targetId) return {}
       const sourceIndex = state.queuedMessages.findIndex((message) => message.id === id)
@@ -344,23 +358,6 @@ export function createThreadQueueActions(
       return { queuedMessages }
     })
     runtime.persistActiveQueuedMessages()
-    if (
-      moving?.deliveryState === 'in_flight' &&
-      moving.deliveryTurnId &&
-      anchorTurnId
-    ) {
-      const threadId = get().activeThreadId
-      const provider = getProvider()
-      if (threadId && typeof provider.moveQueuedTurn === 'function') {
-        try {
-          await provider.moveQueuedTurn(threadId, moving.deliveryTurnId, {
-            [position === 'before' ? 'beforeTurnId' : 'afterTurnId']: anchorTurnId
-          })
-        } catch (error) {
-          set({ error: describeRuntimeError(error).message })
-        }
-      }
-    }
   },
 
   resumeQueuedTurns: async () => {
