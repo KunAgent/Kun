@@ -3,6 +3,7 @@ import type { ChatBlock } from '../../agent/types'
 import {
   activeTimelineTurnIndex,
   groupTurns,
+  isAppendedUserBlock,
   sameTurnContent,
   stableTurnKey,
   turnTaskSurface
@@ -273,5 +274,63 @@ describe('message timeline turns', () => {
     expect(turns[0]?.turnId).toBe('turn_1')
     expect(turns[0]?.blocks.map((block) => block.id)).toEqual(['assistant_1', 'tool_late'])
     expect(turns[1]?.blocks.map((block) => block.id)).toEqual(['assistant_2'])
+  })
+
+  it('keeps a same-turn guided input inside the turn without replacing its owner bubble', () => {
+    const blocks: ChatBlock[] = [
+      { kind: 'user', id: 'user_1', turnId: 'turn_1', text: 'Build the page' },
+      { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'Working.' },
+      {
+        kind: 'user',
+        id: 'q-guided',
+        turnId: 'turn_1',
+        text: 'Use the compact logo instead',
+        meta: { displayText: 'Use the compact logo instead' }
+      },
+      { kind: 'assistant', id: 'assistant_2', turnId: 'turn_1', text: 'Adjusted.' }
+    ]
+
+    const turns = groupTurns(blocks)
+
+    expect(turns).toHaveLength(1)
+    expect(turns[0]?.user?.id).toBe('user_1')
+    expect(turns[0]?.blocks.map((block) => block.id)).toEqual([
+      'assistant_1',
+      'q-guided',
+      'assistant_2'
+    ])
+    expect(isAppendedUserBlock(turns[0]!.blocks[1]!)).toBe(true)
+  })
+
+  it('distinguishes guided user inputs from background and internal notices', () => {
+    expect(isAppendedUserBlock({
+      kind: 'user',
+      id: 'q-guided',
+      text: 'keep going'
+    })).toBe(true)
+    expect(isAppendedUserBlock({
+      kind: 'user',
+      id: 'notice_shell',
+      text: '<background_shell_completed><session_id>abcd1234</session_id></background_shell_completed>',
+      meta: { messageSource: 'background_shell' }
+    })).toBe(false)
+    expect(isAppendedUserBlock({
+      kind: 'user',
+      id: 'notice_subagent',
+      text: '<background_subagent_completed><child_id>child-1</child_id></background_subagent_completed>',
+      meta: { messageSource: 'background_subagent' }
+    })).toBe(false)
+    expect(isAppendedUserBlock({
+      kind: 'user',
+      id: 'graph_runtime_1',
+      text: 'Graph Lead supervision for durable run run_1.',
+      meta: { messageSource: 'graph_runtime' }
+    })).toBe(false)
+    expect(isAppendedUserBlock({
+      kind: 'user',
+      id: 'design_continuation_1',
+      text: 'Internal design prompt',
+      meta: { messageSource: 'design_continuation' }
+    })).toBe(false)
   })
 })

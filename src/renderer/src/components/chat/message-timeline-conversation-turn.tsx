@@ -4,6 +4,7 @@ import type { ChatBlock, RuntimeChildActivity, ToolBlock } from '../../agent/typ
 import { formatChildActivityLabel } from './explore-peek-summary'
 import { useChatStore } from '../../store/chat-store'
 import { deriveTurnSections, groupTurnProcessTimeline } from './derive-turn-sections'
+import { OrderedTurnTimeline } from './message-timeline-ordered-timeline'
 import { GeneratedFilesPanel, MessageBubble } from './message-timeline-bubbles'
 import { GeneratedDocumentFilesPanel } from './GeneratedDocumentFilesPanel'
 import {
@@ -150,7 +151,8 @@ export function ConversationTurn({
     conversationVisualizationBlocks,
     generatedFileBlocks,
     turnFileChanges,
-    chartBlocks
+    chartBlocks,
+    timelineEntries
   } = useMemo(
     () =>
       deriveTurnSections({
@@ -162,6 +164,11 @@ export function ConversationTurn({
       }),
     [turn, isProcessing, liveProcessText, liveContent, filePreviewWorkspaceRoot]
   )
+  const orderedAnswerBlocks = useMemo(
+    () => timelineEntries.flatMap((entry) => entry.kind === 'answer' ? [entry.block] : []),
+    [timelineEntries]
+  )
+  const hasOrderedTimeline = timelineEntries.length > 0
   const generatedDocuments = useMemo(
     () => generatedDocumentArtifactsForTurn(
       turn.blocks,
@@ -203,18 +210,23 @@ export function ConversationTurn({
     ).length,
     [processTimelineEntries]
   )
+  const orderedAnswerTurnId =
+    [...orderedAnswerBlocks].reverse().find((block) => block.turnId?.trim())?.turnId?.trim() ?? ''
   const forkTurnId =
     turn.user?.turnId?.trim() ||
     [...assistantContentBlocks].reverse().find((block) => block.turnId?.trim())?.turnId?.trim() ||
-    ''
+    orderedAnswerTurnId
+  const lastActionBlockId =
+    assistantContentBlocks[assistantContentBlocks.length - 1]?.id ??
+    orderedAnswerBlocks[orderedAnswerBlocks.length - 1]?.id
   const forkActionBlockId =
     allowMainThreadActions && !isProcessing && forkTurnId
-      ? assistantContentBlocks[assistantContentBlocks.length - 1]?.id
+      ? lastActionBlockId
       : undefined
   const rollbackCheckpointId = turn.user?.meta?.workspaceCheckpointId?.trim() ?? ''
   const rollbackActionBlockId =
     allowMainThreadActions && !isProcessing && rollbackCheckpointId
-      ? assistantContentBlocks[assistantContentBlocks.length - 1]?.id
+      ? lastActionBlockId
       : undefined
 
   // During a live turn, assistant text, reasoning, and tools share one ordered
@@ -265,9 +277,11 @@ export function ConversationTurn({
   )
   const showLiveProgress = isProcessing && !hasDedicatedLiveOwner
   const showWorkMeta = hasProcess && !isProcessing
+  const showProcessSection = !hasOrderedTimeline && (showWorkMeta || processTimelineEntries.length > 0)
   const showLiveThinking = Boolean(liveProcessText.trim()) && !liveChildActivityLabel && !liveToolBlock
   const hasSettledResultEvidence = !isProcessing && Boolean(
     assistantContentBlocks.length > 0 ||
+    orderedAnswerBlocks.length > 0 ||
     generatedFileBlocks.length > 0 ||
     generatedDocuments.length > 0 ||
     reviewBlocks.length > 0 ||
@@ -315,7 +329,49 @@ export function ConversationTurn({
         <MessageBubble block={turn.user} allowThreadActions={allowMainThreadActions} />
       ) : null}
 
-      {showWorkMeta || processTimelineEntries.length > 0 ? (
+      {hasOrderedTimeline ? (
+        <OrderedTurnTimeline
+          entries={timelineEntries}
+          isProcessing={isProcessing}
+          expanded={workExpanded}
+          onToggle={() => setWorkExpandedOverride((value) => !(value ?? false))}
+          durationMs={durationMs}
+          reasoningDurationMs={reasoningDurationMs}
+          workspaceRoot={filePreviewWorkspaceRoot}
+          viewportRef={viewportRef}
+          allowThreadActions={allowMainThreadActions}
+          allowRecoveryContinue={allowRecoveryContinue}
+          onContinueInterrupted={() => {
+            void sendMessage(t('continueInterruptedTaskPrompt'))
+          }}
+          onOpenChildThread={onOpenChildThread}
+          onCancelToolCall={onCancelToolCall}
+          forkAction={
+            forkActionBlockId
+              ? {
+                  blockId: forkActionBlockId,
+                  busy: forking,
+                  onFork: () => {
+                    void forkFromTurn()
+                  }
+                }
+              : undefined
+          }
+          rollbackAction={
+            rollbackActionBlockId
+              ? {
+                  blockId: rollbackActionBlockId,
+                  busy: rollingBackCheckpointId === rollbackCheckpointId,
+                  onRollback: () => {
+                    void rollbackWorkspace(rollbackCheckpointId)
+                  }
+                }
+              : undefined
+          }
+        />
+      ) : null}
+
+      {showProcessSection ? (
         <div className="flex flex-col gap-1 pb-2">
           {showWorkMeta ? (
             <WorkMetaRow
@@ -349,9 +405,11 @@ export function ConversationTurn({
         </div>
       ) : null}
 
-      {runtimeErrorsBeforeFinalContent.map((block) => (
-        <TimelineRuntimeError key={block.id} block={block} />
-      ))}
+      {!hasOrderedTimeline
+        ? runtimeErrorsBeforeFinalContent.map((block) => (
+            <TimelineRuntimeError key={block.id} block={block} />
+          ))
+        : null}
 
       {componentPrototypeBlocks.map((block) => (
         <ComponentPrototypeCard
@@ -406,7 +464,7 @@ export function ConversationTurn({
         />
       ))}
 
-      {!isProcessing && assistantContentBlocks.length > 0 && turnUsage ? (
+      {!isProcessing && (assistantContentBlocks.length > 0 || orderedAnswerBlocks.length > 0) && turnUsage ? (
         <TurnUsageRow usage={turnUsage} stale={turnUsageStale} />
       ) : null}
 
@@ -436,19 +494,21 @@ export function ConversationTurn({
         <ReviewSummaryCard key={review.id} review={review} />
       ))}
 
-      {runtimeErrorsAfterFinalContent.map((block) => (
-        <TimelineRuntimeError
-          key={block.id}
-          block={block}
-          onContinue={
-            !isProcessing && allowMainThreadActions && allowRecoveryContinue
-              ? () => {
-                  void sendMessage(t('continueInterruptedTaskPrompt'))
-                }
-              : undefined
-          }
-        />
-      ))}
+      {!hasOrderedTimeline
+        ? runtimeErrorsAfterFinalContent.map((block) => (
+            <TimelineRuntimeError
+              key={block.id}
+              block={block}
+              onContinue={
+                !isProcessing && allowMainThreadActions && allowRecoveryContinue
+                  ? () => {
+                      void sendMessage(t('continueInterruptedTaskPrompt'))
+                    }
+                  : undefined
+              }
+            />
+          ))
+        : null}
 
       {!isProcessing && devPreviewCard ? devPreviewCard : null}
 
