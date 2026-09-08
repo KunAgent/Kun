@@ -374,7 +374,7 @@ export async function sendThreadMessage(
       ? waitForRuntimeTurnAdmission(clientRequestId)
       : null
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
-    if (get().busy || hasPendingActiveTurn) {
+    if (get().busy || hasPendingActiveTurn || (queued && !shouldWaitForRuntimeAdmission)) {
       const state = get()
       const activeThreadId = state.activeThreadId
       const threadSnap = activeThreadId

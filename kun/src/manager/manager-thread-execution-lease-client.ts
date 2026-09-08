@@ -190,12 +190,26 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
   }
 
   async owner(threadId: string): Promise<ThreadExecutionLease | null> {
+    // Wait for local release acknowledgements before the scheduler inspects
+    // Manager state; otherwise it can send a just-released cached fence.
+    await Promise.all([...this.leasesByTurn.values()]
+      .filter((lease) => lease.threadId === threadId)
+      .map((lease) => this.pendingReleases.get(leaseGenerationKey(lease))?.catch(() => undefined)))
+    const observed = [...this.leasesByTurn.values()].filter((lease) => lease.threadId === threadId)
     const body = await requestManagerJson(
       this.manager,
       `/v1/leases/threads/${encodeURIComponent(threadId)}`,
       {}
     )
-    return z.object({ lease: ThreadExecutionLeaseSchema.nullable() }).parse(body).lease
+    const owner = z.object({ lease: ThreadExecutionLeaseSchema.nullable() }).parse(body).lease
+    if (!owner) {
+      for (const lease of observed) {
+        // Contextual fences on already-running callbacks remain stale.
+        // Only the scheduler's neutral lookup can forget the cached lease.
+        forgetTurnLease(lease)
+      }
+    }
+    return owner
   }
 
   shutdown(): Promise<void> {

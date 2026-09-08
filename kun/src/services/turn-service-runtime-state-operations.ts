@@ -65,6 +65,8 @@ import {
 } from '../loop/continuation-instructions.js'
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
+import { reconcilePendingQueueAdmission } from './queue-admission.js'
+
 export const turnServiceRuntimeStateOperations = {
 withTurnMutationFence<T>(this: TurnService,
     threadId: string,
@@ -181,17 +183,7 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
           // (the commit boundary) or the commit marker is missing. If the
           // user item exists, finish the admission commit; otherwise roll
           // back so a retry with the same clientRequestId re-enqueues cleanly.
-          const hasUserItem = sessionItems.some((item) =>
-            item.turnId === turn.id && item.kind === 'user_message'
-          )
-          if (hasUserItem) {
-            await this['markTurnAdmissionCompleted'](thread.id, turn.id, {}).catch(() => undefined)
-          } else {
-            const rolledBack = await this['rollbackPendingAdmission'](thread.id, turn.id).catch(() => false)
-            if (!rolledBack) {
-              await this.interruptTurn({ threadId: thread.id, turnId: turn.id }).catch(() => undefined)
-            }
-          }
+          await reconcilePendingQueueAdmission(this, thread.id, turn.id).catch(() => undefined)
           continue
         }
         if (

@@ -22,6 +22,13 @@ vi.mock('../agent/registry', () => ({
   getProvider: registryMock.getProvider
 }))
 
+// Retained local-outbox guidance does not imply a successful runtime admission.
+vi.mock('./chat-store-thread-send-enqueue', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./chat-store-thread-send-enqueue')>()
+  return { ...actual, submitToRuntimeQueue: (input: Parameters<typeof actual.submitToRuntimeQueue>[0]) =>
+    typeof input.provider.sendUserMessage === 'function' ? actual.submitToRuntimeQueue(input) : Promise.resolve(null) }
+})
+
 import { createThreadActions } from './chat-store-thread-actions'
 
 const THREAD_COMPOSER_SELECTION_STORAGE_KEY = 'kun.threadComposerSelection.v1'

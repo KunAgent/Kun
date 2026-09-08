@@ -1,4 +1,5 @@
 import { browserStorage, type BrowserStorageLike } from '../lib/browser-storage'
+import { queueAdmissionPending } from './queue-admission-fence'
 import type { ChatBlock } from '../agent/types'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
 import type { QueuedUserMessage } from './chat-store-types'
@@ -409,8 +410,18 @@ export function reconcileQueuedMessages(
   for (const message of messages) {
     const state = message.deliveryState ?? 'pending'
     if (message.steeringRequest) { reconciled.push(message); continue }
-    if (runtimeQueuedTurns?.some((turn) => turn.status && turn.status !== 'queued' &&
-      (turn.turnId === message.deliveryTurnId || (message.clientRequestId && turn.clientRequestId === message.clientRequestId)))) continue
+    const receipt = runtimeQueuedTurns?.find((turn) =>
+      turn.turnId === message.deliveryTurnId || Boolean(message.clientRequestId && turn.clientRequestId === message.clientRequestId))
+    if (receipt?.status === 'admission_pending') {
+      reconciled.push({ ...message, deliveryState: 'starting', deliveryTurnId: receipt.turnId })
+      continue
+    }
+    if (receipt?.status === 'failed') {
+      reconciled.push({ ...message, deliveryState: 'failed', deliveryTurnId: receipt.turnId,
+        errorCode: receipt.terminalCode ?? 'queued_turn_failed' })
+      continue
+    }
+    if (receipt?.status === 'running' || receipt?.status === 'completed' || receipt?.status === 'aborted') continue
     // A terminal failure stays failed across reconciliation; only an explicit
     // user retry or removal moves it.
     if (state === 'failed') {
@@ -446,6 +457,14 @@ export function reconcileQueuedMessages(
       turnId: activeTurnId || null,
       userMessageItemIds: liveUserItemIds
     })) {
+      continue
+    }
+    if (runtimeQueuedTurns !== undefined && !receipt && message.clientRequestId &&
+      state === 'in_flight' && !queueAdmissionPending(message.id)) {
+      const pending = { ...message, deliveryState: 'pending' as const }
+      delete pending.deliveryTurnId
+      delete pending.deliveryUserMessageItemId
+      reconciled.push(pending)
       continue
     }
     if (state === 'pending' || state === 'paused') {
@@ -554,6 +573,7 @@ export type RuntimeQueuedTurnRef = {
   clientRequestId?: string
   position?: number
   status?: string
+  terminalCode?: string
 }
 
 /**
@@ -563,14 +583,18 @@ export type RuntimeQueuedTurnRef = {
  */
 export async function fetchRuntimeQueuedTurnsBestEffort(
   provider: {
-    getQueuedTurns?: (threadId: string) => Promise<{ queuedTurns: readonly RuntimeQueuedTurnRef[]; settledTurns?: readonly RuntimeQueuedTurnRef[] }>
+    getQueuedTurns?: (threadId: string) => Promise<{
+      queuedTurns: readonly RuntimeQueuedTurnRef[]; settledTurns?: readonly RuntimeQueuedTurnRef[]
+      pendingAdmissions?: readonly RuntimeQueuedTurnRef[]
+    }>
   },
   threadId: string
 ): Promise<readonly RuntimeQueuedTurnRef[] | undefined> {
   if (typeof provider.getQueuedTurns !== 'function') return undefined
   try {
     const response = await provider.getQueuedTurns(threadId)
-    return [...response.queuedTurns, ...(response.settledTurns ?? [])]
+    return [...response.queuedTurns, ...(response.settledTurns ?? []),
+      ...(response.pendingAdmissions ?? []).map((turn) => ({ ...turn, status: 'admission_pending' }))]
   } catch {
     return undefined
   }

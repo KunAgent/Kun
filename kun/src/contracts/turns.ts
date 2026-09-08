@@ -654,6 +654,10 @@ export type QueuedTurnSummary = z.infer<typeof QueuedTurnSummarySchema>
 
 export const QueuedTurnsResponseSchema = z.object({
   queuedTurns: z.array(QueuedTurnSummarySchema),
-  settledTurns: z.array(z.object({ turnId: z.string(), clientRequestId: z.string().optional(), status: TurnStatus })).optional()
+  pendingAdmissions: z.array(QueuedTurnSummarySchema.omit({ position: true })).optional(),
+  settledTurns: z.array(z.object({
+    turnId: z.string(), clientRequestId: z.string().optional(), status: TurnStatus,
+    terminalCode: z.string().optional()
+  })).optional()
 }).strict()
 export type QueuedTurnsResponse = z.infer<typeof QueuedTurnsResponseSchema>

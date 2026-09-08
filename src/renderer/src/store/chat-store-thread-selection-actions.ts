@@ -297,7 +297,7 @@ export function createThreadSelectionActions(
       })
       subscribeThreadEventsWithRecovery(p, id, cached.lastSeq, sink, ac.signal, get)
       if (cached.busy) armBusyWatchdog(set, get)
-      else if (queuedMessages.some(isPendingQueuedMessage)) void get().drainQueuedMessages()
+      if (queuedMessages.length > 0) void get().drainQueuedMessages()
       return
     }
     // Give the sidebar its selected state in this render frame. The timeline
@@ -383,7 +383,8 @@ export function createThreadSelectionActions(
             )
           : rawBlocks
       const loaded = hydrateBlockModelLabels(id, labeledBlocks)
-      const busy = threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
+      const busy = detail.activeTurn !== undefined ? Boolean(detail.activeTurn)
+        : threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
       // Settle blocks left open by an interrupted turn when the server has
       // already settled, so selecting the thread doesn't keep it wedged (#621).
       const blocks = busy ? loaded : settlePendingRuntimeWorkAfterInterrupt(loaded)
@@ -486,9 +487,8 @@ export function createThreadSelectionActions(
       subscribeThreadEventsWithRecovery(p, id, latestSeq, sink, ac.signal, get)
       if (busy) {
         armBusyWatchdog(set, get)
-      } else if (queuedMessages.some(isPendingQueuedMessage)) {
-        void get().drainQueuedMessages()
       }
+      if (queuedMessages.length > 0) void get().drainQueuedMessages()
     } catch (e) {
       if (hydrationAbort.signal.aborted) return
       if (isThreadHydrationCancellation(e)) {
@@ -631,7 +631,8 @@ export function createThreadSelectionActions(
       } = await p.getThreadDetail(targetThreadId)
       if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return
       const loaded = hydrateBlockModelLabels(targetThreadId, rawBlocks)
-      const busy = threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
+      const busy = activeTurn !== undefined ? Boolean(activeTurn)
+        : threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
       // Settle blocks left open by an interrupted turn when the server has
       // already settled, so the thread doesn't stay wedged on load (#621).
       const blocks = busy ? loaded : settlePendingRuntimeWorkAfterInterrupt(loaded)

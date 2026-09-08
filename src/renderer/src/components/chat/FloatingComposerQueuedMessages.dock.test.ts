@@ -476,7 +476,7 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
       'guide',
       container.querySelector('[data-queued-message-id="q-admission"]')!
     ).disabled).toBe(true)
-    expect(container.querySelector('[data-queued-message-id="q-starting"]')).toBeNull()
+    expect(container.querySelector('[data-queued-message-id="q-starting"]')).not.toBeNull()
     // An in-flight row is admitted to the runtime queue but still managed
     // here: visible with a queued chip so the user can edit or remove it.
     const flight = container.querySelector('[data-queued-message-id="q-flight"]')!

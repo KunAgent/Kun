@@ -252,7 +252,7 @@ describe('durable per-thread turn queue', () => {
       request: startRequest('second', { enqueueIfBusy: true })
     })
     await h.turns.interruptTurn({ threadId: 'thr_q', turnId: first.turnId })
-    expect(h.settled).toEqual([])
+    expect(h.settled).toEqual(['thr_q'])
     const thread = await h.threadStore.get('thr_q')
     expect(thread?.turns.map((turn) => turn.status)).toEqual(['aborted', 'queued'])
     // A manual resume promotes the queued turn afterwards.
@@ -566,7 +566,7 @@ describe('durable per-thread turn queue', () => {
         threadId: 'thr_q',
         request: startRequest('second', { enqueueIfBusy: true, clientRequestId: 'req-2' })
       })
-    ).rejects.toThrow('append item failed')
+    ).rejects.toMatchObject({ code: 'queue_admission_uncertain', stage: 'persist' })
     // The half-written queued record must be removed, leaving only the running turn.
     const thread = await h.threadStore.get('thr_q')
     expect(thread?.turns.map((turn) => turn.status)).toEqual(['running'])
@@ -586,7 +586,7 @@ describe('durable per-thread turn queue', () => {
         threadId: 'thr_q',
         request: startRequest('second', { enqueueIfBusy: true, clientRequestId: 'req-2' })
       })
-    ).rejects.toThrow('append item failed')
+    ).rejects.toMatchObject({ code: 'queue_admission_uncertain', stage: 'persist' })
     // The rollback removed the ghost, so the identical retry re-enqueues once.
     const retried = await h.turns.startTurn({
       threadId: 'thr_q',
@@ -648,8 +648,7 @@ describe('durable per-thread turn queue', () => {
     const started = await h.turns.startNextQueuedTurn('thr_q')
     const after = await h.threadStore.get('thr_q')
     const missing = after?.turns.find((turn) => turn.id === 'turn_missing')
-    expect(missing?.status).toBe('failed')
-    expect(missing?.terminalCode).toBe(QUEUE_ADMISSION_FAILED_CODE)
+    expect(missing).toBeUndefined()
     const ok = after?.turns.find((turn) => turn.id === 'turn_ok')
     expect(started).toEqual({ turnId: 'turn_ok' })
     expect(ok?.status).toBe('running')

@@ -375,8 +375,9 @@ export function buildServiceManagerRouter(input: {
       if (!body.ok) return body.response
       try {
         const envelope = ManagerDataRequestEnvelopeSchema.parse(body.value)
-        const assertCurrent = guardManagerDataTurnFence(
-          input.state, 'thread', operation.data, envelope
+        const assertCurrent = await guardManagerDataTurnFence(
+          input.state, 'thread', operation.data, envelope,
+          (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
         const result = await input.sharedData!.executeThread(
           operation.data,
@@ -404,8 +405,9 @@ export function buildServiceManagerRouter(input: {
       if (!body.ok) return body.response
       try {
         const envelope = ManagerDataRequestEnvelopeSchema.parse(body.value)
-        const assertCurrent = guardManagerDataTurnFence(
-          input.state, 'session', operation.data, envelope
+        const assertCurrent = await guardManagerDataTurnFence(
+          input.state, 'session', operation.data, envelope,
+          (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
         const result = await input.sharedData!.executeSession(
           operation.data as ManagerSessionStoreOperation,

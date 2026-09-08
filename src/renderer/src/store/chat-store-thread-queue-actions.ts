@@ -1,4 +1,6 @@
 import { queueMutationPending, withQueueMutation } from './queue-mutation-fence'
+import { fetchRuntimeQueuedTurnsBestEffort } from './queued-message-persistence'
+import { createClientTurnRequestId } from './chat-store-thread-actions-support'
 import { awaitQueueAdmission, queueAdmissionPending } from './queue-admission-fence'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
@@ -227,8 +229,10 @@ export function createThreadQueueActions(
           runtime.persistActiveQueuedMessages()
           state = get()
         }
-        const next = queuedMessages.find(isPendingQueuedMessage)
-        if (!next || state.busy || threadActionSharedState.guidingQueuedMessageIds.has(next.id)) return
+        const next = queuedMessages.find((message) => isPendingQueuedMessage(message) ||
+          (message.deliveryState === 'starting' && message.clientRequestId && !queueAdmissionPending(message.id)))
+        if (!next || (state.busy && (!next.clientRequestId || next.waitForRuntimeAdmission)) ||
+          queueAdmissionPending(next.id) || threadActionSharedState.guidingQueuedMessageIds.has(next.id)) return
         if (
           next.waitForRuntimeAdmission &&
           !hasRuntimeTurnAdmissionWaiter(next.clientRequestId)
@@ -416,11 +420,24 @@ export function createThreadQueueActions(
       if (message.deliveryState === 'paused' && message.clientRequestId) {
         return get().resumeQueuedTurns()
       }
+      const receipts = message.clientRequestId
+        ? await fetchRuntimeQueuedTurnsBestEffort(getProvider(), state.activeThreadId!) : undefined
+      const receipt = receipts?.find((row) => row.clientRequestId === message.clientRequestId)
+      if (get().activeThreadId !== state.activeThreadId) return false
+      if (receipt && (!receipt.status || receipt.status === 'queued')) return get().resumeQueuedTurns()
+      if (receipt?.status === 'running' || receipt?.status === 'completed' || receipt?.status === 'aborted') {
+        await get().recoverActiveTurn({ forceTimeline: true })
+        return true
+      }
+      const retryId = receipt?.status === 'failed' ? createClientTurnRequestId() : message.clientRequestId
       set((current) => ({
         queuedMessages: current.queuedMessages.map((candidate) => candidate.id === id
           ? {
               ...candidate,
               deliveryState: 'pending' as const,
+              clientRequestId: retryId,
+              deliveryTurnId: undefined,
+              deliveryUserMessageItemId: undefined,
               errorCode: undefined,
               errorMessage: undefined
             }

@@ -654,5 +654,6 @@ export type CoreQueuedTurnJson = {
 
 export type CoreQueuedTurnsResponseJson = {
   queuedTurns: CoreQueuedTurnJson[]
-  settledTurns?: Array<{ turnId: string; clientRequestId?: string; status: string }>
+  pendingAdmissions?: Array<{ turnId: string; clientRequestId?: string; createdAt: string }>
+  settledTurns?: Array<{ turnId: string; clientRequestId?: string; status: string; terminalCode?: string }>
 }

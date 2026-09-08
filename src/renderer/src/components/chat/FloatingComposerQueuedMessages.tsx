@@ -125,6 +125,7 @@ function visibleQueue(messages: QueuedComposerMessage[]): QueuedComposerMessage[
     message.deliveryState === 'pending' ||
     message.deliveryState === 'paused' ||
     message.deliveryState === 'failed' ||
+    message.deliveryState === 'starting' ||
     // Admitted to the durable runtime queue: visible so the user can still
     // edit, remove, or reorder it while it waits for the running turn.
     message.deliveryState === 'in_flight'
@@ -146,6 +147,8 @@ export function FloatingComposerQueuedMessages({
 }: Props): ReactElement | null {
   const { t } = useTranslation('common')
   const queue = useMemo(() => visibleQueue(messages), [messages])
+  const queueTitle = t(queue.some((message) => message.deliveryState === 'starting')
+    ? 'queuedMessagesConfirming' : 'queuedMessagesTitle', { count: queue.length })
   const [collapsed, setCollapsed] = useState(true)
   const [busy, setBusy] = useState<{ id: string; kind: QueueActionKind } | null>(null)
   const [dragState, setDragState] = useState<QueueDragState | null>(null)
@@ -175,7 +178,8 @@ export function FloatingComposerQueuedMessages({
 
   const interactionActive = busy !== null
   const expanded = queue.length === 1 || !collapsed || interactionActive
-  const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive)
+  const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive &&
+    !queue.some((message) => message.deliveryState === 'starting'))
 
   const focusReorderHandle = (id: string): void => {
     queueMicrotask(() => reorderHandleRefs.current.get(id)?.focus())
@@ -286,7 +290,7 @@ export function FloatingComposerQueuedMessages({
             <span className={css.lead} aria-hidden="true">
               <MessageCircle size={14} strokeWidth={1.7} />
             </span>
-            <span className={css.count}>{t('queuedMessagesTitle', { count: queue.length })}</span>
+            <span className={css.count}>{queueTitle}</span>
             <span className={css.chevron} aria-hidden="true">
               {expanded
                 ? <ChevronUp size={14} strokeWidth={1.7} />
@@ -310,7 +314,7 @@ export function FloatingComposerQueuedMessages({
         <ul
           id={listId}
           className={css.list}
-          aria-label={t('queuedMessagesTitle', { count: queue.length })}
+          aria-label={queueTitle}
           hidden={!expanded}
         >
           {expanded ? queue.map((message, index) => {
@@ -421,6 +425,9 @@ export function FloatingComposerQueuedMessages({
 
                 <QueuedMessageSnapshotBadges message={message} />
 
+                {message.deliveryState === 'starting' ? (
+                  <span className={css.status}>{t('queuedMessageConfirming')}</span>
+                ) : null}
                 {paused ? (
                   <span className={`${css.status} ${css.paused}`}>
                     {t('queuedMessagePaused')}

@@ -285,6 +285,7 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
         if (!isActiveTurn(turn)) {
           throw new TurnConflictError(`turn is not active: ${input.turnId}`)
         }
+        if (turn.status === 'running') this.notifyTurnSettled(input.threadId, 'aborted')
         if (turn.orchestration === 'graph') {
           // Keep this inside the thread mutation fence. A racing AgentLoop
           // settlement cannot overtake explicit Stop while Graph cancellation

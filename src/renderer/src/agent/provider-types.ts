@@ -272,6 +272,8 @@ export interface AgentProvider {
     turnId: string
     threadId: string
     userMessageItemId?: string
+    status?: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
+    queuedPosition?: number
     agentSurface?: 'code' | 'write' | 'design'
     /** Durable thread ownership; agentSurface above is only this turn's intent. */
     threadAgentSurface?: 'code' | 'write' | 'design'

@@ -22,6 +22,14 @@ vi.mock('../agent/registry', () => ({
   getProvider: registryMock.getProvider
 }))
 
+// Local-outbox cases deliberately omit the provider send API. Model that
+// branch explicitly instead of relying on a TypeError being called success.
+vi.mock('./chat-store-thread-send-enqueue', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./chat-store-thread-send-enqueue')>()
+  return { ...actual, submitToRuntimeQueue: (input: Parameters<typeof actual.submitToRuntimeQueue>[0]) =>
+    typeof input.provider.sendUserMessage === 'function' ? actual.submitToRuntimeQueue(input) : Promise.resolve(null) }
+})
+
 import { createThreadActions } from './chat-store-thread-actions'
 
 const THREAD_COMPOSER_SELECTION_STORAGE_KEY = 'kun.threadComposerSelection.v1'
@@ -82,6 +90,7 @@ function buildHarness(): {
     lastSeq: 0,
     loadComposerModels: vi.fn(async () => undefined),
     queuedMessages: [],
+    drainQueuedMessages: vi.fn(async () => undefined),
     recoverActiveTurn: vi.fn(async () => true),
     refreshThreads: vi.fn(async () => undefined),
     route: 'chat',

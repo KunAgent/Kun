@@ -449,7 +449,7 @@ export function createThreadCreationActions(
             executionTurnId === state.currentTurnId
           const cursorRetained = (runtimeState.replayFloorSeq ?? 0) <= state.lastSeq + 1
           if (runtimeState.latestSeq >= state.lastSeq && latestTurnMatches && cursorRetained) {
-            const runtimeBusy = runtimeState.status === 'running' ||
+            const runtimeBusy = runtimeState.activeTurn !== undefined ? Boolean(runtimeState.activeTurn) : runtimeState.status === 'running' ||
               runtimeState.latestTurnStatus === 'queued' ||
               runtimeState.latestTurnStatus === 'running'
             const replayPending = runtimeState.latestSeq > state.lastSeq
@@ -521,7 +521,8 @@ export function createThreadCreationActions(
       })
       if (!recoveryStillCurrent()) return state.busy
       const loaded = hydrateBlockModelLabels(activeThreadId, rawBlocks)
-      const busy = threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
+      const busy = activeTurn !== undefined ? Boolean(activeTurn)
+        : threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
       // The server has settled but a tool/approval/user_input block may still be
       // open (e.g. a delegate_task interrupted by a runtime restart). Settle it,
       // otherwise threadHasPendingRuntimeWork stays true and the queued message
@@ -598,10 +599,8 @@ export function createThreadCreationActions(
         armBusyWatchdog(set, get)
       } else {
         resetBusyRecoveryAttempts()
-        if (get().queuedMessages.length > 0) {
-          void get().drainQueuedMessages()
-        }
       }
+      if (get().queuedMessages.length > 0) void get().drainQueuedMessages()
       return busy
     } catch (e) {
       if (recoverySignal.aborted) return get().busy

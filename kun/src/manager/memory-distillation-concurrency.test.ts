@@ -17,7 +17,7 @@ import { ManagerRemoteMemoryStore, ManagerRemoteSessionStore } from './remote-da
 import { ManagerRemoteMemoryDistillationPendingStore } from './remote-memory-distillation-pending.js'
 import { buildServiceManagerRouter, ServiceManagerState } from './service-manager.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
-import { runOutsideTurnMutationFence, runWithTurnMutationFence } from './turn-mutation-context.js'
+import { runWithoutTurnMutationFence, runWithTurnMutationFence } from './turn-mutation-context.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => {
@@ -132,7 +132,7 @@ describe('Memory distillation through the shared Manager HTTP API', () => {
 
     await runWithTurnMutationFence(completed, async () => {
       await leases.release('thread', 'turn-completed')
-      await runOutsideTurnMutationFence(() => events.record(usageDraft('turn-completed')))
+      await runWithoutTurnMutationFence(() => events.record(usageDraft('turn-completed')))
     })
 
     expect(await sessionStore.loadEventsSince('thread', 0)).toEqual([
@@ -159,7 +159,7 @@ describe('Memory distillation through the shared Manager HTTP API', () => {
     const active = await leases.acquire('thread', 'turn-next')
 
     await expect(runWithTurnMutationFence(completed, () =>
-      runOutsideTurnMutationFence(() => events.record(usageDraft('turn-completed')))
+      runWithoutTurnMutationFence(() => events.record(usageDraft('turn-completed')))
     )).rejects.toMatchObject({ code: 'stale_turn_fence' })
 
     expect(await sessionStore.loadEventsSince('thread', 0)).toEqual([])

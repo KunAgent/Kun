@@ -1,5 +1,6 @@
 import type { TurnService } from '../services/turn-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 
 /**
  * Runtime-level fair scheduler for durable queued turns.
@@ -23,6 +24,11 @@ export class QueuedTurnDispatcher {
   private readonly readySet = new Set<string>()
   private pendingWakes = 0
   private passInFlight = false
+  private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly retries = new Map<string, number>()
+  private readonly paused = new Set<string>()
+  private disposed = false
+  private passPromise: Promise<void> | undefined
 
   constructor(
     private readonly input: {
@@ -34,6 +40,8 @@ export class QueuedTurnDispatcher {
 
   /** Queue-commit / manual trigger: this thread has (or may have) queued work. */
   requestDrain(threadId: string): void {
+    this.paused.delete(threadId)
+    this.cancelRetry(threadId)
     this.markReady(threadId)
     this.wake()
   }
@@ -47,8 +55,10 @@ export class QueuedTurnDispatcher {
    */
   onTurnSettled(threadId: string, status: 'completed' | 'failed' | 'aborted'): void {
     if (status === 'aborted') {
+      this.paused.add(threadId)
+      this.cancelRetry(threadId)
       this.evictReady(threadId)
-    } else {
+    } else if (!this.paused.has(threadId)) {
       this.markReady(threadId)
     }
     this.wake()
@@ -71,6 +81,7 @@ export class QueuedTurnDispatcher {
   }
 
   private markReady(threadId: string): void {
+    if (this.disposed || this.paused.has(threadId)) return
     if (this.readySet.has(threadId)) return
     this.readySet.add(threadId)
     this.readyIds.push(threadId)
@@ -88,9 +99,9 @@ export class QueuedTurnDispatcher {
   }
 
   private ensurePass(): void {
-    if (this.passInFlight || this.readyIds.length === 0) return
+    if (this.disposed || this.passInFlight || this.readyIds.length === 0) return
     this.passInFlight = true
-    void this.runPass()
+    this.passPromise = runWithoutTurnMutationFence(() => this.runPass())
       .catch((error) => {
         console.warn(
           '[kun] queued-turn dispatcher pass failed: ' +
@@ -113,9 +124,11 @@ export class QueuedTurnDispatcher {
       if (batch.length === 0) return
       const requeued = new Set<string>()
       for (const threadId of batch) {
+        if (this.disposed || this.paused.has(threadId)) continue
         try {
           const started = await this.input.turns.startNextQueuedTurn(threadId)
           if (started) {
+            this.cancelRetry(threadId)
             // startNextQueuedTurn already admitted the turn; runTurn is
             // fire-and-forget because its settlement re-enters the thread
             // at the ready tail via onTurnSettled.
@@ -132,6 +145,9 @@ export class QueuedTurnDispatcher {
             // queue; it sleeps until the next wake frees capacity.
             this.markReady(threadId)
             requeued.add(threadId)
+            this.scheduleRetry(threadId)
+          } else {
+            this.cancelRetry(threadId)
           }
         } catch (error) {
           console.warn(
@@ -142,6 +158,7 @@ export class QueuedTurnDispatcher {
           // wake retries it instead of stranding its durable queue.
           this.markReady(threadId)
           requeued.add(threadId)
+          this.scheduleRetry(threadId)
         }
       }
       // Loop only for ready entries added by hooks mid-pass; threads this
@@ -149,6 +166,36 @@ export class QueuedTurnDispatcher {
       // ensurePass finally-clause covers wakes that arrive after the pass.
       if (this.readyIds.every((id) => requeued.has(id))) return
     }
+  }
+
+  async dispose(): Promise<void> {
+    this.disposed = true
+    for (const timer of this.retryTimers.values()) clearTimeout(timer)
+    this.retryTimers.clear()
+    this.retries.clear()
+    this.readyIds.length = 0
+    this.readySet.clear()
+    await this.passPromise
+  }
+
+  private cancelRetry(threadId: string): void {
+    const timer = this.retryTimers.get(threadId)
+    if (timer) clearTimeout(timer)
+    this.retryTimers.delete(threadId)
+    this.retries.delete(threadId)
+  }
+
+  private scheduleRetry(threadId: string): void {
+    if (this.disposed || this.paused.has(threadId) || this.retryTimers.has(threadId)) return
+    const attempt = this.retries.get(threadId) ?? 0
+    this.retries.set(threadId, Math.min(5, attempt + 1))
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(threadId)
+      this.markReady(threadId)
+      this.wake()
+    }, Math.min(5000, 250 * 2 ** attempt))
+    timer.unref?.()
+    this.retryTimers.set(threadId, timer)
   }
 
   private async threadStillHasQueued(threadId: string): Promise<boolean> {

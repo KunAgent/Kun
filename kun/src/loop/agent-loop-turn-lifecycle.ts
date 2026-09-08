@@ -23,7 +23,7 @@ import {
 } from './turn-lifecycle-hooks.js'
 import type { GoalElapsedTimer } from './goal-turn-coordinator.js'
 import { AgentLoopBase } from './agent-loop-base.js'
-import { runOutsideTurnMutationFence } from '../manager/turn-mutation-context.js'
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 
 export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
   protected abstract loop(
@@ -393,7 +393,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
             ...(finalError ? { error: finalError } : {})
           })
           try {
-            runOutsideTurnMutationFence(() => {
+            runWithoutTurnMutationFence(() => {
               this.opts.memoryDistillation?.schedule({
                 threadId,
                 turnId,
