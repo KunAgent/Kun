@@ -122,6 +122,13 @@
   "usageQuotaCurrentStreak": "Current streak: {{count}} days",
   "usageQuotaMostActiveWeekday": "Most active: {{weekday}}",
   "usageQuotaModels": "モデル使用量",
+  "usageModelScopeLabel": "モデル使用量のソース",
+  "usageModelScope": {
+    "primary": "直接セッション",
+    "side": "サブエージェント",
+    "all": "すべて"
+  },
+  "usageModelScopeNote": "合計にはサブエージェントの使用量も含まれます。ソースを切り替えて確認できます。",
   "usageQuotaModelPagination": "モデル使用量ページ",
   "usageQuotaModelPageRange": "{{first}}–{{last}} / {{total}} を表示",
   "usageQuotaModelPageIndicator": "{{page}} / {{total}}",

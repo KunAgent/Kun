@@ -125,7 +125,7 @@ describe('usage aggregate query runner', () => {
     })
     const model = runUsageAggregateQuery({
       sqlitePath,
-      query: { groupBy: 'model', ...range }
+      query: { groupBy: 'model', ...range, scope: 'all' }
     })
     const elapsedMs = performance.now() - startedAt
 

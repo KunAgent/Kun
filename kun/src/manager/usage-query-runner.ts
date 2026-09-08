@@ -44,7 +44,10 @@ export function runUsageAggregateQuery(
         : query.groupBy === 'day' || query.groupBy === 'model'
           ? { fromInclusive: query.fromInclusive, toExclusive: query.toExclusive }
           : providerRange ?? {},
-      { visibleThreadsOnly: true }
+      {
+        visibleThreadsOnly: true,
+        ...(query.groupBy === 'model' ? { scope: query.scope } : {})
+      }
     )
     const visibleThreadIds = readVisibleThreadIds(db)
     const records = [...indexedRecords, ...reconcileLiveUsageRecords(db, liveRecords)].filter((record) =>

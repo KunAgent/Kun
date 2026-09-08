@@ -16,6 +16,7 @@ export type UsageRow = {
   turn_id: string | null
   model: string | null
   provider_id: string | null
+  relation?: string | null
   usage_json: string
 }
 
@@ -41,6 +42,7 @@ export function usageRowFromEvent(event: RuntimeEvent & { kind: 'usage' }): Usag
     turn_id: event.turnId ?? null,
     model: event.model ?? null,
     provider_id: event.providerId ?? null,
+    relation: null,
     usage_json: JSON.stringify(event.usage)
   }
 }
@@ -60,6 +62,9 @@ export function usageRecordsFromRows(rows: UsageRow[]): SessionUsageRecord[] {
       ...(row.turn_id ? { turnId: row.turn_id } : {}),
       ...(row.model ? { model: row.model } : {}),
       ...(row.provider_id ? { providerId: row.provider_id } : {}),
+      ...(row.relation === 'primary' || row.relation === 'fork' || row.relation === 'side'
+        ? { relation: row.relation }
+        : {}),
       completedAt: row.timestamp,
       usage: delta
     })

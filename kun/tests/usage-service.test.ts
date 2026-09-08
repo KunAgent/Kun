@@ -199,7 +199,8 @@ describe('daily usage service', () => {
       groupBy: 'model',
       from: '2026-05-01',
       to: '2026-05-31',
-      timezone: 'Asia/Shanghai'
+      timezone: 'Asia/Shanghai',
+      scope: 'all'
     })
   })
 
@@ -293,7 +294,8 @@ describe('daily usage service', () => {
       groupBy: 'model',
       from: '2026-05-01',
       to: '2026-05-01',
-      timezone: 'UTC'
+      timezone: 'UTC',
+      scope: 'all'
     })
 
     for (const counters of [
@@ -403,7 +405,7 @@ describe('daily usage service', () => {
           usage: usage({ promptTokens: 60, completionTokens: 30, totalTokens: 90 })
         }
       ],
-      { groupBy: 'model', from: '2026-05-01', to: '2026-05-03', timezone: 'UTC' }
+      { groupBy: 'model', from: '2026-05-01', to: '2026-05-03', timezone: 'UTC', scope: 'all' }
     )
 
     expect(ModelUsageResponseSchema.parse(response)).toEqual(response)

@@ -58,7 +58,7 @@ import {
 } from './child-result-materializer.js'
 import { buildFastContextEvidencePack } from './fast-context-evidence.js'
 import { createFastContextToolHost } from './fast-context-tool-host.js'
-import { resolveChildEpisodeLimits } from './child-episode-limits.js'
+import { resolveChildEpisodeLimits, shouldUseFastContextEpisodeBudget } from './child-episode-limits.js'
 import { withGlobalSubagentTools } from './subagent-global-tool-policy.js'
 import {
   childResultUsedNoTextSummary,
@@ -350,7 +350,10 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {}),
       ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
       ...(options.tokenEconomy ? { tokenEconomy: options.tokenEconomy } : {}),
-      turnLimits: resolveChildEpisodeLimits(options.runtime?.turnLimits, input.fastContext === true),
+      turnLimits: resolveChildEpisodeLimits(
+        options.runtime?.turnLimits,
+        shouldUseFastContextEpisodeBudget({ fastContext: input.fastContext, profile: input.profile })
+      ),
       ...(input.fastContext
         ? {
             fastContext: true,

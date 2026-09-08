@@ -95,6 +95,16 @@ const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 export const ReferencePriceCoverageSchema = z.enum(['complete', 'partial', 'unavailable'])
 export type ReferencePriceCoverage = z.infer<typeof ReferencePriceCoverageSchema>
 
+/**
+ * Source filter for model usage. `primary` covers directly user-visible
+ * conversations (primary + fork relations, plus legacy threads missing a
+ * relation), `side` covers internal subagent/task threads, and `all` is the
+ * full ledger. Cost/velocity math is identical across scopes; only the set
+ * of threads that contributes is narrowed.
+ */
+export const ModelUsageScopeSchema = z.enum(['all', 'primary', 'side'])
+export type ModelUsageScope = z.infer<typeof ModelUsageScopeSchema>
+
 export const DailyUsageCountersSchema = z.object({
   input_tokens: z.number().int().nonnegative(),
   output_tokens: z.number().int().nonnegative(),
@@ -194,6 +204,7 @@ export type ModelUsageDayBucket = z.infer<typeof ModelUsageDayBucketSchema>
 
 export const ModelUsageResponseSchema = UsageResponseSchema.extend({
   group_by: z.literal('model'),
+  scope: ModelUsageScopeSchema,
   from: DateStringSchema,
   to: DateStringSchema,
   timezone: z.string().min(1),

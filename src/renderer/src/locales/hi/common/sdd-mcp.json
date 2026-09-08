@@ -122,6 +122,13 @@
   "usageQuotaCurrentStreak": "Current streak: {{count}} days",
   "usageQuotaMostActiveWeekday": "Most active: {{weekday}}",
   "usageQuotaModels": "मॉडल उपयोग",
+  "usageModelScopeLabel": "मॉडल उपयोग स्रोत",
+  "usageModelScope": {
+    "primary": "प्रत्यक्ष सत्र",
+    "side": "उप-एजेंट",
+    "all": "सभी"
+  },
+  "usageModelScopeNote": "कुल में उप-एजेंट उपयोग शामिल है; जांचने के लिए स्रोत बदलें।",
   "usageQuotaModelPagination": "मॉडल उपयोग पृष्ठ",
   "usageQuotaModelPageRange": "{{first}}–{{last}} / {{total}} दिखा रहे हैं",
   "usageQuotaModelPageIndicator": "{{page}} / {{total}}",

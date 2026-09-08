@@ -17,7 +17,7 @@ import {
   type DailyUsageBucket,
   useDailyUsageState
 } from '../../hooks/use-daily-usage'
-import { useModelUsageState } from '../../hooks/use-model-usage'
+import { useModelUsageState, type ModelUsageScope } from '../../hooks/use-model-usage'
 import { useUsageAutoRefresh } from '../../hooks/use-usage-auto-refresh'
 import { SidebarUsageHistoryCard } from './SidebarUsageHistoryCard'
 
@@ -31,6 +31,7 @@ const RANGE_DAYS: Record<UsageRangeKey, number> = {
 }
 
 const RANGE_KEYS: UsageRangeKey[] = ['7d', '30d', '90d', 'all']
+const MODEL_SCOPES: ModelUsageScope[] = ['primary', 'side', 'all']
 const EMPTY_DAILY_USAGE_BUCKETS: DailyUsageBucket[] = []
 const HISTORY_RANGE_DAYS = 365
 const MODEL_USAGE_PAGE_SIZE = 5
@@ -55,6 +56,7 @@ export function SidebarUsagePanel({
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const [rangeKey, setRangeKey] = useState<UsageRangeKey>('7d')
+  const [modelScope, setModelScope] = useState<ModelUsageScope>('primary')
   const [historyVisibleWeeks, setHistoryVisibleWeeks] = useState(12)
   const [modelPage, setModelPage] = useState(0)
   const [autoRefreshKey, setAutoRefreshKey] = useState(0)
@@ -68,7 +70,8 @@ export function SidebarUsagePanel({
   const modelState = useModelUsageState(
     enabled,
     effectiveRefreshKey,
-    RANGE_DAYS[rangeKey]
+    RANGE_DAYS[rangeKey],
+    modelScope
   )
   const loading =
     dailyState.loading ||
@@ -272,6 +275,33 @@ export function SidebarUsagePanel({
               ))}
             </div>
           </div>
+          <div
+            className="mt-2 inline-flex rounded-[9px] border border-ds-border-muted bg-ds-surface-subtle/70 p-0.5 text-[10px] font-medium text-ds-muted"
+            aria-label={t('usageModelScopeLabel')}
+          >
+            {MODEL_SCOPES.map((scope) => (
+              <button
+                key={scope}
+                type="button"
+                data-usage-scope={scope}
+                aria-pressed={modelScope === scope}
+                onClick={() => {
+                  setModelScope(scope)
+                  setModelPage(0)
+                }}
+                className={`min-h-6 rounded-[7px] px-2 transition ${
+                  modelScope === scope
+                    ? 'bg-accent/10 text-accent shadow-sm dark:bg-accent/20'
+                    : 'hover:text-ds-ink'
+                }`}
+              >
+                {t(`usageModelScope.${scope}`)}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[9.5px] leading-4 text-ds-faint">
+            {t('usageModelScopeNote')}
+          </p>
           {modelState.error ? (
             <p
               role="alert"

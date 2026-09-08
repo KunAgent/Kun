@@ -122,6 +122,13 @@
   "usageQuotaCurrentStreak": "连续使用 {{count}} 天",
   "usageQuotaMostActiveWeekday": "最活跃：{{weekday}}",
   "usageQuotaModels": "模型用量",
+  "usageModelScopeLabel": "模型用量来源",
+  "usageModelScope": {
+    "primary": "直接会话",
+    "side": "子代理",
+    "all": "全部"
+  },
+  "usageModelScopeNote": "总量仍包含子代理用量，可切换来源核对。",
   "usageQuotaModelPagination": "模型用量分页",
   "usageQuotaModelPageRange": "显示 {{first}}–{{last}} / {{total}}",
   "usageQuotaModelPageIndicator": "{{page}} / {{total}}",

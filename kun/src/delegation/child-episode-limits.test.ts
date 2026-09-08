@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveChildEpisodeLimits } from './child-episode-limits.js'
+import {
+  resolveChildEpisodeLimits,
+  shouldUseFastContextEpisodeBudget
+} from './child-episode-limits.js'
 
 describe('resolveChildEpisodeLimits', () => {
   it('gives ordinary children finite episode ceilings', () => {
@@ -23,5 +26,22 @@ describe('resolveChildEpisodeLimits', () => {
     expect(resolveChildEpisodeLimits(undefined, true)).toEqual({
       maxSteps: 4, maxWallTimeMs: 10 * 60_000, maxToolCallsPerStep: 8
     })
+  })
+})
+
+describe('shouldUseFastContextEpisodeBudget', () => {
+  it('is true for the dedicated fast_context entry point', () => {
+    expect(shouldUseFastContextEpisodeBudget({ fastContext: true })).toBe(true)
+  })
+
+  it('is true when a generic delegate_task resolves to the explore profile', () => {
+    expect(shouldUseFastContextEpisodeBudget({ profile: 'explore' })).toBe(true)
+    expect(shouldUseFastContextEpisodeBudget({ fastContext: false, profile: 'explore' })).toBe(true)
+  })
+
+  it('is false for ordinary profiles and default empty inputs', () => {
+    expect(shouldUseFastContextEpisodeBudget({ profile: 'general' })).toBe(false)
+    expect(shouldUseFastContextEpisodeBudget({})).toBe(false)
+    expect(shouldUseFastContextEpisodeBudget({ fastContext: false })).toBe(false)
   })
 })
