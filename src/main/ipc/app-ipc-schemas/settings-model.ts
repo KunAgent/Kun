@@ -135,7 +135,8 @@ const modelProfilePatchShape = {
     cacheReadUsdPerMillion: z.number().nonnegative().max(1_000_000).optional(),
     cacheWriteUsdPerMillion: z.number().nonnegative().max(1_000_000).optional()
   }).strict().optional(),
-  serviceTiers: z.array(modelServiceTierSchema).min(1).max(MODEL_SERVICE_TIERS.length).optional(),
+  // An empty array is an explicit "no supported tier" declaration, not unknown.
+  serviceTiers: z.array(modelServiceTierSchema).max(MODEL_SERVICE_TIERS.length).optional(),
   endpointFormat: modelEndpointFormatSchema.optional(),
   responsesMode: z.literal('lite').optional()
 } satisfies Record<keyof ModelProviderModelProfilePatchV1, z.ZodTypeAny>

@@ -1,0 +1,7 @@
+{
+  "composerFastModeOn": "फ़ास्ट मोड चालू",
+  "composerFastModeOff": "फ़ास्ट मोड बंद",
+  "composerFastModeHint": "Codex के जवाब तेज़ होंगे, लेकिन सदस्यता उपयोग बढ़ेगा।",
+  "composerFastModeUnverified": "इस मॉडल के लिए फ़ास्ट समर्थन की पुष्टि नहीं हुई है। प्रदाता सेटिंग में मॉडल सूची रीफ़्रेश करें।",
+  "composerFastModeUnsupported": "यह मॉडल फ़ास्ट मोड प्रदान नहीं करता।"
+}

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { Brain, ChevronDown, Gauge, Search, Zap } from 'lucide-react'
+import { Brain, ChevronDown, Gauge, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { modelSupportsImageInput } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
-import { composerSupportsCodexFastMode } from './composer-fast-mode'
+import { composerFastModeState, type ComposerFastModeState } from './composer-fast-mode'
+import { ComposerFastModeButton } from './composer-fast-mode-button'
 import { renderComposerModelMenu } from './floating-composer-model-menu'
 import {
   FLOATING_REASONING_POPOVER_ESTIMATED_HEIGHT, FLOATING_REASONING_POPOVER_WIDTH,
@@ -134,13 +135,11 @@ export function FloatingComposerModelPicker({
   const reasoningOptions = reasoningOptionsForModel(currentModelProfile)
   const reasoningEnabled =
     !needsProviderSetup && Boolean(onComposerReasoningEffortChange) && reasoningOptions.length > 0
-  const fastModeAvailable =
-    Boolean(onComposerFastModeChange) &&
-    composerSupportsCodexFastMode(
-      composerModelGroups,
-      currentModel,
-      composerProviderId
-    )
+  const fastModeState: ComposerFastModeState = onComposerFastModeChange
+    ? composerFastModeState(composerModelGroups, currentModel, composerProviderId)
+    : 'hidden'
+  const showFastModeButton = fastModeState !== 'hidden'
+  const fastModeEnabled = fastModeState === 'supported' && composerFastMode
   const currentReasoning = normalizeComposerReasoningEffort(
     composerReasoningEffort,
     currentModelProfile
@@ -175,12 +174,12 @@ export function FloatingComposerModelPicker({
       ? 'w-[184px] max-w-[184px] shrink-0 overflow-hidden'
       : 'w-[248px] max-w-[min(260px,42vw)] shrink-0 overflow-hidden'
   const splitModelWidthClass = stretch
-    ? fastModeAvailable
+    ? showFastModeButton
       ? 'max-w-[min(328px,52vw)]'
       : 'max-w-[min(284px,45vw)]'
     : compact
-      ? fastModeAvailable ? 'max-w-[224px]' : 'max-w-[184px]'
-      : fastModeAvailable ? 'max-w-[min(304px,50vw)]' : 'max-w-[min(260px,42vw)]'
+      ? showFastModeButton ? 'max-w-[224px]' : 'max-w-[184px]'
+      : showFastModeButton ? 'max-w-[min(304px,50vw)]' : 'max-w-[min(260px,42vw)]'
 
   useEffect(() => {
     if (!reasoningEnabled) return
@@ -585,27 +584,13 @@ export function FloatingComposerModelPicker({
           </button>
         ) : null}
 
-        {fastModeAvailable ? (
-          <button
-            type="button"
-            disabled={!canChangeModel}
-            onClick={() => onComposerFastModeChange?.(!composerFastMode)}
-            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg outline-none transition focus-visible:ring-2 focus-visible:ring-accent/25 disabled:cursor-not-allowed ${
-              composerFastMode
-                ? 'bg-amber-400/15 text-amber-600 hover:bg-amber-400/25 dark:text-amber-300'
-                : canChangeModel
-                  ? 'text-ds-faint hover:bg-ds-hover hover:text-ds-ink'
-                  : 'text-ds-faint'
-            }`}
-            aria-pressed={composerFastMode}
-            aria-label={composerFastMode ? t('composerFastModeOn') : t('composerFastModeOff')}
-            title={`${composerFastMode ? t('composerFastModeOn') : t('composerFastModeOff')} — ${t('composerFastModeHint')}`}
-          >
-            <Zap
-              className={`h-4 w-4 ${composerFastMode ? 'fill-current' : ''}`}
-              strokeWidth={2}
-            />
-          </button>
+        {fastModeState !== 'hidden' ? (
+          <ComposerFastModeButton
+            state={fastModeState}
+            enabled={composerFastMode}
+            locked={!canChangeModel}
+            onToggle={() => onComposerFastModeChange?.(!fastModeEnabled)}
+          />
         ) : null}
 
         {renderMenu('fixed z-[1000] overflow-x-hidden overflow-y-auto rounded-xl border border-ds-border bg-white p-1.5 text-[13px] text-ds-muted shadow-[0_22px_64px_rgba(20,47,95,0.18)] dark:bg-ds-card')}

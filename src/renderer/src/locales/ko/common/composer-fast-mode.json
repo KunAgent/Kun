@@ -1,0 +1,7 @@
+{
+  "composerFastModeOn": "빠른 모드 켜짐",
+  "composerFastModeOff": "빠른 모드 꺼짐",
+  "composerFastModeHint": "Codex 응답이 빨라지지만 구독 사용량이 늘어납니다.",
+  "composerFastModeUnverified": "이 모델의 빠른 모드 지원이 확인되지 않았습니다. 공급자 설정에서 모델 목록을 새로 고쳐 주세요.",
+  "composerFastModeUnsupported": "이 모델은 빠른 모드를 제공하지 않습니다."
+}
