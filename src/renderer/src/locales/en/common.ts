@@ -14,6 +14,7 @@ import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
 import workConversations from './common/work-conversations.json'
 import projectBoard from './common/project-board.json'
+import contextDev from './common/context-dev.json'
 
 const common = {
   ...shellWorkflow,
@@ -32,6 +33,7 @@ const common = {
   ...commandPalette,
   ...workConversations,
   ...projectBoard,
+  ...contextDev,
 }
 
 export default common

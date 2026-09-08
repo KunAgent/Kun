@@ -155,7 +155,8 @@ export function validateMcpServersHttps(servers: JsonRecord): void {
 /** Origins whose docs links the OAuth connector preview may open externally. */
 export const OAUTH_DOCS_ALLOWED_ORIGINS: readonly string[] = [
   'https://vercel.com',
-  'https://developers.google.com'
+  'https://developers.google.com',
+  'https://docs.context.dev'
 ]
 
 /**

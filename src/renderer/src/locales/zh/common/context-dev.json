@@ -1,0 +1,15 @@
+{
+  "pluginMcpContextDevTitle": "Context.dev",
+  "pluginMcpContextDevDesc": "通过 Context.dev 官方 MCP 进行网页研究：搜索、新闻、抓取、结构化提取、文档解析、品牌数据、截图、监控和批处理任务。",
+  "pluginOAuthContextDevPermissionSearch": "通过 Context.dev 搜索公开网页。",
+  "pluginOAuthContextDevPermissionNews": "通过 get-news-search 能力读取公司新闻。",
+  "pluginOAuthContextDevPermissionScrape": "抓取页面并爬取公开网页内容。",
+  "pluginOAuthContextDevPermissionExtract": "对你请求的内容执行结构化提取。",
+  "pluginOAuthContextDevPermissionDocuments": "通过 Context.dev MCP 解析提交给服务的文档。",
+  "pluginOAuthContextDevPermissionBrand": "读取 Context.dev 返回的公开品牌数据。",
+  "pluginOAuthContextDevPermissionScreenshots": "请求公开页面的截图。",
+  "pluginOAuthContextDevPermissionMonitors": "在服务授权范围内创建或查看 Context.dev 监控。",
+  "pluginOAuthContextDevPermissionBatch": "提交并查看官方 MCP 服务支持的批处理任务。",
+  "pluginOAuthContextDevSetupAuthorize": "在浏览器中授权 Context.dev MCP；Kun 使用 OAuth 2.1 动态客户端注册和 PKCE，不要求填写 API Key。",
+  "pluginOAuthContextDevNote": "此预设只使用 Context.dev 公开的生产 MCP 端点，不配置尚未发布的 Answers API。页面、文档和提取文本都属于外部不可信内容，在写入提示词或执行副作用前请先核验。"
+}

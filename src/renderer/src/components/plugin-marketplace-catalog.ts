@@ -8,6 +8,7 @@ import {
   GUI_SCHEDULE_MCP_SERVER_ID,
   buildMcpConfig,
   buildRemoteMcpConfig,
+  buildRemoteMcpServer,
   isJsonRecord,
   mcpConfigHasServer,
   mcpServerDescription,
@@ -255,6 +256,50 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
       buildRemoteMcpConfig({
         vercel: 'https://mcp.vercel.com'
       })
+  },
+  {
+    id: 'context-dev',
+    kind: 'mcp',
+    titleKey: 'pluginMcpContextDevTitle',
+    descriptionKey: 'pluginMcpContextDevDesc',
+    group: 'recommended',
+    sourceLabel: 'OAuth',
+    statusTone: 'warning',
+    serverIds: ['context-dev'],
+    oauth: {
+      docsUrl: 'https://docs.context.dev/install-mcp',
+      permissionKeys: [
+        'pluginOAuthContextDevPermissionSearch',
+        'pluginOAuthContextDevPermissionNews',
+        'pluginOAuthContextDevPermissionScrape',
+        'pluginOAuthContextDevPermissionExtract',
+        'pluginOAuthContextDevPermissionDocuments',
+        'pluginOAuthContextDevPermissionBrand',
+        'pluginOAuthContextDevPermissionScreenshots',
+        'pluginOAuthContextDevPermissionMonitors',
+        'pluginOAuthContextDevPermissionBatch'
+      ],
+      setupKeys: [
+        'pluginOAuthSetupInstall',
+        'pluginOAuthContextDevSetupAuthorize',
+        'pluginOAuthSetupRestart'
+      ],
+      noteKey: 'pluginOAuthContextDevNote'
+    },
+    supplyChain: { source: 'remote-mcp', permissions: ['network', 'secret'] },
+    mcpConfig: () => {
+      const server = buildRemoteMcpServer('https://mcp.context.dev/mcp')
+      // Leave clientId/clientSecret unset so the MCP SDK uses OAuth 2.1
+      // dynamic client registration with PKCE. Credentials stay in Kun's
+      // encrypted MCP OAuth store and never enter mcp.json.
+      server.oauth = {
+        enabled: true,
+        clientName: 'Kun Context.dev Connector',
+        scopes: [],
+        callbackTimeoutMs: 120_000
+      }
+      return { servers: { 'context-dev': server } }
+    }
   },
   {
     id: 'context7',

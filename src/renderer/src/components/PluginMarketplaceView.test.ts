@@ -33,7 +33,8 @@ describe('PluginMarketplaceView MCP config helpers', () => {
       'sequential-thinking',
       'memory',
       'brave-search',
-      'vercel'
+      'vercel',
+      'context-dev'
     ]))
     expect(recommendedMarketplaceItemIds()).not.toContain('google-workspace')
   })
@@ -143,6 +144,36 @@ describe('PluginMarketplaceView MCP config helpers', () => {
         })
       }
     })
+  })
+
+  it('configures Context.dev for streamable HTTP OAuth dynamic registration', () => {
+    const context = RECOMMENDED_ITEMS.find((item) => item.id === 'context-dev')
+    expect(context).toMatchObject({
+      kind: 'mcp',
+      oauth: {
+        docsUrl: 'https://docs.context.dev/install-mcp',
+        permissionKeys: expect.arrayContaining([
+          'pluginOAuthContextDevPermissionSearch',
+          'pluginOAuthContextDevPermissionBatch'
+        ])
+      },
+      supplyChain: { source: 'remote-mcp', permissions: ['network', 'secret'] }
+    })
+    const config = context?.mcpConfig?.('') as { servers: Record<string, Record<string, unknown>> }
+    expect(config.servers['context-dev']).toMatchObject({
+      enabled: true,
+      transport: 'streamable-http',
+      url: 'https://mcp.context.dev/mcp',
+      trustScope: 'user',
+      oauth: {
+        enabled: true,
+        clientName: 'Kun Context.dev Connector',
+        scopes: [],
+        callbackTimeoutMs: 120_000
+      }
+    })
+    expect(config.servers['context-dev']).not.toHaveProperty('oauth.clientId')
+    expect(config.servers['context-dev']).not.toHaveProperty('oauth.clientSecret')
   })
 
   it('rejects non-https remote MCP server URLs', () => {
@@ -531,6 +562,7 @@ describe('URL validation guards', () => {
   it('opens docs only for allowlisted https origins', () => {
     expect(isAllowedDocsUrl('https://vercel.com/docs/agent-resources/vercel-mcp.md')).toBe(true)
     expect(isAllowedDocsUrl('https://developers.google.com/workspace/guides/configure-mcp-servers')).toBe(true)
+    expect(isAllowedDocsUrl('https://docs.context.dev/install-mcp')).toBe(true)
     // Non-https schemes are rejected even on an allowlisted host.
     expect(isAllowedDocsUrl('http://vercel.com/docs')).toBe(false)
     // Off-allowlist origins are rejected even over https.

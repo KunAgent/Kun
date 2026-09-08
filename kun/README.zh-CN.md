@@ -245,6 +245,7 @@ Kun 默认使用混合存储：`threads/{threadId}/messages.jsonl` 与 `events.j
 功能开关是显式设计：
 
 - `capabilities.mcp` 启动配置化 MCP 客户端并将工具加入动态注册表；工作区级服务器要求设置 `trustedWorkspaceRoots`。远程 HTTP/SSE MCP 可配置 `oauth`，Kun 会把 OAuth token 存在数据目录下，而不是写进 config。使用 `GET /v1/mcp/oauth` 可查看脱敏后的 OAuth 状态，使用 `DELETE /v1/mcp/oauth/{serverId}` 可清除某个服务保存的授权。
+- GUI 市场提供 Context.dev 预设，端点为 `https://mcp.context.dev/mcp`，使用 streamable HTTP 和 OAuth 2.1 动态客户端注册 + PKCE。故意不填写 `clientId` 与 `clientSecret`；Token 保存在加密的 MCP OAuth 存储中，不会写入 `mcp.json`。预设说明公开的搜索、新闻、抓取、提取、文档、品牌、截图、监控和批处理能力，不配置尚未发布的 Answers API。网页返回内容在写入提示词或执行副作用前都必须按外部不可信内容处理。
 - GUI 会默认写入由系统托管的 GitHub 官方只读 MCP。连接时 Kun 优先使用 `GITHUB_PAT_TOKEN`，否则读取 `gh auth token` 的登录凭据；两者都不可用时可先运行 `gh auth login`。Kun 会先从标准位置、再从 `PATH` 中安全解析已验证的 `gh`（支持 Nix、asdf、mise、Devbox 与自定义前缀等）；它会解析符号链接、要求目标是普通可执行文件，并且不会把原始 `PATH` 传给子进程。Kun 只在进程内存中实例化 Token，持久化 header 仅保留环境变量引用，不会写入明文。用户在 `~/.kun/mcp.json` 中定义同名 `github` server 时，以用户配置为准。
 - `serve.mcpSearch` 可把大量 MCP 工具收敛为 `mcp_search`、`mcp_describe`、`mcp_call` 和 `mcp_refresh_catalog` 四个入口；当工具目录过大时，模型先检索意图相关工具，再描述和调用具体工具，避免每轮都携带完整 MCP schema。
 - `serve.tokenEconomy` / `tokenEconomyMode` 会压缩工具描述、工具结果和历史上下文；保留代码、路径、命令、URL、错误信号等高价值信息，同时省掉重复、超长或二进制 payload。

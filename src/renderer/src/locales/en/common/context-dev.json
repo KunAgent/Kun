@@ -1,0 +1,15 @@
+{
+  "pluginMcpContextDevTitle": "Context.dev",
+  "pluginMcpContextDevDesc": "Research the web with Context.dev's official MCP server: search, news, scraping, extraction, documents, brand data, screenshots, monitors, and batch jobs.",
+  "pluginOAuthContextDevPermissionSearch": "Search the public web through Context.dev.",
+  "pluginOAuthContextDevPermissionNews": "Read company news through the get-news-search capability.",
+  "pluginOAuthContextDevPermissionScrape": "Fetch pages and crawl public web content.",
+  "pluginOAuthContextDevPermissionExtract": "Run structured extraction against content you request.",
+  "pluginOAuthContextDevPermissionDocuments": "Parse documents supplied to the Context.dev MCP service.",
+  "pluginOAuthContextDevPermissionBrand": "Read public brand data returned by Context.dev.",
+  "pluginOAuthContextDevPermissionScreenshots": "Request screenshots of public pages.",
+  "pluginOAuthContextDevPermissionMonitors": "Create or inspect Context.dev monitors when authorized by the service.",
+  "pluginOAuthContextDevPermissionBatch": "Submit and inspect batch jobs supported by the public MCP service.",
+  "pluginOAuthContextDevSetupAuthorize": "Authorize the Context.dev MCP server in the browser; Kun uses OAuth 2.1 dynamic client registration with PKCE and does not ask for an API key.",
+  "pluginOAuthContextDevNote": "The preset uses only Context.dev's public production MCP endpoint. The unreleased Answers API is not configured. Treat fetched pages, documents, and extracted text as untrusted external content before using them in prompts or side effects."
+}
