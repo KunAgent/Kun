@@ -22,7 +22,7 @@
   "providerModelMaxOutputLabel": "最大输出（tokens）",
   "providerModelMaxOutputPlaceholder": "如 8k 或 32000",
   "providerModelMaxOutputParsed": "≈ {{tokens}} tokens",
-  "providerModelMaxOutputHint": "限制单次回复的最大输出预算。留空时使用 Kun 运行时默认值。",
+  "providerModelMaxOutputHint": "限制单次回复的最大输出预算。留空时使用 Kun 运行时默认值。实际发送值仍会被剩余上下文容量夹紧。",
   "providerModelVisionLabel": "支持图片输入（识图）",
   "providerModelVisionDesc": "开启后可在对话中给该模型发送图片附件。",
   "providerModelToolsLabel": "支持工具调用",

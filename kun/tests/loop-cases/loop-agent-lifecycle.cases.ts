@@ -15,6 +15,7 @@ import { COMPACTION_SYSTEM_PROMPT } from '../../src/loop/compaction-summary.js'
 import { effectiveHistoryAfterLatestCompaction } from '../../src/loop/compaction-history.js'
 import { resolveModelContextProfile } from '../../src/loop/model-context-profile.js'
 import { modelRequestContextText } from '../../src/loop/model-request-context.js'
+import { estimateModelRequestInputTokens } from '../../src/loop/model-request-estimator.js'
 import { isPlanClarifyingQuestion } from '../../src/loop/agent-loop.js'
 import { LoopTelemetry } from '../../src/loop/loop-telemetry.js'
 import {
@@ -457,8 +458,9 @@ describe('AgentLoop', () => {
       createThreadRecord({ id: h.threadId, title: 'demo', workspace: '/tmp', model: 'deadzone' })
     )
     // ~725k estimated input tokens stays below the 750k soft threshold. The
-    // advertised 131072 capability must not be reserved in full; ordinary
-    // requests use the bounded 32768-token reservation.
+    // advertised 131072 capability must not be reserved in full for
+    // compaction, but it is still forwarded as the request's `max_tokens`,
+    // clamped only to the remaining room under the 850k hard cap.
     const chunk = '工'.repeat(6_050)
     for (let index = 0; index < 120; index += 1) {
       await h.sessionStore.appendItem(h.threadId, makeUserItem({
@@ -478,7 +480,11 @@ describe('AgentLoop', () => {
 
     expect(requests).toHaveLength(1)
     expect(requests[0]?.history[0]).toMatchObject({ kind: 'user_message' })
-    expect(requests[0]?.maxTokens).toBe(32_768)
+    const sentInputTokens = estimateModelRequestInputTokens(requests[0]!)
+    const expectedMaxTokens = Math.min(131_072, 850_000 - sentInputTokens)
+    expect(requests[0]?.maxTokens).toBe(expectedMaxTokens)
+    expect(expectedMaxTokens).toBeGreaterThan(32_768)
+    expect(sentInputTokens + expectedMaxTokens).toBeLessThanOrEqual(850_000)
     const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
     expect(events.some((event) =>
       event.kind === 'error' && event.code === 'context_window_exceeded'
@@ -491,7 +497,8 @@ describe('AgentLoop', () => {
       kind: 'pipeline_stage',
       stage: 'input_compressed',
       details: expect.objectContaining({
-        outputBudgetTokens: 32_768,
+        outputBudgetTokens: expectedMaxTokens,
+        outputReserveTokens: 32_768,
         requestHardCapTokens: 850_000,
         fallbackCompactionAttempted: false
       })
@@ -551,7 +558,11 @@ describe('AgentLoop', () => {
     const afterSecond = await h.sessionStore.loadEventsSince(h.threadId, 0)
     expect(afterSecond.filter((event) => event.kind === 'compaction_completed')).toHaveLength(1)
     const mainRequests = requests.filter((request) => request.systemPrompt !== COMPACTION_SYSTEM_PROMPT)
-    expect(mainRequests.at(-1)).toMatchObject({ maxTokens: 32_768 })
+    const lastMainRequest = mainRequests.at(-1)!
+    const sentInputTokens = estimateModelRequestInputTokens(lastMainRequest)
+    const expectedMaxTokens = Math.min(500_000, 217_600 - sentInputTokens)
+    expect(lastMainRequest.maxTokens).toBe(expectedMaxTokens)
+    expect(sentInputTokens + expectedMaxTokens).toBeLessThanOrEqual(217_600)
     expect(mainRequests.at(-1)?.history.some((item) =>
       item.kind === 'user_message' && item.text === 'small follow-up after compaction'
     )).toBe(true)

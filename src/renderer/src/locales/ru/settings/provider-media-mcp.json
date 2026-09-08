@@ -22,7 +22,7 @@
   "providerModelMaxOutputLabel": "Макс. вывод (токены)",
   "providerModelMaxOutputPlaceholder": "например 8k или 32000",
   "providerModelMaxOutputParsed": "≈ {{tokens}} токенов",
-  "providerModelMaxOutputHint": "Ограничивает бюджет вывода одного ответа. Оставьте пустым, чтобы использовать значение по умолчанию среды выполнения Kun.",
+  "providerModelMaxOutputHint": "Ограничивает бюджет вывода одного ответа. Оставьте пустым, чтобы использовать значение по умолчанию среды выполнения Kun. Отправляемое значение всё равно ограничивается оставшейся ёмкостью контекстного окна.",
   "providerModelVisionLabel": "Ввод изображений (зрение)",
   "providerModelVisionDesc": "Разрешить отправку изображений этой модели в чате.",
   "providerModelToolsLabel": "Вызов инструментов",

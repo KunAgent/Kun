@@ -61,7 +61,7 @@ import { modelCapabilitiesForModel } from './model-context-profile.js'
 import type { ModelRoundEngine } from './model-round-engine.js'
 import { modelClientDiagnostics } from './model-client-diagnostics.js'
 import { recoverModelContextOverflow } from './model-context-overflow-recovery.js'
-import { composeModelRequest, effectiveOutputBudgetTokens } from './model-request-composer.js'
+import { composeModelRequest, effectiveOutputBudgetTokens, ordinaryOutputReserveTokens } from './model-request-composer.js'
 import { estimateModelRequestInputTokenBreakdown } from './model-request-estimator.js'
 import type { ModelRoutingService } from './model-routing-service.js'
 import {
@@ -210,35 +210,35 @@ export class ModelStepService extends ModelStepPreparationService {
       ...(this.deps.tokenEconomy ? { tokenEconomy: this.deps.tokenEconomy } : {}),
       signal
     }).sentInputTokens
-    // Share one capacity model between the compaction preflight and the
-    // send-time guard. `maxOutputTokens` is a capability ceiling, so first
-    // derive the bounded ordinary reservation independently from the current
-    // input. Final request construction may only lower this preferred value
-    // when the rebuilt request leaves less room under the hard cap.
+    // The compaction reservation and the forwarded `max_tokens` differ: the
+    // reservation stays bounded (huge capabilities must not force compaction
+    // every request), while the forwarded value honors the configured limit.
     const declaredOutputBudgetTokens = modelCapabilities.maxOutputTokens
     const requestHardCapTokens = modelCapabilities.contextWindowTokens
       ? Math.floor(modelCapabilities.contextWindowTokens * 0.85)
       : this.deps.compactor.hardCap(model, providerId)
-    const preferredOutputBudgetTokens =
+    const declaredOutputBudgetAbsent =
       modelCapabilities.endpointFormat === 'messages' && declaredOutputBudgetTokens === undefined
+    const outputReserveTokens = declaredOutputBudgetAbsent
+      ? 0
+      : ordinaryOutputReserveTokens({
+          inputTokens: 0,
+          contextCapTokens: requestHardCapTokens,
+          ...(declaredOutputBudgetTokens !== undefined
+            ? { declaredMaxOutputTokens: declaredOutputBudgetTokens }
+            : {})
+        })
+    const effectiveBudget = (inputTokens: number): number =>
+      declaredOutputBudgetAbsent
         ? 0
         : effectiveOutputBudgetTokens({
-            inputTokens: 0,
+            inputTokens,
             contextCapTokens: requestHardCapTokens,
             ...(declaredOutputBudgetTokens !== undefined
               ? { declaredMaxOutputTokens: declaredOutputBudgetTokens }
               : {})
           })
-    const effectiveBudget = (inputTokens: number): number =>
-      preferredOutputBudgetTokens === 0
-        ? 0
-        : effectiveOutputBudgetTokens({
-            inputTokens,
-            contextCapTokens: requestHardCapTokens,
-            declaredMaxOutputTokens: preferredOutputBudgetTokens,
-            fallbackTokens: preferredOutputBudgetTokens
-          })
-    let outputBudgetTokens = preferredOutputBudgetTokens
+    let outputBudgetTokens = outputReserveTokens
     // History compaction retries from the latest canonical snapshot to avoid
     // losing concurrent writes. That snapshot deliberately retains internal
     // goal records, including records for goals that later ended or changed.
@@ -352,7 +352,7 @@ export class ModelStepService extends ModelStepPreparationService {
         toolSpecs: requestToolSpecs,
         requestOverheadTokens,
         requestInputTokens: inputTokens,
-        outputBudgetTokens,
+        outputBudgetTokens: outputReserveTokens,
         requestHardCapTokens,
         allowModelSummary: false,
         reserveModelRequest: () => this.deps.budgetGate.reserveAdditionalModelRequest(threadId, turnId)
@@ -443,6 +443,7 @@ export class ModelStepService extends ModelStepPreparationService {
       historyItems: composedRequest.request.history.length,
       requestOverheadTokens,
       outputBudgetTokens,
+      outputReserveTokens,
       requestHardCapTokens,
       fallbackCompactionAttempted,
       fallbackCompactionApplied
@@ -454,11 +455,13 @@ export class ModelStepService extends ModelStepPreparationService {
     const requestContext = estimateModelRequestInputTokenBreakdown(request, {
       skillContextInstructions
     })
-    // Tool results become input to the *next* request. Reserve the configured
-    // output budget now so built-in source tools can return the largest honest
-    // page that has a realistic chance of fitting instead of relying on the
-    // send-time history cleaner to silently rewrite it.
-    const sourceResultBudgetTokens = Math.max(0, requestHardCapTokens - inputTokens - outputBudgetTokens)
+    // Tool results become input to the *next* request. Reserve the bounded
+    // ordinary reservation (not the possibly larger forwarded `max_tokens`) so
+    // built-in source tools can return the largest honest page that has a
+    // realistic chance of fitting instead of relying on the send-time history
+    // cleaner to silently rewrite it.
+    const sourceResultBudgetTokens =
+      Math.max(0, requestHardCapTokens - inputTokens - outputReserveTokens)
     const contextThresholds = this.deps.compactor.thresholds(model, providerId)
     const contextWindowTokens = modelCapabilities.contextWindowTokens ??
       Math.max(contextThresholds.softThreshold, contextThresholds.hardThreshold)

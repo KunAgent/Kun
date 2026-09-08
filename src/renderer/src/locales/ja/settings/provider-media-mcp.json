@@ -22,7 +22,7 @@
   "providerModelMaxOutputLabel": "最大出力（トークン）",
   "providerModelMaxOutputPlaceholder": "例: 8kまたは32000",
   "providerModelMaxOutputParsed": "≈ {{tokens}} tokens",
-  "providerModelMaxOutputHint": "1 つの応答の出力バジェットに上限を設けます。 Kun のランタイムのデフォルトを使用するには、空のままにしておきます。",
+  "providerModelMaxOutputHint": "1 つの応答の出力バジェットに上限を設けます。Kun のランタイムのデフォルトを使用するには空のままにします。実際に送信される値は残りのコンテキスト容量で制限されます。",
   "providerModelVisionLabel": "画像入力（ビジョン）",
   "providerModelVisionDesc": "チャットでこのモデルに画像添付ファイルを送信できるようにします。",
   "providerModelToolsLabel": "ツール呼び出し",

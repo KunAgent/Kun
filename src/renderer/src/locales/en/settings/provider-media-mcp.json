@@ -22,7 +22,7 @@
   "providerModelMaxOutputLabel": "Max output (tokens)",
   "providerModelMaxOutputPlaceholder": "e.g. 8k or 32000",
   "providerModelMaxOutputParsed": "≈ {{tokens}} tokens",
-  "providerModelMaxOutputHint": "Caps one response's output budget. Leave empty to use Kun's runtime default.",
+  "providerModelMaxOutputHint": "Caps one response's output budget. Leave empty to use Kun's runtime default. The sent value is still clamped to the remaining context window capacity.",
   "providerModelVisionLabel": "Image input (vision)",
   "providerModelVisionDesc": "Allow sending image attachments to this model in chat.",
   "providerModelToolsLabel": "Tool calling",

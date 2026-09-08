@@ -74,8 +74,7 @@ describe('AgentLoop', () => {
         createThreadRecord({ id: h.threadId, title: 'demo', workspace: '/tmp', model: 'image-fallback' })
       )
       // Preflight lands just below the soft threshold and image rehydration
-      // adds a fixed vision allowance. The 131,072 model capability remains a
-      // 32,768-token ordinary reservation, so history stays intact.
+      // adds a fixed vision allowance, so history stays intact.
       for (let index = 0; index < 119; index += 1) {
         await h.sessionStore.appendItem(h.threadId, makeUserItem({
           id: `image_old_${index}`,
@@ -115,9 +114,11 @@ describe('AgentLoop', () => {
       await expect(h.loop.runTurn(h.threadId, h.turnId)).resolves.toBe('completed')
 
       expect(requests).toHaveLength(1)
-      // History stays intact because the advertised maximum is not reserved.
-      expect(requests[0]?.history[0]).toMatchObject({ kind: 'user_message' })
-      expect(requests[0]?.maxTokens).toBe(32_768)
+      const request = requests[0]!
+      expect(request.history[0]).toMatchObject({ kind: 'user_message' })
+      // Forwarded max_tokens honors the declared capability, not the 32,768 reserve.
+      expect(request.maxTokens).toBeGreaterThan(32_768)
+      expect(request.maxTokens).toBeLessThanOrEqual(131_072)
       const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
       expect(events.some((event) =>
         event.kind === 'error' && event.code === 'context_window_exceeded'
@@ -130,7 +131,7 @@ describe('AgentLoop', () => {
         kind: 'pipeline_stage',
         stage: 'input_compressed',
         details: expect.objectContaining({
-          outputBudgetTokens: 32_768,
+          outputBudgetTokens: request.maxTokens,
           requestHardCapTokens: 850_000,
           fallbackCompactionAttempted: false
         })

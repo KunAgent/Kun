@@ -164,11 +164,14 @@ request id、计划身份和定时任务指纹处理任务切换与重启恢复�
   保留选中对象和可见文字，并使用 renderer 的规范 `textContent` 字段。Renderer 对已完成
   Work turn 的 canvas tool result 做 keyed durable replay，覆盖画布加载与 turn 结束竞态。
 - 自动压缩同时考虑输入压力和请求总预算：压缩触发不仅比较历史/请求输入与
-  soft/hard 输入阈值，还会把为模型输出保留的预算（`maxOutputTokens`）计入
+  soft/hard 输入阈值，还会把压缩预留（有界的普通输出预留，默认 32768）计入
   `input + output` 总预算，并与发送前硬上限（上下文窗口的 85% 或模型
-  profile 的 hard threshold）对齐。这样输入尚未达到软阈值、但加上输出预算
-  已经突破发送上限（例如 1M 窗口 + 131072 输出预算）时，会在发送前强制
-  压缩，而不是在发送校验处直接失败。
+  profile 的 hard threshold）对齐。这样输入尚未达到软阈值、但加上压缩预留
+  已经突破发送上限时，会在发送前强制压缩，而不是在发送校验处直接失败。
+  压缩预留与真正发送的 `max_tokens` 是两个独立的值：预留保持有界，避免模型
+  catalog 把整个上下文窗口当作输出上限（例如 500k）时每次请求都触发压缩；
+  发送值则采用用户配置的模型输出上限（`maxOutputTokens`），仅按硬上限的剩余
+  容量夹紧，因此设置里调大「最大输出」会真正生效。
 - 最终请求只允许一次启发式兜底压缩：重新构造（图片/浏览器转发、token
   economy、history hygiene）后的精确请求若仍超出 `input + output` 上限，
   会基于最新持久化历史再做一次确定性启发式压缩（不调用 summary 模型、不
