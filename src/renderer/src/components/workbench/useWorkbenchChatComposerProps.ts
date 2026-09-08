@@ -71,6 +71,7 @@ type UseWorkbenchChatComposerPropsInput = {
   disabledSkillIds: ComposerProps['disabledSkillIds']
   handlePickAttachments: NonNullable<ComposerProps['onPickAttachments']>
   handlePasteClipboardImage: NonNullable<ComposerProps['onPasteClipboardImage']>
+  handlePasteLongText: NonNullable<ComposerProps['onPasteLongText']>
   removeComposerAttachment: ComposerProps['onRemoveAttachment']
   addComposerFileReference: NonNullable<ComposerProps['onAddFileReference']>
   pickComposerFileReferences: () => void | Promise<unknown>
@@ -161,6 +162,7 @@ export function useWorkbenchChatComposerProps({
   disabledSkillIds,
   handlePickAttachments,
   handlePasteClipboardImage,
+  handlePasteLongText,
   removeComposerAttachment,
   addComposerFileReference,
   pickComposerFileReferences,
@@ -260,6 +262,7 @@ export function useWorkbenchChatComposerProps({
     disabledSkillIds,
     onPickAttachments: (files) => void handlePickAttachments(files),
     onPasteClipboardImage: (options) => void handlePasteClipboardImage(options),
+    onPasteLongText: (text) => void handlePasteLongText(text),
     onRemoveAttachment: removeComposerAttachment,
     onAddFileReference: addComposerFileReference,
     onPickFileReferences: () => void pickComposerFileReferences(),
@@ -407,6 +410,7 @@ export function useWorkbenchChatComposerProps({
     disabledSkillIds,
     handleGuiPlanCommand,
     handlePasteClipboardImage,
+    handlePasteLongText,
     handlePickAttachments,
     handleSend,
     guideQueuedMessage,

@@ -75,6 +75,7 @@ export function DesignConversationContent({
   contextChips,
   onPickAttachments,
   onPasteClipboardImage,
+  onPasteLongText,
   onRemoveAttachment,
   onRemoveContextChip,
   onSend,
@@ -119,6 +120,7 @@ export function DesignConversationContent({
   contextChips?: DesignComposerContext[]
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
+  onPasteLongText?: (text: string) => void | Promise<void>
   onRemoveAttachment?: (id: string) => void
   onRemoveContextChip?: (id: string) => void
   onSend: () => void
@@ -481,6 +483,7 @@ export function DesignConversationContent({
             contextChips={contextChips}
             onPickAttachments={onPickAttachments}
             onPasteClipboardImage={onPasteClipboardImage}
+            onPasteLongText={onPasteLongText}
             onRemoveAttachment={onRemoveAttachment}
             onRemoveContextChip={onRemoveContextChip}
             onSend={onSend}

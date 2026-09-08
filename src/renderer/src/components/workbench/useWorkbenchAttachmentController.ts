@@ -19,7 +19,7 @@ import {
   composerFileReferenceFromPath,
   type ComposerFileReference
 } from '../../lib/composer-file-references'
-import { uploadRuntimeAttachment } from '../../lib/runtime-attachment'
+import { uploadRuntimeAttachment, uploadRuntimePastedText } from '../../lib/runtime-attachment'
 
 export type WorkbenchAttachmentControllerOptions = {
   attachmentUploadEnabled: boolean
@@ -237,6 +237,30 @@ export function useWorkbenchAttachmentController({
     }
   }
 
+  async function handlePasteLongText(text: string): Promise<void> {
+    if (!attachmentUploadEnabled) return
+    const attachmentScope = getAttachmentScope()
+    setAttachmentUploadBusy(true)
+    setAttachmentUploadError(null)
+    try {
+      const workspace = getActiveWorkspace()
+      const reference = await uploadRuntimePastedText({
+        text,
+        ...(activeThreadId ? { threadId: activeThreadId } : {}),
+        ...(workspace ? { workspace } : {})
+      })
+      setComposerAttachmentsForScope(attachmentScope, (current) => {
+        const byId = new Map(current.map((item) => [item.id, item]))
+        byId.set(reference.id, reference)
+        return [...byId.values()]
+      })
+    } catch (error) {
+      setAttachmentUploadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setAttachmentUploadBusy(false)
+    }
+  }
+
   function removeComposerAttachment(id: string): void {
     setComposerAttachments((current) => current.filter((attachment) => attachment.id !== id))
   }
@@ -288,6 +312,7 @@ export function useWorkbenchAttachmentController({
   return {
     handlePickAttachments,
     handlePasteClipboardImage,
+    handlePasteLongText,
     removeComposerAttachment
   }
 }

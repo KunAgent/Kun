@@ -194,6 +194,7 @@ export type FloatingComposerProps = {
   disabledSkillIds?: string[]
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
+  onPasteLongText?: (text: string) => void | Promise<void>
   onRemoveAttachment?: (id: string) => void
   onRemoveContextChip?: (id: string) => void
   onAddFileReference?: (reference: ComposerFileReference) => void

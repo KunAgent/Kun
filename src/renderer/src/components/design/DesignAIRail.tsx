@@ -59,6 +59,7 @@ type Props = {
   contextChips?: DesignComposerContext[]
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
+  onPasteLongText?: (text: string) => void | Promise<void>
   onRemoveAttachment?: (id: string) => void
   onRemoveContextChip?: (id: string) => void
   onSend: () => void
@@ -107,6 +108,7 @@ function DesignAIRailInner({
   contextChips = [],
   onPickAttachments,
   onPasteClipboardImage,
+  onPasteLongText,
   onRemoveAttachment,
   onRemoveContextChip,
   onSend,
@@ -244,6 +246,7 @@ function DesignAIRailInner({
         contextChips={contextChips}
         onPickAttachments={onPickAttachments}
         onPasteClipboardImage={onPasteClipboardImage}
+        onPasteLongText={onPasteLongText}
         onRemoveAttachment={onRemoveAttachment}
         onRemoveContextChip={onRemoveContextChip}
         onSend={onSend}

@@ -351,6 +351,8 @@
   "composerPdfAttachmentNoText": "PDF นี้ไม่มีข้อความที่แยกได้ และ OCR ในตัวตรวจไม่พบข้อความที่อ่านได้ ลองสแกนให้ชัดเจนยิ่งขึ้นหรือวางหน้าที่เกี่ยวข้อง",
   "composerAttachmentUnsupportedType": "สามารถแนบไฟล์ PNG, JPEG, WebP และ PDF ได้ที่นี่เท่านั้น",
   "composerRemoveAttachment": "ลบไฟล์แนบ",
+  "composerPastedText": "ข้อความที่วาง",
+  "composerAttachmentTruncated": "เนื้อหาถูกตัดทอน",
   "composerMentionMenuTitle": "กล่าวถึงบริบท",
   "composerFileMentionMenuTitle": "ไฟล์และโฟลเดอร์",
   "composerKnowledgeMentionEmpty": "ยังไม่ได้เชื่อมต่อฐานความรู้ โปรดเพิ่มจากตัวเลือกฐานความรู้ใต้ช่องข้อความ",

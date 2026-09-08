@@ -13,10 +13,20 @@ describe('runtimeDocumentAttachmentUploadPayloadSchema', () => {
       threadId: 'thr_1',
       workspace: 'D:\\kun'
     })
-    expect(windowsPayload.path).toBe('C:\\Users\\tester\\Desktop\\spec.pdf')
+    expect(windowsPayload).toMatchObject({ path: 'C:\\Users\\tester\\Desktop\\spec.pdf' })
     expect(runtimeDocumentAttachmentUploadPayloadSchema.parse({
       path: '/Users/tester/spec.pdf'
-    }).path).toBe('/Users/tester/spec.pdf')
+    })).toMatchObject({ path: '/Users/tester/spec.pdf' })
+  })
+
+  it('accepts temporary text but rejects ambiguous source input', () => {
+    expect(runtimeDocumentAttachmentUploadPayloadSchema.parse({
+      temporaryText: 'pasted body'
+    })).toMatchObject({ temporaryText: 'pasted body' })
+    expect(() => runtimeDocumentAttachmentUploadPayloadSchema.parse({
+      path: '/tmp/paste.txt',
+      temporaryText: 'pasted body'
+    })).toThrow()
   })
 
   it('rejects relative paths and unexpected keys', () => {

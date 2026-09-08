@@ -20,6 +20,50 @@ export type ComposerClipboardImageSource = ComposerImageTransferSource & {
   getData?: (format: string) => string
 }
 
+export const LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS = 10_000
+
+export function isPastedTextAttachment(attachment: AttachmentReference): boolean {
+  return attachment.documentFormat === 'text' && /^pasted-text-.*\.txt$/u.test(attachment.name ?? '')
+}
+
+function PastedTextAttachmentCard({
+  attachment,
+  onRemoveAttachment
+}: {
+  attachment: AttachmentReference
+  onRemoveAttachment?: (id: string) => void
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const title = attachment.textPreview || attachment.name || attachment.id
+  return (
+    <span
+      className="ds-no-drag relative inline-flex h-20 w-[min(28rem,100%)] items-center gap-3 rounded-[14px] border border-ds-border-muted bg-ds-card px-3 pr-9 shadow-sm"
+      title={title}
+    >
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-ds-subtle text-ds-muted">
+        <FileText className="h-6 w-6" strokeWidth={1.7} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-semibold text-ds-ink">{title}</span>
+        <span className="mt-1 block truncate text-[12px] font-medium text-ds-muted">
+          {t('composerPastedText')}{attachment.truncated ? ` · ${t('composerAttachmentTruncated')}` : ''}
+        </span>
+      </span>
+      {onRemoveAttachment ? (
+        <button
+          type="button"
+          onClick={() => onRemoveAttachment(attachment.id)}
+          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-focus"
+          aria-label={t('composerRemoveAttachment')}
+          title={t('composerRemoveAttachment')}
+        >
+          <X className="h-3 w-3" strokeWidth={2.2} />
+        </button>
+      ) : null}
+    </span>
+  )
+}
+
 function AttachmentImagePreview({
   attachment,
   onRemoveAttachment
@@ -89,7 +133,13 @@ export const FloatingComposerAttachments = memo(function FloatingComposerAttachm
   return (
     <div className="flex flex-wrap items-center gap-2 px-1">
       {attachments.map((attachment) => (
-        attachment.previewUrl ? (
+        isPastedTextAttachment(attachment) ? (
+          <PastedTextAttachmentCard
+            key={attachment.id}
+            attachment={attachment}
+            onRemoveAttachment={onRemoveAttachment}
+          />
+        ) : attachment.previewUrl ? (
           <AttachmentImagePreview
             key={attachment.id}
             attachment={attachment}
@@ -214,22 +264,25 @@ export function imageTransferHasImages(source: ComposerImageTransferSource | nul
   )
 }
 
-export function handleComposerImagePaste({
+export function handleComposerAttachmentPaste({
   canPickAttachment,
   clipboardData,
   preventDefault,
   onPickAttachments,
-  onPasteClipboardImage
+  onPasteClipboardImage,
+  onPasteLongText
 }: {
   canPickAttachment: boolean
   clipboardData: ComposerClipboardImageSource
   preventDefault: () => void
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
+  onPasteLongText?: (text: string) => void | Promise<void>
 }): boolean {
-  if (!canPickAttachment || (!onPickAttachments && !onPasteClipboardImage)) return false
+  if (!canPickAttachment || (!onPickAttachments && !onPasteClipboardImage && !onPasteLongText)) return false
   const files = imageFilesFromTransfer(clipboardData)
-  const hasPlainText = Boolean(clipboardData.getData?.('text/plain'))
+  const plainText = clipboardData.getData?.('text/plain') ?? ''
+  const hasPlainText = Boolean(plainText)
   const hasImageTransfer = imageTransferHasImages(clipboardData)
   if (files.length > 0) {
     preventDefault()
@@ -240,6 +293,11 @@ export function handleComposerImagePaste({
     onPickAttachments?.(files)
     return true
   }
+  if (!hasImageTransfer && plainText.length > LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS && onPasteLongText) {
+    preventDefault()
+    void onPasteLongText(plainText)
+    return true
+  }
   if (!onPasteClipboardImage) return false
 
   const shouldPreventDefault = !hasPlainText || hasImageTransfer
@@ -247,3 +305,5 @@ export function handleComposerImagePaste({
   void onPasteClipboardImage({ silentNoImage: !shouldPreventDefault })
   return shouldPreventDefault
 }
+
+export const handleComposerImagePaste = handleComposerAttachmentPaste

@@ -9,6 +9,7 @@ import {
   calculateContextCapacityPopoverPlacement,
   formatGoalElapsedSeconds,
   handleComposerImagePaste,
+  LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS,
   imageFilesFromTransfer,
   imageTransferHasImages,
   parseCompactCommand,
@@ -225,6 +226,61 @@ describe('FloatingComposer image transfer helpers', () => {
     expect(onPasteClipboardImage).toHaveBeenCalledWith({ silentNoImage: true })
   })
 
+  it('turns only text over the long-paste threshold into an attachment', () => {
+    const preventDefault = vi.fn()
+    const onPasteLongText = vi.fn()
+    const atThreshold = 'x'.repeat(LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS)
+    expect(handleComposerImagePaste({
+      canPickAttachment: true,
+      clipboardData: { getData: () => atThreshold },
+      preventDefault,
+      onPasteLongText
+    })).toBe(false)
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(onPasteLongText).not.toHaveBeenCalled()
+
+    const longText = `${atThreshold}x`
+    expect(handleComposerImagePaste({
+      canPickAttachment: true,
+      clipboardData: { getData: () => longText },
+      preventDefault,
+      onPasteLongText
+    })).toBe(true)
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(onPasteLongText).toHaveBeenCalledWith(longText)
+  })
+
+  it('keeps image paste priority when clipboard text is also long', () => {
+    const screenshot = new File([new Uint8Array([1])], 'shot.png', { type: 'image/png' })
+    const onPasteClipboardImage = vi.fn()
+    const onPasteLongText = vi.fn()
+    expect(handleComposerImagePaste({
+      canPickAttachment: true,
+      clipboardData: {
+        getData: () => 'x'.repeat(LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS + 1),
+        items: { length: 1, 0: { kind: 'file', type: 'image/png', getAsFile: () => screenshot } }
+      },
+      preventDefault: vi.fn(),
+      onPasteClipboardImage,
+      onPasteLongText
+    })).toBe(true)
+    expect(onPasteClipboardImage).toHaveBeenCalledWith({ silentNoImage: false })
+    expect(onPasteLongText).not.toHaveBeenCalled()
+  })
+
+  it('does not intercept long text while attachments are unavailable', () => {
+    const preventDefault = vi.fn()
+    const onPasteLongText = vi.fn()
+    expect(handleComposerImagePaste({
+      canPickAttachment: false,
+      clipboardData: { getData: () => 'x'.repeat(LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS + 1) },
+      preventDefault,
+      onPasteLongText
+    })).toBe(false)
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(onPasteLongText).not.toHaveBeenCalled()
+  })
+
   it('falls back to the Electron clipboard image bridge when files are unavailable', () => {
     const preventDefault = vi.fn()
     const onPasteClipboardImage = vi.fn()
@@ -240,6 +296,35 @@ describe('FloatingComposer image transfer helpers', () => {
     expect(handled).toBe(true)
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(onPasteClipboardImage).toHaveBeenCalledWith({ silentNoImage: false })
+  })
+})
+
+describe('FloatingComposer pasted text card', () => {
+  it('renders the pasted-text summary and truncation state without changing ordinary documents', () => {
+    const pasted = renderToStaticMarkup(createElement(FloatingComposer, {
+      input: '', setInput: vi.fn(), mode: 'agent', setMode: vi.fn(), busy: false,
+      runtimeReady: true, hasActiveThread: true, composerModel: 'auto', composerPickList: [],
+      onComposerModelChange: vi.fn(), queuedMessages: [], onRemoveQueuedMessage: vi.fn(),
+      attachments: [{
+        id: 'att_text', kind: 'document', name: 'pasted-text-20260908-123456.txt',
+        documentFormat: 'text', textPreview: 'first pasted line', truncated: true
+      }],
+      attachmentUploadEnabled: true, onRemoveAttachment: vi.fn(), onSend: vi.fn(), onInterrupt: vi.fn()
+     }))
+    expect(pasted).toContain('first pasted line')
+    expect(pasted).toContain('Pasted text')
+    expect(pasted).toContain('Content truncated')
+    expect(pasted).toContain('aria-label="Remove attachment"')
+
+    const ordinary = renderToStaticMarkup(createElement(FloatingComposer, {
+      input: '', setInput: vi.fn(), mode: 'agent', setMode: vi.fn(), busy: false,
+      runtimeReady: true, hasActiveThread: true, composerModel: 'auto', composerPickList: [],
+      onComposerModelChange: vi.fn(), queuedMessages: [], onRemoveQueuedMessage: vi.fn(),
+      attachments: [{ id: 'att_pdf', kind: 'document', name: 'spec.pdf', documentFormat: 'pdf' }],
+      attachmentUploadEnabled: true, onSend: vi.fn(), onInterrupt: vi.fn()
+    }))
+    expect(ordinary).toContain('spec.pdf')
+    expect(ordinary).not.toContain('Pasted text')
   })
 })
 

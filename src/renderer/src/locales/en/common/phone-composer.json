@@ -381,6 +381,7 @@
   "composerPdfAttachmentNoText": "This PDF has no extractable text and the built-in OCR could not detect readable text. Try a clearer scan or paste the relevant pages.",
   "composerAttachmentUnsupportedType": "Only PNG, JPEG, WebP, and PDF files can be attached here.",
   "composerRemoveAttachment": "Remove attachment",
+  "composerPastedText": "Pasted text", "composerAttachmentTruncated": "Content truncated",
   "composerMentionMenuTitle": "Mention context",
   "composerFileMentionMenuTitle": "Files & folders",
   "composerKnowledgeMentionEmpty": "No knowledge base is mounted. Use the Knowledge Base picker below the composer to add one.",

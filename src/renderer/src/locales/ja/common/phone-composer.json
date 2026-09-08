@@ -351,6 +351,8 @@
   "composerPdfAttachmentNoText": "この PDF には抽出可能なテキストが含まれておらず、内蔵 OCR は読み取り可能なテキストを検出できませんでした。より鮮明なスキャンを試すか、関連するページを貼り付けてください。",
   "composerAttachmentUnsupportedType": "ここに添付できるのは、PNG、JPEG、WebP、PDF ファイルのみです。",
   "composerRemoveAttachment": "添付ファイルを削除する",
+  "composerPastedText": "貼り付けたテキスト",
+  "composerAttachmentTruncated": "内容は切り詰められました",
   "composerMentionMenuTitle": "コンテキストをメンション",
   "composerFileMentionMenuTitle": "ファイルとフォルダー",
   "composerKnowledgeMentionEmpty": "ナレッジベースがマウントされていません。入力欄の下にあるナレッジベース選択から追加してください。",

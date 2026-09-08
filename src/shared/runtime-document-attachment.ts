@@ -14,13 +14,11 @@ export type RuntimeDocumentFormat =
   | 'xml'
 
 /**
- * Document uploads always carry a local absolute path: the main process reads
- * the bytes and forwards them to the runtime over HTTP directly, so large
- * PDF/Office files never travel through the size-capped `runtime:request`
- * IPC body as inline base64.
+ * Local documents are read by the main process. Pasted text is materialized
+ * there as a short-lived file so neither form crosses the generic runtime IPC
+ * body as renderer-created base64.
  */
-export type RuntimeDocumentAttachmentUploadRequest = {
-  path: string
+type RuntimeDocumentAttachmentUploadBase = {
   name?: string
   mimeType?: string
   documentText?: string
@@ -31,6 +29,11 @@ export type RuntimeDocumentAttachmentUploadRequest = {
   threadId?: string
   workspace?: string
 }
+
+export type RuntimeDocumentAttachmentUploadRequest = RuntimeDocumentAttachmentUploadBase & (
+  | { path: string; temporaryText?: never }
+  | { temporaryText: string; path?: never }
+)
 
 export type RuntimeDocumentAttachmentUploadResult =
   | { ok: true; attachment: RuntimeImageAttachmentMetadata }

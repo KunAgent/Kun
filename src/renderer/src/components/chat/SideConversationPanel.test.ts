@@ -271,7 +271,42 @@ describe('SideConversationPanel', () => {
     act(() => renderer!.unmount())
   })
 
-  it('passes draft images to branch creation without changing main attachments', async () => {
+  it('uploads pasted text only to the active branch without requiring image support', async () => {
+const uploadRuntimeDocumentAttachment = vi.fn(async (request: { temporaryText: string; name: string; threadId: string }) => ({
+ok: true as const,
+attachment: {
+id: 'att-side-text', name: request.name, kind: 'document' as const, mimeType: 'text/plain',
+byteSize: request.temporaryText.length, hash: 'hash', documentFormat: 'text' as const,
+threadIds: [request.threadId], workspaces: ['/workspace'], createdAt: 't0', updatedAt: 't0'
+}
+}))
+Object.assign(globalThis.window.kunGui, { uploadRuntimeDocumentAttachment })
+let renderer: ReactTestRenderer
+await act(async () => {
+renderer = create(createElement(SideConversationPanel, {
+variant: 'docked', attachmentStoreAvailable: true
+}))
+})
+
+const composer = renderer!.root.findByType(FloatingComposer)
+const text = 'x'.repeat(10_001)
+await act(async () => {
+await composer.props.onPasteLongText(text)
+})
+expect(uploadRuntimeDocumentAttachment).toHaveBeenCalledWith(expect.objectContaining({
+temporaryText: text,
+threadId: 'side-1'
+}))
+expect(useChatStore.getState().sideConversations['side-1'].attachments).toEqual([
+expect.objectContaining({
+id: 'att-side-text', kind: 'document', documentFormat: 'text'
+})
+])
+expect(useChatStore.getState().sideConversations['side-1'].attachments[0]).not.toHaveProperty('documentText')
+act(() => renderer!.unmount())
+})
+
+it('passes draft images to branch creation without changing main attachments', async () => {
     const spawnSideConversation = vi.fn(async () => 'side-new')
     const uploadRuntimeImageAttachment = vi.fn(async () => ({
       ok: true as const,

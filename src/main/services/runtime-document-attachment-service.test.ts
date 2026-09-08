@@ -1,4 +1,4 @@
-import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -67,6 +67,67 @@ describe('runtime document attachment service', () => {
     expect(upload.documentText).toBe('PDF body')
     expect(upload.pageCount).toBe(2)
     expect(runtimeRequest.mock.calls.every((call) => call[0] !== 'runtime:request')).toBe(true)
+  })
+
+  it('materializes pasted text only while uploading and omits its temporary path', async () => {
+    const text = '第一行 pasted text\nsecond line'
+    let temporaryPath = ''
+    const runtimeRequest = vi.fn(async (_path: string, _method?: string, body?: string) => {
+      const upload = JSON.parse(body ?? '{}') as Record<string, unknown>
+      temporaryPath = String(upload.name).startsWith('pasted-text-')
+        ? join(tmpdir(), 'kun', String(upload.name))
+        : ''
+      expect(Buffer.from(String(upload.dataBase64), 'base64').toString('utf8')).toBe(text)
+      expect(upload).toMatchObject({
+        name: expect.stringMatching(/^pasted-text-/),
+        mimeType: 'text/plain',
+        documentFormat: 'text',
+        threadId: 'thr_text'
+      })
+      expect(upload).not.toHaveProperty('localFilePath')
+      await expect(access(temporaryPath)).resolves.toBeUndefined()
+      return { ok: true, status: 201, body: JSON.stringify({ attachment: {
+        id: 'att_text', name: upload.name, kind: 'document', mimeType: 'text/plain',
+        byteSize: Buffer.byteLength(text), hash: 'hash', documentFormat: 'text',
+        createdAt: 't0', updatedAt: 't0'
+      } }) }
+    })
+
+    await expect(uploadRuntimeDocumentAttachment({
+      temporaryText: text,
+      threadId: 'thr_text'
+    }, { runtimeRequest })).resolves.toMatchObject({
+      ok: true,
+      attachment: { id: 'att_text', documentFormat: 'text' }
+    })
+    expect(temporaryPath).not.toBe('')
+    await expect(access(temporaryPath)).rejects.toThrow()
+  })
+
+  it('cleans pasted-text files when the runtime rejects the upload', async () => {
+    let temporaryPath = ''
+    const runtimeRequest = vi.fn(async (_path: string, _method?: string, body?: string) => {
+      const upload = JSON.parse(body ?? '{}') as Record<string, unknown>
+      temporaryPath = join(tmpdir(), 'kun', String(upload.name))
+      await expect(access(temporaryPath)).resolves.toBeUndefined()
+      return { ok: false, status: 413, body: JSON.stringify({ message: 'too large' }) }
+    })
+    await expect(uploadRuntimeDocumentAttachment({ temporaryText: 'long paste' }, { runtimeRequest }))
+      .resolves.toMatchObject({ ok: false, message: 'too large' })
+    await expect(access(temporaryPath)).rejects.toThrow()
+  })
+
+  it('rejects empty and oversized pasted text before runtime upload', async () => {
+    const runtimeRequest = vi.fn()
+    await expect(uploadRuntimeDocumentAttachment({ temporaryText: '' }, { runtimeRequest }))
+      .resolves.toMatchObject({ ok: false, message: expect.stringMatching(/empty/) })
+    await expect(uploadRuntimeDocumentAttachment({
+      temporaryText: '界'.repeat(Math.ceil(MAX_RUNTIME_DOCUMENT_SOURCE_BYTES / 3) + 1)
+    }, { runtimeRequest })).resolves.toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/exceeds/)
+    })
+    expect(runtimeRequest).not.toHaveBeenCalled()
   })
 
   it('rejects missing, non-file, and empty document sources with bounded errors', async () => {

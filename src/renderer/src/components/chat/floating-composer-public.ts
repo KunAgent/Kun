@@ -10,6 +10,7 @@ export {
 export { calculateContextCapacityPopoverPlacement } from './FloatingComposerContextCapacity'
 export {
   handleComposerImagePaste,
+  LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS,
   imageFilesFromTransfer,
   imageTransferHasImages
 } from './FloatingComposerAttachments'
