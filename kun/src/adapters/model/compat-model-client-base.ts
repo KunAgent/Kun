@@ -60,7 +60,7 @@ import {
 } from './anthropic-messages-stream-decoder.js'
 import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder.js'
 import type { CompatModelClientConfig, ChatMessage, CompatPostResult } from './compat-model-types.js'
-import { isCodexEndpoint, ignoreModelTraceFailure } from './compat-model-support.js'
+import { isCodexEndpoint, isOpenCodeGo, ignoreModelTraceFailure } from './compat-model-support.js'
 import { isDeepSeekHost } from './model-error-probe.js'
 
 export class CompatModelClientBase {
@@ -196,23 +196,43 @@ export class CompatModelClientBase {
     } = {
       apiKey: this.config.apiKey,
       headers: this.config.headers
-    }
+    },
+    runtimeHeaders?: Record<string, string>
   ): Record<string, string> {
-    const configuredHeaders = {
+    const protectedHeaders = {
       ...(this.config.headers ?? {}),
       ...(credentials.headers ?? {})
     }
     // Protected credentials are resolved before every request and may
     // materialize a fresh session_id. Keep transport identity owned by this
     // client so credential refresh cannot invalidate Codex prompt routing.
-    if (this.codexSessionId) configuredHeaders.session_id = this.codexSessionId
+    if (this.codexSessionId) protectedHeaders.session_id = this.codexSessionId
     return buildCompatRequestHeaders({
       apiKey: credentials.apiKey,
-      configuredHeaders,
+      customHeaders: this.config.customHeaders,
+      protectedHeaders,
+      runtimeHeaders,
       stream,
       endpointFormat,
       responsesLite
     })
+  }
+
+  /**
+   * Resolve the per-session routing id for OpenCode Go requests. A real Kun
+   * thread id is propagated as-is; a non-session probe/inline completion that
+   * carries no thread id gets a stable, request-local routing id (never a
+   * client-instance UUID or the GUI's unrelated selected session).
+   */
+  protected openCodeGoSessionId(threadId?: string): string | undefined {
+    if (!isOpenCodeGo({
+      presetSource: this.config.presetSource,
+      providerId: this.config.providerId,
+      baseUrl: this.config.baseUrl
+    })) {
+      return undefined
+    }
+    return threadId?.trim() || randomUUID()
   }
 
   protected async classifyHttpError(status: number, text: string, retryAfter?: string | null) {

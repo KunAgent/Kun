@@ -183,6 +183,8 @@ export const ServeProviderConfigSchema = z
     modelProxyUrl: z.string().optional(),
     modelProfiles: z.record(z.string().min(1), ModelContextProfileConfigSchema).optional(),
     headers: z.record(z.string(), z.string()).optional(),
+    /** User-configured custom HTTP headers (validated, merged before protected headers). */
+    customHeaders: z.record(z.string(), z.string()).optional(),
     /** Secret-free catalog metadata used to seed the shared model registry. */
     models: z.array(z.string().min(1).max(512)).max(500).optional(),
     /** Provider-scoped, secret-free capability metadata for the model catalog. */

@@ -48,7 +48,8 @@ export const StoredProfileSchema = ModelConnectionSnapshotSchema.shape.providers
   credentialRef: z.string().min(1).max(256).optional(),
   credentialSourceId: z.string().min(1).max(256).optional(),
   legacyCredentialSourceToRetire: z.string().min(1).max(256).optional(),
-  headers: z.record(z.string(), z.string()).optional()
+  headers: z.record(z.string(), z.string()).optional(),
+  customHeaders: z.record(z.string(), z.string()).optional()
 })
 export const DeletedProfileTombstoneSchema = z.object({
   deletedRevision: z.number().int().nonnegative(),
@@ -446,6 +447,7 @@ export function sameStoredProfile(left: StoredProfile, right: StoredProfile): bo
     left.credentialRef === right.credentialRef &&
     left.credentialSourceId === right.credentialSourceId &&
     left.legacyCredentialSourceToRetire === right.legacyCredentialSourceToRetire &&
+    sameHeaders(left.customHeaders, right.customHeaders) &&
     sameModels(left.models, right.models) &&
     sameCapabilities(left.modelCapabilities, right.modelCapabilities)
 }
@@ -467,6 +469,8 @@ export function project(
         credentialSourceId: _credentialSourceId,
         legacyCredentialSourceToRetire: _legacyCredentialSourceToRetire,
         headers: _headers,
+        customHeaders: customHeaders,
+        customHeaderNames: _customHeaderNames,
         ...profile
       } = storedProfile
       const credentialHealth = credentialHealthByProvider.get(profile.id)
@@ -481,7 +485,10 @@ export function project(
         ...profile,
         configured: isProfileUsable(storedProfile, credentialHealth),
         ...credentialHealth,
-        ...(Object.keys(modelCapabilities).length > 0 ? { modelCapabilities } : {})
+        ...(Object.keys(modelCapabilities).length > 0 ? { modelCapabilities } : {}),
+        ...(customHeaders && Object.keys(customHeaders).length > 0
+          ? { customHeaderNames: Object.keys(customHeaders) }
+          : {})
       }
     })
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
@@ -615,4 +622,11 @@ export function uniqueModels(models: readonly string[]): string[] {
 
 export function sameModels(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((model, index) => model === right[index])
+}
+
+export function sameHeaders(
+  left: Record<string, string> | undefined,
+  right: Record<string, string> | undefined
+): boolean {
+  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {})
 }

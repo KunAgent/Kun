@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
+import { CustomHeadersSchema } from './custom-headers.js'
 import {
   LocalModelGatewayConfigSchema,
   ModelRoutePoolConfigSchema
@@ -45,7 +46,9 @@ export const ModelConnectionProfileSchema = z.object({
   credentialErrorCode: ModelConnectionCredentialErrorCodeSchema.optional(),
   models: z.array(z.string().min(1).max(512)).max(500),
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),
-  selectedModel: z.string().min(1).max(512).optional()
+  selectedModel: z.string().min(1).max(512).optional(),
+  /** Non-sensitive custom header names (values are never projected). */
+  customHeaderNames: z.array(z.string().min(1).max(128)).max(64).optional()
 }).strict()
 
 export const ModelConnectionSnapshotSchema = z.object({
@@ -90,6 +93,7 @@ export const ModelConnectionConnectRequestSchema = z.object({
   models: z.array(z.string().min(1).max(512)).max(500).default([]),
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),
   selectedModel: z.string().min(1).max(512).optional(),
+  customHeaders: CustomHeadersSchema.optional(),
   probe: z.boolean().default(true),
   select: z.boolean().default(true)
 }).strict()
@@ -148,7 +152,8 @@ export const ModelConnectionPatchRequestSchema = z.object({
   useProxy: z.boolean().optional(),
   models: z.array(z.string().min(1).max(512)).max(500).optional(),
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),
-  selectedModel: z.string().min(1).max(512).optional()
+  selectedModel: z.string().min(1).max(512).optional(),
+  customHeaders: CustomHeadersSchema.optional()
 }).strict()
 
 export const ModelConnectionOAuthStartRequestSchema = z.object({

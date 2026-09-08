@@ -145,7 +145,11 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     }
     const responsesLite = isCodexEndpoint(this.config.baseUrl) &&
       this.capabilitiesForModel(requestModel).responsesMode === 'lite'
-    let headers = this.buildHeaders(stream, endpointFormat, responsesLite, credentials)
+    const openCodeGoSessionId = this.openCodeGoSessionId(request.threadId)
+    const runtimeHeaders = openCodeGoSessionId
+      ? { 'x-opencode-session': openCodeGoSessionId }
+      : undefined
+    let headers = this.buildHeaders(stream, endpointFormat, responsesLite, credentials, runtimeHeaders)
     const retry = normalizeModelRequestRetryConfig(this.config.retry)
     const modelStreamLimits = normalizeModelStreamLimits(this.config.streamLimits)
     const maxErrorBodyBytes = Math.min(modelStreamLimits.maxTotalBytes, 1 * 1024 * 1024)
@@ -209,7 +213,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
           }
           return
         }
-        headers = this.buildHeaders(stream, endpointFormat, responsesLite, credentials)
+        headers = this.buildHeaders(stream, endpointFormat, responsesLite, credentials, runtimeHeaders)
         result = await post(body, 'credential_refresh')
         continue
       }

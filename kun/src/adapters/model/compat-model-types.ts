@@ -10,13 +10,17 @@ import type { CompatChatMessage } from './compat-request-codecs.js'
 export type CompatModelClientConfig = {
   /** Stable configured provider identity retained in durable usage. */
   providerId?: string
+  /** Stable built-in preset identity (e.g. `opencode-go`). */
+  presetSource?: string
   baseUrl: string
   apiKey: string
   model: string
   /** Compatible request/response protocol to use for custom providers. */
   endpointFormat?: ModelEndpointFormat
-  /** Optional extra headers, e.g. project or session ids. */
+  /** Optional protected extra headers (e.g. Codex account/User-Agent material). */
   headers?: Record<string, string>
+  /** Optional user-configured custom headers merged before protected headers. */
+  customHeaders?: Record<string, string>
   /**
    * Resolves protected request credentials immediately before each HTTP call.
    * Passing the rejected access token after a 401 lets OAuth implementations
