@@ -278,11 +278,13 @@ async function runSync(
           turnCompleteNotificationSource(thread.id, state)
         )
       }
-      if (!running && runtimeState && changed) {
+      if (!running && runtimeState) {
+        // Checkpoints deduplicate notifications, not lifecycle cleanup. A
+        // restored watch must settle even on the initial/unchanged snapshot.
         clearWatched(thread.id)
         clearWatchedCompletionNotification(thread.id)
         const outcome = completionOutcomeForTurnStatus(latestTurnStatus)
-        if (outcome) {
+        if (changed && outcome) {
           unreadThreadIds = resolveUnreadCompletionForTurn(
             unreadThreadIds,
             state,

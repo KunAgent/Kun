@@ -20,7 +20,11 @@ export function reduceLateChatProjection(
   switch (action.type) {
     case 'runtime_status_received': {
       const event = action.payload
-      const base: Partial<ChatState> = state.busy ? {} : { busy: true, busyUnconfirmed: false }
+      // Status notices can be replayed after settlement; only a notice for
+      // the still-current turn may restore busy, never historical activity.
+      const base: Partial<ChatState> = !state.busy && state.currentTurnId && event.turnId === state.currentTurnId
+        ? { busy: true, busyUnconfirmed: false }
+        : {}
       const block: ChatBlock = {
         kind: 'system',
         id: event.itemId,

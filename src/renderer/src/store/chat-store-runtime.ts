@@ -520,8 +520,8 @@ export function buildThreadEventSink(
     onRuntimeStatus: (event) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
-      if (!get().busy) armBusyWatchdog(set, get)
       set((state) => reduce(state, { type: 'runtime_status_received', payload: event }))
+      if (get().busy) armBusyWatchdog(set, get)
     },
     onRuntimeError: (event) => {
       if (!isCurrentStream()) return

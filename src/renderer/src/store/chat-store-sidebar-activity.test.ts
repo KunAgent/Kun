@@ -20,6 +20,10 @@ let provider: Pick<
 >
 
 vi.mock('../agent/registry', () => ({ getProvider: () => provider }))
+vi.mock('./chat-store-runtime', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./chat-store-runtime')>(),
+  syncTurnCompletionPoll: vi.fn()
+}))
 
 function thread(patch: Partial<NormalizedThread> = {}): NormalizedThread {
   return {
@@ -87,6 +91,43 @@ describe('sidebar activity observer', () => {
   afterEach(() => {
     stopTurnCompletionPoll()
     vi.unstubAllGlobals()
+  })
+
+  it.each([false, true])('clears a settled watch even when the checkpoint is unchanged (baseline: %s)', async (baseline) => {
+    const listed = thread({ latestTurnId: 'turn-1', latestTurnStatus: 'completed' })
+    provider = {
+      listThreads: vi.fn(async () => [listed]),
+      listThreadsPage: vi.fn(async () => ({ threads: [listed], hasMore: false })),
+      getThreadState: vi.fn(async () => ({
+        status: 'idle', updatedAt: listed.updatedAt, latestSeq: 1,
+        latestTurnId: 'turn-1', latestTurnStatus: 'completed'
+      }))
+    }
+    const h = harness(listed)
+    if (baseline) await h.action()
+    h.get().watchTurnCompletion['thread-1'] = true
+
+    await h.action()
+
+    expect(h.get().watchTurnCompletion).toEqual({})
+    expect(h.get().unreadThreadIds).toEqual({})
+    expect(h.get().threads[0]?.status).toBe('idle')
+  })
+
+  it('retains a watch while the runtime still confirms a running turn', async () => {
+    const listed = thread({ status: 'running', latestTurnId: 'turn-1', latestTurnStatus: 'running' })
+    provider = {
+      listThreads: vi.fn(async () => [listed]),
+      listThreadsPage: vi.fn(async () => ({ threads: [listed], hasMore: false })),
+      getThreadState: vi.fn(async () => ({
+        status: 'running', updatedAt: listed.updatedAt, latestSeq: 1,
+        latestTurnId: 'turn-1', latestTurnStatus: 'running'
+      }))
+    }
+    const h = harness(listed)
+    h.get().watchTurnCompletion['thread-1'] = true
+    await h.action()
+    expect(h.get().watchTurnCompletion).toEqual({ 'thread-1': true })
   })
 
   it('baselines old history, then notices a fast background completion by latestSeq', async () => {
