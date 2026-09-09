@@ -53,6 +53,7 @@
   "speakKeepTracksDesc": "Save the audio for each answer, so speaking it again is instant and you can download the recording.",
   "speakStoredTracks": "Stored recordings",
   "speakStoredTracksDesc": "Kept under your Kun data directory as WAV files.",
-  "speakStoredTracksUsage": "{{count}} files, {{size}}",
+  "speakStoredTracksUsage_one": "{{count}} file, {{size}}",
+  "speakStoredTracksUsage_other": "{{count}} files, {{size}}",
   "speakStoredTracksClear": "Clear"
 }

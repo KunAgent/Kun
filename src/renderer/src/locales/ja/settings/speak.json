@@ -53,6 +53,7 @@
   "speakKeepTracksDesc": "各回答の音声を保存します。次回の読み上げが即座になり、録音をダウンロードできます。",
   "speakStoredTracks": "保存済みの録音",
   "speakStoredTracksDesc": "Kun のデータディレクトリに WAV ファイルとして保存されます。",
-  "speakStoredTracksUsage": "{{count}} ファイル、{{size}}",
+  "speakStoredTracksUsage_one": "{{count}} ファイル、{{size}}",
+  "speakStoredTracksUsage_other": "{{count}} ファイル、{{size}}",
   "speakStoredTracksClear": "消去"
 }

@@ -53,6 +53,7 @@
   "speakKeepTracksDesc": "각 답변의 오디오를 저장해 다시 읽을 때 즉시 재생하고 녹음을 내려받을 수 있습니다.",
   "speakStoredTracks": "보관된 녹음",
   "speakStoredTracksDesc": "Kun 데이터 디렉터리에 WAV 파일로 보관됩니다.",
-  "speakStoredTracksUsage": "{{count}}개 파일, {{size}}",
+  "speakStoredTracksUsage_one": "{{count}}개 파일, {{size}}",
+  "speakStoredTracksUsage_other": "{{count}}개 파일, {{size}}",
   "speakStoredTracksClear": "지우기"
 }

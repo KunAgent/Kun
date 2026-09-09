@@ -53,6 +53,7 @@
   "speakKeepTracksDesc": "हर उत्तर का ऑडियो सेव करें, जिससे दोबारा सुनाना तुरंत हो और रिकॉर्डिंग डाउनलोड की जा सके।",
   "speakStoredTracks": "सेव की गई रिकॉर्डिंग",
   "speakStoredTracksDesc": "आपकी Kun डेटा डायरेक्टरी में WAV फ़ाइलों के रूप में रखी जाती हैं।",
-  "speakStoredTracksUsage": "{{count}} फ़ाइलें, {{size}}",
+  "speakStoredTracksUsage_one": "{{count}} फ़ाइल, {{size}}",
+  "speakStoredTracksUsage_other": "{{count}} फ़ाइलें, {{size}}",
   "speakStoredTracksClear": "साफ़ करें"
 }

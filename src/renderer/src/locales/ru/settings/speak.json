@@ -53,6 +53,7 @@
   "speakKeepTracksDesc": "Сохранять звук каждого ответа, чтобы повторное чтение было мгновенным и запись можно было скачать.",
   "speakStoredTracks": "Сохранённые записи",
   "speakStoredTracksDesc": "Хранятся в каталоге данных Kun в формате WAV.",
-  "speakStoredTracksUsage": "{{count}} файлов, {{size}}",
+  "speakStoredTracksUsage_one": "{{count}} файл, {{size}}",
+  "speakStoredTracksUsage_other": "{{count}} файлов, {{size}}",
   "speakStoredTracksClear": "Очистить"
 }

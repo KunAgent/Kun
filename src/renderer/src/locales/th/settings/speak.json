@@ -53,6 +53,7 @@
   "speakKeepTracksDesc": "บันทึกเสียงของแต่ละคำตอบ เพื่อให้อ่านซ้ำได้ทันทีและดาวน์โหลดไฟล์เสียงได้",
   "speakStoredTracks": "ไฟล์เสียงที่เก็บไว้",
   "speakStoredTracksDesc": "เก็บเป็นไฟล์ WAV ในไดเรกทอรีข้อมูลของ Kun",
-  "speakStoredTracksUsage": "{{count}} ไฟล์, {{size}}",
+  "speakStoredTracksUsage_one": "{{count}} ไฟล์, {{size}}",
+  "speakStoredTracksUsage_other": "{{count}} ไฟล์, {{size}}",
   "speakStoredTracksClear": "ล้าง"
 }

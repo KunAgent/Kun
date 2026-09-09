@@ -53,6 +53,7 @@
   "speakKeepTracksDesc": "保存每条回答的音频，再次朗读时可立即播放，并可下载录音。",
   "speakStoredTracks": "已保存的录音",
   "speakStoredTracksDesc": "以 WAV 文件形式保存在 Kun 数据目录中。",
-  "speakStoredTracksUsage": "{{count}} 个文件，{{size}}",
+  "speakStoredTracksUsage_one": "{{count}} 个文件，{{size}}",
+  "speakStoredTracksUsage_other": "{{count}} 个文件，{{size}}",
   "speakStoredTracksClear": "清除"
 }
