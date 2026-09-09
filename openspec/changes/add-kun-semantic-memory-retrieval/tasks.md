@@ -28,11 +28,11 @@
 ## 5. Make the P2-A decision
 
 - [x] 5.1 Lock the chosen candidate, artifact identity, numeric tolerance, and fusion parameters in the manifest before holdout; verify later parameter drift invalidates the decision run.
-- [ ] 5.2 Run the holdout once and repeat the full frozen evaluation three times from clean process state; verify deterministic ids/scores and retain each machine-readable result.
-- [ ] 5.3 Generate the final threshold-by-threshold go/no-go report; verify any failed safety, relevance, determinism, or desktop-resource gate produces `no-go`, while `go` only recommends a separate P2-B OpenSpec change.
+- [x] 5.2 Run the holdout once and repeat the full frozen evaluation three times from clean process state; verify deterministic ids/scores and retain each machine-readable result.
+- [x] 5.3 Generate the final threshold-by-threshold go/no-go report; verify any failed safety, relevance, determinism, or desktop-resource gate produces `no-go`, while `go` only recommends a separate P2-B OpenSpec change.
 
 ## 6. Documentation and delivery gates
 
-- [ ] 6.1 Update Memory evaluation documentation and the external roadmap with dataset identity, commands, limitations, and the decision; verify docs never imply P2-A changed production retrieval.
-- [ ] 6.2 Run focused Memory tests, `npm run build:kun`, `npm run typecheck`, `npm run build`, strict OpenSpec validation, `npm run check:file-lines`, ESLint for changed source files, and `git diff --check`; record any unrelated full-suite baseline failure separately.
+- [x] 6.1 Update Memory evaluation documentation and the external roadmap with dataset identity, commands, limitations, and the decision; verify docs never imply P2-A changed production retrieval.
+- [x] 6.2 Run focused Memory tests, `npm run build:kun`, `npm run typecheck`, `npm run build`, strict OpenSpec validation, `npm run check:file-lines`, ESLint for changed source files, and `git diff --check`; record any unrelated full-suite baseline failure separately.
 - [ ] 6.3 Prepare the P2-A PR with artifacts, anonymous data, evaluator, frozen baseline, candidate evidence, and decision report only; verify the PR targets `KunAgent/Kun:develop` and contains no production semantic wiring or real Memory data.
