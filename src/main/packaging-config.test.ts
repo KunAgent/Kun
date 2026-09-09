@@ -246,7 +246,7 @@ describe('electron-builder Kun packaging', () => {
       'utf8'
     )
 
-    expect(rootPackage.devDependencies?.['electron-builder']).toBe('26.15.7')
+    expect(rootPackage.devDependencies?.['electron-builder']).toBe('26.16.1')
     expect(multiUserTemplate).not.toContain('System::Store')
     expect(multiUserTemplate).toContain('KERNEL32::lstrcpynW')
   })
