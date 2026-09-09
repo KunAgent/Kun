@@ -10,6 +10,7 @@ import {
   createSemanticMemoryV2EvaluationLock,
   runSemanticMemoryV2DevelopmentGrid,
   runSemanticMemoryV2HoldoutEvaluation,
+  selectSemanticMemoryV2DevelopmentCandidate,
   semanticMemoryV2DevelopmentGridConfigurations,
   semanticMemoryV2DevelopmentGridSha256,
   type SemanticMemoryV2GridConfiguration
@@ -61,6 +62,39 @@ describe('semantic Memory v2 evaluation workflow', () => {
         metadata: { ...candidateFor(configuration).metadata, parameters: {} }
       })
     })).rejects.toThrow('does not match grid configuration')
+  })
+
+  it('selects only a safe development candidate using deterministic quality ordering', async () => {
+    const dataset = await loadSemanticMemoryV2EvaluationDataset()
+    const grid = await runSemanticMemoryV2DevelopmentGrid({ dataset, createCandidate: candidateFor })
+    const baseline = grid.entries[0]!.report
+    const weaker = grid.entries[0]!
+    const stronger = {
+      ...grid.entries[1]!,
+      report: {
+        ...grid.entries[1]!.report,
+        metrics: {
+          ...grid.entries[1]!.report.metrics,
+          recallAtK: baseline.metrics.recallAtK + 0.2,
+          meanReciprocalRank: baseline.metrics.meanReciprocalRank + 0.1,
+          precisionAtK: baseline.metrics.precisionAtK
+        }
+      }
+    }
+    const unsafe = {
+      ...grid.entries[2]!,
+      report: {
+        ...grid.entries[2]!.report,
+        safetyGatePassed: false,
+        metrics: { ...grid.entries[2]!.report.metrics, recallAtK: 1, meanReciprocalRank: 1 }
+      }
+    }
+
+    expect(selectSemanticMemoryV2DevelopmentCandidate({
+      manifest: dataset.manifest,
+      baseline,
+      grid: { ...grid, entries: [weaker, unsafe, stronger] }
+    })?.configuration.id).toBe(stronger.configuration.id)
   })
 
   it('requires a matching lock before returning any holdout result', async () => {

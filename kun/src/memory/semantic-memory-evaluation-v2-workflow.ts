@@ -123,6 +123,29 @@ export async function runSemanticMemoryV2DevelopmentGrid(input: {
   return { gridSha256: semanticMemoryV2DevelopmentGridSha256(input.dataset.manifest), entries }
 }
 
+export function selectSemanticMemoryV2DevelopmentCandidate(input: {
+  manifest: SemanticMemoryV2EvaluationManifest
+  baseline: SemanticMemoryEvaluationReport
+  grid: SemanticMemoryV2DevelopmentGridResult
+}): SemanticMemoryV2DevelopmentGridResult['entries'][number] | undefined {
+  const thresholds = input.manifest.thresholds
+  const baselineLexicalControl = input.baseline.breakdowns.category['lexical-control']?.recallAtK ?? 0
+  return [...input.grid.entries]
+    .filter(({ report }) => {
+      const lexicalControl = report.breakdowns.category['lexical-control']?.recallAtK ?? 0
+      return report.safetyGatePassed &&
+        report.metrics.abstentionAccuracy >= thresholds.emptyResultAccuracy &&
+        input.baseline.metrics.precisionAtK - report.metrics.precisionAtK <= thresholds.maximumOverallPrecisionDecline &&
+        baselineLexicalControl - lexicalControl <= thresholds.maximumLexicalControlRegression
+    })
+    .sort((left, right) =>
+      right.report.metrics.recallAtK - left.report.metrics.recallAtK ||
+      right.report.metrics.meanReciprocalRank - left.report.metrics.meanReciprocalRank ||
+      right.report.metrics.precisionAtK - left.report.metrics.precisionAtK ||
+      left.configuration.id.localeCompare(right.configuration.id)
+    )[0]
+}
+
 export function createSemanticMemoryV2EvaluationLock(input: {
   dataset: SemanticMemoryV2EvaluationDataset
   candidate: SemanticMemoryCandidateMetadata

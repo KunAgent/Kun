@@ -8,7 +8,7 @@
 
 - [x] 2.1 Add per-query candidate-minus-baseline Recall@K and reciprocal-rank deltas; verify relevant and abstention queries use the specified metric populations.
 - [x] 2.2 Add a dependency-free deterministic paired bootstrap with a recorded seed, resample count, and percentile confidence intervals; verify fixed examples, repeatability, and edge cases in focused tests.
-- [ ] 2.3 Include paired deltas and confidence intervals in evaluation and decision reports without changing existing v1 report parsing; verify report schemas reject missing or inconsistent uncertainty metadata.
+- [x] 2.3 Include paired deltas and confidence intervals in evaluation and decision reports without changing existing v1 report parsing; verify report schemas reject missing or inconsistent uncertainty metadata.
 
 ## 3. Compare bounded development candidates
 
@@ -18,9 +18,9 @@
 
 ## 4. Produce decision evidence
 
-- [ ] 4.1 Run and record the frozen lexical and terminology-map development baselines; verify reports contain quality, safety, determinism, timing, and resource evidence.
-- [ ] 4.2 Run the existing E5 candidate and bounded grid on development only, select at most one locked configuration, and verify no holdout result is emitted during tuning.
-- [ ] 4.3 After the candidate and gates are locked, run the holdout once and generate the v2 go/no-go report with paired intervals and per-category evidence; verify every pre-registered gate has an explicit result.
+- [x] 4.1 Run and record the frozen lexical and terminology-map development baselines; verify reports contain quality, safety, determinism, timing, and resource evidence.
+- [x] 4.2 Run the existing E5 candidate and bounded grid on development only, select at most one locked configuration, and verify no holdout result is emitted during tuning.
+- [x] 4.3 After the candidate and gates are locked, run the holdout once and generate the v2 go/no-go report with paired intervals and per-category evidence; no candidate passed development eligibility, so the lock and holdout preconditions were not met and the report records a development no-candidate result instead.
 - [ ] 4.4 Preserve SQLite FTS5 and filesystem fallback as the only production paths; verify the production bundle and runtime dependency graph do not import v2 evaluation modules or a new model dependency.
 
 ## 5. Validate and document the stage
