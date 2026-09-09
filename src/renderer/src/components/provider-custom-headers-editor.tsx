@@ -244,7 +244,7 @@ export function ProviderCustomHeadersEditor({
               disabled={rows.length >= MAX_COUNT}
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
-              {zh ? '添加' : 'Add'}
+              {zh ? '添加请求头' : 'Add header'}
             </button>
             <button
               type="button"
