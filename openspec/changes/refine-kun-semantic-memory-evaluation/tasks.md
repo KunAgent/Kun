@@ -12,7 +12,7 @@
 
 ## 3. Compare bounded development candidates
 
-- [ ] 3.1 Add a deterministic, versioned, hashed English/Chinese terminology map and lexical normalization candidate; verify matching phrases normalize while unrelated queries remain byte-for-byte unchanged.
+- [x] 3.1 Add a deterministic, versioned, hashed English/Chinese terminology map and lexical normalization candidate; verify matching phrases normalize while unrelated queries remain byte-for-byte unchanged.
 - [ ] 3.2 Add a finite development-only grid for similarity gates and lexical/semantic fusion weights; verify every declared configuration runs against the same authorized corpus, K, prompt budget, and query order.
 - [ ] 3.3 Add a lock artifact that records dataset hashes, candidate identity, parameters, terminology hash, gates, and bootstrap settings; verify holdout evaluation fails closed before locking or when any locked input drifts.
 
