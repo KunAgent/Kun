@@ -88,7 +88,8 @@ import {
 } from './local-whisper'
 
 import {
-  normalizeApprovalReviewer
+  normalizeApprovalReviewer,
+  normalizeApprovalReviewSelection
 } from './app-settings-kun-defaults'
 import {
   DEFAULT_GITHUB_MCP_HOST,
@@ -375,6 +376,9 @@ export function mergeKunRuntimeSettings(
     model: nextModel,
     approvalReviewer: normalizeApprovalReviewer(
       patch?.approvalReviewer ?? current.approvalReviewer
+    ),
+    approvalReview: normalizeApprovalReviewSelection(
+      patch?.approvalReview ?? current.approvalReview
     ),
     port: nextPort,
     tokenEconomyMode: nextTokenEconomy.enabled,

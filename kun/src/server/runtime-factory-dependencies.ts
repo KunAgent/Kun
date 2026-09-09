@@ -119,6 +119,10 @@ export {
   type ApprovalReviewer,
   type SandboxMode
 } from '../contracts/policy.js'
+export {
+  DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION,
+  type ApprovalReviewModelSelection
+} from '../contracts/approval-review-config.js'
 export { AgentLoop, type AgentLoopOptions } from '../loop/agent-loop.js'
 export { ContextCompactor } from '../loop/context-compactor.js'
 export { withModelTiming } from '../loop/model-timing-decorator.js'

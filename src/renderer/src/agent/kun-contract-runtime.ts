@@ -601,6 +601,12 @@ export type CoreRuntimeEventJson = {
   riskLevel?: 'low' | 'medium' | 'high' | 'critical'
   rationale?: string
   prompt?: string
+  reviewModelSource?: 'inherit' | 'fixed'
+  reviewModelRoute?: {
+    model: string
+    providerId?: string
+    accountId?: string
+  }
   inputId?: string
   timeoutSeconds?: number
   questions?: Array<{

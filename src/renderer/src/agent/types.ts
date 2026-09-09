@@ -227,6 +227,11 @@ export type UserInputQuestion = {
   maxSelections?: number
 }
 
+type ApprovalReviewModelProjection = {
+  reviewModelSource?: 'inherit' | 'fixed'
+  reviewModelRoute?: { model: string; providerId?: string; accountId?: string }
+}
+
 export type UserInputAnswer = {
   id: string
   label: string
@@ -492,6 +497,8 @@ export type ChatBlock =
       decision?: 'allow' | 'deny'
       riskLevel?: 'low' | 'medium' | 'high' | 'critical'
       rationale?: string
+      reviewModelSource?: ApprovalReviewModelProjection['reviewModelSource']
+      reviewModelRoute?: ApprovalReviewModelProjection['reviewModelRoute']
     }
   | {
       kind: 'user_input'
@@ -541,6 +548,8 @@ export type ApprovalReviewEventPayload = {
   decision?: 'allow' | 'deny'
   riskLevel?: 'low' | 'medium' | 'high' | 'critical'
   rationale?: string
+  reviewModelSource?: ApprovalReviewModelProjection['reviewModelSource']
+  reviewModelRoute?: ApprovalReviewModelProjection['reviewModelRoute']
 }
 
 export type ToolEventPayload = {

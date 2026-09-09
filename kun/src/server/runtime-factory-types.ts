@@ -1,6 +1,7 @@
 import type {
   ApprovalPolicy,
   ApprovalReviewer,
+  ApprovalReviewModelSelection,
   ContextCompactionConfig,
   FastContextConfig,
   FaultInjectionController,
@@ -55,6 +56,7 @@ export type KunServeRuntimeOptions = {
   approvalPolicy: ApprovalPolicy
   sandboxMode: SandboxMode
   approvalReviewer?: ApprovalReviewer
+  approvalReview?: ApprovalReviewModelSelection
   tokenEconomyMode: boolean
   tokenEconomy?: TokenEconomyConfig
   toolOutputLimits?: ToolOutputLimitsConfig

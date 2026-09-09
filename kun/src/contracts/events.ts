@@ -293,6 +293,12 @@ export const ApprovalEvent = RuntimeEventBase.extend({
 })
 export type ApprovalEvent = z.infer<typeof ApprovalEvent>
 
+export const ApprovalReviewRouteSchema = z.object({
+  providerId: z.string().min(1).max(128).optional(),
+  accountId: z.string().min(1).max(128).optional(),
+  model: z.string().min(1).max(512)
+}).strict()
+
 export const ApprovalReviewStartedEvent = RuntimeEventBase.extend({
   kind: z.literal('approval_review_started'),
   reviewId: z.string().min(1),
@@ -301,6 +307,8 @@ export const ApprovalReviewStartedEvent = RuntimeEventBase.extend({
   reviewer: z.literal('agent'),
   status: z.literal('in-progress'),
   summary: z.string().min(1).max(2_048),
+  reviewModelSource: z.enum(['inherit', 'fixed']).optional(),
+  reviewModelRoute: ApprovalReviewRouteSchema.optional(),
   action: ApprovalActionEnvelopeSchema.optional()
 }).strict()
 export type ApprovalReviewStartedEvent = z.infer<typeof ApprovalReviewStartedEvent>
@@ -315,7 +323,9 @@ export const ApprovalReviewCompletedEvent = RuntimeEventBase.extend({
   summary: z.string().min(1).max(2_048),
   decision: z.enum(['allow', 'deny']).optional(),
   riskLevel: z.enum(['low', 'medium', 'high', 'critical']).optional(),
-  rationale: z.string().min(1).max(2_048)
+  rationale: z.string().min(1).max(2_048),
+  reviewModelSource: z.enum(['inherit', 'fixed']).optional(),
+  reviewModelRoute: ApprovalReviewRouteSchema.optional()
 }).strict()
 export type ApprovalReviewCompletedEvent = z.infer<typeof ApprovalReviewCompletedEvent>
 

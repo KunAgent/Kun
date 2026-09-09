@@ -70,12 +70,14 @@ describe('protected Kun execution settings consent', () => {
       current: {
         approvalPolicy: 'auto',
         sandboxMode: 'danger-full-access',
-        approvalReviewer: 'user'
+        approvalReviewer: 'user',
+        approvalReview: { mode: 'inherit' }
       },
       next: {
         approvalPolicy: 'on-request',
         sandboxMode: 'workspace-write',
-        approvalReviewer: 'user'
+        approvalReviewer: 'user',
+        approvalReview: { mode: 'inherit' }
       }
     })
   })
@@ -88,14 +90,41 @@ describe('protected Kun execution settings consent', () => {
       current: {
         approvalPolicy: 'auto',
         sandboxMode: 'danger-full-access',
-        approvalReviewer: 'user'
+        approvalReviewer: 'user',
+        approvalReview: { mode: 'inherit' }
       },
       next: {
         approvalPolicy: 'auto',
         sandboxMode: 'danger-full-access',
-        approvalReviewer: 'agent'
+        approvalReviewer: 'agent',
+        approvalReview: { mode: 'inherit' }
       }
     })
+  })
+
+  it('protects an approval-review-model-only transition', () => {
+    const current = settings()
+    expect(kunExecutionSettingsChange(current, {
+      agents: { kun: {
+        approvalReview: {
+          mode: 'fixed',
+          providerId: 'review-provider',
+          model: 'review-model'
+        }
+      } }
+    })).toMatchObject({
+      current: { approvalReview: { mode: 'inherit' } },
+      next: {
+        approvalReview: {
+          mode: 'fixed',
+          providerId: 'review-provider',
+          model: 'review-model'
+        }
+      }
+    })
+    expect(kunExecutionSettingsChange(current, {
+      agents: { kun: { approvalReview: { mode: 'inherit' } } }
+    })).toBeUndefined()
   })
 
   it('binds a short-lived token to one exact sender and settings transition', () => {
@@ -109,12 +138,14 @@ describe('protected Kun execution settings consent', () => {
       current: {
         approvalPolicy: 'on-request',
         sandboxMode: 'workspace-write',
-        approvalReviewer: 'user'
+        approvalReviewer: 'user',
+        approvalReview: { mode: 'inherit' }
       },
       next: {
         approvalPolicy: 'on-request',
         sandboxMode: 'workspace-write',
-        approvalReviewer: 'agent'
+        approvalReviewer: 'agent',
+        approvalReview: { mode: 'fixed', providerId: 'review-provider', model: 'review-model' }
       },
       senderId: 7,
       senderProcessId: 10,

@@ -99,7 +99,8 @@ import {
   legacyKunRuntimeSettingsDefaults,
   legacyLocalHttpRuntimeDefaults,
   legacyReasoningRuntimeDefaults,
-  normalizeApprovalReviewer
+  normalizeApprovalReviewer,
+  normalizeApprovalReviewSelection
 } from './app-settings-kun-defaults'
 import {
   normalizeKunImageGenerationSettings,
@@ -431,7 +432,8 @@ export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partia
     model: isReasoningLegacy ? legacyReasoning.model : kunDefaults.model,
     approvalPolicy: isReasoningLegacy ? kunDefaults.approvalPolicy : legacyLocalHttp.approvalPolicy,
     sandboxMode: isReasoningLegacy ? kunDefaults.sandboxMode : legacyLocalHttp.sandboxMode,
-    approvalReviewer: DEFAULT_APPROVAL_REVIEWER
+    approvalReviewer: DEFAULT_APPROVAL_REVIEWER,
+    approvalReview: kunDefaults.approvalReview
   }
   const provider = normalizeModelProviderSettings({
     ...parsed.provider,
@@ -459,6 +461,9 @@ export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partia
     model: upgradeLegacyKunDefaultModel(explicitKun.model, legacySeed.model),
     approvalReviewer: normalizeApprovalReviewer(
       explicitKun.approvalReviewer ?? legacySeed.approvalReviewer
+    ),
+    approvalReview: normalizeApprovalReviewSelection(
+      explicitKun.approvalReview ?? legacySeed.approvalReview
     ),
     tokenEconomyMode: typeof explicitKun.tokenEconomy?.enabled === 'boolean'
       ? explicitKun.tokenEconomy.enabled

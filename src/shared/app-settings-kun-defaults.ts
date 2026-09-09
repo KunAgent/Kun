@@ -1,4 +1,8 @@
 import {
+  DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION,
+  ApprovalReviewModelSelectionSchema
+} from '../../kun/src/contracts/approval-review-config.js'
+import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_APPROVAL_POLICY,
   DEFAULT_DEEPSEEK_BASE_URL,
@@ -200,6 +204,7 @@ export function defaultKunRuntimeSettings(
     dataDir: DEFAULT_KUN_DATA_DIR,
     model: DEFAULT_KUN_MODEL,
     ...kunToolPermissionModeSettings('full-access'),
+    approvalReview: { ...DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION },
     tokenEconomyMode: false,
     tokenEconomy: defaultKunTokenEconomySettings(),
     toolOutputLimits: defaultKunToolOutputLimitsSettings(),
@@ -253,6 +258,13 @@ export function legacyKunRuntimeSettingsDefaults(
 
 export function normalizeApprovalReviewer(value: unknown): ApprovalReviewer {
   return value === 'agent' ? 'agent' : DEFAULT_APPROVAL_REVIEWER
+}
+
+export function normalizeApprovalReviewSelection(
+  value: unknown
+): KunRuntimeSettingsV1['approvalReview'] {
+  if (value === undefined) return { ...DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION }
+  return ApprovalReviewModelSelectionSchema.parse(value)
 }
 
 export function defaultKunInstructionSettings(): KunInstructionSettingsV1 {

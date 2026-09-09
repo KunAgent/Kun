@@ -66,6 +66,45 @@ describe('Kun runtime config service', () => {
     expect(body.serve).toMatchObject({ approvalPolicy: 'auto', approvalReviewer: 'agent' })
   })
 
+  it('projects the approval review model selection into serve config and hot apply', () => {
+    const base = normalizeAppSettings({} as AppSettingsV1)
+    const settings = normalizeAppSettings({
+      ...base,
+      agents: {
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          approvalPolicy: 'on-request',
+          approvalReviewer: 'agent',
+          approvalReview: {
+            mode: 'fixed',
+            providerId: 'review-provider',
+            accountId: 'review-account',
+            model: 'review-model'
+          }
+        }
+      }
+    })
+    const config = KunConfigSchema.parse({
+      serve: {
+        host: '127.0.0.1',
+        port: 18899,
+        dataDir: '/tmp/kun-data',
+        runtimeToken: 'runtime-token',
+        insecure: false,
+        providers: {}
+      }
+    })
+    const body = buildManagedRuntimeHotApplyBody(settings, config)
+
+    expect(body.serve?.approvalReview).toEqual({
+      mode: 'fixed',
+      providerId: 'review-provider',
+      accountId: 'review-account',
+      model: 'review-model'
+    })
+    expect(() => RuntimeConfigApplyRequest.parse(body)).not.toThrow()
+  })
+
   it('projects Fast Context without registry-owned gateway state in the hot-apply body', async () => {
     const fixedFastContext = {
       enabled: true,

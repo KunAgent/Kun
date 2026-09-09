@@ -249,6 +249,15 @@ function MessageBubbleImpl({
             {t('approvalTool', { name: block.toolName })}
           </div>
         ) : null}
+        {block.reviewModelRoute ? (
+          <div className="mt-1 text-[12px] text-ds-muted">
+            {t('approvalReviewModel', {
+              model: block.reviewModelRoute.providerId
+                ? `${block.reviewModelRoute.providerId}/${block.reviewModelRoute.model}`
+                : block.reviewModelRoute.model
+            })}
+          </div>
+        ) : null}
         <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-ds-ink">{block.summary}</p>
         <p className="mt-2 text-[12px] font-medium text-ds-muted">{statusLabel}</p>
         {block.riskLevel ? (

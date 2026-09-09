@@ -71,6 +71,15 @@ export const hexColorSchema = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/)
 export const approvalPolicySchema = z.enum(['always', 'on-request', 'untrusted', 'never', 'auto', 'suggest'])
 export const sandboxModeSchema = z.enum(['read-only', 'workspace-write', 'danger-full-access', 'external-sandbox'])
 export const approvalReviewerSchema = z.enum(['user', 'agent'])
+export const approvalReviewSelectionSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('inherit') }).strict(),
+  z.object({
+    mode: z.literal('fixed'),
+    providerId: z.string().trim().min(1).max(128),
+    accountId: z.string().trim().min(1).max(128).optional(),
+    model: z.string().trim().min(1).max(512)
+  }).strict()
+])
 export const mcpSearchModeSchema = z.enum(['direct', 'search', 'auto'])
 export const kunStorageBackendSchema = z.enum(['hybrid', 'file'])
 export const kunCompactionSummaryModeSchema = z.enum(['heuristic', 'model'])
@@ -336,6 +345,7 @@ export const kunRuntimePatchSchema = z.object({
   approvalPolicy: approvalPolicySchema.optional(),
   sandboxMode: sandboxModeSchema.optional(),
   approvalReviewer: approvalReviewerSchema.optional(),
+  approvalReview: approvalReviewSelectionSchema.optional(),
   tokenEconomyMode: z.boolean().optional(),
   tokenEconomy: z.object({
     enabled: z.boolean().optional(),

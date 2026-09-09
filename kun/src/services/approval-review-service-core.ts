@@ -24,6 +24,10 @@ import type {
 import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import type { UsageService } from './usage-service.js'
 import { utf8PrefixWithinBytes } from '../shared/utf8-text-blocks.js'
+import type {
+  ApprovalReviewModelContext,
+  ApprovalReviewModelContextResolver
+} from './approval-review-context-resolver.js'
 import { buildReviewData, canonicalApprovalAction, parseApprovalReviewDecision, raceWithAbort } from './approval-review-service-review-data.js'
 import { appendBoundedOutput, boundedText, normalizeRoute, redactOutput, safeErrorMessage, safeMissingActionSummary } from './approval-review-service-normalization.js'
 
@@ -64,6 +68,8 @@ export type ApprovalReviewServiceOptions = {
   model: Pick<ModelClient, 'stream'>
   events: Pick<RuntimeEventRecorder, 'record'>
   usage: Pick<UsageService, 'record'>
+  /** Resolve and pin the exact route/client before the review's first await. */
+  modelContext?: ApprovalReviewModelContextResolver
   timeoutMs?: number
   nowIso?: () => string
   nextReviewId?: () => string
@@ -108,11 +114,20 @@ export class ApprovalReviewService implements ApprovalReviewPort {
     const summary = action
       ? safeApprovalActionSummary(action)
       : safeMissingActionSummary(input)
+    let context: ApprovalReviewModelContext | null = null
+    let contextFailure: string | null = null
+    if (this.options.modelContext) {
+      try {
+        context = this.options.modelContext(input.route)
+      } catch (error) {
+        contextFailure = safeErrorMessage(error)
+      }
+    }
     const persistTerminal = async (
       candidate: ApprovalReviewResult
     ): Promise<ApprovalReviewResult> => {
       try {
-        await this.recordTerminalLifecycle(input, candidate, action, summary)
+        await this.recordTerminalLifecycle(input, candidate, action, summary, context)
         return candidate
       } catch {
         const failed = fallback(
@@ -123,7 +138,7 @@ export class ApprovalReviewService implements ApprovalReviewPort {
         try {
           // If the first write partially committed, append an authoritative
           // failed-closed pair when storage is healthy enough to recover.
-          await this.recordTerminalLifecycle(input, failed, action, summary)
+          await this.recordTerminalLifecycle(input, failed, action, summary, context)
         } catch {
           // Persistence is already known broken. Returning deny remains safe.
         }
@@ -142,6 +157,10 @@ export class ApprovalReviewService implements ApprovalReviewPort {
         reviewer: 'agent',
         status: 'in-progress',
         summary,
+        ...(context ? {
+          reviewModelSource: context.source,
+          reviewModelRoute: context.route
+        } : {}),
         ...(action ? { action } : {})
       })
     } catch {
@@ -163,11 +182,19 @@ export class ApprovalReviewService implements ApprovalReviewPort {
         'Automatic review was cancelled with the parent turn.'
       ))
     }
-    const route = normalizeRoute(input.route)
+    const route = context
+      ? context.route
+      : normalizeRoute(input.route)
     if (!route) {
       return persistTerminal(fallback(
         'failed-closed',
         'Automatic review denied because the acting turn model route is unavailable.'
+      ))
+    }
+    if (contextFailure) {
+      return persistTerminal(fallback(
+        'failed-closed',
+        `Automatic review denied because its configured model route is unavailable: ${contextFailure}`
       ))
     }
 
@@ -187,9 +214,11 @@ export class ApprovalReviewService implements ApprovalReviewPort {
     }
     try {
       const reviewData = buildReviewData(input, action)
+      const model = context?.client ?? this.options.model
       const first = await this.runAttempt({
         input,
         reviewId,
+        model,
         route,
         reviewData,
         attempt: 1,
@@ -200,6 +229,7 @@ export class ApprovalReviewService implements ApprovalReviewPort {
         outcome = await this.runAttempt({
           input,
           reviewId,
+          model,
           route,
           reviewData,
           attempt: 2,
@@ -300,6 +330,7 @@ export class ApprovalReviewService implements ApprovalReviewPort {
   private async runAttempt(input: {
     input: ApprovalReviewInput
     reviewId: string
+    model: Pick<ModelClient, 'stream'>
     route: { model: string; providerId?: string; accountId?: string }
     reviewData: string
     attempt: 1 | 2
@@ -312,6 +343,7 @@ export class ApprovalReviewService implements ApprovalReviewPort {
   private async collectAttempt(input: {
     input: ApprovalReviewInput
     reviewId: string
+    model: Pick<ModelClient, 'stream'>
     route: { model: string; providerId?: string; accountId?: string }
     reviewData: string
     attempt: 1 | 2
@@ -357,7 +389,7 @@ export class ApprovalReviewService implements ApprovalReviewPort {
     }
     let output = ''
     try {
-      for await (const chunk of this.options.model.stream(request)) {
+      for await (const chunk of input.model.stream(request)) {
         if (input.signal.aborted) throw input.signal.reason ?? new Error('approval review aborted')
         if (chunk.kind === 'assistant_text_delta') {
           output = appendBoundedOutput(output, chunk.text)
@@ -399,7 +431,8 @@ export class ApprovalReviewService implements ApprovalReviewPort {
     input: ApprovalReviewInput,
     result: ApprovalReviewResult,
     action: ApprovalActionEnvelope | undefined,
-    summary: string
+    summary: string,
+    context: ApprovalReviewModelContext | null
   ): Promise<void> {
     await this.options.events.record({
       kind: 'approval_review_completed',
@@ -413,7 +446,11 @@ export class ApprovalReviewService implements ApprovalReviewPort {
       summary,
       decision: result.decision,
       ...(result.riskLevel ? { riskLevel: result.riskLevel } : {}),
-      rationale: result.reason ?? 'Automatic review denied without a rationale.'
+      rationale: result.reason ?? 'Automatic review denied without a rationale.',
+      ...(context ? {
+        reviewModelSource: context.source,
+        reviewModelRoute: context.route
+      } : {})
     })
     await this.options.events.record({
       kind: 'approval_resolved',

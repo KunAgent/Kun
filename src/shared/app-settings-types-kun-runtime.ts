@@ -11,6 +11,9 @@ import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { BrowserUseMode } from './browser-use'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
+import type {
+  ApprovalReviewModelSelection
+} from '../../kun/src/contracts/approval-review-config.js'
 import type { KunGitHubMcpSettingsV1 } from './github-mcp-authorization'
 
 import {
@@ -359,6 +362,8 @@ export type KunRuntimeSettingsV1 = {
   approvalPolicy: ApprovalPolicy
   sandboxMode: SandboxMode
   approvalReviewer: ApprovalReviewer
+  /** Exact model authority for automatic tool review. Defaults to the acting turn route. */
+  approvalReview: ApprovalReviewModelSelection
   /** Compress safe tool context before each model call. */
   tokenEconomyMode: boolean
   /** Detailed token-saving behavior used when building Kun model requests. */
