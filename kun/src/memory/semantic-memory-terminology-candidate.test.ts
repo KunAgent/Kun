@@ -48,7 +48,7 @@ describe('semantic Memory terminology-map candidate', () => {
 
   it('passes the expanded query through the existing lexical candidate', async () => {
     const map = await loadSemanticMemoryTerminologyMap()
-    const retrieve = vi.fn(async () => [])
+    const retrieve = vi.fn<SemanticMemoryCandidate['retrieve']>(async () => [])
     const candidate = createTerminologyMapSemanticMemoryCandidate({
       terminology: map,
       lexicalCandidate: lexicalCandidate(retrieve)
@@ -72,7 +72,7 @@ describe('semantic Memory terminology-map candidate', () => {
 
   it('preserves the original query object when no term matches', async () => {
     const map = await loadSemanticMemoryTerminologyMap()
-    const retrieve = vi.fn(async () => [])
+    const retrieve = vi.fn<SemanticMemoryCandidate['retrieve']>(async () => [])
     const candidate = createTerminologyMapSemanticMemoryCandidate({
       terminology: map,
       lexicalCandidate: lexicalCandidate(retrieve)

@@ -68,7 +68,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test ./scripts/runtime-build-manifest.test.mjs && node ./scripts/run-tests.mjs",
     "test:memory-growth": "node ./scripts/run-memory-growth-regression.mjs",
-    "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts src/memory/semantic-memory-evaluation-dataset.test.ts src/memory/semantic-memory-evaluation.test.ts src/memory/semantic-memory-vector-candidate.test.ts src/memory/semantic-memory-candidate-fallback.test.ts src/memory/semantic-memory-evaluation-decision.test.ts src/memory/semantic-memory-evaluation-evidence.test.ts --reporter=verbose",
+    "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts src/memory/semantic-memory-evaluation-dataset.test.ts src/memory/semantic-memory-evaluation-v2-dataset.test.ts src/memory/semantic-memory-evaluation.test.ts src/memory/semantic-memory-evaluation-comparison.test.ts src/memory/semantic-memory-terminology-candidate.test.ts src/memory/semantic-memory-evaluation-v2-workflow.test.ts src/memory/semantic-memory-evaluation-v2-evidence.test.ts src/memory/semantic-memory-vector-candidate.test.ts src/memory/semantic-memory-candidate-fallback.test.ts src/memory/semantic-memory-evaluation-decision.test.ts src/memory/semantic-memory-evaluation-evidence.test.ts --reporter=verbose",
     "test:watch": "vitest",
     "transcript:diff": "node ./scripts/transcript-diff.mjs",
     "benchmark:replay": "npm run build && node ./dist/cli/replay-entry.js",

@@ -21,11 +21,11 @@
 - [x] 4.1 Run and record the frozen lexical and terminology-map development baselines; verify reports contain quality, safety, determinism, timing, and resource evidence.
 - [x] 4.2 Run the existing E5 candidate and bounded grid on development only, select at most one locked configuration, and verify no holdout result is emitted during tuning.
 - [x] 4.3 After the candidate and gates are locked, run the holdout once and generate the v2 go/no-go report with paired intervals and per-category evidence; no candidate passed development eligibility, so the lock and holdout preconditions were not met and the report records a development no-candidate result instead.
-- [ ] 4.4 Preserve SQLite FTS5 and filesystem fallback as the only production paths; verify the production bundle and runtime dependency graph do not import v2 evaluation modules or a new model dependency.
+- [x] 4.4 Preserve SQLite FTS5 and filesystem fallback as the only production paths; verify the production bundle and runtime dependency graph do not import v2 evaluation modules or a new model dependency.
 
 ## 5. Validate and document the stage
 
-- [ ] 5.1 Run focused Memory evaluation tests, Kun build, top-level typecheck/build, changed-file lint, file-line checks, OpenSpec strict validation, and `git diff --check`; record exact results.
-- [ ] 5.2 Run the full test and lint gates where practical and distinguish any upstream baseline failure from a change-introduced failure in the evidence report.
+- [x] 5.1 Run focused Memory evaluation tests, Kun build, top-level typecheck/build, changed-file lint, file-line checks, OpenSpec strict validation, and `git diff --check`; the v2 evaluation command, `build:kun`, top-level typecheck/build, lint (0 errors; 30 existing warnings), 6,972-file line gate, strict OpenSpec validation, and diff check passed.
+- [x] 5.2 Run the full test and lint gates where practical and distinguish any upstream baseline failure from a change-introduced failure in the evidence report; the full test command was attempted but exceeded the approximately 10-minute local observation window without a final summary, so it is recorded as incomplete and deferred to PR Actions rather than reported as passing or failing.
 - [ ] 5.3 Update the local Memory roadmap and create a timestamped stage note with commits, dataset identity, metrics, decision, and remaining P2-B boundary; verify local notes are not staged in the repository.
 - [ ] 5.4 Push each independently reviewable milestone commit to `SunwardL/Kun:codex/refine-kun-semantic-memory-evaluation`, then create a detailed PR targeting `KunAgent/Kun:develop` only after all required tasks and gates pass.

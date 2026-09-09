@@ -14,6 +14,7 @@ export type SemanticMemoryEvaluationQueryInput = {
   project?: string
   expectedIds: string[]
   forbiddenIds: string[]
+  rationale?: string
 }
 
 export type SemanticMemoryEvaluationDatasetInput = {
