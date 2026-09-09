@@ -6,7 +6,7 @@ The Kokoro integration is not cleared for public distribution merely because
 technical checks pass. Kun retains its PolyForm Noncommercial license. No
 license change or third-party authorization is implied by this implementation.
 
-`onnxruntime-node@1.22.0` and `onnxruntime-common@1.22.0` are MIT licensed.
+`onnxruntime-node@1.23.2` and `onnxruntime-common@1.23.2` are MIT licensed.
 `phonemizer@1.2.1` declares Apache-2.0 for its wrapper but embeds espeak-ng
 WebAssembly and pronunciation data governed by the upstream GPL terms.
 The downloaded Kokoro model and voice files declare Apache-2.0.

@@ -134,8 +134,8 @@ SOFTWARE.
 
 ## ONNX Runtime Node binding
 
-Kun uses `onnxruntime-node` version 1.22.0 together with `onnxruntime-common`
-version 1.22.0 to run the local Kokoro speech model for the Speak action. Both
+Kun uses `onnxruntime-node` version 1.23.2 together with `onnxruntime-common`
+version 1.23.2 to run the local Kokoro speech model for the Speak action. Both
 packages are distributed under the MIT License by Microsoft. Only the prebuilt
 binary matching the packaged platform and architecture is shipped; the others
 are removed during packaging.

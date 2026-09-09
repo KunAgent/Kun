@@ -41,7 +41,7 @@ async function fixture(arch) {
   const onnxRoot = join(modules, 'onnxruntime-node', 'bin', 'napi-v6', 'darwin', arch)
   await mkdir(onnxRoot, { recursive: true })
   await writeFile(join(onnxRoot, 'onnxruntime_binding.node'), 'ort-binding')
-  await writeFile(join(onnxRoot, 'libonnxruntime.1.22.0.dylib'), 'ort-library')
+  await writeFile(join(onnxRoot, 'libonnxruntime.1.23.2.dylib'), 'ort-library')
   return { root, resources, modules }
 }
 
@@ -74,7 +74,7 @@ test('accepts the pruned ONNX Runtime tree and reports both binaries', async (t)
   t.after(() => rm(value.root, { recursive: true, force: true }))
   const result = packagedOnnxRuntimeBinaries(value.modules, 'arm64')
   assert.match(result.binding, /darwin\/arm64\/onnxruntime_binding\.node$/)
-  assert.match(result.library, /darwin\/arm64\/libonnxruntime\.1\.22\.0\.dylib$/)
+  assert.match(result.library, /darwin\/arm64\/libonnxruntime\.1\.23\.2\.dylib$/)
 })
 
 test('rejects an ONNX Runtime tree the afterPack prune did not narrow', async (t) => {
@@ -98,7 +98,7 @@ test('rejects an ONNX Runtime tree with no dylib beside the binding', async (t) 
   const value = await fixture('arm64')
   t.after(() => rm(value.root, { recursive: true, force: true }))
   const archRoot = join(value.modules, 'onnxruntime-node', 'bin', 'napi-v6', 'darwin', 'arm64')
-  await rm(join(archRoot, 'libonnxruntime.1.22.0.dylib'), { force: true })
+  await rm(join(archRoot, 'libonnxruntime.1.23.2.dylib'), { force: true })
   assert.throws(
     () => packagedOnnxRuntimeBinaries(value.modules, 'arm64'),
     /missing an ONNX Runtime dylib/
