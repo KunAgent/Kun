@@ -266,7 +266,11 @@ function parseJson(text: string, name: string): unknown {
 }
 
 function sha256(text: string): string {
-  return createHash('sha256').update(text).digest('hex')
+  return createHash('sha256').update(canonicalText(text)).digest('hex')
+}
+
+function canonicalText(text: string): string {
+  return text.replace(/\r\n?/gu, '\n')
 }
 
 function requireUnique(values: readonly string[], name: string, errors: string[]): void {

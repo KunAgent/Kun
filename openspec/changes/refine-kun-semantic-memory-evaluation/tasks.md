@@ -1,8 +1,8 @@
 ## 1. Freeze the v2 evaluation contract
 
-- [ ] 1.1 Add a strict v2 dataset and manifest schema with versioned counts, category quotas, rationales, split metadata, hashes, fixed evaluation time, and frozen gates; verify malformed or unsupported inputs are rejected in focused tests.
-- [ ] 1.2 Create 40-48 anonymous synthetic Memory records and exactly 40 development plus 40 holdout queries across the declared categories; verify ids, labels, rationales, negatives, language coverage, and category quotas automatically.
-- [ ] 1.3 Compute and record deterministic record, query, and manifest hashes without changing the v1 fixtures or decision evidence; verify repeated loads produce identical hashes.
+- [x] 1.1 Add a strict v2 dataset and manifest schema with versioned counts, category quotas, rationales, split metadata, hashes, fixed evaluation time, and frozen gates; verify malformed or unsupported inputs are rejected in focused tests.
+- [x] 1.2 Create 40-48 anonymous synthetic Memory records and exactly 40 development plus 40 holdout queries across the declared categories; verify ids, labels, rationales, negatives, language coverage, and category quotas automatically.
+- [x] 1.3 Compute and record deterministic record, query, and manifest hashes without changing the v1 fixtures or decision evidence; verify repeated loads produce identical hashes.
 
 ## 2. Add paired uncertainty reporting
 
