@@ -3,10 +3,31 @@ import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
 import type { MemoryRecord } from '../contracts/memory.js'
 import { memoryInScope, memoryLifecycleState } from './memory-ranking.js'
 import { retrieveMemoryRecords } from './memory-retrieval.js'
-import type {
-  SemanticMemoryEvaluationDataset,
-  SemanticMemoryEvaluationQuery
-} from './semantic-memory-evaluation-dataset.js'
+
+export type SemanticMemoryEvaluationQueryInput = {
+  id: string
+  split: 'development' | 'holdout'
+  queryLanguage: 'en' | 'zh'
+  category: string
+  query: string
+  workspace?: string
+  project?: string
+  expectedIds: string[]
+  forbiddenIds: string[]
+}
+
+export type SemanticMemoryEvaluationDatasetInput = {
+  manifest: {
+    datasetId: string
+    evaluationNow: string
+    defaultK: number
+    promptCharacterBudget: number
+    scoringVersion: number
+    hashes: { recordsSha256: string; queriesSha256: string }
+  }
+  records: MemoryRecord[]
+  queries: SemanticMemoryEvaluationQueryInput[]
+}
 
 export type SemanticMemoryCandidateKind = 'lexical' | 'semantic' | 'hybrid'
 export type SemanticMemoryCandidateMetadata = {
@@ -24,7 +45,7 @@ export type SemanticMemoryCandidateMetadata = {
 export type SemanticMemoryCandidate = {
   metadata: SemanticMemoryCandidateMetadata
   retrieve: (input: {
-    query: SemanticMemoryEvaluationQuery
+    query: SemanticMemoryEvaluationQueryInput
     records: readonly MemoryRecord[]
     limit: number
     promptCharacterBudget: number
@@ -34,9 +55,9 @@ export type SemanticMemoryCandidate = {
 
 export type SemanticMemoryQueryResult = {
   queryId: string
-  split: SemanticMemoryEvaluationQuery['split']
-  queryLanguage: SemanticMemoryEvaluationQuery['queryLanguage']
-  category: SemanticMemoryEvaluationQuery['category']
+  split: SemanticMemoryEvaluationQueryInput['split']
+  queryLanguage: SemanticMemoryEvaluationQueryInput['queryLanguage']
+  category: SemanticMemoryEvaluationQueryInput['category']
   expectedCount: number
   selectedIds: string[]
   recallAtK?: number
@@ -118,7 +139,7 @@ export type DeterministicSemanticMemoryEvaluationReport = {
 }
 
 export async function runSemanticMemoryEvaluation(input: {
-  dataset: SemanticMemoryEvaluationDataset
+  dataset: SemanticMemoryEvaluationDatasetInput
   candidate: SemanticMemoryCandidate
   split?: 'development' | 'holdout' | 'all'
   networkAttempts?: number
@@ -268,7 +289,11 @@ export function createDeterministicLexicalBaseline(
   }
 }
 
-function filterCandidateRecords(records: readonly MemoryRecord[], query: SemanticMemoryEvaluationQuery, nowMs: number) {
+function filterCandidateRecords(
+  records: readonly MemoryRecord[],
+  query: SemanticMemoryEvaluationQueryInput,
+  nowMs: number
+) {
   const scoped = records.filter((record) => memoryInScope(record, query))
   const lifecycleEligible = scoped.filter((record) => memoryLifecycleState(record, nowMs) === 'active')
   const supersededIds = new Set(lifecycleEligible.flatMap((record) => record.supersedes ? [record.supersedes] : []))
@@ -281,7 +306,7 @@ function filterCandidateRecords(records: readonly MemoryRecord[], query: Semanti
 }
 
 function scoreQuery(input: {
-  query: SemanticMemoryEvaluationQuery
+  query: SemanticMemoryEvaluationQueryInput
   selected: readonly MemoryRecord[]
   eligibleCount: number
   scopeExcluded: ReadonlySet<string>

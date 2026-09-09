@@ -6,8 +6,8 @@
 
 ## 2. Add paired uncertainty reporting
 
-- [ ] 2.1 Add per-query candidate-minus-baseline Recall@K and reciprocal-rank deltas; verify relevant and abstention queries use the specified metric populations.
-- [ ] 2.2 Add a dependency-free deterministic paired bootstrap with a recorded seed, resample count, and percentile confidence intervals; verify fixed examples, repeatability, and edge cases in focused tests.
+- [x] 2.1 Add per-query candidate-minus-baseline Recall@K and reciprocal-rank deltas; verify relevant and abstention queries use the specified metric populations.
+- [x] 2.2 Add a dependency-free deterministic paired bootstrap with a recorded seed, resample count, and percentile confidence intervals; verify fixed examples, repeatability, and edge cases in focused tests.
 - [ ] 2.3 Include paired deltas and confidence intervals in evaluation and decision reports without changing existing v1 report parsing; verify report schemas reject missing or inconsistent uncertainty metadata.
 
 ## 3. Compare bounded development candidates
