@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "reportKind": "semantic-retrieval-decision",
+  "dataset": {
+    "id": "kun-memory-semantic-retrieval-anonymous-v1",
+    "recordsSha256": "e60bcf7650ded51baefe5a20290e337677fac85d6e79ad3d29fbd7b7d580e254",
+    "queriesSha256": "513c81bba4430b370e527744e0ab5e11720191b4f81ed53384b3ee5ab0458380",
+    "scoringVersion": 1
+  },
+  "candidateLock": {
+    "lockedAt": "2026-09-09T03:10:00.000Z",
+    "candidateId": "multilingual-e5-small-q8-hybrid-0.8-1",
+    "artifactSha256": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193",
+    "numericTolerance": 0.000001
+  },
+  "lexical": {
+    "overall": {
+      "recallAtK": 0.75,
+      "precisionAtK": 0.262,
+      "meanReciprocalRank": 0.711,
+      "abstentionAccuracy": 0
+    },
+    "holdout": {
+      "recallAtK": 0.5,
+      "precisionAtK": 0.156,
+      "meanReciprocalRank": 0.5
+    },
+    "lexicalControlRecallAtK": 1
+  },
+  "candidate": {
+    "overall": {
+      "recallAtK": 0.833,
+      "precisionAtK": 0.345,
+      "meanReciprocalRank": 0.729,
+      "abstentionAccuracy": 1,
+      "scopeLeaks": 0,
+      "lifecycleLeaks": 0,
+      "authorityViolations": 0,
+      "unknownSelections": 0
+    },
+    "holdout": {
+      "recallAtK": 0.625,
+      "precisionAtK": 0.319,
+      "meanReciprocalRank": 0.5
+    },
+    "lexicalControlRecallAtK": 1,
+    "networkAttempts": 0,
+    "fallbackMismatches": 0,
+    "safetyGatePassed": true
+  },
+  "holdoutResultColumns": [
+    "queryId",
+    "selectedIds",
+    "recallAtK",
+    "precisionAtK",
+    "reciprocalRank",
+    "explicitForbiddenSelections"
+  ],
+  "holdoutResults": [
+    ["p2a_q02_package_paraphrase", ["p2a_a_pnpm", "p2a_a_postgres", "p2a_a_node22", "p2a_a_redis_cache"], 1, 0.25, 1, 0],
+    ["p2a_q06_database_cross_language", ["p2a_a_node22", "p2a_a_postgres", "p2a_a_pnpm", "p2a_a_redis_cache", "p2a_a_cn_review"], 1, 0.2, 0.5, 0],
+    ["p2a_q12_concise_cross_language", ["p2a_a_cn_log_retention", "p2a_a_cn_timezone", "p2a_a_api_examples", "p2a_a_cn_review"], 0, 0, 0, 0],
+    ["p2a_q17_accessibility_cross_language", ["p2a_a_api_examples", "p2a_a_cn_log_retention", "p2a_a_cn_timezone", "p2a_a_cn_review"], 0, 0, 0, 0],
+    ["p2a_q20_log_retention_cross_language", ["p2a_a_backup_policy", "p2a_a_cn_log_retention"], 1, 0.5, 0.5, 1],
+    ["p2a_q24_timezone_cross_language", ["p2a_a_support_rotation"], 0, 0, 0, 0],
+    ["p2a_q30_lumen_project_scope", ["p2a_a_buildkite"], 1, 1, 1, 0],
+    ["p2a_q40_multi_record_stack", ["p2a_a_github_actions", "p2a_a_redis_cache", "p2a_a_postgres", "p2a_a_node22", "p2a_a_pnpm"], 1, 0.6, 1, 0]
+  ],
+  "resources": {
+    "coldReadinessMs": 584.333,
+    "warmQueryIterations": 30,
+    "warmQueryP50Ms": 3.581,
+    "warmQueryP95Ms": 4.738,
+    "fixtureBuildMs": 82.155,
+    "tenThousandRecordBuildMs": 17011.378,
+    "incrementalProjectionMs": 5.178,
+    "modelBytes": 135392016,
+    "indexBytes": 15590000,
+    "additionalPeakRssBytes": 351342592
+  },
+  "determinism": {
+    "runHashes": [
+      "4bee9d01b3bd48fe3da18917bd009b3fdb8b105681d653e377c6427dc608eada",
+      "4bee9d01b3bd48fe3da18917bd009b3fdb8b105681d653e377c6427dc608eada",
+      "4bee9d01b3bd48fe3da18917bd009b3fdb8b105681d653e377c6427dc608eada"
+    ],
+    "maximumNumericDelta": 0,
+    "cleanProcessPerRun": true
+  },
+  "requiredPlatformSupport": true,
+  "decision": "no-go",
+  "failedGateIds": [
+    "holdout-recall-gain",
+    "holdout-mrr-gain"
+  ],
+  "productionRecommendation": "Keep lexical SQLite FTS5 and filesystem fallback as the supported production retrieval path. Do not open P2-B from this candidate."
+}
