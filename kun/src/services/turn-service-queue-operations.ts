@@ -465,9 +465,8 @@ export const turnServiceQueueOperations = {
   },
 
   /**
-   * Cancel a queued turn. Returns true when the queued turn was aborted.
-   * A turn that already left the queue (running or terminal) returns false
-   * so the caller can fall back to interrupt semantics.
+   * Cancel only a committed queued turn. Retrying a confirmed queue cancellation
+   * is idempotent; running turns and unrelated terminal states remain conflicts.
    */
   async cancelQueuedTurn(this: TurnService, input: {
     threadId: string
@@ -479,6 +478,12 @@ export const turnServiceQueueOperations = {
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
         const turn = thread.turns.find((candidate) => candidate.id === input.turnId)
         if (!turn) throw new Error(`turn not found: ${input.turnId}`)
+        if (turn.admissionPending) {
+          throw new TurnConflictError(`turn admission is still pending: ${input.turnId}`)
+        }
+        if (turn.status === 'aborted' && turn.terminalCode === QUEUE_CANCELLED_TURN_CODE) {
+          return { threadId: input.threadId, turnId: input.turnId, status: 'aborted' }
+        }
         if (turn.status !== 'queued') {
           throw new TurnConflictError(`turn is not queued: ${input.turnId}`)
         }

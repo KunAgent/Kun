@@ -44,6 +44,7 @@ export type QueuedComposerMessage = {
   id: string
   text: string
   deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
+  editIntent?: 'cancelling' | 'restoring'
   steeringRequest?: { operationId: string; turnId: string }
   deliveryTurnId?: string
   deliveryUserMessageItemId?: string
@@ -179,7 +180,7 @@ export function FloatingComposerQueuedMessages({
   const interactionActive = busy !== null
   const expanded = queue.length === 1 || !collapsed || interactionActive
   const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive &&
-    !queue.some((message) => message.deliveryState === 'starting'))
+    !queue.some((message) => message.editIntent || message.deliveryState === 'starting'))
 
   const focusReorderHandle = (id: string): void => {
     queueMicrotask(() => reorderHandleRefs.current.get(id)?.focus())
@@ -326,7 +327,7 @@ export function FloatingComposerQueuedMessages({
             const imageCount = attachmentImageCount(message)
             const imageNames = imageCount > 0 ? attachmentImageNames(message) : ''
             const canRestore = Boolean(onRestoreToComposer && message.composerRestoreEligible && !message.steeringRequest && message.deliveryState !== 'starting')
-            const canGuide = Boolean(onGuide && message.deliveryState !== 'starting' && (message.steeringRequest || (recoverable
+            const canGuide = Boolean(onGuide && !message.editIntent && message.deliveryState !== 'starting' && (message.steeringRequest || (recoverable
               ? !running && !message.waitForRuntimeAdmission
               : (
                 running &&
@@ -430,7 +431,8 @@ export function FloatingComposerQueuedMessages({
                 ) : null}
                 {paused ? (
                   <span className={`${css.status} ${css.paused}`}>
-                    {t('queuedMessagePaused')}
+                    {t(message.editIntent === 'restoring' ? 'queuedMessageRestorePending'
+                      : message.editIntent === 'cancelling' ? 'queuedMessageCancelPending' : 'queuedMessagePaused')}
                   </span>
                 ) : null}
                 {inFlight ? (

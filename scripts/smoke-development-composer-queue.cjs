@@ -66,6 +66,7 @@ async function main() {
   let electronOutput = ''
   let primaryError
   let result
+  const queueModel = await require('./smoke-composer-runtime-queue.cjs').startQueueSmokeModel()
   try {
     await Promise.all([
       mkdir(profile, { recursive: true }), mkdir(userData, { recursive: true }),
@@ -76,6 +77,7 @@ async function main() {
       ...desktopSmokeSettings(runtimePort, workspaceRoot, profile),
       locale: 'en', theme: 'light', uiFontScale: 1
     }
+    settings.agents.kun.baseUrl = queueModel.baseUrl
     const serializedSettings = `${JSON.stringify(settings, null, 2)}\n`
     await Promise.all(desktopUserDataCandidates({
       platform: process.platform, home, appData, explicitUserData: userData
@@ -117,6 +119,8 @@ async function main() {
     const page = await findWorkbenchWindow(electronApplication, timeoutMs)
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(1_000)
+    const bridge = await require('./smoke-composer-runtime-queue.cjs').assertRuntimeQueueBridge(page, workspaceRoot)
+    process.stdout.write(`Runtime queue bridge passed: ${JSON.stringify(bridge)}\n`)
     await page.evaluate(async () => {
       await import('/src/components/chat/FloatingComposerQueueDockSmokeFixture.tsx')
     })
@@ -229,7 +233,8 @@ async function main() {
       )
     }
   }
-  if (primaryError) throw primaryError
+  if (primaryError) { await queueModel.close(); throw primaryError }
+  await queueModel.close()
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }
 

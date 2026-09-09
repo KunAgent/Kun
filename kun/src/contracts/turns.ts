@@ -458,6 +458,13 @@ export const StartTurnResponse = z.object({
 })
 export type StartTurnResponse = z.infer<typeof StartTurnResponse>
 
+export const CancelQueuedTurnResponse = z.object({
+  threadId: z.string().min(1),
+  turnId: z.string().min(1),
+  status: z.literal('aborted')
+}).strict()
+export type CancelQueuedTurnResponse = z.infer<typeof CancelQueuedTurnResponse>
+
 export const MoveQueuedTurnRequest = z.object({
   /** Move the queued turn directly before this queued sibling. */
   beforeTurnId: z.string().min(1).optional(),

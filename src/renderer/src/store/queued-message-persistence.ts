@@ -132,6 +132,10 @@ function normalizeQueuedMessage(value: unknown): QueuedUserMessage | null {
   } else {
     delete normalized.deliveryUserMessageItemId
   }
+  if (source.editIntent === 'cancelling' || source.editIntent === 'restoring') {
+    normalized.editIntent = source.editIntent
+    normalized.deliveryState = 'paused'
+  } else delete normalized.editIntent
   if (source.serviceTier === 'priority') normalized.serviceTier = 'priority'
   else delete normalized.serviceTier
   if (source.messageSource === 'design_continuation') {
@@ -300,7 +304,7 @@ export function forgetQueuedMessagesForThread(
 }
 
 export function isPendingQueuedMessage(message: QueuedUserMessage): boolean {
-  return !message.deliveryState || message.deliveryState === 'pending'
+  return !message.editIntent && (!message.deliveryState || message.deliveryState === 'pending')
 }
 
 /**
@@ -412,6 +416,13 @@ export function reconcileQueuedMessages(
     if (message.steeringRequest) { reconciled.push(message); continue }
     const receipt = runtimeQueuedTurns?.find((turn) =>
       turn.turnId === message.deliveryTurnId || Boolean(message.clientRequestId && turn.clientRequestId === message.clientRequestId))
+    if (message.editIntent) {
+      if (receipt?.status === 'running' || receipt?.status === 'completed' ||
+        (receipt?.status === 'aborted' && receipt.terminalCode !== 'queue_cancelled')) continue
+      reconciled.push({ ...message, deliveryState: 'paused',
+        ...(receipt?.terminalCode === 'queue_cancelled' ? { editIntent: 'restoring' as const } : {}) })
+      continue
+    }
     if (receipt?.status === 'admission_pending') {
       reconciled.push({ ...message, deliveryState: 'starting', deliveryTurnId: receipt.turnId })
       continue

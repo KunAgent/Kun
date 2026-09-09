@@ -102,6 +102,11 @@ describe('queued-message-edit', () => {
   })
 
   it.each([
+    ['persona snapshot', { persona: 'custom instructions' }],
+    ['account snapshot', { accountId: 'account' }],
+    ['graph orchestration', { orchestration: 'graph' }],
+    ['reserved plan', { guiPlan: { planId: 'plan', relativePath: 'plan.md', workspaceRoot: '/workspace', operation: 'refine' } }],
+    ['unresolved attachment', { attachmentIds: ['missing-reference'] }],
     ['file references', { fileReferences: [{ path: '/workspace/file.ts' }] }],
     ['document attachments', {
       attachments: [{ id: 'doc-1', kind: 'document', name: 'spec.pdf' }]

@@ -242,6 +242,12 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to cancel queued turn'))
     }
+    const receipt = readRuntimeJson<{ threadId?: unknown; turnId?: unknown; status?: unknown }>(
+      response.body, 'runtime returned an invalid queue cancellation response'
+    )
+    if (receipt?.threadId !== threadId || receipt?.turnId !== turnId || receipt?.status !== 'aborted') {
+      throw new Error('runtime returned an invalid queue cancellation response')
+    }
   }
 
   async moveQueuedTurn(

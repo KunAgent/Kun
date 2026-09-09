@@ -18,6 +18,10 @@ import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 
 const common = {
+  queuedMessageRestorePending: 'Withdrawn · ready to edit',
+  queuedMessageCancelPending: 'Confirming withdrawal',
+  queuedMessageStorageFailed: 'Unable to save queued message for editing. Please retry.',
+  queuedMessageCancelUnavailable: 'Runtime queue cancellation is unavailable.',
   ...shellWorkflow,
   ...workflowConnect,
   ...phoneComposer,

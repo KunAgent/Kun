@@ -1,3 +1,4 @@
+import { saveQueueEditIntent } from './queue-edit-handoff'
 import { queueMutationPending, withQueueMutation } from './queue-mutation-fence'
 import { fetchRuntimeQueuedTurnsBestEffort } from './queued-message-persistence'
 import { createClientTurnRequestId } from './chat-store-thread-actions-support'
@@ -176,28 +177,15 @@ export function createThreadQueueActions(
   runtime: ThreadActionRuntime
 ): Pick<ChatState, 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns'> {
   const { set, get, sseAbortRef } = context
-  const cancelRuntimeQueuedTurn = async (message: QueuedUserMessage | undefined): Promise<void> => {
-    // in_flight and runtime-owned paused rows both own a durable server-side
-    // queued turn; failed rows may still carry one before settlement.
-    if (
-      !message?.deliveryTurnId ||
-      (
-        message.deliveryState !== 'in_flight' &&
-        message.deliveryState !== 'paused' &&
-        message.deliveryState !== 'failed'
-      )
-    ) return
-    const threadId = get().activeThreadId
+  const cancelRuntimeQueuedTurn = async (threadId: string, message: QueuedUserMessage): Promise<boolean> => {
     const provider = getProvider()
-    if (!threadId || typeof provider.cancelQueuedTurn !== 'function') return
+    if (!message.deliveryTurnId || !provider.cancelQueuedTurn) return false
     try {
       await provider.cancelQueuedTurn(threadId, message.deliveryTurnId)
+      return true
     } catch (error) {
-      // The turn may have started already; that is fine, the message
-      // simply delivered before the cancel landed.
-      if (!/not found|no longer queued|not queued/i.test(formatRuntimeError(error))) {
-        set({ error: describeRuntimeError(error).message })
-      }
+      if (get().activeThreadId === threadId) set({ error: describeRuntimeError(error).message })
+      return false
     }
   }
   return {
@@ -247,15 +235,17 @@ export function createThreadQueueActions(
         // just-admitted server turn and drop the resurrected row instead of
         // executing a message the user already deleted.
         if (threadActionSharedState.removedQueuedMessageIds.has(next.id)) {
-          threadActionSharedState.removedQueuedMessageIds.delete(next.id)
-          const resurrected = get().queuedMessages.find((message) => message.id === next.id)
+          const active = get().activeThreadId === threadId
+          const rows = active ? get().queuedMessages : queuedMessagesForThread(threadId)
+          const resurrected = rows.find((message) => message.id === next.id)
           if (resurrected) {
-            await cancelRuntimeQueuedTurn(resurrected)
-            set((current) => ({
-              queuedMessages: current.queuedMessages.filter((message) => message.id !== next.id)
-            }))
-            runtime.persistActiveQueuedMessages()
+            if (!await cancelRuntimeQueuedTurn(threadId, resurrected)) return
+            const latest = get().activeThreadId === threadId ? get().queuedMessages : queuedMessagesForThread(threadId)
+            const remaining = latest.filter((message) => message.id !== next.id)
+            if (!saveQueuedMessagesForThread(threadId, remaining)) return
+            if (get().activeThreadId === threadId) set({ queuedMessages: remaining })
           }
+          threadActionSharedState.removedQueuedMessageIds.delete(next.id)
           continue
         }
         if (!started) {
@@ -283,10 +273,20 @@ export function createThreadQueueActions(
       if (get().activeThreadId !== threadId) return
       removed = get().queuedMessages.find((row) => row.id === id)
     }
-    if (removed?.steeringRequest || removed?.deliveryState === 'starting') return
-    if (removed?.deliveryTurnId) {
+    if (removed?.steeringRequest || removed?.deliveryState === 'starting' || removed?.waitForRuntimeAdmission) {
+      set({ error: i18n.t('common:queuedMessageConfirming') })
+      return
+    }
+    if (removed?.deliveryState === 'in_flight' && !removed.deliveryTurnId) {
+      set({ error: i18n.t('common:queuedMessageConfirming') })
+      return
+    }
+    if (removed?.deliveryTurnId && removed.editIntent !== 'restoring') {
       const provider = getProvider()
-      if (!threadId || !provider.cancelQueuedTurn) return
+      if (!threadId || !provider.cancelQueuedTurn) {
+        set({ error: i18n.t('common:queuedMessageCancelUnavailable') })
+        return
+      }
       try {
         await provider.cancelQueuedTurn(threadId, removed.deliveryTurnId)
       } catch (error) {
@@ -310,7 +310,7 @@ export function createThreadQueueActions(
     }
   }),
 
-  restoreQueuedMessage: async (id) => withQueueMutation(get().activeThreadId, null, async () => {
+  restoreQueuedMessage: async (id, accept) => withQueueMutation(get().activeThreadId, null, async () => {
     if (threadActionSharedState.guidingQueuedMessageIds.has(id)) return null
     const threadId = get().activeThreadId
     const pending = get().queuedMessages.find((row) => row.id === id)
@@ -321,30 +321,42 @@ export function createThreadQueueActions(
     const restored = restoreQueuedMessageFromQueue(get().queuedMessages, id)
     if (!restored.restored || restored.restored.steeringRequest || restored.restored.deliveryState === 'starting') return null
     const provider = getProvider()
-    if (restored.restored.deliveryTurnId) {
-      if (!threadId || !provider.cancelQueuedTurn) return null
-      try {
-        await provider.cancelQueuedTurn(threadId, restored.restored.deliveryTurnId)
-      } catch (error) {
-        if (get().activeThreadId === threadId) set({ error: describeRuntimeError(error).message })
-        return null
+    let message = restored.restored
+    try {
+      if (!threadId) throw new Error('No thread is available for queue editing.')
+      if (message.deliveryState === 'in_flight' && !message.deliveryTurnId) {
+        throw new Error(i18n.t('common:queuedMessageConfirming'))
       }
-      if (get().activeThreadId !== threadId) {
-        saveQueuedMessagesForThread(threadId, queuedMessagesForThread(threadId).filter((row) => row.id !== id))
-        invalidateThreadSnapshot(threadId)
-        return null
+      if (message.editIntent !== 'restoring') {
+        message = { ...message, editIntent: 'cancelling', deliveryState: 'paused' }
+        saveQueueEditIntent(threadId, message, get, set)
+        if (message.deliveryTurnId) {
+          if (!provider.cancelQueuedTurn) throw new Error(i18n.t('common:queuedMessageCancelUnavailable'))
+          await provider.cancelQueuedTurn(threadId, message.deliveryTurnId)
+        }
+        message = { ...message, editIntent: 'restoring' }
+        saveQueueEditIntent(threadId, message, get, set)
       }
+      if (get().activeThreadId !== threadId || !accept) return null
+      if (!await accept(message)) return null
+      if (get().activeThreadId !== threadId) return null
+      const next = get().queuedMessages.filter((row) => row.id !== id)
+      if (!saveQueuedMessagesForThread(threadId, next)) {
+        throw new Error(i18n.t('common:queuedMessageStorageFailed'))
+      }
+      threadActionSharedState.removedQueuedMessageIds.add(id)
+      set({ queuedMessages: next })
+      return message
+    } catch (error) {
+      if (get().activeThreadId === threadId) set({ error: describeRuntimeError(error).message })
+      return null
     }
-    // Tombstone before the local removal so a concurrent drain loop sees it.
-    threadActionSharedState.removedQueuedMessageIds.add(id)
-    set((current) => ({ queuedMessages: current.queuedMessages.filter((row) => row.id !== id) }))
-    runtime.persistActiveQueuedMessages()
-    return restored.restored
   }),
 
   reorderQueuedMessage: async (id, targetId, position) => withQueueMutation(get().activeThreadId, undefined, async () => {
     const moving = get().queuedMessages.find((message) => message.id === id)
     const anchor = get().queuedMessages.find((message) => message.id === targetId)
+    if (moving?.editIntent || anchor?.editIntent) return
     const anchorTurnId = anchor?.deliveryTurnId
     const threadId = get().activeThreadId
     if (moving?.deliveryTurnId || anchorTurnId) {
@@ -394,7 +406,7 @@ export function createThreadQueueActions(
     // reached the runtime stay local and keep their paused state.
     set((current) => ({
       queuedMessages: current.queuedMessages.map((message) =>
-        message.deliveryState === 'paused' && message.clientRequestId
+        message.deliveryState === 'paused' && message.clientRequestId && !message.editIntent
           ? { ...message, deliveryState: 'in_flight' as const }
           : message
       )
@@ -408,7 +420,7 @@ export function createThreadQueueActions(
     if (queueMutationPending(get().activeThreadId) || threadActionSharedState.guidingQueuedMessageIds.has(id)) return false
     const state = get()
     const message = state.queuedMessages.find((candidate) => candidate.id === id)
-    if (!message || message.deliveryState === 'starting') return false
+    if (!message || message.editIntent || message.deliveryState === 'starting') return false
     if (message.deliveryState === 'paused' || message.deliveryState === 'failed') {
       if (message.waitForRuntimeAdmission) {
         set({ error: i18n.t('common:queuedMessageRetryUnavailable') })

@@ -8,6 +8,9 @@ type EditableQueuedMessage = Pick<QueuedUserMessage,
   | 'deliveryUserMessageItemId'
   | 'waitForRuntimeAdmission'
   | 'mode'
+  | 'persona'
+  | 'accountId'
+  | 'orchestration'
   | 'agentSurface'
   | 'subagentResume'
   | 'messageSource'
@@ -37,7 +40,9 @@ export function canRestoreQueuedMessageToComposer(message: EditableQueuedMessage
     message.deliveryState !== 'paused' &&
     message.deliveryState !== 'failed'
   ) return false
-  if (message.waitForRuntimeAdmission) return false
+  if (message.waitForRuntimeAdmission || message.persona || message.accountId ||
+    message.guiPlan || message.orchestration === 'graph') return false
+  if (message.attachmentIds?.some((id) => !message.attachments?.some((attachment) => attachment.id === id))) return false
   if (message.agentSurface === 'write' || message.agentSurface === 'design') return false
   if (
     message.subagentResume || message.messageSource ||

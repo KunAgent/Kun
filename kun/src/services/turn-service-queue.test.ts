@@ -303,11 +303,24 @@ describe('durable per-thread turn queue', () => {
     await expect(
       h.turns.cancelQueuedTurn({ threadId: 'thr_q', turnId: first.turnId })
     ).rejects.toBeInstanceOf(TurnConflictError)
-    // Cancelling an already-terminal turn is a conflict too.
+    // A lost cancellation response can be retried without another event.
     await expect(
       h.turns.cancelQueuedTurn({ threadId: 'thr_q', turnId: second.turnId })
-    ).rejects.toBeInstanceOf(TurnConflictError)
+    ).resolves.toEqual(cancelled)
+    expect(eventsOfKind(h, 'turn_aborted').filter((event) => event.turnId === second.turnId)).toHaveLength(1)
     expect(third).toBeTruthy()
+  })
+
+  it('does not cancel an admission that has not committed', async () => {
+    const h = createHarness()
+    await createThread(h, 'thr_q')
+    const thread = (await h.threadStore.get('thr_q'))!
+    const pending = createTurnRecord({ id: 'pending', threadId: 'thr_q', prompt: 'pending', admissionPending: true })
+    await h.threadStore.upsert({ ...thread, turns: [pending] })
+    await expect(h.turns.cancelQueuedTurn({ threadId: 'thr_q', turnId: pending.id }))
+      .rejects.toBeInstanceOf(TurnConflictError)
+    expect((await h.threadStore.get('thr_q'))?.turns[0]?.status).toBe('queued')
+    expect(eventsOfKind(h, 'turn_aborted')).toEqual([])
   })
 
   it('reorders queued turns relative to each other', async () => {

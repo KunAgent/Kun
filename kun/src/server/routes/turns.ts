@@ -7,6 +7,7 @@ import {
   PruneThreadResponse,
   RestoreSnapshotResponse,
   ThreadSnapshotsResponse,
+  CancelQueuedTurnResponse,
   CancelToolCallResponse,
   InterruptTurnRequest,
   InterruptTurnResponse,
@@ -117,7 +118,7 @@ export async function cancelQueuedTurn(
 ): Promise<JsonResponse | Response> {
   try {
     const result = await turns.cancelQueuedTurn({ threadId, turnId })
-    return jsonResponse(result)
+    return jsonResponse(CancelQueuedTurnResponse.parse(result))
   } catch (error) {
     if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
     if (error instanceof Error && /not found/i.test(error.message)) return ERRORS.notFound(error.message)

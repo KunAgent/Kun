@@ -18,6 +18,10 @@ import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 
 const common = {
+  queuedMessageRestorePending: '已撤回，待编辑',
+  queuedMessageCancelPending: '正在确认撤回',
+  queuedMessageStorageFailed: '无法保存待编辑消息，请重试。',
+  queuedMessageCancelUnavailable: '当前运行时无法撤回排队消息。',
   ...shellWorkflow,
   ...workflowConnect,
   ...phoneComposer,

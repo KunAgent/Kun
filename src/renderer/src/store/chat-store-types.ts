@@ -51,6 +51,7 @@ export type QueuedUserMessage = {
   text: string
   /** Stable idempotency key reused while this user submission is retried. */
   clientRequestId?: string
+  editIntent?: 'cancelling' | 'restoring'
   steeringRequest?: { operationId: string; turnId: string }
   waitForRuntimeAdmission?: boolean
   /** Pending/paused items wait locally; admitted items remain until runtime execution starts. */
@@ -82,12 +83,7 @@ export type QueuedUserMessage = {
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
   composerContexts?: ComposerContextAttachment[]
-  /**
-   * Optional GUI plan context forwarded to Kun. The renderer
-   * attaches it for plan/refine turns so the runtime can advertise
-   * the native `create_plan` tool and gate the write to the reserved
-   * plan artifact.
-   */
+  /** GUI plan context forwarded to Kun for its reserved plan artifact. */
   guiPlan?: {
     operation: 'draft' | 'refine'
     workspaceRoot: string
@@ -591,7 +587,7 @@ export type ChatState = {
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>
   drainQueuedMessages: () => Promise<void>
   removeQueuedMessage: (id: string) => Promise<void> | void
-  restoreQueuedMessage: (id: string) => Promise<QueuedUserMessage | null>
+  restoreQueuedMessage: (id: string, accept?: (message: QueuedUserMessage) => boolean | Promise<boolean>) => Promise<QueuedUserMessage | null>
   reorderQueuedMessage: (id: string, targetId: string, position: 'before' | 'after') => Promise<void> | void
   /** Resume a runtime queue paused by an interrupt. */
   resumeQueuedTurns: () => Promise<boolean>
