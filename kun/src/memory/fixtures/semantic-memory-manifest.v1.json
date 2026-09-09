@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "kun-memory-semantic-retrieval-anonymous-v1",
+  "status": "frozen",
+  "evaluationNow": "2026-09-09T00:00:00.000Z",
+  "defaultK": 5,
+  "promptCharacterBudget": 2000,
+  "scoringVersion": 1,
+  "hashes": {
+    "recordsSha256": "e60bcf7650ded51baefe5a20290e337677fac85d6e79ad3d29fbd7b7d580e254",
+    "queriesSha256": "513c81bba4430b370e527744e0ab5e11720191b4f81ed53384b3ee5ab0458380"
+  },
+  "counts": {
+    "records": 31,
+    "queries": 40,
+    "development": 32,
+    "holdout": 8,
+    "english": 27,
+    "chinese": 13,
+    "emptyExpected": 4
+  },
+  "thresholds": {
+    "scopeLeaks": 0,
+    "lifecycleLeaks": 0,
+    "authorityViolations": 0,
+    "networkAttempts": 0,
+    "fallbackMismatches": 0,
+    "emptyResultAccuracy": 1,
+    "semanticHoldoutRecallGain": 0.15,
+    "semanticHoldoutMrrGain": 0.1,
+    "maximumOverallPrecisionDecline": 0.05,
+    "maximumLexicalControlRegression": 0.02,
+    "deterministicRuns": 3,
+    "maximumCompressedModelBytes": 209715200,
+    "maximumWarmQueryP95Ms": 250,
+    "maximumColdReadinessMs": 5000,
+    "maximumTenThousandRecordBuildMs": 120000,
+    "maximumAdditionalPeakRssBytes": 536870912,
+    "maximumTenThousandRecordIndexBytes": 67108864
+  },
+  "referenceMachine": {
+    "platform": "win32",
+    "architecture": "x64",
+    "os": "Windows 10",
+    "osBuild": "19044",
+    "cpu": "Intel Core i7-14700",
+    "physicalCores": 20,
+    "logicalProcessors": 28,
+    "physicalMemoryBytes": 68399452160,
+    "nodeVersion": "22.19.0",
+    "nodeModuleAbi": "127"
+  },
+  "review": {
+    "privacyPatternsChecked": [
+      "Windows drive paths",
+      "UNC paths",
+      "credentials",
+      "email addresses",
+      "GitHub user paths"
+    ],
+    "zeroOverlapSemanticOrCrossLingualQueries": 8,
+    "zeroOverlapHoldoutQueries": 3,
+    "notes": "Synthetic product and workspace names are deliberate. Holdout labels are frozen and must not be used for candidate tuning."
+  },
+  "candidateLock": {
+    "status": "locked",
+    "lockedAt": "2026-09-09T03:10:00.000Z",
+    "selectedOnSplit": "development",
+    "candidate": {
+      "id": "multilingual-e5-small-q8-hybrid-0.8-1",
+      "kind": "hybrid",
+      "modelId": "Xenova/multilingual-e5-small",
+      "version": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+      "runtime": "@huggingface/transformers@4.2.0",
+      "license": "MIT",
+      "artifact": "onnx/model_quantized.onnx",
+      "artifactSha256": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193",
+      "dimensions": 384,
+      "normalization": "attention-mask-mean+l2",
+      "parameters": {
+        "modelId": "Xenova/multilingual-e5-small",
+        "minimumSimilarity": 0.8,
+        "queryPrefix": "query: ",
+        "documentPrefix": "passage: ",
+        "fusionMode": "semantic-gated-rrf",
+        "semanticWeight": 1,
+        "lexicalWeight": 1,
+        "rankConstant": 60,
+        "lexicalCandidateId": "kun-memory-lexical-foundation"
+      },
+      "platforms": [
+        "win32-x64",
+        "darwin-x64",
+        "darwin-arm64",
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    "numericTolerance": 0.000001,
+    "developmentEvidence": "semantic-memory-development-screening.v1.json",
+    "resourceEvidence": "semantic-memory-e5-resources.windows-x64.v1.json"
+  }
+}

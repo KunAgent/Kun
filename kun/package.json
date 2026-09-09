@@ -68,7 +68,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test ./scripts/runtime-build-manifest.test.mjs && node ./scripts/run-tests.mjs",
     "test:memory-growth": "node ./scripts/run-memory-growth-regression.mjs",
-    "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts --reporter=verbose",
+    "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts src/memory/semantic-memory-evaluation-dataset.test.ts src/memory/semantic-memory-evaluation.test.ts src/memory/semantic-memory-vector-candidate.test.ts src/memory/semantic-memory-candidate-fallback.test.ts src/memory/semantic-memory-evaluation-decision.test.ts src/memory/semantic-memory-evaluation-evidence.test.ts --reporter=verbose",
     "test:watch": "vitest",
     "transcript:diff": "node ./scripts/transcript-diff.mjs",
     "benchmark:replay": "npm run build && node ./dist/cli/replay-entry.js",
@@ -120,7 +120,7 @@
   "overrides": {
     "@hono/node-server": "2.0.11",
     "fast-uri": "3.1.6",
-    "hono": "4.13.0",
+    "hono": "4.13.5",
     "ip-address": "10.4.0",
     "qs": "6.16.0",
     "@connectrpc/connect-node": {
