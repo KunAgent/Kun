@@ -36,6 +36,9 @@ type SpeakStoreState = {
   download: SpeakDownloadState | null
   /** Last failure, surfaced next to the Speak action. */
   error: string | null
+  errorBlockId: string | null
+  recordingNotice: string | null
+  setRecordingNotice: (notice: string | null) => void
   /** Chunks finished / total, used for the inline progress hint. */
   progress: { spoken: number; total: number } | null
   setEnabled: (enabled: boolean) => void
@@ -43,7 +46,7 @@ type SpeakStoreState = {
   setPhase: (phase: SpeakPhase) => void
   setDownload: (download: SpeakDownloadState | null) => void
   setProgress: (progress: { spoken: number; total: number } | null) => void
-  fail: (error: string) => void
+  fail: (error: string, blockId?: string) => void
   clearError: () => void
   reset: () => void
 }
@@ -59,13 +62,16 @@ export const useSpeakStore = create<SpeakStoreState>((set) => ({
   ...IDLE,
   enabled: null,
   error: null,
+  errorBlockId: null,
+  recordingNotice: null,
+  setRecordingNotice: (recordingNotice) => set({ recordingNotice }),
   setEnabled: (enabled) => set({ enabled }),
   start: (blockId) =>
-    set({ activeBlockId: blockId, phase: 'preparing', download: null, progress: null, error: null }),
+    set({ activeBlockId: blockId, phase: 'preparing', download: null, progress: null, error: null, recordingNotice: null }),
   setPhase: (phase) => set((state) => (state.activeBlockId ? { phase } : state)),
   setDownload: (download) => set({ download }),
   setProgress: (progress) => set({ progress }),
-  fail: (error) => set({ ...IDLE, error }),
+  fail: (error, blockId) => set({ ...IDLE, error, errorBlockId: blockId ?? null }),
   clearError: () => set({ error: null }),
   reset: () => set({ ...IDLE })
 }))

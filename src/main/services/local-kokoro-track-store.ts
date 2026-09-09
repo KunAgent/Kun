@@ -6,7 +6,7 @@
  * than paying for synthesis again, and the user can save it to their device.
  */
 import { BrowserWindow, app, dialog } from 'electron'
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -22,13 +22,32 @@ import {
 } from '../../shared/local-kokoro-tracks'
 
 /** Captured chunks per in-flight request, dropped when the answer ends. */
-const captures = new Map<string, Uint8Array[]>()
+type Capture = { parts: Uint8Array[]; bytes: number; disabled: boolean; timer: NodeJS.Timeout }
+const captures = new Map<string, Capture>()
+let captureEpoch = 0
+let diskQueue: Promise<unknown> = Promise.resolve()
+
+function diskOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const next = diskQueue.then(operation)
+  diskQueue = next.catch(() => undefined)
+  return next
+}
+
+export function localKokoroCaptureUsage(): { count: number; bytes: number } {
+  return { count: captures.size, bytes: [...captures.values()].reduce((total, item) => total + item.bytes, 0) }
+}
+
+export function discardAllLocalKokoroCaptures(): void {
+  captureEpoch += 1
+  for (const id of captures.keys()) discardLocalKokoroTrackCapture(id)
+}
 
 /**
  * Ceiling for a single recording. A very long answer is still spoken, it just
  * is not kept, so a runaway transcript cannot fill the disk.
  */
 export const LOCAL_KOKORO_TRACK_MAX_BYTES = 200 * 1024 * 1024
+export const LOCAL_KOKORO_TRACK_STORE_MAX_BYTES = 1024 * 1024 * 1024
 
 export function localKokoroTrackDirectory(): string {
   return join(app.getPath('userData'), 'models', 'speech', 'kokoro', 'tracks')
@@ -41,17 +60,30 @@ function trackPath(key: string): string {
 /** Start collecting audio for a request. Calling it again resets the capture. */
 export function beginLocalKokoroTrackCapture(requestId: string): void {
   if (!requestId) return
-  captures.set(requestId, [])
+  discardLocalKokoroTrackCapture(requestId)
+  const timer = setTimeout(() => discardLocalKokoroTrackCapture(requestId), 5 * 60_000)
+  timer.unref?.()
+  captures.set(requestId, { parts: [], bytes: 0, disabled: false, timer })
 }
 
-/** Add one synthesized chunk to an open capture; ignored when none is open. */
+/** Bound capture memory before retaining or copying the next chunk. */
 export function appendLocalKokoroTrackChunk(requestId: string, pcm: Uint8Array): void {
-  const parts = captures.get(requestId)
-  if (!parts) return
-  parts.push(pcm)
+  const capture = captures.get(requestId)
+  if (!capture || capture.disabled) return
+  capture.timer.refresh()
+  if (pcm.byteLength > LOCAL_KOKORO_TRACK_MAX_BYTES - localKokoroCaptureUsage().bytes) {
+    capture.parts = []
+    capture.bytes = 0
+    capture.disabled = true
+    return
+  }
+  capture.parts.push(pcm)
+  capture.bytes += pcm.byteLength
 }
 
 export function discardLocalKokoroTrackCapture(requestId: string): void {
+  const capture = captures.get(requestId)
+  if (capture) clearTimeout(capture.timer)
   captures.delete(requestId)
 }
 
@@ -74,28 +106,32 @@ export async function finalizeLocalKokoroTrack(
   requestId: string,
   key: string
 ): Promise<LocalKokoroTrackInfo | null> {
-  const parts = captures.get(requestId)
-  captures.delete(requestId)
-  if (!parts || parts.length === 0 || !isLocalKokoroTrackKey(key)) return null
-  const pcm = concatChunks(parts)
-  if (pcm.byteLength === 0 || pcm.byteLength > LOCAL_KOKORO_TRACK_MAX_BYTES) return null
-  const directory = localKokoroTrackDirectory()
-  await mkdir(directory, { recursive: true })
-  const wav = encodeWav(pcm)
-  const target = trackPath(key)
-  // Written under a temporary name first so a crash cannot leave a half file
-  // that would later be replayed as a valid recording.
-  const partial = `${target}.writing`
-  await writeFile(partial, wav)
-  await rm(target, { force: true })
-  const { rename } = await import('node:fs/promises')
-  await rename(partial, target)
-  return {
-    key,
-    sizeBytes: wav.byteLength,
-    durationSeconds: localKokoroTrackDurationSeconds(wav.byteLength),
-    createdAt: new Date().toISOString()
-  }
+  const capture = captures.get(requestId)
+  discardLocalKokoroTrackCapture(requestId)
+  if (!capture || capture.disabled || !capture.bytes || !isLocalKokoroTrackKey(key)) return null
+  const epoch = captureEpoch
+  return diskOperation(async () => {
+    if (epoch !== captureEpoch) return null
+    const usage = await localKokoroTrackUsage()
+    const previous = await getLocalKokoroTrack(key)
+    if (usage.totalBytes - (previous?.sizeBytes ?? 0) + capture.bytes + 44 > LOCAL_KOKORO_TRACK_STORE_MAX_BYTES) return null
+    const pcm = concatChunks(capture.parts)
+    const directory = localKokoroTrackDirectory()
+    await mkdir(directory, { recursive: true })
+    const wav = encodeWav(pcm)
+    const target = trackPath(key)
+    const partial = `${target}.writing`
+    try {
+      await writeFile(partial, wav)
+      if (epoch !== captureEpoch) return null
+      await rename(partial, target)
+      if (epoch !== captureEpoch) return null
+      return { key, sizeBytes: wav.byteLength,
+        durationSeconds: localKokoroTrackDurationSeconds(wav.byteLength), createdAt: new Date().toISOString() }
+    } finally {
+      await rm(partial, { force: true }).catch(() => undefined)
+    }
+  })
 }
 
 export async function getLocalKokoroTrack(key: unknown): Promise<LocalKokoroTrackInfo | null> {
@@ -155,8 +191,11 @@ export async function readLocalKokoroTrackPcm(key: unknown): Promise<string | nu
 }
 
 export async function clearLocalKokoroTracks(): Promise<LocalKokoroTrackUsage> {
-  await rm(localKokoroTrackDirectory(), { recursive: true, force: true })
-  return { count: 0, totalBytes: 0 }
+  discardAllLocalKokoroCaptures()
+  return diskOperation(async () => {
+    await rm(localKokoroTrackDirectory(), { recursive: true, force: true })
+    return { count: 0, totalBytes: 0 }
+  })
 }
 
 /** Save a recording to a location the user picks. */

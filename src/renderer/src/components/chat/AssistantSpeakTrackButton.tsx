@@ -52,8 +52,8 @@ export function AssistantSpeakTrackButton({
     return () => window.clearTimeout(timer)
   }, [saved])
 
-  const trackKey = settings?.keepTracks ? speakTrackKeyFor(text, settings) : null
-  if (speakEnabled !== true || !settings?.keepTracks) return null
+  const trackKey = settings ? speakTrackKeyFor(text, settings) : null
+  if (speakEnabled !== true || !settings) return null
   if (!speakTrackStored(keys, trackKey) || !trackKey) return null
 
   const onClick = async (): Promise<void> => {

@@ -63,6 +63,7 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
   const speak = useMemo(() => ({ ...DEFAULT_SPEAK, ...(kun.speak ?? {}) }), [kun.speak])
   const speakPhase = useSpeakStore((state) => state.phase)
   const speakError = useSpeakStore((state) => state.error)
+  const trackKeys = useSpeakTrackStore((state) => state.keys)
   const [statuses, setStatuses] = useState<Partial<Record<LocalKokoroModelId, LocalKokoroModelStatus>>>({})
   const [readyVoices, setReadyVoices] = useState<LocalKokoroVoiceId[]>([])
   const [sourceStatuses, setSourceStatuses] = useState<LocalKokoroDownloadSourceStatus[] | null>(null)
@@ -76,6 +77,7 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
 
   const updateSpeak = useCallback(
     (patch: Record<string, unknown>): void => {
+      if (patch.enabled === false) stopSpeaking()
       updateKun({ speak: { ...speak, ...patch } })
     },
     [speak, updateKun]
@@ -124,7 +126,14 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
     }
   }, [speak.model])
 
-  const voiceGroups = useMemo(() => speakVoiceGroups(accentFilter), [accentFilter])
+  const voiceGroups = useMemo(() => {
+    const groups = speakVoiceGroups(accentFilter)
+    const selected = localKokoroVoiceById(speak.voice)
+    if (!groups.some(group => group.voices.some(voice => voice.id === selected.id))) {
+      groups.push({ accent: selected.accent, voices: [selected] })
+    }
+    return groups
+  }, [accentFilter, speak.voice])
   const previewing = speakPhase !== 'idle'
 
   const runModelAction = async (
@@ -169,7 +178,7 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
         voice: speak.voice,
         speed: clampSpeakSpeed(speak.speed),
         downloadSource: speak.downloadSource,
-        autoDownload: true,
+        autoDownload: speak.autoDownload,
         // The preview is a throwaway sample, never worth storing.
         keepTracks: false
       },
@@ -188,7 +197,7 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
 
   useEffect(() => {
     void refreshTrackUsage()
-  }, [refreshTrackUsage, speak.keepTracks])
+  }, [refreshTrackUsage, speak.keepTracks, trackKeys])
 
   const onClearTracks = async (): Promise<void> => {
     if (typeof window.kunGui?.clearLocalKokoroTracks !== 'function') return
@@ -239,30 +248,28 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
             />
           }
         />
-        {speak.keepTracks ? (
-          <SettingRow
-            title={t('speakStoredTracks')}
-            description={t('speakStoredTracksDesc')}
-            control={
-              <div className="flex w-full min-w-0 items-center justify-end gap-3">
-                <span className="text-[12px] tabular-nums text-ds-muted">
-                  {t('speakStoredTracksUsage', {
-                    count: trackUsage?.count ?? 0,
-                    size: formatBytes(trackUsage?.totalBytes ?? 0) || '0 MB'
-                  })}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void onClearTracks()}
-                  disabled={clearingTracks || (trackUsage?.count ?? 0) === 0}
-                  className="shrink-0 rounded-lg border border-ds-border px-2 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  {t('speakStoredTracksClear')}
-                </button>
-              </div>
-            }
-          />
-        ) : null}
+        <SettingRow
+          title={t('speakStoredTracks')}
+          description={t('speakStoredTracksDesc')}
+          control={
+            <div className="flex w-full min-w-0 items-center justify-end gap-3">
+              <span className="text-[12px] tabular-nums text-ds-muted">
+                {t('speakStoredTracksUsage', {
+                  count: trackUsage?.count ?? 0,
+                  size: formatBytes(trackUsage?.totalBytes ?? 0) || '0 MB'
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={() => void onClearTracks()}
+                disabled={clearingTracks || ((trackUsage?.count ?? 0) === 0 && speakPhase === 'idle')}
+                className="shrink-0 rounded-lg border border-ds-border px-2 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {t('speakStoredTracksClear')}
+              </button>
+            </div>
+          }
+        />
         <SettingRow
           title={t('speakAccent')}
           description={t('speakAccentDesc')}

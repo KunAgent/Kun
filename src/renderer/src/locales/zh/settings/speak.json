@@ -50,9 +50,9 @@
   "speakAutoDownload": "首次使用时自动下载",
   "speakAutoDownloadDesc": "在权重尚未下载时使用朗读，将自动获取并显示进度。",
   "speakKeepTracks": "保留生成的音轨",
-  "speakKeepTracksDesc": "保存每条回答的音频，再次朗读时可立即播放，并可下载录音。",
+  "speakKeepTracksDesc": "保存每条回答的音频，再次朗读时可立即播放，并可下载录音。 关闭后仅停止保存新录音，已有录音会保留至手动清除。",
   "speakStoredTracks": "已保存的录音",
-  "speakStoredTracksDesc": "以 WAV 文件形式保存在 Kun 数据目录中。",
+  "speakStoredTracksDesc": "WAV 录音独立于会话保存，删除会话不会删除录音。总容量上限 1 GiB，单条上限 200 MiB；容量不足时继续朗读但不保存。",
   "speakStoredTracksUsage_one": "{{count}} 个文件，{{size}}",
   "speakStoredTracksUsage_other": "{{count}} 个文件，{{size}}",
   "speakStoredTracksClear": "清除"

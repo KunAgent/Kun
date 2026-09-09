@@ -39,7 +39,11 @@ function fixture(platform = 'darwin', targets = TARGETS) {
     const archRoot = join(binRoot, platform, arch)
     mkdirSync(archRoot, { recursive: true })
     writeFileSync(join(archRoot, 'onnxruntime_binding.node'), `${platform}-${arch}`)
+    writeFileSync(join(archRoot, platform === 'win32' ? 'onnxruntime.dll' : platform === 'darwin' ? 'libonnxruntime.1.22.0.dylib' : 'libonnxruntime.so.1'), 'library')
   }
+  const workerDir = join(packedResourcesPath(appOutDir, platform), 'app.asar.unpacked', 'out', 'main')
+  mkdirSync(workerDir, { recursive: true })
+  writeFileSync(join(workerDir, 'local-kokoro-worker-entry.js'), 'export {}')
   return { root, appOutDir, binRoot }
 }
 
@@ -91,4 +95,12 @@ test('does nothing when the dependency is not packaged', (t) => {
   assert.doesNotThrow(
     () => prunePackedOnnxRuntimeBinaries(context(join(root, 'out'), 'darwin', 'arm64'), HELPERS)
   )
+})
+
+
+test('rejects a platform directory without its runtime library', (t) => {
+  const value = fixture()
+  t.after(() => rmSync(value.root, { recursive: true, force: true }))
+  rmSync(join(value.binRoot, 'darwin', 'arm64', 'libonnxruntime.1.22.0.dylib'))
+  assert.throws(() => prunePackedOnnxRuntimeBinaries(context(value.appOutDir, 'darwin', 'arm64'), HELPERS), /Incomplete ONNX/)
 })

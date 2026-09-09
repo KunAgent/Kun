@@ -292,9 +292,10 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
    * watches this channel while an answer is spoken.
    */
   ipcMain.handle('speak:kokoro:ping', () => Date.now())
-  ipcMain.handle('speak:kokoro:download', async (_, payload: unknown) => {
+  ipcMain.handle('speak:kokoro:download', async (event, payload: unknown) => {
+    watchSpeechSender(event)
     const request = parseIpcPayload('speak:kokoro:download', localKokoroDownloadPayloadSchema, payload)
-    return downloadLocalKokoroModel(request?.modelId, request?.sourceId)
+    return downloadLocalKokoroModel(request?.modelId, request?.sourceId, request?.ownerId)
   })
   ipcMain.handle('speak:kokoro:cancel', async (_, modelId: unknown) =>
     cancelLocalKokoroModel(parseIpcPayload('speak:kokoro:cancel', localKokoroModelIdPayloadSchema, modelId))
@@ -314,17 +315,32 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
     getLocalKokoroVoiceStatus(parseIpcPayload('speak:kokoro:voice-status', localKokoroVoiceIdPayloadSchema, voiceId))
   )
   ipcMain.handle('speak:kokoro:voices', async () => listDownloadedLocalKokoroVoices())
-  ipcMain.handle('speak:kokoro:voice-download', async (_, payload: unknown) => {
+  ipcMain.handle('speak:kokoro:voice-download', async (event, payload: unknown) => {
+    watchSpeechSender(event)
     const request = parseIpcPayload('speak:kokoro:voice-download', localKokoroVoiceDownloadPayloadSchema, payload)
-    return downloadLocalKokoroVoice(request?.voiceId, request?.sourceId)
+    return downloadLocalKokoroVoice(request?.voiceId, request?.sourceId, request?.ownerId)
   })
   ipcMain.handle('speak:kokoro:readiness', async (_, payload: unknown) => {
     const request = parseIpcPayload('speak:kokoro:readiness', localKokoroReadinessPayloadSchema, payload)
     return getLocalKokoroReadiness(request?.modelId, request?.voiceId)
   })
-  ipcMain.handle('speak:kokoro:synthesize', async (_, payload: unknown) =>
-    synthesizeLocalKokoroSpeech(parseIpcPayload('speak:kokoro:synthesize', localKokoroSpeakPayloadSchema, payload))
-  )
+  const watchedSpeechSenders = new WeakSet<Electron.WebContents>()
+  const watchSpeechSender = (event: Electron.IpcMainInvokeEvent): void => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    if (!watchedSpeechSenders.has(event.sender)) {
+      watchedSpeechSenders.add(event.sender)
+      const cleanup = (): void => { void resetLocalKokoroSession() }
+      event.sender.on('destroyed', cleanup)
+      event.sender.on('render-process-gone', cleanup)
+      event.sender.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+        if (isMainFrame && !isInPlace) cleanup()
+      })
+    }
+  }
+  ipcMain.handle('speak:kokoro:synthesize', async (event, payload: unknown) => {
+    watchSpeechSender(event)
+    return synthesizeLocalKokoroSpeech(parseIpcPayload('speak:kokoro:synthesize', localKokoroSpeakPayloadSchema, payload))
+  })
   ipcMain.handle('speak:kokoro:synthesize-cancel', async (_, requestId: unknown) => {
     cancelLocalKokoroSpeech(
       parseIpcPayload('speak:kokoro:synthesize-cancel', localKokoroSpeakCancelPayloadSchema, requestId)

@@ -1,6 +1,6 @@
-import { useEffect, type ReactElement } from 'react'
+import { useCallback, useEffect, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Download, X } from 'lucide-react'
+import { AlertTriangle, Download, Square, X } from 'lucide-react'
 import { useSpeakStore } from '../stores/speak-store'
 import { stopSpeaking } from './chat/speak-controller'
 import { speakErrorLabel } from './chat/AssistantSpeakButton'
@@ -16,9 +16,13 @@ const ERROR_DISMISS_MS = 8_000
  */
 export function SpeakDownloadToast(): ReactElement | null {
   const { t } = useTranslation('common')
+  const phase = useSpeakStore((state) => state.phase)
   const download = useSpeakStore((state) => state.download)
-  const error = useSpeakStore((state) => state.error)
-  const clearError = useSpeakStore((state) => state.clearError)
+  const error = useSpeakStore((state) => state.error ?? state.recordingNotice)
+  const clearError = useCallback(() => {
+    useSpeakStore.getState().clearError()
+    useSpeakStore.getState().setRecordingNotice(null)
+  }, [])
 
   useEffect(() => {
     if (!error) return
@@ -26,7 +30,17 @@ export function SpeakDownloadToast(): ReactElement | null {
     return () => window.clearTimeout(timer)
   }, [clearError, error])
 
-  if (!download && !error) return null
+  if (!download && !error) {
+    if (phase === 'idle') return null
+    return (
+      <div role="status" className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-ds-border bg-ds-card px-3 py-2 shadow-lg">
+        <span>{t(phase === 'speaking' ? 'speakAnswer' : 'speakPreparing')}</span>
+        <button type="button" onClick={stopSpeaking} aria-label={t('speakStop')} className="flex items-center gap-1 text-accent">
+          <Square className="h-4 w-4" />{t('speakStop')}
+        </button>
+      </div>
+    )
+  }
 
   if (!download && error) {
     return (
@@ -38,6 +52,7 @@ export function SpeakDownloadToast(): ReactElement | null {
       >
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
         <span className="min-w-0 flex-1 leading-5">{speakErrorLabel(t, error)}</span>
+        {phase !== 'idle' ? <button type="button" onClick={stopSpeaking} aria-label={t('speakStop')}><Square className="h-4 w-4" /></button> : null}
         <button
           type="button"
           onClick={() => clearError()}

@@ -14,5 +14,7 @@
   "speakDownloadingHint": "ダウンロードが完了すると自動的に読み上げを開始します。",
   "speakTrackDownload": "音声をダウンロード",
   "speakTrackSaved": "保存しました",
-  "speakTrackSaveFailed": "録音を保存できませんでした: {{message}}"
+  "speakTrackSaveFailed": "録音を保存できませんでした: {{message}}",
+  "speakUnsupportedLanguage": "ローカル読み上げは英語のみ対応しています。この内容には未対応の言語が含まれています。",
+  "speakTrackNotSaved": "録音は消去、容量超過、または書き込みエラーにより保存されませんでした。読み上げは続行します。"
 }

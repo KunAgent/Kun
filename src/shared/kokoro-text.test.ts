@@ -246,3 +246,9 @@ describe('takeSpeechChunk', () => {
     expect(drained.join(' ')).toBe('First one. Second one. Third one.')
   })
 })
+
+
+it('preserves inline identifiers and mathematical conditions', () => {
+  expect(speechTextFromAnswer('Use `user_id` to query.')).toContain('user underscore id')
+  expect(speechTextFromAnswer('Ensure x ≤ 10 and y ≠ 0.')).toBe('Ensure x less than or equal to 10 and y not equal to 0.')
+})

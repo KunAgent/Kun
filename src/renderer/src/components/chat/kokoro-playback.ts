@@ -24,6 +24,7 @@ export class KokoroPlayer {
   private drainResolvers: Array<() => void> = []
   private stopped = false
   private gapSeconds = 0
+  private hasScheduledAudio = false
 
   constructor(private readonly sampleRate: number) {}
 
@@ -60,7 +61,8 @@ export class KokoroPlayer {
     const startAt = Math.max(context.currentTime + SCHEDULE_LEAD_SECONDS, this.nextStartTime)
     // Scheduling past the previous chunk's end means the buffer ran dry and the
     // listener heard silence; record it so pacing regressions are measurable.
-    if (this.sources.size > 0) this.gapSeconds += Math.max(0, startAt - this.nextStartTime)
+    if (this.hasScheduledAudio) this.gapSeconds += Math.max(0, startAt - this.nextStartTime)
+    this.hasScheduledAudio = true
     source.start(startAt)
     this.nextStartTime = startAt + buffer.duration
     this.sources.add(source)

@@ -145,6 +145,7 @@ module.exports = {
     // Speech synthesis runs on a worker thread, and `new Worker()` needs a real
     // file on disk: Node's worker loader does not read from inside the archive.
     'out/main/local-kokoro-worker-entry.js',
+    'out/main/chunks/local-kokoro-*.js',
     // Computer-use native automation (@computer-use/nut-js + its libnut
     // binding + node-mac-permissions) ships prebuilt .node files that must
     // live outside the asar archive to load.
@@ -316,6 +317,9 @@ module.exports = {
     ]
   },
   dmg: {
+    // LZFSE keeps the native speech dependency within the installer budget.
+    // Supported since macOS 10.11, below Electron's minimum supported macOS.
+    format: 'ULFO',
     sign: hasExplicitMacSigningIdentity,
     // Volume name carries the same artifact version as artifactName so users
     // can tell installers apart in Finder; without release env overrides,

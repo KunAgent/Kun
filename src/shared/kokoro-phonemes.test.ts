@@ -101,3 +101,11 @@ describe('kokoroTokenSequences', () => {
     ])
   })
 })
+
+
+it('keeps decimal and thousands separators inside the phonemized number', () => {
+  const segments = splitKokoroSegments('The value is 3.14, or 1,000.')
+  expect(segments).toContainEqual({ literal: false, text: '3.14' })
+  expect(segments).toContainEqual({ literal: false, text: '1,000' })
+  expect(segments.at(-1)).toEqual({ literal: true, text: '.' })
+})

@@ -5,7 +5,7 @@
  * first sentence starts as soon as it is ready instead of after the whole
  * answer is rendered.
  */
-import { LOCAL_KOKORO_SAMPLE_RATE, type LocalKokoroModelId } from '@shared/local-kokoro'
+import { LOCAL_KOKORO_SAMPLE_RATE } from '@shared/local-kokoro'
 import { decodeKokoroPcm16 } from '@shared/local-kokoro-speech'
 import {
   KOKORO_FIRST_CHUNK_CHARS,
@@ -16,7 +16,7 @@ import {
 } from '@shared/kokoro-text'
 import { localKokoroVoiceById } from '@shared/local-kokoro-voices'
 import { localKokoroTrackKey } from '@shared/local-kokoro-tracks'
-import { speechTextFromAnswer } from '@shared/kokoro-text'
+import { speechTextFromAnswer, hasUnsupportedSpeechScript } from '@shared/kokoro-text'
 import { refreshSpeakTrackKeys, useSpeakTrackStore } from '../../stores/speak-track-store'
 import { useSpeakStore } from '../../stores/speak-store'
 import { KokoroPlayer } from './kokoro-playback'
@@ -74,10 +74,10 @@ type SpeakSession = {
   requestId: string
   player: KokoroPlayer
   canceled: boolean
-  /** Model tier whose download this session may have started. */
-  downloadingModelId: LocalKokoroModelId | null
   /** Recording being captured for this answer, when tracks are kept. */
   trackKey: string | null
+  keepTrack: boolean
+  failure: string | null
 }
 
 let session: SpeakSession | null = null
@@ -137,12 +137,6 @@ export function stopSpeaking(): void {
     // A stopped answer is incomplete; nothing half-spoken gets stored.
     void window.kunGui?.discardLocalKokoroTrack?.(current.requestId).catch(() => undefined)
   }
-  if (current.downloadingModelId) {
-    // Dismissing the progress card has to stop the transfer too, otherwise it
-    // keeps running with nothing on screen reporting it.
-    void window.kunGui?.cancelLocalKokoroModel?.(current.downloadingModelId).catch(() => undefined)
-    current.downloadingModelId = null
-  }
   useSpeakStore.getState().reset()
 }
 
@@ -161,47 +155,40 @@ export async function speakAnswer(blockId: string, markdown: string): Promise<vo
     store.fail('speakUnavailable')
     return
   }
-  const settings = await loadSpeakSettings()
-  if (!settings) {
-    store.fail('speakUnavailable')
-    return
+  const current = createSession(blockId)
+  try {
+    const settings = await loadSpeakSettings()
+    if (current.canceled) return
+    if (!settings) return finish(current, 'speakUnavailable')
+    if (!settings.enabled) return finish(current, null)
+    const text = speechTextFromAnswer(markdown)
+    if (!text) return finish(current, 'speakNothingToRead')
+    if (hasUnsupportedSpeechScript(text)) return finish(current, 'speakUnsupportedLanguage')
+    current.trackKey = speakTrackKeyFor(markdown, settings)
+    current.keepTrack = settings.keepTracks
+    if (await playStoredTrack(current)) return
+    const ready = await ensureKokoroAssets(settings, () => current.canceled, current.requestId)
+    if (current.canceled) return
+    if (!ready.ok) return finish(current, ready.message)
+    await runChunks(current, settings, speechSentencesFromAnswer(markdown))
+  } catch (error) {
+    finish(current, error instanceof Error ? error.message : String(error))
   }
-  if (!settings.enabled) {
-    // The action is hidden while the toggle is off; a stale click must not
-    // start a download, and there is nothing to report to the user.
-    store.reset()
-    return
-  }
-  const sentences = speechSentencesFromAnswer(markdown)
-  if (sentences.length === 0) {
-    store.fail('speakNothingToRead')
-    return
-  }
+}
+
+function createSession(blockId: string): SpeakSession {
   const current: SpeakSession = {
     blockId,
     requestId: `speak-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     player: new KokoroPlayer(LOCAL_KOKORO_SAMPLE_RATE),
     canceled: false,
-    downloadingModelId: null,
-    trackKey: settings.keepTracks ? speakTrackKeyFor(markdown, settings) : null
+    trackKey: null,
+    keepTrack: false,
+    failure: null
   }
   session = current
-  store.start(blockId)
-  try {
-    const ready = await ensureKokoroAssets(settings, () => current.canceled, (modelId) => {
-      current.downloadingModelId = modelId
-    })
-    current.downloadingModelId = null
-    if (current.canceled) return
-    if (!ready.ok) {
-      finish(current, ready.message)
-      return
-    }
-    if (await playStoredTrack(current)) return
-    await runChunks(current, settings, sentences)
-  } catch (error) {
-    finish(current, error instanceof Error ? error.message : String(error))
-  }
+  useSpeakStore.getState().start(blockId)
+  return current
 }
 
 /**
@@ -213,7 +200,6 @@ export async function speakAnswer(blockId: string, markdown: string): Promise<vo
 async function playStoredTrack(current: SpeakSession): Promise<boolean> {
   const key = current.trackKey
   if (!key || typeof window.kunGui?.readLocalKokoroTrack !== 'function') return false
-  if (!useSpeakTrackStore.getState().keys?.has(key)) return false
   const store = useSpeakStore.getState()
   store.setDownload(null)
   store.setPhase('synthesizing')
@@ -268,13 +254,13 @@ async function runChunks(
       modelId: settings.model,
       voiceId: settings.voice,
       speed: settings.speed,
-      keepTrack: Boolean(current.trackKey)
+      keepTrack: current.keepTrack
     })
     lastSynthesisSeconds = (Date.now() - startedAt) / 1000
     synthesisSecondsPerChar = lastSynthesisSeconds / chunk.length
     if (current.canceled) return
     if (!result.ok) {
-      if (result.canceled) return
+      if (result.canceled) { finish(current, null); return }
       finish(current, result.message || 'speakFailed')
       return
     }
@@ -301,11 +287,13 @@ async function runChunks(
  */
 async function storeTrack(current: SpeakSession): Promise<void> {
   const key = current.trackKey
-  if (!key || typeof window.kunGui?.finalizeLocalKokoroTrack !== 'function') return
+  if (!current.keepTrack || !key || typeof window.kunGui?.finalizeLocalKokoroTrack !== 'function') return
   const info = await window.kunGui
     .finalizeLocalKokoroTrack({ requestId: current.requestId, key })
     .catch(() => null)
+  if (current.canceled) return
   if (info) useSpeakTrackStore.getState().addKey(info.key)
+  else useSpeakStore.getState().setRecordingNotice('speakTrackNotSaved')
 }
 
 /**
@@ -333,21 +321,15 @@ export async function previewKokoroVoice(
     return { ok: false, message: 'speakUnavailable' }
   }
   stopSpeaking()
-  const current: SpeakSession = {
-    blockId: `preview:${localKokoroVoiceById(settings.voice).id}`,
-    requestId: `speak-preview-${Date.now()}`,
-    player: new KokoroPlayer(LOCAL_KOKORO_SAMPLE_RATE),
-    canceled: false,
-    downloadingModelId: null,
-    trackKey: null
-  }
-  session = current
-  useSpeakStore.getState().start(current.blockId)
+  const current = createSession(`preview:${localKokoroVoiceById(settings.voice).id}`)
   try {
-    const ready = await ensureKokoroAssets(settings, () => current.canceled, (modelId) => {
-      current.downloadingModelId = modelId
-    })
-    current.downloadingModelId = null
+    const text = speechTextFromAnswer(sampleText)
+    if (!text || hasUnsupportedSpeechScript(text)) {
+      const message = text ? 'speakUnsupportedLanguage' : 'speakNothingToRead'
+      finish(current, message)
+      return { ok: false, message }
+    }
+    const ready = await ensureKokoroAssets(settings, () => current.canceled, current.requestId)
     if (current.canceled) return { ok: false, message: '' }
     if (!ready.ok) {
       finish(current, ready.message)
@@ -355,19 +337,28 @@ export async function previewKokoroVoice(
     }
     const previewSentences = speechSentencesFromAnswer(sampleText)
     await runChunks(current, settings, previewSentences.length > 0 ? previewSentences : [sampleText])
-    return { ok: true }
+    return current.failure ? { ok: false, message: current.failure } : { ok: true }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const ownsState = session === current
     finish(current, message)
-    return { ok: false, message }
+    return { ok: false, message: ownsState ? message : '' }
   }
 }
 
 function finish(current: SpeakSession, error: string | null): void {
-  if (session === current) session = null
+  const ownsState = session === current
+  current.failure = error
+  if (ownsState) session = null
+  current.canceled = true
   current.player.stop()
+  void window.kunGui?.cancelLocalKokoroSpeech?.(current.requestId).catch(() => undefined)
+  if (current.trackKey) {
+    void window.kunGui?.discardLocalKokoroTrack?.(current.requestId).catch(() => undefined)
+  }
+  if (!ownsState) return
   const store = useSpeakStore.getState()
-  if (error) store.fail(error)
+  if (error) store.fail(error, current.blockId)
   else store.reset()
 }
 

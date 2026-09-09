@@ -14,5 +14,7 @@
   "speakDownloadingHint": "다운로드가 끝나면 자동으로 읽어줍니다.",
   "speakTrackDownload": "오디오 내려받기",
   "speakTrackSaved": "저장됨",
-  "speakTrackSaveFailed": "녹음을 저장할 수 없습니다: {{message}}"
+  "speakTrackSaveFailed": "녹음을 저장할 수 없습니다: {{message}}",
+  "speakUnsupportedLanguage": "로컬 읽기는 영어만 지원합니다. 이 내용에 지원되지 않는 언어가 포함되어 있습니다.",
+  "speakTrackNotSaved": "녹음이 삭제되었거나 저장 한도를 초과했거나 쓰기에 실패하여 저장되지 않았습니다. 읽기는 계속됩니다."
 }

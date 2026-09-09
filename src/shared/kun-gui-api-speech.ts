@@ -51,6 +51,7 @@ export type KunGuiLocalSpeechApi = {
   listLocalKokoroModelStatuses: () => Promise<LocalKokoroModelStatus[]>
   downloadLocalKokoroModel: (payload?: {
     modelId?: LocalKokoroModelId
+    ownerId?: string
     sourceId?: LocalKokoroDownloadSourceId
   }) => Promise<LocalKokoroModelDownloadResult>
   cancelLocalKokoroModel: (modelId?: LocalKokoroModelId) => Promise<LocalKokoroModelDownloadResult>
@@ -62,6 +63,7 @@ export type KunGuiLocalSpeechApi = {
   listDownloadedLocalKokoroVoices: () => Promise<LocalKokoroVoiceId[]>
   downloadLocalKokoroVoice: (payload?: {
     voiceId?: LocalKokoroVoiceId
+    ownerId?: string
     sourceId?: LocalKokoroDownloadSourceId
   }) => Promise<LocalKokoroVoiceStatus>
   getLocalKokoroReadiness: (payload?: {

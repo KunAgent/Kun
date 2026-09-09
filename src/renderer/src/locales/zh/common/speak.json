@@ -14,5 +14,7 @@
   "speakDownloadingHint": "下载完成后会自动开始朗读。",
   "speakTrackDownload": "下载音频",
   "speakTrackSaved": "已保存",
-  "speakTrackSaveFailed": "无法保存录音：{{message}}"
+  "speakTrackSaveFailed": "无法保存录音：{{message}}",
+  "speakUnsupportedLanguage": "本地朗读目前仅支持英语，此内容包含不支持的语言。",
+  "speakTrackNotSaved": "录音已被清空、超过容量限制或写入失败，本次未保存。朗读仍会继续。"
 }

@@ -52,8 +52,7 @@ export async function loadSpeakSettings(): Promise<SpeakSettings | null> {
 export async function ensureKokoroAssets(
   settings: SpeakSettings,
   isCanceled: () => boolean,
-  /** Called with the model tier whose transfer just started, so a cancel can abort it. */
-  onModelDownloadStarted?: (modelId: LocalKokoroModelId) => void
+  ownerId?: string
 ): Promise<SpeakAssetResult> {
   const bridge = window.kunGui
   if (typeof bridge?.getLocalKokoroReadiness !== 'function') {
@@ -63,13 +62,14 @@ export async function ensureKokoroAssets(
     modelId: settings.model,
     voiceId: settings.voice
   })
+  if (isCanceled()) return { ok: false, message: '' }
   if (readiness.ready) return { ok: true }
   if (!settings.autoDownload) return { ok: false, message: 'speakModelMissing' }
   if (isCanceled()) return { ok: false, message: '' }
 
   const store = useSpeakStore.getState()
   store.setPhase('downloading')
-  const stopProgress = subscribeToProgress(settings)
+  const stopProgress = subscribeToProgress(settings, isCanceled)
   try {
     if (readiness.model.state !== 'ready') {
       store.setDownload({
@@ -78,14 +78,14 @@ export async function ensureKokoroAssets(
         downloadedBytes: 0,
         totalBytes: localKokoroModelById(settings.model).sizeBytes
       })
-      onModelDownloadStarted?.(settings.model)
       const download = await bridge.downloadLocalKokoroModel({
         modelId: settings.model,
-        sourceId: settings.downloadSource
+        sourceId: settings.downloadSource,
+        ownerId
       })
       if (isCanceled()) return { ok: false, message: '' }
       if (!download.ok) return { ok: false, message: download.message }
-      if (download.status.state !== 'ready') return { ok: false, message: 'speakModelMissing' }
+      if (download.status.modelId !== settings.model || download.status.state !== 'ready') return { ok: false, message: 'speakModelMissing' }
     }
     if (readiness.voice.state !== 'ready') {
       const voice = localKokoroVoiceById(settings.voice)
@@ -97,7 +97,8 @@ export async function ensureKokoroAssets(
       })
       const voiceStatus = await bridge.downloadLocalKokoroVoice({
         voiceId: settings.voice,
-        sourceId: settings.downloadSource
+        sourceId: settings.downloadSource,
+        ownerId
       })
       if (isCanceled()) return { ok: false, message: '' }
       if (voiceStatus.state !== 'ready') {
@@ -107,13 +108,16 @@ export async function ensureKokoroAssets(
     return { ok: true }
   } finally {
     stopProgress()
-    useSpeakStore.getState().setDownload(null)
+    if (!isCanceled()) useSpeakStore.getState().setDownload(null)
   }
 }
 
-function subscribeToProgress(settings: SpeakSettings): () => void {
+function subscribeToProgress(settings: SpeakSettings, isCanceled: () => boolean): () => void {
   if (typeof window.kunGui?.onLocalKokoroModelProgress !== 'function') return () => undefined
   return window.kunGui.onLocalKokoroModelProgress((progress) => {
+    if (isCanceled()) return
+    if (progress.asset === 'model' && progress.modelId !== settings.model) return
+    if (progress.asset === 'voice' && progress.voiceId !== settings.voice) return
     const label = progress.asset === 'voice'
       ? localKokoroVoiceById(progress.voiceId ?? settings.voice).label
       : localKokoroModelById(progress.modelId ?? settings.model).label

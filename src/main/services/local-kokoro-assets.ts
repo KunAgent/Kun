@@ -147,6 +147,7 @@ export async function downloadVerifiedAsset(request: KokoroAssetDownload): Promi
         `downloaded Kokoro asset checksum mismatch: expected ${request.sha256}, got ${actualSha256}`
       )
     }
+    request.controller.signal.throwIfAborted()
     await rename(tempPath, request.targetPath)
     if (request.metadata) {
       await writeFile(request.metadata.path, JSON.stringify(request.metadata.content, null, 2), 'utf8')

@@ -50,9 +50,9 @@
   "speakAutoDownload": "Download on first use",
   "speakAutoDownloadDesc": "When Speak is used before the weights exist, fetch them automatically and show progress.",
   "speakKeepTracks": "Keep generated tracks",
-  "speakKeepTracksDesc": "Save the audio for each answer, so speaking it again is instant and you can download the recording.",
+  "speakKeepTracksDesc": "Save the audio for each answer, so speaking it again is instant and you can download the recording. Turning this off stops saving new recordings; existing recordings remain until cleared.",
   "speakStoredTracks": "Stored recordings",
-  "speakStoredTracksDesc": "Kept under your Kun data directory as WAV files.",
+  "speakStoredTracksDesc": "WAV files are independent of conversations and remain after a conversation is deleted. Limit: 1 GiB total, 200 MiB per recording; playback continues without saving when full.",
   "speakStoredTracksUsage_one": "{{count}} file, {{size}}",
   "speakStoredTracksUsage_other": "{{count}} files, {{size}}",
   "speakStoredTracksClear": "Clear"

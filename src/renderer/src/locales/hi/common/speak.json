@@ -14,5 +14,7 @@
   "speakDownloadingHint": "डाउनलोड पूरा होने पर बोलना स्वतः शुरू हो जाएगा।",
   "speakTrackDownload": "ऑडियो डाउनलोड करें",
   "speakTrackSaved": "सेव हो गया",
-  "speakTrackSaveFailed": "रिकॉर्डिंग सेव नहीं हो सकी: {{message}}"
+  "speakTrackSaveFailed": "रिकॉर्डिंग सेव नहीं हो सकी: {{message}}",
+  "speakUnsupportedLanguage": "स्थानीय वाचन केवल अंग्रेज़ी का समर्थन करता है। इस पाठ में असमर्थित भाषा है।",
+  "speakTrackNotSaved": "रिकॉर्डिंग हटाए जाने, संग्रहण सीमा पार होने या लिखने में त्रुटि के कारण सहेजी नहीं गई। वाचन जारी रहेगा।"
 }

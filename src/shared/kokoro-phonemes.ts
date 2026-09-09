@@ -37,7 +37,7 @@ export const KOKORO_VOCAB: Record<string, number> = {
 /** Characters espeak keeps verbatim; they carry Kokoro's pauses and prosody. */
 export const KOKORO_PUNCTUATION = ';:,.!?¡¿—…"«»“” '
 
-const PUNCTUATION_RUN = /([;:,.!?¡¿—…"«»“”]+\s*|\s+)/
+const PUNCTUATION_RUN = /((?<!\d)[,.]+\s*|[,.]+(?!\d)\s*|[;:!?¡¿—…"«»“”]+\s*|\s+)/
 /** Anything that is neither punctuation nor whitespace must go through espeak. */
 const SPEAKABLE_CHARACTER = /[^\s;:,.!?¡¿—…"«»“”]/
 

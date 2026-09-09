@@ -14,5 +14,7 @@
   "speakDownloadingHint": "Speaking starts automatically once the download finishes.",
   "speakTrackDownload": "Download audio",
   "speakTrackSaved": "Saved",
-  "speakTrackSaveFailed": "Could not save the recording: {{message}}"
+  "speakTrackSaveFailed": "Could not save the recording: {{message}}",
+  "speakUnsupportedLanguage": "Local speech supports English text only. This answer contains an unsupported language.",
+  "speakTrackNotSaved": "The recording was not saved because it was cleared, exceeded storage limits, or could not be written. Playback continues."
 }

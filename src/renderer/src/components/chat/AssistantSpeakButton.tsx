@@ -8,6 +8,8 @@ import { speakAnswer, stopSpeaking } from './speak-controller'
 /** Error values the controller reports as locale keys rather than raw text. */
 const SPEAK_ERROR_KEYS = new Set([
   'speakUnavailable',
+  'speakUnsupportedLanguage',
+  'speakTrackNotSaved',
   'speakNothingToRead',
   'speakModelMissing',
   'speakVoiceMissing',
@@ -58,7 +60,7 @@ export function AssistantSpeakButton({
   const { t } = useTranslation('common')
   const activeBlockId = useSpeakStore((state) => state.activeBlockId)
   const phase = useSpeakStore((state) => state.phase)
-  const error = useSpeakStore((state) => state.error)
+  const error = useSpeakStore((state) => state.errorBlockId === blockId ? state.error : null)
   const progress = useSpeakStore((state) => state.progress)
   const clearError = useSpeakStore((state) => state.clearError)
   const speakEnabled = useSpeakEnabled()

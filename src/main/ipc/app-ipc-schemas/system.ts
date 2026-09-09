@@ -65,14 +65,16 @@ export const localKokoroVoiceIdPayloadSchema = localKokoroVoiceIdSchema.optional
 export const localKokoroDownloadPayloadSchema = z
   .object({
     modelId: localKokoroModelIdSchema.optional(),
-    sourceId: localKokoroDownloadSourceSchema.optional()
+    sourceId: localKokoroDownloadSourceSchema.optional(),
+    ownerId: trimmedString(MAX_ID_LENGTH).optional()
   })
   .strict()
   .optional()
 export const localKokoroVoiceDownloadPayloadSchema = z
   .object({
     voiceId: localKokoroVoiceIdSchema.optional(),
-    sourceId: localKokoroDownloadSourceSchema.optional()
+    sourceId: localKokoroDownloadSourceSchema.optional(),
+    ownerId: trimmedString(MAX_ID_LENGTH).optional()
   })
   .strict()
   .optional()

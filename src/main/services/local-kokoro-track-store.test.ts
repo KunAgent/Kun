@@ -1,5 +1,5 @@
 import { mkdtempSync } from 'node:fs'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,6 +13,9 @@ import { app, dialog } from 'electron'
 import { decodeWavPcm, localKokoroTrackKey } from '../../shared/local-kokoro-tracks'
 import {
   appendLocalKokoroTrackChunk,
+  localKokoroCaptureUsage,
+  LOCAL_KOKORO_TRACK_MAX_BYTES,
+  LOCAL_KOKORO_TRACK_STORE_MAX_BYTES,
   beginLocalKokoroTrackCapture,
   clearLocalKokoroTracks,
   discardLocalKokoroTrackCapture,
@@ -175,4 +178,49 @@ describe('exportLocalKokoroTrack', () => {
     expect(result).toMatchObject({ ok: false })
     expect(dialog.showSaveDialog).not.toHaveBeenCalled()
   })
+})
+
+
+it('releases capture memory immediately on overflow and does not keep a truncated recording', async () => {
+  beginLocalKokoroTrackCapture('overflow')
+  appendLocalKokoroTrackChunk('overflow', chunk(4, 1))
+  // Only byteLength is inspected; the oversized payload must never be retained or copied.
+  appendLocalKokoroTrackChunk('overflow', { byteLength: LOCAL_KOKORO_TRACK_MAX_BYTES } as Uint8Array)
+  expect(localKokoroCaptureUsage().bytes).toBe(0)
+  appendLocalKokoroTrackChunk('overflow', chunk(4, 2))
+  expect(await finalizeLocalKokoroTrack('overflow', KEY)).toBeNull()
+})
+
+it('clears in-flight captures as well as disk recordings', async () => {
+  beginLocalKokoroTrackCapture('clear-inflight')
+  appendLocalKokoroTrackChunk('clear-inflight', chunk(4, 1))
+  await clearLocalKokoroTracks()
+  appendLocalKokoroTrackChunk('clear-inflight', chunk(4, 2))
+  expect(await finalizeLocalKokoroTrack('clear-inflight', KEY)).toBeNull()
+  expect(localKokoroCaptureUsage()).toEqual({ count: 0, bytes: 0 })
+  expect(await listLocalKokoroTrackKeys()).toEqual([])
+})
+
+it('does not publish a recording whose finalize raced with clear', async () => {
+  beginLocalKokoroTrackCapture('race-clear')
+  appendLocalKokoroTrackChunk('race-clear', chunk(4, 1))
+  const writing = finalizeLocalKokoroTrack('race-clear', KEY)
+  const clearing = clearLocalKokoroTracks()
+  expect(await writing).toBeNull()
+  await clearing
+  expect(await listLocalKokoroTrackKeys()).toEqual([])
+})
+
+
+it('preserves existing recordings and declines new captures at the total store limit', async () => {
+  const dir = localKokoroTrackDirectory()
+  await mkdir(dir, { recursive: true })
+  const existingKey = localKokoroTrackKey({ text: 'Existing', modelId: 'kokoro-82m-int8', voiceId: 'af_heart', speed: 1 })
+  const existingPath = join(dir, `${existingKey}.wav`)
+  await writeFile(existingPath, new Uint8Array(44))
+  await truncate(existingPath, LOCAL_KOKORO_TRACK_STORE_MAX_BYTES)
+  beginLocalKokoroTrackCapture('at-capacity')
+  appendLocalKokoroTrackChunk('at-capacity', chunk(4, 1))
+  expect(await finalizeLocalKokoroTrack('at-capacity', KEY)).toBeNull()
+  expect(await listLocalKokoroTrackKeys()).toEqual([existingKey])
 })

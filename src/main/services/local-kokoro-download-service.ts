@@ -1,3 +1,4 @@
+import { KokoroDownloadTasks } from './local-kokoro-download-tasks'
 import { rm } from 'node:fs/promises'
 import {
   LOCAL_KOKORO_DEFAULT_MODEL_ID,
@@ -42,15 +43,13 @@ import {
 const VOICE_MAX_BYTES = 4 * 1024 * 1024
 
 let progressEmitter: ((progress: LocalKokoroModelProgress) => void) | null = null
-let lastProgress: LocalKokoroModelProgress | null = null
-let modelDownloadPromise: Promise<LocalKokoroModelDownloadResult> | null = null
-let activeModelDownload: {
-  modelId: LocalKokoroModelId
-  controller: AbortController
-  canceled: boolean
-} | null = null
-const voiceDownloads = new Map<LocalKokoroVoiceId, Promise<LocalKokoroVoiceStatus>>()
-let shuttingDown = false
+const progressByModel = new Map<LocalKokoroModelId, LocalKokoroModelProgress>()
+const transfers = new KokoroDownloadTasks()
+
+export function releaseLocalKokoroDownloads(ownerId?: string): void {
+  if (ownerId) transfers.release(ownerId)
+  else transfers.releasePlayback()
+}
 
 export function setLocalKokoroProgressEmitter(
   emitter: ((progress: LocalKokoroModelProgress) => void) | null
@@ -59,8 +58,7 @@ export function setLocalKokoroProgressEmitter(
 }
 
 export function shutdownLocalKokoroDownloads(): void {
-  shuttingDown = true
-  activeModelDownload?.controller.abort()
+  transfers.shutdown()
 }
 
 export async function getLocalKokoroModelStatus(
@@ -75,14 +73,12 @@ export async function getLocalKokoroModelStatus(
       totalBytes: size
     })
   }
-  if (activeModelDownload?.modelId === model.id && activeModelDownload.canceled) {
-    return modelStatus(model, 'not_downloaded')
-  }
-  if (modelDownloadPromise && lastProgress?.modelId === model.id && lastProgress.asset === 'model') {
+  const lastProgress = progressByModel.get(model.id)
+  if (transfers.has(model.id)) {
     return modelStatus(model, 'downloading', {
-      downloadedBytes: lastProgress.downloadedBytes,
-      totalBytes: lastProgress.totalBytes,
-      speedBytesPerSecond: lastProgress.speedBytesPerSecond
+      downloadedBytes: lastProgress?.downloadedBytes,
+      totalBytes: lastProgress?.totalBytes,
+      speedBytesPerSecond: lastProgress?.speedBytesPerSecond
     })
   }
   return modelStatus(model, 'not_downloaded')
@@ -101,7 +97,7 @@ export async function getLocalKokoroVoiceStatus(
   if (size !== null) {
     return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'ready', path, downloadedBytes: size }
   }
-  if (voiceDownloads.has(voice.id)) {
+  if (transfers.has(voice.id)) {
     return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'downloading' }
   }
   return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'not_downloaded' }
@@ -117,38 +113,28 @@ export async function listDownloadedLocalKokoroVoices(): Promise<LocalKokoroVoic
 
 export async function downloadLocalKokoroModel(
   modelId: unknown = LOCAL_KOKORO_DEFAULT_MODEL_ID,
-  sourceId?: unknown
+  sourceId?: unknown,
+  ownerId?: string
 ): Promise<LocalKokoroModelDownloadResult> {
   const model = localKokoroModelById(modelId)
-  if (shuttingDown) {
-    return {
-      ok: false,
-      message: 'local Kokoro service is shutting down',
-      status: modelStatus(model, 'not_downloaded')
-    }
+  try {
+    return await transfers.run(model.id, ownerId, async (controller) => {
+      const current = await getLocalKokoroModelStatus(model.id)
+      if (current.state === 'ready') return { ok: true, status: current }
+      controller.signal.throwIfAborted()
+      return runModelDownload(model, localKokoroDownloadSourceById(sourceId), controller)
+    })
+  } catch (error) {
+    return { ok: false, message: String(error), status: modelStatus(model, 'not_downloaded') }
   }
-  const current = await getLocalKokoroModelStatus(model.id)
-  if (current.state === 'ready') return { ok: true, status: current }
-  if (modelDownloadPromise) return modelDownloadPromise
-  modelDownloadPromise = runModelDownload(model, localKokoroDownloadSourceById(sourceId)).finally(() => {
-    modelDownloadPromise = null
-    lastProgress = null
-  })
-  return modelDownloadPromise
 }
 
 export async function cancelLocalKokoroModel(
   modelId: unknown = LOCAL_KOKORO_DEFAULT_MODEL_ID
 ): Promise<LocalKokoroModelDownloadResult> {
   const model = localKokoroModelById(modelId)
-  if (!activeModelDownload || activeModelDownload.modelId !== model.id) {
-    return { ok: true, status: await getLocalKokoroModelStatus(model.id) }
-  }
-  const canceled = activeModelDownload
-  canceled.canceled = true
-  canceled.controller.abort()
-  await modelDownloadPromise?.catch(() => undefined)
-  return { ok: true, status: modelStatus(model, 'not_downloaded') }
+  await transfers.cancel(model.id)
+  return { ok: true, status: await getLocalKokoroModelStatus(model.id) }
 }
 
 export async function deleteLocalKokoroModel(
@@ -156,9 +142,12 @@ export async function deleteLocalKokoroModel(
 ): Promise<LocalKokoroModelDeleteResult> {
   const model = localKokoroModelById(modelId)
   try {
+    await transfers.cancel(model.id)
     await rm(localKokoroModelPath(model.id), { force: true })
     await rm(localKokoroModelMetadataPath(model.id), { force: true })
-    return { ok: true, status: await getLocalKokoroModelStatus(model.id) }
+    const status = await getLocalKokoroModelStatus(model.id)
+    emitProgress({ asset: 'model', modelId: model.id, downloadedBytes: model.sizeBytes, totalBytes: model.sizeBytes })
+    return { ok: true, status }
   } catch (error) {
     return {
       ok: false,
@@ -174,16 +163,15 @@ export async function deleteLocalKokoroModel(
  */
 export async function downloadLocalKokoroVoice(
   voiceId: unknown = LOCAL_KOKORO_DEFAULT_VOICE_ID,
-  sourceId?: unknown
+  sourceId?: unknown,
+  ownerId?: string
 ): Promise<LocalKokoroVoiceStatus> {
   const voice = localKokoroVoiceById(voiceId)
-  const current = await getLocalKokoroVoiceStatus(voice.id)
-  if (current.state === 'ready') return current
-  const pending = voiceDownloads.get(voice.id)
-  if (pending) return pending
   const source = localKokoroDownloadSourceById(sourceId)
-  const controller = new AbortController()
-  const task = (async (): Promise<LocalKokoroVoiceStatus> => {
+  return transfers.run<LocalKokoroVoiceStatus>(voice.id, ownerId, async (controller) => {
+    const current = await getLocalKokoroVoiceStatus(voice.id)
+    if (current.state === 'ready') return current
+    controller.signal.throwIfAborted()
     const path = localKokoroVoicePath(voice.id)
     try {
       await downloadVerifiedAsset({
@@ -202,16 +190,14 @@ export async function downloadLocalKokoroVoice(
             speedBytesPerSecond: bytesPerSecond
           })
       })
-      return await getLocalKokoroVoiceStatus(voice.id)
+      const status = await getLocalKokoroVoiceStatus(voice.id)
+      emitProgress({ asset: 'voice', voiceId: voice.id, downloadedBytes: voice.sizeBytes, totalBytes: voice.sizeBytes })
+      return status
     } catch (error) {
       const message = `${source.label}: ${describeKokoroDownloadError(error, kokoroTimeoutMessage('stall'))}`
       return { voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'error', message }
     }
-  })().finally(() => {
-    voiceDownloads.delete(voice.id)
-  })
-  voiceDownloads.set(voice.id, task)
-  return task
+  }).catch((error) => ({ voiceId: voice.id, sizeBytes: voice.sizeBytes, state: 'error' as const, message: String(error) }))
 }
 
 /**
@@ -248,10 +234,9 @@ export async function checkLocalKokoroDownloadSources(
 
 async function runModelDownload(
   model: LocalKokoroModel,
-  source: LocalKokoroDownloadSource
+  source: LocalKokoroDownloadSource,
+  controller: AbortController
 ): Promise<LocalKokoroModelDownloadResult> {
-  const controller = new AbortController()
-  activeModelDownload = { modelId: model.id, controller, canceled: false }
   try {
     await downloadVerifiedAsset({
       url: localKokoroModelUrl(model.id, source.id),
@@ -284,15 +269,17 @@ async function runModelDownload(
         }
       }
     })
-    return { ok: true, status: await getLocalKokoroModelStatus(model.id) }
+    const status = await getLocalKokoroModelStatus(model.id)
+    emitProgress({ asset: 'model', modelId: model.id, downloadedBytes: model.sizeBytes, totalBytes: model.sizeBytes })
+    return { ok: true, status }
   } catch (error) {
-    if (activeModelDownload?.modelId === model.id && activeModelDownload.canceled) {
+    if (controller.signal.aborted) {
       return { ok: true, status: modelStatus(model, 'not_downloaded') }
     }
     const message = `${source.label}: ${describeKokoroDownloadError(error, kokoroTimeoutMessage('stall'))}`
     return { ok: false, message, status: modelStatus(model, 'error', { message }) }
   } finally {
-    if (activeModelDownload?.modelId === model.id) activeModelDownload = null
+    progressByModel.delete(model.id)
   }
 }
 
@@ -361,6 +348,7 @@ function emitProgress(progress: LocalKokoroModelProgress): void {
   const percent = progress.totalBytes && progress.totalBytes > 0
     ? Math.min(100, (progress.downloadedBytes / progress.totalBytes) * 100)
     : undefined
-  lastProgress = { ...progress, percent }
-  progressEmitter?.(lastProgress)
+  const update = { ...progress, percent }
+  if (progress.modelId) progressByModel.set(progress.modelId, update)
+  progressEmitter?.(update)
 }

@@ -31,7 +31,7 @@ const ORDERED = /^[ \t]*\d{1,3}[.)][ \t]+/
 const EMPHASIS = /(\*\*\*|\*\*|\*|___|__|_|~~)/g
 const INLINE_CODE = /`+([^`]*)`+/g
 /** Emoji, arrows and dingbats have no pronunciation; drop them. */
-const PICTOGRAPHS = /[\u{1F000}-\u{1FAFF}\u{2190}-\u{2BFF}\u{2600}-\u{27BF}]/gu
+const PICTOGRAPHS = /\p{Extended_Pictographic}/gu
 /**
  * Variation selectors and zero-width joiners left behind once the emoji they
  * decorate is dropped. Skin-tone modifiers already fall inside PICTOGRAPHS.
@@ -80,6 +80,17 @@ function tableCells(line: string): string[] | null {
   return cells.length > 1 ? cells : null
 }
 
+const SPOKEN_SYMBOLS: Record<string, string> = {
+  '≤': 'less than or equal to', '≥': 'greater than or equal to',
+  '≠': 'not equal to', '≈': 'approximately equal to', '±': 'plus or minus',
+  '×': 'times', '÷': 'divided by', '→': 'right arrow', '←': 'left arrow'
+}
+
+/** The bundled pronunciation data cannot handle non-Latin scripts. */
+export function hasUnsupportedSpeechScript(text: string): boolean {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}\p{Script=Thai}]/u.test(text)
+}
+
 function stripInline(line: string): string {
   return line
     .replace(IMAGE, ' ')
@@ -88,10 +99,11 @@ function stripInline(line: string): string {
     .replace(FOOTNOTE_REFERENCE, ' ')
     .replace(AUTOLINK, ' ')
     .replace(BARE_URL, ' ')
-    .replace(INLINE_CODE, '$1')
+    .replace(INLINE_CODE, (_match, content: string) => content.replace(/_/g, ' underscore ').replace(/\*/g, ' asterisk '))
     .replace(HTML_TAG, ' ')
     .replace(EMPHASIS, '')
     .replace(EMOJI_MODIFIERS, '')
+    .replace(/[≤≥≠≈±×÷→←]/g, (symbol) => ` ${SPOKEN_SYMBOLS[symbol]} `)
     .replace(PICTOGRAPHS, ' ')
 }
 
