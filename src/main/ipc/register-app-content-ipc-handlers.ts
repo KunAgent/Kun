@@ -34,6 +34,16 @@ import {
   notificationPayloadSchema,
   projectDesignMdLintPayloadSchema,
   shellOpenExternalUrlSchema,
+  localKokoroDownloadPayloadSchema,
+  localKokoroModelIdPayloadSchema,
+  localKokoroReadinessPayloadSchema,
+  localKokoroSpeakCancelPayloadSchema,
+  localKokoroSpeakPayloadSchema,
+  localKokoroTrackExportPayloadSchema,
+  localKokoroTrackFinalizePayloadSchema,
+  localKokoroTrackKeySchema,
+  localKokoroVoiceDownloadPayloadSchema,
+  localKokoroVoiceIdPayloadSchema,
   localWhisperDownloadPayloadSchema,
   localWhisperModelIdPayloadSchema,
   localWhisperSourceStatusPayloadSchema,
@@ -80,6 +90,34 @@ import {
   setLocalWhisperProgressEmitter
 } from '../services/local-whisper-service'
 import {
+  cancelLocalKokoroModel,
+  checkLocalKokoroDownloadSources,
+  deleteLocalKokoroModel,
+  downloadLocalKokoroModel,
+  downloadLocalKokoroVoice,
+  getLocalKokoroModelStatus,
+  getLocalKokoroReadiness,
+  getLocalKokoroVoiceStatus,
+  listDownloadedLocalKokoroVoices,
+  listLocalKokoroModelStatuses,
+  setLocalKokoroProgressEmitter
+} from '../services/local-kokoro-download-service'
+import {
+  cancelLocalKokoroSpeech,
+  resetLocalKokoroSession,
+  clearLocalKokoroCapture,
+  synthesizeLocalKokoroSpeech
+} from '../services/local-kokoro-synthesis-service'
+import {
+  clearLocalKokoroTracks,
+  discardLocalKokoroTrackCapture,
+  exportLocalKokoroTrack,
+  finalizeLocalKokoroTrack,
+  listLocalKokoroTrackKeys,
+  localKokoroTrackUsage,
+  readLocalKokoroTrackPcm
+} from '../services/local-kokoro-track-store'
+import {
   getComputerUsePermissions,
   requestComputerUsePermission
 } from '../services/computer-use-permissions'
@@ -125,6 +163,9 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   const withRegistryCredentials = options.withRegistryCredentials ?? (async (settings) => settings)
   setLocalWhisperProgressEmitter((payload) => {
     getMainWindow()?.webContents.send('speech:local-whisper:progress', payload)
+  })
+  setLocalKokoroProgressEmitter((payload) => {
+    getMainWindow()?.webContents.send('speak:kokoro:progress', payload)
   })
   ipcMain.handle('write:export', async (_, payload: unknown) =>
     exportWriteDocument(
@@ -241,6 +282,91 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   ipcMain.handle('speech:local-whisper:delete', async (_, modelId: unknown) =>
     deleteLocalWhisperModel(parseIpcPayload('speech:local-whisper:delete', localWhisperModelIdPayloadSchema, modelId))
   )
+  ipcMain.handle('speak:kokoro:status', async (_, modelId: unknown) =>
+    getLocalKokoroModelStatus(parseIpcPayload('speak:kokoro:status', localKokoroModelIdPayloadSchema, modelId))
+  )
+  ipcMain.handle('speak:kokoro:statuses', async () => listLocalKokoroModelStatuses())
+  /**
+   * Liveness probe with no I/O: a slow reply means the Main event loop itself is
+   * blocked. Speech synthesis used to do exactly that, so the development smoke
+   * watches this channel while an answer is spoken.
+   */
+  ipcMain.handle('speak:kokoro:ping', () => Date.now())
+  ipcMain.handle('speak:kokoro:download', async (_, payload: unknown) => {
+    const request = parseIpcPayload('speak:kokoro:download', localKokoroDownloadPayloadSchema, payload)
+    return downloadLocalKokoroModel(request?.modelId, request?.sourceId)
+  })
+  ipcMain.handle('speak:kokoro:cancel', async (_, modelId: unknown) =>
+    cancelLocalKokoroModel(parseIpcPayload('speak:kokoro:cancel', localKokoroModelIdPayloadSchema, modelId))
+  )
+  ipcMain.handle('speak:kokoro:delete', async (_, modelId: unknown) => {
+    const result = await deleteLocalKokoroModel(
+      parseIpcPayload('speak:kokoro:delete', localKokoroModelIdPayloadSchema, modelId)
+    )
+    await resetLocalKokoroSession()
+    return result
+  })
+  ipcMain.handle('speak:kokoro:sources', async (_, payload: unknown) => {
+    const request = parseIpcPayload('speak:kokoro:sources', localKokoroDownloadPayloadSchema, payload)
+    return checkLocalKokoroDownloadSources(request?.modelId)
+  })
+  ipcMain.handle('speak:kokoro:voice-status', async (_, voiceId: unknown) =>
+    getLocalKokoroVoiceStatus(parseIpcPayload('speak:kokoro:voice-status', localKokoroVoiceIdPayloadSchema, voiceId))
+  )
+  ipcMain.handle('speak:kokoro:voices', async () => listDownloadedLocalKokoroVoices())
+  ipcMain.handle('speak:kokoro:voice-download', async (_, payload: unknown) => {
+    const request = parseIpcPayload('speak:kokoro:voice-download', localKokoroVoiceDownloadPayloadSchema, payload)
+    return downloadLocalKokoroVoice(request?.voiceId, request?.sourceId)
+  })
+  ipcMain.handle('speak:kokoro:readiness', async (_, payload: unknown) => {
+    const request = parseIpcPayload('speak:kokoro:readiness', localKokoroReadinessPayloadSchema, payload)
+    return getLocalKokoroReadiness(request?.modelId, request?.voiceId)
+  })
+  ipcMain.handle('speak:kokoro:synthesize', async (_, payload: unknown) =>
+    synthesizeLocalKokoroSpeech(parseIpcPayload('speak:kokoro:synthesize', localKokoroSpeakPayloadSchema, payload))
+  )
+  ipcMain.handle('speak:kokoro:synthesize-cancel', async (_, requestId: unknown) => {
+    cancelLocalKokoroSpeech(
+      parseIpcPayload('speak:kokoro:synthesize-cancel', localKokoroSpeakCancelPayloadSchema, requestId)
+    )
+    return true
+  })
+  ipcMain.handle('speak:kokoro:track:keys', async () => listLocalKokoroTrackKeys())
+  ipcMain.handle('speak:kokoro:track:usage', async () => localKokoroTrackUsage())
+  ipcMain.handle('speak:kokoro:track:finalize', async (_, payload: unknown) => {
+    const request = parseIpcPayload(
+      'speak:kokoro:track:finalize',
+      localKokoroTrackFinalizePayloadSchema,
+      payload
+    )
+    const info = await finalizeLocalKokoroTrack(request.requestId, request.key)
+    clearLocalKokoroCapture(request.requestId)
+    return info
+  })
+  ipcMain.handle('speak:kokoro:track:discard', async (_, requestId: unknown) => {
+    const id = parseIpcPayload(
+      'speak:kokoro:track:discard',
+      localKokoroSpeakCancelPayloadSchema,
+      requestId
+    )
+    discardLocalKokoroTrackCapture(id)
+    clearLocalKokoroCapture(id)
+    return true
+  })
+  ipcMain.handle('speak:kokoro:track:read', async (_, key: unknown) =>
+    readLocalKokoroTrackPcm(parseIpcPayload('speak:kokoro:track:read', localKokoroTrackKeySchema, key))
+  )
+  ipcMain.handle('speak:kokoro:track:export', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    return exportLocalKokoroTrack(
+      parseIpcPayload('speak:kokoro:track:export', localKokoroTrackExportPayloadSchema, payload),
+      { parentWindow: getMainWindow() }
+    )
+  })
+  ipcMain.handle('speak:kokoro:track:clear', async (event) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    return clearLocalKokoroTracks()
+  })
   ipcMain.handle('write:inline-completion-debug:list', async () => listWriteInlineCompletionDebugEntries())
   ipcMain.handle('write:inline-completion-debug:clear', async () => {
     clearWriteInlineCompletionDebugEntries()
