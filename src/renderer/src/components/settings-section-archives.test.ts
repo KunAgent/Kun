@@ -140,6 +140,11 @@ describe('ArchivedThreadsSettingsSection', () => {
     expect(permissionsIndex).toBe(-1)
     expect(archivesIndex).toBeGreaterThan(subagentsIndex)
     expect(migrationIndex).toBeGreaterThan(archivesIndex)
+    // The local speech provider lives under Media, not in its own entry. The
+    // sidebar renders each item's labelKey, and the stub echoes unknown keys.
+    expect(html.indexOf('speechToText')).toBeGreaterThanOrEqual(0)
+    expect(html).not.toContain('speakTitle')
+    expect(html).not.toContain('settingsNavSpeak')
     expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(21)
   })
 

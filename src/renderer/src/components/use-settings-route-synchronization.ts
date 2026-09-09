@@ -36,6 +36,11 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
       setCategory('speechToText')
       return
     }
+    // The Speak tab was retired; its settings are a card under media generation.
+    if (settingsSection === 'speak') {
+      setCategory('mediaGeneration')
+      return
+    }
     if (settingsSection === 'permissions') {
       setCategory('agents')
       return
@@ -106,6 +111,7 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
       settingsSection === 'imageGeneration' ||
       settingsSection === 'mediaGeneration' ||
       settingsSection === 'speechToText' ||
+      settingsSection === 'speak' ||
       settingsSection === 'laboratory' ||
       settingsSection === 'subagents' ||
       settingsSection === 'archives' ||
@@ -125,7 +131,7 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
     }
     if (!agentsSectionReady) return
     const refs: Record<
-      Exclude<SettingsRouteSection, 'general' | 'providers' | 'extensions' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'laboratory' | 'subagents' | 'archives' | 'worktree' | 'memory' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal' | 'debug' | 'storage' | 'dataMigration'>,
+      Exclude<SettingsRouteSection, 'general' | 'providers' | 'extensions' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'speak' | 'laboratory' | 'subagents' | 'archives' | 'worktree' | 'memory' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal' | 'debug' | 'storage' | 'dataMigration'>,
       HTMLDivElement | null
     > = {
       agents: agentsSectionRef.current,
