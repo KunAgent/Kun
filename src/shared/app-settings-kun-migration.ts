@@ -104,6 +104,7 @@ import {
 import {
   normalizeKunImageGenerationSettings,
   normalizeKunMusicGenerationSettings,
+  normalizeKunSpeakSettings,
   normalizeKunSpeechToTextSettings,
   normalizeKunTextToSpeechSettings,
   normalizeKunVideoGenerationSettings
@@ -476,6 +477,7 @@ export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partia
     llmDebug: normalizeKunLlmDebugSettings(explicitKun.llmDebug),
     imageGeneration: normalizeKunImageGenerationSettings(explicitKun.imageGeneration),
     speechToText: normalizeKunSpeechToTextSettings(explicitKun.speechToText),
+    speak: normalizeKunSpeakSettings(explicitKun.speak),
     textToSpeech: normalizeKunTextToSpeechSettings(explicitKun.textToSpeech),
     musicGeneration: normalizeKunMusicGenerationSettings(explicitKun.musicGeneration),
     videoGeneration: normalizeKunVideoGenerationSettings(explicitKun.videoGeneration),
