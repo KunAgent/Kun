@@ -35,4 +35,4 @@
 
 - [x] 6.1 Update Memory evaluation documentation and the external roadmap with dataset identity, commands, limitations, and the decision; verify docs never imply P2-A changed production retrieval.
 - [x] 6.2 Run focused Memory tests, `npm run build:kun`, `npm run typecheck`, `npm run build`, strict OpenSpec validation, `npm run check:file-lines`, ESLint for changed source files, and `git diff --check`; record any unrelated full-suite baseline failure separately.
-- [ ] 6.3 Prepare the P2-A PR with artifacts, anonymous data, evaluator, frozen baseline, candidate evidence, and decision report only; verify the PR targets `KunAgent/Kun:develop` and contains no production semantic wiring or real Memory data.
+- [x] 6.3 Prepare the P2-A PR with artifacts, anonymous data, evaluator, frozen baseline, candidate evidence, and decision report only; verify the PR targets `KunAgent/Kun:develop` and contains no production semantic wiring or real Memory data. PR [#1304](https://github.com/KunAgent/Kun/pull/1304) was verified with base `develop` and head `SunwardL:codex/add-kun-semantic-memory-retrieval`.
