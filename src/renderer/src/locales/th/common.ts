@@ -10,6 +10,7 @@ import agentsGraph from './common/agents-graph.json'
 import sidebar from './common/sidebar.json'
 import commandPalette from './common/command-palette.json'
 import projectBoard from '../en/common/project-board.json'
+import speak from './common/speak.json'
 
 const common = {
   ...shellWorkflow,
@@ -24,6 +25,7 @@ const common = {
   ...sidebar,
   ...commandPalette,
   ...projectBoard,
+  ...speak,
 }
 
 export default common

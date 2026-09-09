@@ -1,0 +1,18 @@
+{
+  "speakAnswer": "Озвучить",
+  "speakStop": "Остановить",
+  "speakPreparing": "Подготовка речи...",
+  "speakDownloading": "Загрузка голосовой модели...",
+  "speakSynthesizing": "Генерация речи...",
+  "speakUnavailable": "Локальная речь недоступна в этой сборке.",
+  "speakNothingToRead": "В этом ответе нет текста для озвучивания.",
+  "speakModelMissing": "Загрузите голосовую модель Kokoro в настройках, чтобы использовать озвучивание.",
+  "speakVoiceMissing": "Не удалось загрузить выбранный голос.",
+  "speakFailed": "Не удалось сгенерировать речь: {{message}}",
+  "speakDownloadingModel": "Загрузка {{model}}",
+  "speakDownloadingVoice": "Загрузка голоса {{voice}}",
+  "speakDownloadingHint": "Озвучивание начнётся автоматически после загрузки.",
+  "speakTrackDownload": "Скачать аудио",
+  "speakTrackSaved": "Сохранено",
+  "speakTrackSaveFailed": "Не удалось сохранить запись: {{message}}"
+}

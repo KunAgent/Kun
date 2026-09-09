@@ -1,0 +1,18 @@
+{
+  "speakAnswer": "อ่านออกเสียง",
+  "speakStop": "หยุด",
+  "speakPreparing": "กำลังเตรียมเสียง...",
+  "speakDownloading": "กำลังดาวน์โหลดโมเดลเสียง...",
+  "speakSynthesizing": "กำลังสร้างเสียง...",
+  "speakUnavailable": "บิลด์นี้ไม่รองรับเสียงในเครื่อง",
+  "speakNothingToRead": "คำตอบนี้ไม่มีข้อความให้อ่านออกเสียง",
+  "speakModelMissing": "ดาวน์โหลดโมเดลเสียง Kokoro ในการตั้งค่าเพื่อใช้การอ่านออกเสียง",
+  "speakVoiceMissing": "ไม่สามารถดาวน์โหลดเสียงที่เลือกได้",
+  "speakFailed": "สร้างเสียงไม่สำเร็จ: {{message}}",
+  "speakDownloadingModel": "กำลังดาวน์โหลด {{model}}",
+  "speakDownloadingVoice": "กำลังดาวน์โหลดเสียง {{voice}}",
+  "speakDownloadingHint": "การอ่านออกเสียงจะเริ่มอัตโนมัติเมื่อดาวน์โหลดเสร็จ",
+  "speakTrackDownload": "ดาวน์โหลดเสียง",
+  "speakTrackSaved": "บันทึกแล้ว",
+  "speakTrackSaveFailed": "บันทึกไฟล์เสียงไม่ได้: {{message}}"
+}

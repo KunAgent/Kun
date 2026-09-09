@@ -1,0 +1,18 @@
+{
+  "speakAnswer": "朗读",
+  "speakStop": "停止",
+  "speakPreparing": "正在准备语音…",
+  "speakDownloading": "正在下载语音模型…",
+  "speakSynthesizing": "正在生成语音…",
+  "speakUnavailable": "此版本不支持本地语音。",
+  "speakNothingToRead": "该回答没有可朗读的文本。",
+  "speakModelMissing": "请在设置中下载 Kokoro 语音模型后再使用朗读。",
+  "speakVoiceMissing": "无法下载所选音色。",
+  "speakFailed": "生成语音失败：{{message}}",
+  "speakDownloadingModel": "正在下载 {{model}}",
+  "speakDownloadingVoice": "正在下载音色 {{voice}}",
+  "speakDownloadingHint": "下载完成后会自动开始朗读。",
+  "speakTrackDownload": "下载音频",
+  "speakTrackSaved": "已保存",
+  "speakTrackSaveFailed": "无法保存录音：{{message}}"
+}
