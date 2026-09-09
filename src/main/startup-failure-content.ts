@@ -1,3 +1,6 @@
+import { join } from 'node:path'
+import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
+import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
 import { KunHandoffError } from './runtime/kun-installed-build-handoff'
 
 const STARTUP_ACTION_PROTOCOL = 'kun-startup-action:'
@@ -8,6 +11,7 @@ export type StartupFailurePresentation = {
   message: string
   handoff: boolean
   retryable: boolean
+  recheck?: boolean
 }
 
 function escapeHtml(value: string): string {
@@ -31,6 +35,12 @@ export function sanitizeStartupFailureMessage(error: unknown): string {
 }
 
 export function startupFailurePresentation(error: unknown): StartupFailurePresentation {
+  if (error instanceof ServiceManagerUnavailableError) {
+    return {
+      message: sanitizeStartupFailureMessage(`${error.message}\nManager log: ${join(defaultKunControlDir(), 'manager.log')}\nRecheck verifies ownership before recovery. If ownership cannot be verified, no process or saved data will be changed.`),
+      handoff: false, retryable: true, recheck: true
+    }
+  }
   if (!(error instanceof KunHandoffError)) {
     const sanitized = sanitizeStartupFailureMessage(error)
     const parsed = parseStartupRuntimeError(error)
@@ -100,7 +110,7 @@ export function parseStartupFailureAction(targetUrl: string): StartupFailureActi
 export function startupFailureHtml(
   message: string,
   logDir: string,
-  options: { handoff?: boolean; retryable?: boolean; busy?: boolean } = {}
+  options: { handoff?: boolean; retryable?: boolean; busy?: boolean; recheck?: boolean } = {}
 ): string {
   const safeMessage = escapeHtml(message || 'Unknown startup error')
   const safeLogDir = escapeHtml(logDir || 'Log directory is unavailable')
@@ -114,9 +124,9 @@ export function startupFailureHtml(
       : 'Kun could not safely verify the previous local owner, so it left the process, active work, and saved data untouched.'
     : 'The application is still running so you can inspect the failure or retry. The diagnostic detail is:'
   const primaryAction = busy
-    ? `<span class="working">${handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
+    ? `<span class="working">${options.recheck ? 'Checking Service Manager ownership…' : handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
     : retryable
-      ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
+      ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${options.recheck ? 'Recheck Kun' : handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
       : ''
   return `<!doctype html>
 <html lang="en">

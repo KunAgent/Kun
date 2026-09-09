@@ -187,6 +187,11 @@ export function createStartupKunHandoffRecovery(
       fetch,
       onEvent: logKunHandoffEvent
     })
+    if (error.reason === 'installed-build-change' || error.reason === 'startup-retry') {
+      mainState.activeServiceManager = await ensureKunServiceManager({
+        dataDir: dataDirs[0], settingsPath
+      })
+    }
   }
 }
 

@@ -1,3 +1,4 @@
+import { rememberManagerStartupInput } from './runtime/kun-startup-manager-recovery'
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -218,6 +219,7 @@ export async function ensureKunServiceManager(input: {
     },
     ...(input.onLegacyHandoverStatus ? { onLegacyHandoverStatus: input.onLegacyHandoverStatus } : {})
   }
+  rememberManagerStartupInput(managerInput)
   let manager: ServiceManagerConnection
   const handoffInput = {
     reason: 'installed-build-change' as const,

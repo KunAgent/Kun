@@ -42,6 +42,26 @@ function clientRuntime(): RuntimeHandoffDiscoveryRecord {
 }
 
 describe('startup retry Manager handoff', () => {
+  it('never treats unavailable Manager status as empty Runtime slots', async () => {
+    const currentManager = manager()
+    const stopManager = vi.fn()
+    const stopRuntime = vi.fn()
+    await expect(drainKunOwnersForHandoff({
+      reason: 'startup-retry', dataDirs: [dataDir], settingsPath, controlDir: '/tmp/control',
+      fetch: vi.fn(async () => new Response(null, { status: 503 }))
+    }, {
+      withManagerLock: async <T>(_dir: string, action: () => Promise<T>) => action(),
+      readManager: async () => currentManager,
+      readRuntime: async () => null,
+      processAlive: () => true,
+      processIdentity: async (pid) => ({ pid, commandLine: 'kun-service-manager',
+        executablePath: 'C:\\Program Files\\nodejs\\node.exe', startedAtMs: Date.parse(startedAt) }),
+      stopManager: stopManager as never, stopRuntime: stopRuntime as never
+    })).rejects.toMatchObject({ code: 'probe_failed' })
+    expect(stopManager).not.toHaveBeenCalled()
+    expect(stopRuntime).not.toHaveBeenCalled()
+  })
+
   it('preserves another client-owned Runtime instead of restarting its Manager', async () => {
     const currentManager = manager()
     const currentRuntime = clientRuntime()

@@ -2,6 +2,7 @@
 
 'use strict'
 
+const { assertPackagedPresetMode } = require('./smoke-packaged-manager-preset.cjs')
 const { mkdir, mkdtemp, readFile, realpath, rm } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
@@ -238,6 +239,7 @@ async function runPositiveScenario(input) {
         }
       }
       await assertChatRoundTrip(current.runtime, profile.workspaceRoot, input.timeoutMs)
+      await assertPackagedPresetMode(current.runtime, runtimeJson)
     } else {
       await assertNoRuntimeDiscovery(profile)
       const savedMetadata = await readFile(

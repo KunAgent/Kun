@@ -1,3 +1,4 @@
+import { revokeBrowserBindingBeforeQuit } from './runtime/partial-startup-quit'
 import {
   app,
   protocol,
@@ -217,8 +218,12 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
     // Revoke the ephemeral Browser host authority while the GUI-owned Runtime
     // is still reachable, then await that exact child before Electron exits.
     try {
-      const settings = await mainState.store.load()
-      await revokeManagedRuntimeBrowserUseBinding(settings, browserUseBinding)
+      await revokeBrowserBindingBeforeQuit({
+        store: mainState.store,
+        hasBinding: Boolean(browserUseBinding),
+        runtimeIsLive: kunRuntimeAdapter.isChildRunning(),
+        revoke: (settings) => revokeManagedRuntimeBrowserUseBinding(settings, browserUseBinding)
+      })
     } catch (error) {
       logWarn('browser-use-shutdown', 'Kun Browser Use authority revoke failed closed', {
         message: error instanceof Error ? error.message : String(error)

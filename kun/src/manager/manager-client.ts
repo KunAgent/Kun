@@ -1,3 +1,4 @@
+import { ServiceManagerUnavailableError } from './manager-resolution-error.js'
 import { ServiceManagerHttpError } from './usage-errors.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -22,6 +23,7 @@ import {
   defaultKunControlDir,
   defaultProductionSettingsPath,
   readManagerDiscovery,
+  readManagerHandoffDiscoveryStrict,
   removeManagerDiscovery,
   withManagerStartLock,
   type ManagerDiscoveryRecord
@@ -31,6 +33,7 @@ import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-le
 import { ManagerResourceLeaseSchema, type ManagerResourceFence } from './resource-lease-state.js'
 import type { ManagerRequestOptions } from './manager-client-support.js'
 import {
+  inspectServiceManager,
   resolveServiceManager
 } from './manager-resolution.js'
 import {
@@ -267,7 +270,10 @@ export async function ensureServiceManagerWithStartLockHeld(
   const controlDir = input.controlDir ?? defaultKunControlDir()
   const settingsPath = input.settingsPath ?? defaultProductionSettingsPath()
   const fetchImpl = input.fetch ?? fetch
-  const elected = await resolveServiceManager(controlDir, fetchImpl)
+  const deadline = Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
+  const inspected = await inspectServiceManager(controlDir, fetchImpl, { attempts: 3, deadline })
+  if (inspected.state === 'unavailable') throw inspected.error
+  const elected = inspected.state === 'ready' ? { discovery: inspected.discovery } : null
   if (elected) {
     if (!managerOwnsPaths(elected.discovery, input.dataDir, settingsPath)) {
       throw new Error('Kun Service Manager owns a different canonical data or settings path')
@@ -275,22 +281,25 @@ export async function ensureServiceManagerWithStartLockHeld(
     return elected
   }
   assertManagerBootstrapAllowed(input)
-  const stale = await readManagerDiscovery(controlDir).catch(() => null)
+  const stale = await readManagerHandoffDiscoveryStrict(controlDir)
   if (stale && !processIsAlive(stale.pid)) {
-    await removeManagerDiscovery(controlDir, stale.instanceId).catch(() => undefined)
+    await removeManagerDiscovery(controlDir, stale.instanceId)
   } else if (stale) {
-    throw new Error(`Kun Service Manager process ${stale.pid} is alive but unavailable`)
+    throw new ServiceManagerUnavailableError('identity_mismatch', stale.pid, stale.instanceId)
   }
   // The Manager owns the canonical data plane for both flavor slots. Even
   // an explicitly allowed source-DV bootstrap must drain a pre-manager
   // production writer before opening shared stores; otherwise the DV
   // Runtime and legacy production Runtime can concurrently mutate JSONL.
+  const handoverStartedAt = Date.now()
   await handoverLegacyProductionRuntime({
     dataDir: input.dataDir,
     fetch: fetchImpl,
     timeoutMs: Math.max(input.timeoutMs ?? START_TIMEOUT_MS, LEGACY_HANDOVER_TIMEOUT_MS),
     ...(input.onLegacyHandoverStatus ? { onStatus: input.onLegacyHandoverStatus } : {})
   })
+  // Legacy active-work draining has its own budget; only discovery and bootstrap share this one.
+  const readyDeadline = deadline + (Date.now() - handoverStartedAt)
   const { child, logPath } = await launchServiceManagerProcess({
     controlDir,
     dataDir: input.dataDir,
@@ -298,10 +307,9 @@ export async function ensureServiceManagerWithStartLockHeld(
     ...(input.buildId ? { buildId: input.buildId } : {}),
     ...(input.launch ? { launch: input.launch } : {})
   })
-  const deadline = Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
-  while (Date.now() < deadline) {
-    const connection = await resolveServiceManager(controlDir, fetchImpl)
-    if (connection) return connection
+  while (Date.now() < readyDeadline) {
+    const inspected = await inspectServiceManager(controlDir, fetchImpl, { deadline: readyDeadline })
+    if (inspected.state === 'ready') return { discovery: inspected.discovery }
     if (child.exitCode !== null) break
     await delay(POLL_MS)
   }

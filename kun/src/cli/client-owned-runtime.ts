@@ -1,3 +1,5 @@
+import { inspectServiceManager } from '../manager/manager-resolution.js'
+import { ServiceManagerUnavailableError } from '../manager/manager-resolution-error.js'
 import type { ChildProcess } from 'node:child_process'
 import type { RuntimeClientOwnerKind } from '../contracts/runtime-owner.js'
 import type { RuntimeFlavor } from '../contracts/runtime-flavor.js'
@@ -229,7 +231,9 @@ async function resolveSafeElectionScope(
   controlDir: string,
   fetchImpl: typeof fetch
 ): Promise<SharedRuntimeScope> {
-  const current = await resolveServiceManager(controlDir, fetchImpl)
+  const inspected = await inspectServiceManager(controlDir, fetchImpl, { attempts: 3 })
+  if (inspected.state === 'unavailable') throw inspected.error
+  const current = inspected.state === 'ready' ? { discovery: inspected.discovery } : null
   if (current) {
     if (!sameCanonicalPath(current.discovery.dataDir, input.dataDir)) {
       throw new Error('Kun Service Manager owns a different canonical data directory')
@@ -248,11 +252,11 @@ async function resolveSafeElectionScope(
     throw new Error('Kun Service Manager owns a different canonical data directory')
   }
   if (persisted && processIsAlive(persisted.pid)) {
-    throw new Error(`Kun Service Manager process ${persisted.pid} is alive but unavailable`)
+    throw new ServiceManagerUnavailableError('identity_mismatch', persisted.pid, persisted.instanceId)
   }
   if (input.manager && processIsAlive(input.manager.discovery.pid)) {
-    throw new Error(
-      `Kun Service Manager process ${input.manager.discovery.pid} is alive but unavailable`
+    throw new ServiceManagerUnavailableError(
+      'identity_mismatch', input.manager.discovery.pid, input.manager.discovery.instanceId
     )
   }
   return { runtimeFlavor, controlDir }
