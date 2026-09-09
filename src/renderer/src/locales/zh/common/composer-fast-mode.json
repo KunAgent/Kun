@@ -1,0 +1,7 @@
+{
+  "composerFastModeOn": "快速模式已开启",
+  "composerFastModeOff": "快速模式已关闭",
+  "composerFastModeHint": "获得更快的 Codex 响应，但会增加订阅用量。",
+  "composerFastModeUnverified": "尚未确认该模型支持快速模式，请在提供商设置中获取并更新模型列表。",
+  "composerFastModeUnsupported": "当前模型未提供快速模式。"
+}

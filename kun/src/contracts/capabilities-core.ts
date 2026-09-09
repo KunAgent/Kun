@@ -84,8 +84,11 @@ export const ModelCapabilityMetadata = z
     reasoning: ModelReasoningCapabilityMetadata.optional(),
     /** Reference catalog pricing for local cost estimation. */
     pricing: ModelCatalogPricing.optional(),
-    /** Provider-advertised request service tiers supported by this model. */
-    serviceTiers: z.array(ModelServiceTier).min(1).optional(),
+    /**
+     * Provider-advertised request service tiers supported by this model. An
+     * empty array is an explicit "no supported tier" declaration.
+     */
+    serviceTiers: z.array(ModelServiceTier).optional(),
     // Per-model wire-format override. Lets one provider route some models to
     // chat completions and others to Anthropic Messages / OpenAI Responses
     // (e.g. OpenCode Go). Absent means "inherit the provider/runtime format".

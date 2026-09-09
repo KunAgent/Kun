@@ -147,7 +147,7 @@ export function normalizeModelProviderModelProfile(
     messageParts: normalizeModelMessageParts(input?.messageParts, defaultMessageParts),
     ...(reasoning ? { reasoning } : {}),
     ...(pricing ? { pricing } : {}),
-    ...(serviceTiers.length ? { serviceTiers } : {}),
+    ...(serviceTiers ? { serviceTiers } : {}),
     ...(endpointFormat ? { endpointFormat } : {}),
     ...(responsesMode ? { responsesMode } : {})
   }
@@ -178,10 +178,16 @@ function nonNegativeFinitePrice(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
+/**
+ * Service tiers are upstream metadata: a missing value means "never declared"
+ * (unknown), while an array is an explicit declaration. An empty array is a
+ * real answer — the provider offers no supported tier — so it must survive
+ * normalization instead of collapsing back to unknown.
+ */
 export function normalizeModelServiceTiers(
   value: unknown
-): NonNullable<ModelProviderModelProfileV1['serviceTiers']> {
-  if (!Array.isArray(value)) return []
+): ModelProviderModelProfileV1['serviceTiers'] {
+  if (!Array.isArray(value)) return undefined
   return [...new Set(value.filter(
     (tier): tier is NonNullable<ModelProviderModelProfileV1['serviceTiers']>[number] =>
       tier === 'priority' || tier === 'flex'

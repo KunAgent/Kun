@@ -499,11 +499,10 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
         )
     const nextModelProfiles = Object.keys(discoveredModelProfiles).length > 0
       ? Object.fromEntries(nextChatModels.flatMap((modelId) => {
-          const discoveredProfile = discoveredModelProfiles[modelId]
-          const enrichedProfile = enrichedModelProfiles[modelId]
-          const profile = discoveredProfile
-            ? { ...enrichedProfile, ...discoveredProfile }
-            : enrichedProfile
+          const profile = mergeDiscoveredModelProfile(
+            enrichedModelProfiles[modelId],
+            discoveredModelProfiles[modelId]
+          )
           return profile ? [[modelId, profile]] : []
         }))
       : enrichedModelProfiles
@@ -548,4 +547,21 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
     return added
   }
   return { runProbe, importPickedModels }
+}
+
+/**
+ * A successful live catalog import is authoritative for the models it returns:
+ * its service-tier declaration replaces the stored one — including an empty
+ * array — and an absent declaration clears a stale stored value instead of
+ * surviving through object spread.
+ */
+export function mergeDiscoveredModelProfile(
+  enriched: ModelProviderModelProfileV1 | undefined,
+  discovered: ModelProviderModelProfileV1 | undefined
+): ModelProviderModelProfileV1 | undefined {
+  if (!discovered) return enriched
+  const merged: ModelProviderModelProfileV1 = { ...enriched, ...discovered }
+  if (discovered.serviceTiers) merged.serviceTiers = [...discovered.serviceTiers]
+  else delete merged.serviceTiers
+  return merged
 }

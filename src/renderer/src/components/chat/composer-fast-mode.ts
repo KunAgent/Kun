@@ -1,8 +1,15 @@
-import type { ModelProviderProfileV1 } from '@shared/app-settings'
+import type { ModelProviderModelProfileV1, ModelProviderProfileV1 } from '@shared/app-settings'
 import { modelProviderModelProfile } from '@shared/app-settings-provider-core'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 
 export const CODEX_FAST_SERVICE_TIER = 'priority' as const
+
+/**
+ * `hidden` keeps non-Codex composers unchanged, `supported` allows the toggle,
+ * `unsupported` means the provider declared tiers without priority, and
+ * `unknown` means the provider never declared tiers for this model.
+ */
+export type ComposerFastModeState = 'hidden' | 'supported' | 'unknown' | 'unsupported'
 
 export function modelProviderIsCodex(
   provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'> | undefined
@@ -16,9 +23,25 @@ export function modelProviderSupportsCodexFastMode(
 ): boolean {
   const model = normalizeModelId(modelId)
   if (!provider || !model || !modelProviderIsCodex(provider)) return false
-  const profile = modelProviderModelProfile(provider, model) ?? Object.values(provider.modelProfiles)
-    .find((candidate) => candidate.aliases?.some((alias) => normalizeModelId(alias) === model))
-  return profile?.serviceTiers?.includes(CODEX_FAST_SERVICE_TIER) === true
+  return modelProviderProfileForModel(provider, model)?.serviceTiers
+    ?.includes(CODEX_FAST_SERVICE_TIER) === true
+}
+
+export function composerFastModeState(
+  groups: readonly ModelProviderModelGroup[],
+  modelId: string,
+  providerId: string
+): ComposerFastModeState {
+  const provider = providerId.trim()
+  const model = normalizeModelId(modelId)
+  if (!provider || !model) return 'hidden'
+  const group = groups.find((candidate) => candidate.providerId === provider)
+  if (!group) return 'hidden'
+  const presetSource = group.presetSource?.trim().toLowerCase()
+  if (!isCodexProvider(provider, presetSource)) return 'hidden'
+  const serviceTiers = composerModelProfile(group, model)?.serviceTiers
+  if (!serviceTiers) return 'unknown'
+  return serviceTiers.includes(CODEX_FAST_SERVICE_TIER) ? 'supported' : 'unsupported'
 }
 
 export function composerSupportsCodexFastMode(
@@ -26,20 +49,7 @@ export function composerSupportsCodexFastMode(
   modelId: string,
   providerId: string
 ): boolean {
-  const provider = providerId.trim()
-  const model = normalizeModelId(modelId)
-  if (!provider || !model) return false
-  const group = groups.find((candidate) => candidate.providerId === provider)
-  if (!group) return false
-  const presetSource = group.presetSource?.trim().toLowerCase()
-  if (!isCodexProvider(provider, presetSource)) {
-    return false
-  }
-  const profile = Object.entries(group.modelProfiles ?? {}).find(([candidate, value]) =>
-    normalizeModelId(candidate) === model ||
-    value.aliases?.some((alias) => normalizeModelId(alias) === model)
-  )?.[1]
-  return profile?.serviceTiers?.includes(CODEX_FAST_SERVICE_TIER) === true
+  return composerFastModeState(groups, modelId, providerId) === 'supported'
 }
 
 export function serviceTierForComposerSelection(
@@ -59,4 +69,22 @@ function isCodexProvider(providerId: string, presetSource: string | undefined): 
 
 function normalizeModelId(modelId: string): string {
   return modelId.trim().toLowerCase()
+}
+
+function modelProviderProfileForModel(
+  provider: Pick<ModelProviderProfileV1, 'modelProfiles'>,
+  model: string
+): ModelProviderModelProfileV1 | undefined {
+  return modelProviderModelProfile(provider, model) ?? Object.values(provider.modelProfiles)
+    .find((candidate) => candidate.aliases?.some((alias) => normalizeModelId(alias) === model))
+}
+
+function composerModelProfile(
+  group: ModelProviderModelGroup,
+  model: string
+): ModelProviderModelProfileV1 | undefined {
+  return Object.entries(group.modelProfiles ?? {}).find(([candidate, value]) =>
+    normalizeModelId(candidate) === model ||
+    value.aliases?.some((alias) => normalizeModelId(alias) === model)
+  )?.[1]
 }

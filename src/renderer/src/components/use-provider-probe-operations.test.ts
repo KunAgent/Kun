@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ModelProviderProfileV1 } from '@shared/app-settings'
+import type { ModelProviderModelProfileV1, ModelProviderProfileV1 } from '@shared/app-settings'
 
 const probeMock = vi.fn<(providerId: string) => Promise<string[]>>()
 const flushMock = vi.fn<
@@ -143,5 +143,32 @@ describe('useProviderProbeOperations shared connection barrier', () => {
     await runProbe(target, 'test')
     expect(flushMock).toHaveBeenCalledTimes(1)
     expect(probeMock).toHaveBeenCalledWith('deepseek')
+  })
+})
+
+describe('mergeDiscoveredModelProfile', () => {
+  const enriched: ModelProviderModelProfileV1 = {
+    inputModalities: ['text'],
+    outputModalities: ['text'],
+    supportsToolCalling: true,
+    messageParts: ['text'],
+    contextWindowTokens: 128_000,
+    serviceTiers: ['priority']
+  }
+  const discovered: ModelProviderModelProfileV1 = {
+    inputModalities: ['text'],
+    outputModalities: ['text'],
+    supportsToolCalling: true,
+    messageParts: ['text']
+  }
+
+  it('replaces the stored tier declaration with the refreshed catalog result', async () => {
+    const { mergeDiscoveredModelProfile } = await import('./use-provider-probe-operations')
+    expect(mergeDiscoveredModelProfile(enriched, discovered)?.serviceTiers).toBeUndefined()
+    expect(mergeDiscoveredModelProfile(enriched, { ...discovered, serviceTiers: [] })?.serviceTiers)
+      .toEqual([])
+    expect(mergeDiscoveredModelProfile(enriched, { ...discovered, serviceTiers: ['priority'] }))
+      .toMatchObject({ contextWindowTokens: 128_000, serviceTiers: ['priority'] })
+    expect(mergeDiscoveredModelProfile(enriched, undefined)).toBe(enriched)
   })
 })

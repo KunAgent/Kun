@@ -83,7 +83,7 @@ const CODEX_PROVIDER_GROUP: ModelProviderModelGroup = {
   providerId: 'codex-2',
   presetSource: 'codex',
   label: 'ChatGPT subscription 2',
-  modelIds: ['gpt-5.4', 'gpt-5.4-mini'],
+  modelIds: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-6-astra'],
   modelProfiles: {
     'gpt-5.4': {
       inputModalities: ['text', 'image'],
@@ -97,6 +97,13 @@ const CODEX_PROVIDER_GROUP: ModelProviderModelGroup = {
       outputModalities: ['text'],
       supportsToolCalling: true,
       messageParts: ['text', 'image_url']
+    },
+    'gpt-6-astra': {
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      supportsToolCalling: true,
+      messageParts: ['text', 'image_url'],
+      serviceTiers: []
     }
   }
 }
@@ -375,7 +382,7 @@ describe('FloatingComposer model controls', () => {
     }
   })
 
-  it('hides Fast for Codex subscription models that do not advertise priority', () => {
+  it('shows a disabled Fast toggle that explains an unverified Codex model', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingComposerModelPicker, {
         compact: false,
@@ -392,7 +399,52 @@ describe('FloatingComposer model controls', () => {
       })
     )
 
-    expect(html).not.toContain('Fast mode on')
+    expect(html).toContain('lucide-zap')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('aria-pressed="false"')
+    expect(html).toContain('Fast support is not confirmed for this model')
+  })
+
+  it('shows a disabled Fast toggle that explains an explicitly unsupported Codex model', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposerModelPicker, {
+        compact: false,
+        mode: 'select',
+        controlVariant: 'split',
+        composerModel: 'gpt-6-astra',
+        composerProviderId: 'codex-2',
+        composerPickList: ['gpt-6-astra'],
+        composerModelGroups: [CODEX_PROVIDER_GROUP],
+        composerFastMode: true,
+        canChangeModel: true,
+        onComposerModelChange: () => undefined,
+        onComposerFastModeChange: () => undefined
+      })
+    )
+
+    expect(html).toContain('lucide-zap')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('This model does not offer Fast mode.')
+  })
+
+  it('hides Fast for non-Codex providers', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposerModelPicker, {
+        compact: false,
+        mode: 'select',
+        controlVariant: 'split',
+        composerModel: 'deepseek-v4-pro',
+        composerProviderId: 'deepseek',
+        composerPickList: ['deepseek-v4-pro'],
+        composerModelGroups: [DEEPSEEK_PROVIDER_GROUP],
+        composerFastMode: true,
+        canChangeModel: true,
+        onComposerModelChange: () => undefined,
+        onComposerReasoningEffortChange: () => undefined,
+        onComposerFastModeChange: () => undefined
+      })
+    )
+
     expect(html).not.toContain('lucide-zap')
   })
 

@@ -1,0 +1,7 @@
+{
+  "composerFastModeOn": "高速モード：オン",
+  "composerFastModeOff": "高速モード：オフ",
+  "composerFastModeHint": "Codex の応答が速くなりますが、サブスクリプション使用量が増えます。",
+  "composerFastModeUnverified": "このモデルの高速モード対応は未確認です。プロバイダー設定でモデル一覧を更新してください。",
+  "composerFastModeUnsupported": "このモデルは高速モードに対応していません。"
+}

@@ -1,4 +1,8 @@
-import type { ModelProviderModelProfileV1, ModelReasoningEffort } from '../shared/app-settings'
+import type {
+  ModelProviderModelProfileV1,
+  ModelReasoningEffort,
+  ModelServiceTier
+} from '../shared/app-settings'
 
 /** Codex uses slugs and picker visibility rather than the public API's data[].id. */
 export function parseCodexModelCatalog(body: string): {
@@ -23,6 +27,15 @@ export function parseCodexModelCatalog(body: string): {
       : []
     const defaultEffort = efforts.includes(row.default_reasoning_level)
       ? row.default_reasoning_level : efforts[0]
+    // A missing service_tiers field means the catalog never declared tiers
+    // (unknown); a present array is authoritative, so an empty array or one
+    // without priority stays an explicit "no supported tier" answer.
+    const serviceTiers = Array.isArray(row.service_tiers)
+      ? [...new Set<ModelServiceTier>(row.service_tiers.flatMap((tier: { id?: string } | null) => {
+          const tierId = tier?.id
+          return tierId === 'priority' || tierId === 'flex' ? [tierId] : []
+        }))]
+      : undefined
     profiles.set(id, {
       inputModalities: vision ? ['text', 'image'] : ['text'],
       outputModalities: ['text'],
@@ -31,8 +44,7 @@ export function parseCodexModelCatalog(body: string): {
       ...(Number.isSafeInteger(row.context_window) && row.context_window > 0
         ? { contextWindowTokens: row.context_window } : {}),
       ...(row.use_responses_lite === true ? { responsesMode: 'lite' as const } : {}),
-      ...(Array.isArray(row.service_tiers) && row.service_tiers.some((tier: { id?: string } | null) => tier?.id === 'priority')
-        ? { serviceTiers: ['priority'] } : {}),
+      ...(serviceTiers ? { serviceTiers } : {}),
       ...(defaultEffort ? { reasoning: {
         supportedEfforts: efforts, defaultEffort, requestProtocol: 'openai-responses' as const
       } } : {})

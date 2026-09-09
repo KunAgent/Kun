@@ -169,6 +169,36 @@ describe('upstream model picker list', () => {
     })
   })
 
+  it('keeps an explicit empty service-tier declaration from the live registry', () => {
+    const result = modelListFromSharedConnections({
+      schemaVersion: 1,
+      providers: [{
+        id: 'codex-2',
+        name: 'ChatGPT subscription 2',
+        presetSource: 'codex',
+        configured: true,
+        models: ['gpt-6-astra'],
+        modelCapabilities: {
+          'gpt-6-astra': {
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text', 'image_url'],
+            serviceTiers: []
+          }
+        }
+      }]
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      modelGroups: [{
+        providerId: 'codex-2',
+        modelProfiles: { 'gpt-6-astra': { serviceTiers: [] } }
+      }]
+    })
+  })
+
   it('excludes providers whose protected credential is missing or unreadable', () => {
     const result = modelListFromSharedConnections({
       schemaVersion: 1,

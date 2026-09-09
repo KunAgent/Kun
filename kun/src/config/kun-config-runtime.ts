@@ -115,7 +115,9 @@ export const ModelContextProfileConfigSchema = z
     messageParts: z.array(ModelMessagePartSupport).optional(),
     reasoning: ModelReasoningCapabilityMetadata.optional(),
     pricing: ModelCatalogPricing.optional(),
-    serviceTiers: z.array(z.enum(['priority', 'flex'])).min(1).optional(),
+    // An empty array is an explicit "no supported tier" declaration; absent
+    // stays "not declared".
+    serviceTiers: z.array(z.enum(['priority', 'flex'])).optional(),
     // Per-model wire-format override. Omitted means "inherit the
     // provider/runtime endpointFormat"; no default coercion here, otherwise
     // every model would be pinned to chat_completions.
