@@ -99,6 +99,33 @@ describe('FileGraphRunStore', () => {
     })
   })
 
+  it('applies thread scope and limit before loading any snapshot', async () => {
+    const { store } = await fixture()
+    for (const [runId, threadId] of [
+      ['run_1', 'thread_1'],
+      ['run_2', 'thread_2'],
+      ['run_3', 'thread_1']
+    ] as const) {
+      await store.create({
+        runId,
+        threadId,
+        projectId: 'project_1',
+        sourceTurnId: 'turn_1',
+        plan: testGraphPlan(),
+        commandId: `command_${runId}`,
+        idempotencyKey: `create_${runId}`
+      })
+    }
+    const loads = vi.spyOn(store, 'get')
+
+    const scoped = await store.list({ threadIds: ['thread_1'], limit: 1 })
+
+    // Newest run_3 was created last, so it wins the cap; run_2 belongs to a
+    // different thread and its snapshot must never even be read.
+    expect(scoped.map((run) => run.id)).toEqual(['run_3'])
+    expect(loads.mock.calls.map(([runId]) => runId)).toEqual(['run_3'])
+  })
+
   it('persists graph_event through the shared recorder and publishes it for SSE', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-graph-runtime-event-'))
     roots.push(root)

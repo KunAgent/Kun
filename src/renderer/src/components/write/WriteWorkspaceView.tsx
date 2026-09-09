@@ -49,6 +49,9 @@ import { createWriteWorkspaceInlineActions } from './write-workspace-inline-acti
 import { createWriteWorkspaceFileActions } from './write-workspace-file-actions'
 import { useWriteWorkspaceViewEffects } from './use-write-workspace-view-effects'
 import { WriteEditorGroups } from './WriteEditorGroups'
+import { WriteNodeGraphSurface } from './WriteNodeGraphSurface'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
+import { useNodeGraphStore } from '../../node-graph/node-graph-store'
 import { useWriteEditorGroupFileWatches } from './use-write-editor-group-file-watches'
 import { shouldShowWriteInlineAgent } from './write-inline-agent-visibility'
 
@@ -68,6 +71,9 @@ export function WriteWorkspaceView({
   onOpenAgentSettings
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const nodeGraphEnabled = useNodeGraphEnabled()
+  const workGraphOpen = useNodeGraphStore((s) => nodeGraphEnabled && s.workGraphOpen)
+  const toggleWorkGraph = useNodeGraphStore((s) => s.toggleWorkGraph)
   const ensureWriteThreadForWorkspace = useChatStore((s) => s.ensureWriteThreadForWorkspace)
   const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const busy = useChatStore((s) => s.busy)
@@ -542,7 +548,14 @@ export function WriteWorkspaceView({
   return (
     <div className={`write-workspace-view ds-no-drag flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${documentFocusMode ? 'is-focus-mode' : ''}`}>
       <div className={`min-h-0 min-w-0 flex-1 overflow-hidden ${writeFocusModeShellClassName(documentFocusMode)}`}>
-        <WriteEditorGroups
+        {workGraphOpen ? (
+          <WriteNodeGraphSurface
+            workspaceRoot={workspaceRoot}
+            leftSidebarCollapsed={leftSidebarCollapsed}
+            onToggleLeftSidebar={onToggleLeftSidebar}
+            onClose={toggleWorkGraph}
+          />
+        ) : <WriteEditorGroups
           workspaceName={workspaceName}
           workspacePathLabel={workspacePathLabel}
           workspaceError={settingsError ?? treeError}
@@ -560,7 +573,7 @@ export function WriteWorkspaceView({
           onAskAssistant={setAssistantPrompt}
           onCreateDraft={() => void createDraftFile()}
           onPickWorkspace={() => void pickWriteWorkspace()}
-        />
+        />}
       </div>
       {selectionAction && activeFilePath && (activeFileIsText || activeFileIsPdf || activeFileIsOffice) ? (
         <WriteInlineAgent

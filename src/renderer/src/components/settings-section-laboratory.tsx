@@ -18,6 +18,7 @@ import {
   Columns3,
   Globe2,
   Monitor,
+  Network,
   Presentation,
   Sparkles,
   Waypoints,
@@ -48,6 +49,7 @@ type LaboratorySettingsPanel =
   | 'browser'
   | 'graph'
   | 'ppt'
+  | 'nodeGraph'
   | 'projectBoard'
 
 export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
@@ -96,6 +98,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           { id: 'browser', label: t('browserUseSettingsTitle'), icon: Globe2 },
           { id: 'graph', label: t('graphSettingsTitle'), icon: Workflow },
           { id: 'ppt', label: t('labPptTitle'), icon: Presentation },
+          { id: 'nodeGraph', label: t('labNodeGraphTitle'), icon: Network },
           { id: 'projectBoard', label: t('labProjectBoardTitle'), icon: Columns3 }
         ]}
         value={activePanel}
@@ -199,6 +202,20 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ lab: patch })}
         />
+      </SettingsTabPanel>
+      <SettingsTabPanel<LaboratorySettingsPanel>
+        baseId="laboratory-settings"
+        tabId="nodeGraph"
+        active={activePanel === 'nodeGraph'}
+      >
+        <SettingsCard title={t('labNodeGraphTitle')}>
+          <SettingRow
+            title={t('labNodeGraphEnabled')}
+            description={t('labNodeGraphDescription')}
+            control={<Toggle checked={lab.nodeGraph?.enabled === true}
+              onChange={(enabled) => updateKun({ lab: { nodeGraph: { enabled } } })} />}
+          />
+        </SettingsCard>
       </SettingsTabPanel>
       <SettingsTabPanel<LaboratorySettingsPanel>
         baseId="laboratory-settings"

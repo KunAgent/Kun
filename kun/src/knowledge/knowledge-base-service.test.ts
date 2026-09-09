@@ -11,7 +11,10 @@ import { createThreadRecord, normalizeKnowledgeBaseMounts } from '../domain/thre
 import { KnowledgeBaseError, KnowledgeBaseService } from './knowledge-base-service.js'
 import { KnowledgeOfficeExtractorRegistry } from './knowledge-office-extractor.js'
 import { buildKnowledgeLocalTools } from './knowledge-tools.js'
-import type { StoredKnowledgeIndex } from './knowledge-types.js'
+import {
+  KNOWLEDGE_INDEX_SCHEMA_VERSION,
+  type StoredKnowledgeIndex
+} from './knowledge-types.js'
 
 const roots: string[] = []
 
@@ -235,7 +238,7 @@ describe('knowledge-base service and tools', () => {
     const catalog = await service.catalog(thread.id, 'Current')
     expect(catalog.matches.some((match) => match.node.title === 'Current source')).toBe(true)
     const stored = JSON.parse(await readFile(join(indexDirectory, `${key}.json`), 'utf8')) as { version: number }
-    expect(stored.version).toBe(2)
+    expect(stored.version).toBe(KNOWLEDGE_INDEX_SCHEMA_VERSION)
   })
 
   it('keeps usable sources ready when an optional Office extractor is unavailable', async () => {
@@ -257,6 +260,113 @@ describe('knowledge-base service and tools', () => {
       formatCounts: { markdown: 1, docx: 1 },
       diagnostics: expect.arrayContaining([expect.stringContaining('OfficeCLI is required')])
     })
+  })
+})
+
+describe('knowledge scan budget', () => {
+  function folderIndexService(dataDir: string): KnowledgeBaseService {
+    return new KnowledgeBaseService({
+      dataDir,
+      threadStore: { get: async () => null },
+      nowIso: () => '2026-08-12T00:00:00.000Z'
+    })
+  }
+
+  it('refuses a rebuild that exceeds the budget, serves the stored index, and charges later rebuilds', async () => {
+    const root = await tempRoot('kun-kb-budget-')
+    const dataDir = await tempRoot('kun-kb-budget-data-')
+    await writeFile(join(root, 'a.md'), '# A\n\nAlpha note body.\n')
+    const service = folderIndexService(dataDir)
+
+    const first = await service.readyFolderIndex(root, 'mount-a', { verifyFreshness: true })
+    expect(first.state).toBe('ready')
+    expect(first.index?.documents).toHaveLength(1)
+
+    // The tree changed, so a rebuild is due — but the request has no allowance
+    // left. The last built index is served instead and nothing is scheduled.
+    await writeFile(join(root, 'b.md'), '# B\n\nBeta note body.\n')
+    const refused = await service.readyFolderIndex(root, 'mount-a', {
+      verifyFreshness: true,
+      budget: {
+        remainingFiles: 0,
+        remainingBytes: 0,
+        remainingDirectories: 0,
+        remainingEntries: 0,
+        remainingMetadataOps: 0
+      }
+    })
+    expect(refused.budgetExhausted).toBe(true)
+    expect(refused.state).toBe('stale')
+    expect(refused.index?.documents.map((document) => document.relativePath)).toEqual(['a.md'])
+
+    // A request with allowance rebuilds and pays for exactly what it scanned.
+    const allowance = {
+      remainingFiles: 10,
+      remainingBytes: 1024 * 1024,
+      remainingDirectories: 10,
+      remainingEntries: 100,
+      remainingMetadataOps: 100
+    }
+    const rebuilt = await service.readyFolderIndex(root, 'mount-a', {
+      verifyFreshness: true,
+      budget: allowance
+    })
+    expect(rebuilt.budgetExhausted).toBeUndefined()
+    expect(rebuilt.index?.documents).toHaveLength(2)
+    expect(allowance.remainingFiles).toBe(8)
+    expect(allowance.remainingBytes).toBeLessThan(1024 * 1024)
+    expect(allowance.remainingDirectories).toBeLessThan(10)
+    expect(allowance.remainingMetadataOps).toBeLessThan(100)
+  })
+
+  it('charges the walk but no bytes when the fingerprint has not moved', async () => {
+    const root = await tempRoot('kun-kb-budget-fresh-')
+    const dataDir = await tempRoot('kun-kb-budget-fresh-data-')
+    await writeFile(join(root, 'a.md'), '# A\n\nAlpha note body.\n')
+    const service = folderIndexService(dataDir)
+    await service.readyFolderIndex(root, 'mount-a', { verifyFreshness: true })
+
+    const allowance = {
+      remainingFiles: 5,
+      remainingBytes: 4_096,
+      remainingDirectories: 5,
+      remainingEntries: 50,
+      remainingMetadataOps: 50
+    }
+    const unchanged = await service.readyFolderIndex(root, 'mount-a', {
+      verifyFreshness: true,
+      budget: allowance
+    })
+    expect(unchanged.state).toBe('ready')
+    expect(unchanged.index?.documents).toHaveLength(1)
+    // The stat pass is real I/O, so the traversal fields are charged even when
+    // nothing gets rebuilt — that bounds a many-root request's metadata scans.
+    expect(allowance.remainingFiles).toBe(4)
+    expect(allowance.remainingDirectories).toBe(4)
+    // Bytes bound content reads, and a fingerprint match reads no content.
+    expect(allowance.remainingBytes).toBe(4_096)
+  })
+
+  it('does not begin scanning a root once the walk allowance is spent', async () => {
+    const root = await tempRoot('kun-kb-budget-spent-')
+    const dataDir = await tempRoot('kun-kb-budget-spent-data-')
+    await writeFile(join(root, 'a.md'), '# A\n\nAlpha note body.\n')
+    const service = folderIndexService(dataDir)
+
+    const spent = await service.readyFolderIndex(root, 'mount-a', {
+      verifyFreshness: true,
+      budget: {
+        remainingFiles: 5,
+        remainingBytes: 4_096,
+        remainingDirectories: 0,
+        remainingEntries: 50,
+        remainingMetadataOps: 50
+      }
+    })
+    // Never indexed and never scanned: there is no stored index to serve.
+    expect(spent.budgetExhausted).toBe(true)
+    expect(spent.state).toBe('pending')
+    expect(spent.index).toBeNull()
   })
 })
 

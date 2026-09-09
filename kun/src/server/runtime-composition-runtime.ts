@@ -20,6 +20,7 @@ import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
+import { NodeGraphService } from '../node-graph/index.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -118,6 +119,13 @@ export function createServerRuntimeComposition(
     extensionIndexClient
   } = extensions
   const { startedAt, rebuildCapabilities, applyConfig } = config
+  const nodeGraphService = new NodeGraphService({
+    threads: threadService,
+    memoryStore: () => services.memoryStore,
+    ...(knowledgeBaseService ? { knowledgeBaseService } : {}),
+    runs: graphRuntime.store,
+    nowIso
+  })
   return {
     threadService,
     projectBoardService,
@@ -156,6 +164,9 @@ export function createServerRuntimeComposition(
 	    migrationService,
 	    migrationImportService,
 	    knowledgeBaseService,
+	    get nodeGraphService() {
+	      return config.activeOptions.lab?.nodeGraph?.enabled === true ? nodeGraphService : undefined
+	    },
 	    get delegationRuntime() {
 	      return delegationRuntime
 	    },

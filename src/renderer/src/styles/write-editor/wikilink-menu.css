@@ -1,0 +1,80 @@
+/*
+ * `[[` reference menu, shared by the CodeMirror (Source/Live) and ProseMirror
+ * (Rich text) editors. Each plugin positions the menu against its own container,
+ * so both containers must establish a containing block.
+ */
+.cm-editor,
+.write-rich-host {
+  position: relative;
+}
+
+.write-wikilink-menu {
+  position: absolute;
+  /* Explicit defaults: with `auto` offsets the menu would fall back to its
+     static position after the scroller, where `.cm-editor` clips it away. */
+  left: 4px;
+  top: 4px;
+  z-index: 30;
+  min-width: 260px;
+  max-width: 420px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  background: var(--ds-surface-card);
+  box-shadow: 0 18px 44px rgba(20, 47, 95, 0.18);
+}
+
+.write-wikilink-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.write-wikilink-row.is-selected {
+  background: var(--ds-surface-hover);
+}
+
+.write-wikilink-name {
+  flex: 0 0 auto;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ds-text);
+}
+
+.write-wikilink-path {
+  flex: 1 1 auto;
+  overflow: hidden;
+  /* Truncate from the left: the tail of a path identifies the file. */
+  direction: rtl;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ds-text-faint);
+}
+
+.write-wikilink-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ds-text-faint);
+}
+
+.write-wikilink-empty {
+  padding: 7px 9px;
+  font-size: 12px;
+  color: var(--ds-text-faint);
+}

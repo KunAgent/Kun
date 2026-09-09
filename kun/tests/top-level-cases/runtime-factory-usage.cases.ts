@@ -291,7 +291,7 @@ describe('runtime factory usage carryover', () => {
       insecure: false,
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
-      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } },
+      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, nodeGraph: { enabled: false }, projectBoard: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -359,7 +359,7 @@ describe('runtime factory usage carryover', () => {
       insecure: false,
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
-      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } },
+      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, nodeGraph: { enabled: false }, projectBoard: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -397,12 +397,12 @@ describe('runtime factory usage carryover', () => {
       expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
-        lab: { pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } }
+        lab: { pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, nodeGraph: { enabled: false }, projectBoard: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(false)
 
       expect(await runtime.applyConfig({
-        lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false } }
+        lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, nodeGraph: { enabled: false }, projectBoard: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(true)
     } finally {

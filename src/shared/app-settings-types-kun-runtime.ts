@@ -141,6 +141,12 @@ export type KunLabConversationVisualizationSettingsV1 = {
   enabled: boolean
 }
 
+/** Experimental read-only knowledge map settings. */
+export type KunLabNodeGraphSettingsV1 = {
+  /** Read-only knowledge map. Opt-in while experimental. */
+  enabled: boolean
+}
+
 /** Experimental Lab feature settings for the project board sidebar entry. */
 export type KunLabProjectBoardSettingsV1 = {
   /** Master switch. Default false while the feature is experimental. */
@@ -173,6 +179,7 @@ export type KunLabSettingsV1 = {
   pptAgent: KunLabPptAgentSettingsV1
   conversationVisualization: KunLabConversationVisualizationSettingsV1
   autoPlanBuild: KunLabAutoPlanBuildSettingsV1
+  nodeGraph: KunLabNodeGraphSettingsV1
   projectBoard: KunLabProjectBoardSettingsV1
 }
 
@@ -183,6 +190,7 @@ export type KunLabSettingsPatchV1 = {
   autoPlanBuild?: Partial<Omit<KunLabAutoPlanBuildSettingsV1, 'scheduledDefaults'>> & {
     scheduledDefaults?: Partial<KunLabAutoPlanBuildScheduledDefaultsV1>
   }
+  nodeGraph?: Partial<KunLabNodeGraphSettingsV1>
   projectBoard?: Partial<KunLabProjectBoardSettingsV1>
 }
 

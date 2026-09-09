@@ -6,6 +6,7 @@ import {
   Columns3,
   LayoutGrid,
   Moon,
+  Network,
   Plus,
   Puzzle,
   Settings,
@@ -28,6 +29,7 @@ import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
 import { SidebarProjectBoardsSection } from './SidebarProjectBoardsSection'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
 import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import {
@@ -40,7 +42,7 @@ import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
 type Props = {
   threads: NormalizedThread[]
   activeThreadId: string | null
-  activeView: 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
+  activeView: 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'nodeGraph' | 'subagents'
   connectPhoneSidebarOpen: boolean
   connectPhoneInitialTarget: ClawInstallTarget
   pluginsActive: boolean
@@ -72,6 +74,7 @@ type Props = {
   onScheduleOpen: () => void
   onBoardOpen?: () => void
   onWorkflowOpen: () => void
+  onNodeGraphOpen: () => void
   onNewConversation: () => void
 }
 
@@ -107,8 +110,10 @@ export function Sidebar({
   onScheduleOpen,
   onBoardOpen,
   onWorkflowOpen,
+  onNodeGraphOpen,
   onNewConversation
 }: Props): ReactElement {
+  const nodeGraphEnabled = useNodeGraphEnabled()
   const { t, i18n } = useTranslation('common')
   const [isDarkMode, setIsDarkMode] = useState(
     () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
@@ -205,7 +210,7 @@ export function Sidebar({
           onWriteOpen={onWriteOpen}
         />
 
-        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' ? (
+        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' && activeView !== 'nodeGraph' ? (
           <SidebarCommandRow
             icon={<Plus className="h-4 w-4" strokeWidth={2} />}
             label={t('newAgent')}
@@ -247,6 +252,14 @@ export function Sidebar({
           onClick={onWorkflowOpen}
           active={activeView === 'workflow'}
         />
+        {nodeGraphEnabled ? (
+          <SidebarCommandRow
+            icon={<Network className="h-4 w-4" strokeWidth={1.75} />}
+            label={t('nodeGraph')}
+            onClick={onNodeGraphOpen}
+            active={activeView === 'nodeGraph'}
+          />
+        ) : null}
       </div>
 
       <div className="ds-no-drag mx-1 my-1" />

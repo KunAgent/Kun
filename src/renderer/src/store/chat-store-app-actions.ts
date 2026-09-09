@@ -79,6 +79,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
   | 'openBoard'
   | 'openSchedule'
   | 'openWorkflow'
+  | 'openNodeGraph'
   | 'openDesign'
   | 'openInitialSetup'
   | 'closeInitialSetup'
@@ -354,6 +355,10 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
 
     openWorkflow: () => {
       set({ route: 'workflow' })
+    },
+
+    openNodeGraph: () => {
+      set({ route: 'nodeGraph' })
     },
     openDesign: () => {
       set({ route: 'chat' })

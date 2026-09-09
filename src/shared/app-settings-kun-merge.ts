@@ -479,6 +479,9 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
         timeZone: ''
       }
     },
+    nodeGraph: {
+      enabled: false
+    },
     projectBoard: {
       enabled: false
     }
@@ -517,6 +520,9 @@ export function mergeKunLabSettings(
           : defaults.autoPlanBuild.scheduledDefaults.reasoningEffort,
         timeZone: stringOrFallback(legacyScheduled?.timeZone, '').trim()
       }
+    },
+    nodeGraph: {
+      enabled: legacyCurrent?.nodeGraph?.enabled === true
     },
     projectBoard: {
       enabled: legacyCurrent?.projectBoard?.enabled ?? defaults.projectBoard.enabled
@@ -563,6 +569,9 @@ export function mergeKunLabSettings(
           base.autoPlanBuild.scheduledDefaults.timeZone
         ).trim()
       }
+    },
+    nodeGraph: {
+      enabled: patch.nodeGraph?.enabled ?? base.nodeGraph.enabled
     },
     projectBoard: {
       enabled: patch.projectBoard?.enabled ?? base.projectBoard.enabled

@@ -112,6 +112,65 @@ describe('write markdown round-trip', () => {
   })
 })
 
+describe('wikilink serialization', () => {
+  it('writes a wikilink typed in the rich editor as bare brackets', () => {
+    const doc = parseWriteMarkdown('See [[concepts/node-graph]] for the map.\n')
+    expect(serializeWriteMarkdown(doc)).toContain('[[concepts/node-graph]]')
+    expect(serializeWriteMarkdown(doc)).not.toContain('\\[')
+  })
+
+  it('keeps a relative wikilink target intact', () => {
+    const doc = parseWriteMarkdown('Now it links to [[../concepts/wikilinks]]\n')
+    expect(serializeWriteMarkdown(doc)).toContain('[[../concepts/wikilinks]]')
+  })
+
+  it('leaves an ordinary markdown link escaped exactly as before', () => {
+    const doc = parseWriteMarkdown('A [real link](https://example.com) stays a link.\n')
+    expect(serializeWriteMarkdown(doc)).toContain('[real link](https://example.com)')
+  })
+
+  it('keeps a note that already contains wikilinks eligible for the rich editor', () => {
+    const audit = auditWriteMarkdownFidelity('# Note\n\nLinks to [[concepts/node-graph]] and [[index]].\n')
+    expect(audit.eligible).toBe(true)
+  })
+
+  it('gives a bare wikilink the wikilink mark, brackets intact', () => {
+    const doc = parseWriteMarkdown('See [[concepts/node-graph]].\n')
+    const marked = JSON.stringify(doc).includes(
+      '"text":"[[concepts/node-graph]]","marks":[{"type":"wikilink"}]'
+    )
+    expect(marked).toBe(true)
+  })
+
+  it('keeps the alias form intact', () => {
+    const doc = parseWriteMarkdown('See [[notes/a|Alias]] here.\n')
+    expect(serializeWriteMarkdown(doc)).toContain('[[notes/a|Alias]]')
+  })
+
+  it('preserves deliberately escaped brackets as literal text', () => {
+    // The old global regex turned this literal text into an active wikilink on
+    // every save. The schema-level mark leaves unmarked text to the default
+    // escaping, so the author's escapes survive.
+    const doc = parseWriteMarkdown('Literal \\[\\[not-a-link\\]\\] stays escaped.\n')
+    const serialized = serializeWriteMarkdown(doc)
+    expect(serialized).toContain('\\[\\[not-a-link\\]\\]')
+    expect(serialized).not.toContain('[[not-a-link]]')
+  })
+
+  it('round-trips deliberately escaped brackets through the fidelity audit', () => {
+    const audit = auditWriteMarkdownFidelity('Literal \\[\\[not-a-link\\]\\] stays escaped.\n')
+    expect(audit.eligible).toBe(true)
+    expect(audit.eligible && audit.normalized).toContain('\\[\\[not-a-link\\]\\]')
+  })
+
+  it('keeps a document mixing real and escaped wikilinks faithful to both', () => {
+    const source = 'Real [[notes/alpha]] and literal \\[\\[beta\\]\\] together.\n'
+    const serialized = serializeWriteMarkdown(parseWriteMarkdown(source))
+    expect(serialized).toContain('[[notes/alpha]]')
+    expect(serialized).toContain('\\[\\[beta\\]\\]')
+  })
+})
+
 describe('auditWriteMarkdownFidelity', () => {
   it('accepts simple generated markdown', () => {
     const fidelity = auditWriteMarkdownFidelity(SIMPLE_DOC)

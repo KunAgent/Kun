@@ -9,6 +9,7 @@ import {
   FolderOpen,
   FolderPlus,
   FolderSearch,
+  Network,
   Plus,
   RefreshCw,
   Settings,
@@ -18,6 +19,8 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import type { WorkWhiteboard } from '../../write/write-workspace-store'
+import { useNodeGraphEnabled } from '../../node-graph/use-node-graph-enabled'
+import { useNodeGraphStore } from '../../node-graph/node-graph-store'
 import { confirmDialog } from '../../lib/confirm-dialog'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
 import { revealWorkspacePathInFileManager } from '../../lib/open-workspace-path'
@@ -47,7 +50,7 @@ import { WriteFileTree } from './WriteFileTree'
 import { WorkWhiteboardSidebarSection } from './WorkWhiteboardSidebarSection'
 
 type Props = {
-  activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow'
+  activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow' | 'nodeGraph'
   connectPhoneSidebarOpen: boolean
   focusModeEnabled: boolean
   onCodeOpen: () => void
@@ -70,6 +73,9 @@ export function WriteSidebar({
   onToggleConnectPhone
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const nodeGraphEnabled = useNodeGraphEnabled()
+  const workGraphOpen = useNodeGraphStore((state) => state.workGraphOpen)
+  const toggleWorkGraph = useNodeGraphStore((state) => state.toggleWorkGraph)
   const clawChannels = useChatStore((s) => s.clawChannels)
   const addClawChannel = useChatStore((s) => s.addClawChannel)
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
@@ -382,6 +388,14 @@ export function WriteSidebar({
           label={t('writeAddWorkspace')}
           onClick={() => void pickWriteWorkspace()}
         />
+        {nodeGraphEnabled ? (
+          <SidebarCommandRow
+            icon={<Network className="h-4 w-4" strokeWidth={1.75} />}
+            label={workGraphOpen ? t('nodeGraphWorkClose') : t('nodeGraphWorkOpen')}
+            onClick={toggleWorkGraph}
+            active={workGraphOpen}
+          />
+        ) : null}
       </div>
 
       <div className="ds-no-drag mx-1.5 my-3" />

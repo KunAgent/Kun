@@ -46,6 +46,9 @@ import type {
 import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
 import type { RemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspaces'
 
+import type { AppRoute, PluginHostRoute, SettingsRouteSection } from './chat-store-route-types'
+export type { AppRoute, PluginHostRoute, SettingsRouteSection } from './chat-store-route-types'
+
 export type QueuedUserMessage = {
   id: string
   text: string
@@ -215,33 +218,6 @@ export type ClearDesignHistoryResult = {
 }
 
 export type InitialSetupMode = 'required' | 'preview'
-export type SettingsRouteSection =
-  | 'general'
-  | 'providers'
-  | 'extensions'
-  | 'write'
-  | 'design'
-  | 'imageGeneration'
-  | 'mediaGeneration'
-  | 'speechToText'
-  | 'agents'
-  | 'laboratory'
-  | 'subagents'
-  | 'archives'
-  | 'worktree'
-  | 'memory'
-  | 'permissions'
-  | 'skill'
-  | 'mcp'
-  | 'shortcuts'
-  | 'easterEgg'
-  | 'claw'
-  | 'updates'
-  | 'terminal'
-  | 'debug'
-  | 'storage'
-  | 'dataMigration'
-export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -250,7 +226,6 @@ export type ScheduledThreadActivity = {
   nextRunAt: string
   queued: boolean
 }
-export type PluginHostRoute = 'chat' | 'claw'
 
 /**
  * A side conversation ("by-the-way") running alongside the active
@@ -525,6 +500,7 @@ export type ChatState = {
   openBoard: (workspaceRoot?: string) => void
   openSchedule: () => void
   openWorkflow: () => void
+  openNodeGraph: () => void
   openDesign: () => void
   clearActiveThreadSelection: () => void
   refreshClawChannels: () => Promise<void>

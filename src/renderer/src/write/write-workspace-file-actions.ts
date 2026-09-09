@@ -28,6 +28,7 @@ import {
   moveWriteFileThreads,
   saveWriteThreadRegistry
 } from './write-thread-registry'
+import { invalidateWikilinkTargets } from './wikilink/wikilink-target-service'
 import {
   createWriteDocumentSession,
   isWriteFileTab,
@@ -440,6 +441,7 @@ export function createWriteFileActions({
         set({ fileError: result.message })
         return null
       }
+      invalidateWikilinkTargets()
       await get().refreshWorkspace(workspaceRoot)
       await get().openFile(workspaceRoot, result.path)
       return result.path
@@ -570,6 +572,7 @@ export function createWriteFileActions({
       } else {
         rememberActiveFile(workspaceRoot, null)
       }
+      invalidateWikilinkTargets()
       await get().refreshWorkspace(workspaceRoot)
       return result.path
     },
@@ -628,6 +631,7 @@ export function createWriteFileActions({
         }
       })
       rememberActiveFile(workspaceRoot, get().activeFilePath)
+      invalidateWikilinkTargets()
       await get().refreshWorkspace(workspaceRoot)
       return true
     }

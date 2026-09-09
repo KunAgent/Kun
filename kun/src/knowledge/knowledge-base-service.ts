@@ -8,7 +8,13 @@ import type {
   ThreadRecord
 } from '../contracts/threads.js'
 import type { ThreadStore } from '../ports/thread-store.js'
-import { buildKnowledgeIndex, extractPdfPages, scanKnowledgeSources } from './knowledge-indexer.js'
+import {
+  buildKnowledgeIndex,
+  extractPdfPages,
+  scanBudgetExhausted,
+  scanKnowledgeSources,
+  type KnowledgeScanBudget
+} from './knowledge-indexer.js'
 import {
   KnowledgeOfficeArtifactStore,
   sha256KnowledgeSource
@@ -36,11 +42,17 @@ const INDEX_CACHE_TTL_MS = 5_000
 export class KnowledgeBaseError extends Error {
   constructor(
     message: string,
-    readonly code: 'not_found' | 'busy' | 'unavailable' | 'invalid'
+    readonly code: 'not_found' | 'busy' | 'unavailable' | 'invalid' | 'budget'
   ) {
     super(message)
     this.name = 'KnowledgeBaseError'
   }
+}
+
+export type { KnowledgeScanBudget } from './knowledge-indexer.js'
+
+function isBudgetError(error: unknown): boolean {
+  return error instanceof KnowledgeBaseError && error.code === 'budget'
 }
 
 type KnowledgeBaseServiceOptions = {
@@ -92,6 +104,109 @@ export class KnowledgeBaseService {
     const mount = this.requireMount(thread, mountId)
     const index = await this.ensureIndex(mount, { force: true })
     return this.readyStatus(mount, index)
+  }
+
+  /**
+   * Non-blocking index read for read-only projections (Node Graph). Returns
+   * the persisted index only when it is already usable, and schedules a
+   * background rebuild when it is missing or stale, so opening a view never
+   * pays for a full re-index inline.
+   */
+  async readyIndex(
+    mount: KnowledgeBaseMount,
+    options: { verifyFreshness?: boolean; budget?: KnowledgeScanBudget } = {}
+  ): Promise<{
+    index: StoredKnowledgeIndex | null
+    state: KnowledgeBaseIndexStatus['state']
+    /** True when the request's scan budget refused this root's rebuild. */
+    budgetExhausted?: boolean
+  }> {
+    if (options.verifyFreshness) {
+      // Checked before the TTL cache on purpose: this path exists to reflect the
+      // filesystem right now, and a short-circuit here is exactly what made a
+      // just-saved edit need a second manual refresh. `ensureIndex` still only
+      // rebuilds when the scan fingerprint moved, so an unchanged tree costs one
+      // stat pass and reuses the persisted index.
+      try {
+        return {
+          index: await this.ensureIndex(mount, {
+            verifyFreshness: true,
+            ...(options.budget ? { budget: options.budget } : {})
+          }),
+          state: 'ready'
+        }
+      } catch (error) {
+        if (isBudgetError(error)) {
+          // The request's allowance is spent. Serve the last built index and
+          // skip the non-blocking path below: its status inspection would
+          // schedule a background rebuild, spending off-request exactly the
+          // work the budget refused.
+          const stored = await this.readStored(mount)
+          return { index: stored, state: stored ? 'stale' : 'pending', budgetExhausted: true }
+        }
+        /* fall through to the non-blocking path below */
+      }
+    }
+    const cached = this.indexCache.get(mountKey(mount))
+    if (cached && Date.now() - cached.checkedAt < INDEX_CACHE_TTL_MS) {
+      return { index: cached.index, state: 'ready' }
+    }
+    // A spent budget must stop even the status inspection: it performs the
+    // very filesystem walk the allowance exists to bound.
+    if (options.budget && scanBudgetExhausted(options.budget)) {
+      const stored = await this.readStored(mount)
+      return { index: stored, state: stored ? 'stale' : 'pending', budgetExhausted: true }
+    }
+    let status: KnowledgeBaseIndexStatus
+    try {
+      status = await this.inspectStatus(mount, options.budget)
+    } catch (error) {
+      if (!isBudgetError(error)) throw error
+      const stored = await this.readStored(mount)
+      return { index: stored, state: stored ? 'stale' : 'pending', budgetExhausted: true }
+    }
+    if (status.state === 'pending' || status.state === 'stale') {
+      // The background rebuild keeps charging this request's budget, so one
+      // projection load cannot fan out into unbounded off-request work.
+      this.schedule(mount, status.state === 'stale', options.budget)
+    }
+    if (status.state === 'ready' || status.state === 'stale') {
+      const stored = await this.readStored(mount)
+      if (stored) return { index: stored, state: status.state }
+    }
+    return { index: null, state: status.state }
+  }
+
+  /**
+   * Non-blocking index read for a bare directory, with no thread or mount
+   * involved. Node Graph's Write-workspace projection needs the same markdown
+   * scan (`[[wikilinks]]`, headings, folder nesting) that a mounted base gets,
+   * so a mount is synthesized rather than duplicating the indexer.
+   */
+  async readyFolderIndex(
+    root: string,
+    mountId: string,
+    options: { verifyFreshness?: boolean; budget?: KnowledgeScanBudget } = {}
+  ): Promise<{
+    index: StoredKnowledgeIndex | null
+    state: KnowledgeBaseIndexStatus['state']
+    budgetExhausted?: boolean
+  }> {
+    const trimmed = root.trim()
+    if (!trimmed) throw new KnowledgeBaseError('a folder root is required', 'invalid')
+    if (!isAbsolute(trimmed)) {
+      throw new KnowledgeBaseError('folder root must be an absolute path', 'invalid')
+    }
+    return this.readyIndex(
+      {
+        id: mountId,
+        root: trimmed,
+        name: trimmed,
+        source: 'write-workspace',
+        access: 'read-only'
+      },
+      options
+    )
   }
 
   async catalog(threadId: string, query?: string): Promise<KnowledgeCatalogResult> {
@@ -217,7 +332,7 @@ export class KnowledgeBaseService {
 
   private async ensureIndex(
     mount: KnowledgeBaseMount,
-    options: { force?: boolean; verifyFreshness?: boolean } = {}
+    options: { force?: boolean; verifyFreshness?: boolean; budget?: KnowledgeScanBudget } = {}
   ): Promise<StoredKnowledgeIndex> {
     const force = options.force === true
     const key = mountKey(mount)
@@ -232,7 +347,7 @@ export class KnowledgeBaseService {
     }
     const existing = this.inFlight.get(key)
     if (existing) return existing
-    const promise = this.buildOrLoad(mount, force)
+    const promise = this.buildOrLoad(mount, force, options.budget)
     this.inFlight.set(key, promise)
     try {
       return await promise
@@ -241,18 +356,55 @@ export class KnowledgeBaseService {
     }
   }
 
-  private async buildOrLoad(mount: KnowledgeBaseMount, force: boolean): Promise<StoredKnowledgeIndex> {
+  private async buildOrLoad(
+    mount: KnowledgeBaseMount,
+    force: boolean,
+    budget?: KnowledgeScanBudget
+  ): Promise<StoredKnowledgeIndex> {
     const key = mountKey(mount)
     let previous = this.indexCache.get(key)?.index ?? null
     this.statuses.set(key, status(mount.id, 'indexing', undefined, previous ?? undefined))
     try {
       previous ??= await this.readStored(mount)
-      const scan = await scanKnowledgeSources(mount.root)
+      // A root whose walk cannot even begin must not start scanning at all:
+      // the whole point of the shared allowance is that once it is spent, the
+      // remaining roots of the request cost nothing.
+      if (budget && scanBudgetExhausted(budget)) {
+        throw new KnowledgeBaseError(
+          `knowledge base ${mount.name} was not scanned: the request's scan budget is exhausted`,
+          'budget'
+        )
+      }
+      // The walk itself charges the budget's traversal fields (directories,
+      // entries, metadata ops, discovered files), so even the stat pass of a
+      // many-root request is bounded — not only the rebuild below.
+      const scan = await scanKnowledgeSources(mount.root, budget)
+      if (scan.budgetExhausted) {
+        // A partial walk has an untrustworthy file list and fingerprint;
+        // neither a fingerprint match nor a rebuild may be based on it.
+        throw new KnowledgeBaseError(
+          `knowledge base ${mount.name} scan stopped early: the request's scan budget is exhausted`,
+          'budget'
+        )
+      }
       const stored = force ? null : previous
       if (stored?.fingerprint === scan.fingerprint && stored.root === scan.root) {
         this.indexCache.set(key, { index: stored, checkedAt: Date.now() })
         this.statuses.set(key, this.readyStatus(mount, stored))
         return stored
+      }
+      // Bytes are charged only here — after the fingerprint check — because
+      // the rebuild is what reads file contents and runs PDF/Office
+      // extraction. (Files were already charged by the walk above.)
+      if (budget) {
+        const scanBytes = scan.files.reduce((total, file) => total + file.size, 0)
+        if (scanBytes > budget.remainingBytes) {
+          throw new KnowledgeBaseError(
+            `knowledge base ${mount.name} needs ${scanBytes} bytes, exceeding the request's remaining scan budget`,
+            'budget'
+          )
+        }
+        budget.remainingBytes -= scanBytes
       }
       const artifacts = this.artifactStore(mount)
       await artifacts.prune(new Set(previous?.documents.flatMap((document) =>
@@ -269,16 +421,36 @@ export class KnowledgeBaseService {
     } catch (error) {
       if (previous) this.indexCache.set(key, { index: previous, checkedAt: 0 })
       else this.indexCache.delete(key)
+      if (isBudgetError(error)) {
+        // A budget refusal is not a fault of this mount: the tree may be fine
+        // and merely too expensive for what remains of the request. Report it
+        // stale (a later, cheaper request can rebuild) rather than errored.
+        this.statuses.set(key, status(mount.id, previous ? 'stale' : 'pending', undefined, previous ?? undefined))
+        throw error
+      }
       const state = isUnavailable(error) ? 'unavailable' : 'error'
       this.statuses.set(key, status(mount.id, state, message(error), previous ?? undefined))
       throw new KnowledgeBaseError(`knowledge base ${mount.name} is unavailable: ${message(error)}`, 'unavailable')
     }
   }
 
-  private async inspectStatus(mount: KnowledgeBaseMount): Promise<KnowledgeBaseIndexStatus> {
+  /** Throws a budget `KnowledgeBaseError` when the walk allowance runs out. */
+  private async inspectStatus(
+    mount: KnowledgeBaseMount,
+    budget?: KnowledgeScanBudget
+  ): Promise<KnowledgeBaseIndexStatus> {
     if (this.inFlight.has(mountKey(mount))) return status(mount.id, 'indexing')
     try {
-      const [scan, stored] = await Promise.all([scanKnowledgeSources(mount.root), this.readStored(mount)])
+      const [scan, stored] = await Promise.all([
+        scanKnowledgeSources(mount.root, budget),
+        this.readStored(mount)
+      ])
+      if (scan.budgetExhausted) {
+        throw new KnowledgeBaseError(
+          `knowledge base ${mount.name} scan stopped early: the request's scan budget is exhausted`,
+          'budget'
+        )
+      }
       if (!stored) return status(mount.id, 'pending')
       if (stored.root !== scan.root || stored.fingerprint !== scan.fingerprint) {
         return status(mount.id, 'stale', undefined, stored)
@@ -286,12 +458,15 @@ export class KnowledgeBaseService {
       this.indexCache.set(mountKey(mount), { index: stored, checkedAt: Date.now() })
       return this.readyStatus(mount, stored)
     } catch (error) {
+      // A spent budget is the caller's condition to handle, not this mount's
+      // health; folding it into an error status would misreport a fine tree.
+      if (isBudgetError(error)) throw error
       return status(mount.id, isUnavailable(error) ? 'unavailable' : 'error', message(error))
     }
   }
 
-  private schedule(mount: KnowledgeBaseMount, force = false): void {
-    void this.ensureIndex(mount, { force }).catch(() => undefined)
+  private schedule(mount: KnowledgeBaseMount, force = false, budget?: KnowledgeScanBudget): void {
+    void this.ensureIndex(mount, { force, ...(budget ? { budget } : {}) }).catch(() => undefined)
   }
 
   private statusFor(mount: KnowledgeBaseMount): KnowledgeBaseIndexStatus {

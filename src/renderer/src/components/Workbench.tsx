@@ -86,9 +86,6 @@ import {
   workbenchContributionRegistry,
   type ExtensionRightRailViewEntry
 } from '../extensions/contribution-registry'
-import { graphNodeLiveness } from '../graph/graph-liveness'
-import { openGraphChildThread } from '../graph/graph-child-navigation'
-import { formatSubagentElapsed } from './subagents/SubagentLiveness'
 import { MAX_COMPOSER_CONTEXT_ATTACHMENTS } from '@kun/extension-api'
 import type { DevPreviewContextDraft } from './DevBrowserPanel'
 import { createDevPreviewComposerContextAttachment } from '../lib/dev-preview-composer-context'
@@ -106,7 +103,7 @@ export function Workbench(): ReactElement {
     codeWorkspaceRoots, selectWorkspaceRoot,
     setRoute, openCode, openWrite, openDesign, ensureWriteThreadForWorkspace,
     ensureDesignThreadForWorkspace, createWriteThread, clearDesignHistory, openSettings,
-    openPlugins, openClaw, openBoard, openSchedule, openWorkflow, chooseWorkspace, clawChannels,
+    openPlugins, openClaw, openBoard, openSchedule, openWorkflow, openNodeGraph, chooseWorkspace, clawChannels,
     activeClawChannelId, selectClawChannel, resetClawChannelSession, setClawChannelModel,
     appendLocalClawTurn, setError, sendMessage, reviewActiveThread, queuedMessages,
     extensionComposerContexts, attachExtensionComposerContext,
@@ -547,7 +544,7 @@ export function Workbench(): ReactElement {
 
   const {
     closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openPluginsView, openExtensionsView, openBoardView, openScheduleView,
-    openThread, openWorkflowView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
+    openThread, openWorkflowView, openNodeGraphView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
     startNewChat, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
     toggleConnectPhone
   } = useWorkbenchNavigationController({
@@ -555,7 +552,7 @@ export function Workbench(): ReactElement {
     runtimeConnection, sddDraftContent, threads, useWorktreePool, workspaceRoot, worktreeBranch,
     clearFilePreviewTargets, createConversation, createThread, createWriteThread, dismissActiveSddDraft,
     ensureWriteThreadForWorkspace, findSddDraftForSidebarThread, openClaw, openCode,
-    openPlugins, openBoard, openSchedule, openWorkflow, openWrite,
+    openPlugins, openBoard, openSchedule, openWorkflow, openNodeGraph, openWrite,
     selectThread, setConnectPhoneSidebarOpen, setDesignAssistantOpen, setFilePreviewTarget, setInput,
     setRightPanelMode, setRoute, setUseWorktreePool, setWriteAssistantOpen
   })
@@ -648,7 +645,7 @@ export function Workbench(): ReactElement {
     deleteThread, deleteDrawing, startNewChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone,
     openConnectWeixin: () => { setConnectPhoneInitialTarget('weixin'); openClaw(); setConnectPhoneSidebarOpen(true) },
-    openCodeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView,
+    openCodeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView, openNodeGraphView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy, implementDesignInCode,
     handleDesignHtmlElementAsContext, selectCanvasShape, sendDesignPrompt,
     handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest, rightPanelSharedProps,
@@ -691,7 +688,8 @@ export function Workbench(): ReactElement {
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
       actions={{ routes: { chat: openCodeMode, write: openWriteMode, design: openDesignMode,
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
-        claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView },
+        claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView,
+        nodeGraph: openNodeGraphView },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,
         openCode, setInput, setError, setComposerModel, archiveThread, pinThread }}
       input={input}

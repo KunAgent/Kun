@@ -29,6 +29,21 @@ import {
 } from './kun-runtime-capability-config'
 
 describe('Kun runtime config service', () => {
+  it.each([undefined, false, true])('projects the Node Graph opt-in: %s', async (enabled) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-node-graph-'))
+    const settings = normalizeAppSettings({} as AppSettingsV1)
+    if (enabled !== undefined) settings.agents.kun.lab.nodeGraph.enabled = enabled
+    try {
+      const config = await syncGuiManagedKunConfig(dataDir, settings.agents.kun)
+      expect(config.lab?.nodeGraph.enabled).toBe(enabled === true)
+      const body = buildManagedRuntimeHotApplyBody(settings, config)
+      expect(body.lab?.nodeGraph.enabled).toBe(enabled === true)
+      expect(RuntimeConfigApplyRequest.parse(body).lab?.nodeGraph.enabled).toBe(enabled === true)
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('projects the Memory distillation opt-in without changing approval policy', () => {
     const base = normalizeAppSettings({} as AppSettingsV1)
     const settings = normalizeAppSettings({
