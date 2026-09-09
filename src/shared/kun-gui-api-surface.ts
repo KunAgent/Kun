@@ -125,15 +125,7 @@ import type {
   SpeechTranscriptionRequest,
   SpeechTranscriptionResult
 } from './speech-to-text'
-import type {
-  LocalWhisperModelDeleteResult,
-  LocalWhisperDownloadSourceId,
-  LocalWhisperDownloadSourceStatusResult,
-  LocalWhisperModelDownloadResult,
-  LocalWhisperModelId,
-  LocalWhisperModelProgress,
-  LocalWhisperModelStatus
-} from './local-whisper'
+import type { KunGuiLocalSpeechApi } from './kun-gui-api-speech'
 import type {
   UiPluginListItem,
   UiPluginManifestV1,
@@ -254,7 +246,7 @@ import {
   WorkspaceCreationTimeEntry,
   WorkspacePickResult
 } from './kun-gui-api-contracts'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & {
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & {
   platform: string
   /** Immutable mode selected before the BrowserWindow and renderer are created. */
   desktopTitleBarMode: DesktopTitleBarMode
@@ -605,17 +597,6 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   transcribeSpeech: (
     payload: SpeechTranscriptionRequest
   ) => Promise<SpeechTranscriptionResult>
-  getLocalWhisperModelStatus: (modelId?: LocalWhisperModelId) => Promise<LocalWhisperModelStatus>
-  downloadLocalWhisperModel: (payload?: {
-    modelId?: LocalWhisperModelId
-    sourceId?: LocalWhisperDownloadSourceId
-  }) => Promise<LocalWhisperModelDownloadResult>
-  cancelLocalWhisperModel: (modelId?: LocalWhisperModelId) => Promise<LocalWhisperModelDownloadResult>
-  checkLocalWhisperDownloadSources: (payload?: {
-    modelId?: LocalWhisperModelId
-  }) => Promise<LocalWhisperDownloadSourceStatusResult>
-  deleteLocalWhisperModel: (modelId?: LocalWhisperModelId) => Promise<LocalWhisperModelDeleteResult>
-  onLocalWhisperModelProgress: (handler: (payload: LocalWhisperModelProgress) => void) => () => void
   listWriteInlineCompletionDebugEntries: () => Promise<WriteInlineCompletionDebugEntry[]>
   clearWriteInlineCompletionDebugEntries: () => Promise<boolean>
   exportWriteDocument: (payload: WriteExportPayload) => Promise<WriteExportResult>
