@@ -12,7 +12,7 @@
 - [x] 2.3 Add the current semantic-gated-rrf control wrapper using the fixed E5 artifact; verify it remains evaluator-only and produces bounded traces. The wrapper reproduces semantic-side gating and lexical RRF intersection without changing `semantic-memory-vector-candidate.ts`; tests confirm semantic results remain possible when lexical retrieval is empty.
 - [x] 2.4 Add lexical-veto semantic reranking that cannot introduce records rejected by the lexical gate; verify zero lexical admissions return no semantic result. `semantic-memory-v3-candidates.test.ts` covers the admission boundary.
 - [x] 2.5 Add lexical-veto plus margin/gap scoring with the pre-registered formula, finite grid, tie behavior, and deterministic selection order; verify every grid configuration is reported. The evaluator wrapper and margin tests now fix top1-top2 gap semantics.
-- [ ] 2.6 Keep terminology-map normalization as a separately labeled exploratory candidate; verify it cannot be selected as the primary candidate without the same safety and resource gates.
+- [x] 2.6 Keep terminology-map normalization as a separately labeled exploratory candidate; verify it cannot be selected as the primary candidate without the same safety and resource gates. The v3 wrapper marks the candidate `exploratory-only` and `primaryCandidateEligible: false` while retaining the shared evaluator safety gates.
 
 ## 3. Metrics, uncertainty, and locking
 
