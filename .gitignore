@@ -72,3 +72,6 @@ docs/R2_RELEASE.md
 # Test-only self-signed CA for the 0.3.7 standalone TUI self-update harness.
 !scripts/fixtures/tui-self-update-ca/cert.pem
 !scripts/fixtures/tui-self-update-ca/key.pem
+
+### jetbrain
+.idea/
