@@ -62,6 +62,16 @@ Add one shared ranking test for the gate and one hybrid-store/in-memory SQLite i
 
 No new configuration field is exposed to users. The threshold is a code-level foundation version constant. Rollback is a single commit reverting the gate and its fixtures; no data migration is required.
 
+### 5. Keep historical evaluation evidence reproducible
+
+The checked-in v1/v2 lexical evidence describes the pre-gate baseline and must remain
+byte-for-byte unchanged. The evaluation helper therefore exposes an explicit
+`historical-v1` relevance mode for reproducing those artifacts, while its
+`foundation-v1` mode exercises the production threshold and is recorded in the new
+lexical-abstention evaluation report. Production retrieval defaults to `foundation-v1`;
+the historical mode is limited to evaluation compatibility and is not used by the
+Memory store.
+
 ## Risks / Trade-offs
 
 - A stricter lexical gate may reduce Recall@K for weakly worded queries. Mitigation: record the full v2 development metric delta and preserve type affinity; semantic retrieval remains a separate future decision.

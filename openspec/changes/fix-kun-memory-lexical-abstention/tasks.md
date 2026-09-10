@@ -6,15 +6,15 @@
 
 ## 2. Verify both production retrieval modes
 
-- [ ] 2.1 Add shared ranking tests proving below-threshold lexical-only candidates are irrelevant while type-affinity candidates remain eligible.
+- [x] 2.1 Add shared ranking tests proving below-threshold lexical-only candidates are irrelevant while type-affinity candidates remain eligible.
 - [x] 2.2 Add an in-memory SQLite FTS5 integration test using the real `HybridMemoryIndex`/store path and compare q033–q036 selected ids and bounded features with filesystem fallback.
-- [ ] 2.3 Verify scope, lifecycle, authority, prompt budget, and degraded fallback behavior remain unchanged.
+- [x] 2.3 Verify scope, lifecycle, authority, prompt budget, and degraded fallback behavior remain unchanged.
 
 ## 3. Implement and calibrate the gate
 
-- [ ] 3.1 Add the named foundation threshold and shared relevance predicate with no user-facing configuration.
-- [ ] 3.2 Run the complete v2 development split at the selected threshold and record Recall@K, Precision@K, MRR, abstention, forbidden selections, safety, timing, and deterministic trace evidence.
-- [ ] 3.3 Confirm q033/q034 abstain in both modes, q035/q036 remain empty, and no existing focused Memory test regresses.
+- [x] 3.1 Add the named foundation threshold and shared relevance predicate with no user-facing configuration.
+- [x] 3.2 Run the complete v2 development split at the selected threshold and record Recall@K, Precision@K, MRR, abstention, forbidden selections, safety, timing, and deterministic trace evidence.
+- [x] 3.3 Confirm q033/q034 abstain in both production retrieval modes, q035/q036 remain empty, and no existing focused Memory test regresses; historical evaluation mode remains baseline-only.
 
 ## 4. Validate and deliver
 
