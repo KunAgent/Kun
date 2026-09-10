@@ -70,7 +70,17 @@ async function harness() {
       yield { kind: 'completed', stopReason: 'stop' }
     } }
   })
-  const dispatcher = new QueuedTurnDispatcher({ turns, threadStore, runTurn: (id, turn) => loop.runTurn(id, turn) })
+  const activeRuns = new Set<Promise<unknown>>()
+  const runTurn = (threadId: string, turnId: string): Promise<unknown> => {
+    const run = loop.runTurn(threadId, turnId)
+    activeRuns.add(run)
+    void run.then(
+      () => activeRuns.delete(run),
+      () => activeRuns.delete(run)
+    )
+    return run
+  }
+  const dispatcher = new QueuedTurnDispatcher({ turns, threadStore, runTurn })
   turns.setTurnQueuedHook((id) => dispatcher.requestDrain(id))
   turns.setTurnSettledHook((id, status) => dispatcher.onTurnSettled(id, status))
   // Optional until the implementation adds disposal for retry timers.
@@ -78,6 +88,7 @@ async function harness() {
     turns.setTurnQueuedHook(() => undefined)
     turns.setTurnSettledHook(() => undefined)
     await dispatcher.dispose()
+    await Promise.allSettled([...activeRuns])
     await turns.closeAdmissionForShutdown()
   })
   await threadStore.upsert(createThreadRecord({ id: 'thread-test', title: 'Queue', workspace: dir, model: 'test' }))

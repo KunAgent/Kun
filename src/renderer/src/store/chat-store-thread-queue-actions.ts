@@ -273,7 +273,7 @@ export function createThreadQueueActions(
       if (get().activeThreadId !== threadId) return
       removed = get().queuedMessages.find((row) => row.id === id)
     }
-    if (removed?.steeringRequest || removed?.deliveryState === 'starting' || removed?.waitForRuntimeAdmission) {
+    if (removed?.steeringRequest || removed?.deliveryState === 'starting') {
       set({ error: i18n.t('common:queuedMessageConfirming') })
       return
     }

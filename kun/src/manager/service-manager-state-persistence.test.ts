@@ -305,10 +305,11 @@ describe('Service Manager renewal flush coalescing', () => {
       expect(atResponse.durableLag).toBe(1)
       expect(atResponse.stats.lastDurableFlushAt).toBe(durableFlushAtBeforeHeartbeat)
 
-      await sleep(120)
-      const settled = manager.statePersistence()
-      expect(settled.durableLag).toBe(0)
-      expect(settled.stats.lastDurableFlushAt).toBeGreaterThan(durableFlushAtBeforeHeartbeat)
+      await vi.waitFor(() => {
+        const settled = manager.statePersistence()
+        expect(settled.durableLag).toBe(0)
+        expect(settled.stats.lastDurableFlushAt).toBeGreaterThan(durableFlushAtBeforeHeartbeat)
+      }, { timeout: 2_000, interval: 10 })
     } finally {
       await manager.close().catch(() => undefined)
     }
