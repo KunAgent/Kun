@@ -20,13 +20,19 @@ export type SemanticMemoryV3PairedComparisonReport = {
     expectedCount: number
     zeroOverlapPositive: boolean
     recallAtKDelta?: number
+    precisionAtKDelta?: number
     reciprocalRankDelta?: number
     abstentionCorrectDelta?: number
+    falsePositiveSelectionsDelta: number
+    explicitForbiddenSelectionsDelta: number
   }>
   metrics: {
     recallAtKDelta: SemanticMemoryBootstrapInterval
+    precisionAtKDelta: SemanticMemoryBootstrapInterval
     meanReciprocalRankDelta: SemanticMemoryBootstrapInterval
     zeroOverlapRecallAtKDelta: SemanticMemoryBootstrapInterval
+    falsePositiveSelectionsDelta: SemanticMemoryBootstrapInterval
+    explicitForbiddenSelectionsDelta: SemanticMemoryBootstrapInterval
     abstentionAccuracyDelta: number
     abstentionSampleSize: number
     zeroOverlapSampleSize: number
@@ -58,6 +64,7 @@ export function compareSemanticMemoryV3EvaluationReports(input: {
     return pairedResult(baseline, candidate, input.zeroOverlapQueryIds.has(baseline.queryId))
   })
   const recallDeltas = results.flatMap((result) => result.recallAtKDelta === undefined ? [] : [result.recallAtKDelta])
+  const precisionDeltas = results.flatMap((result) => result.precisionAtKDelta === undefined ? [] : [result.precisionAtKDelta])
   const reciprocalRankDeltas = results.flatMap((result) => result.reciprocalRankDelta === undefined ? [] : [result.reciprocalRankDelta])
   const zeroOverlapRecallDeltas = results.flatMap((result) =>
     result.zeroOverlapPositive && result.recallAtKDelta !== undefined ? [result.recallAtKDelta] : []
@@ -65,6 +72,8 @@ export function compareSemanticMemoryV3EvaluationReports(input: {
   const abstentionDeltas = results.flatMap((result) =>
     result.abstentionCorrectDelta === undefined ? [] : [result.abstentionCorrectDelta]
   )
+  const falsePositiveDeltas = results.map((result) => result.falsePositiveSelectionsDelta)
+  const forbiddenDeltas = results.map((result) => result.explicitForbiddenSelectionsDelta)
   return {
     schemaVersion: 3,
     reportKind: 'v3-paired-candidate-comparison',
@@ -74,8 +83,11 @@ export function compareSemanticMemoryV3EvaluationReports(input: {
     results,
     metrics: {
       recallAtKDelta: pairedBootstrapInterval(recallDeltas, input.bootstrap),
+      precisionAtKDelta: pairedBootstrapInterval(precisionDeltas, input.bootstrap),
       meanReciprocalRankDelta: pairedBootstrapInterval(reciprocalRankDeltas, input.bootstrap),
       zeroOverlapRecallAtKDelta: pairedBootstrapInterval(zeroOverlapRecallDeltas, input.bootstrap),
+      falsePositiveSelectionsDelta: pairedBootstrapInterval(falsePositiveDeltas, input.bootstrap),
+      explicitForbiddenSelectionsDelta: pairedBootstrapInterval(forbiddenDeltas, input.bootstrap),
       abstentionAccuracyDelta: average(abstentionDeltas),
       abstentionSampleSize: abstentionDeltas.length,
       zeroOverlapSampleSize: zeroOverlapRecallDeltas.length
@@ -97,10 +109,13 @@ function pairedResult(
     zeroOverlapPositive,
     ...(ranked ? {
       recallAtKDelta: round((candidate.recallAtK ?? 0) - (baseline.recallAtK ?? 0)),
+      precisionAtKDelta: round((candidate.precisionAtK ?? 0) - (baseline.precisionAtK ?? 0)),
       reciprocalRankDelta: round((candidate.reciprocalRank ?? 0) - (baseline.reciprocalRank ?? 0))
     } : {
       abstentionCorrectDelta: Number(candidate.abstentionCorrect ?? false) - Number(baseline.abstentionCorrect ?? false)
-    })
+    }),
+    falsePositiveSelectionsDelta: candidate.falsePositiveSelections - baseline.falsePositiveSelections,
+    explicitForbiddenSelectionsDelta: candidate.explicitForbiddenSelections - baseline.explicitForbiddenSelections
   }
 }
 

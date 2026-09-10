@@ -13,17 +13,24 @@ describe('semantic Memory v3 paired comparison', () => {
       result('q002', 'irrelevant-no-evidence', 0, undefined, undefined, true)
     ])
 
-    const comparison = compareSemanticMemoryV3EvaluationReports({
+    const comparisonInput = {
       baseline,
       candidate,
       zeroOverlapQueryIds: new Set(['q001']),
       bootstrap: { method: 'paired-percentile', seed: 7, resamples: 100, confidenceLevel: 0.95 }
-    })
+    } as const
+    const comparison = compareSemanticMemoryV3EvaluationReports(comparisonInput)
+    const repeated = compareSemanticMemoryV3EvaluationReports(comparisonInput)
 
     expect(comparison.metrics.recallAtKDelta.pointEstimate).toBe(1)
+    expect(comparison.metrics.precisionAtKDelta.pointEstimate).toBe(1)
+    expect(comparison.metrics.precisionAtKDelta.sampleSize).toBe(1)
     expect(comparison.metrics.zeroOverlapRecallAtKDelta.pointEstimate).toBe(1)
+    expect(comparison.metrics.falsePositiveSelectionsDelta.pointEstimate).toBe(0)
+    expect(comparison.metrics.explicitForbiddenSelectionsDelta.pointEstimate).toBe(0)
     expect(comparison.metrics.abstentionAccuracyDelta).toBe(1)
     expect(comparison.metrics.zeroOverlapSampleSize).toBe(1)
+    expect(repeated.metrics).toEqual(comparison.metrics)
   })
 
   it('rejects mismatched datasets and missing zero-overlap ids', () => {
