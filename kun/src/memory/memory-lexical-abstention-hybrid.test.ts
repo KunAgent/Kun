@@ -51,7 +51,7 @@ describe('Memory lexical abstention hybrid parity', () => {
           sources: record.sources
         })
         if (record.deletedAt) {
-          await store.delete(record.id, { scope: record.scope, workspace: record.workspace, project: record.project })
+          await store.delete(record.id, { workspace: record.workspace, project: record.project })
         }
       }
       await store.waitForBackfill()
