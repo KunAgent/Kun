@@ -19,7 +19,7 @@
 - [x] 3.1 Implement query-level paired deltas against the lexical baseline for Recall@K, Precision@K, MRR, abstention, false positives, and forbidden selections; verify empty-result queries do not inflate ranked-quality denominators. The v3 comparison now reports all six paired dimensions and excludes empty-expected queries from ranked Recall/Precision/MRR samples.
 - [x] 3.2 Implement deterministic paired bootstrap intervals with fixed seed, resample count, confidence method, and lower-bound calculation; verify repeated runs produce identical intervals. The v3 comparison reuses the fixed paired-percentile implementation and now has a repeated-run equality test.
 - [x] 3.3 Add independent language, category, safety, and zero-overlap-positive Recall@K breakdowns; verify lexical-veto trade-offs are visible separately from aggregate metrics. The v3 report now includes language/category Recall intervals, the dedicated zero-overlap interval, and explicit safety deltas.
-- [ ] 3.4 Implement finite-grid development selection and a fail-closed holdout lock artifact containing dataset, model, candidate, parameter, baseline, metric, and gate hashes; verify holdout produces no labels or metrics without a valid lock.
+- [x] 3.4 Implement finite-grid development selection and a fail-closed holdout lock artifact containing dataset, model, candidate, parameter, baseline, metric, and gate hashes; verify holdout produces no labels or metrics without a valid lock. The workflow enumerates all 54 frozen configurations, applies lower-bound/safety gates, hashes development evidence, and the holdout runner rejects invalid locks before invoking a candidate.
 
 ## 4. Automated safeguards
 

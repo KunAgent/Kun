@@ -7,6 +7,7 @@ import {
   type SemanticMemoryEvaluationReport
 } from './semantic-memory-evaluation.js'
 import type { SemanticMemoryV3EvaluationDataset } from './semantic-memory-evaluation-v3-dataset.js'
+import { compareSemanticMemoryV3EvaluationReports, type SemanticMemoryV3PairedComparisonReport } from './semantic-memory-evaluation-v3-comparison.js'
 import {
   parseSemanticMemoryV3HoldoutLock,
   type SemanticMemoryV3HoldoutLock
@@ -29,6 +30,12 @@ export type SemanticMemoryV3DevelopmentGridResult = {
     report?: SemanticMemoryEvaluationReport
     error?: string
   }>
+}
+
+export type SemanticMemoryV3DevelopmentSelection = {
+  configuration: SemanticMemoryV3GridConfiguration
+  report: SemanticMemoryEvaluationReport
+  comparison: SemanticMemoryV3PairedComparisonReport
 }
 
 export function semanticMemoryV3DevelopmentGridConfigurations(
@@ -81,6 +88,58 @@ export async function runSemanticMemoryV3DevelopmentGrid(input: {
     gridSha256: semanticMemoryV3DevelopmentGridSha256(input.dataset),
     entries
   }
+}
+
+export function selectSemanticMemoryV3DevelopmentCandidate(input: {
+  dataset: SemanticMemoryV3EvaluationDataset
+  baseline: SemanticMemoryEvaluationReport
+  grid: SemanticMemoryV3DevelopmentGridResult
+}): SemanticMemoryV3DevelopmentSelection | undefined {
+  const zeroOverlapQueryIds = new Set(
+    input.dataset.queries.filter((query) => query.zeroLexicalOverlap).map((query) => query.id)
+  )
+  const candidates = input.grid.entries.flatMap((entry) => {
+    if (!entry.report || entry.error) return []
+    const comparison = compareSemanticMemoryV3EvaluationReports({
+      baseline: input.baseline,
+      candidate: entry.report,
+      zeroOverlapQueryIds,
+      bootstrap: input.dataset.manifest.bootstrap
+    })
+    const thresholds = input.dataset.manifest.thresholds
+    const passes = entry.report.safetyGatePassed &&
+      entry.report.metrics.abstentionAccuracy >= thresholds.emptyResultAccuracy &&
+      comparison.metrics.recallAtKDelta.lowerBound >= thresholds.minimumRecallGainLowerBound &&
+      comparison.metrics.meanReciprocalRankDelta.lowerBound >= thresholds.minimumMrrGainLowerBound &&
+      comparison.metrics.precisionAtKDelta.lowerBound >= -thresholds.maximumOverallPrecisionDecline &&
+      comparison.metrics.zeroOverlapRecallAtKDelta.lowerBound >= -thresholds.maximumZeroOverlapRecallDecline
+    return passes ? [{ configuration: entry.configuration, report: entry.report, comparison }] : []
+  })
+  return candidates.sort((left, right) =>
+    right.comparison.metrics.recallAtKDelta.lowerBound - left.comparison.metrics.recallAtKDelta.lowerBound ||
+    right.comparison.metrics.meanReciprocalRankDelta.lowerBound - left.comparison.metrics.meanReciprocalRankDelta.lowerBound ||
+    right.comparison.metrics.precisionAtKDelta.lowerBound - left.comparison.metrics.precisionAtKDelta.lowerBound ||
+    left.configuration.id.localeCompare(right.configuration.id)
+  )[0]
+}
+
+export function semanticMemoryV3DevelopmentEvidenceSha256(
+  grid: SemanticMemoryV3DevelopmentGridResult
+): string {
+  const snapshot = grid.entries.map((entry) => ({
+    configuration: entry.configuration,
+    error: entry.error,
+    report: entry.report ? {
+      candidate: entry.report.candidate,
+      results: entry.report.results.map(({ latencyMs: _latencyMs, ...result }) => result),
+      metrics: withoutTiming(entry.report.metrics),
+      breakdowns: entry.report.breakdowns,
+      safetyGatePassed: entry.report.safetyGatePassed,
+      networkAttempts: entry.report.networkAttempts,
+      fallbackMismatches: entry.report.fallbackMismatches
+    } : undefined
+  }))
+  return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
 }
 
 export function semanticMemoryV3DevelopmentGridSha256(
@@ -153,4 +212,9 @@ function assertCandidateMatchesConfiguration(
 function gridConfigurationId(input: Omit<SemanticMemoryV3GridConfiguration, 'id'>): string {
   const part = (value: number) => String(value).replace('-', 'm').replace('.', 'p')
   return `v3-sim-${part(input.minimumSimilarity)}-gap-${part(input.marginGap)}-sem-${part(input.semanticWeight)}-lex-${part(input.lexicalWeight)}-rrf-${part(input.rankConstant)}`
+}
+
+function withoutTiming(metrics: SemanticMemoryEvaluationReport['metrics']): Omit<SemanticMemoryEvaluationReport['metrics'], 'latencyP50Ms' | 'latencyP95Ms'> {
+  const { latencyP50Ms: _latencyP50Ms, latencyP95Ms: _latencyP95Ms, ...deterministic } = metrics
+  return deterministic
 }

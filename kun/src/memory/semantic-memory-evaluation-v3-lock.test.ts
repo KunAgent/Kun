@@ -11,6 +11,7 @@ describe('semantic Memory v3 holdout lock', () => {
     const lock = createSemanticMemoryV3HoldoutLock({
       manifest,
       manifestSha256: 'a0387fff8c0ab3b48135a69baa754c149a71b828cf4271d62144bd9103c94f09',
+      developmentEvidenceSha256: 'b'.repeat(64),
       model: manifest.candidateIdentity,
       baseline: {
         id: 'kun-memory-lexical-foundation-post-1308',
@@ -57,6 +58,7 @@ describe('semantic Memory v3 holdout lock', () => {
     const input = {
       manifest,
       manifestSha256: 'a0387fff8c0ab3b48135a69baa754c149a71b828cf4271d62144bd9103c94f09',
+      developmentEvidenceSha256: 'b'.repeat(64),
       model: manifest.candidateIdentity,
       baseline: { id: 'baseline', version: 'v1', parameters: {} },
       candidate: { id: 'candidate', version: 'v3', parameters: {} },

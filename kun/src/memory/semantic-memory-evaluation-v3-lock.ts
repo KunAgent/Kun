@@ -69,6 +69,7 @@ const HoldoutLock = z.object({
   }).strict(),
   hashes: z.object({
     dataset: z.string().regex(/^[a-f0-9]{64}$/u),
+    developmentEvidence: z.string().regex(/^[a-f0-9]{64}$/u),
     model: z.string().regex(/^[a-f0-9]{64}$/u),
     baseline: z.string().regex(/^[a-f0-9]{64}$/u),
     candidate: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -82,6 +83,7 @@ export type SemanticMemoryV3HoldoutLock = z.infer<typeof HoldoutLock>
 export function createSemanticMemoryV3HoldoutLock(input: {
   manifest: SemanticMemoryV3EvaluationManifest
   manifestSha256: string
+  developmentEvidenceSha256: string
   model: SemanticMemoryV3EvaluationManifest['candidateIdentity']
   baseline: Pick<SemanticMemoryCandidateMetadata, 'id' | 'version' | 'parameters'>
   candidate: Pick<SemanticMemoryCandidateMetadata, 'id' | 'version' | 'parameters'>
@@ -143,7 +145,8 @@ export function createSemanticMemoryV3HoldoutLock(input: {
     gates: input.gates,
     bootstrap,
     hashes: {
-      dataset: hash(dataset),
+    dataset: hash(dataset),
+      developmentEvidence: input.developmentEvidenceSha256,
       model: hash(model),
       baseline: hash(baseline),
       candidate: hash(candidate),
@@ -158,6 +161,7 @@ export function parseSemanticMemoryV3HoldoutLock(value: unknown): SemanticMemory
   const lock = HoldoutLock.parse(value)
   const expected = {
     dataset: hash(lock.dataset),
+    developmentEvidence: lock.hashes.developmentEvidence,
     model: hash(lock.model),
     baseline: hash(lock.baseline),
     candidate: hash(lock.candidate),
