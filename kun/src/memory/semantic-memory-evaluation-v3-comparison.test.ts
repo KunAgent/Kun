@@ -30,6 +30,16 @@ describe('semantic Memory v3 paired comparison', () => {
     expect(comparison.metrics.explicitForbiddenSelectionsDelta.pointEstimate).toBe(0)
     expect(comparison.metrics.abstentionAccuracyDelta).toBe(1)
     expect(comparison.metrics.zeroOverlapSampleSize).toBe(1)
+    expect(comparison.breakdowns.language.en.pointEstimate).toBe(1)
+    expect(comparison.breakdowns.category['cross-lingual-zero-overlap-positive']?.pointEstimate).toBe(1)
+    expect(comparison.breakdowns.safety).toEqual({
+      scopeLeaksDelta: 0,
+      lifecycleLeaksDelta: 0,
+      authorityViolationsDelta: 0,
+      unknownSelectionsDelta: 0,
+      networkAttemptsDelta: 0,
+      fallbackMismatchesDelta: 0
+    })
     expect(repeated.metrics).toEqual(comparison.metrics)
   })
 
@@ -73,7 +83,24 @@ function report(candidateId: string, results: SemanticMemoryEvaluationReport['re
       platforms: ['win32-x64']
     },
     results,
-    metrics: {} as SemanticMemoryEvaluationReport['metrics'],
+    metrics: {
+      queryCount: results.length,
+      rankedQueryCount: results.filter((item) => item.expectedCount > 0).length,
+      emptyExpectedQueryCount: results.filter((item) => item.expectedCount === 0).length,
+      recallAtK: 0,
+      precisionAtK: 0,
+      meanReciprocalRank: 0,
+      abstentionAccuracy: 0,
+      falsePositiveSelections: 0,
+      explicitForbiddenSelections: 0,
+      scopeLeaks: 0,
+      lifecycleLeaks: 0,
+      authorityViolations: 0,
+      unknownSelections: 0,
+      selectedCharacters: 0,
+      latencyP50Ms: 0,
+      latencyP95Ms: 0
+    },
     breakdowns: { split: {}, language: {}, category: {} },
     safetyGatePassed: true,
     networkAttempts: 0,

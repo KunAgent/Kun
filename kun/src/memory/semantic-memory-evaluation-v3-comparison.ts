@@ -16,6 +16,7 @@ export type SemanticMemoryV3PairedComparisonReport = {
   results: Array<{
     queryId: string
     split: SemanticMemoryQueryResult['split']
+    queryLanguage: SemanticMemoryQueryResult['queryLanguage']
     category: string
     expectedCount: number
     zeroOverlapPositive: boolean
@@ -36,6 +37,19 @@ export type SemanticMemoryV3PairedComparisonReport = {
     abstentionAccuracyDelta: number
     abstentionSampleSize: number
     zeroOverlapSampleSize: number
+  }
+  breakdowns: {
+    language: Record<string, SemanticMemoryBootstrapInterval>
+    category: Record<string, SemanticMemoryBootstrapInterval>
+    zeroOverlapPositive: SemanticMemoryBootstrapInterval
+    safety: {
+      scopeLeaksDelta: number
+      lifecycleLeaksDelta: number
+      authorityViolationsDelta: number
+      unknownSelectionsDelta: number
+      networkAttemptsDelta: number
+      fallbackMismatchesDelta: number
+    }
   }
 }
 
@@ -91,6 +105,19 @@ export function compareSemanticMemoryV3EvaluationReports(input: {
       abstentionAccuracyDelta: average(abstentionDeltas),
       abstentionSampleSize: abstentionDeltas.length,
       zeroOverlapSampleSize: zeroOverlapRecallDeltas.length
+    },
+    breakdowns: {
+      language: groupedRecallIntervals(results, (result) => result.queryLanguage, input.bootstrap),
+      category: groupedRecallIntervals(results, (result) => result.category, input.bootstrap),
+      zeroOverlapPositive: pairedBootstrapInterval(zeroOverlapRecallDeltas, input.bootstrap),
+      safety: {
+        scopeLeaksDelta: input.candidate.metrics.scopeLeaks - input.baseline.metrics.scopeLeaks,
+        lifecycleLeaksDelta: input.candidate.metrics.lifecycleLeaks - input.baseline.metrics.lifecycleLeaks,
+        authorityViolationsDelta: input.candidate.metrics.authorityViolations - input.baseline.metrics.authorityViolations,
+        unknownSelectionsDelta: input.candidate.metrics.unknownSelections - input.baseline.metrics.unknownSelections,
+        networkAttemptsDelta: input.candidate.networkAttempts - input.baseline.networkAttempts,
+        fallbackMismatchesDelta: input.candidate.fallbackMismatches - input.baseline.fallbackMismatches
+      }
     }
   }
 }
@@ -104,6 +131,7 @@ function pairedResult(
   return {
     queryId: baseline.queryId,
     split: baseline.split,
+    queryLanguage: baseline.queryLanguage,
     category: baseline.category,
     expectedCount: baseline.expectedCount,
     zeroOverlapPositive,
@@ -117,6 +145,20 @@ function pairedResult(
     falsePositiveSelectionsDelta: candidate.falsePositiveSelections - baseline.falsePositiveSelections,
     explicitForbiddenSelectionsDelta: candidate.explicitForbiddenSelections - baseline.explicitForbiddenSelections
   }
+}
+
+function groupedRecallIntervals(
+  results: readonly SemanticMemoryV3PairedComparisonReport['results'][number][],
+  keyFor: (result: SemanticMemoryV3PairedComparisonReport['results'][number]) => string,
+  bootstrap: Parameters<typeof pairedBootstrapInterval>[1]
+): Record<string, SemanticMemoryBootstrapInterval> {
+  const keys = [...new Set(results.map(keyFor))].sort()
+  return Object.fromEntries(keys.map((key) => [key, pairedBootstrapInterval(
+    results
+      .filter((result) => keyFor(result) === key)
+      .flatMap((result) => result.recallAtKDelta === undefined ? [] : [result.recallAtKDelta]),
+    bootstrap
+  )]))
 }
 
 function assertComparableReports(
