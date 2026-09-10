@@ -8,8 +8,8 @@
   "scoringVersion": 3,
   "splitRule": "query ordinals 001-040 development; 041-080 holdout",
   "hashes": {
-    "recordsSha256": "f0bb85989faa7dfd791659e092db95f4e4fb259031817daa9068088f3a0112b9",
-    "queriesSha256": "a1f30c81291594607e437eb6efda9a1593d5fecf338e94cf0d7a7e13207ca489"
+    "recordsSha256": "88d31cca185a91f5e8fbcb3fe979d7ea00d35ef2f52766e25fe6e5323fbd582a",
+    "queriesSha256": "211caf9056ceb55bc4574f22b3534fd94550d00623140d62cd4622477fb96a0d"
   },
   "counts": {
     "records": 44,

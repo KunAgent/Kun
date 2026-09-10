@@ -23,7 +23,7 @@ export type SemanticMemoryV3ScoreRecords = (
 ) => readonly SemanticMemoryV3ScoredRecord[] | Promise<readonly SemanticMemoryV3ScoredRecord[]>
 
 export function createSemanticMemoryV3SemanticGatedCandidate(input: {
-  metadata: Omit<SemanticMemoryCandidateMetadata, 'kind' | 'parameters'>
+  metadata: Omit<SemanticMemoryCandidateMetadata, 'kind'>
   lexicalCandidate: SemanticMemoryCandidate
   scoreRecords: SemanticMemoryV3ScoreRecords
   minimumSimilarity: number
@@ -87,7 +87,7 @@ export function createSemanticMemoryV3SemanticGatedCandidate(input: {
 }
 
 export function createSemanticMemoryV3LexicalVetoCandidate(input: {
-  metadata: Omit<SemanticMemoryCandidateMetadata, 'kind' | 'parameters'>
+  metadata: Omit<SemanticMemoryCandidateMetadata, 'kind'>
   lexicalCandidate: SemanticMemoryCandidate
   scoreRecords: SemanticMemoryV3ScoreRecords
   marginGap?: number
