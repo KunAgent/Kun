@@ -22,7 +22,7 @@ const fixturePath = fileURLToPath(new URL(
 ))
 
 describe('Memory lexical abstention audit', () => {
-  it('records the weak-positive q033/q034 baseline and correct q035/q036 abstention', async () => {
+  it('rejects weak-positive q033/q034 while preserving the frozen baseline evidence', async () => {
     const fixture = JSON.parse(await readFile(fixturePath, 'utf8')) as RegressionFixture
     const dataset = await loadSemanticMemoryV2EvaluationDataset()
     const policy = { ...DEFAULT_KUN_CAPABILITIES_CONFIG.memory, enabled: true }
@@ -45,13 +45,13 @@ describe('Memory lexical abstention audit', () => {
         nowIso: dataset.manifest.evaluationNow
       })
 
-      expect(result.records.map((record) => record.id)).toEqual(testCase.observedBeforeFix)
+      expect(testCase.observedBeforeFix).toEqual(expect.any(Array))
       expect(testCase.expectedAfterFix).toEqual([])
+      expect(result.records.map((record) => record.id)).toEqual(testCase.expectedAfterFix)
       expect(result.records.every((record) => !testCase.expectedIds.includes(record.id))).toBe(true)
-      if (testCase.observedBeforeFix.length > 0) {
-        expect(result.trace.rankings[0]?.features.lexical).toBeGreaterThan(0)
-        expect(result.trace.rankings[0]?.features.lexical).toBeLessThan(fixture.foundationThreshold)
-      }
+      expect(result.trace.filtered.irrelevant).toBeGreaterThanOrEqual(
+        testCase.observedBeforeFix.length > 0 ? 1 : 0
+      )
     }
   })
 })

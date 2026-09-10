@@ -88,11 +88,9 @@ describe('Memory lexical abstention hybrid parity', () => {
           ranking.features.lexical >= 0 && ranking.features.lexical <= 1
         )).toBe(true)
         if (queryId === 'p2a_v2_q033_database_credential' || queryId === 'p2a_v2_q034_customer_names') {
-          expect(trace.filtered.irrelevant).toBe(0)
-          expect(filesystem.records.length).toBeGreaterThan(0)
-          expect(indexed.length).toBeGreaterThan(0)
-          expect(trace.rankings[0]?.features.lexical).toBeGreaterThan(0)
-          expect(trace.rankings[0]?.features.lexical).toBeLessThan(0.4)
+          expect(trace.filtered.irrelevant).toBeGreaterThan(0)
+          expect(filesystem.records).toEqual([])
+          expect(indexed).toEqual([])
         } else {
           expect(indexed).toEqual([])
         }

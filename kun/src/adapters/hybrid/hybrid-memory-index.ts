@@ -264,4 +264,3 @@ function staticLifecycle(record: MemoryRecordValue): string {
   if (record.supersededAt) return 'superseded'
   return 'active'
 }
-

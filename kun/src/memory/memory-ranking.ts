@@ -17,6 +17,7 @@ export const MEMORY_RANKING_WEIGHTS = Object.freeze({
   importance: 0.075,
   confidence: 0.075
 })
+export const MEMORY_MIN_LEXICAL_RELEVANCE = 0.4
 
 export type MemoryLifecycleState =
   | 'active'
@@ -125,7 +126,7 @@ export function rankMemory(input: {
 }
 
 export function hasPositiveMemoryRelevance(candidate: RankedMemory): boolean {
-  return candidate.features.lexical > 0 || candidate.features.typeAffinity > 0
+  return candidate.features.lexical >= MEMORY_MIN_LEXICAL_RELEVANCE || candidate.features.typeAffinity > 0
 }
 
 export function compareRankedMemories(left: RankedMemory, right: RankedMemory): number {
