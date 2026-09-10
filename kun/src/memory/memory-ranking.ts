@@ -33,6 +33,8 @@ export type RankedMemory = {
   features: MemoryRankingFeatures
 }
 
+export type MemoryRelevanceMode = 'foundation-v1' | 'historical-v1'
+
 export function memoryLifecycleState(record: MemoryRecord, nowMs: number): MemoryLifecycleState {
   if (record.deletedAt) return 'deleted'
   if (record.disabledAt) return 'disabled'
@@ -127,6 +129,10 @@ export function rankMemory(input: {
 
 export function hasPositiveMemoryRelevance(candidate: RankedMemory): boolean {
   return candidate.features.lexical >= MEMORY_MIN_LEXICAL_RELEVANCE || candidate.features.typeAffinity > 0
+}
+
+export function hasHistoricalPositiveMemoryRelevance(candidate: RankedMemory): boolean {
+  return candidate.features.lexical > 0 || candidate.features.typeAffinity > 0
 }
 
 export function compareRankedMemories(left: RankedMemory, right: RankedMemory): number {

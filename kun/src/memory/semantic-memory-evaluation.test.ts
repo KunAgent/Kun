@@ -92,7 +92,7 @@ describe('semantic Memory evaluation', () => {
     const dataset = await loadSemanticMemoryEvaluationDataset()
     const report = await runSemanticMemoryEvaluation({
       dataset,
-      candidate: createLexicalSemanticMemoryCandidate(),
+      candidate: createLexicalSemanticMemoryCandidate({ relevanceMode: 'foundation-v1' }),
       split: 'all'
     })
 

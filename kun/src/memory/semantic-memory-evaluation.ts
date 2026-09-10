@@ -209,7 +209,10 @@ export async function runSemanticMemoryEvaluation(input: {
   }
 }
 
-export function createLexicalSemanticMemoryCandidate(): SemanticMemoryCandidate {
+export function createLexicalSemanticMemoryCandidate(input: {
+  relevanceMode?: 'historical-v1' | 'foundation-v1'
+} = {}): SemanticMemoryCandidate {
+  const relevanceMode = input.relevanceMode ?? 'historical-v1'
   return {
     metadata: {
       id: 'kun-memory-lexical-foundation',
@@ -217,7 +220,9 @@ export function createLexicalSemanticMemoryCandidate(): SemanticMemoryCandidate 
       version: 'p0-v1',
       runtime: 'kun-memory-retrieval',
       license: 'repository',
-      parameters: { mode: 'filesystem-fallback' },
+      parameters: relevanceMode === 'historical-v1'
+        ? { mode: 'filesystem-fallback' }
+        : { mode: 'filesystem-fallback', relevanceMode },
       platforms: ['win32-x64', 'darwin-x64', 'darwin-arm64', 'linux-x64', 'linux-arm64']
     },
     retrieve: async ({ query, records, limit, promptCharacterBudget, nowIso }) => retrieveMemoryRecords({
@@ -225,7 +230,8 @@ export function createLexicalSemanticMemoryCandidate(): SemanticMemoryCandidate 
       request: { query: query.query, workspace: query.workspace, project: query.project, limit, promptCharacterBudget },
       policy: { ...DEFAULT_KUN_CAPABILITIES_CONFIG.memory, enabled: true },
       mode: 'filesystem-fallback',
-      nowIso
+      nowIso,
+      relevanceMode
     }).records
   }
 }

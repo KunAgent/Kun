@@ -7,11 +7,13 @@ import {
 } from '../contracts/memory.js'
 import {
   compareRankedMemories,
+  hasHistoricalPositiveMemoryRelevance,
   hasPositiveMemoryRelevance,
   memoryInScope,
   memoryLifecycleState,
   rankMemory,
-  type RankedMemory
+  type RankedMemory,
+  type MemoryRelevanceMode
 } from './memory-ranking.js'
 import {
   MEMORY_MAX_QUERY_SEARCH_TOKENS,
@@ -51,6 +53,7 @@ export function retrieveMemoryRecords(input: {
   lexicalScores?: ReadonlyMap<string, number>
   channels?: ReadonlyMap<string, RankedMemory['channel']>
   preFiltered?: { scope: number; lifecycle: number }
+  relevanceMode?: MemoryRelevanceMode
 }): MemoryRetrievalResult {
   const queryTokens = input.queryTokens ?? memorySearchTokens(
     input.request.query,
@@ -73,7 +76,10 @@ export function retrieveMemoryRecords(input: {
       lexicalOverride: input.lexicalScores?.get(record.id),
       channel: input.channels?.get(record.id) ?? (input.mode === 'sqlite-fts5' ? 'fts5' : 'filesystem')
     }))
-  const relevant = ranked.filter(hasPositiveMemoryRelevance).sort(compareRankedMemories)
+  const relevancePredicate = input.relevanceMode === 'historical-v1'
+    ? hasHistoricalPositiveMemoryRelevance
+    : hasPositiveMemoryRelevance
+  const relevant = ranked.filter(relevancePredicate).sort(compareRankedMemories)
   const requestedLimit = Math.max(0, Math.floor(input.request.limit))
   const recordLimit = input.policy.enabled
     ? Math.min(requestedLimit, input.policy.maxInjectedRecords, MEMORY_MAX_TRACE_RANKINGS)
