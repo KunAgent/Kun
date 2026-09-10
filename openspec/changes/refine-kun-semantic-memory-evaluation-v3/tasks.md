@@ -1,6 +1,6 @@
 ## 1. Version and data foundation
 
-- [ ] 1.1 Define the v3 dataset/decision schema and version identifiers, then verify strict validation rejects unknown fields, duplicate ids, unresolved labels, missing rationales, and unsupported versions.
+- [x] 1.1 Define the v3 dataset/decision schema and version identifiers, then verify strict validation rejects unknown fields, duplicate ids, unresolved labels, missing rationales, and unsupported versions; `semantic-memory-evaluation-v3-dataset.test.ts` covers frozen structure, zero-overlap strata, stale hashes, and Windows line endings.
 - [ ] 1.2 Record the exact `multilingual-e5-small-q8` model, tokenizer, preprocessing, pooling, normalization, quantization, runtime, and artifact hashes, then verify the candidate manifest is complete and network-independent.
 - [ ] 1.3 Build the stratified v3 anonymous corpus and query set with no-evidence, irrelevant, same-category near-miss, scope/lifecycle negatives, and cross-language zero-overlap positive queries; verify expected/forbidden ids and rationales resolve.
 - [ ] 1.4 Freeze development/holdout assignment, category quotas, zero-overlap definition, evaluation time, and SHA-256 manifest; verify no duplicate or near-duplicate query crosses the split.
