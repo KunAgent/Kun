@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 2,
+  "datasetId": "kun-memory-semantic-retrieval-anonymous-v2",
+  "algorithm": "sha256",
+  "files": {
+    "records": "d3420b44d74a7b65a69e74ed4a0120fe36439c84defb829b118ae59e33ef94b2",
+    "queries": "a7f1f5f8081034606f1dd1a222bbd09006242e60290a08f8348cd9ecdaa8cbc4",
+    "manifest": "6bb40694307e2f7a80666781919ae8778c9de960596bc17a45b4ee08de912320"
+  }
+}

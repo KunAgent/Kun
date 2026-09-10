@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 2,
+  "datasetId": "kun-memory-semantic-retrieval-anonymous-v2",
+  "status": "frozen",
+  "evaluationNow": "2026-09-09T00:00:00.000Z",
+  "defaultK": 5,
+  "promptCharacterBudget": 2000,
+  "scoringVersion": 2,
+  "splitRule": "query ordinals 001-040 development; 041-080 holdout",
+  "hashes": {
+    "recordsSha256": "d3420b44d74a7b65a69e74ed4a0120fe36439c84defb829b118ae59e33ef94b2",
+    "queriesSha256": "a7f1f5f8081034606f1dd1a222bbd09006242e60290a08f8348cd9ecdaa8cbc4"
+  },
+  "counts": {
+    "records": 44,
+    "queries": 80,
+    "development": 40,
+    "holdout": 40,
+    "english": 40,
+    "chinese": 40,
+    "emptyExpected": 9
+  },
+  "categoryQuotas": {
+    "lexical-control": {
+      "development": 4,
+      "holdout": 4
+    },
+    "semantic-paraphrase": {
+      "development": 6,
+      "holdout": 6
+    },
+    "cross-lingual": {
+      "development": 8,
+      "holdout": 8
+    },
+    "terse-abstract": {
+      "development": 6,
+      "holdout": 6
+    },
+    "scope-lifecycle-negative": {
+      "development": 8,
+      "holdout": 8
+    },
+    "no-result-authority-safety": {
+      "development": 4,
+      "holdout": 4
+    },
+    "multi-relevant": {
+      "development": 4,
+      "holdout": 4
+    }
+  },
+  "bootstrap": {
+    "method": "paired-percentile",
+    "seed": 20260909,
+    "resamples": 10000,
+    "confidenceLevel": 0.95
+  },
+  "developmentGrid": {
+    "minimumSimilarities": [
+      0.7,
+      0.75,
+      0.8
+    ],
+    "semanticWeights": [
+      0.5,
+      1,
+      1.5
+    ],
+    "lexicalWeights": [
+      1
+    ],
+    "rankConstants": [
+      30,
+      60
+    ]
+  },
+  "thresholds": {
+    "scopeLeaks": 0,
+    "lifecycleLeaks": 0,
+    "authorityViolations": 0,
+    "networkAttempts": 0,
+    "fallbackMismatches": 0,
+    "emptyResultAccuracy": 1,
+    "semanticHoldoutRecallGain": 0.15,
+    "semanticHoldoutMrrGain": 0.1,
+    "minimumRecallGainLowerBound": 0,
+    "minimumMrrGainLowerBound": 0,
+    "maximumOverallPrecisionDecline": 0.05,
+    "maximumLexicalControlRegression": 0.02,
+    "deterministicRuns": 3,
+    "maximumCompressedModelBytes": 209715200,
+    "maximumWarmQueryP95Ms": 250,
+    "maximumColdReadinessMs": 5000,
+    "maximumTenThousandRecordBuildMs": 120000,
+    "maximumAdditionalPeakRssBytes": 536870912,
+    "maximumTenThousandRecordIndexBytes": 67108864
+  },
+  "review": {
+    "privacyPatternsChecked": [
+      "Windows drive paths",
+      "UNC paths",
+      "credentials",
+      "email addresses",
+      "GitHub user paths"
+    ],
+    "labelingRule": "Expected ids must directly answer the query; forbidden ids are reviewed same-topic distractors or unsafe records.",
+    "notes": "Synthetic names and /fixtures paths are deliberate. Development and holdout use identical category quotas; holdout labels are not tuning input."
+  }
+}

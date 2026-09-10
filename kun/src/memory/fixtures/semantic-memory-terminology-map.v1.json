@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "mapId": "kun-memory-semantic-evaluation-terminology-v1",
+  "status": "frozen",
+  "entries": [
+    {"id":"accessibility","terms":["accessibility","keyboard navigation","visible focus","无障碍","键盘导航","焦点"]},
+    {"id":"api","terms":["api","public interface","公共接口","接口"]},
+    {"id":"appendix","terms":["appendix","supporting evidence","附录","详细证据"]},
+    {"id":"availability","terms":["availability objective","reliability target","可用性目标","可靠性目标"]},
+    {"id":"backup","terms":["backup","data copy","备份","数据副本"]},
+    {"id":"cache","terms":["cache","ephemeral data","缓存","临时数据"]},
+    {"id":"continuous_integration","terms":["continuous integration","ci","持续集成","构建流水线"]},
+    {"id":"credential_rotation","terms":["credential rotation","renew credentials","凭据轮换","凭据更新"]},
+    {"id":"database","terms":["database","durable storage","persistent storage","数据库","持久化存储"]},
+    {"id":"deployment","terms":["deployment","release","rollout","部署","发布","上线"]},
+    {"id":"encryption","terms":["encryption","protect data","加密","数据保护"]},
+    {"id":"error_format","terms":["error format","problem details","failure response","错误格式","失败响应"]},
+    {"id":"examples","terms":["runnable examples","code samples","可运行示例","代码示例"]},
+    {"id":"incident","terms":["incident","outage","post-incident review","故障","事故","复盘"]},
+    {"id":"keys","terms":["encryption key","kms","key management","加密密钥","密钥管理"]},
+    {"id":"logs","terms":["operational logs","audit logs","log retention","生产日志","审计日志","日志保留"]},
+    {"id":"maintenance","terms":["maintenance window","maintenance schedule","维护窗口","维护安排"]},
+    {"id":"on_call","terms":["on-call rotation","on-call handoff","值班轮换","值班交接"]},
+    {"id":"rate_limit","terms":["rate limit","request quota","requests per minute","限流","请求限额","每分钟"]},
+    {"id":"review","terms":["code review","maintainer approval","reviewer count","代码审查","维护者审批","审查人数"]},
+    {"id":"rollback","terms":["rollback","restore previous release","undo release","回滚","回退","恢复上一版本"]},
+    {"id":"snapshot","terms":["snapshot","snapshot retention","快照","快照保留"]},
+    {"id":"timezone","terms":["timezone","time standard","beijing time","时区","时间标准","北京时间"]}
+  ]
+}

@@ -78,6 +78,16 @@ describe('semantic Memory evaluation dataset', () => {
     expect(() => parseSemanticMemoryEvaluationDataset(toTexts(data)))
       .toThrow('records hash mismatch')
   })
+
+  it('accepts the frozen dataset with Windows line endings', async () => {
+    const data = await sourceTexts()
+
+    expect(() => parseSemanticMemoryEvaluationDataset({
+      recordsText: windowsLines(data.recordsText),
+      queriesText: windowsLines(data.queriesText),
+      manifestText: windowsLines(data.manifestText)
+    })).not.toThrow()
+  })
 })
 
 type RawData = {
@@ -139,4 +149,8 @@ function toTexts(data: RawData) {
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
+}
+
+function windowsLines(value: string): string {
+  return value.replace(/\r?\n/gu, '\r\n')
 }
