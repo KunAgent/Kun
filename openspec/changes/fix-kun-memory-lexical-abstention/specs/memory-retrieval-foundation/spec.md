@@ -2,11 +2,11 @@
 
 ### Requirement: Ranking signals are independent and deterministic
 
-Kun SHALL combine normalized lexical relevance, scope/type affinity, temporal freshness, importance, and confidence as separate bounded features with stable tie-breaking. A lexical-only candidate SHALL be considered positively relevant only when its normalized lexical feature meets the versioned foundation relevance threshold; any explicit type-affinity candidate MAY remain relevant without lexical overlap.
+Kun SHALL combine normalized lexical relevance, scope/type affinity, temporal freshness, importance, and confidence as separate bounded features with stable tie-breaking. A lexical-only candidate SHALL be considered positively relevant only when its normalized lexical feature meets the versioned foundation relevance floor for the query language (Latin or CJK); any explicit type-affinity candidate MAY remain relevant without lexical overlap.
 
 #### Scenario: Weak lexical overlap is rejected
 
-- **WHEN** an authorized active record has lexical relevance below the foundation threshold and no positive type affinity
+- **WHEN** an authorized active record has lexical relevance below the applicable foundation floor and no positive type affinity
 - **THEN** it is excluded from the relevant ranking set and cannot consume the result or prompt budget
 
 #### Scenario: Old but trusted fact competes with a recent weak inference

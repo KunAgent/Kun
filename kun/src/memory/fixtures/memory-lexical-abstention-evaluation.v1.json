@@ -16,6 +16,7 @@
     "version": "p0-v1",
     "relevanceMode": "foundation-v1",
     "lexicalThreshold": 0.4,
+    "cjkLexicalThreshold": 0.3333333333333333,
     "retrievalMode": "filesystem-fallback"
   },
   "baseline": {

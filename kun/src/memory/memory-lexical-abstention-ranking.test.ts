@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MemoryRecord } from '../contracts/memory.js'
 import {
   hasPositiveMemoryRelevance,
+  MEMORY_MIN_CJK_LEXICAL_RELEVANCE,
   MEMORY_MIN_LEXICAL_RELEVANCE,
   rankMemory
 } from './memory-ranking.js'
@@ -43,6 +44,30 @@ describe('Memory lexical abstention ranking gate', () => {
     expect(hasPositiveMemoryRelevance(exact)).toBe(true)
     expect(typeAffinity.features.typeAffinity).toBeGreaterThan(0)
     expect(hasPositiveMemoryRelevance(typeAffinity)).toBe(true)
+  })
+
+  it('keeps the CJK n-gram floor separate from the English safety threshold', () => {
+    const cjk = rankMemory({
+      record: record('cjk-match'),
+      query: '用户叫什么名字',
+      queryTokens: ['c用户', 'c户叫', 'c叫什', 'c什么', 'c么名', 'c名字'],
+      lexicalOverride: MEMORY_MIN_CJK_LEXICAL_RELEVANCE,
+      nowMs: Date.parse(nowIso),
+      channel: 'filesystem'
+    })
+    const belowCjk = rankMemory({
+      record: record('cjk-weak-match'),
+      query: '用户叫什么名字',
+      queryTokens: [],
+      lexicalOverride: MEMORY_MIN_CJK_LEXICAL_RELEVANCE - 0.001,
+      nowMs: Date.parse(nowIso),
+      channel: 'filesystem'
+    })
+
+    expect(hasPositiveMemoryRelevance(cjk, '用户叫什么名字')).toBe(true)
+    expect(hasPositiveMemoryRelevance(belowCjk, '用户叫什么名字')).toBe(false)
+    expect(hasPositiveMemoryRelevance(cjk, 'What is the production database password?')).toBe(false)
+    expect(MEMORY_MIN_CJK_LEXICAL_RELEVANCE).toBeCloseTo(1 / 3)
   })
 })
 

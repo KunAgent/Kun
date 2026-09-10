@@ -23,18 +23,19 @@ Both production modes share `retrieveMemoryRecords()` and `hasPositiveMemoryRele
 
 ## Decisions
 
-### 1. Use one shared lexical gate
+### 1. Use one shared lexical predicate with language-calibrated floors
 
-Introduce a named foundation threshold, initially calibrated to `0.40` from the frozen v2 development evidence. This is the lowest tested lexical-coverage threshold that makes the four development no-result cases abstain completely while retaining the existing type-affinity path. The value must be a named constant and included in evaluation output/tests so later tuning is visible.
+Introduce named foundation thresholds: `0.40` for Latin-only queries and `1/3` for queries containing CJK characters. The Latin floor is calibrated from the frozen v2 development evidence and remains the lowest tested lexical-coverage threshold that makes q033/q034 abstain. The CJK floor preserves the existing n-gram contract: the CJK regression query `用户叫什么名字` has two relevant bigrams out of six (`1/3`), while q035/q036 have zero overlap and still abstain. Both values are code-level constants and are covered by tests so later tuning is visible.
 
 The predicate becomes conceptually:
 
 ```ts
 candidate.features.typeAffinity > 0 ||
-candidate.features.lexical >= MEMORY_MIN_LEXICAL_RELEVANCE
+candidate.features.lexical >= lexicalThresholdForQuery(query)
 ```
 
-The predicate remains shared by SQLite FTS5 and filesystem fallback. FTS5 BM25 may
+The predicate remains shared by SQLite FTS5 and filesystem fallback; only the
+query-language floor differs. FTS5 BM25 may
 order the bounded candidate window, but the gate receives the same token-coverage
 score as filesystem fallback; backend-specific BM25 normalization cannot inflate a
 weak match past the foundation threshold.
@@ -75,7 +76,7 @@ Memory store.
 ## Risks / Trade-offs
 
 - A stricter lexical gate may reduce Recall@K for weakly worded queries. Mitigation: record the full v2 development metric delta and preserve type affinity; semantic retrieval remains a separate future decision.
-- A fixed threshold can behave differently across languages. Mitigation: keep English/CJK cases in the same development matrix and require deterministic cross-mode tests.
+- A fixed threshold can behave differently across languages. Mitigation: use explicit Latin/CJK floors, keep English/CJK cases in the same development matrix, and require deterministic cross-mode tests.
 - BM25 normalization may change with SQLite versions. Mitigation: the coverage floor and shared predicate remain authoritative; record SQLite path scores in integration evidence.
 - Existing callers may rely on weak matches. Mitigation: this change follows the already-approved no-unrelated-injection contract and adds explicit regression evidence before merge.
 

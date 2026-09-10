@@ -22,3 +22,8 @@
 - [x] 4.2 Run the full test/lint gates where practical and distinguish infrastructure or upstream baseline failures from this change; lint passed with warnings, `eval:memory-retrieval` passed, and the broad Kun test command exceeded the local observation window without a final summary.
 - [x] 4.3 Update the Memory roadmap and create a timestamped stage note with metrics, selected threshold, trade-offs, and the terminology/semantic boundary.
 - [x] 4.4 Push independently reviewable commits to `SunwardL/Kun:codex/fix-memory-lexical-abstention`, then create detailed PR [#1308](https://github.com/KunAgent/Kun/pull/1308) targeting `KunAgent/Kun:develop`; Quality gates and review are now pending.
+
+## 5. Post-review regression correction
+
+- [x] 5.1 Preserve the existing CJK n-gram retrieval contract by adding a versioned CJK lexical floor, add boundary coverage, and re-run the affected store regression.
+- [x] 5.2 Document the remaining q040 precision-only forbidden selection separately from the q033–q036 authority-boundary safety cases.

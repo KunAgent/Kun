@@ -78,7 +78,7 @@ export function retrieveMemoryRecords(input: {
     }))
   const relevancePredicate = input.relevanceMode === 'historical-v1'
     ? hasHistoricalPositiveMemoryRelevance
-    : hasPositiveMemoryRelevance
+    : (candidate: RankedMemory) => hasPositiveMemoryRelevance(candidate, input.request.query)
   const relevant = ranked.filter(relevancePredicate).sort(compareRankedMemories)
   const requestedLimit = Math.max(0, Math.floor(input.request.limit))
   const recordLimit = input.policy.enabled
