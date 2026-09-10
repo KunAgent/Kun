@@ -49,6 +49,7 @@ import {
   type KunRuntimeSettingsV1,
   type KunSettingsEnvelopePatchV1,
   type KunSettingsEnvelopeV1,
+  type KunSpeakSettingsV1,
   type KunSpeechToTextSettingsV1,
   type KunStorageSettingsV1,
   type KunToolOutputLimitsSettingsV1,
@@ -83,6 +84,11 @@ import {
   LOCAL_WHISPER_DEFAULT_DOWNLOAD_SOURCE_ID,
   isLocalWhisperDownloadSourceId
 } from './local-whisper'
+import {
+  isLocalKokoroDownloadSourceId,
+  isLocalKokoroModelId
+} from './local-kokoro'
+import { isLocalKokoroVoiceId } from './local-kokoro-voices'
 
 import {
   defaultKunBrowserUseSettings,
@@ -90,6 +96,7 @@ import {
   defaultKunImageGenerationSettings,
   defaultKunMusicGenerationSettings,
   defaultKunPromptOptimizationSettings,
+  defaultKunSpeakSettings,
   defaultKunSpeechToTextSettings,
   defaultKunTextToSpeechSettings,
   defaultKunVideoGenerationSettings
@@ -163,6 +170,30 @@ export function normalizeKunSpeechToTextProtocol(value: unknown): SpeechToTextPr
   if (value === 'gemini-audio') return 'gemini-audio'
   if (value === 'gemini-cli-audio') return 'gemini-cli-audio'
   return DEFAULT_SPEECH_TO_TEXT_PROTOCOL
+}
+
+export function normalizeKunSpeakSettings(
+  input: Partial<KunSpeakSettingsV1> | undefined
+): KunSpeakSettingsV1 {
+  const defaults = defaultKunSpeakSettings()
+  return {
+    enabled: input?.enabled !== false,
+    model: isLocalKokoroModelId(input?.model) ? input.model : defaults.model,
+    voice: isLocalKokoroVoiceId(input?.voice) ? input.voice : defaults.voice,
+    speed: normalizeKokoroSpeed(input?.speed, defaults.speed),
+    downloadSource: isLocalKokoroDownloadSourceId(input?.downloadSource)
+      ? input.downloadSource
+      : defaults.downloadSource,
+    autoDownload: input?.autoDownload !== false,
+    keepTracks: input?.keepTracks === true
+  }
+}
+
+/** Kokoro accepts 0.5x-2x; anything outside that range is clamped. */
+export function normalizeKokoroSpeed(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(2, Math.max(0.5, Math.round(parsed * 100) / 100))
 }
 
 export function normalizeKunTextToSpeechSettings(

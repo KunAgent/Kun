@@ -133,6 +133,7 @@ const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   design: 'design',
   imageGeneration: 'mediaGeneration',
   mediaGeneration: 'mediaGeneration',
+  speak: 'mediaGeneration',
   speechToText: 'settingsNavSpeech',
   agents: 'settingsNavAssistant',
   laboratory: 'agentsQuickLaboratory',
@@ -201,7 +202,7 @@ const PALETTE_HIDDEN_SHORTCUT_COMMANDS = new Set<string>(['command-palette'])
  * still covers every section, so a genuinely new destination keeps failing
  * compilation until it gets copy.
  */
-const PALETTE_ALIAS_SETTINGS_SECTIONS = new Set<SettingsRouteSection>(['imageGeneration'])
+const PALETTE_ALIAS_SETTINGS_SECTIONS = new Set<SettingsRouteSection>(['imageGeneration', 'speak'])
 
 function slashCommandIcon(command: SlashCommand): LucideIcon {
   if (command.kind === 'skill') return Sparkles

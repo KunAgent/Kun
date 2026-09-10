@@ -34,6 +34,7 @@ import {
   textToSpeechProtocolLabel,
   videoGenerationProtocolLabel
 } from './settings-section-media-generation-rows'
+import { LocalSpeechProviderSettings } from './settings-section-speak'
 
 const AUDIO_FORMATS = ['mp3', 'wav', 'flac'] as const
 const VIDEO_RESOLUTIONS = ['768P', '1080P'] as const
@@ -315,6 +316,11 @@ export function MediaGenerationSettingsSection({ ctx }: { ctx: Record<string, an
           </>
         ) : null}
         </SettingsCard>
+        {/*
+          Outside the toggle above: the local provider reads answers aloud in the
+          chat and works whether or not the remote generate_speech tool is on.
+        */}
+        <LocalSpeechProviderSettings ctx={ctx} />
       </SettingsTabPanel>
 
       <SettingsTabPanel

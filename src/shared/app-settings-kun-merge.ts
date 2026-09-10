@@ -100,6 +100,7 @@ import {
   normalizeKunImageGenerationSettings,
   normalizeKunMusicGenerationSettings,
   normalizeKunPromptOptimizationSettings,
+  normalizeKunSpeakSettings,
   normalizeKunSpeechToTextSettings,
   normalizeKunTextToSpeechSettings,
   normalizeKunVideoGenerationSettings
@@ -194,6 +195,11 @@ export function mergeKunRuntimeSettings(
   const nextSpeechToText = normalizeKunSpeechToTextSettings({
     ...currentSpeechToText,
     ...(patch?.speechToText ?? {})
+  })
+  const currentSpeak = normalizeKunSpeakSettings(current.speak)
+  const nextSpeak = normalizeKunSpeakSettings({
+    ...currentSpeak,
+    ...(patch?.speak ?? {})
   })
   const currentTextToSpeech = normalizeKunTextToSpeechSettings(current.textToSpeech)
   const nextTextToSpeech = normalizeKunTextToSpeechSettings({
@@ -383,6 +389,7 @@ export function mergeKunRuntimeSettings(
     llmDebug: nextLlmDebug,
     imageGeneration: nextImageGeneration,
     speechToText: nextSpeechToText,
+    speak: nextSpeak,
     textToSpeech: nextTextToSpeech,
     promptOptimization: nextPromptOptimization,
     musicGeneration: nextMusicGeneration,

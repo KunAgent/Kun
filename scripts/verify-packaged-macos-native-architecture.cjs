@@ -44,6 +44,40 @@ function packagedSharpBinding(bindingPackage, arch) {
   return join(libDirectory, bindings[0])
 }
 
+/**
+ * The packaged ONNX Runtime used by local Kokoro speech. afterPack keeps only
+ * the target platform/arch, so anything else surviving here means the prune
+ * regressed and the app is carrying ~200 MB of unusable binaries.
+ */
+function packagedOnnxRuntimeBinaries(unpackedModules, arch) {
+  const binRoot = requirePath(
+    join(unpackedModules, 'onnxruntime-node', 'bin'),
+    'ONNX Runtime bin directory'
+  )
+  const abis = readdirSync(binRoot)
+  if (abis.length !== 1) {
+    throw new Error(`Expected exactly one ONNX Runtime ABI directory in ${binRoot}, got: ${abis.join(', ') || 'none'}`)
+  }
+  const abiRoot = join(binRoot, abis[0])
+  const platforms = readdirSync(abiRoot)
+  if (platforms.length !== 1 || platforms[0] !== 'darwin') {
+    throw new Error(`Expected only the darwin ONNX Runtime binaries in ${abiRoot}, got: ${platforms.join(', ') || 'none'}`)
+  }
+  const platformRoot = join(abiRoot, 'darwin')
+  const architectures = readdirSync(platformRoot)
+  if (architectures.length !== 1 || architectures[0] !== arch) {
+    throw new Error(`Expected only the ${arch} ONNX Runtime binaries in ${platformRoot}, got: ${architectures.join(', ') || 'none'}`)
+  }
+  const archRoot = join(platformRoot, arch)
+  const names = readdirSync(archRoot)
+  const libraryName = names.find((name) => name.endsWith('.dylib'))
+  if (!libraryName) throw new Error(`Packaged macOS app is missing an ONNX Runtime dylib in ${archRoot}`)
+  return {
+    binding: requirePath(join(archRoot, 'onnxruntime_binding.node'), 'ONNX Runtime binding'),
+    library: join(archRoot, libraryName)
+  }
+}
+
 function assertMachOArchitecture(path, arch, inspect = (candidate) =>
   execFileSync('file', ['-b', candidate], { encoding: 'utf8' }).trim()) {
   const description = String(inspect(path))
@@ -83,11 +117,12 @@ function verifyPackagedMacosNativeArchitecture({ resourcesDir, arch, inspect }) 
     join(canvasPackage, `skia.darwin-${arch}.node`),
     'Canvas native binding'
   )
+  const onnxRuntime = packagedOnnxRuntimeBinaries(unpackedModules, arch)
 
-  for (const path of [mainExecutable, binding, libvips, canvas]) {
+  for (const path of [mainExecutable, binding, libvips, canvas, onnxRuntime.binding, onnxRuntime.library]) {
     assertMachOArchitecture(path, arch, inspect)
   }
-  return { arch, mainExecutable, binding, libvips, canvas }
+  return { arch, mainExecutable, binding, libvips, canvas, onnxRuntime }
 }
 
 function main() {
@@ -97,7 +132,7 @@ function main() {
   })
   process.stdout.write(
     `Packaged macOS native architecture OK: darwin/${result.arch}, ` +
-    'Sharp, libvips, and Canvas match the app\n'
+    'Sharp, libvips, Canvas, and ONNX Runtime match the app\n'
   )
 }
 
@@ -112,6 +147,7 @@ if (require.main === module) {
 
 module.exports = {
   assertMachOArchitecture,
+  packagedOnnxRuntimeBinaries,
   packagedSharpBinding,
   verifyPackagedMacosNativeArchitecture
 }

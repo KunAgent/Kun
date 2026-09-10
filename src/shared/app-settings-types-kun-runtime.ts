@@ -22,6 +22,7 @@ import {
   KunProjectConfigSettingsV1,
   KunPromptOptimizationSettingsV1,
   KunRuntimeTuningSettingsV1,
+  KunSpeakSettingsV1,
   KunSpeechToTextSettingsV1,
   KunStorageSettingsV1,
   KunTextToSpeechSettingsV1,
@@ -384,6 +385,8 @@ export type KunRuntimeSettingsV1 = {
   imageGeneration: KunImageGenerationSettingsV1
   /** Speech-to-text provider used for voice input in the composer. */
   speechToText: KunSpeechToTextSettingsV1
+  /** Local Kokoro speech playback for assistant answers. */
+  speak: KunSpeakSettingsV1
   /** Text-to-speech provider exposed to agents as generate_speech. */
   textToSpeech: KunTextToSpeechSettingsV1
   /** Model + prompt used by the composer prompt optimization button. */

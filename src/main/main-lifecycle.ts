@@ -44,6 +44,8 @@ import {
 import {
   shutdownLocalWhisperService
 } from './services/local-whisper-service'
+import { shutdownLocalKokoroDownloads } from './services/local-kokoro-download-service'
+import { shutdownLocalKokoroSynthesis } from './services/local-kokoro-synthesis-service'
 import {
   ManagedRuntimeShutdownCoordinator
 } from './runtime/managed-runtime-shutdown-coordinator'
@@ -185,6 +187,8 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
   ])
   await stopWeixinBridgeRuntime()
   await shutdownLocalWhisperService()
+  shutdownLocalKokoroDownloads()
+  await shutdownLocalKokoroSynthesis()
   await Promise.all([
     waitForBrowserUseHostLifecycle(),
     mainState.waitForRuntimeOperationsIdle?.() ?? Promise.resolve()

@@ -2,6 +2,8 @@ import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { LocalWhisperDownloadSourceId } from './local-whisper'
+import type { LocalKokoroDownloadSourceId, LocalKokoroModelId } from './local-kokoro'
+import type { LocalKokoroVoiceId } from './local-kokoro-voices'
 import type {
   ApprovalPolicy,
   ApprovalReviewer,
@@ -81,6 +83,31 @@ export type KunSpeechToTextSettingsV1 = {
   /** Language hint sent to the provider ("zh", "en", ...). Empty means auto-detect. */
   language: string
   timeoutMs: number
+}
+
+/**
+ * Local Kokoro speech playback for assistant answers ("Speak"). Independent
+ * from `KunTextToSpeechSettingsV1`, which configures a remote TTS provider
+ * exposed to agents as a tool.
+ */
+export type KunSpeakSettingsV1 = {
+  /** Whether the Speak action appears under assistant answers. */
+  enabled: boolean
+  /** Kokoro weight tier downloaded and used for synthesis. */
+  model: LocalKokoroModelId
+  /** Voice whose style vector is applied. */
+  voice: LocalKokoroVoiceId
+  /** Playback rate passed to the model. 1 is the natural rate. */
+  speed: number
+  /** Mirror used to download model weights and voice files. */
+  downloadSource: LocalKokoroDownloadSourceId
+  /** Start the model download automatically the first time Speak is used. */
+  autoDownload: boolean
+  /**
+   * Keep the audio produced for an answer on disk, so it can be replayed
+   * without synthesizing again and saved to the user's device.
+   */
+  keepTracks: boolean
 }
 
 export type KunTextToSpeechSettingsV1 = {
@@ -284,7 +311,7 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab'
+    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'speak' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
@@ -298,6 +325,7 @@ export type KunRuntimeSettingsPatchV1 = Partial<
   llmDebug?: Partial<KunLlmDebugSettingsV1>
   imageGeneration?: Partial<KunImageGenerationSettingsV1>
   speechToText?: Partial<KunSpeechToTextSettingsV1>
+  speak?: Partial<KunSpeakSettingsV1>
   textToSpeech?: Partial<KunTextToSpeechSettingsV1>
   promptOptimization?: Partial<KunPromptOptimizationSettingsV1>
   musicGeneration?: Partial<KunMusicGenerationSettingsV1>

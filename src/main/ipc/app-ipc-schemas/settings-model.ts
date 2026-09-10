@@ -37,6 +37,16 @@ import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { KEYBOARD_SHORTCUT_COMMANDS } from '../../../shared/keyboard-shortcuts'
 import { LOCAL_WHISPER_DOWNLOAD_SOURCES, LOCAL_WHISPER_MODELS } from '../../../shared/local-whisper'
 import type { LocalWhisperDownloadSourceId } from '../../../shared/local-whisper'
+import {
+  LOCAL_KOKORO_DOWNLOAD_SOURCES,
+  LOCAL_KOKORO_MODELS,
+  type LocalKokoroDownloadSourceId,
+  type LocalKokoroModelId
+} from '../../../shared/local-kokoro'
+import {
+  LOCAL_KOKORO_VOICES,
+  type LocalKokoroVoiceId
+} from '../../../shared/local-kokoro-voices'
 import { kunGraphPatchSchema } from './settings-graph'
 import { kunFastContextPatchSchema, kunLabPatchSchema } from './settings-lab'
 import {
@@ -97,6 +107,21 @@ const localWhisperDownloadSourceIds = LOCAL_WHISPER_DOWNLOAD_SOURCES.map((source
 export const localWhisperDownloadSourceSchema = z.enum(
   localWhisperDownloadSourceIds
 )
+const localKokoroModelIds = LOCAL_KOKORO_MODELS.map((model) => model.id) as [
+  LocalKokoroModelId,
+  ...LocalKokoroModelId[]
+]
+export const localKokoroModelIdSchema = z.enum(localKokoroModelIds)
+const localKokoroDownloadSourceIds = LOCAL_KOKORO_DOWNLOAD_SOURCES.map((source) => source.id) as [
+  LocalKokoroDownloadSourceId,
+  ...LocalKokoroDownloadSourceId[]
+]
+export const localKokoroDownloadSourceSchema = z.enum(localKokoroDownloadSourceIds)
+const localKokoroVoiceIds = LOCAL_KOKORO_VOICES.map((voice) => voice.id) as [
+  LocalKokoroVoiceId,
+  ...LocalKokoroVoiceId[]
+]
+export const localKokoroVoiceIdSchema = z.enum(localKokoroVoiceIds)
 export const textToSpeechProtocolSchema = z.enum(TEXT_TO_SPEECH_PROTOCOLS)
 export const musicGenerationProtocolSchema = z.enum(MUSIC_GENERATION_PROTOCOLS)
 export const videoGenerationProtocolSchema = z.enum(VIDEO_GENERATION_PROTOCOLS)
@@ -421,6 +446,15 @@ export const kunRuntimePatchSchema = z.object({
     localWhisperDownloadSource: localWhisperDownloadSourceSchema.optional(),
     language: z.string().trim().max(16).optional(),
     timeoutMs: z.number().int().positive().max(600_000).optional()
+  }).strict().optional(),
+  speak: z.object({
+    enabled: z.boolean().optional(),
+    model: localKokoroModelIdSchema.optional(),
+    voice: localKokoroVoiceIdSchema.optional(),
+    speed: z.number().min(0.5).max(2).optional(),
+    downloadSource: localKokoroDownloadSourceSchema.optional(),
+    autoDownload: z.boolean().optional(),
+    keepTracks: z.boolean().optional()
   }).strict().optional(),
   textToSpeech: z.object({
     enabled: z.boolean().optional(),

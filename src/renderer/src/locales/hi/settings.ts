@@ -4,6 +4,7 @@ import providerMediaMcp from './settings/provider-media-mcp.json'
 import mcpMigration from './settings/mcp-migration.json'
 import migrationSystem from './settings/migration-system.json'
 import codePersonas from './settings/code-personas.json'
+import speak from './settings/speak.json'
 
 const settings = {
   ...navigationProviders,
@@ -13,6 +14,7 @@ const settings = {
   ...migrationSystem,
   ...codePersonas,
   guiUpdateErrFeedUnavailable: 'अभी कोई अपडेट स्रोत उपलब्ध नहीं है। बाद में फिर कोशिश करें या डाउनलोड पृष्ठ का उपयोग करें।',
+  ...speak,
 }
 
 export default settings
