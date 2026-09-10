@@ -1,4 +1,5 @@
 import type { ThreadRecord } from '../contracts/threads.js'
+import { enqueueTurnDurably, reconcilePendingQueueAdmissions } from './queue-admission.js'
 import type { TurnItem } from '../contracts/items.js'
 import type {
   StartTurnRequest,
@@ -45,7 +46,7 @@ function userItemId(turnId: string): string {
   return `item_${turnId}_user`
 }
 
-function queuedResponse(thread: ThreadRecord, turn: Turn): StartTurnResponse {
+export function queuedResponse(thread: ThreadRecord, turn: Turn): StartTurnResponse {
   const position = queuedTurns(thread).findIndex((candidate) => candidate.id === turn.id) + 1
   return {
     threadId: thread.id,
@@ -106,9 +107,9 @@ export const turnServiceQueueOperations = {
   async persistQueuedTurnRecord(this: TurnService, thread: ThreadRecord, input: {
     threadId: string
     request: StartTurnRequest
-  }): Promise<{ turnId: string; userItem: TurnItem }> {
+  }, allocatedTurnId?: string): Promise<{ turnId: string; userItem: TurnItem }> {
     assertQueueCapacity(thread, input.threadId)
-    const turnId = this['deps'].ids.next('turn')
+    const turnId = allocatedTurnId ?? this['deps'].ids.next('turn')
     const designAdmission = resolveDesignTurnAdmission({
       thread,
       request: input.request,
@@ -256,13 +257,8 @@ export const turnServiceQueueOperations = {
       threadAgentSurface: resolveThreadAgentSurface(committedThread),
       ...(committed.agentSurface ? { agentSurface: committed.agentSurface } : {})
     }).catch(() => undefined)
-    await this['deps'].events.record({
-      kind: 'item_created',
-      threadId: input.threadId,
-      turnId: input.attemptedTurnId,
-      itemId: input.userItem.id,
-      item: input.userItem
-    }).catch(() => undefined)
+    // The user item is durable but not executable yet. Publishing it here
+    // makes renderer consumers mistake queue admission for a running turn.
     return queuedResponse(committedThread, committed)
   },
 
@@ -278,51 +274,13 @@ export const turnServiceQueueOperations = {
     request: StartTurnRequest
   }): Promise<StartTurnResponse> {
     const finishAdmission = this['beginExecutionAdmission']()
-    let attemptedTurnId: string | undefined
-    let admissionAccepted = false
     try {
       if (this['deps'].migrationMaintenance?.isLocked()) {
         throw new TurnConflictError('runtime migration maintenance is in progress')
       }
-      // Deliberately no "no active turn" rejection here: the thread may have
-      // gone idle between the busy decision and this critical section. The
-      // record still commits durably; the dispatcher promotion turns it into
-      // a direct start when the thread is idle.
-      const started = await this['withQueueDataMutation'](input.threadId, async () => {
-        if (this['deps'].lifecycleFence?.isClosing(input.threadId)) {
-          throw new ThreadClosingError(input.threadId)
-        }
-        const thread = await this['deps'].threadStore.get(input.threadId)
-        if (!thread) throw new Error(`thread not found: ${input.threadId}`)
-        if (thread.status === 'archived') {
-          throw new TurnConflictError(`thread is archived: ${input.threadId}`)
-        }
-        return this['persistQueuedTurnRecord'](thread, input)
-      })
-      attemptedTurnId = started.turnId
-      const response = await this['completeQueuedTurnAdmission']({
-        ...input,
-        attemptedTurnId: started.turnId,
-        userItem: started.userItem
-      })
-      admissionAccepted = true
+      const response = await enqueueTurnDurably(this, input)
       this['notifyTurnQueued'](input.threadId)
       return response
-    } catch (error) {
-      if (attemptedTurnId && !admissionAccepted) {
-        const rolledBack = await this['rollbackPendingAdmission'](
-          input.threadId,
-          attemptedTurnId
-        ).catch(() => false)
-        if (!rolledBack) {
-          await this.interruptTurn({
-            threadId: input.threadId,
-            turnId: attemptedTurnId
-          }).catch(() => undefined)
-        }
-        this['clearRuntimeTurnState'](input.threadId, attemptedTurnId, { abort: true, releaseLease: false })
-      }
-      throw error
     } finally {
       finishAdmission()
     }
@@ -342,6 +300,7 @@ export const turnServiceQueueOperations = {
     const input = typeof threadIdOrInput === 'string' ? { threadId: threadIdOrInput } : threadIdOrInput
     const finishAdmission = this['beginExecutionAdmission']()
     try {
+      await reconcilePendingQueueAdmissions(this, input.threadId)
       return await this['withQueueDataMutation'](input.threadId, async () => {
         const failCandidateInPlace = async (
           thread: ThreadRecord,
@@ -383,22 +342,9 @@ export const turnServiceQueueOperations = {
           if (await this['deps'].executionLeases?.owner(input.threadId)) return null
           const candidate = queuedTurns(thread)[0]
           if (!candidate) return null
-          if (candidate.admissionPending) {
-            // The queued admission never reached its commit boundary before
-            // this promotion was reached (e.g. a manual start before restart
-            // reconciliation finished). The session user item is the commit
-            // boundary: commit it inline, or fail the candidate in place.
-            const sessionItems = await this['deps'].sessionStore
-              .loadItems(input.threadId)
-              .catch(() => null)
-            const hasUserItem = Boolean(
-              sessionItems?.some((item) => item.turnId === candidate.id && item.kind === 'user_message')
-            )
-            if (!hasUserItem) {
-              await failCandidateInPlace(thread, candidate, 'queued admission never crossed the durable boundary')
-              continue
-            }
-          }
+          // A new admission may have arrived between the two mutex scopes.
+          // Leave it to the next pass; never promote an uncommitted row.
+          if (candidate.admissionPending) return null
           const requestSnapshot: StartTurnRequest = {
             prompt: candidate.prompt,
             orchestration: candidate.orchestration ?? 'direct',
@@ -496,6 +442,13 @@ export const turnServiceQueueOperations = {
                 ? { designDocumentTarget: startedTurn.designDocumentTarget }
                 : {})
             }).catch(() => undefined)
+            const userItem = startedTurn.items.find((item) => item.kind === 'user_message')
+            if (userItem) {
+              await this['deps'].events.record({
+                kind: 'item_created', threadId: input.threadId, turnId: candidate.id,
+                itemId: userItem.id, item: userItem
+              }).catch(() => undefined)
+            }
             return { turnId: candidate.id }
           } catch (error) {
             this['clearRuntimeTurnState'](input.threadId, candidate.id, {
@@ -512,9 +465,8 @@ export const turnServiceQueueOperations = {
   },
 
   /**
-   * Cancel a queued turn. Returns true when the queued turn was aborted.
-   * A turn that already left the queue (running or terminal) returns false
-   * so the caller can fall back to interrupt semantics.
+   * Cancel only a committed queued turn. Retrying a confirmed queue cancellation
+   * is idempotent; running turns and unrelated terminal states remain conflicts.
    */
   async cancelQueuedTurn(this: TurnService, input: {
     threadId: string
@@ -526,6 +478,12 @@ export const turnServiceQueueOperations = {
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
         const turn = thread.turns.find((candidate) => candidate.id === input.turnId)
         if (!turn) throw new Error(`turn not found: ${input.turnId}`)
+        if (turn.admissionPending) {
+          throw new TurnConflictError(`turn admission is still pending: ${input.turnId}`)
+        }
+        if (turn.status === 'aborted' && turn.terminalCode === QUEUE_CANCELLED_TURN_CODE) {
+          return { threadId: input.threadId, turnId: input.turnId, status: 'aborted' }
+        }
         if (turn.status !== 'queued') {
           throw new TurnConflictError(`turn is not queued: ${input.turnId}`)
         }

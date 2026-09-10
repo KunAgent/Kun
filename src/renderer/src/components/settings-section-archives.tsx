@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
-import { Archive, Folder, RotateCcw, Search, Trash2 } from 'lucide-react'
+import { Archive, Folder, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react'
 import type { NormalizedThread } from '../agent/types'
+import { useArchivedThreads } from '../hooks/use-archived-threads'
 import { confirmDialog } from '../lib/confirm-dialog'
 import { formatRelativeTime } from '../lib/format-relative-time'
+import { formatRuntimeError } from '../lib/format-runtime-error'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
+import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { useChatStore } from '../store/chat-store'
 import { WRITE_ASSISTANT_THREAD_TITLE } from '../write/write-thread-registry'
 import { SettingsCard, SettingRow } from './settings-controls'
 
@@ -59,10 +63,9 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
   const {
     t,
     tCommon,
-    threads,
+    threads: cachedThreads,
     runtimeReady,
     locale,
-    refreshThreads,
     openCode,
     selectThread,
     archiveThread,
@@ -71,24 +74,27 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
 
   const [query, setQuery] = useState('')
   const [busyThreadIds, setBusyThreadIds] = useState<Record<string, boolean>>({})
+  const [actionError, setActionError] = useState<string | null>(null)
   const workAssistantLabel = tCommon('writeAssistant')
-
-  useEffect(() => {
-    if (!runtimeReady || typeof refreshThreads !== 'function') return
-    void refreshThreads()
-  }, [refreshThreads, runtimeReady])
+  const { threads, loading, error, refresh } = useArchivedThreads(
+    runtimeReady,
+    Array.isArray(cachedThreads) ? cachedThreads : []
+  )
 
   const archivedThreads = useMemo(
-    () => filterArchivedThreads(Array.isArray(threads) ? threads : [], query, workAssistantLabel),
+    () => filterArchivedThreads(threads, query, workAssistantLabel),
     [query, threads, workAssistantLabel]
   )
   const groups = useMemo(() => groupArchivedThreads(archivedThreads), [archivedThreads])
-  const totalArchived = (Array.isArray(threads) ? threads : []).filter((thread) => thread.archived === true).length
+  const totalArchived = threads.length
 
   const runThreadAction = async (threadId: string, action: () => Promise<void>): Promise<void> => {
     setBusyThreadIds((current) => ({ ...current, [threadId]: true }))
+    setActionError(null)
     try {
       await action()
+    } catch (error) {
+      setActionError(formatRuntimeError(error))
     } finally {
       setBusyThreadIds((current) => {
         const next = { ...current }
@@ -98,16 +104,24 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
     }
   }
 
-  const openThread = async (threadId: string): Promise<void> => {
-    await runThreadAction(threadId, async () => {
+  const openThread = async (thread: NormalizedThread): Promise<void> => {
+    await runThreadAction(thread.id, async () => {
       if (typeof openCode === 'function') await openCode()
-      if (typeof selectThread === 'function') await selectThread(threadId)
+      // Selection needs metadata even when this archive was never loaded by
+      // the active sidebar. Retain the rest of its inventory and cursors.
+      useChatStore.setState((state) => ({
+        threads: state.threads.some((item) => item.id === thread.id)
+          ? state.threads
+          : [...state.threads, { ...thread, workspace: normalizeWorkspaceRoot(thread.workspace) }]
+      }))
+      if (typeof selectThread === 'function') await selectThread(thread.id)
     })
   }
 
   const restoreThread = async (threadId: string): Promise<void> => {
     await runThreadAction(threadId, async () => {
       if (typeof archiveThread === 'function') await archiveThread(threadId, false)
+      await refresh()
     })
   }
 
@@ -120,14 +134,17 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
     if (!ok) return
     await runThreadAction(thread.id, async () => {
       if (typeof deleteThread === 'function') await deleteThread(thread.id)
+      await refresh()
     })
   }
 
   const emptyMessage = !runtimeReady
     ? t('archivesOffline')
-    : query.trim()
-      ? t('archivesSearchEmpty')
-      : t('archivesEmpty')
+    : loading
+      ? tCommon('loading')
+      : query.trim()
+        ? t('archivesSearchEmpty')
+        : t('archivesEmpty')
 
   return (
     <SettingsCard title={t('archivesTitle')}>
@@ -152,9 +169,23 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.75} />
                 {t('archivesCount', { count: totalArchived })}
               </div>
+              <button
+                type="button"
+                disabled={!runtimeReady}
+                onClick={() => void refresh()}
+                title={t('refresh')}
+                aria-label={t('refresh')}
+                className="self-end rounded-lg p-2 text-ds-muted transition hover:bg-ds-hover disabled:opacity-50 sm:self-auto"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+              </button>
             </div>
 
-            {groups.length === 0 ? (
+            {error || actionError ? (
+              <div role="alert" className="text-[13px] text-red-600">{actionError || error}</div>
+            ) : null}
+
+            {groups.length === 0 ? error ? null : (
               <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ds-border-muted bg-ds-main/40 px-4 py-10 text-center">
                 <Archive className="h-7 w-7 text-ds-faint" strokeWidth={1.5} />
                 <div className="text-[13px] text-ds-faint">{emptyMessage}</div>
@@ -183,7 +214,7 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
                           <button
                             type="button"
                             className="min-w-0 text-left"
-                            onClick={() => void openThread(thread.id)}
+                            onClick={() => void openThread(thread)}
                           >
                             <div className="truncate text-[14px] font-semibold text-ds-ink">
                               {displayTitle || t('archivesUntitled')}

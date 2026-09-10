@@ -463,6 +463,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     updateKun({ providerId, model: nextModel, apiKey: '', baseUrl: '' })
   }
   const toolPermissionMode = kunToolPermissionModeFromSettings(kun)
+  const approvalReview = kun.approvalReview ?? { mode: 'inherit' as const }
   const view = {
     ...ctx,
     productionManagedDataDir, windowsStorageManagement, mcpSearch, tokenEconomy,
@@ -473,7 +474,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     updateRuntimeTuning, updateToolOutputLimits, updateToolStorm, updateToolArgumentRepair, provider,
     modelProviders, instructions, updateInstructions, quality, updateQuality, activeProvider,
     activeProviderModels, promptOptimization, promptOptimizationModels, promptOptimizationDefaultModel,
-    updatePromptOptimization, selectKunProvider, toolPermissionMode
+    updatePromptOptimization, selectKunProvider, toolPermissionMode, approvalReview
   }
 
   return (

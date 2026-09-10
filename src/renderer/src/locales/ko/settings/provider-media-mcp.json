@@ -22,7 +22,7 @@
   "providerModelMaxOutputLabel": "최대 출력(토큰)",
   "providerModelMaxOutputPlaceholder": "예를 들어 8k 또는 32000",
   "providerModelMaxOutputParsed": "≒ {{tokens}} 토큰",
-  "providerModelMaxOutputHint": "하나의 응답의 출력 예산을 제한합니다. Kun의 런타임 기본값을 사용하려면 비워 두세요.",
+  "providerModelMaxOutputHint": "하나의 응답 출력 예산을 제한합니다. Kun의 런타임 기본값을 사용하려면 비워 두세요. 실제 전송 값은 남은 컨텍스트 용량으로 제한됩니다.",
   "providerModelVisionLabel": "이미지 입력(비전)",
   "providerModelVisionDesc": "채팅에서 이 모델에 이미지 첨부 파일을 보내는 것을 허용합니다.",
   "providerModelToolsLabel": "도구 호출",

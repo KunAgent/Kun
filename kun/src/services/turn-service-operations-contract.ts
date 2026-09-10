@@ -113,6 +113,8 @@ export interface TurnServiceOperations {
     turnId: string
   }): Promise<RewindThreadResponse>;
   steerTurn(input: {
+    operationId?: string
+    sourceTurnId?: string
     threadId: string
     turnId: string
     text: string

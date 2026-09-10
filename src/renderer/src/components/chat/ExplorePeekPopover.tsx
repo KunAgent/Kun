@@ -1,3 +1,4 @@
+import { formatRuntimeError } from '../../lib/format-runtime-error'
 import {
   useEffect,
   useRef,
@@ -94,7 +95,7 @@ export function ExplorePeekPopover({
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err))
+          setError(formatRuntimeError(err))
         }
       } finally {
         if (!cancelled) setLoading(false)

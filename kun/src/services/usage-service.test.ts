@@ -380,7 +380,8 @@ describe('model usage aggregation', () => {
       groupBy: 'model',
       from: '2026-08-01',
       to: '2026-08-09',
-      timezone: 'UTC'
+      timezone: 'UTC',
+      scope: 'all'
     })
 
     expect(response.buckets.map((bucket) => bucket.model)).toEqual([
@@ -397,6 +398,116 @@ describe('model usage aggregation', () => {
     ])
     expect(response.buckets).toHaveLength(tokensByModel.length)
     expect(response.totals.total_tokens).toBe(2_900)
+  })
+
+  it('attributes each bucket to the actual routed model, not the requested alias', () => {
+    const records: ThreadUsageRecord[] = [
+      {
+        threadId: 'thread-primary',
+        relation: 'primary',
+        model: 'deepseek-v4-pro',
+        providerId: 'provider-a',
+        completedAt: '2026-08-09T00:00:00.000Z',
+        usage: {
+          promptTokens: 1_000,
+          completionTokens: 0,
+          totalTokens: 1_000,
+          cacheHitRate: null,
+          turns: 1,
+          requestedModelId: 'deepseek-v4-pro',
+          actualModelId: 'gpt-6-astra',
+          actualProviderId: 'provider-b'
+        }
+      }
+    ]
+
+    const response = buildModelUsageResponse(records, {
+      groupBy: 'model',
+      from: '2026-08-01',
+      to: '2026-08-09',
+      timezone: 'UTC',
+      scope: 'all'
+    })
+
+    expect(response.buckets.map((bucket) => bucket.model)).toEqual(['gpt-6-astra'])
+    expect(response.scope).toBe('all')
+  })
+
+  it('falls back to requested then thread model when the actual model is absent', () => {
+    const records: ThreadUsageRecord[] = [
+      {
+        threadId: 't1',
+        relation: 'primary',
+        model: 'thread-model',
+        completedAt: '2026-08-09T00:00:00.000Z',
+        usage: {
+          promptTokens: 1, completionTokens: 0, totalTokens: 1,
+          cacheHitRate: null, turns: 1, requestedModelId: 'requested-model'
+        }
+      },
+      {
+        threadId: 't2',
+        relation: 'primary',
+        model: 'thread-model-only',
+        completedAt: '2026-08-09T00:00:00.000Z',
+        usage: { promptTokens: 2, completionTokens: 0, totalTokens: 2, cacheHitRate: null, turns: 1 }
+      }
+    ]
+
+    const response = buildModelUsageResponse(records, {
+      groupBy: 'model',
+      from: '2026-08-01',
+      to: '2026-08-09',
+      timezone: 'UTC',
+      scope: 'all'
+    })
+
+    expect(response.buckets.map((bucket) => bucket.model).sort())
+      .toEqual(['requested-model', 'thread-model-only'])
+  })
+
+  it('filters buckets by primary/side scope while preserving totals under all', () => {
+    const record = (threadId: string, relation: 'primary' | 'side'): ThreadUsageRecord => ({
+      threadId,
+      relation,
+      model: relation === 'primary' ? 'gpt-6-astra' : 'deepseek-v4-pro',
+      completedAt: '2026-08-09T00:00:00.000Z',
+      usage: { promptTokens: 10, completionTokens: 0, totalTokens: 10, cacheHitRate: null, turns: 1 }
+    })
+    const records: ThreadUsageRecord[] = [record('primary-1', 'primary'), record('side-1', 'side')]
+    const base = { groupBy: 'model' as const, from: '2026-08-01', to: '2026-08-09', timezone: 'UTC' }
+
+    const primary = buildModelUsageResponse(records, { ...base, scope: 'primary' })
+    const side = buildModelUsageResponse(records, { ...base, scope: 'side' })
+    const all = buildModelUsageResponse(records, { ...base, scope: 'all' })
+
+    expect(primary.buckets.map((bucket) => bucket.model)).toEqual(['gpt-6-astra'])
+    expect(side.buckets.map((bucket) => bucket.model)).toEqual(['deepseek-v4-pro'])
+    expect(all.buckets.map((bucket) => bucket.model).sort()).toEqual(['deepseek-v4-pro', 'gpt-6-astra'])
+    expect(primary.scope).toBe('primary')
+    expect(side.scope).toBe('side')
+    expect(primary.totals.total_tokens + side.totals.total_tokens).toBe(all.totals.total_tokens)
+  })
+
+  it('treats legacy threads without a relation as direct (primary)', () => {
+    const records: ThreadUsageRecord[] = [
+      {
+        threadId: 'legacy',
+        model: 'gpt-6-astra',
+        completedAt: '2026-08-09T00:00:00.000Z',
+        usage: { promptTokens: 5, completionTokens: 0, totalTokens: 5, cacheHitRate: null, turns: 1 }
+      }
+    ]
+
+    const primary = buildModelUsageResponse(records, {
+      groupBy: 'model', from: '2026-08-01', to: '2026-08-09', timezone: 'UTC', scope: 'primary'
+    })
+    const side = buildModelUsageResponse(records, {
+      groupBy: 'model', from: '2026-08-01', to: '2026-08-09', timezone: 'UTC', scope: 'side'
+    })
+
+    expect(primary.buckets.map((bucket) => bucket.model)).toEqual(['gpt-6-astra'])
+    expect(side.buckets).toEqual([])
   })
 })
 

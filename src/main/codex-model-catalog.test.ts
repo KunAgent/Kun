@@ -20,6 +20,19 @@ describe('Codex catalog', () => {
     })
   })
 
+  it('keeps a missing tier field unknown and a declared tier list explicit', () => {
+    const result = parseCodexModelCatalog(JSON.stringify({ models: [
+      { slug: 'gpt-6-astra', visibility: 'list', service_tiers: [] },
+      { slug: 'gpt-6-vega', visibility: 'list', service_tiers: [{ id: 'flex' }, { id: 'standard' }] },
+      { slug: 'gpt-6-nova', visibility: 'list', service_tiers: 'priority' },
+      { slug: 'gpt-6-orion', visibility: 'list' }
+    ] }))
+    expect(result.modelProfiles['gpt-6-astra'].serviceTiers).toEqual([])
+    expect(result.modelProfiles['gpt-6-vega'].serviceTiers).toEqual(['flex'])
+    expect(result.modelProfiles['gpt-6-nova'].serviceTiers).toBeUndefined()
+    expect(result.modelProfiles['gpt-6-orion'].serviceTiers).toBeUndefined()
+  })
+
   it('rejects malformed responses instead of substituting a static catalog', () => {
     for (const body of ['<html>error</html>', '{}', 'null', '{"models":{}}']) {
       expect(() => parseCodexModelCatalog(body)).toThrow()

@@ -11,6 +11,9 @@ import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { BrowserUseMode } from './browser-use'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
+import type {
+  ApprovalReviewModelSelection
+} from '../../kun/src/contracts/approval-review-config.js'
 import type { KunGitHubMcpSettingsV1 } from './github-mcp-authorization'
 
 import {
@@ -22,6 +25,7 @@ import {
   KunProjectConfigSettingsV1,
   KunPromptOptimizationSettingsV1,
   KunRuntimeTuningSettingsV1,
+  KunSpeakSettingsV1,
   KunSpeechToTextSettingsV1,
   KunStorageSettingsV1,
   KunTextToSpeechSettingsV1,
@@ -358,6 +362,8 @@ export type KunRuntimeSettingsV1 = {
   approvalPolicy: ApprovalPolicy
   sandboxMode: SandboxMode
   approvalReviewer: ApprovalReviewer
+  /** Exact model authority for automatic tool review. Defaults to the acting turn route. */
+  approvalReview: ApprovalReviewModelSelection
   /** Compress safe tool context before each model call. */
   tokenEconomyMode: boolean
   /** Detailed token-saving behavior used when building Kun model requests. */
@@ -384,6 +390,8 @@ export type KunRuntimeSettingsV1 = {
   imageGeneration: KunImageGenerationSettingsV1
   /** Speech-to-text provider used for voice input in the composer. */
   speechToText: KunSpeechToTextSettingsV1
+  /** Local Kokoro speech playback for assistant answers. */
+  speak: KunSpeakSettingsV1
   /** Text-to-speech provider exposed to agents as generate_speech. */
   textToSpeech: KunTextToSpeechSettingsV1
   /** Model + prompt used by the composer prompt optimization button. */

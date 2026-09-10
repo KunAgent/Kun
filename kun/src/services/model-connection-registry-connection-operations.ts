@@ -177,6 +177,12 @@ async snapshot(this: ModelConnectionRegistry): Promise<ModelConnectionSnapshot> 
     return this['projectWithCredentialHealth'](await this['file'].read(emptyDocument))
   },
 
+async getCustomHeaders(this: ModelConnectionRegistry, providerId: string): Promise<Record<string, string>> {
+    const document = await this['file'].read(emptyDocument)
+    const profile = requireProfile(document, providerId)
+    return { ...(profile.customHeaders ?? {}) }
+  },
+
 async assertRevision(this: ModelConnectionRegistry, expectedRevision: number): Promise<void> {
     assertRevision(
       await this['file'].read(emptyDocument),
@@ -293,7 +299,8 @@ async connectAuthenticated(this: ModelConnectionRegistry,
         credentialRef,
         credentialSourceId: credentialRef ? undefined : existing?.credentialSourceId,
         ...(legacyCredentialSourceToRetire ? { legacyCredentialSourceToRetire } : {}),
-        headers: existing?.headers
+        headers: existing?.headers,
+        customHeaders: input.customHeaders ?? existing?.customHeaders
       })
     }
 
@@ -514,6 +521,7 @@ async connectInternal(this: ModelConnectionRegistry,
               : {}),
             selectedModel,
             credentialRef: nextRef,
+            ...(input.customHeaders ? { customHeaders: input.customHeaders } : {}),
             ...(deleted?.legacyCredentialSourceToRetire && this['options'].retireLegacyCredentialSource
               ? { legacyCredentialSourceToRetire: deleted.legacyCredentialSourceToRetire }
               : {})
@@ -582,6 +590,7 @@ async connectInternal(this: ModelConnectionRegistry,
           : {}),
         selectedModel,
         credentialSourceId,
+        ...(input.customHeaders ? { customHeaders: input.customHeaders } : {}),
         ...(deleted?.legacyCredentialSourceToRetire && this['options'].retireLegacyCredentialSource
           ? { legacyCredentialSourceToRetire: deleted.legacyCredentialSourceToRetire }
           : {})

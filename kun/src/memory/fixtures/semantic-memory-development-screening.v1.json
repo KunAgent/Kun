@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "runKind": "development-candidate-screening",
+  "dataset": {
+    "id": "kun-memory-semantic-retrieval-anonymous-v1",
+    "recordsSha256": "e60bcf7650ded51baefe5a20290e337677fac85d6e79ad3d29fbd7b7d580e254",
+    "queriesSha256": "513c81bba4430b370e527744e0ab5e11720191b4f81ed53384b3ee5ab0458380",
+    "queryCount": 32
+  },
+  "constraints": {
+    "split": "development",
+    "holdoutIncluded": false,
+    "networkAttempts": 0,
+    "scopeLeaks": 0,
+    "lifecycleLeaks": 0,
+    "authorityViolations": 0,
+    "unknownSelections": 0
+  },
+  "metricColumns": [
+    "configurationId",
+    "minimumSimilarity",
+    "lexicalWeight",
+    "recallAtK",
+    "precisionAtK",
+    "meanReciprocalRank",
+    "abstentionAccuracy",
+    "falsePositiveSelections",
+    "explicitForbiddenSelections",
+    "crossLingualRecallAtK",
+    "semanticParaphraseRecallAtK",
+    "lexicalControlRecallAtK"
+  ],
+  "lexicalBaseline": {
+    "recallAtK": 0.821,
+    "precisionAtK": 0.293,
+    "meanReciprocalRank": 0.771,
+    "abstentionAccuracy": 0,
+    "falsePositiveSelections": 20,
+    "explicitForbiddenSelections": 4
+  },
+  "candidates": [
+    {
+      "id": "multilingual-e5-small-q8",
+      "modelId": "Xenova/multilingual-e5-small",
+      "revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+      "artifact": "onnx/model_quantized.onnx",
+      "artifactSha256": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193",
+      "modelBytes": 135392016,
+      "license": "MIT",
+      "queryPrefix": "query: ",
+      "documentPrefix": "passage: ",
+      "configurations": [
+        ["hybrid-0.76-1", 0.76, 1, 0.964, 0.237, 0.818, 0, 12, 6, 0.857, 1, 1],
+        ["hybrid-0.77-1", 0.77, 1, 0.929, 0.286, 0.806, 0.5, 6, 6, 0.714, 1, 1],
+        ["hybrid-0.78-1", 0.78, 1, 0.929, 0.312, 0.812, 0.75, 2, 4, 0.714, 1, 1],
+        ["hybrid-0.79-1", 0.79, 1, 0.929, 0.338, 0.812, 0.75, 1, 3, 0.714, 1, 1],
+        ["semantic-0.8", 0.8, 0, 0.893, 0.352, 0.725, 1, 0, 2, 0.714, 0.889, 1],
+        ["hybrid-0.8-1", 0.8, 1, 0.893, 0.352, 0.794, 1, 0, 3, 0.714, 0.889, 1],
+        ["hybrid-0.81-1", 0.81, 1, 0.821, 0.372, 0.705, 1, 0, 2, 0.714, 0.778, 1],
+        ["hybrid-0.82-1", 0.82, 1, 0.679, 0.382, 0.643, 1, 0, 0, 0.286, 0.667, 1]
+      ]
+    },
+    {
+      "id": "paraphrase-multilingual-minilm-l12-v2-q8",
+      "modelId": "onnx-community/paraphrase-multilingual-MiniLM-L12-v2-ONNX",
+      "revision": "d4c06bf0d7680171ac30042a1387e1fdb7a90021",
+      "artifact": "onnx/model_quantized.onnx",
+      "artifactSha256": "0029fce9c82365d8a2bf20e03a476e84785a872d8d423c8bac0fd0f350df88dc",
+      "modelBytes": 135134376,
+      "license": "Apache-2.0",
+      "queryPrefix": "",
+      "documentPrefix": "",
+      "configurations": [
+        ["hybrid-0.41-0.5", 0.41, 0.5, 0.893, 0.587, 0.833, 0.75, 1, 3, 0.857, 0.889, 1],
+        ["hybrid-0.43-0.5", 0.43, 0.5, 0.821, 0.54, 0.762, 0.75, 1, 2, 0.857, 0.778, 1],
+        ["hybrid-0.45-0.5", 0.45, 0.5, 0.786, 0.576, 0.744, 1, 0, 2, 0.857, 0.667, 1],
+        ["hybrid-0.47-0.5", 0.47, 0.5, 0.714, 0.534, 0.673, 1, 0, 2, 0.714, 0.556, 1],
+        ["hybrid-0.49-0.5", 0.49, 0.5, 0.714, 0.568, 0.673, 1, 0, 2, 0.714, 0.556, 1]
+      ]
+    }
+  ],
+  "developmentSelection": {
+    "candidateId": "multilingual-e5-small-q8",
+    "configurationId": "hybrid-0.8-1",
+    "rationale": "This is the only screened configuration with perfect development abstention that also improves Recall@5, Precision@5, and MRR over the lexical baseline while preserving every hard safety counter."
+  }
+}

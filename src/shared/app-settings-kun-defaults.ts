@@ -1,4 +1,8 @@
 import {
+  DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION,
+  ApprovalReviewModelSelectionSchema
+} from '../../kun/src/contracts/approval-review-config.js'
+import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_APPROVAL_POLICY,
   DEFAULT_DEEPSEEK_BASE_URL,
@@ -50,6 +54,7 @@ import {
   type KunRuntimeSettingsV1,
   type KunSettingsEnvelopePatchV1,
   type KunSettingsEnvelopeV1,
+  type KunSpeakSettingsV1,
   type KunSpeechToTextSettingsV1,
   type KunStorageSettingsV1,
   type KunToolOutputLimitsSettingsV1,
@@ -84,6 +89,11 @@ import {
   LOCAL_WHISPER_DEFAULT_DOWNLOAD_SOURCE_ID,
   isLocalWhisperDownloadSourceId
 } from './local-whisper'
+import {
+  LOCAL_KOKORO_DEFAULT_DOWNLOAD_SOURCE_ID,
+  LOCAL_KOKORO_DEFAULT_MODEL_ID
+} from './local-kokoro'
+import { LOCAL_KOKORO_DEFAULT_VOICE_ID } from './local-kokoro-voices'
 import {
   DEFAULT_GITHUB_MCP_HOST,
   normalizeGitHubMcpSettings
@@ -194,6 +204,7 @@ export function defaultKunRuntimeSettings(
     dataDir: DEFAULT_KUN_DATA_DIR,
     model: DEFAULT_KUN_MODEL,
     ...kunToolPermissionModeSettings('full-access'),
+    approvalReview: { ...DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION },
     tokenEconomyMode: false,
     tokenEconomy: defaultKunTokenEconomySettings(),
     toolOutputLimits: defaultKunToolOutputLimitsSettings(),
@@ -210,6 +221,7 @@ export function defaultKunRuntimeSettings(
     llmDebug: defaultKunLlmDebugSettings(),
     imageGeneration: defaultKunImageGenerationSettings(),
     speechToText: defaultKunSpeechToTextSettings(),
+    speak: defaultKunSpeakSettings(),
     textToSpeech: defaultKunTextToSpeechSettings(),
     promptOptimization: defaultKunPromptOptimizationSettings(),
     musicGeneration: defaultKunMusicGenerationSettings(),
@@ -246,6 +258,13 @@ export function legacyKunRuntimeSettingsDefaults(
 
 export function normalizeApprovalReviewer(value: unknown): ApprovalReviewer {
   return value === 'agent' ? 'agent' : DEFAULT_APPROVAL_REVIEWER
+}
+
+export function normalizeApprovalReviewSelection(
+  value: unknown
+): KunRuntimeSettingsV1['approvalReview'] {
+  if (value === undefined) return { ...DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION }
+  return ApprovalReviewModelSelectionSchema.parse(value)
 }
 
 export function defaultKunInstructionSettings(): KunInstructionSettingsV1 {
@@ -327,6 +346,18 @@ export function defaultKunSpeechToTextSettings(): KunSpeechToTextSettingsV1 {
     localWhisperDownloadSource: LOCAL_WHISPER_DEFAULT_DOWNLOAD_SOURCE_ID,
     language: '',
     timeoutMs: 60_000
+  }
+}
+
+export function defaultKunSpeakSettings(): KunSpeakSettingsV1 {
+  return {
+    enabled: true,
+    model: LOCAL_KOKORO_DEFAULT_MODEL_ID,
+    voice: LOCAL_KOKORO_DEFAULT_VOICE_ID,
+    speed: 1,
+    downloadSource: LOCAL_KOKORO_DEFAULT_DOWNLOAD_SOURCE_ID,
+    autoDownload: true,
+    keepTracks: false
   }
 }
 

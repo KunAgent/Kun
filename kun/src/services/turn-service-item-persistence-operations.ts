@@ -344,7 +344,9 @@ releaseRuntimeTurnExecution(this: TurnService,
       return
     }
     if (options.releaseLease !== false && this['leasedTurns'].delete(turnId)) {
-      void this['deps'].executionLeases?.release(threadId, turnId).catch(() => undefined)
+      void this['deps'].executionLeases?.release(threadId, turnId)
+        .then(() => this.notifyTurnSettled(threadId, 'completed'))
+        .catch(() => undefined)
     }
   },
 

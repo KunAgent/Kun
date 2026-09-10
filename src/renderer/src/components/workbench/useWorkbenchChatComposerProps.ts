@@ -1,18 +1,19 @@
-import { useMemo, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
 import {
   canGuideQueuedMessage,
   queuedMessageMatchesRunningTurn
 } from '../../store/queued-message-guidance'
 import { useChatStore } from '../../store/chat-store'
-import { canRestoreQueuedMessageToComposer, queuedMessageComposerRestoreText } from '../../store/queued-message-edit'
+import { assertQueueEditAccount } from '../../store/queue-edit-handoff'
+import { canRestoreQueuedMessageToComposer, queuedMessageEditBlockReason, queuedMessageComposerRestoreText } from '../../store/queued-message-edit'
 import type { WorkbenchChatStageProps } from './WorkbenchChatStage'
 
 type ComposerProps = WorkbenchChatStageProps['composerProps']
 
 type UseWorkbenchChatComposerPropsInput = {
   input: string
-  setInput: ComposerProps['setInput']
+  setInput: Dispatch<SetStateAction<string>>
   composerMode: ComposerProps['mode']
   autoPlanBuildEnabled: boolean
   setComposerMode: ComposerProps['setMode']
@@ -71,6 +72,7 @@ type UseWorkbenchChatComposerPropsInput = {
   disabledSkillIds: ComposerProps['disabledSkillIds']
   handlePickAttachments: NonNullable<ComposerProps['onPickAttachments']>
   handlePasteClipboardImage: NonNullable<ComposerProps['onPasteClipboardImage']>
+  handlePasteLongText: NonNullable<ComposerProps['onPasteLongText']>
   removeComposerAttachment: ComposerProps['onRemoveAttachment']
   addComposerFileReference: NonNullable<ComposerProps['onAddFileReference']>
   pickComposerFileReferences: () => void | Promise<unknown>
@@ -161,6 +163,7 @@ export function useWorkbenchChatComposerProps({
   disabledSkillIds,
   handlePickAttachments,
   handlePasteClipboardImage,
+  handlePasteLongText,
   removeComposerAttachment,
   addComposerFileReference,
   pickComposerFileReferences,
@@ -185,6 +188,11 @@ export function useWorkbenchChatComposerProps({
   openSideConversationDraft,
   startNewSddRequirement
 }: UseWorkbenchChatComposerPropsInput): ComposerProps {
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const runningTurnMeta = useChatStore((state) => {
     const runningUser = state.blocks.find((block) => block.kind === 'user' && (
       block.id === state.currentTurnUserId || block.turnId === state.currentTurnId
@@ -260,6 +268,7 @@ export function useWorkbenchChatComposerProps({
     disabledSkillIds,
     onPickAttachments: (files) => void handlePickAttachments(files),
     onPasteClipboardImage: (options) => void handlePasteClipboardImage(options),
+    onPasteLongText: (text) => void handlePasteLongText(text),
     onRemoveAttachment: removeComposerAttachment,
     onAddFileReference: addComposerFileReference,
     onPickFileReferences: () => void pickComposerFileReferences(),
@@ -269,6 +278,7 @@ export function useWorkbenchChatComposerProps({
     queuedMessages: queuedMessages.map((message) => ({
       id: message.id,
       text: message.text,
+      ...(message.steeringRequest ? { steeringRequest: message.steeringRequest } : {}),
       ...(message.deliveryState ? { deliveryState: message.deliveryState } : {}),
       ...(message.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
       ...(message.deliveryTurnId ? { deliveryTurnId: message.deliveryTurnId } : {}),
@@ -293,36 +303,47 @@ export function useWorkbenchChatComposerProps({
       ...(message.guiDesignMode ? { guiDesignMode: true } : {}),
       ...(message.guiDesignArtifact ? { guiDesignArtifact: message.guiDesignArtifact } : {}),
       ...(message.writeContext ? { writeContext: message.writeContext } : {}),
+      editIntent: message.editIntent,
+      composerRestoreBlockReason: queuedMessageEditBlockReason(message),
       composerRestoreEligible: canRestoreQueuedMessageToComposer(message),
       guidanceEligible: canGuideQueuedMessage(message) &&
         queuedMessageMatchesRunningTurn(message, runningTurnMeta)
     })),
     onRemoveQueuedMessage: removeQueuedMessage,
     onRestoreQueuedMessageToComposer: async (id) => {
-      const restored = await restoreQueuedMessage(id)
-      if (!restored) return false
-      const text = queuedMessageComposerRestoreText(restored)
-      setInput(text
-        ? (input.trim() ? `${input.replace(/\s+$/, '')}\n${text}` : text)
-        : input)
-      if (restored.attachments?.length) void restoreComposerAttachments(restored.attachments)
-      // Replay the frozen submission settings so a re-send reproduces the
-      // original turn instead of silently adopting current composer state.
-      if (restored.mode === 'agent' || restored.mode === 'auto' || restored.mode === 'plan') setComposerMode(restored.mode)
-      if (restored.model?.trim()) setComposerModel(restored.model.trim())
-      if (restored.reasoningEffort && setComposerReasoningEffort) {
-        setComposerReasoningEffort(
-          restored.reasoningEffort as Parameters<NonNullable<typeof setComposerReasoningEffort>>[0]
-        )
-      }
-      if (restored.approvalPolicy || restored.sandboxMode || restored.approvalReviewer) {
-        updateComposerExecutionSettings({
-          ...(restored.approvalPolicy ? { approvalPolicy: restored.approvalPolicy } : {}),
-          ...(restored.sandboxMode ? { sandboxMode: restored.sandboxMode } : {}),
-          ...(restored.approvalReviewer ? { approvalReviewer: restored.approvalReviewer } : {})
-        })
-      }
-      return true
+      const restored = await restoreQueuedMessage(id, async (message) => {
+        const inScope = (): boolean => {
+          const state = useChatStore.getState()
+          return mounted.current && state.activeThreadId === activeThreadId && state.route === route
+        }
+        if (!inScope()) return false
+        if (message.attachments?.length) await restoreComposerAttachments(message.attachments)
+        if (!inScope()) return false
+        assertQueueEditAccount(message, useChatStore.getState)
+        // Restore the frozen selection, not whichever provider is selected now.
+        if (message.mode === 'agent' || message.mode === 'auto' || message.mode === 'plan') setComposerMode(message.mode)
+        if (message.model?.trim()) setComposerModel(message.model.trim(), message.providerId)
+        setComposerFastMode(message.serviceTier === 'priority')
+        if (message.reasoningEffort && setComposerReasoningEffort) {
+          setComposerReasoningEffort(
+            message.reasoningEffort as Parameters<NonNullable<typeof setComposerReasoningEffort>>[0]
+          )
+        }
+        if (message.approvalPolicy || message.sandboxMode || message.approvalReviewer) {
+          await updateComposerExecutionSettings({
+            ...(message.approvalPolicy ? { approvalPolicy: message.approvalPolicy } : {}),
+            ...(message.sandboxMode ? { sandboxMode: message.sandboxMode } : {}),
+            ...(message.approvalReviewer ? { approvalReviewer: message.approvalReviewer } : {})
+          })
+        }
+        if (!inScope()) return false
+        assertQueueEditAccount(message, useChatStore.getState)
+        const text = queuedMessageComposerRestoreText(message)
+        setInput((current) => !text || current === text || current.endsWith(`\n${text}`)
+          ? current : current.trim() ? `${current.replace(/\s+$/, '')}\n${text}` : text)
+        return true
+      })
+      return Boolean(restored)
     },
     onGuideQueuedMessage: guideQueuedMessage,
     onInterrupt: (options) => void interrupt(options),
@@ -406,6 +427,7 @@ export function useWorkbenchChatComposerProps({
     disabledSkillIds,
     handleGuiPlanCommand,
     handlePasteClipboardImage,
+    handlePasteLongText,
     handlePickAttachments,
     handleSend,
     guideQueuedMessage,

@@ -1,3 +1,5 @@
+import { beginQueueAdmission } from './queue-admission-fence'
+import { confirmQueueAdmission } from './queue-admission-recovery'
 import type { AgentProvider } from '../agent/types'
 import type { AttachmentReference } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet, QueuedUserMessage, SendMessageOverrides } from './chat-store-types'
@@ -19,6 +21,8 @@ import {
   turnAdmissionOutcomeMayBeUnknown,
   withoutConsumedComposerContexts
 } from './chat-store-thread-actions-support'
+import { queuedMessagesForThread, saveQueuedMessagesForThread } from './queued-message-persistence'
+import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 
 export type RuntimeQueueSendInput = {
@@ -67,11 +71,23 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     composerAccountId, userModelChip, displayText, reasoningEffort, serviceTier,
     subagentResume, messageSource, persona, designProfile, designDocumentTarget,
     designImagePlacementTarget, attachmentIds, attachments, fileReferences, composerContexts,
-    queued, overrides, set, get
+    queued, overrides, set: setStore, get
   } = input
+  const initialState = { ...get() }
+  const set: ChatStoreSet = (partial) => {
+    if (get().activeThreadId === activeThreadId) {
+      setStore(partial)
+      return
+    }
+    const parked = { ...initialState, queuedMessages: queuedMessagesForThread(activeThreadId) }
+    const patch = typeof partial === 'function' ? partial(parked) : partial
+    if (patch.queuedMessages) saveQueuedMessagesForThread(activeThreadId, patch.queuedMessages)
+    invalidateThreadSnapshot(activeThreadId)
+  }
   const queuedId = queued?.id ?? `q-${clientRequestId}`
+  const finishAdmission = beginQueueAdmission(queuedId)
   try {
-    const channel = get().route === 'claw' ? activeClawChannel(get()) : null
+    const channel = initialState.route === 'claw' ? activeClawChannel(initialState) : null
     await ensureRuntimeProviderForSend({
       providerId: channel ? undefined : composerProviderId,
       model: composerModel
@@ -86,18 +102,21 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     })
     const checkpointRequestId = startWorkspaceCheckpointSnapshot({
       settings,
-      threads: get().threads,
+      threads: initialState.threads,
       activeThreadId,
       fallbackWorkspaceRoot: settings.workspaceRoot
     })
     const sendOptions = {
       clientRequestId,
+      ...((queued?.approvalPolicy ?? overrides?.approvalPolicy) ? { approvalPolicy: queued?.approvalPolicy ?? overrides?.approvalPolicy } : {}),
+      ...((queued?.sandboxMode ?? overrides?.sandboxMode) ? { sandboxMode: queued?.sandboxMode ?? overrides?.sandboxMode } : {}),
+      ...((queued?.approvalReviewer ?? overrides?.approvalReviewer) ? { approvalReviewer: queued?.approvalReviewer ?? overrides?.approvalReviewer } : {}),
       ...(mode ? { mode } : {}),
       orchestration,
       agentSurface: requestedAgentSurface ??
-        (writeContext || get().route === 'write'
+        (writeContext || initialState.route === 'write'
           ? 'write' as const
-          : queued?.guiDesignMode || get().route === 'design' ? 'design' as const : 'code' as const),
+          : queued?.guiDesignMode || initialState.route === 'design' ? 'design' as const : 'code' as const),
       ...(composerModel ? { model: composerModel } : {}),
       ...(!channel && composerProviderId ? { providerId: composerProviderId } : {}),
       ...(!channel && composerAccountId ? { accountId: composerAccountId } : {}),
@@ -120,9 +139,11 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(fileReferences?.length ? { fileReferences } : {}),
       ...(composerContexts.length ? { composerContexts } : {})
     }
-    let accepted: Awaited<ReturnType<typeof p.sendUserMessage>>
     const queuedRow = pendingQueuedMessage({
       ...queued,
+      ...(sendOptions.approvalPolicy ? { approvalPolicy: sendOptions.approvalPolicy } : {}),
+      ...(sendOptions.sandboxMode ? { sandboxMode: sendOptions.sandboxMode } : {}),
+      ...(sendOptions.approvalReviewer ? { approvalReviewer: sendOptions.approvalReviewer } : {}),
       id: queuedId,
       text: trimmedText,
       clientRequestId,
@@ -138,6 +159,14 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(displayText ? { displayText } : {}),
       ...(mode ? { mode } : {}),
       orchestration,
+      agentSurface: sendOptions.agentSurface,
+      ...(composerProviderId ? { providerId: composerProviderId } : {}),
+      ...(composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+      ...(serviceTier ? { serviceTier } : {}),
+      ...(subagentResume ? { subagentResume } : {}),
+      ...(messageSource ? { messageSource } : {}),
+      ...(persona ? { persona } : {}),
       ...(composerModel ? { model: composerModel } : {}),
       ...(userModelChip ? { modelLabel: userModelChip } : {})
     })
@@ -161,20 +190,15 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         error: null
       }
     })
-    input.persistActiveQueuedMessages()
+    if (get().activeThreadId === activeThreadId) input.persistActiveQueuedMessages()
 
-    try {
-      accepted = await p.sendUserMessage(activeThreadId, runtimeText, {
+    const accepted = await confirmQueueAdmission({
+      provider: p, threadId: activeThreadId, clientRequestId,
+      send: () => p.sendUserMessage(activeThreadId, runtimeText, {
         ...sendOptions,
         enqueueIfBusy: true
       })
-    } catch (busyError) {
-      const busyCode = getRuntimeErrorCode(busyError)
-      if (busyCode !== 'thread_busy' && busyCode !== 'turn_in_progress') throw busyError
-      // The turn settled between the busy check and admission; submit as a
-      // regular turn instead of queueing behind nothing.
-      accepted = await p.sendUserMessage(activeThreadId, runtimeText, sendOptions)
-    }
+    })
     // Update the already-persisted starting row to in_flight with the
     // runtime-admitted turn identity.
     set((s) => {
@@ -188,7 +212,11 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         deliveryTurnId: accepted.turnId,
         deliveryUserMessageItemId: accepted.userMessageItemId ?? queuedRow.id
       }
-      const queuedMessages = existingIndex < 0
+      const queuedMessages = accepted.retired || (accepted.status !== 'queued' &&
+        (s.currentTurnId === accepted.turnId ||
+        s.blocks.some((block) => block.kind === 'user' && block.id === accepted.userMessageItemId)))
+        ? s.queuedMessages.filter((row) => row.id !== queuedRow.id)
+        : existingIndex < 0
         ? [...s.queuedMessages, admittedRow]
         : s.queuedMessages.map((message, index) => index === existingIndex
             ? { ...message, ...admittedRow, id: message.id }
@@ -199,7 +227,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         error: null
       }
     })
-    input.persistActiveQueuedMessages()
+    if (get().activeThreadId === activeThreadId) input.persistActiveQueuedMessages()
     if (accepted.userMessageItemId && userModelChip) {
       rememberTurnModel(activeThreadId, accepted.userMessageItemId, userModelChip)
     }
@@ -215,25 +243,20 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
         })
       }
     }
+    if (accepted.status !== 'queued' && get().activeThreadId === activeThreadId) {
+      await get().recoverActiveTurn?.({ forceTimeline: true })
+    }
     return true
   } catch (error) {
-    // Unknown outcome means the runtime may have admitted the queued turn
-    // already; the idempotent clientRequestId makes the local retry below
-    // safe, so only bail out on errors that cannot have created server state.
-    if (!turnAdmissionOutcomeMayBeUnknown(error)) {
-      const view = describeRuntimeError(error)
-      // A deterministic rejection never created server state; drop the
-      // starting row persisted before admission and surface the error.
-      set((s) => ({
-        queuedMessages: s.queuedMessages.filter((message) =>
-          message.id !== queuedId &&
-          !(clientRequestId && message.clientRequestId === clientRequestId)
-        ),
-        error: view.message
-      }))
-      input.persistActiveQueuedMessages()
-      return false
-    }
-    return null
-  }
+    const view = describeRuntimeError(error)
+    // Do not fall back to a normal send or use another active turn as an
+    // acknowledgement. Retain the exact request for an explicit retry.
+    set((s) => ({
+      queuedMessages: s.queuedMessages.map((row) => row.id === queuedId || row.clientRequestId === clientRequestId
+        ? { ...row, deliveryState: 'failed' as const, errorCode: view.code, errorMessage: view.message } : row),
+      error: view.message
+    }))
+    if (get().activeThreadId === activeThreadId) input.persistActiveQueuedMessages()
+    return false
+  } finally { finishAdmission() }
 }

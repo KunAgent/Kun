@@ -120,7 +120,7 @@ export function InitialSessionUsageHeatmap({
   const [rangeKey, setRangeKey] = useState<UsageRangeKey>('all')
   const [modelUsageEnabled, setModelUsageEnabled] = useState(false)
   const state = useDailyUsageState(true, refreshKey, USAGE_RANGE_DAYS.all)
-  const modelState = useModelUsageState(modelUsageEnabled, `${refreshKey}:${rangeKey}`, USAGE_RANGE_DAYS[rangeKey])
+  const modelState = useModelUsageState(modelUsageEnabled, `${refreshKey}:${rangeKey}`, USAGE_RANGE_DAYS[rangeKey], 'all')
 
   return (
     <InitialSessionUsageHeatmapView

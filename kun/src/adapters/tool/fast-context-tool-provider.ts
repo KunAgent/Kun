@@ -162,6 +162,7 @@ type FastContextOutput = {
   model?: string
   error?: string
   failure?: { source: 'model' | 'runtime' | 'contract'; code?: string; category?: string }
+  providerFallback?: Awaited<ReturnType<DelegationRuntime['runChild']>>['providerFallback']
   queuedMs?: number
   toolInvocations?: number
   attemptStartedAt?: string
@@ -231,6 +232,7 @@ class FastContextRunState {
       model: this.model,
       error: this.error,
       failure: record?.failure,
+      providerFallback: record?.providerFallback,
       queuedMs: record?.queuedMs,
       toolInvocations: record?.toolInvocations,
       attemptStartedAt: record?.startedAt,

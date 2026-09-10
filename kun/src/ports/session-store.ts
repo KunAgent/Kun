@@ -2,6 +2,7 @@ import type { AgentSession } from '../domain/session.js'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
+import type { ThreadRelation } from '../contracts/threads.js'
 import type {
   SessionUsageAggregateQuery,
   SessionUsageAggregateResponse
@@ -20,6 +21,7 @@ export type SessionUsageRecord = {
   turnId?: string
   model?: string
   providerId?: string
+  relation?: ThreadRelation
   completedAt: string
   usage: UsageSnapshot
   /** Worker-only marker: `usage` is cumulative and must be diffed in SQLite. */

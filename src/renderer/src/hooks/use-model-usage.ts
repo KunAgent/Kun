@@ -12,8 +12,11 @@ export type ModelUsageBucket = Omit<DailyUsageBucket, 'date'> & {
   model: string
 }
 
+export type ModelUsageScope = 'all' | 'primary' | 'side'
+
 export type ModelUsageSummary = {
   groupBy: 'model'
+  scope: ModelUsageScope
   from: string
   to: string
   timezone: string
@@ -63,6 +66,7 @@ type RawModelUsageDayBucket = RawUsageCounters & {
 
 type RawModelUsageResponse = {
   group_by?: unknown
+  scope?: unknown
   from?: unknown
   to?: unknown
   timezone?: unknown
@@ -134,13 +138,18 @@ function normalizeTotals(raw: RawUsageCounters & { days?: unknown; active_days?:
   }
 }
 
-export function buildModelUsagePath(range: DailyUsageRange): string {
+export function buildModelUsagePath(range: DailyUsageRange, scope: ModelUsageScope = 'primary'): string {
   const params = new URLSearchParams()
   params.set('group_by', 'model')
+  params.set('scope', scope)
   params.set('from', range.from)
   params.set('to', range.to)
   params.set('timezone', range.timezone)
   return `/v1/usage?${params.toString()}`
+}
+
+function normalizeScope(raw: unknown): ModelUsageScope {
+  return raw === 'all' || raw === 'primary' || raw === 'side' ? raw : 'all'
 }
 
 export function normalizeModelUsageResponse(raw: RawModelUsageResponse): ModelUsageSummary {
@@ -154,6 +163,7 @@ export function normalizeModelUsageResponse(raw: RawModelUsageResponse): ModelUs
     : []
   return {
     groupBy: 'model',
+    scope: normalizeScope(raw.scope),
     from: typeof raw.from === 'string' ? raw.from : days[0]?.date ?? '',
     to: typeof raw.to === 'string' ? raw.to : days[days.length - 1]?.date ?? '',
     timezone: typeof raw.timezone === 'string' && raw.timezone.trim() ? raw.timezone : '',
@@ -165,10 +175,11 @@ export function normalizeModelUsageResponse(raw: RawModelUsageResponse): ModelUs
 
 export async function loadModelUsage(
   range: DailyUsageRange,
+  scope: ModelUsageScope,
   generation?: string | number
 ): Promise<ModelUsageSummary | null> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return null
-  const response = await requestUsage(buildModelUsagePath(range), 'model usage', generation)
+  const response = await requestUsage(buildModelUsagePath(range, scope), 'model usage', generation)
   if (!response.ok || !response.body.trim()) {
     throw usageRequestError('model usage', response.status, response.body)
   }
@@ -179,7 +190,12 @@ export async function loadModelUsage(
   return normalizeModelUsageResponse(parsed)
 }
 
-export function useModelUsageState(enabled: boolean, refreshKey: unknown, days: number): ModelUsageState {
+export function useModelUsageState(
+  enabled: boolean,
+  refreshKey: unknown,
+  days: number,
+  scope: ModelUsageScope
+): ModelUsageState {
   const [state, setState] = useState<ModelUsageState>({
     usage: null,
     loading: false,
@@ -198,7 +214,7 @@ export function useModelUsageState(enabled: boolean, refreshKey: unknown, days: 
     const explicitRefresh = previousRefreshKey.current !== refreshKey
     previousRefreshKey.current = refreshKey
     const range = defaultDailyUsageRange(new Date(), days)
-    const path = buildModelUsagePath(range)
+    const path = buildModelUsagePath(range, scope)
     const cached = readUsageSummaryCache<ModelUsageSummary>(path)
     if (cached) {
       setState({
@@ -213,7 +229,7 @@ export function useModelUsageState(enabled: boolean, refreshKey: unknown, days: 
     } else {
       setState((current) => ({ ...current, loading: true, error: null }))
     }
-    void loadModelUsage(range, String(refreshKey))
+    void loadModelUsage(range, scope, String(refreshKey))
       .then((usage) => {
         if (cancelled) return
         if (!usage) {
@@ -245,7 +261,7 @@ export function useModelUsageState(enabled: boolean, refreshKey: unknown, days: 
     return () => {
       cancelled = true
     }
-  }, [days, enabled, refreshKey])
+  }, [days, enabled, refreshKey, scope])
 
   return state
 }

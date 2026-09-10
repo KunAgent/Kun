@@ -74,6 +74,7 @@ describe('queued-message-edit', () => {
   })
 
   it.each([
+    ['account snapshot', { providerId: 'zhipu', model: 'glm-5.3', accountId: 'account:zhipu' }],
     ['plan mode', { mode: 'plan' }],
     ['auto mode', { mode: 'auto' }],
     ['in-flight delivery', {
@@ -102,6 +103,10 @@ describe('queued-message-edit', () => {
   })
 
   it.each([
+    ['persona snapshot', { persona: 'custom instructions' }],
+    ['graph orchestration', { orchestration: 'graph' }],
+    ['reserved plan', { guiPlan: { planId: 'plan', relativePath: 'plan.md', workspaceRoot: '/workspace', operation: 'refine' } }],
+    ['unresolved attachment', { attachmentIds: ['missing-reference'] }],
     ['file references', { fileReferences: [{ path: '/workspace/file.ts' }] }],
     ['document attachments', {
       attachments: [{ id: 'doc-1', kind: 'document', name: 'spec.pdf' }]

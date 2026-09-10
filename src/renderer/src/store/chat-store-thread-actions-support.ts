@@ -366,7 +366,8 @@ export function turnAdmissionOutcomeMayBeUnknown(error: unknown): boolean {
     // Deterministic client rejections have a known outcome: retrying the
     // identical request cannot succeed. Fail them once instead of recovering.
     if (isDeterministicKunRejection(code)) return false
-    return code === 'unknown' || code === 'runtime_offline' || code === 'internal_error'
+    return code === 'unknown' || code === 'runtime_offline' || code === 'internal_error' ||
+      code === 'queue_admission_uncertain' || code === 'fetch_failed' || code === 'service_manager_unavailable'
   }
   const message = error instanceof Error ? error.message : String(error ?? '')
   // A renderer-side 4xx response is a definitive rejection, even when a

@@ -1,8 +1,12 @@
+import { stat } from 'node:fs/promises'
+import { ServiceManagerUnavailableError, type ManagerFailureKind } from './manager-resolution-error.js'
 import { z } from 'zod'
 import {
   KUN_MANAGER_PROTOCOL_VERSION,
   defaultKunControlDir,
   readManagerDiscovery,
+  readManagerHandoffDiscoveryStrict,
+  managerDiscoveryPath,
   type ManagerDiscoveryRecord
 } from './manager-discovery.js'
 import { KUN_MANAGER_CAPABILITIES } from './service-manager.js'
@@ -33,12 +37,8 @@ export async function resolveServiceManager(
   controlDir = defaultKunControlDir(),
   fetchImpl: typeof fetch = fetch
 ): Promise<{ discovery: ManagerDiscoveryRecord } | null> {
-  const candidate = await probeManagerHealth(controlDir, fetchImpl)
-  if (!candidate) return null
-  if (!KUN_MANAGER_CAPABILITIES.every((capability) =>
-    candidate.health.capabilities.includes(capability)
-  )) return null
-  return { discovery: candidate.discovery }
+  const result = await inspectServiceManager(controlDir, fetchImpl)
+  return result.state === 'ready' ? { discovery: result.discovery } : null
 }
 
 /**
@@ -81,24 +81,96 @@ export async function resolveServiceManagerForMigration(
     await resolveServiceManagerForHandoff(controlDir, fetchImpl)
 }
 
+export type ManagerInspection =
+  | { state: 'ready'; discovery: ManagerDiscoveryRecord; health: ManagerIdentity }
+  | { state: 'missing' | 'dead' }
+  | { state: 'unavailable'; error: ServiceManagerUnavailableError }
+
+/** Startup callers may retry transport failures, sharing one bounded deadline. */
+export async function inspectServiceManager(
+  controlDir = defaultKunControlDir(),
+  fetchImpl: typeof fetch = fetch,
+  options: { attempts?: number; deadline?: number } = {}
+): Promise<ManagerInspection> {
+  const deadline = options.deadline ?? Date.now() + 2_000
+  const attempts = Math.min(3, Math.max(1, options.attempts ?? 1))
+  let result: ManagerInspection = { state: 'missing' }
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    result = await inspectManagerOnce(controlDir, fetchImpl, deadline)
+    if (result.state === 'ready') {
+      const { discovery, health } = result
+      if (!KUN_MANAGER_CAPABILITIES.every((capability) => health.capabilities.includes(capability))) {
+        return { state: 'unavailable', error: new ServiceManagerUnavailableError(
+          'capability_incompatible', discovery.pid, discovery.instanceId
+        ) }
+      }
+    }
+    if (result.state !== 'unavailable' || !result.error.kind.startsWith('transport_')) break
+    if (Date.now() >= deadline || attempt + 1 === attempts) break
+    await new Promise((resolve) => setTimeout(resolve, Math.min(100, deadline - Date.now())))
+  }
+  return result
+}
+
+async function inspectManagerOnce(
+  controlDir: string, fetchImpl: typeof fetch, deadline: number
+): Promise<ManagerInspection> {
+  let discovery: ManagerDiscoveryRecord | null
+  const unavailable = (kind: ManagerFailureKind, pid?: number, instanceId?: string): ManagerInspection => ({
+    state: 'unavailable', error: new ServiceManagerUnavailableError(kind, pid, instanceId)
+  })
+  try {
+    discovery = await readManagerDiscovery(controlDir)
+    if (!discovery) {
+      const legacy = await readManagerHandoffDiscoveryStrict(controlDir)
+      if (legacy) {
+        if (!processIsAlive(legacy.pid)) return { state: 'dead' }
+        return unavailable('protocol_incompatible', legacy.pid, legacy.instanceId)
+      }
+      return { state: 'missing' }
+    }
+  } catch (readError) {
+    const code = (readError as NodeJS.ErrnoException)?.code
+    if (code === 'EACCES' || code === 'EPERM' || code === 'EIO') return unavailable('discovery_unreadable')
+    try { await stat(managerDiscoveryPath(controlDir)) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: 'missing' }
+      return unavailable('discovery_unreadable')
+    }
+    return unavailable('discovery_invalid')
+  }
+  const fail = (kind: ManagerFailureKind) => unavailable(kind, discovery.pid, discovery.instanceId)
+  if (!safeManagerUrl(discovery)) return fail('discovery_invalid')
+  if (!processIsAlive(discovery.pid)) return { state: 'dead' }
+  if (Date.now() >= deadline) return fail('transport_timeout')
+  let response: Response
+  let body: unknown
+  try {
+    response = await fetchImpl(`${discovery.baseUrl}/health`, {
+      signal: AbortSignal.timeout(Math.max(1, Math.min(2_000, deadline - Date.now())))
+    })
+    if (!response.ok) return fail('http_failure')
+    body = await response.json()
+  } catch (error) {
+    if (error instanceof SyntaxError) return fail('health_invalid')
+    const detail = error as { name?: string; code?: string; cause?: { code?: string } }
+    const code = detail?.cause?.code ?? detail?.code
+    return fail(detail?.name === 'TimeoutError' || detail?.name === 'AbortError'
+      ? 'transport_timeout' : code === 'ECONNREFUSED' ? 'transport_refused' : 'transport_failure')
+  }
+  if (body && typeof body === 'object' && 'protocolVersion' in body &&
+    body.protocolVersion !== KUN_MANAGER_PROTOCOL_VERSION) return fail('protocol_incompatible')
+  const parsed = ManagerHealthSchema.safeParse(body)
+  if (!parsed.success) return fail('health_invalid')
+  if (!managerIdentityMatchesDiscovery(parsed.data, discovery)) return fail('identity_mismatch')
+  return { state: 'ready', discovery, health: parsed.data }
+}
+
 async function probeManagerHealth(
   controlDir: string,
   fetchImpl: typeof fetch
 ): Promise<{ discovery: ManagerDiscoveryRecord; health: ManagerIdentity } | null> {
-  const discovery = await readManagerDiscovery(controlDir).catch(() => null)
-  if (!discovery || !safeManagerUrl(discovery) || !processIsAlive(discovery.pid)) return null
-  try {
-    const response = await fetchImpl(`${discovery.baseUrl}/health`, {
-      signal: AbortSignal.timeout(2_000)
-    })
-    if (!response.ok) return null
-    const health = ManagerHealthSchema.parse(await response.json())
-    return managerIdentityMatchesDiscovery(health, discovery)
-      ? { discovery, health }
-      : null
-  } catch {
-    return null
-  }
+  const result = await inspectManagerOnce(controlDir, fetchImpl, Date.now() + 2_000)
+  return result.state === 'ready' ? result : null
 }
 
 function managerIdentityMatchesDiscovery(

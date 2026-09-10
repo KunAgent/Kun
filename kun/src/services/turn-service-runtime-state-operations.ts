@@ -1,3 +1,4 @@
+import { flushDurableSteering } from './durable-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -63,6 +64,8 @@ import {
   buildInterruptionNoteText
 } from '../loop/continuation-instructions.js'
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
+
+import { reconcilePendingQueueAdmission } from './queue-admission.js'
 
 export const turnServiceRuntimeStateOperations = {
 withTurnMutationFence<T>(this: TurnService,
@@ -130,7 +133,8 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
         this['deps'].threadStore.getMetadata?.(summary.id) ??
         this['deps'].threadStore.get(summary.id)
       ).catch(() => null)
-      if (!metadata?.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')) {
+      if (!metadata?.turns.some((turn) => turn.status === 'running' || turn.status === 'queued' ||
+        turn.steeringDeliveries?.some((entry) => !entry.delivered))) {
         continue
       }
       if (this['deps'].executionLeases) {
@@ -157,6 +161,11 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
       }
       const thread = await this['deps'].threadStore.get(summary.id).catch(() => null)
       if (!thread) continue
+      for (const turn of thread.turns) {
+        if (turn.steeringDeliveries?.some((entry) => !entry.delivered)) {
+          await flushDurableSteering(this, summary.id, turn.id)
+        }
+      }
       // Load once per thread: the interrupted turn's checkpoint is derived
       // from its persisted items (intent, progress, completed tool work).
       const sessionItems = await this['deps'].sessionStore.loadItems(summary.id).catch(() => [])
@@ -174,17 +183,7 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
           // (the commit boundary) or the commit marker is missing. If the
           // user item exists, finish the admission commit; otherwise roll
           // back so a retry with the same clientRequestId re-enqueues cleanly.
-          const hasUserItem = sessionItems.some((item) =>
-            item.turnId === turn.id && item.kind === 'user_message'
-          )
-          if (hasUserItem) {
-            await this['markTurnAdmissionCompleted'](thread.id, turn.id, {}).catch(() => undefined)
-          } else {
-            const rolledBack = await this['rollbackPendingAdmission'](thread.id, turn.id).catch(() => false)
-            if (!rolledBack) {
-              await this.interruptTurn({ threadId: thread.id, turnId: turn.id }).catch(() => undefined)
-            }
-          }
+          await reconcilePendingQueueAdmission(this, thread.id, turn.id).catch(() => undefined)
           continue
         }
         if (

@@ -15,6 +15,7 @@ import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettings
 import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-settings-service'
 import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
+import { SpeakDownloadToast } from './components/SpeakDownloadToast'
 import {
   clearCurrentlyVisibleUnreadCompletions,
   persistUnreadCompletions,
@@ -160,6 +161,7 @@ export default function AppShell(): React.ReactElement {
             ) : <WorkbenchView />}
           </Suspense>
         </div>
+        <SpeakDownloadToast />
         <ExtensionWorkbenchLifecycle />
         {initialSetupOpen ? (
           <ProtectedRendererSurface

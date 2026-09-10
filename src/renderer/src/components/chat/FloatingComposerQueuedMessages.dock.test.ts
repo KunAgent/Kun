@@ -2,6 +2,8 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { canRestoreQueuedMessageToComposer } from '../../store/queued-message-edit'
+import type { QueuedUserMessage } from '../../store/chat-store-types'
 import {
   FloatingComposerQueuedMessages,
   type QueuedComposerMessage
@@ -91,6 +93,19 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
       root.render(createElement(FloatingComposerQueuedMessages, props))
     })
   }
+
+  it('enables and clicks edit for an ordinary account-backed queue row', async () => {
+    const queued: QueuedUserMessage = {
+      id: 'account-row', text: '你是谁', deliveryState: 'in_flight',
+      deliveryTurnId: 'turn-b', providerId: 'zhipu', model: 'glm-5.3', accountId: 'account:zhipu'
+    }
+    const restore = vi.fn(async () => true)
+    await render({ messages: [{ ...queued, composerRestoreEligible: canRestoreQueuedMessageToComposer(queued) }],
+      onRestoreToComposer: restore })
+    expect(action('edit').disabled).toBe(false)
+    await act(async () => { action('edit').click() })
+    expect(restore).toHaveBeenCalledWith('account-row')
+  })
 
   const action = (kind: string, row?: Element): HTMLButtonElement => {
     const scope = row ?? container
@@ -476,7 +491,7 @@ describe('FloatingComposerQueuedMessages DSH queue dock interactions', () => {
       'guide',
       container.querySelector('[data-queued-message-id="q-admission"]')!
     ).disabled).toBe(true)
-    expect(container.querySelector('[data-queued-message-id="q-starting"]')).toBeNull()
+    expect(container.querySelector('[data-queued-message-id="q-starting"]')).not.toBeNull()
     // An in-flight row is admitted to the runtime queue but still managed
     // here: visible with a queued chip so the user can edit or remove it.
     const flight = container.querySelector('[data-queued-message-id="q-flight"]')!

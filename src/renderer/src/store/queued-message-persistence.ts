@@ -1,4 +1,5 @@
 import { browserStorage, type BrowserStorageLike } from '../lib/browser-storage'
+import { queueAdmissionPending } from './queue-admission-fence'
 import type { ChatBlock } from '../agent/types'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
 import type { QueuedUserMessage } from './chat-store-types'
@@ -131,6 +132,10 @@ function normalizeQueuedMessage(value: unknown): QueuedUserMessage | null {
   } else {
     delete normalized.deliveryUserMessageItemId
   }
+  if (source.editIntent === 'cancelling' || source.editIntent === 'restoring') {
+    normalized.editIntent = source.editIntent
+    normalized.deliveryState = 'paused'
+  } else delete normalized.editIntent
   if (source.serviceTier === 'priority') normalized.serviceTier = 'priority'
   else delete normalized.serviceTier
   if (source.messageSource === 'design_continuation') {
@@ -299,7 +304,7 @@ export function forgetQueuedMessagesForThread(
 }
 
 export function isPendingQueuedMessage(message: QueuedUserMessage): boolean {
-  return !message.deliveryState || message.deliveryState === 'pending'
+  return !message.editIntent && (!message.deliveryState || message.deliveryState === 'pending')
 }
 
 /**
@@ -350,6 +355,7 @@ export function queuedMessageStartedByRuntime(
   message: QueuedUserMessage,
   runtime: { turnId?: string | null; userMessageItemIds?: ReadonlySet<string> }
 ): boolean {
+  if (message.steeringRequest) return false
   const state = message.deliveryState
   if (state !== 'starting' && state !== 'in_flight') return false
   const liveTurnId = normalizedString(runtime.turnId)
@@ -399,6 +405,7 @@ export function reconcileQueuedMessages(
   const queuedTurnByClientRequestId = new Map<string, string>()
   const queuedTurnIds = new Set<string>()
   for (const turn of runtimeQueuedTurns ?? []) {
+    if (turn.status && turn.status !== 'queued') continue
     queuedTurnIds.add(turn.turnId)
     const requestId = normalizedString(turn.clientRequestId)
     if (requestId) queuedTurnByClientRequestId.set(requestId, turn.turnId)
@@ -406,15 +413,26 @@ export function reconcileQueuedMessages(
   const reconciled: QueuedUserMessage[] = []
   for (const message of messages) {
     const state = message.deliveryState ?? 'pending'
-    // A runtime-started item no longer waits in the local queue: its user
-    // message is already rendered in the timeline, so keeping it would show a
-    // duplicate and expose edit/remove on an in-flight turn.
-    if (queuedMessageStartedByRuntime(message, {
-      turnId: activeTurnId || null,
-      userMessageItemIds: liveUserItemIds
-    })) {
+    if (message.steeringRequest) { reconciled.push(message); continue }
+    const receipt = runtimeQueuedTurns?.find((turn) =>
+      turn.turnId === message.deliveryTurnId || Boolean(message.clientRequestId && turn.clientRequestId === message.clientRequestId))
+    if (message.editIntent) {
+      if (receipt?.status === 'running' || receipt?.status === 'completed' ||
+        (receipt?.status === 'aborted' && receipt.terminalCode !== 'queue_cancelled')) continue
+      reconciled.push({ ...message, deliveryState: 'paused',
+        ...(receipt?.terminalCode === 'queue_cancelled' ? { editIntent: 'restoring' as const } : {}) })
       continue
     }
+    if (receipt?.status === 'admission_pending') {
+      reconciled.push({ ...message, deliveryState: 'starting', deliveryTurnId: receipt.turnId })
+      continue
+    }
+    if (receipt?.status === 'failed') {
+      reconciled.push({ ...message, deliveryState: 'failed', deliveryTurnId: receipt.turnId,
+        errorCode: receipt.terminalCode ?? 'queued_turn_failed' })
+      continue
+    }
+    if (receipt?.status === 'running' || receipt?.status === 'completed' || receipt?.status === 'aborted') continue
     // A terminal failure stays failed across reconciliation; only an explicit
     // user retry or removal moves it.
     if (state === 'failed') {
@@ -424,23 +442,40 @@ export function reconcileQueuedMessages(
       })
       continue
     }
-    // Runtime-queue ownership is authoritative: when the runtime still holds a
-    // queued turn for this row's idempotency key (or its admitted turn id), keep
-    // it in_flight with the server turn identity so cancel/reorder keeps working
-    // even when the local busy projection is stale after a crash. Paused rows
-    // keep their explicit interrupt state and are intentionally not matched.
+    if (state === 'starting' && message.clientRequestId && !message.deliveryTurnId &&
+      !queuedTurnByClientRequestId.has(message.clientRequestId) && runtime.busy) {
+      reconciled.push(message)
+      continue
+    }
+    // Admission persists user items before execution. The authoritative queue
+    // wins over stale active-turn ids and timeline item presence. Preserve
+    // explicit interrupt state while retaining the server-side identity.
     const rowClientRequestId = normalizedString(message.clientRequestId)
     const runtimeTurnId =
       (rowClientRequestId && queuedTurnByClientRequestId.get(rowClientRequestId)) ||
       (message.deliveryTurnId && queuedTurnIds.has(message.deliveryTurnId)
         ? message.deliveryTurnId
         : undefined)
-    if (state !== 'paused' && runtimeTurnId) {
+    if (runtimeTurnId) {
       reconciled.push({
         ...message,
-        deliveryState: 'in_flight',
+        deliveryState: state === 'paused' ? 'paused' : 'in_flight',
         deliveryTurnId: runtimeTurnId
       })
+      continue
+    }
+    if (queuedMessageStartedByRuntime(message, {
+      turnId: activeTurnId || null,
+      userMessageItemIds: liveUserItemIds
+    })) {
+      continue
+    }
+    if (runtimeQueuedTurns !== undefined && !receipt && message.clientRequestId &&
+      state === 'in_flight' && !queueAdmissionPending(message.id)) {
+      const pending = { ...message, deliveryState: 'pending' as const }
+      delete pending.deliveryTurnId
+      delete pending.deliveryUserMessageItemId
+      reconciled.push(pending)
       continue
     }
     if (state === 'pending' || state === 'paused') {
@@ -529,6 +564,14 @@ export function reconcileQueuedMessages(
         : {})
     })
   }
+  if (runtimeQueuedTurns) {
+    const position = new Map(runtimeQueuedTurns.filter((turn) => !turn.status || turn.status === 'queued')
+      .map((turn, index) => [turn.turnId, turn.position ?? index]))
+    const owned = reconciled.filter((row) => row.deliveryTurnId && position.has(row.deliveryTurnId))
+      .sort((a, b) => position.get(a.deliveryTurnId!)! - position.get(b.deliveryTurnId!)!)
+    let index = 0
+    return reconciled.map((row) => row.deliveryTurnId && position.has(row.deliveryTurnId) ? owned[index++] : row)
+  }
   return reconciled
 }
 
@@ -540,6 +583,8 @@ export type RuntimeQueuedTurnRef = {
   turnId: string
   clientRequestId?: string
   position?: number
+  status?: string
+  terminalCode?: string
 }
 
 /**
@@ -549,14 +594,18 @@ export type RuntimeQueuedTurnRef = {
  */
 export async function fetchRuntimeQueuedTurnsBestEffort(
   provider: {
-    getQueuedTurns?: (threadId: string) => Promise<{ queuedTurns: readonly RuntimeQueuedTurnRef[] }>
+    getQueuedTurns?: (threadId: string) => Promise<{
+      queuedTurns: readonly RuntimeQueuedTurnRef[]; settledTurns?: readonly RuntimeQueuedTurnRef[]
+      pendingAdmissions?: readonly RuntimeQueuedTurnRef[]
+    }>
   },
   threadId: string
 ): Promise<readonly RuntimeQueuedTurnRef[] | undefined> {
   if (typeof provider.getQueuedTurns !== 'function') return undefined
   try {
     const response = await provider.getQueuedTurns(threadId)
-    return response.queuedTurns
+    return [...response.queuedTurns, ...(response.settledTurns ?? []),
+      ...(response.pendingAdmissions ?? []).map((turn) => ({ ...turn, status: 'admission_pending' }))]
   } catch {
     return undefined
   }

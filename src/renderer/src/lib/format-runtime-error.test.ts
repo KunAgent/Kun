@@ -129,3 +129,19 @@ describe('format runtime error', () => {
     expect(view.detail).toContain(`Message:\n${message}`)
   })
 })
+
+
+describe('Service Manager errors', () => {
+  it.each([
+    "Error invoking remote method 'runtime:request': ServiceManagerTransportError: fetch failed",
+    'Kun Service Manager connection failed (socket_closed; ECONNRESET).',
+    JSON.stringify({ code: 'service_manager_unavailable', message: 'fetch failed' })
+  ])('distinguishes the local data service from an offline runtime: %s', (message) => {
+    const view = describeRuntimeError(new Error(message))
+    expect(view.code).toBe('service_manager_unavailable')
+    expect(view.summary).toBe(i18n.t('common:runtimeServiceManagerUnavailable'))
+    expect(view.message).toBe(view.summary)
+    expect(view.summary).not.toContain('kun serve')
+    expect(view.settingsAction).toBeUndefined()
+  })
+})

@@ -214,7 +214,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     threadId: string,
     turnId: string,
     text: string,
-    options?: { displayText?: string; attachmentIds?: string[] }
+    options?: { displayText?: string; attachmentIds?: string[]; operationId?: string; sourceTurnId?: string }
   ): Promise<void> {
     const displayText = options?.displayText?.trim()
     const attachmentIds = options?.attachmentIds?.map((id) => id.trim()).filter(Boolean) ?? []
@@ -223,6 +223,8 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
       'POST',
       JSON.stringify({
         text,
+        ...(options?.operationId ? { operationId: options.operationId } : {}),
+        ...(options?.sourceTurnId ? { sourceTurnId: options.sourceTurnId } : {}),
         ...(displayText ? { displayText } : {}),
         ...(attachmentIds.length ? { attachmentIds } : {})
       })
@@ -239,6 +241,12 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     )
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to cancel queued turn'))
+    }
+    const receipt = readRuntimeJson<{ threadId?: unknown; turnId?: unknown; status?: unknown }>(
+      response.body, 'runtime returned an invalid queue cancellation response'
+    )
+    if (receipt?.threadId !== threadId || receipt?.turnId !== turnId || receipt?.status !== 'aborted') {
+      throw new Error('runtime returned an invalid queue cancellation response')
     }
   }
 
@@ -649,6 +657,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
 
 function runtimeStateFromCore(state: CoreThreadRuntimeStateJson): ThreadRuntimeState {
   return {
+    ...(state.activeTurn !== undefined ? { activeTurn: state.activeTurn } : {}),
     status: state.status,
     updatedAt: state.updatedAt,
     latestSeq: state.latestSeq,

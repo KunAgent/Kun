@@ -390,6 +390,7 @@ export function createServerRuntimeComposition(
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
               agent.shuttingDown = true
+              await agent.queuedTurnDispatcher.dispose()
               backgroundMaintenance.stop()
               modelConnectionOAuth.close()
               eventStreamRegistry.closeAll()

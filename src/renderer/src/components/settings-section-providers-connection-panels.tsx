@@ -49,6 +49,7 @@ import {
   SharedDefaultModelPicker,
   type SharedModelConnection, type SharedModelConnectionsSnapshot
 } from './settings-section-providers-shared-api'
+import { ProviderCustomHeadersEditor } from './provider-custom-headers-editor'
 
 import {
   sharedProviderMutationCoordinator
@@ -99,6 +100,17 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
     connection: SharedModelConnection,
     model: string
   ) => Promise<void>
+  const isOpenCodeGo = activeProvider.presetSource?.presetId === 'opencode-go' ||
+    (() => {
+      try {
+        const url = new URL(activeProvider.baseUrl)
+        const path = url.pathname.replace(/\/+$/u, '')
+        return url.protocol === 'https:' && url.hostname === 'opencode.ai' &&
+          (path === '/zen/go' || path.startsWith('/zen/go/'))
+      } catch {
+        return false
+      }
+    })()
   return (
     <>
                 <SettingsTabPanel<ProviderTaskTab>
@@ -511,6 +523,21 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                     </div>
                   ) : null}
                 </DetailSection>
+                {!isDelegatedEndpointProvider(activeProvider) ? (
+                  <ProviderCustomHeadersEditor
+                    providerId={activeProvider.id}
+                    zh={zh}
+                    isOpenCodeGo={isOpenCodeGo}
+                  />
+                ) : (
+                  <DetailSection title={zh ? '自定义请求头' : 'Custom request headers'}>
+                    <p className="text-[12px] leading-5 text-ds-muted">
+                      {zh
+                        ? '该供应商由官方 SDK/CLI 托管，Kun 无法为其生效自定义请求头。'
+                        : 'This provider is hosted by an official SDK/CLI; Kun cannot apply custom headers to it.'}
+                    </p>
+                  </DetailSection>
+                )}
                 </SettingsTabPanel>
     </>
   )

@@ -304,6 +304,15 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       model: resolvedModel,
       providerId: resolvedProviderId,
       accountId: resolvedAccountId,
+      ...(input.inheritedModel?.trim() && input.inheritedProviderId?.trim() ? {
+        parentModelRoute: {
+          model: input.inheritedModel.trim(),
+          providerId: input.inheritedProviderId.trim(),
+          accountId: input.inheritedAccountId?.trim() || undefined,
+          reasoningEffort: normalizeInheritedReasoningEffort(input.inheritedReasoningEffort),
+          serviceTier: input.inheritedServiceTier
+        }
+      } : {}),
       reasoningEffort: resolvedReasoningEffort,
       ...(resolvedServiceTier ? { serviceTier: resolvedServiceTier } : {}),
       profile: profileName,

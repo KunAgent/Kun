@@ -131,6 +131,9 @@ async materializeDocument(this: ModelConnectionRegistry,
               ...(profile.selectedModel ? { selectedModel: profile.selectedModel } : {}),
               ...(materialHeaders || profile.headers
                 ? { headers: { ...(profile.headers ?? {}), ...(materialHeaders ?? {}) } }
+                : {}),
+              ...(profile.customHeaders && Object.keys(profile.customHeaders).length > 0
+                ? { customHeaders: profile.customHeaders }
                 : {})
             }
       providers.set(profile.id, config)

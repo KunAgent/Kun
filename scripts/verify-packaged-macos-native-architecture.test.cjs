@@ -6,6 +6,7 @@ const test = require('node:test')
 
 const {
   assertMachOArchitecture,
+  packagedOnnxRuntimeBinaries,
   verifyPackagedMacosNativeArchitecture
 } = require('./verify-packaged-macos-native-architecture.cjs')
 
@@ -37,7 +38,11 @@ async function fixture(arch) {
   await writeFile(join(bindingPackage, 'lib', `sharp-darwin-${arch}-0.35.3.node`), 'binding')
   await writeFile(join(libvipsPackage, 'lib', 'libvips-cpp.test.dylib'), 'libvips')
   await writeFile(join(canvasPackage, `skia.darwin-${arch}.node`), 'canvas')
-  return { root, resources }
+  const onnxRoot = join(modules, 'onnxruntime-node', 'bin', 'napi-v6', 'darwin', arch)
+  await mkdir(onnxRoot, { recursive: true })
+  await writeFile(join(onnxRoot, 'onnxruntime_binding.node'), 'ort-binding')
+  await writeFile(join(onnxRoot, 'libonnxruntime.1.23.2.dylib'), 'ort-library')
+  return { root, resources, modules }
 }
 
 test('accepts a packaged app whose executable, Sharp, libvips, and Canvas match x64', async (t) => {
@@ -62,6 +67,42 @@ test('rejects the arm64 Sharp binding that broke the published x64 app', async (
       ? 'Mach-O 64-bit executable x86_64'
       : 'Mach-O 64-bit bundle arm64')
   }), /expected.*darwin\/x64.*arm64/i)
+})
+
+test('accepts the pruned ONNX Runtime tree and reports both binaries', async (t) => {
+  const value = await fixture('arm64')
+  t.after(() => rm(value.root, { recursive: true, force: true }))
+  const result = packagedOnnxRuntimeBinaries(value.modules, 'arm64')
+  assert.match(result.binding, /darwin\/arm64\/onnxruntime_binding\.node$/)
+  assert.match(result.library, /darwin\/arm64\/libonnxruntime\.1\.23\.2\.dylib$/)
+})
+
+test('rejects an ONNX Runtime tree the afterPack prune did not narrow', async (t) => {
+  const value = await fixture('arm64')
+  t.after(() => rm(value.root, { recursive: true, force: true }))
+  const abiRoot = join(value.modules, 'onnxruntime-node', 'bin', 'napi-v6')
+  await mkdir(join(abiRoot, 'linux', 'x64'), { recursive: true })
+  assert.throws(
+    () => packagedOnnxRuntimeBinaries(value.modules, 'arm64'),
+    /Expected only the darwin ONNX Runtime binaries/
+  )
+  await rm(join(abiRoot, 'linux'), { recursive: true, force: true })
+  await mkdir(join(abiRoot, 'darwin', 'x64'), { recursive: true })
+  assert.throws(
+    () => packagedOnnxRuntimeBinaries(value.modules, 'arm64'),
+    /Expected only the arm64 ONNX Runtime binaries/
+  )
+})
+
+test('rejects an ONNX Runtime tree with no dylib beside the binding', async (t) => {
+  const value = await fixture('arm64')
+  t.after(() => rm(value.root, { recursive: true, force: true }))
+  const archRoot = join(value.modules, 'onnxruntime-node', 'bin', 'napi-v6', 'darwin', 'arm64')
+  await rm(join(archRoot, 'libonnxruntime.1.23.2.dylib'), { force: true })
+  assert.throws(
+    () => packagedOnnxRuntimeBinaries(value.modules, 'arm64'),
+    /missing an ONNX Runtime dylib/
+  )
 })
 
 test('rejects mixed or non-Mach-O architecture descriptions', () => {

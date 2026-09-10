@@ -18,13 +18,7 @@ const visualPreviewSchema = z.strictObject({
   wasCompressed: z.boolean().optional()
 })
 
-export const runtimeDocumentAttachmentUploadPayloadSchema = z.strictObject({
-  path: z
-    .string()
-    .trim()
-    .min(1)
-    .max(MAX_PATH_LENGTH)
-    .refine(isAbsoluteDocumentPath, 'document path must be absolute'),
+const commonDocumentFields = {
   name: z.string().trim().min(1).max(512).optional(),
   mimeType: z.string().trim().min(3).max(128).optional(),
   documentText: z.string().max(MAX_BODY_BYTES).optional(),
@@ -36,4 +30,23 @@ export const runtimeDocumentAttachmentUploadPayloadSchema = z.strictObject({
   visualPreview: visualPreviewSchema.optional(),
   threadId: z.string().trim().min(1).max(MAX_ID_LENGTH).optional(),
   workspace: z.string().trim().min(1).max(MAX_PATH_LENGTH).optional()
-})
+}
+
+export const runtimeDocumentAttachmentUploadPayloadSchema = z.union([
+  z.strictObject({
+    ...commonDocumentFields,
+    path: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_PATH_LENGTH)
+      .refine(isAbsoluteDocumentPath, 'document path must be absolute')
+  }),
+  z.strictObject({
+    ...commonDocumentFields,
+    temporaryText: z.string().min(1).refine(
+      (value) => Buffer.byteLength(value, 'utf8') <= MAX_RUNTIME_DOCUMENT_SOURCE_BYTES,
+      `temporary text exceeds the ${MAX_RUNTIME_DOCUMENT_SOURCE_BYTES} byte limit`
+    )
+  })
+])

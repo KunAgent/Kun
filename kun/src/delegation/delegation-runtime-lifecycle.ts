@@ -127,6 +127,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     expectedResumeCount?: number
     expectedLaunchers?: readonly ChildRunLauncher[]
     requireResumable?: boolean
+    parentModelRoute?: ChildRunRecord['parentModelRoute']
     /** Model-initiated continuation governed by the global proactive retry policy. */
     proactive?: boolean
     /** Current parent boundary; the resumed child receives its intersection with the stored snapshot. */
@@ -161,6 +162,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     expectedResumeCount?: number
     expectedLaunchers?: readonly ChildRunLauncher[]
     requireResumable?: boolean
+    parentModelRoute?: ChildRunRecord['parentModelRoute']
     proactive?: boolean
     security?: ChildSecuritySnapshot
     executionBlockedTools?: string[]
@@ -254,6 +256,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     const preserveDetached = input.proactive === true && previous.detached === true
     const record = ChildRunRecord.parse({
       ...previous,
+      parentModelRoute: input.parentModelRoute ?? previous.parentModelRoute,
       prompt: input.prompt,
       source,
       controlPrompt: undefined,

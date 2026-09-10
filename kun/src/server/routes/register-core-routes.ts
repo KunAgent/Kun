@@ -37,6 +37,7 @@ import {
   connectModelConnection,
   deleteModelConnection,
   fenceModelCredential,
+  getModelConnectionCustomHeaders,
   listModelConnections,
   modelConnectionEvents,
   patchModelConnection,
@@ -255,6 +256,10 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('POST', '/v1/model-connections/:providerId/probe', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return probeModelConnection(runtime.modelConnections, ctx.params.providerId)
+  })
+  router.add('GET', '/v1/model-connections/:providerId/custom-headers', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getModelConnectionCustomHeaders(runtime.modelConnections, ctx.params.providerId)
   })
   router.add('POST', '/v1/runtime/config/apply', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

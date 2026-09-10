@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "runKind": "candidate-resource-evidence",
+  "datasetId": "kun-memory-semantic-retrieval-anonymous-v1",
+  "candidate": {
+    "modelId": "Xenova/multilingual-e5-small",
+    "revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+    "artifactSha256": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193",
+    "dimensions": 384
+  },
+  "platform": {
+    "platform": "win32",
+    "architecture": "x64",
+    "nodeVersion": "22.19.0"
+  },
+  "offline": {
+    "networkAttempts": 0
+  },
+  "resources": {
+    "coldReadinessMs": 584.333,
+    "warmQueryIterations": 30,
+    "warmQueryP50Ms": 3.581,
+    "warmQueryP95Ms": 4.738,
+    "fixtureBuildMs": 82.155,
+    "tenThousandRecordBuildMs": 17011.378,
+    "incrementalProjectionMs": 5.178,
+    "modelBytes": 135392016,
+    "indexBytes": 15590000,
+    "additionalPeakRssBytes": 351342592
+  },
+  "warmQuerySamplesMs": [
+    3.703,
+    3.688,
+    3.836,
+    3.578,
+    3.581,
+    3.538,
+    3.481,
+    3.657,
+    3.721,
+    3.192,
+    3.475,
+    3.464,
+    3.252,
+    3.195,
+    3.237,
+    3.446,
+    3.207,
+    3.276,
+    2.958,
+    2.913,
+    3.691,
+    4.673,
+    4.554,
+    4.738,
+    4.662,
+    5.256,
+    3.737,
+    4.299,
+    4.034,
+    4.049
+  ]
+}

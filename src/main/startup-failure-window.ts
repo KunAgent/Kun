@@ -53,7 +53,8 @@ export function showStartupFailureWindow(
         logDir,
         {
           handoff: presentation.handoff,
-          retryable: presentation.handoff ? canRecoverHandoff : true,
+          retryable: presentation.handoff ? canRecoverHandoff : presentation.retryable,
+          recheck: presentation.recheck,
           busy
         }
       ))}`).catch((loadError) => {
@@ -70,7 +71,8 @@ export function showStartupFailureWindow(
       }
       event.preventDefault()
       if (action === 'retry') {
-        if (recoveryInFlight) return
+        if (recoveryInFlight || !presentation.retryable) return
+        if (presentation.recheck && !options.recoverRetry) return
         if (!presentation.handoff) {
           recoveryInFlight = true
           render(message, true)
@@ -113,7 +115,8 @@ export function showStartupFailureWindow(
       logDir,
       {
         handoff: presentation.handoff,
-        retryable: presentation.handoff ? canRecoverHandoff : true
+        retryable: presentation.handoff ? canRecoverHandoff : presentation.retryable,
+        recheck: presentation.recheck
       }
     ))}`)
       .catch((loadError) => {

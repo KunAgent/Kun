@@ -36,7 +36,8 @@ export function projectTimelineTurn(turn: Turn, items: TurnItem[]): Turn {
     ...publicTurn,
     prompt: '',
     steering: [],
-    items: items.filter(isPublicTurnItem),
+    items: turn.status === 'queued' || turn.steeredToTurnId || turn.terminalCode === 'queue_cancelled'
+      ? [] : items.filter(isPublicTurnItem),
     attachmentIds: turn.attachmentIds.slice(0, 32),
     composerContexts: undefined,
     activeSkillIds: turn.activeSkillIds.slice(0, 32),
@@ -54,6 +55,7 @@ export function projectTimelineTurn(turn: Turn, items: TurnItem[]): Turn {
 export function projectPublicTurn(turn: Turn): Turn {
   const {
     terminalCode: _terminalCode,
+    steeringDeliveries: _steeringDeliveries,
     managerLeaseSettlement: _managerLeaseSettlement,
     ...publicTurn
   } = turn

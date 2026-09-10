@@ -252,7 +252,7 @@ describe('durable per-thread turn queue', () => {
       request: startRequest('second', { enqueueIfBusy: true })
     })
     await h.turns.interruptTurn({ threadId: 'thr_q', turnId: first.turnId })
-    expect(h.settled).toEqual([])
+    expect(h.settled).toEqual(['thr_q'])
     const thread = await h.threadStore.get('thr_q')
     expect(thread?.turns.map((turn) => turn.status)).toEqual(['aborted', 'queued'])
     // A manual resume promotes the queued turn afterwards.
@@ -303,11 +303,24 @@ describe('durable per-thread turn queue', () => {
     await expect(
       h.turns.cancelQueuedTurn({ threadId: 'thr_q', turnId: first.turnId })
     ).rejects.toBeInstanceOf(TurnConflictError)
-    // Cancelling an already-terminal turn is a conflict too.
+    // A lost cancellation response can be retried without another event.
     await expect(
       h.turns.cancelQueuedTurn({ threadId: 'thr_q', turnId: second.turnId })
-    ).rejects.toBeInstanceOf(TurnConflictError)
+    ).resolves.toEqual(cancelled)
+    expect(eventsOfKind(h, 'turn_aborted').filter((event) => event.turnId === second.turnId)).toHaveLength(1)
     expect(third).toBeTruthy()
+  })
+
+  it('does not cancel an admission that has not committed', async () => {
+    const h = createHarness()
+    await createThread(h, 'thr_q')
+    const thread = (await h.threadStore.get('thr_q'))!
+    const pending = createTurnRecord({ id: 'pending', threadId: 'thr_q', prompt: 'pending', admissionPending: true })
+    await h.threadStore.upsert({ ...thread, turns: [pending] })
+    await expect(h.turns.cancelQueuedTurn({ threadId: 'thr_q', turnId: pending.id }))
+      .rejects.toBeInstanceOf(TurnConflictError)
+    expect((await h.threadStore.get('thr_q'))?.turns[0]?.status).toBe('queued')
+    expect(eventsOfKind(h, 'turn_aborted')).toEqual([])
   })
 
   it('reorders queued turns relative to each other', async () => {
@@ -566,7 +579,7 @@ describe('durable per-thread turn queue', () => {
         threadId: 'thr_q',
         request: startRequest('second', { enqueueIfBusy: true, clientRequestId: 'req-2' })
       })
-    ).rejects.toThrow('append item failed')
+    ).rejects.toMatchObject({ code: 'queue_admission_uncertain', stage: 'persist' })
     // The half-written queued record must be removed, leaving only the running turn.
     const thread = await h.threadStore.get('thr_q')
     expect(thread?.turns.map((turn) => turn.status)).toEqual(['running'])
@@ -586,7 +599,7 @@ describe('durable per-thread turn queue', () => {
         threadId: 'thr_q',
         request: startRequest('second', { enqueueIfBusy: true, clientRequestId: 'req-2' })
       })
-    ).rejects.toThrow('append item failed')
+    ).rejects.toMatchObject({ code: 'queue_admission_uncertain', stage: 'persist' })
     // The rollback removed the ghost, so the identical retry re-enqueues once.
     const retried = await h.turns.startTurn({
       threadId: 'thr_q',
@@ -648,8 +661,7 @@ describe('durable per-thread turn queue', () => {
     const started = await h.turns.startNextQueuedTurn('thr_q')
     const after = await h.threadStore.get('thr_q')
     const missing = after?.turns.find((turn) => turn.id === 'turn_missing')
-    expect(missing?.status).toBe('failed')
-    expect(missing?.terminalCode).toBe(QUEUE_ADMISSION_FAILED_CODE)
+    expect(missing).toBeUndefined()
     const ok = after?.turns.find((turn) => turn.id === 'turn_ok')
     expect(started).toEqual({ turnId: 'turn_ok' })
     expect(ok?.status).toBe('running')

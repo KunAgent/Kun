@@ -31,8 +31,8 @@ export function FloatingComposerStackView({
             onRemove={onRemoveQueuedMessage}
             onGuide={onGuideQueuedMessage}
             onRestoreToComposer={onRestoreQueuedMessageToComposer
-              ? (id: string) => {
-                  const restored = onRestoreQueuedMessageToComposer(id)
+              ? async (id: string) => {
+                  const restored = await onRestoreQueuedMessageToComposer(id)
                   if (restored !== false) draft.focusComposer()
                   return restored
                 }

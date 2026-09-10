@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { sidebarThreadActivity } from '../components/chat/sidebar-project-selectors'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
 import type { ChatState } from './chat-store-types'
 import { reduceChatProjection } from './chat-projection-reducer'
@@ -56,6 +57,46 @@ function project(
 }
 
 describe('chat projection turn failure identity', () => {
+  it.each(['turn_completed', 'turn_aborted'] as const)(
+    'does not restart the sidebar spinner for runtime status replay after %s',
+    (type) => {
+      const projected = project({
+        ...state(),
+        busy: true,
+        currentTurnId: 'turn_1',
+        watchTurnCompletion: { thread_1: true },
+        unreadThreadIds: {},
+        threads: [{ ...state().threads[0]!, status: 'running', latestTurnId: 'turn_1' }]
+      }, [
+        { type, payload: { turnId: 'turn_1', status: type === 'turn_aborted' ? 'aborted' : 'completed' } },
+        { type: 'runtime_status_received', payload: {
+          kind: 'model_request_retry', itemId: 'late-status', turnId: 'turn_1'
+        } }
+      ])
+
+      expect(projected.busy).toBe(false)
+      expect(projected.currentTurnId).toBeNull()
+      expect(sidebarThreadActivity(projected.threads[0]!, projected)).toBe('read')
+      expect(projected.blocks).toContainEqual(expect.objectContaining({ id: 'late-status' }))
+    }
+  )
+
+  it('keeps runtime status for the current turn active', () => {
+    const projected = project({ ...state(), busy: false, currentTurnId: 'turn_1' }, [{
+      type: 'runtime_status_received',
+      payload: { kind: 'model_request_retry', itemId: 'current-status', turnId: 'turn_1' }
+    }])
+    expect(projected.busy).toBe(true)
+  })
+
+  it('does not activate an idle projection from an unidentified runtime status', () => {
+    const projected = project({ ...state(), busy: false, currentTurnId: null }, [{
+      type: 'runtime_status_received',
+      payload: { kind: 'model_request_retry', itemId: 'legacy-status' }
+    }])
+    expect(projected.busy).toBe(false)
+  })
+
   it('keeps the active turn settled-running when a stale turn failure is replayed', () => {
     const initial = {
       ...state(),

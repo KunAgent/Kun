@@ -4,6 +4,7 @@ import providerMediaMcp from './settings/provider-media-mcp.json'
 import mcpMigration from './settings/mcp-migration.json'
 import migrationSystem from './settings/migration-system.json'
 import codePersonas from './settings/code-personas.json'
+import speak from './settings/speak.json'
 
 const settings = {
   ...navigationProviders,
@@ -13,6 +14,7 @@ const settings = {
   ...migrationSystem,
   ...codePersonas,
   guiUpdateErrFeedUnavailable: '現在、利用できる更新元がありません。後でもう一度試すか、ダウンロードページを利用してください。',
+  ...speak,
 }
 
 export default settings

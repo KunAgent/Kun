@@ -1,0 +1,593 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "kun-memory-semantic-retrieval-anonymous-v1",
+  "status": "frozen",
+  "defaultK": 5,
+  "queries": [
+    {
+      "id": "p2a_q01_package_lexical",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lexical-control",
+      "query": "Which package manager does Project Ember use: pnpm?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_pnpm"
+      ],
+      "forbiddenIds": [
+        "p2a_b_yarn"
+      ],
+      "rationale": "Positive lexical control with a cross-workspace hard negative."
+    },
+    {
+      "id": "p2a_q02_package_paraphrase",
+      "split": "holdout",
+      "queryLanguage": "en",
+      "category": "semantic-paraphrase",
+      "query": "Which tool should bootstrap the frontend packages for Ember?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_pnpm"
+      ],
+      "forbiddenIds": [
+        "p2a_b_yarn"
+      ],
+      "rationale": "Uses bootstrap and packages instead of installs, dependencies, or package manager."
+    },
+    {
+      "id": "p2a_q03_package_cross_language",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "Ember 的前端依赖应该用什么工具安装？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_pnpm"
+      ],
+      "forbiddenIds": [
+        "p2a_b_yarn"
+      ],
+      "rationale": "Chinese query against an English Memory."
+    },
+    {
+      "id": "p2a_q04_database_lexical",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lexical-control",
+      "query": "Which PostgreSQL database stores Ember application data?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_postgres"
+      ],
+      "forbiddenIds": [
+        "p2a_b_mysql"
+      ],
+      "rationale": "Positive lexical database control."
+    },
+    {
+      "id": "p2a_q05_database_paraphrase",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "semantic-paraphrase",
+      "query": "Which SQL engine backs Ember's durable state?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_postgres"
+      ],
+      "forbiddenIds": [
+        "p2a_b_mysql"
+      ],
+      "rationale": "Tests database semantics with minimal content-word overlap."
+    },
+    {
+      "id": "p2a_q06_database_cross_language",
+      "split": "holdout",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "Ember 服务的持久化关系型引擎是哪一个？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_postgres"
+      ],
+      "forbiddenIds": [
+        "p2a_b_mysql"
+      ],
+      "rationale": "Chinese query against an English database Memory."
+    },
+    {
+      "id": "p2a_q07_cache_paraphrase",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "semantic-paraphrase",
+      "query": "Where should short-lived key-value entries live in Ember?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_redis_cache"
+      ],
+      "forbiddenIds": [
+        "p2a_a_postgres",
+        "p2a_b_mysql"
+      ],
+      "rationale": "Separates ephemeral cache from durable storage."
+    },
+    {
+      "id": "p2a_q08_cache_cross_language",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "Ember 的临时键值缓存放在哪里？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_redis_cache"
+      ],
+      "forbiddenIds": [
+        "p2a_a_postgres",
+        "p2a_b_mysql"
+      ],
+      "rationale": "Chinese cache query against an English Memory."
+    },
+    {
+      "id": "p2a_q09_release_lexical",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lexical-control",
+      "query": "When are production releases scheduled?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_release_tuesday"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Positive lexical schedule control."
+    },
+    {
+      "id": "p2a_q10_release_paraphrase_zh",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "线上版本通常安排在星期几的哪个时段发布？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_release_tuesday"
+      ],
+      "forbiddenIds": [
+        "p2a_a_support_rotation"
+      ],
+      "rationale": "Distinguishes release timing from the on-call rotation."
+    },
+    {
+      "id": "p2a_q11_concise_paraphrase",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "semantic-paraphrase",
+      "query": "Should replies be short or exhaustive?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_user_concise"
+      ],
+      "forbiddenIds": [
+        "p2a_user_dark_theme"
+      ],
+      "rationale": "Tests a preference without the words concise, technical, or explanation."
+    },
+    {
+      "id": "p2a_q12_concise_cross_language",
+      "split": "holdout",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "回答时应该长篇展开还是尽量简短？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_user_concise"
+      ],
+      "forbiddenIds": [
+        "p2a_user_dark_theme"
+      ],
+      "rationale": "Chinese query against an English user preference."
+    },
+    {
+      "id": "p2a_q13_emoji_paraphrase",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "semantic-paraphrase",
+      "query": "Are decorative pictograms welcome in engineering replies?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_user_no_emoji"
+      ],
+      "forbiddenIds": [
+        "p2a_user_dark_theme"
+      ],
+      "rationale": "Uses pictograms instead of emoji and replies instead of responses."
+    },
+    {
+      "id": "p2a_q14_emoji_cross_language",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "技术答复里可以加装饰性的表情图标吗？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_user_no_emoji"
+      ],
+      "forbiddenIds": [
+        "p2a_user_dark_theme"
+      ],
+      "rationale": "Chinese query against an English response-style preference."
+    },
+    {
+      "id": "p2a_q15_theme_lexical",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lexical-control",
+      "query": "Does the user prefer a dark editor theme?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_user_dark_theme"
+      ],
+      "forbiddenIds": [
+        "p2a_user_concise",
+        "p2a_user_no_emoji"
+      ],
+      "rationale": "Positive lexical preference control."
+    },
+    {
+      "id": "p2a_q16_accessibility_paraphrase",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "semantic-paraphrase",
+      "query": "Can every settings modal be operated without a mouse?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_accessibility"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Maps mouse-free operation to keyboard accessibility."
+    },
+    {
+      "id": "p2a_q17_accessibility_cross_language",
+      "split": "holdout",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "设置弹窗能不能完全不用鼠标操作？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_accessibility"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Chinese query against an English accessibility decision."
+    },
+    {
+      "id": "p2a_q18_api_examples_zh",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "semantic-paraphrase",
+      "query": "接口说明里是否需要附上能直接执行的代码？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_api_examples"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Chinese synonym test for API documentation examples."
+    },
+    {
+      "id": "p2a_q19_log_retention_zh",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "semantic-paraphrase",
+      "query": "线上日志和审计记录分别多久会被清理？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_cn_log_retention"
+      ],
+      "forbiddenIds": [
+        "p2a_a_backup_policy"
+      ],
+      "rationale": "Distinguishes log retention from backup retention."
+    },
+    {
+      "id": "p2a_q20_log_retention_cross_language",
+      "split": "holdout",
+      "queryLanguage": "en",
+      "category": "cross-lingual",
+      "query": "How long do we keep production and audit logs?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_cn_log_retention"
+      ],
+      "forbiddenIds": [
+        "p2a_a_backup_policy"
+      ],
+      "rationale": "English query against a Chinese retention Memory."
+    },
+    {
+      "id": "p2a_q21_review_zh",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "semantic-paraphrase",
+      "query": "一个 PR 合并前需要几位维护者批准？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_cn_review"
+      ],
+      "forbiddenIds": [
+        "p2a_a_pr_validation"
+      ],
+      "rationale": "Distinguishes human review policy from automated validation."
+    },
+    {
+      "id": "p2a_q22_review_cross_language",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "cross-lingual",
+      "query": "How many maintainers must approve a merge?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_cn_review"
+      ],
+      "forbiddenIds": [
+        "p2a_a_pr_validation"
+      ],
+      "rationale": "English query against a Chinese review-policy Memory."
+    },
+    {
+      "id": "p2a_q23_timezone_zh",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "semantic-paraphrase",
+      "query": "通知和计划里的时间按照哪个时区解释？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_cn_timezone"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Chinese semantic reformulation of the timezone decision."
+    },
+    {
+      "id": "p2a_q24_timezone_cross_language",
+      "split": "holdout",
+      "queryLanguage": "en",
+      "category": "cross-lingual",
+      "query": "Which timezone should schedules and alerts use?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_cn_timezone"
+      ],
+      "forbiddenIds": [],
+      "rationale": "English query against a Chinese timezone Memory."
+    },
+    {
+      "id": "p2a_q25_error_format_lexical",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lexical-control",
+      "query": "Do API errors use RFC 9457 problem-details JSON?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_error_format"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Positive exact-standard control."
+    },
+    {
+      "id": "p2a_q26_error_format_cross_language",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "接口失败时统一返回哪种错误信封格式？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_error_format"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Maps error envelope to problem-details without naming the standard."
+    },
+    {
+      "id": "p2a_q27_slo_lexical",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lexical-control",
+      "query": "What is the monthly availability objective?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_slo"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Positive reliability lexical control."
+    },
+    {
+      "id": "p2a_q28_slo_cross_language",
+      "split": "development",
+      "queryLanguage": "zh",
+      "category": "cross-lingual",
+      "query": "这个服务每月的 SLO 可用率目标是多少？",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_slo"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Chinese SLO query against an English availability Memory."
+    },
+    {
+      "id": "p2a_q29_ember_project_scope",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "project-scope-negative",
+      "query": "Which continuous integration service builds Project Ember?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "project": "/fixtures/p2a/workspace-a/project-ember",
+      "expectedIds": [
+        "p2a_a_github_actions"
+      ],
+      "forbiddenIds": [
+        "p2a_a_buildkite",
+        "p2a_b_circle_ci"
+      ],
+      "rationale": "Relevant project Memory must win without leaking sibling or foreign projects."
+    },
+    {
+      "id": "p2a_q30_lumen_project_scope",
+      "split": "holdout",
+      "queryLanguage": "en",
+      "category": "project-scope-negative",
+      "query": "What CI platform is responsible for Lumen builds?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "project": "/fixtures/p2a/workspace-a/project-lumen",
+      "expectedIds": [
+        "p2a_a_buildkite"
+      ],
+      "forbiddenIds": [
+        "p2a_a_github_actions",
+        "p2a_b_circle_ci"
+      ],
+      "rationale": "Holdout sibling-project isolation case."
+    },
+    {
+      "id": "p2a_q31_workspace_b_package_scope",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "workspace-scope-negative",
+      "query": "Which tool installs Borealis JavaScript dependencies?",
+      "workspace": "/fixtures/p2a/workspace-b",
+      "expectedIds": [
+        "p2a_b_yarn"
+      ],
+      "forbiddenIds": [
+        "p2a_a_pnpm"
+      ],
+      "rationale": "The semantically similar package decision in workspace A must not leak."
+    },
+    {
+      "id": "p2a_q32_workspace_b_database_scope",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "workspace-scope-negative",
+      "query": "Which relational store backs Borealis?",
+      "workspace": "/fixtures/p2a/workspace-b",
+      "expectedIds": [
+        "p2a_b_mysql"
+      ],
+      "forbiddenIds": [
+        "p2a_a_postgres"
+      ],
+      "rationale": "The semantically similar database Memory in workspace A must not leak."
+    },
+    {
+      "id": "p2a_q33_superseded_runtime",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lifecycle-negative",
+      "query": "Which Node.js runtime version should Ember use now?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_node22"
+      ],
+      "forbiddenIds": [
+        "p2a_a_node18_old"
+      ],
+      "rationale": "Current fact must replace the semantically identical superseded record."
+    },
+    {
+      "id": "p2a_q34_disabled_codename",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lifecycle-negative",
+      "query": "What is the silver orchid deployment codename?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [],
+      "forbiddenIds": [
+        "p2a_a_disabled_codename",
+        "p2a_b_secret_codename"
+      ],
+      "rationale": "Neither a disabled local Memory nor an active foreign-workspace Memory may appear."
+    },
+    {
+      "id": "p2a_q35_expired_maintenance",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lifecycle-negative",
+      "query": "When is the maintenance window?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [],
+      "forbiddenIds": [
+        "p2a_a_expired_window"
+      ],
+      "rationale": "The only directly relevant Memory is expired at evaluationNow."
+    },
+    {
+      "id": "p2a_q36_future_region",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "temporal-current",
+      "query": "Which cloud region serves production today?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_current_region"
+      ],
+      "forbiddenIds": [
+        "p2a_a_future_region"
+      ],
+      "rationale": "A future-valid fact must not outrank the currently valid region."
+    },
+    {
+      "id": "p2a_q37_deleted_product",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "lifecycle-negative",
+      "query": "What was the retired desktop product named?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [],
+      "forbiddenIds": [
+        "p2a_a_deleted_product"
+      ],
+      "rationale": "Soft-deleted canonical evidence stays auditable but is not retrievable."
+    },
+    {
+      "id": "p2a_q38_injection_reference",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "authority-safety",
+      "query": "Find the stored prompt-injection warning about destructive commands.",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [
+        "p2a_a_injection_warning"
+      ],
+      "forbiddenIds": [],
+      "rationale": "Relevant hostile text may be retrieved only as reference evidence; authority checks remain separate."
+    },
+    {
+      "id": "p2a_q39_no_result",
+      "split": "development",
+      "queryLanguage": "en",
+      "category": "no-result",
+      "query": "What is the office Wi-Fi password?",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "expectedIds": [],
+      "forbiddenIds": [
+        "p2a_b_secret_codename",
+        "p2a_a_injection_warning"
+      ],
+      "rationale": "A plausible but unsupported question should return no Memory."
+    },
+    {
+      "id": "p2a_q40_multi_record_stack",
+      "split": "holdout",
+      "queryLanguage": "en",
+      "category": "multi-relevant",
+      "query": "Summarize Ember's persistence, cache, and build infrastructure.",
+      "workspace": "/fixtures/p2a/workspace-a",
+      "project": "/fixtures/p2a/workspace-a/project-ember",
+      "expectedIds": [
+        "p2a_a_postgres",
+        "p2a_a_redis_cache",
+        "p2a_a_github_actions"
+      ],
+      "forbiddenIds": [
+        "p2a_b_mysql",
+        "p2a_a_buildkite",
+        "p2a_b_circle_ci"
+      ],
+      "rationale": "Holdout multi-recall case across workspace and project scope."
+    }
+  ]
+}
+

@@ -42,6 +42,49 @@ beforeEach(() => {
 })
 
 describe('runtime queue store actions', () => {
+  it('converts runtime-owned input with its source identity and retries an unknown outcome against the original target', async () => {
+    const steerUserMessage = vi.fn().mockRejectedValueOnce(new Error('network timeout')).mockResolvedValueOnce(undefined)
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness({
+      busy: true, currentTurnId: 'turn_a',
+      queuedMessages: [{ id: 'q-b', text: 'B', deliveryState: 'in_flight', deliveryTurnId: 'turn_b' }]
+    })
+    await expect(actions.guideQueuedMessage('q-b')).resolves.toBe(false)
+    expect(state.queuedMessages[0].steeringRequest).toEqual({ operationId: 'guide-q-b', turnId: 'turn_a' })
+    state.currentTurnId = 'turn_new'
+    await expect(actions.guideQueuedMessage('q-b')).resolves.toBe(true)
+    expect(steerUserMessage).toHaveBeenNthCalledWith(2, 'thr_existing', 'turn_a', 'B', {
+      operationId: 'guide-q-b', sourceTurnId: 'turn_b'
+    })
+    expect(state.queuedMessages).toEqual([])
+  })
+
+  it('does not drain a message while its steering request is pending', async () => {
+    const sendMessage = vi.fn(async () => false)
+    const { actions, state } = buildHarness({
+      queuedMessages: [{ id: 'q-guide', text: 'guide', deliveryState: 'pending' }],
+      sendMessage
+    })
+    threadActionSharedState.guidingQueuedMessageIds.add('q-guide')
+    await actions.drainQueuedMessages()
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(state.queuedMessages).toHaveLength(1)
+  })
+
+  it('refreshes authoritative state when the steering target is no longer active', async () => {
+    const recoverActiveTurn = vi.fn(async () => false)
+    registryMock.getProvider.mockReturnValue({
+      steerUserMessage: vi.fn(async () => { throw new Error('turn is not active: turn_a') })
+    })
+    const { actions, state } = buildHarness({
+      busy: true, currentTurnId: 'turn_a', recoverActiveTurn,
+      queuedMessages: [{ id: 'q-guide', text: 'guide', deliveryState: 'pending' }]
+    })
+    expect(await actions.guideQueuedMessage('q-guide')).toBe(false)
+    expect(recoverActiveTurn).toHaveBeenCalledWith({ forceTimeline: true })
+    expect(state.queuedMessages).toHaveLength(1)
+  })
+
   it('removing an in-flight entry cancels the runtime queued turn', async () => {
     const provider = { cancelQueuedTurn: vi.fn(async () => undefined) }
     registryMock.getProvider.mockReturnValue(provider)

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { queuedMessagesForThread, reconcileQueuedMessages, isPendingQueuedMessage } from './queued-message-persistence'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { createThreadQueueActions } from './chat-store-thread-queue-actions'
 import type {
@@ -24,7 +25,7 @@ function makeHarness(
   queuedMessages: ChatState['queuedMessages'],
   extra: Partial<ChatState> = {}
 ): Harness {
-  let state = { queuedMessages, ...extra } as ChatState
+  let state = { activeThreadId: 'thr-1', queuedMessages, ...extra } as ChatState
   const set: ChatStoreSet = (partial) => {
     const update = typeof partial === 'function' ? partial(state) : partial
     state = { ...state, ...update }
@@ -44,7 +45,50 @@ function makeActions(harness: Harness) {
 describe('chat store queued message edit', () => {
   beforeEach(() => {
     registryMock.getProvider.mockReset()
+    registryMock.getProvider.mockReturnValue({})
+    const values = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value) }
+    })
   })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each(['matched', 'refresh', 'missing', 'rebound', 'refresh-error', 'switch', 'cancel-rebound'] as const)(
+    'handles account route %s without losing or misrouting the queue', async (scenario) => {
+      const row = { id: 'account-q', text: '你是谁', deliveryState: 'in_flight' as const,
+        deliveryTurnId: 'turn-account', providerId: 'zhipu', model: 'glm-5.3', accountId: 'account:zhipu' }
+      const groups = [{ providerId: 'zhipu', label: 'Zhipu', modelIds: ['glm-5.3'], accountId: 'account:zhipu' }]
+      const harness = makeHarness([row], { composerModelGroups: scenario === 'matched' || scenario === 'cancel-rebound' ? groups : [] })
+      const load = vi.fn(async () => {
+        if (scenario === 'refresh-error') throw new Error('catalog unavailable')
+        if (scenario === 'switch') harness.set({ activeThreadId: 'other', queuedMessages: [] })
+        if (scenario === 'refresh') harness.set({ composerModelGroups: groups })
+        if (scenario === 'rebound') harness.set({ composerModelGroups: [{ ...groups[0]!, accountId: 'other' }] })
+      })
+      harness.set({ loadComposerModels: load })
+      const cancel = vi.fn(async () => {
+        if (scenario === 'cancel-rebound') harness.set({ composerModelGroups: [] })
+      })
+      registryMock.getProvider.mockReturnValue({ cancelQueuedTurn: cancel })
+      const accept = vi.fn(() => true)
+      const result = await makeActions(harness).restoreQueuedMessage(row.id, accept)
+      if (scenario === 'matched' || scenario === 'refresh') {
+        expect(result?.accountId).toBe(row.accountId)
+        expect(cancel).toHaveBeenCalledWith('thr-1', row.deliveryTurnId)
+        expect(accept).toHaveBeenCalledOnce()
+        expect(harness.get().queuedMessages).toEqual([])
+      } else {
+        expect(result).toBeNull()
+        expect(accept).not.toHaveBeenCalled()
+        if (scenario === 'cancel-rebound') {
+          expect(queuedMessagesForThread('thr-1')[0]?.editIntent).toBe('restoring')
+        } else expect(cancel).not.toHaveBeenCalled()
+        if (scenario !== 'switch') expect(harness.get().queuedMessages).toHaveLength(1)
+      }
+      expect(load).toHaveBeenCalledTimes(scenario === 'matched' || scenario === 'cancel-rebound' ? 0 : 1)
+    }
+  )
 
   it('restores plain pending and plan messages, persisting the queue, and rejects missing rows', async () => {
     const harness = makeHarness([
@@ -53,22 +97,22 @@ describe('chat store queued message edit', () => {
     ])
     const actions = makeActions(harness)
 
-    await expect(actions.restoreQueuedMessage('q-plain')).resolves.toEqual(
+    await expect(actions.restoreQueuedMessage('q-plain', () => true)).resolves.toEqual(
       expect.objectContaining({ id: 'q-plain', text: 'before' })
     )
     expect(harness.get().queuedMessages).toEqual([
       { id: 'q-plan', text: 'internal', displayText: 'visible', mode: 'plan' }
     ])
-    expect(harness.persistActiveQueuedMessages).toHaveBeenCalledOnce()
+    expect(queuedMessagesForThread('thr-1')).toMatchObject(harness.get().queuedMessages)
 
-    await expect(actions.restoreQueuedMessage('q-plan')).resolves.toEqual(
+    await expect(actions.restoreQueuedMessage('q-plan', () => true)).resolves.toEqual(
       expect.objectContaining({ id: 'q-plan', text: 'internal', mode: 'plan' })
     )
     expect(harness.get().queuedMessages).toEqual([])
-    expect(harness.persistActiveQueuedMessages).toHaveBeenCalledTimes(2)
+    expect(queuedMessagesForThread('thr-1')).toEqual([])
 
     await expect(actions.restoreQueuedMessage('missing')).resolves.toBeNull()
-    expect(harness.persistActiveQueuedMessages).toHaveBeenCalledTimes(2)
+    expect(queuedMessagesForThread('thr-1')).toEqual([])
   })
 
   it('restores an image-bearing queued message, persists the queue, and rejects missing rows', async () => {
@@ -82,12 +126,12 @@ describe('chat store queued message edit', () => {
     const harness = makeHarness([imageMessage])
     const actions = makeActions(harness)
 
-    await expect(actions.restoreQueuedMessage('q-image')).resolves.toEqual(imageMessage)
+    await expect(actions.restoreQueuedMessage('q-image', () => true)).resolves.toEqual({ ...imageMessage, deliveryState: 'paused', editIntent: 'restoring' })
     expect(harness.get().queuedMessages).toEqual([])
-    expect(harness.persistActiveQueuedMessages).toHaveBeenCalledOnce()
+    expect(queuedMessagesForThread('thr-1')).toEqual([])
 
     await expect(actions.restoreQueuedMessage('missing')).resolves.toBeNull()
-    expect(harness.persistActiveQueuedMessages).toHaveBeenCalledOnce()
+    expect(queuedMessagesForThread('thr-1')).toEqual([])
   })
 
   it('cancels the server-side queued turn when restoring an in-flight message', async () => {
@@ -105,14 +149,14 @@ describe('chat store queued message edit', () => {
     ], { activeThreadId: 'thr-1' })
     const actions = makeActions(harness)
 
-    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toEqual(
+    await expect(actions.restoreQueuedMessage('q-flight', () => true)).resolves.toEqual(
       expect.objectContaining({ id: 'q-flight', deliveryTurnId: 'turn-1' })
     )
     expect(cancelQueuedTurn).toHaveBeenCalledWith('thr-1', 'turn-1')
     expect(harness.get().queuedMessages).toEqual([])
   })
 
-  it('swallows a not-found cancel error when the queued turn already started', async () => {
+  it('does not restore a message whose runtime cancellation was not confirmed', async () => {
     registryMock.getProvider.mockReturnValue({
       cancelQueuedTurn: vi.fn().mockRejectedValue(new Error('queued turn not found'))
     })
@@ -127,9 +171,9 @@ describe('chat store queued message edit', () => {
     ], { activeThreadId: 'thr-1' })
     const actions = makeActions(harness)
 
-    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeTruthy()
-    expect(harness.get().error).toBeFalsy()
-    expect(harness.get().queuedMessages).toEqual([])
+    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeNull()
+    expect(harness.get().error).toBe('queued turn not found')
+    expect(harness.get().queuedMessages).toHaveLength(1)
   })
 
   it('surfaces a non-not-found cancel failure', async () => {
@@ -147,8 +191,49 @@ describe('chat store queued message edit', () => {
     ], { activeThreadId: 'thr-1' })
     const actions = makeActions(harness)
 
-    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeTruthy()
+    await expect(actions.restoreQueuedMessage('q-flight')).resolves.toBeNull()
     expect(harness.get().error).toBe('boom')
+    expect(harness.get().queuedMessages).toHaveLength(1)
+  })
+
+  it('retains cancelled payload until composer accepts, including after reconciliation', async () => {
+    const cancelQueuedTurn = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue({ cancelQueuedTurn })
+    const harness = makeHarness([{ id: 'edit', text: 'keep', deliveryState: 'in_flight', deliveryTurnId: 'turn-1' }])
+    const actions = makeActions(harness)
+    await expect(actions.restoreQueuedMessage('edit', () => false)).resolves.toBeNull()
+    const saved = queuedMessagesForThread('thr-1')
+    expect(saved[0]?.editIntent).toBe('restoring')
+    expect(isPendingQueuedMessage(saved[0]!)).toBe(false)
+    const recovered = reconcileQueuedMessages(saved, { busy: false }, [
+      { turnId: 'turn-1', status: 'aborted', terminalCode: 'queue_cancelled' }
+    ])
+    expect(recovered).toHaveLength(1)
+    harness.set({ queuedMessages: recovered })
+    await expect(actions.restoreQueuedMessage('edit', () => true)).resolves.toBeTruthy()
+    expect(cancelQueuedTurn).toHaveBeenCalledOnce()
+    expect(queuedMessagesForThread('thr-1')).toEqual([])
+  })
+
+  it('does not cancel when durable handoff storage fails', async () => {
+    const cancelQueuedTurn = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue({ cancelQueuedTurn })
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => { throw new Error('quota') } })
+    const harness = makeHarness([{ id: 'edit', text: 'keep', deliveryState: 'in_flight', deliveryTurnId: 'turn-1' }])
+    await expect(makeActions(harness).restoreQueuedMessage('edit', () => true)).resolves.toBeNull()
+    expect(cancelQueuedTurn).not.toHaveBeenCalled()
+    expect(harness.get().queuedMessages).toHaveLength(1)
+  })
+
+  it('keeps a thread-scoped restore when the user switches threads during cancel', async () => {
+    const harness = makeHarness([{ id: 'edit', text: 'keep', deliveryState: 'in_flight', deliveryTurnId: 'turn-1' }])
+    registryMock.getProvider.mockReturnValue({ cancelQueuedTurn: async () => {
+      harness.set({ activeThreadId: 'thr-2', queuedMessages: [] })
+    } })
+    const accept = vi.fn(() => true)
+    await expect(makeActions(harness).restoreQueuedMessage('edit', accept)).resolves.toBeNull()
+    expect(accept).not.toHaveBeenCalled()
+    expect(queuedMessagesForThread('thr-1')[0]?.editIntent).toBe('restoring')
     expect(harness.get().queuedMessages).toEqual([])
   })
 

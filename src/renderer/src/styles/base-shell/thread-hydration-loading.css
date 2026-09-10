@@ -1,0 +1,48 @@
+@keyframes ds-thread-loading-fade-in {
+from {
+opacity: 0;
+}
+
+to {
+opacity: 1;
+}
+}
+
+@keyframes ds-thread-loading-breathe {
+0%,
+100% {
+opacity: 0.35;
+transform: scale(0.96);
+}
+
+50% {
+opacity: 1;
+transform: scale(1);
+}
+}
+
+.ds-thread-loading-logo {
+width: 72px;
+height: 72px;
+object-fit: contain;
+user-select: none;
+-webkit-user-drag: none;
+animation:
+ds-thread-loading-fade-in 0.3s ease-out,
+ds-thread-loading-breathe 2.4s ease-in-out 0.3s infinite;
+}
+
+.ds-thread-loading-slow {
+animation: ds-thread-loading-fade-in 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+.ds-thread-loading-logo,
+.ds-thread-loading-slow {
+animation: none;
+}
+
+.ds-thread-loading-logo {
+opacity: 0.85;
+}
+}

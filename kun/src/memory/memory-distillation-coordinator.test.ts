@@ -6,8 +6,11 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { UserMessageSource } from '../contracts/items.js'
 import type { ThreadRecord } from '../contracts/threads.js'
+import { emptyUsageSnapshot } from '../contracts/usage.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
 import type { ThreadStore } from '../ports/thread-store.js'
+import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
+import { UsageService } from '../services/usage-service.js'
 import {
   MEMORY_DISTILLATION_MAX_INPUT_CHARS,
   MEMORY_DISTILLATION_MAX_OUTPUT_TOKENS,
@@ -54,6 +57,27 @@ describe('MemoryDistillationCoordinator', () => {
     const sourceTrust = pending[0]!.candidate.sources.map((source) => source.trust)
     expect(sourceTrust).toHaveLength(2)
     expect(sourceTrust).toEqual(expect.arrayContaining(['inferred', 'explicit-user']))
+  })
+
+  it('keeps extracted candidates when post-turn usage persistence is fenced', async () => {
+    const usage = new UsageService()
+    const events = {
+      record: vi.fn(async () => {
+        throw Object.assign(new Error('turn mutation fence is stale'), {
+          code: 'stale_turn_fence'
+        })
+      })
+    } as unknown as RuntimeEventRecorder
+    const harness = await createHarness({ includeUsage: true, usage, events })
+
+    const pending = await harness.coordinator.distill('thread_1', 'turn_1')
+
+    expect(pending).toHaveLength(1)
+    expect(usage.forThread('thread_1').totalTokens).toBe(100)
+    expect(events.record).toHaveBeenCalledOnce()
+    expect(harness.diagnostics).toEqual([
+      'memory distillation usage persistence failed: turn mutation fence is stale'
+    ])
   })
 
   it('writes an authority-reference Memory only after allow and replays idempotently', async () => {
@@ -105,7 +129,7 @@ describe('MemoryDistillationCoordinator', () => {
     expect(await timed.memory.list({ all: true })).toHaveLength(0)
   })
 
-  it('does not extract failed, aborted, empty, or opted-out turns', async () => {
+  it('does not extract failed, aborted, empty, opted-out, or deleted turns', async () => {
     for (const input of [
       { status: 'failed' as const },
       { status: 'aborted' as const },
@@ -119,6 +143,10 @@ describe('MemoryDistillationCoordinator', () => {
     const disabled = await createHarness({ enabled: false })
     disabled.coordinator.schedule({ threadId: 'thread_1', turnId: 'turn_1', status: 'completed' })
     await vi.waitFor(() => expect(disabled.requests).toHaveLength(0))
+
+    const deleted = await createHarness({ missingThread: true })
+    expect(await deleted.coordinator.distill('thread_1', 'turn_1')).toEqual([])
+    expect(deleted.requests).toHaveLength(0)
   })
 
   it.each([
@@ -385,6 +413,10 @@ async function createHarness(options: {
   messageSource?: UserMessageSource
   turnId?: string
   nowIso?: () => string
+  includeUsage?: boolean
+  usage?: UsageService
+  events?: RuntimeEventRecorder
+  missingThread?: boolean
 } = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'kun-memory-distillation-'))
   const nowIso = options.nowIso ?? (() => now)
@@ -415,11 +447,25 @@ async function createHarness(options: {
         kind: 'assistant_text_delta',
         text: options.output ?? extraction({ turnId: options.turnId })
       } satisfies ModelStreamChunk
+      if (options.includeUsage) {
+        yield {
+          kind: 'usage',
+          usage: {
+            ...emptyUsageSnapshot(),
+            promptTokens: 80,
+            completionTokens: 20,
+            totalTokens: 100,
+            turns: 1
+          }
+        } satisfies ModelStreamChunk
+      }
       yield { kind: 'completed', stopReason: 'stop' } satisfies ModelStreamChunk
     }
   }
   const thread = makeThread(options)
-  const threads = { get: async () => thread } as unknown as ThreadStore
+  const threads = {
+    get: async () => options.missingThread ? null : thread
+  } as unknown as ThreadStore
   const pending = new MemoryDistillationPendingStore({ dataDir, nowIso })
   const diagnostics: string[] = []
   const coordinator = new MemoryDistillationCoordinator({
@@ -429,6 +475,8 @@ async function createHarness(options: {
     memoryStore: () => memory,
     enabled: () => options.enabled !== false,
     nowIso,
+    ...(options.usage ? { usage: options.usage } : {}),
+    ...(options.events ? { events: options.events } : {}),
     ...(options.timeout ? { timeoutMs: options.timeoutMs ?? 5 } : {}),
     onDiagnostic: ({ message }) => diagnostics.push(message)
   })

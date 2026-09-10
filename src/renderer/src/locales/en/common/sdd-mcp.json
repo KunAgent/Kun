@@ -122,6 +122,13 @@
   "usageQuotaCurrentStreak": "Current streak: {{count}} days",
   "usageQuotaMostActiveWeekday": "Most active: {{weekday}}",
   "usageQuotaModels": "Model usage",
+  "usageModelScopeLabel": "Model usage source",
+  "usageModelScope": {
+    "primary": "Direct sessions",
+    "side": "Subagents",
+    "all": "All"
+  },
+  "usageModelScopeNote": "Totals still include subagent usage; switch source to review it.",
   "usageQuotaModelPagination": "Model usage pages",
   "usageQuotaModelPageRange": "Showing {{first}}–{{last}} / {{total}}",
   "usageQuotaModelPageIndicator": "{{page}} / {{total}}",

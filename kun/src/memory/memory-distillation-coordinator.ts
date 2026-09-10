@@ -400,16 +400,25 @@ export class MemoryDistillationCoordinator {
           throw new Error('memory distillation model attempted a tool call')
         } else if (chunk.kind === 'usage' && this.options.usage && this.options.events) {
           const usage = this.options.usage.record(input.threadId, chunk.usage)
-          await this.options.events.record({
-            kind: 'usage',
-            threadId: input.threadId,
-            turnId: input.turnId,
-            model: input.route.model,
-            ...(input.route.providerId ? { providerId: input.route.providerId } : {}),
-            ...(input.route.accountId ? { accountId: input.route.accountId } : {}),
-            attribution: 'memory-distillation',
-            usage
-          })
+          try {
+            await this.options.events.record({
+              kind: 'usage',
+              threadId: input.threadId,
+              turnId: input.turnId,
+              model: input.route.model,
+              ...(input.route.providerId ? { providerId: input.route.providerId } : {}),
+              ...(input.route.accountId ? { accountId: input.route.accountId } : {}),
+              attribution: 'memory-distillation',
+              usage
+            })
+          } catch (error) {
+            // Usage replay is independently observable, but a fenced accounting
+            // event must not discard an otherwise valid approval candidate.
+            const detail = error instanceof Error ? error.message : String(error)
+            this.diagnose(input.threadId, input.turnId, new Error(
+              `memory distillation usage persistence failed: ${detail}`
+            ))
+          }
         } else if (chunk.kind === 'error') {
           throw new Error(chunk.message)
         }

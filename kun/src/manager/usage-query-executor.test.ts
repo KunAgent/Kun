@@ -138,8 +138,9 @@ function rangeQuery(groupBy: 'day' | 'model'): SessionUsageAggregateQuery {
     to: '2026-08-02',
     timezone: 'UTC',
     fromInclusive: '2026-08-01T00:00:00.000Z',
-    toExclusive: '2026-08-03T00:00:00.000Z'
-  }
+    toExclusive: '2026-08-03T00:00:00.000Z',
+    ...(groupBy === 'model' ? { scope: 'all' as const } : {})
+  } as SessionUsageAggregateQuery
 }
 
 function threadResponse(turns: number): SessionUsageAggregateResponse {

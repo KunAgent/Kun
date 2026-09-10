@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -23,7 +23,7 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
-import { ChildRunFailureSchema } from '../contracts/subagent-retry.js'
+import { ChildProviderFallbackSchema, ChildRunFailureSchema } from '../contracts/subagent-retry.js'
 import { MAX_TURN_ATTACHMENT_IDS } from '../contracts/attachments.js'
 import {
   ComposerContextAttachmentSchema,
@@ -52,6 +52,7 @@ import {
   type FastContextTask
 } from './fast-context-evidence.js'
 import { DetachedChildHandoffStore } from './detached-child-handoff-store.js'
+import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 
 const ChildRunUsage = z.object({
   promptTokens: z.number().int().nonnegative().default(0),
@@ -235,6 +236,16 @@ export const ChildRunRecord = z.object({
   providerId: z.string().optional(),
   /** Opaque account id inherited only with the same selected provider route. */
   accountId: z.string().optional(),
+  /** Exact acting parent route captured at admission, never a mutable global default. */
+  parentModelRoute: z.object({
+    model: z.string().min(1),
+    providerId: z.string().min(1),
+    accountId: z.string().optional(),
+    reasoningEffort: ModelReasoningEffort.optional(),
+    serviceTier: z.literal('priority').optional()
+  }).strict().optional(),
+  /** Retained across resume/restart so automatic fallback cannot loop. */
+  providerFallback: ChildProviderFallbackSchema.optional(),
   /** Effective reasoning strength used by the child model request. */
   reasoningEffort: ModelReasoningEffort.optional(),
   /** Effective Codex service tier used by the child model request ('fast' = priority). */
@@ -342,6 +353,8 @@ export type ChildRunLifecycleMetadata = {
 export type ChildRunExecutor = (input: {
   /** Continue the persisted child thread instead of creating it again. */
   resumeChild?: boolean
+  /** Host-owned provider fallback may reuse evidence from earlier turns. */
+  providerFallbackContinuation?: boolean
   childId: string
   parentThreadId: string
   parentTurnId: string
@@ -444,9 +457,8 @@ export class FileDelegationStore {
             path,
             (value) => ChildRunRecord.parse(value)
           ).write(record)
-        : writeFile(path, JSON.stringify(record, null, 2), {
-            encoding: 'utf8',
-            mode: 0o600
+        : atomicWriteFile(path, JSON.stringify(record, null, 2), {
+            allowDirectWriteFallback: false
           }))
   }
 

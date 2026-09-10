@@ -426,6 +426,14 @@ export function approvalReviewFromEvent(
     event.riskLevel === 'critical'
       ? event.riskLevel
       : undefined
+  const route = event.reviewModelRoute
+  const reviewModelRoute = route?.model.trim()
+    ? {
+        model: route.model.trim(),
+        ...(route.providerId?.trim() ? { providerId: route.providerId.trim() } : {}),
+        ...(route.accountId?.trim() ? { accountId: route.accountId.trim() } : {})
+      }
+    : undefined
   return {
     reviewId,
     approvalId,
@@ -438,7 +446,11 @@ export function approvalReviewFromEvent(
     ...(riskLevel ? { riskLevel } : {}),
     ...(event.rationale?.trim()
       ? { rationale: redactSecretText(event.rationale.trim()) }
-      : {})
+      : {}),
+    ...(event.reviewModelSource === 'inherit' || event.reviewModelSource === 'fixed'
+      ? { reviewModelSource: event.reviewModelSource }
+      : {}),
+    ...(reviewModelRoute ? { reviewModelRoute } : {})
   }
 }
 

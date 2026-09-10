@@ -199,6 +199,7 @@ export function useWorkbenchAttachmentRuntime({
   const {
     handlePickAttachments,
     handlePasteClipboardImage,
+    handlePasteLongText,
     removeComposerAttachment
   } = useWorkbenchAttachmentController({
     attachmentUploadEnabled,
@@ -271,6 +272,7 @@ export function useWorkbenchAttachmentRuntime({
     composerAttachments,
     getAttachmentScope: () => composerAttachmentScopeRef.current,
     handlePasteClipboardImage,
+    handlePasteLongText,
     handlePickAttachments,
     removeComposerAttachments,
     removeComposerAttachment,

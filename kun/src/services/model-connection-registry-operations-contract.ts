@@ -35,6 +35,7 @@ export interface ModelConnectionRegistryOperations {
     }
   ): Promise<ModelConnectionSnapshot>;
   snapshot(): Promise<ModelConnectionSnapshot>;
+  getCustomHeaders(providerId: string): Promise<Record<string, string>>;
   assertRevision(expectedRevision: number): Promise<void>;
   subscribe(listener: (snapshot: ModelConnectionSnapshot) => void): () => void;
   waitForRevision(

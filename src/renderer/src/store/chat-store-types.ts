@@ -51,9 +51,10 @@ export type QueuedUserMessage = {
   text: string
   /** Stable idempotency key reused while this user submission is retried. */
   clientRequestId?: string
-  /** First Design document remains provisional until Kun accepts this queued turn. */
+  editIntent?: 'cancelling' | 'restoring'
+  steeringRequest?: { operationId: string; turnId: string }
   waitForRuntimeAdmission?: boolean
-  /** Pending/paused items are visible and waiting; starting/in-flight items stay durable while they wait in the server queue and are removed once their turn starts executing (the runtime timeline takes over); failed items are terminal until retried or deleted. */
+  /** Pending/paused items wait locally; admitted items remain until runtime execution starts. */
   deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
   deliveryTurnId?: string
   deliveryUserMessageItemId?: string
@@ -82,12 +83,7 @@ export type QueuedUserMessage = {
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
   composerContexts?: ComposerContextAttachment[]
-  /**
-   * Optional GUI plan context forwarded to Kun. The renderer
-   * attaches it for plan/refine turns so the runtime can advertise
-   * the native `create_plan` tool and gate the write to the reserved
-   * plan artifact.
-   */
+  /** GUI plan context forwarded to Kun for its reserved plan artifact. */
   guiPlan?: {
     operation: 'draft' | 'refine'
     workspaceRoot: string
@@ -215,32 +211,8 @@ export type ClearDesignHistoryResult = {
 }
 
 export type InitialSetupMode = 'required' | 'preview'
-export type SettingsRouteSection =
-  | 'general'
-  | 'providers'
-  | 'extensions'
-  | 'write'
-  | 'design'
-  | 'imageGeneration'
-  | 'mediaGeneration'
-  | 'speechToText'
-  | 'agents'
-  | 'laboratory'
-  | 'subagents'
-  | 'archives'
-  | 'worktree'
-  | 'memory'
-  | 'permissions'
-  | 'skill'
-  | 'mcp'
-  | 'shortcuts'
-  | 'easterEgg'
-  | 'claw'
-  | 'updates'
-  | 'terminal'
-  | 'debug'
-  | 'storage'
-  | 'dataMigration'
+import type { SettingsRouteSection } from './settings-route-sections'
+export type { SettingsRouteSection }
 export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
@@ -615,7 +587,7 @@ export type ChatState = {
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>
   drainQueuedMessages: () => Promise<void>
   removeQueuedMessage: (id: string) => Promise<void> | void
-  restoreQueuedMessage: (id: string) => Promise<QueuedUserMessage | null>
+  restoreQueuedMessage: (id: string, accept?: (message: QueuedUserMessage) => boolean | Promise<boolean>) => Promise<QueuedUserMessage | null>
   reorderQueuedMessage: (id: string, targetId: string, position: 'before' | 'after') => Promise<void> | void
   /** Resume a runtime queue paused by an interrupt. */
   resumeQueuedTurns: () => Promise<boolean>

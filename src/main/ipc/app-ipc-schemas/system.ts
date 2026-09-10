@@ -3,6 +3,7 @@ import { isValidTimeZone } from '../../../shared/zoned-date-time'
 import { DESKTOP_COMMANDS, MAX_APP_BADGE_COUNT } from '../../../shared/kun-gui-api'
 import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { SPEECH_TRANSCRIPTION_MAX_BASE64_CHARS, SPEECH_TRANSCRIPTION_MAX_DURATION_MS } from '../../../shared/speech-to-text'
+import { KOKORO_SPEAK_MAX_TEXT_CHARS } from '../../../shared/local-kokoro-speech'
 import {
   TERMINAL_DEFAULT_COLS,
   TERMINAL_DEFAULT_ROWS,
@@ -28,6 +29,9 @@ import {
 import {
   clawImProviderSchema,
   clawRunModeSchema,
+  localKokoroDownloadSourceSchema,
+  localKokoroModelIdSchema,
+  localKokoroVoiceIdSchema,
   localWhisperDownloadSourceSchema,
   localWhisperModelIdSchema,
   modelIdSchema,
@@ -53,6 +57,60 @@ export const localWhisperDownloadPayloadSchema = z
 export const localWhisperSourceStatusPayloadSchema = z
   .object({
     modelId: localWhisperModelIdSchema.optional()
+  })
+  .strict()
+
+export const localKokoroModelIdPayloadSchema = localKokoroModelIdSchema.optional()
+export const localKokoroVoiceIdPayloadSchema = localKokoroVoiceIdSchema.optional()
+export const localKokoroDownloadPayloadSchema = z
+  .object({
+    modelId: localKokoroModelIdSchema.optional(),
+    sourceId: localKokoroDownloadSourceSchema.optional(),
+    ownerId: trimmedString(MAX_ID_LENGTH).optional()
+  })
+  .strict()
+  .optional()
+export const localKokoroVoiceDownloadPayloadSchema = z
+  .object({
+    voiceId: localKokoroVoiceIdSchema.optional(),
+    sourceId: localKokoroDownloadSourceSchema.optional(),
+    ownerId: trimmedString(MAX_ID_LENGTH).optional()
+  })
+  .strict()
+  .optional()
+export const localKokoroReadinessPayloadSchema = z
+  .object({
+    modelId: localKokoroModelIdSchema.optional(),
+    voiceId: localKokoroVoiceIdSchema.optional()
+  })
+  .strict()
+  .optional()
+export const localKokoroSpeakPayloadSchema = z
+  .object({
+    text: z.string().min(1).max(KOKORO_SPEAK_MAX_TEXT_CHARS),
+    requestId: trimmedString(MAX_ID_LENGTH),
+    modelId: localKokoroModelIdSchema.optional(),
+    voiceId: localKokoroVoiceIdSchema.optional(),
+    speed: z.number().min(0.5).max(2).optional(),
+    keepTrack: z.boolean().optional()
+  })
+  .strict()
+export const localKokoroSpeakCancelPayloadSchema = trimmedString(MAX_ID_LENGTH)
+
+/** Recording identity produced by `localKokoroTrackKey`. */
+export const localKokoroTrackKeySchema = z
+  .string()
+  .regex(/^[0-9a-f]{16}-[0-9a-z]{1,12}$/, 'Not a speech recording key')
+export const localKokoroTrackFinalizePayloadSchema = z
+  .object({
+    requestId: trimmedString(MAX_ID_LENGTH),
+    key: localKokoroTrackKeySchema
+  })
+  .strict()
+export const localKokoroTrackExportPayloadSchema = z
+  .object({
+    key: localKokoroTrackKeySchema,
+    fileName: optionalTrimmedString(MAX_ID_LENGTH)
   })
   .strict()
 

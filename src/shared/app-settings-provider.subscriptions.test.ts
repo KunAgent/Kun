@@ -91,7 +91,7 @@ describe('ChatGPT subscription migration', () => {
     expect(provider.modelProfiles['gpt-5.3-codex-spark'].serviceTiers).toBeUndefined()
   })
 
-  it('removes stale priority metadata from unsupported Codex models', () => {
+  it('keeps explicit Codex service tiers over the static preset', () => {
     const normalized = normalizeModelProviderSettings({
       providers: [{
         id: 'codex',
@@ -100,7 +100,7 @@ describe('ChatGPT subscription migration', () => {
         baseUrl: 'https://chatgpt.com/backend-api/codex',
         endpointFormat: 'custom_endpoint',
         useProxy: false,
-        models: ['gpt-5.4-mini'],
+        models: ['gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5'],
         modelProfiles: {
           'gpt-5.4-mini': {
             inputModalities: ['text', 'image'],
@@ -108,15 +108,25 @@ describe('ChatGPT subscription migration', () => {
             supportsToolCalling: true,
             messageParts: ['text', 'image_url'],
             serviceTiers: ['priority']
+          },
+          'gpt-5.4': {
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text', 'image_url'],
+            serviceTiers: []
           }
         }
       }]
     })
 
-    expect(
-      normalized.providers.find((item) => item.id === 'codex')
-        ?.modelProfiles['gpt-5.4-mini'].serviceTiers
-    ).toBeUndefined()
+    const profiles = normalized.providers.find((item) => item.id === 'codex')?.modelProfiles
+    // A live catalog declaration survives even when the static preset omits it.
+    expect(profiles?.['gpt-5.4-mini'].serviceTiers).toEqual(['priority'])
+    // An explicit empty declaration is not overwritten by the static preset.
+    expect(profiles?.['gpt-5.4'].serviceTiers).toEqual([])
+    // Models without any declaration still inherit the static preset.
+    expect(profiles?.['gpt-5.5'].serviceTiers).toEqual(['priority'])
   })
 
   it('keeps custom names and custom model collections unchanged', () => {

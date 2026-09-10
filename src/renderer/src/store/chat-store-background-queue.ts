@@ -1,4 +1,6 @@
 import type { AgentProvider } from '../agent/types'
+import { confirmQueueAdmission } from './queue-admission-recovery'
+import { queueAdmissionPending } from './queue-admission-fence'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { describeRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import type { ChatState, ChatStoreGet, ChatStoreSet, QueuedUserMessage } from './chat-store-types'
@@ -154,11 +156,13 @@ export async function drainBackgroundQueuedMessage(
     } else {
       messages = settleCompletedDelivery(messages, input.completedTurnId)
     }
-    let next = messages.find(isPendingQueuedMessage)
+    const sendable = (message: QueuedUserMessage): boolean => isPendingQueuedMessage(message) ||
+      Boolean(message.deliveryState === 'starting' && message.clientRequestId && !queueAdmissionPending(message.id))
+    let next = messages.find(sendable)
     while (next?.waitForRuntimeAdmission && !hasRuntimeTurnAdmissionWaiter(next.clientRequestId)) {
       messages = messages.filter((message) => message.id !== next?.id)
       settleRuntimeTurnAdmission(next.clientRequestId, false)
-      next = messages.find(isPendingQueuedMessage)
+      next = messages.find(sendable)
     }
     saveQueuedMessagesForThread(threadId, messages)
     if (!next) return { status: 'none' }
@@ -202,15 +206,23 @@ export async function drainBackgroundQueuedMessage(
       replaceQueuedMessage(threadId, next.id, (message) => ({ ...message, ...next }))
       syncActiveQueue(set, threadId, next.id, (message) => ({ ...message, ...next }))
 
-      const accepted = await provider.sendUserMessage(
+      const submission = next
+      const accepted = await confirmQueueAdmission({ provider, threadId, clientRequestId,
+        send: () => provider.sendUserMessage(
         threadId,
         runtimeText,
-        queuedSendOptions(next, {
-          displayText: next.displayText ?? next.text,
+        { ...queuedSendOptions(submission, {
+          displayText: submission.displayText ?? submission.text,
           checkpointRequestId,
           claw: Boolean(channel)
-        })
-      )
+        }), enqueueIfBusy: true }
+      ) })
+      if (accepted.retired) {
+        saveQueuedMessagesForThread(threadId, queuedMessagesForThread(threadId).filter((row) => row.id !== submission.id))
+        set((current) => current.activeThreadId === threadId
+          ? { queuedMessages: current.queuedMessages.filter((row) => row.id !== submission.id) } : {})
+        return { status: 'none' }
+      }
       resetUnknownOutcomeAttempts(clientRequestId)
       settleRuntimeTurnAdmission(clientRequestId, true)
       const acceptedUpdate = (message: QueuedUserMessage): QueuedUserMessage => ({
@@ -241,11 +253,11 @@ export async function drainBackgroundQueuedMessage(
               ...thread,
               status: thread.archived ? thread.status : 'running',
               latestTurnId: accepted.turnId,
-              latestTurnStatus: 'running'
+              latestTurnStatus: accepted.status === 'queued' ? 'queued' : 'running'
             }
           : thread)
       }))
-      input.onTurnStarted?.(accepted.turnId)
+      if (accepted.status !== 'queued') input.onTurnStarted?.(accepted.turnId)
       return { status: 'accepted', turnId: accepted.turnId }
     } catch (error) {
       const code = getRuntimeErrorCode(error)

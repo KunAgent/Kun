@@ -32,7 +32,16 @@ describe('model usage helpers', () => {
         to: '2026-05-31',
         timezone: 'Asia/Shanghai'
       })
-    ).toBe('/v1/usage?group_by=model&from=2026-05-01&to=2026-05-31&timezone=Asia%2FShanghai')
+    ).toBe('/v1/usage?group_by=model&scope=primary&from=2026-05-01&to=2026-05-31&timezone=Asia%2FShanghai')
+  })
+
+  it('builds a model usage request path for a chosen source scope', () => {
+    expect(
+      buildModelUsagePath(
+        { from: '2026-05-01', to: '2026-05-31', timezone: 'Asia/Shanghai' },
+        'side'
+      )
+    ).toBe('/v1/usage?group_by=model&scope=side&from=2026-05-01&to=2026-05-31&timezone=Asia%2FShanghai')
   })
 
   it('normalizes model buckets and daily chart buckets', () => {
@@ -76,6 +85,22 @@ describe('model usage helpers', () => {
     })
     expect(normalized.days.map((bucket) => bucket.date)).toEqual(['2026-05-01', '2026-05-02'])
     expect(normalized.totals.activeDays).toBe(1)
+    expect(normalized.scope).toBe('all')
+  })
+
+  it('normalizes the response scope and falls back to all when missing', () => {
+    expect(
+      normalizeModelUsageResponse({
+        group_by: 'model',
+        scope: 'side',
+        from: '2026-05-01',
+        to: '2026-05-01',
+        timezone: 'UTC',
+        buckets: [],
+        days: [],
+        totals: {}
+      }).scope
+    ).toBe('side')
   })
 
   it('loads model usage from the runtime request bridge', async () => {
@@ -94,11 +119,14 @@ describe('model usage helpers', () => {
     }))
     setRuntimeRequest(runtimeRequest)
 
-    const loaded = await loadModelUsage({ from: '2026-05-01', to: '2026-05-01', timezone: 'UTC' })
+    const loaded = await loadModelUsage(
+      { from: '2026-05-01', to: '2026-05-01', timezone: 'UTC' },
+      'primary'
+    )
 
     expect(loaded?.buckets[0]?.model).toBe('Opus 4.8')
     expect(runtimeRequest).toHaveBeenCalledWith(
-      '/v1/usage?group_by=model&from=2026-05-01&to=2026-05-01&timezone=UTC',
+      '/v1/usage?group_by=model&scope=primary&from=2026-05-01&to=2026-05-01&timezone=UTC',
       'GET'
     )
   })
@@ -107,7 +135,7 @@ describe('model usage helpers', () => {
     let resolve!: (value: { ok: boolean; status: number; body: string }) => void
     setRuntimeRequest(() => new Promise((done) => { resolve = done }))
 
-    const pending = loadModelUsage({ from: '2026-05-01', to: '2026-05-01', timezone: 'UTC' })
+    const pending = loadModelUsage({ from: '2026-05-01', to: '2026-05-01', timezone: 'UTC' }, 'all')
     resolve({
       ok: true,
       status: 200,
@@ -121,7 +149,7 @@ describe('model usage helpers', () => {
     setRuntimeRequest(async () => ({ ok: true, status: 200, body: '{bad-json' }))
 
     await expect(
-      loadModelUsage({ from: '2026-05-01', to: '2026-05-01', timezone: 'UTC' })
+      loadModelUsage({ from: '2026-05-01', to: '2026-05-01', timezone: 'UTC' }, 'primary')
     ).rejects.toThrow('model usage response was not valid JSON')
   })
 })

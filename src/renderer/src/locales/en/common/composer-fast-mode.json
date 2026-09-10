@@ -1,0 +1,7 @@
+{
+  "composerFastModeOn": "Fast mode on",
+  "composerFastModeOff": "Fast mode off",
+  "composerFastModeHint": "Faster Codex responses with increased subscription usage.",
+  "composerFastModeUnverified": "Fast support is not confirmed for this model. Refresh the model list in provider settings.",
+  "composerFastModeUnsupported": "This model does not offer Fast mode."
+}

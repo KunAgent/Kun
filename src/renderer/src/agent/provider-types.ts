@@ -91,6 +91,7 @@ export type ThreadListPage = {
 }
 
 export type ThreadRuntimeState = {
+  activeTurn?: { id: string; status: string; orchestration: 'direct' | 'graph' } | null
   status: string
   updatedAt: string
   latestSeq: number
@@ -123,6 +124,7 @@ export type ThreadLiveProjection = {
 }
 
 export type ThreadDetail = {
+  activeTurn?: { id: string; status: string; orchestration: 'direct' | 'graph' } | null
   blocks: ChatBlock[]
   latestSeq: number
   /** Cumulative unfinished text restored separately from settled timeline blocks. */
@@ -270,6 +272,8 @@ export interface AgentProvider {
     turnId: string
     threadId: string
     userMessageItemId?: string
+    status?: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
+    queuedPosition?: number
     agentSurface?: 'code' | 'write' | 'design'
     /** Durable thread ownership; agentSurface above is only this turn's intent. */
     threadAgentSurface?: 'code' | 'write' | 'design'
@@ -345,7 +349,7 @@ export interface AgentProvider {
     threadId: string,
     turnId: string,
     text: string,
-    options?: { displayText?: string; attachmentIds?: string[] }
+    options?: { displayText?: string; attachmentIds?: string[]; operationId?: string; sourceTurnId?: string }
   ): Promise<void>
   interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void>
   cancelQueuedTurn?(threadId: string, turnId: string): Promise<void>

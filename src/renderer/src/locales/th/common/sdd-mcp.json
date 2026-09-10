@@ -122,6 +122,13 @@
   "usageQuotaCurrentStreak": "Current streak: {{count}} days",
   "usageQuotaMostActiveWeekday": "Most active: {{weekday}}",
   "usageQuotaModels": "การใช้งานโมเดล",
+  "usageModelScopeLabel": "แหล่งที่มาการใช้งานโมเดล",
+  "usageModelScope": {
+    "primary": "เซสชันโดยตรง",
+    "side": "เอเจนต์ย่อย",
+    "all": "ทั้งหมด"
+  },
+  "usageModelScopeNote": "ยอดรวมยังรวมการใช้งานของเอเจนต์ย่อย; สลับแหล่งที่มาเพื่อตรวจสอบ",
   "usageQuotaModelPagination": "หน้าการใช้งานโมเดล",
   "usageQuotaModelPageRange": "แสดง {{first}}–{{last}} / {{total}}",
   "usageQuotaModelPageIndicator": "{{page}} / {{total}}",

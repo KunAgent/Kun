@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { makeToolResultItem, makeUserItem } from '../domain/item.js'
 import { estimateModelRequestInputTokens } from './model-request-estimator.js'
-import { composeModelRequest, effectiveOutputBudgetTokens } from './model-request-composer.js'
+import { composeModelRequest, effectiveOutputBudgetTokens, ordinaryOutputReserveTokens } from './model-request-composer.js'
 import { isModelVisibleImageOutput } from './tool-result-image.js'
 
 const threadId = 'thread_request_composer'
@@ -15,17 +15,17 @@ const emptyAttachments = {
 } as const
 
 describe('composeModelRequest', () => {
-  it('bounds model output capability by the ordinary reservation and remaining capacity', () => {
+  it('forwards the declared output capability clamped only by remaining capacity', () => {
     expect(effectiveOutputBudgetTokens({
       inputTokens: 14_236,
       contextCapTokens: 111_411,
       declaredMaxOutputTokens: 128_000
-    })).toBe(32_768)
+    })).toBe(97_175)
     expect(effectiveOutputBudgetTokens({
       inputTokens: 14_236,
       contextCapTokens: 111_411,
       declaredMaxOutputTokens: 500_000
-    })).toBe(32_768)
+    })).toBe(97_175)
     expect(effectiveOutputBudgetTokens({
       inputTokens: 14_236,
       contextCapTokens: 111_411,
@@ -36,6 +36,28 @@ describe('composeModelRequest', () => {
       contextCapTokens: 111_411,
       declaredMaxOutputTokens: 128_000
     })).toBe(6_411)
+  })
+
+  it('bounds the compaction reservation by the ordinary runtime default', () => {
+    expect(ordinaryOutputReserveTokens({
+      inputTokens: 0,
+      contextCapTokens: 850_000,
+      declaredMaxOutputTokens: 128_000
+    })).toBe(32_768)
+    expect(ordinaryOutputReserveTokens({
+      inputTokens: 0,
+      contextCapTokens: 217_600,
+      declaredMaxOutputTokens: 500_000
+    })).toBe(32_768)
+    expect(ordinaryOutputReserveTokens({
+      inputTokens: 0,
+      contextCapTokens: 850_000
+    })).toBe(32_768)
+    expect(ordinaryOutputReserveTokens({
+      inputTokens: 0,
+      contextCapTokens: 20_000,
+      declaredMaxOutputTokens: 128_000
+    })).toBe(20_000)
   })
 
   it('uses a finite fallback when a model has no output metadata', () => {

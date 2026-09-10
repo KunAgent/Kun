@@ -1,3 +1,5 @@
+import { recoverStartupManager } from './runtime/kun-startup-manager-recovery'
+import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   defaultKunRuntimeSettings,
@@ -115,7 +117,11 @@ vi.mock('./runtime/kun-adapter', () => ({
     stopSharedForReplacementAndWait: harness.stopSharedForReplacementAndWait
   }
 }))
+vi.mock('./runtime/kun-startup-manager-recovery', () => ({
+  recoverStartupManager: vi.fn(async () => harness.activeServiceManager)
+}))
 vi.mock('./kun-process', () => ({
+  configureKunManagerDataPlaneForCurrentProcess: (manager: unknown) => manager,
   isKunChildRunning: () => false,
   waitForKunStartupSettled: harness.waitForKunStartupSettled
 }))
@@ -295,22 +301,24 @@ describe('GUI Runtime startup preparation', () => {
     ))
 
     expect(harness.stopAndWait).toHaveBeenCalledOnce()
-    expect(harness.drainKunOwnersForHandoff).toHaveBeenCalledWith(expect.objectContaining({
-      reason: 'startup-retry',
-      dataDirs: ['/tmp/kun-data'],
-      settingsPath: '/tmp/kun-settings.json',
-      controlDir: '/tmp/kun-control'
-    }))
-    expect(harness.mainState.activeServiceManager).toBeNull()
+    expect(recoverStartupManager).toHaveBeenCalledWith(true)
+    expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
   })
 
   it('keeps the Manager binding when verified replacement fails', async () => {
-    harness.drainKunOwnersForHandoff.mockRejectedValueOnce(new Error('another TUI owns the Runtime'))
+    vi.mocked(recoverStartupManager).mockRejectedValueOnce(new Error('another TUI owns the Runtime'))
 
     await expect(prepareGuiRuntimeForStartupRetry(new Error(
       'Kun Service Manager data mutex failed with HTTP 500: internal_error'
     ))).rejects.toThrow(/another TUI owns the Runtime/)
 
+    expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
+  })
+
+  it('recovers a Manager failure before activeServiceManager is initialized', async () => {
+    harness.mainState.activeServiceManager = null
+    await prepareGuiRuntimeForStartupRetry(new ServiceManagerUnavailableError('transport_refused', 11288))
+    expect(recoverStartupManager).toHaveBeenCalledWith(false)
     expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
   })
 

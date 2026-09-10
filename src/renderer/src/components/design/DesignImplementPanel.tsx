@@ -39,6 +39,7 @@ type Props = {
   attachmentUploadError?: string | null
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
+  onPasteLongText?: (text: string) => void | Promise<void>
   onRemoveAttachment?: (id: string) => void
   onSend: () => void
   onInterrupt: (options?: { discard?: boolean }) => void
@@ -85,6 +86,7 @@ export function DesignImplementPanel({
   attachmentUploadError = null,
   onPickAttachments,
   onPasteClipboardImage,
+  onPasteLongText,
   onRemoveAttachment,
   onSend,
   onInterrupt,
@@ -180,6 +182,7 @@ export function DesignImplementPanel({
           attachmentUploadError={attachmentUploadError}
           onPickAttachments={onPickAttachments}
           onPasteClipboardImage={onPasteClipboardImage}
+          onPasteLongText={onPasteLongText}
           onRemoveAttachment={onRemoveAttachment}
           onSend={onSend}
           onInterrupt={(options) => interruptDesignPagesRun(onInterrupt, options)}

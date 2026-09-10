@@ -50,6 +50,7 @@ import type {
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
+  fetchRuntimeQueuedTurnsBestEffort,
   isPendingQueuedMessage,
   queuedMessagesForThread,
   reconcileQueuedMessages,
@@ -442,11 +443,13 @@ export function createThreadCreationActions(
           const runtimeState = await p.getThreadState(activeThreadId, { signal: recoverySignal })
           recoverySignal.throwIfAborted()
           if (!recoveryStillCurrent()) return state.busy
-          const latestTurnMatches = !state.currentTurnId || !runtimeState.latestTurnId ||
-            runtimeState.latestTurnId === state.currentTurnId
+          const executionTurnId = runtimeState.activeTurn !== undefined
+            ? runtimeState.activeTurn?.id ?? null : runtimeState.latestTurnId
+          const latestTurnMatches = !state.currentTurnId || !executionTurnId ||
+            executionTurnId === state.currentTurnId
           const cursorRetained = (runtimeState.replayFloorSeq ?? 0) <= state.lastSeq + 1
           if (runtimeState.latestSeq >= state.lastSeq && latestTurnMatches && cursorRetained) {
-            const runtimeBusy = runtimeState.status === 'running' ||
+            const runtimeBusy = runtimeState.activeTurn !== undefined ? Boolean(runtimeState.activeTurn) : runtimeState.status === 'running' ||
               runtimeState.latestTurnStatus === 'queued' ||
               runtimeState.latestTurnStatus === 'running'
             const replayPending = runtimeState.latestSeq > state.lastSeq
@@ -456,9 +459,12 @@ export function createThreadCreationActions(
               busyUnconfirmed: busy,
               ...(busy
                 ? {
-                    currentTurnId: runtimeState.latestTurnId ?? snapshot.currentTurnId,
-                    currentTurnOrchestration: runtimeState.latestTurnOrchestration ??
-                      snapshot.currentTurnOrchestration ?? 'direct'
+                    currentTurnId: runtimeState.activeTurn !== undefined
+                      ? runtimeState.activeTurn?.id ?? null
+                      : runtimeState.latestTurnId ?? snapshot.currentTurnId,
+                    currentTurnOrchestration: runtimeState.activeTurn !== undefined
+                      ? runtimeState.activeTurn?.orchestration ?? null
+                      : runtimeState.latestTurnOrchestration ?? snapshot.currentTurnOrchestration ?? 'direct'
                   }
                 : {
                     blocks: settlePendingRuntimeWorkAfterInterrupt(snapshot.blocks),
@@ -481,7 +487,10 @@ export function createThreadCreationActions(
             })
             subscribeThreadEventsWithRecovery(p, activeThreadId, state.lastSeq, sink, ac.signal, get)
             if (busy) armBusyWatchdog(set, get)
-            else resetBusyRecoveryAttempts()
+            else {
+              resetBusyRecoveryAttempts()
+              void get().drainQueuedMessages?.()
+            }
             return busy
           }
         } catch (error) {
@@ -491,6 +500,7 @@ export function createThreadCreationActions(
         }
       }
       const {
+        activeTurn,
         blocks: rawBlocks,
         latestSeq,
         threadStatus,
@@ -511,7 +521,8 @@ export function createThreadCreationActions(
       })
       if (!recoveryStillCurrent()) return state.busy
       const loaded = hydrateBlockModelLabels(activeThreadId, rawBlocks)
-      const busy = threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
+      const busy = activeTurn !== undefined ? Boolean(activeTurn)
+        : threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
       // The server has settled but a tool/approval/user_input block may still be
       // open (e.g. a delegate_task interrupted by a runtime restart). Settle it,
       // otherwise threadHasPendingRuntimeWork stays true and the queued message
@@ -522,11 +533,13 @@ export function createThreadCreationActions(
         : null
       // The detail response is authoritative for the running turn; a stale local
       // currentTurnId from a previous recovery attempt must not win over it.
-      const currentTurnId = busy ? latestTurnId ?? state.currentTurnId ?? null : null
-      const durableQueuedMessages = queuedMessagesForThread(activeThreadId)
+      const currentTurnId = activeTurn !== undefined
+        ? activeTurn?.id ?? null : busy ? latestTurnId ?? state.currentTurnId ?? null : null
+      const runtimeQueue = await fetchRuntimeQueuedTurnsBestEffort(p, activeThreadId)
+      if (!recoveryStillCurrent()) return get().busy
       const queuedMessages = reconcileQueuedMessages(
-        state.queuedMessages.length > 0 ? state.queuedMessages : durableQueuedMessages,
-        { busy, turnId: currentTurnId, blocks }
+        get().queuedMessages,
+        { busy, turnId: currentTurnId, blocks }, runtimeQueue
       )
 
       set((snapshot) => {
@@ -554,7 +567,8 @@ export function createThreadCreationActions(
           // unconfirmed until the live stream proves the turn is alive.
           busyUnconfirmed: busy,
           currentTurnId,
-          currentTurnOrchestration: busy ? latestTurnOrchestration ?? 'direct' : null,
+          currentTurnOrchestration: activeTurn !== undefined
+            ? activeTurn?.orchestration ?? null : busy ? latestTurnOrchestration ?? 'direct' : null,
           currentTurnUserId,
           currentTurnStartedAtMs: busy ? latestTurnStartedAtMs ?? null : null,
           turnDurationByUserId,
@@ -585,10 +599,8 @@ export function createThreadCreationActions(
         armBusyWatchdog(set, get)
       } else {
         resetBusyRecoveryAttempts()
-        if (get().queuedMessages.length > 0) {
-          void get().drainQueuedMessages()
-        }
       }
+      if (get().queuedMessages.length > 0) void get().drainQueuedMessages()
       return busy
     } catch (e) {
       if (recoverySignal.aborted) return get().busy

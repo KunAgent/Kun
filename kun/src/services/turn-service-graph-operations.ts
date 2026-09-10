@@ -96,7 +96,8 @@ async suspendGraphLeadTurn(this: TurnService, input: {
         input.force !== true &&
         (
           this['hasGraphSteeringResume'](input.turnId) ||
-          this['deps'].steering.peek(input.turnId).length > 0
+          this['deps'].steering.peek(input.turnId).length > 0 ||
+          latest.steeringDeliveries?.some((entry) => !entry.delivered)
         )
       ) return 'pending_steering'
       if (attached.supervisionPending && input.allowPendingSupervision !== true) {
@@ -184,7 +185,8 @@ async suspendGraphPlanningTurn(this: TurnService, input: {
         input.force !== true &&
         (
           this['hasGraphSteeringResume'](input.turnId) ||
-          this['deps'].steering.peek(input.turnId).length > 0
+          this['deps'].steering.peek(input.turnId).length > 0 ||
+          turn.steeringDeliveries?.some((entry) => !entry.delivered)
         )
       ) return 'pending_steering'
       await this['deps'].threadStore.upsert({

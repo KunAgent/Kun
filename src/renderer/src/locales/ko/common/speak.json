@@ -1,0 +1,20 @@
+{
+  "speakAnswer": "읽어주기",
+  "speakStop": "정지",
+  "speakPreparing": "음성을 준비하는 중...",
+  "speakDownloading": "음성 모델을 다운로드하는 중...",
+  "speakSynthesizing": "음성을 생성하는 중...",
+  "speakUnavailable": "이 빌드에서는 로컬 음성을 사용할 수 없습니다.",
+  "speakNothingToRead": "이 답변에는 읽어줄 텍스트가 없습니다.",
+  "speakModelMissing": "읽어주기를 사용하려면 설정에서 Kokoro 음성 모델을 다운로드하세요.",
+  "speakVoiceMissing": "선택한 음성을 다운로드할 수 없습니다.",
+  "speakFailed": "음성을 생성할 수 없습니다: {{message}}",
+  "speakDownloadingModel": "{{model}} 다운로드 중",
+  "speakDownloadingVoice": "음성 {{voice}} 다운로드 중",
+  "speakDownloadingHint": "다운로드가 끝나면 자동으로 읽어줍니다.",
+  "speakTrackDownload": "오디오 내려받기",
+  "speakTrackSaved": "저장됨",
+  "speakTrackSaveFailed": "녹음을 저장할 수 없습니다: {{message}}",
+  "speakUnsupportedLanguage": "로컬 읽기는 영어만 지원합니다. 이 내용에 지원되지 않는 언어가 포함되어 있습니다.",
+  "speakTrackNotSaved": "녹음이 삭제되었거나 저장 한도를 초과했거나 쓰기에 실패하여 저장되지 않았습니다. 읽기는 계속됩니다."
+}

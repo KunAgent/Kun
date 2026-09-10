@@ -194,6 +194,7 @@ describe('getThreadState', () => {
       latestSeq: 73,
       replayFloorSeq: 0,
       pendingUserInputIds: [],
+      activeTurn: { id: 'turn_state', status: 'running', orchestration: 'direct' },
       latestTurn: { id: 'turn_state', status: 'running', orchestration: 'direct' }
     })
     expect(getMetadata).toHaveBeenCalledWith(record.id)

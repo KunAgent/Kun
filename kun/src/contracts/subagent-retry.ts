@@ -21,6 +21,15 @@ export const ChildRunFailureSchema = z.object({
 }).strict()
 export type ChildRunFailure = z.infer<typeof ChildRunFailureSchema>
 
+/** A single automatic route change; contains no credentials or raw provider errors. */
+export const ChildProviderFallbackSchema = z.object({
+  from: z.object({ model: z.string().optional(), providerId: z.string().optional() }).strict(),
+  to: z.object({ model: z.string().min(1), providerId: z.string().min(1) }).strict(),
+  failure: ChildRunFailureSchema,
+  timestamp: z.string()
+}).strict()
+export type ChildProviderFallback = z.infer<typeof ChildProviderFallbackSchema>
+
 export const ProactiveRetryStatusSchema = z.object({
   enabled: z.boolean(),
   eligible: z.boolean(),

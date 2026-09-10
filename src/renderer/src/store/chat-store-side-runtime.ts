@@ -448,7 +448,9 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
               status: ev.status,
               decision: ev.decision ?? current?.decision,
               riskLevel: ev.riskLevel ?? current?.riskLevel,
-              rationale: ev.rationale ?? current?.rationale
+              rationale: ev.rationale ?? current?.rationale,
+              reviewModelSource: ev.reviewModelSource ?? current?.reviewModelSource,
+              reviewModelRoute: ev.reviewModelRoute ?? current?.reviewModelRoute
             })
           }
         })

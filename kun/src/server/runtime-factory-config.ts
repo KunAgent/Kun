@@ -30,6 +30,7 @@ export function mergeRuntimeConfigApplyOptions(
     approvalPolicy: serve.approvalPolicy ?? current.approvalPolicy,
     sandboxMode: serve.sandboxMode ?? current.sandboxMode,
     approvalReviewer: serve.approvalReviewer ?? current.approvalReviewer,
+    approvalReview: serve.approvalReview ?? current.approvalReview,
     tokenEconomyMode: serve.tokenEconomyMode ?? current.tokenEconomyMode,
     tokenEconomy: serve.tokenEconomy ?? current.tokenEconomy,
     toolOutputLimits: serve.toolOutputLimits ?? current.toolOutputLimits,

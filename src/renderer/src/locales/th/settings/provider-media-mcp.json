@@ -22,7 +22,7 @@
   "providerModelMaxOutputLabel": "เอาต์พุตสูงสุด (โทเค็น)",
   "providerModelMaxOutputPlaceholder": "เช่น 8k หรือ 32000",
   "providerModelMaxOutputParsed": "Token โทเค็น {{tokens}}",
-  "providerModelMaxOutputHint": "กำหนดงบประมาณเอาต์พุตของการตอบกลับหนึ่งรายการ เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นรันไทม์ของ Kun",
+  "providerModelMaxOutputHint": "กำหนดงบประมาณเอาต์พุตของการตอบกลับหนึ่งรายการ เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นรันไทม์ของ Kun ค่าที่ส่งจริงยังถูกจำกัดด้วยความจุหน้าต่างบริบทที่เหลืออยู่",
   "providerModelVisionLabel": "อินพุตภาพ (การมองเห็น)",
   "providerModelVisionDesc": "อนุญาตให้ส่งไฟล์แนบรูปภาพไปยังโมเดลนี้ในการแชท",
   "providerModelToolsLabel": "การเรียกเครื่องมือ",

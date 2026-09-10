@@ -319,7 +319,8 @@ export class TurnService {
   declare private rollbackPendingAdmission: (threadId: string, turnId: string) => Promise<boolean>
   declare private persistQueuedTurnRecord: (
     thread: ThreadRecord,
-    input: { threadId: string; request: StartTurnRequest }
+    input: { threadId: string; request: StartTurnRequest },
+    allocatedTurnId?: string
   ) => Promise<{ turnId: string; userItem: TurnItem }>
   declare private completeQueuedTurnAdmission: (input: {
     threadId: string

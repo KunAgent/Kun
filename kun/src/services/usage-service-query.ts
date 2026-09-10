@@ -11,10 +11,12 @@ import type {
   DailyUsageResponse,
   ModelUsageBucket,
   ModelUsageResponse,
+  ModelUsageScope,
   ThreadUsageBucket,
   ThreadUsageResponse,
   UsageSnapshot
 } from '../contracts/usage.js'
+import type { ThreadRelation } from '../contracts/threads.js'
 import { MAX_DAILY_USAGE_DAYS } from './usage-service-core.js'
 import { hasCacheTelemetry } from './usage-service-aggregation.js'
 
@@ -41,6 +43,7 @@ export type ModelUsageQuery = {
   from: string
   to: string
   timezone: string
+  scope: ModelUsageScope
 }
 
 export type TurnUsageQuery = {
@@ -53,6 +56,7 @@ export type ThreadUsageRecord = {
   turnId?: string
   model?: string
   providerId?: string
+  relation?: ThreadRelation
   completedAt: string
   usage: UsageSnapshot
 }
@@ -192,7 +196,30 @@ export function parseModelUsageQuery(
   assertValidTimezone(timezone)
   const { from, to } = resolveUsageWindow(input, timezone, now, 'model usage')
   inclusiveDayCount(from, to)
-  return { groupBy: 'model', from, to, timezone }
+  const scope = parseModelUsageScope(input)
+  return { groupBy: 'model', from, to, timezone, scope }
+}
+
+function parseModelUsageScope(input: Record<string, unknown>): ModelUsageScope {
+  const scope = stringParam(input, 'scope')
+  if (!scope) return 'all'
+  if (scope === 'all' || scope === 'primary' || scope === 'side') return scope
+  throw new UsageValidationError(`invalid model usage scope: ${scope}`)
+}
+
+/**
+ * Map a persisted thread relation to the coarse usage scope it belongs to.
+ * `primary`/`fork` (and legacy threads without a relation) are directly
+ * user-visible; only `side` threads are internal subagents/tasks.
+ */
+export function relationMatchesScope(
+  scope: ModelUsageScope,
+  relation: ThreadRelation | undefined
+): boolean {
+  if (scope === 'all') return true
+  const effective = relation ?? 'primary'
+  if (scope === 'side') return effective === 'side'
+  return effective === 'primary' || effective === 'fork'
 }
 
 export type UsageUtcRange = {

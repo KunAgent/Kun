@@ -601,6 +601,12 @@ export type CoreRuntimeEventJson = {
   riskLevel?: 'low' | 'medium' | 'high' | 'critical'
   rationale?: string
   prompt?: string
+  reviewModelSource?: 'inherit' | 'fixed'
+  reviewModelRoute?: {
+    model: string
+    providerId?: string
+    accountId?: string
+  }
   inputId?: string
   timeoutSeconds?: number
   questions?: Array<{
@@ -654,4 +660,6 @@ export type CoreQueuedTurnJson = {
 
 export type CoreQueuedTurnsResponseJson = {
   queuedTurns: CoreQueuedTurnJson[]
+  pendingAdmissions?: Array<{ turnId: string; clientRequestId?: string; createdAt: string }>
+  settledTurns?: Array<{ turnId: string; clientRequestId?: string; status: string; terminalCode?: string }>
 }

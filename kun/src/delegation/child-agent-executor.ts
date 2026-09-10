@@ -50,6 +50,7 @@ import { isHostShutdownTurnSuspension, TurnService } from '../services/turn-serv
 import { UsageService } from '../services/usage-service.js'
 import { submittedDesignTaskProfile } from '../domain/design-task-profile.js'
 import type { ChildRunExecutor } from './delegation-runtime.js'
+import { childContinuationEvidence } from './child-agent-result-support.js'
 import {
   ChildResultExecutionError,
   childResultSource,
@@ -57,7 +58,7 @@ import {
 } from './child-result-materializer.js'
 import { buildFastContextEvidencePack } from './fast-context-evidence.js'
 import { createFastContextToolHost } from './fast-context-tool-host.js'
-import { resolveChildEpisodeLimits } from './child-episode-limits.js'
+import { resolveChildEpisodeLimits, shouldUseFastContextEpisodeBudget } from './child-episode-limits.js'
 import { withGlobalSubagentTools } from './subagent-global-tool-policy.js'
 import {
   childResultUsedNoTextSummary,
@@ -143,6 +144,23 @@ export type ChildAgentExecutorOptions = {
 }
 
 export function createChildAgentExecutor(options: ChildAgentExecutorOptions): ChildRunExecutor {
+  const nowIso = options.nowIso ?? (() => new Date().toISOString())
+  // Keep the same stores/ledger across automatic continuations, including
+  // embedded in-memory executors. Child ids still isolate their histories.
+  const sessionStore: SessionStore = options.sessionStore ?? new InMemorySessionStore()
+  const threadStore: ThreadStore = options.threadStore ?? new InMemoryThreadStore()
+  const events =
+    options.events ??
+    (() => {
+      const eventBus = new InMemoryEventBus()
+      return new RuntimeEventRecorder({
+        eventBus,
+        sessionStore,
+        allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+        nowIso
+      })
+    })()
+  const usage = options.usage ?? new UsageService()
   return async (input) => {
     const fastContextTaskCount = input.fastContextTasks?.length ?? 1
     const toolHost = input.fastContext
@@ -158,28 +176,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(input.security?.blockedSkillIds ?? []),
       ...(input.blockedSkills ?? [])
     ])
-    const nowIso = options.nowIso ?? (() => new Date().toISOString())
     const attachmentStore = options.attachmentStore?.()
-    // Persist into the main runtime's stores + event bus when supplied, so the
-    // child session is queryable and streams live; otherwise stay isolated in
-    // throwaway in-memory stores (preserves test behavior). The recorder is
-    // shared too — events persist-before-publish to the same bus, and seq
-    // allocation is per-thread (childId), so child events never bleed into the
-    // parent thread's stream.
-    const sessionStore: SessionStore = options.sessionStore ?? new InMemorySessionStore()
-    const threadStore: ThreadStore = options.threadStore ?? new InMemoryThreadStore()
-    const events =
-      options.events ??
-      (() => {
-        const eventBus = new InMemoryEventBus()
-        return new RuntimeEventRecorder({
-          eventBus,
-          sessionStore,
-          allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
-          nowIso
-        })
-      })()
-    const usage = options.usage ?? new UsageService()
     const ids = new RandomIdGenerator()
     const inflight = new InflightTracker()
     const steering = new SteeringQueue()
@@ -353,7 +350,10 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {}),
       ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
       ...(options.tokenEconomy ? { tokenEconomy: options.tokenEconomy } : {}),
-      turnLimits: resolveChildEpisodeLimits(options.runtime?.turnLimits, input.fastContext === true),
+      turnLimits: resolveChildEpisodeLimits(
+        options.runtime?.turnLimits,
+        shouldUseFastContextEpisodeBudget({ fastContext: input.fastContext, profile: input.profile })
+      ),
       ...(input.fastContext
         ? {
             fastContext: true,
@@ -511,7 +511,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     const evidencePack = input.fastContext && input.fastContextTasks?.length
       ? buildFastContextEvidencePack({
           tasks: input.fastContextTasks,
-          items,
+          items: input.providerFallbackContinuation
+            ? items.map((item) => ({ ...item, turnId: started.turnId }))
+            : items,
           turnId: started.turnId,
           summary: result.summary,
           ...(status === 'completed' ? {} : { failure: `Retrieval child ${status}.` })
@@ -547,12 +549,13 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       sessionStore,
       thread.id,
       (event) =>
-        event.kind === 'error' &&
+        (event.kind === 'error' || event.kind === 'turn_failed') &&
+        Boolean(event.message?.trim()) &&
         event.turnId === started.turnId &&
         event.severity !== 'warning' &&
         event.severity !== 'info'
     )
-    if (runtimeError?.kind === 'error') {
+    if ((runtimeError?.kind === 'error' || runtimeError?.kind === 'turn_failed') && runtimeError.message) {
       // A Fast Context child that exhausted its retrieval budget can still
       // settle `completed` with a fatal-looking loop bookkeeping error (empty
       // final answer / suppressed repeat tool calls). Only those whitelisted
@@ -578,7 +581,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       })
     }
     const evidence = input.returnFormat === 'evidence'
-      ? childToolEvidence(items, started.turnId)
+      ? input.providerFallbackContinuation
+        ? childContinuationEvidence(items)
+        : childToolEvidence(items, started.turnId)
       : undefined
     if (status !== 'completed') {
       throw new ChildResultExecutionError(result.summary || `child agent ${status}`, structuredResult, {
@@ -628,12 +633,25 @@ function childExecutionErrorMessage(error: unknown): string {
 }
 
 function childFailureFromRuntimeError(
-  event: Extract<import('../contracts/events.js').RuntimeEvent, { kind: 'error' }>
+  event: Pick<Extract<import('../contracts/events.js').RuntimeEvent, { kind: 'error' }>,
+    'code' | 'details' | 'modelRequestFailure'> & { message?: string }
 ): ChildRunFailure {
+  if (/ServiceManagerTransportError|Kun Service Manager connection failed/i.test(event.message ?? '')) {
+    return { source: 'runtime', code: 'service_manager_unavailable' }
+  }
   const details = event.details && typeof event.details === 'object' && !Array.isArray(event.details)
     ? event.details as Record<string, unknown>
     : undefined
-  const modelFailure = details?.modelFailure
+  const nativeCategories: Record<string, ChildRunFailure['category']> = {
+    cursor_sdk_authentication_failed: 'authentication',
+    cursor_sdk_rate_limited: 'rate_limit',
+    cursor_sdk_network_failed: 'network',
+    cursor_sdk_configuration_failed: 'request',
+    cursor_sdk_unavailable: 'unavailable'
+  }
+  const nativeCategory = nativeCategories[event.code ?? '']
+  const modelFailure = event.modelRequestFailure ?? details?.modelFailure ??
+    (nativeCategory ? { category: nativeCategory } : undefined)
   const parsed = ChildRunFailureSchema.safeParse(
     modelFailure && typeof modelFailure === 'object' && !Array.isArray(modelFailure)
       ? {

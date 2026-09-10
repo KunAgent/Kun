@@ -505,8 +505,13 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(migrationScript).toContain("Get-EnvironmentValue 'KUN_INSTALLER_DIAGNOSTIC_PATH'")
     expect(migrationScript).toContain('$preparedSources += @{')
     expect(migrationScript).toContain('if ($set.Unknown.Count -eq 0)')
-    expect(migrationScript).toContain('function Assert-TrustedSecondarySource')
-    expect(migrationScript).toContain('function Assert-PackagedApplicationPayload')
+    expect(migrationScript).toContain('function Test-PackagedApplicationPayload')
+    expect(migrationScript).toContain('(-not (Test-PathEqual $source $primarySource))')
+    expect(migrationScript).toContain(
+      'Retiring the unverifiable current-user installation registration without modifying its files'
+    )
+    expect(migrationScript).not.toContain('function Assert-TrustedSecondarySource')
+    expect(migrationScript).not.toContain('function Assert-PackagedApplicationPayload')
     expect(migrationScript).toContain("Join-Path $Source 'resources'")
     expect(migrationScript).toContain("'app.asar'")
     expect(migrationScript).toContain('Ignoring missing current-user installation source')

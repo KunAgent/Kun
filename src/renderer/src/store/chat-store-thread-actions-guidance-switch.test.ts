@@ -202,7 +202,7 @@ describe('chat-store-thread-actions guidance with thread switching', () => {
       'thr_existing',
       'turn_active',
       'use the compact logo instead',
-      { displayText: 'Use the compact logo instead' }
+      { displayText: 'Use the compact logo instead', operationId: 'guide-q-guide' }
     )
 
     // Switch to B before the runtime answers; A's parked snapshot keeps Q.

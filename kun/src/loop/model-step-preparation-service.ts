@@ -1,3 +1,4 @@
+import { executableHistory } from './executable-history.js'
 import type { ModelToolSpec } from '../ports/model-client.js'
 import type { TurnItem } from '../contracts/items.js'
 import { makeErrorItem } from '../domain/item.js'
@@ -178,7 +179,7 @@ export abstract class ModelStepPreparationService {
     const goalForHistory = planTurnSuppressesGoalContext
       ? undefined
       : (await this.deps.threadStore.get(threadId))?.goal
-    historyItems = filterGoalContextsForActiveGoal(historyItems, goalForHistory)
+    historyItems = filterGoalContextsForActiveGoal(executableHistory(historyItems, await this.deps.threadStore.get(threadId)), goalForHistory)
     const turnDynamicContext = projectTurnDynamicContext({
       turnId,
       persona: turn.persona,

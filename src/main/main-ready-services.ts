@@ -32,7 +32,7 @@ import {
   setKunUnexpectedExitHandler
 } from './kun-process'
 import { LegacyProviderSettingsMigrationCoordinator } from './legacy-provider-settings-migration'
-import { configureLogger, logError, logWarn } from './logger'
+import { configureLogger, logError, logInfo, logWarn } from './logger'
 import { createClawRuntime } from './claw-runtime'
 import { createScheduleRuntime } from './schedule-runtime'
 import { createWorkflowRuntime } from './workflow-runtime'
@@ -202,6 +202,12 @@ export async function initializeMainServices(input: {
       }
     })
     mainState.activeServiceManager = serviceManager
+    logInfo('startup', 'Service Manager attached.', {
+      pid: serviceManager.discovery.pid,
+      instanceId: serviceManager.discovery.instanceId.slice(0, 12),
+      serviceVersion: serviceManager.discovery.serviceVersion,
+      buildId: serviceManager.discovery.buildId?.slice(0, 12)
+    })
     // Main still hosts a handful of legacy model consumers. Point their
     // Registry/credential projection at the exact Manager-owned data plane used
     // by both Runtime flavors; a process-local AtomicJson fallback would bypass

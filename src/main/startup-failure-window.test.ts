@@ -273,6 +273,24 @@ describe('showStartupFailureWindow', () => {
     expect(electron.app.quit).toHaveBeenCalledOnce()
   })
 
+  it('keeps a failed Manager recheck visible and does not relaunch on repeated clicks', async () => {
+    const { ServiceManagerUnavailableError } = await import('../../kun/src/manager/manager-resolution-error.js')
+    let reject!: (error: Error) => void
+    const recoverRetry = vi.fn(() => new Promise<void>((_resolve, rejectPromise) => { reject = rejectPromise }))
+    showStartupFailureWindow(new ServiceManagerUnavailableError('transport_refused', 11288), '/tmp/logs', { recoverRetry })
+    expect(lastRenderedHtml()).toContain('Recheck Kun')
+    const navigate = electron.webHandlers.get('will-navigate')!
+    navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    expect(recoverRetry).toHaveBeenCalledOnce()
+    reject(new Error('Runtime ownership cannot be verified; managerToken=secret'))
+    await vi.waitFor(() => expect(lastRenderedHtml()).toContain('Runtime ownership cannot be verified'))
+    expect(lastRenderedHtml()).not.toContain('managerToken=secret')
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+    navigate({ preventDefault: vi.fn() }, 'kun-startup-action:quit')
+    expect(electron.app.quit).toHaveBeenCalledOnce()
+  })
+
   it('keeps recovery open when ordinary retry cleanup fails', async () => {
     const recoverRetry = vi.fn().mockRejectedValue(new Error('cleanup failed'))
     showStartupFailureWindow(new Error('manager failed'), '/tmp/kun-logs', { recoverRetry })

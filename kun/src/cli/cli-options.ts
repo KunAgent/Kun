@@ -26,6 +26,9 @@ import {
   LabConfigSchema
 } from '../config/kun-config.js'
 import {
+  ApprovalReviewModelSelectionSchema
+} from '../contracts/approval-review-config.js'
+import {
   DEFAULT_KUN_CAPABILITIES_CONFIG,
   KunCapabilitiesConfig
 } from '../contracts/capabilities.js'
@@ -74,6 +77,7 @@ export const ServeOptionsSchema = z.object({
   approvalReviewer: ApprovalReviewerSchema.default(
     DEFAULT_FRESH_SERVE_PERMISSIONS.approvalReviewer
   ),
+  approvalReview: ApprovalReviewModelSelectionSchema.optional(),
   tokenEconomyMode: z.boolean().default(false),
   tokenEconomy: TokenEconomyConfigSchema.optional(),
   toolOutputLimits: ToolOutputLimitsConfigSchema.default(DEFAULT_TOOL_OUTPUT_LIMITS_CONFIG),

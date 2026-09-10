@@ -2,18 +2,47 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildCompatRequestHeaders,
   classifyCompatHttpError,
-  compatHttpFailureLog
+  compatHttpFailureLog,
+  mergeHeadersCaseInsensitive
 } from './compat-http-diagnostics.js'
 
 describe('compat HTTP diagnostics', () => {
   it('builds protocol-specific headers without changing configured overrides', () => {
     expect(buildCompatRequestHeaders({
       apiKey: 'secret', stream: true, endpointFormat: 'messages',
-      configuredHeaders: { 'x-project': 'p' }
+      customHeaders: { 'x-project': 'p' }
     })).toMatchObject({
       Authorization: 'Bearer secret', 'x-api-key': 'secret',
       'anthropic-version': '2023-06-01', 'x-project': 'p'
     })
+  })
+
+  it('lets a custom authorization header override the default bearer (case-insensitive)', () => {
+    const headers = buildCompatRequestHeaders({
+      apiKey: 'secret', stream: true, endpointFormat: 'chat_completions',
+      customHeaders: { authorization: 'Basic user:pass' }
+    })
+    expect(headers).not.toHaveProperty('Authorization')
+    expect(headers.authorization).toBe('Basic user:pass')
+  })
+
+  it('keeps protected headers winning over custom headers', () => {
+    const headers = buildCompatRequestHeaders({
+      apiKey: 'secret', stream: true, endpointFormat: 'chat_completions',
+      customHeaders: { Authorization: 'Bearer custom' },
+      protectedHeaders: { Authorization: 'Bearer protected' }
+    })
+    expect(headers.Authorization).toBe('Bearer protected')
+  })
+
+  it('keeps runtime-reserved headers winning over everything', () => {
+    const headers = buildCompatRequestHeaders({
+      apiKey: 'secret', stream: true, endpointFormat: 'chat_completions',
+      customHeaders: { 'x-opencode-session': 'static' },
+      protectedHeaders: { 'x-opencode-session': 'protected' },
+      runtimeHeaders: { 'x-opencode-session': 'runtime-thread' }
+    })
+    expect(headers['x-opencode-session']).toBe('runtime-thread')
   })
 
   it('omits every auth header for an anonymous (empty-key) request', () => {
@@ -22,6 +51,17 @@ describe('compat HTTP diagnostics', () => {
     })
     expect(headers).not.toHaveProperty('Authorization')
     expect(headers).not.toHaveProperty('x-api-key')
+  })
+
+  it('merges header layers case-insensitively', () => {
+    const merged = mergeHeadersCaseInsensitive(
+      { 'Content-Type': 'application/json', Authorization: 'Bearer a' },
+      { authorization: 'Bearer b', 'x-id': '1' }
+    )
+    expect(merged.Authorization).toBeUndefined()
+    expect(merged.authorization).toBe('Bearer b')
+    expect(merged['x-id']).toBe('1')
+    expect(merged['Content-Type']).toBe('application/json')
   })
 
   it('keeps provider guidance on 404 errors', async () => {

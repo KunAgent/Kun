@@ -97,6 +97,12 @@ describe('enqueue race at turn-end boundaries', () => {
     const h = createHarness({ executionLeases: { ...noopLeases(), owner } })
     await createThread(h, 'thr_race')
     const prevTurn = createTurnRecord({ id: 'turn_prev', threadId: 'thr_race', prompt: 'previous' })
+    // The active turn must actually exist in the store across every read,
+    // including the admission's new exact-request lookup.
+    await h.threadStore.upsert({
+      ...(await h.threadStore.get('thr_race'))!,
+      turns: [{ ...prevTurn, status: 'running' }]
+    })
     // First store read inside startTurn's mutation sees the running turn.
     let settled = false
     let busyObserved = false

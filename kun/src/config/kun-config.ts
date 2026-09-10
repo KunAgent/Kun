@@ -1,4 +1,7 @@
 export {
+  ApprovalReviewModelSelectionSchema
+} from '../contracts/approval-review-config.js'
+export {
   KUN_CONFIG_FILENAME,
   DEFAULT_KUN_MODEL,
   DEFAULT_MODEL_REQUEST_RETRY_CONFIG,

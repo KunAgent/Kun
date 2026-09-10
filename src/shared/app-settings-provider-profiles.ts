@@ -389,6 +389,12 @@ export function withPresetModelProfiles(
       storedProfile,
       presetProfile
     )
+    // Codex live catalogs are the tier authority: an explicit stored
+    // declaration (including an empty array) must survive, and the static
+    // preset only fills models that never declared tiers. Other providers keep
+    // inheriting additions and removals from the preset catalog.
+    const inheritPresetServiceTiers = !isCodexPresetProvider(provider) ||
+      storedProfile?.serviceTiers === undefined
     const profile: ModelProviderModelProfileV1 = {
       ...presetProfile,
       ...(storedProfile ?? {}),
@@ -396,8 +402,9 @@ export function withPresetModelProfiles(
         ? { reasoning: presetProfile.reasoning }
         : {}),
       // Service-tier availability is upstream model metadata. Older stored
-      // profiles must inherit additions and removals from the preset catalog.
-      ...(presetProfile.serviceTiers?.length
+      // profiles inherit additions and removals from the preset catalog unless
+      // Codex declared them explicitly (see inheritPresetServiceTiers).
+      ...(inheritPresetServiceTiers && presetProfile.serviceTiers?.length
         ? { serviceTiers: [...presetProfile.serviceTiers] }
         : {}),
       // Catalog reference pricing is upstream metadata, not a user-editable
@@ -416,10 +423,18 @@ export function withPresetModelProfiles(
           }
         : {})
     }
-    if (!presetProfile.serviceTiers?.length) delete profile.serviceTiers
+    if (inheritPresetServiceTiers && !presetProfile.serviceTiers?.length) {
+      delete profile.serviceTiers
+    }
     profiles[modelId] = profile
   }
   return profiles
+}
+
+function isCodexPresetProvider(
+  provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>
+): boolean {
+  return resolveModelProviderPresetSource(provider)?.preset.id === CHATGPT_SUBSCRIPTION_PROVIDER_ID
 }
 
 export function shouldRepairKnownOpenCodeGrokCapacity(

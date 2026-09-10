@@ -2,17 +2,22 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
 import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
 import type { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
+import { emptyUsageSnapshot } from '../contracts/usage.js'
 import { MemoryDistillationCoordinator } from '../memory/memory-distillation-coordinator.js'
 import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
 import { startNodeHttpServer } from '../server/node-http-server.js'
 import { decideMemoryDistillationCandidate } from '../server/routes/memory-distillation.js'
+import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { KUN_MANAGER_PROTOCOL_VERSION } from './manager-discovery.js'
-import { ManagerRemoteMemoryStore } from './remote-data-stores.js'
+import { ManagerThreadExecutionLeaseClient } from './manager-thread-execution-lease-client.js'
+import { ManagerRemoteMemoryStore, ManagerRemoteSessionStore } from './remote-data-stores.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from './remote-memory-distillation-pending.js'
 import { buildServiceManagerRouter, ServiceManagerState } from './service-manager.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
+import { runWithoutTurnMutationFence, runWithTurnMutationFence } from './turn-mutation-context.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => {
@@ -26,9 +31,20 @@ async function harness() {
   const data = await ManagerSharedDataStore.create(dataDir)
   cleanup.push(() => data.close())
   const startedAt = new Date().toISOString()
+  const state = new ServiceManagerState()
+  state.register({
+    flavor: 'development',
+    instanceId: 'runtime-a',
+    pid: process.pid,
+    startedAt,
+    host: '127.0.0.1',
+    port: 18899,
+    baseUrl: 'http://127.0.0.1:18899',
+    runtimeToken: 'runtime-token'
+  })
   const router = buildServiceManagerRouter({
     managerToken: 'test-token', instanceId: 'manager-test', startedAt,
-    state: new ServiceManagerState(), sharedData: data
+    state, sharedData: data
   })
   const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
   cleanup.push(() => server.close())
@@ -54,7 +70,38 @@ async function harness() {
     sources: [{ id: 'source-user', kind: 'user' as const, trust: 'explicit-user' as const,
       threadId: 'thread', turnId: 'turn', excerpt: 'I prefer concise notes.' }]
   }
-  return { dataDir, data, memory, runtime, candidate }
+  return { dataDir, data, manager, memory, runtime, candidate }
+}
+
+function eventRecorder(manager: Awaited<ReturnType<typeof harness>>['manager']) {
+  const sessionStore = new ManagerRemoteSessionStore(manager)
+  const eventBus = new InMemoryEventBus()
+  return {
+    sessionStore,
+    events: new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => sessionStore.allocateEventSeq(threadId),
+      nowIso: () => new Date().toISOString()
+    })
+  }
+}
+
+function usageDraft(turnId: string) {
+  return {
+    kind: 'usage' as const,
+    threadId: 'thread',
+    turnId,
+    model: 'test-model',
+    attribution: 'memory-distillation' as const,
+    usage: {
+      ...emptyUsageSnapshot(),
+      promptTokens: 80,
+      completionTokens: 20,
+      totalTokens: 100,
+      turns: 1
+    }
+  }
 }
 
 async function insert(
@@ -72,6 +119,53 @@ async function insert(
 }
 
 describe('Memory distillation through the shared Manager HTTP API', () => {
+  it('persists post-turn usage after leaving the released turn fence', async () => {
+    const h = await harness()
+    const { events, sessionStore } = eventRecorder(h.manager)
+    const leases = new ManagerThreadExecutionLeaseClient(
+      h.manager,
+      'development',
+      'runtime-a'
+    )
+    cleanup.push(() => leases.shutdown())
+    const completed = await leases.acquire('thread', 'turn-completed')
+
+    await runWithTurnMutationFence(completed, async () => {
+      await leases.release('thread', 'turn-completed')
+      await runWithoutTurnMutationFence(() => events.record(usageDraft('turn-completed')))
+    })
+
+    expect(await sessionStore.loadEventsSince('thread', 0)).toEqual([
+      expect.objectContaining({
+        kind: 'usage',
+        turnId: 'turn-completed',
+        attribution: 'memory-distillation',
+        usage: expect.objectContaining({ totalTokens: 100 })
+      })
+    ])
+  })
+
+  it('keeps Manager fencing active while the next same-thread turn owns the lease', async () => {
+    const h = await harness()
+    const { events, sessionStore } = eventRecorder(h.manager)
+    const leases = new ManagerThreadExecutionLeaseClient(
+      h.manager,
+      'development',
+      'runtime-a'
+    )
+    cleanup.push(() => leases.shutdown())
+    const completed = await leases.acquire('thread', 'turn-completed')
+    await leases.release('thread', 'turn-completed')
+    const active = await leases.acquire('thread', 'turn-next')
+
+    await expect(runWithTurnMutationFence(completed, () =>
+      runWithoutTurnMutationFence(() => events.record(usageDraft('turn-completed')))
+    )).rejects.toMatchObject({ code: 'stale_turn_fence' })
+
+    expect(await sessionStore.loadEventsSince('thread', 0)).toEqual([])
+    await leases.release(active.threadId, active.turnId)
+  })
+
   it('preserves live extraction and terminal denial across runtime reconnects', async () => {
     const h = await harness()
     const first = h.runtime()

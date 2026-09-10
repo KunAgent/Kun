@@ -184,6 +184,7 @@ export async function syncGuiManagedKunConfig(
       approvalPolicy: runtime.approvalPolicy,
       sandboxMode: runtime.sandboxMode,
       approvalReviewer: runtime.approvalReviewer,
+      approvalReview: runtime.approvalReview,
       modelProxyUrl: appProxyUrl,
       retry: runtime.retry,
       tokenEconomy: tokenEconomyConfigForRuntime(runtime.tokenEconomy, objectValue(serve.tokenEconomy)),
@@ -357,7 +358,7 @@ function defaultCredentialSourceId(settings: AppSettingsV1): string | undefined 
 
 type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'apiKey' | 'baseUrl' | 'endpointFormat' | 'model' | 'providerId' |
-  'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' |
+  'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'approvalReview' |
   'mcpSearch' | 'retry' |
   'tokenEconomy' | 'toolOutputLimits' | 'storage' | 'contextCompaction' |
   'runtimeTuning' | 'llmDebug' | 'imageGeneration' | 'textToSpeech' | 'musicGeneration' |
@@ -416,6 +417,7 @@ export function buildManagedRuntimeHotApplyBody(
       approvalPolicy: runtime.approvalPolicy,
       sandboxMode: runtime.sandboxMode,
       approvalReviewer: runtime.approvalReviewer,
+      approvalReview: runtime.approvalReview,
       tokenEconomyMode: runtime.tokenEconomyMode,
       tokenEconomy: runtime.tokenEconomy,
       toolOutputLimits: runtime.toolOutputLimits,

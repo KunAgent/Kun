@@ -6,11 +6,16 @@ import type {
   ApprovalReviewer,
   SandboxMode
 } from '../shared/app-settings'
+import {
+  approvalReviewSelectionEquals,
+  type ApprovalReviewModelSelection
+} from '../../kun/src/contracts/approval-review-config.js'
 
 export type KunExecutionSecuritySettings = {
   approvalPolicy: ApprovalPolicy
   sandboxMode: SandboxMode
   approvalReviewer: ApprovalReviewer
+  approvalReview: ApprovalReviewModelSelection
 }
 
 export type KunExecutionSettingsChange = {
@@ -44,18 +49,21 @@ export function kunExecutionSettingsChange(
   if (!kunPatch || (
     !Object.prototype.hasOwnProperty.call(kunPatch, 'approvalPolicy') &&
     !Object.prototype.hasOwnProperty.call(kunPatch, 'sandboxMode') &&
-    !Object.prototype.hasOwnProperty.call(kunPatch, 'approvalReviewer')
+    !Object.prototype.hasOwnProperty.call(kunPatch, 'approvalReviewer') &&
+    !Object.prototype.hasOwnProperty.call(kunPatch, 'approvalReview')
   )) return undefined
 
   const currentSettings: KunExecutionSecuritySettings = {
     approvalPolicy: current.agents.kun.approvalPolicy,
     sandboxMode: current.agents.kun.sandboxMode,
-    approvalReviewer: current.agents.kun.approvalReviewer
+    approvalReviewer: current.agents.kun.approvalReviewer,
+    approvalReview: current.agents.kun.approvalReview
   }
   const next: KunExecutionSecuritySettings = {
     approvalPolicy: kunPatch.approvalPolicy ?? currentSettings.approvalPolicy,
     sandboxMode: kunPatch.sandboxMode ?? currentSettings.sandboxMode,
-    approvalReviewer: kunPatch.approvalReviewer ?? currentSettings.approvalReviewer
+    approvalReviewer: kunPatch.approvalReviewer ?? currentSettings.approvalReviewer,
+    approvalReview: kunPatch.approvalReview ?? currentSettings.approvalReview
   }
   return executionSettingsEqual(currentSettings, next)
     ? undefined
@@ -69,7 +77,8 @@ export function executionSettingsEqual(
   return (
     left.approvalPolicy === right.approvalPolicy &&
     left.sandboxMode === right.sandboxMode &&
-    left.approvalReviewer === right.approvalReviewer
+    left.approvalReviewer === right.approvalReviewer &&
+    approvalReviewSelectionEquals(left.approvalReview, right.approvalReview)
   )
 }
 
@@ -120,9 +129,11 @@ function actionKey(action: KunExecutionSettingsConsentAction): string {
     action.current.approvalPolicy,
     action.current.sandboxMode,
     action.current.approvalReviewer,
+    action.current.approvalReview,
     action.next.approvalPolicy,
     action.next.sandboxMode,
     action.next.approvalReviewer,
+    action.next.approvalReview,
     action.senderId,
     action.senderProcessId,
     action.senderRoutingId

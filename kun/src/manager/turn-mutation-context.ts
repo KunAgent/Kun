@@ -34,12 +34,19 @@ export function runWithTurnMutationFence<T>(
   return storage.run(toFence(fence), operation)
 }
 
+/** Scheduler work is a new owner, not a continuation of a settled model turn. */
+export function runWithoutTurnMutationFence<T>(operation: () => T): T {
+  return storage.exit(operation)
+}
+
 export function mutationFenceForValue(value: unknown): TurnMutationFence | undefined {
   const contextual = currentTurnMutationFence()
   const threadId = mutationThreadId(value) ?? undefined
   const turnId = mutationTurnId(value) ?? undefined
-  if (contextual && fenceMatchesTarget(contextual, threadId, turnId)) return contextual
-  if (turnId) return optionalFence(activeByTurn.get(turnId))
+  if (contextual && contextual.threadId === threadId) return contextual
+  // Keep a known old generation stale; only a turn without its own lease
+  // (queue admission) may use the current thread owner's authority.
+  if (turnId && activeByTurn.has(turnId)) return optionalFence(activeByTurn.get(turnId))
   return threadId ? optionalFence(activeByThread.get(threadId)) : undefined
 }
 

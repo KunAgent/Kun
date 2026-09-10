@@ -42,6 +42,7 @@ vi.mock('./chat-store-runtime-notifications', () => ({
   rememberPendingClawFeishuMirror: notificationsMock.rememberPendingClawFeishuMirror
 }))
 
+import { canRestoreQueuedMessageToComposer } from './queued-message-edit'
 import { submitToRuntimeQueue } from './chat-store-thread-send-enqueue'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import type { AttachmentReference } from '../agent/types'
@@ -95,6 +96,23 @@ beforeEach(() => {
 })
 
 describe('submitToRuntimeQueue', () => {
+  it('does not write a late admission into the newly selected thread', async () => {
+    const { state, set, get } = buildHarness()
+    const sendUserMessage = vi.fn(async () => {
+      state.activeThreadId = 'thr_other'
+      state.queuedMessages = [{ id: 'other', text: 'other thread' }]
+      return { turnId: 'turn_new', userMessageItemId: 'user_new' }
+    })
+    const result = await submitToRuntimeQueue({
+      provider: { sendUserMessage } as never,
+      activeThreadId: 'thr_1', trimmedText: 'original', clientRequestId: 'switch-request',
+      orchestration: 'direct', composerModel: 'test', composerProviderId: 'deepseek',
+      composerContexts: [], set, get, persistActiveQueuedMessages: vi.fn()
+    } as unknown as Parameters<typeof submitToRuntimeQueue>[0])
+    expect(result).toBe(true)
+    expect(state.queuedMessages).toEqual([{ id: 'other', text: 'other thread' }])
+  })
+
   it('preserves the full attachment snapshot on an admitted busy-thread send', async () => {
     const sendUserMessage = vi.fn(async () => ({
       turnId: 'turn_new',
@@ -113,7 +131,7 @@ describe('submitToRuntimeQueue', () => {
       writeContext: undefined,
       composerModel: 'deepseek-v4-pro',
       composerProviderId: 'deepseek',
-      composerAccountId: undefined,
+      composerAccountId: 'account:deepseek',
       userModelChip: undefined,
       displayText: undefined,
       reasoningEffort: undefined,
@@ -149,8 +167,10 @@ describe('submitToRuntimeQueue', () => {
       deliveryState: 'in_flight',
       deliveryTurnId: 'turn_new',
       deliveryUserMessageItemId: 'user_new',
-      attachmentIds: ['att_1']
+      attachmentIds: ['att_1'],
+      accountId: 'account:deepseek'
     })
+    expect(canRestoreQueuedMessageToComposer(state.queuedMessages[0])).toBe(true)
     expect(state.queuedMessages[0].attachments).toEqual([attachment])
     expect(persistActiveQueuedMessages).toHaveBeenCalled()
   })

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
 import type { AttachmentReference } from '../../agent/types'
+import { uploadRuntimePastedText } from '../../lib/runtime-attachment'
 import { FloatingComposer } from './FloatingComposer'
 import { modelProfileForComposerSelection } from '../workbench/useWorkbenchComposerCapabilities'
 import {
@@ -398,6 +399,28 @@ export function SideConversationPanel({
     }
   }
 
+  const uploadPastedText = async (text: string): Promise<void> => {
+    if (!attachmentUploadEnabled || !attachmentWorkspace) {
+      setAttachmentUploadError(t('composerAttachmentUnavailable'))
+      return
+    }
+    const targetSideId = activeSide?.threadId ?? null
+    const draftGeneration = draftAttachmentGenerationRef.current
+    setAttachmentUploadBusy(true)
+    setAttachmentUploadError(null)
+    try {
+      const attachment = await uploadRuntimePastedText({
+        text,
+        ...(targetSideId ? { threadId: targetSideId } : { workspace: attachmentWorkspace })
+      })
+      appendUploadedAttachment(targetSideId, draftGeneration, attachment)
+    } catch (error) {
+      setAttachmentUploadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setAttachmentUploadBusy(false)
+    }
+  }
+
   const removeAttachment = (id: string): void => {
     if (activeSide) {
       sideData.setSideAttachments(
@@ -590,6 +613,7 @@ export function SideConversationPanel({
             clipboard: true,
             silentNoImage: options?.silentNoImage
           })}
+          onPasteLongText={uploadPastedText}
           onRemoveAttachment={removeAttachment}
           modelControlVariant="split"
           onComposerModelChange={(model, providerId) => {

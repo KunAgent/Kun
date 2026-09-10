@@ -6,6 +6,7 @@ import {
   formatFilePathForDisplay,
 } from '../../lib/diff-stats'
 import {
+  isAppendedUserBlock,
   isProcessBlock,
   splitThink,
   type Turn
@@ -22,6 +23,24 @@ export type TurnProcessTimelineEntry =
   | { kind: 'process'; section: ProcessSection }
   | { kind: 'runtime_error'; block: TurnRuntimeErrorBlock }
 
+export type TurnUserBlock = Extract<ChatBlock, { kind: 'user' }>
+
+export type TurnProcessSegment = {
+  id: string
+  blocks: ChatBlock[]
+  entries: TurnProcessTimelineEntry[]
+}
+
+/**
+ * Ordered rendering entries for a turn that contains guided user inputs.
+ * Process work is split at every guided message so folding never hides or
+ * reorders a user bubble.
+ */
+export type TurnTimelineEntry =
+  | { kind: 'user'; block: TurnUserBlock }
+  | { kind: 'process'; segment: TurnProcessSegment }
+  | { kind: 'answer'; block: TurnAssistantBlock }
+
 export type TurnSections = {
   processBlocks: ChatBlock[]
   /** Active-turn process blocks plus runtime errors in their original order. */
@@ -36,6 +55,13 @@ export type TurnSections = {
   conversationVisualizationBlocks: ToolBlock[]
   generatedFileBlocks: ToolBlock[]
   turnFileChanges: ToolBlock[]
+  /** Guided inputs appended inside the turn, in timeline order. */
+  appendedUserBlocks: TurnUserBlock[]
+  /**
+   * Ordered user/process/answer entries. Empty unless the turn contains guided
+   * inputs; every other turn keeps rendering through the existing fields.
+   */
+  timelineEntries: TurnTimelineEntry[]
 }
 
 type ResolvedFileChangeBlock = ToolBlock & {
@@ -168,8 +194,43 @@ export function deriveTurnSections({
   const finalAssistantContentIndex = isProcessing
     ? -1
     : findLastAssistantContentIndex(timelineBlocks)
+  const appendedUserBlocks: TurnUserBlock[] = []
+  for (const block of timelineBlocks) {
+    if (isAppendedUserBlock(block)) appendedUserBlocks.push(block)
+  }
+  // Guided inputs switch the turn to an ordered timeline: process work folds
+  // per user-message boundary and the final answer keeps its chronological
+  // place instead of being hoisted above the guided bubble.
+  const orderedTimeline = appendedUserBlocks.length > 0
+  const answerOutsideTimelineIndex = orderedTimeline ? -1 : finalAssistantContentIndex
+  const answerTimelineEntryIndex = orderedTimeline ? finalAssistantContentIndex : -1
+  const timelineEntries: TurnTimelineEntry[] = []
+  let pendingSegmentBlocks: ChatBlock[] = []
+  const flushProcessSegment = (): void => {
+    if (!orderedTimeline || pendingSegmentBlocks.length === 0) return
+    const segmentBlocks = pendingSegmentBlocks
+    pendingSegmentBlocks = []
+    timelineEntries.push({
+      kind: 'process',
+      segment: {
+        id: `process-${segmentBlocks[0]!.id}`,
+        blocks: segmentBlocks,
+        entries: groupTurnProcessTimeline(segmentBlocks)
+      }
+    })
+  }
 
   for (const [index, block] of timelineBlocks.entries()) {
+    if (orderedTimeline && isAppendedUserBlock(block)) {
+      flushProcessSegment()
+      timelineEntries.push({ kind: 'user', block })
+      continue
+    }
+    if (index === answerTimelineEntryIndex && block.kind === 'assistant') {
+      flushProcessSegment()
+      timelineEntries.push({ kind: 'answer', block: { ...block, text: splitThink(block.text).content } })
+      continue
+    }
     if (block.kind === 'system' && block.runtimeError === true) {
       const runtimeErrorBlock = block as TurnRuntimeErrorBlock
       runtimeErrorBlocks.push(runtimeErrorBlock)
@@ -180,6 +241,7 @@ export function deriveTurnSections({
       } else {
         runtimeErrorsAfterFinalContent.push(runtimeErrorBlock)
       }
+      if (orderedTimeline) pendingSegmentBlocks.push(runtimeErrorBlock)
       continue
     }
     if (block.kind === 'assistant') {
@@ -194,14 +256,16 @@ export function deriveTurnSections({
         }
         processBlocks.push(reasoningBlock)
         processTimelineBlocks.push(reasoningBlock)
+        if (orderedTimeline) pendingSegmentBlocks.push(reasoningBlock)
       }
       if (split.content.trim()) {
         const contentBlock: TurnAssistantBlock = { ...block, text: split.content }
-        if (index === finalAssistantContentIndex) {
+        if (index === answerOutsideTimelineIndex) {
           assistantContentBlocks.push(contentBlock)
         } else {
           processBlocks.push(contentBlock)
           processTimelineBlocks.push(contentBlock)
+          if (orderedTimeline) pendingSegmentBlocks.push(contentBlock)
         }
       }
       continue
@@ -209,6 +273,7 @@ export function deriveTurnSections({
     if (isProcessBlock(block)) {
       processBlocks.push(block)
       processTimelineBlocks.push(block)
+      if (orderedTimeline) pendingSegmentBlocks.push(block)
     }
   }
 
@@ -223,6 +288,7 @@ export function deriveTurnSections({
     }
     processBlocks.push(liveReasoningBlock)
     processTimelineBlocks.push(liveReasoningBlock)
+    if (orderedTimeline) pendingSegmentBlocks.push(liveReasoningBlock)
   }
   if (isProcessing && liveContent.trim()) {
     const liveAssistantBlock: ChatBlock = {
@@ -232,7 +298,9 @@ export function deriveTurnSections({
     }
     processBlocks.push(liveAssistantBlock)
     processTimelineBlocks.push(liveAssistantBlock)
+    if (orderedTimeline) pendingSegmentBlocks.push(liveAssistantBlock)
   }
+  flushProcessSegment()
 
   const turnFileChanges: ToolBlock[] = isProcessing
     ? []
@@ -289,6 +357,8 @@ export function deriveTurnSections({
     conversationVisualizationBlocks,
     generatedFileBlocks,
     turnFileChanges,
-    chartBlocks
+    chartBlocks,
+    appendedUserBlocks,
+    timelineEntries
   }
 }

@@ -21,6 +21,13 @@ const MAX_FORWARDED_TOOL_IMAGES = 3
 
 export const DEFAULT_EFFECTIVE_OUTPUT_BUDGET_TOKENS = 32_768
 
+/**
+ * Output budget actually forwarded as the request's `max_tokens`. A configured
+ * model limit is authoritative and is only clamped to the remaining safe
+ * context capacity, so raising "max output" in provider settings takes effect
+ * instead of silently stopping at the runtime default. Omitting the declaration
+ * falls back to {@link DEFAULT_EFFECTIVE_OUTPUT_BUDGET_TOKENS}.
+ */
 export function effectiveOutputBudgetTokens(input: {
   inputTokens: number
   contextCapTokens: number
@@ -32,11 +39,30 @@ export function effectiveOutputBudgetTokens(input: {
     ? fallback
     : Math.max(1, Math.floor(input.declaredMaxOutputTokens))
   const remaining = Math.max(1, Math.floor(input.contextCapTokens - input.inputTokens))
-  // `maxOutputTokens` is provider capability metadata, not an instruction to
-  // reserve the model's entire maximum on every request. Keep the ordinary
-  // request reservation bounded by the runtime default; smaller model limits
-  // remain authoritative, and the final request is still clamped to the
-  // remaining safe context capacity.
+  return Math.min(declared, remaining)
+}
+
+/**
+ * Output budget reserved by the compaction preflight. `maxOutputTokens` is
+ * provider capability metadata, and some catalogs advertise the whole context
+ * window (e.g. 500k), so reserving the declared value in full would make
+ * `input + output > hard cap` true on every request and force compaction
+ * endlessly. Keep this ordinary reservation bounded by the runtime default;
+ * the value actually sent as `max_tokens` comes from
+ * {@link effectiveOutputBudgetTokens} and is still clamped to the remaining
+ * safe context capacity.
+ */
+export function ordinaryOutputReserveTokens(input: {
+  inputTokens: number
+  contextCapTokens: number
+  declaredMaxOutputTokens?: number
+  fallbackTokens?: number
+}): number {
+  const fallback = Math.max(1, Math.floor(input.fallbackTokens ?? DEFAULT_EFFECTIVE_OUTPUT_BUDGET_TOKENS))
+  const declared = input.declaredMaxOutputTokens === undefined
+    ? fallback
+    : Math.max(1, Math.floor(input.declaredMaxOutputTokens))
+  const remaining = Math.max(1, Math.floor(input.contextCapTokens - input.inputTokens))
   return Math.min(declared, fallback, remaining)
 }
 

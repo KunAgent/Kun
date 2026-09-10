@@ -4,25 +4,59 @@ import type { ModelFailureMetadata } from '../../contracts/model-route-pool.js'
 
 export function buildCompatRequestHeaders(input: {
   apiKey: string
-  configuredHeaders?: Record<string, string>
+  /** User-configured custom headers (overrides protocol defaults). */
+  customHeaders?: Record<string, string>
+  /** Protected credential/material headers (override custom headers). */
+  protectedHeaders?: Record<string, string>
+  /** Runtime-reserved identity headers (override everything but internal flags). */
+  runtimeHeaders?: Record<string, string>
   stream: boolean
   endpointFormat: ModelEndpointFormat
   responsesLite?: boolean
 }): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (!input.stream) headers.Accept = 'application/json'
+  const defaults: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (!input.stream) defaults.Accept = 'application/json'
   if (input.apiKey) {
-    headers.Authorization = `Bearer ${input.apiKey}`
+    defaults.Authorization = `Bearer ${input.apiKey}`
     if (input.endpointFormat === 'messages') {
-      headers['x-api-key'] = input.apiKey
-      headers['anthropic-version'] = '2023-06-01'
+      defaults['x-api-key'] = input.apiKey
+      defaults['anthropic-version'] = '2023-06-01'
     }
   }
-  return {
-    ...headers,
-    ...(input.configuredHeaders ?? {}),
+  const reserved: Record<string, string> = {
     ...(input.responsesLite ? { 'x-openai-internal-codex-responses-lite': 'true' } : {})
   }
+  return mergeHeadersCaseInsensitive(
+    defaults,
+    input.customHeaders,
+    input.protectedHeaders,
+    input.runtimeHeaders,
+    reserved
+  )
+}
+
+/**
+ * Merge header layers case-insensitively. A later layer replaces an earlier
+ * key even when the casing differs (e.g. a user `authorization` overrides the
+ * protocol default `Authorization`), so header identity never depends on how
+ * the caller spelled the name.
+ */
+export function mergeHeadersCaseInsensitive(
+  ...layers: (Record<string, string> | undefined)[]
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  const canonicalByLower = new Map<string, string>()
+  for (const layer of layers) {
+    if (!layer) continue
+    for (const [rawKey, value] of Object.entries(layer)) {
+      const lower = rawKey.toLowerCase()
+      const existing = canonicalByLower.get(lower)
+      if (existing !== undefined && existing !== rawKey) delete out[existing]
+      out[rawKey] = value
+      canonicalByLower.set(lower, rawKey)
+    }
+  }
+  return out
 }
 
 export async function classifyCompatHttpError(input: {

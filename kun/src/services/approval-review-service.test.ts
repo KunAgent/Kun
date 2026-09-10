@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeEventDraft } from './runtime-event-recorder.js'
-import type {
-  ModelRequest,
-  ModelStreamChunk
-} from '../ports/model-client.js'
+import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
 import {
   createApprovalActionEnvelope,
   createApprovalRequest
@@ -82,6 +79,11 @@ function service(input: {
   stream: (request: ModelRequest) => AsyncIterable<ModelStreamChunk>
   events: RuntimeEventDraft[]
   record?: (event: RuntimeEventDraft) => Promise<unknown>
+  modelContext?: (actingRoute?: { model: string; providerId?: string; accountId?: string }) => {
+    source: 'inherit' | 'fixed'
+    route: { model: string; providerId?: string; accountId?: string }
+    client: Pick<ModelClient, 'stream'>
+  }
   timeoutMs?: number
 }): ApprovalReviewService {
   return new ApprovalReviewService({
@@ -93,6 +95,7 @@ function service(input: {
       }
     } as never,
     usage: new UsageService(),
+    ...(input.modelContext ? { modelContext: input.modelContext } : {}),
     timeoutMs: input.timeoutMs,
     nowIso: () => '2026-07-29T00:00:00.000Z',
     nextReviewId: () => 'review_1'
@@ -141,6 +144,112 @@ describe('parseApprovalReviewDecision', () => {
 })
 
 describe('ApprovalReviewService', () => {
+  it('uses a pinned fixed route and records it in review lifecycle events', async () => {
+    const requests: ModelRequest[] = []
+    const events: RuntimeEventDraft[] = []
+    const actingClient = {
+      stream: (request: ModelRequest) => {
+        requests.push({ ...request, model: `acting:${request.model}` })
+        return stream([
+          {
+            kind: 'assistant_text_delta',
+            text: '{"decision":"allow","riskLevel":"low","rationale":"wrong client"}'
+          },
+          { kind: 'completed', stopReason: 'stop' }
+        ])
+      }
+    }
+    const reviewClient = {
+      stream: (request: ModelRequest) => {
+        requests.push(request)
+        return stream([
+          {
+            kind: 'assistant_text_delta',
+            text: '{"decision":"allow","riskLevel":"low","rationale":"fixed reviewer"}'
+          },
+          { kind: 'completed', stopReason: 'stop' }
+        ])
+      }
+    }
+    const reviewer = service({
+      events,
+      stream: actingClient.stream,
+      modelContext: (actingRoute) => {
+        expect(actingRoute).toEqual({ model: 'acting-model', providerId: 'provider-a' })
+        return {
+          source: 'fixed',
+          route: { model: 'review-model', providerId: 'provider-b', accountId: 'review-account' },
+          client: reviewClient
+        }
+      }
+    })
+
+    const result = await reviewer.review({
+      approval: approval(),
+      route: { model: 'acting-model', providerId: 'provider-a' },
+      intent: 'Run the tests.',
+      signal: new AbortController().signal
+    })
+
+    expect(result.decision).toBe('allow')
+    expect(requests).toHaveLength(1)
+    expect(requests[0]).toMatchObject({
+      model: 'review-model',
+      providerId: 'provider-b',
+      accountId: 'review-account',
+      tools: []
+    })
+    expect(events.find((event) => event.kind === 'approval_review_started')).toMatchObject({
+      reviewModelSource: 'fixed',
+      reviewModelRoute: {
+        model: 'review-model',
+        providerId: 'provider-b',
+        accountId: 'review-account'
+      }
+    })
+    expect(events.find((event) => event.kind === 'approval_review_completed')).toMatchObject({
+      reviewModelSource: 'fixed',
+      reviewModelRoute: {
+        model: 'review-model',
+        providerId: 'provider-b',
+        accountId: 'review-account'
+      }
+    })
+  })
+
+  it('fails closed with auditable lifecycle when the configured route cannot resolve', async () => {
+    const requests: ModelRequest[] = []
+    const events: RuntimeEventDraft[] = []
+    const reviewer = service({
+      events,
+      stream: (request) => {
+        requests.push(request)
+        return stream([{ kind: 'completed', stopReason: 'stop' }])
+      },
+      modelContext: () => {
+        throw new Error('unknown model provider: missing')
+      }
+    })
+
+    const result = await reviewer.review({
+      approval: approval(),
+      route: { model: 'acting-model', providerId: 'provider-a' },
+      intent: 'Run the tests.',
+      signal: new AbortController().signal
+    })
+
+    expect(result).toMatchObject({ decision: 'deny', reviewStatus: 'failed-closed' })
+    expect(requests).toHaveLength(0)
+    expect(events.map((event) => event.kind)).toEqual([
+      'approval_review_started',
+      'approval_review_completed',
+      'approval_resolved'
+    ])
+    expect(events.find((event) => event.kind === 'approval_review_completed')).toMatchObject({
+      status: 'failed-closed'
+    })
+  })
+
   it('uses the exact acting route with no tools and durably records allow before release', async () => {
       const requests: ModelRequest[] = []
       const events: RuntimeEventDraft[] = []

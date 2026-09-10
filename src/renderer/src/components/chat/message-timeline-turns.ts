@@ -41,6 +41,16 @@ export function isBackgroundNoticeBlock(block: ChatBlock): boolean {
   )
 }
 
+/**
+ * A guided/steered user input appended inside a turn that already owns its
+ * user bubble. Internal runtime notices stay process content, not bubbles.
+ */
+export function isAppendedUserBlock(
+  block: ChatBlock
+): block is Extract<ChatBlock, { kind: 'user' }> {
+  return block.kind === 'user' && !isBackgroundNoticeBlock(block)
+}
+
 export function groupTurns(blocks: ChatBlock[]): Turn[] {
   const turns: Turn[] = []
   const turnsById = new Map<string, Turn>()
@@ -72,12 +82,12 @@ export function groupTurns(blocks: ChatBlock[]): Turn[] {
         turnsById.set(turnId, turn)
         turns.push(turn)
       }
-      if (block.kind === 'user' && !isBackgroundNoticeBlock(block) && !turn.user) {
+      if (isAppendedUserBlock(block) && !turn.user) {
         turn.user = block
       } else {
         turn.blocks.push(block)
       }
-      if (block.kind === 'user' && !isBackgroundNoticeBlock(block)) current = turn
+      if (isAppendedUserBlock(block)) current = turn
       continue
     }
     if (block.kind === 'user') {

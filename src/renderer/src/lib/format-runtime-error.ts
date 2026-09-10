@@ -48,6 +48,7 @@ function runtimeErrorCode(payload: RuntimeErrorPayload | null, raw: string): str
   const lowered = stripIpcPrefix(payloadMessage(payload) || raw).toLowerCase()
   if (lowered.includes('model provider did not return a response')) return 'model_provider_unreachable'
   if (lowered.includes('model request failed:')) return 'model_request_failed'
+  if (lowered.includes('servicemanagertransporterror') || lowered.includes('kun service manager connection failed')) return 'service_manager_unavailable'
   if (lowered.includes('fetch failed')) return 'fetch_failed'
   if (lowered.includes('runtime unhealthy')) return 'runtime_unhealthy'
   if (lowered.includes('active turn')) return 'turn_in_progress'
@@ -95,6 +96,10 @@ function localizedRuntimeSummary(code: string | null, text: string): string | nu
 
   if (code === 'model_request_failed' || lowered.includes('model request failed:')) {
     return i18n.t('common:runtimeModelRequestFailed')
+  }
+
+  if (code === 'service_manager_unavailable') {
+    return i18n.t('common:runtimeServiceManagerUnavailable')
   }
 
   if (code === 'fetch_failed' || lowered.includes('fetch failed')) {
@@ -174,7 +179,7 @@ export function describeRuntimeError(error: unknown): RuntimeErrorView {
     i18n.t('common:runtimeRequestFailed')
   const isStreamDisconnect = errorCode === 'stream_disconnected' ||
     redactedText.toLowerCase().includes('stream closed before')
-  const message = errorCode === 'thread_busy' ||
+  const message = errorCode === 'service_manager_unavailable' || errorCode === 'thread_busy' ||
     errorCode === 'model_provider_unreachable' ||
     isStreamDisconnect
     ? summary

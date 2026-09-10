@@ -122,6 +122,13 @@
   "usageQuotaCurrentStreak": "Current streak: {{count}} days",
   "usageQuotaMostActiveWeekday": "Most active: {{weekday}}",
   "usageQuotaModels": "Использование моделей",
+  "usageModelScopeLabel": "Источник использования моделей",
+  "usageModelScope": {
+    "primary": "Прямые сеансы",
+    "side": "Субагенты",
+    "all": "Все"
+  },
+  "usageModelScopeNote": "Итоги включают использование субагентов; переключите источник, чтобы проверить.",
   "usageQuotaModelPagination": "Страницы использования моделей",
   "usageQuotaModelPageRange": "Показано {{first}}–{{last}} / {{total}}",
   "usageQuotaModelPageIndicator": "{{page}} / {{total}}",

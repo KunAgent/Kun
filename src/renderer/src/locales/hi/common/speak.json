@@ -1,0 +1,20 @@
+{
+  "speakAnswer": "बोलें",
+  "speakStop": "रोकें",
+  "speakPreparing": "भाषण तैयार हो रहा है...",
+  "speakDownloading": "वॉइस मॉडल डाउनलोड हो रहा है...",
+  "speakSynthesizing": "भाषण बनाया जा रहा है...",
+  "speakUnavailable": "इस बिल्ड में स्थानीय भाषण उपलब्ध नहीं है।",
+  "speakNothingToRead": "इस उत्तर में पढ़ने योग्य कोई पाठ नहीं है।",
+  "speakModelMissing": "बोलें सुविधा के लिए सेटिंग्स में Kokoro वॉइस मॉडल डाउनलोड करें।",
+  "speakVoiceMissing": "चयनित आवाज़ डाउनलोड नहीं हो सकी।",
+  "speakFailed": "भाषण नहीं बन सका: {{message}}",
+  "speakDownloadingModel": "{{model}} डाउनलोड हो रहा है",
+  "speakDownloadingVoice": "आवाज़ {{voice}} डाउनलोड हो रही है",
+  "speakDownloadingHint": "डाउनलोड पूरा होने पर बोलना स्वतः शुरू हो जाएगा।",
+  "speakTrackDownload": "ऑडियो डाउनलोड करें",
+  "speakTrackSaved": "सेव हो गया",
+  "speakTrackSaveFailed": "रिकॉर्डिंग सेव नहीं हो सकी: {{message}}",
+  "speakUnsupportedLanguage": "स्थानीय वाचन केवल अंग्रेज़ी का समर्थन करता है। इस पाठ में असमर्थित भाषा है।",
+  "speakTrackNotSaved": "रिकॉर्डिंग हटाए जाने, संग्रहण सीमा पार होने या लिखने में त्रुटि के कारण सहेजी नहीं गई। वाचन जारी रहेगा।"
+}

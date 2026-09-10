@@ -20,7 +20,7 @@ type UsageThreadSource = {
 
 type UsageAttributionThread = Pick<
   ThreadRecord,
-  'id' | 'model' | 'providerId' | 'updatedAt'
+  'id' | 'model' | 'providerId' | 'updatedAt' | 'relation'
 > & {
   turns: Array<Pick<ThreadRecord['turns'][number], 'id' | 'model' | 'providerId'>>
 }
@@ -111,6 +111,7 @@ function usageAttributionFromThread(thread: ThreadRecord): UsageAttributionThrea
     model: thread.model,
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
     updatedAt: thread.updatedAt,
+    relation: thread.relation,
     turns: (thread.turns ?? []).map((turn) => ({
       id: turn.id,
       ...(turn.model ? { model: turn.model } : {}),
@@ -205,6 +206,7 @@ export async function loadLiveUsageRemainders(
       ...(turnId ? { turnId } : {}),
       model: usageRecordModel(thread, { turnId }),
       ...(providerId ? { providerId } : {}),
+      relation: thread.relation,
       completedAt,
       usage: reconcileInWorker ? candidate.cumulativeUsage : candidate.remainder,
       ...(reconcileInWorker ? { cumulative: true } : {})
@@ -300,6 +302,7 @@ async function loadUsageRecords(
         ...(record.turnId ? { turnId: record.turnId } : {}),
         ...(record.model ? { model: record.model } : {}),
         ...(providerId ? { providerId } : {}),
+        relation: thread?.relation ?? record.relation ?? 'primary',
         completedAt: record.completedAt,
         usage: record.usage
       }
@@ -432,6 +435,7 @@ async function loadUsageRecordsForSource(
       ...(usageRecordProvider(thread, event)
         ? { providerId: usageRecordProvider(thread, event) }
         : {}),
+      relation: thread.relation,
       completedAt: event.timestamp,
       usage: delta
     })
@@ -448,6 +452,7 @@ async function loadUsageRecordsForSource(
       ...(usageRecordProvider(thread, { turnId })
         ? { providerId: usageRecordProvider(thread, { turnId }) }
         : {}),
+      relation: thread.relation,
       completedAt: thread.updatedAt || source.nowIso(),
       usage: liveRemainder
     })

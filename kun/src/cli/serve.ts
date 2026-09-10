@@ -192,6 +192,7 @@ export function parseServeOptions(
         : env.KUN_APPROVAL_REVIEWER as ServeOptions['approvalReviewer'] | undefined ??
           configServe.approvalReviewer ??
           permissionDefaults.approvalReviewer,
+    approvalReview: configServe.approvalReview,
     tokenEconomyMode,
     tokenEconomy: {
       ...(configServe.tokenEconomy ?? {}),

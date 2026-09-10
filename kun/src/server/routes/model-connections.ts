@@ -111,6 +111,20 @@ export async function probeModelConnection(
   return mutate(registry, () => registry!.probe(providerId))
 }
 
+export async function getModelConnectionCustomHeaders(
+  registry: ModelConnectionRegistry | undefined,
+  providerId: string
+): Promise<JsonResponse> {
+  if (!registry) return ERRORS.unavailable('model connection registry is unavailable')
+  try {
+    return jsonResponse({ customHeaders: await registry.getCustomHeaders(providerId) })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('not found')) return ERRORS.notFound(message)
+    return ERRORS.validation(message)
+  }
+}
+
 export async function modelConnectionEvents(
   registry: ModelConnectionRegistry | undefined,
   request: Request

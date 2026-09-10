@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SteeringDeliverySchema } from './steering-delivery.js'
 import { TurnItem, UserFileReferenceSchema, UserMessageSource } from './items.js'
 import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
 import {
@@ -211,6 +212,8 @@ export const TurnSchema = z.object({
   approvalReviewer: ApprovalReviewerSchema.optional(),
   /** Steered text queued by the user mid-turn. Cleared on completion. */
   steering: z.array(z.string()).default([]),
+  steeringDeliveries: z.array(SteeringDeliverySchema).max(256).optional(),
+  steeredToTurnId: z.string().optional(),
   createdAt: z.string(),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
@@ -455,6 +458,13 @@ export const StartTurnResponse = z.object({
 })
 export type StartTurnResponse = z.infer<typeof StartTurnResponse>
 
+export const CancelQueuedTurnResponse = z.object({
+  threadId: z.string().min(1),
+  turnId: z.string().min(1),
+  status: z.literal('aborted')
+}).strict()
+export type CancelQueuedTurnResponse = z.infer<typeof CancelQueuedTurnResponse>
+
 export const MoveQueuedTurnRequest = z.object({
   /** Move the queued turn directly before this queued sibling. */
   beforeTurnId: z.string().min(1).optional(),
@@ -467,6 +477,8 @@ export const MoveQueuedTurnRequest = z.object({
 export type MoveQueuedTurnRequest = z.infer<typeof MoveQueuedTurnRequest>
 
 export const SteerTurnRequest = z.object({
+  operationId: z.string().trim().min(1).max(256).optional(),
+  sourceTurnId: z.string().trim().min(1).optional(),
   text: z.string().min(1),
   displayText: z.string().optional(),
   messageSource: UserMessageSource.optional(),
@@ -648,6 +660,11 @@ export const QueuedTurnSummarySchema = z.object({
 export type QueuedTurnSummary = z.infer<typeof QueuedTurnSummarySchema>
 
 export const QueuedTurnsResponseSchema = z.object({
-  queuedTurns: z.array(QueuedTurnSummarySchema)
+  queuedTurns: z.array(QueuedTurnSummarySchema),
+  pendingAdmissions: z.array(QueuedTurnSummarySchema.omit({ position: true })).optional(),
+  settledTurns: z.array(z.object({
+    turnId: z.string(), clientRequestId: z.string().optional(), status: TurnStatus,
+    terminalCode: z.string().optional()
+  })).optional()
 }).strict()
 export type QueuedTurnsResponse = z.infer<typeof QueuedTurnsResponseSchema>

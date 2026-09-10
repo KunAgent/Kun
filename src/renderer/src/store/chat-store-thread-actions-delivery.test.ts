@@ -81,6 +81,7 @@ function buildHarness(): {
     lastSeq: 0,
     loadComposerModels: vi.fn(async () => undefined),
     queuedMessages: [],
+    drainQueuedMessages: vi.fn(async () => undefined),
     recoverActiveTurn: vi.fn(async () => true),
     refreshThreads: vi.fn(async () => undefined),
     route: 'chat',
@@ -213,13 +214,16 @@ describe('chat-store-thread-actions queued messages', () => {
     const retained = state.queuedMessages[0]!
     state.busy = false
     state.currentTurnId = null
-    await expect(actions.sendMessage(retained.text, retained.mode, { queued: retained })).resolves.toBe(true)
+    // The explicit retry is still rejected. Another running turn is not an
+    // acknowledgement for this message; retain a visible failed row.
+    await expect(actions.sendMessage(retained.text, retained.mode, { queued: retained })).resolves.toBe(false)
 
     expect(sendUserMessage).toHaveBeenCalledTimes(2)
     const retryOptions = sendUserMessage.mock.calls[1]![2] as { clientRequestId?: string }
     expect(retryOptions.clientRequestId).toBe(firstOptions.clientRequestId)
     expect(state.queuedMessages).toHaveLength(1)
     expect(state.queuedMessages[0]?.clientRequestId).toBe(firstOptions.clientRequestId)
+    expect(state.queuedMessages[0]?.deliveryState).toBe('failed')
   })
 
   it('returns a thread-bound Design turn as soon as runtime accepts it', async () => {

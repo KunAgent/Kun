@@ -152,7 +152,10 @@ export class HybridMemoryIndex {
       for (const row of ftsRows) {
         rows.set(row.id, row)
         const coverage = lexicalTokenCoverage(queryTokens.tokens, row.search_tokens.split(' '))
-        lexicalScores.set(row.id, Math.max(coverage, normalizeBm25(row.rank)))
+        // Coverage is the bounded foundation score shared with filesystem fallback.
+        // BM25 still determines the FTS candidate order, but must not inflate the
+        // relevance value used by the shared abstention gate.
+        lexicalScores.set(row.id, coverage)
         channels.set(row.id, 'fts5')
       }
     }
@@ -260,10 +263,4 @@ function staticLifecycle(record: MemoryRecordValue): string {
   if (record.disabledAt) return 'disabled'
   if (record.supersededAt) return 'superseded'
   return 'active'
-}
-
-function normalizeBm25(value: number | undefined): number {
-  if (!Number.isFinite(value)) return 0
-  const magnitude = Math.max(0, -(value ?? 0))
-  return Math.min(1, magnitude / (1 + magnitude))
 }

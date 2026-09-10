@@ -7,7 +7,6 @@ import type {
   DesktopStartupStatePayload
 } from '@shared/desktop-startup-state'
 import { StartupGate, STARTUP_STATE_TIMEOUT_MS } from './StartupGate'
-import { KUN_STARTUP_VARIANTS } from './components/startup/kun-startup-variants'
 
 const appMock = vi.hoisted(() => ({
   prepareWorkbenchApp: vi.fn<() => Promise<void>>(async () => undefined)
@@ -212,30 +211,16 @@ describe('StartupGate', () => {
     renderGate({})
     await act(async () => undefined)
     expect(container.textContent).toContain('Preparing Kun desktop...')
-    expect(container.textContent).toContain('Kun is preparing your workspace.')
     expect(container.textContent).not.toContain('Chick')
     const status = container.querySelector('[role="status"]')
     expect(status?.getAttribute('aria-live')).toBe('polite')
     expect(status?.getAttribute('aria-busy')).toBe('true')
-    const artwork = container.querySelector('[data-testid="kun-startup-artwork"]')
-    expect(artwork?.getAttribute('aria-hidden')).toBe('true')
-    expect(artwork?.getAttribute('data-motion')).toBe('running')
-    const startupVariant = artwork?.getAttribute('data-variant')
-    expect(KUN_STARTUP_VARIANTS).toContain(startupVariant)
-    expect(container.querySelector('.kun-startup')?.getAttribute('data-startup-variant'))
-      .toBe(startupVariant)
-    expect(container.querySelector('[data-testid="kun-startup-kun"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="kun-startup-bird"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="kun-startup-orbit"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="kun-startup-hologram"]')?.getAttribute('data-wordmark')).toBe('KUN')
-    expect(container.querySelector('[data-testid="kun-startup-workspace-link"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="kun-startup-kun"]')?.getAttribute('alt')).toBe('')
-    expect(container.querySelector('[data-testid="kun-startup-bird"]')?.getAttribute('alt')).toBe('')
-    expect(container.querySelector('[data-testid="kun-startup-wordmark"]')?.getAttribute('alt')).toBe('')
-    expect(container.querySelector('[data-testid="kun-startup-wordmark"]')?.getAttribute('src')).toContain('kun-startup-wordmark.webp')
-    const progress = container.querySelector('[role="progressbar"]')
-    expect(progress?.getAttribute('aria-label')).toBe('Kun startup progress')
-    expect(progress?.hasAttribute('aria-valuenow')).toBe(false)
+    const logo = container.querySelector('[data-testid="kun-startup-logo"]')
+    expect(logo?.getAttribute('aria-hidden')).toBe('true')
+    expect(logo?.getAttribute('data-motion')).toBe('running')
+    expect(logo?.getAttribute('alt')).toBe('')
+    expect(logo?.getAttribute('src')).toContain('kun_bird')
+    expect(container.querySelector('[role="progressbar"]')).toBeNull()
     expect(container.querySelector('[data-testid="workbench-app"]')).toBeNull()
   })
 
@@ -244,16 +229,13 @@ describe('StartupGate', () => {
     renderGate({})
     await act(async () => undefined)
     expect(container.textContent).toContain('Preparing Kun desktop...')
-    const startupVariant = container
-      .querySelector('[data-testid="kun-startup-artwork"]')
-      ?.getAttribute('data-variant')
+    expect(container.querySelector('[data-testid="kun-startup-logo"]')?.getAttribute('data-motion'))
+      .toBe('running')
 
     await act(async () => {
       api.listeners.forEach((listener) => listener(phasePayload('runtime_starting')))
     })
     expect(container.textContent).toContain('Starting Kun runtime...')
-    expect(container.querySelector('[data-testid="kun-startup-artwork"]')?.getAttribute('data-variant'))
-      .toBe(startupVariant)
     expect(container.querySelector('[data-testid="workbench-app"]')).toBeNull()
 
     await act(async () => {
@@ -347,7 +329,7 @@ describe('StartupGate', () => {
     // Desktop startup is ready, but the shell remains until store boot and the
     // initial route chunk are both prepared.
     expect(container.textContent).toContain('Opening your workspace...')
-    expect(container.querySelector('[data-testid="kun-startup-artwork"]')?.getAttribute('data-motion')).toBe('running')
+    expect(container.querySelector('[data-testid="kun-startup-logo"]')?.getAttribute('data-motion')).toBe('running')
     expect(container.querySelector('[data-testid="workbench-app"]')).toBeNull()
     await act(async () => preparation.resolve())
     await flushAsync()
@@ -386,12 +368,8 @@ describe('StartupGate', () => {
     const alert = container.querySelector('[role="alert"]')
     expect(alert).not.toBeNull()
     expect(alert?.getAttribute('aria-busy')).toBeNull()
-    const artwork = container.querySelector('[data-testid="kun-startup-artwork"]')
-    expect(artwork?.getAttribute('data-motion')).toBe('paused')
-    expect(container.querySelector('[data-testid="kun-startup-kun"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="kun-startup-bird"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="kun-startup-orbit"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="kun-startup-hologram"]')).not.toBeNull()
+    const logo = container.querySelector('[data-testid="kun-startup-logo"]')
+    expect(logo?.getAttribute('data-motion')).toBe('paused')
     expect(container.querySelector('[role="progressbar"]')).toBeNull()
     expect([...container.querySelectorAll('button')]
       .some((button) => button.textContent === 'Reload Kun')).toBe(true)

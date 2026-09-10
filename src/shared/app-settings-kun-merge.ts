@@ -88,7 +88,8 @@ import {
 } from './local-whisper'
 
 import {
-  normalizeApprovalReviewer
+  normalizeApprovalReviewer,
+  normalizeApprovalReviewSelection
 } from './app-settings-kun-defaults'
 import {
   DEFAULT_GITHUB_MCP_HOST,
@@ -100,6 +101,7 @@ import {
   normalizeKunImageGenerationSettings,
   normalizeKunMusicGenerationSettings,
   normalizeKunPromptOptimizationSettings,
+  normalizeKunSpeakSettings,
   normalizeKunSpeechToTextSettings,
   normalizeKunTextToSpeechSettings,
   normalizeKunVideoGenerationSettings
@@ -194,6 +196,11 @@ export function mergeKunRuntimeSettings(
   const nextSpeechToText = normalizeKunSpeechToTextSettings({
     ...currentSpeechToText,
     ...(patch?.speechToText ?? {})
+  })
+  const currentSpeak = normalizeKunSpeakSettings(current.speak)
+  const nextSpeak = normalizeKunSpeakSettings({
+    ...currentSpeak,
+    ...(patch?.speak ?? {})
   })
   const currentTextToSpeech = normalizeKunTextToSpeechSettings(current.textToSpeech)
   const nextTextToSpeech = normalizeKunTextToSpeechSettings({
@@ -370,6 +377,9 @@ export function mergeKunRuntimeSettings(
     approvalReviewer: normalizeApprovalReviewer(
       patch?.approvalReviewer ?? current.approvalReviewer
     ),
+    approvalReview: normalizeApprovalReviewSelection(
+      patch?.approvalReview ?? current.approvalReview
+    ),
     port: nextPort,
     tokenEconomyMode: nextTokenEconomy.enabled,
     tokenEconomy: nextTokenEconomy,
@@ -383,6 +393,7 @@ export function mergeKunRuntimeSettings(
     llmDebug: nextLlmDebug,
     imageGeneration: nextImageGeneration,
     speechToText: nextSpeechToText,
+    speak: nextSpeak,
     textToSpeech: nextTextToSpeech,
     promptOptimization: nextPromptOptimization,
     musicGeneration: nextMusicGeneration,

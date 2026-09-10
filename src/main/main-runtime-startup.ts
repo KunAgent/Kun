@@ -1,3 +1,5 @@
+import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
+import { recoverStartupManager } from './runtime/kun-startup-manager-recovery'
 import { randomBytes } from 'node:crypto'
 import {
   applyKunRuntimePatch,
@@ -8,6 +10,7 @@ import {
   kunRuntimeAdapter
 } from './runtime/kun-adapter'
 import {
+  configureKunManagerDataPlaneForCurrentProcess,
   isKunChildRunning,
   waitForKunStartupSettled
 } from './kun-process'
@@ -15,13 +18,10 @@ import { clearHistoricalKunServeProcesses } from './runtime/kun-serve-process-cl
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { logWarn } from './logger'
-import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
 import {
   mainState,
   runtimeJsonError
 } from './main-app-context'
-import { drainKunOwnersForHandoff } from './runtime/kun-installed-build-handoff'
-import { logKunHandoffEvent } from './runtime/kun-handoff-logging'
 import {
   kunRuntimeHealthMonitor,
   noteRuntimeHealthy,
@@ -239,27 +239,9 @@ export async function prepareGuiRuntimeForStartupRetry(error?: unknown): Promise
   runtimeSupervisor.setManagedRuntimeExpected(false)
   await runtimeSupervisor.waitForIdle()
   await kunRuntimeAdapter.stopAndWait()
-  if (!isServiceManagerDataMutexFailure(error)) return
-
-  // A Manager state-write failure is sticky for the lifetime of that Manager:
-  // relaunching only the Runtime reconnects to the same poisoned write queue
-  // and repeats the HTTP 500. Retry is an explicit recovery action, so replace
-  // the exact authenticated Manager after proving that no other client-owned
-  // Runtime would be interrupted.
-  const manager = mainState.activeServiceManager
-  if (!manager) {
-    throw new Error('Kun Service Manager recovery is unavailable; quit Kun and start it again.')
-  }
-  await drainKunOwnersForHandoff({
-    reason: 'startup-retry',
-    dataDirs: [manager.discovery.dataDir],
-    settingsPath: manager.discovery.settingsPath,
-    controlDir: defaultKunControlDir(),
-    fetch,
-    onEvent: logKunHandoffEvent
-  })
-  if (mainState.activeServiceManager === manager) {
-    mainState.activeServiceManager = null
+  if (error instanceof ServiceManagerUnavailableError || isServiceManagerDataMutexFailure(error)) {
+    const recovered = await recoverStartupManager(isServiceManagerDataMutexFailure(error))
+    mainState.activeServiceManager = configureKunManagerDataPlaneForCurrentProcess(recovered)
   }
 }
 

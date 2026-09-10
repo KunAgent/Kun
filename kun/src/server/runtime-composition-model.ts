@@ -49,6 +49,7 @@ import {
 import { aggregateCodexProviderLocalCosts } from '../services/provider-local-cost.js'
 import { loadLiveUsageRemainders, loadUsageHistory } from '../services/usage-history.js'
 import { GatewayCredentialService } from '../services/gateway-credential-service.js'
+import { createApprovalReviewModelContextResolver } from '../services/approval-review-context-resolver.js'
 
 export async function createRuntimeModelComposition(
   core: Awaited<ReturnType<typeof createRuntimeCore>>
@@ -245,6 +246,11 @@ export async function createRuntimeModelComposition(
     // Automatic review must not route through a model pool because pool
     // failover would silently substitute the acting turn's selected route.
     model: approvalReviewModelClient,
+    modelContext: createApprovalReviewModelContextResolver({
+      selection: () => core.activeOptions.approvalReview,
+      clients: approvalReviewModelClient,
+      routePoolProviderIds: core.activeOptions.routePools?.map((pool) => pool.id)
+    }),
     events,
     usage: usageService,
     nowIso

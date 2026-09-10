@@ -21,12 +21,19 @@ export async function getQueuedTurns(
     )
   }
   const queuedTurns = thread.turns
-    .filter((turn) => turn.status === 'queued')
+    .filter((turn) => turn.status === 'queued' && !turn.admissionPending)
     .map((turn, index) => ({
       turnId: turn.id,
       ...(turn.clientRequestId ? { clientRequestId: turn.clientRequestId } : {}),
       position: index,
       createdAt: turn.createdAt
     }))
-  return jsonResponse(QueuedTurnsResponseSchema.parse({ queuedTurns }))
+  const pendingAdmissions = thread.turns.filter((turn) => turn.admissionPending)
+    .map((turn) => ({ turnId: turn.id, clientRequestId: turn.clientRequestId, createdAt: turn.createdAt }))
+  const settledTurns = thread.turns.filter((turn) => turn.status !== 'queued' && !turn.admissionPending && turn.clientRequestId)
+    .map((turn) => ({ turnId: turn.id, clientRequestId: turn.clientRequestId, status: turn.status, terminalCode: turn.terminalCode }))
+  return jsonResponse(QueuedTurnsResponseSchema.parse({ queuedTurns,
+    ...(pendingAdmissions.length ? { pendingAdmissions } : {}),
+    ...(settledTurns.length ? { settledTurns } : {})
+  }))
 }

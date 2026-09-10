@@ -22,6 +22,34 @@ export function isCodexEndpoint(baseUrl: string): boolean {
   }
 }
 
+/**
+ * OpenCode Go (the subscription tier at opencode.ai/zen/go) requires a
+ * per-session routing header (`x-opencode-session`) on every request. Identify
+ * it from the stable preset source first, then from the exact host + path
+ * boundary for manually configured official Go endpoints. Never use a loose
+ * substring match: `opencode-free` and other `opencode.ai` paths must not be
+ * misclassified.
+ */
+export function isOpenCodeGo(input: {
+  presetSource?: string
+  providerId?: string
+  baseUrl: string
+}): boolean {
+  if (input.presetSource === 'opencode-go') return true
+  const providerId = input.providerId?.trim().toLowerCase() ?? ''
+  // Multi-account preset ids resolve to presetSource 'opencode-go', but a
+  // profile that lost that binding still keeps an `opencode-go[-N]` id.
+  if (/^opencode-go(?:-[0-9]+)?$/u.test(providerId)) return true
+  try {
+    const url = new URL(input.baseUrl.trim())
+    if (url.protocol !== 'https:' || url.hostname !== 'opencode.ai') return false
+    const path = url.pathname.replace(/\/+$/u, '')
+    return path === '/zen/go' || path.startsWith('/zen/go/')
+  } catch {
+    return false
+  }
+}
+
 export function normalizeCodexResponsesUrl(baseUrl: string): string {
   try {
     const url = new URL(baseUrl.trim())

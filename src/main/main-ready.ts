@@ -63,7 +63,10 @@ export function startMainApp(): Promise<void> {
     configureLogger({ dir: mainState.logDir, enabled: true })
     logInfo('startup', 'Desktop startup entered.', {
       platform: process.platform,
-      packaged: app.isPackaged
+      packaged: app.isPackaged,
+      appVersion: app.getVersion(),
+      executablePath: process.execPath,
+      appPath: app.getAppPath()
     })
   } catch (error) {
     console.warn('[kun-gui] failed to configure bootstrap startup logging:', error)

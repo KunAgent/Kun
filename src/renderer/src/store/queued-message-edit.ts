@@ -1,6 +1,7 @@
 import type { QueuedUserMessage } from './chat-store-types'
 
 type EditableQueuedMessage = Pick<QueuedUserMessage,
+  | 'steeringRequest'
   | 'text'
   | 'displayText'
   | 'deliveryState'
@@ -8,6 +9,9 @@ type EditableQueuedMessage = Pick<QueuedUserMessage,
   | 'deliveryUserMessageItemId'
   | 'waitForRuntimeAdmission'
   | 'mode'
+  | 'persona'
+  | 'accountId'
+  | 'orchestration'
   | 'agentSurface'
   | 'subagentResume'
   | 'messageSource'
@@ -28,28 +32,38 @@ type EditableQueuedMessage = Pick<QueuedUserMessage,
   | 'approvalReviewer'
 >
 
-/** True when the whole queued payload (text + image attachments) can be faithfully returned to the composer. */
-export function canRestoreQueuedMessageToComposer(message: EditableQueuedMessage): boolean {
+export type QueueEditBlockReason = 'queuedMessageConfirming' | 'queuedMessageEditSteering' | 'queuedMessageEditUnsupported'
+
+export function queuedMessageEditBlockReason(message: EditableQueuedMessage): QueueEditBlockReason | undefined {
+  if (message.steeringRequest) return 'queuedMessageEditSteering'
+  if (message.waitForRuntimeAdmission) return 'queuedMessageConfirming'
   if (
     message.deliveryState !== undefined &&
     message.deliveryState !== 'pending' &&
     message.deliveryState !== 'in_flight' &&
     message.deliveryState !== 'paused' &&
     message.deliveryState !== 'failed'
-  ) return false
-  if (message.waitForRuntimeAdmission) return false
-  if (message.agentSurface === 'write' || message.agentSurface === 'design') return false
+  ) return 'queuedMessageConfirming'
+  if (message.persona || message.guiPlan || message.orchestration === 'graph') return 'queuedMessageEditUnsupported'
+  if (message.attachmentIds?.some((id) => !message.attachments?.some((attachment) => attachment.id === id))) return 'queuedMessageEditUnsupported'
+  if (message.agentSurface === 'write' || message.agentSurface === 'design') return 'queuedMessageEditUnsupported'
   if (
     message.subagentResume || message.messageSource ||
     message.fileReferences?.length || message.composerContexts?.length ||
     message.guiDesignCanvas || message.guiDesignMode ||
     message.guiDesignArtifact || message.designProfile || message.designDocumentTarget ||
     message.designImagePlacementTarget || message.writeContext
-  ) return false
+  ) return 'queuedMessageEditUnsupported'
   // Document content is already inlined into the text prompt and cannot be
   // faithfully rebuilt as a composer attachment.
-  if (message.attachments?.some((attachment) => attachment.kind === 'document')) return false
-  return Boolean(message.text.trim() || message.attachments?.length || message.attachmentIds?.length)
+  if (message.attachments?.some((attachment) => attachment.kind === 'document')) return 'queuedMessageEditUnsupported'
+  return message.text.trim() || message.attachments?.length || message.attachmentIds?.length
+    ? undefined : 'queuedMessageEditUnsupported'
+}
+
+/** Account routing is checked separately against the live model catalog. */
+export function canRestoreQueuedMessageToComposer(message: EditableQueuedMessage): boolean {
+  return queuedMessageEditBlockReason(message) === undefined
 }
 
 /** Composer text for a restore: image-only messages carry a synthesized prompt as `text`. */

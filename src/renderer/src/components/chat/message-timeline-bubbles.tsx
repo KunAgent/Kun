@@ -22,6 +22,9 @@ import {
   UserInputBubble,
   formatMessageDateTime
 } from './message-timeline-bubble-support'
+import { AssistantSpeakButton } from './AssistantSpeakButton'
+import { AssistantSpeakTrackButton } from './AssistantSpeakTrackButton'
+import { useSpeakStore } from '../../stores/speak-store'
 import { ToolAttachmentPreviews } from './message-timeline-media-views'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
@@ -30,6 +33,18 @@ export { GeneratedFilesPanel } from './message-timeline-media-views'
 export { generatedMediaScrollAvailability } from './message-timeline-media-logic'
 
 export const MessageBubble = memo(MessageBubbleImpl)
+
+/**
+ * The answer action row is hover-only, which would hide the Speak control that
+ * doubles as stop. While an answer is speaking its row stays on screen.
+ */
+export function assistantActionRowClass(speaking: boolean): string {
+  return [
+    'mt-1 flex min-h-5 min-w-0 items-center justify-between gap-3 text-[11.5px] text-ds-faint',
+    'transition duration-150 group-hover/message:opacity-100',
+    speaking ? 'opacity-100' : 'opacity-0'
+  ].join(' ')
+}
 
 export function shouldAnimateAssistantStream({
   isLiveAssistant,
@@ -89,6 +104,7 @@ function MessageBubbleImpl({
   const catchingUpThread = useChatStore((s) =>
     Boolean(s.activeThreadId && s.threadLoadingId === s.activeThreadId)
   )
+  const speakingBlockId = useSpeakStore((s) => s.activeBlockId)
   if (block.kind === 'user' && isBackgroundShellNoticeBlock(block)) {
     return <BackgroundShellNoticeBubble block={block} nested={nested} />
   }
@@ -121,7 +137,7 @@ function MessageBubbleImpl({
             <AssistantMarkdown text={block.text} streaming={effectiveStreaming} />
           </div>
         {!streaming ? (
-          <div className="mt-1 flex min-h-5 min-w-0 items-center justify-between gap-3 text-[11.5px] text-ds-faint opacity-0 transition duration-150 group-hover/message:opacity-100">
+          <div className={assistantActionRowClass(speakingBlockId === block.id)}>
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate">{createdAtLabel ?? ''}</span>
               {turnMetrics ? (
@@ -160,6 +176,8 @@ function MessageBubbleImpl({
                   <span>{forkAction.busy ? t('forkingThread') : t('forkResponse')}</span>
                 </button>
               ) : null}
+              <AssistantSpeakButton blockId={block.id} text={block.text} />
+              <AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} />
               <AssistantExportButton text={block.text} createdAt={block.createdAt} />
               <CopyFeedbackButton text={block.text} />
             </div>
@@ -229,6 +247,15 @@ function MessageBubbleImpl({
         {block.toolName ? (
           <div className="mt-1 text-[12px] text-ds-muted">
             {t('approvalTool', { name: block.toolName })}
+          </div>
+        ) : null}
+        {block.reviewModelRoute ? (
+          <div className="mt-1 text-[12px] text-ds-muted">
+            {t('approvalReviewModel', {
+              model: block.reviewModelRoute.providerId
+                ? `${block.reviewModelRoute.providerId}/${block.reviewModelRoute.model}`
+                : block.reviewModelRoute.model
+            })}
           </div>
         ) : null}
         <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-ds-ink">{block.summary}</p>

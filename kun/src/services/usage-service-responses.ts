@@ -15,7 +15,7 @@ import type {
   TurnUsageResponse,
   UsageSnapshot
 } from '../contracts/usage.js'
-import { addUtcDays, assertValidTimezone, type DailyUsageAccumulator, type DailyUsageQuery, dateString, formatDateInTimezone, inclusiveDayCount, type ModelUsageAccumulator, type ModelUsageQuery, parseDateString, type ThreadUsageAccumulator, type ThreadUsageRecord, type TurnUsageQuery } from './usage-service-query.js'
+import { addUtcDays, assertValidTimezone, type DailyUsageAccumulator, type DailyUsageQuery, dateString, formatDateInTimezone, inclusiveDayCount, type ModelUsageAccumulator, type ModelUsageQuery, parseDateString, relationMatchesScope, type ThreadUsageAccumulator, type ThreadUsageRecord, type TurnUsageQuery } from './usage-service-query.js'
 import { addUsageCounters, emptyCounters, emptyDailyBucket, emptyModelBucket, emptyThreadBucket, finalizeCacheRate, finalizeDailyBucket, finalizeModelBucket, finalizeThreadBucket } from './usage-service-aggregation.js'
 
 type SummedCounters = Pick<DailyUsageResponse['totals'],
@@ -114,20 +114,23 @@ export function buildDailyUsageResponse(records: readonly ThreadUsageRecord[], q
 
 export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], query: ModelUsageQuery): ModelUsageResponse {
   const days = inclusiveDayCount(query.from, query.to)
+  const scope = query.scope ?? 'all'
   assertValidTimezone(query.timezone)
   const start = parseDateString(query.from, 'from')
   const dayBuckets = new Map<string, DailyUsageAccumulator>()
   const modelBuckets = new Map<string, ModelUsageAccumulator>()
   for (let offset = 0; offset < days; offset += 1) dayBuckets.set(dateString(addUtcDays(start, offset)), emptyDailyBucket(dateString(addUtcDays(start, offset))))
   for (const record of records) {
+    if (!relationMatchesScope(scope, record.relation)) continue
     const day = formatDateInTimezone(record.completedAt, query.timezone)
     const dayBucket = day ? dayBuckets.get(day) : undefined
     if (!dayBucket) continue
-    const model = record.model?.trim() || 'unknown'
+    const model = resolveUsageModel(record)
+    const providerId = resolveUsageProviderId(record)
     const modelBucket = modelBuckets.get(model) ?? emptyModelBucket(model)
     for (const bucket of [dayBucket, modelBucket]) {
       const added = addUsageCounters(
-        bucket, record.usage, record.model, record.completedAt, record.providerId
+        bucket, record.usage, model, record.completedAt, providerId
       )
       bucket.threadIds.add(record.threadId)
       bucket.thread_count = bucket.threadIds.size
@@ -146,7 +149,24 @@ export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], q
   const ids = new Set<string>()
   for (const bucket of modelBuckets.values()) for (const id of bucket.threadIds) ids.add(id)
   totalsBase.thread_count = ids.size
-  return { group_by: 'model', from: query.from, to: query.to, timezone: query.timezone, buckets: finalizedModels, days: finalizedDays, totals: finalizeCacheRate(totalsBase, [...modelBuckets.values()].some((bucket) => bucket.hasCacheTelemetry)) }
+  return { group_by: 'model', scope, from: query.from, to: query.to, timezone: query.timezone, buckets: finalizedModels, days: finalizedDays, totals: finalizeCacheRate(totalsBase, [...modelBuckets.values()].some((bucket) => bucket.hasCacheTelemetry)) }
+}
+
+/**
+ * Resolve the concrete model this record should be attributed to: the routed
+ * actual model first, then the requested alias, then the thread/turn model.
+ */
+function resolveUsageModel(record: ThreadUsageRecord): string {
+  return record.usage.actualModelId?.trim() ||
+    record.usage.requestedModelId?.trim() ||
+    record.model?.trim() ||
+    'unknown'
+}
+
+function resolveUsageProviderId(record: ThreadUsageRecord): string | undefined {
+  return record.usage.actualProviderId?.trim() ||
+    record.providerId?.trim() ||
+    undefined
 }
 
 type TurnAccumulator = {
@@ -219,7 +239,7 @@ function foldTurnRecord(target: TurnAccumulator, record: ThreadUsageRecord): voi
   target.cachedTokens += usage.cacheHitTokens ?? usage.cachedTokens ?? 0
   target.cacheWriteTokens += usage.cacheWriteTokens ?? 0
   target.totalTokens += usage.totalTokens
-  const model = usage.actualModelId ?? usage.requestedModelId ?? record.model?.trim() ?? 'unknown'
+  const model = resolveUsageModel(record)
   if (model) target.models.add(model)
   if (usage.actualProviderId?.trim()) target.providerIds.add(usage.actualProviderId.trim())
   const referenceValue = usage.billingKind === 'subscription' || (

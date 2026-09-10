@@ -34,6 +34,7 @@ export const ThreadRuntimeStateSchema = z.object({
   replayFloorSeq: z.number().int().nonnegative().optional(),
   /** Live request ids that still require a user response. */
   pendingUserInputIds: z.array(z.string().min(1)),
+  activeTurn: TurnSchema.pick({ id: true, status: true, orchestration: true }).nullable().optional(),
   latestTurn: z.object({
     id: z.string().min(1),
     status: TurnStatus,
@@ -450,6 +451,7 @@ export type ThreadRecord = z.infer<typeof ThreadSchema>
 
 export const ThreadTimelineResponseSchema = ThreadSchemaReadable.extend({
   latestSeq: z.number().int().nonnegative(),
+  activeTurn: TurnSchema.omit({ items: true }).nullable().optional(),
   latestTurn: TurnSchema.omit({ items: true }).nullable(),
   pendingUserInputIds: z.array(z.string()),
   pendingApprovalIds: z.array(z.string()).optional(),

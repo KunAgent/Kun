@@ -1,3 +1,4 @@
+import { childSecurity, parentModelRoute } from './delegation-tool-context.js'
 import {
   type ChildRunRecord,
   type ChildRoutingMetadata,
@@ -349,6 +350,7 @@ async function runChild(
     agentSurface: context.agentSurface ?? 'code',
     ...(subagentTaskRequiresReadOnly(common.prompt) ? { toolPolicyCeiling: 'readOnly' as const } : {}),
     security: childSecurity(context),
+    ...(context.serviceTier ? { inheritedServiceTier: context.serviceTier } : {}),
     ...(common.inheritedModel ? { inheritedModel: common.inheritedModel } : {}),
     ...(common.inheritedProviderId ? { inheritedProviderId: common.inheritedProviderId } : {}),
     ...(common.inheritedAccountId ? { inheritedAccountId: common.inheritedAccountId } : {}),
@@ -479,6 +481,7 @@ async function resumeChild(
         : {}),
       expectedLaunchers: ['delegate_task'],
       requireResumable: true,
+      parentModelRoute: parentModelRoute(context),
       proactive: context.subagentResume === undefined,
       security: childSecurity(context),
       signal: context.abortSignal,
@@ -488,22 +491,6 @@ async function resumeChild(
     return childToolResult(runtime, record)
   } catch (error) {
     return toolError(error instanceof Error ? error.message : String(error))
-  }
-}
-
-function childSecurity(context: ToolHostContext) {
-  return {
-    sandboxRoot: context.workspace,
-    ...(context.allowedProviderIds ? { allowedProviderIds: [...context.allowedProviderIds] } : {}),
-    ...(context.allowedToolNames ? { allowedToolNames: [...context.allowedToolNames] } : {}),
-    ...(context.allowedSkillIds ? { allowedSkillIds: [...context.allowedSkillIds] } : {}),
-    ...(context.allowedReadPaths ? { allowedReadPaths: [...context.allowedReadPaths] } : {}),
-    ...(context.allowedWritePaths ? { allowedWritePaths: [...context.allowedWritePaths] } : {}),
-    ...(context.allowedArtifactIds ? { allowedArtifactIds: [...context.allowedArtifactIds] } : {}),
-    ...(context.blockedProviderIds ? { blockedProviderIds: [...context.blockedProviderIds] } : {}),
-    ...(context.blockedToolNames ? { blockedToolNames: [...context.blockedToolNames] } : {}),
-    ...(context.blockedSkillIds ? { blockedSkillIds: [...context.blockedSkillIds] } : {}),
-    memoryEnabled: context.memoryPolicy?.enabled === true
   }
 }
 
@@ -538,6 +525,7 @@ function childToolResult(
       ...(record.profile ? { profile: record.profile } : {}),
       ...(record.profileSnapshot?.name ? { profileName: record.profileSnapshot.name } : {}),
       ...(record.model ? { model: record.model } : {}),
+      ...(record.providerFallback ? { providerFallback: record.providerFallback } : {}),
       ...(record.reasoningEffort ? { reasoningEffort: record.reasoningEffort } : {}),
       ...(record.routing ? { routing: routingToolOutput(record.routing) } : {}),
       ...(record.toolPolicy ? { toolPolicy: record.toolPolicy } : {}),

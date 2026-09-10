@@ -31,6 +31,7 @@ export type DesignRightPanelSharedProps = Pick<
   | 'attachmentUploadError'
   | 'onPickAttachments'
   | 'onPasteClipboardImage'
+  | 'onPasteLongText'
   | 'onRemoveAttachment'
   | 'onInterrupt'
   | 'onRetryConnection'

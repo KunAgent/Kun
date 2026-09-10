@@ -46,7 +46,7 @@ export function useFloatingComposerActions(
     forkActiveThread, goalInputMode, goalPanelDraftObjective, handleComposerImagePaste,
     hideBtwCommand, highlightedSlashCommand, input, inputHistory, isComposerSendHotkey,
     mode, onAddFileReference, onBtwCommand, onNewCommand, onOpenDesignReferencePicker,
-    onOpenFileReferencePicker, onOrchestrationChange, onPasteClipboardImage,
+    onOpenFileReferencePicker, onOrchestrationChange, onPasteClipboardImage, onPasteLongText,
     onPickAttachments, onPickFileReferences, onPlanCommand, onReviewCommand, onSend,
     orchestration, parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand,
     parseResearchCommand, parseReviewCommand, parsedGoalCommand, primaryActionDisabled,
@@ -469,7 +469,8 @@ export function useFloatingComposerActions(
       clipboardData: event.clipboardData,
       preventDefault: () => event.preventDefault(),
       onPickAttachments,
-      onPasteClipboardImage
+      onPasteClipboardImage,
+      onPasteLongText
     })
   }
 

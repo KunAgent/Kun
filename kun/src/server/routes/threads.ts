@@ -197,6 +197,8 @@ export async function getThread(
     : undefined
   return jsonResponse({
     ...ThreadSchemaReadable.parse(hydratedThread),
+    activeTurn: thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)
+      ? omitTurnItems(projectTimelineTurn(thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)!, [])) : null,
     latestSeq: replayFloor,
     pendingUserInputIds,
     ...(pendingApprovalIds ? { pendingApprovalIds } : {})
@@ -239,6 +241,7 @@ export async function loadThreadRuntimeState(
     return null
   }
   const latestTurn = thread.turns.at(-1)
+  const activeTurn = thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)
   return ThreadRuntimeStateSchema.parse({
     schemaVersion: THREAD_RUNTIME_STATE_SCHEMA_VERSION,
     id: thread.id,
@@ -247,6 +250,7 @@ export async function loadThreadRuntimeState(
     latestSeq,
     replayFloorSeq,
     pendingUserInputIds: userInputGate?.pending(threadId).map((request) => request.id) ?? [],
+    activeTurn: activeTurn ?? null,
     latestTurn: latestTurn
       ? {
           id: latestTurn.id,
@@ -347,7 +351,8 @@ export async function getThreadTimeline(
   // The newest page keeps the active turn's opening user message anchored so
   // a long running turn cannot push the visible request onto an older page
   // that the renderer refuses to page back into while it is busy.
-  const latestTurnId = thread.turns.at(-1)?.id
+  const activeTurn = thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)
+  const latestTurnId = activeTurn?.id ?? thread.turns.at(-1)?.id
   const pageOptions = {
     ...(parsedQuery.data.before ? { before: parsedQuery.data.before } : {}),
     ...(!parsedQuery.data.before && latestTurnId ? { anchorTurnId: latestTurnId } : {}),
@@ -418,6 +423,7 @@ export async function getThreadTimeline(
   return jsonResponse(ThreadTimelineResponseSchema.parse({
     ...ThreadSchemaReadable.parse(projectTimelineThread(pageThread)),
     latestSeq: replayFloor,
+    activeTurn: activeTurn ? omitTurnItems(projectTimelineTurn(activeTurn, [])) : null,
     latestTurn: latestTurnMetadata,
     pendingUserInputIds,
     ...(pendingApprovalIds ? { pendingApprovalIds } : {}),

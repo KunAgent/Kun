@@ -1,3 +1,5 @@
+import { ServiceManagerTransportError } from '../manager/usage-errors.js'
+import { redactSecretText } from '../config/secret-redaction.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import {
   isHostShutdownTurnSuspension,
@@ -21,6 +23,7 @@ import {
 } from './turn-lifecycle-hooks.js'
 import type { GoalElapsedTimer } from './goal-turn-coordinator.js'
 import { AgentLoopBase } from './agent-loop-base.js'
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 
 export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
   protected abstract loop(
@@ -55,7 +58,18 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     const run = this.opts.turns.withTurnMutationFence(
       threadId,
       turnId,
-      () => this.runTurnOwned(threadId, turnId)
+      () => this.runTurnOwned(threadId, turnId).catch(async (error) => {
+        // A data-service failure can happen before runTurnOwned enters its
+        // try/finally, or even while enriching an error. Always release local
+        // admission/lease heartbeats via finishTurn's failure cleanup. The
+        // Manager reconciles any terminal write that could not be persisted.
+        await this.opts.turns.finishTurn({
+          threadId, turnId, status: 'failed',
+          error: redactSecretText(error instanceof Error ? error.message : String(error)),
+          ...(error instanceof ServiceManagerTransportError ? { code: 'service_manager_unavailable' } : {})
+        }).catch(() => undefined)
+        throw error
+      })
     )
     const active = {
       promise: run,
@@ -321,7 +335,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       const raw = error instanceof Error ? error.message : String(error)
       // Best-effort enrichment so the renderer can show "what failed where"
       // instead of the bare "Kun turn failed" string. See issue #26.
-      const thread = await this.opts.threadStore.get(threadId)
+      const thread = await this.opts.threadStore.get(threadId).catch(() => owningThread)
       const turn = thread?.turns.find((candidate) => candidate.id === turnId)
       const modelName = turn?.model?.trim() || thread?.model?.trim() || this.opts.model.model || 'unknown'
       const providerId = turn?.providerId?.trim() || thread?.providerId?.trim()
@@ -379,10 +393,12 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
             ...(finalError ? { error: finalError } : {})
           })
           try {
-            this.opts.memoryDistillation?.schedule({
-              threadId,
-              turnId,
-              status: finalStatus ?? 'failed'
+            runWithoutTurnMutationFence(() => {
+              this.opts.memoryDistillation?.schedule({
+                threadId,
+                turnId,
+                status: finalStatus ?? 'failed'
+              })
             })
           } catch {
             // Post-turn distillation is best-effort and cannot alter settlement.

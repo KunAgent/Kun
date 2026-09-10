@@ -342,7 +342,8 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
   protected async recordOutputTruncated(input: RoundOutcomeInput): Promise<void> {
     const message =
       'The model reached its maximum output length and the response was truncated. ' +
-      'Raise the model’s max output tokens, or ask it to continue or split the work into smaller steps.'
+      'Raise the model’s max output tokens, or ask it to continue or split the work into smaller steps. ' +
+      'Output also stays clamped to the remaining context window capacity.'
     await this.deps.events.record({
       kind: 'error',
       threadId: input.threadId,

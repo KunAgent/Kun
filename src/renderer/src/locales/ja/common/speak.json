@@ -1,0 +1,20 @@
+{
+  "speakAnswer": "読み上げ",
+  "speakStop": "停止",
+  "speakPreparing": "音声を準備しています...",
+  "speakDownloading": "音声モデルをダウンロードしています...",
+  "speakSynthesizing": "音声を生成しています...",
+  "speakUnavailable": "このビルドではローカル音声を利用できません。",
+  "speakNothingToRead": "この回答には読み上げる本文がありません。",
+  "speakModelMissing": "読み上げを使うには、設定で Kokoro 音声モデルをダウンロードしてください。",
+  "speakVoiceMissing": "選択した声をダウンロードできませんでした。",
+  "speakFailed": "音声を生成できませんでした: {{message}}",
+  "speakDownloadingModel": "{{model}} をダウンロード中",
+  "speakDownloadingVoice": "音声 {{voice}} をダウンロード中",
+  "speakDownloadingHint": "ダウンロードが完了すると自動的に読み上げを開始します。",
+  "speakTrackDownload": "音声をダウンロード",
+  "speakTrackSaved": "保存しました",
+  "speakTrackSaveFailed": "録音を保存できませんでした: {{message}}",
+  "speakUnsupportedLanguage": "ローカル読み上げは英語のみ対応しています。この内容には未対応の言語が含まれています。",
+  "speakTrackNotSaved": "録音は消去、容量超過、または書き込みエラーにより保存されませんでした。読み上げは続行します。"
+}

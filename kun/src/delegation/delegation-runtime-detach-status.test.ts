@@ -78,11 +78,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void
 async function waitForAsync(predicate: () => Promise<boolean>, timeoutMs = 1000): Promise<void> {
   const started = Date.now()
   while (true) {
-    try {
-      if (await predicate()) return
-    } catch {
-      // FileDelegationStore uses plain writes in tests; retry an in-flight read.
-    }
+    if (await predicate()) return
     if (Date.now() - started > timeoutMs) throw new Error('timed out waiting for async condition')
     await new Promise((resolve) => setTimeout(resolve, 5))
   }

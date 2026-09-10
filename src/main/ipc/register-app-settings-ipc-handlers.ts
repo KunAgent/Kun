@@ -48,7 +48,8 @@ import {
   KunExecutionSettingsConsentService,
   executionSettingsEqual,
   kunExecutionSettingsChange,
-  type KunExecutionSettingsConsentAction
+  type KunExecutionSettingsConsentAction,
+  type KunExecutionSecuritySettings
 } from '../execution-settings-consent'
 import {
   resolveModelProviderProxyUrl
@@ -151,6 +152,10 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     return dialog.showMessageBox(parent, messageBoxOptions)
   })
   const executionSettingsConsents = new KunExecutionSettingsConsentService()
+  const approvalReviewSelectionLabel = (
+    selection: KunExecutionSecuritySettings['approvalReview']
+  ): string => selection.mode === 'fixed'
+    ? `fixed ${selection.providerId}/${selection.model}` : 'follow the acting turn'
   const applyProtectedSettingsPatch = async (
     event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
     partial: AppSettingsPatch,
@@ -174,9 +179,11 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
         `Current approval policy: ${change.current.approvalPolicy}`,
         `Current sandbox: ${change.current.sandboxMode}`,
         `Current approval reviewer: ${change.current.approvalReviewer}`,
+        `Current approval review model: ${approvalReviewSelectionLabel(change.current.approvalReview)}`,
         `New approval policy: ${change.next.approvalPolicy}`,
         `New sandbox: ${change.next.sandboxMode}`,
         `New approval reviewer: ${change.next.approvalReviewer}`,
+        `New approval review model: ${approvalReviewSelectionLabel(change.next.approvalReview)}`,
         ...(change.next.approvalPolicy === 'auto' &&
           change.next.sandboxMode === 'danger-full-access' &&
           change.next.approvalReviewer === 'user'
@@ -203,7 +210,8 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     const latestExecution = {
       approvalPolicy: latest.agents.kun.approvalPolicy,
       sandboxMode: latest.agents.kun.sandboxMode,
-      approvalReviewer: latest.agents.kun.approvalReviewer
+      approvalReviewer: latest.agents.kun.approvalReviewer,
+      approvalReview: latest.agents.kun.approvalReview
     }
     if (!executionSettingsEqual(latestExecution, change.current)) {
       throw new Error('Kun execution settings changed while confirmation was open; retry the change.')

@@ -122,6 +122,13 @@
   "usageQuotaCurrentStreak": "Current streak: {{count}} days",
   "usageQuotaMostActiveWeekday": "Most active: {{weekday}}",
   "usageQuotaModels": "모델 사용량",
+  "usageModelScopeLabel": "모델 사용량 출처",
+  "usageModelScope": {
+    "primary": "직접 세션",
+    "side": "하위 에이전트",
+    "all": "전체"
+  },
+  "usageModelScopeNote": "합계에는 하위 에이전트 사용량도 포함됩니다. 출처를 전환해 확인하세요.",
   "usageQuotaModelPagination": "모델 사용량 페이지",
   "usageQuotaModelPageRange": "{{first}}–{{last}} / {{total}} 표시",
   "usageQuotaModelPageIndicator": "{{page}} / {{total}}",

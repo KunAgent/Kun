@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   DailyUsageResponseSchema,
   ModelUsageResponseSchema,
+  ModelUsageScopeSchema,
   ThreadUsageResponseSchema,
   TurnUsageResponseSchema
 } from './usage.js'
@@ -25,7 +26,7 @@ export const SessionUsageAggregateQuerySchema = z.discriminatedUnion('groupBy', 
     threadId: z.string().min(1).max(512).optional()
   }).strict(),
   RangeSchema.extend({ groupBy: z.literal('day') }).strict(),
-  RangeSchema.extend({ groupBy: z.literal('model') }).strict(),
+  RangeSchema.extend({ groupBy: z.literal('model'), scope: ModelUsageScopeSchema.default('all') }).strict(),
   z.object({
     groupBy: z.literal('turn'),
     threadId: z.string().min(1).max(512)
@@ -46,6 +47,7 @@ export const SessionUsageRecordSchema = z.object({
   turnId: z.string().min(1).optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
+  relation: z.enum(['primary', 'fork', 'side']).optional(),
   completedAt: IsoTimestampSchema,
   usage: UsageSnapshotSchema,
   cumulative: z.boolean().optional()

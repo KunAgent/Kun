@@ -128,7 +128,7 @@ export function modelListFromSharedConnections(
           ? { maxOutputTokens: positiveInteger(capability.maxOutputTokens) }
           : {}),
         ...(reasoning ? { reasoning } : {}),
-        ...(sharedServiceTiers(capability.serviceTiers).length
+        ...(Array.isArray(capability.serviceTiers)
           ? { serviceTiers: sharedServiceTiers(capability.serviceTiers) }
           : {}),
         ...(isModelEndpointFormat(capability.endpointFormat)

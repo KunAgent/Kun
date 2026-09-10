@@ -4,6 +4,7 @@ import providerMediaMcp from './settings/provider-media-mcp.json'
 import mcpMigration from './settings/mcp-migration.json'
 import migrationSystem from './settings/migration-system.json'
 import codePersonas from './settings/code-personas.json'
+import speak from './settings/speak.json'
 
 const settings = {
   ...navigationProviders,
@@ -13,6 +14,7 @@ const settings = {
   ...migrationSystem,
   ...codePersonas,
   guiUpdateErrFeedUnavailable: 'ขณะนี้ไม่สามารถเข้าถึงแหล่งอัปเดตได้ โปรดลองอีกครั้งภายหลังหรือใช้หน้าดาวน์โหลด',
+  ...speak,
 }
 
 export default settings

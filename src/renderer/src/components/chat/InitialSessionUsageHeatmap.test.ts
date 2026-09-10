@@ -188,6 +188,7 @@ describe('InitialSessionUsageHeatmap', () => {
           from: '2026-06-04',
           to: '2026-06-04',
           timezone: 'UTC',
+          scope: 'all',
           buckets: [
             { ...detailedDay, model: 'deepseek-v4-pro' },
             { ...detailedDay, model: 'gpt-5.6-sol', totalTokens: 1_800_000 },
@@ -241,6 +242,7 @@ describe('InitialSessionUsageHeatmap', () => {
             from: detailedDay.date,
             to: detailedDay.date,
             timezone: 'UTC',
+            scope: 'all',
             buckets: models,
             days: [detailedDay],
             totals: { ...usage().totals, totalTokens: 2_850, days: 1, activeDays: 1 }
@@ -297,6 +299,7 @@ describe('InitialSessionUsageHeatmap', () => {
           from: days[0].date,
           to: days[days.length - 1].date,
           timezone: 'UTC',
+          scope: 'all',
           buckets: [{ ...days[0], model: 'deepseek-v4' }],
           days,
           totals: { ...usage(days).totals }

@@ -27,9 +27,23 @@ const manifests = {
 async function fixture(options, action) {
   const root = await mkdtemp(join(tmpdir(), 'kun-public-release-'))
   const methods = []
+  const requests = new Map()
   const server = createServer((request, response) => {
     methods.push(request.method)
     const name = new URL(request.url, 'http://localhost').pathname.split('/').at(-1)
+    const count = (requests.get(request.url) || 0) + 1
+    requests.set(request.url, count)
+    if (options.interrupted && name.endsWith('.exe') && count === 1) {
+      response.writeHead(200, { 'Content-Length': bytes.length })
+      response.write(bytes.subarray(0, 4))
+      setTimeout(() => response.destroy(), 20)
+      return
+    }
+    if (options.unavailable && name === 'latest.yml' && count === 1) {
+      response.writeHead(503)
+      response.end('Temporarily unavailable')
+      return
+    }
     if (manifests[name]) {
       const files = manifests[name].filter(url => url !== options.missingArtifact).map(url => ({
         url: options.outsideFeed ? `https://example.com/${url}` : url + (options.revision ? `?revision=${commit}` : ''),
@@ -37,7 +51,8 @@ async function fixture(options, action) {
       }))
       response.end(stringify({ version: options.wrongVersion ? '0.3.7' : version, files }))
     } else if (name === 'latest.json') {
-      response.end(JSON.stringify({ version }))
+      const stale = options.staleStableJson && request.url.includes('/channels/stable/latest/')
+      response.end(JSON.stringify({ version: stale ? '0.3.7' : version }))
     } else if (name.startsWith('Kun-')) response.end(options.tamper ? 'tampered-bytes' : bytes)
     else { response.statusCode = 404; response.end() }
   })
@@ -53,7 +68,7 @@ async function fixture(options, action) {
     const execute = (mode) => run(process.execPath, [script, mode], { cwd: root, timeout: 20_000,
       env: { ...process.env, RELEASE_VERSION: version, TAG_NAME: `v${version}`, CANDIDATE_COMMIT: commit,
         R2_PUBLIC_BASE_URL: `http://127.0.0.1:${server.address().port}`, R2_RELEASE_PREFIX: 'deepseek-gui' } })
-    await action({ execute, root })
+    await action({ execute, root, requests })
     if (options.wrongTag || options.published) assert.equal(methods.length, 0)
     else assert.ok(methods.length > 0)
     assert.ok(methods.every((method) => method === 'GET'), 'Verification must never change public feeds')
@@ -75,6 +90,29 @@ test('public candidate verification hashes downloads and saves previous feeds wi
     await readFile(join(root, 'public-release-evidence/previous-stable-latest.yml'))
     await readFile(join(root, 'public-release-evidence/previous-legacy-latest.yml'))
     await execute('latest')
+  })
+})
+
+for (const [name, options] of [
+  ['interrupted artifact bodies', { interrupted: true }],
+  ['temporarily unavailable manifests', { unavailable: true }]
+]) {
+  test(`public verification recovers from ${name} and verifies complete bytes`, async () => {
+    await fixture(options, async ({ execute, root, requests }) => {
+      for (const mode of ['candidate', 'latest']) {
+        await execute(mode)
+        const receipt = JSON.parse(await readFile(join(root, `public-release-evidence/${mode}-verified.json`), 'utf8'))
+        assert.equal(receipt.verified.length, mode === 'candidate' ? 9 : 18)
+        assert.ok(receipt.verified.every(file => file.sha256 === sha256 && file.sha512 === sha512 && file.size === bytes.length))
+      }
+      assert.ok([...requests.values()].some(count => count >= 2))
+    })
+  })
+}
+
+test('latest verification rejects a stale stable JSON feed even when legacy is current', async () => {
+  await fixture({ staleStableJson: true }, async ({ execute }) => {
+    await assert.rejects(execute('latest'))
   })
 })
 

@@ -44,6 +44,8 @@ export type QueuedComposerMessage = {
   id: string
   text: string
   deliveryState?: 'pending' | 'paused' | 'starting' | 'in_flight' | 'failed'
+  editIntent?: 'cancelling' | 'restoring'
+  steeringRequest?: { operationId: string; turnId: string }
   deliveryTurnId?: string
   deliveryUserMessageItemId?: string
   waitForRuntimeAdmission?: boolean
@@ -72,6 +74,7 @@ export type QueuedComposerMessage = {
   designDocumentTarget?: unknown
   designImagePlacementTarget?: unknown
   writeContext?: unknown
+  composerRestoreBlockReason?: import('../../store/queued-message-edit').QueueEditBlockReason
   composerRestoreEligible?: boolean
 }
 
@@ -124,6 +127,7 @@ function visibleQueue(messages: QueuedComposerMessage[]): QueuedComposerMessage[
     message.deliveryState === 'pending' ||
     message.deliveryState === 'paused' ||
     message.deliveryState === 'failed' ||
+    message.deliveryState === 'starting' ||
     // Admitted to the durable runtime queue: visible so the user can still
     // edit, remove, or reorder it while it waits for the running turn.
     message.deliveryState === 'in_flight'
@@ -145,6 +149,8 @@ export function FloatingComposerQueuedMessages({
 }: Props): ReactElement | null {
   const { t } = useTranslation('common')
   const queue = useMemo(() => visibleQueue(messages), [messages])
+  const queueTitle = t(queue.some((message) => message.deliveryState === 'starting')
+    ? 'queuedMessagesConfirming' : 'queuedMessagesTitle', { count: queue.length })
   const [collapsed, setCollapsed] = useState(true)
   const [busy, setBusy] = useState<{ id: string; kind: QueueActionKind } | null>(null)
   const [dragState, setDragState] = useState<QueueDragState | null>(null)
@@ -174,7 +180,8 @@ export function FloatingComposerQueuedMessages({
 
   const interactionActive = busy !== null
   const expanded = queue.length === 1 || !collapsed || interactionActive
-  const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive)
+  const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive &&
+    !queue.some((message) => message.editIntent || message.deliveryState === 'starting'))
 
   const focusReorderHandle = (id: string): void => {
     queueMicrotask(() => reorderHandleRefs.current.get(id)?.focus())
@@ -285,7 +292,7 @@ export function FloatingComposerQueuedMessages({
             <span className={css.lead} aria-hidden="true">
               <MessageCircle size={14} strokeWidth={1.7} />
             </span>
-            <span className={css.count}>{t('queuedMessagesTitle', { count: queue.length })}</span>
+            <span className={css.count}>{queueTitle}</span>
             <span className={css.chevron} aria-hidden="true">
               {expanded
                 ? <ChevronUp size={14} strokeWidth={1.7} />
@@ -309,7 +316,7 @@ export function FloatingComposerQueuedMessages({
         <ul
           id={listId}
           className={css.list}
-          aria-label={t('queuedMessagesTitle', { count: queue.length })}
+          aria-label={queueTitle}
           hidden={!expanded}
         >
           {expanded ? queue.map((message, index) => {
@@ -320,14 +327,14 @@ export function FloatingComposerQueuedMessages({
             const recoverable = paused || failed
             const imageCount = attachmentImageCount(message)
             const imageNames = imageCount > 0 ? attachmentImageNames(message) : ''
-            const canRestore = Boolean(onRestoreToComposer && message.composerRestoreEligible)
-            const canGuide = Boolean(onGuide && (recoverable
+            const canRestore = Boolean(onRestoreToComposer && message.composerRestoreEligible && !message.steeringRequest && message.deliveryState !== 'starting')
+            const canGuide = Boolean(onGuide && !message.editIntent && message.deliveryState !== 'starting' && (message.steeringRequest || (recoverable
               ? !running && !message.waitForRuntimeAdmission
               : (
                 running &&
                 message.guidanceEligible !== false &&
                 canGuideQueuedComposerMessage(message)
-              )))
+              ))))
             const guideLabel = recoverable
               ? t('queuedMessageRetry')
               : t('queuedMessageSteer')
@@ -420,9 +427,13 @@ export function FloatingComposerQueuedMessages({
 
                 <QueuedMessageSnapshotBadges message={message} />
 
+                {message.deliveryState === 'starting' ? (
+                  <span className={css.status}>{t('queuedMessageConfirming')}</span>
+                ) : null}
                 {paused ? (
                   <span className={`${css.status} ${css.paused}`}>
-                    {t('queuedMessagePaused')}
+                    {t(message.editIntent === 'restoring' ? 'queuedMessageRestorePending'
+                      : message.editIntent === 'cancelling' ? 'queuedMessageCancelPending' : 'queuedMessagePaused')}
                   </span>
                 ) : null}
                 {inFlight ? (
@@ -445,10 +456,10 @@ export function FloatingComposerQueuedMessages({
                       action="edit"
                       label={canRestore
                         ? t('queuedMessageEditInComposer')
-                        : t('queuedMessageEditUnsupported')}
+                        : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')}
                       title={canRestore
                         ? t('queuedMessageEditInComposer')
-                        : t('queuedMessageEditUnsupported')}
+                        : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')}
                       disabled={busy !== null || !canRestore}
                       onClick={() => void applyAction(
                         message.id,
@@ -464,7 +475,7 @@ export function FloatingComposerQueuedMessages({
                   <QueueActionButton
                     action="remove"
                     label={t('queuedMessageRemove')}
-                    disabled={busy !== null}
+                    disabled={busy !== null || message.deliveryState === 'starting' || Boolean(message.steeringRequest)}
                     onClick={() => void applyAction(
                       message.id,
                       'remove',

@@ -129,6 +129,7 @@ export function buildModelClientRouterInput(
         })
       : new CompatModelClient({
           providerId: activeProviderId,
+          presetSource: activeProvider?.presetSource,
           baseUrl: options.baseUrl,
           apiKey: options.apiKey,
           modelProxyUrl: defaultModelProxyUrl,
@@ -137,6 +138,7 @@ export function buildModelClientRouterInput(
           model: options.model,
           modelCapabilities: defaultModelCapabilities,
           headers: options.headers,
+          customHeaders: activeProvider?.customHeaders,
           ...(defaultBillingKind ? { billingKind: defaultBillingKind } : {}),
           ...(options.credentialSourceId && credentialResolver
             ? {
@@ -191,6 +193,7 @@ export function buildModelClientRouterInput(
         })
       : new CompatModelClient({
           providerId: trimmedId,
+          presetSource: provider.presetSource,
           baseUrl: provider.baseUrl ?? options.baseUrl ?? '',
           apiKey: provider.apiKey,
           modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl')
@@ -201,6 +204,7 @@ export function buildModelClientRouterInput(
           model: options.model,
           modelCapabilities: scopedModelCapabilities,
           headers: provider.headers,
+          customHeaders: provider.customHeaders,
           ...(providerBillingKind ? { billingKind: providerBillingKind } : {}),
           ...(provider.credentialSourceId && credentialResolver
             ? {

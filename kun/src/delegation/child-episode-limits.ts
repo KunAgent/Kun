@@ -7,6 +7,20 @@ const FAST_CONTEXT_MAX_STEPS = 4
 const FAST_CONTEXT_MAX_WALL_MS = 10 * 60_000
 const FAST_CONTEXT_MAX_TOOL_CALLS_PER_STEP = 8
 
+/**
+ * Whether a child run should use the Fast Context episode budget. This is
+ * true for the dedicated `fast_context` entry point, and also for the
+ * built-in retrieval role `explore` when it is launched through a generic
+ * `delegate_task` path — otherwise that role could fall back to the 128-step
+ * ordinary ceiling and blow through its intended four-step budget.
+ */
+export function shouldUseFastContextEpisodeBudget(input: {
+  fastContext?: boolean
+  profile?: string
+}): boolean {
+  return input.fastContext === true || input.profile === 'explore'
+}
+
 /** Inherit stricter user limits while preserving a finite child episode. */
 export function resolveChildEpisodeLimits(
   configured: TurnLimitsConfig | undefined,

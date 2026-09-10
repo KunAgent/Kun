@@ -1,3 +1,4 @@
+import { setTimeout as delayRequestRetry } from 'node:timers/promises'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
@@ -46,6 +47,8 @@ export type ManagerRequestOptions = {
   fetch?: typeof fetch
   timeoutMs?: number
   signal?: AbortSignal
+  /** Explicitly read-only RPCs may retry after an ambiguous socket failure. */
+  retrySafe?: boolean
 }
 
 export async function requestManagerJson(
@@ -53,7 +56,7 @@ export async function requestManagerJson(
   path: string,
   options: ManagerRequestOptions
 ): Promise<unknown> {
-  return requireManagerJson(await requestManagerResponse(manager, path, options))
+  return performManagerRequest(manager, path, options, requireManagerJson)
 }
 
 export async function requestManagerResponse(
@@ -61,21 +64,46 @@ export async function requestManagerResponse(
   path: string,
   options: ManagerRequestOptions
 ): Promise<Response> {
+  return performManagerRequest(manager, path, options, async (response) => response)
+}
+
+async function performManagerRequest<T>(
+  manager: ServiceManagerConnection,
+  path: string,
+  options: ManagerRequestOptions,
+  consume: (response: Response) => Promise<T>
+): Promise<T> {
   const fetchImpl = options.fetch ?? fetch
-  try {
-    return await fetchImpl(`${manager.discovery.baseUrl}${path}`, {
-      method: options.method ?? 'GET',
-      headers: {
-        authorization: `Bearer ${manager.discovery.managerToken}`,
-        ...(options.body === undefined ? {} : { 'content-type': 'application/json' })
-      },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-      signal: options.signal
-        ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs ?? 5_000)])
-        : AbortSignal.timeout(options.timeoutMs ?? 5_000)
-    })
-  } catch (error) {
-    throw classifyManagerTransportError(error)
+  const method = (options.method ?? 'GET').toUpperCase()
+  const retrySafe = options.retrySafe === true || method === 'GET' || method === 'HEAD'
+  // All attempts share the original budget. A cancelled request never retries.
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs ?? 5_000)])
+    : AbortSignal.timeout(options.timeoutMs ?? 5_000)
+  const body = options.body === undefined ? undefined : JSON.stringify(options.body)
+  for (let attempt = 0; ; attempt += 1) {
+    signal.throwIfAborted()
+    let receivedResponse = false
+    try {
+      const response = await fetchImpl(`${manager.discovery.baseUrl}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${manager.discovery.managerToken}`,
+          ...(body === undefined ? {} : { 'content-type': 'application/json' })
+        },
+        ...(body === undefined ? {} : { body }),
+        signal
+      })
+      receivedResponse = true
+      return await consume(response)
+    } catch (error) {
+      const failure = classifyManagerTransportError(error)
+      if (signal.aborted || attempt >= 2 || !(failure instanceof ServiceManagerTransportError) ||
+        (!retrySafe && (receivedResponse || failure.kind !== 'connection_refused'))) throw failure
+      // Stay on the authenticated Manager instance. A new Manager requires
+      // ownership/lease recovery, never a blind data-plane endpoint swap.
+      await delayRequestRetry(100 * (attempt + 1), undefined, { signal })
+    }
   }
 }
 
@@ -107,15 +135,24 @@ function classifyManagerTransportError(error: unknown): Error {
   const causeCode = (error.cause as NodeJS.ErrnoException | undefined)?.code
   const code = String((error as NodeJS.ErrnoException).code ?? causeCode ?? '')
   if (code === 'ECONNREFUSED') {
-    return new ServiceManagerTransportError('connection_refused', error.message, { cause: error })
+    return managerTransportError('connection_refused', code, error)
   }
-  if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-    return new ServiceManagerTransportError('timeout', error.message, { cause: error })
+  if (error.name === 'TimeoutError' || error.name === 'AbortError' || code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT') {
+    return managerTransportError('timeout', code, error)
   }
   if (code === 'ECONNRESET' || code === 'EPIPE' || code === 'UND_ERR_SOCKET') {
-    return new ServiceManagerTransportError('socket_closed', error.message, { cause: error })
+    return managerTransportError('socket_closed', code, error)
   }
   return error
+}
+
+function managerTransportError(
+  kind: import('./usage-errors.js').ServiceManagerTransportKind,
+  code: string,
+  cause: Error
+): ServiceManagerTransportError {
+  return new ServiceManagerTransportError(kind,
+    `Kun Service Manager connection failed (${kind}${code ? `; ${code}` : ''}).`, { cause })
 }
 
 export function safeManagerUrl(record: ManagerDiscoveryRecord): boolean {

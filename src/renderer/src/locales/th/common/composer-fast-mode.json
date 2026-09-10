@@ -1,0 +1,7 @@
+{
+  "composerFastModeOn": "เปิดโหมดเร็ว",
+  "composerFastModeOff": "ปิดโหมดเร็ว",
+  "composerFastModeHint": "Codex ตอบเร็วขึ้น แต่ใช้โควตาการสมัครสมาชิกมากขึ้น",
+  "composerFastModeUnverified": "ยังไม่ยืนยันการรองรับโหมดเร็วสำหรับโมเดลนี้ โปรดรีเฟรชรายการโมเดลในการตั้งค่าผู้ให้บริการ",
+  "composerFastModeUnsupported": "โมเดลนี้ไม่รองรับโหมดเร็ว"
+}

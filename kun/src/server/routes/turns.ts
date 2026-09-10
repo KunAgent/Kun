@@ -7,6 +7,7 @@ import {
   PruneThreadResponse,
   RestoreSnapshotResponse,
   ThreadSnapshotsResponse,
+  CancelQueuedTurnResponse,
   CancelToolCallResponse,
   InterruptTurnRequest,
   InterruptTurnResponse,
@@ -36,6 +37,7 @@ import {
 import { ThreadExecutionBusyError } from '../../ports/thread-execution-lease.js'
 import type { ToolCancellationService } from '../../services/tool-cancellation-service.js'
 import { projectPublicTurn } from './thread-projection.js'
+import { QueueAdmissionUncertainError } from '../../services/queue-admission.js'
 
 export async function startTurn(
   turns: TurnService,
@@ -60,6 +62,12 @@ export async function startTurn(
     }, { onAdmitted: onStarted })
     return jsonResponse(StartTurnResponse.parse(response), 202)
   } catch (error) {
+    if (error instanceof QueueAdmissionUncertainError) {
+      return jsonResponse({
+        code: error.code, message: error.message,
+        details: { clientRequestId: error.clientRequestId, stage: error.stage, retryable: true }
+      }, 503)
+    }
     if (error instanceof ThreadExecutionBusyError) {
       return jsonResponse({
         code: 'thread_busy',
@@ -110,7 +118,7 @@ export async function cancelQueuedTurn(
 ): Promise<JsonResponse | Response> {
   try {
     const result = await turns.cancelQueuedTurn({ threadId, turnId })
-    return jsonResponse(result)
+    return jsonResponse(CancelQueuedTurnResponse.parse(result))
   } catch (error) {
     if (error instanceof TurnConflictError) return ERRORS.conflict(error.message)
     if (error instanceof Error && /not found/i.test(error.message)) return ERRORS.notFound(error.message)
@@ -152,6 +160,7 @@ export async function resumeQueuedTurns(
 ): Promise<JsonResponse | Response> {
   try {
     const started = await turns.startNextQueuedTurn(threadId)
+    turns.notifyTurnQueued(threadId)
     if (!started) return jsonResponse({ threadId, started: false as const })
     onStarted(threadId, started.turnId)
     return jsonResponse({ threadId, started: true as const, turnId: started.turnId }, 202)
@@ -177,6 +186,8 @@ export async function steerTurn(
   }
   try {
     await turns.steerTurn({
+      ...(parsed.data.operationId ? { operationId: parsed.data.operationId } : {}),
+      ...(parsed.data.sourceTurnId ? { sourceTurnId: parsed.data.sourceTurnId } : {}),
       threadId,
       turnId,
       text: parsed.data.text,

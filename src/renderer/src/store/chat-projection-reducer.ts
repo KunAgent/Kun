@@ -500,7 +500,9 @@ export function reduceChatProjection(
         status: event.status,
         decision: event.decision ?? current?.decision,
         riskLevel: event.riskLevel ?? current?.riskLevel,
-        rationale: event.rationale ?? current?.rationale
+        rationale: event.rationale ?? current?.rationale,
+        reviewModelSource: event.reviewModelSource ?? current?.reviewModelSource,
+        reviewModelRoute: event.reviewModelRoute ?? current?.reviewModelRoute
       }
       return {
         blocks: upsertProjectedTimelineBlock(state, block),
