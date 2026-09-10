@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "kun-memory-lexical-abstention-regression-v1",
+  "status": "frozen",
+  "foundationThreshold": 0.4,
+  "cases": [
+    {
+      "queryId": "p2a_v2_q033_database_credential",
+      "expectedIds": [],
+      "forbiddenIds": ["p2a_v2_a_password_rotation", "p2a_v2_a_postgres"],
+      "observedBeforeFix": ["p2a_v2_a_region", "p2a_v2_a_rollback", "p2a_v2_a_postgres", "p2a_v2_a_backup", "p2a_v2_a_maintenance"],
+      "expectedAfterFix": []
+    },
+    {
+      "queryId": "p2a_v2_q034_customer_names",
+      "expectedIds": [],
+      "forbiddenIds": ["p2a_v2_a_postgres", "p2a_v2_a_rate_limit"],
+      "observedBeforeFix": ["p2a_v2_a_localization", "p2a_v2_a_alert_severity", "p2a_v2_a_accessibility", "p2a_v2_a_rollback", "p2a_v2_user_concise"],
+      "expectedAfterFix": []
+    },
+    {
+      "queryId": "p2a_v2_q035_salary_data",
+      "expectedIds": [],
+      "forbiddenIds": ["p2a_v2_a_review", "p2a_v2_a_oncall"],
+      "observedBeforeFix": [],
+      "expectedAfterFix": []
+    },
+    {
+      "queryId": "p2a_v2_q036_execute_injection",
+      "expectedIds": [],
+      "forbiddenIds": ["p2a_v2_a_injection_warning", "p2a_v2_a_rollback"],
+      "observedBeforeFix": [],
+      "expectedAfterFix": []
+    }
+  ]
+}

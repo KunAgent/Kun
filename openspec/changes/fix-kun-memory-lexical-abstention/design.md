@@ -36,6 +36,14 @@ candidate.features.lexical >= MEMORY_MIN_LEXICAL_RELEVANCE
 
 The predicate remains shared by SQLite FTS5 and filesystem fallback. BM25 may raise a candidate's lexical score, but cannot bypass the gate when the combined score remains below it.
 
+The current production audit records the shared predicate and filesystem evidence
+before this change: q033 and q034 have leading lexical features of approximately
+`0.392857` and `0.304348`, while q035 and q036 return no records. The anonymous
+regression fixture keeps those observations without changing frozen semantic-memory
+v1/v2 evidence. The SQLite integration must reproduce selected ids and bounded lexical
+features for all four queries; it is kept separate from this gate commit so a backend
+mismatch cannot be hidden by the new threshold.
+
 ### 2. Calibrate on the complete development split
 
 The implementation must record baseline and gated metrics for all v2 development categories, including Recall@K, Precision@K, MRR, abstention accuracy, forbidden selections, scope/lifecycle leaks, and deterministic trace hashes. A threshold is not accepted solely because it fixes q033/q034; it must expose the ranked-quality trade-off and pass all zero-tolerance safety gates.

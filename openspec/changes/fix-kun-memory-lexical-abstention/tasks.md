@@ -1,8 +1,8 @@
 ## 1. Freeze the production contract and audit fixture
 
 - [x] 1.1 Add the delta spec for the versioned foundation lexical relevance gate and validate the change strictly.
-- [ ] 1.2 Add an anonymous regression fixture for q033/q034 false positives and q035/q036 correct abstention without modifying frozen v1/v2 evidence.
-- [ ] 1.3 Record the current shared predicate, filesystem scores, and expected SQLite/fallback parity in focused test notes.
+- [x] 1.2 Add an anonymous regression fixture for q033/q034 false positives and q035/q036 correct abstention without modifying frozen v1/v2 evidence.
+- [x] 1.3 Record the current shared predicate, filesystem scores, and expected SQLite/fallback parity in focused test notes.
 
 ## 2. Verify both production retrieval modes
 
