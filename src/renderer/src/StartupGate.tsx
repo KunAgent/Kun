@@ -4,8 +4,7 @@ import type {
   DesktopStartupStatePayload
 } from '@shared/desktop-startup-state'
 import { requestApplicationReload } from './lib/application-reload'
-import { KunStartupArtwork } from './components/startup/KunStartupArtwork'
-import { selectKunStartupVariant } from './components/startup/kun-startup-variants'
+import kunLogoUrl from '../../asset/img/kun_bird.png'
 import {
   mergeStartupPhase,
   startupPhaseLabel,
@@ -110,7 +109,6 @@ export function StartupGate({
   const [startupAttempt, setStartupAttempt] = useState(0)
   const [recoveryActionError, setRecoveryActionError] = useState<string | null>(null)
   const [boot, setBoot] = useState<WorkbenchBootState>({ status: 'idle' })
-  const [startupVariant] = useState(selectKunStartupVariant)
   const bootRunRef = useRef(0)
 
   useEffect(() => {
@@ -274,17 +272,21 @@ export function StartupGate({
   const recovering = phase === 'recovery_required'
   if (recovering) {
     return (
-      <main
-        className="kun-startup"
-        data-recovery="true"
-        data-startup-variant={startupVariant}
-      >
+      <main className="kun-startup" data-recovery="true">
         <section className="kun-startup__content" role="alert" aria-live="assertive">
-          <KunStartupArtwork motion="paused" variant={startupVariant} />
-          <div className="kun-startup__copy">
-            <h1 className="kun-startup__title">{startupPhaseLabel(phase)}</h1>
-            {phaseDetail ? <p className="kun-startup__detail">{phaseDetail}</p> : null}
-          </div>
+          <img
+            className="kun-startup__logo"
+            data-motion="paused"
+            data-testid="kun-startup-logo"
+            src={kunLogoUrl}
+            width="96"
+            height="96"
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+          <h1 className="kun-startup__title">{startupPhaseLabel(phase)}</h1>
+          {phaseDetail ? <p className="kun-startup__detail">{phaseDetail}</p> : null}
           <p className="kun-startup__hint">
             Startup stopped before Kun could finish preparing the workspace.
           </p>
@@ -299,32 +301,26 @@ export function StartupGate({
     ? 'Opening your workspace...'
     : startupPhaseLabel(phase)
   return (
-    <main
-      className="kun-startup"
-      data-recovery="false"
-      data-startup-variant={startupVariant}
-    >
+    <main className="kun-startup" data-recovery="false">
       <section
         className="kun-startup__content"
         role="status"
         aria-live="polite"
         aria-busy="true"
       >
-        <KunStartupArtwork motion="running" variant={startupVariant} />
-        <div className="kun-startup__copy">
-          <h1 className="kun-startup__title">{statusTitle}</h1>
-          {phaseDetail ? <p className="kun-startup__detail">{phaseDetail}</p> : null}
-        </div>
-        <div
-          className="kun-startup__progress"
-          role="progressbar"
-          aria-label="Kun startup progress"
-        >
-          <span className="kun-startup__progress-indicator kun-startup__motion" />
-        </div>
-        <p className="kun-startup__hint">
-          Kun is preparing your workspace.
-        </p>
+        <img
+          className="kun-startup__logo"
+          data-motion="running"
+          data-testid="kun-startup-logo"
+          src={kunLogoUrl}
+          width="96"
+          height="96"
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+        />
+        <h1 className="kun-startup__title">{statusTitle}</h1>
+        {phaseDetail ? <p className="kun-startup__detail">{phaseDetail}</p> : null}
       </section>
     </main>
   )
