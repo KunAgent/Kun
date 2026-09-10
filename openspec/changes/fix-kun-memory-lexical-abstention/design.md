@@ -34,15 +34,19 @@ candidate.features.typeAffinity > 0 ||
 candidate.features.lexical >= MEMORY_MIN_LEXICAL_RELEVANCE
 ```
 
-The predicate remains shared by SQLite FTS5 and filesystem fallback. BM25 may raise a candidate's lexical score, but cannot bypass the gate when the combined score remains below it.
+The predicate remains shared by SQLite FTS5 and filesystem fallback. FTS5 BM25 may
+order the bounded candidate window, but the gate receives the same token-coverage
+score as filesystem fallback; backend-specific BM25 normalization cannot inflate a
+weak match past the foundation threshold.
 
 The current production audit records the shared predicate and filesystem evidence
 before this change: q033 and q034 have leading lexical features of approximately
 `0.392857` and `0.304348`, while q035 and q036 return no records. The anonymous
 regression fixture keeps those observations without changing frozen semantic-memory
 v1/v2 evidence. The SQLite integration must reproduce selected ids and bounded lexical
-features for all four queries; it is kept separate from this gate commit so a backend
-mismatch cannot be hidden by the new threshold.
+features for all four queries. It is kept separate from the threshold commit and first
+exposed that the old BM25-derived score could diverge from filesystem fallback; the
+indexed path now uses the shared bounded coverage score for the gate.
 
 ### 2. Calibrate on the complete development split
 
@@ -52,7 +56,7 @@ The current evidence suggests `0.40` removes the two false-positive queries whil
 
 ### 3. Test both retrieval modes without duplicating business logic
 
-Add one shared ranking test for the gate and one hybrid-store/in-memory SQLite integration test that builds the FTS projection from the anonymous records, retrieves q033–q036, and compares selected ids, gate decisions, and bounded trace features with filesystem fallback. Do not alter the fallback to compensate for an indexed-only discrepancy.
+Add one shared ranking test for the gate and one hybrid-store/in-memory SQLite integration test that builds the FTS projection from the anonymous records, retrieves q033–q036, and compares selected ids, gate decisions, and bounded trace features with filesystem fallback. Do not alter the fallback to compensate for an indexed-only discrepancy; the indexed path must use the shared coverage score instead.
 
 ### 4. Keep the fix narrow and reversible
 

@@ -7,7 +7,7 @@
 ## 2. Verify both production retrieval modes
 
 - [ ] 2.1 Add shared ranking tests proving below-threshold lexical-only candidates are irrelevant while type-affinity candidates remain eligible.
-- [ ] 2.2 Add an in-memory SQLite FTS5 integration test using the real `HybridMemoryIndex`/store path and compare q033–q036 selected ids and bounded features with filesystem fallback.
+- [x] 2.2 Add an in-memory SQLite FTS5 integration test using the real `HybridMemoryIndex`/store path and compare q033–q036 selected ids and bounded features with filesystem fallback.
 - [ ] 2.3 Verify scope, lifecycle, authority, prompt budget, and degraded fallback behavior remain unchanged.
 
 ## 3. Implement and calibrate the gate
