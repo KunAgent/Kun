@@ -96,7 +96,9 @@ export function selectSemanticMemoryV3DevelopmentCandidate(input: {
   grid: SemanticMemoryV3DevelopmentGridResult
 }): SemanticMemoryV3DevelopmentSelection | undefined {
   const zeroOverlapQueryIds = new Set(
-    input.dataset.queries.filter((query) => query.zeroLexicalOverlap).map((query) => query.id)
+    input.dataset.queries
+      .filter((query) => query.split === 'development' && query.zeroLexicalOverlap)
+      .map((query) => query.id)
   )
   const candidates = input.grid.entries.flatMap((entry) => {
     if (!entry.report || entry.error) return []
@@ -198,13 +200,13 @@ function assertCandidateMatchesConfiguration(
   candidate: SemanticMemoryCandidateMetadata,
   configuration: SemanticMemoryV3GridConfiguration
 ): void {
-  const expected = {
+  const expected: Record<string, number> = {
     minimumSimilarity: configuration.minimumSimilarity,
-    marginGap: configuration.marginGap,
     semanticWeight: configuration.semanticWeight,
     lexicalWeight: configuration.lexicalWeight,
     rankConstant: configuration.rankConstant
   }
+  if (candidate.parameters.fusionMode !== 'lexical-veto') expected.marginGap = configuration.marginGap
   const differences = Object.entries(expected).filter(([key, value]) => candidate.parameters[key] !== value)
   if (differences.length > 0) throw new Error(`candidate does not match v3 grid configuration ${configuration.id}`)
 }

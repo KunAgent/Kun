@@ -31,8 +31,8 @@
 
 ## 5. Evaluation and delivery evidence
 
-- [ ] 5.1 Run the complete v3 development matrix offline and store per-query selected ids, metrics, bootstrap intervals, resource measurements, and artifact hashes; verify the report is reproducible from the frozen manifest.
-- [ ] 5.2 Apply the pre-registered development gates and record either a locked candidate or a development no-go; verify no threshold or grid value changes after result inspection.
+- [x] 5.1 Run the complete v3 development matrix offline and store per-query selected ids, metrics, bootstrap intervals, resource measurements, and artifact hashes; verify the report is reproducible from the frozen manifest. `scripts/run-semantic-memory-v3-development.mjs` ran all three 54-point candidate matrices against the local E5 q8 artifact with zero network attempts; the compact evidence is stored at `D:\learning\Review_md\codex\p2a-semantic-spike\v3-development-output.json`.
+- [x] 5.2 Apply the pre-registered development gates and record either a locked candidate or a development no-go; verify no threshold or grid value changes after result inspection. All three selections are null: semantic-gated-rrf fails abstention/false-positive gates, lexical-veto matches baseline without the required gain, and lexical-veto+margin loses Recall; holdout is therefore not allowed.
 - [ ] 5.3 If and only if development passes, run holdout once from the lock artifact; verify a failed holdout remains no-go and does not reopen tuning.
 - [ ] 5.4 Write the final v3 decision report and update the roadmap without changing v1/v2 frozen evidence; verify the report states whether P2-B remains blocked.
 - [ ] 5.5 Run focused evaluation tests, typecheck, build:kun, build, lint, file-lines, OpenSpec strict validation, and diff check; verify no production retrieval file or model asset is changed.
