@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MemoryRecord } from '../contracts/memory.js'
 import {
+  createSemanticMemoryV3SemanticGatedCandidate,
   createSemanticMemoryV3LexicalVetoCandidate,
   passesMarginGate
 } from './semantic-memory-v3-candidates.js'
@@ -60,6 +61,24 @@ describe('semantic Memory v3 lexical-veto candidates', () => {
       { record: second!, score: 0.8 }
     ], 0.01)).toBe(false)
     expect(() => passesMarginGate([], -0.1)).toThrow('marginGap')
+  })
+
+  it('keeps the semantic-gated control behavior when lexical retrieval is empty', async () => {
+    const candidate = createSemanticMemoryV3SemanticGatedCandidate({
+      metadata: metadata('semantic-gated-rrf'),
+      lexicalCandidate: stubCandidate([]),
+      scoreRecords: () => [
+        { record: third!, score: 0.95 },
+        { record: first!, score: 0.8 }
+      ],
+      minimumSimilarity: 0.9,
+      semanticWeight: 1,
+      lexicalWeight: 1,
+      rankConstant: 60
+    })
+
+    await expect(candidate.retrieve(request())).resolves.toEqual([third])
+    expect(candidate.metadata.parameters).toMatchObject({ fusionMode: 'semantic-gated-rrf' })
   })
 })
 
