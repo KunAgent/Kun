@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
+  loadSemanticMemoryV3EvaluationDataset,
   parseSemanticMemoryV3EvaluationDataset,
   SemanticMemoryV3QueryCategory
 } from './semantic-memory-evaluation-v3-dataset.js'
@@ -40,6 +41,19 @@ describe('semantic Memory v3 evaluation dataset', () => {
       manifestText: windowsLines(texts.manifestText),
       checksumsText: windowsLines(texts.checksumsText)
     })).not.toThrow()
+  })
+
+  it('loads the checked-in frozen v3 fixture with the locked model identity', async () => {
+    const dataset = await loadSemanticMemoryV3EvaluationDataset()
+
+    expect(dataset.records).toHaveLength(44)
+    expect(dataset.queries).toHaveLength(80)
+    expect(dataset.manifest.candidateIdentity).toMatchObject({
+      modelId: 'multilingual-e5-small-q8',
+      modelSha256: 'f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193',
+      tokenizerSha256: '0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39'
+    })
+    expect(dataset.queries.filter((query) => query.zeroLexicalOverlap)).toHaveLength(8)
   })
 })
 
@@ -89,7 +103,7 @@ function buildRawData(): RawData {
       split: ordinal <= 40 ? 'development' : 'holdout',
       queryLanguage: ordinal % 2 === 0 ? 'zh' : 'en',
       category,
-      query: zeroLexicalOverlap ? `跨语言零词面样本 ${ordinal}` : `Anonymous query ${ordinal}`,
+      query: zeroLexicalOverlap ? '跨语言零词面样本' : `Anonymous query ${ordinal}`,
       expectedIds,
       forbiddenIds: [forbidden],
       zeroLexicalOverlap,

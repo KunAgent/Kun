@@ -266,6 +266,9 @@ export function parseSemanticMemoryV3EvaluationDataset(input: {
       if (record && (!memoryInScope(record, query) || memoryLifecycleState(record, nowMs) !== 'active')) {
         errors.push(`query ${query.id} expects unavailable record ${id}`)
       }
+      if (record && query.zeroLexicalOverlap && hasNormalizedLexicalOverlap(query.query, record.content)) {
+        errors.push(`query ${query.id} violates zero lexical overlap for ${id}`)
+      }
     }
   }
 
@@ -333,9 +336,30 @@ export function semanticMemoryV3Sha256(text: string): string {
   return sha256(text)
 }
 
+export function semanticMemoryV3NormalizedTokens(text: string): ReadonlySet<string> {
+  const normalized = text.normalize('NFKC').toLocaleLowerCase('en-US')
+  const cjkTokens = [...normalized].filter((character) => /\p{Script=Han}/u.test(character))
+  const wordText = normalized
+    .replace(/\p{Script=Han}/gu, ' ')
+    .replace(/[^\p{Letter}\p{Number}_-]+/gu, ' ')
+  const wordTokens = wordText.split(/\s+/u).filter((token) => token.length > 0 && !V3_STOPWORDS.has(token))
+  return new Set([...cjkTokens, ...wordTokens])
+}
+
+function hasNormalizedLexicalOverlap(query: string, content: string): boolean {
+  const contentTokens = semanticMemoryV3NormalizedTokens(content)
+  return [...semanticMemoryV3NormalizedTokens(query)].some((token) => contentTokens.has(token))
+}
+
 function sha256(text: string): string {
   return createHash('sha256').update(canonicalText(text)).digest('hex')
 }
+
+const V3_STOPWORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'before', 'by', 'can', 'does', 'for', 'from',
+  'how', 'in', 'is', 'it', 'of', 'on', 'or', 'the', 'to', 'what', 'when', 'where', 'which',
+  'who', 'with'
+])
 
 function canonicalText(text: string): string {
   return text.replace(/\r\n?/gu, '\n')
