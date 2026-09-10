@@ -47,7 +47,7 @@ The zero-overlap rule is computed after the declared case, punctuation, CJK segm
 
 ### Pre-registered tuning and uncertainty
 
-Before development execution, the change records the finite similarity, margin/gap, and fusion grid, the margin formula, ties, candidate selection order, and all safety/resource gates. Every grid configuration is reported, including failures. Selection uses development only.
+Before development execution, the change records the finite similarity, margin/gap, and fusion grid, the margin formula, ties, candidate selection order, and all safety/resource gates. In v3, the margin is the top admitted semantic score minus the second admitted semantic score; fewer than two admitted candidates pass, while a tie fails every positive margin. Every grid configuration is reported, including failures. Selection uses development only.
 
 Quality deltas are paired by query id against the post-#1308 lexical baseline. Bootstrap resampling operates on complete queries, with a fixed seed, fixed resample count, and declared confidence interval method. The report includes both point estimates and lower bounds; the lower bound, not the point estimate alone, is used for the decision gate.
 
