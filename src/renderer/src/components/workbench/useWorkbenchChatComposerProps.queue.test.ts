@@ -24,6 +24,7 @@ function ComposerHarness(message: QueuedUserMessage) {
   const setComposerModel = vi.fn()
   const setComposerFastMode = vi.fn()
   mock.state = {
+    composerModelGroups: [{ providerId: 'provider', label: 'Provider', modelIds: ['model'], accountId: 'account:provider' }],
     activeThreadId: 'thread', route: 'chat', blocks: [],
     restoreQueuedMessage: async (_id: string, accept?: (message: QueuedUserMessage) => boolean | Promise<boolean>) => {
       draft = 'typed while cancelling'
@@ -44,7 +45,8 @@ function ComposerHarness(message: QueuedUserMessage) {
 describe('queue composer asynchronous restore', () => {
   beforeEach(() => vi.clearAllMocks())
   it('merges current typing and restores the frozen provider/service tier', async () => {
-    const h = ComposerHarness({ id: 'q', text: 'original', providerId: 'provider', model: 'model', serviceTier: 'priority' })
+    const h = ComposerHarness({ id: 'q', text: 'original', providerId: 'provider', model: 'model', accountId: 'account:provider', serviceTier: 'priority' })
+    expect(h.props.queuedMessages[0].composerRestoreEligible).toBe(true)
     await expect(h.props.onRestoreQueuedMessageToComposer!('q')).resolves.toBe(true)
     expect(h.draft()).toBe('typed while cancelling\noriginal')
     expect(h.setComposerModel).toHaveBeenCalledWith('model', 'provider')

@@ -74,6 +74,7 @@ export type QueuedComposerMessage = {
   designDocumentTarget?: unknown
   designImagePlacementTarget?: unknown
   writeContext?: unknown
+  composerRestoreBlockReason?: import('../../store/queued-message-edit').QueueEditBlockReason
   composerRestoreEligible?: boolean
 }
 
@@ -455,10 +456,10 @@ export function FloatingComposerQueuedMessages({
                       action="edit"
                       label={canRestore
                         ? t('queuedMessageEditInComposer')
-                        : t('queuedMessageEditUnsupported')}
+                        : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')}
                       title={canRestore
                         ? t('queuedMessageEditInComposer')
-                        : t('queuedMessageEditUnsupported')}
+                        : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')}
                       disabled={busy !== null || !canRestore}
                       onClick={() => void applyAction(
                         message.id,

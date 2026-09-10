@@ -42,6 +42,7 @@ vi.mock('./chat-store-runtime-notifications', () => ({
   rememberPendingClawFeishuMirror: notificationsMock.rememberPendingClawFeishuMirror
 }))
 
+import { canRestoreQueuedMessageToComposer } from './queued-message-edit'
 import { submitToRuntimeQueue } from './chat-store-thread-send-enqueue'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import type { AttachmentReference } from '../agent/types'
@@ -130,7 +131,7 @@ describe('submitToRuntimeQueue', () => {
       writeContext: undefined,
       composerModel: 'deepseek-v4-pro',
       composerProviderId: 'deepseek',
-      composerAccountId: undefined,
+      composerAccountId: 'account:deepseek',
       userModelChip: undefined,
       displayText: undefined,
       reasoningEffort: undefined,
@@ -166,8 +167,10 @@ describe('submitToRuntimeQueue', () => {
       deliveryState: 'in_flight',
       deliveryTurnId: 'turn_new',
       deliveryUserMessageItemId: 'user_new',
-      attachmentIds: ['att_1']
+      attachmentIds: ['att_1'],
+      accountId: 'account:deepseek'
     })
+    expect(canRestoreQueuedMessageToComposer(state.queuedMessages[0])).toBe(true)
     expect(state.queuedMessages[0].attachments).toEqual([attachment])
     expect(persistActiveQueuedMessages).toHaveBeenCalled()
   })

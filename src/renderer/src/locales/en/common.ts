@@ -18,6 +18,8 @@ import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 
 const common = {
+  queuedMessageEditAccountUnavailable: 'The original model account is unavailable or has changed. The queued message has been kept.',
+  queuedMessageEditSteering: 'This message is being delivered as guidance; editing is temporarily unavailable.',
   queuedMessageRestorePending: 'Withdrawn · ready to edit',
   queuedMessageCancelPending: 'Confirming withdrawal',
   queuedMessageStorageFailed: 'Unable to save queued message for editing. Please retry.',

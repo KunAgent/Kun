@@ -54,6 +54,42 @@ describe('chat store queued message edit', () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
+  it.each(['matched', 'refresh', 'missing', 'rebound', 'refresh-error', 'switch', 'cancel-rebound'] as const)(
+    'handles account route %s without losing or misrouting the queue', async (scenario) => {
+      const row = { id: 'account-q', text: '你是谁', deliveryState: 'in_flight' as const,
+        deliveryTurnId: 'turn-account', providerId: 'zhipu', model: 'glm-5.3', accountId: 'account:zhipu' }
+      const groups = [{ providerId: 'zhipu', label: 'Zhipu', modelIds: ['glm-5.3'], accountId: 'account:zhipu' }]
+      const harness = makeHarness([row], { composerModelGroups: scenario === 'matched' || scenario === 'cancel-rebound' ? groups : [] })
+      const load = vi.fn(async () => {
+        if (scenario === 'refresh-error') throw new Error('catalog unavailable')
+        if (scenario === 'switch') harness.set({ activeThreadId: 'other', queuedMessages: [] })
+        if (scenario === 'refresh') harness.set({ composerModelGroups: groups })
+        if (scenario === 'rebound') harness.set({ composerModelGroups: [{ ...groups[0]!, accountId: 'other' }] })
+      })
+      harness.set({ loadComposerModels: load })
+      const cancel = vi.fn(async () => {
+        if (scenario === 'cancel-rebound') harness.set({ composerModelGroups: [] })
+      })
+      registryMock.getProvider.mockReturnValue({ cancelQueuedTurn: cancel })
+      const accept = vi.fn(() => true)
+      const result = await makeActions(harness).restoreQueuedMessage(row.id, accept)
+      if (scenario === 'matched' || scenario === 'refresh') {
+        expect(result?.accountId).toBe(row.accountId)
+        expect(cancel).toHaveBeenCalledWith('thr-1', row.deliveryTurnId)
+        expect(accept).toHaveBeenCalledOnce()
+        expect(harness.get().queuedMessages).toEqual([])
+      } else {
+        expect(result).toBeNull()
+        expect(accept).not.toHaveBeenCalled()
+        if (scenario === 'cancel-rebound') {
+          expect(queuedMessagesForThread('thr-1')[0]?.editIntent).toBe('restoring')
+        } else expect(cancel).not.toHaveBeenCalled()
+        if (scenario !== 'switch') expect(harness.get().queuedMessages).toHaveLength(1)
+      }
+      expect(load).toHaveBeenCalledTimes(scenario === 'matched' || scenario === 'cancel-rebound' ? 0 : 1)
+    }
+  )
+
   it('restores plain pending and plan messages, persisting the queue, and rejects missing rows', async () => {
     const harness = makeHarness([
       { id: 'q-plain', text: 'before', deliveryState: 'pending' as const },

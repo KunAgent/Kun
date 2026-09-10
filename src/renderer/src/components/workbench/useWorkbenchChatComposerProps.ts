@@ -5,7 +5,8 @@ import {
   queuedMessageMatchesRunningTurn
 } from '../../store/queued-message-guidance'
 import { useChatStore } from '../../store/chat-store'
-import { canRestoreQueuedMessageToComposer, queuedMessageComposerRestoreText } from '../../store/queued-message-edit'
+import { assertQueueEditAccount } from '../../store/queue-edit-handoff'
+import { canRestoreQueuedMessageToComposer, queuedMessageEditBlockReason, queuedMessageComposerRestoreText } from '../../store/queued-message-edit'
 import type { WorkbenchChatStageProps } from './WorkbenchChatStage'
 
 type ComposerProps = WorkbenchChatStageProps['composerProps']
@@ -303,6 +304,7 @@ export function useWorkbenchChatComposerProps({
       ...(message.guiDesignArtifact ? { guiDesignArtifact: message.guiDesignArtifact } : {}),
       ...(message.writeContext ? { writeContext: message.writeContext } : {}),
       editIntent: message.editIntent,
+      composerRestoreBlockReason: queuedMessageEditBlockReason(message),
       composerRestoreEligible: canRestoreQueuedMessageToComposer(message),
       guidanceEligible: canGuideQueuedMessage(message) &&
         queuedMessageMatchesRunningTurn(message, runningTurnMeta)
@@ -317,6 +319,7 @@ export function useWorkbenchChatComposerProps({
         if (!inScope()) return false
         if (message.attachments?.length) await restoreComposerAttachments(message.attachments)
         if (!inScope()) return false
+        assertQueueEditAccount(message, useChatStore.getState)
         // Restore the frozen selection, not whichever provider is selected now.
         if (message.mode === 'agent' || message.mode === 'auto' || message.mode === 'plan') setComposerMode(message.mode)
         if (message.model?.trim()) setComposerModel(message.model.trim(), message.providerId)
@@ -334,6 +337,7 @@ export function useWorkbenchChatComposerProps({
           })
         }
         if (!inScope()) return false
+        assertQueueEditAccount(message, useChatStore.getState)
         const text = queuedMessageComposerRestoreText(message)
         setInput((current) => !text || current === text || current.endsWith(`\n${text}`)
           ? current : current.trim() ? `${current.replace(/\s+$/, '')}\n${text}` : text)

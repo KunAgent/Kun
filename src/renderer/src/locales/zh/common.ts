@@ -18,6 +18,8 @@ import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 
 const common = {
+  queuedMessageEditAccountUnavailable: '原模型账号不可用或已变更，消息已保留。请恢复原模型连接后重试。',
+  queuedMessageEditSteering: '消息正在作为引导送达，暂时无法修改。',
   queuedMessageRestorePending: '已撤回，待编辑',
   queuedMessageCancelPending: '正在确认撤回',
   queuedMessageStorageFailed: '无法保存待编辑消息，请重试。',

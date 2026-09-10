@@ -119,7 +119,7 @@ async function main() {
     const page = await findWorkbenchWindow(electronApplication, timeoutMs)
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(1_000)
-    const bridge = await require('./smoke-composer-runtime-queue.cjs').assertRuntimeQueueBridge(page, workspaceRoot)
+    const bridge = await require('./smoke-composer-runtime-queue.cjs').assertRuntimeQueueBridge(page, workspaceRoot, queueModel)
     process.stdout.write(`Runtime queue bridge passed: ${JSON.stringify(bridge)}\n`)
     await page.evaluate(async () => {
       await import('/src/components/chat/FloatingComposerQueueDockSmokeFixture.tsx')

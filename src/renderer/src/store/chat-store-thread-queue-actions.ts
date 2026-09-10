@@ -1,4 +1,4 @@
-import { saveQueueEditIntent } from './queue-edit-handoff'
+import { assertQueueEditAccount, preflightQueueEditAccount, saveQueueEditIntent } from './queue-edit-handoff'
 import { queueMutationPending, withQueueMutation } from './queue-mutation-fence'
 import { fetchRuntimeQueuedTurnsBestEffort } from './queued-message-persistence'
 import { createClientTurnRequestId } from './chat-store-thread-actions-support'
@@ -63,7 +63,7 @@ import {
   reconcileQueuedMessages,
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
-import { restoreQueuedMessageFromQueue } from './queued-message-edit'
+import { queuedMessageEditBlockReason, restoreQueuedMessageFromQueue } from './queued-message-edit'
 import {
   accountIdForComposerSelection,
   activeClawChannel,
@@ -318,12 +318,19 @@ export function createThreadQueueActions(
       await awaitQueueAdmission(pending)
       if (get().activeThreadId !== threadId) return null
     }
+    const candidate = get().queuedMessages.find((row) => row.id === id)
+    const reason = candidate && queuedMessageEditBlockReason(candidate)
+    if (reason) { set({ error: i18n.t(`common:${reason}`) }); return null }
     const restored = restoreQueuedMessageFromQueue(get().queuedMessages, id)
     if (!restored.restored || restored.restored.steeringRequest || restored.restored.deliveryState === 'starting') return null
     const provider = getProvider()
     let message = restored.restored
     try {
       if (!threadId) throw new Error('No thread is available for queue editing.')
+      if (!await preflightQueueEditAccount(threadId, message, get)) return null
+      const latest = get().queuedMessages.find((row) => row.id === id)
+      if (!latest || queuedMessageEditBlockReason(latest)) return null
+      message = latest
       if (message.deliveryState === 'in_flight' && !message.deliveryTurnId) {
         throw new Error(i18n.t('common:queuedMessageConfirming'))
       }
@@ -338,6 +345,7 @@ export function createThreadQueueActions(
         saveQueueEditIntent(threadId, message, get, set)
       }
       if (get().activeThreadId !== threadId || !accept) return null
+      assertQueueEditAccount(message, get)
       if (!await accept(message)) return null
       if (get().activeThreadId !== threadId) return null
       const next = get().queuedMessages.filter((row) => row.id !== id)
