@@ -17,6 +17,8 @@ export const MEMORY_RANKING_WEIGHTS = Object.freeze({
   importance: 0.075,
   confidence: 0.075
 })
+export const MEMORY_MIN_LEXICAL_RELEVANCE = 0.4
+export const MEMORY_MIN_CJK_LEXICAL_RELEVANCE = 1 / 3
 
 export type MemoryLifecycleState =
   | 'active'
@@ -31,6 +33,8 @@ export type RankedMemory = {
   channel: 'fts5' | 'type-affinity' | 'filesystem'
   features: MemoryRankingFeatures
 }
+
+export type MemoryRelevanceMode = 'foundation-v1' | 'historical-v1'
 
 export function memoryLifecycleState(record: MemoryRecord, nowMs: number): MemoryLifecycleState {
   if (record.deletedAt) return 'deleted'
@@ -124,7 +128,14 @@ export function rankMemory(input: {
   }
 }
 
-export function hasPositiveMemoryRelevance(candidate: RankedMemory): boolean {
+export function hasPositiveMemoryRelevance(candidate: RankedMemory, query = ''): boolean {
+  const threshold = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/u.test(query)
+    ? MEMORY_MIN_CJK_LEXICAL_RELEVANCE
+    : MEMORY_MIN_LEXICAL_RELEVANCE
+  return candidate.features.lexical >= threshold || candidate.features.typeAffinity > 0
+}
+
+export function hasHistoricalPositiveMemoryRelevance(candidate: RankedMemory): boolean {
   return candidate.features.lexical > 0 || candidate.features.typeAffinity > 0
 }
 

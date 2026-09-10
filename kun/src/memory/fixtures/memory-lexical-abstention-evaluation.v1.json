@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "reportKind": "memory-lexical-abstention-development",
+  "status": "measured",
+  "generatedAt": "2026-09-10T03:32:00.000Z",
+  "dataset": {
+    "id": "kun-memory-semantic-retrieval-anonymous-v2",
+    "recordsSha256": "d3420b44d74a7b65a69e74ed4a0120fe36439c84defb829b118ae59e33ef94b2",
+    "queriesSha256": "a7f1f5f8081034606f1dd1a222bbd09006242e60290a08f8348cd9ecdaa8cbc4",
+    "manifestSha256": "6bb40694307e2f7a80666781919ae8778c9de960596bc17a45b4ee08de912320",
+    "split": "development",
+    "queryCount": 40
+  },
+  "candidate": {
+    "id": "kun-memory-lexical-foundation",
+    "version": "p0-v1",
+    "relevanceMode": "foundation-v1",
+    "lexicalThreshold": 0.4,
+    "cjkLexicalThreshold": 0.3333333333333333,
+    "retrievalMode": "filesystem-fallback"
+  },
+  "baseline": {
+    "recallAtK": 0.482,
+    "precisionAtK": 0.202,
+    "meanReciprocalRank": 0.5,
+    "abstentionAccuracy": 0.5,
+    "falsePositiveSelections": 10,
+    "explicitForbiddenSelections": 5,
+    "selectedCharacters": 7763,
+    "latencyP50Ms": 1.566,
+    "latencyP95Ms": 4.897
+  },
+  "gated": {
+    "recallAtK": 0.343,
+    "precisionAtK": 0.354,
+    "meanReciprocalRank": 0.361,
+    "abstentionAccuracy": 1,
+    "falsePositiveSelections": 0,
+    "explicitForbiddenSelections": 1,
+    "scopeLeaks": 0,
+    "lifecycleLeaks": 0,
+    "authorityViolations": 0,
+    "unknownSelections": 0,
+    "selectedCharacters": 1194,
+    "latencyP50Ms": 0.462,
+    "latencyP95Ms": 0.876,
+    "safetyGatePassed": true
+  },
+  "regressionQueries": {
+    "p2a_v2_q033_database_credential": [],
+    "p2a_v2_q034_customer_names": [],
+    "p2a_v2_q035_salary_data": [],
+    "p2a_v2_q036_execute_injection": []
+  },
+  "tradeoff": {
+    "recallAtKDelta": -0.139,
+    "precisionAtKDelta": 0.152,
+    "meanReciprocalRankDelta": -0.139,
+    "abstentionAccuracyDelta": 0.5,
+    "interpretation": "The threshold removes weak lexical false positives and reduces broad weak-match recall; semantic retrieval remains a separate future decision."
+  }
+}
