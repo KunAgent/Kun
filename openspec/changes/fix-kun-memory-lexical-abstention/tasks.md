@@ -21,4 +21,4 @@
 - [x] 4.1 Run focused Memory tests, `build:kun`, typecheck, build, changed-file lint, file-lines, OpenSpec strict validation, and `git diff --check`; Kun typecheck and root build passed, while root typecheck stopped on the pre-existing missing `phonemizer` module.
 - [x] 4.2 Run the full test/lint gates where practical and distinguish infrastructure or upstream baseline failures from this change; lint passed with warnings, `eval:memory-retrieval` passed, and the broad Kun test command exceeded the local observation window without a final summary.
 - [x] 4.3 Update the Memory roadmap and create a timestamped stage note with metrics, selected threshold, trade-offs, and the terminology/semantic boundary.
-- [ ] 4.4 Push independently reviewable commits to `SunwardL/Kun:codex/fix-memory-lexical-abstention`, then create a detailed PR targeting `KunAgent/Kun:develop`.
+- [x] 4.4 Push independently reviewable commits to `SunwardL/Kun:codex/fix-memory-lexical-abstention`, then create detailed PR [#1308](https://github.com/KunAgent/Kun/pull/1308) targeting `KunAgent/Kun:develop`; Quality gates and review are now pending.
