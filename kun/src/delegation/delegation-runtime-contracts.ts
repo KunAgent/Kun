@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -52,6 +52,7 @@ import {
   type FastContextTask
 } from './fast-context-evidence.js'
 import { DetachedChildHandoffStore } from './detached-child-handoff-store.js'
+import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 
 const ChildRunUsage = z.object({
   promptTokens: z.number().int().nonnegative().default(0),
@@ -456,9 +457,8 @@ export class FileDelegationStore {
             path,
             (value) => ChildRunRecord.parse(value)
           ).write(record)
-        : writeFile(path, JSON.stringify(record, null, 2), {
-            encoding: 'utf8',
-            mode: 0o600
+        : atomicWriteFile(path, JSON.stringify(record, null, 2), {
+            allowDirectWriteFallback: false
           }))
   }
 

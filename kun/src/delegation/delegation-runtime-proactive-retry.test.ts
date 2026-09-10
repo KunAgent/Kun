@@ -231,12 +231,7 @@ describe('DelegationRuntime proactive retry', () => {
         resumeCount: 1, proactiveRetryCount: 1
       })
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        try {
-          if ((await store.get('child_retry'))?.status === 'completed') break
-        } catch {
-          // The test store uses plain writes outside manager-owned data paths;
-          // tolerate observing one in-flight write before polling again.
-        }
+        if ((await store.get('child_retry'))?.status === 'completed') break
         await new Promise((resolve) => setTimeout(resolve, 5))
       }
       await expect(store.get('child_retry')).resolves.toMatchObject({
