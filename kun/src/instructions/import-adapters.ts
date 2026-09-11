@@ -3,7 +3,7 @@ import type { SourceAdapter, SourceToolId } from './instruction-import.js'
 /**
  * Source adapters for importing other coding agents' instruction files into
  * Kun `AGENTS.md`. File locations follow the `rulesync` project as a reference.
- * Adapters are added per delivery round; this module currently ships rounds 1-3.
+ * Adapters are added per delivery round; this module now ships all ten tools.
  */
 
 export const claudeCodeAdapter: SourceAdapter = {
@@ -77,6 +77,38 @@ export const clineAdapter: SourceAdapter = {
   global: []
 }
 
+export const zedAdapter: SourceAdapter = {
+  tool: 'zed',
+  label: 'Zed',
+  workspace: [{ kind: '.rules', relFile: '.rules' }],
+  // Zed's global lives under the platform config dir; list both so the absent one is skipped.
+  global: [
+    { kind: '~/.config/zed/AGENTS.md', relFile: '.config/zed/AGENTS.md' },
+    { kind: 'AppData/Roaming/Zed/AGENTS.md', relFile: 'AppData/Roaming/Zed/AGENTS.md' }
+  ]
+}
+
+export const opencodeAdapter: SourceAdapter = {
+  tool: 'opencode',
+  label: 'OpenCode',
+  // Workspace AGENTS.md resolves to the Kun target and is reported as an identity skip.
+  workspace: [
+    { kind: 'AGENTS.md', relFile: 'AGENTS.md' },
+    { kind: '.opencode/memories', relDir: '.opencode/memories', exts: ['.md'] }
+  ],
+  global: [
+    { kind: '~/.config/opencode/AGENTS.md', relFile: '.config/opencode/AGENTS.md' },
+    { kind: '~/.config/opencode/memories', relDir: '.config/opencode/memories', exts: ['.md'] }
+  ]
+}
+
+export const kiroAdapter: SourceAdapter = {
+  tool: 'kiro',
+  label: 'Kiro',
+  workspace: [{ kind: '.kiro/steering', relDir: '.kiro/steering', exts: ['.md'], stripFrontmatter: true }],
+  global: [{ kind: '~/.kiro/steering', relDir: '.kiro/steering', exts: ['.md'], stripFrontmatter: true }]
+}
+
 export const IMPORT_ADAPTERS: SourceAdapter[] = [
   claudeCodeAdapter,
   codexAdapter,
@@ -84,7 +116,10 @@ export const IMPORT_ADAPTERS: SourceAdapter[] = [
   geminiAdapter,
   copilotAdapter,
   windsurfAdapter,
-  clineAdapter
+  clineAdapter,
+  zedAdapter,
+  opencodeAdapter,
+  kiroAdapter
 ]
 
 export function adapterById(id: string): SourceAdapter | undefined {

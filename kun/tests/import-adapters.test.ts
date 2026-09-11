@@ -210,3 +210,78 @@ describe('import-adapters (round 3: copilot, windsurf, cline)', () => {
     expect(await readFile(join(workspace, 'AGENTS.md'), 'utf8')).toContain('Cline dir rule.')
   })
 })
+
+describe('import-adapters (round 4: zed, opencode, kiro)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters4-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('imports Zed .rules at workspace and ~/.config/zed/AGENTS.md at global scope', async () => {
+    await writeFile(join(workspace, '.rules'), 'Zed workspace rule.', 'utf8')
+    await mkdir(join(home, '.config', 'zed'), { recursive: true })
+    await writeFile(join(home, '.config', 'zed', 'AGENTS.md'), 'Zed global rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace', 'global'], tools: ['zed']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(workspace, 'AGENTS.md'), 'utf8')).toContain('Zed workspace rule.')
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Zed global rule.')
+  })
+
+  it('skips OpenCode workspace AGENTS.md as identity but imports .opencode/memories', async () => {
+    await writeFile(join(workspace, 'AGENTS.md'), 'Kun native rule.', 'utf8')
+    await mkdir(join(workspace, '.opencode', 'memories'), { recursive: true })
+    await writeFile(join(workspace, '.opencode', 'memories', 'mem.md'), 'OpenCode memory rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['opencode']
+    })
+
+    expect(plan.warnings).toContainEqual({ code: 'identity-skip', tool: 'opencode', path: join(workspace, 'AGENTS.md') })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Kun native rule.')
+    expect(text).toContain('OpenCode memory rule.')
+  })
+
+  it('imports Kiro steering files with inclusion frontmatter stripped', async () => {
+    await mkdir(join(workspace, '.kiro', 'steering'), { recursive: true })
+    await writeFile(join(workspace, '.kiro', 'steering', 'product.md'), 'Product steering.', 'utf8')
+    await writeFile(
+      join(workspace, '.kiro', 'steering', 'ts.md'),
+      '---\ninclusion: fileMatch\nfileMatchPattern: "**/*.ts"\n---\nTS steering.',
+      'utf8'
+    )
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['kiro']
+    })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Product steering.')
+    expect(text).toContain('TS steering.')
+    expect(text).not.toContain('inclusion: fileMatch')
+  })
+
+  it('exposes all ten tools', () => {
+    expect(supportedToolIds()).toEqual([
+      'claude-code', 'codex', 'cursor', 'gemini', 'copilot', 'windsurf', 'cline', 'zed', 'opencode', 'kiro'
+    ])
+  })
+})
