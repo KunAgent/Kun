@@ -46,10 +46,8 @@ import { FileSessionEventRetention } from './file-session-event-retention.js'
 import { FileSessionEventsSizeTracker } from './file-session-events-size-tracker.js'
 import { UsageCompactionDebtTracker } from './file-session-usage-debt.js'
 import {
-  clearCursorCheckpointState,
-  loadCursorCheckpoint,
-  persistCursorCheckpointEvent,
-  resetCursorCheckpointState
+  clearCursorCheckpointState, loadCursorCheckpoint,
+  persistCursorCheckpointEvent, resetCursorCheckpointState
 } from './file-session-cursor-checkpoint.js'
 import { FileSessionRevisionCache } from './file-session-revision-cache.js'
 export { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES, readLatestItemsFromJsonl } from './file-session-jsonl.js'
@@ -193,12 +191,10 @@ export class FileSessionStore implements SessionStore {
 
   async appendEvent(threadId: string, event: RuntimeEvent): Promise<void> {
     assertSafeThreadId(threadId)
-    if (await persistCursorCheckpointEvent(
-      event, this.threadDir(threadId), (operation) => this.withThreadWrite(threadId, operation)
-    )) {
-      // The checkpoint lands in events.cursor, not events.jsonl: the durable
-      // high-water cache entry stays valid, and the cursor side is served
-      // from memory by loadCursorCheckpoint.
+    if (await persistCursorCheckpointEvent(event, this.threadDir(threadId),
+      (operation) => this.withThreadWrite(threadId, operation))) {
+      // events.cursor is a separate log: the durable high-water cache stays
+      // valid and the cursor side is served from memory.
       return
     }
     const path = this.eventsPath(threadId)
