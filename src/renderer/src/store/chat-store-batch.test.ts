@@ -83,6 +83,7 @@ describe('dispatchKunRuntimeEvents batching', () => {
       onApproval: () => undefined,
       onUserInput: () => undefined,
       onUserInputStatus: () => undefined,
+      onGoal: () => undefined,
       onTurnComplete: () => undefined,
       onError: () => undefined
     }
