@@ -138,3 +138,75 @@ describe('import-adapters (round 2: cursor, gemini)', () => {
     expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Global gemini rule.')
   })
 })
+
+describe('import-adapters (round 3: copilot, windsurf, cline)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters3-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('imports Copilot instructions and .github/instructions with frontmatter stripped', async () => {
+    await mkdir(join(workspace, '.github', 'instructions'), { recursive: true })
+    await writeFile(join(workspace, '.github', 'copilot-instructions.md'), 'Copilot main rule.', 'utf8')
+    await writeFile(join(workspace, '.github', 'instructions', 'ts.instructions.md'), '---\napplyTo: "**/*.ts"\n---\nTS rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['copilot']
+    })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Copilot main rule.')
+    expect(text).toContain('TS rule.')
+    expect(text).not.toContain('applyTo:')
+  })
+
+  it('imports Windsurf rules directory and legacy .windsurfrules', async () => {
+    await mkdir(join(workspace, '.windsurf', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.windsurf', 'rules', 'core.md'), 'Windsurf core rule.', 'utf8')
+    await writeFile(join(workspace, '.windsurfrules'), 'Legacy windsurf rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['windsurf']
+    })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Windsurf core rule.')
+    expect(text).toContain('Legacy windsurf rule.')
+  })
+
+  it('imports a .clinerules file', async () => {
+    await writeFile(join(workspace, '.clinerules'), 'Cline file rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['cline']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(workspace, 'AGENTS.md'), 'utf8')).toContain('Cline file rule.')
+  })
+
+  it('imports a .clinerules directory of markdown rules', async () => {
+    await mkdir(join(workspace, '.clinerules'), { recursive: true })
+    await writeFile(join(workspace, '.clinerules', 'one.md'), 'Cline dir rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['cline']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(workspace, 'AGENTS.md'), 'utf8')).toContain('Cline dir rule.')
+  })
+})

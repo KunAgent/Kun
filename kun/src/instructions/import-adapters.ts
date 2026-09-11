@@ -3,7 +3,7 @@ import type { SourceAdapter, SourceToolId } from './instruction-import.js'
 /**
  * Source adapters for importing other coding agents' instruction files into
  * Kun `AGENTS.md`. File locations follow the `rulesync` project as a reference.
- * Adapters are added per delivery round; this module currently ships rounds 1-2.
+ * Adapters are added per delivery round; this module currently ships rounds 1-3.
  */
 
 export const claudeCodeAdapter: SourceAdapter = {
@@ -46,11 +46,45 @@ export const geminiAdapter: SourceAdapter = {
   global: [{ kind: '~/.gemini/GEMINI.md', relFile: '.gemini/GEMINI.md' }]
 }
 
+export const copilotAdapter: SourceAdapter = {
+  tool: 'copilot',
+  label: 'GitHub Copilot',
+  workspace: [
+    { kind: '.github/copilot-instructions.md', relFile: '.github/copilot-instructions.md' },
+    { kind: '.github/instructions', relDir: '.github/instructions', exts: ['.instructions.md', '.md'], stripFrontmatter: true }
+  ],
+  global: []
+}
+
+export const windsurfAdapter: SourceAdapter = {
+  tool: 'windsurf',
+  label: 'Windsurf',
+  workspace: [
+    { kind: '.windsurf/rules', relDir: '.windsurf/rules', exts: ['.md'], stripFrontmatter: true },
+    { kind: '.windsurfrules', relFile: '.windsurfrules' }
+  ],
+  global: []
+}
+
+export const clineAdapter: SourceAdapter = {
+  tool: 'cline',
+  label: 'Cline',
+  // `.clinerules` may be a single file or a directory of markdown rules.
+  workspace: [
+    { kind: '.clinerules', relFile: '.clinerules' },
+    { kind: '.clinerules/', relDir: '.clinerules', exts: ['.md'] }
+  ],
+  global: []
+}
+
 export const IMPORT_ADAPTERS: SourceAdapter[] = [
   claudeCodeAdapter,
   codexAdapter,
   cursorAdapter,
-  geminiAdapter
+  geminiAdapter,
+  copilotAdapter,
+  windsurfAdapter,
+  clineAdapter
 ]
 
 export function adapterById(id: string): SourceAdapter | undefined {
