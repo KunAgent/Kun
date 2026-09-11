@@ -472,47 +472,51 @@ export async function dispatchKunRuntimeEvents(
   sink: ThreadEventSink,
   handleApprovalRequest: (event: CoreRuntimeEventJson, sink: ThreadEventSink) => Promise<void>
 ): Promise<void> {
-  let pendingDeltas: ThreadDeltaEvent[] = []
-  const flushDeltas = async (): Promise<void> => {
-    if (pendingDeltas.length === 0) return
-    const deltas = pendingDeltas
-    pendingDeltas = []
-    const seqs = deltas
-      .map((delta) => delta.seq)
-      .filter((seq): seq is number => typeof seq === 'number')
-    await applyRuntimeProjectionAction(
-      {
-        type: 'deltas_received',
-        deltas,
-        ...(seqs.length > 0 ? { seq: Math.max(...seqs) } : {})
-      },
-      sink,
-      handleApprovalRequest
-    )
-  }
-  for (const event of events) {
-    if (event.kind === 'assistant_text_delta' || event.kind === 'assistant_reasoning_delta') {
-      const text = event.item?.text ?? ''
-      if (text) {
-        pendingDeltas.push({
-          text,
-          kind: event.kind === 'assistant_text_delta' ? 'agent_message' : 'agent_reasoning',
-          seq: event.seq,
-          ...(typeof event.deltaOffset === 'number'
-            ? { deltaOffset: event.deltaOffset }
-            : {}),
-          threadId: event.threadId ?? event.item?.threadId,
-          turnId: event.turnId ?? event.item?.turnId,
-          itemId: event.itemId ?? event.item?.id,
-          createdAt: event.timestamp ?? event.item?.createdAt
-        })
+  const body = async (): Promise<void> => {
+    let pendingDeltas: ThreadDeltaEvent[] = []
+    const flushDeltas = async (): Promise<void> => {
+      if (pendingDeltas.length === 0) return
+      const deltas = pendingDeltas
+      pendingDeltas = []
+      const seqs = deltas
+        .map((delta) => delta.seq)
+        .filter((seq): seq is number => typeof seq === 'number')
+      await applyRuntimeProjectionAction(
+        {
+          type: 'deltas_received',
+          deltas,
+          ...(seqs.length > 0 ? { seq: Math.max(...seqs) } : {})
+        },
+        sink,
+        handleApprovalRequest
+      )
+    }
+    for (const event of events) {
+      if (event.kind === 'assistant_text_delta' || event.kind === 'assistant_reasoning_delta') {
+        const text = event.item?.text ?? ''
+        if (text) {
+          pendingDeltas.push({
+            text,
+            kind: event.kind === 'assistant_text_delta' ? 'agent_message' : 'agent_reasoning',
+            seq: event.seq,
+            ...(typeof event.deltaOffset === 'number'
+              ? { deltaOffset: event.deltaOffset }
+              : {}),
+            threadId: event.threadId ?? event.item?.threadId,
+            turnId: event.turnId ?? event.item?.turnId,
+            itemId: event.itemId ?? event.item?.id,
+            createdAt: event.timestamp ?? event.item?.createdAt
+          })
+        }
+        continue
       }
-      continue
+      await flushDeltas()
+      await dispatchKunRuntimeEvent(event, sink, handleApprovalRequest)
     }
     await flushDeltas()
-    await dispatchKunRuntimeEvent(event, sink, handleApprovalRequest)
   }
-  await flushDeltas()
+  if (sink.runEventBatch) return sink.runEventBatch(body)
+  return body()
 }
 
 export async function dispatchKunRuntimeEvent(
