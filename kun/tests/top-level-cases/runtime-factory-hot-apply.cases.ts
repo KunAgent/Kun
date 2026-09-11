@@ -165,7 +165,8 @@ describe('runtime factory usage carryover', () => {
       tokenEconomyMode: false,
       insecure: false,
       storage: { backend: 'file' },
-      capabilities: KunCapabilitiesConfig.parse({})
+      capabilities: KunCapabilitiesConfig.parse({}),
+      eventBusRetainTail: true
     })
 
     try {
