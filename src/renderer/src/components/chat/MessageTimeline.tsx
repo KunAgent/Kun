@@ -11,6 +11,7 @@ import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './m
 import {
   activeTimelineTurnIndex,
   groupTurns,
+  sameTurnContent,
   stableTurnKey,
   turnTaskSurface,
   type Turn
@@ -166,7 +167,20 @@ export function MessageTimeline({
     position: { x: number; y: number }
     context: JsonValue
   } | null>(null)
-  const turns = useMemo(() => groupTurns(blocks), [blocks])
+  const stableTurnsRef = useRef<Turn[]>([])
+  const turns = useMemo(() => {
+    const next = groupTurns(blocks)
+    // groupTurns rebuilds every turn object whenever blocks changes; reuse
+    // unchanged turns so anchor memos, the scroll effects bound to them, and
+    // per-turn children keep referential stability across unrelated commits.
+    const previous = stableTurnsRef.current
+    const stable = next.map((turn, index) => {
+      const before = previous[index]
+      return before && sameTurnContent(before, turn) ? before : turn
+    })
+    stableTurnsRef.current = stable
+    return stable
+  }, [blocks])
   const latestBlock = blocks[blocks.length - 1]
   const scrollContentKey = [
     activeThreadId ?? '',
