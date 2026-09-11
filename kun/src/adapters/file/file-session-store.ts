@@ -32,6 +32,7 @@ import { FileSessionUsageMaintenance, sessionDirectoryExists } from './file-sess
 import { FileSessionUsageIndex } from './file-session-usage-index.js'
 import { listThreadDirs, loadLatestUsageSnapshotsFromIndex, loadUsageRecordsFromIndex } from './file-session-usage-read.js'
 import { JsonlFileAccessCoordinator } from './jsonl-file-access.js'
+import { serializeRuntimeEvent } from '../event-serialization.js'
 import { loadIndexedLiveItemPageFromStore } from './file-session-page.js'
 import { FileSessionLiveItems, liveReplayAfterSeq, overlayLiveItems, readRecoveredLiveItems, readLiveItems, serializeItemRecord, serializeItemRecords } from './file-session-live-items.js'
 import { FileSessionLiveCheckpointCoordinator } from './file-session-live-checkpoint-coordinator.js'
@@ -194,7 +195,7 @@ export class FileSessionStore implements SessionStore {
       return
     }
     const path = this.eventsPath(threadId)
-    const record = `${JSON.stringify(event)}\n`
+    const record = `${serializeRuntimeEvent(event)}\n`
     let usageCompactionDue = false
     await this.eventHistory.withEventIndexMutation(threadId, () =>
       this.fileAccess.withRead(path, () => this.withThreadWrite(threadId, async () => {

@@ -59,7 +59,11 @@ export async function createRuntimeCore(
 ) {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   let activeOptions: KunServeRuntimeOptions = { ...options }
-  const eventBus = new InMemoryEventBus()
+  // Production replay reads the durable session store; nothing calls
+  // snapshotSince on the live bus, so skip retaining a serialized tail.
+  const eventBus = new InMemoryEventBus({
+    retainTail: options.eventBusRetainTail === true
+  })
   const eventStreamRegistry = new ThreadEventStreamRegistry()
   const stores = await createPersistentStores({
     dataDir: options.dataDir,
