@@ -16,6 +16,7 @@ const {
 } = require('node:fs')
 const { join } = require('node:path')
 const { prunePackedOnnxRuntimeBinaries } = require('./after-pack-onnxruntime.cjs')
+const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
   assertElfExecutable,
@@ -323,6 +324,7 @@ function prunePackedApplicationPayload(context) {
   prunePackedBetterSqliteBuildFiles(context)
   prunePackedTesseractResources(context)
   prunePackedOnnxRuntimeBinaries(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
+  trimPackedNodePtyPayload(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
   prunePackedHoistedKunDependencies(context)
 }
 

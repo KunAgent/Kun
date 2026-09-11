@@ -6,6 +6,9 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
+      // electron-vite disables minification by default; enable esbuild so the
+      // shipped main-process bundle is smaller without touching externals.
+      minify: 'esbuild',
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
@@ -19,6 +22,7 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
+      minify: 'esbuild',
       rollupOptions: {
         input: {
           index: resolve('src/preload/index.ts'),
@@ -46,6 +50,7 @@ export default defineConfig({
       host: '127.0.0.1'
     },
     build: {
+      minify: 'esbuild',
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),

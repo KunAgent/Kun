@@ -218,6 +218,19 @@ module.exports = {
     '!**/tsconfig*.json',
     '!**/README*',
     '!**/CHANGELOG*',
+    // Lark SDK ships an ESM (`es/`) build for bundlers alongside its CJS `main`
+    // (`lib/`). The main process resolves `@larksuiteoapi/node-sdk` through
+    // Node's `main` field, so the ESM copy is dead weight at runtime.
+    '!**/node_modules/@larksuiteoapi/node-sdk/es/**/*',
+    // pdfjs-dist ships modern + legacy builds plus a renderer viewer. The
+    // renderer imports `build/pdf.mjs`, `build/pdf.worker.mjs` and
+    // `web/pdf_viewer.mjs`, which Vite compiles into out/renderer; only the
+    // legacy build is loaded from node_modules at runtime (by the main process
+    // and the Kun knowledge indexer). Drop the renderer-bundled copies and the
+    // redundant pre-minified `.min.mjs` duplicates.
+    '!**/node_modules/pdfjs-dist/build/**/*',
+    '!**/node_modules/pdfjs-dist/web/**/*',
+    '!**/node_modules/pdfjs-dist/**/*.min.mjs',
     'packages/create-kun-extension/templates/**/*',
     // @computer-use/libnut-linux currently publishes an x86-64 libnut.node
     // even though its npm metadata also declares arm64. Keep that incompatible
