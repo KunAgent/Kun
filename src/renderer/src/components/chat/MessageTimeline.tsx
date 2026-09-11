@@ -170,9 +170,8 @@ export function MessageTimeline({
   const stableTurnsRef = useRef<Turn[]>([])
   const turns = useMemo(() => {
     const next = groupTurns(blocks)
-    // groupTurns rebuilds every turn object whenever blocks changes; reuse
-    // unchanged turns so anchor memos, the scroll effects bound to them, and
-    // per-turn children keep referential stability across unrelated commits.
+    // groupTurns rebuilds every turn object per blocks change; reuse unchanged
+    // turns so anchor memos and per-turn children keep referential stability.
     const previous = stableTurnsRef.current
     const stable = next.map((turn, index) => {
       const before = previous[index]
