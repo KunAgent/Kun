@@ -89,3 +89,52 @@ describe('import-adapters (round 1)', () => {
     expect(text).toContain('<!-- kun:import:begin tool=codex -->')
   })
 })
+
+describe('import-adapters (round 2: cursor, gemini)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters2-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('imports Cursor .mdc rules (frontmatter stripped) and legacy .cursorrules', async () => {
+    await mkdir(join(workspace, '.cursor', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.cursor', 'rules', 'style.mdc'), '---\ndescription: style\n---\nUse tabs.', 'utf8')
+    await writeFile(join(workspace, '.cursorrules'), 'Legacy cursor rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['cursor']
+    })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Use tabs.')
+    expect(text).toContain('Legacy cursor rule.')
+    expect(text).not.toContain('description: style')
+    expect(text).toContain('<!-- kun:import:begin tool=cursor -->')
+  })
+
+  it('imports Gemini GEMINI.md at workspace and global scope', async () => {
+    await writeFile(join(workspace, 'GEMINI.md'), 'Workspace gemini rule.', 'utf8')
+    await mkdir(join(home, '.gemini'), { recursive: true })
+    await writeFile(join(home, '.gemini', 'GEMINI.md'), 'Global gemini rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace', 'global'], tools: ['gemini']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(workspace, 'AGENTS.md'), 'utf8')).toContain('Workspace gemini rule.')
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Global gemini rule.')
+  })
+})
