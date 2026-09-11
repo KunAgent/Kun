@@ -45,7 +45,12 @@ import { FileSessionEventHistory, createFileSessionEventSubsystem, type FileSess
 import { FileSessionEventRetention } from './file-session-event-retention.js'
 import { FileSessionEventsSizeTracker } from './file-session-events-size-tracker.js'
 import { UsageCompactionDebtTracker } from './file-session-usage-debt.js'
-import { loadCursorCheckpoint, persistCursorCheckpointEvent } from './file-session-cursor-checkpoint.js'
+import {
+  clearCursorCheckpointState,
+  loadCursorCheckpoint,
+  persistCursorCheckpointEvent,
+  resetCursorCheckpointState
+} from './file-session-cursor-checkpoint.js'
 import { FileSessionRevisionCache } from './file-session-revision-cache.js'
 export { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES, readLatestItemsFromJsonl } from './file-session-jsonl.js'
 const DEFAULT_USAGE_EVENT_COMPACTION_MAX_BYTES = 5 * 1024 * 1024
@@ -191,7 +196,9 @@ export class FileSessionStore implements SessionStore {
     if (await persistCursorCheckpointEvent(
       event, this.threadDir(threadId), (operation) => this.withThreadWrite(threadId, operation)
     )) {
-      this.highestSeqCache.delete(threadId)
+      // The checkpoint lands in events.cursor, not events.jsonl: the durable
+      // high-water cache entry stays valid, and the cursor side is served
+      // from memory by loadCursorCheckpoint.
       return
     }
     const path = this.eventsPath(threadId)
@@ -550,6 +557,7 @@ export class FileSessionStore implements SessionStore {
     this.itemHistoryRevisions.clear()
     this.eventHistoryRevisions.clear()
     this.highestSeqCache.clear()
+    resetCursorCheckpointState()
     this.eventsSizeTracker.clear()
     this.usageIndex.resetMemory()
     this.usageCompactionDebt.clear()
@@ -562,6 +570,7 @@ export class FileSessionStore implements SessionStore {
     this.itemHistoryRevisions.clear(threadId)
     this.eventHistoryRevisions.clear(threadId)
     this.highestSeqCache.delete(threadId)
+    clearCursorCheckpointState(this.threadDir(threadId))
     this.eventsSizeTracker.invalidate(threadId)
     this.usageIndex.clearThreadMemory(threadId)
     this.usageCompactionDebt.clear(threadId)
