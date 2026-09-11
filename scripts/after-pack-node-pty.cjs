@@ -3,8 +3,8 @@
 const { existsSync, readdirSync, rmSync } = require('node:fs')
 const { join } = require('node:path')
 
-// node-pty publishes prebuilt native binaries for every platform/arch pair,
-// including ~58 MiB of Windows .pdb/.dll/.exe files plus the winpty build
+// node-pty publishes macOS and Windows prebuilt native binaries, including
+// ~58 MiB of Windows .pdb/.dll/.exe files plus the winpty build
 // source tree. Its loader (lib/utils.js) only ever tries `build/Release`,
 // `build/Debug`, then `prebuilds/<platform>-<arch>`, so every foreign prebuild
 // and the C++ build source tree are dead weight in a packaged app.
@@ -88,10 +88,22 @@ function validatePackedNodePtyPayload(context, helpers) {
 
   assertExists(join(packageRoot, 'package.json'), 'node-pty package manifest')
   assertExists(join(packageRoot, 'lib', 'index.js'), 'node-pty runtime JavaScript')
-  assertExists(join(packageRoot, 'prebuilds', targetPrebuild), `node-pty ${targetPrebuild} prebuild`)
+  // Linux compiles locally and has no published prebuild. Follow the loader's
+  // candidate directories and require a complete set of runtime artifacts.
+  const candidates = ['build/Release', 'build/Debug', `prebuilds/${targetPrebuild}`]
+  const requiredFiles = platform === 'win32'
+    ? ['pty.node', 'winpty.dll', 'winpty-agent.exe', 'conpty.node', 'conpty_console_list.node']
+    : ['pty.node', 'spawn-helper']
+  if (!candidates.some((dir) => requiredFiles.every((file) => existsSync(join(packageRoot, dir, file))))) {
+    throw new Error(
+      `[after-pack] Missing node-pty ${targetPrebuild} runtime artifacts (${requiredFiles.join(', ')}); checked ${candidates.join(', ')}`
+    )
+  }
 
   const prebuildsDir = join(packageRoot, 'prebuilds')
-  const unexpectedPrebuilds = readdirSync(prebuildsDir).filter((entry) => entry !== targetPrebuild)
+  const unexpectedPrebuilds = existsSync(prebuildsDir)
+    ? readdirSync(prebuildsDir).filter((entry) => entry !== targetPrebuild)
+    : []
   if (unexpectedPrebuilds.length > 0) {
     throw new Error(
       `[after-pack] Unexpected foreign node-pty prebuilds: ${unexpectedPrebuilds.join(', ')}`

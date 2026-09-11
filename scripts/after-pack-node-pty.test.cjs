@@ -74,12 +74,13 @@ test('prunes foreign node-pty prebuilds and build sources, keeping the target bi
   }
 })
 
-test('rejects a package whose target node-pty prebuild is missing', () => {
+test('rejects a package without either built or prebuilt runtime binaries', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'kun-node-pty-'))
   try {
     const unpacked = join(tmp, 'app.asar.unpacked')
     const pkg = buildFixture(unpacked)
     rmSync(join(pkg, 'prebuilds', 'darwin-arm64'), { recursive: true, force: true })
+    rmSync(join(pkg, 'build'), { recursive: true, force: true })
     const context = { electronPlatformName: 'darwin', arch: 'arm64' }
     const helpers = {
       unpackedAppRoot: () => unpacked,
@@ -90,8 +91,51 @@ test('rejects a package whose target node-pty prebuild is missing', () => {
     prunePackedNodePtyPayload(context, helpers)
     assert.throws(
       () => validatePackedNodePtyPayload(context, helpers),
-      /darwin-arm64 prebuild/
+      /Missing node-pty darwin-arm64 runtime artifacts/
     )
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+for (const arch of ['x64', 'arm64']) {
+  for (const buildDir of ['build/Release', 'build/Debug']) {
+    test(`accepts Linux ${arch} ${buildDir} without a prebuild directory`, () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'kun-node-pty-'))
+      try {
+        const pkg = buildFixture(tmp)
+        rmSync(join(pkg, 'prebuilds'), { recursive: true, force: true })
+        if (buildDir === 'build/Debug') {
+          rmSync(join(pkg, 'build/Release'), { recursive: true, force: true })
+          writeFile(join(pkg, buildDir, 'pty.node'))
+          writeFile(join(pkg, buildDir, 'spawn-helper'))
+        }
+        const context = { electronPlatformName: 'linux', arch }
+        const helpers = { unpackedAppRoot: () => tmp, normalizePlatform, normalizeArch }
+        prunePackedNodePtyPayload(context, helpers)
+        validatePackedNodePtyPayload(context, helpers)
+
+        // A binding alone is not enough: node-pty execs this adjacent helper.
+        rmSync(join(pkg, buildDir, 'spawn-helper'))
+        assert.throws(() => validatePackedNodePtyPayload(context, helpers), /runtime artifacts/)
+      } finally {
+        rmSync(tmp, { recursive: true, force: true })
+      }
+    })
+  }
+}
+
+test('keeps complete Windows prebuilds after trimming foreign payloads', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'kun-node-pty-'))
+  try {
+    const pkg = buildFixture(tmp)
+    for (const file of ['pty.node', 'conpty.node', 'conpty_console_list.node', 'winpty-agent.exe']) {
+      writeFile(join(pkg, 'prebuilds/win32-x64', file))
+    }
+    const context = { electronPlatformName: 'win32', arch: 'x64' }
+    const helpers = { unpackedAppRoot: () => tmp, normalizePlatform, normalizeArch }
+    prunePackedNodePtyPayload(context, helpers)
+    validatePackedNodePtyPayload(context, helpers)
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }

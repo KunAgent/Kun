@@ -61,6 +61,47 @@ describe('createBatchedStoreAccess', () => {
     expect(store.set).toHaveBeenCalledTimes(2)
     expect(store.state().value).toBe(3)
   })
+
+  it('runs effects after the outer commit and lets them write to the real store', async () => {
+    const store = makeStore()
+    const batch = createBatchedStoreAccess(store.set, store.get)
+    const observed: number[] = []
+
+    await batch.run(async () => {
+      batch.set({ value: 1 })
+      await batch.run(async () => {
+        batch.afterCommit(() => {
+          observed.push(store.get().value)
+          batch.set({ flag: true })
+        })
+      })
+      batch.set({ value: 2 })
+      batch.afterCommit(() => observed.push(store.get().value))
+      expect(observed).toEqual([])
+    })
+
+    expect(observed).toEqual([2, 2])
+    expect(store.state()).toEqual({ value: 2, flag: true })
+    expect(store.set).toHaveBeenCalledTimes(2)
+    batch.afterCommit(() => observed.push(3))
+    expect(observed).toEqual([2, 2, 3])
+  })
+
+  it('preserves completed event effects when a later event fails', async () => {
+    const store = makeStore()
+    const batch = createBatchedStoreAccess(store.set, store.get)
+    const observed: number[] = []
+
+    await expect(batch.run(async () => {
+      batch.set({ value: 1 })
+      batch.afterCommit(() => observed.push(store.get().value))
+      throw new Error('later event failed')
+    })).rejects.toThrow('later event failed')
+
+    await batch.run(async () => { batch.set({ value: 2 }) })
+    expect(observed).toEqual([1])
+    expect(store.state().value).toBe(2)
+  })
 })
 
 describe('dispatchKunRuntimeEvents batching', () => {

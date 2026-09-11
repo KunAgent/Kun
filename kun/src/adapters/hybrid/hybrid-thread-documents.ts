@@ -68,9 +68,7 @@ export class HybridThreadDocumentRepository {
   }
 
   invalidate(threadId: string): void {
-    const cached = this.cache.get(threadId)
-    if (cached) this.cacheBytes = Math.max(0, this.cacheBytes - cached.bytes)
-    this.cache.delete(threadId)
+    this.removeCachedRecord(threadId)
     this.metadataMirrors.delete(threadId)
     this.itemsMirrors.delete(threadId)
   }
@@ -103,39 +101,35 @@ export class HybridThreadDocumentRepository {
 
   async readLatestMetadata(threadId: string): Promise<ThreadRecord | null> {
     const path = this.metadataPath(threadId)
-    const info = await stat(path).catch(() => null)
-    if (!info) {
-      this.metadataMirrors.delete(threadId)
-      return null
-    }
-    const mark = fileMark(info)
-    const mirror = touch(this.metadataMirrors, threadId)
-    if (mirror && isContinuation(mirror, mark)) {
-      if (mark.byteOffset === mirror.byteOffset) return mirror.record
-      const { lines, endOffset } = await this.fileAccess.withRead(
-        path,
-        () => readJsonlTail(path, mirror.byteOffset)
-      )
-      foldMetadataLines(threadId, mirror, lines)
-      mirror.byteOffset = endOffset
-      mirror.mtimeMs = mark.mtimeMs
-      return mirror.record
-    }
-    const fresh: MetadataMirror = {
-      ...mark,
-      byteOffset: 0,
-      recovered: new Map(),
-      latest: null,
-      record: null
-    }
-    const { lines, endOffset } = await this.fileAccess.withRead(
-      path,
-      () => readJsonlTail(path, 0)
-    )
-    foldMetadataLines(threadId, fresh, lines)
-    fresh.byteOffset = endOffset
-    setBounded(this.metadataMirrors, threadId, fresh, METADATA_MIRROR_LIMIT)
-    return fresh.record
+    return this.fileAccess.withRead(path, async () => {
+      const info = await stat(path).catch(() => null)
+      if (!info) {
+        this.metadataMirrors.delete(threadId)
+        return null
+      }
+      const mark = fileMark(info)
+      const mirror = touch(this.metadataMirrors, threadId)
+      if (mirror && isContinuation(mirror, mark)) {
+        if (mark.byteOffset === mirror.byteOffset) return mirror.record
+        const { lines, endOffset } = await readJsonlTail(path, mirror.byteOffset)
+        foldMetadataLines(threadId, mirror, lines)
+        mirror.byteOffset = endOffset
+        mirror.mtimeMs = mark.mtimeMs
+        return mirror.record
+      }
+      const fresh: MetadataMirror = {
+        ...mark,
+        byteOffset: 0,
+        recovered: new Map(),
+        latest: null,
+        record: null
+      }
+      const { lines, endOffset } = await readJsonlTail(path, 0)
+      foldMetadataLines(threadId, fresh, lines)
+      fresh.byteOffset = endOffset
+      setBounded(this.metadataMirrors, threadId, fresh, METADATA_MIRROR_LIMIT)
+      return fresh.record
+    })
   }
 
   async readMetadata(threadId: string): Promise<ThreadRecord | null> {
@@ -159,42 +153,42 @@ export class HybridThreadDocumentRepository {
 
   private async loadItems(threadId: string): Promise<TurnItem[]> {
     const path = this.messagesPath(threadId)
-    const info = await stat(path).catch(() => null)
-    if (!info) {
-      this.itemsMirrors.delete(threadId)
-      return []
-    }
-    const mark = fileMark(info)
-    const mirror = touch(this.itemsMirrors, threadId)
-    if (mirror && isContinuation(mirror, mark)) {
-      if (mark.byteOffset === mirror.byteOffset) return materializeItems(mirror)
-      const { lines, endOffset } = await this.fileAccess.withRead(
-        path,
-        () => readJsonlTail(path, mirror.byteOffset)
-      )
-      foldItemLines(mirror, lines)
-      mirror.byteOffset = endOffset
-      mirror.mtimeMs = mark.mtimeMs
-      return materializeItems(mirror)
-    }
-    const fresh: ItemsMirror = { ...mark, byteOffset: 0, byId: new Map(), order: [] }
-    const { lines, endOffset } = await this.fileAccess.withRead(
-      path,
-      () => readJsonlTail(path, 0)
-    )
-    foldItemLines(fresh, lines)
-    fresh.byteOffset = endOffset
-    setBounded(this.itemsMirrors, threadId, fresh, ITEMS_MIRROR_LIMIT)
-    return materializeItems(fresh)
+    return this.fileAccess.withRead(path, async () => {
+      const info = await stat(path).catch(() => null)
+      if (!info) {
+        this.itemsMirrors.delete(threadId)
+        return []
+      }
+      const mark = fileMark(info)
+      const mirror = touch(this.itemsMirrors, threadId)
+      if (mirror && isContinuation(mirror, mark)) {
+        if (mark.byteOffset === mirror.byteOffset) return materializeItems(mirror)
+        const { lines, endOffset } = await readJsonlTail(path, mirror.byteOffset)
+        foldItemLines(mirror, lines)
+        mirror.byteOffset = endOffset
+        mirror.mtimeMs = mark.mtimeMs
+        return materializeItems(mirror)
+      }
+      const fresh: ItemsMirror = { ...mark, byteOffset: 0, byId: new Map(), order: [] }
+      const { lines, endOffset } = await readJsonlTail(path, 0)
+      foldItemLines(fresh, lines)
+      fresh.byteOffset = endOffset
+      setBounded(this.itemsMirrors, threadId, fresh, ITEMS_MIRROR_LIMIT)
+      return materializeItems(fresh)
+    })
   }
 
   private cacheRecord(
     threadId: string,
     entry: { metadataSig: string; itemsSig: string; record: ThreadRecord }
   ): void {
-    this.invalidate(threadId)
+    // Replacing the hydrated record must preserve the offsets just read.
+    this.removeCachedRecord(threadId)
     const bytes = Buffer.byteLength(JSON.stringify(entry.record), 'utf-8')
-    if (bytes > this.cacheMaxBytes / 2 || bytes > this.cacheMaxBytes) return
+    if (bytes > this.cacheMaxBytes / 2 || bytes > this.cacheMaxBytes) {
+      this.invalidate(threadId)
+      return
+    }
     this.cache.set(threadId, { ...entry, bytes })
     this.cacheBytes += bytes
     while (
@@ -205,6 +199,12 @@ export class HybridThreadDocumentRepository {
       if (oldest === undefined) break
       this.invalidate(oldest)
     }
+  }
+
+  private removeCachedRecord(threadId: string): void {
+    const cached = this.cache.get(threadId)
+    if (cached) this.cacheBytes = Math.max(0, this.cacheBytes - cached.bytes)
+    this.cache.delete(threadId)
   }
 }
 

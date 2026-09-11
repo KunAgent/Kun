@@ -17,6 +17,7 @@ type EffectStoreAccess = {
 }
 
 type RuntimeEffectDeps = EffectStoreAccess & {
+  afterCommit: (effect: () => void) => void
   armBusyWatchdog: (set: EffectStoreAccess['set'], get: EffectStoreAccess['get']) => void
   syncTurnCompletionPoll: (set: EffectStoreAccess['set'], get: EffectStoreAccess['get']) => void
   loadThreadDetail: AgentProvider['getThreadDetail']
@@ -70,9 +71,14 @@ export function createChatRuntimeEffectRunner(
         case 'release_worktree':
           releaseThreadWorktreeIfNeeded(effect.threadId)
           break
-        case 'drain_queued_messages':
-          void get().drainQueuedMessages?.()
+        case 'drain_queued_messages': {
+          const threadId = get().activeThreadId
+          // Store actions close over the real get(), not the batch draft.
+          deps.afterCommit(() => {
+            if (get().activeThreadId === threadId) void get().drainQueuedMessages?.()
+          })
           break
+        }
       }
     }
   }

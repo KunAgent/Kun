@@ -331,6 +331,7 @@ export function buildThreadEventSink(
   const runEffects = createChatRuntimeEffectRunner({
     set,
     get,
+    afterCommit: batch.afterCommit,
     armBusyWatchdog,
     syncTurnCompletionPoll,
     loadThreadDetail
@@ -400,31 +401,31 @@ export function buildThreadEventSink(
       if (!get().busy && !event.updateOnly && !isDetachedSubagentToolEvent(event)) {
         armBusyWatchdog(set, get)
       }
-      set((state) => {
-        const eventChildKey = toolEventChildProjectionKey(event)
-        const existing = findMatchingToolBlockIndex(state.blocks, event) >= 0
-        if (!existing && event.updateOnly) {
-          if (eventChildKey) {
-            pendingChildToolUpdates.delete(eventChildKey)
-            pendingChildToolUpdates.set(eventChildKey, event)
-            while (pendingChildToolUpdates.size > MAX_PENDING_CHILD_TOOL_UPDATES) {
-              const oldestChildKey = pendingChildToolUpdates.keys().next().value
-              if (!oldestChildKey) break
-              pendingChildToolUpdates.delete(oldestChildKey)
-            }
-          }
-          return {}
-        }
-        let projectedEvent = event
+      // Consume stream-local repair state once. The batched store can replay
+      // the pure projection below against a newer shared store snapshot.
+      const eventChildKey = toolEventChildProjectionKey(event)
+      const existing = findMatchingToolBlockIndex(get().blocks, event) >= 0
+      let projectedEvent = event
+      if (!existing && event.updateOnly) {
         if (eventChildKey) {
-          const pending = pendingChildToolUpdates.get(eventChildKey)
-          if (pending) {
-            pendingChildToolUpdates.delete(eventChildKey)
-            projectedEvent = mergeToolProjectionEvents(event, pending)
+          pendingChildToolUpdates.delete(eventChildKey)
+          pendingChildToolUpdates.set(eventChildKey, event)
+          while (pendingChildToolUpdates.size > MAX_PENDING_CHILD_TOOL_UPDATES) {
+            const oldestChildKey = pendingChildToolUpdates.keys().next().value
+            if (!oldestChildKey) break
+            pendingChildToolUpdates.delete(oldestChildKey)
           }
         }
-        return reduce(state, { type: 'tool_updated', payload: projectedEvent })
-      })
+      } else if (eventChildKey) {
+        const pending = pendingChildToolUpdates.get(eventChildKey)
+        if (pending) {
+          pendingChildToolUpdates.delete(eventChildKey)
+          projectedEvent = mergeToolProjectionEvents(event, pending)
+        }
+      }
+      // Still queue update-only projections: another sink may commit the
+      // wrapper while this batch is open. The reducer ignores missing cards.
+      set((state) => reduce(state, { type: 'tool_updated', payload: projectedEvent }))
     },
     onCompaction: (event) => {
       if (!isCurrentStream()) return
