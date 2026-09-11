@@ -7,8 +7,44 @@ import {
   buildImportPlan,
   detectImportSources,
   mergeManagedBlock,
-  type SourceAdapter
+  parseImportArgs,
+  type SourceAdapter,
+  type SourceToolId
 } from '../src/instructions/instruction-import.js'
+
+const KNOWN: SourceToolId[] = ['claude-code', 'codex', 'cursor']
+
+describe('parseImportArgs', () => {
+  it('defaults to workspace scope, no tools, no dry-run', () => {
+    expect(parseImportArgs(undefined, KNOWN)).toEqual({
+      tools: [], unknownTools: [], scopes: ['workspace'], dryRun: false
+    })
+  })
+
+  it('extracts a known tool and keeps workspace scope', () => {
+    const parsed = parseImportArgs('claude-code', KNOWN)
+    expect(parsed.tools).toEqual(['claude-code'])
+    expect(parsed.scopes).toEqual(['workspace'])
+  })
+
+  it('maps --global alone to global-only scope', () => {
+    expect(parseImportArgs('--global', KNOWN).scopes).toEqual(['global'])
+  })
+
+  it('maps --global --workspace to both scopes', () => {
+    expect(parseImportArgs('codex --global --workspace', KNOWN).scopes).toEqual(['workspace', 'global'])
+  })
+
+  it('flags --dry-run', () => {
+    expect(parseImportArgs('--dry-run', KNOWN).dryRun).toBe(true)
+  })
+
+  it('separates unknown tools from known tools', () => {
+    const parsed = parseImportArgs('claude-code bogus cursor', KNOWN)
+    expect(parsed.tools).toEqual(['claude-code', 'cursor'])
+    expect(parsed.unknownTools).toEqual(['bogus'])
+  })
+})
 
 const adapters: SourceAdapter[] = [
   {

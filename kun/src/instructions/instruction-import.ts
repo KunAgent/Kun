@@ -413,3 +413,31 @@ export function describeImportPlan(plan: ImportPlan): string[] {
   }
   return lines
 }
+
+export type ParsedImportArgs = {
+  tools: SourceToolId[]
+  unknownTools: string[]
+  scopes: ImportScope[]
+  dryRun: boolean
+}
+
+/**
+ * Parse `/import` arguments into a typed request. Tool tokens are split into
+ * known (`tools`) and `unknownTools` against `knownTools`. Scope defaults to
+ * workspace; `--global` alone means global only, and passing both flags means
+ * both. Pure and free of any filesystem or adapter dependency.
+ */
+export function parseImportArgs(args: string | undefined, knownTools: SourceToolId[]): ParsedImportArgs {
+  const tokens = (args ?? '').trim().split(/\s+/u).filter((token) => token.length > 0)
+  const flags = new Set(tokens.filter((token) => token.startsWith('--')))
+  const requested = tokens.filter((token) => !token.startsWith('--'))
+  const known = new Set<string>(knownTools)
+  const tools = requested.filter((token): token is SourceToolId => known.has(token))
+  const unknownTools = requested.filter((token) => !known.has(token))
+  const wantGlobal = flags.has('--global')
+  const wantWorkspace = flags.has('--workspace') || !wantGlobal
+  const scopes: ImportScope[] = []
+  if (wantWorkspace) scopes.push('workspace')
+  if (wantGlobal) scopes.push('global')
+  return { tools, unknownTools, scopes, dryRun: flags.has('--dry-run') }
+}

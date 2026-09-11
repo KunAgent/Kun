@@ -84,10 +84,9 @@ import {
   applyImportPlan,
   buildImportPlan,
   describeImportPlan,
-  type ImportScope,
-  type SourceToolId
+  parseImportArgs
 } from '../instructions/instruction-import.js'
-import { IMPORT_ADAPTERS, adapterById, supportedToolIds } from '../instructions/import-adapters.js'
+import { IMPORT_ADAPTERS, supportedToolIds } from '../instructions/import-adapters.js'
 
 export abstract class TuiControllerCommands extends TuiControllerIntegrations {
   setTheme(value?: string): void {
@@ -313,19 +312,9 @@ export abstract class TuiControllerCommands extends TuiControllerIntegrations {
   }
 
   async importAgentContext(args?: string): Promise<void> {
-    const tokens = splitWords(args?.trim() ?? '')
-    const flags = new Set(tokens.filter((token) => token.startsWith('--')))
-    const requestedTools = tokens.filter((token) => !token.startsWith('--'))
-    const dryRun = flags.has('--dry-run')
-    const wantGlobal = flags.has('--global')
-    const wantWorkspace = flags.has('--workspace') || !wantGlobal
-    const scopes: ImportScope[] = []
-    if (wantWorkspace) scopes.push('workspace')
-    if (wantGlobal) scopes.push('global')
-
-    const unknown = requestedTools.filter((id) => !adapterById(id))
-    if (unknown.length > 0) {
-      this.notify(`Unknown tool(s): ${unknown.join(', ')}. Supported: ${supportedToolIds().join(', ')}.`, 'error')
+    const { tools, unknownTools, scopes, dryRun } = parseImportArgs(args, supportedToolIds())
+    if (unknownTools.length > 0) {
+      this.notify(`Unknown tool(s): ${unknownTools.join(', ')}. Supported: ${supportedToolIds().join(', ')}.`, 'error')
       return
     }
 
@@ -336,7 +325,7 @@ export abstract class TuiControllerCommands extends TuiControllerIntegrations {
         homeDir: homedir(),
         adapters: IMPORT_ADAPTERS,
         scopes,
-        ...(requestedTools.length > 0 ? { tools: requestedTools as SourceToolId[] } : {})
+        ...(tools.length > 0 ? { tools } : {})
       })
       if (dryRun) {
         this.inspect('Import agent context (dry run)', describeImportPlan(plan))
