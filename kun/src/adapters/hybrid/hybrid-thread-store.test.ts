@@ -493,3 +493,32 @@ describe('HybridThreadStore cold-index transition', () => {
     }
   })
 })
+
+describe('HybridThreadStore event high-water buffering', () => {
+  it('merges buffered marks into reads and commits them on close', async () => {
+    const { root, store } = await createStore()
+    const threadId = 'thread-high-water'
+    try {
+      await store.upsert(createThreadRecord({
+        id: threadId,
+        title: 'High water',
+        workspace: '/tmp/workspace',
+        model: 'test-model'
+      }))
+      await store.noteEventSeq(threadId, 7)
+      await store.noteEventSeq(threadId, 4)
+      // Buffered marks must be visible to readers before the flush window.
+      await expect(store.getEventSeqHighWater(threadId)).resolves.toBe(7)
+    } finally {
+      store.close()
+    }
+
+    const reopened = new HybridThreadStore({ dataDir: root })
+    try {
+      await reopened.ready()
+      await expect(reopened.getEventSeqHighWater(threadId)).resolves.toBe(7)
+    } finally {
+      reopened.close()
+    }
+  })
+})
