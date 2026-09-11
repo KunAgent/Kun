@@ -381,6 +381,52 @@ export async function* iterateRuntimeEventsJsonl(
   }
 }
 
+/**
+ * Reads only the bytes of a JSONL log beyond `startByte`, returning complete
+ * newline-terminated records plus the absolute offset just past the last one.
+ * A partial trailing record (in-flight append) stays unconsumed. Callers must
+ * only treat the result as a continuation when they verified the file is the
+ * same incarnation that produced `startByte` (inode / append-only growth).
+ */
+export async function readJsonlTail(
+  path: string,
+  startByte: number,
+  options: { maxRecordBytes?: number } = {}
+): Promise<{ lines: string[]; endOffset: number }> {
+  const maxRecordBytes = Math.max(
+    1,
+    Math.floor(options.maxRecordBytes ?? DEFAULT_ITEM_HISTORY_MAX_RECORD_BYTES)
+  )
+  const start = Math.max(0, Math.floor(startByte))
+  const chunks: Buffer[] = []
+  try {
+    const stream = createReadStream(path, { start })
+    for await (const chunk of stream) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk)
+    }
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') {
+      return { lines: [], endOffset: start }
+    }
+    throw error
+  }
+  const buffer = Buffer.concat(chunks)
+  const lastNewline = buffer.lastIndexOf(0x0a)
+  if (lastNewline < 0) return { lines: [], endOffset: start }
+  const complete = buffer.subarray(0, lastNewline + 1)
+  const lines: string[] = []
+  let lineStart = 0
+  for (let index = 0; index < complete.length; index += 1) {
+    if (complete[index] !== 0x0a) continue
+    if (index - lineStart > maxRecordBytes) {
+      throw new Error(`jsonl record exceeds ${maxRecordBytes} bytes`)
+    }
+    lines.push(complete.toString('utf-8', lineStart, index))
+    lineStart = index + 1
+  }
+  return { lines, endOffset: start + lastNewline + 1 }
+}
+
 export async function readLatestItemsFromJsonl(
   path: string,
   options: {
