@@ -13,6 +13,7 @@ import { memoryInScope, memoryLifecycleState } from './memory-ranking.js'
 export const SEMANTIC_MEMORY_V3_DATASET_ID = 'kun-memory-semantic-retrieval-anonymous-v3'
 export const SEMANTIC_MEMORY_V3_DATASET_VERSION = 3
 export const SEMANTIC_MEMORY_V3_SPLIT_RULE = 'query ordinals 001-040 development; 041-080 holdout'
+export const SEMANTIC_MEMORY_V3_NEAR_DUPLICATE_JACCARD_THRESHOLD = 0.75
 
 export const SemanticMemoryV3QueryCategory = z.enum([
   'lexical-control',
@@ -329,7 +330,7 @@ function validateSplitLeakage(queries: readonly SemanticMemoryV3EvaluationQuery[
       if (holdoutTokens.size < 3) continue
       const union = new Set([...developmentTokens, ...holdoutTokens]).size
       const intersection = [...developmentTokens].filter((token) => holdoutTokens.has(token)).length
-      if (union > 0 && intersection / union >= 0.75) {
+      if (union > 0 && intersection / union >= SEMANTIC_MEMORY_V3_NEAR_DUPLICATE_JACCARD_THRESHOLD) {
         errors.push(`queries ${developmentQuery.id} and ${holdoutQuery.id} are near-duplicates across splits`)
       }
     }
