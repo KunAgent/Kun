@@ -14,6 +14,7 @@ export function roomResourceAffected(path: string, event: RoomEvent): boolean {
   const task = route.match(/\/tasks\/([^/]+)/)?.[1]
   if (task && event.payload?.taskId && event.payload.taskId !== decodeURIComponent(task)) return false
   if (task && event.kind.startsWith('task.') && event.payload?.id !== decodeURIComponent(task)) return false
+  if (route.includes('/topics')) return event.kind.startsWith('peer.')
   if (route.includes('/requests')) {
     const request = route.match(/\/requests\/([^/]+)/)?.[1]
     if (event.kind.startsWith('rule_compression.')) return Boolean(request)

@@ -185,7 +185,12 @@ export function RoomTimeline({
     setFocused(null)
     window.dispatchEvent(
       new CustomEvent('kun-room-reply', {
-        detail: { roomId: room.id, messageId: message.id, body: message.body }
+        detail: {
+          roomId: room.id,
+          messageId: message.id,
+          body: message.body,
+          rootRequestId: message.rootRequestId
+        }
       })
     )
   }

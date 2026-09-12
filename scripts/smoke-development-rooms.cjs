@@ -25,6 +25,7 @@ const {
 } = require('./smoke-packaged-extension-desktop-process.cjs')
 const { developmentRendererEnvironment } = require('./development-renderer-environment.cjs')
 const { exerciseRoomHardening } = require('./smoke-rooms-hardening-controls.cjs')
+const { roomPeerModelFixture, exercisePeerRoom } = require('./smoke-rooms-peer-controls.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 
 const exec = promisify(execFile)
@@ -139,17 +140,27 @@ async function main() {
     await page.waitForLoadState('domcontentloaded')
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
     const { room } = await runtimeRequest(page, '/v1/rooms', 'POST', {
-      clientRequestId: 'desktop-create-room', name: ROOM_NAME,
+      clientRequestId: 'desktop-create-room', name: ROOM_NAME, collaborationMode: 'autonomous',
       repositories: [{ id: 'repo', displayPath: workspaceRoot, defaultBaseRef: 'develop' }]
     })
     assert.equal(room.collaborationMode, 'autonomous')
     await switchMode(page, 'rooms')
     await page.getByRole('heading', { name: ROOM_NAME, exact: true }).waitFor()
     await capture('1-room-ready')
+    if (process.argv.includes('--peer-only')) {
+      const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+        resize: (width, height) => resize(electronApplication, width, height) })
+      assert.deepEqual(pageErrors, [])
+      result = { ok: true, scenario: 'peer-only', peer, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
+      await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+      return
+    }
     await page.getByLabel('Automatic intent', { exact: true }).selectOption('execute')
     await page.getByRole('textbox', { name: 'Discuss a question or describe the work to do…' }).fill(TASK_PROMPT)
     await page.getByRole('button', { name: 'Send', exact: true }).click()
     await poll(() => modelFixture.snapshot().executionRequests > 0, timeoutMs, 'real task model dispatch')
+    await openRoomDetails(page, 'Tasks')
     await page.locator('[aria-label="Tasks"]').getByRole('button', { name: new RegExp(TASK_TITLE) }).waitFor()
     await capture('2-task-running')
     const agreement = await exerciseRoomProductControls(page, room.id, capture)
@@ -175,7 +186,7 @@ async function main() {
         await switchMode(page, 'rooms')
         await openTask(page)
         await capture('approval-required')
-        const allow = page.getByRole('complementary', { name: 'Task details' }).getByRole('button', { name: 'Allow', exact: true })
+        const allow = page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Allow', exact: true })
         await allow.waitFor()
         await capture('approval-in-room')
         const thread = await runtimeRequest(page, `/v1/threads/${task.executionThreadId}`)
@@ -195,7 +206,7 @@ async function main() {
       if (task.status === 'needs_input' && inputsResolved === 0) {
         await switchMode(page, 'rooms')
         await openTask(page)
-        const question = page.getByRole('complementary', { name: 'Task details' })
+        const question = page.getByRole('dialog', { name: 'Room details', exact: true })
         await question.getByLabel('Proceed').check()
         await question.getByRole('button', { name: 'Submit answers', exact: true }).click()
         inputsResolved += 1
@@ -212,7 +223,7 @@ async function main() {
     const detailBeforeReload = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}`)
     assert.equal(detailBeforeReload.reviews[0]?.verdict, 'passed')
     assert(detailBeforeReload.diff.includes(FILE_CONTENT.trim()), 'Delivery must include the actual write tool diff')
-    const panel = page.getByRole('complementary', { name: 'Task details' })
+    const panel = page.getByRole('dialog', { name: 'Room details', exact: true })
     await panel.getByRole('heading', { name: 'Delivery', exact: true }).waitFor()
     await panel.getByRole('combobox', { name: 'Delivery history' }).selectOption(detailBeforeReload.delivery.id)
     await panel.getByText(detailBeforeReload.delivery.versionHash, { exact: true }).waitFor()
@@ -329,15 +340,17 @@ async function main() {
     assert(await page.locator('[data-workspace-mode-trigger]').first().evaluate((trigger) => {
       const bounds = trigger.getBoundingClientRect()
       return Boolean(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
-        ?.closest('aside[aria-label="Task details"]'))
+        ?.closest('aside[aria-label="Room details"]'))
     }), 'Underlying mode trigger paints above the narrow task overlay')
+    const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+      resize: (width, height) => resize(electronApplication, width, height) })
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
     assert.equal(approvalsResolved, 1, 'Expected the on-request tool approval path')
     assert.equal(inputsResolved, 1, 'Expected the in-room structured answer path')
     assert.equal(integrationInputsResolved, 1, 'Expected integration execution-specific structured input')
     result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
-      baselineSha, targetSha, agreement, hardening, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      baselineSha, targetSha, agreement, hardening, peer, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
       nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
       narrowViewport, pageErrors, screenshots,
@@ -345,7 +358,8 @@ async function main() {
         'Code and Work mode switches preserve background task', 'approval resolved within room through protected IPC', 'structured input answered within room', 'integration question answered on actual integration thread', 'versioned rules and search', 'durable read cursor',
         'immutable delivery and review',
         'renderer reload restores delivery', 'accept does not apply', 'target advances then declared validation and fixed-version review pass before applying the candidate', 'explicit cleanup retains immutable delivery history',
-        'clean source repository', 'narrow task panel'] }
+        'clean source repository', 'narrow task panel', 'default peer mode and activity drawer',
+        'peer stop suppresses late publication', 'peer continuation and independent new topic', 'peer discussion creates no tasks'] }
     await writeFile(join(evidenceRoot, 'report.json'), `${JSON.stringify(result, null, 2)}\n`)
   } catch (error) {
     await capture('failure').catch(() => undefined)
@@ -356,6 +370,7 @@ async function main() {
   } finally {
     modelFixture?.releaseExecution()
     modelFixture?.releaseCoordination()
+    modelFixture?.releasePeer()
     const errors = []
     const cleanup = async (operation) => {
       try { await withTimeout(operation, 20_000, 'cleaning isolated Rooms smoke') }
@@ -390,8 +405,10 @@ async function main() {
 }
 
 async function exerciseRoomProductControls(page, roomId, capture) {
+  await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
   const userMessage = page.locator('article').filter({ hasText: TASK_PROMPT })
   await userMessage.getByRole('button', { name: 'Pin as project agreement', exact: true }).click()
+  await openRoomDetails(page, 'Room overview')
   await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
   await page.getByRole('button', { name: 'Edit agreement', exact: true }).click()
   await page.getByRole('textbox', { name: 'Edit agreement', exact: true }).fill('Use LF line endings for this project.')
@@ -405,6 +422,7 @@ async function exerciseRoomProductControls(page, roomId, capture) {
   assert.equal(rule.active, true)
   await capture('agreement-history')
   await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
+  await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
   const search = page.getByRole('textbox', { name: 'Search messages (2+ characters)', exact: true })
   await search.fill('desktop-smoke.txt')
   await page.locator('article').filter({ hasText: TASK_PROMPT }).waitFor()
@@ -480,9 +498,18 @@ async function switchMode(page, mode) {
   await page.locator(`[data-workspace-mode-trigger][data-workspace-mode="${mode}"]`).first().waitFor()
 }
 
+async function openRoomDetails(page, section) {
+  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  if (!(await drawer.count())) await page.getByRole('button', { name: 'Room details', exact: true }).click()
+  const back = drawer.getByRole('button', { name: 'Back to tasks', exact: true })
+  if (await back.count()) await back.click()
+  await drawer.getByRole('button', { name: section, exact: true }).click()
+}
+
 async function openTask(page) {
+  await openRoomDetails(page, 'Tasks')
   await page.locator('[aria-label="Tasks"]').getByRole('button', { name: new RegExp(TASK_TITLE) }).click()
-  await page.getByRole('complementary', { name: 'Task details' }).waitFor()
+  await page.getByRole('dialog', { name: 'Room details', exact: true }).waitFor()
 }
 
 function resize(application, width, height) {
@@ -501,6 +528,7 @@ async function poll(check, timeoutMs, description) {
 }
 
 async function startModelFixture() {
+  const peerFixture = roomPeerModelFixture()
   let releaseExecution
   const gate = new Promise((resolve) => { releaseExecution = resolve })
   let releaseCoordination
@@ -518,13 +546,15 @@ async function startModelFixture() {
       for await (const chunk of request) chunks.push(chunk)
       const body = JSON.parse(Buffer.concat(chunks).toString())
       const messageText = (message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? '')
-      const principal = body.messages.findLastIndex((message) => message.role === 'user' && /You coordinate a personal Kun room|Complete this authorized room task|Review this immutable|Run exactly the declared|Compress project agreements/.test(messageText(message)))
+      const principal = body.messages.findLastIndex((message) => message.role === 'user' && /You coordinate a personal Kun room|Complete this authorized room task|Review this immutable|Run exactly the declared|Compress project agreements|Participate as this Kun room member/.test(messageText(message)))
       const messages = body.messages.slice(Math.max(0, principal))
       const prompt = JSON.stringify(messages)
       let content = 'Completed.', toolCalls
       const called = (name) => messages.some((message) => message.tool_calls?.some((tool) => tool.function?.name === name))
       const tool = (name, args) => [{ index: 0, id: 'smoke-' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
-      if (prompt.includes('Compress project agreements')) {
+      const peerResponse = await peerFixture.respond({ body, prompt, called, tool })
+      if (peerResponse) { content = peerResponse.content; toolCalls = peerResponse.toolCalls }
+      else if (prompt.includes('Compress project agreements')) {
         state.compressionRequests = (state.compressionRequests ?? 0) + 1
         const texts = messages.flatMap((message) => typeof message.content === 'string' ? [message.content] : (message.content ?? []).map((part) => part.text ?? ''))
         const input = JSON.parse(texts.flatMap((text) => text.split('\n')).findLast((line) => line.startsWith('{"sources":')))
@@ -579,8 +609,8 @@ async function startModelFixture() {
     }
   })
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
-  return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution, releaseCoordination,
-    snapshot: () => ({ ...state }), close: () => new Promise((resolve, reject) => {
+  return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution, releaseCoordination, releasePeer: peerFixture.release,
+    snapshot: () => ({ ...state, ...peerFixture.snapshot() }), close: () => new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
       server.closeAllConnections?.()
     }) }

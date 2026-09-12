@@ -9,7 +9,7 @@ import {
   Settings,
   X
 } from 'lucide-react'
-import type { RoomMessage, RoomTask } from '@shared/rooms-api'
+import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
 import { WorkspaceModeTabs } from '../chat/WorkspaceModeTabs'
 import { useChatStore } from '../../store/chat-store'
 import { RoomSettings, roomButtonClass } from './RoomSettings'
@@ -22,6 +22,13 @@ import { RoomTimeline } from './RoomTimeline'
 import { RoomTaskStrip } from './RoomTaskStrip'
 import { RoomList } from './RoomList'
 import { RoomOverview } from './RoomOverview'
+import { useRoomTopics } from './useRoomTopics'
+import {
+  continueRoomTopic,
+  RoomPeerActivity,
+  RoomPeerSummary
+} from './RoomPeerActivity'
+import { RoomDetailsDrawer, type RoomDetailsSection } from './RoomDetailsDrawer'
 
 export function RoomsWorkspaceView({
   onOpenThread
@@ -35,14 +42,22 @@ export function RoomsWorkspaceView({
   const [historicalTask, setHistoricalTask] = useState<RoomTask | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [details, setDetails] = useState<RoomDetailsSection | null>(null)
   const [jumpMessageId, setJumpMessageId] = useState<string | null>(null)
   const { room, messages } = state
   const { selectedId, setError } = state
+  const topicState = useRoomTopics(selectedId)
   const selectedTask =
     state.tasks.find((task) => task.id === taskId) ??
     (historicalTask?.id === taskId && historicalTask.roomId === state.selectedId
       ? historicalTask
       : null)
+
+  useEffect(() => {
+    setTaskId(null)
+    setHistoricalTask(null)
+    setDetails(null)
+  }, [selectedId])
 
   useEffect(() => {
     if (!taskId || !selectedId || selectedTask) return
@@ -79,6 +94,7 @@ export function RoomsWorkspaceView({
   const chooseRoom = (id: string): void => {
     state.select(id)
     setTaskId(null)
+    setDetails(null)
     setSidebarOpen(false)
     setJumpMessageId(null)
   }
@@ -185,27 +201,31 @@ export function RoomsWorkspaceView({
           </div>
           {room ? (
             <>
-              <button
-                className={roomButtonClass}
+              <select
+                aria-label={t('roomsMode')}
+                className={`${roomButtonClass} max-w-40 bg-ds-main`}
                 disabled={busy}
-                onClick={() =>
+                value={room.collaborationMode}
+                onChange={(event) => {
+                  const collaborationMode = event.target
+                    .value as Room['collaborationMode']
                   void perform(async () => {
                     const result = await roomsClient.update(room, {
-                      collaborationMode:
-                        room.collaborationMode === 'autonomous'
-                          ? 'directed'
-                          : 'autonomous'
+                      collaborationMode
                     })
                     state.saved(result.room)
                   })
-                }
-                title={t('roomsMode')}
+                }}
               >
-                {t(
-                  room.collaborationMode === 'autonomous'
-                    ? 'roomsAutonomous'
-                    : 'roomsDirected'
-                )}
+                <option value="peer">{t('roomsPeer')}</option>
+                <option value="autonomous">{t('roomsAutonomous')}</option>
+                <option value="directed">{t('roomsDirected')}</option>
+              </select>
+              <button
+                className={roomButtonClass}
+                onClick={() => setDetails('discussion')}
+              >
+                {t('roomsRoomDetails')}
               </button>
               <button
                 className={roomButtonClass}
@@ -270,12 +290,12 @@ export function RoomsWorkspaceView({
                 {t(room.archivedAt ? 'roomsRestore' : 'roomsArchive')}
               </button>
             </div>
-            <RoomOverview
-              room={room}
-              rules={state.rules}
-              onUpdated={state.refresh}
-              onTask={setTaskId}
-              onMessage={setJumpMessageId}
+            <RoomPeerSummary
+              topics={topicState.topics}
+              loading={topicState.loading}
+              onOpen={() => setDetails('discussion')}
+              onTasks={() => setDetails('tasks')}
+              taskCounts={state.rooms.find((entry) => entry.id === room.id)}
             />
             <RoomTimeline
               key={room.id + '-timeline'}
@@ -290,23 +310,17 @@ export function RoomsWorkspaceView({
               jumpMessageId={jumpMessageId}
               onJumped={() => setJumpMessageId(null)}
             />
-            <RoomTaskStrip
-              key={room.id + '-tasks'}
-              room={room}
-              tasks={state.tasks}
-              selectedId={taskId}
-              onTask={setTaskId}
-              cursor={state.taskCursor}
-              moreBusy={state.moreBusy}
-              loadMore={state.loadMoreTasks}
-            />
             <RoomComposer
               key={room.id + '-composer'}
               room={room}
               tasks={state.tasks}
+              topicChoices={topicState.topics.map((topic) => ({
+                rootRequestId: topic.rootRequestId,
+                title: topic.title
+              }))}
               onSend={async (message) => {
                 await roomsClient.send(room.id, message)
-                await state.refresh()
+                await Promise.all([state.refresh(), topicState.refresh()])
               }}
             />
           </>
@@ -323,14 +337,96 @@ export function RoomsWorkspaceView({
           </div>
         )}
       </section>
-      {selectedTask ? (
-        <RoomTaskPanel
-          key={selectedTask.id}
-          task={selectedTask}
-          onClose={() => setTaskId(null)}
-          onOpenThread={onOpenThread}
-          onUpdated={() => void state.refresh()}
-        />
+      {room && (details || taskId) ? (
+        <RoomDetailsDrawer
+          key={room.id + '-details'}
+          section={details ?? 'tasks'}
+          onSection={(value) => {
+            setTaskId(null)
+            setDetails(value)
+          }}
+          onClose={() => {
+            setTaskId(null)
+            setDetails(null)
+          }}
+          taskOpen={Boolean(taskId)}
+          onBack={() => {
+            setTaskId(null)
+            setDetails('tasks')
+          }}
+        >
+          {taskId ? (
+            selectedTask ? (
+              <RoomTaskPanel
+                key={selectedTask.id}
+                embedded
+                task={selectedTask}
+                onClose={() => {
+                  setTaskId(null)
+                  setDetails('tasks')
+                }}
+                onOpenThread={onOpenThread}
+                onUpdated={() => void state.refresh()}
+              />
+            ) : (
+              <p className="p-4 text-sm text-ds-muted">{t('roomsLoading')}</p>
+            )
+          ) : details === 'discussion' ? (
+            <RoomPeerActivity
+              room={room}
+              {...topicState}
+              onUpdated={topicState.refresh}
+              onContinue={(rootRequestId) => {
+                continueRoomTopic(room.id, rootRequestId)
+                setDetails(null)
+              }}
+            />
+          ) : details === 'overview' ? (
+            <RoomOverview
+              room={room}
+              rules={state.rules}
+              onUpdated={state.refresh}
+              onTask={setTaskId}
+              onMessage={(id) => {
+                setJumpMessageId(id)
+                setDetails(null)
+              }}
+            />
+          ) : details === 'members' ? (
+            <div className="space-y-3 p-4">
+              {room.members
+                .filter((member) => !member.removedAt)
+                .map((member) => (
+                  <article
+                    key={member.id}
+                    className="space-y-1 rounded-lg border border-ds-border p-3"
+                  >
+                    <h3 className="break-words text-sm font-medium text-ds-ink">
+                      {member.displayName}
+                    </h3>
+                    <p className="text-xs text-ds-muted">
+                      {t(member.enabled ? 'roomsEnabled' : 'roomsDisabled')}
+                    </p>
+                    <p className="whitespace-pre-wrap break-words text-xs text-ds-muted">
+                      {member.roleNotes}
+                    </p>
+                  </article>
+                ))}
+            </div>
+          ) : (
+            <RoomTaskStrip
+              key={room.id + '-tasks'}
+              stacked
+              room={room}
+              tasks={state.tasks}
+              selectedId={taskId}
+              onTask={setTaskId}
+              cursor={state.taskCursor}
+              moreBusy={state.moreBusy}
+              loadMore={state.loadMoreTasks}
+            />
+          )}
+        </RoomDetailsDrawer>
       ) : null}
       {settings ? (
         <RoomSettings

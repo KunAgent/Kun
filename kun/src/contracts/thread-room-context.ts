@@ -3,6 +3,8 @@ import { z } from 'zod'
 /** Populated by the room coordinator, never accepted from a public thread request. */
 export const RoomThreadContextSchema = z.object({
   requestId: z.string().min(1).max(128).optional(),
+  rootRequestId: z.string().min(1).max(128).optional(),
+  collaborationProtocol: z.enum(['legacy', 'peer']).optional(),
   roomId: z.string().min(1),
   taskId: z.string().min(1).optional(),
   memberId: z.string().min(1),

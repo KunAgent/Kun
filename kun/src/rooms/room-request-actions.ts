@@ -5,6 +5,7 @@ import type { RoomStoredDocument } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
 import { RoomService, putRoomDocument, roomFingerprint, roomId as newId } from './room-service.js'
 import { stopRoomTaskTurn } from './room-task-activity.js'
+import { preserveRoomDiscussions } from './room-discussion-evidence.js'
 
 type Identity = { threadId: string; turnId?: string; admissionAttempted?: boolean }
 export async function roomRequestActivity(deps: RoomRuntimeDeps, request: RoomRequestState) {
@@ -102,6 +103,7 @@ export async function roomRequestAction(deps: RoomRuntimeDeps, service: RoomServ
   if (combined.length > 64000) throw new RoomStoreConflictError('request text is too long; start a new explicitly scoped request')
   const attachments = [...new Set([...value.message.attachmentIds, ...messageInput.attachmentIds])]
   if (attachments.length > 20) throw new RoomStoreConflictError('request supports at most 20 attachments')
+  preserveRoomDiscussions(value)
   value.originalMessage ??= structuredClone(value.message)
   value.originalSourceMessageId ??= value.sourceMessageId
   value.message = { ...value.message, ...messageInput, clientRequestId: value.message.clientRequestId,
@@ -112,7 +114,6 @@ export async function roomRequestAction(deps: RoomRuntimeDeps, service: RoomServ
   value.sourceMessageId = messageId
   value.continuation = (value.continuation ?? 0) + 1
   value.contextId = 'context-' + id + '-continuation-' + value.continuation
-  value.previousDiscussions = [...(value.previousDiscussions ?? []), ...(value.discussions ?? [])]
   value.discussions = undefined
   value.stage = 'coordinate'
   value.round = 0

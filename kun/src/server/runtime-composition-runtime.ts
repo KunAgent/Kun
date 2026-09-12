@@ -11,6 +11,7 @@ import {
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import type { createRuntimeConfigController } from './runtime-composition-config.js'
 import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
+import { bindRoomPeerStore } from '../rooms/room-peer-tools.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -126,6 +127,7 @@ export function createServerRuntimeComposition(
       artifacts: artifactStore,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
+      peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
       backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
       stopBackgroundExecution: async (threadId) => { await backgroundShellRuntime.stopThread(threadId) },
       proveStopped: async (threadId, turnId) => {
@@ -144,6 +146,9 @@ export function createServerRuntimeComposition(
       } }
   })
   bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)
+  // Tool providers bind to the lifecycle-fenced facade, while room admission
+  // retains the backing store. Bind both identities to the same room scope.
+  bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
   return {
     threadService,
     rooms: roomComposition.rooms,

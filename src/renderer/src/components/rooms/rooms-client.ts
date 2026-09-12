@@ -7,12 +7,20 @@ import type {
   RoomRequestOutcome,
   RoomAgreementContext,
   RoomTask,
+  RoomPeerTopicSummary,
   RoomTaskAction,
   SendRoomMessage
 } from '@shared/rooms-api'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 
-export class RoomHttpError extends Error { constructor(message: string, readonly status: number) { super(message) } }
+export class RoomHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message)
+  }
+}
 
 export type RoomInput = Omit<CreateRoomRequest, 'clientRequestId'>
 export type RoomRepositoryInput = NonNullable<RoomInput['repositories']>[number]
@@ -121,7 +129,8 @@ export async function roomsRequest<T>(
         ? value.error
         : (value.error?.message ??
             value.message ??
-            `Rooms request failed (${result.status})`), result.status
+            `Rooms request failed (${result.status})`),
+      result.status
     )
   }
   return value as T
@@ -159,6 +168,19 @@ export const roomsClient = {
       'GET',
       undefined,
       signal
+    ),
+  topics: (id: string, cursor?: string, signal?: AbortSignal) =>
+    roomsRequest<RoomPage<{ topics: RoomPeerTopicSummary[] }>>(
+      `${roomPath(id)}/topics?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      'GET',
+      undefined,
+      signal
+    ),
+  stopTopic: (topic: RoomPeerTopicSummary, clientRequestId: string) =>
+    roomsRequest<{ topic: RoomPeerTopicSummary }>(
+      `${roomPath(topic.roomId)}/topics/${encodeURIComponent(topic.rootRequestId)}/stop`,
+      'POST',
+      { expectedRevision: topic.revision, clientRequestId }
     ),
   send: (id: string, input: SendRoomMessage) =>
     roomsRequest<{ message: RoomMessage }>(

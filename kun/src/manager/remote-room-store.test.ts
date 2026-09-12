@@ -92,6 +92,22 @@ describe('room data over the real Manager HTTP boundary', () => {
     await expect(store.commit({ requestId: 'degraded' })).rejects.toMatchObject({ status: 503 })
   })
 
+  it('requires the coordinator fence for peer state while preserving the ordinary user-message path', async () => {
+    const { store, connection } = await manager()
+    const input = { requestId: 'peer-topic', checks: [{ kind: 'peer_topic' as const, id: 'root', expectedRevision: null }],
+      puts: [{ kind: 'peer_topic' as const, id: 'root', roomId: 'room', value: { rootRequestId: 'root', status: 'active' } }] }
+    await expect(store.commit(input)).rejects.toBeInstanceOf(RoomStoreConflictError)
+    expect(await store.get('peer_topic', 'root')).toBeNull()
+    await expect(store.commit({ requestId: 'user-message', checks: [{ kind: 'message', id: 'user-message', expectedRevision: null }],
+      puts: [{ kind: 'message', id: 'user-message', roomId: 'room', value: { body: 'User authorization' } }] })).resolves.toMatchObject({ duplicate: false })
+    const lease = new RoomExecutionLease({ manager: connection, flavor: 'production', instanceId: 'production-runtime' })
+    leases.push(lease)
+    expect(await lease.start()).toBe(true)
+    const fenced = new RemoteRoomStore(connection, { getFence: () => lease.getFence() })
+    await expect(fenced.commit(input)).resolves.toMatchObject({ duplicate: false })
+    expect(await store.list('peer_topic', { rootRequestId: 'root' })).toHaveLength(1)
+  })
+
   it('preserves the internal activity projection across the Manager boundary', async () => {
     const { store } = await manager()
     await store.commit({ requestId: 'activity', checks: [{ kind: 'integration', id: 'integration', expectedRevision: null }],

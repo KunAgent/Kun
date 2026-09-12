@@ -1,4 +1,4 @@
-import type { RoomMessage } from '../contracts/rooms.js'
+import type { Room, RoomMessage } from '../contracts/rooms.js'
 import type { RoomDelivery, RoomReview } from '../contracts/room-deliveries.js'
 import { RoomService, putRoomDocument } from './room-service.js'
 import { RoomRequestRunner } from './room-request-runner.js'
@@ -11,11 +11,17 @@ import { RoomProductService } from './room-product-service.js'
 import { RoomIntegrationService } from './room-integration.js'
 import { roomActivitySummary } from './room-activity-summary.js'
 import { RoomContextPending } from './room-rule-compression.js'
+import { RoomPeerRunner } from './room-peer-runner.js'
+import { bindRoomPeerStore } from './room-peer-tools.js'
+import { roomPeerTopicPage, roomPeerMetricPage, stopRoomPeerTopic, deliverRoomPeerTaskProgress } from './room-peer-api.js'
+import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRequest } from './room-discussion-scheduler.js'
+import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 
 export class RoomRuntime {
   readonly service: RoomService
   readonly product: RoomProductService
   readonly integrations: RoomIntegrationService
+  readonly peers: RoomPeerRunner
   private readonly requests: RoomRequestRunner
   private readonly tasks: RoomTaskRunner
   private timer?: ReturnType<typeof setTimeout>
@@ -33,6 +39,8 @@ export class RoomRuntime {
     this.integrations = new RoomIntegrationService(deps)
     this.requests = new RoomRequestRunner(deps, this.executionService)
     this.tasks = new RoomTaskRunner(deps, this.executionService)
+    this.peers = new RoomPeerRunner(deps, () => this.wake())
+    bindRoomPeerStore(deps.threadStore, deps.store)
   }
   start() { this.stopped = false; this.wake() }
   wake() {
@@ -53,6 +61,7 @@ export class RoomRuntime {
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
     await this.inFlight
+    await this.peers.close()
     await this.actionQueue.catch(() => undefined)
   }
   async action(roomId: string, id: string, action: string, input: unknown) {
@@ -68,6 +77,16 @@ export class RoomRuntime {
     const run = this.actionQueue.catch(() => undefined).then(operation)
     this.actionQueue = run
     return run
+  }
+  peerTopics(roomId: string, limit: number, cursor?: number) {
+    return roomPeerTopicPage(this.peers.state, roomId, limit, cursor)
+  }
+  peerMetrics(roomId: string, rootRequestId: string, limit: number, cursor?: number) {
+    return roomPeerMetricPage(this.peers.state, roomId, rootRequestId, limit, cursor)
+  }
+  async stopPeerTopic(roomId: string, rootRequestId: string, input: unknown) {
+    try { return await this.exclusive(() => stopRoomPeerTopic(this.deps, this.peers.state, roomId, rootRequestId, input)) }
+    finally { this.wake() }
   }
   async taskDetail(roomId: string, taskId: string, includeDiff = true) {
     const row = await this.deps.store.get<RoomTaskExecution>('task', taskId)
@@ -104,16 +123,41 @@ export class RoomRuntime {
     const requests = await this.deps.store.list<RoomRequestState>('request', {
       status: ['pending', 'running', 'stopping', 'recovery_required'], limit: 100, order: 'asc', afterSeq: this.requestCursor })
     this.requestCursor = requests.length === 100 ? requests.at(-1)!.seq : undefined
+    const discussionBusy = await roomDiscussionBusy(this.deps, true)
     for (const row of requests) {
       if (this.stopped) return
-      try { await this.requests.tick(row) } catch (error) {
+      try {
+        if (row.value.collaborationProtocol === 'peer') {
+          if (await pendingPeerRoomAmendment(this.deps, row.value)) {
+            await this.requests.tick(row)
+            continue
+          }
+          const topic = await this.peers.state.initialize(row.value)
+          if (!topic || topic.value.requestId !== row.id) {
+            await cancelSupersededRoomRequest(this.deps, row.id)
+            continue
+          }
+          if (row.value.cancellationRequested) await this.peers.state.stop(topic.id)
+        }
+        const target = roomRequestDiscussionTarget(row.value)
+        const directPeerDiscussion = row.value.collaborationProtocol === 'peer' && row.value.message.executionIntent === 'discussion'
+        if (target && !target.turnId && !row.value.cancellationRequested && !directPeerDiscussion) {
+          const key = row.value.roomId + ':' + target.memberId
+          if (discussionBusy.has(key) || [...discussionBusy].filter((item) => item.startsWith(row.value.roomId + ':')).length >= 2) continue
+          discussionBusy.add(key)
+        }
+        await this.requests.tick(row)
+      } catch (error) {
         if (error instanceof RoomContextPending) continue
         const current = await this.deps.store.get<RoomRequestState>('request', row.id)
         if (!current || current.revision !== row.revision) continue
         const message = error instanceof Error ? error.message : String(error)
+        const dispatchedAmendment = await pendingPeerRoomAmendment(this.deps, row.value)
+        // Retry an interrupted admitted operation once; retain its receipt for an explicit retry after persistent failure.
+        const status = dispatchedAmendment ? row.value.status === 'recovery_required' ? 'needs_input' : 'recovery_required' : 'failed'
         await this.executionService.append(row.roomId!, 'error-' + row.id, message)
         await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!,
-          { ...row.value, status: 'failed', error: message }, row)
+          { ...row.value, status, error: message }, row)
       }
     }
     const taskRows: RoomStoredDocument<RoomTaskExecution>[] = []
@@ -129,6 +173,16 @@ export class RoomRuntime {
     const actingMember = (execution: RoomTaskExecution) => execution.task.stage === 'review' ?
       execution.reviewer?.id ?? execution.task.ownerMemberId : execution.task.ownerMemberId
     let occupied = 0
+    const occupiedByRoom = new Map<string, number>()
+    const roomLimits = new Map<string, number>()
+    const claimRoom = (roomId: string) => occupiedByRoom.set(roomId, (occupiedByRoom.get(roomId) ?? 0) + 1)
+    const roomHasCapacity = async (roomId: string) => {
+      if (!roomLimits.has(roomId)) {
+        const room = await this.deps.store.get<Room>('room', roomId)
+        roomLimits.set(roomId, room?.value.maxConcurrentTasks ?? 2)
+      }
+      return (occupiedByRoom.get(roomId) ?? 0) < roomLimits.get(roomId)!
+    }
     const busyMembers = new Set<string>()
     const integrations = await this.integrations.active()
     const activeIntegrations = new Set<string>()
@@ -139,9 +193,9 @@ export class RoomRuntime {
       integrationMembers.set(row.id, member)
       try {
         if (await this.integrations.activity(row.value) !== 'idle') {
-          activeIntegrations.add(row.id); occupied++; busyMembers.add(member)
+          activeIntegrations.add(row.id); occupied++; claimRoom(row.roomId!); busyMembers.add(member)
         }
-      } catch { activeIntegrations.add(row.id); occupied++; busyMembers.add(member) }
+      } catch { activeIntegrations.add(row.id); occupied++; claimRoom(row.roomId!); busyMembers.add(member) }
     }
     const occupiedTasks = new Set<string>()
     for (const row of taskRows) {
@@ -152,6 +206,7 @@ export class RoomRuntime {
         Boolean(activeTurn(execution))
       if (!isOccupied) continue
       occupied += 1
+      claimRoom(row.roomId!)
       occupiedTasks.add(row.id)
       busyMembers.add(row.roomId + ':' + actingMember(execution))
     }
@@ -160,7 +215,7 @@ export class RoomRuntime {
       if (row.value.task.status === 'needs_input' && row.value.task.stage === 'review' &&
         row.value.completedReviewRunId && row.value.completedReviewRunId === row.value.reviewThreadId) continue
       const member = row.roomId + ':' + actingMember(row.value)
-      const canStart = occupied < 2 && !busyMembers.has(member)
+      const canStart = occupied < 2 && !busyMembers.has(member) && await roomHasCapacity(row.roomId!)
       try {
         await this.tasks.tick(row, canStart)
       } catch (error) { await this.tasks.fail(row, error) }
@@ -171,6 +226,7 @@ export class RoomRuntime {
         const execution = current?.value ?? row.value
         if ((await roomTaskActivity(this.deps, execution)).state !== 'idle') {
           occupied += 1
+          claimRoom(row.roomId!)
           occupiedTasks.add(row.id)
           busyMembers.add(row.roomId + ':' + actingMember(execution))
         }
@@ -179,12 +235,14 @@ export class RoomRuntime {
     await this.product.summarizeRequests(taskRows.map((row) => row.value))
     for (const row of integrations) {
       const member = integrationMembers.get(row.id)!
-      const allowStart = occupied < 2 && !busyMembers.has(member)
+      const allowStart = occupied < 2 && !busyMembers.has(member) && await roomHasCapacity(row.roomId!)
       await this.integrations.tick(row, allowStart)
       if (allowStart && !activeIntegrations.has(row.id)) {
         const current = await this.integrations.get(row.value.roomId, row.value.taskId, row.id)
-        if (await this.integrations.activity(current.value) !== 'idle') { occupied++; busyMembers.add(member) }
+        if (await this.integrations.activity(current.value) !== 'idle') { occupied++; claimRoom(row.roomId!); busyMembers.add(member) }
       }
     }
+    await deliverRoomPeerTaskProgress(this.deps, this.peers.state)
+    await this.peers.tick(await roomDiscussionBusy(this.deps))
   }
 }

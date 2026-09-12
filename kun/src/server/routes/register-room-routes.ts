@@ -62,6 +62,19 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   })
 
   registerRoomEvidenceRoutes(add)
+  add('GET', '/v1/rooms/:roomId/topics', (rooms, request, context) => {
+    const page = pagination(request)
+    return rooms.peerTopics(context.params.roomId, page.limit, page.cursor)
+  })
+  add('GET', '/v1/rooms/:roomId/topics/:rootRequestId/metrics', (rooms, request, context) => {
+    RoomIdSchema.parse(context.params.rootRequestId)
+    const page = pagination(request)
+    return rooms.peerMetrics(context.params.roomId, context.params.rootRequestId, page.limit, page.cursor)
+  })
+  add('POST', '/v1/rooms/:roomId/topics/:rootRequestId/stop', async (rooms, request, context) => {
+    RoomIdSchema.parse(context.params.rootRequestId)
+    return rooms.stopPeerTopic(context.params.roomId, context.params.rootRequestId, await body(request))
+  })
   add('GET', '/v1/rooms/presets', (rooms) => {
     const defaults = rooms.deps.model()
     const unsupportedProviderIds = rooms.deps.unsupportedProviderIds?.() ?? []

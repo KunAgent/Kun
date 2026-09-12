@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RoomMember } from '../contracts/rooms.js'
 import type { ThreadRecord } from '../contracts/threads.js'
+import type { Turn } from '../contracts/turns.js'
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
 import { roomEvidenceHistory } from './room-evidence-history.js'
 import { roomTurnItems } from './room-item-history.js'
@@ -10,13 +11,15 @@ import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 
 export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   id: string; roomId: string; taskId?: string; requestId?: string; member: RoomMember;
+  rootRequestId?: string; collaborationProtocol?: 'legacy' | 'peer';
   kind: NonNullable<ThreadRecord['roomContext']>['kind']; workspace?: string;
   profile?: SubagentProfileConfig | null
 }): Promise<ThreadRecord> {
   const old = await deps.threads.getMetadata(input.id)
   if (old) {
     if (old.roomContext?.roomId !== input.roomId || old.roomContext.memberId !== input.member.id ||
-      old.roomContext.kind !== input.kind || old.roomContext.taskId !== input.taskId || (input.workspace && old.workspace !== input.workspace)) {
+      old.roomContext.kind !== input.kind || old.roomContext.taskId !== input.taskId ||
+      old.roomContext.rootRequestId !== input.rootRequestId || (input.workspace && old.workspace !== input.workspace)) {
       throw new Error('room execution thread identity mismatch')
     }
     return old
@@ -43,6 +46,9 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   // Result submission is a scoped data-only protocol. Host-level denies still win.
   if (resultTool && allowed && !blocked.includes(resultTool)) allowed.push(resultTool)
   if (allowed && !blocked.includes('read_room_rules')) allowed.push('read_room_rules')
+  if (input.kind === 'discussion' && input.collaborationProtocol === 'peer' && allowed) {
+    allowed.push(...['read_room_updates', 'send_room_message'].filter((name) => !blocked.includes(name)))
+  }
   return deps.threads.create({
     workspace, title: input.member.displayName, model: binding.model, providerId: binding.providerId,
     ...('accountId' in binding && typeof binding.accountId === 'string' ? { accountId: binding.accountId } : {}),
@@ -52,6 +58,7 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
     systemPrompt: [profile?.systemPrompt, profile?.promptPreamble, input.member.roleNotes].filter(Boolean).join('\n')
   }, { id: input.id, relation: 'side', roomContext: {
     roomId: input.roomId, taskId: input.taskId, requestId: input.requestId, memberId: input.member.id, kind: input.kind,
+    rootRequestId: input.rootRequestId, collaborationProtocol: input.collaborationProtocol,
     allowedToolNames: allowed,
     blockedToolNames: [...new Set(['delegate_task', 'create_goal', ...blocked])],
     blockedProviderIds: [...new Set([...(profile?.blockedMcpServers ?? []), ...(overrides?.blockedMcpServers ?? [])])].map((id) => id.startsWith('mcp:') ? id : 'mcp:' + id),
@@ -91,7 +98,16 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
   }
 }
 
-export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, turnId?: string) {
+export type ObservedRoomTurn = {
+  status: Turn['status'] | 'missing'
+  text: string
+  turn?: Turn
+  structured?: unknown
+  error?: string
+  resultError?: string
+}
+
+export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, turnId?: string): Promise<ObservedRoomTurn> {
   const thread = await deps.threads.getMetadata(threadId)
   const turn = thread?.turns.find((candidate) => candidate.id === turnId)
   if (!turn) return { status: 'missing' as const, text: '' }
@@ -99,9 +115,10 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
     return { status: turn.status, text: '', turn }
   }
   const textParts: string[] = []
-  let textLength = 0, error: string | undefined, structured: unknown
+  let textLength = 0, error: string | undefined, structured: unknown, resultError: string | undefined
   const resultName = thread?.roomContext?.kind === 'coordination' ? 'submit_room_plan' :
-    thread?.roomContext?.kind === 'review' ? 'submit_room_review' : undefined
+    thread?.roomContext?.kind === 'review' ? 'submit_room_review' :
+      thread?.roomContext?.kind === 'discussion' && thread.roomContext.collaborationProtocol === 'peer' ? 'send_room_message' : undefined
   for await (const item of roomTurnItems(deps.sessions, threadId, turn.id)) {
     if (item.kind === 'assistant_text' && textLength < 64000) {
       const text = item.text.slice(-(64000 - textLength))
@@ -109,6 +126,9 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
       textLength += text.length
     }
     if (item.kind === 'error' && !error) error = item.message
+    if (item.kind === 'tool_result' && item.toolName === resultName && item.isError) {
+      resultError = 'The scoped room result was rejected; no message was submitted.'
+    }
     if (structured === undefined && item.kind === 'tool_result' && !item.isError && item.toolName === resultName &&
       typeof item.output === 'object' && item.output !== null && 'accepted' in item.output && item.output.accepted === true) {
       structured = (item.output as { value?: unknown }).value
@@ -120,5 +140,5 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
       typeof item.output === 'object' && item.output !== null && 'accepted' in item.output && item.output.accepted === true)?.item
     if (exact && 'output' in exact) structured = (exact.output as { value?: unknown }).value
   }
-  return { status: turn.status, text: textParts.join('\n'), turn, structured, error }
+  return { status: turn.status, text: textParts.join('\n'), turn, structured, error, resultError }
 }

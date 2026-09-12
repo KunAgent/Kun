@@ -55,6 +55,9 @@ export class SqliteRoomStore implements RoomStore {
   async list<T = unknown>(kind: RoomDocumentKind, options: RoomStoreListOptions = {}): Promise<RoomStoredDocument<T>[]> {
     RoomDocumentKindSchema.parse(kind)
     const parsed = RoomStoreListOptionsSchema.parse(options)
+    if (kind !== 'peer_inbox' && (parsed.peerGeneration !== undefined || parsed.coalescePeerMessages)) {
+      throw new z.ZodError([{ code: 'custom', path: ['peerGeneration'], message: 'peer input filters require an inbox' }])
+    }
     if (parsed.activityOnly && kind !== 'task' && kind !== 'integration' && kind !== 'request') {
       throw new z.ZodError([{ code: 'custom', path: ['activityOnly'], message: 'activity projection requires a task or integration' }])
     }
@@ -63,9 +66,26 @@ export class SqliteRoomStore implements RoomStore {
     const args: (string | number)[] = [kind]
     if (parsed.roomId) { clauses.push('room_id = ?'); args.push(parsed.roomId) }
     if (parsed.taskId) { clauses.push('task_id = ?'); args.push(parsed.taskId) }
-    if (parsed.memberId) { clauses.push("json_extract(document, '$.task.ownerMemberId') = ?"); args.push(parsed.memberId) }
+    if (parsed.rootRequestId) { clauses.push("json_extract(document, '$.rootRequestId') = ?"); args.push(parsed.rootRequestId) }
+    if (parsed.peerGeneration !== undefined) { clauses.push("json_extract(document, '$.generation') = ?"); args.push(parsed.peerGeneration) }
+    if (parsed.coalescePeerMessages) clauses.push(`(
+      json_extract(document, '$.sourceKind') NOT IN ('message', 'invitation') OR NOT EXISTS (
+        SELECT 1 FROM room_documents newer WHERE newer.kind = 'peer_inbox'
+          AND newer.room_id = room_documents.room_id
+          AND json_extract(newer.document, '$.rootRequestId') = json_extract(room_documents.document, '$.rootRequestId')
+          AND json_extract(newer.document, '$.memberId') = json_extract(room_documents.document, '$.memberId')
+          AND json_extract(newer.document, '$.generation') = json_extract(room_documents.document, '$.generation')
+          AND json_extract(newer.document, '$.sourceKind') IN ('message', 'invitation')
+          AND json_extract(newer.document, '$.sourceId') = json_extract(room_documents.document, '$.sourceId')
+          AND (json_extract(newer.document, '$.sourceRevision') > json_extract(room_documents.document, '$.sourceRevision')
+            OR (json_extract(newer.document, '$.sourceRevision') = json_extract(room_documents.document, '$.sourceRevision')
+              AND newer.seq > room_documents.seq))
+      ))`)
+    if (parsed.memberId) { clauses.push(kind.startsWith('peer_') ? "json_extract(document, '$.memberId') = ?" :
+      "json_extract(document, '$.task.ownerMemberId') = ?"); args.push(parsed.memberId) }
     if (parsed.repositoryId) { clauses.push("json_extract(document, '$.task.repositoryId') = ?"); args.push(parsed.repositoryId) }
-    if (parsed.requestId) { clauses.push("json_extract(document, '$.task.requestId') = ?"); args.push(parsed.requestId) }
+    if (parsed.requestId) { clauses.push(kind.startsWith('peer_') ? "json_extract(document, '$.rootRequestId') = ?" :
+      "json_extract(document, '$.task.requestId') = ?"); args.push(parsed.requestId) }
     if (parsed.documentId) { clauses.push("json_extract(document, '$.id') = ?"); args.push(parsed.documentId) }
     if (parsed.deliveryId) { clauses.push("json_extract(document, '$.deliveryId') = ?"); args.push(parsed.deliveryId) }
     if (parsed.threadId) {
@@ -210,7 +230,8 @@ export class SqliteRoomStore implements RoomStore {
         written.add(key)
         const current = db.prepare('SELECT * FROM room_documents WHERE kind = ? AND id = ?')
           .get(put.kind, put.id) as DocumentRow | undefined
-        if (current && ['delivery', 'review', 'artifact', 'rule_version', 'context', 'rule_bundle', 'request_input'].includes(put.kind)) {
+        if (current && ['delivery', 'review', 'artifact', 'rule_version', 'context', 'rule_bundle', 'request_input',
+          'peer_inbox', 'peer_publication', 'peer_metric'].includes(put.kind)) {
           throw new RoomStoreConflictError(`room ${put.kind} versions are immutable`, current.revision)
         }
         const metadata = record(put.value)
@@ -277,7 +298,7 @@ export class SqliteRoomStore implements RoomStore {
     try {
       await chmod(this.input.path, 0o600)
       const previousVersion = Number(db.prepare('PRAGMA user_version').get()?.user_version)
-      if (previousVersion > 3) {
+      if (previousVersion > 4) {
         throw new Error('room database was created by a newer Kun version')
       }
       db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000')
@@ -303,8 +324,9 @@ export class SqliteRoomStore implements RoomStore {
       immediateTransaction(db, () => {
         initializeRoomIndex(db, previousVersion < 2)
         initializeRoomProjections(db)
+        db.exec("CREATE INDEX IF NOT EXISTS room_peer_root_member ON room_documents(kind, json_extract(document, '$.rootRequestId'), json_extract(document, '$.memberId'), seq);")
         db.exec("CREATE TABLE IF NOT EXISTS room_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); INSERT OR IGNORE INTO room_metadata VALUES('event_scope',lower(hex(randomblob(16))));")
-        db.exec('PRAGMA user_version = 3')
+        db.exec('PRAGMA user_version = 4')
       })
       const backfill = () => {
         if (this.closed) return

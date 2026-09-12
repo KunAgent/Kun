@@ -13,6 +13,7 @@ export type {
   RoomReview
 } from '../../kun/src/contracts/room-deliveries'
 export type { CreateRoomRequest } from '../../kun/src/contracts/rooms-api'
+export type { RoomPeerTopicSummary } from '../../kun/src/rooms/room-peer-types'
 export type {
   RoomRule,
   RoomAgreementContext,

@@ -33,8 +33,8 @@ export function RoomSettings({
   const [baselineRoom] = useState(room)
   const [name, setName] = useState(room?.name ?? '')
   const [description, setDescription] = useState(room?.description ?? '')
-  const [mode, setMode] = useState<'autonomous' | 'directed'>(
-    room?.collaborationMode ?? 'autonomous'
+  const [mode, setMode] = useState<Room['collaborationMode']>(
+    room?.collaborationMode ?? 'peer'
   )
   const [members, setMembers] = useState<RoomMember[]>(
     room?.members ??
@@ -232,10 +232,12 @@ export function RoomSettings({
             <label className="block text-sm text-ds-muted">
               {t('roomsMode')}
               <select
+                aria-label={t('roomsMode')}
                 value={mode}
                 onChange={(event) => setMode(event.target.value as typeof mode)}
                 className={roomFieldClass}
               >
+                <option value="peer">{t('roomsPeer')}</option>
                 <option value="autonomous">{t('roomsAutonomous')}</option>
                 <option value="directed">{t('roomsDirected')}</option>
               </select>

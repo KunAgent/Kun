@@ -50,12 +50,14 @@ export function RoomTaskPanel({
   task,
   onClose,
   onOpenThread,
-  onUpdated
+  onUpdated,
+  embedded = false
 }: {
   task: RoomTask
   onClose: () => void
   onOpenThread: (id: string) => void
   onUpdated: () => void
+  embedded?: boolean
 }) {
   const { t } = useTranslation('common')
   const resource = useRoomResource<RoomTaskDetail>(
@@ -78,22 +80,31 @@ export function RoomTaskPanel({
     <aside
       aria-label={t('roomsDetails')}
       onKeyDown={(event) => {
-        if (event.key === 'Escape') onClose()
+        if (event.key === 'Escape') {
+          event.stopPropagation()
+          onClose()
+        }
       }}
-      className="absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[400px] xl:shrink-0 xl:shadow-none"
+      className={
+        embedded
+          ? 'flex min-h-0 flex-1 flex-col overflow-hidden bg-ds-main'
+          : 'absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[400px] xl:shrink-0 xl:shadow-none'
+      }
     >
-      <header className="rooms-detail-titlebar flex items-center justify-between border-b border-ds-border p-4">
-        <h2 className="text-sm font-semibold text-ds-ink">
-          {t('roomsDetails')}
-        </h2>
-        <button
-          className={roomButtonClass}
-          onClick={onClose}
-          aria-label={t('roomsClose')}
-        >
-          <X size={16} />
-        </button>
-      </header>
+      {!embedded ? (
+        <header className="rooms-detail-titlebar flex items-center justify-between border-b border-ds-border p-4">
+          <h2 className="text-sm font-semibold text-ds-ink">
+            {t('roomsDetails')}
+          </h2>
+          <button
+            className={roomButtonClass}
+            onClick={onClose}
+            aria-label={t('roomsClose')}
+          >
+            <X size={16} />
+          </button>
+        </header>
+      ) : null}
       <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
         <h3 className="break-words text-lg font-semibold text-ds-ink">
           {current.title}
@@ -115,7 +126,10 @@ export function RoomTaskPanel({
           <ExternalLink size={15} />
           {t('roomsOpenCode')}
         </button>
-        <RoomAgreementSources roomId={task.roomId} agreements={detail?.agreements} />
+        <RoomAgreementSources
+          roomId={task.roomId}
+          agreements={detail?.agreements}
+        />
         <RoomTaskGates task={current} detail={detail} onUpdated={refresh} />
         <dl className="space-y-2 text-sm text-ds-muted">
           <div>

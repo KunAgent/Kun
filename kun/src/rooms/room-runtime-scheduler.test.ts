@@ -29,28 +29,28 @@ async function fixture() {
   const runtime = new RoomRuntime(deps)
   cleanups.push(async () => { await runtime.close(); await store.close(); await rm(root, { recursive: true, force: true }) })
   const save = async (execution: RoomTaskExecution) => putRoomDocument(store, 'task', execution.task.id,
-    'room', execution, await store.get('task', execution.task.id), execution.task.id)
+    execution.task.roomId, execution, await store.get('task', execution.task.id), execution.task.id)
   const get = async (id: string) => (await store.get<RoomTaskExecution>('task', id))!.value
   async function task(id: string, status: RoomTaskExecution['task']['status'], memberId: string,
-    turnStatus?: 'running' | 'completed') {
+    turnStatus?: 'running' | 'completed', roomId = 'room') {
     const member = RoomMemberSchema.parse({ id: memberId, displayName: memberId, presetId: 'developer',
       role: 'developer', allowedRepositoryIds: ['repo'], revision: 0 })
-    const execution: RoomTaskExecution = { task: RoomTaskSchema.parse({ id, roomId: 'room', requestId: id,
+    const execution: RoomTaskExecution = { task: RoomTaskSchema.parse({ id, roomId, requestId: id,
       sourceMessageId: id, title: id, ownerMemberId: memberId, memberSnapshot: member, repositoryId: 'repo',
       workspaceId: id, executionThreadId: 'execution-' + id, status, stage: 'develop',
       requirementRevision: 0, revision: 0, updatedAt: new Date().toISOString() }),
       prompt: 'Work on ' + id, attachmentIds: [], dependencyTaskIds: [], attempt: 1, reworkRounds: 0, configuration: null }
     if (turnStatus) {
-      const thread = await ensureRoomThread(deps, { id: execution.task.executionThreadId, roomId: 'room',
+      const thread = await ensureRoomThread(deps, { id: execution.task.executionThreadId, roomId,
         taskId: id, member, kind: 'execution', workspace: root })
       execution.turnId = 'turn-' + id
       await h.threadStore.upsert({ ...thread, turns: [createTurnRecord({ id: execution.turnId,
         threadId: thread.id, prompt: execution.prompt, clientRequestId: id + '-attempt-1', status: turnStatus })] })
     }
-    const workspace: RoomWorkspace = { id, roomId: 'room', taskId: id, path: root, state: 'ready',
+    const workspace: RoomWorkspace = { id, roomId, taskId: id, path: root, state: 'ready',
       branch: 'codex/rooms/' + id, baseRevision: 'a'.repeat(40), repository: { root, commonDir: join(root, '.git'),
         head: 'a'.repeat(40), branch: 'refs/heads/develop', dirty: false, operationInProgress: false } }
-    await putRoomDocument(store, 'workspace', id, 'room', workspace, null, id)
+    await putRoomDocument(store, 'workspace', id, roomId, workspace, null, id)
     await save(execution)
     return execution
   }
@@ -62,6 +62,20 @@ async function fixture() {
 }
 
 describe('room scheduler execution ownership', () => {
+  it('honors a room limit of one while admitting another room within global capacity', async () => {
+    const f = await fixture()
+    const first = (await f.runtime.service.create({ clientRequestId: 'one-at-a-time', name: 'Sequential', maxConcurrentTasks: 1 })).room
+    const second = (await f.runtime.service.create({ clientRequestId: 'another-room', name: 'Other', maxConcurrentTasks: 2 })).room
+    await f.task('active-first', 'running', 'developer', 'running', first.id)
+    await f.task('waiting-first', 'queued', 'reviewer', undefined, first.id)
+    await f.task('ready-second', 'queued', 'developer', undefined, second.id)
+    await f.task('waiting-second', 'queued', 'reviewer', undefined, second.id)
+    await f.tick()
+    expect((await f.get('waiting-first')).turnId).toBeUndefined()
+    expect((await f.get('ready-second')).turnId).toBeDefined()
+    expect((await f.get('waiting-second')).turnId).toBeUndefined()
+  })
+
   it('counts a live recovered execution and resumes only observation of its existing turn', async () => {
     const f = await fixture()
     await f.task('recovered', 'recovery_required', 'developer', 'running')

@@ -53,7 +53,8 @@ export class RoomService {
     const now = new Date().toISOString()
     const members = body.members ?? defaultRoomMembers(repositories.map((repo) => repo.id))
     const room = RoomSchema.parse({ schemaVersion: 1, id: roomId(), name: body.name,
-      description: body.description, collaborationMode: body.collaborationMode,
+      description: body.description, collaborationMode: body.collaborationMode ?? 'peer',
+      maxConcurrentTasks: body.maxConcurrentTasks,
       defaultMemberId: body.defaultMemberId ?? members[0].id, members, repositories,
       revision: 0, createdAt: now, updatedAt: now })
     const result = { room }
@@ -95,23 +96,49 @@ export class RoomService {
     if (replay) return replay as { message: RoomMessage; requestId: string }
     const room = await this.get(id)
     if (room.archivedAt) throw new RoomStoreConflictError('restore the room before sending')
+    const reply = body.replyToMessageId
+      ? await this.store.get<RoomMessage>('message', body.replyToMessageId) : null
+    if (body.replyToMessageId && (!reply || reply.roomId !== id)) {
+      throw new RoomStoreConflictError('reply message is unavailable in this room')
+    }
+    if (body.rootRequestId && reply?.value.rootRequestId && body.rootRequestId !== reply.value.rootRequestId) {
+      throw new RoomStoreConflictError('reply and topic refer to different room requests')
+    }
+    const inheritedRootId = body.rootRequestId ?? reply?.value.rootRequestId
+    const root = inheritedRootId ? await this.store.get<RoomRequestState>('request', inheritedRootId) : null
+    if (inheritedRootId && (!root || root.roomId !== id ||
+      (root.value.rootRequestId && root.value.rootRequestId !== inheritedRootId))) {
+      throw new RoomStoreConflictError('root request is unavailable in this room')
+    }
+    const requestId = roomId()
+    const protocol = root ? root.value.collaborationProtocol ??
+      (root.value.roomSnapshot.collaborationMode === 'peer' ? 'peer' : 'legacy') :
+      room.collaborationMode === 'peer' ? 'peer' : 'legacy'
+    const rootRequestId = inheritedRootId ?? requestId
     const message = RoomMessageSchema.parse({
       id: roomId(), roomId: id, messageSeq: 1, authorKind: 'user', authorLabelSnapshot: '你',
+      rootRequestId, sourceRequestId: requestId, status: 'final',
       body: body.body, bodyRevision: 0, mentionMemberIds: body.mentionMemberIds,
       replyToMessageId: body.replyToMessageId, taskId: body.taskId,
       attachmentIds: body.attachmentIds, clientRequestId: body.clientRequestId,
       requestFingerprint: roomFingerprint(body), createdAt: new Date().toISOString()
     })
-    const request: RoomRequestState = { id: roomId(), roomId: id, status: 'pending',
-      message: body, sourceMessageId: message.id, roomSnapshot: room,
+    const request: RoomRequestState = { id: requestId, roomId: id, status: 'pending',
+      rootRequestId, collaborationProtocol: protocol,
+      ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}),
+      message: body, sourceMessageId: message.id,
+      roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
       threadId: 'room-discussion-' + roomId(), ...(internal ? { ruleAdoption: internal.ruleAdoption } : {}) }
     const result = { message, requestId: request.id }
     const saved = await this.store.commit({ requestId: key, fingerprint: roomFingerprint(identity),
       checks: [{ kind: 'room', id, expectedRevision: room.revision },
         { kind: 'message', id: message.id, expectedRevision: null },
-        { kind: 'request', id: request.id, expectedRevision: null }],
+        { kind: 'request', id: request.id, expectedRevision: null },
+        ...(root && protocol === 'peer' ? [{ kind: 'request' as const, id: root.id, expectedRevision: root.revision }] : [])],
       puts: [{ kind: 'message', id: message.id, roomId: id, value: message },
-        { kind: 'request', id: request.id, roomId: id, value: request }],
+        { kind: 'request', id: request.id, roomId: id, value: request },
+        ...(root && protocol === 'peer' ? [{ kind: 'request' as const, id: root.id, roomId: id,
+          value: { ...root.value, peerLatestRequestId: requestId } }] : [])],
       events: [{ roomId: id, kind: 'message.created', payload: { id: message.id } }], result })
     this.wake()
     return saved.result as typeof result

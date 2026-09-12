@@ -45,7 +45,7 @@ async function legacy() {
 }
 function open(path: string) { const store = new SqliteRoomStore({ path }); stores.push(store); return store }
 
-describe('room SQLite schema 1 to 2 migration', () => {
+describe('room SQLite schema migration', () => {
   it('preserves row cursors, revisions, execution IDs, delivery pins and receipts while backfilling searchable history', async () => {
     const path = await legacy()
     const store = open(path)
@@ -67,7 +67,7 @@ describe('room SQLite schema 1 to 2 migration', () => {
     expect(await store.list('message', { roomId: 'room', search: '中文搜索', limit: 1000 })).toHaveLength(70)
     expect(await store.list('message', { roomId: 'room', search: '搜索', limit: 1000 })).toHaveLength(70)
     const db = new DatabaseSync(path, { readOnly: true })
-    try { expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(3) } finally { db.close() }
+    try { expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(4) } finally { db.close() }
   })
 
   it('migrates only known rule versions and never fabricates v1 from later content on repeated startup', async () => {
@@ -103,10 +103,10 @@ describe('room SQLite schema 1 to 2 migration', () => {
   it('refuses future schema versions instead of rewriting them', async () => {
     const path = await legacy()
     const db = new DatabaseSync(path)
-    db.exec('PRAGMA user_version=4;')
+    db.exec('PRAGMA user_version=5;')
     db.close()
     await expect(open(path).get('room', 'room')).rejects.toThrow('newer Kun version')
     const after = new DatabaseSync(path, { readOnly: true })
-    try { expect(after.prepare('PRAGMA user_version').get()?.user_version).toBe(4) } finally { after.close() }
+    try { expect(after.prepare('PRAGMA user_version').get()?.user_version).toBe(5) } finally { after.close() }
   })
 })

@@ -6,7 +6,8 @@ export const RoomDocumentKindSchema = z.enum([
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
-  'request_input', 'rule_bundle', 'rule_compression'
+  'request_input', 'rule_bundle', 'rule_compression',
+  'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>
 const Id = z.string().min(1).max(256)
@@ -37,6 +38,9 @@ export type RoomStoreEvent = z.infer<typeof RoomStoreEventSchema>
 export const RoomStoreListOptionsSchema = z.object({
   roomId: Id.optional(),
   taskId: Id.optional(),
+  rootRequestId: Id.optional(),
+  peerGeneration: Seq.optional(),
+  coalescePeerMessages: z.boolean().optional(),
   status: z.union([z.string(), z.array(z.string()).max(30)]).optional(),
   limit: z.number().int().min(1).max(1000).default(50),
   beforeSeq: Seq.optional(),

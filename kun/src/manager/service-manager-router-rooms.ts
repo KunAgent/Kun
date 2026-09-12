@@ -83,6 +83,9 @@ export function addManagerRoomRoutes(router: Router, input: {
           case 'commit': {
             const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional() })
               .strict().parse(body.value)
+            if (!value.fence && value.input.puts.some((put) => put.kind.startsWith('peer_'))) {
+              throw new ResourceFenceStaleError()
+            }
             if (value.fence) assertCurrent(value.fence)
             result = await input.roomStore.commit(value.input,
               value.fence ? () => assertCurrent(value.fence!) : undefined)

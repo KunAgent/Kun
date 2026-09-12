@@ -87,7 +87,7 @@ async function fixture(structuredResults = false, malformedResults = false) {
     await h.turns.interruptActiveTurns()
     await store.close()
   })
-  const { room } = await runtime.service.create({ clientRequestId: 'create-room', name: '研发室',
+  const { room } = await runtime.service.create({ clientRequestId: 'create-room', name: '研发室', collaborationMode: 'autonomous',
     repositories: [{ id: 'repo', displayPath: repo }] })
   runtime.start()
   return { root, repo, room, plans, calls, h, store, get runtime() { return runtime },

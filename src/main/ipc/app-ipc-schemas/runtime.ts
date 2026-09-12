@@ -202,6 +202,9 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/rooms/{roomId}/read', ['POST']),
   compileEndpoint('/v1/rooms/{roomId}/search', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/requests', ['GET']),
+  compileEndpoint('/v1/rooms/{roomId}/topics', ['GET']),
+  compileEndpoint('/v1/rooms/{roomId}/topics/{requestId}/stop', ['POST']),
+  compileEndpoint('/v1/rooms/{roomId}/topics/{requestId}/metrics', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/requests/{requestId}/retry', ['POST']),
   compileEndpoint('/v1/rooms/{roomId}/requests/{requestId}', ['GET']),
   ...['continue', 'cancel', 'reconcile'].map((action) =>

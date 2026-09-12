@@ -25,6 +25,7 @@ type Draft = {
   fingerprint: string
   replyToMessageId?: string
   replyBody?: string
+  rootRequestId?: string
 }
 function emptyDraft(): Draft {
   return {
@@ -55,11 +56,13 @@ export function RoomComposer({
   room,
   tasks,
   draftId,
+  topicChoices = [],
   onSend
 }: {
   room: Room
   tasks: RoomTask[]
   draftId?: string
+  topicChoices?: Array<{ rootRequestId: string; title: string }>
   onSend: (message: SendRoomMessage) => Promise<void>
 }): ReactElement {
   const { t } = useTranslation('common')
@@ -85,7 +88,7 @@ export function RoomComposer({
     (member) =>
       member.enabled &&
       !member.removedAt &&
-      (room.collaborationMode === 'autonomous' ||
+      (room.collaborationMode !== 'directed' ||
         (draft.mentions.length
           ? draft.mentions.includes(member.id)
           : member.id === room.defaultMemberId))
@@ -135,11 +138,13 @@ export function RoomComposer({
           roomId: string
           messageId: string
           body?: string
+          rootRequestId?: string
         }>
       ).detail
       if (detail.roomId === room.id) {
         setDraft((draft) => ({
           ...draft,
+          rootRequestId: detail.rootRequestId,
           replyToMessageId: detail.messageId,
           replyBody: detail.body?.slice(0, 160)
         }))
@@ -160,16 +165,34 @@ export function RoomComposer({
         textareaRef.current?.focus()
       }
     }
+    const continueTopic = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ roomId: string; rootRequestId: string }>
+      ).detail
+      if (detail.roomId !== room.id) return
+      setDraft((current) => ({
+        ...current,
+        rootRequestId: detail.rootRequestId,
+        replyToMessageId: undefined,
+        replyBody: undefined
+      }))
+      textareaRef.current?.focus()
+    }
     if (draftId) return
+    window.addEventListener?.('kun-room-continue-topic', continueTopic)
     window.addEventListener?.('kun-room-reply', reply)
     window.addEventListener?.('kun-room-task-reply', taskReply)
     return () => {
+      window.removeEventListener?.('kun-room-continue-topic', continueTopic)
       window.removeEventListener?.('kun-room-reply', reply)
       window.removeEventListener?.('kun-room-task-reply', taskReply)
     }
   }, [room.id, draftId])
   useEffect(() => {
-    writeBrowserStorageItem(`kun.rooms.draft.${storageId}`, JSON.stringify(draft))
+    writeBrowserStorageItem(
+      `kun.rooms.draft.${storageId}`,
+      JSON.stringify(draft)
+    )
   }, [draft, storageId])
   const patch = (value: Partial<Draft>): void =>
     setDraft((current) => ({ ...current, ...value }))
@@ -184,6 +207,7 @@ export function RoomComposer({
     )
       return
     const content = {
+      ...(draft.rootRequestId ? { rootRequestId: draft.rootRequestId } : {}),
       ...(draft.replyToMessageId
         ? { replyToMessageId: draft.replyToMessageId }
         : {}),
@@ -272,6 +296,42 @@ export function RoomComposer({
         disabled={busy || uploading || Boolean(room.archivedAt)}
         className="space-y-2"
       >
+        {!draftId && (room.collaborationMode === 'peer' || draft.rootRequestId) ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label={t('roomsTopic')}
+              className={`${roomFieldClass} !w-auto max-w-full`}
+              value={draft.rootRequestId ?? ''}
+              onChange={(event) =>
+                patch({
+                  rootRequestId: event.target.value || undefined,
+                  replyToMessageId: undefined,
+                  replyBody: undefined
+                })
+              }
+            >
+              <option value="">{t('roomsNewTopic')}</option>
+              {topicChoices.map((topic) => (
+                <option key={topic.rootRequestId} value={topic.rootRequestId}>
+                  {t('roomsContinueTopic')} · {topic.title}
+                </option>
+              ))}
+              {draft.rootRequestId &&
+              !topicChoices.some(
+                (topic) => topic.rootRequestId === draft.rootRequestId
+              ) ? (
+                <option value={draft.rootRequestId}>
+                  {t('roomsContinueTopic')}
+                </option>
+              ) : null}
+            </select>
+            {draft.rootRequestId ? (
+              <span className="text-xs text-ds-muted">
+                {t('roomsContinueTopicHint')}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <select
             aria-label={t('roomsMention')}
@@ -542,7 +602,9 @@ export function RoomComposer({
           {t(
             room.collaborationMode === 'directed'
               ? 'roomsDirectedHint'
-              : 'roomsAutoHint'
+              : room.collaborationMode === 'peer'
+                ? 'roomsPeerHint'
+                : 'roomsAutoHint'
           )}
         </p>
       )}

@@ -20,13 +20,18 @@ const room = {
 describe('RoomComposer', () => {
   let renderer: ReactTestRenderer
   const stored = new Map<string, string>()
+  const listeners = new Map<string, (event: Event) => void>()
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     stored.clear()
+    listeners.clear()
     upload
       .mockReset()
       .mockResolvedValue({ id: 'attachment', name: 'diagram.png' })
     vi.stubGlobal('window', {
+      addEventListener: (name: string, fn: (event: Event) => void) =>
+        listeners.set(name, fn),
+      removeEventListener: (name: string) => listeners.delete(name),
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => stored.set(key, value)
@@ -139,5 +144,68 @@ describe('RoomComposer', () => {
     )
     await submit()
     expect(send.mock.calls[0][0].attachmentIds).toEqual(['attachment'])
+  })
+  it('continues a selected topic explicitly and starts a new topic after a successful send', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    act(() =>
+      listeners.get('kun-room-continue-topic')!({
+        detail: { roomId: 'room', rootRequestId: 'topic' }
+      } as unknown as Event)
+    )
+    input('Continue the architecture discussion')
+    await submit()
+    expect(send.mock.calls[0][0].rootRequestId).toBe('topic')
+    input('An unrelated question')
+    await submit()
+    expect(send.mock.calls[1][0].rootRequestId).toBeUndefined()
+  })
+  it('preserves reply topic identity on failure and lets new topic clear the quote without discarding content', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('Connection lost'))
+    await render(send)
+    act(() =>
+      listeners.get('kun-room-reply')!({
+        detail: {
+          roomId: 'room',
+          messageId: 'message',
+          rootRequestId: 'topic',
+          body: 'Prior conclusion'
+        }
+      } as unknown as Event)
+    )
+    input('Follow up')
+    await submit()
+    expect(send.mock.calls[0][0]).toMatchObject({
+      rootRequestId: 'topic',
+      replyToMessageId: 'message'
+    })
+    await submit()
+    expect(send.mock.calls[1][0].clientRequestId).toBe(
+      send.mock.calls[0][0].clientRequestId
+    )
+    act(() =>
+      renderer.root
+        .findByProps({ 'aria-label': 'Topic' })
+        .props.onChange({ target: { value: '' } })
+    )
+    await submit()
+    expect(send.mock.calls[2][0]).toMatchObject({ body: 'Follow up' })
+    expect(send.mock.calls[2][0].rootRequestId).toBeUndefined()
+    expect(send.mock.calls[2][0].replyToMessageId).toBeUndefined()
+    expect(send.mock.calls[2][0].clientRequestId).not.toBe(
+      send.mock.calls[0][0].clientRequestId
+    )
+  })
+  it('ignores topic continuation actions from a different room', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    act(() =>
+      listeners.get('kun-room-continue-topic')!({
+        detail: { roomId: 'other-room', rootRequestId: 'topic' }
+      } as unknown as Event)
+    )
+    input('New question')
+    await submit()
+    expect(send.mock.calls[0][0].rootRequestId).toBeUndefined()
   })
 })

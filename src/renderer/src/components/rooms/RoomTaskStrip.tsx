@@ -13,7 +13,8 @@ export function RoomTaskStrip({
   onTask,
   cursor,
   loadMore,
-  moreBusy
+  moreBusy,
+  stacked = false
 }: {
   room: Room
   tasks: RoomTask[]
@@ -22,6 +23,7 @@ export function RoomTaskStrip({
   cursor: string | null
   loadMore: () => Promise<void>
   moreBusy: boolean
+  stacked?: boolean
 }) {
   const { t } = useTranslation('common')
   const [status, setStatus] = useState('')
@@ -40,8 +42,8 @@ export function RoomTaskStrip({
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    horizontal: true,
-    estimateSize: () => 232,
+    horizontal: !stacked,
+    estimateSize: () => (stacked ? 90 : 232),
     overscan: 3
   })
   const virtual = rows.length > 30
@@ -154,12 +156,25 @@ export function RoomTaskStrip({
           {error}
         </p>
       ) : null}
-      <div ref={scrollRef} className="flex max-h-28 gap-2 overflow-auto p-3">
+      <div
+        ref={scrollRef}
+        className={
+          stacked
+            ? 'max-h-[60vh] overflow-auto p-3'
+            : 'flex max-h-28 gap-2 overflow-auto p-3'
+        }
+      >
         <div
-          className="relative flex gap-2"
+          className={`relative flex gap-2 ${stacked ? 'flex-col' : ''}`}
           style={
             virtual
-              ? { width: virtualizer.getTotalSize(), height: 72, flexShrink: 0 }
+              ? stacked
+                ? { height: virtualizer.getTotalSize() }
+                : {
+                    width: virtualizer.getTotalSize(),
+                    height: 72,
+                    flexShrink: 0
+                  }
               : undefined
           }
         >
@@ -173,13 +188,13 @@ export function RoomTaskStrip({
                   virtual
                     ? {
                         position: 'absolute',
-                        left: row.start,
-                        top: 0,
-                        width: 224
+                        left: stacked ? 0 : row.start,
+                        top: stacked ? row.start : 0,
+                        width: stacked ? '100%' : 224
                       }
                     : undefined
                 }
-                className={`w-56 shrink-0 rounded-lg border p-3 text-left ${selectedId === task.id ? 'border-accent bg-accent/5' : 'border-ds-border hover:bg-ds-hover'}`}
+                className={`${stacked ? 'w-full' : 'w-56'} shrink-0 rounded-lg border p-3 text-left ${selectedId === task.id ? 'border-accent bg-accent/5' : 'border-ds-border hover:bg-ds-hover'}`}
               >
                 <span className="block truncate text-sm font-medium text-ds-ink">
                   {task.title}

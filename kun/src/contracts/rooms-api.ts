@@ -10,7 +10,8 @@ export const RoomRepositoryInputSchema = z.object({
 const fields = {
   name: z.string().trim().min(1).max(120),
   description: z.string().max(8000).optional(),
-  collaborationMode: z.enum(['autonomous', 'directed']).optional(),
+  collaborationMode: z.enum(['autonomous', 'directed', 'peer']).optional(),
+  maxConcurrentTasks: z.number().int().min(1).max(2).optional(),
   defaultMemberId: RoomIdSchema.optional(),
   members: z.array(RoomMemberSchema).min(1).max(100).optional(),
   repositories: z.array(RoomRepositoryInputSchema).max(100).optional()

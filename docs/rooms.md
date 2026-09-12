@@ -21,11 +21,15 @@ repository and agreement snapshots. Members can be copied or disabled; removal
 must not strand an unfinished execution or its reviewer. The profile management
 shortcut opens the existing Agent settings surface.
 
-New rooms default to autonomous collaboration. The coordinator invites members
-or assigns work within the current user's explicit goal. Directed mode addresses
-selected members, or the default responder when there is no mention. Each
-message can explicitly choose discussion or execution; automatic intent
-classification is the default. Changing collaboration mode affects new requests.
+New rooms default to **Peer discussion** (`peer`). Members independently decide
+whether they have useful new information and may invite another member. The
+existing **Coordinator collaboration** (`autonomous`) mode continues to let the
+coordinator select speakers and assign authorized work; **Directed collaboration**
+(`directed`) addresses selected members or the default responder. Existing rooms
+keep their saved mode. Each message can explicitly choose discussion or execution;
+automatic intent classification is the default. Changing mode affects newly
+started topics; existing topics retain their frozen collaboration protocol.
+See [Peer discussion](./rooms-peer.md) for topic controls and budgets.
 Missing or ambiguous goals, members or repository targets require clarification.
 Historical messages, model summaries and attachments do not authorize new work.
 
@@ -52,10 +56,16 @@ rather than being cleared merely because a room was selected.
 
 ## Collaboration context and bounds
 
-Autonomous discussion is limited to three rounds per request. At most two room
-execution tasks run concurrently, with one active task per member, also subject
-to Kun's global execution capacity. Review, integration and unknown execution
-states participate in the relevant admission/ownership checks; leaving the
+Peer discussion allows up to 32 response activations per user-started or
+explicitly continued topic, up to 8 per member, and up to 128 participation
+checks. Retry and stale-context regeneration count toward those bounds. Only
+complete messages, structured invitations and relevant task changes wake peers;
+there is no periodic search for new work. Legacy coordinator discussion remains
+limited to three rounds per request. At most two room execution tasks run
+concurrently across rooms, also honoring each room's `maxConcurrentTasks` and
+one active execution per member. Discussion has a separate channel, at most two
+activations per room and one per member, subject to Kun's global turn capacity.
+Review, integration and unknown execution states participate in the relevant admission/ownership checks; leaving the
 page does not free an execution slot.
 
 Coordination, member discussion and task execution share a frozen room context
@@ -219,14 +229,16 @@ coordinator across Runtime flavors. Thread/turn admission uses durable identitie
 and the existing queued-turn dispatcher.
 
 Rooms uses Node's built-in `node:sqlite`, without a separately compiled SQLite
-addon. The database schema is version 3 and retains WAL mode, FULL synchronization
+addon. The database schema is version 4 and retains WAL mode, FULL synchronization
 and immediate transactions. Upgrade preserves existing room messages, thread
 identities, delivery SHAs and pins, and seeds existing agreements' immutable
 version history. Version 3 adds paginated review lookup, request activity indexes,
 rebuildable outcome projections and a persistent event namespace without
 rewriting old messages or execution identities. Local SQLite search indexes are backfilled in bounded batches;
-opening the room does not require a complete historical replay. The logical
-room document's `schemaVersion` remains 1.
+opening the room does not require a complete historical replay. Version 4 adds an
+indexed peer topic/member lookup and durable peer documents without replaying
+old history as new inbox events. The logical room document's
+`schemaVersion` remains 1.
 
 The desktop subscribes to a global room SSE stream from the workbench level.
 Room/task updates, unread state and attention counts therefore continue across
@@ -258,7 +270,8 @@ preserve those relationships. Archiving prevents new room messages while
 retaining existing work and deliveries; it does not cancel active tasks.
 
 Public room APIs include room/member configuration, paginated messages and
-search, individual message lookup, durable read cursors, request outcomes and
+search, individual message lookup, durable read cursors, paginated peer topics
+and revision-checked discussion stop, request outcomes and
 retry/continue/stop/reconcile, task controls/recovery, delivery history/compare,
 scoped original agreements and verification logs, agreement versions and
 adoption, integration prepare/open/validate/resolve/cancel/apply, cleanup
@@ -285,7 +298,13 @@ figures are not measured latency, memory or throughput guarantees.
 
 ## Verification status
 
-The following records describe verified execution, not a blanket release claim:
+Peer discussion verification is tracked separately in [rooms-peer.md](./rooms-peer.md).
+The updated offline Electron checks passed, including exact structured peer
+publication and topic controls. Its real-model comparison is tracked separately;
+the historical native-model results below do not establish acceptance of the
+new peer protocol.
+
+The following records describe prior verified execution, not a blanket release claim:
 
 - Automated coverage includes SQLite/Manager transactions and upgrade, request
   idempotency, context/retrieval bounds, rule adoption, permissions, real

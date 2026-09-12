@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { RoomContextSnapshot } from '../contracts/rooms-product.js'
 import type { RoomRequestState } from './room-runtime-types.js'
+import { roomDiscussionContext } from './room-discussion-evidence.js'
 
 export const RoomCoordinationPlanSchema = z.object({
   kind: z.enum(['discussion', 'execute', 'clarify', 'answer']),
@@ -22,7 +23,7 @@ export function parseRoomJson(text: string): unknown {
   return JSON.parse(trimmed)
 }
 
-export function roomCoordinationPrompt(request: RoomRequestState, context: RoomContextSnapshot): string {
+export function roomCoordinationPrompt(request: RoomRequestState, context: RoomContextSnapshot, budget = 16000): string {
   return [
     'You coordinate a personal Kun room. Submit with submit_room_plan when available; otherwise return ONE JSON object only. Do not execute repository tools.',
     'Schema: {kind:"discussion"|"execute"|"clarify"|"answer",response:string,participants:string[],',
@@ -42,7 +43,7 @@ export function roomCoordinationPrompt(request: RoomRequestState, context: RoomC
     'Execute only after goals are clear. Never duplicate a task; each assignment key is unique and dependencies refer to earlier keys.',
     'If no code is needed, use answer. If multiple possible task references make the request ambiguous, use clarify.',
     JSON.stringify({ currentRequest: request.message, room: request.roomSnapshot,
-      round: request.round ?? 0, previousDiscussion: [...(request.previousDiscussions ?? []), ...(request.discussions ?? [])], referencedTask: request.referencedTask,
-      context })
+      round: request.round ?? 0, referencedTask: request.referencedTask,
+      ...roomDiscussionContext(request, context, budget) })
   ].join('\n')
 }

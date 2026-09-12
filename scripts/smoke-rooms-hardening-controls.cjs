@@ -53,6 +53,9 @@ async function exerciseRoomHardening({ page, request, switchMode, poll, capture,
   const compressionCalls = fixture.snapshot().compressionRequests
   await switchMode(page, 'rooms')
   await page.getByRole('heading', { name: NAME, exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Room details', exact: true }).click()
+  const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  await drawer.getByRole('button', { name: 'Room overview', exact: true }).click()
   const overview = page.getByRole('region', { name: 'Room overview', exact: true })
   await overview.getByRole('button', { name: /^Requests/ }).click()
   const card = overview.locator('article').filter({ hasText: QUESTION })
@@ -86,6 +89,7 @@ async function exerciseRoomHardening({ page, request, switchMode, poll, capture,
   await poll(async () => (await request(page, '/v1/rooms/' + room.id + '/requests')).requests.some((item) =>
     item.message.body.includes('ROOM_HARDENING_STOP') && item.status === 'cancelled'), 30000, 'durable coordination stop')
   await capture('hardening-request-stopped')
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
   await page.evaluate(() => globalThis.__roomsHardeningRestore?.())
   return { roomId: room.id, requestId: original.id, compressionCalls, continuedSameRequest: true,
     cancellationConfirmed: true, notificationDetailAttempts: fault.attempts, injectedReadFailures: fault.failures }
