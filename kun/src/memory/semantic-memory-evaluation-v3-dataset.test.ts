@@ -24,6 +24,22 @@ describe('semantic Memory v3 evaluation dataset', () => {
     expect(() => parseSemanticMemoryV3EvaluationDataset(toTexts(data))).toThrow()
   })
 
+  it('rejects a missing category stratum', () => {
+    const data = buildRawData()
+    data.queries.queries[0]!.category = 'semantic-paraphrase'
+    refreshHashes(data)
+
+    expect(() => parseSemanticMemoryV3EvaluationDataset(toTexts(data))).toThrow('lexical-control development quota mismatch')
+  })
+
+  it('rejects malformed category values before evaluation', () => {
+    const data = buildRawData()
+    data.queries.queries[0]!.category = 'unsupported-category'
+    refreshHashes(data)
+
+    expect(() => parseSemanticMemoryV3EvaluationDataset(toTexts(data))).toThrow()
+  })
+
   it('rejects stale source checksums', () => {
     const data = buildRawData()
     data.records.records[0]!.content += ' Changed.'
@@ -41,6 +57,22 @@ describe('semantic Memory v3 evaluation dataset', () => {
       manifestText: windowsLines(texts.manifestText),
       checksumsText: windowsLines(texts.checksumsText)
     })).not.toThrow()
+  })
+
+  it('rejects normalized duplicate queries across development and holdout', () => {
+    const data = buildRawData()
+    data.queries.queries[40]!.query = '  ＡＮＯＮＹＭＯＵＳ   ＱＵＥＲＹ １ ＬＥＸＩＣＡＬ－ＣＯＮＴＲＯＬ!!! '
+    refreshHashes(data)
+
+    expect(() => parseSemanticMemoryV3EvaluationDataset(toTexts(data))).toThrow('duplicates development query')
+  })
+
+  it('rejects near-duplicate queries across development and holdout', () => {
+    const data = buildRawData()
+    data.queries.queries[40]!.query = 'Anonymous query 1 lexical-control sample'
+    refreshHashes(data)
+
+    expect(() => parseSemanticMemoryV3EvaluationDataset(toTexts(data))).toThrow('near-duplicates across splits')
   })
 
   it('loads the checked-in frozen v3 fixture with the locked model identity', async () => {
@@ -103,7 +135,9 @@ function buildRawData(): RawData {
       split: ordinal <= 40 ? 'development' : 'holdout',
       queryLanguage: ordinal % 2 === 0 ? 'zh' : 'en',
       category,
-      query: zeroLexicalOverlap ? '跨语言零词面样本' : `Anonymous query ${ordinal}`,
+      query: zeroLexicalOverlap
+        ? `跨语言零词面样本 ${String.fromCharCode(97 + ((ordinal - 1) % 26))}${String.fromCharCode(97 + Math.floor((ordinal - 1) / 26))} ${String.fromCharCode(122 - ((ordinal - 1) % 26))}${String.fromCharCode(122 - Math.floor((ordinal - 1) / 26))}`
+        : `Anonymous query ${ordinal} ${category}`,
       expectedIds,
       forbiddenIds: [forbidden],
       zeroLexicalOverlap,

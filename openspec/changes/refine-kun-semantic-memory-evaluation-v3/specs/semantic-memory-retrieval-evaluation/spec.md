@@ -4,6 +4,8 @@
 
 The repository SHALL provide a strictly validated anonymous Memory corpus and labeled query set with explicit development and holdout splits, a fixed evaluation time, and immutable content hashes for each released dataset version. A v3 decision dataset SHALL record exact split counts, category quotas, a human-readable relevance rationale for every query, and a first-class stratum for positive cross-language queries with zero normalized lexical overlap.
 
+The validator SHALL reject normalized duplicate or near-duplicate queries that cross the development/holdout boundary. Normalization SHALL use the frozen NFKC, case, punctuation, and token rules recorded in the manifest.
+
 #### Scenario: Run the default evaluation
 
 - **WHEN** a developer runs the semantic Memory evaluation without an explicit local-data option

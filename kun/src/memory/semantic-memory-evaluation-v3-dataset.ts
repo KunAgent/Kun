@@ -274,6 +274,7 @@ export function parseSemanticMemoryV3EvaluationDataset(input: {
 
   validateCounts(records, queriesFile.queries, manifest, errors)
   validateCategoryQuotas(queriesFile.queries, manifest.categoryQuotas, errors)
+  validateSplitLeakage(queriesFile.queries, errors)
   if (errors.length > 0) throw new Error(`invalid semantic memory v3 evaluation dataset: ${errors.join('; ')}`)
   return { manifest, records, queries: queriesFile.queries, sourceHashes: checksums.files }
 }
@@ -307,6 +308,41 @@ function validateCategoryQuotas(
       requireEqual(actual, quotas[category][split], `${category} ${split} quota`, errors)
     }
   }
+}
+
+function validateSplitLeakage(queries: readonly SemanticMemoryV3EvaluationQuery[], errors: string[]): void {
+  const development = queries.filter((query) => query.split === 'development')
+  const holdout = queries.filter((query) => query.split === 'holdout')
+  const developmentByCanonical = new Map(development.map((query) => [canonicalQuery(query.query), query.id]))
+
+  for (const query of holdout) {
+    const canonical = canonicalQuery(query.query)
+    const duplicateId = developmentByCanonical.get(canonical)
+    if (duplicateId) errors.push(`query ${query.id} duplicates development query ${duplicateId} after normalization`)
+  }
+
+  for (const developmentQuery of development) {
+    const developmentTokens = semanticMemoryV3NormalizedTokens(developmentQuery.query)
+    if (developmentTokens.size < 3) continue
+    for (const holdoutQuery of holdout) {
+      const holdoutTokens = semanticMemoryV3NormalizedTokens(holdoutQuery.query)
+      if (holdoutTokens.size < 3) continue
+      const union = new Set([...developmentTokens, ...holdoutTokens]).size
+      const intersection = [...developmentTokens].filter((token) => holdoutTokens.has(token)).length
+      if (union > 0 && intersection / union >= 0.75) {
+        errors.push(`queries ${developmentQuery.id} and ${holdoutQuery.id} are near-duplicates across splits`)
+      }
+    }
+  }
+}
+
+function canonicalQuery(query: string): string {
+  return query
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/[^\p{Letter}\p{Number}\p{Script=Han}]+/gu, ' ')
+    .trim()
+    .replace(/\s+/gu, ' ')
 }
 
 function expectedSplit(id: string): 'development' | 'holdout' {

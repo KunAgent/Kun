@@ -4,7 +4,7 @@
   "algorithm": "sha256",
   "files": {
     "records": "88d31cca185a91f5e8fbcb3fe979d7ea00d35ef2f52766e25fe6e5323fbd582a",
-    "queries": "211caf9056ceb55bc4574f22b3534fd94550d00623140d62cd4622477fb96a0d",
-    "manifest": "b89050d8ce7477612e5021276eb065eb76b741b347e22f32263349d11b9bf762"
+    "queries": "8c56c3b665b4074a389d46f910caf4118a2b5620b91c8e8458c9afa456d5419f",
+    "manifest": "66f6ef4d33ef9afefbf86231df14c9397993305afee87b84c4448a7931083cd3"
   }
 }
