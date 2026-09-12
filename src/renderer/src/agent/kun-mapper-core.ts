@@ -87,6 +87,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
     relation: thread.relation,
     parentThreadId: thread.parentThreadId,
+    ...(thread.roomContext ? { roomContext: thread.roomContext } : {}),
     planBuildRunId: thread.planBuildRunId,
     forkedFromThreadId: thread.forkedFromThreadId,
     forkedFromTitle: thread.forkedFromTitle,

@@ -11,15 +11,16 @@ describe('WorkspaceModeTabs', () => {
     await i18n.changeLanguage('en')
   })
 
-  function props(activeView: 'chat' | 'workflow' | 'write' | 'design' = 'chat') {
+  function props(activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' = 'chat') {
     return {
       activeView,
       onCodeOpen: vi.fn(),
-      onWriteOpen: vi.fn()
+      onWriteOpen: vi.fn(),
+      onRoomsOpen: vi.fn()
     }
   }
 
-  function renderInteractive(activeView: 'chat' | 'workflow' | 'write' | 'design' = 'chat') {
+  function renderInteractive(activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' = 'chat') {
     const componentProps = props(activeView)
     let renderer!: ReactTestRenderer
     act(() => {
@@ -51,8 +52,8 @@ describe('WorkspaceModeTabs', () => {
     act(() => trigger.props.onClick())
 
     const options = renderer.root.findAllByProps({ role: 'menuitemradio' })
-    expect(options).toHaveLength(2)
-    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual(['write', 'chat'])
+    expect(options).toHaveLength(3)
+    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual(['write', 'chat', 'rooms'])
     expect(renderer.root.findAllByProps({ role: 'menu' })).toHaveLength(1)
     const rendered = JSON.stringify(renderer.toJSON())
     expect(rendered).toContain('Build, debug, and ship')
@@ -105,8 +106,18 @@ describe('WorkspaceModeTabs', () => {
     act(() => trigger.props.onKeyDown({ key: 'ArrowDown', preventDefault }))
 
     expect(preventDefault).toHaveBeenCalledOnce()
-    expect(renderer.root.findAllByProps({ role: 'menuitemradio' })).toHaveLength(2)
+    expect(renderer.root.findAllByProps({ role: 'menuitemradio' })).toHaveLength(3)
     act(() => renderer.unmount())
+  })
+
+  it('opens Rooms through the dedicated callback and labels its active mode', () => {
+    const { componentProps, renderer } = renderInteractive()
+    act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
+    act(() => renderer.root.findAllByProps({ role: 'menuitemradio' })[2]?.props.onClick())
+    expect(componentProps.onRoomsOpen).toHaveBeenCalledOnce()
+    expect(componentProps.onCodeOpen).not.toHaveBeenCalled()
+    act(() => renderer.unmount())
+    expect(renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))).toContain('title="Rooms"')
   })
 
   it('uses Work as the trigger value in the Work workspace', () => {
@@ -139,7 +150,7 @@ describe('WorkspaceModeTabs', () => {
       disabledReason: 'Preparing the drawing'
     }))
 
-    expect(html).toContain(`aria-label="${i18n.t('code')} / ${i18n.t('workspaceModeWorkLabel')}"`)
+    expect(html).toContain(`aria-label="${i18n.t('code')} / ${i18n.t('workspaceModeWorkLabel')} / ${i18n.t('roomsLabel')}"`)
     expect(html).toContain('disabled=""')
     expect(html).toContain('title="Preparing the drawing"')
     expect(html).not.toContain('role="menu"')

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
 import type {
@@ -121,6 +122,7 @@ async startTurn(this: TurnService, input: {
         }
         const thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        assertRoomTurnAdmission(thread, input.request)
         if (thread.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')) {
           if (
             !options.expectedLatestFailedTurnId &&

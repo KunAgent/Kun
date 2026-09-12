@@ -20,6 +20,7 @@ import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
+import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -118,8 +119,15 @@ export function createServerRuntimeComposition(
     extensionIndexClient
   } = extensions
   const { startedAt, rebuildCapabilities, applyConfig } = config
+  const roomComposition = createRuntimeRoomComposition({
+    options: () => config.activeOptions,
+    services: { threads: threadService, threadStore: stores.threadStore,
+      turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
+      runTurn: runAgentTurn }
+  })
   return {
     threadService,
+    rooms: roomComposition.rooms,
     projectBoardService,
     turnService,
     threadStore: stores.threadStore,
@@ -137,7 +145,10 @@ export function createServerRuntimeComposition(
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
     }),
-    startBackgroundMaintenance: () => backgroundMaintenance.start(),
+    startBackgroundMaintenance: () => {
+      backgroundMaintenance.start()
+      roomComposition.start()
+    },
     prepareForRequests: prepareUsageCarryover,
     inspectThreadStore: () => services.threadStoreGuardian.run(),
     sessionGuardian: services.sessionGuardian,
@@ -392,6 +403,8 @@ export function createServerRuntimeComposition(
         async () => {
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
+              eventStreamRegistry.closeAll()
+              await roomComposition.close()
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()
               backgroundMaintenance.stop()

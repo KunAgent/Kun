@@ -67,9 +67,15 @@ type InternalResumeSessionOptions = ResumeSessionOptions & {
 
 export const threadServiceLifecycleOperations = {
 async delete(this: ThreadService, threadId: string): Promise<boolean> {
+    if ((await this.getMetadata(threadId))?.roomContext) {
+      throw new Error('room execution history is retained; archive the room instead')
+    }
     let rawDeleteCommitted = false
     try {
       return await this['withThreadMutation'](threadId, async () => {
+        if ((await this.getMetadata(threadId))?.roomContext) {
+          throw new Error('room execution history is retained; archive the room instead')
+        }
         // A concurrent delete that arrives after this service already removed
         // the thread must not reopen its fence on a raw false result.
         if (this['lifecycleFence']?.isDeleted(threadId)) return false
@@ -115,12 +121,16 @@ async deleteByWorkspace(this: ThreadService, workspace: string): Promise<string[
     })
     const deleted: string[] = []
     for (const summary of summaries) {
+      if ((await this.getMetadata(summary.id))?.roomContext) continue
       if (await this.delete(summary.id)) deleted.push(summary.id)
     }
     return deleted
   },
 
 async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {}): Promise<ThreadRecord> {
+    if ((await this.getMetadata(threadId))?.roomContext) {
+      throw new Error('room threads cannot be forked; create a managed task in the room instead')
+    }
     const internalOptions = options as InternalForkThreadOptions
     if (options.designCloneOperationId && !internalOptions[DESIGN_CLONE_COMMIT]) {
       const source = await this['threadStore'].get(threadId)
@@ -332,6 +342,9 @@ async resumeSession(this: ThreadService,
     sessionId: string,
     options: ResumeSessionOptions = {}
   ): Promise<ResumeSessionResult> {
+    if ((await this.getMetadata(sessionId))?.roomContext) {
+      throw new Error('room execution history must be resumed through its room task')
+    }
     const internalOptions = options as InternalResumeSessionOptions
     if (options.designCloneOperationId && !internalOptions[DESIGN_CLONE_COMMIT]) {
       const threadId = designCloneThreadId(options.designCloneOperationId)

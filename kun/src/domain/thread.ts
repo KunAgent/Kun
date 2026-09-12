@@ -42,6 +42,7 @@ const LEGACY_WRITE_INTERACTION_AGREEMENT =
   '交互约定: 需要更多信息时通常直接用普通文本向用户提问。仅当当前激活的专用工作流明确要求结构化确认（例如 PPT 视觉评审）时，调用该工作流提供的确认工具；其他写作任务不要滥用结构化交互。'
 
 export function createThreadRecord(input: {
+  roomContext?: ThreadRecord['roomContext']
   id: string
   title: string
   titleAuto?: boolean
@@ -111,6 +112,7 @@ export function createThreadRecord(input: {
     ...(input.toolCatalogEpoch ? { toolCatalogEpoch: input.toolCatalogEpoch } : {}),
     ...(input.agentId ? { agentId: input.agentId } : {}),
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+    ...(input.roomContext ? { roomContext: input.roomContext } : {}),
     mode: input.mode ?? 'agent',
     status: input.status ?? 'idle',
     approvalPolicy: input.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,

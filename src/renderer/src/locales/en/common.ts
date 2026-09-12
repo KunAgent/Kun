@@ -1,3 +1,4 @@
+import rooms from './common/rooms.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
@@ -18,6 +19,7 @@ import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 
 const common = {
+  ...rooms,
   queuedMessageEditAccountUnavailable: 'The original model account is unavailable or has changed. The queued message has been kept.',
   queuedMessageEditSteering: 'This message is being delivered as guidance; editing is temporarily unavailable.',
   queuedMessageRestorePending: 'Withdrawn · ready to edit',

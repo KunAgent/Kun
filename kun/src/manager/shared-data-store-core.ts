@@ -1,4 +1,5 @@
 import { ManagerMemoryDistillationPendingOwner } from './memory-distillation-pending-owner.js'
+import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { readFile, rm } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
@@ -73,6 +74,7 @@ import type { ManagerSessionStoreOperation } from './shared-data-store-contracts
 export abstract class ManagerSharedDataStoreCore {
   readonly threadStore: ThreadStore
   readonly sessionStore: SessionStore
+  readonly roomStore: SqliteRoomStore
   protected readonly hybridThreadStore: HybridThreadStore
   protected readonly artifactStore: ArtifactStore
   protected readonly attachmentStores = new Map<string, AttachmentStore>()
@@ -103,6 +105,7 @@ export abstract class ManagerSharedDataStoreCore {
     sessionStore: HybridSessionStore
   }) {
     this.dataDir = resolve(input.dataDir)
+    this.roomStore = new SqliteRoomStore({ path: resolve(this.dataDir, 'rooms', 'rooms.sqlite') })
     this.memoryDistillationPending = new ManagerMemoryDistillationPendingOwner(this.dataDir)
     this.memoryFeedback = new ManagerMemoryFeedbackOwner({
       dataDir: this.dataDir,
@@ -195,7 +198,11 @@ export abstract class ManagerSharedDataStoreCore {
       try {
         await this.memoryRepository?.shutdown?.()
       } finally {
-        await this.hybridThreadStore.shutdown()
+        try {
+          await this.hybridThreadStore.shutdown()
+        } finally {
+          await this.roomStore.close()
+        }
       }
     }
   }

@@ -213,7 +213,7 @@ export type ClearDesignHistoryResult = {
 export type InitialSetupMode = 'required' | 'preview'
 import type { SettingsRouteSection } from './settings-route-sections'
 export type { SettingsRouteSection }
-export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
+export type AppRoute = 'chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {

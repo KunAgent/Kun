@@ -1,4 +1,5 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+import type { RoomThreadSource } from '@shared/rooms-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { CoreTurnJson } from './kun-contract-runtime'
 import type { DesignTaskProfile } from './design-task-profile'
@@ -19,6 +20,7 @@ export type CoreItemStatus =
   | string
 
 export type CoreThreadSummaryJson = {
+  roomContext?: RoomThreadSource
   id: string
   title: string
   /** Durable product surface that owns the thread. Absent for legacy Code threads. */

@@ -53,6 +53,7 @@ import {
   validation
 } from './service-manager-router-auth.js'
 import { addHostPowerRoute } from './service-manager-router-host-power.js'
+import { addManagerRoomRoutes } from './service-manager-router-rooms.js'
 import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
 import {
   fencedAtomicJsonMutation,
@@ -96,12 +97,19 @@ export function buildServiceManagerRouter(input: {
   }
 }): Router {
   const router = new Router()
+  if (input.sharedData) addManagerRoomRoutes(router, {
+    managerToken: input.managerToken,
+    state: input.state,
+    roomStore: input.sharedData.roomStore,
+    statePersistence: input.statePersistence
+  })
   const capabilities = input.sharedData
     ? KUN_MANAGER_CAPABILITIES
     : KUN_MANAGER_CAPABILITIES.filter((capability) =>
         capability !== 'shared-data-v1' &&
         capability !== 'artifact-memory-data-v1' &&
-        capability !== 'atomic-json-v1'
+        capability !== 'atomic-json-v1' &&
+        capability !== 'room-store-v1'
       )
   router.add('GET', '/health', () => {
     const persistence = input.statePersistence?.()

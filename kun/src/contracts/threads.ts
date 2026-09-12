@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RoomThreadContextSchema } from './thread-room-context.js'
 import { TurnSchema, TurnStatus } from './turns.js'
 import {
   ApprovalPolicySchema,
@@ -14,6 +15,8 @@ import {
 } from './design-task-profile.js'
 import { ThreadRetentionPolicySchema } from './thread-retention.js'
 import { ThreadIndexStatusInfoSchema } from './thread-index-status.js'
+import { ThreadTimelinePageSchema } from './thread-timeline.js'
+export * from './thread-timeline.js'
 
 export const ThreadStatus = z.enum(['idle', 'running', 'archived', 'deleted'])
 export type ThreadStatus = z.infer<typeof ThreadStatus>
@@ -104,17 +107,6 @@ export const ThreadRuntimeStateBatchResponseSchema = z.object({
   results: z.array(ThreadRuntimeStateBatchResultSchema).max(THREAD_RUNTIME_STATE_BATCH_MAX_IDS)
 })
 export type ThreadRuntimeStateBatchResponse = z.infer<typeof ThreadRuntimeStateBatchResponseSchema>
-
-export const THREAD_TIMELINE_MAX_ITEMS = 300
-export const THREAD_TIMELINE_MAX_ITEM_BYTES = 4 * 1024 * 1024
-
-export const ThreadTimelinePageSchema = z.object({
-  nextCursor: z.string().min(1).optional(),
-  hasMore: z.boolean(),
-  itemCount: z.number().int().nonnegative().max(THREAD_TIMELINE_MAX_ITEMS),
-  itemBytes: z.number().int().nonnegative().max(THREAD_TIMELINE_MAX_ITEM_BYTES)
-})
-export type ThreadTimelinePage = z.infer<typeof ThreadTimelinePageSchema>
 
 /**
  * The generic thread PATCH endpoint only owns the archival visibility
@@ -349,6 +341,8 @@ export const DesignCloneOperationSchema = z.object({
 export type DesignCloneOperation = z.infer<typeof DesignCloneOperationSchema>
 
 export const ThreadSchemaBase = z.object({
+  /** Host-owned Rooms execution provenance and frozen capability ceiling. */
+  roomContext: RoomThreadContextSchema.optional(),
   id: z.string().min(1),
   /** Internal optimistic-concurrency version; defaults for legacy records. */
   revision: z.number().int().nonnegative().optional(),

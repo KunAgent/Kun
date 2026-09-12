@@ -47,6 +47,9 @@ export const RoomSchema = z.object({
   id: RoomIdSchema,
   name: z.string().trim().min(1).max(120),
   description: z.string().max(8000).default(''),
+  collaborationMode: z.enum(['autonomous', 'directed']).default('autonomous'),
+  maxDiscussionRounds: z.number().int().min(1).max(3).default(3),
+  maxConcurrentTasks: z.number().int().min(1).max(2).default(2),
   pinned: z.boolean().default(false),
   archivedAt: Timestamp.optional(),
   defaultMemberId: RoomIdSchema,
@@ -82,6 +85,7 @@ export type Room = z.infer<typeof RoomSchema>
 
 export const SendRoomMessageSchema = z.object({
   clientRequestId: RoomIdSchema,
+  executionIntent: z.enum(['auto', 'discussion', 'execute']).default('auto'),
   body: z.string().max(64000),
   mentionMemberIds: UniqueIds.default([]),
   replyToMessageId: RoomIdSchema.optional(),

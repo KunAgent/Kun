@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ROOM_ENDPOINTS, ROOM_TASK_ACTIONS } from '../../../shared/rooms-api'
 import {
   KUN_ATTACHMENT_CONTENT_TEMPLATE,
   KUN_ATTACHMENT_DIAGNOSTICS_TEMPLATE,
@@ -187,6 +188,15 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  compileEndpoint(ROOM_ENDPOINTS.list, ['GET', 'POST']),
+  compileEndpoint(ROOM_ENDPOINTS.presets, ['GET']),
+  compileEndpoint(ROOM_ENDPOINTS.room, ['GET', 'PATCH']),
+  compileEndpoint(ROOM_ENDPOINTS.messages, ['GET', 'POST']),
+  compileEndpoint(ROOM_ENDPOINTS.tasks, ['GET']),
+  compileEndpoint(ROOM_ENDPOINTS.task, ['GET']),
+  compileEndpoint(ROOM_ENDPOINTS.events, ['GET']),
+  compileEndpoint(ROOM_ENDPOINTS.rules, ['GET', 'POST']),
+  ...ROOM_TASK_ACTIONS.map((action) => compileEndpoint(`${ROOM_ENDPOINTS.task}/${action}`, ['POST'])),
   compileEndpoint(KUN_HEALTH_TEMPLATE, ['GET']),
   compileEndpoint(KUN_RUNTIME_INFO_TEMPLATE, ['GET']),
   compileEndpoint(KUN_RUNTIME_TOOLS_TEMPLATE, ['GET']),

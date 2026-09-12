@@ -95,7 +95,7 @@ export function WorkbenchLeftSidebar({
   onNewConversation,
   onBeginResize
 }: WorkbenchLeftSidebarProps): ReactElement | null {
-  if (collapsed) return null
+  if (collapsed || route === 'rooms') return null
   const normalizedRoute = normalizeWorkbenchRoute(route)
   return (
     <>

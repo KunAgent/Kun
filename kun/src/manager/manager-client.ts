@@ -110,6 +110,11 @@ export class ManagerResourceLeaseClient {
     private readonly instanceId: string
   ) {}
 
+  getFence(resource: string): ManagerResourceFence | undefined {
+    const state = this.resources.get(resource)
+    return state?.held && state.fence ? { ...state.fence } : undefined
+  }
+
   async maintain(input: {
     resource: string
     onAcquired: () => void | Promise<void>

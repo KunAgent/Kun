@@ -6,23 +6,25 @@ import {
   type KeyboardEvent,
   type ReactElement
 } from 'react'
-import { Briefcase, Check, ChevronDown, Code2 } from 'lucide-react'
+import { Briefcase, Check, ChevronDown, Code2, MessagesSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 type Props = {
-  activeView: 'chat' | 'write' | 'design' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
+  activeView: 'chat' | 'write' | 'rooms' | 'design' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
   onCodeOpen: () => void
   onWriteOpen: () => void
+  onRoomsOpen?: () => void
   disabled?: boolean
   disabledReason?: string
 }
 
-type WorkspaceMode = 'chat' | 'write'
+type WorkspaceMode = 'chat' | 'write' | 'rooms'
 
 export function WorkspaceModeTabs({
   activeView,
   onCodeOpen,
   onWriteOpen,
+  onRoomsOpen = () => { void import('../../store/chat-store').then(({ useChatStore }) => useChatStore.getState().setRoute('rooms')) },
   disabled = false,
   disabledReason
 }: Props): ReactElement {
@@ -33,7 +35,7 @@ export function WorkspaceModeTabs({
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const pendingFocusIndexRef = useRef<number | null>(null)
   const menuId = useId()
-  const selectedMode: WorkspaceMode = activeView === 'write' ? 'write' : 'chat'
+  const selectedMode: WorkspaceMode = activeView === 'write' || activeView === 'rooms' ? activeView : 'chat'
   const options = [
     {
       id: 'write' as const,
@@ -48,6 +50,13 @@ export function WorkspaceModeTabs({
       description: t('workspaceModeCodeDescription'),
       Icon: Code2,
       onSelect: onCodeOpen
+    },
+    {
+      id: 'rooms' as const,
+      label: t('roomsLabel'),
+      description: t('roomsDescription'),
+      Icon: MessagesSquare,
+      onSelect: onRoomsOpen
     }
   ]
   const selectedOption = options.find((option) => option.id === selectedMode) ?? options[0]
@@ -134,7 +143,7 @@ export function WorkspaceModeTabs({
         data-workspace-mode-trigger
         data-workspace-mode={selectedMode}
         data-cursor-spotlight-target
-        aria-label={`${t('code')} / ${t('workspaceModeWorkLabel')}`}
+        aria-label={`${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('roomsLabel')}`}
         aria-haspopup="menu"
         aria-controls={menuId}
         aria-expanded={open}
@@ -163,7 +172,7 @@ export function WorkspaceModeTabs({
         <div
           id={menuId}
           role="menu"
-          aria-label={`${t('code')} / ${t('workspaceModeWorkLabel')}`}
+          aria-label={`${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('roomsLabel')}`}
           className="workspace-mode-menu ds-no-drag absolute left-0 top-[calc(100%+6px)] z-50 w-[248px] max-w-[calc(100vw-32px)] rounded-xl border border-[var(--ds-border-strong)] p-1.5"
         >
           {options.map(({ id, label, description, Icon }, index) => {

@@ -35,6 +35,7 @@ import type {
   ResolvedTurnAttachments
 } from './turn-execution-types.js'
 import { collectTurnAttachmentIds } from './turn-steering-attachments.js'
+import { applyRoomToolPolicy, mergeRoomDeniedIds } from './room-turn-policy.js'
 
 const EMPTY_SKILL_RESOLUTION: SkillTurnResolution = {
   activeSkillIds: [],
@@ -112,15 +113,16 @@ export class TurnContextResolver {
     const workspace = input.thread.workspace
     const clientSurface = resolveTurnClientSurface(input.turn)
     const approvalPolicy = normalizeApprovalPolicy(
-      input.turn.approvalPolicy ?? input.thread.approvalPolicy
+      input.thread.roomContext ? input.thread.approvalPolicy : input.turn.approvalPolicy ?? input.thread.approvalPolicy
     )
     const sandboxMode = normalizeSandboxMode(
-      input.turn.sandboxMode ?? input.thread.sandboxMode
+      input.thread.roomContext ? input.thread.sandboxMode : input.turn.sandboxMode ?? input.thread.sandboxMode
     )
     const approvalReviewer = normalizeApprovalReviewer(
-      input.turn.approvalReviewer ?? input.thread.approvalReviewer
+      input.thread.roomContext ? input.thread.approvalReviewer : input.turn.approvalReviewer ?? input.thread.approvalReviewer
     )
-    const memoryStore = this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    const memoryStore = input.thread.roomContext ? undefined : this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    const blockedSkillIds = mergeRoomDeniedIds(this.deps.blockedSkillIds, input.thread.roomContext?.blockedSkillIds)
     // These inputs are independent snapshots. Resolve their filesystem/store
     // I/O together so model dispatch pays the slowest branch, not their sum.
     const [attachments, skillResolution, instructionResolution, memories] = await Promise.all([
@@ -130,13 +132,13 @@ export class TurnContextResolver {
         workspace,
         modelCapabilities: input.modelCapabilities
       }),
-      this.deps.skillRuntime?.resolveTurn({
+      (input.thread.roomContext?.skillsEnabled === false ? undefined : this.deps.skillRuntime)?.resolveTurn({
         prompt: input.turn.prompt,
         workspace,
         threadId: input.threadId,
         turnId: input.turnId,
         ...(this.deps.allowedSkillIds ? { allowedSkillIds: this.deps.allowedSkillIds } : {}),
-        ...(this.deps.blockedSkillIds ? { blockedSkillIds: this.deps.blockedSkillIds } : {})
+        ...(blockedSkillIds.length ? { blockedSkillIds } : {})
       }) ?? Promise.resolve(EMPTY_SKILL_RESOLUTION),
       this.deps.instructionRuntime?.resolveTurn({ workspace }) ??
         Promise.resolve(EMPTY_INSTRUCTION_RESOLUTION),
@@ -168,10 +170,10 @@ export class TurnContextResolver {
         input.mode.dedicatedSvgTurn ? undefined : skillResolution.allowedToolNames,
         activeGoalInstruction !== null
       ),
-      forcedAllowedToolNames
+      intersectAllowedToolNames(forcedAllowedToolNames, input.thread.roomContext?.allowedToolNames)
     )
     const userInputDisabled = input.turn.disableUserInput === true
-    const toolDiscoveryContext = createToolDiscoveryContext({
+    const toolDiscoveryContext = applyRoomToolPolicy(createToolDiscoveryContext({
       threadId: input.threadId,
       turnId: input.turnId,
       workspace,
@@ -216,7 +218,7 @@ export class TurnContextResolver {
       ...(this.deps.fastContextScopeId ? { fastContextScopeId: this.deps.fastContextScopeId } : {}),
       ...(this.deps.fastContextTaskCount ? { fastContextTaskCount: this.deps.fastContextTaskCount } : {}),
       interactiveToolBridge: this.deps.interactiveToolBridge
-    })
+    }), input.thread)
     const tools = await listModelTools(
       this.deps.toolHost,
       modelToolDiscoveryContexts(toolDiscoveryContext)

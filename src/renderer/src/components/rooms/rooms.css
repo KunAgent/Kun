@@ -1,0 +1,12 @@
+/* Preserve the native window controls when a room replaces the Code sidebar. */
+@media (max-width: 767px) {
+  .rooms-main-titlebar {
+    padding-left: calc(var(--ds-window-controls-safe-inset, 0px) + 1rem);
+  }
+}
+
+@media (max-width: 1279px) {
+  .rooms-detail-titlebar {
+    padding-left: calc(var(--ds-window-controls-safe-inset, 0px) + 1rem);
+  }
+}

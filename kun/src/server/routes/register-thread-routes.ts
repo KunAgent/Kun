@@ -225,6 +225,9 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/goal', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     return setThreadGoal(runtime.threadService, ctx.params.id, request)
   })
   router.add('DELETE', '/v1/threads/:id/goal', async (request, ctx) => {
@@ -259,6 +262,9 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/turns', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     return startTurn(
       runtime.turnService,
       ctx.params.id,
@@ -271,6 +277,9 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/rewind', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     return rewindThread(runtime.turnService, ctx.params.id, request)
   })
   router.add('POST', '/v1/threads/:id/turns/:turnId/cancel-queued', async (request, ctx) => {
@@ -283,6 +292,9 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/queue/resume', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     return resumeQueuedTurns(runtime.turnService, ctx.params.id, (threadId, turnId) => {
       runtime.runTurn(threadId, turnId)
     })
@@ -295,6 +307,9 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/review', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     if (!runtime.reviewService || !runtime.runReview) {
       return ERRORS.unavailable('review is not available')
     }
@@ -322,6 +337,9 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/turns/:turnId/steer', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     const forwarded = await runtime.forwardThreadControl?.(request, ctx.params.id)
     if (forwarded) return forwarded
     return steerTurn(
@@ -365,6 +383,9 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/prune', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     return pruneThread(runtime.turnService, ctx.params.id, request)
   })
   router.add('POST', '/v1/threads/:id/prune/preview', async (request, ctx) => {
@@ -387,10 +408,16 @@ export function registerThreadRoutes(
   })
   router.add('POST', '/v1/threads/:id/snapshots/:snapshotId/restore', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     return restoreThreadSnapshot(runtime.turnService, ctx.params.id, ctx.params.snapshotId)
   })
   router.add('POST', '/v1/threads/:id/compact', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if ((await runtime.threadService.getMetadata(ctx.params.id))?.roomContext) {
+      return ERRORS.conflict('This execution belongs to a room. Use the room task controls to preserve its delivery and execution state.')
+    }
     return compactTurn(runtime.turnService, ctx.params.id, request)
   })
   router.add('GET', '/v1/threads/:id/events', async (request, ctx) => {
