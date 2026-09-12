@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { RoomMember, RoomMessage } from '../contracts/rooms.js'
 import { RoomTaskSchema } from '../contracts/room-tasks.js'
+import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import { RoomCoordinationPlanSchema, parseRoomJson, roomCoordinationPrompt } from './room-coordination-plan.js'
 import { ensureRoomThread, enqueueRoomTurn, observeRoomTurn } from './room-execution.js'
 import { putRoomDocument, RoomService } from './room-service.js'
@@ -16,11 +17,27 @@ export class RoomRequestRunner {
   async tick(row: RoomStoredDocument<RoomRequestState>): Promise<void> {
     const request = structuredClone(row.value)
     const room = request.roomSnapshot
+    const referenced = request.message.taskId ? await this.referenced(request) : undefined
     const route = resolveRoomRecipients({ room, message: request.message,
-      ...(request.message.taskId ? { referencedTask: await this.referenced(request) } : {}) })
+      ...(referenced ? { referencedTask: referenced.task } : {}) })
     if (route.kind === 'clarify') return this.finish(row, 'needs_input', route.reason)
-    if (request.message.taskId) return this.amend(row)
     if (request.stage === 'discuss') return this.discuss(row)
+    if (referenced) {
+      if (request.message.repositoryId && request.message.repositoryId !== referenced.task.repositoryId) {
+        return this.finish(row, 'needs_input', '任务已绑定其他仓库，请移除仓库选择或另发新任务。')
+      }
+      if (request.message.executionIntent === 'execute') return this.amend(row)
+      if (!request.referencedTask) {
+        const delivery = referenced.task.latestDeliveryId
+          ? (await this.deps.store.get<RoomDelivery>('delivery', referenced.task.latestDeliveryId))?.value : undefined
+        request.referencedTask = { task: referenced.task, requirement: referenced.prompt, delivery,
+          diffExcerpt: delivery ? (await this.deps.store.get<string>('artifact', delivery.diffArtifactId))?.value.slice(0, 64000) : undefined }
+        if (request.message.executionIntent === 'discussion') {
+          this.startDiscussion(request, route.memberIds)
+        }
+        return this.save(row, request)
+      }
+    }
     const coordinator = room.members.find((member) => member.id === room.defaultMemberId)!
     const recent = await this.deps.store.list<RoomMessage>('message', { roomId: room.id, limit: 30,
       beforeSeq: (await this.deps.store.get('message', request.sourceMessageId))?.seq })
@@ -43,6 +60,7 @@ export class RoomRequestRunner {
     const plan = RoomCoordinationPlanSchema.parse(parseRoomJson(observed.text))
     if (plan.kind === 'execute') {
       if (request.message.executionIntent === 'discussion') throw new Error('discussion cannot authorize execution')
+      if (request.message.taskId) return this.amend(row)
       if (!plan.assignments.length) throw new Error('execution plan has no assignments')
       const seen = new Set<string>()
       const prepared: Array<{ execution: RoomTaskExecution; workspace: RoomWorkspace }> = []
@@ -80,15 +98,13 @@ export class RoomRequestRunner {
       return this.finish(row, 'completed', plan.response)
     }
     const addressedAnswer = plan.kind === 'answer' && (request.round ?? 0) === 0 &&
-      request.message.mentionMemberIds.length > 0
+      (request.message.mentionMemberIds.length > 0 || Boolean(request.message.taskId))
     if ((plan.kind === 'discussion' || addressedAnswer) && (request.round ?? 0) < room.maxDiscussionRounds) {
-      const participants = room.collaborationMode === 'directed' || addressedAnswer ? route.memberIds : plan.participants
+      const participants = room.collaborationMode === 'directed' || addressedAnswer || request.message.taskId
+        ? route.memberIds : plan.participants
       if (!participants.length || participants.some((id) => !room.members.some((member) =>
         member.id === id && member.enabled && !member.removedAt))) throw new Error('invalid discussion participants')
-      request.discussions = [...new Set(participants)].map((memberId) => ({
-        memberId, threadId: 'room-member-' + request.id + '-' + (request.round ?? 0) + '-' + memberId
-      }))
-      request.stage = 'discuss'
+      this.startDiscussion(request, participants)
       return this.save(row, request)
     }
     return this.finish(row, plan.kind === 'clarify' ? 'needs_input' : 'completed',
@@ -100,15 +116,24 @@ export class RoomRequestRunner {
     for (const discussion of request.discussions ?? []) {
       if (discussion.response !== undefined) continue
       const member = request.roomSnapshot.members.find((member) => member.id === discussion.memberId)!
-      const repository = request.roomSnapshot.repositories.find((repo) => repo.id === member.defaultRepositoryId &&
-        member.allowedRepositoryIds.includes(repo.id))
+      const selectedRepositoryId = request.message.repositoryId ?? request.referencedTask?.task.repositoryId ?? member.defaultRepositoryId
+      const resolved = selectedRepositoryId ? resolveRoomRepository({ room: request.roomSnapshot,
+        memberId: member.id, explicitRepositoryId: selectedRepositoryId }) : undefined
+      if (resolved && !resolved.ok) return this.finish(row, 'needs_input', resolved.reason)
+      const repository = resolved?.ok ? request.roomSnapshot.repositories.find((repo) => repo.id === resolved.repositoryId) : undefined
       await ensureRoomThread(this.deps, { id: discussion.threadId, roomId: request.roomId, member,
-        kind: 'discussion', workspace: repository?.canonicalRoot })
+        kind: 'discussion', workspace: request.referencedTask ? undefined : repository?.canonicalRoot })
       if (!discussion.turnId) {
         discussion.turnId = await enqueueRoomTurn(this.deps, discussion.threadId,
           'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id,
           ['Participate as this room member. Discuss or inspect read-only. Do not implement or run commands.',
-            JSON.stringify({ member, request: request.message, priorResponses: request.discussions })].join('\n'),
+            ...(request.referencedTask ? [
+              'This task-reference reply has only the frozen requirement, task state and delivery evidence below; the task repository is not mounted here.',
+              'Do not inspect an unrelated repository or claim fresh code inspection. The diff excerpt may be incomplete. State insufficient evidence and request a formal review when needed.',
+              'Answer the question without treating it as an amendment or authorization for implementation.'
+            ] : []),
+            JSON.stringify({ member, request: request.message, referencedTask: request.referencedTask,
+              priorResponses: request.discussions })].join('\n'),
           request.message.attachmentIds)
         return this.save(row, request)
       }
@@ -122,7 +147,7 @@ export class RoomRequestRunner {
       return this.save(row, request)
     }
     request.round = (request.round ?? 0) + 1
-    if (request.roomSnapshot.collaborationMode === 'directed') {
+    if (request.roomSnapshot.collaborationMode === 'directed' || request.message.taskId) {
       request.status = 'completed'
       return this.save(row, request)
     }
@@ -178,7 +203,14 @@ export class RoomRequestRunner {
 
   private async referenced(request: RoomRequestState) {
     const found = await this.deps.store.get<RoomTaskExecution>('task', request.message.taskId!)
-    return found?.roomId === request.roomId ? found.value.task : undefined
+    return found?.roomId === request.roomId ? found.value : undefined
+  }
+
+  private startDiscussion(request: RoomRequestState, participants: string[]) {
+    request.discussions = [...new Set(participants)].map((memberId) => ({
+      memberId, threadId: 'room-member-' + request.id + '-' + (request.round ?? 0) + '-' + memberId
+    }))
+    request.stage = 'discuss'
   }
 
   private async amend(row: RoomStoredDocument<RoomRequestState>) {
@@ -186,6 +218,9 @@ export class RoomRequestRunner {
     const taskRow = await this.deps.store.get<RoomTaskExecution>('task', request.message.taskId!)
     if (!taskRow || taskRow.roomId !== request.roomId) throw new Error('task not found')
     const execution = structuredClone(taskRow.value)
+    if (execution.task.applicationStatus === 'applying') {
+      return this.finish(row, 'needs_input', '请先恢复或核对正在应用的交付版本，再补充执行要求。')
+    }
     if (execution.task.status === 'stopping') {
       return this.finish(row, 'needs_input', '任务正在停止，请等待执行器确认后补充要求。')
     }
@@ -204,6 +239,7 @@ export class RoomRequestRunner {
         { model: config.model, providerId: config.providerId } : this.deps.model())
       execution.reviewer = { ...reviewer, modelRef: { ...binding, providerId: binding.providerId ?? 'default' } }
       execution.reviewerConfiguration = config ?? null
+      execution.reviewRequest = { body: request.message.body, attachmentIds: [...request.message.attachmentIds] }
       if (execution.task.latestDeliveryId && !['queued', 'running', 'stopping', 'needs_approval'].includes(execution.task.status)) {
         execution.task.stage = 'review'
         execution.task.status = 'running'

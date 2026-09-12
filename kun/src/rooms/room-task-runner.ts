@@ -10,6 +10,7 @@ import { createRoomDelivery, prepareRoomReviewWorktree, assertRoomTaskWorkspace 
 import { parseRoomJson } from './room-coordination-plan.js'
 import { captureRoomVerification } from './room-verification.js'
 import { resolveRoomDependencies, materializeRoomDependencies } from './room-task-dependencies.js'
+import { roomTaskActivity, stopRoomTaskTurn } from './room-task-activity.js'
 
 export class RoomTaskRunner {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
@@ -17,7 +18,17 @@ export class RoomTaskRunner {
   async tick(row: RoomStoredDocument<RoomTaskExecution>, allowStart: boolean): Promise<void> {
     const execution = structuredClone(row.value)
     const { task } = execution
-    if (['completed', 'awaiting_acceptance', 'cancelled', 'failed', 'recovery_required'].includes(task.status)) return
+    if (['completed', 'awaiting_acceptance', 'cancelled', 'failed'].includes(task.status)) return
+    if (task.status === 'recovery_required') {
+      const activity = await roomTaskActivity(this.deps, execution)
+      // Only resume observing an identified live turn. An unknown or terminal
+      // execution stays available for explicit recovery, never fresh admission.
+      if (activity.state !== 'active') return
+      if (task.stage === 'review') execution.reviewTurnId = activity.turnId
+      else execution.turnId = activity.turnId
+      task.status = activity.status!
+      return this.save(row, execution)
+    }
     if (task.status === 'waiting_dependency') {
       const dependencies = await resolveRoomDependencies(this.deps, execution)
       if (!dependencies) return
@@ -80,15 +91,14 @@ export class RoomTaskRunner {
     if (!execution.turnId) return
     const observed = await observeRoomTurn(this.deps, task.executionThreadId, execution.turnId)
     if (observed.status === 'queued') {
-      if (task.status === 'stopping') await this.deps.turns.cancelQueuedTurn({
-        threadId: task.executionThreadId, turnId: execution.turnId })
+      if (task.status === 'stopping') await stopRoomTaskTurn(this.deps, task.executionThreadId, execution.turnId)
       return
     }
     if (observed.status === 'running') {
       if (observed.text) await this.service.publish(task.roomId, `progress-${task.id}-${execution.attempt}`,
         observed.text, task.ownerMemberId, task.id)
       if (task.status === 'stopping') {
-        await this.deps.turns.interruptTurn({ threadId: task.executionThreadId, turnId: execution.turnId })
+        await stopRoomTaskTurn(this.deps, task.executionThreadId, execution.turnId)
         return
       }
       const next = this.deps.approvals.pending(task.executionThreadId).length ? 'needs_approval' :
@@ -143,6 +153,7 @@ export class RoomTaskRunner {
       passed ? 'partial' : 'failed'
     if (execution.reviewer) {
       task.stage = 'review'
+      task.status = 'running'
       execution.reviewThreadId = 'room-review-' + task.id + '-' + execution.attempt
       return this.save(row, execution)
     }
@@ -186,9 +197,9 @@ export class RoomTaskRunner {
           'Review this immutable delivered version read-only. Return ONE JSON object only:',
           '{"verdict":"passed"|"changes_requested","findings":[{"severity":"blocking"|"major"|"minor","file"?:string,"line"?:number,"description":string}],"limitations":string[]}.',
           'Never claim tests ran if you only inspected code. Identify concrete defects.',
-          JSON.stringify({ requirement: execution.prompt, delivery,
+          JSON.stringify({ requirement: execution.prompt, userReviewRequest: execution.reviewRequest?.body, delivery,
             diff: (await this.deps.store.get<string>('artifact', delivery.diffArtifactId))?.value })
-        ].join('\n'))
+        ].join('\n'), execution.reviewRequest?.attachmentIds ?? [])
       task.status = 'running'
       task.latestProgress = '正在评审交付版本 ' + delivery.versionHash.slice(0, 8)
       return this.save(row, execution)
@@ -196,10 +207,16 @@ export class RoomTaskRunner {
     const observed = await observeRoomTurn(this.deps, execution.reviewThreadId!, execution.reviewTurnId)
     if (observed.status === 'running' || observed.status === 'queued') {
       if (task.status === 'stopping') {
-        if (observed.status === 'queued') {
-          await this.deps.turns.cancelQueuedTurn({ threadId: execution.reviewThreadId!, turnId: execution.reviewTurnId })
-        } else {
-          await this.deps.turns.interruptTurn({ threadId: execution.reviewThreadId!, turnId: execution.reviewTurnId })
+        await stopRoomTaskTurn(this.deps, execution.reviewThreadId!, execution.reviewTurnId)
+      } else {
+        const next = observed.status === 'queued' ? 'queued' :
+          this.deps.approvals.pending(execution.reviewThreadId!).length ? 'needs_approval' :
+          this.deps.inputs.pending(execution.reviewThreadId!).length ? 'needs_input' : 'running'
+        if (task.status !== next) {
+          task.status = next
+          task.latestProgress = next === 'needs_approval' || next === 'needs_input' ?
+            '请打开评审任务处理待授权或补充信息。' : '正在评审交付版本 ' + delivery.versionHash.slice(0, 8)
+          await this.save(row, execution)
         }
       }
       return
@@ -256,7 +273,8 @@ export class RoomTaskRunner {
     const current = await this.deps.store.get<RoomTaskExecution>('task', row.id)
     if (!current || current.revision !== row.revision) return
     const execution = structuredClone(row.value)
-    execution.task.status = 'recovery_required'
+    // A failed cancellation transport does not withdraw the user's stop intent.
+    if (execution.task.status !== 'stopping') execution.task.status = 'recovery_required'
     execution.task.latestProgress = error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000)
     await this.save(row, execution)
   }

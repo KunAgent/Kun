@@ -5,7 +5,8 @@ import { RoomRequestRunner } from './room-request-runner.js'
 import { RoomTaskRunner } from './room-task-runner.js'
 import { roomTaskAction } from './room-task-actions.js'
 import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
-import type { RoomStore } from './room-store.js'
+import type { RoomStore, RoomStoredDocument } from './room-store.js'
+import { roomTaskActivity } from './room-task-activity.js'
 
 export class RoomRuntime {
   readonly service: RoomService
@@ -59,12 +60,13 @@ export class RoomRuntime {
     if (!row || row.roomId !== roomId) throw new Error('task not found')
     const task = { ...row.value.task, revision: row.revision }
     const delivery = task.latestDeliveryId ? (await this.deps.store.get<RoomDelivery>('delivery', task.latestDeliveryId))?.value : undefined
+    const controlThreadId = task.stage === 'review' ? row.value.reviewThreadId : task.executionThreadId
     return { task, delivery, workspace: (await this.deps.store.get<RoomWorkspace>('workspace', task.workspaceId))?.value,
       reviews: (await this.deps.store.list<RoomReview>('review', { taskId, limit: 100 })).map((row) => row.value),
       diff: delivery ? (await this.deps.store.get<string>('artifact', delivery.diffArtifactId))?.value : undefined,
-      controlThreadId: task.stage === 'review' ? row.value.reviewThreadId : task.executionThreadId,
-      approvals: this.deps.approvals.pending(task.executionThreadId),
-      userInputs: this.deps.inputs.pending(task.executionThreadId) }
+      controlThreadId,
+      approvals: controlThreadId ? this.deps.approvals.pending(controlThreadId) : [],
+      userInputs: controlThreadId ? this.deps.inputs.pending(controlThreadId) : [] }
   }
   async listRooms(input: { cursor?: string; archivedOnly?: boolean; limit: number }) {
     const page = await this.service.store.listRooms(input)
@@ -93,31 +95,52 @@ export class RoomRuntime {
           { ...row.value, status: 'failed', error: message }, row)
       }
     }
-    const taskRows = await this.deps.store.list<RoomTaskExecution>('task', {
-      status: ['queued', 'waiting_dependency', 'running', 'needs_input', 'needs_approval', 'stopping'],
-      limit: 1000, order: 'asc' })
+    const taskRows: RoomStoredDocument<RoomTaskExecution>[] = []
+    for (;;) {
+      const page = await this.deps.store.list<RoomTaskExecution>('task', {
+        status: ['queued', 'waiting_dependency', 'running', 'needs_input', 'needs_approval', 'stopping', 'recovery_required'],
+        limit: 1000, order: 'asc', afterSeq: taskRows.at(-1)?.seq })
+      taskRows.push(...page)
+      if (page.length < 1000) break
+    }
     const activeTurn = (execution: RoomTaskExecution) => execution.task.stage === 'review' ?
       execution.completedReviewRunId === execution.reviewThreadId ? undefined : execution.reviewTurnId : execution.turnId
     const actingMember = (execution: RoomTaskExecution) => execution.task.stage === 'review' ?
       execution.reviewer?.id ?? execution.task.ownerMemberId : execution.task.ownerMemberId
-    let occupied = taskRows.filter((row) => activeTurn(row.value) &&
-      ['queued', 'running', 'needs_input', 'needs_approval', 'stopping'].includes(row.value.task.status)).length
-    const busyMembers = new Set(taskRows.filter((row) => activeTurn(row.value) &&
-      ['queued', 'running', 'needs_input', 'needs_approval', 'stopping'].includes(row.value.task.status))
-      .map((row) => row.roomId + ':' + actingMember(row.value)))
+    let occupied = 0
+    const busyMembers = new Set<string>()
+    const occupiedTasks = new Set<string>()
+    for (const row of taskRows) {
+      const execution = row.value
+      const uncertain = execution.task.status === 'recovery_required' ||
+        (!activeTurn(execution) && execution.task.status !== 'waiting_dependency')
+      const isOccupied = uncertain ? (await roomTaskActivity(this.deps, execution)).state !== 'idle' :
+        Boolean(activeTurn(execution))
+      if (!isOccupied) continue
+      occupied += 1
+      occupiedTasks.add(row.id)
+      busyMembers.add(row.roomId + ':' + actingMember(execution))
+    }
     for (const row of taskRows) {
       if (this.stopped) return
-      if (row.value.task.status === 'needs_input' && row.value.task.stage === 'review') continue
+      if (row.value.task.status === 'needs_input' && row.value.task.stage === 'review' &&
+        row.value.completedReviewRunId && row.value.completedReviewRunId === row.value.reviewThreadId) continue
       const member = row.roomId + ':' + actingMember(row.value)
       const canStart = occupied < 2 && !busyMembers.has(member)
       try {
         await this.tasks.tick(row, canStart)
-        if (canStart && !activeTurn(row.value) &&
-          (row.value.task.status === 'queued' || row.value.task.stage === 'review')) {
-          occupied += 1
-          busyMembers.add(member)
-        }
       } catch (error) { await this.tasks.fail(row, error) }
+      if (canStart && !occupiedTasks.has(row.id)) {
+        // Admission can succeed before saving its receipt fails. Reconcile the
+        // original identity before allowing a later task to use this slot.
+        const current = await this.deps.store.get<RoomTaskExecution>('task', row.id)
+        const execution = current?.value ?? row.value
+        if ((await roomTaskActivity(this.deps, execution)).state !== 'idle') {
+          occupied += 1
+          occupiedTasks.add(row.id)
+          busyMembers.add(row.roomId + ':' + actingMember(execution))
+        }
+      }
     }
   }
 }

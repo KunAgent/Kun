@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { chmod, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { Database } from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import {
   RoomDocumentKindSchema,
@@ -35,7 +35,7 @@ type EventRow = { seq: number; room_id: string; kind: string; payload: string; c
 
 /** Only Service Manager opens the canonical database; tests may use an isolated path. */
 export class SqliteRoomStore implements RoomStore {
-  private opening: Promise<Database> | undefined
+  private opening: Promise<DatabaseSync> | undefined
   private closed = false
 
   constructor(private readonly input: { path: string }) {}
@@ -131,7 +131,7 @@ export class SqliteRoomStore implements RoomStore {
     const fingerprint = parsed.fingerprint ?? createHash('sha256')
       .update(JSON.stringify(canonical(parsed))).digest('hex')
     const db = await this.database()
-    return db.transaction(() => {
+    return immediateTransaction(db, () => {
       assertCurrent?.()
       // Deduplication precedes CAS: a lost response must replay its original result.
       const prior = this.requestRow(db, parsed.requestId)
@@ -193,7 +193,7 @@ export class SqliteRoomStore implements RoomStore {
       db.prepare('INSERT INTO room_requests (id, fingerprint, result, events) VALUES (?, ?, ?, ?)')
         .run(parsed.requestId, fingerprint, JSON.stringify(result), JSON.stringify(events))
       return { duplicate: false, result, events }
-    }).immediate()
+    })
   }
 
   async close(): Promise<void> {
@@ -207,28 +207,27 @@ export class SqliteRoomStore implements RoomStore {
     if (this.closed) throw new Error('room store is closed')
   }
 
-  private requestRow(db: Database, requestId: string): RequestRow | undefined {
+  private requestRow(db: DatabaseSync, requestId: string): RequestRow | undefined {
     return db.prepare('SELECT fingerprint, result, events FROM room_requests WHERE id = ?')
       .get(requestId) as RequestRow | undefined
   }
 
-  private database(): Promise<Database> {
+  private database(): Promise<DatabaseSync> {
     if (this.closed) return Promise.reject(new Error('room store is closed'))
     return this.opening ??= this.open()
   }
 
-  private async open(): Promise<Database> {
+  private async open(): Promise<DatabaseSync> {
     await mkdir(dirname(this.input.path), { recursive: true, mode: 0o700 })
-    const { default: DatabaseConstructor } = await import('better-sqlite3')
-    const db = new DatabaseConstructor(this.input.path)
+    // Node >=22.19 and Electron's Node both provide this API. Unlike a native
+    // addon, its ABI always matches the process that owns canonical room data.
+    const db = new DatabaseSync(this.input.path)
     try {
       await chmod(this.input.path, 0o600)
-      if (Number(db.pragma('user_version', { simple: true })) > 1) {
+      if (Number(db.prepare('PRAGMA user_version').get()?.user_version) > 1) {
         throw new Error('room database was created by a newer Kun version')
       }
-      db.pragma('journal_mode = WAL')
-      db.pragma('synchronous = FULL')
-      db.pragma('busy_timeout = 5000')
+      db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000')
       db.exec(`
         CREATE TABLE IF NOT EXISTS room_documents (
           seq INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, id TEXT NOT NULL,
@@ -254,6 +253,18 @@ export class SqliteRoomStore implements RoomStore {
       db.close()
       throw error
     }
+  }
+}
+
+function immediateTransaction<T>(db: DatabaseSync, operation: () => T): T {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const value = operation()
+    db.exec('COMMIT')
+    return value
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
   }
 }
 

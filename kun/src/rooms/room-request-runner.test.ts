@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -131,7 +131,7 @@ describe('Room task amendments and incremental messages', () => {
     await putRoomDocument(f.store, 'task', task.id, f.room.id,
       { ...taskRow.value, task: { ...task, status: 'running' }, turnId: 'running-turn' }, taskRow, task.id)
     f.metadata.mockResolvedValue({ turns: [{ id: 'running-turn', status: 'running' }] })
-    const sent = await f.service.send(f.room.id, { clientRequestId: 'steer', body: 'Handle empty input', taskId: task.id })
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'steer', body: 'Handle empty input', taskId: task.id, executionIntent: 'execute' })
     const commit = f.store.commit.bind(f.store)
     let failCommit = true
     vi.spyOn(f.store, 'commit').mockImplementation(async (input) => {
@@ -164,7 +164,7 @@ describe('Room task amendments and incremental messages', () => {
       if (input.requestId.startsWith('amend-')) cancellationOrder.push('commit')
       return commit(input)
     })
-    const input = { clientRequestId: 'amend', body: 'Also handle empty input', taskId: task.id }
+    const input = { clientRequestId: 'amend', body: 'Also handle empty input', taskId: task.id, executionIntent: 'execute' }
     const sent = await f.service.send(f.room.id, input)
     expect(await f.service.send(f.room.id, input)).toEqual(sent)
     await f.tick(sent.requestId)
@@ -186,7 +186,7 @@ describe('Room task amendments and incremental messages', () => {
       { ...taskRow.value, turnId: 'old-queued-turn' }, taskRow, task.id)
     f.metadata.mockResolvedValue({ turns: [{ id: 'old-queued-turn', status: 'queued' }] })
     f.cancel.mockRejectedValueOnce(new Error('Queue is unavailable'))
-    const sent = await f.service.send(f.room.id, { clientRequestId: 'amend', body: 'More work', taskId: task.id })
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'amend', body: 'More work', taskId: task.id, executionIntent: 'execute' })
     await expect(f.tick(sent.requestId)).rejects.toThrow('Queue is unavailable')
     const unchanged = (await f.store.get<RoomTaskExecution>('task', task.id))!.value
     expect(unchanged.turnId).toBe('old-queued-turn')
@@ -206,5 +206,133 @@ describe('Room task amendments and incremental messages', () => {
     expect((await f.store.get<RoomMessage>('message', 'stream-message'))?.revision).toBe(updated.revision)
     expect(await f.store.list('message', { roomId: f.room.id })).toHaveLength(1)
     await expect(f.service.publish(f.room.id, 'stream-message', 'Different owner', 'reviewer')).rejects.toThrow('identity mismatch')
+  })
+
+  it.each(['discussion', 'auto'] as const)('keeps a completed task and its accepted delivery unchanged for a %s question', async (intent) => {
+    const f = await fixture()
+    const taskRow = await createTask(f)
+    const task = { ...taskRow.value.task, status: 'completed' as const, latestDeliveryId: 'delivery-one',
+      acceptedDeliveryId: 'delivery-one', applicationStatus: 'applied', verificationStatus: 'passed' }
+    await putRoomDocument(f.store, 'task', task.id, f.room.id, { ...taskRow.value, task }, taskRow, task.id)
+    const delivery = { id: 'delivery-one', taskId: task.id, versionHash: 'a'.repeat(40),
+      summary: 'Added empty input handling', diffArtifactId: 'diff-one' }
+    await putRoomDocument(f.store, 'delivery', delivery.id, f.room.id, delivery, null, task.id)
+    await putRoomDocument(f.store, 'artifact', 'diff-one', f.room.id, '+ if (!input) return null', null, task.id)
+    const before = await f.store.get('task', task.id)
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'question', body: 'What did this task change?',
+      taskId: task.id, executionIntent: intent })
+    await f.tick(sent.requestId)
+    if (intent === 'auto') {
+      await f.tick(sent.requestId)
+      expect(execution.enqueue.mock.calls.at(-1)?.[3]).toContain('A referenced task is context, not authorization')
+      await f.tick(sent.requestId)
+    }
+    await f.tick(sent.requestId)
+    expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion', member: { id: 'developer' } })
+    const prompt = execution.enqueue.mock.calls.at(-1)?.[3] as string
+    expect(prompt).toContain(delivery.versionHash)
+    expect(prompt).toContain(delivery.summary)
+    expect(prompt).toContain('+ if (!input) return null')
+    expect(prompt).toContain('the task repository is not mounted here')
+    expect(prompt).toContain('request a formal review when needed')
+    expect(execution.ensure.mock.calls.at(-1)?.[1].workspace).toBeUndefined()
+    execution.observe.mockResolvedValueOnce({ status: 'completed', text: 'The fixed delivery added empty input handling.' })
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    expect((await f.request(sent.requestId)).value.status).toBe('completed')
+    expect(await f.store.get('task', task.id)).toEqual(before)
+    expect(f.steer).not.toHaveBeenCalled()
+    expect(f.cancel).not.toHaveBeenCalled()
+  })
+
+  it('classifies a running task question without steering and uses the frozen task state in its reply', async () => {
+    const f = await fixture()
+    const taskRow = await createTask(f)
+    const task = { ...taskRow.value.task, status: 'running' as const, latestProgress: 'Still checking input' }
+    await putRoomDocument(f.store, 'task', task.id, f.room.id, { ...taskRow.value, task, turnId: 'live' }, taskRow, task.id)
+    f.metadata.mockResolvedValue({ turns: [{ id: 'live', status: 'running' }] })
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'progress', body: 'How is this going?', taskId: task.id })
+    await f.tick(sent.requestId)
+    const latest = (await f.store.get<RoomTaskExecution>('task', task.id))!
+    await putRoomDocument(f.store, 'task', task.id, f.room.id,
+      { ...latest.value, task: { ...task, latestProgress: 'Now finishing' } }, latest, task.id)
+    const before = await f.store.get('task', task.id)
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion' })
+    expect(execution.enqueue.mock.calls.at(-1)?.[3]).toContain('Still checking input')
+    expect(execution.enqueue.mock.calls.at(-1)?.[3]).not.toContain('Now finishing')
+    expect(f.steer).not.toHaveBeenCalled()
+    expect(f.cancel).not.toHaveBeenCalled()
+    expect(await f.store.get('task', task.id)).toEqual(before)
+  })
+
+  it('amends an automatic referenced request only after the coordinator classifies it as explicit execution', async () => {
+    const f = await fixture()
+    const taskRow = await createTask(f)
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'fix', body: 'Also handle empty input', taskId: taskRow.id })
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    expect(await f.store.get('task', taskRow.id)).toEqual(taskRow)
+    execution.observe.mockResolvedValueOnce({ status: 'completed', text: JSON.stringify({ kind: 'execute', response: 'Apply this additional requirement' }) })
+    await f.tick(sent.requestId)
+    const amended = (await f.store.get<RoomTaskExecution>('task', taskRow.id))!.value
+    expect(amended.task.requirementRevision).toBe(1)
+    expect(amended.prompt).toContain('Also handle empty input')
+    expect((await f.request(sent.requestId)).value.status).toBe('completed')
+  })
+
+  it('preserves an applying delivery receipt for recovery instead of starting an amendment', async () => {
+    const f = await fixture()
+    const taskRow = await createTask(f)
+    const task = { ...taskRow.value.task, status: 'completed' as const, latestDeliveryId: 'delivery-one',
+      acceptedDeliveryId: 'delivery-one', applicationStatus: 'applying' }
+    await putRoomDocument(f.store, 'task', task.id, f.room.id, { ...taskRow.value, task }, taskRow, task.id)
+    const before = await f.store.get('task', task.id)
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'more', body: 'Add another change',
+      taskId: task.id, executionIntent: 'execute' })
+    await f.tick(sent.requestId)
+    expect((await f.request(sent.requestId)).value.status).toBe('needs_input')
+    expect(await f.store.get('task', task.id)).toEqual(before)
+    expect(f.steer).not.toHaveBeenCalled()
+    expect(f.cancel).not.toHaveBeenCalled()
+  })
+
+  it.each(['execute', 'auto'] as const)('keeps a read-only reviewer question separate from %s formal review assignment', async (intent) => {
+    const f = await fixture()
+    const taskRow = await createTask(f)
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'review-question', body: 'What should we check?',
+      taskId: taskRow.id, mentionMemberIds: ['reviewer'], executionIntent: 'discussion' })
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion', member: { id: 'reviewer' } })
+    expect(await f.store.get('task', taskRow.id)).toEqual(taskRow)
+    const review = await f.service.send(f.room.id, { clientRequestId: 'review', body: 'Review only SQL injection risks',
+      taskId: taskRow.id, mentionMemberIds: ['reviewer'], executionIntent: intent, attachmentIds: ['review-spec'] })
+    await f.tick(review.requestId)
+    if (intent === 'auto') {
+      await f.tick(review.requestId)
+      execution.observe.mockResolvedValueOnce({ status: 'completed', text: JSON.stringify({ kind: 'execute', response: 'Review the existing delivery read-only' }) })
+      await f.tick(review.requestId)
+    }
+    const reviewed = (await f.store.get<RoomTaskExecution>('task', taskRow.id))!.value
+    expect(reviewed.reviewer?.id).toBe('reviewer')
+    expect(reviewed.reviewRequest).toEqual({ body: 'Review only SQL injection risks', attachmentIds: ['review-spec'] })
+  })
+
+  it('inspects an explicitly selected repository instead of the member default during discussion', async () => {
+    const f = await fixture('directed')
+    const distinctPath = join(f.root, 'other-repository')
+    await exec('git', ['clone', f.repo, distinctPath])
+    await f.service.update(f.room.id, { clientRequestId: 'repositories', expectedRevision: f.room.revision,
+      repositories: [{ id: 'repo', displayPath: f.repo }, { id: 'other', displayPath: distinctPath }],
+      members: f.room.members.map((member) => ({ ...member, allowedRepositoryIds: ['repo', 'other'] })) })
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'inspect', body: 'Explain this repository',
+      mentionMemberIds: ['developer'], repositoryId: 'other', executionIntent: 'discussion' })
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion', workspace: await realpath(distinctPath) })
   })
 })

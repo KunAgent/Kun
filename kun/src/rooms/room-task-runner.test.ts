@@ -3,7 +3,7 @@ import { promisify } from 'node:util'
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeFakeModel, makeHarness } from '../../tests/loop-test-harness.js'
 import { RoomTaskSchema } from '../contracts/room-tasks.js'
 import { type RoomDelivery, type RoomReview } from '../contracts/room-deliveries.js'
@@ -16,10 +16,17 @@ import { RoomTaskRunner } from './room-task-runner.js'
 import { observeRoomRepository, createRoomTaskWorktree } from './task-workspace-service.js'
 import { createRoomDelivery } from './room-delivery-service.js'
 import { ensureRoomThread } from './room-execution.js'
+import { FileAttachmentStore } from '../attachments/attachment-store.js'
+import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
+import { createApprovalRequest } from '../domain/approval.js'
+import { RoomRuntime } from './room-runtime.js'
 
 const exec = promisify(execFile)
 const cleanup: Array<() => Promise<void>> = []
-afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
+afterEach(async () => {
+  vi.restoreAllMocks()
+  for (const close of cleanup.splice(0).reverse()) await close()
+})
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'kun-room-runner-'))
@@ -34,7 +41,9 @@ async function fixture() {
   await git('-C', source, 'commit', '-m', 'baseline')
   const repository = await observeRoomRepository(source)
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
-  const h = makeHarness(makeFakeModel([{ kind: 'completed', stopReason: 'stop' }]))
+  const attachments = new FileAttachmentStore({ rootDir: join(root, 'attachments'),
+    config: DEFAULT_KUN_CAPABILITIES_CONFIG.attachments })
+  const h = makeHarness(makeFakeModel([{ kind: 'completed', stopReason: 'stop' }]), { attachmentStore: attachments })
   cleanup.push(async () => { await h.turns.interruptActiveTurns(); await store.close() })
   const deps: RoomRuntimeDeps = { store, threads: h.threads, threadStore: h.threadStore, turns: h.turns,
     sessions: h.sessionStore, approvals: h.approvalGate, inputs: h.userInputGate,
@@ -95,10 +104,99 @@ async function fixture() {
         findings: verdict === 'passed' ? [] : [{ severity: 'major', description: 'Repair the defect' }], limitations: [] }) }))
     return save(execution)
   }
-  return { root, source, repository, room, store, h, deps, service, runner, task, save, deliver, reviewed }
+  return { root, source, repository, room, store, h, deps, service, runner, task, save, deliver, reviewed, attachments }
 }
 
 describe('room dependency and review lifecycle', () => {
+  it('shows the active reviewer approval and observes completion after the gate is answered', async () => {
+    const f = await fixture()
+    const value = await f.task('approval')
+    await f.deliver(value.execution, value.workspace)
+    const row = await f.reviewed(value.execution, 'review-approval', 'passed')
+    const thread = (await f.h.threadStore.get('review-approval'))!
+    await f.h.threadStore.upsert({ ...thread, turns: thread.turns.map((turn) => ({ ...turn, status: 'running' as const })) })
+    const decision = f.h.approvalGate.request(createApprovalRequest({ id: 'review-approval-gate',
+      threadId: 'review-approval', turnId: 'review-approval-turn', toolName: 'web_fetch', summary: 'Read remote reference' }))
+    await f.runner.tick(row, false)
+    const detail = await new RoomRuntime(f.deps).taskDetail(f.room.id, value.execution.task.id)
+    expect(detail.task.status).toBe('needs_approval')
+    expect(detail.controlThreadId).toBe('review-approval')
+    expect(detail.approvals.map((approval) => approval.id)).toEqual(['review-approval-gate'])
+    f.h.approvalGate.decide('review-approval-gate', 'allow')
+    await decision
+    await f.h.threadStore.upsert(thread)
+    await f.runner.tick((await f.store.get<RoomTaskExecution>('task', value.execution.task.id))!, false)
+    expect((await f.store.get<RoomTaskExecution>('task', value.execution.task.id))?.value.task.status).toBe('awaiting_acceptance')
+  })
+
+  it('schedules review when a developer completes immediately after answering input, preserving review instructions', async () => {
+    const f = await fixture()
+    const value = await f.task('answered')
+    await f.deliver(value.execution, value.workspace)
+    value.execution.task.status = 'needs_input'
+    value.execution.reviewer = f.room.members.find((member) => member.id === 'reviewer')
+    const attachment = await f.attachments.create({ name: 'criteria.txt', mimeType: 'text/plain',
+      data: Buffer.from('Cancellation must preserve uncommitted changes.') })
+    value.execution.reviewRequest = { body: 'Focus on cancellation races and the attached acceptance criteria.',
+      attachmentIds: [attachment.id] }
+    const thread = await ensureRoomThread(f.deps, { id: value.execution.task.executionThreadId,
+      roomId: f.room.id, member: value.execution.task.memberSnapshot, kind: 'execution', workspace: value.workspace.path })
+    value.execution.turnId = 'answered-turn'
+    await f.h.threadStore.upsert({ ...thread, turns: [createTurnRecord({ id: 'answered-turn',
+      threadId: thread.id, prompt: 'Work', status: 'completed', clientRequestId: 'answered-attempt-1' })] })
+    await f.runner.tick(await f.save(value.execution), true)
+    const pendingReview = (await f.store.get<RoomTaskExecution>('task', 'answered'))!
+    expect(pendingReview.value.task).toMatchObject({ stage: 'review', status: 'running' })
+    await f.runner.tick(pendingReview, true)
+    const reviewed = (await f.store.get<RoomTaskExecution>('task', 'answered'))!.value
+    const admitted = await f.h.threads.getMetadata(reviewed.reviewThreadId!)
+    expect(admitted?.turns[0].prompt).toContain(value.execution.reviewRequest.body)
+    expect(admitted?.turns[0].attachmentIds).toEqual([attachment.id])
+    expect((await f.attachments.get(attachment.id))?.threadIds).toContain(reviewed.reviewThreadId)
+  })
+
+  it('cancels the same turn when queue promotion races cancellation', async () => {
+    const f = await fixture()
+    const value = await f.task('promotion')
+    const thread = await ensureRoomThread(f.deps, { id: value.execution.task.executionThreadId,
+      roomId: f.room.id, member: value.execution.task.memberSnapshot, kind: 'execution', workspace: value.workspace.path })
+    const admitted = await f.h.turns.enqueueTurn({ threadId: thread.id,
+      request: { prompt: 'Work', clientRequestId: 'promotion-attempt-1' } })
+    value.execution.turnId = admitted.turnId
+    value.execution.task.status = 'stopping'
+    vi.spyOn(f.h.turns, 'cancelQueuedTurn').mockImplementationOnce(async () => {
+      const current = (await f.h.threadStore.get(thread.id))!
+      await f.h.threadStore.upsert({ ...current, turns: current.turns.map((turn) =>
+        turn.id === admitted.turnId ? { ...turn, status: 'running' as const } : turn) })
+      throw new Error('turn is not queued: ' + admitted.turnId)
+    })
+    const interrupt = vi.spyOn(f.h.turns, 'interruptTurn')
+    await f.runner.tick(await f.save(value.execution), false)
+    expect(interrupt).toHaveBeenCalledWith({ threadId: thread.id, turnId: admitted.turnId })
+    await f.runner.tick((await f.store.get<RoomTaskExecution>('task', 'promotion'))!, false)
+    expect((await f.store.get<RoomTaskExecution>('task', 'promotion'))?.value.task.status).toBe('cancelled')
+  })
+
+  it('keeps a failed cancellation pending and retries until execution confirms termination', async () => {
+    const f = await fixture()
+    const value = await f.task('stop-retry')
+    const thread = await ensureRoomThread(f.deps, { id: value.execution.task.executionThreadId,
+      roomId: f.room.id, member: value.execution.task.memberSnapshot, kind: 'execution', workspace: value.workspace.path })
+    const admitted = await f.h.turns.enqueueTurn({ threadId: thread.id,
+      request: { prompt: 'Work', clientRequestId: 'stop-retry-attempt-1' } })
+    value.execution.turnId = admitted.turnId
+    value.execution.task.status = 'stopping'
+    const cancel = vi.spyOn(f.h.turns, 'cancelQueuedTurn').mockRejectedValue(new Error('temporary store failure'))
+    const row = await f.save(value.execution)
+    await expect(f.runner.tick(row, false)).rejects.toThrow('temporary store failure')
+    await f.runner.fail(row, new Error('temporary store failure'))
+    expect((await f.store.get<RoomTaskExecution>('task', 'stop-retry'))?.value.task.status).toBe('stopping')
+    cancel.mockRestore()
+    await f.runner.tick((await f.store.get<RoomTaskExecution>('task', 'stop-retry'))!, false)
+    await f.runner.tick((await f.store.get<RoomTaskExecution>('task', 'stop-retry'))!, false)
+    expect((await f.store.get<RoomTaskExecution>('task', 'stop-retry'))?.value.task.status).toBe('cancelled')
+  })
+
   it('freezes and materializes the predecessor version before dispatch, retaining source dirt and later parent repairs', async () => {
     const f = await fixture()
     const parent = await f.task('parent')

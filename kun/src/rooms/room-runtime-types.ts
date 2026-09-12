@@ -1,5 +1,6 @@
 import type { Room, RoomMember, SendRoomMessage } from '../contracts/rooms.js'
 import type { RoomTask } from '../contracts/room-tasks.js'
+import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import type { ThreadService } from '../services/thread-service.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -23,6 +24,7 @@ export type RoomRequestState = {
   round?: number
   stage?: 'coordinate' | 'discuss'
   discussions?: Array<{ memberId: string; threadId: string; turnId?: string; response?: string }>
+  referencedTask?: { task: RoomTask; requirement: string; delivery?: RoomDelivery; diffExcerpt?: string }
 }
 export type RoomWorkspace = {
   id: string
@@ -49,6 +51,7 @@ export type RoomTaskExecution = {
   completedReviewRunId?: string
   configuration: SubagentProfileConfig | null
   reviewerConfiguration?: SubagentProfileConfig | null
+  reviewRequest?: { body: string; attachmentIds: string[] }
   rulesSnapshot?: unknown[]
 }
 export type RoomRuntimeDeps = {

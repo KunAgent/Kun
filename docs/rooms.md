@@ -21,6 +21,11 @@ Use the structured member, repository and task selectors to route a request.
 Reply to a task to supplement it or select a reviewer. Missing or ambiguous
 targets require clarification. Attachments preserve their Runtime attachment
 identities and local file paths through the existing attachment bridge.
+Questions about a referenced task run in a separate read-only discussion.
+They use frozen task and delivery evidence and do not amend or steer execution.
+That evidence-only discussion does not mount the repository; request a formal
+review when source inspection is needed. Reviewer-specific instructions and
+attachments are retained for the actual review turn.
 
 Tasks keep their member/model/tool configuration and project-agreement snapshot.
 Changing room settings affects subsequent work. Fixed agreements come only from
@@ -58,6 +63,9 @@ Cancellation reports "stopping" until Runtime confirms termination. Retrying
 requires the old execution to have stopped. Room execution history cannot be
 rewritten, rebound, forked, deleted or independently resumed through generic
 thread controls. Use room actions to preserve its task lifecycle.
+Queue promotion races and temporary observation failures do not release an
+unconfirmed execution's concurrency slot. Review steps resume correctly after
+user input, and review approvals refer to the actual review thread.
 
 ## Persistence and recovery
 
@@ -67,6 +75,10 @@ SQLite transactions bind request deduplication, revision checks, document
 updates and replayable events. A fenced Manager resource lease elects one
 coordinator across Runtime flavors. Thread admission uses durable identities
 and the existing queued-turn dispatcher.
+Rooms uses [Node's built-in SQLite API](https://nodejs.org/api/sqlite.html),
+available in the supported Node and Electron versions, so the room database
+does not depend on a separately compiled addon ABI. The version-1 database
+schema, WAL mode, FULL synchronization and immediate transactions are preserved.
 
 Room/task/message history is paginated. Published message edits preserve their
 sequence so streaming tokens do not reorder the room list. The public event API
@@ -97,8 +109,17 @@ Coverage includes real SQLite and Manager HTTP transactions, restart/idempotency
 AgentLoop execution, local tool policy enforcement, real Git isolation,
 immutable reviews, explicit apply, cancellation and application recovery.
 Renderer tests cover routing, stale responses, pagination, retry identity,
-attachments and task controls. Desktop and narrow layouts are checked in a
-browser fixture; that fixture does not represent live model output.
+attachments and task controls. A managed Runtime HTTP test starts real Manager
+and Runtime instances against an isolated local model fixture, performs an
+actual tool write, restarts Runtime and applies the retained delivery.
+
+The Electron smoke uses the real renderer/preload/Main/Manager/Runtime chain.
+It sends a task through the composer, switches Code/Work during execution,
+resolves its approval from the original Code thread, checks review and reload
+recovery, then accepts and applies through the UI. The model endpoint is a
+deterministic local fixture. Native approval consent uses a one-shot test response
+bound to the exact pending approval reference; manual OS dialog clicking is not
+covered. Narrow overlay layering is checked with a browser hit-test.
 
 Validation commands:
 
@@ -106,12 +127,16 @@ Validation commands:
 npm run typecheck
 npm run build
 npm run check:file-lines
+node scripts/smoke-development-rooms.cjs --timeout-ms 120000
 cd kun
 ./node_modules/.bin/vitest run src/rooms src/manager/remote-room-store.test.ts \
-  src/server/routes/rooms.test.ts src/loop/room-turn-policy.test.ts \
+  src/server/routes/rooms.test.ts src/server/rooms-managed-runtime.integration.test.ts \
+  src/loop/room-turn-policy.test.ts \
   src/loop/agent-loop-room-policy.test.ts src/services/thread-service.rooms.test.ts
 ```
 
-Local verification is on macOS with Node 25.2.1. Windows/Linux packaged-app
+Local verification is on macOS arm64 with Node 25.2.1 and Electron's Node 24.18.0.
+Smoke reports and screenshots are written to ignored `dist/rooms-desktop-smoke`.
+Windows/Linux packaged-app
 execution and real-provider end-to-end smoke remain release validation work;
 passing fixture tests must not be described as that evidence.

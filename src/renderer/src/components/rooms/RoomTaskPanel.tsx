@@ -99,7 +99,7 @@ export function RoomTaskPanel({
   return (
     <aside
       aria-label={t('roomsDetails')}
-      className="absolute inset-0 z-30 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[380px] xl:shrink-0 xl:shadow-none"
+      className="absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[380px] xl:shrink-0 xl:shadow-none"
     >
       <header className="rooms-detail-titlebar flex items-center justify-between border-b border-ds-border p-4">
         <h2 className="text-sm font-semibold text-ds-ink">

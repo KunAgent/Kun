@@ -1,0 +1,422 @@
+#!/usr/bin/env node
+'use strict'
+
+// Exercise the real Electron renderer/preload/main/Manager/Runtime composition.
+// All model responses are deterministic and offline. Application settings, data,
+// discovery/control files, Git repositories and processes belong to this run.
+const assert = require('node:assert/strict')
+const { createHash } = require('node:crypto')
+const { execFile, spawn } = require('node:child_process')
+const { existsSync } = require('node:fs')
+const { mkdir, mkdtemp, readFile, readdir, rm, writeFile } = require('node:fs/promises')
+const { createServer } = require('node:http')
+const { tmpdir } = require('node:os')
+const { join, resolve } = require('node:path')
+const { promisify } = require('node:util')
+const { _electron } = require('playwright-core')
+const { makeTreeWritable } = require('./smoke-packaged-extensions.cjs')
+const {
+  createIsolatedEnvironment, desktopSmokeSettings, desktopSmokeWorkspaceParent,
+  desktopUserDataCandidates, platformDesktopArguments, stopIsolatedServiceManager,
+  stopIsolatedSharedRuntime, releaseChildProcessHandles, withTimeout
+} = require('./smoke-packaged-extension-desktop-runtime.cjs')
+const {
+  availablePort, argumentValue, positiveIntegerArgument, terminateProcessTree
+} = require('./smoke-packaged-extension-desktop-process.cjs')
+const { developmentRendererEnvironment } = require('./development-renderer-environment.cjs')
+const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
+
+const exec = promisify(execFile)
+const ROOM_NAME = 'Rooms desktop smoke'
+const TASK_TITLE = 'Create desktop evidence file'
+const TASK_PROMPT = 'Create desktop-smoke.txt containing isolated desktop runtime and have it reviewed.'
+const FILE_CONTENT = 'isolated desktop runtime\n'
+const MODEL = 'deepseek-chat'
+
+async function main() {
+  const repositoryRoot = resolve(__dirname, '..')
+  const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
+  const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'rooms-desktop-smoke'))
+  for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
+    assert(existsSync(join(repositoryRoot, entry)), `Missing ${entry}; run npm run build first`)
+  }
+  const electronPackage = join(repositoryRoot, 'node_modules', 'electron')
+  const electronPathFile = join(electronPackage, 'path.txt')
+  assert(existsSync(electronPathFile), 'Electron binary is not installed; install dependencies before this offline smoke')
+  const electronExecutable = join(electronPackage, 'dist', (await readFile(electronPathFile, 'utf8')).trim())
+  assert(existsSync(electronExecutable), 'Electron executable is missing; install dependencies before this offline smoke')
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'kun-rooms-desktop-smoke-'))
+  const home = join(temporaryRoot, 'home')
+  const profile = join(home, '.kun', 'data')
+  const userData = join(temporaryRoot, 'electron-user-data')
+  const appData = join(temporaryRoot, 'app-data')
+  const localAppData = join(temporaryRoot, 'local-app-data')
+  const temporaryDirectory = join(temporaryRoot, 'tmp')
+  const workspaceParent = desktopSmokeWorkspaceParent(repositoryRoot)
+  await mkdir(workspaceParent, { recursive: true })
+  const workspaceRoot = await mkdtemp(join(workspaceParent, 'rooms with spaces-'))
+  let rendererProcess, electronApplication, electronProcess, page, modelFixture, result, primaryError
+  let rendererOutput = '', electronOutput = ''
+  const pageErrors = []
+  const screenshots = []
+  const capture = async (name) => {
+    const path = join(evidenceRoot, `${name}.png`)
+    await page.screenshot({ path })
+    screenshots.push(path)
+  }
+  try {
+    await Promise.all([home, profile, userData, appData, localAppData, temporaryDirectory, evidenceRoot]
+      .map((directory) => mkdir(directory, { recursive: true })))
+    const runtimePort = await availablePort()
+    let rendererPort = await availablePort()
+    while (rendererPort === runtimePort) rendererPort = await availablePort()
+    const isolatedEnvironment = developmentRendererEnvironment(createIsolatedEnvironment(process.env, {
+      home, appData, localAppData, temporaryDirectory
+    }), { rendererPort, temporaryRoot })
+    isolatedEnvironment.NODE_ENV = 'development'
+    // Exclude ambient Git hooks, signing and global config from the disposable repository.
+    const gitConfig = join(temporaryRoot, 'git-config')
+    await writeFile(gitConfig, '')
+    Object.assign(isolatedEnvironment, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: gitConfig })
+    const git = (args) => exec('git', ['-C', workspaceRoot, ...args], { env: isolatedEnvironment })
+    await git(['init', '-b', 'develop'])
+    await git(['config', 'user.name', 'Rooms Desktop Smoke'])
+    await git(['config', 'user.email', 'rooms-desktop@example.test'])
+    await writeFile(join(workspaceRoot, 'baseline.txt'), 'baseline\n')
+    await git(['add', 'baseline.txt'])
+    await git(['commit', '-m', 'test: seed isolated rooms repository'])
+    const baselineSha = (await git(['rev-parse', 'HEAD'])).stdout.trim()
+
+    modelFixture = await startModelFixture()
+    const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, profile), locale: 'en', theme: 'light' }
+    settings.agents.kun.baseUrl = modelFixture.baseUrl
+    settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
+    const allocatedPorts = new Set([runtimePort, rendererPort, new URL(modelFixture.baseUrl).port].map(Number))
+    const nextPort = async () => {
+      let port
+      do { port = await availablePort() } while (allocatedPorts.has(port))
+      allocatedPorts.add(port)
+      return port
+    }
+    settings.claw = { im: { enabled: false, port: await nextPort() } }
+    settings.schedule = { internal: { port: await nextPort() } }
+    const serializedSettings = `${JSON.stringify(settings, null, 2)}\n`
+    await Promise.all(desktopUserDataCandidates({ platform: process.platform, home, appData, explicitUserData: userData })
+      .map(async (directory) => {
+        await mkdir(directory, { recursive: true })
+        await writeFile(join(directory, 'kun-settings.json'), serializedSettings)
+      }))
+    rendererProcess = spawn(process.execPath, [join(repositoryRoot, 'node_modules/vite/bin/vite.js'),
+      '--config', join(repositoryRoot, 'scripts/vite-development-renderer.config.mjs'), '--logLevel', 'warn'], {
+      cwd: repositoryRoot, env: isolatedEnvironment, detached: process.platform !== 'win32',
+      windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']
+    })
+    for (const stream of [rendererProcess.stdout, rendererProcess.stderr]) {
+      stream.on('data', (chunk) => { rendererOutput = `${rendererOutput}${chunk}`.slice(-64 * 1024) })
+    }
+    await poll(async () => {
+      assert.equal(rendererProcess.exitCode, null, 'Development renderer exited')
+      try { return (await fetch(`http://127.0.0.1:${rendererPort}`, { signal: AbortSignal.timeout(1000) })).ok }
+      catch { return false }
+    }, timeoutMs, 'renderer server startup')
+    electronApplication = await _electron.launch({
+      executablePath: electronExecutable, args: [`--user-data-dir=${userData}`, '--no-first-run',
+        '--disable-background-networking', '--disable-component-update', '--disable-default-apps',
+        ...platformDesktopArguments(process.platform), repositoryRoot],
+      cwd: repositoryRoot, env: isolatedEnvironment, chromiumSandbox: true, timeout: timeoutMs
+    })
+    electronProcess = electronApplication.process()
+    for (const stream of [electronProcess.stdout, electronProcess.stderr]) {
+      stream?.on('data', (chunk) => { electronOutput = `${electronOutput}${chunk}`.slice(-64 * 1024) })
+    }
+    await resize(electronApplication, 1360, 900)
+    page = await findWorkbenchWindow(electronApplication, timeoutMs)
+    page.setDefaultTimeout(30_000)
+    page.on('pageerror', (error) => pageErrors.push(error.message))
+    await page.waitForLoadState('domcontentloaded')
+    await page.locator('[data-workspace-mode-trigger]').first().waitFor()
+    const { room } = await runtimeRequest(page, '/v1/rooms', 'POST', {
+      clientRequestId: 'desktop-create-room', name: ROOM_NAME,
+      repositories: [{ id: 'repo', displayPath: workspaceRoot, defaultBaseRef: 'develop' }]
+    })
+    assert.equal(room.collaborationMode, 'autonomous')
+    await switchMode(page, 'rooms')
+    await page.getByRole('heading', { name: ROOM_NAME, exact: true }).waitFor()
+    await capture('1-room-ready')
+    await page.getByLabel('Automatic intent', { exact: true }).selectOption('execute')
+    await page.getByRole('textbox', { name: 'Discuss a question or describe the work to do…' }).fill(TASK_PROMPT)
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    await poll(() => modelFixture.snapshot().executionRequests > 0, timeoutMs, 'real task model dispatch')
+    await page.locator('[aria-label="Tasks"]').getByRole('button', { name: new RegExp(TASK_TITLE) }).waitFor()
+    await capture('2-task-running')
+
+    // Hold the real write response until the room has unmounted, proving that
+    // neither scheduling nor execution depends on a Rooms React component.
+    await switchMode(page, 'chat')
+    assert.equal(await page.locator('[data-rooms-workspace]').count(), 0)
+    await capture('3-code-while-running')
+    await switchMode(page, 'write')
+    assert.equal(await page.locator('[data-rooms-workspace]').count(), 0)
+    await capture('4-work-while-running')
+    modelFixture.releaseExecution()
+    let task, approvalsResolved = 0
+    await poll(async () => {
+      const { tasks } = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks`)
+      assert.equal(tasks.length, 1, 'One UI send must create exactly one task')
+      task = tasks[0]
+      assert(!['failed', 'recovery_required'].includes(task.status), `${task.status}: ${task.latestProgress}`)
+      if (task.status === 'needs_approval' && approvalsResolved === 0) {
+        assert(!existsSync(join(workspaceRoot, 'desktop-smoke.txt')), 'Unapproved write changed source repository')
+        await switchMode(page, 'rooms')
+        await openTask(page)
+        await capture('approval-required')
+        await page.getByRole('complementary', { name: 'Task details' })
+          .getByRole('button', { name: 'Open in Code', exact: true }).click()
+        await page.locator('[data-workspace-mode-trigger][data-workspace-mode="chat"]').first().waitFor()
+        const allow = page.getByRole('button', { name: 'Allow', exact: true })
+        await allow.waitFor()
+        await capture('approval-in-code')
+        const thread = await runtimeRequest(page, `/v1/threads/${task.executionThreadId}`)
+        const pending = thread.turns.flatMap((turn) => turn.items ?? []).filter((item) =>
+          item.kind === 'approval' && thread.pendingApprovalIds.includes(item.approvalId))
+        assert.equal(pending.length, 1)
+        assert.equal(pending[0].toolName, 'write')
+        assert.equal(pending[0].summary, 'Review file action write: file="desktop-smoke.txt"')
+        const approvalRef = 'sha256:' + createHash('sha256').update(pending[0].approvalId).digest('hex').slice(0, 16)
+        await installNativeConsentFixture(electronApplication, approvalRef)
+        await allow.click()
+        await poll(() => electronApplication.evaluate(() => globalThis.__roomsSmokeNativeConsent?.calls === 1),
+          10_000, 'the fixture-scoped protected native consent')
+        approvalsResolved += 1
+        await switchMode(page, 'write')
+      }
+      return task.status === 'awaiting_acceptance'
+    }, timeoutMs, 'offscreen task development and review')
+    assert(!existsSync(join(workspaceRoot, 'desktop-smoke.txt')), 'Task wrote the source checkout before explicit application')
+    assert.equal((await git(['rev-parse', 'HEAD'])).stdout.trim(), baselineSha)
+    await switchMode(page, 'rooms')
+    await openTask(page)
+    const detailBeforeReload = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}`)
+    assert.equal(detailBeforeReload.reviews[0]?.verdict, 'passed')
+    assert(detailBeforeReload.diff.includes(FILE_CONTENT.trim()), 'Delivery must include the actual write tool diff')
+    const panel = page.getByRole('complementary', { name: 'Task details' })
+    await panel.getByText('Delivery v1', { exact: false }).waitFor()
+    await capture('5-reviewed-delivery')
+
+    // Reload the actual Electron page and restore durable room state.
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.locator('[data-workspace-mode-trigger]').first().waitFor()
+    if (!(await page.locator('[data-rooms-workspace]').count())) await switchMode(page, 'rooms')
+    await page.getByRole('heading', { name: ROOM_NAME, exact: true }).waitFor()
+    await openTask(page)
+    const restored = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}`)
+    assert.equal(restored.task.latestDeliveryId, detailBeforeReload.task.latestDeliveryId)
+    assert.equal(restored.task.status, 'awaiting_acceptance')
+    const restoredMessages = await runtimeRequest(page, `/v1/rooms/${room.id}/messages`)
+    assert.equal(restoredMessages.messages.filter((message) => message.authorKind === 'user' &&
+      message.body === TASK_PROMPT).length, 1, 'Reload duplicated the user request')
+    await capture('6-restored-delivery')
+    await panel.getByRole('button', { name: 'Accept delivery', exact: true }).click()
+    await panel.getByRole('button', { name: 'Apply changes', exact: true }).waitFor()
+    assert(!existsSync(join(workspaceRoot, 'desktop-smoke.txt')), 'Accepting delivery applied changes prematurely')
+    await panel.getByRole('button', { name: 'Apply changes', exact: true }).click()
+    await poll(async () => {
+      const detail = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}`)
+      return detail.task.applicationStatus === 'applied'
+    }, timeoutMs, 'explicit application to the isolated repository')
+    assert.equal(await readFile(join(workspaceRoot, 'desktop-smoke.txt'), 'utf8'), FILE_CONTENT)
+    assert.equal((await git(['status', '--porcelain'])).stdout.trim(), '')
+    await panel.getByText('Applied', { exact: true }).waitFor()
+    await capture('7-applied-delivery')
+    await resize(electronApplication, 760, 780)
+    await page.waitForTimeout(400)
+    await capture('8-narrow-task-details')
+    const narrowBounds = await panel.boundingBox()
+    const narrowViewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
+    assert(narrowBounds.x >= 0 && narrowBounds.x + narrowBounds.width <= narrowViewport.width + 1,
+      'Narrow task details overflow the window')
+    assert(await page.locator('[data-workspace-mode-trigger]').first().evaluate((trigger) => {
+      const bounds = trigger.getBoundingClientRect()
+      return Boolean(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        ?.closest('aside[aria-label="Task details"]'))
+    }), 'Underlying mode trigger paints above the narrow task overlay')
+    assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
+    assert.equal(approvalsResolved, 1, 'Expected the on-request tool approval path')
+    result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
+      executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
+      baselineSha, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      modelFixture: modelFixture.snapshot(), approvalsResolved,
+      nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
+      narrowViewport, pageErrors, screenshots,
+      assertions: ['real Electron bridge and Manager-backed Runtime', 'UI send dispatches real write tool',
+        'Code and Work mode switches preserve background task', 'approval resolved from original thread in Code',
+        'immutable delivery and review',
+        'renderer reload restores delivery', 'accept does not apply', 'explicit UI application fast-forwards',
+        'clean source repository', 'narrow task panel'] }
+    await writeFile(join(evidenceRoot, 'report.json'), `${JSON.stringify(result, null, 2)}\n`)
+  } catch (error) {
+    await capture('failure').catch(() => undefined)
+    await captureIsolatedLogs(temporaryRoot, evidenceRoot).catch(() => undefined)
+    if (page) await writeFile(join(evidenceRoot, 'failure-page.txt'), await page.locator('body').innerText().catch(() => '')).catch(() => undefined)
+    primaryError = new Error(`${error.stack ?? error}\nFixture: ${JSON.stringify(modelFixture?.snapshot())}\nRenderer:\n${rendererOutput}\nElectron:\n${electronOutput}`)
+    await writeFile(join(evidenceRoot, 'failure.txt'), primaryError.stack).catch(() => undefined)
+  } finally {
+    modelFixture?.releaseExecution()
+    const errors = []
+    const cleanup = async (operation) => {
+      try { await withTimeout(operation, 20_000, 'cleaning isolated Rooms smoke') }
+      catch (error) { errors.push(error.message) }
+    }
+    let closing
+    if (electronApplication) {
+      await electronApplication.evaluate(({ dialog }) => {
+        const fixture = globalThis.__roomsSmokeNativeConsent
+        if (fixture) dialog.showMessageBox = fixture.original
+      }).catch(() => undefined)
+      closing = electronApplication.close()
+      await withTimeout(closing, 3000, 'closing isolated Electron').catch(() => undefined)
+    }
+    if (electronProcess) await cleanup(terminateProcessTree(electronProcess, process.platform,
+      { timeoutMs: 15_000, detached: process.platform !== 'win32' }))
+    await cleanup(stopIsolatedSharedRuntime(repositoryRoot, profile))
+    await cleanup(stopIsolatedServiceManager(home, profile))
+    if (closing) await withTimeout(closing, 1000, 'settling Electron').catch(() => undefined)
+    releaseChildProcessHandles(electronProcess)
+    if (rendererProcess) await cleanup(terminateProcessTree(rendererProcess, process.platform,
+      { timeoutMs: 15_000, detached: process.platform !== 'win32' }))
+    releaseChildProcessHandles(rendererProcess)
+    if (modelFixture) await cleanup(modelFixture.close())
+    await cleanup(Promise.all([makeTreeWritable(temporaryRoot), makeTreeWritable(workspaceRoot)]))
+    await cleanup(Promise.all([temporaryRoot, workspaceRoot]
+      .map((path) => rm(path, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }))))
+    if (errors.length) primaryError = new Error(`${primaryError?.stack ?? ''}\nCleanup failures: ${errors.join('; ')}`)
+  }
+  if (primaryError) throw primaryError
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+}
+
+async function installNativeConsentFixture(application, approvalRef) {
+  await application.evaluate(({ dialog }, expectedRef) => {
+    const original = dialog.showMessageBox
+    const state = { original, calls: 0 }
+    globalThis.__roomsSmokeNativeConsent = state
+    dialog.showMessageBox = async (...args) => {
+      const options = args.at(-1) ?? {}
+      if (state.calls === 0 && options.title === 'Approve tool action' &&
+        options.message === 'Allow this pending Kun tool action once?' &&
+        options.detail?.startsWith(`Approval reference: ${expectedRef}\n\n`) &&
+        JSON.stringify(options.buttons) === JSON.stringify(['Allow once', 'Cancel'])) {
+        state.calls += 1
+        dialog.showMessageBox = original
+        return { response: 0, checkboxChecked: false }
+      }
+      return original.apply(dialog, args)
+    }
+  }, approvalRef)
+}
+
+async function captureIsolatedLogs(root, destination) {
+  for (const entry of await readdir(root, { withFileTypes: true, recursive: true })) {
+    if (entry.isFile() && (entry.name === 'manager.log' || /^kun-.*\.log$/u.test(entry.name))) {
+      const path = join(entry.parentPath ?? entry.path, entry.name)
+      const name = path.slice(root.length + 1).replace(/[^A-Za-z0-9_.-]/g, '_')
+      await writeFile(join(destination, name), await readFile(path))
+    }
+  }
+}
+
+function runtimeRequest(page, path, method = 'GET', body) {
+  return page.evaluate(async ({ path, method, body }) => {
+    const response = await globalThis.kunGui.runtimeRequest(path, method,
+      body === undefined ? undefined : JSON.stringify(body))
+    if (!response.ok) throw new Error(`${method} ${path} (${response.status}): ${response.body}`)
+    return JSON.parse(response.body)
+  }, { path, method, body })
+}
+
+async function switchMode(page, mode) {
+  await page.locator('[data-workspace-mode-trigger]').first().click()
+  await page.locator(`[role="menuitemradio"][data-workspace-mode="${mode}"]`).click()
+  await page.locator(`[data-workspace-mode-trigger][data-workspace-mode="${mode}"]`).first().waitFor()
+}
+
+async function openTask(page) {
+  await page.locator('[aria-label="Tasks"]').getByRole('button', { name: new RegExp(TASK_TITLE) }).click()
+  await page.getByRole('complementary', { name: 'Task details' }).waitFor()
+}
+
+function resize(application, width, height) {
+  return application.evaluate(({ BrowserWindow }, bounds) => {
+    BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())?.setBounds({ x: 20, y: 20, ...bounds })
+  }, { width, height })
+}
+
+async function poll(check, timeoutMs, description) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await check()) return
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+  throw new Error(`Timed out waiting for ${description}`)
+}
+
+async function startModelFixture() {
+  let releaseExecution
+  const gate = new Promise((resolve) => { releaseExecution = resolve })
+  const state = { coordinationRequests: 0, executionRequests: 0, reviewRequests: 0, otherRequests: 0 }
+  const server = createServer(async (request, response) => {
+    try {
+      if (request.method === 'GET' && /\/models(?:\?|$)/u.test(request.url ?? '')) {
+        response.writeHead(200, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ object: 'list', data: [{ id: MODEL, object: 'model' }] }))
+        return
+      }
+      assert.equal(request.method, 'POST', 'Unexpected offline model request')
+      const chunks = []
+      for await (const chunk of request) chunks.push(chunk)
+      const body = JSON.parse(Buffer.concat(chunks).toString())
+      const prompt = JSON.stringify(body.messages)
+      let content = 'Completed.', toolCalls
+      if (prompt.includes('You coordinate a personal Kun room')) {
+        state.coordinationRequests += 1
+        content = JSON.stringify({ kind: 'execute', response: 'Development and review assigned.', participants: [],
+          assignments: [{ key: 'desktop-smoke', memberId: 'developer', repositoryId: 'repo',
+            title: TASK_TITLE, prompt: TASK_PROMPT, dependsOn: [], reviewerMemberId: 'reviewer' }] })
+      } else if (prompt.includes('Review this immutable delivered version')) {
+        state.reviewRequests += 1
+        content = JSON.stringify({ verdict: 'passed', findings: [], limitations: ['No test command requested.'] })
+      } else if (prompt.includes('Complete this authorized room task')) {
+        state.executionRequests += 1
+        await gate
+        if (!body.messages.some((message) => message.role === 'tool')) {
+          content = ''
+          toolCalls = [{ index: 0, id: 'desktop-smoke-write', type: 'function', function: { name: 'write',
+            arguments: JSON.stringify({ path: 'desktop-smoke.txt', content: FILE_CONTENT }) } }]
+        } else content = 'Created desktop-smoke.txt; no test commands were run.'
+      } else state.otherRequests += 1
+      const message = { role: 'assistant', content, ...(toolCalls ? { tool_calls: toolCalls } : {}) }
+      const finish_reason = toolCalls ? 'tool_calls' : 'stop'
+      if (body.stream) {
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        response.write('data: ' + JSON.stringify({ id: 'desktop-smoke', choices: [{ index: 0, delta: message, finish_reason: null }] }) + '\n\n')
+        response.write('data: ' + JSON.stringify({ id: 'desktop-smoke', choices: [{ index: 0, delta: {}, finish_reason }] }) + '\n\n')
+        response.end('data: [DONE]\n\n')
+      } else {
+        response.writeHead(200, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ id: 'desktop-smoke', choices: [{ index: 0, message, finish_reason }],
+          usage: { prompt_tokens: 20, completion_tokens: 20, total_tokens: 40 } }))
+      }
+    } catch (error) {
+      response.writeHead(500, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: { message: String(error) } }))
+    }
+  })
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
+  return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution,
+    snapshot: () => ({ ...state }), close: () => new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+      server.closeAllConnections?.()
+    }) }
+}
+
+main().catch((error) => { process.stderr.write(`${error.stack ?? error}\n`); process.exitCode = 1 })
