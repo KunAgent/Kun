@@ -27,7 +27,7 @@
 - [x] 4.2 Add candidate safety tests for scope, lifecycle, authority, unknown ids, forbidden selections, and network attempts; verify any safety violation forces no-go. The v3 workflow test injects each violation into one candidate report and confirms the safety gate fails closed.
 - [x] 4.3 Add deterministic repeat tests for candidate ids, scores, configuration order, and bounded traces; verify three locked repeats remain within the declared tolerance. The v3 workflow now executes the frozen 54-point development grid three times and compares configuration order, hashes, selected ids, and latency-independent metrics.
 - [x] 4.4 Add resource and fallback tests for missing/corrupt model artifacts and local runtime failure; verify the evaluator reports unsupported/fallback evidence without relaxing safety. Existing fallback coverage exercises missing, corrupt, unsupported, and unexpected initialization failures; the v3-specific test confirms a missing local model stays on the lexical candidate with zero network attempts and a passing safety report.
-- [ ] 4.5 Add development-only and holdout-lock tests; verify candidate tuning cannot read holdout labels or emit holdout aggregates before locking.
+- [x] 4.5 Add development-only and holdout-lock tests; verify candidate tuning cannot read holdout labels or emit holdout aggregates before locking. The workflow now asserts tuning sees exactly the 40 development queries and no holdout ids, while the existing invalid-lock test confirms no candidate invocation before lock validation.
 
 ## 5. Evaluation and delivery evidence
 

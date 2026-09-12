@@ -74,6 +74,34 @@ describe('semantic Memory v3 development workflow', () => {
     expect(deterministic(repeats[2]!)).toEqual(deterministic(repeats[0]!))
   })
 
+  it('does not expose holdout labels or aggregates during development tuning', async () => {
+    const dataset = await loadSemanticMemoryV3EvaluationDataset()
+    const seenQueryIds = new Set<string>()
+    const result = await runSemanticMemoryV3DevelopmentGrid({
+      dataset,
+      createCandidate: (configuration) => ({
+        metadata: {
+          id: configuration.id,
+          kind: 'hybrid' as const,
+          version: 'v3-test',
+          runtime: 'offline-test',
+          license: 'repository',
+          parameters: { ...configuration },
+          platforms: ['win32-x64']
+        },
+        retrieve: async ({ query }) => {
+          seenQueryIds.add(query.id)
+          return []
+        }
+      })
+    })
+    const holdoutIds = new Set(dataset.queries.filter((query) => query.split === 'holdout').map((query) => query.id))
+
+    expect(seenQueryIds.size).toBe(40)
+    expect([...seenQueryIds].some((id) => holdoutIds.has(id))).toBe(false)
+    expect(result.entries.every((entry) => entry.report?.results.every((item) => !holdoutIds.has(item.queryId)))).toBe(true)
+  })
+
   it('does not invoke a candidate when the holdout lock is invalid', async () => {
     const dataset = await loadSemanticMemoryV3EvaluationDataset()
     const retrieve = vi.fn(async () => [])
