@@ -22,7 +22,7 @@ import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from
 
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
-const Operations = z.enum(['get', 'list', 'listRooms', 'commit', 'getRequest', 'events', 'assertOwnership'])
+const Operations = z.enum(['get', 'list', 'listRooms', 'commit', 'getRequest', 'events', 'latestEventSeq', 'assertOwnership'])
 
 export function addManagerRoomRoutes(router: Router, input: {
   managerToken: string
@@ -49,6 +49,7 @@ export function addManagerRoomRoutes(router: Router, input: {
       try {
         let result: unknown
         switch (operation.data) {
+          case 'latestEventSeq': result = await input.roomStore.latestEventSeq(); break
           case 'get': {
             const value = z.object({ kind: RoomDocumentKindSchema, id: Id }).strict().parse(body.value)
             result = await input.roomStore.get(value.kind, value.id)

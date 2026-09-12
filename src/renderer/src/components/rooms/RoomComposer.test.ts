@@ -104,6 +104,24 @@ describe('RoomComposer', () => {
     })
     expect(renderer.root.findByType('textarea').props.value).toBe('')
   })
+
+  it('supports typed mentions at the caret without losing trailing message text', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    act(() =>
+      renderer.root.findByType('textarea').props.onChange({
+        target: { value: 'Ask @Dev about tests', selectionStart: 8 }
+      })
+    )
+    const candidate = renderer.root.findByProps({ role: 'option' })
+    act(() => candidate.props.onClick())
+    await submit()
+    expect(send.mock.calls[0][0]).toMatchObject({
+      body: 'Ask  about tests',
+      mentionMemberIds: ['developer']
+    })
+  })
+
   it('uploads through the local-file contract and sends attachment IDs', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)

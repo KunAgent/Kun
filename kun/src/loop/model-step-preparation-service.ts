@@ -638,7 +638,7 @@ export abstract class ModelStepPreparationService {
       memoryCount: memories.length,
       contextInstructionCount: contextInstructions.length
     })
-    const modeInstruction = buildTurnModeInstruction(turn, planTurnActive)
+    const modeInstruction = buildTurnModeInstruction(turn, planTurnActive, thread.roomContext, historyItems, turnId)
     const modelContextUpdate = resolveModelContextUpdate({
       threadId,
       turnId,

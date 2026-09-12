@@ -26,6 +26,7 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import { diffUsage, hasUsage } from '../domain/usage.js'
+import { roomResultProvider } from '../rooms/room-result-tools.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -338,7 +339,8 @@ export function createRuntimeRegistry(
       reason: services.browserUseProviders.reason
     }
   })
-	  let registry = new CapabilityRegistry([
+  let registry = new CapabilityRegistry([
+    roomResultProvider(threadStore),
     ...services.baseToolProviders,
     // Host control is available to the top-level agent only, never to
     // delegated subagents (which use childRegistry/baseToolProviders).

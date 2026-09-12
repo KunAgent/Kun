@@ -123,6 +123,7 @@ export const appBadgeCountSchema = z.number().int().min(0).max(MAX_APP_BADGE_COU
 
 export const notificationPayloadSchema = z
   .object({
+    roomId: optionalTrimmedString(MAX_ID_LENGTH),
     threadId: optionalTrimmedString(MAX_ID_LENGTH),
     source: z.enum(['main-agent', 'subagent']),
     title: trimmedString(MAX_NOTIFICATION_TITLE_LENGTH),
@@ -243,7 +244,8 @@ export const sseStartPayloadSchema = z
     threadId: trimmedString(MAX_ID_LENGTH),
     sinceSeq: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     streamId: optionalTrimmedString(MAX_ID_LENGTH),
-    acknowledgedBatches: z.boolean().optional()
+    acknowledgedBatches: z.boolean().optional(),
+    scope: z.literal('rooms').optional()
   })
   .strict()
 

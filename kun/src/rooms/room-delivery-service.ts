@@ -4,7 +4,7 @@ import { RoomIdSchema } from '../contracts/rooms.js'
 import { RoomDeliverySchema, type RoomDelivery } from '../contracts/room-deliveries.js'
 import { assertRoomApplyPreflight, observeRoomRepository,
   type RoomRepositoryObservation } from './task-workspace-service.js'
-import { assertRoomAncestor, roomGit, runRoomGit, ROOM_REVISION_HASH } from './room-git.js'
+import { assertRoomAncestor, roomGit, runRoomGit, ROOM_REVISION_HASH, serializeRoomGitMutation as serialize } from './room-git.js'
 
 type Ownership = { assertOwnership: () => Promise<void> }
 type Repository = { repository: RoomRepositoryObservation }
@@ -14,21 +14,6 @@ type Workspace = Repository & {
   workspacePath: string
   workspaceBranch: string
   baseRevision: string
-}
-
-// Serialize local mutations. The ownership callback must also fence the Runtime's
-// persisted task lease; this map is deliberately not a substitute for that lease.
-const mutations = new Map<string, Promise<void>>()
-async function serialize<T>(key: string, operation: () => Promise<T>): Promise<T> {
-  const previous = mutations.get(key) ?? Promise.resolve()
-  let release!: () => void
-  const current = new Promise<void>((resolve) => { release = resolve })
-  mutations.set(key, current)
-  await previous
-  try { return await operation() } finally {
-    release()
-    if (mutations.get(key) === current) mutations.delete(key)
-  }
 }
 
 async function assertRepositoryIdentity(repository: RoomRepositoryObservation): Promise<void> {

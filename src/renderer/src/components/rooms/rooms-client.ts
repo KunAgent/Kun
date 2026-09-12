@@ -4,6 +4,7 @@ import type {
   RoomDelivery,
   RoomMessage,
   RoomReview,
+  RoomRequestOutcome,
   RoomTask,
   RoomTaskAction,
   SendRoomMessage
@@ -17,6 +18,8 @@ export type RoomPatch = Partial<RoomInput> & {
   archived?: boolean
 }
 export type RoomTaskDetail = {
+  approvals?: Array<{ id: string; toolName: string; summary: string }>
+  userInputs?: RoomUserInput[]
   task: RoomTask
   controlThreadId?: string
   delivery?: RoomDelivery
@@ -24,17 +27,67 @@ export type RoomTaskDetail = {
   diff?: string
   reviews: RoomReview[]
 }
-export type RoomListEntry = Room & { latestMessageSeq?: number }
-export type RoomPreset = { id: string; name: string; description?: string }
+export type RoomListEntry = Room & {
+  latestMessageSeq?: number
+  readSeq?: number
+  runningCount?: number
+  attentionCount?: number
+}
+export type RoomUserInput = {
+  id: string
+  prompt: string
+  questions: Array<{
+    id: string
+    question: string
+    options: Array<{ label: string; description: string }>
+    selectionMode?: 'single' | 'multiple'
+    minSelections?: number
+    maxSelections?: number
+  }>
+}
+export type RoomPreset = {
+  id: string
+  name: string
+  description?: string
+  model?: string
+  providerId?: string
+  toolPolicy?: string
+  allowedTools?: string[]
+  blockedTools?: string[]
+  blockedMcpServers?: string[]
+  blockedSkills?: string[]
+  skillsEnabled?: boolean
+  available?: boolean
+  reason?: string
+}
+export type RoomPresetCatalog = {
+  presets: RoomPreset[]
+  defaultModel?: { model: string; providerId?: string }
+  unsupportedProviderIds?: string[]
+}
+export type RoomRequestEntry = {
+  id: string
+  revision: number
+  status: string
+  sourceMessageId: string
+  message: { body: string }
+  error?: string
+  outcome?: RoomRequestOutcome
+}
 export type RoomRule = {
   id: string
   messageId: string
   body: string
   version: number
+  active?: boolean
+  revision?: number
 }
 export type RoomPage<T> = { nextCursor?: string | null } & T
 
-const roomPath = (id: string): string => `/v1/rooms/${encodeURIComponent(id)}`
+export const roomPath = (id: string): string =>
+  `/v1/rooms/${encodeURIComponent(id)}`
+export const roomTaskPath = (task: Pick<RoomTask, 'roomId' | 'id'>): string =>
+  `${roomPath(task.roomId)}/tasks/${encodeURIComponent(task.id)}`
 export const roomRequestId = (): string => crypto.randomUUID()
 
 export async function roomsRequest<T>(
@@ -68,9 +121,14 @@ export async function roomsRequest<T>(
 }
 
 export const roomsClient = {
-  list: (archived: boolean, cursor?: string, signal?: AbortSignal) =>
+  list: (
+    archived: boolean,
+    cursor?: string,
+    signal?: AbortSignal,
+    search = ''
+  ) =>
     roomsRequest<RoomPage<{ rooms: RoomListEntry[] }>>(
-      `/v1/rooms?limit=50&archived_only=${archived}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      `/v1/rooms?limit=50&archived_only=${archived}&search=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
       'GET',
       undefined,
       signal
@@ -101,9 +159,14 @@ export const roomsClient = {
       'POST',
       input
     ),
-  tasks: (id: string, signal?: AbortSignal, cursor?: string) =>
+  tasks: (
+    id: string,
+    signal?: AbortSignal,
+    cursor?: string,
+    filters?: { status?: string; memberId?: string; repositoryId?: string }
+  ) =>
     roomsRequest<RoomPage<{ tasks: RoomTask[] }>>(
-      `${roomPath(id)}/tasks?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      `${roomPath(id)}/tasks?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${filters?.status ? `&status=${encodeURIComponent(filters.status)}` : ''}${filters?.memberId ? `&member_id=${encodeURIComponent(filters.memberId)}` : ''}${filters?.repositoryId ? `&repository_id=${encodeURIComponent(filters.repositoryId)}` : ''}`,
       'GET',
       undefined,
       signal
@@ -121,7 +184,7 @@ export const roomsClient = {
       'POST',
       { expectedRevision: task.revision, clientRequestId }
     ),
-  presets: () => roomsRequest<{ presets: RoomPreset[] }>('/v1/rooms/presets'),
+  presets: () => roomsRequest<RoomPresetCatalog>('/v1/rooms/presets'),
   rules: (id: string, signal?: AbortSignal) =>
     roomsRequest<{ rules: RoomRule[] }>(
       `${roomPath(id)}/rules`,

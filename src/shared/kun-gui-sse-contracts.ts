@@ -27,7 +27,7 @@ export interface KunGuiSseSurface {
     threadId: string,
     sinceSeq: number,
     streamId?: string,
-    options?: { acknowledgedBatches?: boolean }
+    options?: { acknowledgedBatches?: boolean; scope?: 'rooms' }
   ) => Promise<{ streamId: string }>
   stopSse: (streamId: string) => Promise<boolean>
   ackSse: (streamId: string, batchId: string) => Promise<boolean>

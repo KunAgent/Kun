@@ -4,6 +4,20 @@ import { promisify } from 'node:util'
 const exec = promisify(execFile)
 export const ROOM_REVISION_HASH = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/
 
+const mutations = new Map<string, Promise<void>>()
+/** Local ordering supplements the Manager ownership fence; it never replaces it. */
+export async function serializeRoomGitMutation<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = mutations.get(key) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => { release = resolve })
+  mutations.set(key, current)
+  await previous
+  try { return await operation() } finally {
+    release()
+    if (mutations.get(key) === current) mutations.delete(key)
+  }
+}
+
 /** No shell, inherited Git redirection, repository hooks, or external diff programs. */
 export async function runRoomGit(cwd: string, args: string[]): Promise<string> {
   const env = { ...process.env }

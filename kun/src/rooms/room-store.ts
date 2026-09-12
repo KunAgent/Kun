@@ -3,7 +3,8 @@ import type { Room } from '../contracts/rooms.js'
 
 export const RoomDocumentKindSchema = z.enum([
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
-  'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact'
+  'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
+  'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>
 const Id = z.string().min(1).max(256)
@@ -40,7 +41,10 @@ export const RoomStoreListOptionsSchema = z.object({
   afterSeq: Seq.optional(),
   order: z.enum(['asc', 'desc']).default('desc'),
   includeArchived: z.boolean().default(false),
-  archivedOnly: z.boolean().default(false)
+  archivedOnly: z.boolean().default(false),
+  search: z.string().trim().max(200).optional(),
+  activityOnly: z.boolean().optional(),
+  memberId: Id.optional(), repositoryId: Id.optional(), requestId: Id.optional(), documentId: Id.optional()
 }).strict()
 export type RoomStoreListOptions = z.input<typeof RoomStoreListOptionsSchema>
 
@@ -52,6 +56,7 @@ export const RoomListOptionsSchema = z.object({
     catch { return false }
   }, 'invalid room page cursor').optional(),
   archivedOnly: z.boolean().default(false),
+  search: z.string().trim().max(200).optional(),
   limit: z.number().int().min(1).max(1000).default(50)
 }).strict()
 export type RoomListOptions = z.input<typeof RoomListOptionsSchema>
@@ -107,6 +112,7 @@ export interface RoomStore {
   commit(input: RoomStoreCommit): Promise<RoomStoreCommitResult>
   getRequest(requestId: string): Promise<RoomStoreRequest | null>
   events(roomId: string, sinceSeq?: number, limit?: number): Promise<RoomStoreEvent[]>
+  latestEventSeq?(): Promise<number>
   assertOwnership(): Promise<void>
   close(): Promise<void>
 }

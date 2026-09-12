@@ -23,6 +23,13 @@ export const RoomMemberSchema = z.object({
     model: z.string().min(1).max(256),
     accountId: z.string().min(1).max(256).optional()
   }).strict().optional(),
+  capabilityOverrides: z.object({
+    allowedTools: z.array(z.string().min(1).max(256)).max(256).optional(),
+    blockedTools: z.array(z.string().min(1).max(256)).max(256).default([]),
+    blockedMcpServers: z.array(z.string().min(1).max(256)).max(100).default([]),
+    blockedSkills: z.array(z.string().min(1).max(256)).max(100).default([]),
+    skillsEnabled: z.boolean().optional()
+  }).strict().optional(),
   reviewPolicy: z.object({
     reviewerMemberId: RoomIdSchema,
     allowAutomaticRework: z.boolean().default(false),

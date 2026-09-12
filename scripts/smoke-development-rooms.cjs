@@ -32,6 +32,7 @@ const TASK_TITLE = 'Create desktop evidence file'
 const TASK_PROMPT = 'Create desktop-smoke.txt containing isolated desktop runtime and have it reviewed.'
 const FILE_CONTENT = 'isolated desktop runtime\n'
 const MODEL = 'deepseek-chat'
+const VALIDATION_COMMAND = 'node -e "process.exit(0)"'
 
 async function main() {
   const repositoryRoot = resolve(__dirname, '..')
@@ -133,6 +134,7 @@ async function main() {
     page = await findWorkbenchWindow(electronApplication, timeoutMs)
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
+    page.on('console', (message) => { if (message.type() === 'error' && message.text().includes('same key')) pageErrors.push(message.text()) })
     await page.waitForLoadState('domcontentloaded')
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
     const { room } = await runtimeRequest(page, '/v1/rooms', 'POST', {
@@ -149,6 +151,8 @@ async function main() {
     await poll(() => modelFixture.snapshot().executionRequests > 0, timeoutMs, 'real task model dispatch')
     await page.locator('[aria-label="Tasks"]').getByRole('button', { name: new RegExp(TASK_TITLE) }).waitFor()
     await capture('2-task-running')
+    const agreement = await exerciseRoomProductControls(page, room.id, capture)
+    assert.equal(agreement.version, 4)
 
     // Hold the real write response until the room has unmounted, proving that
     // neither scheduling nor execution depends on a Rooms React component.
@@ -159,7 +163,7 @@ async function main() {
     assert.equal(await page.locator('[data-rooms-workspace]').count(), 0)
     await capture('4-work-while-running')
     modelFixture.releaseExecution()
-    let task, approvalsResolved = 0
+    let task, approvalsResolved = 0, inputsResolved = 0, integrationInputsResolved = 0, integrationApprovalsResolved = 0
     await poll(async () => {
       const { tasks } = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks`)
       assert.equal(tasks.length, 1, 'One UI send must create exactly one task')
@@ -170,12 +174,9 @@ async function main() {
         await switchMode(page, 'rooms')
         await openTask(page)
         await capture('approval-required')
-        await page.getByRole('complementary', { name: 'Task details' })
-          .getByRole('button', { name: 'Open in Code', exact: true }).click()
-        await page.locator('[data-workspace-mode-trigger][data-workspace-mode="chat"]').first().waitFor()
-        const allow = page.getByRole('button', { name: 'Allow', exact: true })
+        const allow = page.getByRole('complementary', { name: 'Task details' }).getByRole('button', { name: 'Allow', exact: true })
         await allow.waitFor()
-        await capture('approval-in-code')
+        await capture('approval-in-room')
         const thread = await runtimeRequest(page, `/v1/threads/${task.executionThreadId}`)
         const pending = thread.turns.flatMap((turn) => turn.items ?? []).filter((item) =>
           item.kind === 'approval' && thread.pendingApprovalIds.includes(item.approvalId))
@@ -190,6 +191,17 @@ async function main() {
         approvalsResolved += 1
         await switchMode(page, 'write')
       }
+      if (task.status === 'needs_input' && inputsResolved === 0) {
+        await switchMode(page, 'rooms')
+        await openTask(page)
+        const question = page.getByRole('complementary', { name: 'Task details' })
+        await question.getByLabel('Proceed').check()
+        await question.getByRole('button', { name: 'Submit answers', exact: true }).click()
+        inputsResolved += 1
+        await capture('structured-answer-in-room')
+        await question.getByRole('button', { name: 'Close', exact: true }).click()
+        await switchMode(page, 'write')
+      }
       return task.status === 'awaiting_acceptance'
     }, timeoutMs, 'offscreen task development and review')
     assert(!existsSync(join(workspaceRoot, 'desktop-smoke.txt')), 'Task wrote the source checkout before explicit application')
@@ -200,7 +212,10 @@ async function main() {
     assert.equal(detailBeforeReload.reviews[0]?.verdict, 'passed')
     assert(detailBeforeReload.diff.includes(FILE_CONTENT.trim()), 'Delivery must include the actual write tool diff')
     const panel = page.getByRole('complementary', { name: 'Task details' })
-    await panel.getByText('Delivery v1', { exact: false }).waitFor()
+    await panel.getByRole('heading', { name: 'Delivery', exact: true }).waitFor()
+    await panel.getByRole('combobox', { name: 'Delivery history' }).selectOption(detailBeforeReload.delivery.id)
+    await panel.getByText(detailBeforeReload.delivery.versionHash, { exact: true }).waitFor()
+    await panel.getByRole('combobox', { name: 'Delivery history' }).selectOption('')
     await capture('5-reviewed-delivery')
 
     // Reload the actual Electron page and restore durable room state.
@@ -219,14 +234,54 @@ async function main() {
     await panel.getByRole('button', { name: 'Accept delivery', exact: true }).click()
     await panel.getByRole('button', { name: 'Apply changes', exact: true }).waitFor()
     assert(!existsSync(join(workspaceRoot, 'desktop-smoke.txt')), 'Accepting delivery applied changes prematurely')
-    await panel.getByRole('button', { name: 'Apply changes', exact: true }).click()
+    await writeFile(join(workspaceRoot, 'target-advance.txt'), 'new target commit\n')
+    await git(['add', 'target-advance.txt'])
+    await git(['commit', '-m', 'test: advance integration target'])
+    const targetSha = (await git(['rev-parse', 'HEAD'])).stdout.trim()
+    await panel.getByRole('textbox', { name: 'Validation commands', exact: true }).fill(VALIDATION_COMMAND)
+    await panel.getByRole('button', { name: 'Prepare integration', exact: true }).click()
+    await capture('integration-preparing')
+    await poll(async () => {
+      const alerts = await panel.getByRole('alert').allTextContents()
+      assert.equal(alerts.length, 0, alerts.join('\n'))
+      const { integrations } = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}/integrations`)
+      assert(!integrations.some((item) => ['failed', 'recovery_required'].includes(item.status)), JSON.stringify(integrations))
+      if (integrations[0]?.userInputs?.length && !integrationInputsResolved) {
+        await panel.getByLabel('Run verification').check()
+        await panel.getByRole('button', { name: 'Submit answers', exact: true }).click()
+        integrationInputsResolved += 1
+        await capture('integration-structured-answer')
+      }
+      if (integrations[0]?.approvals?.length && !integrationApprovalsResolved) {
+        const approval = integrations[0].approvals[0]
+        const ref = 'sha256:' + createHash('sha256').update(approval.id).digest('hex').slice(0, 16)
+        await installNativeConsentFixture(electronApplication, ref)
+        await panel.getByRole('button', { name: 'Allow', exact: true }).click()
+        integrationApprovalsResolved += 1
+        await capture('integration-protected-approval')
+      }
+      if (integrations[0]?.status === 'ready') assert.equal(integrations[0].validation[0]?.exitCode, 0)
+      return integrations[0]?.status === 'ready'
+    }, timeoutMs, 'immutable integration candidate review')
+    assert.equal(await panel.getByLabel('I reviewed this candidate and agree to apply it without recorded verification.').count(), 0)
+    await capture('integration-reviewed-verified-candidate')
+    await panel.getByRole('button', { name: 'Apply integration candidate', exact: true }).click()
     await poll(async () => {
       const detail = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}`)
       return detail.task.applicationStatus === 'applied'
     }, timeoutMs, 'explicit application to the isolated repository')
     assert.equal(await readFile(join(workspaceRoot, 'desktop-smoke.txt'), 'utf8'), FILE_CONTENT)
     assert.equal((await git(['status', '--porcelain'])).stdout.trim(), '')
-    await panel.getByText('Applied', { exact: true }).waitFor()
+    await panel.getByText('Applied', { exact: true }).first().waitFor()
+    assert.equal(await readFile(join(workspaceRoot, 'target-advance.txt'), 'utf8'), 'new target commit\n')
+    await panel.getByRole('button', { name: 'Review disk usage and cleanup', exact: true }).click()
+    await installCleanupConsentFixture(electronApplication)
+    await panel.getByRole('button', { name: 'Clean up directories', exact: true }).click()
+    await poll(() => !existsSync(detailBeforeReload.workspace.path), timeoutMs, 'explicit safe task cleanup')
+    assert.equal(await readFile(join(workspaceRoot, 'desktop-smoke.txt'), 'utf8'), FILE_CONTENT)
+    const retained = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}/deliveries/${detailBeforeReload.delivery.id}`)
+    assert.equal(retained.delivery.versionHash, detailBeforeReload.delivery.versionHash)
+    await capture('cleanup-retains-history')
     await capture('7-applied-delivery')
     await resize(electronApplication, 760, 780)
     await page.waitForTimeout(400)
@@ -242,16 +297,18 @@ async function main() {
     }), 'Underlying mode trigger paints above the narrow task overlay')
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
     assert.equal(approvalsResolved, 1, 'Expected the on-request tool approval path')
+    assert.equal(inputsResolved, 1, 'Expected the in-room structured answer path')
+    assert.equal(integrationInputsResolved, 1, 'Expected integration execution-specific structured input')
     result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
-      baselineSha, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      baselineSha, targetSha, agreement, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
       nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
       narrowViewport, pageErrors, screenshots,
       assertions: ['real Electron bridge and Manager-backed Runtime', 'UI send dispatches real write tool',
-        'Code and Work mode switches preserve background task', 'approval resolved from original thread in Code',
+        'Code and Work mode switches preserve background task', 'approval resolved within room through protected IPC', 'structured input answered within room', 'integration question answered on actual integration thread', 'versioned rules and search', 'durable read cursor',
         'immutable delivery and review',
-        'renderer reload restores delivery', 'accept does not apply', 'explicit UI application fast-forwards',
+        'renderer reload restores delivery', 'accept does not apply', 'target advances then declared validation and fixed-version review pass before applying the candidate', 'explicit cleanup retains immutable delivery history',
         'clean source repository', 'narrow task panel'] }
     await writeFile(join(evidenceRoot, 'report.json'), `${JSON.stringify(result, null, 2)}\n`)
   } catch (error) {
@@ -293,6 +350,52 @@ async function main() {
   }
   if (primaryError) throw primaryError
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+}
+
+async function exerciseRoomProductControls(page, roomId, capture) {
+  const userMessage = page.locator('article').filter({ hasText: TASK_PROMPT })
+  await userMessage.getByRole('button', { name: 'Pin as project agreement', exact: true }).click()
+  await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
+  await page.getByRole('button', { name: 'Edit agreement', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Edit agreement', exact: true }).fill('Use LF line endings for this project.')
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.getByRole('button', { name: 'History', exact: true }).click()
+  await page.getByText('v1 · Enabled · ' + TASK_PROMPT, { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Disable', exact: true }).click()
+  await page.getByRole('button', { name: 'Enable', exact: true }).click()
+  let rule
+  await poll(async () => { rule = (await runtimeRequest(page, `/v1/rooms/${roomId}/rules`)).rules[0]; return rule?.version === 4 }, 10000, 'versioned agreement edit/disable/restore')
+  assert.equal(rule.active, true)
+  await capture('agreement-history')
+  await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
+  const search = page.getByRole('textbox', { name: 'Search messages (2+ characters)', exact: true })
+  await search.fill('desktop-smoke.txt')
+  await page.locator('article').filter({ hasText: TASK_PROMPT }).waitFor()
+  await capture('message-search')
+  await search.fill('')
+  await poll(async () => {
+    const { rooms } = await runtimeRequest(page, '/v1/rooms')
+    const current = rooms.find((item) => item.id === roomId)
+    return current?.readSeq > 0
+  }, 10000, 'durable visible-message read cursor')
+  return { id: rule.id, version: rule.version, active: rule.active }
+}
+
+async function installCleanupConsentFixture(application) {
+  await application.evaluate(({ dialog }) => {
+    const original = dialog.showMessageBox
+    const state = { original, calls: 0 }
+    globalThis.__roomsSmokeNativeConsent = state
+    dialog.showMessageBox = async (...args) => {
+      const options = args.at(-1) ?? {}
+      if (state.calls === 0 && options.message === 'Remove these task directories?' && options.detail?.includes('rooms')) {
+        state.calls += 1
+        dialog.showMessageBox = original
+        return { response: 0, checkboxChecked: false }
+      }
+      return original.apply(dialog, args)
+    }
+  })
 }
 
 async function installNativeConsentFixture(application, approvalRef) {
@@ -363,7 +466,7 @@ async function poll(check, timeoutMs, description) {
 async function startModelFixture() {
   let releaseExecution
   const gate = new Promise((resolve) => { releaseExecution = resolve })
-  const state = { coordinationRequests: 0, executionRequests: 0, reviewRequests: 0, otherRequests: 0 }
+  const state = { coordinationRequests: 0, executionRequests: 0, reviewRequests: 0, inputRequests: 0, otherRequests: 0 }
   const server = createServer(async (request, response) => {
     try {
       if (request.method === 'GET' && /\/models(?:\?|$)/u.test(request.url ?? '')) {
@@ -377,21 +480,33 @@ async function startModelFixture() {
       const body = JSON.parse(Buffer.concat(chunks).toString())
       const prompt = JSON.stringify(body.messages)
       let content = 'Completed.', toolCalls
+      const called = (name) => body.messages.some((message) => message.tool_calls?.some((tool) => tool.function?.name === name))
+      const tool = (name, args) => [{ index: 0, id: 'smoke-' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
       if (prompt.includes('You coordinate a personal Kun room')) {
         state.coordinationRequests += 1
-        content = JSON.stringify({ kind: 'execute', response: 'Development and review assigned.', participants: [],
+        if (!called('submit_room_plan')) { content = ''; toolCalls = tool('submit_room_plan', { kind: 'execute', response: 'Development and review assigned.', participants: [],
           assignments: [{ key: 'desktop-smoke', memberId: 'developer', repositoryId: 'repo',
-            title: TASK_TITLE, prompt: TASK_PROMPT, dependsOn: [], reviewerMemberId: 'reviewer' }] })
-      } else if (prompt.includes('Review this immutable delivered version')) {
+            title: TASK_TITLE, prompt: TASK_PROMPT, dependsOn: [], reviewerMemberId: 'reviewer' }] }) }
+      } else if (prompt.includes('Run exactly the declared verification commands without changing candidate source code')) {
+        state.validationRequests = (state.validationRequests ?? 0) + 1
+        if (!called('user_input')) {
+          content = ''; toolCalls = tool('user_input', { prompt: 'Integration validation choice', questions: [{ id: 'validation', question: 'Run the declared verification command?', options: [{ label: 'Run verification', description: 'Execute the isolated candidate check.' }, { label: 'Stop verification', description: 'Do not continue.' }] }] })
+        } else if (!called('declare_room_checks')) { content = ''; toolCalls = tool('declare_room_checks', { checks: [{ id: 'candidate-exit-code', command: VALIDATION_COMMAND }] }) }
+        else if (!called('bash')) { content = ''; toolCalls = tool('bash', { command: VALIDATION_COMMAND }) }
+        else content = 'Declared verification completed successfully.'
+      } else if (prompt.includes('Review this immutable delivered version') || prompt.includes('Review this immutable integrated candidate')) {
         state.reviewRequests += 1
-        content = JSON.stringify({ verdict: 'passed', findings: [], limitations: ['No test command requested.'] })
+        if (!called('submit_room_review')) { content = ''; toolCalls = tool('submit_room_review', { verdict: 'passed', findings: [], limitations: ['Only declared checks are covered.'] }) }
       } else if (prompt.includes('Complete this authorized room task')) {
         state.executionRequests += 1
         await gate
-        if (!body.messages.some((message) => message.role === 'tool')) {
+        if (!called('write')) {
           content = ''
           toolCalls = [{ index: 0, id: 'desktop-smoke-write', type: 'function', function: { name: 'write',
             arguments: JSON.stringify({ path: 'desktop-smoke.txt', content: FILE_CONTENT }) } }]
+        } else if (!called('user_input')) {
+          state.inputRequests += 1
+          content = ''; toolCalls = tool('user_input', { prompt: 'Confirm the smoke fixture delivery', questions: [{ id: 'delivery', question: 'Deliver this file?', options: [{ label: 'Proceed', description: 'Finish the requested file.' }, { label: 'Stop', description: 'Cancel delivery.' }] }] })
         } else content = 'Created desktop-smoke.txt; no test commands were run.'
       } else state.otherRequests += 1
       const message = { role: 'assistant', content, ...(toolCalls ? { tool_calls: toolCalls } : {}) }

@@ -7,9 +7,14 @@ import { roomTaskAction } from './room-task-actions.js'
 import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
 import type { RoomStore, RoomStoredDocument } from './room-store.js'
 import { roomTaskActivity } from './room-task-activity.js'
+import { RoomProductService } from './room-product-service.js'
+import { RoomIntegrationService } from './room-integration.js'
+import { roomActivitySummary } from './room-activity-summary.js'
 
 export class RoomRuntime {
   readonly service: RoomService
+  readonly product: RoomProductService
+  readonly integrations: RoomIntegrationService
   private readonly requests: RoomRequestRunner
   private readonly tasks: RoomTaskRunner
   private timer?: ReturnType<typeof setTimeout>
@@ -22,6 +27,8 @@ export class RoomRuntime {
     apiStore: RoomStore = deps.store) {
     this.service = new RoomService(apiStore, () => this.wake())
     this.executionService = new RoomService(deps.store, () => this.wake())
+    this.product = new RoomProductService(deps, this.service)
+    this.integrations = new RoomIntegrationService(deps)
     this.requests = new RoomRequestRunner(deps, this.executionService)
     this.tasks = new RoomTaskRunner(deps, this.executionService)
   }
@@ -47,10 +54,15 @@ export class RoomRuntime {
     await this.actionQueue.catch(() => undefined)
   }
   async action(roomId: string, id: string, action: string, input: unknown) {
-    const run = this.exclusive(() => roomTaskAction(this.deps, roomId, id, action, input))
+    const run = this.exclusive(async () => {
+      const result = await roomTaskAction(this.deps, roomId, id, action, input)
+      const row = await this.deps.store.get<RoomTaskExecution>('task', id)
+      if (row) await this.product.summarizeRequests([row.value])
+      return result
+    })
     try { return await run } finally { this.wake() }
   }
-  private exclusive<T>(operation: () => Promise<T>): Promise<T> {
+  exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const run = this.actionQueue.catch(() => undefined).then(operation)
     this.actionQueue = run
     return run
@@ -70,8 +82,12 @@ export class RoomRuntime {
   }
   async listRooms(input: { cursor?: string; archivedOnly?: boolean; limit: number }) {
     const page = await this.service.store.listRooms(input)
-    return { rooms: page.rooms.map((row) => ({ ...row.value, revision: row.revision,
-      latestMessageSeq: row.latestMessageSeq })), nextCursor: page.nextCursor }
+    return { rooms: await Promise.all(page.rooms.map(async (row) => {
+      const { runningCount, attentionCount } = await roomActivitySummary(this.service.store, row.id)
+      return { ...row.value, revision: row.revision, latestMessageSeq: row.latestMessageSeq,
+        readSeq: (await this.service.store.get<{ seq: number }>('read_state', row.id))?.value.seq ?? 0,
+        runningCount, attentionCount }
+    })), nextCursor: page.nextCursor }
   }
   async messages(roomId: string, limit: number, cursor?: number) {
     await this.service.get(roomId)
@@ -109,6 +125,19 @@ export class RoomRuntime {
       execution.reviewer?.id ?? execution.task.ownerMemberId : execution.task.ownerMemberId
     let occupied = 0
     const busyMembers = new Set<string>()
+    const integrations = await this.integrations.active()
+    const activeIntegrations = new Set<string>()
+    const integrationMembers = new Map<string, string>()
+    for (const row of integrations) {
+      const task = await this.deps.store.get<RoomTaskExecution>('task', row.value.taskId)
+      const member = row.roomId + ':' + (row.value.runKind === 'review' ? task?.value.reviewer?.id : task?.value.task.ownerMemberId)
+      integrationMembers.set(row.id, member)
+      try {
+        if (await this.integrations.activity(row.value) !== 'idle') {
+          activeIntegrations.add(row.id); occupied++; busyMembers.add(member)
+        }
+      } catch { activeIntegrations.add(row.id); occupied++; busyMembers.add(member) }
+    }
     const occupiedTasks = new Set<string>()
     for (const row of taskRows) {
       const execution = row.value
@@ -140,6 +169,16 @@ export class RoomRuntime {
           occupiedTasks.add(row.id)
           busyMembers.add(row.roomId + ':' + actingMember(execution))
         }
+      }
+    }
+    await this.product.summarizeRequests(taskRows.map((row) => row.value))
+    for (const row of integrations) {
+      const member = integrationMembers.get(row.id)!
+      const allowStart = occupied < 2 && !busyMembers.has(member)
+      await this.integrations.tick(row, allowStart)
+      if (allowStart && !activeIntegrations.has(row.id)) {
+        const current = await this.integrations.get(row.value.roomId, row.value.taskId, row.id)
+        if (await this.integrations.activity(current.value) !== 'idle') { occupied++; busyMembers.add(member) }
       }
     }
   }

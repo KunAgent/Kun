@@ -81,11 +81,12 @@ describe('durable room task user actions', () => {
     await f.h.threads.create({ workspace: f.root, model: 'fake', mode: 'agent' }, { id: 'execution-a' })
     const turn = await f.h.turns.enqueueTurn({ threadId: 'execution-a', request: { prompt: 'queued', clientRequestId: 'task-a-attempt-1' } })
     await f.save()
-    const signal = vi.spyOn(f.h.turns, 'cancelQueuedTurn').mockImplementationOnce(async () => {
+    const signal = vi.spyOn(f.h.turns, 'cancelQueuedTurn').mockImplementation(async () => {
       expect((await f.current()).value.task.status).toBe('stopping')
       throw new Error('crash before cancellation signal')
     })
     await expect(f.action('cancel', 'cancel-once', 0)).rejects.toThrow('crash before cancellation')
+    expect(signal).toHaveBeenCalledTimes(3)
     expect((await f.current()).value.turnId).toBe(turn.turnId)
     signal.mockRestore()
     await f.action('cancel', 'cancel-once', 0)
@@ -93,18 +94,20 @@ describe('durable room task user actions', () => {
   })
 
   it('requires actual stopped execution before retry and invalidates the previous delivery selection', async () => {
-    const f = await fixture()
+    const f = await delivered()
     await f.h.threads.create({ workspace: f.root, model: 'fake', mode: 'agent' }, { id: 'execution-a' })
     const turn = await f.h.turns.enqueueTurn({ threadId: 'execution-a', request: { prompt: 'queued' } })
     f.execution.task.status = 'failed'
-    f.execution.task.latestDeliveryId = 'old-delivery'
-    f.execution.task.acceptedDeliveryId = 'old-delivery'
+    f.execution.task.latestDeliveryId = f.delivery.id
+    f.execution.task.acceptedDeliveryId = f.delivery.id
     f.execution.task.applicationStatus = 'applied'
     f.execution.turnId = turn.turnId
     await f.save()
-    await expect(f.action('retry', 'retry-once', 0)).rejects.toThrow('existing execution')
+    const revision = (await f.current()).revision
+    await expect(f.action('retry', 'retry-once', revision)).rejects.toThrow('existing execution')
     await f.h.turns.cancelQueuedTurn({ threadId: 'execution-a', turnId: turn.turnId })
-    await f.action('retry', 'retry-once', 0)
+    await f.action('retry', 'retry-once', revision)
+    expect((await f.store.get('delivery', f.delivery.id))?.value).toEqual(f.delivery)
     expect((await f.current()).value).toMatchObject({ attempt: 2, task: { stage: 'fix', status: 'queued', applicationStatus: 'not_applied' } })
     expect((await f.current()).value.task.latestDeliveryId).toBeUndefined()
     expect((await f.current()).value.task.acceptedDeliveryId).toBeUndefined()

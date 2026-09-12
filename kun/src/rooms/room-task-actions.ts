@@ -3,6 +3,9 @@ import type { RoomRuntimeDeps, RoomTaskExecution } from './room-runtime-types.js
 import { RoomStoreConflictError } from './room-store.js'
 import { roomFingerprint } from './room-service.js'
 import { applyRoomTask, type RoomActionResult } from './room-task-application.js'
+import { withLatestRoomReview } from './room-feedback.js'
+import { assertNoActiveRoomIntegration } from './room-integration.js'
+import { stopRoomTaskTurn } from './room-task-activity.js'
 
 export async function roomTaskAction(deps: RoomRuntimeDeps, roomId: string, id: string, action: string, input: unknown) {
   const body = RoomTaskActionSchema.parse(input)
@@ -19,10 +22,16 @@ export async function roomTaskAction(deps: RoomRuntimeDeps, roomId: string, id: 
   await deps.assertOwnership()
   const row = await deps.store.get<RoomTaskExecution>('task', id)
   if (!row || row.roomId !== roomId) throw new Error('task not found')
-  if (action === 'apply') return applyRoomTask({ deps, row, body, requestId, fingerprint })
+  if (action === 'apply') {
+    await assertNoActiveRoomIntegration(deps, roomId, id)
+    return applyRoomTask({ deps, row, body, requestId, fingerprint })
+  }
   if (row.revision !== body.expectedRevision) throw new RoomStoreConflictError('task changed; reload before retrying', row.revision)
   const execution = structuredClone(row.value)
   const { task } = execution
+  if (action !== 'cancel') {
+    await assertNoActiveRoomIntegration(deps, roomId, id)
+  }
   if (task.applicationStatus === 'applying') {
     throw new RoomStoreConflictError('resolve the pending application before changing this task')
   }
@@ -33,7 +42,7 @@ export async function roomTaskAction(deps: RoomRuntimeDeps, roomId: string, id: 
     if (!targetTurnId) targetTurnId = thread?.turns.find((turn) => turn.status === 'queued' || turn.status === 'running')?.id
     if (targetThreadId && targetTurnId) {
       const turn = thread?.turns.find((candidate) => candidate.id === targetTurnId)
-      if (turn?.status === 'queued' || turn?.status === 'running') {
+      if (turn?.status === 'queued' || turn?.status === 'running' || deps.backgroundExecutionActive?.(targetThreadId)) {
         // Persist stopping before crossing the cancellation boundary.
         task.status = 'stopping'
         if (task.stage === 'review') execution.reviewTurnId = targetTurnId
@@ -54,14 +63,21 @@ export async function roomTaskAction(deps: RoomRuntimeDeps, roomId: string, id: 
     if (threads.some((thread) => thread?.turns.some((turn) => turn.status === 'queued' || turn.status === 'running'))) {
       throw new RoomStoreConflictError('resolve or cancel the existing execution before retrying')
     }
-    if (targetTurnId && !threads.some((thread) => thread?.turns.some((turn) => turn.id === targetTurnId))) {
+    if (!execution.recoveryResolved && targetTurnId && !threads.some((thread) => thread?.turns.some((turn) => turn.id === targetTurnId))) {
       throw new RoomStoreConflictError('execution identity is missing; confirm recovery before retrying')
     }
     execution.attempt += 1
+    if (execution.recoveryResolved && !threads.some((thread) => thread?.id === task.executionThreadId)) {
+      execution.previousExecutionThreadIds = [...(execution.previousExecutionThreadIds ?? []), task.executionThreadId]
+      task.executionThreadId = 'room-recovered-' + roomFingerprint({ roomId, id, requestId }).slice(0, 48)
+      execution.prompt += '\nRecovery: inspect the retained worktree and prior delivery evidence before continuing. Do not assume earlier side effects need repeating.'
+    }
+    execution.recoveryResolved = false
+    execution.abandoned = false
     execution.turnId = undefined
     execution.reviewThreadId = undefined
     execution.reviewTurnId = undefined
-    execution.prompt += body.body ? '\nUser continuation:\n' + body.body : ''
+    execution.prompt = await withLatestRoomReview(deps, execution) + (body.body ? '\nUser continuation:\n' + body.body : '')
     task.status = execution.dependencyTaskIds.length && !execution.dependencyDeliveries ? 'waiting_dependency' : 'queued'
     task.stage = task.latestDeliveryId ? 'fix' : 'develop'
     task.latestDeliveryId = undefined
@@ -72,14 +88,15 @@ export async function roomTaskAction(deps: RoomRuntimeDeps, roomId: string, id: 
     if (task.status !== 'awaiting_acceptance' || !task.latestDeliveryId) throw new RoomStoreConflictError('no current delivery ready for acceptance')
     task.status = 'completed'
     task.acceptedDeliveryId = task.latestDeliveryId
-  } else if (action === 'review') {
-    if (!task.latestDeliveryId || !execution.reviewer || !['awaiting_acceptance', 'completed', 'needs_input'].includes(task.status)) {
+  } else if (action === 'review' || action === 'retry-review') {
+    if (!task.latestDeliveryId || !execution.reviewer || !['awaiting_acceptance', 'completed', 'needs_input', 'recovery_required', 'failed'].includes(task.status)) {
       throw new RoomStoreConflictError('select a reviewer through the task reply before requesting review')
     }
     task.stage = 'review'
     task.status = 'running'
     execution.reviewThreadId = 'room-review-' + id + '-' + execution.attempt + '-' + roomFingerprint(body.clientRequestId).slice(0, 12)
     execution.reviewTurnId = undefined
+    execution.reviewRepairs = 0
   } else throw new Error('unknown task action')
   task.revision = row.revision + 1
   task.updatedAt = new Date().toISOString()
@@ -100,8 +117,5 @@ async function retryCancellation(deps: RoomRuntimeDeps, roomId: string, id: stri
   const threadId = execution.task.stage === 'review' ? execution.reviewThreadId : execution.task.executionThreadId
   const turnId = execution.task.stage === 'review' ? execution.reviewTurnId : execution.turnId
   if (!threadId || !turnId) return
-  const thread = await deps.threads.getMetadata(threadId)
-  const turn = thread?.turns.find((candidate) => candidate.id === turnId)
-  if (turn?.status === 'queued') await deps.turns.cancelQueuedTurn({ threadId, turnId })
-  else if (turn?.status === 'running') await deps.turns.interruptTurn({ threadId, turnId })
+  await stopRoomTaskTurn(deps, threadId, turnId)
 }

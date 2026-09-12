@@ -158,4 +158,23 @@ describe('canonical SQLite room store', () => {
     expect((await store.listRooms({ archivedOnly: true, limit: 1 })).rooms.map((row) => row.id)).toEqual(['archived'])
     await expect(store.listRooms({ cursor: '-1' })).rejects.toThrow('invalid room page cursor')
   })
+
+  it('projects only activity metadata for badge scans without reading diff, prompts or frozen configuration', async () => {
+    const { store } = await database()
+    await store.commit(insertion('task-activity', 'task', { task: { id: 'task-activity', status: 'running',
+      memberSnapshot: { prompt: 'large private role context' } }, prompt: 'large task context' }))
+    await store.commit({ requestId: 'integration-activity', checks: [{ kind: 'integration', id: 'integration-activity', expectedRevision: null }],
+      puts: [{ kind: 'integration', id: 'integration-activity', roomId: 'room-a', taskId: 'task-activity', value: {
+        taskId: 'task-activity', status: 'validating', cancelRequested: true, diff: 'large diff'.repeat(10000),
+        candidates: [{ diff: 'old candidate diff' }], validation: [{ output: 'large log' }],
+        attention: { approvalIds: ['approval'], userInputIds: [] }, applyIntent: { candidateSha: 'pinned' }
+      } }] })
+    expect((await store.list('task', { activityOnly: true }))[0].value).toEqual({ task: { status: 'running' } })
+    const projected = (await store.list('integration', { activityOnly: true }))[0]
+    expect(projected.taskId).toBe('task-activity')
+    expect(projected.value).toEqual({ taskId: 'task-activity', status: 'validating', cancelRequested: true,
+      attention: { approvalIds: ['approval'], userInputIds: [] }, applyIntent: { candidateSha: 'pinned' } })
+    expect((await store.get<{ diff: string }>('integration', 'integration-activity'))!.value.diff.length).toBeGreaterThan(1000)
+    await expect(store.list('message', { activityOnly: true })).rejects.toThrow('activity projection requires')
+  })
 })

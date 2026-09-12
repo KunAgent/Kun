@@ -91,4 +91,16 @@ describe('room data over the real Manager HTTP boundary', () => {
     expect(await store.list('room')).toEqual([])
     await expect(store.commit({ requestId: 'degraded' })).rejects.toMatchObject({ status: 503 })
   })
+
+  it('preserves the internal activity projection across the Manager boundary', async () => {
+    const { store } = await manager()
+    await store.commit({ requestId: 'activity', checks: [{ kind: 'integration', id: 'integration', expectedRevision: null }],
+      puts: [{ kind: 'integration', id: 'integration', roomId: 'room', taskId: 'task', value: {
+        taskId: 'task', status: 'validating', diff: 'large omitted candidate diff',
+        attention: { approvalIds: ['approval'], userInputIds: [] }
+      } }] })
+    const rows = await store.list<{ status: string; attention: unknown; diff?: string }>('integration', { roomId: 'room', activityOnly: true })
+    expect(rows[0]).toMatchObject({ taskId: 'task', value: { status: 'validating', attention: { approvalIds: ['approval'] } } })
+    expect(rows[0].value).not.toHaveProperty('diff')
+  })
 })

@@ -304,3 +304,29 @@ describe('room dependency and review lifecycle', () => {
     expect((await f.store.get<RoomTaskExecution>('task', 'cancelled'))?.value.task.status).toBe('cancelled')
   })
 })
+
+describe('bounded room review format repairs', () => {
+  it('retries only the pinned review twice and retains the developer attempt and immutable delivery', async () => {
+    const f = await fixture()
+    const value = await f.task('format-repair')
+    const delivery = await f.deliver(value.execution, value.workspace)
+    const first = await f.reviewed(value.execution, 'review-format', 'passed')
+    await f.h.sessionStore.updateItem('review-format', 'result-review-format', { text: 'Malformed review output' })
+    await f.runner.tick(first, true)
+    for (let repair = 1; repair <= 2; repair += 1) {
+      const row = (await f.store.get<RoomTaskExecution>('task', value.execution.task.id))!
+      expect(row.value.reviewRepairs).toBe(repair)
+      expect(row.value.attempt).toBe(1)
+      expect(row.value.task.latestDeliveryId).toBe(delivery.id)
+      const thread = (await f.h.threadStore.get('review-format'))!
+      await f.h.threadStore.upsert({ ...thread, turns: thread.turns.map((turn) => turn.id === row.value.reviewTurnId ? { ...turn, status: 'completed' as const } : turn) })
+      await f.h.sessionStore.appendItem(thread.id, makeAssistantTextItem({ id: 'invalid-repair-' + repair,
+        threadId: thread.id, turnId: row.value.reviewTurnId!, status: 'completed', text: 'Still malformed' }))
+      if (repair < 2) await f.runner.tick(row, true)
+      else await expect(f.runner.tick(row, true)).rejects.toThrow('单独重试评审')
+    }
+    expect((await f.h.threadStore.get('review-format'))?.turns).toHaveLength(3)
+    expect(await f.h.threadStore.get(value.execution.task.executionThreadId)).toBeNull()
+    expect((await f.store.get<RoomDelivery>('delivery', delivery.id))?.value.versionHash).toBe(delivery.versionHash)
+  })
+})

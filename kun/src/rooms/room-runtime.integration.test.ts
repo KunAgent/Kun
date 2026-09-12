@@ -8,6 +8,9 @@ import { makeHarness } from '../../tests/loop-test-harness.js'
 import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
 import { QueuedTurnDispatcher } from '../server/queued-turn-dispatcher.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
+import { roomResultProvider } from './room-result-tools.js'
+import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
+import { buildBuiltinLocalTools } from '../adapters/tool/builtin-tools.js'
 import { RoomRuntime } from './room-runtime.js'
 import type { RoomTaskExecution } from './room-runtime-types.js'
 
@@ -15,7 +18,7 @@ const exec = promisify(execFile)
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
 
-async function fixture() {
+async function fixture(structuredResults = false, malformedResults = false) {
   const root = await mkdtemp(join(tmpdir(), 'kun-room-runtime-'))
   cleanups.push(() => rm(root, { recursive: true, force: true }))
   const repo = join(root, 'repo with spaces')
@@ -31,11 +34,23 @@ async function fixture() {
     async *stream(request): AsyncIterable<ModelStreamChunk> {
       calls.set(request.threadId, (calls.get(request.threadId) ?? 0) + 1)
       if (request.threadId.startsWith('room-discussion')) {
+        if (structuredResults && (malformedResults || calls.get(request.threadId) === 1)) {
+          expect(request.tools.map((tool) => tool.name)).toEqual(['submit_room_plan'])
+          yield { kind: 'tool_call_complete', callId: 'plan', toolName: 'submit_room_plan', arguments: malformedResults ? { response: 'Invalid attempt ' + calls.get(request.threadId) } : plans.current as Record<string, unknown> }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+          return
+        }
         yield { kind: 'assistant_text_delta', text: JSON.stringify(plans.current ?? {
           kind: 'answer', response: '讨论完成', participants: [], assignments: []
         }) }
       } else if (request.threadId.startsWith('room-review')) {
         expect(request.tools.some((tool) => tool.name === 'write' || tool.name === 'bash')).toBe(false)
+        if (structuredResults && (malformedResults || calls.get(request.threadId) === 1)) {
+          expect(request.tools.map((tool) => tool.name)).toContain('submit_room_review')
+          yield { kind: 'tool_call_complete', callId: 'review', toolName: 'submit_room_review', arguments: { verdict: 'passed', findings: [], limitations: ['No tests executed by reviewer'] } }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+          return
+        }
         yield { kind: 'assistant_text_delta', text: JSON.stringify({ verdict: 'passed', findings: [], limitations: ['No tests executed by reviewer'] }) }
       } else if (request.threadId.startsWith('room-execution')) {
         if ((calls.get(request.threadId) ?? 0) === 1) {
@@ -51,6 +66,9 @@ async function fixture() {
       yield { kind: 'completed', stopReason: 'stop' }
     } }
   const h = makeHarness(model)
+  if (structuredResults) h.toolHost.replaceRuntimeComponents({ registry: new CapabilityRegistry([
+    { id: 'builtin', kind: 'built-in', enabled: true, available: true, tools: buildBuiltinLocalTools() }, roomResultProvider(h.threadStore)
+  ]) })
   h.threads.updateRuntimeDefaults({ approvalPolicy: 'auto', sandboxMode: 'workspace-write',
     approvalReviewer: 'user', modelRequestCaptureEnabled: false })
   const dispatcher = new QueuedTurnDispatcher({ turns: h.turns, threadStore: h.threadStore,
@@ -77,8 +95,8 @@ async function fixture() {
 }
 
 describe('Rooms real queue, AgentLoop and Git integration', () => {
-  it('delivers and reviews an actual isolated tool change, then accepts and applies without duplicate execution', async () => {
-    const f = await fixture()
+  it.each([false, true])('delivers and reviews an actual isolated tool change without duplicate execution (structured results: %s)', async (structuredResults) => {
+    const f = await fixture(structuredResults)
     const enqueue = f.h.turns.enqueueTurn.bind(f.h.turns)
     let lostAdmissionResponse = false
     vi.spyOn(f.h.turns, 'enqueueTurn').mockImplementation(async (input) => {
@@ -121,6 +139,17 @@ describe('Rooms real queue, AgentLoop and Git integration', () => {
     const execution = await f.h.threads.getMetadata(task.executionThreadId)
     expect(execution?.turns).toHaveLength(1)
   }, 30000)
+
+  it('stops invalid native result submission after the initial attempt and two repairs without scheduling work', async () => {
+    const f = await fixture(true, true)
+    await f.runtime.service.send(f.room.id, { clientRequestId: 'invalid-native', body: 'Implement result', executionIntent: 'execute' })
+    await vi.waitFor(async () => {
+      const request = (await f.store.list<{ status: string; error?: string }>('request', { roomId: f.room.id }))[0]
+      expect(request.value.status).toBe('failed')
+    }, { timeout: 15000 })
+    expect([...f.calls.values()]).toEqual([3])
+    expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
+  }, 20000)
 
   it('fails closed when a discussion classifier tries to schedule code', async () => {
     const f = await fixture()

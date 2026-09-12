@@ -123,7 +123,23 @@ export function createServerRuntimeComposition(
     options: () => config.activeOptions,
     services: { threads: threadService, threadStore: stores.threadStore,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
-      runTurn: runAgentTurn }
+      runTurn: runAgentTurn,
+      backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
+      stopBackgroundExecution: async (threadId) => { await backgroundShellRuntime.stopThread(threadId) },
+      proveStopped: async (threadId, turnId) => {
+        if (turnId && turnService.isTurnExecutionActive(turnId)) return false
+        if (backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running')) return false
+        if (executionLeases && await executionLeases.owner(threadId)) return false
+        const thread = await threadService.getMetadata(threadId)
+        if (thread?.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')) return false
+        if (!turnId) return true
+        if (thread?.turns.some((turn) => turn.id === turnId && ['completed', 'failed', 'aborted'].includes(turn.status))) return true
+        // Lease absence alone does not prove a missing executor finished.
+        const highest = await sessionStore.highestSeq(threadId)
+        const tail = await sessionStore.loadEventsSince(threadId, Math.max(0, highest - 1000))
+        return tail.some((event) => event.turnId === turnId &&
+          ['turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind))
+      } }
   })
   return {
     threadService,

@@ -1,13 +1,18 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoomMessage } from '../contracts/rooms.js'
-import type { RoomRequestState, RoomRuntimeDeps, RoomTaskExecution } from './room-runtime-types.js'
+import type { RoomRequestState, RoomRuntimeDeps, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
 import { RoomRequestRunner } from './room-request-runner.js'
 import { RoomService, putRoomDocument } from './room-service.js'
+import { createRoomDelivery } from './room-delivery-service.js'
+import { createRoomTaskWorktree } from './task-workspace-service.js'
+import { roomReviewFeedback } from './room-feedback.js'
+import type { RoomReview } from '../contracts/room-deliveries.js'
+import { dirname } from 'node:path'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 
 const execution = vi.hoisted(() => ({ ensure: vi.fn(), enqueue: vi.fn(), observe: vi.fn() }))
@@ -42,7 +47,7 @@ async function fixture(mode: 'directed' | 'autonomous' = 'autonomous') {
   const cancel = vi.fn().mockResolvedValue(undefined)
   const deps = {
     store, dataDir: root, model: () => ({ model: 'test-model', providerId: 'test-provider' }),
-    profiles: () => ({}), threads: { getMetadata: metadata }, turns: { steerTurn: steer, cancelQueuedTurn: cancel }
+    profiles: () => ({}), assertOwnership: async () => {}, threads: { getMetadata: metadata }, turns: { steerTurn: steer, cancelQueuedTurn: cancel }
   } as unknown as RoomRuntimeDeps
   const runner = new RoomRequestRunner(deps, service)
   const { room } = await service.create({ clientRequestId: 'create', name: 'Room', collaborationMode: mode,
@@ -53,7 +58,14 @@ async function fixture(mode: 'directed' | 'autonomous' = 'autonomous') {
     return row
   }
   const tick = async (requestId: string) => runner.tick(await request(requestId))
-  return { root, repo, room, store, service, runner, deps, metadata, steer, cancel, wake, request, tick }
+  const readyWorkspace = async (task: RoomTaskExecution['task']) => {
+    const row = (await store.get<RoomWorkspace>('workspace', task.workspaceId))!
+    await mkdir(dirname(row.value.path), { recursive: true })
+    await createRoomTaskWorktree({ repository: row.value.repository, taskId: task.id, destination: row.value.path, assertOwnership: deps.assertOwnership })
+    await putRoomDocument(store, 'workspace', row.id, room.id, { ...row.value, state: 'ready' }, row, task.id)
+    return row.value
+  }
+  return { readyWorkspace, root, repo, room, store, service, runner, deps, metadata, steer, cancel, wake, request, tick }
 }
 const assignment = (key = 'first', repositoryId = 'repo') => ({
   key, memberId: 'developer', repositoryId, title: 'Implement result', prompt: 'Add the requested result', dependsOn: []
@@ -212,12 +224,15 @@ describe('Room task amendments and incremental messages', () => {
     const f = await fixture()
     const taskRow = await createTask(f)
     const task = { ...taskRow.value.task, status: 'completed' as const, latestDeliveryId: 'delivery-one',
-      acceptedDeliveryId: 'delivery-one', applicationStatus: 'applied', verificationStatus: 'passed' }
+      acceptedDeliveryId: 'delivery-one', applicationStatus: 'applied' as const, verificationStatus: 'passed' as const }
     await putRoomDocument(f.store, 'task', task.id, f.room.id, { ...taskRow.value, task }, taskRow, task.id)
-    const delivery = { id: 'delivery-one', taskId: task.id, versionHash: 'a'.repeat(40),
-      summary: 'Added empty input handling', diffArtifactId: 'diff-one' }
+    const workspace = await f.readyWorkspace(task)
+    await writeFile(join(workspace.path, 'file.txt'), 'if (!input) return null\n')
+    const delivery = await createRoomDelivery({ id: 'delivery-one', taskId: task.id, attemptId: 'attempt-1', version: 1,
+      workspacePath: workspace.path, workspaceBranch: workspace.branch, repository: workspace.repository,
+      baseRevision: workspace.baseRevision, summary: 'Added empty input handling', assertOwnership: f.deps.assertOwnership,
+      persistDiff: async (id, diff) => putRoomDocument(f.store, 'artifact', id, f.room.id, diff, null, task.id) })
     await putRoomDocument(f.store, 'delivery', delivery.id, f.room.id, delivery, null, task.id)
-    await putRoomDocument(f.store, 'artifact', 'diff-one', f.room.id, '+ if (!input) return null', null, task.id)
     const before = await f.store.get('task', task.id)
     const sent = await f.service.send(f.room.id, { clientRequestId: 'question', body: 'What did this task change?',
       taskId: task.id, executionIntent: intent })
@@ -232,10 +247,12 @@ describe('Room task amendments and incremental messages', () => {
     const prompt = execution.enqueue.mock.calls.at(-1)?.[3] as string
     expect(prompt).toContain(delivery.versionHash)
     expect(prompt).toContain(delivery.summary)
-    expect(prompt).toContain('+ if (!input) return null')
-    expect(prompt).toContain('the task repository is not mounted here')
-    expect(prompt).toContain('request a formal review when needed')
-    expect(execution.ensure.mock.calls.at(-1)?.[1].workspace).toBeUndefined()
+    expect(prompt).toContain('+if (!input) return null')
+    expect(prompt).toContain('Inspect the pinned delivered commit read-only')
+    const pinned = execution.ensure.mock.calls.at(-1)?.[1].workspace
+    expect(await readFile(join(pinned, 'file.txt'), 'utf8')).toContain('if (!input) return null')
+    await writeFile(join(workspace.path, 'file.txt'), 'later unreviewed content')
+    expect(await readFile(join(pinned, 'file.txt'), 'utf8')).not.toContain('later unreviewed')
     execution.observe.mockResolvedValueOnce({ status: 'completed', text: 'The fixed delivery added empty input handling.' })
     await f.tick(sent.requestId)
     await f.tick(sent.requestId)
@@ -250,6 +267,7 @@ describe('Room task amendments and incremental messages', () => {
     const taskRow = await createTask(f)
     const task = { ...taskRow.value.task, status: 'running' as const, latestProgress: 'Still checking input' }
     await putRoomDocument(f.store, 'task', task.id, f.room.id, { ...taskRow.value, task, turnId: 'live' }, taskRow, task.id)
+    const workspace = await f.readyWorkspace(task)
     f.metadata.mockResolvedValue({ turns: [{ id: 'live', status: 'running' }] })
     const sent = await f.service.send(f.room.id, { clientRequestId: 'progress', body: 'How is this going?', taskId: task.id })
     await f.tick(sent.requestId)
@@ -260,7 +278,8 @@ describe('Room task amendments and incremental messages', () => {
     await f.tick(sent.requestId)
     await f.tick(sent.requestId)
     await f.tick(sent.requestId)
-    expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion' })
+    expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion', workspace: workspace.path })
+    expect(execution.enqueue.mock.calls.at(-1)?.[3]).toContain('contents can change')
     expect(execution.enqueue.mock.calls.at(-1)?.[3]).toContain('Still checking input')
     expect(execution.enqueue.mock.calls.at(-1)?.[3]).not.toContain('Now finishing')
     expect(f.steer).not.toHaveBeenCalled()
@@ -334,5 +353,104 @@ describe('Room task amendments and incremental messages', () => {
     await f.tick(sent.requestId)
     await f.tick(sent.requestId)
     expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion', workspace: await realpath(distinctPath) })
+  })
+})
+
+describe('Room result repair and handoff', () => {
+  it('allows two format repairs, creates no partial assignments, then stops the coordination step', async () => {
+    const f = await fixture()
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'repair-plan', body: 'Implement the fix', executionIntent: 'execute' })
+    execution.observe.mockResolvedValue({ status: 'completed', text: '{"kind":"execute","assignments":[' })
+    await f.tick(sent.requestId)
+    for (let i = 1; i <= 2; i += 1) {
+      await f.tick(sent.requestId)
+      expect((await f.request(sent.requestId)).value.resultRepairs).toBe(i)
+      expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
+      await f.tick(sent.requestId)
+    }
+    await expect(f.tick(sent.requestId)).rejects.toThrow('单独重试协调')
+    expect(execution.enqueue).toHaveBeenCalledTimes(3)
+    expect(execution.enqueue.mock.calls.at(-1)?.[3]).toContain('Implement the fix')
+  })
+
+  it('accepts a validated structured plan without depending on final prose JSON', async () => {
+    const f = await fixture()
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'tools-plan', body: 'Implement result', executionIntent: 'execute' })
+    await f.tick(sent.requestId)
+    execution.observe.mockResolvedValueOnce({ status: 'completed', text: 'Plan submitted.', structured: {
+      kind: 'execute', response: 'Assigned', assignments: [assignment()] } })
+    await f.tick(sent.requestId)
+    const task = (await f.store.list<RoomTaskExecution>('task', { roomId: f.room.id }))[0].value
+    expect(task.prompt).toContain('Original authorized user request:\nImplement result')
+    expect(task.contextSnapshot?.roomId).toBe(f.room.id)
+    expect(task.rulesSnapshot).toEqual(task.contextSnapshot?.rules)
+  })
+
+  it('passes the same exact pinned review evidence to manual continuation as automatic rework', async () => {
+    const f = await fixture()
+    const taskRow = await createTask(f)
+    const task = { ...taskRow.value.task, status: 'needs_input' as const, latestDeliveryId: 'pinned-delivery' }
+    await putRoomDocument(f.store, 'task', task.id, f.room.id, { ...taskRow.value, task }, taskRow, task.id)
+    await putRoomDocument(f.store, 'delivery', 'pinned-delivery', f.room.id,
+      { id: 'pinned-delivery', taskId: task.id, versionHash: 'a'.repeat(40) }, null, task.id)
+    const review: RoomReview = { id: 'review-one', taskId: task.id, deliveryId: 'pinned-delivery',
+      versionHash: 'a'.repeat(40), reviewerMemberId: 'reviewer', verdict: 'changes_requested',
+      findings: [{ severity: 'major', description: 'Cancellation must wait for the executor stop acknowledgement' }], limitations: [] }
+    await putRoomDocument(f.store, 'review', review.id, f.room.id, review, null, task.id)
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'fix-review', body: '按评审意见修复',
+      taskId: task.id, executionIntent: 'execute', attachmentIds: ['user-criteria'] })
+    await f.tick(sent.requestId)
+    const saved = (await f.store.get<RoomTaskExecution>('task', task.id))!.value
+    expect(saved.prompt).toContain(roomReviewFeedback(review))
+    expect(saved.prompt).toContain('按评审意见修复')
+    expect(saved.attachmentIds).toContain('user-criteria')
+    expect(saved.task).toMatchObject({ stage: 'fix', status: 'queued' })
+    expect(saved.task.latestDeliveryId).toBeUndefined()
+  })
+})
+
+describe('discussion step failures', () => {
+  it('preserves successful member responses while exposing the failed member for a scoped retry', async () => {
+    const f = await fixture()
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'members', body: 'Discuss the approach', executionIntent: 'discussion' })
+    await f.tick(sent.requestId)
+    execution.observe.mockResolvedValueOnce({ status: 'completed', structured: { kind: 'discussion', response: 'Discuss', participants: ['developer', 'reviewer'] }, text: '' })
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    execution.observe.mockResolvedValueOnce({ status: 'completed', text: 'Developer proposal retained' })
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    execution.observe.mockResolvedValueOnce({ status: 'failed', text: '', error: 'Reviewer connection failed' })
+    await f.tick(sent.requestId)
+    const failed = (await f.request(sent.requestId)).value
+    expect(failed.status).toBe('failed')
+    expect(failed.stage).toBe('discuss')
+    expect(failed.discussions).toMatchObject([
+      { memberId: 'developer', response: 'Developer proposal retained' },
+      { memberId: 'reviewer', error: 'Reviewer connection failed' }
+    ])
+    expect(failed.discussions?.[1].response).toBeUndefined()
+  })
+})
+
+describe('explicit task rule adoption', () => {
+  it('replaces and withdraws current task rules without rewriting the original context snapshot', async () => {
+    const f = await fixture()
+    const taskRow = await createTask(f)
+    const original = taskRow.value.contextSnapshot
+    const rule = { id: 'rule', messageId: 'rule-source', body: 'Use the updated API', version: 2, active: true }
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'adopt-rule', body: 'Use this rule in the task', taskId: taskRow.id, executionIntent: 'execute' }, { ruleAdoption: rule })
+    await f.tick(sent.requestId)
+    const adopted = (await f.store.get<RoomTaskExecution>('task', taskRow.id))!.value
+    expect(adopted.rulesSnapshot).toEqual([rule])
+    expect(adopted.ruleAdoptions).toEqual([{ ruleId: rule.id, version: 2, requestId: sent.requestId, active: true }])
+    expect(adopted.contextSnapshot).toEqual(original)
+    const remove = await f.service.send(f.room.id, { clientRequestId: 'remove-rule', body: 'Withdraw this rule', taskId: taskRow.id, executionIntent: 'execute' }, { ruleAdoption: { ...rule, version: 3, active: false } })
+    await f.tick(remove.requestId)
+    const removed = (await f.store.get<RoomTaskExecution>('task', taskRow.id))!.value
+    expect(removed.rulesSnapshot).toEqual([])
+    expect(removed.ruleAdoptions).toEqual([{ ruleId: rule.id, version: 3, requestId: remove.requestId, active: false }])
+    expect(removed.contextSnapshot).toEqual(original)
+    expect(removed.abandoned).toBe(false)
   })
 })

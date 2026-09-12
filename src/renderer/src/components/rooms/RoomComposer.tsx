@@ -7,7 +7,11 @@ import {
   writeBrowserStorageItem
 } from '../../lib/browser-storage'
 import { uploadRuntimeAttachment } from '../../lib/runtime-attachment'
-import { roomRequestId } from './rooms-client'
+import {
+  roomRequestId,
+  roomsClient,
+  type RoomPresetCatalog
+} from './rooms-client'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
 
 type Draft = {
@@ -19,6 +23,8 @@ type Draft = {
   attachments: Array<{ id: string; name: string }>
   requestId: string
   fingerprint: string
+  replyToMessageId?: string
+  replyBody?: string
 }
 function emptyDraft(): Draft {
   return {
@@ -59,7 +65,105 @@ export function RoomComposer({
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [catalog, setCatalog] = useState<RoomPresetCatalog | null>(null)
+  useEffect(() => {
+    let active = true
+    void roomsClient
+      .presets()
+      .then((value) => {
+        if (active) setCatalog(value)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [room.id, room.revision])
+  const addressed = room.members.filter(
+    (member) =>
+      member.enabled &&
+      !member.removedAt &&
+      (room.collaborationMode === 'autonomous' ||
+        (draft.mentions.length
+          ? draft.mentions.includes(member.id)
+          : member.id === room.defaultMemberId))
+  )
+  const unavailableMembers = catalog
+    ? addressed.filter((member) => {
+        const preset = catalog.presets.find(
+          (item) => item.id === member.presetId
+        )
+        const provider =
+          member.modelRef?.providerId ??
+          preset?.providerId ??
+          catalog.defaultModel?.providerId
+        return (
+          (provider && catalog.unsupportedProviderIds?.includes(provider)) ||
+          (!member.modelRef && preset?.available === false)
+        )
+      })
+    : []
   const fileRef = useRef<HTMLInputElement>(null)
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const mentionRange = useRef({ start: 0, end: 0 })
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const candidates = room.members.filter(
+    (member) =>
+      member.enabled &&
+      !member.removedAt &&
+      member.displayName
+        .toLocaleLowerCase()
+        .includes((mentionQuery ?? '').toLocaleLowerCase())
+  )
+  const chooseMention = (id: string) => {
+    patch({
+      mentions: [...new Set([...draft.mentions, id])],
+      body:
+        draft.body.slice(0, mentionRange.current.start) +
+        draft.body.slice(mentionRange.current.end)
+    })
+    setMentionQuery(null)
+    textareaRef.current?.focus()
+  }
+  useEffect(() => {
+    const reply = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          roomId: string
+          messageId: string
+          body?: string
+        }>
+      ).detail
+      if (detail.roomId === room.id) {
+        setDraft((draft) => ({
+          ...draft,
+          replyToMessageId: detail.messageId,
+          replyBody: detail.body?.slice(0, 160)
+        }))
+        textareaRef.current?.focus()
+      }
+    }
+    const taskReply = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ roomId: string; taskId: string; body: string }>
+      ).detail
+      if (detail.roomId === room.id) {
+        setDraft((draft) => ({
+          ...draft,
+          taskId: detail.taskId,
+          body: draft.body.trim() ? draft.body : detail.body,
+          intent: 'execute'
+        }))
+        textareaRef.current?.focus()
+      }
+    }
+    window.addEventListener?.('kun-room-reply', reply)
+    window.addEventListener?.('kun-room-task-reply', taskReply)
+    return () => {
+      window.removeEventListener?.('kun-room-reply', reply)
+      window.removeEventListener?.('kun-room-task-reply', taskReply)
+    }
+  }, [room.id])
   useEffect(() => {
     writeBrowserStorageItem(`kun.rooms.draft.${room.id}`, JSON.stringify(draft))
   }, [draft, room.id])
@@ -69,12 +173,16 @@ export function RoomComposer({
   const submit = async (): Promise<void> => {
     if (
       busy ||
+      unavailableMembers.length > 0 ||
       uploading ||
       room.archivedAt ||
       (!draft.body.trim() && !draft.attachments.length)
     )
       return
     const content = {
+      ...(draft.replyToMessageId
+        ? { replyToMessageId: draft.replyToMessageId }
+        : {}),
       body: draft.body,
       mentionMemberIds: draft.mentions,
       ...(draft.taskId ? { taskId: draft.taskId } : {}),
@@ -247,15 +355,122 @@ export function RoomComposer({
             ))}
           </div>
         ) : null}
+        {draft.replyToMessageId ? (
+          <div className="flex gap-2 text-xs text-accent">
+            <span className="min-w-0 truncate">
+              {t('roomsReply')} · {draft.replyBody ?? draft.replyToMessageId}
+            </span>
+            <button
+              onClick={() =>
+                patch({ replyToMessageId: undefined, replyBody: undefined })
+              }
+              type="button"
+            >
+              {t('roomsCancel')}
+            </button>
+          </div>
+        ) : null}
+        {mentionQuery !== null ? (
+          <div
+            role="listbox"
+            id="room-mention-list"
+            className="max-h-40 overflow-auto rounded border border-ds-border bg-ds-main p-2"
+          >
+            {candidates.map((member, index) => (
+              <button
+                key={member.id}
+                id={'room-mention-' + member.id}
+                type="button"
+                role="option"
+                aria-selected={index === mentionIndex}
+                className={`block w-full p-2 text-left text-sm hover:bg-ds-hover ${index === mentionIndex ? 'bg-accent/10' : ''}`}
+                onClick={() => chooseMention(member.id)}
+              >
+                {member.displayName} ·{' '}
+                {t(
+                  `rooms${member.role?.[0]?.toUpperCase()}${member.role?.slice(1)}`
+                )}{' '}
+                ·{' '}
+                {room.repositories.find(
+                  (repo) => repo.id === member.defaultRepositoryId
+                )?.displayName ?? t('roomsNoRepository')}
+                {tasks.some(
+                  (task) =>
+                    task.ownerMemberId === member.id &&
+                    ['running', 'needs_input', 'needs_approval'].includes(
+                      task.status
+                    )
+                )
+                  ? ` · ${t('roomsState_running')}`
+                  : ''}
+              </button>
+            ))}
+            {!candidates.length ? (
+              <span className="text-xs text-ds-muted">
+                {t('roomsNoResults')}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <textarea
+          ref={textareaRef}
+          aria-controls={
+            mentionQuery !== null ? 'room-mention-list' : undefined
+          }
+          aria-activedescendant={
+            mentionQuery !== null && candidates[mentionIndex]
+              ? 'room-mention-' + candidates[mentionIndex].id
+              : undefined
+          }
           className={`${roomFieldClass} resize-none`}
           rows={3}
           maxLength={64000}
           value={draft.body}
           placeholder={t('roomsComposerPlaceholder')}
           aria-label={t('roomsComposerPlaceholder')}
-          onChange={(event) => patch({ body: event.target.value })}
+          onChange={(event) => {
+            patch({ body: event.target.value })
+            const end = event.target.selectionStart ?? event.target.value.length
+            const match = /(?:^|\s)@([^@\s]*)$/.exec(
+              event.target.value.slice(0, end)
+            )
+            setMentionQuery(match?.[1] ?? null)
+            setMentionIndex(0)
+            if (match)
+              mentionRange.current = { start: end - match[1].length - 1, end }
+          }}
           onKeyDown={(event) => {
+            if (mentionQuery !== null && !event.nativeEvent.isComposing) {
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setMentionQuery(null)
+                return
+              }
+              if (
+                ['ArrowDown', 'ArrowUp'].includes(event.key) &&
+                candidates.length
+              ) {
+                event.preventDefault()
+                setMentionIndex(
+                  (index) =>
+                    (index +
+                      (event.key === 'ArrowDown' ? 1 : -1) +
+                      candidates.length) %
+                    candidates.length
+                )
+                return
+              }
+              if (
+                event.key === 'Enter' &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                candidates[mentionIndex]
+              ) {
+                event.preventDefault()
+                chooseMention(candidates[mentionIndex].id)
+                return
+              }
+            }
             if (
               event.key === 'Enter' &&
               (event.metaKey || event.ctrlKey) &&
@@ -298,7 +513,10 @@ export function RoomComposer({
           <button
             type="submit"
             className={`${roomButtonClass} ml-auto flex items-center gap-2 bg-accent/10`}
-            disabled={!draft.body.trim() && !draft.attachments.length}
+            disabled={
+              unavailableMembers.length > 0 ||
+              (!draft.body.trim() && !draft.attachments.length)
+            }
           >
             <Send size={15} />
             {t(
@@ -307,6 +525,12 @@ export function RoomComposer({
           </button>
         </div>
       </fieldset>
+      {unavailableMembers.length ? (
+        <p role="alert" className="mt-2 text-xs text-amber-600">
+          {t('roomsSdkUnavailable')} ·{' '}
+          {unavailableMembers.map((member) => member.displayName).join(', ')}
+        </p>
+      ) : null}
       {room.archivedAt ? (
         <p className="mt-2 text-xs text-ds-muted">{t('roomsArchiveHint')}</p>
       ) : (

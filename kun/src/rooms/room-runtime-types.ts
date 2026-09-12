@@ -1,6 +1,7 @@
 import type { Room, RoomMember, SendRoomMessage } from '../contracts/rooms.js'
 import type { RoomTask } from '../contracts/room-tasks.js'
 import type { RoomDelivery } from '../contracts/room-deliveries.js'
+import type { RoomContextSnapshot } from '../contracts/rooms-product.js'
 import type { ThreadService } from '../services/thread-service.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -23,7 +24,13 @@ export type RoomRequestState = {
   error?: string
   round?: number
   stage?: 'coordinate' | 'discuss'
-  discussions?: Array<{ memberId: string; threadId: string; turnId?: string; response?: string }>
+  stepAttempt?: number
+  resultRepairs?: number
+  repairInstruction?: string
+  contextId?: string
+  summaryThreadId?: string
+  ruleAdoption?: import('../contracts/rooms-product.js').RoomRule
+  discussions?: Array<{ memberId: string; threadId: string; turnId?: string; response?: string; error?: string; attempt?: number }>
   referencedTask?: { task: RoomTask; requirement: string; delivery?: RoomDelivery; diffExcerpt?: string }
 }
 export type RoomWorkspace = {
@@ -52,7 +59,13 @@ export type RoomTaskExecution = {
   configuration: SubagentProfileConfig | null
   reviewerConfiguration?: SubagentProfileConfig | null
   reviewRequest?: { body: string; attachmentIds: string[] }
+  reviewRepairs?: number
+  recoveryResolved?: boolean
+  abandoned?: boolean
+  previousExecutionThreadIds?: string[]
+  ruleAdoptions?: Array<{ ruleId: string; version: number; requestId: string; active: boolean }>
   rulesSnapshot?: unknown[]
+  contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
   store: RoomStore
@@ -67,4 +80,8 @@ export type RoomRuntimeDeps = {
   model: () => { model: string; providerId?: string }
   profiles: () => Record<string, SubagentProfileConfig>
   assertOwnership: () => Promise<void>
+  proveStopped?: (threadId: string, turnId?: string) => Promise<boolean>
+  unsupportedProviderIds?: () => string[]
+  backgroundExecutionActive?: (threadId: string) => boolean
+  stopBackgroundExecution?: (threadId: string) => Promise<void>
 }

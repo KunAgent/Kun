@@ -8,6 +8,10 @@ import { putRoomDocument, RoomService } from './room-service.js'
 import { createRoomTaskWorktree } from './task-workspace-service.js'
 import { createRoomDelivery, prepareRoomReviewWorktree, assertRoomTaskWorkspace } from './room-delivery-service.js'
 import { parseRoomJson } from './room-coordination-plan.js'
+import { roomTaskContext } from './room-context.js'
+import { roomReviewFeedback } from './room-feedback.js'
+import { RoomReviewResultSchema } from './room-result-tools.js'
+import { roomGit } from './room-git.js'
 import { captureRoomVerification } from './room-verification.js'
 import { resolveRoomDependencies, materializeRoomDependencies } from './room-task-dependencies.js'
 import { roomTaskActivity, stopRoomTaskTurn } from './room-task-activity.js'
@@ -55,6 +59,14 @@ export class RoomTaskRunner {
       const workspaceRow = await this.deps.store.get<RoomWorkspace>('workspace', task.workspaceId)
       if (!workspaceRow) throw new Error('task workspace reservation missing')
       let workspace = workspaceRow.value
+      if (workspace.state === 'ready') {
+        try { await access(workspace.path) } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          await this.deps.assertOwnership()
+          await mkdir(dirname(workspace.path), { recursive: true })
+          await roomGit(workspace.repository.root, ['worktree', 'add', '--', workspace.path, workspace.branch])
+        }
+      }
       if (workspace.state === 'reserved') {
         await mkdir(dirname(workspace.path), { recursive: true })
         let exists = false
@@ -78,10 +90,11 @@ export class RoomTaskRunner {
       const prompt = [
         'Complete this authorized room task in this worktree. Preserve the source checkout.',
         'Report actual changes, checks with results, and remaining limitations. Do not merge or delete worktrees.',
+        'Before running validation, declare exact checks with declare_room_checks. Only matched completed executions count as verified.',
         'Do not create independent subagents or new goals; collaboration is owned by the room coordinator.',
         JSON.stringify({ goal: execution.prompt, member: task.memberSnapshot, workspace: workspace.path,
           baseRevision: workspace.baseRevision, dependencies: execution.dependencyDeliveries ?? [],
-          projectAgreements: execution.rulesSnapshot ?? [] })
+          context: roomTaskContext(execution) })
       ].join('\n')
       execution.turnId = await enqueueRoomTurn(this.deps, task.executionThreadId,
         task.id + '-attempt-' + execution.attempt, prompt, execution.attachmentIds)
@@ -120,6 +133,10 @@ export class RoomTaskRunner {
       task.latestProgress = observed.error ?? '执行中断，已有改动保留；请核对后重试。'
       return this.save(row, execution)
     }
+    const currentThread = await this.deps.threads.getMetadata(task.executionThreadId)
+    if (currentThread?.turns.some((turn) => turn.id !== execution.turnId && ['running', 'queued'].includes(turn.status))) {
+      throw new Error('Another task turn is still active; reconcile it before freezing delivery')
+    }
     const workspace = (await this.deps.store.get<RoomWorkspace>('workspace', task.workspaceId))!.value
     const deliveryId = 'delivery-' + task.id + '-' + execution.attempt
     let delivery = (await this.deps.store.get<RoomDelivery>('delivery', deliveryId))?.value
@@ -128,6 +145,7 @@ export class RoomTaskRunner {
         roomId: task.roomId, taskId: task.id, threadId: task.executionThreadId,
         turnId: execution.turnId, workspace: workspace.path, deliveryId
       })
+      if (evidence.activeBackground) throw new Error('Background commands are still active; inspect and stop them before recovering delivery')
       delivery = await createRoomDelivery({ id: deliveryId, taskId: task.id,
         attemptId: 'attempt-' + execution.attempt, version: execution.attempt,
         workspacePath: workspace.path, workspaceBranch: workspace.branch,
@@ -154,6 +172,7 @@ export class RoomTaskRunner {
     if (execution.reviewer) {
       task.stage = 'review'
       task.status = 'running'
+      execution.reviewRepairs = 0
       execution.reviewThreadId = 'room-review-' + task.id + '-' + execution.attempt
       return this.save(row, execution)
     }
@@ -194,10 +213,11 @@ export class RoomTaskRunner {
         profile: execution.reviewerConfiguration })
       execution.reviewTurnId = await enqueueRoomTurn(this.deps, execution.reviewThreadId!,
         'review-' + execution.reviewThreadId, [
-          'Review this immutable delivered version read-only. Return ONE JSON object only:',
+          'Review this immutable delivered version read-only. Submit with submit_room_review when available; otherwise return ONE JSON object only:',
           '{"verdict":"passed"|"changes_requested","findings":[{"severity":"blocking"|"major"|"minor","file"?:string,"line"?:number,"description":string}],"limitations":string[]}.',
           'Never claim tests ran if you only inspected code. Identify concrete defects.',
           JSON.stringify({ requirement: execution.prompt, userReviewRequest: execution.reviewRequest?.body, delivery,
+            context: roomTaskContext(execution),
             diff: (await this.deps.store.get<string>('artifact', delivery.diffArtifactId))?.value })
         ].join('\n'), execution.reviewRequest?.attachmentIds ?? [])
       task.status = 'running'
@@ -226,10 +246,22 @@ export class RoomTaskRunner {
       return this.save(row, execution)
     }
     if (observed.status !== 'completed') throw new Error(observed.error ?? 'review interrupted; preserve delivery')
+    let submitted
+    try { submitted = RoomReviewResultSchema.parse(observed.structured ?? parseRoomJson(observed.text)) }
+    catch (error) {
+      if ((execution.reviewRepairs ?? 0) >= 2) throw new Error('评审结果格式连续无效；请单独重试评审。')
+      execution.reviewRepairs = (execution.reviewRepairs ?? 0) + 1
+      execution.reviewTurnId = await enqueueRoomTurn(this.deps, execution.reviewThreadId!,
+        'review-repair-' + execution.reviewThreadId + '-' + execution.reviewRepairs,
+        'Correct the review format only using submit_room_review. The pinned delivery is unchanged.\n' +
+        JSON.stringify({ deliveryId: delivery.id, versionHash: delivery.versionHash,
+          issues: String(error).slice(0, 4000), previous: observed.text.slice(-16000) }))
+      return this.save(row, execution)
+    }
     const reviewId = 'review-' + execution.reviewThreadId
     const existing = await this.deps.store.get<RoomReview>('review', reviewId)
     const review = existing?.value ?? RoomReviewSchema.parse({
-      ...(parseRoomJson(observed.text) as Record<string, unknown>),
+      ...submitted,
       id: reviewId, taskId: task.id, deliveryId: delivery.id, versionHash: delivery.versionHash,
       reviewerMemberId: reviewer.id
     })
@@ -243,12 +275,14 @@ export class RoomTaskRunner {
     if (review.verdict === 'changes_requested') {
       const policy = task.memberSnapshot.reviewPolicy
       if (policy?.allowAutomaticRework && execution.reworkRounds < Math.min(2, policy.maxReworkRounds)) {
+        execution.abandoned = false
         execution.reworkRounds += 1
         execution.attempt += 1
         execution.turnId = undefined
         execution.reviewThreadId = undefined
         execution.reviewTurnId = undefined
-        execution.prompt += '\nAddress this review of the prior delivery:\n' + JSON.stringify(review)
+        execution.reviewRepairs = 0
+        execution.prompt += roomReviewFeedback(review)
         task.stage = 'fix'
         task.status = 'queued'
         task.latestDeliveryId = undefined

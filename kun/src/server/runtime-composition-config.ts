@@ -397,7 +397,8 @@ export function createRuntimeConfigController(
 	      designCanvasProvider
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
-	    const nextRegistry = new CapabilityRegistry([
+    const nextRegistry = new CapabilityRegistry([
+      roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,
 	      ...nextComputerUseProviders.providers,
 	      ...nextBrowserUseProviders.providers,
@@ -698,3 +699,4 @@ export function createRuntimeConfigController(
     get loop() { return loop }
   }
 }
+import { roomResultProvider } from '../rooms/room-result-tools.js'

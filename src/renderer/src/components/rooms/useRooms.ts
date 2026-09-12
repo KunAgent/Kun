@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { subscribeRoomEvents, roomEventsLive } from './useRoomEvents'
 import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -14,6 +15,7 @@ import {
 export function useRooms() {
   const [rooms, setRooms] = useState<RoomListEntry[]>([])
   const [archived, setArchived] = useState(false)
+  const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(
     readBrowserStorageItem('kun.rooms.selected') ?? ''
   )
@@ -40,7 +42,12 @@ export function useRooms() {
     async (reset = false): Promise<void> => {
       const generation = ++listGenerationRef.current
       try {
-        const result = await roomsClient.list(archived)
+        const result = await roomsClient.list(
+          archived,
+          undefined,
+          undefined,
+          search
+        )
         if (generation !== listGenerationRef.current) return
         setRooms((current) =>
           reset
@@ -65,17 +72,27 @@ export function useRooms() {
         if (!selectedRef.current) setLoading(false)
       }
     },
-    [archived, select]
+    [archived, select, search]
   )
   useEffect(() => {
     void refreshList(true)
-    const timer = setInterval(() => void refreshList(), 10000)
+    const timer = setInterval(() => {
+      if (!roomEventsLive()) void refreshList()
+    }, 10000)
+    let eventTimer: ReturnType<typeof setTimeout> | undefined
+    const unsubscribe = subscribeRoomEvents((event) => {
+      if (event.kind === 'navigate') select(event.roomId)
+      clearTimeout(eventTimer)
+      eventTimer = setTimeout(() => void refreshList(), 150)
+    })
     const listingGeneration = listGenerationRef
     return () => {
       clearInterval(timer)
+      clearTimeout(eventTimer)
+      unsubscribe()
       listingGeneration.current++
     }
-  }, [refreshList])
+  }, [refreshList, select])
   useEffect(() => {
     setRoom(null)
     setMessages([])
@@ -128,14 +145,26 @@ export function useRooms() {
       } finally {
         if (!controller.signal.aborted && version === refreshVersion) {
           setLoading(false)
-          timer = setTimeout(() => void refresh(), 2500)
+          timer = setTimeout(
+            () => void refresh(),
+            roomEventsLive() ? 30000 : 2500
+          )
         }
       }
     }
     refreshRef.current = refresh
     void refresh()
+    let eventTimer: ReturnType<typeof setTimeout> | undefined
+    const unsubscribe = subscribeRoomEvents((event) => {
+      if (event.roomId === selectedId) {
+        clearTimeout(eventTimer)
+        eventTimer = setTimeout(() => void refresh(), 100)
+      }
+    })
     return () => {
       controller.abort()
+      unsubscribe()
+      clearTimeout(eventTimer)
       clearTimeout(timer)
       refreshRef.current = async () => undefined
     }
@@ -161,7 +190,12 @@ export function useRooms() {
     const generation = listGenerationRef.current
     setMoreBusy(true)
     try {
-      const page = await roomsClient.list(archived, roomCursor)
+      const page = await roomsClient.list(
+        archived,
+        roomCursor,
+        undefined,
+        search
+      )
       if (generation !== listGenerationRef.current) return
       setRooms((current) => [
         ...new Map(
@@ -206,6 +240,8 @@ export function useRooms() {
     void refreshList()
   }
   return {
+    search,
+    setSearch,
     rooms,
     room,
     messages,

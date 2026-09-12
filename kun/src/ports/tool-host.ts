@@ -153,6 +153,8 @@ export type PptWorkflowScope = Readonly<{
 }>
 
 export type ToolHostContext = {
+  /** Host-authored room step scope, never accepted from model arguments. */
+  roomStepKind?: 'coordination' | 'discussion' | 'execution' | 'review'
   threadId: string
   turnId: string
   workspace: string

@@ -7,7 +7,8 @@ import { RoomRuntime } from '../rooms/room-runtime.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
-import { activeModelConnectionProviderId } from './runtime-factory-model.js'
+import { activeModelConnectionProviderId, agentSdkProviderIdsForOptions,
+  antigravityProviderIdsForOptions, cursorSdkProviderIdsForOptions } from './runtime-factory-model.js'
 
 export function createRuntimeRoomComposition(input: {
   options: () => KunServeRuntimeOptions
@@ -25,6 +26,8 @@ export function createRuntimeRoomComposition(input: {
     store: executionStore,
     dataDir: options.dataDir,
     model: () => ({ model: input.options().model, providerId: activeModelConnectionProviderId(input.options()) }),
+    unsupportedProviderIds: () => [...new Set([...agentSdkProviderIdsForOptions(input.options()),
+      ...antigravityProviderIdsForOptions(input.options()), ...cursorSdkProviderIdsForOptions(input.options())])],
     profiles: () => mergeBuiltinSubagentProfiles(
       (input.options().capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).subagents
     ).profiles,

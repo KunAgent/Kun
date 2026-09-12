@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { RoomMember, RoomMessage } from '../contracts/rooms.js'
 import { RoomTaskSchema } from '../contracts/room-tasks.js'
+import { assertNoActiveRoomIntegration } from './room-integration.js'
 import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import { RoomCoordinationPlanSchema, parseRoomJson, roomCoordinationPrompt } from './room-coordination-plan.js'
 import { ensureRoomThread, enqueueRoomTurn, observeRoomTurn } from './room-execution.js'
@@ -10,6 +11,8 @@ import { resolveRoomRecipients, resolveRoomRepository } from './room-router.js'
 import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
 import type { RoomStoredDocument } from './room-store.js'
 import { observeRoomRepository } from './task-workspace-service.js'
+import { withLatestRoomReview } from './room-feedback.js'
+import { roomContext, roomDiscussionWorkspace } from './room-context.js'
 
 export class RoomRequestRunner {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
@@ -39,15 +42,14 @@ export class RoomRequestRunner {
       }
     }
     const coordinator = room.members.find((member) => member.id === room.defaultMemberId)!
-    const recent = await this.deps.store.list<RoomMessage>('message', { roomId: room.id, limit: 30,
-      beforeSeq: (await this.deps.store.get('message', request.sourceMessageId))?.seq })
-    const rules = await this.deps.store.list('rule', { roomId: room.id, limit: 100 })
+    const context = await roomContext(this.deps, request)
     await ensureRoomThread(this.deps, { id: request.threadId, roomId: room.id,
       member: coordinator, kind: 'coordination' })
     if (!request.turnId) {
       request.turnId = await enqueueRoomTurn(this.deps, request.threadId,
-        'coordinate-' + request.id + '-' + (request.round ?? 0),
-        roomCoordinationPrompt(request, recent.reverse().map((entry) => entry.value), rules.map((entry) => entry.value)),
+        'coordinate-' + request.id + '-' + (request.round ?? 0) + '-' + (request.stepAttempt ?? 0),
+        roomCoordinationPrompt(request, context) +
+          (request.repairInstruction ?? ''),
         request.message.attachmentIds)
       request.status = 'running'
       return this.save(row, request)
@@ -57,7 +59,19 @@ export class RoomRequestRunner {
     if (observed.status !== 'completed') {
       return this.finish(row, 'failed', observed.error ?? '协调未完成，请重发或补充要求。')
     }
-    const plan = RoomCoordinationPlanSchema.parse(parseRoomJson(observed.text))
+    let plan
+    try { plan = RoomCoordinationPlanSchema.parse(observed.structured ?? parseRoomJson(observed.text)) }
+    catch (error) {
+      if ((request.resultRepairs ?? 0) >= 2) throw new Error('协调结果格式连续无效；可单独重试协调。')
+      request.resultRepairs = (request.resultRepairs ?? 0) + 1
+      request.stepAttempt = (request.stepAttempt ?? 0) + 1
+      request.turnId = undefined
+      request.repairInstruction = '\nRepair only the result format using submit_room_plan. Preserve the original user authorization.\n' +
+        JSON.stringify({ issues: String(error).slice(0, 4000), previous: observed.text.slice(-16000) })
+      return this.save(row, request)
+    }
+    request.resultRepairs = 0
+    request.repairInstruction = undefined
     if (plan.kind === 'execute') {
       if (request.message.executionIntent === 'discussion') throw new Error('discussion cannot authorize execution')
       if (request.message.taskId) return this.amend(row)
@@ -121,19 +135,21 @@ export class RoomRequestRunner {
         memberId: member.id, explicitRepositoryId: selectedRepositoryId }) : undefined
       if (resolved && !resolved.ok) return this.finish(row, 'needs_input', resolved.reason)
       const repository = resolved?.ok ? request.roomSnapshot.repositories.find((repo) => repo.id === resolved.repositoryId) : undefined
+      const discussionWorkspace = request.referencedTask ? await roomDiscussionWorkspace(this.deps, request) : repository?.canonicalRoot
       await ensureRoomThread(this.deps, { id: discussion.threadId, roomId: request.roomId, member,
-        kind: 'discussion', workspace: request.referencedTask ? undefined : repository?.canonicalRoot })
+        kind: 'discussion', workspace: discussionWorkspace })
       if (!discussion.turnId) {
         discussion.turnId = await enqueueRoomTurn(this.deps, discussion.threadId,
-          'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id,
+          'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id + '-' + (discussion.attempt ?? 0),
           ['Participate as this room member. Discuss or inspect read-only. Do not implement or run commands.',
             ...(request.referencedTask ? [
-              'This task-reference reply has only the frozen requirement, task state and delivery evidence below; the task repository is not mounted here.',
-              'Do not inspect an unrelated repository or claim fresh code inspection. The diff excerpt may be incomplete. State insufficient evidence and request a formal review when needed.',
+              !discussionWorkspace ? 'The task worktree is not created yet. Answer from the requirement and status; do not claim code inspection.' :
+              request.referencedTask.delivery ? 'Inspect the pinned delivered commit read-only; its identity is included below.' :
+                'Inspect the running task worktree read-only. Its contents can change while the task is executing; state the observed scope.',
               'Answer the question without treating it as an amendment or authorization for implementation.'
             ] : []),
             JSON.stringify({ member, request: request.message, referencedTask: request.referencedTask,
-              priorResponses: request.discussions })].join('\n'),
+              priorResponses: request.discussions, context: await roomContext(this.deps, request) })].join('\n'),
           request.message.attachmentIds)
         return this.save(row, request)
       }
@@ -142,7 +158,14 @@ export class RoomRequestRunner {
         if (observed.text) await this.service.publish(request.roomId, 'reply-' + discussion.threadId, observed.text, member.id)
         return
       }
-      discussion.response = observed.status === 'completed' ? observed.text : observed.error ?? '成员本轮未完成。'
+      if (observed.status !== 'completed') {
+        discussion.error = observed.error ?? '成员本轮未完成，可重试此成员。'
+        request.error = discussion.error
+        request.status = 'failed'
+        await this.service.publish(request.roomId, 'reply-' + discussion.threadId, discussion.error, member.id)
+        return this.save(row, request)
+      }
+      discussion.response = observed.text
       await this.service.publish(request.roomId, 'reply-' + discussion.threadId, discussion.response, member.id)
       return this.save(row, request)
     }
@@ -152,6 +175,8 @@ export class RoomRequestRunner {
       return this.save(row, request)
     }
     request.stage = 'coordinate'
+    request.resultRepairs = 0
+    request.repairInstruction = undefined
     request.turnId = undefined
     // Each round has a distinct immutable input and idempotency key.
     await this.save(row, request)
@@ -189,12 +214,13 @@ export class RoomRequestRunner {
       executionThreadId: 'room-execution-' + id,
       status: assignment.dependsOn.length ? 'waiting_dependency' : 'queued',
       stage: 'develop', requirementRevision: 0, revision: 0, updatedAt: new Date().toISOString() })
-    const execution: RoomTaskExecution = { task, prompt: assignment.prompt,
+    const contextSnapshot = await roomContext(this.deps, request)
+    const execution: RoomTaskExecution = { task, prompt: assignment.prompt + '\nOriginal authorized user request:\n' + request.message.body,
       attachmentIds: request.message.attachmentIds,
       dependencyTaskIds: assignment.dependsOn.map((key) => 'task-' + request.id + '-' + key),
       attempt: 1, reworkRounds: 0, reviewer, configuration: this.deps.profiles()[member.presetId] ?? null,
       reviewerConfiguration: reviewer ? this.deps.profiles()[reviewer.presetId] ?? null : null,
-      rulesSnapshot: (await this.deps.store.list('rule', { roomId: room.id, limit: 100 })).map((row) => row.value) }
+      contextSnapshot, rulesSnapshot: contextSnapshot.rules }
     const workspace: RoomWorkspace = { id, taskId: id, roomId: room.id,
       path: join(this.deps.dataDir, 'rooms', 'worktrees', id), branch: 'codex/rooms/' + id,
       baseRevision: observed.head, repository: observed, state: 'reserved' }
@@ -218,6 +244,10 @@ export class RoomRequestRunner {
     const taskRow = await this.deps.store.get<RoomTaskExecution>('task', request.message.taskId!)
     if (!taskRow || taskRow.roomId !== request.roomId) throw new Error('task not found')
     const execution = structuredClone(taskRow.value)
+    await assertNoActiveRoomIntegration(this.deps, request.roomId, taskRow.id)
+    if (execution.task.status === 'recovery_required' && !execution.recoveryResolved) {
+      return this.finish(row, 'needs_input', '请先核对并恢复原任务执行，再补充修改要求。')
+    }
     if (execution.task.applicationStatus === 'applying') {
       return this.finish(row, 'needs_input', '请先恢复或核对正在应用的交付版本，再补充执行要求。')
     }
@@ -246,11 +276,14 @@ export class RoomRequestRunner {
         execution.task.acceptedDeliveryId = undefined
         execution.reviewThreadId = 'room-review-' + createHash('sha256').update(request.id).digest('hex').slice(0, 32)
         execution.reviewTurnId = undefined
+        execution.reviewRepairs = 0
       }
     } else if (execution.turnId && (await this.deps.threads.getMetadata(execution.task.executionThreadId))?.turns
       .some((turn) => turn.id === execution.turnId && turn.status === 'running')) {
       await this.deps.turns.steerTurn({ operationId: request.id, threadId: execution.task.executionThreadId,
         turnId: execution.turnId, text: request.message.body, attachmentIds: request.message.attachmentIds })
+      execution.prompt += '\nAdditional user requirement:\n' + request.message.body
+      execution.attachmentIds = [...new Set([...execution.attachmentIds, ...request.message.attachmentIds])]
     } else {
       if (execution.turnId && (await this.deps.threads.getMetadata(execution.task.executionThreadId))?.turns
         .some((turn) => turn.id === execution.turnId && turn.status === 'queued')) {
@@ -263,12 +296,13 @@ export class RoomRequestRunner {
           return this.finish(row, 'needs_input', '评审尚未停止，请先取消或等待完成再开始修复。')
         }
       }
-      execution.prompt += '\nAdditional user requirement:\n' + request.message.body
+      execution.prompt = await withLatestRoomReview(this.deps, execution) + '\nAdditional user requirement:\n' + request.message.body
       execution.attachmentIds = [...new Set([...execution.attachmentIds, ...request.message.attachmentIds])]
       execution.attempt += 1
       execution.turnId = undefined
       execution.reviewThreadId = undefined
       execution.reviewTurnId = undefined
+      execution.reviewRepairs = 0
       execution.task.status = 'queued'
       execution.task.stage = 'fix'
       execution.task.acceptedDeliveryId = undefined
@@ -276,6 +310,15 @@ export class RoomRequestRunner {
       execution.task.applicationStatus = 'not_applied'
       execution.task.verificationStatus = 'not_run'
     }
+    if (request.ruleAdoption) {
+      const rule = request.ruleAdoption
+      execution.rulesSnapshot = (execution.rulesSnapshot ?? execution.contextSnapshot?.rules ?? []).filter((entry) =>
+        typeof entry !== 'object' || entry === null || !('id' in entry) || entry.id !== rule.id)
+      if (rule.active) execution.rulesSnapshot.push(rule)
+      execution.ruleAdoptions = [...(execution.ruleAdoptions ?? []).filter((entry) => entry.ruleId !== rule.id),
+        { ruleId: rule.id, version: rule.version, requestId: request.id, active: rule.active }]
+    }
+    execution.abandoned = false
     execution.task.requirementRevision += 1
     execution.task.latestProgress = '补充已接收；执行中的补充在下一个可接收点生效。'
     execution.task.revision = taskRow.revision + 1

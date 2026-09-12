@@ -491,6 +491,9 @@ export async function showTurnCompleteNotification(
     })
     notification.on('click', () => {
       revealMainWindow()
+      if (payload.roomId) mainState.mainWindow?.webContents.send('runtime:sse-event', {
+        streamId: 'rooms-navigation', events: [{ kind: 'navigate', roomId: payload.roomId }]
+      })
     })
     notification.show()
     return { ok: true, shown: true }

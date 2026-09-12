@@ -7,6 +7,7 @@ import type { RoomStore, RoomDocumentKind, RoomStoredDocument } from './room-sto
 import { RoomStoreConflictError } from './room-store.js'
 import { observeRoomRepository } from './task-workspace-service.js'
 import type { RoomRequestState } from './room-runtime-types.js'
+import { assertRoomMemberRemovalAllowed } from './room-member-dependencies.js'
 
 export const roomId = (): string => randomUUID()
 export const roomFingerprint = (value: unknown): string =>
@@ -20,7 +21,7 @@ export async function putRoomDocument(
     requestId: randomUUID(),
     checks: [{ kind, id, expectedRevision: previous?.revision ?? null }],
     puts: [{ kind, id, roomId, taskId, value }],
-    events: [{ roomId, kind: kind + '.updated', payload: { id } }]
+    events: [{ roomId, kind: kind + '.updated', payload: { id, ...(taskId ? { taskId } : {}) } }]
   })
 }
 
@@ -77,15 +78,7 @@ export class RoomService {
       ...(repositories ? { repositories: await this.repositories(repositories) } : {}),
       ...(archived !== undefined ? { archivedAt: archived ? new Date().toISOString() : undefined } : {}),
       revision: expectedRevision + 1, updatedAt: new Date().toISOString() })
-    // Keep frozen task owners and their configured review targets addressable.
-    const tasks = await this.store.list<{ task: { ownerMemberId: string; status: string } }>(
-      'task', { roomId: id, limit: 1000 })
-    for (const row of tasks) {
-      if (!['completed', 'cancelled', 'failed'].includes(row.value.task.status) &&
-        !room.members.some((member) => member.id === row.value.task.ownerMemberId)) {
-        throw new RoomStoreConflictError('disable the member until existing tasks finish')
-      }
-    }
+    await assertRoomMemberRemovalAllowed(this.store, old, room)
     const result = { room }
     const saved = await this.store.commit({ requestId: key, fingerprint: roomFingerprint(body),
       checks: [{ kind: 'room', id, expectedRevision }],
@@ -94,10 +87,11 @@ export class RoomService {
     return saved.result as typeof result
   }
 
-  async send(id: string, input: unknown): Promise<{ message: RoomMessage; requestId: string }> {
+  async send(id: string, input: unknown, internal?: { ruleAdoption: import('../contracts/rooms-product.js').RoomRule }): Promise<{ message: RoomMessage; requestId: string }> {
     const body = SendRoomMessageSchema.parse(input)
+    const identity = internal ? { ...body, ruleAdoption: internal.ruleAdoption } : body
     const key = 'room-message:' + id + ':' + body.clientRequestId
-    const replay = await this.replay(key, body)
+    const replay = await this.replay(key, identity)
     if (replay) return replay as { message: RoomMessage; requestId: string }
     const room = await this.get(id)
     if (room.archivedAt) throw new RoomStoreConflictError('restore the room before sending')
@@ -110,9 +104,9 @@ export class RoomService {
     })
     const request: RoomRequestState = { id: roomId(), roomId: id, status: 'pending',
       message: body, sourceMessageId: message.id, roomSnapshot: room,
-      threadId: 'room-discussion-' + roomId() }
+      threadId: 'room-discussion-' + roomId(), ...(internal ? { ruleAdoption: internal.ruleAdoption } : {}) }
     const result = { message, requestId: request.id }
-    const saved = await this.store.commit({ requestId: key, fingerprint: roomFingerprint(body),
+    const saved = await this.store.commit({ requestId: key, fingerprint: roomFingerprint(identity),
       checks: [{ kind: 'room', id, expectedRevision: room.revision },
         { kind: 'message', id: message.id, expectedRevision: null },
         { kind: 'request', id: request.id, expectedRevision: null }],
@@ -153,10 +147,12 @@ export class RoomService {
     const message = await this.store.get<RoomMessage>('message', messageId)
     if (!message || message.roomId !== id) throw new Error('message not found')
     const ruleId = roomId()
-    const value = { id: ruleId, messageId, body: message.value.body, version: 1 }
+    const value = { id: ruleId, messageId, body: message.value.body, version: 1, active: true }
     return this.store.commit({ requestId: 'rule:' + id + ':' + clientRequestId,
-      fingerprint: roomFingerprint({ messageId }), checks: [{ kind: 'rule', id: ruleId, expectedRevision: null }],
-      puts: [{ kind: 'rule', id: ruleId, roomId: id, value }],
+      fingerprint: roomFingerprint({ messageId }), checks: [{ kind: 'rule', id: ruleId, expectedRevision: null },
+        { kind: 'rule_version', id: ruleId + '-v1', expectedRevision: null }],
+      puts: [{ kind: 'rule', id: ruleId, roomId: id, value },
+        { kind: 'rule_version', id: ruleId + '-v1', roomId: id, value }],
       events: [{ roomId: id, kind: 'rule.created', payload: value }], result: value })
   }
 

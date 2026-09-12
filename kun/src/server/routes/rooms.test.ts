@@ -83,6 +83,67 @@ describe('Rooms HTTP routes and durable storage', () => {
     expect(conflict.body.currentRevision).toBe(0)
   })
 
+  it('returns canonical message cursors from search and detail reads', async () => {
+    const f = await fixture()
+    const path = `/v1/rooms/${f.room.id}`
+    await f.rooms.service.append(f.room.id, 'first-searchable', 'searchable first')
+    await f.rooms.service.append(f.room.id, 'second-searchable', 'searchable second')
+    const history = (await f.call(path + '/messages')).body.messages
+    const search = (await f.call(path + '/search?q=searchable&limit=1')).body
+    const latest = history.at(-1)
+    expect(latest.messageSeq).toBeGreaterThan(1)
+    expect(search.messages[0]).toEqual(latest)
+    expect((await f.call(path + '/messages/' + latest.id)).body.message).toEqual(latest)
+    const earlier = (await f.call(path + '/search?q=searchable&limit=1&cursor=' + search.nextCursor)).body
+    expect(earlier.messages[0]).toEqual(history[0])
+  })
+
+  it('counts waiting and failed tasks across every page in room and global badges', async () => {
+    const f = await fixture()
+    for (let start = 0; start < 1002; start += 500) {
+      await f.store.commit({ requestId: 'badge-page-' + start,
+        checks: Array.from({ length: Math.min(500, 1002 - start) }, (_, offset) => ({
+          kind: 'task' as const, id: 'badge-task-' + (start + offset), expectedRevision: null
+        })),
+        puts: Array.from({ length: Math.min(500, 1002 - start) }, (_, offset) => {
+          const index = start + offset
+          return { kind: 'task' as const, id: 'badge-task-' + index, roomId: f.room.id,
+            value: { task: { id: 'badge-task-' + index, status: index < 1001 ? 'failed' : 'waiting_dependency' } } }
+        }) })
+    }
+    const rooms = (await f.call('/v1/rooms')).body.rooms
+    expect(rooms[0]).toMatchObject({ runningCount: 1, attentionCount: 1001 })
+    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1001 })
+  })
+
+  it('includes integration gates on completed tasks in both badges without double counting a task', async () => {
+    const f = await fixture()
+    await f.store.commit({ requestId: 'integration-badges', checks: [
+      { kind: 'task', id: 'task', expectedRevision: null }, { kind: 'integration', id: 'checking', expectedRevision: null },
+      { kind: 'integration', id: 'ready', expectedRevision: null }
+    ], puts: [
+      { kind: 'task', id: 'task', roomId: f.room.id, taskId: 'task', value: { task: { id: 'task', status: 'completed' } } },
+      { kind: 'integration', id: 'checking', roomId: f.room.id, taskId: 'task', value: {
+        taskId: 'task', status: 'validating', attention: { approvalIds: ['approval'], userInputIds: ['question'] } } },
+      { kind: 'integration', id: 'ready', roomId: f.room.id, taskId: 'task', value: { taskId: 'task', status: 'ready' } }
+    ] })
+    expect((await f.call('/v1/rooms')).body.rooms[0]).toMatchObject({ runningCount: 1, attentionCount: 1 })
+    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1 })
+    await f.store.commit({ requestId: 'also-task-attention', checks: [{ kind: 'task', id: 'task', expectedRevision: 0 }],
+      puts: [{ kind: 'task', id: 'task', roomId: f.room.id, taskId: 'task', value: { task: { id: 'task', status: 'awaiting_acceptance' } } }] })
+    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1 })
+    await f.store.commit({ requestId: 'all-resolved', checks: [
+      { kind: 'task', id: 'task', expectedRevision: 1 }, { kind: 'integration', id: 'checking', expectedRevision: 0 },
+      { kind: 'integration', id: 'ready', expectedRevision: 0 }
+    ], puts: [
+      { kind: 'task', id: 'task', roomId: f.room.id, taskId: 'task', value: { task: { id: 'task', status: 'completed' } } },
+      { kind: 'integration', id: 'checking', roomId: f.room.id, taskId: 'task', value: { taskId: 'task', status: 'applied' } },
+      { kind: 'integration', id: 'ready', roomId: f.room.id, taskId: 'task', value: { taskId: 'task', status: 'failed', cancelRequested: true } }
+    ] })
+    expect((await f.call('/v1/rooms')).body.rooms[0]).toMatchObject({ runningCount: 0, attentionCount: 0 })
+    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 0 })
+  })
+
   it('paginates task projections, scopes detail reads and returns updated detail after a cancel action', async () => {
     const f = await fixture()
     const path = `/v1/rooms/${f.room.id}/tasks`

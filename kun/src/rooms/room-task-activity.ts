@@ -10,11 +10,12 @@ export type RoomTaskActivity = {
 /** Durable task state alone cannot prove that a lost admission or observation stopped executing. */
 export async function roomTaskActivity(deps: RoomRuntimeDeps, execution: RoomTaskExecution): Promise<RoomTaskActivity> {
   const reviewing = execution.task.stage === 'review'
-  if (reviewing && execution.completedReviewRunId &&
-    execution.completedReviewRunId === execution.reviewThreadId) return { state: 'idle' }
   const threadId = reviewing ? execution.reviewThreadId : execution.task.executionThreadId
   const turnId = reviewing ? execution.reviewTurnId : execution.turnId
   if (!threadId) return { state: turnId ? 'unknown' : 'idle' }
+  if (deps.backgroundExecutionActive?.(threadId)) return { state: 'active', threadId, turnId, status: 'running' }
+  if (reviewing && execution.completedReviewRunId &&
+    execution.completedReviewRunId === execution.reviewThreadId) return { state: 'idle', threadId, turnId }
   const identity = { threadId, turnId }
   let thread
   try { thread = await deps.threads.getMetadata(threadId) } catch { return { state: 'unknown', ...identity } }
@@ -34,6 +35,7 @@ export async function roomTaskActivity(deps: RoomRuntimeDeps, execution: RoomTas
 
 /** Queue promotion and settlement may race either cancellation boundary. */
 export async function stopRoomTaskTurn(deps: RoomRuntimeDeps, threadId: string, turnId: string): Promise<void> {
+  await deps.stopBackgroundExecution?.(threadId)
   let lastError: unknown
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const thread = await deps.threads.getMetadata(threadId)

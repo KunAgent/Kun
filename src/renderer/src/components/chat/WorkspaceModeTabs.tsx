@@ -6,11 +6,27 @@ import {
   type KeyboardEvent,
   type ReactElement
 } from 'react'
-import { Briefcase, Check, ChevronDown, Code2, MessagesSquare } from 'lucide-react'
+import {
+  Briefcase,
+  Check,
+  ChevronDown,
+  Code2,
+  MessagesSquare
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useRoomAttentionCount } from '../rooms/useRoomEvents'
 
 type Props = {
-  activeView: 'chat' | 'write' | 'rooms' | 'design' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
+  activeView:
+    | 'chat'
+    | 'write'
+    | 'rooms'
+    | 'design'
+    | 'claw'
+    | 'board'
+    | 'schedule'
+    | 'workflow'
+    | 'subagents'
   onCodeOpen: () => void
   onWriteOpen: () => void
   onRoomsOpen?: () => void
@@ -24,18 +40,24 @@ export function WorkspaceModeTabs({
   activeView,
   onCodeOpen,
   onWriteOpen,
-  onRoomsOpen = () => { void import('../../store/chat-store').then(({ useChatStore }) => useChatStore.getState().setRoute('rooms')) },
+  onRoomsOpen = () => {
+    void import('../../store/chat-store').then(({ useChatStore }) =>
+      useChatStore.getState().setRoute('rooms')
+    )
+  },
   disabled = false,
   disabledReason
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const roomAttention = useRoomAttentionCount()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const pendingFocusIndexRef = useRef<number | null>(null)
   const menuId = useId()
-  const selectedMode: WorkspaceMode = activeView === 'write' || activeView === 'rooms' ? activeView : 'chat'
+  const selectedMode: WorkspaceMode =
+    activeView === 'write' || activeView === 'rooms' ? activeView : 'chat'
   const options = [
     {
       id: 'write' as const,
@@ -53,13 +75,14 @@ export function WorkspaceModeTabs({
     },
     {
       id: 'rooms' as const,
-      label: t('roomsLabel'),
+      label: t('roomsLabel') + (roomAttention ? ' · ' + roomAttention : ''),
       description: t('roomsDescription'),
       Icon: MessagesSquare,
       onSelect: onRoomsOpen
     }
   ]
-  const selectedOption = options.find((option) => option.id === selectedMode) ?? options[0]
+  const selectedOption =
+    options.find((option) => option.id === selectedMode) ?? options[0]
   const SelectedIcon = selectedOption.Icon
 
   useEffect(() => {
@@ -102,7 +125,9 @@ export function WorkspaceModeTabs({
     setOpen(true)
   }
 
-  const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
+  const handleTriggerKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>
+  ): void => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     event.preventDefault()
     openAndFocus(event.key === 'ArrowDown' ? 0 : options.length - 1)
@@ -118,11 +143,13 @@ export function WorkspaceModeTabs({
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
-    const nextIndex = event.key === 'Home'
-      ? 0
-      : event.key === 'End'
-        ? options.length - 1
-        : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? options.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) %
+            options.length
     optionRefs.current[nextIndex]?.focus()
   }
 
@@ -136,7 +163,10 @@ export function WorkspaceModeTabs({
   }
 
   return (
-    <div ref={rootRef} className="workspace-mode-tabs relative z-40 mb-1.5 w-fit max-w-full">
+    <div
+      ref={rootRef}
+      className="workspace-mode-tabs relative z-40 mb-1.5 w-fit max-w-full"
+    >
       <button
         ref={triggerRef}
         type="button"
@@ -161,6 +191,14 @@ export function WorkspaceModeTabs({
         <span className="workspace-mode-tab-label min-w-0 truncate whitespace-nowrap">
           {selectedOption.label}
         </span>
+        {selectedMode !== 'rooms' && roomAttention > 0 ? (
+          <span
+            className="rounded-full bg-accent/15 px-1.5 text-[10px] text-accent"
+            aria-label={t('roomsAttention')}
+          >
+            {roomAttention}
+          </span>
+        ) : null}
         <ChevronDown
           aria-hidden
           className={`ml-auto h-3.5 w-3.5 shrink-0 text-ds-faint transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
@@ -180,7 +218,9 @@ export function WorkspaceModeTabs({
             return (
               <button
                 key={id}
-                ref={(node) => { optionRefs.current[index] = node }}
+                ref={(node) => {
+                  optionRefs.current[index] = node
+                }}
                 type="button"
                 role="menuitemradio"
                 aria-checked={selected}
@@ -205,7 +245,11 @@ export function WorkspaceModeTabs({
                   </span>
                 </span>
                 {selected ? (
-                  <Check aria-hidden className="h-4 w-4 shrink-0 text-ds-ink" strokeWidth={2} />
+                  <Check
+                    aria-hidden
+                    className="h-4 w-4 shrink-0 text-ds-ink"
+                    strokeWidth={2}
+                  />
                 ) : null}
               </button>
             )

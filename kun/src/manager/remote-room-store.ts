@@ -58,6 +58,7 @@ export class RemoteRoomStore implements RoomStore {
     if (!fence) throw new RoomStoreConflictError('room coordinator ownership is required')
     await this.call('assertOwnership', { fence })
   }
+  async latestEventSeq(): Promise<number> { return z.number().parse(await this.call('latestEventSeq', {})) }
 
   async close(): Promise<void> {}
 

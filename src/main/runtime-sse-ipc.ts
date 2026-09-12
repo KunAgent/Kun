@@ -260,7 +260,7 @@ export function registerRuntimeSseIpc(options: {
             runtimeAuthHeaders(connectionSettings).forEach((value, key) => {
               headers[key] = value
             })
-            const url = new URL(`${base}${kunThreadEventsPath(request.threadId)}`)
+            const url = new URL(`${base}${request.scope === 'rooms' ? '/v1/rooms/events' : kunThreadEventsPath(request.threadId)}`)
             url.searchParams.set('since_seq', String(nextSinceSeq))
             const requestHeaders = { ...headers }
             if (nextSinceSeq > 0) {
