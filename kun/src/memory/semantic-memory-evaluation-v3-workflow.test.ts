@@ -36,6 +36,44 @@ describe('semantic Memory v3 development workflow', () => {
     expect(result.entries.every((entry) => entry.report?.results.every((item) => item.split === 'development'))).toBe(true)
   })
 
+  it('keeps three locked development repeats deterministic', async () => {
+    const dataset = await loadSemanticMemoryV3EvaluationDataset()
+    const run = () => runSemanticMemoryV3DevelopmentGrid({
+      dataset,
+      createCandidate: (configuration) => ({
+        metadata: {
+          id: configuration.id,
+          kind: 'hybrid' as const,
+          version: 'v3-test',
+          runtime: 'offline-test',
+          license: 'repository',
+          parameters: { ...configuration },
+          platforms: ['win32-x64']
+        },
+        retrieve: async ({ records, limit }) => records.slice(0, limit)
+      })
+    })
+    const repeats = await Promise.all(Array.from({ length: 3 }, run))
+    const deterministic = (grid: typeof repeats[number]) => ({
+      gridSha256: grid.gridSha256,
+      entries: grid.entries.map((entry) => ({
+        configuration: entry.configuration,
+        error: entry.error,
+        report: entry.report && {
+          results: entry.report.results.map(({ latencyMs: _latencyMs, ...result }) => result),
+          metrics: {
+            ...entry.report.metrics,
+            latencyP50Ms: 0,
+            latencyP95Ms: 0
+          }
+        }
+      }))
+    })
+
+    expect(deterministic(repeats[1]!)).toEqual(deterministic(repeats[0]!))
+    expect(deterministic(repeats[2]!)).toEqual(deterministic(repeats[0]!))
+  })
+
   it('does not invoke a candidate when the holdout lock is invalid', async () => {
     const dataset = await loadSemanticMemoryV3EvaluationDataset()
     const retrieve = vi.fn(async () => [])

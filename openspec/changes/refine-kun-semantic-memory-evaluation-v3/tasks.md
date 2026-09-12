@@ -25,7 +25,7 @@
 
 - [x] 4.1 Add fixture and validator tests for malformed data, missing strata, split leakage, normalization changes, and hash mismatches; verify the complete evaluation rejects invalid input before retrieval. Focused dataset tests cover unsupported categories, missing quotas, stale hashes, Windows line endings, NFKC duplicate detection, and near-duplicate split leakage.
 - [x] 4.2 Add candidate safety tests for scope, lifecycle, authority, unknown ids, forbidden selections, and network attempts; verify any safety violation forces no-go. The v3 workflow test injects each violation into one candidate report and confirms the safety gate fails closed.
-- [ ] 4.3 Add deterministic repeat tests for candidate ids, scores, configuration order, and bounded traces; verify three locked repeats remain within the declared tolerance.
+- [x] 4.3 Add deterministic repeat tests for candidate ids, scores, configuration order, and bounded traces; verify three locked repeats remain within the declared tolerance. The v3 workflow now executes the frozen 54-point development grid three times and compares configuration order, hashes, selected ids, and latency-independent metrics.
 - [ ] 4.4 Add resource and fallback tests for missing/corrupt model artifacts and local runtime failure; verify the evaluator reports unsupported/fallback evidence without relaxing safety.
 - [ ] 4.5 Add development-only and holdout-lock tests; verify candidate tuning cannot read holdout labels or emit holdout aggregates before locking.
 
