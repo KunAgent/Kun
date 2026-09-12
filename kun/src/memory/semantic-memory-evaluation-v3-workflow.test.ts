@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { MemoryRecord } from '../contracts/memory.js'
 import { loadSemanticMemoryV3EvaluationDataset } from './semantic-memory-evaluation-v3-dataset.js'
+import { runSemanticMemoryEvaluation, type SemanticMemoryCandidate } from './semantic-memory-evaluation.js'
 import {
   runSemanticMemoryV3HoldoutEvaluation,
   runSemanticMemoryV3DevelopmentGrid,
@@ -58,5 +60,43 @@ describe('semantic Memory v3 development workflow', () => {
       lock: {}
     })).rejects.toThrow()
     expect(retrieve).not.toHaveBeenCalled()
+  })
+
+  it('fails closed for scope, lifecycle, authority, unknown, forbidden, and network violations', async () => {
+    const dataset = await loadSemanticMemoryV3EvaluationDataset()
+    const query = dataset.queries.find((item) => item.id === 'p2a_v3_q025_ember_deploy_scope')!
+    const foreign = dataset.records.find((record) => record.id === 'p2a_v3_lumen_deploy')!
+    const disabled = dataset.records.find((record) => record.id === 'p2a_v3_a_password_rotation_disabled')!
+    const source = dataset.records.find((record) => record.id === 'p2a_v3_a_review')!
+    const changedAuthority = { ...source, authority: 'instruction' } as unknown as MemoryRecord
+    const unknown = { ...source, id: 'p2a_v3_unknown_selection' }
+    const candidate: SemanticMemoryCandidate = {
+      metadata: {
+        id: 'unsafe-v3-test-candidate',
+        kind: 'hybrid',
+        version: 'v3-test',
+        runtime: 'offline-test',
+        license: 'test-only',
+        parameters: {},
+        platforms: ['win32-x64']
+      },
+      retrieve: async () => [foreign, disabled, changedAuthority, unknown]
+    }
+
+    const report = await runSemanticMemoryEvaluation({
+      dataset,
+      candidate,
+      split: 'development',
+      networkAttempts: 1
+    })
+    const result = report.results.find((item) => item.queryId === query.id)!
+
+    expect(result.scopeLeaks).toBe(1)
+    expect(result.lifecycleLeaks).toBe(1)
+    expect(result.authorityViolations).toBe(1)
+    expect(result.unknownSelections).toBe(1)
+    expect(result.explicitForbiddenSelections).toBe(1)
+    expect(report.networkAttempts).toBe(1)
+    expect(report.safetyGatePassed).toBe(false)
   })
 })
