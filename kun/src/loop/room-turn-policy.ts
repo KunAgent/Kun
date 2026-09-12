@@ -18,8 +18,8 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   if (!policy) return context
   const readOnly = policy.kind !== 'execution' || thread.sandboxMode === 'read-only'
   const allowed = intersectAllowedToolNames(context.allowedToolNames,
-    intersectAllowedToolNames(policy.allowedToolNames, policy.kind === 'coordination' ? ['submit_room_plan'] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules'] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules'] :
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
   return {
     ...context,
     roomStepKind: policy.kind,

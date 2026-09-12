@@ -1,10 +1,12 @@
 import { z } from 'zod'
 import type { Room } from '../contracts/rooms.js'
+import type { RoomRequestOutcome } from '../contracts/rooms-product.js'
 
 export const RoomDocumentKindSchema = z.enum([
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
-  'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation'
+  'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
+  'request_input', 'rule_bundle', 'rule_compression'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>
 const Id = z.string().min(1).max(256)
@@ -44,9 +46,17 @@ export const RoomStoreListOptionsSchema = z.object({
   archivedOnly: z.boolean().default(false),
   search: z.string().trim().max(200).optional(),
   activityOnly: z.boolean().optional(),
+  summaryOnly: z.boolean().optional(),
+  deliveryId: Id.optional(),
+  threadId: Id.optional(),
   memberId: Id.optional(), repositoryId: Id.optional(), requestId: Id.optional(), documentId: Id.optional()
 }).strict()
 export type RoomStoreListOptions = z.input<typeof RoomStoreListOptionsSchema>
+export const RoomOutcomeQuerySchema = z.object({
+  roomId: Id.optional(), requestIds: z.array(Id).max(200).optional(),
+  pendingOnly: z.boolean().optional(), limit: z.number().int().min(1).max(200).optional()
+}).strict()
+export type RoomOutcomeQuery = z.infer<typeof RoomOutcomeQuerySchema>
 
 const RoomListCursorSchema = z.object({ pinned: z.union([z.literal(0), z.literal(1)]),
   activitySeq: z.number().int().nonnegative(), id: z.string().min(1).max(256) }).strict()
@@ -113,6 +123,8 @@ export interface RoomStore {
   getRequest(requestId: string): Promise<RoomStoreRequest | null>
   events(roomId: string, sinceSeq?: number, limit?: number): Promise<RoomStoreEvent[]>
   latestEventSeq?(): Promise<number>
+  eventScope?(): Promise<string>
+  requestOutcomes?(input: RoomOutcomeQuery): Promise<{ outcomes: RoomRequestOutcome[]; initializing: boolean }>
   assertOwnership(): Promise<void>
   close(): Promise<void>
 }

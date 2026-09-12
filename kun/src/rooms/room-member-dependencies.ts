@@ -28,7 +28,7 @@ export async function assertRoomMemberRemovalAllowed(store: RoomStore, previous:
   for await (const row of pages<RoomTaskExecution>(store, 'task', { roomId: previous.id,
     status: ['queued', 'waiting_dependency', 'running', 'needs_input', 'needs_approval',
       'recovery_required', 'stopping', 'awaiting_acceptance'] })) requireMembers(taskMembers(row.value), 'task')
-  for await (const row of pages<RoomRequestState>(store, 'request', { roomId: previous.id, status: ['pending', 'running'] })) {
+  for await (const row of pages<RoomRequestState>(store, 'request', { roomId: previous.id, status: ['pending', 'running', 'stopping', 'recovery_required'] })) {
     // Accepted requests retain their roster and may still invite or assign any enabled member.
     const members = row.value.roomSnapshot?.members ?? previous.members
     requireMembers([...members.filter((member) => member.enabled && !member.removedAt).map((member) => member.id),

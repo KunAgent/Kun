@@ -3,6 +3,7 @@ import { ExternalLink, X } from 'lucide-react'
 import type { RoomTask, RoomTaskAction } from '@shared/rooms-api'
 import { roomsClient, roomTaskPath, type RoomTaskDetail } from './rooms-client'
 import { roomButtonClass } from './RoomSettings'
+import { RoomAgreementSources } from './RoomAgreementSources'
 import { useRoomMutation, useRoomResource } from './useRoomResource'
 import { RoomTaskGates } from './RoomTaskGates'
 import { RoomDeliveryHistory } from './RoomDeliveryHistory'
@@ -59,7 +60,7 @@ export function RoomTaskPanel({
   const { t } = useTranslation('common')
   const resource = useRoomResource<RoomTaskDetail>(
     task.roomId,
-    roomTaskPath(task)
+    roomTaskPath(task) + '?include_diff=false'
   )
   const detail = resource.data
   const current =
@@ -114,6 +115,7 @@ export function RoomTaskPanel({
           <ExternalLink size={15} />
           {t('roomsOpenCode')}
         </button>
+        <RoomAgreementSources roomId={task.roomId} agreements={detail?.agreements} />
         <RoomTaskGates task={current} detail={detail} onUpdated={refresh} />
         <dl className="space-y-2 text-sm text-ds-muted">
           <div>

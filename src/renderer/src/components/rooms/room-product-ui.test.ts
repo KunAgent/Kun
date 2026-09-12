@@ -181,7 +181,7 @@ describe('Room product interactions', () => {
       validation: [],
       diff: ''
     } as unknown as RoomIntegration
-    api.snapshots.set(base + '/integrations', { integrations: [integration] })
+    api.snapshots.set(base + '/integrations?summary_only=true', { integrations: [integration] })
     await act(async () => {
       renderer = create(
         createElement(RoomIntegrationPanel, {
@@ -256,7 +256,7 @@ describe('Room product interactions', () => {
   })
 
   it('resolves integration gates using integration execution IDs', async () => {
-    api.snapshots.set(base + '/integrations', {
+    api.snapshots.set(base + '/integrations?summary_only=true', {
       integrations: [
         {
           id: 'candidate',
@@ -326,7 +326,7 @@ describe('Room product interactions', () => {
   })
 
   it('never deletes a task directory until cleanup preview and explicit confirmation both allow it', async () => {
-    api.snapshots.set(base + '/integrations', { integrations: [] })
+    api.snapshots.set(base + '/integrations?summary_only=true', { integrations: [] })
     api.snapshots.set(base + '/cleanup', {
       eligible: true,
       revision: 8,

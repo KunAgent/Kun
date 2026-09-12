@@ -42,7 +42,7 @@ export function roomCoordinationPrompt(request: RoomRequestState, context: RoomC
     'Execute only after goals are clear. Never duplicate a task; each assignment key is unique and dependencies refer to earlier keys.',
     'If no code is needed, use answer. If multiple possible task references make the request ambiguous, use clarify.',
     JSON.stringify({ currentRequest: request.message, room: request.roomSnapshot,
-      round: request.round ?? 0, previousDiscussion: request.discussions, referencedTask: request.referencedTask,
+      round: request.round ?? 0, previousDiscussion: [...(request.previousDiscussions ?? []), ...(request.discussions ?? [])], referencedTask: request.referencedTask,
       context })
   ].join('\n')
 }

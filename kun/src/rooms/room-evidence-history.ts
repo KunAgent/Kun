@@ -40,3 +40,24 @@ export async function roomEvidenceHistory(sessions: SessionStore, threadId: stri
   }
   return { items: [...items.values()].sort((a, b) => a.order - b.order), background: [...background.values()] }
 }
+
+/** Rehydrate only the selected check's output after the metadata scan. */
+export async function roomEvidenceOutput(sessions: SessionStore, threadId: string, turnId: string,
+  resultId: string, order: number, eventSeq?: number): Promise<Record<string, unknown>> {
+  const sequence = eventSeq ?? (order > 1_000_000_000 ? Number.MAX_SAFE_INTEGER - order : undefined)
+  try {
+    if (sequence !== undefined && sessions.iterateEventsSince) {
+      for await (const event of sessions.iterateEventsSince(threadId, Math.max(0, sequence - 1))) {
+        if (event.seq > sequence) break
+        if (event.threadId !== threadId || event.turnId !== turnId) continue
+        if (eventSeq !== undefined && 'output' in event && typeof event.output === 'string') return { output: event.output }
+        if ('item' in event && event.item.id === resultId && event.item.kind === 'tool_result' &&
+          typeof event.item.output === 'object' && event.item.output) return event.item.output as Record<string, unknown>
+      }
+    }
+    for await (const item of roomTurnItems(sessions, threadId, turnId)) {
+      if (item.id === resultId && item.kind === 'tool_result' && typeof item.output === 'object' && item.output) return item.output as Record<string, unknown>
+    }
+  } catch { /* A missing output must not change the recorded command exit status. */ }
+  return { _roomOutputUnavailable: true }
+}

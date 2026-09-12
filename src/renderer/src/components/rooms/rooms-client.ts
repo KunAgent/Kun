@@ -5,11 +5,14 @@ import type {
   RoomMessage,
   RoomReview,
   RoomRequestOutcome,
+  RoomAgreementContext,
   RoomTask,
   RoomTaskAction,
   SendRoomMessage
 } from '@shared/rooms-api'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
+
+export class RoomHttpError extends Error { constructor(message: string, readonly status: number) { super(message) } }
 
 export type RoomInput = Omit<CreateRoomRequest, 'clientRequestId'>
 export type RoomRepositoryInput = NonNullable<RoomInput['repositories']>[number]
@@ -26,6 +29,7 @@ export type RoomTaskDetail = {
   workspace?: { path: string; branch?: string }
   diff?: string
   reviews: RoomReview[]
+  agreements?: RoomAgreementContext
 }
 export type RoomListEntry = Room & {
   latestMessageSeq?: number
@@ -73,6 +77,9 @@ export type RoomRequestEntry = {
   message: { body: string }
   error?: string
   outcome?: RoomRequestOutcome
+  clarification?: string
+  contextState?: 'compressing' | 'ready'
+  outcomeInitializing?: boolean
 }
 export type RoomRule = {
   id: string
@@ -109,12 +116,12 @@ export async function roomsRequest<T>(
     throw new Error(`Invalid Rooms response (${result.status})`)
   }
   if (!result.ok) {
-    throw new Error(
+    throw new RoomHttpError(
       typeof value.error === 'string'
         ? value.error
         : (value.error?.message ??
             value.message ??
-            `Rooms request failed (${result.status})`)
+            `Rooms request failed (${result.status})`), result.status
     )
   }
   return value as T
@@ -173,7 +180,7 @@ export const roomsClient = {
     ),
   task: (id: string, taskId: string, signal?: AbortSignal) =>
     roomsRequest<RoomTaskDetail>(
-      `${roomPath(id)}/tasks/${encodeURIComponent(taskId)}`,
+      `${roomPath(id)}/tasks/${encodeURIComponent(taskId)}?include_diff=false`,
       'GET',
       undefined,
       signal

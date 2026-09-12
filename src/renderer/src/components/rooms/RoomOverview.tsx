@@ -9,7 +9,10 @@ import {
   type RoomRule
 } from './rooms-client'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
-import { useRoomMutation, useRoomResource } from './useRoomResource'
+import { useRoomMutation } from './useRoomResource'
+import { useRoomPage } from './useRoomPage'
+import { RoomRequestControls } from './RoomRequestControls'
+import { RoomRequestTaskLinks } from './RoomRequestTaskLinks'
 
 function RuleEditor({
   roomId,
@@ -26,9 +29,9 @@ function RuleEditor({
   const [editRevision, setEditRevision] = useState(rule.revision ?? 0)
   const [history, setHistory] = useState(false)
   const path = `${roomPath(roomId)}/rules/${encodeURIComponent(rule.id)}`
-  const versions = useRoomResource<{ versions: RoomRule[] }>(
+  const versions = useRoomPage<RoomRule>(
     roomId,
-    history ? path + '/versions' : null
+    history ? path + '/versions' : null, 'versions', true
   )
   const mutation = useRoomMutation(onUpdated)
   const update = (patch: { body?: string; active?: boolean }) => {
@@ -56,7 +59,7 @@ function RuleEditor({
           className={roomFieldClass}
           rows={3}
           value={body}
-          maxLength={16000}
+          maxLength={64000}
           onChange={(event) => setBody(event.target.value)}
         />
       ) : (
@@ -120,7 +123,7 @@ function RuleEditor({
       ) : null}
       {history ? (
         <div className="max-h-60 space-y-2 overflow-auto">
-          {versions.data?.versions.map((version) => (
+          {versions.items.map((version) => (
             <p
               key={version.version}
               className="whitespace-pre-wrap break-words border-t border-ds-border pt-2 text-xs text-ds-muted"
@@ -130,6 +133,7 @@ function RuleEditor({
               {version.body}
             </p>
           ))}
+          {versions.nextCursor ? <button className={roomButtonClass} disabled={versions.busy} onClick={() => void versions.loadMore()}>{t('roomsLoadMore')}</button> : null}
         </div>
       ) : null}
     </article>
@@ -151,22 +155,18 @@ export function RoomOverview({
 }) {
   const { t } = useTranslation('common')
   const [section, setSection] = useState<'requests' | 'rules' | null>(null)
-  const resource = useRoomResource<{ requests: RoomRequestEntry[] }>(
-    room.id,
-    `${roomPath(room.id)}/requests`
-  )
-  const mutation = useRoomMutation(async () => {
-    await resource.refresh()
-    await onUpdated()
-  })
-  const requests = resource.data?.requests ?? []
+  const resource = useRoomPage<RoomRequestEntry>(room.id, section === 'requests' ? roomPath(room.id) + '/requests' : null, 'requests')
+  const rulePage = useRoomPage<RoomRule>(room.id, section === 'rules' ? roomPath(room.id) + '/rules' : null, 'rules')
+  const refresh = async () => { await Promise.all([resource.refresh(), rulePage.refresh(), onUpdated()]) }
+  const requests = resource.items
+  const shownRules = rulePage.items.length ? rulePage.items : rules
   const attention = requests.filter(
     (request) =>
       ['failed', 'needs_input'].includes(request.status) ||
       request.outcome?.status === 'needs_attention'
   ).length
   return (
-    <section className="shrink-0 border-b border-ds-border">
+    <section aria-label={t('roomsOverview')} className="shrink-0 border-b border-ds-border">
       <div className="flex gap-4 px-4 py-2 text-xs text-ds-muted">
         <button
           aria-expanded={section === 'requests'}
@@ -180,7 +180,7 @@ export function RoomOverview({
           onClick={() => setSection(section === 'rules' ? null : 'rules')}
         >
           {t('roomsRules')} (
-          {rules.filter((rule) => rule.active !== false).length})
+          {shownRules.filter((rule) => rule.active !== false).length}{rulePage.nextCursor ? '+' : ''})
         </button>
       </div>
       {section ? (
@@ -190,17 +190,19 @@ export function RoomOverview({
               <p className="text-xs text-ds-muted">
                 {t('roomsRuleVersionHint')}
               </p>
-              {rules.map((rule) => (
+              {shownRules.map((rule) => (
                 <RuleEditor
                   key={rule.id}
                   roomId={room.id}
                   rule={rule}
-                  onUpdated={onUpdated}
+                  onUpdated={refresh}
                 />
               ))}
+              {rulePage.nextCursor ? <button className={roomButtonClass} disabled={rulePage.busy} onClick={() => void rulePage.loadMore()}>{t('roomsLoadMore')}</button> : null}
             </>
           ) : (
-            requests.map((request) => (
+            <>
+            {requests.map((request) => (
               <article
                 key={request.id}
                 className="space-y-2 rounded-lg border border-ds-border p-3"
@@ -212,7 +214,7 @@ export function RoomOverview({
                   {request.message.body}
                 </button>
                 <p className="text-xs text-ds-muted">
-                  {t(`roomsState_${request.outcome?.status ?? request.status}`)}
+                  {request.outcomeInitializing ? t('roomsInitializingOutcomes') : t(`roomsState_${request.outcome?.status ?? request.status}`)}
                   {request.outcome
                     ? ` · ${request.outcome.completed}/${request.outcome.total} ${t('roomsState_completed')} · ${request.outcome.delivered} ${t('roomsDelivery')}`
                     : ''}
@@ -237,35 +239,17 @@ export function RoomOverview({
                       {t('roomsDetails')} {index + 1}
                     </button>
                   ))}
-                  {['failed', 'needs_input'].includes(request.status) ? (
-                    <button
-                      className={roomButtonClass}
-                      disabled={mutation.busy}
-                      onClick={() =>
-                        void mutation.run(
-                          `${request.id}:${request.revision}`,
-                          (clientRequestId) =>
-                            roomsRequest(
-                              `${roomPath(room.id)}/requests/${encodeURIComponent(request.id)}/retry`,
-                              'POST',
-                              {
-                                clientRequestId,
-                                expectedRevision: request.revision
-                              }
-                            )
-                        )
-                      }
-                    >
-                      {t('roomsRetryCoordination')}
-                    </button>
-                  ) : null}
+                  <RoomRequestTaskLinks roomId={room.id} request={request} onTask={onTask} />
+                  <RoomRequestControls room={room} request={request} onUpdated={refresh} />
                 </div>
               </article>
-            ))
+            ))}
+            {resource.nextCursor ? <button className={roomButtonClass} disabled={resource.busy} onClick={() => void resource.loadMore()}>{t('roomsLoadMore')}</button> : null}
+            </>
           )}
-          {resource.error || mutation.error ? (
+          {resource.error || rulePage.error ? (
             <p role="alert" className="text-xs text-red-500">
-              {resource.error || mutation.error}
+              {resource.error || rulePage.error}
             </p>
           ) : null}
         </div>

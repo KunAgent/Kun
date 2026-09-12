@@ -161,7 +161,7 @@ describe('canonical SQLite room store', () => {
 
   it('projects only activity metadata for badge scans without reading diff, prompts or frozen configuration', async () => {
     const { store } = await database()
-    await store.commit(insertion('task-activity', 'task', { task: { id: 'task-activity', status: 'running',
+    await store.commit(insertion('task-activity', 'task', { task: { id: 'task-activity', status: 'running', requestId: 'request-activity',
       memberSnapshot: { prompt: 'large private role context' } }, prompt: 'large task context' }))
     await store.commit({ requestId: 'integration-activity', checks: [{ kind: 'integration', id: 'integration-activity', expectedRevision: null }],
       puts: [{ kind: 'integration', id: 'integration-activity', roomId: 'room-a', taskId: 'task-activity', value: {
@@ -169,10 +169,10 @@ describe('canonical SQLite room store', () => {
         candidates: [{ diff: 'old candidate diff' }], validation: [{ output: 'large log' }],
         attention: { approvalIds: ['approval'], userInputIds: [] }, applyIntent: { candidateSha: 'pinned' }
       } }] })
-    expect((await store.list('task', { activityOnly: true }))[0].value).toEqual({ task: { status: 'running' } })
+    expect((await store.list('task', { activityOnly: true }))[0].value).toEqual({ task: { status: 'running', requestId: 'request-activity' } })
     const projected = (await store.list('integration', { activityOnly: true }))[0]
     expect(projected.taskId).toBe('task-activity')
-    expect(projected.value).toEqual({ taskId: 'task-activity', status: 'validating', cancelRequested: true,
+    expect(projected.value).toEqual({ taskId: 'task-activity', requestId: 'request-activity', status: 'validating', cancelRequested: true,
       attention: { approvalIds: ['approval'], userInputIds: [] }, applyIntent: { candidateSha: 'pinned' } })
     expect((await store.get<{ diff: string }>('integration', 'integration-activity'))!.value.diff.length).toBeGreaterThan(1000)
     await expect(store.list('message', { activityOnly: true })).rejects.toThrow('activity projection requires')

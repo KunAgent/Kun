@@ -11,6 +11,10 @@ type IntegrationDetail = RoomIntegration &
   Pick<RoomTaskDetail, 'approvals' | 'userInputs'>
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
 import { useRoomMutation, useRoomResource } from './useRoomResource'
+import { useRoomPage } from './useRoomPage'
+import { RoomDiffViewer } from './RoomDiffViewer'
+import { RoomIntegrationHistory } from './RoomIntegrationHistory'
+import { RoomTextEvidence } from './RoomTextEvidence'
 
 export function RoomIntegrationPanel({
   task,
@@ -26,9 +30,9 @@ export function RoomIntegrationPanel({
   const [preview, setPreview] = useState(false)
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>({})
   const path = roomTaskPath(task)
-  const resource = useRoomResource<{ integrations: IntegrationDetail[] }>(
+  const resource = useRoomPage<IntegrationDetail>(
     task.roomId,
-    path + '/integrations'
+    path + '/integrations?summary_only=true', 'integrations'
   )
   const cleanup = useRoomResource<RoomCleanupPreview>(
     task.roomId,
@@ -138,7 +142,7 @@ export function RoomIntegrationPanel({
       >
         {t('roomsPrepareIntegration')}
       </button>
-      {resource.data?.integrations.map((integration) => (
+      {resource.items.map((integration) => (
         <article
           key={integration.id}
           className="space-y-2 rounded-lg border border-ds-border p-3"
@@ -177,8 +181,9 @@ export function RoomIntegrationPanel({
                 {check.command} · {check.exitCode ?? '—'}
               </summary>
               <pre className="max-h-40 overflow-auto whitespace-pre-wrap">
-                {check.output}
+                {check.output && !/^[A-Za-z0-9_-]+$/.test(check.output) ? check.output : ''}
               </pre>
+              {check.output && /^[A-Za-z0-9_-]+$/.test(check.output) ? <RoomTextEvidence roomId={task.roomId} path={path + '/logs/' + encodeURIComponent(check.output)} label={t('roomsViewLog')} /> : null}
             </details>
           ))}
           {integration.review ? (
@@ -193,27 +198,8 @@ export function RoomIntegrationPanel({
               </pre>
             </div>
           ) : null}
-          <details className="text-xs text-ds-muted">
-            <summary>{t('roomsDiff')}</summary>
-            <pre className="max-h-80 overflow-auto">
-              {integration.diff || t('roomsNoDiff')}
-            </pre>
-          </details>
-          {integration.candidates && integration.candidates.length > 1 ? (
-            <details className="text-xs text-ds-muted">
-              <summary>{t('roomsHistory')}</summary>
-              {integration.candidates.map((candidate) => (
-                <div
-                  key={candidate.pinId}
-                  className="mt-2 border-t border-ds-border pt-2"
-                >
-                  <code>{candidate.sha}</code>
-                  <p>{candidate.createdAt}</p>
-                  <pre className="max-h-40 overflow-auto">{candidate.diff}</pre>
-                </div>
-              ))}
-            </details>
-          ) : null}
+          <RoomDiffViewer roomId={task.roomId} path={path + '/integrations/' + integration.id + '/diff'} />
+          <RoomIntegrationHistory roomId={task.roomId} path={path + '/integrations/' + integration.id} />
           {integration.status === 'ready' && !integration.validation.length ? (
             <label className="flex items-start gap-2 text-xs text-amber-600">
               <input
@@ -303,6 +289,7 @@ export function RoomIntegrationPanel({
           </div>
         </article>
       ))}
+      {resource.nextCursor ? <button className={roomButtonClass} disabled={resource.busy} onClick={() => void resource.loadMore()}>{t('roomsLoadMore')}</button> : null}
       <button className={roomButtonClass} onClick={() => setPreview(!preview)}>
         {t('roomsCleanupPreview')}
       </button>

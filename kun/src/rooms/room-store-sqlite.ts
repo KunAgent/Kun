@@ -4,6 +4,8 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { initializeRoomIndex, roomIndexReady, refreshRoomMessageIndex, backfillRoomIndex } from './room-store-index.js'
+import { initializeRoomProjections, backfillRoomProjections, projectRoomTask, queryRoomOutcomes } from './room-store-projections.js'
+import { RoomOutcomeQuerySchema, type RoomOutcomeQuery } from './room-store.js'
 import {
   RoomDocumentKindSchema,
   RoomStoreCommitSchema,
@@ -53,7 +55,7 @@ export class SqliteRoomStore implements RoomStore {
   async list<T = unknown>(kind: RoomDocumentKind, options: RoomStoreListOptions = {}): Promise<RoomStoredDocument<T>[]> {
     RoomDocumentKindSchema.parse(kind)
     const parsed = RoomStoreListOptionsSchema.parse(options)
-    if (parsed.activityOnly && kind !== 'task' && kind !== 'integration') {
+    if (parsed.activityOnly && kind !== 'task' && kind !== 'integration' && kind !== 'request') {
       throw new z.ZodError([{ code: 'custom', path: ['activityOnly'], message: 'activity projection requires a task or integration' }])
     }
     const db = await this.database()
@@ -65,6 +67,11 @@ export class SqliteRoomStore implements RoomStore {
     if (parsed.repositoryId) { clauses.push("json_extract(document, '$.task.repositoryId') = ?"); args.push(parsed.repositoryId) }
     if (parsed.requestId) { clauses.push("json_extract(document, '$.task.requestId') = ?"); args.push(parsed.requestId) }
     if (parsed.documentId) { clauses.push("json_extract(document, '$.id') = ?"); args.push(parsed.documentId) }
+    if (parsed.deliveryId) { clauses.push("json_extract(document, '$.deliveryId') = ?"); args.push(parsed.deliveryId) }
+    if (parsed.threadId) {
+      clauses.push("(json_extract(document,'$.threadId') = ? OR EXISTS (SELECT 1 FROM json_each(json_extract(document,'$.discussions')) d WHERE json_extract(d.value,'$.threadId') = ?))")
+      args.push(parsed.threadId, parsed.threadId)
+    }
     if (parsed.search) {
       if (kind === 'message' && parsed.search.length >= 3 && roomIndexReady(db)) {
         clauses.push('seq IN (SELECT rowid FROM room_message_fts WHERE room_message_fts MATCH ?)')
@@ -88,11 +95,18 @@ export class SqliteRoomStore implements RoomStore {
     }
     args.push(parsed.limit)
     const columns = parsed.activityOnly ? `seq,kind,id,room_id,task_id,revision,
-      CASE kind WHEN 'task' THEN json_object('task',json_object('status',status))
+      CASE kind WHEN 'task' THEN json_object('task',json_object('status',status,'requestId',json_extract(document,'$.task.requestId')))
+      WHEN 'request' THEN json_object('status',status)
       ELSE json_object('status',status,'taskId',json_extract(document,'$.taskId'),
+        'requestId',(SELECT json_extract(t.document,'$.task.requestId') FROM room_documents t WHERE t.kind='task' AND t.id=room_documents.task_id),
         'attention',json_extract(document,'$.attention'), 'applyIntent',json_extract(document,'$.applyIntent'),
         'cancelRequested',json(CASE WHEN json_extract(document,'$.cancelRequested')=1 THEN 'true' ELSE 'false' END))
-      END AS document` : '*'
+      END AS document` : parsed.summaryOnly ? `seq,kind,id,room_id,task_id,revision,
+      CASE kind WHEN 'request' THEN json_object('status',status,'message',json_object('body',substr(COALESCE(json_extract(document,'$.originalMessage.body'),json_extract(document,'$.message.body')),1,1000)),
+        'sourceMessageId',COALESCE(json_extract(document,'$.originalSourceMessageId'),json_extract(document,'$.sourceMessageId')),'error',json_extract(document,'$.error'),'clarification',json_extract(document,'$.clarification'),'continuation',json_extract(document,'$.continuation'),'contextState',json_extract(document,'$.contextState'))
+      WHEN 'integration' THEN json_remove(document,'$.diff','$.candidates')
+      WHEN 'delivery' THEN json_remove(document,'$.verification','$.changedFiles')
+      ELSE document END AS document` : '*'
     const rows = db.prepare(`SELECT ${columns} FROM room_documents WHERE ${clauses.join(' AND ')}
       ORDER BY seq ${parsed.order === 'asc' ? 'ASC' : 'DESC'} LIMIT ?`).all(...args) as DocumentRow[]
     return rows.map((row) => document<T>(row))
@@ -153,6 +167,12 @@ export class SqliteRoomStore implements RoomStore {
   async latestEventSeq(): Promise<number> {
     return Number((await this.database()).prepare('SELECT COALESCE(MAX(seq), 0) AS seq FROM room_events').get()?.seq ?? 0)
   }
+  async requestOutcomes(input: RoomOutcomeQuery) {
+    return queryRoomOutcomes(await this.database(), RoomOutcomeQuerySchema.parse(input))
+  }
+  async eventScope(): Promise<string> {
+    return String((await this.database()).prepare("SELECT value FROM room_metadata WHERE key='event_scope'").get()!.value)
+  }
 
   async commit(input: RoomStoreCommit, assertCurrent?: () => void): Promise<RoomStoreCommitResult> {
     // Snapshot caller-owned values before asynchronous initialization can yield.
@@ -190,7 +210,7 @@ export class SqliteRoomStore implements RoomStore {
         written.add(key)
         const current = db.prepare('SELECT * FROM room_documents WHERE kind = ? AND id = ?')
           .get(put.kind, put.id) as DocumentRow | undefined
-        if (current && ['delivery', 'review', 'artifact', 'rule_version', 'context'].includes(put.kind)) {
+        if (current && ['delivery', 'review', 'artifact', 'rule_version', 'context', 'rule_bundle', 'request_input'].includes(put.kind)) {
           throw new RoomStoreConflictError(`room ${put.kind} versions are immutable`, current.revision)
         }
         const metadata = record(put.value)
@@ -212,6 +232,7 @@ export class SqliteRoomStore implements RoomStore {
             .run(...args, put.kind, put.id)
         }
         if (put.kind === 'message') refreshRoomMessageIndex(db, put.id)
+        if (put.kind === 'task' && roomId) projectRoomTask(db, put.id, roomId, put.value)
       }
       const now = new Date().toISOString()
       const events: RoomStoreEvent[] = parsed.events.map((event) => {
@@ -256,7 +277,7 @@ export class SqliteRoomStore implements RoomStore {
     try {
       await chmod(this.input.path, 0o600)
       const previousVersion = Number(db.prepare('PRAGMA user_version').get()?.user_version)
-      if (previousVersion > 2) {
+      if (previousVersion > 3) {
         throw new Error('room database was created by a newer Kun version')
       }
       db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000')
@@ -279,11 +300,18 @@ export class SqliteRoomStore implements RoomStore {
           id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL, events TEXT NOT NULL
         );
       `)
-      immediateTransaction(db, () => { initializeRoomIndex(db, previousVersion < 2); db.exec('PRAGMA user_version = 2') })
+      immediateTransaction(db, () => {
+        initializeRoomIndex(db, previousVersion < 2)
+        initializeRoomProjections(db)
+        db.exec("CREATE TABLE IF NOT EXISTS room_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); INSERT OR IGNORE INTO room_metadata VALUES('event_scope',lower(hex(randomblob(16))));")
+        db.exec('PRAGMA user_version = 3')
+      })
       const backfill = () => {
         if (this.closed) return
         try {
-          if (!backfillRoomIndex(db)) { this.indexTimer = setImmediate(backfill); this.indexTimer.unref() }
+          const messagesReady = backfillRoomIndex(db)
+          const outcomesReady = backfillRoomProjections(db)
+          if (!messagesReady || !outcomesReady) { this.indexTimer = setImmediate(backfill); this.indexTimer.unref() }
         } catch { /* Search remains correct using its bounded query fallback. */ }
       }
       this.indexTimer = setImmediate(backfill)

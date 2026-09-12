@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RoomIdSchema, RoomMemberSchema } from './rooms.js'
+import { RoomIdSchema, RoomMemberSchema, SendRoomMessageSchema } from './rooms.js'
 
 export const RoomRepositoryInputSchema = z.object({
   id: RoomIdSchema.optional(),
@@ -35,4 +35,11 @@ export const RoomTaskActionSchema = z.object({
 export const RoomRuleRequestSchema = z.object({
   clientRequestId: RoomIdSchema,
   messageId: RoomIdSchema
+}).strict()
+
+export const RoomRequestContinueSchema = z.object({
+  clientRequestId: RoomIdSchema,
+  expectedRevision: z.number().int().nonnegative(),
+  message: z.object(SendRoomMessageSchema.shape).omit({ clientRequestId: true }).strict()
+    .refine((value) => Boolean(value.body.trim() || value.attachmentIds.length), 'continuation requires text or an attachment')
 }).strict()

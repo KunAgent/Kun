@@ -4,6 +4,7 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { CapabilityToolProvider } from '../adapters/tool/capability-registry.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { RoomCoordinationPlanSchema } from './room-coordination-plan.js'
+import { roomRuleReadTool } from './room-rule-read-tool.js'
 
 export const RoomReviewResultSchema = z.object({
   verdict: RoomReviewSchema.shape.verdict,
@@ -21,7 +22,7 @@ export function roomResultProvider(threads: ThreadStore): CapabilityToolProvider
   return {
     id: 'room-results', kind: 'built-in', enabled: true, available: true,
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
-    tools: [
+    tools: [roomRuleReadTool(threads), ...[
       { name: 'submit_room_plan', kind: 'coordination', schema: RoomCoordinationPlanSchema,
         description: 'Submit the structured room decision for the current user request.' },
       { name: 'submit_room_review', kind: 'review', schema: RoomReviewResultSchema,
@@ -40,6 +41,6 @@ export function roomResultProvider(threads: ThreadStore): CapabilityToolProvider
         return parsed.success ? { output: { accepted: true, value: parsed.data } } :
           { isError: true, output: { error: 'invalid room result', issues: parsed.error.issues } }
       }
-    }))
+    }))]
   }
 }

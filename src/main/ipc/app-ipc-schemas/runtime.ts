@@ -203,12 +203,21 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/rooms/{roomId}/search', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/requests', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/requests/{requestId}/retry', ['POST']),
+  compileEndpoint('/v1/rooms/{roomId}/requests/{requestId}', ['GET']),
+  ...['continue', 'cancel', 'reconcile'].map((action) =>
+    compileEndpoint('/v1/rooms/{roomId}/requests/{requestId}/' + action, ['POST'])),
   compileEndpoint('/v1/rooms/{roomId}/rules/{ruleId}', ['PATCH']),
   compileEndpoint('/v1/rooms/{roomId}/rules/{ruleId}/versions', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/rules/{ruleId}/adopt', ['POST']),
   ...['recovery', 'deliveries', 'compare'].map((part) =>
     compileEndpoint(ROOM_ENDPOINTS.task + '/' + part, ['GET'])),
   compileEndpoint(ROOM_ENDPOINTS.task + '/recover', ['POST']),
+  compileEndpoint(ROOM_ENDPOINTS.task + '/reviews', ['GET']),
+  compileEndpoint(ROOM_ENDPOINTS.task + '/diff', ['GET']),
+  compileEndpoint(ROOM_ENDPOINTS.task + '/logs/{artifactId}', ['GET']),
+  compileEndpoint('/v1/rooms/{roomId}/agreements/{bundleId}', ['GET']),
+  ...['diff', 'candidates'].map((part) => compileEndpoint(ROOM_ENDPOINTS.task + '/integrations/{integrationId}/' + part, ['GET'])),
+  compileEndpoint(ROOM_ENDPOINTS.task + '/integrations/{integrationId}', ['GET']),
   ...['cleanup', 'integrations'].map((part) =>
     compileEndpoint(ROOM_ENDPOINTS.task + '/' + part, ['GET', 'POST'])),
   compileEndpoint(ROOM_ENDPOINTS.task + '/deliveries/{deliveryId}', ['GET']),

@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { RoomNotificationQueue } from './room-notification-queue'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -14,8 +15,8 @@ import {
   type RoomIntegrationSnapshot
 } from './room-notifications'
 import {
-  readBrowserStorageItem,
-  writeBrowserStorageItem
+  browserStorage,
+  readBrowserStorageItem,  writeBrowserStorageItem
 } from '../../lib/browser-storage'
 
 type Event = {
@@ -52,8 +53,9 @@ export function useRoomEvents() {
     if (!window.kunGui?.startSse) return
     const streamId = 'rooms-' + roomRequestId()
     let stopped = false
-    let cursor = Number(readBrowserStorageItem('kun.rooms.eventCursor') ?? 0)
-    const notified = new Set<string>()
+    const savedCursor = Number(readBrowserStorageItem('kun.rooms.eventCursor') ?? 0)
+    let cursor = Number.isSafeInteger(savedCursor) && savedCursor >= 0 ? savedCursor : 0
+    let queue: RoomNotificationQueue | undefined
     let refreshTimer: ReturnType<typeof setTimeout> | undefined
     let fallback: ReturnType<typeof setInterval> | undefined
     const updateBadge = async () => {
@@ -64,60 +66,52 @@ export function useRoomEvents() {
       badge = result.attentionCount
       badgeListeners.forEach((listener) => listener())
     }
+    const deliver = async (event: Event, known: (key: string) => boolean): Promise<string | null> => {
+      if (stopped) throw new Error('room notification subscription stopped')
+      const integrationEvent = event.kind.startsWith('integration.')
+      let notice: { key: string; threadId: string; body: string } | null = null
+      try {
+        if (event.kind.startsWith('request.')) {
+          const result = await roomsRequest<{ request: { id: string; status: string; threadId: string; continuation?: number; stepAttempt?: number; clarification?: string; error?: string; message: { body: string } } }>(
+            '/v1/rooms/' + encodeURIComponent(event.roomId) + '/requests/' + encodeURIComponent(event.payload!.id!))
+          const request = result.request
+          if (['needs_input', 'failed', 'recovery_required'].includes(request.status)) notice = {
+            key: ['request', request.id, request.status, request.continuation ?? 0, request.stepAttempt ?? 0].join(':'),
+            threadId: request.threadId,
+            body: request.message.body.slice(0, 140) + ': ' + (request.clarification || request.error || i18n.t('roomsState_' + request.status, { ns: 'common' }))
+          }
+        } else {
+          const taskId = integrationEvent ? event.payload?.taskId : event.payload?.id
+          if (!taskId) return null
+          const detail = await roomsClient.task(event.roomId, taskId)
+          if (integrationEvent) {
+            const result = await roomsRequest<{ integration: RoomIntegrationSnapshot }>(roomTaskPath(detail.task) + '/integrations/' + encodeURIComponent(event.payload!.id!))
+            notice = integrationRoomNotice(detail, result.integration, (key) => i18n.t(key, { ns: 'common' }))
+          } else notice = taskRoomNotice(detail)
+        }
+      } catch (error) {
+        if (error instanceof Error && 'status' in error && error.status === 404) return null
+        throw error
+      }
+      if (stopped) throw new Error('room notification subscription stopped')
+      if (!notice || known(notice.key)) return notice?.key ?? null
+      if (useChatStore.getState().route === 'rooms' && readBrowserStorageItem('kun.rooms.selected') === event.roomId && document.hasFocus()) return notice.key
+      const result = await window.kunGui.showTurnCompleteNotification({ roomId: event.roomId, threadId: notice.threadId,
+        source: 'main-agent', title: 'Kun · ' + i18n.t('roomsLabel', { ns: 'common' }), body: notice.body.slice(0, 500) })
+      if (!result.ok) throw new Error(result.message)
+      return notice.key
+    }
     const consume = async (event: Event) => {
-      if (stopped || !Number.isSafeInteger(event.seq) || event.seq <= cursor)
-        return
-      cursor = event.seq
+      if (stopped || !queue || !queue.accept(event)) return
+      cursor = queue.cursor
       writeBrowserStorageItem('kun.rooms.eventCursor', String(cursor))
       listeners.forEach((listener) => listener(event))
       clearTimeout(refreshTimer)
-      refreshTimer = setTimeout(() => {
-        void updateBadge().catch(() => undefined)
-      }, 300)
-      const integrationEvent = event.kind.startsWith('integration.')
-      if (
-        (!event.kind.startsWith('task.') && !integrationEvent) ||
-        !event.payload?.id
-      )
-        return
-      const taskId = integrationEvent ? event.payload.taskId : event.payload.id
-      if (!taskId) return
-      try {
-        const detail = await roomsClient.task(event.roomId, taskId)
-        let notice = integrationEvent ? null : taskRoomNotice(detail)
-        if (integrationEvent) {
-          const result = await roomsRequest<{
-            integrations: RoomIntegrationSnapshot[]
-          }>(roomTaskPath(detail.task) + '/integrations')
-          const integration = result.integrations.find(
-            (item) => item.id === event.payload!.id
-          )
-          if (integration)
-            notice = integrationRoomNotice(detail, integration, (key) =>
-              i18n.t(key, { ns: 'common' })
-            )
-        }
-        if (stopped || !notice || notified.has(notice.key)) return
-        notified.add(notice.key)
-        if (notified.size > 500)
-          notified.delete(notified.values().next().value!)
-        if (
-          useChatStore.getState().route === 'rooms' &&
-          readBrowserStorageItem('kun.rooms.selected') === event.roomId &&
-          document.hasFocus()
-        )
-          return
-        await window.kunGui.showTurnCompleteNotification({
-          roomId: event.roomId,
-          threadId: notice.threadId,
-          source: 'main-agent',
-          title: 'Kun · ' + i18n.t('roomsLabel', { ns: 'common' }),
-          body: notice.body
-        })
-      } catch {
-        /* The next event refreshes the authoritative gate snapshot. */
-      }
+      refreshTimer = setTimeout(() => { void updateBadge().catch(() => undefined) }, 300)
+      await queue.drain(deliver)
     }
+    const notificationRetry = setInterval(() => { void queue?.drain(deliver) }, 1000)
+    void queue?.drain(deliver)
     const off = rendererRuntimeClient.onSseEvent((payload) => {
       if (payload.streamId === 'rooms-navigation') {
         const event = payload.events[0] as { roomId?: string }
@@ -140,21 +134,31 @@ export function useRoomEvents() {
     const ended = rendererRuntimeClient.onSseEnd((payload) => {
       if (payload.streamId === streamId) live = false
     })
-    void (async () => {
-      if (!cursor)
-        cursor = (
-          await roomsRequest<{ cursor: number }>('/v1/rooms/events?latest=true')
-        ).cursor
+    const initialize = async () => {
+      const metadata = await roomsRequest<{ cursor: number; scopeId?: string }>('/v1/rooms/events?latest=true')
       if (stopped) return
-      await rendererRuntimeClient.startSse('rooms', cursor, streamId, {
-        scope: 'rooms'
-      })
-      await updateBadge()
-    })().catch(() => {
-      live = false
-    })
+      const queueKey = 'kun.rooms.notificationQueue.v1.' + (metadata.scopeId ?? 'default')
+      let saved = readBrowserStorageItem(queueKey)
+      try {
+        const parsed = JSON.parse(saved ?? 'null')
+        if (parsed && parsed.cursor > metadata.cursor) { parsed.cursor = 0; saved = JSON.stringify(parsed) }
+      } catch { saved = null }
+      queue = new RoomNotificationQueue(Math.min(cursor || metadata.cursor, metadata.cursor), (value) => {
+        const storage = browserStorage()
+        if (!storage) throw new Error('notification persistence unavailable')
+        storage.setItem(queueKey, value)
+      }, saved)
+      cursor = queue.cursor
+      void queue.drain(deliver)
+      await Promise.allSettled([
+        rendererRuntimeClient.startSse('rooms', cursor, streamId, { scope: 'rooms' }), updateBadge()
+      ])
+    }
+    void initialize().catch(() => { live = false })
     fallback = setInterval(() => {
       if (live || stopped) return
+      if (!queue) { void initialize().catch(() => undefined); return }
+      void updateBadge().catch(() => undefined)
       void roomsRequest<{ events: Event[] }>(
         '/v1/rooms/events?since_seq=' + cursor
       )
@@ -168,6 +172,7 @@ export function useRoomEvents() {
       live = false
       clearTimeout(refreshTimer)
       clearInterval(fallback)
+      clearInterval(notificationRetry)
       off()
       opened()
       failed()

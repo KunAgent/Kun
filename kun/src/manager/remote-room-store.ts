@@ -19,6 +19,8 @@ import {
 import { requestManagerJson, type ServiceManagerConnection } from './manager-client.js'
 import type { ManagerResourceFence } from './resource-lease-state.js'
 import { ServiceManagerHttpError } from './usage-errors.js'
+import type { RoomOutcomeQuery } from '../rooms/room-store.js'
+import type { RoomRequestOutcome } from '../contracts/rooms-product.js'
 
 /** Runtime proxy. Canonical room data never opens a local file in this process. */
 export class RemoteRoomStore implements RoomStore {
@@ -59,6 +61,13 @@ export class RemoteRoomStore implements RoomStore {
     await this.call('assertOwnership', { fence })
   }
   async latestEventSeq(): Promise<number> { return z.number().parse(await this.call('latestEventSeq', {})) }
+  async eventScope(): Promise<string> { return z.string().parse(await this.call('eventScope', {})) }
+  async requestOutcomes(input: RoomOutcomeQuery) {
+    return z.object({ initializing: z.boolean(), outcomes: z.array(z.object({
+      requestId: z.string(), status: z.string(), total: z.number(), revision: z.string()
+    }).passthrough()) }).strict().parse(await this.call('requestOutcomes', input)) as {
+      initializing: boolean; outcomes: RoomRequestOutcome[] }
+  }
 
   async close(): Promise<void> {}
 

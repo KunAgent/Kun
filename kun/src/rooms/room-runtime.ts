@@ -10,6 +10,7 @@ import { roomTaskActivity } from './room-task-activity.js'
 import { RoomProductService } from './room-product-service.js'
 import { RoomIntegrationService } from './room-integration.js'
 import { roomActivitySummary } from './room-activity-summary.js'
+import { RoomContextPending } from './room-rule-compression.js'
 
 export class RoomRuntime {
   readonly service: RoomService
@@ -21,6 +22,7 @@ export class RoomRuntime {
   private stopped = true
   private inFlight?: Promise<void>
   private actionQueue: Promise<unknown> = Promise.resolve()
+  private requestCursor?: number
   private readonly executionService: RoomService
 
   constructor(readonly deps: RoomRuntimeDeps, private readonly held: () => boolean = () => true,
@@ -67,7 +69,7 @@ export class RoomRuntime {
     this.actionQueue = run
     return run
   }
-  async taskDetail(roomId: string, taskId: string) {
+  async taskDetail(roomId: string, taskId: string, includeDiff = true) {
     const row = await this.deps.store.get<RoomTaskExecution>('task', taskId)
     if (!row || row.roomId !== roomId) throw new Error('task not found')
     const task = { ...row.value.task, revision: row.revision }
@@ -75,7 +77,8 @@ export class RoomRuntime {
     const controlThreadId = task.stage === 'review' ? row.value.reviewThreadId : task.executionThreadId
     return { task, delivery, workspace: (await this.deps.store.get<RoomWorkspace>('workspace', task.workspaceId))?.value,
       reviews: (await this.deps.store.list<RoomReview>('review', { taskId, limit: 100 })).map((row) => row.value),
-      diff: delivery ? (await this.deps.store.get<string>('artifact', delivery.diffArtifactId))?.value : undefined,
+      diff: delivery && includeDiff ? (await this.deps.store.get<string>('artifact', delivery.diffArtifactId))?.value : undefined,
+      agreements: row.value.agreements ?? row.value.contextSnapshot?.agreements,
       controlThreadId,
       approvals: controlThreadId ? this.deps.approvals.pending(controlThreadId) : [],
       userInputs: controlThreadId ? this.deps.inputs.pending(controlThreadId) : [] }
@@ -99,10 +102,12 @@ export class RoomRuntime {
     if (!this.held()) return
     await this.deps.assertOwnership()
     const requests = await this.deps.store.list<RoomRequestState>('request', {
-      status: ['pending', 'running'], limit: 100, order: 'asc' })
+      status: ['pending', 'running', 'stopping', 'recovery_required'], limit: 100, order: 'asc', afterSeq: this.requestCursor })
+    this.requestCursor = requests.length === 100 ? requests.at(-1)!.seq : undefined
     for (const row of requests) {
       if (this.stopped) return
       try { await this.requests.tick(row) } catch (error) {
+        if (error instanceof RoomContextPending) continue
         const current = await this.deps.store.get<RoomRequestState>('request', row.id)
         if (!current || current.revision !== row.revision) continue
         const message = error instanceof Error ? error.message : String(error)

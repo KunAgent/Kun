@@ -1,14 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+const roots: string[] = []
+afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
 import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
 import { makeAssistantTextItem, makeToolCallItem, makeToolResultItem, makeUserItem } from '../domain/item.js'
 import type { RoomStoreCommit } from './room-store.js'
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
+import { readRoomLog, type StoredRoomLog } from './room-evidence-log.js'
 import { captureRoomVerification } from './room-verification.js'
 
 function fixture() {
   const sessions = new InMemorySessionStore()
   const commit = vi.fn(async (input: RoomStoreCommit) => ({ duplicate: false, events: [], result: input.result }))
-  const deps = { sessions, store: { commit } } as unknown as RoomRuntimeDeps
+  const dataDir = mkdtempSync(join(tmpdir(), 'kun-verification-'))
+  roots.push(dataDir)
+  const deps = { dataDir, sessions, store: { commit } } as unknown as RoomRuntimeDeps
   const identity = { threadId: 'thread', turnId: 'turn' }
   const append = (item: Parameters<typeof sessions.appendItem>[1]) => sessions.appendItem('thread', item)
   const run = async (id: string, name: string, args: Record<string, unknown>, output: unknown,
@@ -19,7 +28,7 @@ function fixture() {
   const declare = (checks: Array<{ id: string; command: string; cwd?: string; purpose?: string }>) =>
     run('declare', 'declare_room_checks', { checks }, { accepted: true, value: { checks } }, 'tool_call')
   const capture = () => captureRoomVerification(deps, { ...identity, roomId: 'room', taskId: 'task', workspace: '/workspace', deliveryId: 'delivery' })
-  return { sessions, commit, append, identity, run, declare, capture }
+  return { deps, sessions, commit, append, identity, run, declare, capture }
 }
 
 describe('declared Rooms verification evidence', () => {
@@ -37,6 +46,15 @@ describe('declared Rooms verification evidence', () => {
     expect(page.mock.calls.length).toBeGreaterThan(5)
     expect(f.commit.mock.calls[0][0]).toMatchObject({ puts: [{ value: { check: { purpose: 'Verify empty input' },
       attempts: [{ callId: 'validation', resultId: 'validation-result' }] } }] })
+  })
+
+  it('rehydrates the selected command output after its metadata was compacted', async () => {
+    const f = fixture()
+    await f.declare([{ id: 'unit', command: 'node check' }])
+    await f.run('check', 'bash', { command: 'node check' }, { exit_code: 0, output: 'Actual verification output ✅' })
+    await f.capture()
+    const value = f.commit.mock.calls[0][0].puts![0].value as { log: StoredRoomLog }
+    expect((await readRoomLog(f.deps, value.log)).text).toBe('Actual verification output ✅')
   })
 
   it('does not infer checks from command words, late declarations, failed declarations or a different cwd', async () => {

@@ -12,12 +12,17 @@ import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution, RoomWorkspac
 import type { RoomStoredDocument } from './room-store.js'
 import { observeRoomRepository } from './task-workspace-service.js'
 import { withLatestRoomReview } from './room-feedback.js'
-import { roomContext, roomDiscussionWorkspace } from './room-context.js'
+import { roomContext, roomDiscussionWorkspace, roomContextBudget, roomTaskContext } from './room-context.js'
+import { prepareRoomAgreements, roomBundleRules } from './room-rule-compression.js'
+import { RoomRuleSchema } from '../contracts/rooms-product.js'
+import { settleRoomRequestStop } from './room-request-actions.js'
 
 export class RoomRequestRunner {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
 
   async tick(row: RoomStoredDocument<RoomRequestState>): Promise<void> {
+    if (row.value.cancellationRequested) { await settleRoomRequestStop(this.deps, row); return }
+    if (row.value.status === 'recovery_required') return
     const request = structuredClone(row.value)
     const room = request.roomSnapshot
     const referenced = request.message.taskId ? await this.referenced(request) : undefined
@@ -43,9 +48,14 @@ export class RoomRequestRunner {
     }
     const coordinator = room.members.find((member) => member.id === room.defaultMemberId)!
     const context = await roomContext(this.deps, request)
-    await ensureRoomThread(this.deps, { id: request.threadId, roomId: room.id,
+    await ensureRoomThread(this.deps, { id: request.threadId, roomId: room.id, requestId: request.id,
       member: coordinator, kind: 'coordination' })
     if (!request.turnId) {
+      if (!request.admissionAttempted) {
+        request.admissionAttempted = true
+        await this.save(row, request)
+        row = (await this.deps.store.get<RoomRequestState>('request', row.id))!
+      }
       request.turnId = await enqueueRoomTurn(this.deps, request.threadId,
         'coordinate-' + request.id + '-' + (request.round ?? 0) + '-' + (request.stepAttempt ?? 0),
         roomCoordinationPrompt(request, context) +
@@ -75,6 +85,9 @@ export class RoomRequestRunner {
     if (plan.kind === 'execute') {
       if (request.message.executionIntent === 'discussion') throw new Error('discussion cannot authorize execution')
       if (request.message.taskId) return this.amend(row)
+      if (await this.deps.store.getRequest('plan-' + request.id)) {
+        return this.finish(row, 'completed', '此前的任务已经派发，请在对应任务中补充修改；不会重复创建任务。')
+      }
       if (!plan.assignments.length) throw new Error('execution plan has no assignments')
       const seen = new Set<string>()
       const prepared: Array<{ execution: RoomTaskExecution; workspace: RoomWorkspace }> = []
@@ -136,9 +149,14 @@ export class RoomRequestRunner {
       if (resolved && !resolved.ok) return this.finish(row, 'needs_input', resolved.reason)
       const repository = resolved?.ok ? request.roomSnapshot.repositories.find((repo) => repo.id === resolved.repositoryId) : undefined
       const discussionWorkspace = request.referencedTask ? await roomDiscussionWorkspace(this.deps, request) : repository?.canonicalRoot
-      await ensureRoomThread(this.deps, { id: discussion.threadId, roomId: request.roomId, member,
+      await ensureRoomThread(this.deps, { id: discussion.threadId, roomId: request.roomId, requestId: request.id, member,
         kind: 'discussion', workspace: discussionWorkspace })
       if (!discussion.turnId) {
+        if (!discussion.admissionAttempted) {
+          discussion.admissionAttempted = true
+          await this.save(row, request)
+          row = (await this.deps.store.get<RoomRequestState>('request', row.id))!
+        }
         discussion.turnId = await enqueueRoomTurn(this.deps, discussion.threadId,
           'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id + '-' + (discussion.attempt ?? 0),
           ['Participate as this room member. Discuss or inspect read-only. Do not implement or run commands.',
@@ -220,7 +238,7 @@ export class RoomRequestRunner {
       dependencyTaskIds: assignment.dependsOn.map((key) => 'task-' + request.id + '-' + key),
       attempt: 1, reworkRounds: 0, reviewer, configuration: this.deps.profiles()[member.presetId] ?? null,
       reviewerConfiguration: reviewer ? this.deps.profiles()[reviewer.presetId] ?? null : null,
-      contextSnapshot, rulesSnapshot: contextSnapshot.rules }
+      contextSnapshot, rulesSnapshot: contextSnapshot.rules, agreements: contextSnapshot.agreements }
     const workspace: RoomWorkspace = { id, taskId: id, roomId: room.id,
       path: join(this.deps.dataDir, 'rooms', 'worktrees', id), branch: 'codex/rooms/' + id,
       baseRevision: observed.head, repository: observed, state: 'reserved' }
@@ -234,7 +252,7 @@ export class RoomRequestRunner {
 
   private startDiscussion(request: RoomRequestState, participants: string[]) {
     request.discussions = [...new Set(participants)].map((memberId) => ({
-      memberId, threadId: 'room-member-' + request.id + '-' + (request.round ?? 0) + '-' + memberId
+      memberId, threadId: 'room-member-' + request.id + '-' + (request.continuation ?? 0) + '-' + (request.round ?? 0) + '-' + memberId
     }))
     request.stage = 'discuss'
   }
@@ -253,6 +271,15 @@ export class RoomRequestRunner {
     }
     if (execution.task.status === 'stopping') {
       return this.finish(row, 'needs_input', '任务正在停止，请等待执行器确认后补充要求。')
+    }
+    if (request.ruleAdoption) {
+      const original = execution.agreements ? await roomBundleRules(this.deps.store, request.roomId, execution.agreements.bundleId) :
+        (execution.rulesSnapshot ?? execution.contextSnapshot?.rules ?? []).map((rule) => RoomRuleSchema.parse(rule))
+      const updated = original.filter((rule) => rule.id !== request.ruleAdoption!.id)
+      if (request.ruleAdoption.active) updated.push(request.ruleAdoption)
+      const prepared = await prepareRoomAgreements(this.deps, request, updated, roomContextBudget(this.deps, request))
+      execution.rulesSnapshot = prepared.rules
+      execution.agreements = prepared.agreements
     }
     if (request.message.mentionMemberIds.some((id) => id !== execution.task.ownerMemberId)) {
       const reviewer = request.roomSnapshot.members.find((member) =>
@@ -281,7 +308,8 @@ export class RoomRequestRunner {
     } else if (execution.turnId && (await this.deps.threads.getMetadata(execution.task.executionThreadId))?.turns
       .some((turn) => turn.id === execution.turnId && turn.status === 'running')) {
       await this.deps.turns.steerTurn({ operationId: request.id, threadId: execution.task.executionThreadId,
-        turnId: execution.turnId, text: request.message.body, attachmentIds: request.message.attachmentIds })
+        turnId: execution.turnId, text: request.message.body + (request.ruleAdoption ? '\nUpdated project agreements:\n' +
+          JSON.stringify(roomTaskContext(execution)) : ''), attachmentIds: request.message.attachmentIds })
       execution.prompt += '\nAdditional user requirement:\n' + request.message.body
       execution.attachmentIds = [...new Set([...execution.attachmentIds, ...request.message.attachmentIds])]
     } else {
@@ -312,9 +340,6 @@ export class RoomRequestRunner {
     }
     if (request.ruleAdoption) {
       const rule = request.ruleAdoption
-      execution.rulesSnapshot = (execution.rulesSnapshot ?? execution.contextSnapshot?.rules ?? []).filter((entry) =>
-        typeof entry !== 'object' || entry === null || !('id' in entry) || entry.id !== rule.id)
-      if (rule.active) execution.rulesSnapshot.push(rule)
       execution.ruleAdoptions = [...(execution.ruleAdoptions ?? []).filter((entry) => entry.ruleId !== rule.id),
         { ruleId: rule.id, version: rule.version, requestId: request.id, active: rule.active }]
     }
@@ -334,9 +359,10 @@ export class RoomRequestRunner {
   }
 
   private async finish(row: RoomStoredDocument<RoomRequestState>, status: RoomRequestState['status'], body: string) {
-    await this.service.append(row.roomId!, 'result-' + row.id, body || '本次讨论已结束。',
+    const suffix = (row.value.stepAttempt ?? 0) ? '-step-' + row.value.stepAttempt : ''
+    await this.service.append(row.roomId!, 'result-' + row.id + suffix, body || '本次讨论已结束。',
       row.value.roomSnapshot.defaultMemberId, row.value.message.taskId)
-    await this.save(row, { ...row.value, status })
+    await this.save(row, { ...row.value, status, clarification: status === 'needs_input' ? body : undefined })
   }
   private async save(row: RoomStoredDocument<RoomRequestState>, value: RoomRequestState) {
     await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)

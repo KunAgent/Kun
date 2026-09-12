@@ -117,7 +117,7 @@ describe('Room integration notifications', () => {
       .mockReset()
       .mockImplementation(async (path: string) =>
         path.includes('/integrations')
-          ? { integrations: rows }
+          ? { integrations: rows, integration: rows[0] }
           : path.includes('latest=true')
             ? { cursor: 1 }
             : { attentionCount: 0 }

@@ -9,7 +9,7 @@ import { SUBAGENT_READ_ONLY_TOOL_NAMES } from '../contracts/capabilities-core.js
 import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 
 export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
-  id: string; roomId: string; taskId?: string; member: RoomMember;
+  id: string; roomId: string; taskId?: string; requestId?: string; member: RoomMember;
   kind: NonNullable<ThreadRecord['roomContext']>['kind']; workspace?: string;
   profile?: SubagentProfileConfig | null
 }): Promise<ThreadRecord> {
@@ -42,6 +42,7 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   if (allowed) allowed = allowed.filter((name) => !blocked.includes(name))
   // Result submission is a scoped data-only protocol. Host-level denies still win.
   if (resultTool && allowed && !blocked.includes(resultTool)) allowed.push(resultTool)
+  if (allowed && !blocked.includes('read_room_rules')) allowed.push('read_room_rules')
   return deps.threads.create({
     workspace, title: input.member.displayName, model: binding.model, providerId: binding.providerId,
     ...('accountId' in binding && typeof binding.accountId === 'string' ? { accountId: binding.accountId } : {}),
@@ -50,7 +51,7 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
     agentId: input.member.presetId,
     systemPrompt: [profile?.systemPrompt, profile?.promptPreamble, input.member.roleNotes].filter(Boolean).join('\n')
   }, { id: input.id, relation: 'side', roomContext: {
-    roomId: input.roomId, taskId: input.taskId, memberId: input.member.id, kind: input.kind,
+    roomId: input.roomId, taskId: input.taskId, requestId: input.requestId, memberId: input.member.id, kind: input.kind,
     allowedToolNames: allowed,
     blockedToolNames: [...new Set(['delegate_task', 'create_goal', ...blocked])],
     blockedProviderIds: [...new Set([...(profile?.blockedMcpServers ?? []), ...(overrides?.blockedMcpServers ?? [])])].map((id) => id.startsWith('mcp:') ? id : 'mcp:' + id),

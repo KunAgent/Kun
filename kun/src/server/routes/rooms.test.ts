@@ -167,6 +167,32 @@ describe('Rooms HTTP routes and durable storage', () => {
     expect((await f.call(path + '?status=queued')).body.tasks).toHaveLength(2)
   })
 
+  it('pages long agreement histories and filters historical reviews before applying the limit', async () => {
+    const f = await fixture()
+    const path = '/v1/rooms/' + f.room.id
+    const rules = Array.from({ length: 125 }, (_, i) => ({ kind: 'rule' as const, id: 'rule-' + i, roomId: f.room.id,
+      value: { id: 'rule-' + i, messageId: 'source', version: 1, active: true, body: 'Agreement ' + i } }))
+    await f.store.commit({ requestId: 'many-rules', puts: rules,
+      checks: rules.map((rule) => ({ kind: rule.kind, id: rule.id, expectedRevision: null })) })
+    const seen = new Set<string>()
+    let cursor: string | undefined
+    do {
+      const page = (await f.call(path + '/rules?limit=50' + (cursor ? '&cursor=' + cursor : ''))).body
+      for (const rule of page.rules) { expect(seen.has(rule.id)).toBe(false); seen.add(rule.id) }
+      cursor = page.nextCursor
+    } while (cursor)
+    expect(seen.size).toBe(125)
+    await f.store.commit({ requestId: 'old-delivery', checks: [{ kind: 'delivery', id: 'old', expectedRevision: null }],
+      puts: [{ kind: 'delivery', id: 'old', roomId: f.room.id, taskId: 'task', value: { id: 'old', taskId: 'task', diffArtifactId: 'diff' } }] })
+    const reviews = Array.from({ length: 151 }, (_, i) => ({ kind: 'review' as const, id: 'review-' + i, roomId: f.room.id, taskId: 'task',
+      value: { id: 'review-' + i, deliveryId: i === 0 ? 'old' : 'new', verdict: 'passed' } }))
+    await f.store.commit({ requestId: 'many-reviews', puts: reviews,
+      checks: reviews.map((review) => ({ kind: review.kind, id: review.id, expectedRevision: null })) })
+    const old = (await f.call(path + '/tasks/task/deliveries/old?include_diff=false')).body
+    expect(old.reviews.map((review: { id: string }) => review.id)).toEqual(['review-0'])
+    expect((await f.call(path + '/tasks/task/reviews?delivery_id=old')).body.reviews).toHaveLength(1)
+  })
+
   it('replays room events from Last-Event-ID and releases live streams on shutdown', async () => {
     const f = await fixture()
     const path = `/v1/rooms/${f.room.id}`

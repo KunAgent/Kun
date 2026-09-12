@@ -54,14 +54,17 @@ function readDraft(roomId: string): Draft {
 export function RoomComposer({
   room,
   tasks,
+  draftId,
   onSend
 }: {
   room: Room
   tasks: RoomTask[]
+  draftId?: string
   onSend: (message: SendRoomMessage) => Promise<void>
 }): ReactElement {
   const { t } = useTranslation('common')
-  const [draft, setDraft] = useState(() => readDraft(room.id))
+  const storageId = draftId ?? room.id
+  const [draft, setDraft] = useState(() => readDraft(storageId))
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -157,16 +160,17 @@ export function RoomComposer({
         textareaRef.current?.focus()
       }
     }
+    if (draftId) return
     window.addEventListener?.('kun-room-reply', reply)
     window.addEventListener?.('kun-room-task-reply', taskReply)
     return () => {
       window.removeEventListener?.('kun-room-reply', reply)
       window.removeEventListener?.('kun-room-task-reply', taskReply)
     }
-  }, [room.id])
+  }, [room.id, draftId])
   useEffect(() => {
-    writeBrowserStorageItem(`kun.rooms.draft.${room.id}`, JSON.stringify(draft))
-  }, [draft, room.id])
+    writeBrowserStorageItem(`kun.rooms.draft.${storageId}`, JSON.stringify(draft))
+  }, [draft, storageId])
   const patch = (value: Partial<Draft>): void =>
     setDraft((current) => ({ ...current, ...value }))
 
@@ -200,7 +204,7 @@ export function RoomComposer({
     const pending = { ...draft, fingerprint, requestId }
     setDraft(pending)
     writeBrowserStorageItem(
-      `kun.rooms.draft.${room.id}`,
+      `kun.rooms.draft.${storageId}`,
       JSON.stringify(pending)
     )
     setBusy(true)

@@ -15,6 +15,9 @@ import { ERRORS } from './runtime-error.js'
 import { roomEventStream } from './room-event-stream.js'
 import { roomCleanupPreview, cleanupRoomTask } from '../../rooms/room-cleanup.js'
 import { roomGit } from '../../rooms/room-git.js'
+import { roomRequestAction } from '../../rooms/room-request-actions.js'
+import { roomHistoryPage } from '../../rooms/room-history.js'
+import { registerRoomEvidenceRoutes } from './register-room-evidence-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
 
 const PageSchema = z.object({
@@ -58,6 +61,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     }
   })
 
+  registerRoomEvidenceRoutes(add)
   add('GET', '/v1/rooms/presets', (rooms) => {
     const defaults = rooms.deps.model()
     const unsupportedProviderIds = rooms.deps.unsupportedProviderIds?.() ?? []
@@ -81,7 +85,8 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   add('GET', '/v1/rooms/attention', (rooms) => rooms.product.attention())
   add('GET', '/v1/rooms/events', async (rooms, request) => {
     const params = new URL(request.url).searchParams
-    if (params.get('latest') === 'true') return { cursor: await rooms.service.store.latestEventSeq?.() ?? 0 }
+    if (params.get('latest') === 'true') return { cursor: await rooms.service.store.latestEventSeq?.() ?? 0,
+      scopeId: await rooms.service.store.eventScope?.() }
     const sinceSeq = z.coerce.number().int().nonnegative().parse(params.get('since_seq') ?? 0)
     if (request.headers.get('accept')?.includes('text/event-stream')) return roomEventStream({ runtime, rooms, roomId: '*', request, sinceSeq })
     const events = await rooms.service.store.events('*', sinceSeq, 200)
@@ -125,7 +130,22 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const input = z.object({ seq: z.number().int().nonnegative(), clientRequestId: RoomIdSchema }).parse(await body(request))
     return (await rooms.product.read(context.params.roomId, input.seq, input.clientRequestId)).result
   })
-  add('GET', '/v1/rooms/:roomId/requests', (rooms, _request, context) => rooms.product.requests(context.params.roomId).then((requests) => ({ requests })))
+  add('GET', '/v1/rooms/:roomId/requests', (rooms, request, context) => rooms.product.requestPage(context.params.roomId, pagination(request)))
+  add('GET', '/v1/rooms/:roomId/requests/:requestId', async (rooms, _request, { params }) => {
+    const row = await rooms.service.store.get<import('../../rooms/room-runtime-types.js').RoomRequestState>('request', params.requestId)
+    if (!row || row.roomId !== params.roomId) throw new Error('request not found')
+    const context = await rooms.service.store.get('context', row.value.contextId ?? 'context-' + row.id)
+    const compression = row.value.compressionId ? await rooms.service.store.get<import('../../rooms/room-rule-compression.js').RuleCompression>('rule_compression', row.value.compressionId) : null
+    return { request: { ...row.value, revision: row.revision }, context: context?.value,
+      compression: compression ? { status: compression.value.status, completed: compression.value.index,
+        total: compression.value.units.length, error: compression.value.error } : undefined }
+  })
+  for (const action of ['continue', 'cancel', 'reconcile'] as const) add('POST', '/v1/rooms/:roomId/requests/:requestId/' + action, async (rooms, request, { params }) => {
+    const input = await body(request)
+    const result = await rooms.exclusive(() => roomRequestAction(rooms.deps, rooms.service, params.roomId, params.requestId, action, input))
+    rooms.wake()
+    return result
+  })
   add('POST', '/v1/rooms/:roomId/requests/:requestId/retry', async (rooms, request, context) => {
     const input = RoomTaskActionSchema.parse(await body(request))
     const result = await rooms.exclusive(() => rooms.product.retryRequest(context.params.roomId, context.params.requestId, input.clientRequestId, input.expectedRevision))
@@ -140,14 +160,15 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const status = selected ? z.array(RoomTaskStatusSchema).parse(selected.split(',')) : undefined
     const rows = await rooms.deps.store.list<RoomTaskExecution>('task', {
       roomId, limit: page.limit, beforeSeq: page.cursor, status,
+      requestId: new URL(request.url).searchParams.get('request_id') ?? undefined,
       memberId: new URL(request.url).searchParams.get('member_id') ?? undefined,
       repositoryId: new URL(request.url).searchParams.get('repository_id') ?? undefined
     })
     return { tasks: rows.map((row) => ({ ...row.value.task, revision: row.revision })),
       nextCursor: rows.length === page.limit ? String(rows.at(-1)!.seq) : undefined }
   })
-  add('GET', '/v1/rooms/:roomId/tasks/:taskId', (rooms, _request, context) =>
-    rooms.taskDetail(context.params.roomId, context.params.taskId))
+  add('GET', '/v1/rooms/:roomId/tasks/:taskId', (rooms, request, context) =>
+    rooms.taskDetail(context.params.roomId, context.params.taskId, new URL(request.url).searchParams.get('include_diff') !== 'false'))
   for (const action of ['cancel', 'retry', 'accept', 'apply', 'review', 'retry-review']) {
     add('POST', `/v1/rooms/:roomId/tasks/:taskId/${action}`, async (rooms, request, context) => {
       await rooms.action(context.params.roomId, context.params.taskId, action, await body(request))
@@ -160,10 +181,16 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const input = await body(request)
     return rooms.exclusive(() => rooms.product.recover(context.params.roomId, context.params.taskId, input))
   })
-  add('GET', '/v1/rooms/:roomId/tasks/:taskId/deliveries', (rooms, _request, context) =>
-    rooms.product.deliveries(context.params.roomId, context.params.taskId).then((deliveries) => ({ deliveries })))
-  add('GET', '/v1/rooms/:roomId/tasks/:taskId/deliveries/:deliveryId', (rooms, _request, context) =>
-    rooms.product.delivery(context.params.roomId, context.params.taskId, context.params.deliveryId))
+  add('GET', '/v1/rooms/:roomId/tasks/:taskId/deliveries', (rooms, request, context) =>
+    rooms.product.deliveryPage(context.params.roomId, context.params.taskId, pagination(request), new URL(request.url).searchParams.get('summary_only') === 'true'))
+  add('GET', '/v1/rooms/:roomId/tasks/:taskId/deliveries/:deliveryId', (rooms, request, context) =>
+    rooms.product.delivery(context.params.roomId, context.params.taskId, context.params.deliveryId, new URL(request.url).searchParams.get('include_diff') !== 'false'))
+  add('GET', '/v1/rooms/:roomId/tasks/:taskId/reviews', async (rooms, request, { params }) => {
+    const page = await roomHistoryPage<import('../../contracts/room-deliveries.js').RoomReview>(rooms.service.store, 'review', {
+      roomId: params.roomId, taskId: params.taskId, deliveryId: new URL(request.url).searchParams.get('delivery_id') ?? undefined
+    }, pagination(request))
+    return { reviews: page.items, nextCursor: page.nextCursor }
+  })
   add('GET', '/v1/rooms/:roomId/tasks/:taskId/compare', async (rooms, request, { params }) => {
     const query = new URL(request.url).searchParams
     const before = await rooms.product.delivery(params.roomId, params.taskId, RoomIdSchema.parse(query.get('from')))
@@ -175,13 +202,19 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const workspace = workspaceRow.value
     return { diff: await roomGit(workspace.repository.root, ['diff', '--no-ext-diff', before.delivery.versionHash, after.delivery.versionHash]) }
   })
-  add('GET', '/v1/rooms/:roomId/tasks/:taskId/integrations', async (rooms, _request, { params }) => ({
-    integrations: (await rooms.deps.store.list<import('../../contracts/rooms-product.js').RoomIntegration>('integration',
-      { roomId: params.roomId, taskId: params.taskId, limit: 100 }))
-      .map((row) => ({ ...row.value, revision: row.revision,
-        approvals: row.value.threadId ? rooms.deps.approvals.pending(row.value.threadId) : [],
-        userInputs: row.value.threadId ? rooms.deps.inputs.pending(row.value.threadId) : [] }))
-  }))
+  add('GET', '/v1/rooms/:roomId/tasks/:taskId/integrations', async (rooms, request, { params }) => {
+    const page = await roomHistoryPage<import('../../contracts/rooms-product.js').RoomIntegration>(rooms.service.store, 'integration',
+      { roomId: params.roomId, taskId: params.taskId, summaryOnly: new URL(request.url).searchParams.get('summary_only') === 'true' }, pagination(request))
+    return { integrations: page.items.map((value) => ({ ...value,
+      approvals: value.threadId ? rooms.deps.approvals.pending(value.threadId) : [],
+      userInputs: value.threadId ? rooms.deps.inputs.pending(value.threadId) : [] })), nextCursor: page.nextCursor }
+  })
+  add('GET', '/v1/rooms/:roomId/tasks/:taskId/integrations/:integrationId', async (rooms, _request, { params }) => {
+    const row = await rooms.integrations.get(params.roomId, params.taskId, params.integrationId)
+    return { integration: { ...row.value, revision: row.revision,
+      approvals: row.value.threadId ? rooms.deps.approvals.pending(row.value.threadId) : [],
+      userInputs: row.value.threadId ? rooms.deps.inputs.pending(row.value.threadId) : [] } }
+  })
   add('POST', '/v1/rooms/:roomId/tasks/:taskId/integrations', async (rooms, request, { params }) => {
     const input = await body(request)
     return { integration: await rooms.exclusive(() => rooms.integrations.prepare(params.roomId, params.taskId, input)) }
@@ -214,10 +247,10 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     })
     return { versions: rows.map((row) => row.value), nextCursor: rows.length === page.limit ? String(rows.at(-1)!.seq) : undefined }
   })
-  add('GET', '/v1/rooms/:roomId/rules', async (rooms, _request, context) => {
+  add('GET', '/v1/rooms/:roomId/rules', async (rooms, request, context) => {
     await rooms.service.get(context.params.roomId)
-    return { rules: (await rooms.service.store.list('rule', { roomId: context.params.roomId, limit: 100 }))
-      .map((row) => ({ ...(row.value as object), revision: row.revision })) }
+    const page = await roomHistoryPage(rooms.service.store, 'rule', { roomId: context.params.roomId }, pagination(request))
+    return { rules: page.items, nextCursor: page.nextCursor }
   })
   add('POST', '/v1/rooms/:roomId/rules', async (rooms, request, context) => {
     const input = RoomRuleRequestSchema.parse(await body(request))

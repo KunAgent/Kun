@@ -15,6 +15,7 @@ export type {
 export type { CreateRoomRequest } from '../../kun/src/contracts/rooms-api'
 export type {
   RoomRule,
+  RoomAgreementContext,
   RoomRecoveryInfo,
   RoomRequestOutcome,
   RoomIntegration,

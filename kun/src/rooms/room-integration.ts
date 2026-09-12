@@ -13,6 +13,7 @@ import { roomTaskActivity, stopRoomTaskTurn } from './room-task-activity.js'
 import { RoomReviewResultSchema } from './room-result-tools.js'
 import { parseRoomJson } from './room-coordination-plan.js'
 import { captureRoomVerification } from './room-verification.js'
+import { roomTaskContext } from './room-context.js'
 import { assertIntegrationWorkspace, freezeIntegrationCandidate, integrationDelivery,
   prepareIntegrationGit } from './room-integration-git.js'
 
@@ -434,7 +435,7 @@ export class RoomIntegrationService {
       JSON.stringify({ requirement: execution.prompt, sourceSha: value.sourceSha, targetSha: value.targetSha,
         candidateSha: value.candidateSha, conflicts: value.conflicts, findings: value.review?.findings,
         diffExcerpt: value.diff.slice(0, 64000), diffTruncated: value.diff.length > 64000,
-        commands: value.validationCommands, validationRules: execution.rulesSnapshot, priorError: value.error }))
+        commands: value.validationCommands, projectContext: roomTaskContext(execution), priorError: value.error }))
   }
   private nextStage(value: RoomIntegration, kind: RoomIntegration['runKind']) {
     value.runKind = kind

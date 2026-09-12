@@ -24,6 +24,7 @@ const {
   availablePort, argumentValue, positiveIntegerArgument, terminateProcessTree
 } = require('./smoke-packaged-extension-desktop-process.cjs')
 const { developmentRendererEnvironment } = require('./development-renderer-environment.cjs')
+const { exerciseRoomHardening } = require('./smoke-rooms-hardening-controls.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 
 const exec = promisify(execFile)
@@ -32,7 +33,7 @@ const TASK_TITLE = 'Create desktop evidence file'
 const TASK_PROMPT = 'Create desktop-smoke.txt containing isolated desktop runtime and have it reviewed.'
 const FILE_CONTENT = 'isolated desktop runtime\n'
 const MODEL = 'deepseek-chat'
-const VALIDATION_COMMAND = 'node -e "process.exit(0)"'
+const VALIDATION_COMMAND = `node -e "console.log('rooms verification proof')"`
 
 async function main() {
   const repositoryRoot = resolve(__dirname, '..')
@@ -216,6 +217,13 @@ async function main() {
     await panel.getByRole('combobox', { name: 'Delivery history' }).selectOption(detailBeforeReload.delivery.id)
     await panel.getByText(detailBeforeReload.delivery.versionHash, { exact: true }).waitFor()
     await panel.getByRole('combobox', { name: 'Delivery history' }).selectOption('')
+    const diffSummary = panel.locator('summary').filter({ hasText: /^Diff/ }).first()
+    await diffSummary.click()
+    await panel.getByRole('button', { name: 'desktop-smoke.txt', exact: true }).click()
+    await panel.locator('summary').filter({ hasText: /^desktop-smoke.txt$/ }).click()
+    await poll(async () => (await panel.innerText()).includes('+isolated desktop runtime'), 10000, 'per-file immutable diff')
+    await capture('hardening-file-diff')
+    await diffSummary.click()
     await capture('5-reviewed-delivery')
 
     // Reload the actual Electron page and restore durable room state.
@@ -264,6 +272,26 @@ async function main() {
       return integrations[0]?.status === 'ready'
     }, timeoutMs, 'immutable integration candidate review')
     assert.equal(await panel.getByLabel('I reviewed this candidate and agree to apply it without recorded verification.').count(), 0)
+    await panel.locator('summary').filter({ hasText: VALIDATION_COMMAND }).click()
+    await panel.locator('summary').filter({ hasText: 'View verification log' }).click()
+    await poll(async () => (await panel.innerText()).includes('rooms verification proof'), 10000, 'canonical verification log view')
+    const logDownload = join(temporaryRoot, 'verification-download.log')
+    await electronApplication.evaluate(({ dialog }, filePath) => {
+      const original = dialog.showSaveDialog
+      globalThis.__roomsLogSaveCalls = 0
+      dialog.showSaveDialog = async (...args) => {
+        const options = args.at(-1) ?? {}
+        if (!globalThis.__roomsLogSaveCalls && options.title === 'Save generated file' && options.defaultPath === 'verification.log') {
+          globalThis.__roomsLogSaveCalls++; dialog.showSaveDialog = original
+          return { canceled: false, filePath }
+        }
+        return original.apply(dialog, args)
+      }
+    }, logDownload)
+    await panel.getByRole('button', { name: 'Download output', exact: true }).click()
+    await poll(() => existsSync(logDownload), 10000, 'scoped native verification log export')
+    assert((await readFile(logDownload, 'utf8')).includes('rooms verification proof'))
+    await capture('hardening-log-export')
     await capture('integration-reviewed-verified-candidate')
     await panel.getByRole('button', { name: 'Apply integration candidate', exact: true }).click()
     await poll(async () => {
@@ -282,6 +310,14 @@ async function main() {
     const retained = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}/deliveries/${detailBeforeReload.delivery.id}`)
     assert.equal(retained.delivery.versionHash, detailBeforeReload.delivery.versionHash)
     await capture('cleanup-retains-history')
+    const integrationsWithLogs = (await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}/integrations`)).integrations
+    const logId = integrationsWithLogs[0].validation[0].output
+    const retainedLog = await runtimeRequest(page, `/v1/rooms/${room.id}/tasks/${task.id}/logs/${logId}`)
+    assert.equal(retainedLog.missing, undefined)
+    await panel.getByRole('button', { name: 'Close', exact: true }).click()
+    const hardening = await exerciseRoomHardening({ page, request: runtimeRequest, switchMode, poll, capture, fixture: modelFixture })
+    await page.getByRole('button', { name: new RegExp(ROOM_NAME) }).click()
+    await openTask(page)
     await capture('7-applied-delivery')
     await resize(electronApplication, 760, 780)
     await page.waitForTimeout(400)
@@ -301,7 +337,7 @@ async function main() {
     assert.equal(integrationInputsResolved, 1, 'Expected integration execution-specific structured input')
     result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
-      baselineSha, targetSha, agreement, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      baselineSha, targetSha, agreement, hardening, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
       nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
       narrowViewport, pageErrors, screenshots,
@@ -319,6 +355,7 @@ async function main() {
     await writeFile(join(evidenceRoot, 'failure.txt'), primaryError.stack).catch(() => undefined)
   } finally {
     modelFixture?.releaseExecution()
+    modelFixture?.releaseCoordination()
     const errors = []
     const cleanup = async (operation) => {
       try { await withTimeout(operation, 20_000, 'cleaning isolated Rooms smoke') }
@@ -466,6 +503,8 @@ async function poll(check, timeoutMs, description) {
 async function startModelFixture() {
   let releaseExecution
   const gate = new Promise((resolve) => { releaseExecution = resolve })
+  let releaseCoordination
+  const coordinationGate = new Promise((resolve) => { releaseCoordination = resolve })
   const state = { coordinationRequests: 0, executionRequests: 0, reviewRequests: 0, inputRequests: 0, otherRequests: 0 }
   const server = createServer(async (request, response) => {
     try {
@@ -478,11 +517,24 @@ async function startModelFixture() {
       const chunks = []
       for await (const chunk of request) chunks.push(chunk)
       const body = JSON.parse(Buffer.concat(chunks).toString())
-      const prompt = JSON.stringify(body.messages)
+      const messageText = (message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? '')
+      const principal = body.messages.findLastIndex((message) => message.role === 'user' && /You coordinate a personal Kun room|Complete this authorized room task|Review this immutable|Run exactly the declared|Compress project agreements/.test(messageText(message)))
+      const messages = body.messages.slice(Math.max(0, principal))
+      const prompt = JSON.stringify(messages)
       let content = 'Completed.', toolCalls
-      const called = (name) => body.messages.some((message) => message.tool_calls?.some((tool) => tool.function?.name === name))
+      const called = (name) => messages.some((message) => message.tool_calls?.some((tool) => tool.function?.name === name))
       const tool = (name, args) => [{ index: 0, id: 'smoke-' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
-      if (prompt.includes('You coordinate a personal Kun room')) {
+      if (prompt.includes('Compress project agreements')) {
+        state.compressionRequests = (state.compressionRequests ?? 0) + 1
+        const texts = messages.flatMap((message) => typeof message.content === 'string' ? [message.content] : (message.content ?? []).map((part) => part.text ?? ''))
+        const input = JSON.parse(texts.flatMap((text) => text.split('\n')).findLast((line) => line.startsWith('{"sources":')))
+        content = JSON.stringify({ sources: input.sources, summary: 'Keep limit 12. Never upload secrets. Exception: local fixtures only.' })
+      } else if (prompt.includes('You coordinate a personal Kun room') && /ROOM_HARDENING_/.test(prompt)) {
+        state.coordinationRequests += 1
+        if (prompt.includes('ROOM_HARDENING_STOP')) { state.stoppingRequests = (state.stoppingRequests ?? 0) + 1; await coordinationGate }
+        const plan = prompt.includes('ROOM_HARDENING_REQUEST') && !prompt.includes('CONFIRMED_HARDENING_ANSWER') ? { kind: 'clarify', response: 'Which compatibility option should be used?' } : { kind: 'answer', response: 'The conservative compatibility option is confirmed. No files were changed.' }
+        if (!called('submit_room_plan')) { content = ''; toolCalls = tool('submit_room_plan', plan) }
+      } else if (prompt.includes('You coordinate a personal Kun room')) {
         state.coordinationRequests += 1
         if (!called('submit_room_plan')) { content = ''; toolCalls = tool('submit_room_plan', { kind: 'execute', response: 'Development and review assigned.', participants: [],
           assignments: [{ key: 'desktop-smoke', memberId: 'developer', repositoryId: 'repo',
@@ -527,7 +579,7 @@ async function startModelFixture() {
     }
   })
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
-  return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution,
+  return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution, releaseCoordination,
     snapshot: () => ({ ...state }), close: () => new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
       server.closeAllConnections?.()

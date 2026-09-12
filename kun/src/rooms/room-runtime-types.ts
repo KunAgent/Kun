@@ -11,16 +11,18 @@ import type { UserInputGate } from '../ports/user-input-gate.js'
 import type { RoomStore } from './room-store.js'
 import type { RoomRepositoryObservation } from './task-workspace-service.js'
 import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
+import type { ArtifactStore } from '../artifacts/artifact-store.js'
 
 export type RoomRequestState = {
   id: string
   roomId: string
-  status: 'pending' | 'running' | 'completed' | 'needs_input' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'needs_input' | 'failed' | 'stopping' | 'cancelled' | 'recovery_required'
   message: SendRoomMessage
   sourceMessageId: string
   roomSnapshot: Room
   threadId: string
   turnId?: string
+  admissionAttempted?: boolean
   error?: string
   round?: number
   stage?: 'coordinate' | 'discuss'
@@ -28,9 +30,17 @@ export type RoomRequestState = {
   resultRepairs?: number
   repairInstruction?: string
   contextId?: string
+  continuation?: number
+  originalMessage?: SendRoomMessage
+  originalSourceMessageId?: string
+  clarification?: string
+  cancellationRequested?: boolean
+  previousDiscussions?: NonNullable<RoomRequestState['discussions']>
+  compressionId?: string
+  contextState?: 'compressing' | 'ready'
   summaryThreadId?: string
   ruleAdoption?: import('../contracts/rooms-product.js').RoomRule
-  discussions?: Array<{ memberId: string; threadId: string; turnId?: string; response?: string; error?: string; attempt?: number }>
+  discussions?: Array<{ memberId: string; threadId: string; turnId?: string; admissionAttempted?: boolean; response?: string; error?: string; attempt?: number }>
   referencedTask?: { task: RoomTask; requirement: string; delivery?: RoomDelivery; diffExcerpt?: string }
 }
 export type RoomWorkspace = {
@@ -65,9 +75,11 @@ export type RoomTaskExecution = {
   previousExecutionThreadIds?: string[]
   ruleAdoptions?: Array<{ ruleId: string; version: number; requestId: string; active: boolean }>
   rulesSnapshot?: unknown[]
+  agreements?: import('../contracts/rooms-product.js').RoomAgreementContext
   contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
+  artifacts?: ArtifactStore
   store: RoomStore
   threads: ThreadService
   threadStore: ThreadStore

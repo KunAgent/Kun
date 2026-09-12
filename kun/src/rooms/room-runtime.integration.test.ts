@@ -35,7 +35,7 @@ async function fixture(structuredResults = false, malformedResults = false) {
       calls.set(request.threadId, (calls.get(request.threadId) ?? 0) + 1)
       if (request.threadId.startsWith('room-discussion')) {
         if (structuredResults && (malformedResults || calls.get(request.threadId) === 1)) {
-          expect(request.tools.map((tool) => tool.name)).toEqual(['submit_room_plan'])
+          expect(request.tools.map((tool) => tool.name)).toEqual(['read_room_rules', 'submit_room_plan'])
           yield { kind: 'tool_call_complete', callId: 'plan', toolName: 'submit_room_plan', arguments: malformedResults ? { response: 'Invalid attempt ' + calls.get(request.threadId) } : plans.current as Record<string, unknown> }
           yield { kind: 'completed', stopReason: 'tool_calls' }
           return

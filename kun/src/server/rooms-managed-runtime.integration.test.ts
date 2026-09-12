@@ -9,6 +9,7 @@ import { startServiceManager, type ServiceManagerHandle } from '../manager/servi
 import { startKunServe, type KunServeHandle } from './runtime-factory.js'
 import type { Room } from '../contracts/rooms.js'
 import type { RoomTask } from '../contracts/room-tasks.js'
+import { heartbeatRuntimeWithManager } from '../manager/manager-client.js'
 
 const exec = promisify(execFile)
 const cleanup: Array<() => Promise<unknown>> = []
@@ -18,6 +19,8 @@ afterEach(async () => {
 
 async function modelServer() {
   let executionCalls = 0
+  let originalRuleId = ''
+  let originalRuleRead = false
   const server = createServer(async (request, response) => {
     try {
       const chunks: Buffer[] = []
@@ -29,7 +32,20 @@ async function modelServer() {
       const prompt = JSON.stringify(body.messages)
       let content = 'Completed.'
       let toolCalls: unknown[] | undefined
-      if (prompt.includes('You coordinate a personal Kun room')) {
+      if (prompt.includes('READ_ORIGINAL_ROOM_RULE')) {
+        const texts = body.messages.map((message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
+        const toolResult = body.messages.find((message) => message.role === 'tool')
+        if (!toolResult) {
+          const bundleId = texts.join(' ').match(/rules-[a-f0-9]{64}/g)?.at(-1)
+          content = ''
+          toolCalls = [{ index: 0, id: 'original-room-rule', type: 'function', function: { name: 'read_room_rules',
+            arguments: JSON.stringify({ bundleId, ruleId: originalRuleId, version: 1 }) } }]
+        } else {
+          const output = JSON.parse(String(toolResult.content))
+          originalRuleRead = output.rule?.body === 'Keep original numeric limit 12.'
+          content = originalRuleRead ? 'Original numeric limit is 12.' : 'Original rule tool failed.'
+        }
+      } else if (prompt.includes('You coordinate a personal Kun room')) {
         content = JSON.stringify({ kind: 'execute', response: 'Development and review assigned.',
           participants: [], assignments: [{ key: 'smoke', memberId: 'developer', repositoryId: 'repo',
             title: 'Create smoke file', prompt: 'Create smoke.txt containing managed runtime.',
@@ -65,7 +81,8 @@ async function modelServer() {
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('model server unavailable')
   cleanup.push(() => closeServer(server))
-  return { baseUrl: 'http://127.0.0.1:' + address.port, calls: () => executionCalls }
+  return { baseUrl: 'http://127.0.0.1:' + address.port, calls: () => executionCalls,
+    setRule: (id: string) => { originalRuleId = id }, ruleRead: () => originalRuleRead }
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -91,13 +108,22 @@ describe('Rooms full managed Runtime HTTP composition', () => {
     cleanup.push(async () => { await manager?.close(); manager = undefined })
     let runtime: KunServeHandle | undefined
     cleanup.push(async () => { await runtime?.close(); runtime = undefined })
-    const start = async () => startKunServe({
+    let heartbeat: ReturnType<typeof setInterval> | undefined
+    cleanup.push(async () => { if (heartbeat) clearInterval(heartbeat) })
+    const start = async () => {
+      if (heartbeat) clearInterval(heartbeat)
+      const handle = await startKunServe({
       host: '127.0.0.1', port: 0, dataDir: join(root, 'data'),
       runtimeToken: 'isolated-room-runtime', apiKey: 'test-fixture',
       baseUrl: model.baseUrl, model: 'test-model', approvalPolicy: 'auto', sandboxMode: 'workspace-write',
       tokenEconomyMode: false, insecure: false, runtimeFlavor: 'development',
       discoveryDir: join(root, 'discovery'), serviceManager: { discovery: manager!.discovery }
     })
+      heartbeat = setInterval(() => { void heartbeatRuntimeWithManager({ manager: { discovery: manager!.discovery },
+        flavor: 'development', instanceId: handle.instanceId }).catch(() => undefined) }, 5000)
+      heartbeat.unref()
+      return handle
+    }
     runtime = await start()
     const api = async <T>(path: string, body?: unknown, method?: string): Promise<T> => {
       const response = await fetch('http://' + runtime!.host + ':' + runtime!.port + path, {
@@ -122,6 +148,12 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       task = response.tasks[0]
       expect(task.status, task.latestProgress).toBe('awaiting_acceptance')
     }, { timeout: 40000, interval: 300 })
+    await runtime.runtime.rooms!.service.append(room.id, 'original-rule-note', 'Keep original numeric limit 12.')
+    const pinned = await api<{ rule: { id: string } }>('/v1/rooms/' + room.id + '/rules', { clientRequestId: 'pin-original', messageId: 'original-rule-note' })
+    model.setRule(pinned.rule.id)
+    await api('/v1/rooms/' + room.id + '/messages', { clientRequestId: 'read-original', body: 'READ_ORIGINAL_ROOM_RULE', taskId: task.id,
+      executionIntent: 'discussion', mentionMemberIds: ['developer'] })
+    await vi.waitFor(() => expect(model.ruleRead()).toBe(true), { timeout: 10000, interval: 200 })
     const calls = model.calls()
     expect(calls).toBeGreaterThanOrEqual(2)
     await expect(readFile(join(repo, 'smoke.txt'))).rejects.toThrow()

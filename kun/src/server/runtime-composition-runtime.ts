@@ -10,6 +10,7 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import type { createRuntimeConfigController } from './runtime-composition-config.js'
+import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -122,6 +123,7 @@ export function createServerRuntimeComposition(
   const roomComposition = createRuntimeRoomComposition({
     options: () => config.activeOptions,
     services: { threads: threadService, threadStore: stores.threadStore,
+      artifacts: artifactStore,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
       backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
@@ -141,6 +143,7 @@ export function createServerRuntimeComposition(
           ['turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind))
       } }
   })
+  bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)
   return {
     threadService,
     rooms: roomComposition.rooms,

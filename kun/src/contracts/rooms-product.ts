@@ -20,14 +20,24 @@ export type RoomRecoveryInfo = {
   reason: string; canRetry: boolean; canAbandon: boolean; observedAt: string
 }
 export type RoomRequestOutcome = {
+  roomId?: string
   requestId: string; status: 'discussing' | 'running' | 'needs_attention' | 'partial' | 'awaiting_acceptance' | 'completed' | 'failed' | 'cancelled'
   total: number; completed: number; delivered: number; failed: number; active: number
   taskIds: string[]; summary: string; revision: string
+  tasksTruncated?: boolean
 }
 export type RoomContextSnapshot = {
   id: string; roomId: string; coveredSeq: number; summary: string
   messages: Array<{ id: string; author: string; body: string }>
   rules: RoomRule[]; truncated: boolean
+  agreements?: RoomAgreementContext
+}
+export type RoomAgreementContext = {
+  bundleId: string; count: number; compressed: boolean; summary?: string; model?: string
+  policyVersion: number
+}
+export type RoomRuleBundle = {
+  roomId: string; references: Array<{ id: string; version: number; hash: string }>
 }
 export type RoomIntegration = {
   id: string; roomId: string; taskId: string; deliveryId: string; sourceSha: string; targetSha: string

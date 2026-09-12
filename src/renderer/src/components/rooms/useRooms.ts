@@ -7,6 +7,8 @@ import {
 } from '../../lib/browser-storage'
 import {
   mergeRoomMessages,
+  roomsRequest,
+  roomPath,
   roomsClient,
   type RoomRule,
   type RoomListEntry
@@ -82,6 +84,7 @@ export function useRooms() {
     let eventTimer: ReturnType<typeof setTimeout> | undefined
     const unsubscribe = subscribeRoomEvents((event) => {
       if (event.kind === 'navigate') select(event.roomId)
+      if (!/^(room|task|request|integration)\./.test(event.kind) && event.kind !== 'message.created') return
       clearTimeout(eventTimer)
       eventTimer = setTimeout(() => void refreshList(), 150)
     })
@@ -109,22 +112,25 @@ export function useRooms() {
     let first = true
     let refreshVersion = 0
     setLoading(true)
-    const refresh = async (): Promise<void> => {
+    const refresh = async (parts?: Set<string>, messageIds: string[] = [], taskIds: string[] = []): Promise<void> => {
       clearTimeout(timer)
       const version = ++refreshVersion
       try {
-        const [detail, page, taskResult, ruleResult] = await Promise.all([
-          roomsClient.get(selectedId, controller.signal),
-          roomsClient.messages(selectedId, undefined, controller.signal),
-          roomsClient.tasks(selectedId, controller.signal),
-          roomsClient.rules(selectedId, controller.signal)
+        const needed = (kind: string) => first || !parts || parts.has(kind)
+        const [detail, page, taskResult, ruleResult, changedMessages, changedTasks] = await Promise.all([
+          needed('room') ? roomsClient.get(selectedId, controller.signal) : undefined,
+          needed('messages') ? roomsClient.messages(selectedId, undefined, controller.signal) : undefined,
+          needed('tasks') ? roomsClient.tasks(selectedId, controller.signal) : undefined,
+          needed('rules') ? roomsClient.rules(selectedId, controller.signal) : undefined,
+          Promise.all(messageIds.map((id) => roomsRequest<{ message: RoomMessage }>(roomPath(selectedId) + '/messages/' + encodeURIComponent(id), 'GET', undefined, controller.signal))),
+          Promise.all(taskIds.map((id) => roomsClient.task(selectedId, id, controller.signal)))
         ])
-        if (controller.signal.aborted || version !== refreshVersion) return
-        setRoom(detail.room)
-        setMessages((current) => mergeRoomMessages(current, page.messages))
+        if (controller.signal.aborted) return
+        if (detail) setRoom((current) => !current || detail.room.revision >= current.revision ? detail.room : current)
+        setMessages((current) => mergeRoomMessages(current, [...(page?.messages ?? []), ...changedMessages.map((value) => value.message)]))
         setTasks((current) => {
           const merged = new Map(current.map((task) => [task.id, task]))
-          for (const task of taskResult.tasks) {
+          for (const task of [...(taskResult?.tasks ?? []), ...changedTasks.map((value) => value.task)]) {
             if ((merged.get(task.id)?.revision ?? -1) <= task.revision)
               merged.set(task.id, task)
           }
@@ -132,10 +138,10 @@ export function useRooms() {
             b.updatedAt.localeCompare(a.updatedAt)
           )
         })
-        setRules(ruleResult.rules)
+        if (ruleResult) setRules((current) => ruleResult.rules.map((rule) => { const previous = current.find((item) => item.id === rule.id); return previous && (previous.revision ?? 0) > (rule.revision ?? 0) ? previous : rule }))
         if (first) {
-          setMessageCursor(page.nextCursor ?? null)
-          setTaskCursor(taskResult.nextCursor ?? null)
+          setMessageCursor(page?.nextCursor ?? null)
+          setTaskCursor(taskResult?.nextCursor ?? null)
         }
         setError('')
         first = false
@@ -155,11 +161,24 @@ export function useRooms() {
     refreshRef.current = refresh
     void refresh()
     let eventTimer: ReturnType<typeof setTimeout> | undefined
+    const pending = new Set<string>()
+    const messageIds = new Set<string>()
+    const taskIds = new Set<string>()
     const unsubscribe = subscribeRoomEvents((event) => {
-      if (event.roomId === selectedId) {
-        clearTimeout(eventTimer)
-        eventTimer = setTimeout(() => void refresh(), 100)
-      }
+      if (event.roomId !== selectedId) return
+      if (event.kind.startsWith('room.')) pending.add('room')
+      if (event.kind.startsWith('rule.')) pending.add('rules')
+      if (event.kind === 'message.created') pending.add('messages')
+      if (event.kind === 'message.updated' && event.payload?.id) messageIds.add(event.payload.id)
+      if (event.kind === 'task.created') pending.add('tasks')
+      if (event.kind.startsWith('task.') && event.payload?.id) taskIds.add(event.payload.id)
+      if (!pending.size && !messageIds.size && !taskIds.size) return
+      clearTimeout(eventTimer)
+      eventTimer = setTimeout(() => {
+        const parts = new Set(pending), changedMessages = [...messageIds], changedTasks = [...taskIds]
+        pending.clear(); messageIds.clear(); taskIds.clear()
+        void refresh(parts, changedMessages, changedTasks)
+      }, 150)
     })
     return () => {
       controller.abort()

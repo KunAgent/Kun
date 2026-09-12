@@ -3,7 +3,8 @@ import type { ToolCallTurnItem, ToolResultTurnItem } from '../contracts/items.js
 import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
 import { RoomChecksSchema } from './room-result-tools.js'
-import { roomEvidenceHistory } from './room-evidence-history.js'
+import { roomEvidenceHistory, roomEvidenceOutput } from './room-evidence-history.js'
+import { preserveRoomLog } from './room-evidence-log.js'
 
 type Check = { id: string; command: string; cwd: string; purpose?: string; order: number; declarationCallId: string }
 type Outcome = { call: ToolCallTurnItem; result: ToolResultTurnItem; output: Record<string, unknown>; order: number; eventSeq?: number }
@@ -53,6 +54,7 @@ export async function captureRoomVerification(deps: RoomRuntimeDeps, input: {
     sessions.set(event.sessionId, { ...origin, order, eventSeq: event.seq, output: {
       session_id: event.sessionId, status: event.status, exit_code: event.exitCode,
       finished_at: event.finishedAt, output_truncated: event.outputTruncated, output_file: event.outputFilePath
+      , output: event.output
     } })
   }
   // Do not freeze a delivery while any known command can still change its worktree.
@@ -87,10 +89,14 @@ export async function captureRoomVerification(deps: RoomRuntimeDeps, input: {
     }
     if (latestFileChangeOrder < latest.order) incomplete.push('Workspace files changed after validation; rerun: ' + check.command)
     const artifactId = input.deliveryId + '-check-' + verification.length
+    const originalOutput = await roomEvidenceOutput(deps.sessions, input.threadId, input.turnId,
+      latest.result.id, latest.order, latest.eventSeq)
+    const log = await preserveRoomLog(deps, artifactId, latest.call.callId, { ...latest.output, ...originalOutput },
+      { nativeTool: latest.call.toolName === 'bash', threadId: input.threadId })
     await deps.store.commit({ requestId: artifactId,
       checks: [{ kind: 'artifact', id: artifactId, expectedRevision: null }],
       puts: [{ kind: 'artifact', id: artifactId, roomId: input.roomId, taskId: input.taskId, value: {
-        check, deliveryId: input.deliveryId, threadId: input.threadId, turnId: input.turnId,
+        check, deliveryId: input.deliveryId, threadId: input.threadId, turnId: input.turnId, log,
         attempts: attempts.map(({ call, result, output, eventSeq }) => ({ callId: call.callId, resultId: result.id, eventSeq,
           exitCode: output.exit_code ?? output.exitCode ?? null, sessionId: output.session_id,
           outputFile: output.output_file ?? output.full_output_path,

@@ -6,6 +6,8 @@ import { RoomService, roomFingerprint } from './room-service.js'
 import { inspectRoomRecovery, recoverRoomTask } from './room-recovery.js'
 import { RoomMessageSchema } from '../contracts/rooms.js'
 import { roomActivitySummary } from './room-activity-summary.js'
+import { roomRequestActivity } from './room-request-actions.js'
+import { roomHistoryPage, type RoomHistoryPage } from './room-history.js'
 
 export class RoomProductService {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
@@ -34,16 +36,20 @@ export class RoomProductService {
       result: { rule: { ...rule, revision: old.revision + 1 } } })
   }
 
-  async requests(roomId: string) {
+  async requests(roomId: string) { return (await this.requestPage(roomId)).requests }
+  async requestPage(roomId: string, page: { limit?: number; cursor?: number } = {}) {
     await this.service.get(roomId)
-    const requests = await this.deps.store.list<RoomRequestState>('request', { roomId, limit: 100 })
-    return Promise.all(requests.map(async (row) => {
-      const outcome = await this.deps.store.get<RoomRequestOutcome>('outcome', row.id)
-      const calculated = await this.requestOutcome(roomId, row.id) ?? outcome?.value
-      return { id: row.id, roomId, status: row.value.status, message: { body: row.value.message.body },
-        sourceMessageId: row.value.sourceMessageId, error: row.value.error,
-        revision: row.revision, outcome: calculated }
-    }))
+    const limit = page.limit ?? 50
+    const rows = await this.service.store.list<RoomRequestState>('request', { roomId, limit, beforeSeq: page.cursor, summaryOnly: true })
+    const projection = await this.service.store.requestOutcomes?.({ roomId, requestIds: rows.map((row) => row.id), limit })
+    const requests = await Promise.all(rows.map(async (row) => ({
+      id: row.id, roomId, status: row.value.status, message: { body: row.value.message.body },
+      sourceMessageId: row.value.originalSourceMessageId ?? row.value.sourceMessageId, error: row.value.error,
+      clarification: row.value.clarification, contextState: row.value.contextState, continuation: row.value.continuation ?? 0,
+      revision: row.revision, outcome: projection ? projection.outcomes.find((item) => item.requestId === row.id) :
+        await this.requestOutcome(roomId, row.id), outcomeInitializing: projection?.initializing ?? false
+    })))
+    return { requests, nextCursor: rows.length === limit ? String(rows.at(-1)!.seq) : undefined }
   }
   async adoptRule(roomId: string, ruleId: string, input: {
     taskId: string; expectedTaskRevision: number; version: number; clientRequestId: string; body?: string
@@ -72,7 +78,7 @@ export class RoomProductService {
     }
     const payload = { clientRequestId: key, taskId: input.taskId, executionIntent: 'execute' as const,
       body: input.body ?? (rule.active ? 'Apply this project agreement to the current task: ' : 'Withdraw this project agreement from the current task: ') +
-        rule.id + ' v' + rule.version + '\n' + rule.body,
+        rule.id + ' v' + rule.version,
       mentionMemberIds: [], attachmentIds: [] }
     const result = await this.service.send(roomId, payload, { ruleAdoption: rule })
     return (await this.deps.store.commit({ requestId: key, fingerprint, result })).result as typeof result
@@ -88,10 +94,9 @@ export class RoomProductService {
     const row = await this.deps.store.get<RoomRequestState>('request', id)
     if (!row || row.roomId !== roomId) throw new Error('request not found')
     if (!['failed', 'needs_input'].includes(row.value.status)) throw new RoomStoreConflictError('request is not awaiting retry')
-    const thread = await this.deps.threads.getMetadata(row.value.threadId)
-    if (thread?.turns.some((turn) => ['queued', 'running'].includes(turn.status))) throw new RoomStoreConflictError('original request is still active')
+    if ((await roomRequestActivity(this.deps, row.value)).state !== 'stopped') throw new RoomStoreConflictError('original request is still active or requires reconciliation')
     const value: RoomRequestState = { ...row.value, status: 'pending', turnId: undefined,
-      resultRepairs: 0, repairInstruction: undefined, error: undefined,
+      resultRepairs: 0, repairInstruction: undefined, error: undefined, compressionId: undefined, admissionAttempted: false,
       stepAttempt: (row.value.stepAttempt ?? 0) + 1 }
     if (value.stage === 'discuss') {
       value.discussions = value.discussions?.map((discussion) => discussion.error
@@ -105,16 +110,17 @@ export class RoomProductService {
   }
   recovery(roomId: string, taskId: string) { return inspectRoomRecovery(this.deps, roomId, taskId) }
   recover(roomId: string, taskId: string, input: unknown) { return recoverRoomTask(this.deps, roomId, taskId, input) }
-  async deliveries(roomId: string, taskId: string) {
-    return (await this.deps.store.list<RoomDelivery>('delivery', { roomId, taskId, limit: 100 }))
-      .map((row) => row.value)
+  async deliveries(roomId: string, taskId: string) { return (await this.deliveryPage(roomId, taskId)).deliveries }
+  async deliveryPage(roomId: string, taskId: string, page?: RoomHistoryPage, summaryOnly = false) {
+    const result = await roomHistoryPage<RoomDelivery>(this.service.store, 'delivery', { roomId, taskId, summaryOnly }, page)
+    return { deliveries: result.items, nextCursor: result.nextCursor }
   }
-  async delivery(roomId: string, taskId: string, id: string) {
+  async delivery(roomId: string, taskId: string, id: string, includeDiff = true) {
     const row = await this.deps.store.get<RoomDelivery>('delivery', id)
     if (!row || row.roomId !== roomId || row.taskId !== taskId) throw new Error('delivery not found')
-    return { delivery: row.value, diff: (await this.deps.store.get<string>('artifact', row.value.diffArtifactId))?.value ?? '',
-      reviews: (await this.deps.store.list<RoomReview>('review', { roomId, taskId, limit: 100 }))
-        .map((row) => row.value).filter((review) => review.deliveryId === id) }
+    const reviews = await roomHistoryPage<RoomReview>(this.service.store, 'review', { roomId, taskId, deliveryId: id })
+    return { delivery: row.value, diff: includeDiff ? (await this.deps.store.get<string>('artifact', row.value.diffArtifactId))?.value ?? '' : undefined,
+      reviews: reviews.items, reviewsNextCursor: reviews.nextCursor }
   }
   async read(roomId: string, seq: number, clientRequestId: string) {
     await this.service.get(roomId)
@@ -141,17 +147,26 @@ export class RoomProductService {
     throw new Error('read cursor did not settle')
   }
   async summarizeRequests(taskRows: RoomTaskExecution[]) {
-    const groups = new Map<string, RoomTaskExecution[]>()
-    for (const row of taskRows) groups.set(row.task.requestId, [...(groups.get(row.task.requestId) ?? []), row])
-    for (const [requestId, rows] of groups) {
-      const value = await this.requestOutcome(rows[0].task.roomId, requestId)
-      if (!value) continue
+    const values: RoomRequestOutcome[] = []
+    if (this.deps.store.requestOutcomes) {
+      const pending = await this.deps.store.requestOutcomes({ pendingOnly: true, limit: 100 })
+      if (pending.initializing) return
+      values.push(...pending.outcomes)
+    } else {
+      const requests = new Map(taskRows.map((row) => [row.task.requestId, row.task.roomId]))
+      for (const [id, roomId] of requests) {
+        const value = await this.requestOutcome(roomId, id)
+        if (value) values.push({ ...value, roomId })
+      }
+    }
+    for (const value of values) {
+      const requestId = value.requestId
       const { revision, active, status, summary } = value
       const old = await this.deps.store.get<RoomRequestOutcome>('outcome', requestId)
       if (old?.value.revision === revision) continue
-      const roomId = rows[0].task.roomId
+      const roomId = value.roomId!
       const messageId = 'summary-' + roomFingerprint({ requestId, revision })
-      const publish = !active && status !== 'needs_attention' && !await this.deps.store.get('message', messageId)
+      const publish = !active && status !== 'needs_attention' && (old?.value.status !== status || old?.value.summary !== summary) && !await this.deps.store.get('message', messageId)
       const message = publish ? RoomMessageSchema.parse({ id: messageId, roomId, messageSeq: 1,
         authorKind: 'system', authorLabelSnapshot: 'Kun', body: ('需求整体状态: ' + status + '\n' + summary).slice(0, 64000),
         bodyRevision: 0, mentionMemberIds: [], attachmentIds: [], createdAt: new Date().toISOString() }) : undefined
@@ -169,6 +184,9 @@ export class RoomProductService {
     return { attentionCount }
   }
   private async requestOutcome(roomId: string, requestId: string): Promise<RoomRequestOutcome | undefined> {
+    if (this.deps.store.requestOutcomes) {
+      return (await this.deps.store.requestOutcomes({ roomId, requestIds: [requestId], limit: 1 })).outcomes[0]
+    }
     const totals = []
     let afterSeq: number | undefined
     for (;;) {

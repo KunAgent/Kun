@@ -29,6 +29,14 @@ classification is the default. Changing collaboration mode affects new requests.
 Missing or ambiguous goals, members or repository targets require clarification.
 Historical messages, model summaries and attachments do not authorize new work.
 
+Requests awaiting clarification can be continued through their original request
+card. Additional text, attachments and explicit member/repository choices are
+saved as immutable supplemental inputs; the original goal and completed
+responses remain available. Retry repeats a failed step, while continuation adds
+new user information. Stopping coordination retains a durable stop intent and
+does not cancel already assigned development tasks. Missing or unsettled execution
+identities must be reconciled before a continuation can run.
+
 The composer supports typed `@` member selection, repository/task references,
 ordinary message replies and attachments. Mentions use stable member IDs.
 Replies preserve the original message ID, including when the original message
@@ -63,6 +71,21 @@ for the room snapshot, not the entire model request: the current user input and
 normal Runtime tool history are handled separately. Explicit references take
 priority over background history; truncation is recorded.
 
+Enabled project agreements are never silently dropped to fit this budget.
+Original versions are frozen into an immutable source bundle. Oversized rules
+are automatically compressed in bounded batches using the coordinator model,
+with bounded merge and format-repair attempts. The cache binds source versions,
+content, model, budget and compression policy. Every compression result must
+account for its exact input sources; failure retains the originals and leaves a
+visible retryable request error. Compression preserves reference material, not
+a proof of semantic equivalence: original rules remain authoritative.
+
+The request and task views show compression state and expose paginated originals.
+The scoped read_room_rules tool can inspect only the current execution's frozen
+bundle; it is available in coordination, discussion, development, review and
+integration. Explicit rule adoption updates the task bundle and recomputes its
+compressed guide without changing earlier snapshots.
+
 A discussion referencing delivered code mounts a read-only checkout of the
 fixed delivery SHA. A discussion about an unfinished task can inspect its
 current worktree with enforced read-only tools and is told that files may change
@@ -81,6 +104,10 @@ The request overview aggregates actual child task state, including running,
 needs-attention, partial completion, awaiting acceptance and completed results.
 Finishing assignment is not treated as finishing the user's overall request.
 Terminal updates produce a deduplicated room summary with per-task results.
+Progress is maintained by an incremental SQLite projection when task facts
+change. Overview reads use that projection instead of rescanning all child
+execution records. A bounded task preview links to a paginated full task list;
+legacy projection backfill exposes an initialization state.
 
 ## Agreements, task execution and review
 
@@ -137,6 +164,15 @@ verification when files change afterward. A still-running background command
 blocks delivery finalization. An exit status from an arbitrary command, or text
 claiming success, is not complete requirement acceptance.
 
+Verification logs have a room/task-scoped viewer and download action. New logs
+use the existing Manager ArtifactStore with delivery ownership retained across
+worktree cleanup. The retained text is capped at 8 MiB per check and explicitly
+marks truncation or unavailable archives; command exit evidence is separate.
+Native full-output paths are validated against their actual execution storage,
+and callers cannot provide arbitrary file paths. Old records use available
+execution evidence or explicitly report missing output. Diffs load by file and
+byte range, with file search and virtualization.
+
 ## Acceptance, integration and cleanup
 
 Accepting a delivery and applying code are separate user actions. Direct apply
@@ -183,26 +219,30 @@ coordinator across Runtime flavors. Thread/turn admission uses durable identitie
 and the existing queued-turn dispatcher.
 
 Rooms uses Node's built-in `node:sqlite`, without a separately compiled SQLite
-addon. The database schema is version 2 and retains WAL mode, FULL synchronization
+addon. The database schema is version 3 and retains WAL mode, FULL synchronization
 and immediate transactions. Upgrade preserves existing room messages, thread
 identities, delivery SHAs and pins, and seeds existing agreements' immutable
-version history. Local SQLite search indexes are backfilled in bounded batches;
+version history. Version 3 adds paginated review lookup, request activity indexes,
+rebuildable outcome projections and a persistent event namespace without
+rewriting old messages or execution identities. Local SQLite search indexes are backfilled in bounded batches;
 opening the room does not require a complete historical replay. The logical
 room document's `schemaVersion` remains 1.
 
 The desktop subscribes to a global room SSE stream from the workbench level.
 Room/task updates, unread state and attention counts therefore continue across
 Code/Work navigation. Running and attention counts include integrations and
-count the same task only once within each category. Persisted event cursors support replay; bounded polling
+group attention by original request while preserving task-level reasons.
+Persisted event cursors support replay; bounded polling
 is the fallback when the stream is unavailable. Streaming edits retain their
 message identity and sequence instead of moving the room on every token.
-Task and integration attention notifications use existing desktop notification
-preferences. Integration gate changes publish room events carrying their parent
-task ID; the client reads the actual integration approval/input IDs and execution
-identity. Repeated progress events do not repeat an already observed gate alert,
-while a new gate receives its own notification. The currently focused room
-suppresses notifications already visible there. Opening a notification returns
-to its room.
+Request clarification/failure/recovery and task/integration attention use the
+existing desktop notification preferences. Counts deduplicate the original
+request while cards expose the individual reasons. A persisted notification
+queue is separate from view refresh: failed detail reads or notification sends
+retry with backoff even if no later event arrives. Pending entries and delivery
+keys survive renderer reload, are namespaced by room storage, and are dismissed
+when resolved, already viewed or disabled by notification preferences. Opening
+a notification returns to its room.
 
 Closing a room panel, switching modes or closing to tray does not stop execution.
 A real GUI quit stops that GUI's owned Runtime. Restart reconciles original
@@ -219,10 +259,16 @@ retaining existing work and deliveries; it does not cancel active tasks.
 
 Public room APIs include room/member configuration, paginated messages and
 search, individual message lookup, durable read cursors, request outcomes and
-retry, task controls/recovery, delivery history/compare, agreement versions and
+retry/continue/stop/reconcile, task controls/recovery, delivery history/compare,
+scoped original agreements and verification logs, agreement versions and
 adoption, integration prepare/open/validate/resolve/cancel/apply, cleanup
 preview/execution and SSE events. Generic approval and user-input APIs are reused.
 These APIs remain behind the shared desktop IPC allowlist and Runtime auth.
+Requests, agreements, versions, deliveries, reviews and integrations use cursor
+paging (50 rows by default, at most 200). Review filtering happens before paging.
+The desktop retains loaded pages and selections, refreshes relevant entities,
+coalesces concurrent reads and does not continuously refresh collapsed evidence
+views. Modern overview consumers omit large diff bodies.
 
 ## Model and release boundaries
 
@@ -282,6 +328,34 @@ The following records describe verified execution, not a blanket release claim:
   unavailable. macOS evidence and fixture tests must not be described as
   all-platform or complete real-model acceptance.
 
+The latest hardening pass additionally verified:
+
+- The extended macOS Electron flow passed automatic agreement compression,
+  original-version browsing, continuation of the same request, durable
+  coordination cancellation, and recovery from an injected transient detail-read
+  failure. It also retained the existing development, approval/input, integration,
+  verification, application and cleanup checks, and exercised per-file diff loading
+  and native export of the actual verification output. The report and 23 screenshots
+  are in ignored `dist/rooms-hardening-desktop-4/`.
+- A real DeepSeek V4 Pro run completed automatic compression, a successful
+  read_room_rules lookup, clarification and continuation on the original request.
+  Nine upstream calls returned HTTP 200; the frozen bundle and compression cache
+  were reused, no development tasks were created, and the source checkout and
+  selected provider registry were unchanged. The isolated harness waits for
+  coordinator ownership and maintains the production Manager heartbeat.
+  Its report is in ignored `dist/rooms-native-hardening-3/`.
+- The production rule-tool storage binding is covered by a full managed Runtime
+  regression. This caught the distinction between the raw store and the
+  lifecycle-fenced store used by the tool registry. Verification output rehydration
+  also has a regression so compact metadata cannot silently produce an empty log.
+- A 30-minute storage benchmark covered 100 rooms, 100,000 historical messages,
+  2,000 historical tasks, 1,205 pending tasks and a large integration diff. It
+  consumed all 8,587 emitted events with no backlog. The measured tick p95 was
+  7.92 ms; RSS was about 383 MiB after fixture setup and 217 MiB at the final
+  sample. Activity payloads omitted the large diff. These are local storage
+  measurements, not desktop frame-rate or cross-platform guarantees. Evidence
+  is in ignored `dist/rooms-hardening-benchmark/`.
+
 Useful validation commands from the repository root:
 
 ```bash
@@ -289,7 +363,10 @@ npm run typecheck
 npm run build
 npm run check:file-lines
 node scripts/smoke-development-rooms.cjs --timeout-ms 180000 \
-  --evidence dist/rooms-product-completion-smoke
+  --evidence dist/rooms-hardening-desktop
+node scripts/benchmark-rooms.mjs --duration-ms 1800000
+# Explicitly uses the selected native Chat Completions API profile:
+node scripts/smoke-native-rooms.mjs --run
 npx vitest run src/renderer/src/components/rooms \
   src/renderer/src/components/chat/__tests__/WorkspaceModeTabs.test.ts
 cd kun

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { roomRequestId, roomsRequest } from './rooms-client'
+import { roomRequestId } from './rooms-client'
 import { roomEventsLive, subscribeRoomEvents } from './useRoomEvents'
+import { invalidateRoomRead, roomResourceAffected, sharedRoomRead } from './room-resource-events'
 
 /** Subscribe once, coalesce bursts, and retain the last usable snapshot on failure. */
-export function useRoomResource<T>(roomId: string, path: string | null) {
+export function useRoomResource<T>(roomId: string, path: string | null, live = true) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState('')
   const refreshRef = useRef<() => Promise<void>>(async () => undefined)
@@ -15,22 +16,19 @@ export function useRoomResource<T>(roomId: string, path: string | null) {
     let generation = 0
     let timer: ReturnType<typeof setTimeout> | undefined
     let eventTimer: ReturnType<typeof setTimeout> | undefined
-    const refresh = async (): Promise<void> => {
+    let inFlight: Promise<void> | undefined
+    let invalidated = false
+    const load = async (): Promise<void> => {
       clearTimeout(timer)
       const current = ++generation
       try {
-        const result = await roomsRequest<T>(
-          path,
-          'GET',
-          undefined,
-          controller.signal
-        )
+        const result = await sharedRoomRead<T>(path)
         if (!controller.signal.aborted && generation === current) {
           setData(result)
           setError('')
         }
       } catch (cause) {
-        if (!controller.signal.aborted && generation === current)
+        if (live && !controller.signal.aborted && generation === current)
           setError(String(cause instanceof Error ? cause.message : cause))
       } finally {
         if (!controller.signal.aborted && generation === current)
@@ -40,9 +38,25 @@ export function useRoomResource<T>(roomId: string, path: string | null) {
           )
       }
     }
-    refreshRef.current = refresh
+    const refresh = (): Promise<void> => {
+      if (inFlight) { invalidated = true; return inFlight }
+      inFlight = (async () => {
+        invalidated = false
+        await load()
+        if (invalidated && !controller.signal.aborted) { invalidated = false; await load() }
+      })().finally(() => {
+        inFlight = undefined
+        if (invalidated && !controller.signal.aborted) {
+          clearTimeout(eventTimer)
+          eventTimer = setTimeout(() => void refresh(), 0)
+        }
+      })
+      return inFlight
+    }
+    refreshRef.current = () => { invalidateRoomRead(path); return refresh() }
     const unsubscribe = subscribeRoomEvents((event) => {
-      if (event.roomId !== roomId) return
+      if (!live || event.roomId !== roomId || !roomResourceAffected(path, event)) return
+      invalidateRoomRead(path)
       clearTimeout(eventTimer)
       eventTimer = setTimeout(() => void refresh(), 150)
     })
@@ -54,7 +68,7 @@ export function useRoomResource<T>(roomId: string, path: string | null) {
       unsubscribe()
       refreshRef.current = async () => undefined
     }
-  }, [path, roomId])
+  }, [path, roomId, live])
   const refresh = useCallback(() => refreshRef.current(), [])
   return { data, error, refresh }
 }
