@@ -572,6 +572,7 @@ export class ChatRoot implements Component, Focusable {
       case 'undo': await this.controller.undoLastTurn(); break
       case 'redo': await this.controller.redoBranch(); break
       case 'init': await this.controller.initializeWorkspace(command.instructions); break
+      case 'import': await this.controller.importAgentContext(command.args); break
       case 'mcp': await this.controller.showMcp(command.action); break
       case 'timeline': this.actions.onTimeline(command.query); break
       case 'jump': this.actions.onTimeline(undefined, command.target); break
