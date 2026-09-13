@@ -67,6 +67,28 @@ async function allJson(root: string): Promise<string> {
 }
 
 describe('reference branches', () => {
+  it('persists and recovers an OpenCode branch with an independent read gate', async () => {
+    const h = await harness(), path = join(h.root, 'opencode.json')
+    await writeFile(path, JSON.stringify({ info: { id: 'ses_service', directory: h.root, title: 'Source' }, messages: [
+      { info: { id: 'msg1', role: 'user', time: { created: 1 } }, parts: [{ id: 'part1', type: 'text', text: 'Question' }] },
+      { info: { id: 'msg2', role: 'assistant', parentID: 'msg1', time: { created: 2, completed: 3 }, finish: 'stop' }, parts: [{ id: 'part2', type: 'text', text: sourceSecret }] }
+    ] }))
+    let enabled = true
+    const service = new HistoryReferenceService({ ...h.options, enabledFor: (source) => source === 'opencode' && enabled })
+    const input = { path, sourceProvider: 'opencode' as const, idempotencyKey: 'opencode' }
+    const created = await service.createBranch(input)
+    expect(created.thread.turns).toEqual([])
+    expect(await allJson(join(h.root, 'data'))).not.toContain(sourceSecret)
+    expect((await service.createBranch(input)).thread.id).toBe(created.thread.id)
+    await h.threadStore.delete(created.thread.id)
+    const recovered = await h.threadService.resumeSession(created.thread.id)
+    expect(recovered.thread.historyRefId).toBe(created.reference.id)
+    expect((await service.readForThread(recovered.thread.id, { operation: 'recent' })).text).toContain(sourceSecret)
+    enabled = false
+    await expect(service.page(created.reference.id, { threadId: recovered.thread.id })).rejects.toMatchObject({ code: 'history_reference_disabled' })
+    expect(await h.threadService.getMetadata(recovered.thread.id)).not.toBeNull()
+  })
+
   it('creates and recovers Claude branches without persisting transcript bodies, with independent gates', async () => {
     const h = await harness()
     const codexPath = h.path

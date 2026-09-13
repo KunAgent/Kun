@@ -1,3 +1,4 @@
+import { OpenCodeSourceKindSchema } from '../../contracts/history-reference.js'
 import { z } from 'zod'
 import {
   CreateReferenceBranchSchema, HistoryReferenceError, type HistoryReferenceService
@@ -76,6 +77,12 @@ export function registerHistoryReferenceRoutes(router: Router, runtime: ServerRu
   }))
   add('POST', '/v1/history-sources/claude-code/preview', async (history, request) =>
     history.preview(PreviewSchema.parse(await readBody(request)), 'claude-code'))
+  add('GET', '/v1/history-sources/opencode/sessions', async (history, request) => ({
+    sessions: await history.discover(DiscoverySchema.extend({ path: z.string().min(1).optional(), sourceKind: OpenCodeSourceKindSchema.optional() })
+      .parse(Object.fromEntries(new URL(request.url).searchParams)), 'opencode')
+  }))
+  add('POST', '/v1/history-sources/opencode/preview', async (history, request) => history.preview(
+    PreviewSchema.extend({ sessionId: z.string().min(1).optional(), sourceKind: OpenCodeSourceKindSchema.optional() }).parse(await readBody(request)), 'opencode'))
   add('POST', '/v1/threads/reference-branches', async (history, request) =>
     history.createBranch(CreateReferenceBranchSchema.parse(await readBody(request))))
   add('GET', '/v1/history-sources/:id/timeline', async (history, request, context) => {

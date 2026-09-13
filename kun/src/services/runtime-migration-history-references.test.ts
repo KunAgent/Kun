@@ -1,3 +1,5 @@
+import { createOpenCodeReference } from '../history/opencode-history.js'
+import { sameHistorySnapshot } from './runtime-migration-history-references.js'
 import { mkdtemp, rm, rename, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,6 +49,26 @@ async function harness() {
 }
 
 describe('reference-aware runtime migration', () => {
+  it('preserves OpenCode manifests through migration and rejects conflicting record fingerprints', async () => {
+    const h = await harness(), path = join(h.root, 'export.json')
+    await writeFile(path, JSON.stringify({ info: { id: 'ses_migration', directory: '/old/project', title: 'Source' }, messages: [
+      { info: { id: 'msg1', role: 'user', time: { created: 1 } }, parts: [{ id: 'part1', type: 'text', text: 'Question' }] },
+      { info: { id: 'msg2', role: 'assistant', parentID: 'msg1', time: { created: 2, completed: 3 }, finish: 'stop' }, parts: [{ id: 'part2', type: 'text', text: 'SOURCE_PRIVATE_BODY' }] }
+    ] }))
+    const descriptor = await createOpenCodeReference(path)
+    const preflight = await h.service.preflight(control(), records([
+      { ...threadRecord(), value: { ...thread(), historyRefId: descriptor.id } }, { ...refRecord(), value: descriptor }
+    ]))
+    await h.service.commit(preflight.importId)
+    const stored = await h.historyReferences.get(descriptor.id)
+    expect(stored).toEqual(descriptor)
+    expect(JSON.stringify(stored)).not.toContain('SOURCE_PRIVATE_BODY')
+    expect(sameHistorySnapshot(descriptor, { ...descriptor, source: { ...descriptor.source, path: '/moved/export.json' } })).toBe(true)
+    expect(sameHistorySnapshot(descriptor, { ...descriptor, records: descriptor.records.map((r, i) => i ? r : { ...r, sha256: 'a'.repeat(64) }) })).toBe(false)
+    await rm(path)
+    expect((await h.threadStore.getMetadata(thread().id))?.historyRefId).toBe(descriptor.id)
+  })
+
   it('preserves Claude Code descriptors when migrating without the original file', async () => {
     const h = await harness()
     const descriptor = { ...reference(), provider: 'claude-code' as const }

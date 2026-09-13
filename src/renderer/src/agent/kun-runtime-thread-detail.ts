@@ -60,7 +60,7 @@ export async function getKunThreadDetail(threadId: string, options: {
     'runtime returned an invalid thread response'
   )
   const turns = (Array.isArray(thread.turns) ? thread.turns : [])
-    .filter((turn) => sourceHistoryAllowed(turn.id) || !/^(codex|claude-code):/u.test(turn.id))
+    .filter((turn) => sourceHistoryAllowed(turn.id) || !/^(codex|claude-code|opencode):/u.test(turn.id))
   const items = turns.filter((turn) => turn.status !== 'queued').flatMap((turn) =>
     (turn.items ?? []).map((item) => ({
       ...item,
@@ -81,7 +81,7 @@ export async function getKunThreadDetail(threadId: string, options: {
   )
   // Explicit null means this branch has no native turn yet. Source history
   // remains display-only even when a legacy response omits native metadata.
-  const nativeTurns = turns.filter((turn) => !/^(codex|claude-code):/u.test(turn.id))
+  const nativeTurns = turns.filter((turn) => !/^(codex|claude-code|opencode):/u.test(turn.id))
   const latestTurn = thread.latestTurn === undefined ? nativeTurns.at(-1) : thread.latestTurn
   const activeTurn = thread.activeTurn === undefined
     ? nativeTurns.find((turn) => turn.status === 'running') : thread.activeTurn
@@ -138,7 +138,7 @@ export async function getKunThreadDetail(threadId: string, options: {
     : undefined
   const resolvedLatestUserMessageId =
     latestUserMessageId ?? [...items].reverse().find((item) =>
-      item.kind === 'user_message' && !/^(codex|claude-code):/u.test(item.turnId ?? ''))?.id
+      item.kind === 'user_message' && !/^(codex|claude-code|opencode):/u.test(item.turnId ?? ''))?.id
   return {
     ...(thread.activeTurn !== undefined ? { activeTurn: thread.activeTurn ? {
       id: thread.activeTurn.id, status: thread.activeTurn.status,

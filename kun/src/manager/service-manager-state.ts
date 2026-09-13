@@ -72,6 +72,7 @@ export const KUN_MANAGER_CAPABILITIES = [
   'history-reference-cleanup-v1',
   'history-reference-recovery-v1',
   'history-reference-sources-v1',
+  'history-reference-sources-v2',
   'thread-leases-v1',
   'durable-leases-v1',
   'item-page-v1',

@@ -93,7 +93,7 @@ import {
  */
 export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ChatBlock | null {
   const block = baseChatBlockFromItem(item, child)
-  if (!block || !/^(codex|claude-code):/u.test(item.turnId ?? '')) return block
+  if (!block || !/^(codex|claude-code|opencode):/u.test(item.turnId ?? '')) return block
   return { ...block, ...(item.sourceHistoryOrder ? { sourceHistoryOrder: item.sourceHistoryOrder } : {}), sourceRecords: [{ itemId: item.id, kind: item.kind }],
     ...(item.sourceAttachments?.length ? {
       sourceItemId: item.id, sourceAttachments: item.sourceAttachments.map((entry) => ({ ...entry }))

@@ -21,10 +21,11 @@ let refreshController: AbortController | undefined
 export async function applyCodexReferenceSettings(settings: AppSettingsV1): Promise<void> {
   const enabled = codexReferenceEnabled(settings)
   const claudeEnabled = getKunRuntimeSettings(settings).lab.claudeCodeReferenceBranches?.enabled === true
+  const opencodeEnabled = getKunRuntimeSettings(settings).lab.opencodeReferenceBranches?.enabled === true
   const previous = useCodexReferenceState.getState()
-  if (previous.enabled === enabled && previous.claudeEnabled === claudeEnabled) return
+  if (previous.enabled === enabled && previous.claudeEnabled === claudeEnabled && previous.opencodeEnabled === opencodeEnabled) return
   const revision = previous.revision + 1
-  useCodexReferenceState.setState({ enabled, claudeEnabled, revision })
+  useCodexReferenceState.setState({ enabled, claudeEnabled, opencodeEnabled, revision })
   refreshController?.abort()
   clearThreadSnapshotCache()
   const target = useThreadTurnTarget.getState().target
@@ -58,7 +59,7 @@ export async function applyCodexReferenceSettings(settings: AppSettingsV1): Prom
     if (!current()) return
     useChatStore.setState((latest) => ({
       blocks: [
-        ...((enabled || claudeEnabled) ? detail.blocks.filter(isSourceHistoryTurn) : []),
+        ...((enabled || claudeEnabled || opencodeEnabled) ? detail.blocks.filter(isSourceHistoryTurn) : []),
         ...latest.blocks.filter((block) => !isSourceHistoryTurn(block))
       ],
       threadHistoryCursor: detail.historyCursor ?? null,

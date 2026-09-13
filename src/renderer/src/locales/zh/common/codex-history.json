@@ -51,5 +51,8 @@
   "codexHistoryRecord_assistant_reasoning": "思考摘要",
   "codexHistoryRecord_tool_call": "工具参数",
   "codexHistoryRecord_tool_result": "工具结果",
-  "historySourceLabel": "历史来源"
+  "historySourceLabel": "历史来源",
+  "openCodeChooseDirectory": "选择存储目录",
+  "openCodeChooseFiles": "选择数据库或导出文件",
+  "openCodeFileType": "请选择 .db、.sqlite、.sqlite3 或会话导出 .json 文件。"
 }

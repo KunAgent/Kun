@@ -1,3 +1,5 @@
+import { frozenOpenCode, subreferenceOpenCode, relinkOpenCode, createOpenCodeReference, inspectOpenCode } from './opencode-history.js'
+import { projectOpenCodeRecord } from './opencode-projection.js'
 import { historySourceAdapter } from './history-source-adapter.js'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
@@ -7,7 +9,7 @@ import type { TurnItem } from '../contracts/items.js'
 import { TurnSchema, type Turn } from '../contracts/turns.js'
 import {
   HistoryReferenceSchema, type HistoryReference, type HistorySourceStatus,
-  type CodexSessionSummary, type HistoryCutoff, type HistorySourceProvider
+  type CodexSessionSummary, type HistoryCutoff, type HistorySourceProvider, type OpenCodeSource
 } from '../contracts/history-reference.js'
 import { type CodexIndex, type IndexedItem, type IndexedTurn } from './codex-index.js'
 import { HistorySourceError, readCodexLines, validateSourceFile } from './codex-jsonl.js'
@@ -44,9 +46,13 @@ export interface HistoryPage {
 }
 export interface HistoryPointer { turn: IndexedTurn; item: IndexedItem; id: string; turnIndex: number }
 
-export async function inspectCodexSession(path: string, provider: HistorySourceProvider = 'codex'): Promise<{
+export async function inspectCodexSession(path: string, provider: HistorySourceProvider = 'codex', locator: { sessionId?: string; sourceKind?: OpenCodeSource['kind'] } = {}): Promise<{
   session: CodexSessionSummary; cutoffs: HistoryCutoff[]; warnings: string[]
 }> {
+  if (provider === 'opencode') {
+    const { reference: _reference, ...inspected } = await inspectOpenCode(path, locator.sessionId, locator.sourceKind)
+    return inspected
+  }
   assertPath(path)
   const index = await historySourceAdapter(provider).index(path)
   const session = provider === 'codex' ? await summarizeCodexFile(path) : { sessionId: index.sessionId, path: index.path, title: index.title, workspace: index.workspace, updatedAt: index.updatedAt, archived: false }
@@ -62,7 +68,8 @@ function assertPath(path: string): void {
   if (!isCodexPath(path)) throw new HistorySourceError('partial', 'Select a source .jsonl or .jsonl.zst history file.')
 }
 
-export async function createHistoryReference(path: string, cutoffTurnId?: string, provider: HistorySourceProvider = 'codex'): Promise<HistoryReference> {
+export async function createHistoryReference(path: string, cutoffTurnId?: string, provider: HistorySourceProvider = 'codex', locator: { sessionId?: string; sourceKind?: OpenCodeSource['kind'] } = {}): Promise<HistoryReference> {
+  if (provider === 'opencode') return createOpenCodeReference(path, locator.sessionId, locator.sourceKind, cutoffTurnId)
   assertPath(path)
   const index = await historySourceAdapter(provider).index(path)
   const cutoff = cutoffTurnId
@@ -73,7 +80,8 @@ export async function createHistoryReference(path: string, cutoffTurnId?: string
 }
 
 /** Preview can display an unfinished tail without making it a valid branch cutoff. */
-export async function createHistoryPreviewReference(path: string, provider: HistorySourceProvider): Promise<HistoryReference | undefined> {
+export async function createHistoryPreviewReference(path: string, provider: HistorySourceProvider, locator: { sessionId?: string; sourceKind?: OpenCodeSource['kind'] } = {}): Promise<HistoryReference | undefined> {
+  if (provider === 'opencode') return (await inspectOpenCode(path, locator.sessionId, locator.sourceKind)).reference
   const index = await historySourceAdapter(provider).index(path)
   const last = index.turns.at(-1)
   return last ? referenceFromIndex(index, last, provider) : undefined
@@ -95,6 +103,7 @@ function referenceFromIndex(index: CodexIndex, cutoff: IndexedTurn, provider: Hi
 
 /** Branch from the original fixed prefix, even when Codex later rolls back that turn. */
 export async function createHistorySubreference(reference: HistoryReference, cutoffTurnId: string): Promise<HistoryReference> {
+  if (reference.provider === 'opencode') return subreferenceOpenCode(reference, cutoffTurnId)
   const index = await frozenHistoryIndex(reference)
   const cutoff = index.turns.find((turn) => turn.id === cutoffTurnId && turn.complete)
   if (!cutoff) throw new HistorySourceError('partial', 'The selected completed turn is outside this branch history.')
@@ -103,6 +112,7 @@ export async function createHistorySubreference(reference: HistoryReference, cut
 }
 
 export async function frozenHistoryIndex(reference: HistoryReference): Promise<CodexIndex> {
+  if (reference.provider === 'opencode') return (await frozenOpenCode(reference)).index
   return getCachedCodexIndex(reference, () => buildFrozenHistoryIndex(reference))
 }
 
@@ -139,6 +149,16 @@ export async function hydrateHistory(
   reference: HistoryReference, pointers: HistoryPointer[], transform?: (item: ItemContent, pointer: HistoryPointer) => ItemContent | undefined
 ): Promise<Map<string, ItemContent>> {
   const values = new Map<string, ItemContent>()
+  if (reference.provider === 'opencode') {
+    const { index } = await frozenOpenCode(reference)
+    for (const pointer of pointers) {
+      const item = projectOpenCodeRecord(index.records[pointer.item.offset] ?? {})[pointer.item.blockIndex ?? 0]
+      if (!item) throw new HistorySourceError('changed', 'The referenced OpenCode record is unavailable.')
+      const value = transform ? transform(item, pointer) : boundContent(item)
+      if (value) values.set(pointer.id, value)
+    }
+    return values
+  }
   const orderedFiles = [...reference.files].sort((a, b) => pointers.findIndex((pointer) => pointer.turn.filePath === a.path) - pointers.findIndex((pointer) => pointer.turn.filePath === b.path))
   for (const file of orderedFiles) {
     const selected = new Map<number, HistoryPointer[]>()
@@ -281,6 +301,7 @@ export async function readHistoryPage(reference: HistoryReference, options: Hist
 }
 
 export async function relinkHistoryReference(reference: HistoryReference, path: string): Promise<HistoryReference> {
+  if (reference.provider === 'opencode') return relinkOpenCode(reference, path)
   assertPath(path)
   const files = reference.files.map((file, position) => position === 0 ? { ...file, path: resolve(path) } : file)
   await validateSourceFile(files[0])
@@ -302,6 +323,11 @@ export async function relinkHistoryReference(reference: HistoryReference, path: 
 export async function readHistorySourceRecord(reference: HistoryReference, itemId: string): Promise<{
   record: Record<string, unknown>; sourcePath: string; workspace: string
 } | undefined> {
+  if (reference.provider === 'opencode') {
+    const { index } = await frozenOpenCode(reference)
+    const pointer = historyPointers(index).find((entry) => entry.id === itemId)
+    return pointer ? { record: index.records[pointer.item.offset], sourcePath: reference.source.path, workspace: pointer.turn.workspace } : undefined
+  }
   const index = await frozenHistoryIndex(reference)
   const pointer = historyPointers(index).find((entry) => entry.id === itemId)
   if (!pointer) return undefined

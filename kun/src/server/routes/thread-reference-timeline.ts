@@ -23,7 +23,7 @@ export async function getComposedThreadTimeline(
   if (sourcePageRequested && !before!.startsWith(prefix)) {
     return jsonResponse({ code: 'invalid_cursor', message: 'History cursor belongs to another reference' }, 400)
   }
-  const sourceTurnRequested = /^(codex|claude-code):/u.test(turnId ?? '')
+  const sourceTurnRequested = /^(codex|claude-code|opencode):/u.test(turnId ?? '')
   const nativeUrl = new URL(request.url)
   if (sourcePageRequested) nativeUrl.searchParams.delete('before')
   if (sourceTurnRequested) {

@@ -399,7 +399,7 @@ export function ProcessEntryDetail({
     )
   }
   if (detail.kind === 'tool') {
-    if (block.kind === 'tool' && toolNameForBlock(block) === 'read_source_history' && !/^(codex|claude-code):/u.test(block.turnId ?? '')) {
+    if (block.kind === 'tool' && toolNameForBlock(block) === 'read_source_history' && !/^(codex|claude-code|opencode):/u.test(block.turnId ?? '')) {
       return <SourceHistoryReadDetail block={block} />
     }
     if (detail.isPatch) {

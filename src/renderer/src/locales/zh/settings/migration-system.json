@@ -252,9 +252,11 @@
   "labProjectBoardEnabled": "启用项目看板",
   "labProjectBoardEnabledDesc": "开启后侧边栏显示“看板”入口；默认关闭。",
   "labCodexReferenceBranchesTitle": "历史引用分支",
-  "labCodexReferenceBranchesDescription": "从本机 Codex 或 Claude Code 历史创建 Kun 分支。旧历史只读引用，不自动加入模型上下文。",
+  "labCodexReferenceBranchesDescription": "从本机 Codex、Claude Code 或 OpenCode 历史创建 Kun 分支。旧历史只读引用，不自动加入模型上下文。",
   "labCodexReferenceBranchesEnabled": "启用 Codex 历史分支",
   "labCodexReferenceBranchesEnabledDesc": "默认关闭。开启后显示创建入口并允许读取 Codex 日志；关闭后已有分支的新聊天仍可继续。",
   "labClaudeCodeReferenceBranchesEnabled": "Claude Code 历史分支",
-  "labClaudeCodeReferenceBranchesEnabledDesc": "发现本机主会话并创建引用分支；默认关闭。"
+  "labClaudeCodeReferenceBranchesEnabledDesc": "发现本机主会话并创建引用分支；默认关闭。",
+  "labOpenCodeReferenceBranchesEnabled": "OpenCode 历史分支",
+  "labOpenCodeReferenceBranchesEnabledDesc": "只读引用本机数据库、旧目录或导出会话，默认关闭。"
 }

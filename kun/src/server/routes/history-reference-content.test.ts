@@ -59,18 +59,18 @@ it('reads every long source-tool-output fragment through HTTP without native per
   } finally { await rm(f.root, { recursive: true, force: true }) }
 })
 
-it('composes Claude history and exact record targets without creating native items', async () => {
-  const f = await historyReferenceFixture('claude-code')
+it.each(['claude-code', 'opencode'] as const)('composes %s history and exact record targets without creating native items', async (provider) => {
+  const f = await historyReferenceFixture(provider)
   try {
     const runtime = { ...f, runtimeToken: 'test-token', insecure: false } as unknown as ServerRuntime
     const response = await getComposedThreadTimeline(runtime, f.thread.id, new Request('http://kun/timeline?limit=1'))
     expect(response.status).toBe(200)
     const body = JSON.parse(response.body)
-    expect(body.sourceHistory.provider).toBe('claude-code')
-    expect(body.turns[0].id).toBe('claude-code:source-test:old-2')
+    expect(body.sourceHistory.provider).toBe(provider)
+    expect(body.turns[0].id).toBe(f.reference.cutoffTurnId)
     const itemId = body.turns[0].items[0].id
     const target = await getComposedThreadTimeline(runtime, f.thread.id,
-      new Request(`http://kun/timeline?turnId=claude-code:source-test:old-2&itemId=${encodeURIComponent(itemId)}`))
+      new Request(`http://kun/timeline?turnId=${encodeURIComponent(f.reference.cutoffTurnId)}&itemId=${encodeURIComponent(itemId)}`))
     expect(JSON.parse(target.body).timeline.target.itemId).toBe(itemId)
     expect(await f.sessionStore.loadItems(f.thread.id)).toEqual([])
     f.disable()

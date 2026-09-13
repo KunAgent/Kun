@@ -14,9 +14,9 @@ import { ContextCompactor } from '../../src/loop/context-compactor.js'
 import { HistoryReferenceService } from '../../src/history/history-reference-service.js'
 
 export const SOURCE_TEXT = 'SOURCE_ONLY_e8e27a677_previous_investigation'
-export async function historyReferenceFixture(provider: 'codex' | 'claude-code' = 'codex') {
+export async function historyReferenceFixture(provider: 'codex' | 'claude-code' | 'opencode' = 'codex') {
   const root = await mkdtemp(join(tmpdir(), 'kun-ref-integration-'))
-  const path = join(root, 'rollout-fixture.jsonl')
+  const path = join(root, provider === 'opencode' ? 'export.json' : 'rollout-fixture.jsonl')
   const nowIso = () => '2026-09-13T00:00:00.000Z'
   const records: unknown[] = [{ type: 'session_meta', payload: { id: 'source-test', cwd: root } }]
   for (let i = 1; i <= 2; i += 1) records.push(
@@ -35,6 +35,14 @@ export async function historyReferenceFixture(provider: 'codex' | 'claude-code' 
     )
   }
   await writeFile(path, records.map((record) => JSON.stringify({ timestamp: nowIso(), ...record as object })).join('\n') + '\n')
+  if (provider === 'opencode') await writeFile(path, JSON.stringify({
+    info: { id: 'source-test', title: 'OpenCode history', directory: root, time: { created: 1, updated: 2 } },
+    messages: [1, 2].flatMap((i) => [
+      { info: { id: `msg${i}u`, role: 'user', time: { created: i } }, parts: [{ id: `part${i}u`, type: 'text', text: `Task ${i}` }] },
+      { info: { id: `msg${i}z`, role: 'assistant', parentID: `msg${i}u`, path: { cwd: root }, time: { created: i, completed: i + 1 }, finish: 'stop' },
+        parts: [{ id: `part${i}z`, type: 'text', text: `${SOURCE_TEXT} ${i}` }] }
+    ])
+  }))
   const threadStore = new InMemoryThreadStore()
   const sessionStore = new InMemorySessionStore()
   const eventBus = new InMemoryEventBus()

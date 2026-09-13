@@ -9,7 +9,7 @@ import { UsageService } from '../services/usage-service.js'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
 
-it.each(['codex', 'claude-code'] as const)('%s sends only a descriptor initially, then persists requested excerpts for subsequent native turns', async (provider) => {
+it.each(['codex', 'claude-code', 'opencode'] as const)('%s sends only a descriptor initially, then persists requested excerpts for subsequent native turns', async (provider) => {
   const f = await historyReferenceFixture(provider)
   const requests: string[] = []
   let step = 0

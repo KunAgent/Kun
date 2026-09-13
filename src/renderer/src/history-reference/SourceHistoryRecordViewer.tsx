@@ -11,7 +11,7 @@ type Content = NonNullable<HistoryPage['content']>
 
 export function sourceHistoryRecords(blocks: ChatBlock[]): SourceRecord[] {
   const records = blocks.flatMap((block): SourceRecord[] => {
-    if (!/^(codex|claude-code):/u.test(block.turnId ?? '') || (!block.sourceRecords?.length && !['user', 'assistant', 'reasoning', 'tool'].includes(block.kind))) return []
+    if (!/^(codex|claude-code|opencode):/u.test(block.turnId ?? '') || (!block.sourceRecords?.length && !['user', 'assistant', 'reasoning', 'tool'].includes(block.kind))) return []
     const itemId = block.sourceItemId || (block.kind === 'tool' && typeof block.meta?.sourceItemId === 'string'
       ? block.meta.sourceItemId : block.id)
     return (block.sourceRecords ?? [{ itemId, kind: block.kind }]).map((record) => ({
@@ -24,7 +24,7 @@ export function sourceHistoryRecords(blocks: ChatBlock[]): SourceRecord[] {
 /** Reads one bounded source segment into component memory; never adds it to chat history. */
 export function SourceHistoryRecordViewer({ blocks, referenceId, threadId }: { blocks: ChatBlock[]; referenceId?: string; threadId?: string | null }): ReactElement | null {
   const { t } = useTranslation('common')
-  const enabled = useCodexReferenceEnabled(blocks.some((block) => block.turnId?.startsWith('claude-code:')) ? 'claude-code' : 'codex')
+  const enabled = useCodexReferenceEnabled(blocks.some((block) => block.turnId?.startsWith('opencode:')) ? 'opencode' : blocks.some((block) => block.turnId?.startsWith('claude-code:')) ? 'claude-code' : 'codex')
   const records = useMemo(() => sourceHistoryRecords(blocks), [blocks])
   const target = useThreadTurnTarget((state) => state.target)
   const targetRecord = target && target.threadId === threadId ? records.find((record) => record.itemId === target.itemId && record.turnId === target.turnId) : undefined

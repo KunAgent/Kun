@@ -43,6 +43,11 @@ export function CodexReferenceBranchesSettingsPanel({
           control={<Toggle checked={value.claudeCodeReferenceBranches?.enabled === true}
             onChange={(enabled) => onChange({ claudeCodeReferenceBranches: { enabled } })} />}
         />
+        <SettingRow title={t('labOpenCodeReferenceBranchesEnabled')}
+          description={t('labOpenCodeReferenceBranchesEnabledDesc')}
+          control={<Toggle checked={value.opencodeReferenceBranches?.enabled === true}
+            onChange={(enabled) => onChange({ opencodeReferenceBranches: { enabled } })} />}
+        />
       </SettingsCard>
     </div>
   )

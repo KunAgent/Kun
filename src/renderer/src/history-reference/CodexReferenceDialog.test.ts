@@ -45,6 +45,32 @@ async function submit(): Promise<void> {
 }
 
 describe('Codex branch workspace defaults', () => {
+  it('selects two independent sessions from the same OpenCode database', async () => {
+    const timers: Array<() => void> = []
+    window.setTimeout = ((callback: () => void) => { timers.push(callback); return 1 }) as typeof window.setTimeout
+    await mount()
+    await act(async () => { renderer!.root.findAllByType('select')[0]!.props.onChange({ target: { value: 'opencode' } }) })
+    state.request.mockResolvedValue({ sessions: ['a', 'b'].map((id) => ({ ...preview('/opencode.db').session, sessionId: id, sourceKind: 'sqlite', title: id })) })
+    await act(async () => { timers.at(-1)!() })
+    for (const id of ['a', 'b']) await act(async () => {
+      renderer!.root.findAllByType('input').find((node) => node.props['aria-label'] === id)!.props.onChange()
+    })
+    await submit()
+    expect(state.create.mock.calls.map(([input]) => [input.path, input.sessionId, input.sourceProvider, input.sourceKind])).toEqual([
+      ['/opencode.db', 'a', 'opencode', 'sqlite'], ['/opencode.db', 'b', 'opencode', 'sqlite']
+    ])
+  })
+
+  it('previews and selects a manually chosen OpenCode export', async () => {
+    await mount()
+    await act(async () => { renderer!.root.findAllByType('select')[0]!.props.onChange({ target: { value: 'opencode' } }) })
+    state.pickFiles.mockResolvedValue({ canceled: false, paths: ['/export.json'] })
+    state.request.mockResolvedValue({ ...preview('/export.json'), session: { ...preview('/export.json').session, sourceKind: 'export' } })
+    await act(async () => { button('openCodeChooseFiles').props.onClick() })
+    await submit()
+    expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ path: '/export.json', sessionId: 'session', sourceKind: 'export', sourceProvider: 'opencode' }))
+  })
+
   it('disables creation when the selected preview has no completed cutoff', async () => {
     state.request.mockResolvedValue({ ...preview(), cutoffs: [] })
     await mount()

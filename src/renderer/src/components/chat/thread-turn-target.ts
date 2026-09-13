@@ -28,7 +28,7 @@ export async function prepareThreadTurnTarget(threadId: string, turnId: string, 
   const detail = await getProvider().getThreadDetail(threadId, {
     turnId, ...(itemId ? { itemId } : {}), priority: 'foreground'
   })
-  if ((!/^(codex|claude-code):/u.test(turnId) && detail.latestTurnId !== turnId) ||
+  if ((!/^(codex|claude-code|opencode):/u.test(turnId) && detail.latestTurnId !== turnId) ||
     !detail.blocks.some((block) => block.turnId === turnId && (!itemId || blockContainsHistoryItem(block, itemId)))) {
     throw new Error(`Requested turn history is unavailable: ${turnId}`)
   }
@@ -36,7 +36,7 @@ export async function prepareThreadTurnTarget(threadId: string, turnId: string, 
 }
 
 export function activateThreadTurnTarget(threadId: string, turnId: string, detail: ThreadDetail, itemId?: string): void {
-  if (/^(codex|claude-code):/u.test(turnId) && !sourceHistoryAllowed(turnId)) return
+  if (/^(codex|claude-code|opencode):/u.test(turnId) && !sourceHistoryAllowed(turnId)) return
   useThreadTurnTarget.setState({ target: {
     threadId, turnId, itemId: itemId ?? detail.historyTarget?.itemId,
     blocks: detail.blocks.filter((block) => block.turnId === turnId),
@@ -74,20 +74,20 @@ export function mergeThreadTurnTarget(
   const merged = mergeChatBlocks([...target.blocks.filter((block) => !liveItemIds.includes(block.id)), ...blocks])
   const ids = new Map<string, ChatBlock>()
   for (const block of merged) ids.set(block.id, block)
-  if (/^(codex|claude-code):/u.test(target.turnId)) {
+  if (/^(codex|claude-code|opencode):/u.test(target.turnId)) {
     // Existing pages define the fallback order for legacy sources. Explicit
     // source ordinals then place both overlaps and new records without relying
     // on identical per-turn timestamps. Native/SSE blocks retain their order.
     const loadedIds = new Set(blocks.map((block) => block.id))
     const source = orderSourceHistoryBlocks([
-      ...blocks.filter((block) => /^(codex|claude-code):/u.test(block.turnId ?? '')).map((block) => ids.get(block.id)!),
-      ...[...ids.values()].filter((block) => /^(codex|claude-code):/u.test(block.turnId ?? '') && !loadedIds.has(block.id))
+      ...blocks.filter((block) => /^(codex|claude-code|opencode):/u.test(block.turnId ?? '')).map((block) => ids.get(block.id)!),
+      ...[...ids.values()].filter((block) => /^(codex|claude-code|opencode):/u.test(block.turnId ?? '') && !loadedIds.has(block.id))
     ])
     return [...new Map(source.map((block) => [block.id, block])).values(),
-      ...[...ids.values()].filter((block) => !/^(codex|claude-code):/u.test(block.turnId ?? ''))]
+      ...[...ids.values()].filter((block) => !/^(codex|claude-code|opencode):/u.test(block.turnId ?? ''))]
   }
-  const source = orderSourceHistoryBlocks([...ids.values()].filter((block) => /^(codex|claude-code):/u.test(block.turnId ?? '')))
-  const native = [...ids.values()].filter((block) => !/^(codex|claude-code):/u.test(block.turnId ?? '')).sort((left, right) => {
+  const source = orderSourceHistoryBlocks([...ids.values()].filter((block) => /^(codex|claude-code|opencode):/u.test(block.turnId ?? '')))
+  const native = [...ids.values()].filter((block) => !/^(codex|claude-code|opencode):/u.test(block.turnId ?? '')).sort((left, right) => {
     const a = Date.parse(left.createdAt ?? ''), b = Date.parse(right.createdAt ?? '')
     return Number.isFinite(a) && Number.isFinite(b) ? a - b : 0
   })

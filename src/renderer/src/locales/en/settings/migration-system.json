@@ -252,9 +252,11 @@
   "labProjectBoardEnabled": "Enable project board",
   "labProjectBoardEnabledDesc": "Shows the Board entry in the sidebar. Off by default.",
   "labCodexReferenceBranchesTitle": "History reference branches",
-  "labCodexReferenceBranchesDescription": "Create Kun branches from local Codex or Claude Code history. Original history stays read-only and is not automatically loaded into model context.",
+  "labCodexReferenceBranchesDescription": "Create Kun branches from local Codex, Claude Code or OpenCode history. Original history stays read-only and is not automatically loaded into model context.",
   "labCodexReferenceBranchesEnabled": "Enable Codex history branches",
   "labCodexReferenceBranchesEnabledDesc": "Off by default. Enables the branch entry and Codex log access. Existing branches can continue new conversations when disabled.",
   "labClaudeCodeReferenceBranchesEnabled": "Claude Code history branches",
-  "labClaudeCodeReferenceBranchesEnabledDesc": "Discover local main conversations and create reference branches. Disabled by default."
+  "labClaudeCodeReferenceBranchesEnabledDesc": "Discover local main conversations and create reference branches. Disabled by default.",
+  "labOpenCodeReferenceBranchesEnabled": "OpenCode history branches",
+  "labOpenCodeReferenceBranchesEnabledDesc": "Reference local databases, legacy directories or exported sessions. Disabled by default."
 }

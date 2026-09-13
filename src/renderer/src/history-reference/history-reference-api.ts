@@ -4,13 +4,15 @@ import type { CoreTurnJson } from '../agent/kun-contract-runtime'
 import { chatBlockFromItem, mergeChatBlocks } from '../agent/kun-mapper'
 import type { ChatBlock } from '../agent/types'
 
-export type HistorySourceProvider = 'codex' | 'claude-code'
+export type HistorySourceProvider = 'codex' | 'claude-code' | 'opencode'
 export type HistorySession = {
+  sourceKind?: 'sqlite' | 'legacy' | 'export'
   sessionId: string; path: string; title: string; workspace: string; updatedAt: string; archived: boolean
 }
 export type HistoryReference = {
   provider?: HistorySourceProvider
   id: string; sessionId: string; title: string; workspace: string; cutoffTurnId: string
+  source?: { kind: 'sqlite' | 'legacy' | 'export'; path: string; sessionId: string }
   files: Array<{ path: string }>; warnings: string[]
 }
 export type HistoryPage = {
@@ -26,6 +28,8 @@ export type HistoryPreview = {
 }
 export type ReferenceBranchInput = {
   sourceProvider?: HistorySourceProvider
+  sourceKind?: 'sqlite' | 'legacy' | 'export'
+  sessionId?: string
   path?: string; referenceId?: string; cutoffTurnId?: string; workspace?: string
   model?: string; providerId?: string; idempotencyKey: string
 }
@@ -54,5 +58,5 @@ export function historyBlocks(turn: CoreTurnJson): ChatBlock[] {
 }
 
 export function isSourceHistoryTurn(turn: { turnId?: string }): boolean {
-  return /^(codex|claude-code):/u.test(turn.turnId ?? '') === true
+  return /^(codex|claude-code|opencode):/u.test(turn.turnId ?? '') === true
 }

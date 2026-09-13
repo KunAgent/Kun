@@ -16,6 +16,7 @@ export const parseHistoryMigrationState = (value: unknown): HistoryMigrationStat
 export function sameHistorySnapshot(a: HistoryReference, b: HistoryReference): boolean {
   const identity = (ref: HistoryReference) => JSON.stringify({ provider: ref.provider,
     sessionId: ref.sessionId, cutoffTurnId: ref.cutoffTurnId, parserVersion: ref.parserVersion,
+    ...(ref.provider === 'opencode' ? { sourceKind: ref.source.kind, sourceSessionId: ref.source.sessionId, sourceWorkspace: ref.sourceWorkspace, records: ref.records } : {}),
     files: ref.files.map(({ path: _path, ...file }) => file) })
   return a.id === b.id && identity(a) === identity(b)
 }

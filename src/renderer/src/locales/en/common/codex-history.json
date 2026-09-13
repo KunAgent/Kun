@@ -51,5 +51,8 @@
   "codexHistoryRecord_assistant_reasoning": "Reasoning summary",
   "codexHistoryRecord_tool_call": "Tool arguments",
   "codexHistoryRecord_tool_result": "Tool result",
-  "historySourceLabel": "History source"
+  "historySourceLabel": "History source",
+  "openCodeChooseDirectory": "Choose storage directory",
+  "openCodeChooseFiles": "Choose database or export",
+  "openCodeFileType": "Select a .db, .sqlite, .sqlite3 or exported session .json file."
 }

@@ -6,7 +6,7 @@ import { useCodexReferenceEnabled } from './use-codex-reference-enabled'
 /** Target pages are independent of the main timeline's older-history cursor. */
 export function SourceHistoryTargetPager({ threadId, turnId }: { threadId: string | null; turnId?: string }): ReactElement | null {
   const { t } = useTranslation('common')
-  const enabled = useCodexReferenceEnabled(turnId?.startsWith('claude-code:') ? 'claude-code' : 'codex')
+  const enabled = useCodexReferenceEnabled(turnId?.startsWith('opencode:') ? 'opencode' : turnId?.startsWith('claude-code:') ? 'claude-code' : 'codex')
   const target = useThreadTurnTarget((state) => state.target)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

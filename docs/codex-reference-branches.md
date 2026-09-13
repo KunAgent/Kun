@@ -82,3 +82,35 @@ Claude Code 从 `CLAUDE_CONFIG_DIR/projects` 或默认 `~/.claude/projects` 发�
 运行时新增 `/v1/history-sources/claude-code/sessions` 和 `/preview`；创建引用分支
 使用 `sourceProvider: "claude-code"`，与模型的 `providerId` 不同。旧请求省略来源
 继续按 Codex 处理；再次分支以已有引用的来源为准。
+
+## OpenCode 来源
+
+“OpenCode 历史分支”是独立且默认关闭的实验室开关，开启后进入同一个
+“从历史创建分支”弹窗选择 OpenCode。支持本机 SQLite 数据库、旧 JSON 存储目录，
+以及 OpenCode 导出的 `{ info, messages }` 会话 JSON。
+
+默认查找 `$XDG_DATA_HOME/opencode`，未设置时查找 `~/.local/share/opencode`。
+数据库优先于同 ID 的旧目录记录。旧目录包括 `storage/session/<project>/<session>.json`
+及更早的 `project/<project>/storage/session/info` 布局。列表支持项目、关键词、日期和
+归档筛选，每次最多返回 200 条，隐藏子代理会话。手动选择数据库或目录后先选择
+其中的会话；手动选择单个导出 JSON 会直接预览。
+
+数据库使用只读连接和短事务，读取 WAL，不执行 OpenCode 初始化或迁移。
+引用保存消息/内容块的 ID、固定顺序和规范化内容指纹，不复制数据库、JSON 或旧正文。
+记录按 OpenCode 的二进制 ID 顺序排列，不依赖操作系统区域设置。
+新增消息、其他会话更新、checkpoint 和 VACUUM 不影响已有引用；固定记录被修改、
+删除或压缩清理后会显示不可用，Kun 新消息和已读取片段继续保留。
+
+创建时排除撤销边界后的记录，只有已完成且工具结果齐全的回合允许创建分支。
+保留文本、reasoning、工具参数/结果、声明的附件和压缩标记；不展开子代理独立日志。
+模型仍通过 `read_source_history` 按需读取，浏览与预览不自动加入模型上下文。
+
+OpenCode 引用使用 parserVersion 2 和记录清单，旧 JSONL 引用格式保持兼容。
+一次来源快照最多读取 10,000 条消息/内容块记录及 64 MiB 原始数据；导出 JSON 单文件也限制为 64 MiB，
+超出时明确报错，不生成截断后冒充完整的分支。重新关联要求来源格式、会话身份和
+固定记录指纹匹配；不自动在 SQLite、旧目录与导出文件之间转换。
+恢复、内部迁移与垃圾回收保留完整引用清单，不携带原始正文。
+
+新增 `/v1/history-sources/opencode/sessions` 与 `/preview`；创建请求指定
+`sourceProvider: "opencode"`，可携带 `sourceKind: "sqlite" | "legacy" | "export"`。
+数据库和目录必须同时指定 `sessionId`。记录清单只在 Kun 管理的数据目录保存。

@@ -1,5 +1,7 @@
+import { createOpenCodeReference, inspectOpenCode } from './opencode-history.js'
+import { discoverOpenCodeSessions, type OpenCodeDiscoveryOptions } from './opencode-discovery.js'
 import { historySourceAdapter } from './history-source-adapter.js'
-import { HistorySourceProviderSchema, type HistorySourceProvider } from '../contracts/history-reference.js'
+import { HistorySourceProviderSchema, OpenCodeSourceKindSchema, type OpenCodeSource, type HistorySourceProvider } from '../contracts/history-reference.js'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
 import { z } from 'zod'
@@ -8,7 +10,7 @@ import type { HistoryReference } from '../contracts/history-reference.js'
 import type { ThreadService } from '../services/thread-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import {
-  createHistoryReference, createHistoryPreviewReference, createHistorySubreference, discoverCodexSessions, inspectCodexSession,
+  createHistoryReference, createHistoryPreviewReference, createHistorySubreference, inspectCodexSession,
   HistorySourceError,
   readHistoryPage, readSourceHistory, relinkHistoryReference
 } from './codex-history.js'
@@ -18,6 +20,8 @@ import { readHistoryAttachment } from './history-reference-attachments.js'
 
 export const CreateReferenceBranchSchema = z.object({
   sourceProvider: HistorySourceProviderSchema.optional(),
+  sourceKind: OpenCodeSourceKindSchema.optional(),
+  sessionId: z.string().min(1).optional(),
   path: z.string().min(1).optional(),
   referenceId: z.string().min(1).optional(),
   cutoffTurnId: z.string().min(1).optional(),
@@ -38,6 +42,7 @@ export type HistoryReferenceServiceOptions = {
   enabledFor?: (provider: HistorySourceProvider) => boolean
   claudeHome?: string
   defaultModel: () => { model: string; providerId?: string; accountId?: string }
+  opencodeHome?: string
   codexHome?: string
 }
 export class HistoryReferenceError extends Error {
@@ -56,7 +61,7 @@ export class HistoryReferenceService {
 
   isEnabled(provider?: HistorySourceProvider): boolean {
     return provider ? this.options.enabledFor?.(provider) ?? (provider === 'codex' && this.options.enabled())
-      : this.options.enabled() || this.options.enabledFor?.('claude-code') === true
+      : this.isEnabled('codex') || this.isEnabled('claude-code') || this.isEnabled('opencode')
   }
 
   assertEnabled(provider?: HistorySourceProvider): void {
@@ -76,19 +81,26 @@ export class HistoryReferenceService {
     return null
   }
 
-  async discover(options: Omit<Parameters<typeof discoverCodexSessions>[0], 'codexHome'> = {}, provider: HistorySourceProvider = 'codex') {
+  async discover(options: OpenCodeDiscoveryOptions = {}, provider: HistorySourceProvider = 'codex') {
     this.assertEnabled()
     this.assertEnabled(provider)
-    const sessions = await historySourceAdapter(provider).discover({ ...options, codexHome: this.options.codexHome, claudeHome: this.options.claudeHome })
+    const sessions = provider === 'opencode' ? await discoverOpenCodeSessions({ ...options, opencodeHome: this.options.opencodeHome }) : await historySourceAdapter(provider).discover({ ...options, codexHome: this.options.codexHome, claudeHome: this.options.claudeHome })
     this.assertEnabled(provider)
     this.assertEnabled()
     return sessions
   }
 
-  async preview(input: { path: string; cursor?: string; limit?: number }, provider: HistorySourceProvider = 'codex') {
+  async preview(input: { path: string; sourceKind?: OpenCodeSource['kind']; sessionId?: string; cursor?: string; limit?: number }, provider: HistorySourceProvider = 'codex') {
     this.assertEnabled()
     this.assertEnabled(provider)
-    const path = sourcePath(input.path)
+    const path = sourcePath(input.path, provider)
+    if (provider === 'opencode') {
+      const { reference, ...inspected } = await inspectOpenCode(path, input.sessionId, input.sourceKind)
+      const page = reference ? await readHistoryPage(reference, { threadId: `preview:${reference.sessionId}`, cursor: input.cursor, limit: input.limit })
+        : { turns: [], hasMore: false, itemCount: 0, itemBytes: 0, status: 'partial' as const, warnings: inspected.warnings }
+      this.assertEnabled(provider)
+      return { ...inspected, page }
+    }
     const inspected = await inspectCodexSession(path, provider)
     this.assertEnabled(provider)
     const previewReference = provider === 'claude-code' ? await createHistoryPreviewReference(path, provider) : undefined
@@ -133,7 +145,7 @@ export class HistoryReferenceService {
             'Choose an absolute workspace directory for this branch.')
         }
         // A user-selected equivalent snapshot can also repair its shared source location.
-        await this.store.put(existing ? { ...existing, files: reference.files, workspace: reference.workspace } : reference)
+        await this.store.put(existing ? { ...existing, files: reference.files, ...(reference.provider === 'opencode' ? { source: reference.source } : {}), workspace: reference.workspace } : reference)
         reservation = {
           requestHash, referenceId: reference.id, threadId: `thr_${randomUUID()}`,
           request: {
@@ -223,7 +235,7 @@ export class HistoryReferenceService {
     this.assertEnabled()
     return this.store.withMutation(async () => {
       const current = await this.requireReference(id)
-      const linked = await relinkHistoryReference(current, sourcePath(path))
+      const linked = await relinkHistoryReference(current, sourcePath(path, current.provider))
       this.assertEnabled(current.provider)
       const saved = await this.store.put({ ...linked, id: current.id })
       invalidateCodexIndexCache(current.id)
@@ -240,6 +252,7 @@ export class HistoryReferenceService {
   }
 
   private async resolveBranchReference(input: CreateReferenceBranchInput): Promise<HistoryReference> {
+    if (input.path && input.sourceProvider === 'opencode') return createOpenCodeReference(sourcePath(input.path, 'opencode'), input.sessionId, input.sourceKind, input.cutoffTurnId)
     if (input.path) return createHistoryReference(sourcePath(input.path), input.cutoffTurnId, input.sourceProvider ?? 'codex')
     const reference = await this.requireReference(input.referenceId!)
     if (input.sourceProvider && input.sourceProvider !== reference.provider) throw new HistoryReferenceError('history_source_mismatch', 'The source provider does not match the reference.')
@@ -263,8 +276,8 @@ export class HistoryReferenceService {
   }
 }
 
-function sourcePath(path: string): string {
-  if (!isAbsolute(path) || !/\.jsonl(?:\.zst)?$/iu.test(path)) {
+function sourcePath(path: string, provider: HistorySourceProvider = 'codex'): string {
+  if (!isAbsolute(path) || (provider !== 'opencode' && !/\.jsonl(?:\.zst)?$/iu.test(path))) {
     throw new HistoryReferenceError('history_path_invalid', 'Select an absolute source .jsonl or .jsonl.zst path.')
   }
   return resolve(path)
