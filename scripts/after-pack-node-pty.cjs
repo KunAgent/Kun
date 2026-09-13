@@ -93,7 +93,9 @@ function validatePackedNodePtyPayload(context, helpers) {
   const candidates = ['build/Release', 'build/Debug', `prebuilds/${targetPrebuild}`]
   const requiredFiles = platform === 'win32'
     ? ['pty.node', 'winpty.dll', 'winpty-agent.exe', 'conpty.node', 'conpty_console_list.node']
-    : ['pty.node', 'spawn-helper']
+    : platform === 'darwin'
+      ? ['pty.node', 'spawn-helper']
+      : ['pty.node']
   if (!candidates.some((dir) => requiredFiles.every((file) => existsSync(join(packageRoot, dir, file))))) {
     throw new Error(
       `[after-pack] Missing node-pty ${targetPrebuild} runtime artifacts (${requiredFiles.join(', ')}); checked ${candidates.join(', ')}`

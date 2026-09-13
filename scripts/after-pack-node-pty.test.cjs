@@ -115,8 +115,13 @@ for (const arch of ['x64', 'arm64']) {
         prunePackedNodePtyPayload(context, helpers)
         validatePackedNodePtyPayload(context, helpers)
 
-        // A binding alone is not enough: node-pty execs this adjacent helper.
-        rmSync(join(pkg, buildDir, 'spawn-helper'))
+        if (buildDir === 'build/Release') {
+          // Linux's native fork path only needs the pty binding. The helper is
+          // built for macOS's posix_spawn path, not for Linux.
+          rmSync(join(pkg, buildDir, 'spawn-helper'))
+          validatePackedNodePtyPayload(context, helpers)
+        }
+        rmSync(join(pkg, buildDir, 'pty.node'))
         assert.throws(() => validatePackedNodePtyPayload(context, helpers), /runtime artifacts/)
       } finally {
         rmSync(tmp, { recursive: true, force: true })
