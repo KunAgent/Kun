@@ -28,7 +28,7 @@ export async function roomPeerTriage(input: {
   mainProviderId?: string
   mainAccountId?: string
   identity: string
-  member: { id: string; displayName: string; role: string; roleNotes: string }
+  member: { id: string; displayName: string; role: string; roleNotes: string; agentInstructions?: string }
   updates: unknown
   signal: AbortSignal
   timeoutMs?: number
@@ -44,7 +44,8 @@ export async function roomPeerTriage(input: {
   const timer = setTimeout(() => controller.abort(new Error('Room participation check timed out')), input.timeoutMs ?? 20_000)
   const prompt = JSON.stringify({ member: {
     id: input.member.id, displayName: input.member.displayName, role: input.member.role,
-    roleNotes: boundedRoomText(input.member.roleNotes, 1000)
+    roleNotes: boundedRoomText(input.member.roleNotes, 1000),
+    responsibilities: boundedRoomText(input.member.agentInstructions ?? '', 1000)
   }, updates: input.updates })
   if (Buffer.byteLength(prompt) > 12_000) {
     clearTimeout(timer)

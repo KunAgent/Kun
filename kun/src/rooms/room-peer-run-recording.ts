@@ -21,7 +21,7 @@ export async function appendPeerActivationRun(store: RoomStore, commit: RoomStor
   const inbox = source ? await store.get<RoomPeerInboxItem>('peer_inbox', source.id) : null
   const trigger = await store.get<RoomMessage>('message', inbox?.value.messageId ?? topic.sourceMessageId)
   const now = new Date().toISOString()
-  const run = RoomRunRecordSchema.parse({ id, roomId: topic.roomId, rootRequestId: topic.rootRequestId,
+  const run = RoomRunRecordSchema.parse({ id, participantAgentId: topic.roomSnapshot.members.find((value) => value.id === member.memberId)?.participantAgentId, roomId: topic.roomId, rootRequestId: topic.rootRequestId,
     requestId: topic.requestId, memberId: member.memberId,
     memberLabel: topic.roomSnapshot.members.find((value) => value.id === member.memberId)?.displayName ?? member.memberId,
     phase, clientRequestId: active.clientRequestId, attempt: active.attempt, previousRunId: previous?.id,

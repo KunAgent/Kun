@@ -33,8 +33,8 @@ export async function inspectRoomRun(deps: RoomRuntimeDeps, roomId: string, runI
   const snapshotSeq = run.threadId ? await deps.sessions.highestSeq(run.threadId) : 0
   let availability: RoomRunAvailability = { status: 'available' }
   let turn: Turn | undefined
-  if (run.phase === 'triage' || !run.threadId) {
-    availability = run.phase === 'triage'
+  if (run.phase === 'memory' || run.phase === 'triage' || !run.threadId) {
+    availability = run.phase === 'memory' ? { status: 'no_session', reason: '记忆整理是独立的轻量调用，没有 Code 会话。' } : run.phase === 'triage'
       ? { status: 'no_session', reason: '轻量接话判断没有独立的 Code 会话。' }
       : { status: 'pending', reason: '本次运行尚未确认会话身份。' }
   } else {
@@ -89,14 +89,15 @@ export async function roomRunDetail(deps: RoomRuntimeDeps, roomId: string, runId
   const seq = current.snapshotSeq
   const trigger = current.run.triggerMessageId
     ? await deps.store.get<RoomMessage>('message', current.run.triggerMessageId) : null
-  const context = current.run.contextId
-    ? await deps.store.get<{ prompt?: string; attachmentIds?: string[] }>('context', current.run.contextId) : null
+  const admittedContext = current.run.threadId ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }>('context', current.run.id + '-input') : null
+  const context = admittedContext ?? (current.run.contextId
+    ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }>('context', current.run.contextId) : null)
   return { run: publicRoomRun(current.run), availability: current.availability,
     trigger: trigger?.roomId === roomId ? { ...trigger.value, messageSeq: trigger.seq } : undefined,
     context: current.run.id.startsWith('legacy-') && current.turn
       ? { prompt: current.turn.prompt.slice(0, 64000), attachmentIds: current.turn.attachmentIds?.slice(0, 20) }
       : context?.roomId === roomId ? { prompt: context.value.prompt?.slice(0, 64000),
-        attachmentIds: context.value.attachmentIds?.slice(0, 20) } : undefined,
+        attachmentIds: context.value.attachmentIds?.slice(0, 20), memoryIds: context.value.memoryIds?.slice(0, 8) } : undefined,
     eventsCursor: encodeRunCursor({ v: 1, id: runId, revision: current.row.revision, seq,
       availability: current.availability.status }) }
 }

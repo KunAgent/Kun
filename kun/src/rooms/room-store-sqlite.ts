@@ -71,9 +71,15 @@ export class SqliteRoomStore implements RoomStore {
     const db = await this.database()
     const clauses = ['kind = ?']
     const args: (string | number)[] = [kind]
+    if (parsed.sourceRoomId) { clauses.push("json_extract(document, '$.sourceRoomId')=?"); args.push(parsed.sourceRoomId) }
+    if (parsed.parentHandoffId) { clauses.push("json_extract(document, '$.parentHandoffId')=?"); args.push(parsed.parentHandoffId) }
+    if (parsed.participantAgentId) { clauses.push(kind === 'room' ? "EXISTS(SELECT 1 FROM json_each(document, '$.participantAgentIds') a WHERE a.value=?)" : "json_extract(document, '$.participantAgentId') = ?"); args.push(parsed.participantAgentId) }
+    if (parsed.conversationKind && parsed.conversationKind !== 'all') {
+      clauses.push("COALESCE(json_extract(document, '$.conversationKind'),'group') = ?"); args.push(parsed.conversationKind)
+    }
     if (parsed.roomId) { clauses.push('room_id = ?'); args.push(parsed.roomId) }
     if (parsed.taskId) { clauses.push('task_id = ?'); args.push(parsed.taskId) }
-    if (parsed.rootRequestId) { clauses.push("json_extract(document, '$.rootRequestId') = ?"); args.push(parsed.rootRequestId) }
+    if (parsed.rootRequestId) { clauses.push(kind === 'agent_handoff' ? "json_extract(document, '$.sourceRootRequestId') = ?" : "json_extract(document, '$.rootRequestId') = ?"); args.push(parsed.rootRequestId) }
     if (parsed.phase) { clauses.push("json_extract(document, '$.phase') = ?"); args.push(parsed.phase) }
     if (parsed.clientRequestId) { clauses.push("json_extract(document, '$.clientRequestId') = ?"); args.push(parsed.clientRequestId) }
     if (parsed.peerGeneration !== undefined) { clauses.push("json_extract(document, '$.generation') = ?"); args.push(parsed.peerGeneration) }
@@ -102,7 +108,9 @@ export class SqliteRoomStore implements RoomStore {
       args.push(parsed.threadId, parsed.threadId)
     }
     if (parsed.search) {
-      if (kind === 'room_run') {
+      if (kind === 'agent_identity') {
+        clauses.push("instr(lower(COALESCE(json_extract(document,'$.name'),'') || ' ' || COALESCE(json_extract(document,'$.title'),'')),lower(?))>0"); args.push(parsed.search)
+      } else if (kind === 'room_run') {
         clauses.push("instr(lower(COALESCE(json_extract(document,'$.input'),'') || ' ' || COALESCE(json_extract(document,'$.memberLabel'),'') || ' ' || COALESCE(json_extract(document,'$.reason'),'') || ' ' || COALESCE(json_extract(document,'$.error'),'')),lower(?))>0")
         args.push(parsed.search)
       } else if (kind === 'message' && parsed.search.length >= 3 && roomIndexReady(db)) {
@@ -113,7 +121,7 @@ export class SqliteRoomStore implements RoomStore {
         args.push(parsed.search)
       }
     }
-    if (kind === 'room') {
+    if (kind === 'room' || kind === 'agent_identity') {
       if (parsed.archivedOnly) clauses.push('archived = 1')
       else if (!parsed.includeArchived) clauses.push('archived = 0')
     }
@@ -136,6 +144,9 @@ export class SqliteRoomStore implements RoomStore {
       END AS document` : parsed.summaryOnly ? `seq,kind,id,room_id,task_id,revision,
       CASE kind WHEN 'request' THEN json_object('status',status,'message',json_object('body',substr(COALESCE(json_extract(document,'$.originalMessage.body'),json_extract(document,'$.message.body')),1,1000)),
         'sourceMessageId',COALESCE(json_extract(document,'$.originalSourceMessageId'),json_extract(document,'$.sourceMessageId')),'error',json_extract(document,'$.error'),'clarification',json_extract(document,'$.clarification'),'continuation',json_extract(document,'$.continuation'),'contextState',json_extract(document,'$.contextState'))
+      WHEN 'agent_memory_job' THEN json_remove(document,'$.snapshot')
+      WHEN 'agent_handoff' THEN json_remove(document,'$.sources','$.recipientSnapshot.presetSnapshot','$.recipientSnapshot.agentInstructions','$.body','$.result')
+      WHEN 'room_run' THEN json_set(document,'$.input',substr(COALESCE(json_extract(document,'$.input'),''),1,800))
       WHEN 'integration' THEN json_remove(document,'$.diff','$.candidates')
       WHEN 'delivery' THEN json_remove(document,'$.verification','$.changedFiles')
       ELSE document END AS document` : '*'
@@ -167,6 +178,10 @@ export class SqliteRoomStore implements RoomStore {
     const cursor = input.cursor ? decodeRoomCursor(input.cursor) : undefined
     const db = await this.database()
     const conditions: string[] = [], filterArgs: Array<string | number> = []
+    if (input.conversationKind !== 'all') {
+      conditions.push("COALESCE(json_extract(room.document,'$.conversationKind'),'group')=?")
+      filterArgs.push(input.conversationKind)
+    }
     if (input.ids) { conditions.push(`room.id IN (${input.ids.map(() => '?').join(',')})`); filterArgs.push(...input.ids) }
     if (input.repositoryRoot) {
       conditions.push("EXISTS(SELECT 1 FROM json_each(room.document,'$.repositories') repo WHERE json_extract(repo.value,'$.canonicalRoot')=?)")
@@ -307,7 +322,7 @@ export class SqliteRoomStore implements RoomStore {
           if (run.id !== put.id) throw new RoomStoreConflictError('room run id mismatch')
           if (current) {
             const before = RoomRunRecordSchema.parse(JSON.parse(current.document))
-            for (const key of ['id', 'roomId', 'memberId', 'phase', 'clientRequestId', 'rootRequestId', 'taskId',
+            for (const key of ['participantAgentId', 'handoffId', 'id', 'roomId', 'memberId', 'phase', 'clientRequestId', 'rootRequestId', 'taskId',
               'requestId', 'attempt', 'previousRunId', 'contextId', 'generation', 'threadId', 'turnId'] as const) {
               if (before[key] !== undefined && before[key] !== run[key]) {
                 throw new RoomStoreConflictError('room run identity cannot change: ' + key, current.revision)

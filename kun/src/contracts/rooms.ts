@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { ConversationKind, ParticipantAgentId } from './agent-identities.js'
+import { SubagentProfileConfig } from './capabilities-core.js'
 import { RoomAvatarReferenceSchema, RoomContentReferenceSchema } from './room-content.js'
 
 export const RoomIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
@@ -9,6 +11,12 @@ const UniqueIds = z.array(RoomIdSchema).max(100).refine(
 )
 
 export const RoomMemberSchema = z.object({
+  participantAgentId: ParticipantAgentId.optional(),
+  agentRevision: Revision.optional(),
+  configuredReviewerAgentId: ParticipantAgentId.optional(),
+  taskScopedMemory: z.boolean().optional(),
+  agentInstructions: z.string().max(8000).optional(),
+  presetSnapshot: SubagentProfileConfig.nullable().optional(),
   id: RoomIdSchema,
   displayName: z.string().trim().min(1).max(80),
   presetId: z.string().min(1).max(256),
@@ -52,6 +60,8 @@ export const RoomRepositorySchema = z.object({
 export type RoomRepository = z.infer<typeof RoomRepositorySchema>
 
 export const RoomSchema = z.object({
+  conversationKind: ConversationKind.optional(),
+  participantAgentIds: z.array(ParticipantAgentId).max(100).optional(),
   schemaVersion: z.literal(1),
   id: RoomIdSchema,
   name: z.string().trim().min(1).max(120),
@@ -71,6 +81,8 @@ export const RoomSchema = z.object({
   const issue = (message: string): void => ctx.addIssue({ code: 'custom', message })
   const members = new Set(room.members.map((member) => member.id))
   const repositories = new Set(room.repositories.map((repository) => repository.id))
+  const agents = room.members.filter((member) => member.participantAgentId && !member.removedAt).map((member) => member.participantAgentId)
+  if (new Set(agents).size !== agents.length) issue('duplicate agent membership')
   if (members.size !== room.members.length) issue('duplicate member identifiers')
   if (repositories.size !== room.repositories.length) issue('duplicate repository identifiers')
   const active = (id: string): boolean => room.members.some(
@@ -102,6 +114,8 @@ export const SendRoomMessageSchema = z.object({
   references: z.array(RoomContentReferenceSchema).max(20).optional(),
   pollInvitation: z.object({ pollId: RoomIdSchema, memberIds: UniqueIds }).strict().optional(),
   taskId: RoomIdSchema.optional(),
+  designatedAgentIds: UniqueIds.optional(),
+  executionAgentId: ParticipantAgentId.optional(),
   repositoryId: RoomIdSchema.optional(),
   attachmentIds: z.array(z.string().min(1).max(256)).max(20).default([])
 }).strict().refine((value) => value.body.trim().length > 0 || value.attachmentIds.length > 0 || Boolean(value.references?.length),
@@ -114,6 +128,8 @@ export const RoomMessageSchema = z.object({
   rootRequestId: RoomIdSchema.optional(),
   sourceRequestId: RoomIdSchema.optional(),
   originRunId: RoomIdSchema.optional(),
+  authorAgentId: ParticipantAgentId.optional(),
+  handoffId: RoomIdSchema.optional(),
   displayThreadRootId: RoomIdSchema.optional(),
   replyCount: z.number().int().nonnegative().optional(),
   presentationKind: z.literal('poll').optional(),

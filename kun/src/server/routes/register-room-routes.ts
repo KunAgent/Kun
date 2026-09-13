@@ -1,3 +1,5 @@
+import { registerAgentHandoffRoutes } from './register-agent-handoff-routes.js'
+import { registerAgentIdentityRoutes } from './register-agent-identity-routes.js'
 import { z } from 'zod'
 import { RoomIdSchema } from '../../contracts/rooms.js'
 import { RoomRuleRequestSchema, RoomTaskActionSchema } from '../../contracts/rooms-api.js'
@@ -66,6 +68,8 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     }
   })
 
+  registerAgentIdentityRoutes(add)
+  registerAgentHandoffRoutes(add)
   registerRoomEvidenceRoutes(add)
   registerRoomRunRoutes(add, runtime)
   registerRoomExperienceRoutes(add)
@@ -118,7 +122,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   add('GET', '/v1/rooms', (rooms, request) => {
     const params = new URL(request.url).searchParams
     const archived = z.enum(['true', 'false']).parse(params.get('archived_only') ?? 'false')
-    return rooms.listRooms(RoomListOptionsSchema.parse({ search: params.get('search') ?? undefined, limit: params.has('limit') ? Number(params.get('limit')) : undefined,
+    return rooms.listRooms(RoomListOptionsSchema.parse({ conversationKind: params.get('conversation_kind') ?? undefined, search: params.get('search') ?? undefined, limit: params.has('limit') ? Number(params.get('limit')) : undefined,
       cursor: params.get('cursor') ?? undefined, archivedOnly: archived === 'true',
       unreadOnly: z.enum(['true', 'false']).parse(params.get('unread_only') ?? 'false') === 'true',
       attentionOnly: z.enum(['true', 'false']).parse(params.get('attention_only') ?? 'false') === 'true',

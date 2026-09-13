@@ -14,6 +14,8 @@ import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 
 export type RoomRequestState = {
+  handoffReturnId?: string
+  taskParticipants?: RoomMember[]
   pollInvitation?: import('../contracts/room-interactions.js').RoomPollInvitation
   id: string
   roomId: string
@@ -60,6 +62,7 @@ export type RoomWorkspace = {
   state: 'reserved' | 'ready'
 }
 export type RoomTaskExecution = {
+  sharedMessageIds?: string[]
   task: RoomTask
   prompt: string
   attachmentIds: string[]
@@ -85,6 +88,13 @@ export type RoomTaskExecution = {
   contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
+  discussionFairness?: import('../agents/agent-discussion-fairness.js').AgentDiscussionFairness
+  agentDirectory?: import('../agents/agent-identity-service.js').AgentIdentityService
+  agentHandoffs?: import('../agents/agent-handoff-service.js').AgentHandoffService
+  agentMemory?: import('../agents/agent-memory-service.js').AgentMemoryService
+  memoryStore?: import('../memory/memory-store.js').MemoryStore
+  memoryEnabled?: () => boolean
+  validateAgentAvatars?: (members: RoomMember[]) => Promise<void>
   artifacts?: ArtifactStore
   store: RoomStore
   threads: ThreadService

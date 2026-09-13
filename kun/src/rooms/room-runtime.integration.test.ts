@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeHarness } from '../../tests/loop-test-harness.js'
-import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
+import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
+import { openAgentConversation } from '../agents/agent-conversations.js'
 import { QueuedTurnDispatcher } from '../server/queued-turn-dispatcher.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import { roomResultProvider } from './room-result-tools.js'
@@ -30,12 +31,16 @@ async function fixture(structuredResults = false, malformedResults = false) {
   await exec('git', ['-C', repo, 'commit', '-m', 'baseline'])
   const plans: Record<string, unknown> = {}
   const calls = new Map<string, number>()
+  const modelRequests: ModelRequest[] = []
   const model: ModelClient = { provider: 'fake', model: 'fake',
     async *stream(request): AsyncIterable<ModelStreamChunk> {
+      modelRequests.push(request)
       calls.set(request.threadId, (calls.get(request.threadId) ?? 0) + 1)
       if (request.threadId.startsWith('room-discussion')) {
         if (structuredResults && (malformedResults || calls.get(request.threadId) === 1)) {
-          expect(request.tools.map((tool) => tool.name)).toEqual(['read_room_rules', 'submit_room_plan'])
+          expect(request.tools.map((tool) => tool.name).sort()).toEqual([
+            'get_agent_handoff', 'list_collaboration_agents', 'read_room_rules', 'send_agent_message', 'submit_room_plan'
+          ])
           yield { kind: 'tool_call_complete', callId: 'plan', toolName: 'submit_room_plan', arguments: malformedResults ? { response: 'Invalid attempt ' + calls.get(request.threadId) } : plans.current as Record<string, unknown> }
           yield { kind: 'completed', stopReason: 'tool_calls' }
           return
@@ -90,7 +95,7 @@ async function fixture(structuredResults = false, malformedResults = false) {
   const { room } = await runtime.service.create({ clientRequestId: 'create-room', name: '研发室', collaborationMode: 'autonomous',
     repositories: [{ id: 'repo', displayPath: repo }] })
   runtime.start()
-  return { root, repo, room, plans, calls, h, store, get runtime() { return runtime },
+  return { root, repo, room, plans, calls, modelRequests, h, store, get runtime() { return runtime },
     restart: async () => { await runtime.close(); runtime = new RoomRuntime(deps); runtime.start() } }
 }
 
@@ -150,6 +155,39 @@ describe('Rooms real queue, AgentLoop and Git integration', () => {
     expect([...f.calls.values()]).toEqual([3])
     expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
   }, 20000)
+
+  it('executes privately with an external owner and reviewer without exposing unrelated history', async () => {
+    const f = await fixture(true)
+    const caller = (await f.runtime.agents.create({ clientRequestId: 'private-caller', name: 'Caller', defaultRole: 'coordinator' })).agent
+    const reviewer = (await f.runtime.agents.create({ clientRequestId: 'private-reviewer', name: 'Independent reviewer', defaultRole: 'reviewer' })).agent
+    const worker = (await f.runtime.agents.create({ clientRequestId: 'private-worker', name: 'Task worker', reviewerAgentId: reviewer.id })).agent
+    const direct = (await openAgentConversation(f.runtime.agents, f.runtime.service, caller.id)).room
+    const room = (await f.runtime.service.update(direct.id, { clientRequestId: 'private-repository', expectedRevision: direct.revision,
+      repositories: [{ id: 'repo', displayPath: f.repo }],
+      members: direct.members.map((member) => ({ ...member, allowedRepositoryIds: ['repo'], defaultRepositoryId: 'repo' })) })).room
+    await f.store.commit({ requestId: 'private-history', checks: [{ kind: 'message', id: 'private-history', expectedRevision: null }],
+      puts: [{ kind: 'message', id: 'private-history', roomId: room.id, value: {
+        id: 'private-history', roomId: room.id, authorKind: 'user', authorLabelSnapshot: 'User', status: 'final',
+        body: 'UNRELATED_PRIVATE_HISTORY_NOT_FOR_TASK_PARTICIPANTS', bodyRevision: 0,
+        mentionMemberIds: [], attachmentIds: [], createdAt: new Date().toISOString()
+      } }] })
+    f.plans.current = { kind: 'execute', response: 'The selected worker will implement the change.', participants: [],
+      assignments: [{ key: 'private-change', memberId: worker.id, repositoryId: 'repo', title: 'Private task', prompt: 'Create result.txt', dependsOn: [] }] }
+    await f.runtime.service.send(room.id, { clientRequestId: 'private-task', body: 'Create the result file', executionIntent: 'execute',
+      executionAgentId: worker.id, repositoryId: 'repo' })
+    let task: RoomTaskExecution | undefined
+    await vi.waitFor(async () => {
+      task = (await f.store.list<RoomTaskExecution>('task', { roomId: room.id }))[0]?.value
+      expect(task?.task.status).toBe('awaiting_acceptance')
+    }, { timeout: 25000, interval: 100 })
+    expect(task?.task.memberSnapshot.participantAgentId).toBe(worker.id)
+    expect(task?.reviewer?.participantAgentId).toBe(reviewer.id)
+    expect((await f.runtime.service.get(room.id)).members.map((member) => member.participantAgentId)).toEqual([caller.id])
+    const participants = f.modelRequests.filter((request) => request.threadId.startsWith('room-execution') || request.threadId.startsWith('room-review'))
+    expect(participants.length).toBeGreaterThan(1)
+    expect(JSON.stringify(participants)).not.toContain('UNRELATED_PRIVATE_HISTORY_NOT_FOR_TASK_PARTICIPANTS')
+    expect(await f.store.list('task', { roomId: room.id })).toHaveLength(1)
+  }, 30000)
 
   it('fails closed when a discussion classifier tries to schedule code', async () => {
     const f = await fixture()

@@ -449,6 +449,10 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     return result.record
   }
 
+  async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> {
+    return MemoryRecord.parse(await this.call('getById', { id, access }))
+  }
+
   async create(input: MemoryCreateRequest) {
     return MemoryRecord.parse(await this.call('create', input))
   }
@@ -465,8 +469,8 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     return MemoryRecord.parse(await this.call('delete', { id, access }))
   }
 
-  async purge(id: string): Promise<void> {
-    await this.call('purge', { id })
+  async purge(id: string, access?: MemoryAccess): Promise<void> {
+    await this.call('purge', { id, access })
   }
 
   async list(filter: MemoryListFilter = {}) {

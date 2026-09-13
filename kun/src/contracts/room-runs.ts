@@ -2,10 +2,12 @@ import { z } from 'zod'
 import { UsageSnapshotSchema } from './usage.js'
 
 const Id = z.string().min(1).max(256)
-export const RoomRunPhaseSchema = z.enum(['coordination', 'discussion', 'execution', 'review', 'integration', 'triage'])
+export const RoomRunPhaseSchema = z.enum(['coordination', 'discussion', 'execution', 'review', 'integration', 'triage', 'memory'])
 export const RoomRunStatusSchema = z.enum(['queued', 'running', 'completed', 'failed', 'cancelled', 'recovery_required'])
 export const RoomRunOutcomeSchema = z.enum(['published', 'skipped', 'stale', 'duplicate', 'respond', 'failed', 'cancelled'])
 export const RoomRunRecordSchema = z.object({
+  participantAgentId: z.string().min(1).max(128).optional(),
+  handoffId: z.string().min(1).max(128).optional(),
   id: Id, roomId: Id, rootRequestId: Id.optional(), requestId: Id.optional(), taskId: Id.optional(),
   memberId: Id, memberLabel: z.string().max(120), phase: RoomRunPhaseSchema,
   attempt: z.number().int().positive(), previousRunId: Id.optional(), clientRequestId: Id,

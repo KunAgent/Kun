@@ -1,3 +1,4 @@
+import { peerBudgetMember, discussionAgentLane } from '../agents/agent-discussion-scope.js'
 import { roomRunId, updateRoomRun } from './room-run-recording.js'
 import { randomUUID } from 'node:crypto'
 import type { Room, RoomMember } from '../contracts/rooms.js'
@@ -41,6 +42,29 @@ export class RoomPeerRunner {
     this.triages.clear()
   }
 
+  async registerWaiting(): Promise<void> {
+    if (!this.deps.discussionFairness) return
+    for (const topic of await this.state.topics()) {
+      if (!['active', 'idle'].includes(topic.value.status) || !await this.state.current(topic)) continue
+      if (topic.value.roomSnapshot.conversationKind === 'user_agent' && this.deps.agentDirectory && !(await this.deps.agentDirectory.features()).identities) continue
+      const request = await this.deps.store.get<RoomRequestState>('request', topic.value.requestId)
+      if (!request || ['failed', 'needs_input'].includes(request.value.status) || request.value.message.executionIntent !== 'discussion' && !request.value.peerCoordinationDone) continue
+      for (const member of await this.state.members(topic.id)) {
+        if (member.value.activation || member.value.state === 'recovery_required' ||
+          member.value.state === 'failed' && (!member.value.retryAt || Date.parse(member.value.retryAt) > Date.now()) ||
+          (topic.value.memberResponses[peerBudgetMember(topic.value, member.value.memberId)] ?? 0) >= 8 || topic.value.responseCount >= 32) continue
+        const actor = topic.value.roomSnapshot.members.find((value) => value.id === member.value.memberId)
+        if (!actor?.participantAgentId || !actor.enabled || actor.removedAt) continue
+        const updates = await this.state.readUpdates(topic.id, member.value.memberId)
+        if (!updates?.items.length || !await this.direct(updates, request.value) && topic.value.triageCount >= 128) continue
+        this.deps.discussionFairness.waiting(actor.participantAgentId, this.userDirected(updates, request.value) ? 'user' : 'peer')
+      }
+    }
+  }
+  private userDirected(updates: RoomPeerUpdates, request: RoomRequestState): boolean {
+    const addressed = request.message.mentionMemberIds.length ? request.message.mentionMemberIds : [request.roomSnapshot.defaultMemberId]
+    return addressed.includes(updates.member.value.memberId) && updates.items.some((item) => item.value.sourceId === request.sourceMessageId)
+  }
   async tick(externalBusy: ReadonlySet<string> = new Set()): Promise<void> {
     if (this.closed) return
     const topics = await this.state.topics()
@@ -64,6 +88,8 @@ export class RoomPeerRunner {
       const key = member.value.roomId + ':' + member.value.memberId
       if (!busy.has(key)) roomCounts.set(member.value.roomId, (roomCounts.get(member.value.roomId) ?? 0) + 1)
       busy.add(key)
+      const agent = await discussionAgentLane(this.deps, member.value.roomId, member.value.memberId, topic.value.roomSnapshot)
+      if (agent) busy.add(agent)
     }
     const start = this.nextTopic % Math.max(1, topics.length)
     const ordered = [...topics.slice(start), ...topics.slice(0, start)]
@@ -79,31 +105,43 @@ export class RoomPeerRunner {
       }
       const states = await this.state.members(topic.id)
       const room = await this.deps.store.get<Room>('room', topic.value.roomId)
-      const enabled = new Set(room?.value.members.filter((member) => member.enabled && !member.removedAt).map((member) => member.id) ?? [])
-      const eligible = [...states].sort((a, b) => (topic.value.memberResponses[a.value.memberId] ?? 0) -
-        (topic.value.memberResponses[b.value.memberId] ?? 0) || a.seq - b.seq)
+      const identitiesDisabled = room?.value.conversationKind === 'user_agent' && this.deps.agentDirectory && !(await this.deps.agentDirectory.features()).identities
+      const enabled = new Set((identitiesDisabled ? [] : room?.value.members)?.filter((member) => member.enabled && !member.removedAt).map((member) => member.id) ?? [])
+      for (const member of room?.value.members ?? []) {
+        if (!member.participantAgentId) continue
+        const agent = await this.deps.store.get<{ archivedAt?: string }>('agent_identity', member.participantAgentId)
+        if (!agent || agent.value.archivedAt) enabled.delete(member.id)
+      }
+      const eligible = [...states].sort((a, b) => (topic.value.memberResponses[peerBudgetMember(topic.value, a.value.memberId)] ?? 0) -
+        (topic.value.memberResponses[peerBudgetMember(topic.value, b.value.memberId)] ?? 0) || a.seq - b.seq)
       for (const member of eligible) {
         const key = topic.value.roomId + ':' + member.value.memberId
         if (!member.value.activation && !enabled.has(member.value.memberId)) {
           await setPeerMemberWait(this.deps, member, 'member_unavailable')
           continue
         }
-        if (!member.value.activation && (topic.value.memberResponses[member.value.memberId] ?? 0) >= 8) {
+        if (!member.value.activation && (topic.value.memberResponses[peerBudgetMember(topic.value, member.value.memberId)] ?? 0) >= 8) {
           await setPeerMemberWait(this.deps, member, 'member_budget_exhausted')
           continue
         }
-        if (member.value.activation || busy.has(key) || (roomCounts.get(topic.value.roomId) ?? 0) >= 2) continue
+        const agent = await discussionAgentLane(this.deps, topic.value.roomId, member.value.memberId, topic.value.roomSnapshot)
+        if (member.value.activation || busy.has(key) || Boolean(agent && busy.has(agent)) || (roomCounts.get(topic.value.roomId) ?? 0) >= 2) continue
         if (member.value.state === 'recovery_required') continue
         if (member.value.state === 'failed' && (!member.value.retryAt || Date.parse(member.value.retryAt) > Date.now())) continue
         const updates = await this.state.readUpdates(topic.id, member.value.memberId)
         if (!updates?.items.length) continue
         const direct = await this.direct(updates, request.value)
+        const actorId = topic.value.roomSnapshot.members.find((value) => value.id === member.value.memberId)?.participantAgentId
+        const priority = this.userDirected(updates, request.value) ? 'user' : 'peer'
+        if (actorId && this.deps.discussionFairness && !this.deps.discussionFairness.canStart(actorId, priority)) continue
         if (!direct && Date.parse(updates.items[0].value.createdAt) + (this.options.debounceMs ?? 2500) > Date.now()) continue
         if (!direct && this.triages.size >= 2) continue
         try {
           const active = await this.begin(updates, direct ? 'respond' : 'triage')
           if (!active?.value.activation) continue
+          if (actorId) this.deps.discussionFairness?.started(actorId, priority)
           busy.add(key)
+          if (agent) busy.add(agent)
           roomCounts.set(topic.value.roomId, (roomCounts.get(topic.value.roomId) ?? 0) + 1)
           if (active.value.activation.phase === 'triage') await this.startTriage(topic, active)
           else await this.admit(topic, active)
@@ -118,7 +156,7 @@ export class RoomPeerRunner {
         if (member.value.activation) { active = true; continue }
         if (!(await this.state.readUpdates(topic.id, member.value.memberId))?.items.length) continue
         if (!enabled.has(member.value.memberId)) disabledPending = true
-        else if ((latestTopic.value.memberResponses[member.value.memberId] ?? 0) >= 8) budgetPending = true
+        else if ((latestTopic.value.memberResponses[peerBudgetMember(latestTopic.value, member.value.memberId)] ?? 0) >= 8) budgetPending = true
         else if (member.value.state === 'failed' && !member.value.retryAt) failedPending = true
         else runnablePending = true
       }

@@ -1,3 +1,4 @@
+import { executeAgentHandoffRoomTool } from '../agents/agent-handoff-tools.js'
 import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RoomStore } from './room-store.js'
@@ -33,6 +34,7 @@ export function roomPeerTools(threads: ThreadStore) {
       try {
         const thread = await (threads.getMetadata?.(context.threadId) ?? threads.get(context.threadId))
         const room = thread?.roomContext, store = bindings.get(threads)
+        if (room?.handoffId) return await executeAgentHandoffRoomTool(threads, name, args, context)
         if (!thread || !store || !room?.rootRequestId || room.collaborationProtocol !== 'peer' || room.kind !== 'discussion' ||
           !thread.turns.some((turn) => turn.id === context.turnId)) throw new Error('peer room scope required')
         const topic = await store.get<RoomPeerTopic>('peer_topic', room.rootRequestId)

@@ -6,6 +6,7 @@ import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replie
 import type { RoomRepositoryChoice, RoomSearchPage, RoomSearchQuery, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 
 export const RoomDocumentKindSchema = z.enum([
+  'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
@@ -40,6 +41,10 @@ export const RoomStoreEventSchema = z.object({
 export type RoomStoreEvent = z.infer<typeof RoomStoreEventSchema>
 
 export const RoomStoreListOptionsSchema = z.object({
+  sourceRoomId: Id.optional(),
+  parentHandoffId: Id.optional(),
+  participantAgentId: Id.optional(),
+  conversationKind: z.enum(['group', 'user_agent', 'agent_agent', 'all']).optional(),
   roomId: Id.optional(),
   taskId: Id.optional(),
   rootRequestId: Id.optional(),
@@ -71,6 +76,7 @@ export type RoomOutcomeQuery = z.infer<typeof RoomOutcomeQuerySchema>
 const RoomListCursorSchema = z.object({ pinned: z.union([z.literal(0), z.literal(1)]),
   activitySeq: z.number().int().nonnegative(), id: z.string().min(1).max(256) }).strict()
 export const RoomListOptionsSchema = z.object({
+  conversationKind: z.enum(['group', 'user_agent', 'agent_agent', 'all']).default('group'),
   cursor: z.string().min(1).max(2048).regex(/^[A-Za-z0-9_-]+$/).refine((value) => {
     try { return RoomListCursorSchema.safeParse(JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))).success }
     catch { return false }

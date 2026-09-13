@@ -1,3 +1,11 @@
+import { AgentDiscussionFairness } from '../agents/agent-discussion-fairness.js'
+import { AgentHandoffService } from '../agents/agent-handoff-service.js'
+import { AgentHandoffRunner } from '../agents/agent-handoff-runner.js'
+import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
+import { discussionAgentLane } from '../agents/agent-discussion-scope.js'
+import { AgentMemoryCoordinator } from '../agents/agent-memory-coordinator.js'
+import { AgentMemoryService } from '../agents/agent-memory-service.js'
+import { AgentIdentityService } from '../agents/agent-identity-service.js'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
 import type { RoomDelivery, RoomReview } from '../contracts/room-deliveries.js'
 import { RoomService, putRoomDocument } from './room-service.js'
@@ -18,6 +26,11 @@ import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRe
 import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 
 export class RoomRuntime {
+  private readonly memoryCapture: AgentMemoryCoordinator
+  readonly agentMemory: AgentMemoryService
+  readonly handoffs: AgentHandoffService
+  private readonly handoffRunner: AgentHandoffRunner
+  readonly agents: AgentIdentityService
   readonly service: RoomService
   readonly product: RoomProductService
   readonly integrations: RoomIntegrationService
@@ -33,8 +46,24 @@ export class RoomRuntime {
 
   constructor(readonly deps: RoomRuntimeDeps, private readonly held: () => boolean = () => true,
     apiStore: RoomStore = deps.store) {
-    this.service = new RoomService(apiStore, () => this.wake())
+    void apiStore
+    deps.discussionFairness ??= new AgentDiscussionFairness()
+    this.agents = new AgentIdentityService(deps.store, deps.profiles, async (members) => {
+      if (!deps.validateAgentAvatars) throw new Error('avatar storage unavailable')
+      await deps.validateAgentAvatars(members)
+    })
+    this.agentMemory = new AgentMemoryService(this.agents, () => deps.memoryStore, deps.memoryEnabled)
+    deps.agentMemory = this.agentMemory
+    this.memoryCapture = new AgentMemoryCoordinator(deps)
+    this.service = new RoomService(deps.store, () => this.wake())
+    this.service.setAgentDirectory(this.agents)
+    deps.agentDirectory = this.agents
     this.executionService = new RoomService(deps.store, () => this.wake())
+    this.executionService.setAgentDirectory(this.agents)
+    this.handoffs = new AgentHandoffService(deps, this.agents, this.service, () => this.wake())
+    deps.agentHandoffs = this.handoffs
+    this.handoffRunner = new AgentHandoffRunner(this.handoffs)
+    bindAgentHandoffService(deps.threadStore, this.handoffs)
     this.product = new RoomProductService(deps, this.service)
     this.integrations = new RoomIntegrationService(deps)
     this.requests = new RoomRequestRunner(deps, this.executionService)
@@ -62,6 +91,7 @@ export class RoomRuntime {
     this.timer = undefined
     await this.inFlight
     await this.peers.close()
+    await this.memoryCapture.close()
     await this.actionQueue.catch(() => undefined)
   }
   async action(roomId: string, id: string, action: string, input: unknown) {
@@ -106,7 +136,7 @@ export class RoomRuntime {
     const page = await this.service.store.listRooms(input)
     return { rooms: await Promise.all(page.rooms.map(async (row) => {
       const { runningCount, attentionCount } = await roomActivitySummary(this.service.store, row.id)
-      return { ...row.value, revision: row.revision, latestMessageSeq: row.latestMessageSeq,
+      return { ...await this.agents.present(row.value), revision: row.revision, latestMessageSeq: row.latestMessageSeq,
         ...(row.latestMessage ? { latestMessage: row.latestMessage } : {}),
         readSeq: (await this.service.store.get<{ seq: number }>('read_state', row.id))?.value.seq ?? 0,
         runningCount, attentionCount }
@@ -121,13 +151,30 @@ export class RoomRuntime {
   private async tick() {
     if (!this.held()) return
     await this.deps.assertOwnership()
+    await this.agents.initialize()
+    await this.memoryCapture.tick()
     const requests = await this.deps.store.list<RoomRequestState>('request', {
       status: ['pending', 'running', 'stopping', 'recovery_required'], limit: 100, order: 'asc', afterSeq: this.requestCursor })
     this.requestCursor = requests.length === 100 ? requests.at(-1)!.seq : undefined
-    const discussionBusy = await roomDiscussionBusy(this.deps, true)
+    this.deps.discussionFairness!.resetWaiting()
+    await this.handoffRunner.registerWaiting()
+    await this.peers.registerWaiting()
+    for (const row of requests) {
+      if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) continue
+      const target = roomRequestDiscussionTarget(row.value)
+      const actor = row.value.roomSnapshot.members.find((member) => member.id === target?.memberId)
+      if (actor?.participantAgentId && !target?.turnId && !target?.admissionAttempted) {
+        this.deps.discussionFairness!.waiting(actor.participantAgentId, row.value.handoffReturnId ? 'peer' : 'user')
+      }
+    }
+    await this.handoffRunner.tick(new Set(), false)
+    const discussionBusy = new Set([...await roomDiscussionBusy(this.deps, true), ...await this.handoffRunner.busy()])
     for (const row of requests) {
       if (this.stopped) return
       try {
+        if (row.value.handoffReturnId && !await this.handoffs.current(row.value.handoffReturnId)) {
+          await cancelSupersededRoomRequest(this.deps, row.id); continue
+        }
         if (row.value.collaborationProtocol === 'peer') {
           if (await pendingPeerRoomAmendment(this.deps, row.value)) {
             await this.requests.tick(row)
@@ -142,10 +189,19 @@ export class RoomRuntime {
         }
         const target = roomRequestDiscussionTarget(row.value)
         const directPeerDiscussion = row.value.collaborationProtocol === 'peer' && row.value.message.executionIntent === 'discussion'
-        if (target && !target.turnId && !row.value.cancellationRequested && !directPeerDiscussion) {
+        if (target && !target.turnId && !target.admissionAttempted && !row.value.cancellationRequested && !directPeerDiscussion) {
+          if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) continue
           const key = row.value.roomId + ':' + target.memberId
-          if (discussionBusy.has(key) || [...discussionBusy].filter((item) => item.startsWith(row.value.roomId + ':')).length >= 2) continue
+          const agent = await discussionAgentLane(this.deps, row.value.roomId, target.memberId, row.value.roomSnapshot)
+          if (agent) {
+            const identity = await this.deps.store.get<{ archivedAt?: string }>('agent_identity', agent.slice('agent:'.length))
+            if (!identity || identity.value.archivedAt) continue
+          }
+          const priority = row.value.handoffReturnId ? 'peer' : 'user'
+          if (agent && !this.deps.discussionFairness!.canStart(agent.slice('agent:'.length), priority)) continue
+          if (discussionBusy.has(key) || Boolean(agent && discussionBusy.has(agent)) || [...discussionBusy].filter((item) => item.startsWith(row.value.roomId + ':')).length >= 2) continue
           discussionBusy.add(key)
+          if (agent) { discussionBusy.add(agent); this.deps.discussionFairness!.started(agent.slice('agent:'.length), priority) }
         }
         await this.requests.tick(row)
       } catch (error) {
@@ -244,6 +300,7 @@ export class RoomRuntime {
       }
     }
     await deliverRoomPeerTaskProgress(this.deps, this.peers.state)
-    await this.peers.tick(await roomDiscussionBusy(this.deps))
+    await this.peers.tick(new Set([...await roomDiscussionBusy(this.deps), ...await this.handoffRunner.busy()]))
+    await this.handoffRunner.tick(await roomDiscussionBusy(this.deps, true))
   }
 }

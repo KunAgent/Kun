@@ -440,7 +440,7 @@ export class RoomIntegrationService {
       JSON.stringify({ requirement: execution.prompt, sourceSha: value.sourceSha, targetSha: value.targetSha,
         candidateSha: value.candidateSha, conflicts: value.conflicts, findings: value.review?.findings,
         diffExcerpt: value.diff.slice(0, 64000), diffTruncated: value.diff.length > 64000,
-        commands: value.validationCommands, projectContext: roomTaskContext(execution), priorError: value.error }), [],
+        commands: value.validationCommands, projectContext: roomTaskContext(execution, value.runKind === 'review' ? 'review' : 'execution'), priorError: value.error }), [],
       { phase: 'integration', integrationId: value.id, integrationStage: value.runKind, attempt: (value.stepAttempt ?? 0) + 1 })
   }
   private nextStage(value: RoomIntegration, kind: RoomIntegration['runKind']) {

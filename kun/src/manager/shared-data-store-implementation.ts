@@ -1,3 +1,4 @@
+import { AgentMemoryAccessSchema } from '../memory/agent-memory-scope.js'
 import { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
 import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
 import { readFile, rm } from 'node:fs/promises'
@@ -264,6 +265,11 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             throw error
           }
         }
+        case 'getById': {
+          const request = z.object({ id: z.string().min(1), access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional() }).strict().parse(body.value)
+          if (!store.getById) throw new Error('scoped memory lookup unavailable')
+          return store.getById(request.id, request.access)
+        }
         case 'create':
           return store.create(MemoryCreateRequest.parse(body.value))
         case 'createWithId': {
@@ -274,20 +280,20 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           const request = z.object({
             id: z.string().min(1),
             patch: MemoryUpdateRequest,
-            access: z.object({ workspace: z.string().optional(), project: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.update(request.id, request.patch, request.access)
         }
         case 'delete': {
           const request = z.object({
             id: z.string().min(1),
-            access: z.object({ workspace: z.string().optional(), project: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.delete(request.id, request.access)
         }
         case 'purge': {
-          const request = z.object({ id: z.string().min(1) }).strict().parse(body.value)
-          await store.purge?.(request.id)
+          const request = z.object({ id: z.string().min(1), access: z.object({ agent: AgentMemoryAccessSchema.optional() }).strict().optional() }).strict().parse(body.value)
+          await store.purge?.(request.id, request.access)
           return null
         }
         case 'list': {
@@ -295,7 +301,9 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             workspace: z.string().optional(),
             project: z.string().optional(),
             includeDeleted: z.boolean().optional(),
-            all: z.boolean().optional()
+            all: z.boolean().optional(), agent: AgentMemoryAccessSchema.optional(),
+            limit: z.number().int().min(1).max(1000).optional(),
+            before: z.object({ updatedAt: z.string(), id: z.string() }).strict().optional()
           }).strict().parse(body.value ?? {})
           return store.list(filter)
         }
@@ -305,7 +313,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             workspace: z.string().optional(),
             project: z.string().optional(),
             limit: z.number().int().positive(),
-            promptCharacterBudget: z.number().int().nonnegative().optional()
+            promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional()
           }).strict().parse(body.value)
           return store.retrieve({ ...request, policy: body.config })
         }

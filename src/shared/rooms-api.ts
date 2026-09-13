@@ -73,3 +73,7 @@ export const ROOM_TASK_ACTIONS = [
 export type RoomTaskAction = (typeof ROOM_TASK_ACTIONS)[number]
 
 export type { RoomRunRecord, RoomRunPhase, RoomRunStatus } from '../../kun/src/contracts/room-runs'
+
+export type { AgentIdentity, AgentPage, AgentFeatures } from '../../kun/src/contracts/agent-identities'
+
+export type { AgentHandoff } from '../../kun/src/contracts/agent-handoffs'

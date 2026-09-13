@@ -1,3 +1,4 @@
+import { peerBudgetMember } from '../agents/agent-discussion-scope.js'
 import { appendPeerActivationRun, appendPeerRunOutcome } from './room-peer-run-recording.js'
 import { createHash } from 'node:crypto'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
@@ -246,7 +247,7 @@ export class RoomPeerStore {
 
   private async exhaustBudget(topic: TopicRow, member: MemberRow, phase: RoomPeerActivation['phase']): Promise<void> {
     if (phase === 'respond' && topic.value.responseCount < ROOM_PEER_LIMITS.responses &&
-      (topic.value.memberResponses[member.value.memberId] ?? 0) >= ROOM_PEER_LIMITS.memberResponses) {
+      (topic.value.memberResponses[peerBudgetMember(topic.value, member.value.memberId)] ?? 0) >= ROOM_PEER_LIMITS.memberResponses) {
       await this.store.commit({ requestId: peerId('member-budget', topic.id, topic.value.generation, member.id),
         fingerprint: peerFingerprint([topic.id, topic.value.generation, member.id]),
         checks: [{ kind: 'peer_topic', id: topic.id, expectedRevision: topic.revision },
@@ -260,6 +261,7 @@ export class RoomPeerStore {
   }
 
   private consumeBudget(topic: RoomPeerTopic, memberId: string, phase: RoomPeerActivation['phase']): RoomPeerTopic | null {
+    memberId = peerBudgetMember(topic, memberId)
     const status = topic.status === 'paused' ? 'paused' : 'active'
     if (phase === 'triage') return topic.triageCount >= ROOM_PEER_LIMITS.triages ? null :
       { ...topic, status, triageCount: topic.triageCount + 1, updatedAt: new Date().toISOString() }

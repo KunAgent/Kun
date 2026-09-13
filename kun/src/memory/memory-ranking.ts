@@ -1,3 +1,4 @@
+import { agentMemoryVisible, type AgentMemoryScope } from './agent-memory-scope.js'
 import { resolve } from 'node:path'
 import type {
   MemoryFreshnessClass,
@@ -67,9 +68,10 @@ export function memoryFreshnessClass(value: number): MemoryFreshnessClass {
 
 export function memoryInScope(
   record: MemoryRecord,
-  access: { workspace?: string; project?: string },
+  access: AgentMemoryScope,
   allowedScopes: readonly MemoryScope[] = ['user', 'workspace', 'project']
 ): boolean {
+  if (!agentMemoryVisible(record, access)) return false
   if (!allowedScopes.includes(record.scope)) return false
   if (record.scope === 'user') return true
   const workspace = normalizeMemoryScopePath(access.workspace)

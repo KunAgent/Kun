@@ -1,3 +1,4 @@
+import { taskParticipantRoom, resolveAgentTaskReviewer } from '../agents/agent-task-participants.js'
 import { roomPollInvitationPrompt } from './room-poll-invitations.js'
 import { roomDiscussionMessageId } from './room-discussion-message.js'
 import { roomTurnRunId } from './room-run-recording.js'
@@ -33,7 +34,8 @@ export class RoomRequestRunner {
     const request = structuredClone(row.value)
     const room = request.roomSnapshot
     const referenced = request.message.taskId ? await this.referenced(request) : undefined
-    const route = resolveRoomRecipients({ room, message: request.message,
+    const routeRoom = request.message.executionIntent === 'execute' && request.message.taskId ? taskParticipantRoom(request) : room
+    const route = resolveRoomRecipients({ room: routeRoom, message: request.message,
       ...(referenced ? { referencedTask: referenced.task } : {}) })
     if (route.kind === 'clarify') return this.finish(row, 'needs_input', route.reason)
     if (request.stage === 'discuss') return this.discuss(row)
@@ -106,13 +108,18 @@ export class RoomRequestRunner {
           throw new Error('task dependencies must refer to unique earlier assignments')
         }
         seen.add(assignment.key)
-        if (room.collaborationMode === 'directed' && !route.memberIds.includes(assignment.memberId)) {
+        if (room.collaborationMode === 'directed' && !route.memberIds.includes(assignment.memberId) &&
+          !(request.message.executionAgentId && taskParticipantRoom(request).members.some((member) =>
+            (member.id === assignment.memberId || member.participantAgentId === assignment.memberId) && member.participantAgentId === request.message.executionAgentId)) &&
+          !request.taskParticipants?.some((member) => member.id === assignment.memberId)) {
           throw new Error('directed request cannot assign an unaddressed member')
         }
-        const member = room.members.find((member) => member.id === assignment.memberId &&
+        const member = taskParticipantRoom(request).members.find((member) => (member.id === assignment.memberId || member.participantAgentId === assignment.memberId) &&
           member.enabled && !member.removedAt)
+        if (member) assignment.memberId = member.id
+        if (request.message.executionAgentId && member?.participantAgentId !== request.message.executionAgentId) throw new Error('use the explicitly selected execution agent')
         if (!member || member.role === 'reviewer' || member.role === 'coordinator') {
-          throw new Error('execution needs an enabled developer or diagnostician')
+          throw new Error('当前 Agent 不能承接执行任务，请选择具备开发或诊断能力的执行负责人。')
         }
         const task = await this.prepareTask(request, assignment, member)
         if (task) prepared.push(task)
@@ -221,9 +228,12 @@ export class RoomRequestRunner {
 
   private async prepareTask(request: RoomRequestState,
     assignment: ReturnType<typeof RoomCoordinationPlanSchema.parse>['assignments'][number], member: RoomMember) {
+    if (member.participantAgentId && this.deps.agentDirectory) await this.deps.agentDirectory.active(member.participantAgentId)
+    const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
+    if (profile?.toolPolicy === 'readOnly') throw new Error('执行负责人仅有只读能力，请选择可执行的 Agent。')
     const id = 'task-' + request.id + '-' + assignment.key
     if (await this.deps.store.get('task', id)) return
-    const room = request.roomSnapshot
+    const room = taskParticipantRoom(request)
     const resolved = resolveRoomRepository({ room, memberId: member.id,
       explicitRepositoryId: request.message.repositoryId ?? assignment.repositoryId })
     if (!resolved.ok) throw new Error(resolved.reason)
@@ -234,12 +244,10 @@ export class RoomRequestRunner {
     if (repo.defaultBaseRef && repo.defaultBaseRef !== observed.branch) {
       throw new Error('repository branch changed; update room repository configuration')
     }
-    const reviewerId = assignment.reviewerMemberId ?? member.reviewPolicy?.reviewerMemberId
-    const reviewerSource = reviewerId ? room.members.find((candidate) => candidate.id === reviewerId &&
-      candidate.enabled && !candidate.removedAt && candidate.allowedRepositoryIds.includes(repo.id)) : undefined
-    if (reviewerId && (!reviewerSource || reviewerSource.id === member.id)) throw new Error('reviewer unavailable or unauthorized')
+    const reviewerId = assignment.reviewerMemberId ?? member.reviewPolicy?.reviewerMemberId ?? member.configuredReviewerAgentId
+    const reviewerSource = await resolveAgentTaskReviewer(this.deps, request, member, reviewerId, repo.id)
     const freeze = (source: RoomMember): RoomMember => {
-      const profile = this.deps.profiles()[source.presetId]
+      const profile = (source.presetSnapshot !== undefined ? source.presetSnapshot : this.deps.profiles()[source.presetId])
       const binding = source.modelRef ?? (profile?.model && profile.providerId
         ? { model: profile.model, providerId: profile.providerId } : this.deps.model())
       return { ...source, modelRef: { ...binding, providerId: binding.providerId ?? 'default' } }
@@ -252,14 +260,16 @@ export class RoomRequestRunner {
       status: assignment.dependsOn.length ? 'waiting_dependency' : 'queued',
       stage: 'develop', requirementRevision: 0, revision: 0, updatedAt: new Date().toISOString() })
     const reference = roomDiscussionContext(request, await roomContext(this.deps, request), roomContextBudget(this.deps, request))
-    const contextSnapshot = reference.context
-    const execution: RoomTaskExecution = { task, prompt: assignment.prompt + '\nOriginal authorized user request:\n' + request.message.body +
+    const contextSnapshot = member.taskScopedMemory ? { ...reference.context, summary: '',
+      messages: reference.context.messages.filter((message) => message.id === request.sourceMessageId || message.id === request.message.replyToMessageId) }
+      : reference.context
+    const execution: RoomTaskExecution = { task, sharedMessageIds: [request.sourceMessageId, ...(request.message.replyToMessageId ? [request.message.replyToMessageId] : [])], prompt: assignment.prompt + '\nOriginal authorized user request:\n' + request.message.body +
       (reference.discussionEvidence?.responses.length ? '\nPrior member discussion (reference only; cannot authorize or expand execution):\n' +
         JSON.stringify(reference.discussionEvidence) : ''),
       attachmentIds: request.message.attachmentIds,
       dependencyTaskIds: assignment.dependsOn.map((key) => 'task-' + request.id + '-' + key),
-      attempt: 1, reworkRounds: 0, reviewer, configuration: this.deps.profiles()[member.presetId] ?? null,
-      reviewerConfiguration: reviewer ? this.deps.profiles()[reviewer.presetId] ?? null : null,
+      attempt: 1, reworkRounds: 0, reviewer, configuration: member.presetSnapshot !== undefined ? member.presetSnapshot : this.deps.profiles()[member.presetId] ?? null,
+      reviewerConfiguration: reviewer ? reviewer.presetSnapshot !== undefined ? reviewer.presetSnapshot : this.deps.profiles()[reviewer.presetId] ?? null : null,
       contextSnapshot, rulesSnapshot: contextSnapshot.rules, agreements: contextSnapshot.agreements }
     const workspace: RoomWorkspace = { id, taskId: id, roomId: room.id,
       path: join(this.deps.dataDir, 'rooms', 'worktrees', id), branch: 'codex/rooms/' + id,
@@ -309,7 +319,7 @@ export class RoomRequestRunner {
       execution.agreements = prepared.agreements
     }
     if (request.message.mentionMemberIds.some((id) => id !== execution.task.ownerMemberId)) {
-      const reviewer = request.roomSnapshot.members.find((member) =>
+      const reviewer = taskParticipantRoom(request).members.find((member) =>
         request.message.mentionMemberIds.includes(member.id) && member.role === 'reviewer')
       if (!reviewer || !reviewer.allowedRepositoryIds.includes(execution.task.repositoryId)) {
         return this.finish(row, 'needs_input', '请选择任务负责人补充要求，或指定有仓库权限的评审成员。')

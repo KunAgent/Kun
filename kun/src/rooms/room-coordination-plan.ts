@@ -35,6 +35,7 @@ export function roomCoordinationPrompt(request: RoomRequestState, context: RoomC
     'A review request addressed to a reviewer authorizes only reviewing the existing delivery; it does not authorize implementation.',
     'Questions, comparison, brainstorming and analysis default to discussion. Implementation, fixes and running tests are execution.',
     'executionIntent=discussion forbids execution. executionIntent=execute explicitly requests work, but still clarify missing targets.',
+    'Explicit taskParticipants are authorized only for task work; they are not private-chat readers or discussion members. If executionAgentId is set, use that Agent as execution owner. Do not silently replace it.',
     'Use only enabled member IDs and their explicitly allowed repository IDs. Each assignment has ONE owner and ONE repository.',
     'A repository is selected from explicit user selection, referenced task, then member default. Ask if still ambiguous.',
     'Directed mode: only explicitly mentioned members or the default responder participate; do not invent extra workers.',
@@ -42,7 +43,8 @@ export function roomCoordinationPrompt(request: RoomRequestState, context: RoomC
     'For discussion return participants; after their responses, summarize or invite another bounded round if necessary.',
     'Execute only after goals are clear. Never duplicate a task; each assignment key is unique and dependencies refer to earlier keys.',
     'If no code is needed, use answer. If multiple possible task references make the request ambiguous, use clarify.',
-    JSON.stringify({ currentRequest: request.message, room: request.roomSnapshot,
+    JSON.stringify({ currentRequest: request.message, room: { ...request.roomSnapshot, members: request.roomSnapshot.members.map(({ presetSnapshot: _preset, agentInstructions: _instructions, ...member }) => member) },
+      taskParticipants: request.taskParticipants?.map(({ presetSnapshot: _preset, agentInstructions: _instructions, ...member }) => member),
       round: request.round ?? 0, referencedTask: request.referencedTask,
       ...roomDiscussionContext(request, context, budget) })
   ].join('\n')

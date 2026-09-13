@@ -1,3 +1,4 @@
+import { AGENT_COLLABORATION_TOOLS } from '../agents/agent-handoff-tools.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from '../contracts/capabilities-core.js'
@@ -17,15 +18,16 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   const policy = thread.roomContext
   if (!policy) return context
   const readOnly = policy.kind !== 'execution' || thread.sandboxMode === 'read-only'
+  const agentTools = policy.participantAgentId ? [...AGENT_COLLABORATION_TOOLS] : []
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []
   const pollTools = policy.kind === 'discussion' && policy.allowedToolNames?.includes('vote_room_poll') ? ['vote_room_poll'] : []
   const allowed = intersectAllowedToolNames(context.allowedToolNames,
-    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules'] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools, ...agentTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', ...agentTools] :
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...agentTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
   return {
     ...context,
-    roomStepKind: policy.kind,
+    roomStepKind: policy.kind, roomAgent: Boolean(policy.participantAgentId),
     roomPeer: peerTools.length > 0,
     workspace: thread.workspace,
     additionalWorkspaces: undefined,

@@ -1,3 +1,4 @@
+import { agentHandoffTools } from '../agents/agent-handoff-tools.js'
 import { z } from 'zod'
 import { RoomReviewSchema } from '../contracts/room-deliveries.js'
 import type { ThreadStore } from '../ports/thread-store.js'
@@ -24,7 +25,7 @@ export function roomResultProvider(threads: ThreadStore): CapabilityToolProvider
   return {
     id: 'room-results', kind: 'built-in', enabled: true, available: true,
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
-    tools: [roomRuleReadTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), ...[
+    tools: [...agentHandoffTools(threads), roomRuleReadTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), ...[
       { name: 'submit_room_plan', kind: 'coordination', schema: RoomCoordinationPlanSchema,
         description: 'Submit the structured room decision for the current user request.' },
       { name: 'submit_room_review', kind: 'review', schema: RoomReviewResultSchema,

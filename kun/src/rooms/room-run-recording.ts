@@ -7,6 +7,7 @@ import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution } from './roo
 import type { RoomStore, RoomStoreCommit } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
 import { captureRoomTurnUsageBaseline, readRoomTurnUsage } from './room-run-usage.js'
+import { agentStableId } from '../agents/agent-identity-service.js'
 
 export const roomRunId = (roomId: string, clientRequestId: string, triage = false): string =>
   'run-' + createHash('sha256').update(JSON.stringify([roomId, clientRequestId, triage])).digest('hex').slice(0, 40)
@@ -32,14 +33,26 @@ export async function prepareRoomRun(deps: RoomRuntimeDeps, thread: ThreadRecord
     const snapshot = await deps.store.get<{ prompt: string; attachmentIds: string[] }>('context',
       old.value.threadId ? id + '-input' : old.value.contextId ?? id + '-input') ??
       await deps.store.get<{ prompt: string; attachmentIds: string[] }>('context', old.value.contextId ?? id + '-input')
+    const memoryInput = scope.participantAgentId ? await deps.store.get<{ originalHash: string; prompt: string; memoryIds?: string[] }>('context',
+      agentStableId('agent-memory-input', thread.id, clientRequestId)) : null
+    const enriched = !old.value.threadId && snapshot && memoryInput?.roomId === scope.roomId &&
+      memoryInput.value.prompt === prompt && memoryInput.value.originalHash === createHash('sha256').update(snapshot.value.prompt).digest('hex')
     if (old.value.threadId && old.value.threadId !== thread.id || old.value.memberId !== scope.memberId ||
-      snapshot?.value.prompt !== prompt || JSON.stringify(snapshot.value.attachmentIds) !== JSON.stringify(attachmentIds)) {
+      !enriched && snapshot?.value.prompt !== prompt || JSON.stringify(snapshot?.value.attachmentIds) !== JSON.stringify(attachmentIds)) {
       throw new Error('Room run identity was reused with different input')
     }
-    if (!old.value.threadId) await updateRoomRun(deps.store, id, { threadId: thread.id, model: thread.model,
-      ...await captureRoomTurnUsageBaseline(deps, thread.id), ...override })
+    if (!old.value.threadId) {
+      if (enriched) await deps.store.commit({ requestId: id + '-memory-input',
+        checks: [{ kind: 'context', id: id + '-input', expectedRevision: null }],
+        puts: [{ kind: 'context', id: id + '-input', roomId: scope.roomId, value: {
+          id: id + '-input', roomId: scope.roomId, prompt, attachmentIds, memoryIds: memoryInput?.value.memoryIds
+        } }] })
+      await updateRoomRun(deps.store, id, { threadId: thread.id, model: thread.model,
+        ...await captureRoomTurnUsageBaseline(deps, thread.id), ...override })
+    }
     return (await deps.store.get<RoomRunRecord>('room_run', id))!.value
   }
+  const memoryInput = scope.participantAgentId ? await deps.store.get<{ memoryIds?: string[] }>('context', agentStableId('agent-memory-input', thread.id, clientRequestId)) : null
   const task = scope.taskId ? await deps.store.get<RoomTaskExecution>('task', scope.taskId) : null
   const requestId = override.requestId ?? scope.requestId ?? task?.value.task.requestId
   const request = requestId ? await deps.store.get<RoomRequestState>('request', requestId) : null
@@ -51,7 +64,7 @@ export async function prepareRoomRun(deps: RoomRuntimeDeps, thread: ThreadRecord
     roomId: scope.roomId, rootRequestId, memberId: scope.memberId, taskId: scope.taskId, phase, limit: 1
   }))[0]
   const now = new Date().toISOString()
-  const run = RoomRunRecordSchema.parse({ id, roomId: scope.roomId, taskId: scope.taskId,
+  const run = RoomRunRecordSchema.parse({ id, participantAgentId: scope.participantAgentId, handoffId: scope.handoffId, roomId: scope.roomId, taskId: scope.taskId,
     requestId, rootRequestId, memberId: scope.memberId,
     memberLabel: request?.value.roomSnapshot.members.find((member) => member.id === scope.memberId)?.displayName ??
       task?.value.task.memberSnapshot.displayName ?? thread.title ?? scope.memberId,
@@ -69,7 +82,7 @@ export async function prepareRoomRun(deps: RoomRuntimeDeps, thread: ThreadRecord
       checks: [{ kind: 'room_run', id, expectedRevision: null }, { kind: 'context', id: id + '-input', expectedRevision: null }],
       puts: [{ kind: 'room_run', id, roomId: run.roomId, taskId: run.taskId, value: run },
         { kind: 'context', id: id + '-input', roomId: run.roomId, taskId: run.taskId,
-          value: { id: id + '-input', roomId: run.roomId, rootRequestId, memberId: run.memberId, prompt, attachmentIds } }],
+          value: { id: id + '-input', roomId: run.roomId, rootRequestId, memberId: run.memberId, prompt, attachmentIds, memoryIds: memoryInput?.value.memoryIds } }],
       events: [{ roomId: run.roomId, kind: 'room_run.updated', payload: { id, rootRequestId, memberId: run.memberId } }] })
     return run
   })
@@ -131,12 +144,15 @@ export async function attachRoomRunPublication(store: RoomStore, commit: RoomSto
   if (row.value.publishedMessageId && row.value.publishedMessageId !== message.id) throw new Error('Run already published another message')
   if (message.originRunId && message.originRunId !== runId) throw new Error('Message run provenance is immutable')
   message.originRunId = runId
+  message.authorAgentId = row.value.participantAgentId
+  message.authorLabelSnapshot = row.value.memberLabel
+  message.handoffId = row.value.handoffId
   message.rootRequestId = row.value.rootRequestId
   message.sourceRequestId = row.value.requestId
   commit.checks ??= []; commit.puts ??= []; commit.events ??= []
   commit.checks.push({ kind: 'room_run', id: runId, expectedRevision: row.revision })
   commit.puts.push({ kind: 'room_run', id: runId, roomId: row.roomId, taskId: row.taskId,
-    value: { ...row.value, outcome: 'published', publishedMessageId: message.id, updatedAt: new Date().toISOString() } })
+    value: { ...row.value, outcome: message.status === 'streaming' ? row.value.outcome : message.status === 'failed' ? 'failed' : 'published', publishedMessageId: message.id, updatedAt: new Date().toISOString() } })
   commit.events.push({ roomId: message.roomId, kind: 'room_run.updated', payload: { id: runId, memberId: row.value.memberId } })
 }
 

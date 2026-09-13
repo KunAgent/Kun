@@ -76,6 +76,7 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
     const message = RoomMessageSchema.parse({ id: peerId('message', input.clientRequestId),
       roomId: topic.value.roomId, rootRequestId: input.rootRequestId, sourceRequestId: topic.value.requestId,
       messageSeq: 1, status: 'final', authorKind: 'member', authorMemberId: input.memberId,
+      authorAgentId: sender?.participantAgentId,
       authorLabelSnapshot: sender.displayName, body: input.body, bodyRevision: 0,
       mentionMemberIds: [...new Set([...mentions, ...invites])], replyToMessageId: input.replyToMessageId,
       displayThreadRootId: replyContext.displayThreadRootId,

@@ -21,13 +21,19 @@ export function boundedRoomText(text: string, budget: number): string {
   }
   return result
 }
-export function roomContextBudget(deps: RoomRuntimeDeps, request: RoomRequestState): number {
+export function roomBaseContextBudget(deps: RoomRuntimeDeps, request: RoomRequestState): number {
   const windows = request.roomSnapshot.members.filter((member) => member.enabled && !member.removedAt).map((member) => {
     const profile = deps.profiles()[member.presetId]
     return modelCapabilitiesForModel(member.modelRef?.model ??
       (profile?.model && profile.providerId ? profile.model : deps.model().model)).contextWindowTokens ?? 64000
   })
   return Math.min(16000, ...windows.map((window) => Math.floor(window / 4)))
+}
+
+export function roomContextBudget(deps: RoomRuntimeDeps, request: RoomRequestState): number {
+  const base = roomBaseContextBudget(deps, request)
+  return deps.agentMemory && request.roomSnapshot.members.some((member) => member.participantAgentId)
+    ? Math.floor(base * .75) : base
 }
 
 type Summary = { body: string; coveredSeq: number; threadId?: string; turnId?: string; pendingCoveredSeq?: number; ownerRequestId?: string }
@@ -146,12 +152,13 @@ export async function roomDiscussionWorkspace(deps: RoomRuntimeDeps, request: Ro
 }
 
 /** Frozen background remains reference data; explicit user adoptions define the current rule authority. */
-export function roomTaskContext(execution: RoomTaskExecution) {
+export function roomTaskContext(execution: RoomTaskExecution, audience: 'execution' | 'review' = execution.task.stage === 'review' ? 'review' : 'execution') {
   const agreements = execution.agreements ?? execution.contextSnapshot?.agreements
   const sources = agreements ? { bundleId: agreements.bundleId, count: agreements.count,
     compressed: agreements.compressed, model: agreements.model, policyVersion: agreements.policyVersion } : undefined
   return {
-    reference: execution.contextSnapshot ? { ...execution.contextSnapshot, rules: [], agreements: undefined } : undefined,
+    reference: execution.contextSnapshot ? { ...execution.contextSnapshot, rules: [], agreements: undefined,
+      ...(audience === 'review' && execution.reviewer?.taskScopedMemory ? { summary: '', messages: execution.contextSnapshot.messages.filter((message) => message.id === execution.task.sourceMessageId) } : {}) } : undefined,
     currentProjectAgreements: agreements?.compressed ? agreements.summary :
       execution.rulesSnapshot ?? execution.contextSnapshot?.rules ?? [],
     agreementSources: sources,

@@ -82,7 +82,8 @@ export const KUN_MANAGER_CAPABILITIES = [
   'room-store-v2',
   'room-store-v3',
   'room-store-v4',
-  'room-store-v5'
+  'room-store-v5',
+  'agent-identities-v1'
 ] as const
 
 export const ThreadStoreOperationSchema = z.enum(MANAGER_THREAD_STORE_OPERATIONS)
@@ -98,7 +99,7 @@ export const ArtifactStoreOperationSchema = z.enum([
   'put', 'releaseOwner', 'delete', 'list', 'get', 'readRange', 'stat'
 ])
 export const MemoryStoreOperationSchema = z.enum([
-  'distillationPending', 'commitDistillation',
+  'distillationPending', 'commitDistillation', 'getById',
   'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'retrieve', 'diagnostics',
   'feedbackReady', 'feedbackAppend', 'feedbackEvent', 'feedbackAggregate',
   'feedbackAggregates', 'feedbackDiagnostics', 'feedbackConfirm', 'feedbackCorrect'

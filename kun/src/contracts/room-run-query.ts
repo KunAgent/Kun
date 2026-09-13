@@ -10,7 +10,7 @@ export type RoomRunAvailability = {
 export type RoomRunDetail = {
   run: RoomRunRecord
   trigger?: RoomMessage
-  context?: { prompt?: string; attachmentIds?: string[] }
+  context?: { prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }
   availability: RoomRunAvailability
   eventsCursor: string
 }

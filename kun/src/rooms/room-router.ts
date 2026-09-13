@@ -8,7 +8,7 @@ export type RoomRoute =
 export function resolveRoomRecipients(input: {
   room: Room
   message: SendRoomMessage
-  referencedTask?: { id: string; roomId: string; ownerMemberId: string }
+  referencedTask?: { id: string; roomId: string; ownerMemberId: string; memberSnapshot?: { taskScopedMemory?: boolean } }
 }): RoomRoute {
   const { room, message, referencedTask } = input
   if (room.archivedAt) return { kind: 'clarify', reason: 'room_archived' }
@@ -19,7 +19,7 @@ export function resolveRoomRecipients(input: {
   // Only structured composer targets are considered; quoted text and attachments
   // cannot inject recipients by containing an @ token.
   const targets = message.mentionMemberIds.length ? message.mentionMemberIds :
-    [referencedTask?.ownerMemberId ?? room.defaultMemberId]
+    [referencedTask ? !active.has(referencedTask.ownerMemberId) && referencedTask.memberSnapshot?.taskScopedMemory && message.executionIntent !== 'execute' ? room.defaultMemberId : referencedTask.ownerMemberId : room.defaultMemberId]
   if (targets.some((id) => !active.has(id))) return { kind: 'clarify', reason: 'member_unavailable' }
   return { kind: 'respond', memberIds: [...new Set(targets)],
     ...(message.taskId ? { taskId: message.taskId } : {}) }

@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
 import { mergeBuiltinSubagentProfiles } from '../delegation/builtin-profiles.js'
+import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
+import { createPersistentMemoryStore } from './runtime-factory-storage.js'
 import { RemoteRoomStore } from '../manager/remote-room-store.js'
 import { RoomExecutionLease } from '../manager/room-execution-lease.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
@@ -21,8 +23,16 @@ export function createRuntimeRoomComposition(input: {
   const localStore = manager ? undefined : new SqliteRoomStore({ path: join(options.dataDir, 'rooms', 'rooms.sqlite') })
   const apiStore = manager ? new RemoteRoomStore(manager) : localStore!
   const executionStore = manager ? new RemoteRoomStore(manager, { getFence: () => lease!.getFence() }) : localStore!
+  // Agent-owned records share the canonical Manager repository, with their own
+  // explicit feature policy. Code's legacy memory toggle is a separate surface.
+  const ownedAgentMemory = manager || !input.services.memoryStore ? createPersistentMemoryStore({
+    ...options, capabilities: { ...(options.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG),
+      memory: MemoryCapabilityConfig.parse({ enabled: true, maxInjectedRecords: 8 }) }
+  }, () => new Date().toISOString()) : undefined
   const rooms = new RoomRuntime({
     ...input.services,
+    memoryStore: ownedAgentMemory ?? input.services.memoryStore,
+    memoryEnabled: () => true,
     store: executionStore,
     dataDir: options.dataDir,
     model: () => ({ model: input.options().model, providerId: activeModelConnectionProviderId(input.options()) }),
@@ -49,7 +59,7 @@ export function createRuntimeRoomComposition(input: {
     async close(): Promise<void> {
       stopped = true
       await starting
-      try { await rooms.close() } finally {
+      try { await rooms.close(); await ownedAgentMemory?.shutdown?.() } finally {
         try { await lease?.close() } finally { await localStore?.close() }
       }
     }

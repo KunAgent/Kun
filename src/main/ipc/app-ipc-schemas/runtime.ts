@@ -188,6 +188,23 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  compileEndpoint('/v1/agent-handoffs', ['GET', 'POST']),
+  compileEndpoint('/v1/agent-handoffs/{handoffId}', ['GET']),
+  compileEndpoint('/v1/agent-handoffs/{handoffId}/cancel', ['POST']),
+  compileEndpoint('/v1/agent-handoffs/{handoffId}/retry', ['POST']),
+  compileEndpoint('/v1/agents/default-members', ['POST']),
+  compileEndpoint('/v1/agents/templates', ['GET']),
+  compileEndpoint('/v1/agents/features', ['GET', 'PUT']),
+  compileEndpoint('/v1/agents', ['GET', 'POST']),
+  compileEndpoint('/v1/agents/{agentId}', ['GET', 'PATCH']),
+  compileEndpoint('/v1/agents/{agentId}/conversation', ['POST']),
+  compileEndpoint('/v1/agents/{agentId}/runs', ['GET']),
+  compileEndpoint('/v1/agents/{agentId}/conversations', ['GET']),
+  compileEndpoint('/v1/agents/{agentId}/memory-candidates', ['GET']),
+  compileEndpoint('/v1/agents/{agentId}/memory-candidates/{candidateId}/decision', ['POST']),
+  compileEndpoint('/v1/agents/{agentId}/memory-work', ['GET']),
+  compileEndpoint('/v1/agents/{agentId}/memories', ['GET', 'POST']),
+  compileEndpoint('/v1/agents/{agentId}/memories/{memoryId}', ['PATCH']),
   compileEndpoint('/v1/history-sources/codex/sessions', ['GET']),
   compileEndpoint('/v1/history-sources/codex/preview', ['POST']),
   compileEndpoint('/v1/history-sources/{id}', ['GET']),

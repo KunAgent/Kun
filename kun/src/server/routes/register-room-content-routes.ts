@@ -24,6 +24,7 @@ const query = (request: Request) => Object.fromEntries(new URL(request.url).sear
 
 export function registerRoomContentRoutes(add: Add, runtime: ServerRuntime): void {
   const links = new RoomLinkPreviewService()
+  if (runtime.rooms) runtime.rooms.deps.validateAgentAvatars = (members) => validateRoomMemberAvatars(runtime.rooms!.deps.store, runtime.attachmentStore, members)
   runtime.rooms?.service.setMemberAvatarValidator((members) => validateRoomMemberAvatars(runtime.rooms!.deps.store, runtime.attachmentStore, members))
   runtime.rooms?.service.setContentReferenceValidator(async (room, references) => {
     for (const reference of references) {

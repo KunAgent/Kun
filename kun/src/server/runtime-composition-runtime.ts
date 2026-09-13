@@ -12,6 +12,7 @@ import type { createRuntimeExtensionComposition } from './runtime-composition-ex
 import type { createRuntimeConfigController } from './runtime-composition-config.js'
 import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
 import { bindRoomPeerStore } from '../rooms/room-peer-tools.js'
+import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -125,6 +126,7 @@ export function createServerRuntimeComposition(
     options: () => config.activeOptions,
     services: { threads: threadService, threadStore: stores.threadStore,
       artifacts: artifactStore,
+      memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
@@ -149,6 +151,7 @@ export function createServerRuntimeComposition(
   // Tool providers bind to the lifecycle-fenced facade, while room admission
   // retains the backing store. Bind both identities to the same room scope.
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
+  bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   return {
     threadService,
     historyReferences: core.historyReferences,

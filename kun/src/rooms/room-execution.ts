@@ -1,5 +1,9 @@
+import { appendAgentResponseBudget } from '../agents/agent-response-budget.js'
+import { agentStableId } from '../agents/agent-identity-service.js'
+import { AGENT_COLLABORATION_TOOLS } from '../agents/agent-handoff-tools.js'
+import { freezeAgentMemoryInput } from '../agents/agent-memory-input.js'
 import { prepareRoomRun, observeRecordedRoomTurn, updateRoomRun, roomRunId, type RoomRunAdmission } from './room-run-recording.js'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RoomMember } from '../contracts/rooms.js'
 import type { ThreadRecord } from '../contracts/threads.js'
@@ -12,7 +16,7 @@ import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 
 export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   id: string; roomId: string; taskId?: string; requestId?: string; member: RoomMember;
-  rootRequestId?: string; collaborationProtocol?: 'legacy' | 'peer';
+  rootRequestId?: string; collaborationProtocol?: 'legacy' | 'peer'; handoffId?: string;
   kind: NonNullable<ThreadRecord['roomContext']>['kind']; workspace?: string;
   profile?: SubagentProfileConfig | null
 }): Promise<ThreadRecord> {
@@ -20,15 +24,17 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   if (old) {
     if (old.roomContext?.roomId !== input.roomId || old.roomContext.memberId !== input.member.id ||
       old.roomContext.kind !== input.kind || old.roomContext.taskId !== input.taskId ||
-      old.roomContext.rootRequestId !== input.rootRequestId || (input.workspace && old.workspace !== input.workspace)) {
+      old.roomContext.rootRequestId !== input.rootRequestId || old.roomContext.handoffId !== input.handoffId || (input.workspace && old.workspace !== input.workspace)) {
       throw new Error('room execution thread identity mismatch')
     }
     return old
   }
   await deps.assertOwnership()
   const workspace = input.workspace ?? join(deps.dataDir, 'rooms', 'discussion', input.roomId)
-  await mkdir(workspace, { recursive: true })
-  const profile = input.profile !== undefined ? input.profile ?? undefined : deps.profiles()[input.member.presetId]
+  if (input.workspace) {
+    if (!(await stat(workspace)).isDirectory()) throw new Error('authorized workspace is unavailable')
+  } else await mkdir(workspace, { recursive: true })
+  const profile = input.profile !== undefined ? input.profile ?? undefined : (input.member.presetSnapshot !== undefined ? input.member.presetSnapshot ?? undefined : deps.profiles()[input.member.presetId])
   const binding = input.member.modelRef ?? (profile?.model && profile.providerId
     ? { model: profile.model, providerId: profile.providerId } : deps.model())
   if (binding.providerId && deps.unsupportedProviderIds?.().includes(binding.providerId)) {
@@ -53,14 +59,16 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   if (input.kind === 'discussion' && input.collaborationProtocol === 'peer' && allowed) {
     allowed.push(...['read_room_updates', 'send_room_message'].filter((name) => !blocked.includes(name)))
   }
+  if (input.member.participantAgentId && allowed) allowed.push(...AGENT_COLLABORATION_TOOLS.filter((name) => !blocked.includes(name)))
   return deps.threads.create({
     workspace, title: input.member.displayName, model: binding.model, providerId: binding.providerId,
     ...('accountId' in binding && typeof binding.accountId === 'string' ? { accountId: binding.accountId } : {}),
     mode: readOnly ? 'plan' : 'agent', agentSurface: 'code',
     sandboxMode: readOnly ? 'read-only' : 'workspace-write',
     agentId: input.member.presetId,
-    systemPrompt: [profile?.systemPrompt, profile?.promptPreamble, input.member.roleNotes].filter(Boolean).join('\n')
+    systemPrompt: [profile?.systemPrompt, profile?.promptPreamble, input.member.agentInstructions, input.member.roleNotes].filter(Boolean).join('\n')
   }, { id: input.id, relation: 'side', roomContext: {
+    participantAgentId: input.member.participantAgentId, agentRevision: input.member.agentRevision, taskScopedMemory: input.member.taskScopedMemory, handoffId: input.handoffId,
     roomId: input.roomId, taskId: input.taskId, requestId: input.requestId, memberId: input.member.id, kind: input.kind,
     rootRequestId: input.rootRequestId, collaborationProtocol: input.collaborationProtocol,
     allowedToolNames: allowed,
@@ -76,6 +84,19 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
   await deps.assertOwnership()
   const thread = await deps.threads.getMetadata(threadId)
   if (!thread?.roomContext) throw new Error('room thread not found')
+  if (thread.roomContext.participantAgentId && thread.roomContext.kind === 'discussion' &&
+    thread.roomContext.collaborationProtocol !== 'peer' && !thread.roomContext.handoffId && thread.roomContext.requestId) {
+    const request = await deps.store.get<import('./room-runtime-types.js').RoomRequestState>('request', thread.roomContext.requestId)
+    if (request) {
+      const rootId = request.value.rootRequestId ?? request.id
+      const root = await deps.store.get<import('./room-runtime-types.js').RoomRequestState>('request', rootId)
+      const commit: import('./room-store.js').RoomStoreCommit = { requestId: agentStableId('legacy-agent-response', threadId, clientRequestId) }
+      await appendAgentResponseBudget(deps, commit, { sourceRoomId: thread.roomContext.roomId, rootRequestId: rootId,
+        agentId: thread.roomContext.participantAgentId, generation: root?.value.continuation ?? 0, clientRequestId })
+      if (commit.puts?.length) await deps.store.commit(commit)
+    }
+  }
+  prompt = await freezeAgentMemoryInput(deps, thread, clientRequestId, prompt)
   const run = await prepareRoomRun(deps, thread, clientRequestId, prompt, attachmentIds, runInput)
   const existing = thread.turns.find((turn) => turn.clientRequestId === clientRequestId)
   const reuse = async (turn: NonNullable<typeof existing>): Promise<string> => {
