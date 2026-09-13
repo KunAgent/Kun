@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Room } from '../contracts/rooms.js'
+import type { RoomLatestMessage } from '../contracts/room-list.js'
 import type { RoomRequestOutcome } from '../contracts/rooms-product.js'
 
 export const RoomDocumentKindSchema = z.enum([
@@ -75,7 +76,7 @@ export const RoomListOptionsSchema = z.object({
 }).strict()
 export type RoomListOptions = z.input<typeof RoomListOptionsSchema>
 export type RoomListPage = {
-  rooms: Array<RoomStoredDocument<Room> & { latestMessageSeq: number }>
+  rooms: Array<RoomStoredDocument<Room> & { latestMessageSeq: number; latestMessage?: RoomLatestMessage }>
   nextCursor?: string
 }
 

@@ -12,6 +12,8 @@ import type {
   SendRoomMessage
 } from '@shared/rooms-api'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
+export type { RoomListEntry } from '@shared/rooms-api'
+import type { RoomListEntry } from '@shared/rooms-api'
 
 export class RoomHttpError extends Error {
   constructor(
@@ -38,12 +40,6 @@ export type RoomTaskDetail = {
   diff?: string
   reviews: RoomReview[]
   agreements?: RoomAgreementContext
-}
-export type RoomListEntry = Room & {
-  latestMessageSeq?: number
-  readSeq?: number
-  runningCount?: number
-  attentionCount?: number
 }
 export type RoomUserInput = {
   id: string

@@ -85,6 +85,30 @@ describe('room data over the real Manager HTTP boundary', () => {
     expect(await store.get('task', 'task-a')).toBeNull()
   })
 
+  it('preserves bounded latest-message projections across the shared Manager boundary', async () => {
+    const { store, data, connection } = await manager()
+    const otherRuntime = new RemoteRoomStore(connection)
+    await store.commit({ requestId: 'list-preview', checks: [
+      { kind: 'room', id: 'preview-room', expectedRevision: null },
+      { kind: 'message', id: 'preview-message', expectedRevision: null }
+    ], puts: [
+      { kind: 'room', id: 'preview-room', value: { name: 'Preview room' } },
+      { kind: 'message', id: 'preview-message', roomId: 'preview-room', value: {
+        authorKind: 'user', authorLabelSnapshot: 'You', createdAt: '2026-09-13T00:00:00Z',
+        body: '[Design](https://example.test/private) **ready** ' + 'content '.repeat(7000), attachmentIds: ['image']
+      } }
+    ] })
+    const page = await store.listRooms({ search: 'preview', limit: 1 })
+    expect(page).toEqual(await otherRuntime.listRooms({ search: 'preview', limit: 1 }))
+    expect(page).toEqual(await data.roomStore.listRooms({ search: 'preview', limit: 1 }))
+    expect(page.rooms[0].latestMessage).toMatchObject({ id: 'preview-message', authorKind: 'user',
+      authorLabelSnapshot: 'You', createdAt: '2026-09-13T00:00:00Z', attachmentCount: 1 })
+    expect(page.rooms[0].latestMessage?.preview).toMatch(/^Design ready content /)
+    expect(page.rooms[0].latestMessage?.preview).toHaveLength(160)
+    expect(JSON.stringify(page)).not.toContain('private')
+    expect(JSON.stringify(page).length).toBeLessThan(1500)
+  })
+
   it('permits history reads but rejects commits while Manager durability is degraded', async () => {
     const { store, degrade } = await manager()
     degrade()

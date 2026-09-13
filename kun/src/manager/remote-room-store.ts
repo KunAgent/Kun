@@ -21,6 +21,7 @@ import type { ManagerResourceFence } from './resource-lease-state.js'
 import { ServiceManagerHttpError } from './usage-errors.js'
 import type { RoomOutcomeQuery } from '../rooms/room-store.js'
 import type { RoomRequestOutcome } from '../contracts/rooms-product.js'
+import { RoomLatestMessageSchema } from '../contracts/room-list.js'
 
 /** Runtime proxy. Canonical room data never opens a local file in this process. */
 export class RemoteRoomStore implements RoomStore {
@@ -43,7 +44,9 @@ export class RemoteRoomStore implements RoomStore {
   }
 
   async listRooms(options: RoomListOptions = {}): Promise<RoomListPage> {
-    return z.object({ rooms: z.array(RoomStoredDocumentSchema.extend({ latestMessageSeq: z.number().int().nonnegative() })),
+    return z.object({ rooms: z.array(RoomStoredDocumentSchema.extend({
+      latestMessageSeq: z.number().int().nonnegative(), latestMessage: RoomLatestMessageSchema.optional()
+    })),
       nextCursor: z.string().optional() }).strict().parse(await this.call('listRooms', { options })) as RoomListPage
   }
 

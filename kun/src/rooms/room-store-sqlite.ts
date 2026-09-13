@@ -3,6 +3,8 @@ import { chmod, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import { RoomLatestMessageSchema } from '../contracts/room-list.js'
+import { ROOM_MESSAGE_PREVIEW_INPUT_LIMIT, roomMessagePreview } from './room-message-preview.js'
 import { initializeRoomIndex, roomIndexReady, refreshRoomMessageIndex, backfillRoomIndex } from './room-store-index.js'
 import { initializeRoomProjections, backfillRoomProjections, projectRoomTask, queryRoomOutcomes } from './room-store-projections.js'
 import { RoomOutcomeQuerySchema, type RoomOutcomeQuery } from './room-store.js'
@@ -144,16 +146,38 @@ export class SqliteRoomStore implements RoomStore {
       AND instr(lower(COALESCE(json_extract(room.document, '$.name'), '')), lower(?)) > 0
     ), ordered AS (
       SELECT *, CASE WHEN latest_message_seq > 0 THEN latest_message_seq ELSE seq END AS activity_seq FROM candidates
-    ) SELECT * FROM ordered ${cursor ? 'WHERE (pinned, activity_seq, id) < (?, ?, ?)' : ''}
-      ORDER BY pinned DESC, activity_seq DESC, id DESC LIMIT ?`).all(
+    ), page AS (
+      SELECT * FROM ordered ${cursor ? 'WHERE (pinned, activity_seq, id) < (?, ?, ?)' : ''}
+      ORDER BY pinned DESC, activity_seq DESC, id DESC LIMIT ?
+    ) SELECT page.*, CASE WHEN message.id IS NOT NULL THEN json_object(
+        'id', message.id,
+        'authorKind', json_extract(message.document, '$.authorKind'),
+        'authorMemberId', json_extract(message.document, '$.authorMemberId'),
+        'authorLabelSnapshot', json_extract(message.document, '$.authorLabelSnapshot'),
+        'createdAt', json_extract(message.document, '$.createdAt'),
+        'body', substr(COALESCE(json_extract(message.document, '$.body'), ''), 1, ${ROOM_MESSAGE_PREVIEW_INPUT_LIMIT}),
+        'attachmentCount', COALESCE(json_array_length(message.document, '$.attachmentIds'), 0)
+      ) END AS latest_message
+      FROM page LEFT JOIN room_documents message ON message.seq = page.latest_message_seq AND message.kind = 'message'
+      ORDER BY page.pinned DESC, page.activity_seq DESC, page.id DESC`).all(
       input.archivedOnly ? 1 : 0,
       input.search ?? '',
       ...(cursor ? [cursor.pinned, cursor.activitySeq, cursor.id] : []), input.limit + 1
-    ) as Array<DocumentRow & { pinned: number; latest_message_seq: number; activity_seq: number }>
+    ) as Array<DocumentRow & { pinned: number; latest_message_seq: number; activity_seq: number; latest_message: string | null }>
     const visible = rows.slice(0, input.limit)
     const last = visible.at(-1)
     return {
-      rooms: visible.map((row) => ({ ...document<import('../contracts/rooms.js').Room>(row), latestMessageSeq: row.latest_message_seq })),
+      rooms: visible.map((row) => {
+        const projected = row.latest_message ? JSON.parse(row.latest_message) : undefined
+        const latestMessage = projected ? RoomLatestMessageSchema.safeParse({
+          id: projected.id, authorKind: projected.authorKind,
+          authorMemberId: projected.authorMemberId ?? undefined,
+          authorLabelSnapshot: projected.authorLabelSnapshot, createdAt: projected.createdAt,
+          preview: roomMessagePreview(projected.body), attachmentCount: projected.attachmentCount
+        }) : undefined
+        return { ...document<import('../contracts/rooms.js').Room>(row), latestMessageSeq: row.latest_message_seq,
+          ...(latestMessage?.success ? { latestMessage: latestMessage.data } : {}) }
+      }),
       ...(rows.length > input.limit && last ? { nextCursor: Buffer.from(JSON.stringify({
         pinned: last.pinned, activitySeq: last.activity_seq, id: last.id
       })).toString('base64url') } : {})

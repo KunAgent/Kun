@@ -84,7 +84,8 @@ export function useRooms() {
     let eventTimer: ReturnType<typeof setTimeout> | undefined
     const unsubscribe = subscribeRoomEvents((event) => {
       if (event.kind === 'navigate') select(event.roomId)
-      if (!/^(room|task|request|integration|peer)\./.test(event.kind) && event.kind !== 'message.created') return
+      if (!/^(room|task|request|integration|peer)\./.test(event.kind) &&
+        event.kind !== 'message.created' && event.kind !== 'message.updated') return
       clearTimeout(eventTimer)
       eventTimer = setTimeout(() => void refreshList(), 150)
     })

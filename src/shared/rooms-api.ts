@@ -8,6 +8,7 @@ export type {
   SendRoomMessage
 } from '../../kun/src/contracts/rooms'
 export type { RoomTask } from '../../kun/src/contracts/room-tasks'
+export type { RoomLatestMessage, RoomListEntry } from '../../kun/src/contracts/room-list'
 export type {
   RoomDelivery,
   RoomReview

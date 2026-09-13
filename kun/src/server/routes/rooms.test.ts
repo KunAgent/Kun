@@ -56,6 +56,10 @@ describe('Rooms HTTP routes and durable storage', () => {
     expect((await f.call(path + '/messages', 'POST', message)).body).toEqual(sent.body)
     const history = await f.call(path + '/messages?limit=1')
     expect(history.body.messages).toHaveLength(1)
+    expect((await f.call('/v1/rooms')).body.rooms[0]).toMatchObject({
+      latestMessage: { id: sent.body.message.id, authorKind: 'user', preview: 'Discuss the plan', attachmentCount: 0 },
+      latestMessageSeq: history.body.messages[0].messageSeq, readSeq: 0, runningCount: 1, attentionCount: 0
+    })
     const pinned = await f.call(path + '/rules', 'POST', { messageId: sent.body.message.id, clientRequestId: 'rule-once' })
     expect(pinned.body.rule).toMatchObject({ body: 'Discuss the plan', version: 1 })
     expect((await f.call(path + '/rules')).body.rules).toHaveLength(1)

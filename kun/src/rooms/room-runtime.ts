@@ -107,6 +107,7 @@ export class RoomRuntime {
     return { rooms: await Promise.all(page.rooms.map(async (row) => {
       const { runningCount, attentionCount } = await roomActivitySummary(this.service.store, row.id)
       return { ...row.value, revision: row.revision, latestMessageSeq: row.latestMessageSeq,
+        ...(row.latestMessage ? { latestMessage: row.latestMessage } : {}),
         readSeq: (await this.service.store.get<{ seq: number }>('read_state', row.id))?.value.seq ?? 0,
         runningCount, attentionCount }
     })), nextCursor: page.nextCursor }

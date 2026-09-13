@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Paperclip } from 'lucide-react'
 import { AssistantMarkdown } from '../chat/AssistantMarkdown'
 import { getProvider } from '../../agent/registry'
 import { roomsRequest } from './rooms-client'
@@ -13,6 +14,17 @@ function RoomAttachment({ id }: { id: string }) {
     text?: string
   } | null>(null)
   const [error, setError] = useState('')
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const previewOpen = Boolean(preview)
+  useEffect(() => {
+    if (!previewOpen) return
+    const previous = document.activeElement as HTMLElement | null
+    closeRef.current?.focus()
+    return () => {
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [previewOpen])
   useEffect(() => {
     let alive = true
     void roomsRequest<{ attachment: { name: string } }>(
@@ -40,6 +52,7 @@ function RoomAttachment({ id }: { id: string }) {
         char.charCodeAt(0)
       )
       const mime = result.attachment.mimeType ?? 'application/octet-stream'
+      setError('')
       setPreview({
         url: URL.createObjectURL(new Blob([bytes], { type: mime })),
         mime,
@@ -52,19 +65,40 @@ function RoomAttachment({ id }: { id: string }) {
     }
   }
   return (
-    <div className="text-xs">
-      <button className="text-accent underline" onClick={() => void open()}>
-        {name}
+    <div className="rooms-message-attachment">
+      <button
+        type="button"
+        className="rooms-message-attachment-button"
+        onClick={() => void open()}
+      >
+        <Paperclip size={14} aria-hidden="true" />
+        <span>{name}</span>
       </button>
       {error ? <span role="alert">{error}</span> : null}
       {preview ? (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               event.stopPropagation()
               setPreview(null)
+            }
+            if (event.key === 'Tab') {
+              const controls =
+                dialogRef.current?.querySelectorAll<HTMLElement>(
+                  'button, a[href]'
+                )
+              const first = controls?.[0]
+              const last = controls?.[controls.length - 1]
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault()
+                last?.focus()
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault()
+                first?.focus()
+              }
             }
           }}
           aria-label={name}
@@ -74,7 +108,13 @@ function RoomAttachment({ id }: { id: string }) {
             <a href={preview.url} download={name}>
               {t('roomsDownload')} {name}
             </a>
-            <button onClick={() => setPreview(null)}>{t('roomsClose')}</button>
+            <button
+              ref={closeRef}
+              type="button"
+              onClick={() => setPreview(null)}
+            >
+              {t('roomsClose')}
+            </button>
           </div>
           {preview.mime.startsWith('image/') ? (
             <img
@@ -100,15 +140,19 @@ export function RoomMessageBody({
   attachmentIds: string[]
 }) {
   return (
-    <div className="space-y-2">
+    <div className="rooms-message-body">
       <AssistantMarkdown
         text={body}
         streaming={false}
-        className="text-sm leading-7 text-ds-ink"
+        className="ds-markdown rooms-message-markdown"
       />
-      {attachmentIds.map((id) => (
-        <RoomAttachment key={id} id={id} />
-      ))}
+      {attachmentIds.length ? (
+        <div className="rooms-message-attachments">
+          {attachmentIds.map((id) => (
+            <RoomAttachment key={id} id={id} />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

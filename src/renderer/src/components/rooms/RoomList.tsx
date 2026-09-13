@@ -1,10 +1,18 @@
 import { useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { MessagesSquare, Pin } from 'lucide-react'
+import { Pin } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { readBrowserStorageItem } from '../../lib/browser-storage'
 import type { RoomListEntry } from './rooms-client'
 import { roomButtonClass } from './RoomSettings'
+import { RoomAvatarGroup } from './RoomAvatar'
+
+export function roomPreviewText(room: RoomListEntry, attachmentLabel: (count: number) => string): string {
+  const latest = room.latestMessage
+  if (!latest) return room.description || room.members.filter((member) => !member.removedAt).map((member) => member.displayName).join(', ')
+  const preview = latest.preview || (latest.attachmentCount ? attachmentLabel(latest.attachmentCount) : '')
+  return latest.authorLabelSnapshot && preview ? `${latest.authorLabelSnapshot}: ${preview}` : preview
+}
 
 export function RoomList({
   rooms,
@@ -38,7 +46,7 @@ export function RoomList({
     <nav
       ref={scrollRef}
       aria-label={t('roomsLabel')}
-      className="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
+      className="rooms-list-nav min-h-0 flex-1 overflow-y-auto"
     >
       <div
         className="relative"
@@ -56,40 +64,44 @@ export function RoomList({
                   ? { position: 'absolute', width: '100%', top: row.start }
                   : undefined
               }
-              className="pb-1"
+              className="pb-1.5"
             >
               <button
                 onClick={() => select(room.id)}
-                className={`flex w-full items-start gap-2 rounded-lg px-3 py-3 text-left ${selectedId === room.id ? 'bg-accent/10' : 'hover:bg-ds-hover'}`}
+                className={`rooms-conversation-row ${selectedId === room.id ? 'is-selected' : ''}`}
+                aria-label={room.name}
                 aria-current={selectedId === room.id ? 'page' : undefined}
               >
-                <MessagesSquare
-                  size={16}
-                  className="mt-0.5 shrink-0 text-ds-muted"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-ds-ink">
+                <RoomAvatarGroup members={room.members} size={44} />
+                <span className="rooms-conversation-copy">
+                  <span className="rooms-conversation-name">
                     {room.name}
                   </span>
-                  <span className="mt-1 block truncate text-xs text-ds-faint">
-                    {room.description ||
-                      room.members
-                        .filter((member) => !member.removedAt)
-                        .map((member) => member.displayName)
-                        .join(', ')}
+                  <span className={`rooms-conversation-preview ${room.latestMessage?.authorLabelSnapshot ? 'has-author' : ''}`}
+                    title={roomPreviewText(room, (count) => t('roomsAttachmentSummary', { count }))}>
+                    {room.latestMessage?.authorLabelSnapshot ? <>
+                      <span className="rooms-preview-author">{room.latestMessage.authorLabelSnapshot}</span>
+                      <span aria-hidden="true">:</span>
+                      <span className="rooms-preview-body">{room.latestMessage.preview ||
+                        (room.latestMessage.attachmentCount ? t('roomsAttachmentSummary', { count: room.latestMessage.attachmentCount }) : '')}</span>
+                    </> : roomPreviewText(room, (count) => t('roomsAttachmentSummary', { count }))}
                   </span>
-                  {(room.runningCount ?? 0) + (room.attentionCount ?? 0) > 0 ? (
-                    <span className="mt-1 block text-[10px] text-ds-muted">
-                      {t('roomsActivityCounts', {
-                        running: room.runningCount ?? 0,
-                        attention: room.attentionCount ?? 0
-                      })}
-                    </span>
-                  ) : null}
                 </span>
-                {room.pinned ? (
-                  <Pin size={12} className="mt-1 shrink-0 text-ds-muted" />
-                ) : null}
+                <span className="rooms-conversation-meta">
+                  {room.latestMessage?.createdAt && Number.isFinite(Date.parse(room.latestMessage.createdAt)) ? (
+                    <time dateTime={room.latestMessage.createdAt} title={new Date(room.latestMessage.createdAt).toLocaleString()}>
+                      {new Date(room.latestMessage.createdAt).toDateString() === new Date().toDateString()
+                        ? new Date(room.latestMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : new Date(room.latestMessage.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </time>
+                  ) : null}
+                  <span className="rooms-conversation-badges">
+                  {room.pinned ? <Pin size={11} aria-label={t('roomsPin')} /> : null}
+                  {(room.attentionCount ?? 0) > 0 ? (
+                    <span className="rooms-activity-count needs-attention" title={t('roomsAttention')}>{room.attentionCount}</span>
+                  ) : (room.runningCount ?? 0) > 0 ? (
+                    <span className="rooms-activity-count" title={t('roomsState_running')}>{room.runningCount}</span>
+                  ) : null}
                 {(room.latestMessageSeq ?? 0) >
                 Math.max(
                   room.readSeq ?? 0,
@@ -100,9 +112,11 @@ export function RoomList({
                   <span
                     aria-label={t('roomsUnread')}
                     title={t('roomsUnread')}
-                    className="mt-2 h-2 w-2 shrink-0 rounded-full bg-accent"
+                    className="rooms-unread-dot"
                   />
                 ) : null}
+                  </span>
+                </span>
               </button>
             </div>
           )

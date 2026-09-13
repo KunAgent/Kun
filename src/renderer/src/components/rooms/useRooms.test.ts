@@ -14,6 +14,14 @@ vi.mock('./rooms-client', async (original) => ({
   ...(await original<typeof import('./rooms-client')>()),
   roomsClient: client
 }))
+const events = vi.hoisted(() => new Set<(event: { seq: number; roomId: string; kind: string }) => void>())
+vi.mock('./useRoomEvents', () => ({
+  roomEventsLive: () => false,
+  subscribeRoomEvents: (listener: (event: { seq: number; roomId: string; kind: string }) => void) => {
+    events.add(listener)
+    return () => events.delete(listener)
+  }
+}))
 
 describe('Rooms view state', () => {
   let renderer: ReactTestRenderer
@@ -113,5 +121,22 @@ describe('Rooms view state', () => {
     })
     expect(state.error).toBe('Runtime unavailable')
     expect(state.messages.map((message) => message.body)).toEqual(['Latest'])
+  })
+
+  it.each(['message.created', 'message.updated'])('refreshes list previews on %s without fetching other rooms histories', async (kind) => {
+    await mount()
+    const latestMessage = { id: 'latest', authorKind: 'member', authorMemberId: 'reviewer',
+      authorLabelSnapshot: 'Reviewer', preview: 'Updated review', createdAt: '2026-09-13T00:00:00Z', attachmentCount: 0 }
+    client.list.mockResolvedValueOnce({ rooms: [{ ...room, latestMessage }] })
+    const historyCalls = client.messages.mock.calls.length
+    const listCalls = client.list.mock.calls.length
+    await act(async () => {
+      events.forEach((listener) => listener({ seq: 10, roomId: 'room-b', kind }))
+      events.forEach((listener) => listener({ seq: 11, roomId: 'room-b', kind }))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(client.list).toHaveBeenCalledTimes(listCalls + 1)
+    expect(client.messages).toHaveBeenCalledTimes(historyCalls)
+    expect(state.rooms[0].latestMessage).toEqual(latestMessage)
   })
 })

@@ -1,7 +1,14 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pin } from 'lucide-react'
+import { ArrowDown, Search, X } from 'lucide-react'
 import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -13,8 +20,9 @@ import {
   roomRequestId,
   roomsRequest
 } from './rooms-client'
-import { RoomMessageBody } from './RoomMessageBody'
+import { RoomMessageRow } from './RoomMessageRow'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
+import './rooms-timeline.css'
 
 export function RoomTimeline({
   room,
@@ -26,7 +34,10 @@ export function RoomTimeline({
   onPin,
   onTask,
   jumpMessageId,
-  onJumped
+  onJumped,
+  searchOpen = false,
+  onSearchClose,
+  onMember
 }: {
   room: Room
   messages: RoomMessage[]
@@ -38,12 +49,26 @@ export function RoomTimeline({
   onTask: (id: string) => void
   jumpMessageId: string | null
   onJumped: () => void
+  searchOpen?: boolean
+  onSearchClose?: () => void
+  onMember?: (id: string) => void
 }) {
   const { t } = useTranslation('common')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rowsRef = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
   const initialized = useRef(false)
-  const anchor = useRef<{ height: number; top: number } | null>(null)
+  const anchor = useRef<{
+    height: number
+    top: number
+    firstId?: string
+  } | null>(null)
+  const returnToLatest = useRef(false)
+  const wasSearching = useRef(false)
+  const [awayFromBottom, setAwayFromBottom] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLElement>(null)
+  const closeDialogRef = useRef<HTMLButtonElement>(null)
   const readSeq = useRef(
     Number(readBrowserStorageItem(`kun.rooms.read.${room.id}`) ?? 0)
   )
@@ -56,20 +81,33 @@ export function RoomTimeline({
   const [searchBusy, setSearchBusy] = useState(false)
   const [error, setError] = useState('')
   const [focused, setFocused] = useState<RoomMessage | null>(null)
+  const dialogOpen = Boolean(focused)
+  const messageById = useMemo(
+    () => new Map(messages.map((message) => [message.id, message])),
+    [messages]
+  )
   const rows = useMemo(() => results ?? messages, [results, messages])
   const virtual = rows.length > 40
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 220,
+    estimateSize: () => 160,
     overscan: 6,
     getItemKey: (index) => rows[index].id
   })
   const rendered = virtual
     ? virtualizer.getVirtualItems()
     : rows.map((row, index) => ({ key: row.id, index, start: 0, end: 0 }))
-  const markRead = () => {
-    if (results || focused || !document.hasFocus() || !atBottom.current) return
+  const totalSize = virtualizer.getTotalSize()
+  const markRead = useCallback(() => {
+    if (
+      searchOpen ||
+      results ||
+      focused ||
+      !document.hasFocus() ||
+      !atBottom.current
+    )
+      return
     const seq = messages.at(-1)?.messageSeq ?? 0
     if (seq <= readSeq.current || seq <= readPending.current) return
     readPending.current = seq
@@ -94,11 +132,32 @@ export function RoomTimeline({
       .finally(() => {
         readPending.current = 0
       })
-  }
+  }, [focused, messages, results, room.id, searchOpen])
+  useEffect(() => {
+    if (!searchOpen) {
+      setQuery('')
+      setSearchBusy(false)
+      return
+    }
+    const previous = document.activeElement as HTMLElement | null
+    searchRef.current?.focus()
+    return () => {
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [searchOpen])
+  useEffect(() => {
+    if (!dialogOpen) return
+    const previous = document.activeElement as HTMLElement | null
+    closeDialogRef.current?.focus()
+    return () => {
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [dialogOpen])
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults(null)
       setSearchCursor(undefined)
+      setSearchBusy(false)
       setError('')
       return
     }
@@ -130,9 +189,35 @@ export function RoomTimeline({
       clearTimeout(timer)
     }
   }, [query, room.id])
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined' || !rowsRef.current) return
+    const observer = new ResizeObserver(() => {
+      if (
+        atBottom.current &&
+        !results &&
+        !focused &&
+        !anchor.current &&
+        scrollRef.current
+      )
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    })
+    observer.observe(rowsRef.current)
+    return () => observer.disconnect()
+  }, [focused, results])
   useLayoutEffect(() => {
     const scroller = scrollRef.current
-    if (!scroller || results) return
+    if (!scroller || focused) return
+    if (results) {
+      wasSearching.current = true
+      return
+    }
+    if (returnToLatest.current) {
+      returnToLatest.current = false
+      wasSearching.current = false
+      atBottom.current = true
+      setAwayFromBottom(false)
+      scroller.scrollTop = scroller.scrollHeight
+    }
     if (!initialized.current) {
       initialized.current = true
       const value = readBrowserStorageItem(`kun.rooms.scroll.${room.id}`)
@@ -140,18 +225,26 @@ export function RoomTimeline({
         value === null ? scroller.scrollHeight : Number(value) || 0
       atBottom.current =
         scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80
-    } else if (anchor.current) {
+      setAwayFromBottom(!atBottom.current)
+    } else if (wasSearching.current) {
+      wasSearching.current = false
+      const value = readBrowserStorageItem(`kun.rooms.scroll.${room.id}`)
+      scroller.scrollTop = atBottom.current
+        ? scroller.scrollHeight
+        : Number(value) || 0
+    } else if (anchor.current && anchor.current.firstId !== messages[0]?.id) {
       scroller.scrollTop =
         anchor.current.top + scroller.scrollHeight - anchor.current.height
       anchor.current = null
     } else if (atBottom.current) scroller.scrollTop = scroller.scrollHeight
     markRead()
-  })
+  }, [focused, results, messages, room.id, markRead, awayFromBottom, totalSize])
   useEffect(() => {
     if (!jumpMessageId) return
     const index = rows.findIndex((message) => message.id === jumpMessageId)
     if (index >= 0) {
       atBottom.current = false
+      setAwayFromBottom(true)
       if (virtual) virtualizer.scrollToIndex(index, { align: 'center' })
       else
         document
@@ -194,87 +287,93 @@ export function RoomTimeline({
       })
     )
   }
+  const viewReply = (id: string) => {
+    const index = rows.findIndex((message) => message.id === id)
+    if (index >= 0 && !focused) {
+      atBottom.current = false
+      setAwayFromBottom(true)
+      if (virtual) virtualizer.scrollToIndex(index, { align: 'center' })
+      else
+        document
+          .getElementById('room-message-' + id)
+          ?.scrollIntoView({ block: 'center' })
+      return
+    }
+    const loaded = messageById.get(id)
+    if (loaded) setFocused(loaded)
+    else
+      void roomsRequest<{ message: RoomMessage }>(
+        `${roomPath(room.id)}/messages/${encodeURIComponent(id)}`
+      )
+        .then((result) => setFocused(result.message))
+        .catch((cause) => setError(String(cause)))
+  }
   const renderMessage = (message: RoomMessage) => (
-    <article
-      id={'room-message-' + message.id}
-      className={`group mx-auto max-w-3xl rounded-xl p-4 ${message.authorKind === 'user' ? 'bg-accent/5' : 'border border-ds-border'}`}
-    >
-      <div className="mb-2 flex items-center gap-2 text-xs text-ds-muted">
-        <strong className="min-w-0 truncate text-sm text-ds-ink">
-          {message.authorLabelSnapshot}
-        </strong>
-        <time
-          dateTime={message.createdAt}
-          className="ml-auto whitespace-nowrap"
-        >
-          {new Date(message.createdAt).toLocaleString([], {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </time>
-        <button
-          onClick={() => onPin(message)}
-          className="shrink-0 rounded p-1 hover:bg-ds-hover"
-          aria-label={t('roomsPinMessage')}
-        >
-          <Pin size={12} />
-        </button>
-      </div>
-      {message.replyToMessageId ? (
-        <button
-          className="mb-2 text-xs text-accent"
-          onClick={() => {
-            void roomsRequest<{ message: RoomMessage }>(
-              `${roomPath(room.id)}/messages/${encodeURIComponent(message.replyToMessageId!)}`
-            )
-              .then((result) => setFocused(result.message))
-              .catch((cause) => setError(String(cause)))
-          }}
-        >
-          {t('roomsViewReply')}
-        </button>
-      ) : null}
-      <RoomMessageBody
-        body={message.body}
-        attachmentIds={message.attachmentIds}
-      />
-      <div className="mt-2 flex gap-3">
-        <button className="text-xs text-accent" onClick={() => reply(message)}>
-          {t('roomsReply')}
-        </button>
-        {message.taskId ? (
-          <button
-            className="text-xs text-accent"
-            onClick={() => {
+    <RoomMessageRow
+      message={message}
+      member={room.members.find(
+        (member) => member.id === message.authorMemberId
+      )}
+      task={tasks.find((task) => task.id === message.taskId)}
+      referencedMessage={
+        message.replyToMessageId
+          ? messageById.get(message.replyToMessageId)
+          : undefined
+      }
+      onReply={reply}
+      onPin={onPin}
+      onTask={(id) => {
+        setFocused(null)
+        onTask(id)
+      }}
+      onViewReply={viewReply}
+      onMember={
+        onMember
+          ? (id) => {
               setFocused(null)
-              onTask(message.taskId!)
-            }}
-          >
-            {tasks.find((task) => task.id === message.taskId)?.title ??
-              t('roomsDetails')}
-          </button>
-        ) : null}
-      </div>
-    </article>
+              onMember(id)
+            }
+          : undefined
+      }
+    />
   )
   return (
-    <>
-      <div className="flex shrink-0 items-center gap-2 px-4 py-2">
-        <input
-          aria-label={t('roomsSearchMessages')}
-          placeholder={t('roomsSearchMessages')}
-          className={roomFieldClass}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {query ? (
-          <button className={roomButtonClass} onClick={() => setQuery('')}>
-            {t('roomsClose')}
+    <div className="rooms-timeline">
+      {searchOpen ? (
+        <div className="rooms-timeline-search">
+          <Search
+            size={16}
+            className="shrink-0 text-ds-muted"
+            aria-hidden="true"
+          />
+          <input
+            ref={searchRef}
+            aria-label={t('roomsSearchMessages')}
+            placeholder={t('roomsSearchMessages')}
+            className={roomFieldClass}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.stopPropagation()
+                setQuery('')
+                onSearchClose?.()
+              }
+            }}
+          />
+          <button
+            type="button"
+            className={roomButtonClass}
+            aria-label={t('roomsClose')}
+            onClick={() => {
+              setQuery('')
+              onSearchClose?.()
+            }}
+          >
+            <X size={16} />
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {error ? (
         <p role="alert" className="px-4 text-xs text-red-500">
           {error}
@@ -282,22 +381,25 @@ export function RoomTimeline({
       ) : null}
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-7"
+        className="rooms-timeline-scroll"
         onScroll={(event) => {
           const element = event.currentTarget
-          atBottom.current =
-            element.scrollHeight - element.scrollTop - element.clientHeight < 80
-          if (!results)
+          if (!results) {
+            atBottom.current =
+              element.scrollHeight - element.scrollTop - element.clientHeight <
+              80
+            setAwayFromBottom(!atBottom.current)
             writeBrowserStorageItem(
               `kun.rooms.scroll.${room.id}`,
               String(element.scrollTop)
             )
+          }
           markRead()
         }}
         onFocus={markRead}
       >
         {!results && cursor ? (
-          <div className="mb-4 text-center">
+          <div className="rooms-timeline-older">
             <button
               className={roomButtonClass}
               disabled={moreBusy}
@@ -306,9 +408,13 @@ export function RoomTimeline({
                 if (element)
                   anchor.current = {
                     height: element.scrollHeight,
-                    top: element.scrollTop
+                    top: element.scrollTop,
+                    firstId: messages[0]?.id
                   }
-                void loadEarlier()
+                void loadEarlier().catch((cause) => {
+                  anchor.current = null
+                  setError(String(cause))
+                })
               }}
             >
               {t(moreBusy ? 'roomsLoading' : 'roomsOlder')}
@@ -316,7 +422,7 @@ export function RoomTimeline({
           </div>
         ) : null}
         {!rows.length ? (
-          <p className="py-12 text-center text-sm text-ds-muted">
+          <p className="rooms-timeline-empty">
             {t(
               searchBusy
                 ? 'roomsLoading'
@@ -327,13 +433,14 @@ export function RoomTimeline({
           </p>
         ) : null}
         <div
+          ref={rowsRef}
           style={
             virtual
               ? {
                   paddingTop: rendered[0]?.start ?? 0,
                   paddingBottom: Math.max(
                     0,
-                    virtualizer.getTotalSize() - (rendered.at(-1)?.end ?? 0)
+                    totalSize - (rendered.at(-1)?.end ?? 0)
                   )
                 }
               : undefined
@@ -344,7 +451,7 @@ export function RoomTimeline({
               key={row.key}
               data-index={row.index}
               ref={virtual ? virtualizer.measureElement : undefined}
-              className="pb-5"
+              className="rooms-timeline-row"
             >
               {renderMessage(rows[row.index])}
             </div>
@@ -381,8 +488,25 @@ export function RoomTimeline({
           </button>
         ) : null}
       </div>
+      {awayFromBottom && !results && !focused ? (
+        <button
+          type="button"
+          className="rooms-timeline-latest"
+          onClick={() => {
+            returnToLatest.current = true
+            setAwayFromBottom(false)
+            setFocused(null)
+            setQuery('')
+            onSearchClose?.()
+          }}
+        >
+          <ArrowDown size={14} aria-hidden="true" />
+          {t('roomsLatestMessages')}
+        </button>
+      ) : null}
       {focused ? (
         <section
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-label={t('roomsViewReply')}
@@ -391,12 +515,27 @@ export function RoomTimeline({
               event.stopPropagation()
               setFocused(null)
             }
+            if (event.key === 'Tab') {
+              const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
+                'button, a[href], input, [tabindex="0"]'
+              )
+              const first = controls?.[0]
+              const last = controls?.[controls.length - 1]
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault()
+                last?.focus()
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault()
+                first?.focus()
+              }
+            }
           }}
-          className="absolute inset-4 z-[60] overflow-auto rounded-xl border border-ds-border bg-ds-main p-4 shadow-xl"
+          className="rooms-message-dialog"
         >
-          <div className="mb-4 flex justify-between text-sm text-ds-muted">
+          <div className="rooms-message-dialog-header">
             <span>{t('roomsReferencedMessage')}</span>
             <button
+              ref={closeDialogRef}
               className={roomButtonClass}
               onClick={() => setFocused(null)}
             >
@@ -406,6 +545,6 @@ export function RoomTimeline({
           {renderMessage(focused)}
         </section>
       ) : null}
-    </>
+    </div>
   )
 }

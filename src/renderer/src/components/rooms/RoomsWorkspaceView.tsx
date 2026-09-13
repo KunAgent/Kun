@@ -2,18 +2,21 @@ import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
-  Menu,
   MessagesSquare,
+  MoreHorizontal,
+  Search,
   Plus,
   RefreshCw,
-  Settings,
   X
 } from 'lucide-react'
-import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
+import type { RoomMessage, RoomTask } from '@shared/rooms-api'
 import { WorkspaceModeTabs } from '../chat/WorkspaceModeTabs'
 import { useChatStore } from '../../store/chat-store'
 import { RoomSettings, roomButtonClass } from './RoomSettings'
 import { RoomComposer } from './RoomComposer'
+import { RoomHeader } from './RoomHeader'
+import { RoomMemberDetails } from './RoomMemberDetails'
+import { RoomPopover } from './RoomPopover'
 import { RoomTaskPanel } from './RoomTaskPanel'
 import { roomsClient } from './rooms-client'
 import { useRooms } from './useRooms'
@@ -42,6 +45,8 @@ export function RoomsWorkspaceView({
   const [historicalTask, setHistoricalTask] = useState<RoomTask | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [details, setDetails] = useState<RoomDetailsSection | null>(null)
   const [jumpMessageId, setJumpMessageId] = useState<string | null>(null)
   const { room, messages } = state
@@ -57,6 +62,8 @@ export function RoomsWorkspaceView({
     setTaskId(null)
     setHistoricalTask(null)
     setDetails(null)
+    setSearchOpen(false)
+    setSelectedMemberId(null)
   }, [selectedId])
 
   useEffect(() => {
@@ -108,10 +115,10 @@ export function RoomsWorkspaceView({
   return (
     <div
       data-rooms-workspace
-      className="ds-no-drag relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main"
+      className="rooms-workspace ds-no-drag relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main"
     >
       <aside
-        className={`${sidebarOpen ? 'absolute inset-y-0 left-0 z-40 flex shadow-xl' : 'hidden'} w-[248px] shrink-0 flex-col border-r border-ds-border bg-ds-sidebar md:static md:flex md:shadow-none`}
+        className={`${sidebarOpen ? 'absolute inset-y-0 left-0 z-40 flex shadow-xl' : 'hidden'} rooms-sidebar shrink-0 flex-col border-r border-ds-border bg-ds-sidebar md:static md:flex md:shadow-none`}
       >
         <div
           aria-hidden
@@ -135,39 +142,24 @@ export function RoomsWorkspaceView({
             <X size={18} />
           </button>
         </div>
-        <div className="flex items-center gap-2 p-3">
-          <button
-            className={`${roomButtonClass} flex flex-1 items-center justify-center gap-2`}
-            onClick={() => setSettings('create')}
-          >
-            <Plus size={15} />
-            {t('roomsNew')}
-          </button>
-          <button
-            className={roomButtonClass}
-            onClick={() => void state.refreshList()}
-            aria-label={t('roomsRefresh')}
-          >
-            <RefreshCw size={14} />
-          </button>
+        <div className="rooms-sidebar-heading">
+          <h2>{t('roomsConversations')}</h2>
+          <button type="button" className="rooms-icon-button" onClick={() => setSettings('create')}
+            aria-label={t('roomsNew')} title={t('roomsNew')}><Plus size={19} /></button>
+          <RoomPopover label={t('roomsListOptions')} trigger={<MoreHorizontal size={18} />} className="rooms-icon-button" width={224} align="end">
+            {(close) => <div className="rooms-menu-list">
+              <button type="button" onClick={() => { close(); void state.refreshList() }}><RefreshCw size={15} />{t('roomsRefresh')}</button>
+              <button type="button" onClick={() => { close(); state.setArchived(!state.archived); setTaskId(null) }}><Archive size={15} />{t(state.archived ? 'roomsActive' : 'roomsArchived')}</button>
+            </div>}
+          </RoomPopover>
         </div>
-        <input
-          aria-label={t('roomsSearchRooms')}
-          placeholder={t('roomsSearchRooms')}
-          className="mx-3 mb-2 rounded border border-ds-border bg-transparent p-2 text-sm"
-          value={state.search}
-          onChange={(event) => state.setSearch(event.target.value)}
-        />
-        <button
-          className="mx-3 mb-2 rounded-lg px-2 py-1 text-left text-xs text-ds-muted hover:bg-ds-hover"
-          onClick={() => {
-            state.setArchived(!state.archived)
-            setTaskId(null)
-          }}
-        >
-          <Archive size={13} className="mr-2 inline" />
-          {t(state.archived ? 'roomsActive' : 'roomsArchived')}
-        </button>
+        <div className="rooms-list-search"><Search size={15} aria-hidden="true" />
+          <input aria-label={t('roomsSearchRooms')} placeholder={t('roomsSearchRooms')}
+            value={state.search} onChange={(event) => state.setSearch(event.target.value)} />
+        </div>
+        {state.archived ? <button className="rooms-archived-filter" onClick={() => state.setArchived(false)}>
+          <Archive size={13} />{t('roomsArchived')}<X size={12} />
+        </button> : null}
         <RoomList
           rooms={state.rooms}
           selectedId={state.selectedId}
@@ -178,65 +170,17 @@ export function RoomsWorkspaceView({
         />
       </aside>
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="rooms-main-titlebar flex min-h-16 shrink-0 items-center gap-3 border-b border-ds-border px-4 py-3">
-          <button
-            className={`${roomButtonClass} md:hidden`}
-            onClick={() => setSidebarOpen(true)}
-            aria-label={t('roomsLabel')}
-          >
-            <Menu size={18} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-semibold text-ds-ink">
-              {room?.name ?? t('roomsLabel')}
-            </h1>
-            {room ? (
-              <p className="truncate text-xs text-ds-muted">
-                {room.members
-                  .filter((member) => member.enabled && !member.removedAt)
-                  .map((member) => member.displayName)
-                  .join(' · ')}
-              </p>
-            ) : null}
-          </div>
-          {room ? (
-            <>
-              <select
-                aria-label={t('roomsMode')}
-                className={`${roomButtonClass} max-w-40 bg-ds-main`}
-                disabled={busy}
-                value={room.collaborationMode}
-                onChange={(event) => {
-                  const collaborationMode = event.target
-                    .value as Room['collaborationMode']
-                  void perform(async () => {
-                    const result = await roomsClient.update(room, {
-                      collaborationMode
-                    })
-                    state.saved(result.room)
-                  })
-                }}
-              >
-                <option value="peer">{t('roomsPeer')}</option>
-                <option value="autonomous">{t('roomsAutonomous')}</option>
-                <option value="directed">{t('roomsDirected')}</option>
-              </select>
-              <button
-                className={roomButtonClass}
-                onClick={() => setDetails('discussion')}
-              >
-                {t('roomsRoomDetails')}
-              </button>
-              <button
-                className={roomButtonClass}
-                onClick={() => setSettings('edit')}
-                aria-label={t('roomsSettings')}
-              >
-                <Settings size={16} />
-              </button>
-            </>
-          ) : null}
-        </header>
+        <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
+          onSidebar={() => setSidebarOpen(true)}
+          onSearch={() => setSearchOpen((value) => !value)}
+          onDetails={() => setDetails('discussion')}
+          onMembers={() => { setSelectedMemberId(null); setDetails('members') }}
+          onSettings={() => setSettings('edit')}
+          onUpdate={(patch) => { if (room) void perform(async () => {
+            const result = await roomsClient.update(room, patch)
+            state.saved(result.room)
+          }) }}
+        />
         {state.error ? (
           <div
             role="alert"
@@ -260,36 +204,6 @@ export function RoomsWorkspaceView({
           </div>
         ) : room ? (
           <>
-            <div className="flex shrink-0 flex-wrap gap-2 border-b border-ds-border px-4 py-2">
-              <button
-                disabled={busy}
-                className="text-xs text-ds-muted hover:text-ds-ink"
-                onClick={() =>
-                  void perform(async () => {
-                    const result = await roomsClient.update(room, {
-                      pinned: !room.pinned
-                    })
-                    state.saved(result.room)
-                  })
-                }
-              >
-                {t(room.pinned ? 'roomsUnpin' : 'roomsPin')}
-              </button>
-              <button
-                disabled={busy}
-                className="text-xs text-ds-muted hover:text-ds-ink"
-                onClick={() =>
-                  void perform(async () => {
-                    const result = await roomsClient.update(room, {
-                      archived: !room.archivedAt
-                    })
-                    state.saved(result.room)
-                  })
-                }
-              >
-                {t(room.archivedAt ? 'roomsRestore' : 'roomsArchive')}
-              </button>
-            </div>
             <RoomPeerSummary
               topics={topicState.topics}
               loading={topicState.loading}
@@ -299,6 +213,9 @@ export function RoomsWorkspaceView({
             />
             <RoomTimeline
               key={room.id + '-timeline'}
+              searchOpen={searchOpen}
+              onSearchClose={() => setSearchOpen(false)}
+              onMember={(id) => { setSelectedMemberId(id); setDetails('members') }}
               room={room}
               messages={messages}
               tasks={state.tasks}
@@ -393,26 +310,7 @@ export function RoomsWorkspaceView({
               }}
             />
           ) : details === 'members' ? (
-            <div className="space-y-3 p-4">
-              {room.members
-                .filter((member) => !member.removedAt)
-                .map((member) => (
-                  <article
-                    key={member.id}
-                    className="space-y-1 rounded-lg border border-ds-border p-3"
-                  >
-                    <h3 className="break-words text-sm font-medium text-ds-ink">
-                      {member.displayName}
-                    </h3>
-                    <p className="text-xs text-ds-muted">
-                      {t(member.enabled ? 'roomsEnabled' : 'roomsDisabled')}
-                    </p>
-                    <p className="whitespace-pre-wrap break-words text-xs text-ds-muted">
-                      {member.roleNotes}
-                    </p>
-                  </article>
-                ))}
-            </div>
+            <RoomMemberDetails room={room} selectedMemberId={selectedMemberId} />
           ) : (
             <RoomTaskStrip
               key={room.id + '-tasks'}

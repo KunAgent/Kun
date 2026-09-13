@@ -272,5 +272,21 @@
   "roomsPeerReason_member_unavailable": "此成员已停用或不可用",
   "roomsPeerReason_context_compressing": "正在准备讨论上下文",
   "roomsPeerReason_context_compression": "正在准备讨论上下文",
-  "roomsPeerReason_member_failed": "有成员未能完成响应"
+  "roomsPeerReason_member_failed": "有成员未能完成响应",
+  "roomsConversations": "会话",
+  "roomsMoreActions": "更多操作",
+  "roomsListOptions": "会话列表选项",
+  "roomsAddContext": "添加上下文",
+  "roomsRemoveContext": "移除 {{name}}",
+  "roomsIntentAutoShort": "自动",
+  "roomsIntentDiscussionShort": "讨论",
+  "roomsIntentExecuteShort": "执行",
+  "roomsComposerShortcut": "⌘/Ctrl+Enter 发送",
+  "roomsCopyMessage": "复制消息",
+  "roomsCopiedMessage": "已复制",
+  "roomsLatestMessages": "回到最新消息",
+  "roomsAttachmentSummary": "{{count}} 个附件",
+  "roomsTopicDetails": "成员与响应额度",
+  "roomsAttentionMembers": "{{count}} 位成员需要处理",
+  "roomsRoomActivity": "聊天室活动"
 }

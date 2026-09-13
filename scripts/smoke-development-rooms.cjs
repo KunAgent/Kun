@@ -26,6 +26,7 @@ const {
 const { developmentRendererEnvironment } = require('./development-renderer-environment.cjs')
 const { exerciseRoomHardening } = require('./smoke-rooms-hardening-controls.cjs')
 const { roomPeerModelFixture, exercisePeerRoom } = require('./smoke-rooms-peer-controls.cjs')
+const { exerciseRoomsUi } = require('./smoke-rooms-ui-controls.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 
 const exec = promisify(execFile)
@@ -147,6 +148,17 @@ async function main() {
     await switchMode(page, 'rooms')
     await page.getByRole('heading', { name: ROOM_NAME, exact: true }).waitFor()
     await capture('1-room-ready')
+    const uiScenario = () => exerciseRoomsUi({ page, request: runtimeRequest, poll, capture,
+      fixture: modelFixture, home, profile, workspaceRoot,
+      resize: (width, height) => resize(electronApplication, width, height) })
+    if (process.argv.includes('--ui-only')) {
+      const ui = await uiScenario()
+      assert.deepEqual(pageErrors, [])
+      result = { ok: true, scenario: 'ui-only', ui, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
+      await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+      return
+    }
     if (process.argv.includes('--peer-only')) {
       const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
         resize: (width, height) => resize(electronApplication, width, height) })
@@ -344,13 +356,14 @@ async function main() {
     }), 'Underlying mode trigger paints above the narrow task overlay')
     const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
       resize: (width, height) => resize(electronApplication, width, height) })
+    const ui = process.argv.includes('--ui-visual') ? await uiScenario() : undefined
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
     assert.equal(approvalsResolved, 1, 'Expected the on-request tool approval path')
     assert.equal(inputsResolved, 1, 'Expected the in-room structured answer path')
     assert.equal(integrationInputsResolved, 1, 'Expected integration execution-specific structured input')
     result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
-      baselineSha, targetSha, agreement, hardening, peer, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      baselineSha, targetSha, agreement, hardening, peer, ui, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
       nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
       narrowViewport, pageErrors, screenshots,
@@ -371,6 +384,7 @@ async function main() {
     modelFixture?.releaseExecution()
     modelFixture?.releaseCoordination()
     modelFixture?.releasePeer()
+    modelFixture?.releaseUi()
     const errors = []
     const cleanup = async (operation) => {
       try { await withTimeout(operation, 20_000, 'cleaning isolated Rooms smoke') }
@@ -407,6 +421,7 @@ async function main() {
 async function exerciseRoomProductControls(page, roomId, capture) {
   await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
   const userMessage = page.locator('article').filter({ hasText: TASK_PROMPT })
+  await userMessage.hover()
   await userMessage.getByRole('button', { name: 'Pin as project agreement', exact: true }).click()
   await openRoomDetails(page, 'Room overview')
   await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
@@ -424,10 +439,12 @@ async function exerciseRoomProductControls(page, roomId, capture) {
   await page.getByRole('button', { name: /Pinned project agreements \(1\)/ }).click()
   await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
   const search = page.getByRole('textbox', { name: 'Search messages (2+ characters)', exact: true })
+  await page.getByRole('button', { name: 'Search messages (2+ characters)', exact: true }).click()
   await search.fill('desktop-smoke.txt')
   await page.locator('article').filter({ hasText: TASK_PROMPT }).waitFor()
   await capture('message-search')
   await search.fill('')
+  await search.press('Escape')
   await poll(async () => {
     const { rooms } = await runtimeRequest(page, '/v1/rooms')
     const current = rooms.find((item) => item.id === roomId)
@@ -533,6 +550,8 @@ async function startModelFixture() {
   const gate = new Promise((resolve) => { releaseExecution = resolve })
   let releaseCoordination
   const coordinationGate = new Promise((resolve) => { releaseCoordination = resolve })
+  let releaseUi
+  const uiGate = new Promise((resolve) => { releaseUi = resolve })
   const state = { coordinationRequests: 0, executionRequests: 0, reviewRequests: 0, inputRequests: 0, otherRequests: 0 }
   const server = createServer(async (request, response) => {
     try {
@@ -559,6 +578,10 @@ async function startModelFixture() {
         const texts = messages.flatMap((message) => typeof message.content === 'string' ? [message.content] : (message.content ?? []).map((part) => part.text ?? ''))
         const input = JSON.parse(texts.flatMap((text) => text.split('\n')).findLast((line) => line.startsWith('{"sources":')))
         content = JSON.stringify({ sources: input.sources, summary: 'Keep limit 12. Never upload secrets. Exception: local fixtures only.' })
+      } else if (prompt.includes('You coordinate a personal Kun room') && prompt.includes('ROOM_UI_VISUAL')) {
+        state.uiCoordinationRequests = (state.uiCoordinationRequests ?? 0) + 1
+        await uiGate
+        if (!called('submit_room_plan')) { content = ''; toolCalls = tool('submit_room_plan', { kind: 'answer', response: 'The isolated UI fixture is complete.' }) }
       } else if (prompt.includes('You coordinate a personal Kun room') && /ROOM_HARDENING_/.test(prompt)) {
         state.coordinationRequests += 1
         if (prompt.includes('ROOM_HARDENING_STOP')) { state.stoppingRequests = (state.stoppingRequests ?? 0) + 1; await coordinationGate }
@@ -609,7 +632,7 @@ async function startModelFixture() {
     }
   })
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
-  return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution, releaseCoordination, releasePeer: peerFixture.release,
+  return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution, releaseCoordination, releaseUi, releasePeer: peerFixture.release,
     snapshot: () => ({ ...state, ...peerFixture.snapshot() }), close: () => new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
       server.closeAllConnections?.()

@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Paperclip, Send, X } from 'lucide-react'
 import type { Room, RoomTask, SendRoomMessage } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -12,7 +11,10 @@ import {
   roomsClient,
   type RoomPresetCatalog
 } from './rooms-client'
-import { roomButtonClass, roomFieldClass } from './RoomSettings'
+import { RoomComposerContext, RoomComposerMentions } from './RoomComposerContext'
+import { RoomComposerToolbar } from './RoomComposerToolbar'
+import { useRoomComposerInput } from './useRoomComposerInput'
+import './rooms-composer.css'
 
 type Draft = {
   body: string
@@ -112,7 +114,8 @@ export function RoomComposer({
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
   const mentionRange = useRef({ start: 0, end: 0 })
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const { textareaRef, composingRef } = useRoomComposerInput(draft.body)
+  const mentionListId = useId()
   const candidates = room.members.filter(
     (member) =>
       member.enabled &&
@@ -187,7 +190,7 @@ export function RoomComposer({
       window.removeEventListener?.('kun-room-reply', reply)
       window.removeEventListener?.('kun-room-task-reply', taskReply)
     }
-  }, [room.id, draftId])
+  }, [room.id, draftId, textareaRef])
   useEffect(() => {
     writeBrowserStorageItem(
       `kun.rooms.draft.${storageId}`,
@@ -236,6 +239,7 @@ export function RoomComposer({
     try {
       await onSend({ ...content, clientRequestId: requestId })
       setDraft(emptyDraft())
+      setMentionQuery(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -284,210 +288,43 @@ export function RoomComposer({
     }
   }
 
+  const disabled = busy || uploading || Boolean(room.archivedAt)
+  const topicTitle = topicChoices.find((topic) => topic.rootRequestId === draft.rootRequestId)?.title
+    ?? draft.replyBody ?? draft.rootRequestId
+
   return (
     <form
-      className="shrink-0 border-t border-ds-border p-4"
+      className="rooms-composer"
       onSubmit={(event) => {
         event.preventDefault()
         void submit()
       }}
     >
-      <fieldset
-        disabled={busy || uploading || Boolean(room.archivedAt)}
-        className="space-y-2"
-      >
-        {!draftId && (room.collaborationMode === 'peer' || draft.rootRequestId) ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              aria-label={t('roomsTopic')}
-              className={`${roomFieldClass} !w-auto max-w-full`}
-              value={draft.rootRequestId ?? ''}
-              onChange={(event) =>
-                patch({
-                  rootRequestId: event.target.value || undefined,
-                  replyToMessageId: undefined,
-                  replyBody: undefined
-                })
-              }
-            >
-              <option value="">{t('roomsNewTopic')}</option>
-              {topicChoices.map((topic) => (
-                <option key={topic.rootRequestId} value={topic.rootRequestId}>
-                  {t('roomsContinueTopic')} · {topic.title}
-                </option>
-              ))}
-              {draft.rootRequestId &&
-              !topicChoices.some(
-                (topic) => topic.rootRequestId === draft.rootRequestId
-              ) ? (
-                <option value={draft.rootRequestId}>
-                  {t('roomsContinueTopic')}
-                </option>
-              ) : null}
-            </select>
-            {draft.rootRequestId ? (
-              <span className="text-xs text-ds-muted">
-                {t('roomsContinueTopicHint')}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          <select
-            aria-label={t('roomsMention')}
-            className={`${roomFieldClass} !w-auto max-w-48`}
-            value=""
-            onChange={(event) => {
-              if (
-                event.target.value &&
-                !draft.mentions.includes(event.target.value)
-              )
-                patch({ mentions: [...draft.mentions, event.target.value] })
-            }}
-          >
-            <option value="">@ {t('roomsMention')}</option>
-            {room.members
-              .filter((member) => member.enabled && !member.removedAt)
-              .map((member) => (
-                <option value={member.id} key={member.id}>
-                  {member.displayName}
-                </option>
-              ))}
-          </select>
-          <select
-            aria-label={t('roomsTaskReference')}
-            className={`${roomFieldClass} !w-auto max-w-48`}
-            value={draft.taskId}
-            onChange={(event) => patch({ taskId: event.target.value })}
-          >
-            <option value="">{t('roomsNoTask')}</option>
-            {tasks.map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t('roomsDefaultRepository')}
-            className={`${roomFieldClass} !w-auto max-w-48`}
-            value={draft.repositoryId}
-            onChange={(event) => patch({ repositoryId: event.target.value })}
-          >
-            <option value="">{t('roomsNoRepository')}</option>
-            {room.repositories.map((repository) => (
-              <option key={repository.id} value={repository.id}>
-                {repository.displayName}
-              </option>
-            ))}
-          </select>
-        </div>
-        {draft.mentions.length || draft.attachments.length ? (
-          <div className="flex flex-wrap gap-1">
-            {draft.mentions.map((id) => (
-              <button
-                type="button"
-                key={id}
-                className="flex max-w-full items-center gap-1 rounded-full bg-accent/10 px-2 py-1 text-xs text-ds-ink"
-                onClick={() =>
-                  patch({
-                    mentions: draft.mentions.filter((value) => value !== id)
-                  })
-                }
-              >
-                @
-                {room.members.find((member) => member.id === id)?.displayName ??
-                  id}
-                <X size={12} />
-              </button>
-            ))}
-            {draft.attachments.map((attachment) => (
-              <button
-                type="button"
-                key={attachment.id}
-                className="flex max-w-full items-center gap-1 rounded-full bg-accent/10 px-2 py-1 text-xs text-ds-ink"
-                onClick={() =>
-                  patch({
-                    attachments: draft.attachments.filter(
-                      (value) => value.id !== attachment.id
-                    )
-                  })
-                }
-              >
-                <span className="truncate">{attachment.name}</span>
-                <X size={12} />
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {draft.replyToMessageId ? (
-          <div className="flex gap-2 text-xs text-accent">
-            <span className="min-w-0 truncate">
-              {t('roomsReply')} · {draft.replyBody ?? draft.replyToMessageId}
-            </span>
-            <button
-              onClick={() =>
-                patch({ replyToMessageId: undefined, replyBody: undefined })
-              }
-              type="button"
-            >
-              {t('roomsCancel')}
-            </button>
-          </div>
-        ) : null}
+      <fieldset disabled={disabled} className="rooms-composer-surface">
+        <RoomComposerContext room={room} tasks={tasks} mentions={draft.mentions}
+          attachments={draft.attachments} taskId={draft.taskId} repositoryId={draft.repositoryId}
+          replyToMessageId={draft.replyToMessageId} replyBody={draft.replyBody}
+          onMentions={(mentions) => patch({ mentions })}
+          onAttachments={(attachments) => patch({ attachments })}
+          onTask={() => patch({ taskId: '' })}
+          onRepository={() => patch({ repositoryId: '' })}
+          onClearReply={() => patch({ replyToMessageId: undefined, replyBody: undefined })} />
         {mentionQuery !== null ? (
-          <div
-            role="listbox"
-            id="room-mention-list"
-            className="max-h-40 overflow-auto rounded border border-ds-border bg-ds-main p-2"
-          >
-            {candidates.map((member, index) => (
-              <button
-                key={member.id}
-                id={'room-mention-' + member.id}
-                type="button"
-                role="option"
-                aria-selected={index === mentionIndex}
-                className={`block w-full p-2 text-left text-sm hover:bg-ds-hover ${index === mentionIndex ? 'bg-accent/10' : ''}`}
-                onClick={() => chooseMention(member.id)}
-              >
-                {member.displayName} ·{' '}
-                {t(
-                  `rooms${member.role?.[0]?.toUpperCase()}${member.role?.slice(1)}`
-                )}{' '}
-                ·{' '}
-                {room.repositories.find(
-                  (repo) => repo.id === member.defaultRepositoryId
-                )?.displayName ?? t('roomsNoRepository')}
-                {tasks.some(
-                  (task) =>
-                    task.ownerMemberId === member.id &&
-                    ['running', 'needs_input', 'needs_approval'].includes(
-                      task.status
-                    )
-                )
-                  ? ` · ${t('roomsState_running')}`
-                  : ''}
-              </button>
-            ))}
-            {!candidates.length ? (
-              <span className="text-xs text-ds-muted">
-                {t('roomsNoResults')}
-              </span>
-            ) : null}
-          </div>
+          <RoomComposerMentions room={room} tasks={tasks} candidates={candidates}
+            mentionIndex={mentionIndex} listId={mentionListId} onChoose={chooseMention} />
         ) : null}
         <textarea
           ref={textareaRef}
           aria-controls={
-            mentionQuery !== null ? 'room-mention-list' : undefined
+            mentionQuery !== null ? mentionListId : undefined
           }
           aria-activedescendant={
             mentionQuery !== null && candidates[mentionIndex]
-              ? 'room-mention-' + candidates[mentionIndex].id
+              ? `${mentionListId}-${candidates[mentionIndex].id}`
               : undefined
           }
-          className={`${roomFieldClass} resize-none`}
-          rows={3}
+          className="rooms-composer-textarea"
+          rows={1}
           maxLength={64000}
           value={draft.body}
           placeholder={t('roomsComposerPlaceholder')}
@@ -503,8 +340,14 @@ export function RoomComposer({
             if (match)
               mentionRange.current = { start: end - match[1].length - 1, end }
           }}
+          onBlur={(event) => {
+            if (event.relatedTarget?.getAttribute('role') !== 'option') setMentionQuery(null)
+          }}
+          onCompositionStart={() => { composingRef.current = true }}
+          onCompositionEnd={() => { composingRef.current = false }}
           onKeyDown={(event) => {
-            if (mentionQuery !== null && !event.nativeEvent.isComposing) {
+            const composing = event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229
+            if (mentionQuery !== null && !composing) {
               if (event.key === 'Escape') {
                 event.preventDefault()
                 setMentionQuery(null)
@@ -538,56 +381,34 @@ export function RoomComposer({
             if (
               event.key === 'Enter' &&
               (event.metaKey || event.ctrlKey) &&
-              !event.nativeEvent.isComposing
+              !composing
             ) {
               event.preventDefault()
               void submit()
             }
           }}
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            hidden
-            multiple
-            ref={fileRef}
-            type="file"
-            onChange={(event) => void attach(event.target.files)}
-          />
-          <button
-            type="button"
-            className={roomButtonClass}
-            onClick={() => fileRef.current?.click()}
-            aria-label={t('roomsAttach')}
-            disabled={draft.attachments.length >= 20}
-          >
-            <Paperclip size={16} />
-          </button>
-          <select
-            className={`${roomFieldClass} !w-auto max-w-48`}
-            value={draft.intent}
-            aria-label={t('roomsAutoIntent')}
-            onChange={(event) =>
-              patch({ intent: event.target.value as Draft['intent'] })
-            }
-          >
-            <option value="auto">{t('roomsAutoIntent')}</option>
-            <option value="discussion">{t('roomsDiscussionIntent')}</option>
-            <option value="execute">{t('roomsExecuteIntent')}</option>
-          </select>
-          <button
-            type="submit"
-            className={`${roomButtonClass} ml-auto flex items-center gap-2 bg-accent/10`}
-            disabled={
-              unavailableMembers.length > 0 ||
-              (!draft.body.trim() && !draft.attachments.length)
-            }
-          >
-            <Send size={15} />
-            {t(
-              busy ? 'roomsSending' : uploading ? 'roomsLoading' : 'roomsSend'
-            )}
-          </button>
-        </div>
+        <input hidden multiple ref={fileRef} type="file"
+          onChange={(event) => void attach(event.target.files)} />
+        <RoomComposerToolbar room={room} tasks={tasks} taskId={draft.taskId}
+          repositoryId={draft.repositoryId} rootRequestId={draft.rootRequestId}
+          topicTitle={topicTitle} topicChoices={topicChoices}
+          showTopic={!draftId && (room.collaborationMode === 'peer' || Boolean(draft.rootRequestId))}
+          intent={draft.intent} busy={busy} uploading={uploading} disabled={disabled}
+          attachmentLimit={draft.attachments.length >= 20}
+          canSend={unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length)}
+          onAttach={() => { setMentionQuery(null); fileRef.current?.click() }}
+          onMention={() => {
+            const caret = textareaRef.current?.selectionStart ?? draft.body.length
+            mentionRange.current = { start: caret, end: caret }
+            setMentionQuery('')
+            setMentionIndex(0)
+            textareaRef.current?.focus()
+          }}
+          onTask={(taskId) => patch({ taskId })}
+          onRepository={(repositoryId) => patch({ repositoryId })}
+          onTopic={(id) => patch({ rootRequestId: id || undefined, replyToMessageId: undefined, replyBody: undefined })}
+          onIntent={(intent) => patch({ intent })} />
       </fieldset>
       {unavailableMembers.length ? (
         <p role="alert" className="mt-2 text-xs text-amber-600">

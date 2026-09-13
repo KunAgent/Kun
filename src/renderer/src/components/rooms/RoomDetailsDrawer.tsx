@@ -41,7 +41,7 @@ export function RoomDetailsDrawer({
       ref={panel}
       role="dialog"
       aria-label={t('roomsRoomDetails')}
-      className="absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[400px] xl:shrink-0 xl:shadow-none"
+      className="rooms-details-panel absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[400px] xl:shrink-0 xl:shadow-none"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.stopPropagation()
@@ -92,7 +92,7 @@ export function RoomDetailsDrawer({
       {!taskOpen ? (
         <nav
           aria-label={t('roomsRoomDetails')}
-          className="flex shrink-0 flex-wrap gap-1 border-b border-ds-border p-2"
+          className="rooms-details-tabs shrink-0"
         >
           {(Object.keys(labels) as RoomDetailsSection[]).map((value) => (
             <button

@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next'
-import { MessageCircle, Square } from 'lucide-react'
+import { ChevronRight, MessageCircle, Square } from 'lucide-react'
 import type { Room, RoomPeerTopicSummary } from '@shared/rooms-api'
 import { roomButtonClass } from './RoomSettings'
 import { roomsClient } from './rooms-client'
 import { useRoomMutation } from './useRoomResource'
+import { RoomAvatar } from './RoomAvatar'
 
 export function continueRoomTopic(roomId: string, rootRequestId: string): void {
   window.dispatchEvent(
@@ -66,7 +67,7 @@ export function RoomPeerSummary({
       ? t('roomsPeerPausedSummary', { count: paused })
       : t('roomsPeerQuiet'))
   return (
-    <div className="flex min-h-10 items-center gap-2 border-b border-ds-border px-4 text-xs text-ds-muted">
+    <div className="rooms-activity-summary">
       <button
         className="flex min-w-0 flex-1 items-center gap-2 py-2 text-left hover:text-ds-ink"
         onClick={onOpen}
@@ -76,13 +77,13 @@ export function RoomPeerSummary({
         <span className="min-w-0 flex-1 truncate">
           {loading ? t('roomsLoading') : summary}
         </span>
-        <span className="shrink-0 text-accent">{t('roomsRoomDetails')}</span>
+        <ChevronRight size={13} aria-hidden="true" />
       </button>
       {onTasks ? (
         <button className="shrink-0 py-2 text-accent" onClick={onTasks}>
           {t('roomsTasks')}
-          {taskCounts?.runningCount !== undefined
-            ? ` · ${taskCounts.runningCount} ${t('roomsState_running')}`
+          {(taskCounts?.runningCount ?? 0) > 0
+            ? ` · ${taskCounts?.runningCount} ${t('roomsState_running')}`
             : ''}
           {taskCounts?.attentionCount
             ? ` · ${taskCounts.attentionCount} ${t('roomsAttention')}`
@@ -132,7 +133,7 @@ export function RoomPeerActivity({
       {topics.map((topic) => (
         <article
           key={topic.rootRequestId}
-          className="space-y-3 rounded-xl border border-ds-border p-3"
+          className="rooms-topic-card"
         >
           <h3 className="break-words text-sm font-medium text-ds-ink">
             {topic.title}
@@ -147,6 +148,13 @@ export function RoomPeerActivity({
               })}
             </p>
           ) : null}
+          {topic.members.filter((member) => member.error || ['failed', 'recovery_required'].includes(member.state)).map((member) => (
+            <p key={member.memberId} className="rooms-topic-attention">
+              <strong>{memberName(member.memberId)}</strong> · {member.error || t(`roomsPeerMember_${member.state}`)}
+            </p>
+          ))}
+          <details className="rooms-topic-disclosure">
+            <summary>{t('roomsTopicDetails')}</summary>
           <dl className="grid grid-cols-2 gap-2 text-xs">
             <div>
               <dt className="text-ds-muted">{t('roomsResponsesRemaining')}</dt>
@@ -168,7 +176,8 @@ export function RoomPeerActivity({
                 className="rounded-lg bg-ds-sidebar p-2 text-xs"
               >
                 <div className="flex flex-wrap items-center justify-between gap-1">
-                  <span className="break-words font-medium text-ds-ink">
+                  <span className="flex min-w-0 items-center gap-2 break-words font-medium text-ds-ink">
+                    <RoomAvatar member={room.members.find((value) => value.id === member.memberId)} id={member.memberId} label={memberName(member.memberId)} size={24} />
                     {memberName(member.memberId)}
                   </span>
                   <span className="text-ds-muted">
@@ -205,7 +214,8 @@ export function RoomPeerActivity({
               </li>
             ))}
           </ul>
-          <div className="flex flex-wrap gap-2">
+          </details>
+          <div className="rooms-topic-actions">
             <button
               className={roomButtonClass}
               disabled={Boolean(room.archivedAt)}

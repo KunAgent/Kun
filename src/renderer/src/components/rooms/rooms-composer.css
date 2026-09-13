@@ -1,0 +1,223 @@
+.rooms-composer {
+  min-width: 0;
+  flex-shrink: 0;
+  padding: 12px 20px 10px;
+}
+
+.rooms-composer-surface {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--ds-border);
+  border-radius: 14px;
+  background: var(--ds-surface-card);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.rooms-composer-surface:focus-within {
+  border-color: color-mix(in srgb, var(--ds-accent) 55%, var(--ds-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 8%, transparent);
+}
+
+.rooms-composer-textarea {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  max-height: 200px;
+  padding: 2px 4px 8px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ds-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rooms-composer-textarea::placeholder { color: var(--ds-text-faint); }
+.rooms-composer-surface:disabled { opacity: 0.65; }
+
+.rooms-composer-toolbar,
+.rooms-composer-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.rooms-composer-toolbar { justify-content: space-between; gap: 8px; }
+.rooms-composer-tools { flex-wrap: wrap; }
+
+.rooms-composer-tool,
+.rooms-composer-select,
+.rooms-composer-context-popover {
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ds-text-muted);
+}
+
+.rooms-composer-tool,
+.rooms-composer-context-popover { width: 30px; padding: 0; }
+
+.rooms-composer-tool:hover:not(:disabled),
+.rooms-composer-context-popover:hover:not(:disabled),
+.rooms-composer-select:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+
+.rooms-composer-tool:focus-visible,
+.rooms-composer-context-popover:focus-visible,
+.rooms-composer-send:focus-visible,
+.rooms-composer-chip:focus-visible,
+.rooms-composer-reply button:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.rooms-composer-select { position: relative; max-width: 100%; min-width: 0; }
+.rooms-composer-select select {
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+  padding: 0 22px 0 8px;
+  appearance: none;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  outline-color: var(--ds-focus-ring);
+  cursor: pointer;
+}
+
+.rooms-composer-select option { background: var(--ds-surface-card); color: var(--ds-text); }
+.rooms-composer-select > svg { position: absolute; right: 6px; pointer-events: none; }
+.rooms-composer-topic { max-width: 210px; }
+
+.rooms-composer-send {
+  display: flex;
+  flex-shrink: 0;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: var(--ds-control);
+  color: var(--ds-control-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rooms-composer-send:hover:not(:disabled) { opacity: 0.86; }
+.rooms-composer-send:disabled { opacity: 0.35; }
+.rooms-composer-tool:disabled { opacity: 0.4; }
+
+.rooms-composer-context { padding: 0 4px 8px; }
+.rooms-composer-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rooms-composer-chips:empty { display: none; }
+.rooms-composer-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid var(--ds-chip-border);
+  border-radius: 7px;
+  background: var(--ds-chip-muted-bg);
+  color: var(--ds-text-muted);
+  font-size: 11px;
+}
+
+.rooms-composer-chip > svg { flex-shrink: 0; }
+.rooms-composer-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-composer-chip:hover:not(:disabled) { background: var(--ds-surface-hover); color: var(--ds-text); }
+
+.rooms-composer-reply {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 5px 7px;
+  border-left: 2px solid var(--ds-accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--ds-accent-soft);
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+.rooms-composer-reply > svg { flex-shrink: 0; }
+.rooms-composer-reply > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-composer-reply button { flex-shrink: 0; padding: 3px; border-radius: 4px; }
+
+.rooms-composer-context-menu {
+  display: grid;
+  width: min(280px, calc(100vw - 40px));
+  max-width: 100%;
+  gap: 14px;
+  padding: 6px;
+}
+
+.rooms-composer-context-menu label { display: grid; min-width: 0; gap: 6px; }
+.rooms-composer-context-menu label > span { color: var(--ds-text-muted); font-size: 12px; }
+.rooms-composer-context-menu select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--ds-border);
+  border-radius: 8px;
+  background: var(--ds-bg-main);
+  color: var(--ds-text);
+  font-size: 12px;
+  outline-color: var(--ds-focus-ring);
+}
+
+.rooms-composer-mentions {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  max-height: min(240px, 35vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  background: var(--ds-surface-elevated);
+  box-shadow: var(--ds-shadow-overlay);
+}
+
+.rooms-composer-mention {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.rooms-composer-mention:hover,
+.rooms-composer-mention[aria-selected='true'] { background: var(--ds-surface-hover); }
+.rooms-composer-mention-copy { display: grid; min-width: 0; gap: 2px; }
+.rooms-composer-mention-copy strong { overflow: hidden; color: var(--ds-text); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-composer-mention-copy > span { overflow: hidden; color: var(--ds-text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-composer-empty-mentions { display: block; padding: 12px; color: var(--ds-text-muted); font-size: 12px; }
+
+@media (max-width: 767px) {
+  .rooms-composer { padding: 10px; }
+  .rooms-composer-topic { max-width: 150px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rooms-composer-surface { transition: none; }
+}

@@ -65,6 +65,7 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   const rootRequestId = firstTopic.rootRequestId
   await page.getByRole('button', { name: 'Room details', exact: true }).click()
   const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
+  await drawer.locator('summary').filter({ hasText: 'Members and response budgets' }).click()
   await drawer.getByText(/^Responding(?: ·|$)/).waitFor()
   await drawer.getByText('31 / 32', { exact: true }).waitFor()
   await capture('peer-desktop-responding')
