@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { ArrowLeft, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { roomButtonClass } from './RoomSettings'
+import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
 
 export type RoomDetailsSection = 'discussion' | 'tasks' | 'overview' | 'members'
 const labels: Record<RoomDetailsSection, string> = {
@@ -18,6 +19,9 @@ export function RoomDetailsDrawer({
   taskOpen,
   onBack,
   runOpen = false,
+  childOpen = false,
+  title,
+  backLabel,
   children
 }: {
   section: RoomDetailsSection
@@ -26,6 +30,9 @@ export function RoomDetailsDrawer({
   taskOpen: boolean
   onBack: () => void
   runOpen?: boolean
+  childOpen?: boolean
+  title?: string
+  backLabel?: string
   children: ReactNode
 }) {
   const { t } = useTranslation('common')
@@ -70,18 +77,19 @@ export function RoomDetailsDrawer({
         }
       }}
     >
+      <RoomPanelResizeHandle side="detail" />
       <header className="rooms-detail-titlebar flex items-center gap-2 border-b border-ds-border p-4">
-        {taskOpen || runOpen ? (
+        {taskOpen || runOpen || childOpen ? (
           <button
             className={roomButtonClass}
-            aria-label={t(runOpen ? 'roomsRunBack' : 'roomsBackToTasks')}
+            aria-label={backLabel ?? t(runOpen ? 'roomsRunBack' : 'roomsBackToTasks')}
             onClick={onBack}
           >
             <ArrowLeft size={16} />
           </button>
         ) : null}
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-ds-ink">
-          {t(runOpen ? 'roomsRunDetails' : taskOpen ? 'roomsDetails' : 'roomsRoomDetails')}
+          {title ?? t(runOpen ? 'roomsRunDetails' : taskOpen ? 'roomsDetails' : 'roomsRoomDetails')}
         </h2>
         <button
           className={roomButtonClass}
@@ -91,7 +99,7 @@ export function RoomDetailsDrawer({
           <X size={16} />
         </button>
       </header>
-      {!taskOpen && !runOpen ? (
+      {!taskOpen && !runOpen && !childOpen ? (
         <nav
           aria-label={t('roomsRoomDetails')}
           className="rooms-details-tabs shrink-0"

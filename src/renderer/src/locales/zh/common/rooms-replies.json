@@ -1,0 +1,12 @@
+{
+  "roomsReplyThreadTitle": "回复线程",
+  "roomsReplyContentTitle": "内容预览",
+  "roomsReplyBack": "返回上一层",
+  "roomsReplyCount": "{{count}} 条回复",
+  "roomsReplyOutsideThread": "引用消息在此回复线程中不可用。",
+  "roomsReplyUnavailable_missing_message": "这条消息已不可用。",
+  "roomsReplyUnavailable_missing_parent": "回复线程中的一条上游消息已不可用。",
+  "roomsReplyUnavailable_cycle": "已保存的回复链存在循环，无法确定来源。",
+  "roomsReplyUnavailable_inconsistent_root": "已保存的回复根消息不一致。",
+  "roomsReplyUnavailable_depth_limit": "此历史回复链超过支持的深度，部分回复可能不可用。"
+}

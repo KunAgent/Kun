@@ -5,6 +5,18 @@ import type { Room, RoomTask, SendRoomMessage } from '@shared/rooms-api'
 import i18n from '../../i18n'
 import { RoomComposer } from './RoomComposer'
 
+vi.mock('./RoomRichInput', async () => {
+  const React = await import('react')
+  return { RoomRichInput: React.forwardRef((props: { value: string; mentions: string[];
+    onChange: (value: { body: string; mentions: string[] }) => void; onSubmit: () => void }, ref) => {
+    React.useImperativeHandle(ref, () => ({ focus() {}, insertText(text: string) {
+      props.onChange({ body: props.value + text, mentions: props.mentions })
+    } }))
+    return React.createElement('room-rich-input', { ...props, 'data-room-rich-input': true }, React.createElement('textarea', { value: props.value,
+      onChange: (event: { target: { value: string } }) => props.onChange({ body: event.target.value, mentions: props.mentions }) }))
+  }) }
+})
+
 const upload = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/runtime-attachment', () => ({
   uploadRuntimeAttachment: upload
@@ -93,12 +105,7 @@ describe('RoomComposer', () => {
   it('sends mentions as stable IDs and honors explicit discussion intent', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)
-    act(() =>
-      renderer.root
-        .findByProps({ 'aria-label': 'Mention member' })
-        .props.onClick()
-    )
-    act(() => renderer.root.findByProps({ role: 'option' }).props.onClick())
+    act(() => renderer.root.findByProps({ 'data-room-rich-input': true }).props.onChange({ body: '', mentions: ['developer'] }))
     act(() =>
       renderer.root
         .findByProps({ 'aria-label': 'Automatic intent' })
@@ -113,21 +120,14 @@ describe('RoomComposer', () => {
     expect(renderer.root.findByType('textarea').props.value).toBe('')
   })
 
-  it('supports typed mentions at the caret without losing trailing message text', async () => {
+  it('preserves serialized inline mention chips and expands all enabled members at send', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)
-    act(() =>
-      renderer.root.findByType('textarea').props.onChange({
-        target: { value: 'Ask @Dev about tests', selectionStart: 8 }
-      })
-    )
-    const candidate = renderer.root.findByProps({ role: 'option' })
-    act(() => candidate.props.onClick())
+    act(() => renderer.root.findByProps({ 'data-room-rich-input': true }).props.onChange({
+      body: 'Ask [@all](#kun-room-all) about tests', mentions: ['*']
+    }))
     await submit()
-    expect(send.mock.calls[0][0]).toMatchObject({
-      body: 'Ask  about tests',
-      mentionMemberIds: ['developer']
-    })
+    expect(send.mock.calls[0][0]).toMatchObject({ body: 'Ask [@all](#kun-room-all) about tests', mentionMemberIds: ['developer'] })
   })
 
   it('uploads through the local-file contract and sends attachment IDs', async () => {
@@ -233,30 +233,13 @@ describe('RoomComposer', () => {
     expect(send.mock.calls[0][0].taskId).toBeUndefined()
   })
 
-  it('keeps plain Enter as newline, gives mentions priority, and protects IME before modifier send', async () => {
+  it('uses the rich editor submit callback and keeps reference-only sends valid', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)
-    input('Discuss')
-    const key = async (properties: Record<string, unknown>): Promise<ReturnType<typeof vi.fn>> => {
-      const preventDefault = vi.fn()
-      await act(async () => renderer.root.findByType('textarea').props.onKeyDown({
-        key: 'Enter', nativeEvent: { isComposing: false }, preventDefault, ...properties
-      }))
-      return preventDefault
-    }
-    expect(await key({})).not.toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalled()
-    input('Ask @Dev')
-    expect(await key({})).toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalled()
-    expect(renderer.root.findByType('textarea').props.value).toBe('Ask ')
-    act(() => renderer.root.findByType('textarea').props.onCompositionStart())
-    expect(await key({ metaKey: true })).not.toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalled()
-    act(() => renderer.root.findByType('textarea').props.onCompositionEnd())
-    expect(await key({ metaKey: true, keyCode: 229 })).not.toHaveBeenCalled()
-    expect(await key({ ctrlKey: true })).toHaveBeenCalled()
-    expect(send.mock.calls[0][0]).toMatchObject({ body: 'Ask ', mentionMemberIds: ['developer'] })
+    const picker = renderer.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'RoomContentReferencePicker')[0]
+    act(() => picker.props.onChange([{ kind: 'task', taskId: 'task', titleSnapshot: 'Read the task' }]))
+    await act(async () => renderer.root.findByProps({ 'data-room-rich-input': true }).props.onSubmit())
+    expect(send.mock.calls[0][0]).toMatchObject({ body: '', references: [{ kind: 'task', taskId: 'task' }] })
   })
 
   it('preserves draft-specific scope and shows the actual continued topic title', async () => {
@@ -299,22 +282,12 @@ describe('RoomComposer', () => {
     expect(send.mock.calls[0][0].attachmentIds).not.toContain('1')
   })
 
-  it('grows the textarea up to 200 pixels and resets its height after sending', async () => {
-    const element = { style: {} as Record<string, string>, scrollHeight: 32 }
+  it('keeps reply drawer drafts separate and supplies its explicit reply target', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
-    await act(async () => {
-      renderer = create(createElement(RoomComposer, { room, tasks: [], onSend: send }), {
-        createNodeMock: (node) => node.type === 'textarea' ? element : null
-      })
-    })
-    expect(element.style.height).toBe('40px')
-    element.scrollHeight = 450
-    input('A long paragraph\n'.repeat(40))
-    expect(element.style.height).toBe('200px')
-    expect(element.style.overflowY).toBe('auto')
-    element.scrollHeight = 32
+    await render(send, { draftId: 'reply:room:root', replyTarget: { messageId: 'root', body: 'Root message', rootRequestId: 'topic' } })
+    input('Drawer reply')
     await submit()
-    expect(element.style.height).toBe('40px')
-    expect(element.style.overflowY).toBe('hidden')
+    expect(send.mock.calls[0][0]).toMatchObject({ body: 'Drawer reply', replyToMessageId: 'root', rootRequestId: 'topic' })
+    expect(stored.has('kun.rooms.draft.room')).toBe(false)
   })
 })

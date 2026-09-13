@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { AlertTriangle, Columns3, RefreshCw, WifiOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useRoomBoardTarget } from '../rooms/room-content-navigation'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../../store/chat-store'
 import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../../lib/workspace-path'
@@ -81,6 +82,14 @@ export function ProjectBoardView(props: Props): ReactElement {
   const [selection, setSelection] = useState<ProjectBoardSelection>(EMPTY_PROJECT_BOARD_SELECTION)
   const selected = board.selectedWorkspaceRoot
   const snapshot = board.snapshot
+  const roomTarget = useRoomBoardTarget((state) => state.target)
+  useEffect(() => {
+    if (!roomTarget || roomTarget.workspaceRoot !== selected) return
+    const card = roomTarget.card
+    if (!card) return
+    setDialog({ card, status: card.status })
+    useRoomBoardTarget.setState({ target: null })
+  }, [roomTarget, selected, snapshot])
   const threadWorktrees = readThreadWorktreeRegistry().worktrees
   const todoRevision = useChatStore((state) => state.threads
     .filter((thread) => {

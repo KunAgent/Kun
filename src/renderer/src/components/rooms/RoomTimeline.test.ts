@@ -19,6 +19,7 @@ vi.mock('./rooms-client', async (original) => ({
 vi.mock('./RoomMessageBody', () => ({
   RoomMessageBody: ({ body }: { body: string }) => createElement('p', {}, body)
 }))
+vi.mock('./RoomMessageInteractions', () => ({ RoomMessageInteractions: () => null }))
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getVirtualItems: () =>

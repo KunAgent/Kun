@@ -8,15 +8,18 @@ const client = vi.hoisted(() => ({
   get: vi.fn(),
   messages: vi.fn(),
   tasks: vi.fn(),
-  rules: vi.fn()
+  rules: vi.fn(),
+  request: vi.fn()
 }))
 vi.mock('./rooms-client', async (original) => ({
   ...(await original<typeof import('./rooms-client')>()),
-  roomsClient: client
+  roomsClient: client,
+  roomsRequest: client.request
 }))
 const events = vi.hoisted(() => new Set<(event: { seq: number; roomId: string; kind: string }) => void>())
+const connection = vi.hoisted(() => ({ live: false }))
 vi.mock('./useRoomEvents', () => ({
-  roomEventsLive: () => false,
+  roomEventsLive: () => connection.live,
   subscribeRoomEvents: (listener: (event: { seq: number; roomId: string; kind: string }) => void) => {
     events.add(listener)
     return () => events.delete(listener)
@@ -34,6 +37,7 @@ describe('Rooms view state', () => {
   }
   beforeEach(() => {
     vi.useFakeTimers()
+    connection.live = false
     for (const method of Object.values(client)) method.mockReset()
     client.list.mockResolvedValue({ rooms: [room] })
     client.get.mockImplementation(async (id) => ({ room: { ...room, id } }))
@@ -46,6 +50,7 @@ describe('Rooms view state', () => {
       nextCursor: '2'
     })
     client.rules.mockResolvedValue({ rules: [] })
+    client.request.mockResolvedValue({ messages: [] })
     vi.stubGlobal('window', {
       localStorage: { getItem: () => null, setItem: () => undefined }
     })
@@ -64,6 +69,154 @@ describe('Rooms view state', () => {
       renderer = create(createElement(Harness))
     })
   }
+
+  function pagedRooms() {
+    const records = Array.from({ length: 101 }, (_, index) => ({ ...room, id: `room-${index}`,
+      name: `Room ${index}`, rank: index, unread: true, repositoryRoot: '/repository' }))
+    client.list.mockImplementation(async (_archived: boolean, cursor?: string, _signal?: AbortSignal,
+      _search?: string, filters?: { ids?: string[]; unreadOnly?: boolean; repositoryRoot?: string }) => {
+      let eligible = records.filter((entry) => (!filters?.unreadOnly || entry.unread) &&
+        (!filters?.repositoryRoot || entry.repositoryRoot === filters.repositoryRoot))
+      if (filters?.ids) return { rooms: eligible.filter((entry) => filters.ids!.includes(entry.id)).map((entry) => ({ ...entry })) }
+      if (cursor) eligible = eligible.filter((entry) => entry.rank >= Number(cursor.slice('cursor-'.length)))
+      const selected = eligible.slice(0, 50)
+      return { rooms: selected.map((entry) => ({ ...entry })), nextCursor: eligible.length > 50 ? `cursor-${selected.at(-1)!.rank + 1}` : undefined }
+    })
+    return records
+  }
+
+  it('removes a newly read room through live events without losing later unread pages or rewinding the keyset cursor', async () => {
+    connection.live = true
+    const records = pagedRooms()
+    await mount()
+    await act(async () => state.setFilter('unread'))
+    await act(async () => { await state.loadMoreRooms() })
+    expect(state.rooms).toHaveLength(100)
+    expect(state.roomCursor).toBe('cursor-100')
+    records[0].unread = false
+    client.list.mockClear()
+    await act(async () => {
+      events.forEach((listener) => listener({ seq: 20, roomId: 'room-0', kind: 'room.read' }))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(state.rooms.some((entry) => entry.id === 'room-0')).toBe(false)
+    expect(state.rooms.some((entry) => entry.id === 'room-99')).toBe(true)
+    expect(state.rooms).toHaveLength(99)
+    expect(state.roomCursor).toBe('cursor-100')
+    expect(client.list).toHaveBeenCalledWith(false, undefined, undefined, '', expect.objectContaining({ unreadOnly: true, ids: ['room-0'] }))
+    await act(async () => { await state.loadMoreRooms() })
+    expect(client.list).toHaveBeenLastCalledWith(false, 'cursor-100', undefined, '', expect.objectContaining({ unreadOnly: true }))
+    expect(state.rooms.at(-1)?.id).toBe('room-100')
+    expect(state.roomCursor).toBeNull()
+  })
+
+  it('revalidates changed repository-filtered rows while retaining eligible loaded pages and their next cursor', async () => {
+    connection.live = true
+    const records = pagedRooms()
+    await mount()
+    await act(async () => state.setRepositoryRoot('/repository'))
+    await act(async () => { await state.loadMoreRooms() })
+    records[75].name = 'Renamed in the loaded tail'
+    records[80].repositoryRoot = '/another-repository'
+    client.list.mockClear()
+    await act(async () => {
+      for (const id of ['room-75', 'room-80']) events.forEach((listener) => listener({ seq: 21, roomId: id, kind: 'room.updated' }))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(state.rooms).toHaveLength(99)
+    expect(state.rooms.find((entry) => entry.id === 'room-75')?.name).toBe('Renamed in the loaded tail')
+    expect(state.rooms.some((entry) => entry.id === 'room-80')).toBe(false)
+    expect(state.rooms.some((entry) => entry.id === 'room-99')).toBe(true)
+    expect(state.roomCursor).toBe('cursor-100')
+    expect(client.list).toHaveBeenCalledWith(false, undefined, undefined, '', expect.objectContaining({ repositoryRoot: '/repository', ids: ['room-75', 'room-80'] }))
+    expect(client.list.mock.calls.filter((call) => call[4]?.ids).every((call) => call[4].ids.length <= 50)).toBe(true)
+    await act(async () => { await state.loadMoreRooms() })
+    expect(client.list).toHaveBeenLastCalledWith(false, 'cursor-100', undefined, '', expect.objectContaining({ repositoryRoot: '/repository' }))
+    expect(state.rooms.at(-1)?.id).toBe('room-100')
+  })
+
+  it('finishes a deferred next page after a same-scope background refresh and revalidates its current membership', async () => {
+    connection.live = true
+    const records = pagedRooms()
+    await mount()
+    await act(async () => state.setRepositoryRoot('/repository'))
+    const normalList = client.list.getMockImplementation()!
+    const stalePage = await normalList(false, 'cursor-50', undefined, '', { repositoryRoot: '/repository' })
+    let release!: (value: unknown) => void
+    const deferredPage = new Promise((resolve) => { release = resolve })
+    client.list.mockImplementation((...args) => args[1] === 'cursor-50' ? deferredPage : normalList(...args))
+    let paging!: Promise<void>
+    act(() => { paging = state.loadMoreRooms() })
+    expect(state.moreBusy).toBe(true)
+    records[75].name = 'Updated while the page was in flight'
+    records[80].repositoryRoot = '/another-repository'
+    await act(async () => {
+      for (const id of ['room-75', 'room-80']) events.forEach((listener) => listener({ seq: 22, roomId: id, kind: 'room.updated' }))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(state.rooms).toHaveLength(50)
+    await act(async () => { release(stalePage); await paging })
+    expect(state.rooms).toHaveLength(99)
+    expect(state.rooms.find((entry) => entry.id === 'room-75')?.name).toBe('Updated while the page was in flight')
+    expect(state.rooms.some((entry) => entry.id === 'room-80')).toBe(false)
+    expect(state.rooms.some((entry) => entry.id === 'room-99')).toBe(true)
+    expect(state.roomCursor).toBe('cursor-100')
+    expect(state.moreBusy).toBe(false)
+    const validation = client.list.mock.calls.find((call) => call[4]?.ids?.length === 50)
+    expect(validation?.[4]).toMatchObject({ repositoryRoot: '/repository', ids: Array.from({ length: 50 }, (_, index) => `room-${index + 50}`) })
+    await act(async () => { await state.loadMoreRooms() })
+    expect(client.list).toHaveBeenLastCalledWith(false, 'cursor-100', undefined, '', expect.objectContaining({ repositoryRoot: '/repository' }))
+    expect(state.rooms.at(-1)?.id).toBe('room-100')
+  })
+
+  it.each(['user', 'member'])('refreshes an old loaded root count from a new %s reply without rereading history or losing its cursor', async (authorKind) => {
+    connection.live = true
+    const latest = Array.from({ length: 50 }, (_, index) => ({ id: `recent-${index}`, roomId: 'room-a',
+      body: `Recent ${index}`, bodyRevision: 0, messageSeq: 100 + index }))
+    client.messages.mockResolvedValue({ messages: latest, nextCursor: '100' })
+    await mount()
+    const root = { id: 'old-root', roomId: 'room-a', body: 'Old root', bodyRevision: 0, messageSeq: 1, replyCount: 1 }
+    client.messages.mockResolvedValueOnce({ messages: [root], nextCursor: '1' })
+    await act(async () => { await state.loadEarlier() })
+    const reply = { id: 'new-reply', roomId: 'room-a', authorKind, body: 'A new reply', bodyRevision: 0,
+      messageSeq: 150, replyToMessageId: 'old-root', displayThreadRootId: 'old-root' }
+    client.messages.mockResolvedValue({ messages: [...latest.slice(1), reply], nextCursor: '101' })
+    client.request.mockResolvedValue({ messages: [{ ...root, replyCount: 2 }] })
+    const historyCalls = client.messages.mock.calls.length
+    await act(async () => {
+      events.forEach((listener) => listener({ seq: 30, roomId: 'room-a', kind: 'message.created' }))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(state.messages.find((message) => message.id === root.id)?.replyCount).toBe(2)
+    expect(state.messages.some((message) => message.id === 'recent-0')).toBe(true)
+    expect(state.messages.some((message) => message.id === reply.id)).toBe(true)
+    expect(state.messageCursor).toBe('1')
+    expect(client.messages).toHaveBeenCalledTimes(historyCalls + 1)
+    expect(client.messages).toHaveBeenLastCalledWith('room-a', undefined, expect.any(AbortSignal))
+    expect(client.request).toHaveBeenCalledWith('/v1/rooms/room-a/messages?message_ids=old-root', 'GET', undefined, expect.any(AbortSignal))
+    await act(async () => {
+      events.forEach((listener) => listener({ seq: 31, roomId: 'room-a', kind: 'message.created' }))
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(client.request).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains a newly received reply and retries a failed root-count projection on the next refresh', async () => {
+    await mount()
+    const root = { id: 'old-root', roomId: 'room-a', body: 'Old root', bodyRevision: 0, messageSeq: 1 }
+    client.messages.mockResolvedValueOnce({ messages: [root] })
+    await act(async () => { await state.loadEarlier() })
+    const reply = { id: 'reply', roomId: 'room-a', body: 'Reply', bodyRevision: 0, messageSeq: 3, displayThreadRootId: root.id }
+    client.messages.mockResolvedValue({ messages: [reply] })
+    client.request.mockRejectedValueOnce(new Error('Reply projection unavailable'))
+    await act(async () => { await state.refresh() })
+    expect(state.error).toBe('Reply projection unavailable')
+    expect(state.messages.some((message) => message.id === reply.id)).toBe(true)
+    client.request.mockResolvedValue({ messages: [{ ...root, replyCount: 1 }] })
+    await act(async () => { await state.refresh() })
+    expect(state.messages.find((message) => message.id === root.id)?.replyCount).toBe(1)
+    expect(state.error).toBe('')
+  })
 
   it('keeps earlier pages when the latest page refreshes and stops polling on unmount', async () => {
     await mount()

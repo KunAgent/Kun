@@ -4,6 +4,7 @@ import type { RoomMember } from '@shared/rooms-api'
 import avatarAtlas from '../../../../asset/img/room-avatars/kun-avatar-atlas.png'
 import { avatarForIdentity, ROOM_AVATARS, ROOM_AVATAR_BACKGROUND_SIZE } from './room-avatar-catalog'
 import './rooms-avatars.css'
+import { useRoomUploadedAvatar } from './room-uploaded-avatar'
 
 const tones = [
   'var(--ds-accent)',
@@ -50,6 +51,9 @@ export function RoomAvatar({
   onClick?: () => void
 }) {
   const identity = id ?? member?.id ?? 'kun'
+  const uploaded = useRoomUploadedAvatar(member?.avatar?.kind === 'uploaded' ? member.avatar.attachmentId : undefined)
+  const builtinId = member?.avatar?.kind === 'builtin' ? member.avatar.id : undefined
+  const selected = ROOM_AVATARS.find((item) => item.id === builtinId)
   const style = {
     '--rooms-avatar-size': `${size / 16}rem`,
     '--rooms-avatar-tone': identityTone(identity)
@@ -58,8 +62,10 @@ export function RoomAvatar({
     <>
       {identity === 'user' ? (
         <UserRound aria-hidden="true" className="rooms-avatar-user" />
+      ) : uploaded ? (
+        <img className="rooms-avatar-art object-cover" src={uploaded} alt="" aria-hidden="true" />
       ) : (
-        <RoomAvatarPortrait index={avatarForIdentity(identity).index} />
+        <RoomAvatarPortrait index={selected?.index ?? avatarForIdentity(identity).index} />
       )}
       <span className="rooms-avatar-letter" aria-hidden="true">
         {Array.from(label.trim())[0]?.toLocaleUpperCase() ?? 'K'}

@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Room, RoomTask, SendRoomMessage } from '@shared/rooms-api'
+import type { Room, RoomTask, SendRoomMessage, RoomContentReference } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
   writeBrowserStorageItem
@@ -11,13 +11,18 @@ import {
   roomsClient,
   type RoomPresetCatalog
 } from './rooms-client'
-import { RoomComposerContext, RoomComposerMentions } from './RoomComposerContext'
+import { RoomComposerContext } from './RoomComposerContext'
 import { RoomComposerToolbar } from './RoomComposerToolbar'
-import { useRoomComposerInput } from './useRoomComposerInput'
+import { RoomRichInput, type RoomRichInputHandle } from './RoomRichInput'
+import { roomSendMentionIds, roomMentionToken, roomUnmarkMentions, ROOM_ALL_MENTION } from './room-mentions'
+import { RoomContentReferencePicker, RoomContentReferenceChips } from './RoomContentReferencePicker'
+import { RoomPollCreator } from './RoomPollCreator'
+import './rooms-interactions.css'
 import './rooms-composer.css'
 
 type Draft = {
   body: string
+  references: RoomContentReference[]
   mentions: string[]
   taskId: string
   repositoryId: string
@@ -32,6 +37,7 @@ type Draft = {
 function emptyDraft(): Draft {
   return {
     body: '',
+    references: [],
     mentions: [],
     taskId: '',
     repositoryId: '',
@@ -54,25 +60,38 @@ function readDraft(roomId: string): Draft {
   }
 }
 
-export function RoomComposer({
+function RoomComposerEditor({
   room,
   tasks,
   draftId,
+  replyTarget,
   topicChoices = [],
   onSend
 }: {
   room: Room
   tasks: RoomTask[]
   draftId?: string
+  replyTarget?: { messageId: string; body: string; rootRequestId?: string }
   topicChoices?: Array<{ rootRequestId: string; title: string }>
   onSend: (message: SendRoomMessage) => Promise<void>
 }): ReactElement {
   const { t } = useTranslation('common')
   const storageId = draftId ?? room.id
-  const [draft, setDraft] = useState(() => readDraft(storageId))
+  const [draft, setDraft] = useState(() => {
+    const stored = readDraft(storageId)
+    // Existing drafts stored mentions outside the text; migrate their chips without losing recipients.
+    const missing = stored.mentions.filter((id) => !stored.body.includes(id === ROOM_ALL_MENTION ? '(#kun-room-all)' : '(#kun-room-member-' + id + ')'))
+    return { ...stored, body: missing.map((id) => roomMentionToken(id,
+      room.members.find((member) => member.id === id)?.displayName ?? id)).join(' ') + (missing.length ? ' ' : '') + stored.body }
+  })
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [pollOpen, setPollOpen] = useState(false)
+  const editorRef = useRef<RoomRichInputHandle>(null)
+  const sendMentions = roomSendMentionIds(draft.mentions, room)
+  const replyToMessageId = draft.replyToMessageId ?? replyTarget?.messageId
+  const rootRequestId = draft.rootRequestId ?? replyTarget?.rootRequestId
   const [catalog, setCatalog] = useState<RoomPresetCatalog | null>(null)
   useEffect(() => {
     let active = true
@@ -91,8 +110,8 @@ export function RoomComposer({
       member.enabled &&
       !member.removedAt &&
       (room.collaborationMode !== 'directed' ||
-        (draft.mentions.length
-          ? draft.mentions.includes(member.id)
+        (sendMentions.length
+          ? sendMentions.includes(member.id)
           : member.id === room.defaultMemberId))
   )
   const unavailableMembers = catalog
@@ -111,29 +130,6 @@ export function RoomComposer({
       })
     : []
   const fileRef = useRef<HTMLInputElement>(null)
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [mentionIndex, setMentionIndex] = useState(0)
-  const mentionRange = useRef({ start: 0, end: 0 })
-  const { textareaRef, composingRef } = useRoomComposerInput(draft.body)
-  const mentionListId = useId()
-  const candidates = room.members.filter(
-    (member) =>
-      member.enabled &&
-      !member.removedAt &&
-      member.displayName
-        .toLocaleLowerCase()
-        .includes((mentionQuery ?? '').toLocaleLowerCase())
-  )
-  const chooseMention = (id: string) => {
-    patch({
-      mentions: [...new Set([...draft.mentions, id])],
-      body:
-        draft.body.slice(0, mentionRange.current.start) +
-        draft.body.slice(mentionRange.current.end)
-    })
-    setMentionQuery(null)
-    textareaRef.current?.focus()
-  }
   useEffect(() => {
     const reply = (event: Event) => {
       const detail = (
@@ -151,7 +147,7 @@ export function RoomComposer({
           replyToMessageId: detail.messageId,
           replyBody: detail.body?.slice(0, 160)
         }))
-        textareaRef.current?.focus()
+        editorRef.current?.focus()
       }
     }
     const taskReply = (event: Event) => {
@@ -165,7 +161,7 @@ export function RoomComposer({
           body: draft.body.trim() ? draft.body : detail.body,
           intent: 'execute'
         }))
-        textareaRef.current?.focus()
+        editorRef.current?.focus()
       }
     }
     const continueTopic = (event: Event) => {
@@ -179,7 +175,7 @@ export function RoomComposer({
         replyToMessageId: undefined,
         replyBody: undefined
       }))
-      textareaRef.current?.focus()
+      editorRef.current?.focus()
     }
     if (draftId) return
     window.addEventListener?.('kun-room-continue-topic', continueTopic)
@@ -190,7 +186,12 @@ export function RoomComposer({
       window.removeEventListener?.('kun-room-reply', reply)
       window.removeEventListener?.('kun-room-task-reply', taskReply)
     }
-  }, [room.id, draftId, textareaRef])
+  }, [room.id, draftId])
+  const replyTargetId = replyTarget?.messageId, replyTargetBody = replyTarget?.body, replyTargetRoot = replyTarget?.rootRequestId
+  useEffect(() => {
+    if (replyTargetId) setDraft((current) => ({ ...current, replyToMessageId: replyTargetId,
+      replyBody: replyTargetBody, rootRequestId: replyTargetRoot }))
+  }, [replyTargetId, replyTargetBody, replyTargetRoot])
   useEffect(() => {
     writeBrowserStorageItem(
       `kun.rooms.draft.${storageId}`,
@@ -206,16 +207,17 @@ export function RoomComposer({
       unavailableMembers.length > 0 ||
       uploading ||
       room.archivedAt ||
-      (!draft.body.trim() && !draft.attachments.length)
+      (!draft.body.trim() && !draft.attachments.length && !draft.references.length)
     )
       return
     const content = {
-      ...(draft.rootRequestId ? { rootRequestId: draft.rootRequestId } : {}),
-      ...(draft.replyToMessageId
-        ? { replyToMessageId: draft.replyToMessageId }
+      ...(rootRequestId ? { rootRequestId } : {}),
+      ...(replyToMessageId
+        ? { replyToMessageId }
         : {}),
       body: draft.body,
-      mentionMemberIds: draft.mentions,
+      mentionMemberIds: sendMentions,
+      ...(draft.references.length ? { references: draft.references } : {}),
       ...(draft.taskId ? { taskId: draft.taskId } : {}),
       ...(draft.repositoryId ? { repositoryId: draft.repositoryId } : {}),
       executionIntent: draft.intent,
@@ -239,7 +241,6 @@ export function RoomComposer({
     try {
       await onSend({ ...content, clientRequestId: requestId })
       setDraft(emptyDraft())
-      setMentionQuery(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -289,8 +290,8 @@ export function RoomComposer({
   }
 
   const disabled = busy || uploading || Boolean(room.archivedAt)
-  const topicTitle = topicChoices.find((topic) => topic.rootRequestId === draft.rootRequestId)?.title
-    ?? draft.replyBody ?? draft.rootRequestId
+  const topicTitle = topicChoices.find((topic) => topic.rootRequestId === rootRequestId)?.title
+    ?? draft.replyBody ?? rootRequestId
 
   return (
     <form
@@ -303,108 +304,32 @@ export function RoomComposer({
       <fieldset disabled={disabled} className="rooms-composer-surface">
         <RoomComposerContext room={room} tasks={tasks} mentions={draft.mentions}
           attachments={draft.attachments} taskId={draft.taskId} repositoryId={draft.repositoryId}
-          replyToMessageId={draft.replyToMessageId} replyBody={draft.replyBody}
-          onMentions={(mentions) => patch({ mentions })}
+          replyToMessageId={replyToMessageId} replyBody={draft.replyBody ?? replyTarget?.body}
+          onMentions={(mentions) => patch({ mentions, body: roomUnmarkMentions(draft.body, draft.mentions.filter((id) => !mentions.includes(id))) })}
           onAttachments={(attachments) => patch({ attachments })}
           onTask={() => patch({ taskId: '' })}
           onRepository={() => patch({ repositoryId: '' })}
           onClearReply={() => patch({ replyToMessageId: undefined, replyBody: undefined })} />
-        {mentionQuery !== null ? (
-          <RoomComposerMentions room={room} tasks={tasks} candidates={candidates}
-            mentionIndex={mentionIndex} listId={mentionListId} onChoose={chooseMention} />
-        ) : null}
-        <textarea
-          ref={textareaRef}
-          aria-controls={
-            mentionQuery !== null ? mentionListId : undefined
-          }
-          aria-activedescendant={
-            mentionQuery !== null && candidates[mentionIndex]
-              ? `${mentionListId}-${candidates[mentionIndex].id}`
-              : undefined
-          }
-          className="rooms-composer-textarea"
-          rows={1}
-          maxLength={64000}
-          value={draft.body}
-          placeholder={t('roomsComposerPlaceholder')}
-          aria-label={t('roomsComposerPlaceholder')}
-          onChange={(event) => {
-            patch({ body: event.target.value })
-            const end = event.target.selectionStart ?? event.target.value.length
-            const match = /(?:^|\s)@([^@\s]*)$/.exec(
-              event.target.value.slice(0, end)
-            )
-            setMentionQuery(match?.[1] ?? null)
-            setMentionIndex(0)
-            if (match)
-              mentionRange.current = { start: end - match[1].length - 1, end }
-          }}
-          onBlur={(event) => {
-            if (event.relatedTarget?.getAttribute('role') !== 'option') setMentionQuery(null)
-          }}
-          onCompositionStart={() => { composingRef.current = true }}
-          onCompositionEnd={() => { composingRef.current = false }}
-          onKeyDown={(event) => {
-            const composing = event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229
-            if (mentionQuery !== null && !composing) {
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                setMentionQuery(null)
-                return
-              }
-              if (
-                ['ArrowDown', 'ArrowUp'].includes(event.key) &&
-                candidates.length
-              ) {
-                event.preventDefault()
-                setMentionIndex(
-                  (index) =>
-                    (index +
-                      (event.key === 'ArrowDown' ? 1 : -1) +
-                      candidates.length) %
-                    candidates.length
-                )
-                return
-              }
-              if (
-                event.key === 'Enter' &&
-                !event.metaKey &&
-                !event.ctrlKey &&
-                candidates[mentionIndex]
-              ) {
-                event.preventDefault()
-                chooseMention(candidates[mentionIndex].id)
-                return
-              }
-            }
-            if (
-              event.key === 'Enter' &&
-              (event.metaKey || event.ctrlKey) &&
-              !composing
-            ) {
-              event.preventDefault()
-              void submit()
-            }
-          }}
-        />
+        <RoomContentReferenceChips references={draft.references} onChange={(references) => patch({ references })} disabled={disabled} />
+        <RoomRichInput ref={editorRef} room={room} value={draft.body} mentions={draft.mentions}
+          disabled={disabled} placeholder={t('roomsComposerPlaceholder')} onChange={patch}
+          onSubmit={() => void submit()} onPasteFiles={(files) => void attach(files)} />
+        <RoomContentReferencePicker room={room} tasks={tasks} references={draft.references}
+          onChange={(references) => patch({ references })} disabled={disabled} />
+        {pollOpen ? <RoomPollCreator roomId={room.id} replyToMessageId={replyToMessageId}
+          onClose={() => setPollOpen(false)} /> : null}
         <input hidden multiple ref={fileRef} type="file"
           onChange={(event) => void attach(event.target.files)} />
         <RoomComposerToolbar room={room} tasks={tasks} taskId={draft.taskId}
-          repositoryId={draft.repositoryId} rootRequestId={draft.rootRequestId}
+          repositoryId={draft.repositoryId} rootRequestId={rootRequestId}
           topicTitle={topicTitle} topicChoices={topicChoices}
           showTopic={!draftId && (room.collaborationMode === 'peer' || Boolean(draft.rootRequestId))}
           intent={draft.intent} busy={busy} uploading={uploading} disabled={disabled}
           attachmentLimit={draft.attachments.length >= 20}
-          canSend={unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length)}
-          onAttach={() => { setMentionQuery(null); fileRef.current?.click() }}
-          onMention={() => {
-            const caret = textareaRef.current?.selectionStart ?? draft.body.length
-            mentionRange.current = { start: caret, end: caret }
-            setMentionQuery('')
-            setMentionIndex(0)
-            textareaRef.current?.focus()
-          }}
+          canSend={unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length || draft.references.length)}
+          onAttach={() => fileRef.current?.click()}
+          onMention={() => editorRef.current?.insertText('@')}
+          onEmoji={(emoji) => editorRef.current?.insertText(emoji)} onPoll={() => setPollOpen((value) => !value)}
           onTask={(taskId) => patch({ taskId })}
           onRepository={(repositoryId) => patch({ repositoryId })}
           onTopic={(id) => patch({ rootRequestId: id || undefined, replyToMessageId: undefined, replyBody: undefined })}
@@ -436,4 +361,9 @@ export function RoomComposer({
       ) : null}
     </form>
   )
+}
+
+
+export function RoomComposer(props: Parameters<typeof RoomComposerEditor>[0]): ReactElement {
+  return <RoomComposerEditor key={props.draftId ?? props.room.id} {...props} />
 }

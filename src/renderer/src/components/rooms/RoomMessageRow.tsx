@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { ArrowUpRight, Check, Copy, Pin, Reply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
+import type { Room, RoomContentReference, RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomMessageBody } from './RoomMessageBody'
 import { RoomMessageRunButton } from './RoomMessageRunButton'
+import { RoomMessageInteractions } from './RoomMessageInteractions'
 
 const roles = {
   coordinator: 'roomsCoordinator',
@@ -15,6 +16,8 @@ const roles = {
 
 export function RoomMessageRow({
   message,
+  room,
+  idPrefix = 'room-message',
   member,
   task,
   referencedMessage,
@@ -23,9 +26,12 @@ export function RoomMessageRow({
   onTask,
   onViewReply,
   onMember,
-  onRun
+  onRun,
+  onOpenContent
 }: {
   message: RoomMessage
+  room?: Room
+  idPrefix?: string
   member?: RoomMember
   task?: RoomTask
   referencedMessage?: RoomMessage
@@ -35,6 +41,7 @@ export function RoomMessageRow({
   onViewReply: (id: string) => void
   onMember?: (id: string, rootRequestId?: string) => void
   onRun?: (id: string) => void
+  onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
 }) {
   const { t } = useTranslation('common')
   const [copied, setCopied] = useState(false)
@@ -57,7 +64,8 @@ export function RoomMessageRow({
   }
   return (
     <article
-      id={'room-message-' + message.id}
+      id={idPrefix + '-' + message.id}
+      data-room-message-id={message.id}
       className={`rooms-message-row rooms-message-${message.authorKind}`}
     >
       {!system ? (
@@ -113,12 +121,20 @@ export function RoomMessageRow({
               </span>
             </button>
           ) : null}
-          <RoomMessageBody
+          {message.presentationKind !== 'poll' ? <RoomMessageBody
+            room={room}
+            publicMessage={message.status !== 'streaming'}
+            messageId={message.id}
+            references={message.references}
+            onOpenContent={onOpenContent}
+            onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined}
             body={message.body}
             attachmentIds={message.attachmentIds}
-          />
+          /> : null}
+          {room ? <RoomMessageInteractions room={room} message={message} onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined} /> : null}
         </div>
         <div className="rooms-message-footer">
+          {message.replyCount ? <button type="button" className="rooms-reply-count" onClick={() => onReply(message)}><Reply size={13} />{t('roomsReplyCount', { count: message.replyCount })}</button> : null}
           {onRun && canInspectRun ? <RoomMessageRunButton message={message} onRun={onRun} /> : null}
           {message.taskId ? (
             <button

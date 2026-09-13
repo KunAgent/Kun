@@ -6,6 +6,10 @@
   min-width: 0;
   flex-direction: column;
 }
+.rooms-run-process-filters { display: flex; gap: .4rem; margin: .5rem 0; }
+.rooms-run-process-filters input, .rooms-run-process-filters select { min-width: 0; border: 1px solid var(--ds-border); background: var(--ds-surface-card); border-radius: .4rem; padding: .35rem; font-size: .7rem; }
+.rooms-run-process-filters input { flex: 1; }
+.rooms-run-tool-summary { font-family: monospace; font-size: .7rem; overflow-wrap: anywhere; margin-bottom: .4rem; }
 .rooms-message-footer { flex-wrap: wrap; }
 .rooms-message-run-source { display: inline-flex; flex-direction: column; max-width: 100%; min-width: 0; }
 .rooms-message-run-source .rooms-message-task { max-width: 100%; }

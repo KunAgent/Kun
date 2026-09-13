@@ -9,6 +9,7 @@ import {
   type RoomIntegrationSnapshot
 } from './room-notifications'
 import type { RoomTaskDetail } from './rooms-client'
+import type { RoomNotificationPreference } from '@shared/rooms-api'
 
 const harness = vi.hoisted(() => ({
   event: null as null | ((payload: unknown) => void),
@@ -102,6 +103,7 @@ describe('Room integration notifications', () => {
   let renderer: ReactTestRenderer
   const storage = new Map<string, string>()
   let rows: unknown[]
+  let preference: RoomNotificationPreference
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     vi.useFakeTimers()
@@ -113,10 +115,11 @@ describe('Room integration notifications', () => {
     harness.focus.mockReturnValue(false)
     harness.task.mockReset().mockResolvedValue(detail)
     rows = [integration]
+    preference = { roomId: 'room', mode: 'all', updatedAt: new Date(0).toISOString() }
     harness.request
       .mockReset()
       .mockImplementation(async (path: string) =>
-        path.includes('/integrations')
+        path.endsWith('/preferences') ? { preference, revision: 0 } : path.includes('/integrations')
           ? { integrations: rows, integration: rows[0] }
           : path.includes('latest=true')
             ? { cursor: 1 }
@@ -148,7 +151,7 @@ describe('Room integration notifications', () => {
       renderer = create(createElement(Harness))
     })
   }
-  const event = async (seq: number, roomId = 'room') => {
+  const event = async (seq: number, roomId = 'room', createdAt = new Date().toISOString()) => {
     await act(async () =>
       harness.event?.({
         streamId: (harness.start.mock.calls[0] as unknown[])[2],
@@ -156,6 +159,7 @@ describe('Room integration notifications', () => {
           {
             seq,
             roomId,
+            createdAt,
             kind: 'integration.updated',
             payload: { id: 'integration', taskId: 'task' }
           }
@@ -163,6 +167,21 @@ describe('Room integration notifications', () => {
       })
     )
   }
+
+  it('checks mute at delivery and never replays expired queued events after unmute', async () => {
+    vi.setSystemTime('2026-09-13T00:00:00Z')
+    preference = { roomId: 'room', mode: 'muted', updatedAt: new Date().toISOString() }
+    await mount()
+    await event(2)
+    expect(harness.notify).not.toHaveBeenCalled()
+    preference = { roomId: 'room', mode: 'all', updatedAt: '2026-09-13T01:00:00Z', silencedThrough: '2026-09-13T01:00:00Z' }
+    rows = [{ ...integration, approvals: [{ id: 'approval-2', toolName: 'bash', summary: 'A new check' }] }]
+    vi.setSystemTime('2026-09-13T02:00:00Z')
+    await event(3, 'room', '2026-09-13T00:30:00Z')
+    expect(harness.notify).not.toHaveBeenCalled()
+    await event(4)
+    expect(harness.notify).toHaveBeenCalledTimes(1)
+  })
   it('notifies the actual integration approval and deduplicates repeated updates by gate identity', async () => {
     await mount()
     await event(2)

@@ -21,7 +21,7 @@ export function mergeRunItems(
   ].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }
 
-export function useRoomRun(roomId: string, runId: string) {
+export function useRoomRun(roomId: string, runId: string, active = true) {
   const [detail, setDetail] = useState<RoomRunDetail | null>(null)
   const [items, setItems] = useState<CoreTurnItemJson[]>([])
   const [itemsAvailability, setItemsAvailability] =
@@ -93,7 +93,7 @@ export function useRoomRun(roomId: string, runId: string) {
       : null
   const ready = Boolean(currentDetail)
   useEffect(() => {
-    if (!ready || !window.kunGui?.startSse) return
+    if (!active || !ready || !window.kunGui?.startSse) return
     const controller = new AbortController()
     const streamId = 'room-run-' + roomRequestId()
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -181,7 +181,7 @@ export function useRoomRun(roomId: string, runId: string) {
       opened()
       void rendererRuntimeClient.stopSse(streamId).catch(() => undefined)
     }
-  }, [read, ready, revision, roomId, runId])
+  }, [active, read, ready, revision, roomId, runId])
   const loadEarlier = async () => {
     const gapCursor = gapCursors[0]
     const pageCursor = gapCursor ?? earlierCursor

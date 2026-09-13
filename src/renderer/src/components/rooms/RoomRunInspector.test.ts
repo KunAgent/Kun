@@ -121,13 +121,14 @@ describe('Rooms run inspector', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
-  const render = async (runId = 'run-a') => {
+  const render = async (runId = 'run-a', active = true) => {
     await act(async () => {
       if (renderer)
         renderer.update(
           createElement(RoomRunInspector, {
             roomId: 'room',
             runId,
+            active,
             onOpenThread
           })
         )
@@ -136,6 +137,7 @@ describe('Rooms run inspector', () => {
           createElement(RoomRunInspector, {
             roomId: 'room',
             runId,
+            active,
             onOpenThread
           })
         )
@@ -166,6 +168,18 @@ describe('Rooms run inspector', () => {
     expect(onOpenThread).toHaveBeenCalledWith('thread-run-a', 'turn-run-a')
     expect(texts()).toContain('Original turn unavailable')
     expect(api.request.mock.calls.every((call) => call[1] === 'GET')).toBe(true)
+  })
+  it('retains the selected run but stops its subscription while another drawer child is active', async () => {
+    await render()
+    const streamId = api.start.mock.calls[0][2]
+    api.request.mockClear()
+    await render('run-a', false)
+    expect(api.stop).toHaveBeenCalledWith(streamId)
+    expect(texts()).toContain('Recorded response')
+    await render('run-a', true)
+    expect(api.start).toHaveBeenCalledTimes(2)
+    expect(api.start.mock.calls[1][3].runId).toBe('run-a')
+    expect(api.request).not.toHaveBeenCalled()
   })
 
   it('keeps triage outcomes and unavailable usage visible without inventing a Code target', async () => {

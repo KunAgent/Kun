@@ -137,10 +137,11 @@ export const roomsClient = {
     archived: boolean,
     cursor?: string,
     signal?: AbortSignal,
-    search = ''
+    search = '',
+    filters?: { unreadOnly?: boolean; attentionOnly?: boolean; repositoryRoot?: string; ids?: string[] }
   ) =>
     roomsRequest<RoomPage<{ rooms: RoomListEntry[] }>>(
-      `/v1/rooms?limit=50&archived_only=${archived}&search=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      `/v1/rooms?limit=50&archived_only=${archived}&search=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${filters?.unreadOnly ? '&unread_only=true' : ''}${filters?.attentionOnly ? '&attention_only=true' : ''}${filters?.repositoryRoot ? '&repository_root=' + encodeURIComponent(filters.repositoryRoot) : ''}${filters?.ids ? '&room_ids=' + encodeURIComponent(filters.ids.join(',')) : ''}`,
       'GET',
       undefined,
       signal
@@ -231,8 +232,10 @@ export function mergeRoomMessages(
   const byId = new Map(existing.map((message) => [message.id, message]))
   for (const message of incoming) {
     const current = byId.get(message.id)
-    if (!current || message.bodyRevision >= current.bodyRevision)
-      byId.set(message.id, message)
+    const latest = !current || message.bodyRevision >= current.bodyRevision ? message : current
+    // Replies are append-only; their count changes independently of bodyRevision.
+    const replyCount = Math.max(current?.replyCount ?? 0, message.replyCount ?? 0)
+    byId.set(message.id, replyCount ? { ...latest, replyCount } : latest)
   }
   return Array.from(byId.values()).sort((a, b) => a.messageSeq - b.messageSeq)
 }

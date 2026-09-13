@@ -1,13 +1,14 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AtSign, ChevronDown, LoaderCircle, Paperclip, Plus, Send } from 'lucide-react'
+import { AtSign, BarChart3, ChevronDown, LoaderCircle, Paperclip, Plus, Send } from 'lucide-react'
 import type { Room, RoomTask, SendRoomMessage } from '@shared/rooms-api'
+import { RoomEmojiPicker } from './RoomEmojiPicker'
 import { RoomPopover } from './RoomPopover'
 
 export function RoomComposerToolbar({
   room, tasks, taskId, repositoryId, rootRequestId, topicTitle, topicChoices,
   showTopic, intent, busy, uploading, disabled, attachmentLimit, canSend,
-  onAttach, onMention, onTask, onRepository, onTopic, onIntent
+  onAttach, onMention, onEmoji, onPoll, onTask, onRepository, onTopic, onIntent
 }: {
   room: Room
   tasks: RoomTask[]
@@ -25,6 +26,8 @@ export function RoomComposerToolbar({
   canSend: boolean
   onAttach: () => void
   onMention: () => void
+  onEmoji: (emoji: string) => void
+  onPoll: () => void
   onTask: (id: string) => void
   onRepository: (id: string) => void
   onTopic: (id: string) => void
@@ -43,6 +46,9 @@ export function RoomComposerToolbar({
           aria-label={t('roomsMention')} title={t('roomsMention')} disabled={disabled}>
           <AtSign size={17} />
         </button>
+        <RoomEmojiPicker onChoose={onEmoji} disabled={disabled} />
+        <button type="button" className="rooms-composer-tool" aria-label={t('roomsCreatePoll')} title={t('roomsCreatePoll')}
+          disabled={disabled} onClick={onPoll}><BarChart3 size={17} /></button>
         <RoomPopover label={t('roomsAddContext')} trigger={<Plus size={17} />}
           side="top" className="rooms-composer-context-popover" disabled={disabled}>
           {(close) => (

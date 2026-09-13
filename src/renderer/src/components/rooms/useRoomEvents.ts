@@ -9,6 +9,8 @@ import {
   roomTaskPath
 } from './rooms-client'
 import i18n from '../../i18n'
+import type { RoomPreferenceDetail } from '@shared/rooms-api'
+import { roomNotificationSuppressed, roomNotificationsMuted } from '../../../../../kun/src/contracts/room-experience'
 import {
   integrationRoomNotice,
   taskRoomNotice,
@@ -23,6 +25,7 @@ type Event = {
   seq: number
   roomId: string
   kind: string
+  createdAt?: string
   payload?: { id?: string; taskId?: string }
 }
 const listeners = new Set<(event: Event) => void>()
@@ -95,6 +98,9 @@ export function useRoomEvents() {
       }
       if (stopped) throw new Error('room notification subscription stopped')
       if (!notice || known(notice.key)) return notice?.key ?? null
+      const { preference } = await roomsRequest<RoomPreferenceDetail>('/v1/rooms/' + encodeURIComponent(event.roomId) + '/preferences')
+      if (stopped) throw new Error('room notification subscription stopped')
+      if (roomNotificationSuppressed(preference, event.createdAt)) return roomNotificationsMuted(preference) ? notice.key : null
       if (useChatStore.getState().route === 'rooms' && readBrowserStorageItem('kun.rooms.selected') === event.roomId && document.hasFocus()) return notice.key
       const result = await window.kunGui.showTurnCompleteNotification({ roomId: event.roomId, threadId: notice.threadId,
         source: 'main-agent', title: 'Kun · ' + i18n.t('roomsLabel', { ns: 'common' }), body: notice.body.slice(0, 500) })

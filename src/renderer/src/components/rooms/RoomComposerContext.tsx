@@ -52,7 +52,7 @@ export function RoomComposerContext({
       <div className="rooms-composer-chips">
         {mentions.map((id) => (
           <ContextChip key={id} icon={<AtSign size={13} />}
-            name={room.members.find((member) => member.id === id)?.displayName ?? id}
+            name={id === '*' ? t('roomsMentionAll') : room.members.find((member) => member.id === id)?.displayName ?? id}
             onRemove={() => onMentions(mentions.filter((value) => value !== id))} />
         ))}
         {taskId ? <ContextChip icon={<ListTodo size={13} />}

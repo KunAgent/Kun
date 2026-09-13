@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { Room } from '@shared/rooms-api'
 import { RoomAvatarGroup } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
+import { RoomAppearanceMenu, RoomNotificationMenu } from './RoomManagementControls'
 
 export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDetails, onMembers, onSettings, onUpdate }: {
   room: Room | null; busy: boolean; searchOpen: boolean
@@ -37,6 +38,8 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
         title={t('roomsSearchMessages')} aria-pressed={searchOpen} onClick={onSearch}><Search size={18} /></button>
       <button type="button" className="rooms-icon-button" aria-label={t('roomsRoomDetails')}
         title={t('roomsRoomDetails')} onClick={onDetails}><PanelRight size={18} /></button>
+      <RoomNotificationMenu roomId={room.id} />
+      <RoomAppearanceMenu />
       <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={19} />} align="end" width={224} className="rooms-icon-button">
         {(close) => <div className="rooms-menu-list">
           <button type="button" onClick={() => { close(); onSettings() }}><Settings size={16} />{t('roomsSettings')}</button>

@@ -1,5 +1,9 @@
 import codexHistory from './common/codex-history.json'
 import rooms from './common/rooms.json'
+import roomsReplies from './common/rooms-replies.json'
+import roomsInteractions from './common/rooms-interactions.json'
+import roomsExperience from './common/rooms-experience.json'
+import roomsContent from './common/rooms-content.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
@@ -22,6 +26,10 @@ import speak from './common/speak.json'
 const common = {
   ...codexHistory,
   ...rooms,
+  ...roomsReplies,
+  ...roomsInteractions,
+  ...roomsExperience,
+  ...roomsContent,
   queuedMessageEditAccountUnavailable: '原模型账号不可用或已变更，消息已保留。请恢复原模型连接后重试。',
   queuedMessageEditSteering: '消息正在作为引导送达，暂时无法修改。',
   queuedMessageRestorePending: '已撤回，待编辑',

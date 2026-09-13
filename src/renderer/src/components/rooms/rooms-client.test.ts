@@ -68,6 +68,14 @@ describe('Rooms renderer API', () => {
       mergeRoomMessages([a, b], [{ ...b, body: 'done', bodyRevision: 2 }])
     ).toEqual([a, { ...b, body: 'done', bodyRevision: 2 }])
   })
+  it('keeps newer reply counts when body pages and projections arrive out of order', () => {
+    const current = { id: 'root', messageSeq: 1, body: 'current', bodyRevision: 3, replyCount: 4 } as RoomMessage
+    expect(mergeRoomMessages([current], [{ ...current, replyCount: 1 }])).toEqual([current])
+    expect(mergeRoomMessages([current], [{ ...current, body: 'new', bodyRevision: 4, replyCount: undefined }]))
+      .toEqual([{ ...current, body: 'new', bodyRevision: 4 }])
+    expect(mergeRoomMessages([current], [{ ...current, body: 'old', bodyRevision: 2, replyCount: 6 }]))
+      .toEqual([{ ...current, replyCount: 6 }])
+  })
   it('requires an accepted current delivery before offering Apply', () => {
     const task = {
       status: 'awaiting_acceptance',

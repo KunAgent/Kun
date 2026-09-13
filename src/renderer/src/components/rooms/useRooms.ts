@@ -18,6 +18,8 @@ export function useRooms() {
   const [rooms, setRooms] = useState<RoomListEntry[]>([])
   const [archived, setArchived] = useState(false)
   const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'unread' | 'attention'>('all')
+  const [repositoryRoot, setRepositoryRoot] = useState('')
   const [selectedId, setSelectedId] = useState(
     readBrowserStorageItem('kun.rooms.selected') ?? ''
   )
@@ -33,7 +35,13 @@ export function useRooms() {
   const [moreBusy, setMoreBusy] = useState(false)
   const selectedRef = useRef(selectedId)
   selectedRef.current = selectedId
+  const roomsRef = useRef(rooms)
+  roomsRef.current = rooms
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
   const listGenerationRef = useRef(0)
+  const listScopeRef = useRef('')
+  listScopeRef.current = JSON.stringify([archived, search, filter, repositoryRoot])
   const refreshRef = useRef<() => Promise<void>>(async () => undefined)
 
   const select = useCallback((id: string): void => {
@@ -41,15 +49,31 @@ export function useRooms() {
     writeBrowserStorageItem('kun.rooms.selected', id)
   }, [])
   const refreshList = useCallback(
-    async (reset = false): Promise<void> => {
+    async (reset = false, changedIds?: string[]): Promise<void> => {
       const generation = ++listGenerationRef.current
       try {
         const result = await roomsClient.list(
           archived,
           undefined,
           undefined,
-          search
+          search,
+          { unreadOnly: filter === 'unread', attentionOnly: filter === 'attention', repositoryRoot: repositoryRoot || undefined }
         )
+        if (generation !== listGenerationRef.current) return
+        // Revalidate only loaded rows affected by live events; the original
+        // keyset cursor and loaded tail survive an authoritative head refresh.
+        const headIds = new Set(result.rooms.map((item) => item.id))
+        const recheckIds = reset ? [] : roomsRef.current.filter((item) => !headIds.has(item.id) &&
+          (!changedIds || changedIds.includes(item.id))).map((item) => item.id)
+        const checked = new Set(recheckIds), stillVisible = new Map<string, RoomListEntry>()
+        for (let offset = 0; offset < recheckIds.length; offset += 50) {
+          if (generation !== listGenerationRef.current) return
+          const page = await roomsClient.list(archived, undefined, undefined, search, {
+            unreadOnly: filter === 'unread', attentionOnly: filter === 'attention',
+            repositoryRoot: repositoryRoot || undefined, ids: recheckIds.slice(offset, offset + 50)
+          })
+          for (const item of page.rooms) stillVisible.set(item.id, item)
+        }
         if (generation !== listGenerationRef.current) return
         setRooms((current) =>
           reset
@@ -58,10 +82,8 @@ export function useRooms() {
                 ...new Map(
                   [
                     ...result.rooms,
-                    ...current.filter(
-                      (item) =>
-                        !result.rooms.some((value) => value.id === item.id)
-                    )
+                    ...current.filter((item) => !headIds.has(item.id) && (!checked.has(item.id) || stillVisible.has(item.id)))
+                      .map((item) => stillVisible.get(item.id) ?? item)
                   ].map((item) => [item.id, item])
                 ).values()
               ]
@@ -69,12 +91,12 @@ export function useRooms() {
         if (reset) setRoomCursor(result.nextCursor ?? null)
         if (!selectedRef.current && result.rooms[0]) select(result.rooms[0].id)
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause))
+        if (generation === listGenerationRef.current) setError(cause instanceof Error ? cause.message : String(cause))
       } finally {
         if (!selectedRef.current) setLoading(false)
       }
     },
-    [archived, select, search]
+    [archived, select, search, filter, repositoryRoot]
   )
   useEffect(() => {
     void refreshList(true)
@@ -82,12 +104,14 @@ export function useRooms() {
       if (!roomEventsLive()) void refreshList()
     }, 10000)
     let eventTimer: ReturnType<typeof setTimeout> | undefined
+    const changedRooms = new Set<string>()
     const unsubscribe = subscribeRoomEvents((event) => {
       if (event.kind === 'navigate') select(event.roomId)
       if (!/^(room|task|request|integration|peer)\./.test(event.kind) &&
-        event.kind !== 'message.created' && event.kind !== 'message.updated') return
+        event.kind !== 'message.created' && event.kind !== 'message.updated' && event.kind !== 'message.presentation.created') return
+      changedRooms.add(event.roomId)
       clearTimeout(eventTimer)
-      eventTimer = setTimeout(() => void refreshList(), 150)
+      eventTimer = setTimeout(() => { const ids = [...changedRooms]; changedRooms.clear(); void refreshList(false, ids) }, 150)
     })
     const listingGeneration = listGenerationRef
     return () => {
@@ -112,6 +136,7 @@ export function useRooms() {
     let timer: ReturnType<typeof setTimeout> | undefined
     let first = true
     let refreshVersion = 0
+    const pendingReplyRoots = new Set<string>()
     setLoading(true)
     const refresh = async (parts?: Set<string>, messageIds: string[] = [], taskIds: string[] = []): Promise<void> => {
       clearTimeout(timer)
@@ -128,7 +153,15 @@ export function useRooms() {
         ])
         if (controller.signal.aborted) return
         if (detail) setRoom((current) => !current || detail.room.revision >= current.revision ? detail.room : current)
-        setMessages((current) => mergeRoomMessages(current, [...(page?.messages ?? []), ...changedMessages.map((value) => value.message)]))
+        const incoming = [...(page?.messages ?? []), ...changedMessages.map((value) => value.message)]
+        const loaded = new Map(messagesRef.current.map((message) => [message.id, message]))
+        const incomingIds = new Set(incoming.map((message) => message.id))
+        for (const message of incoming) {
+          const rootId = message.displayThreadRootId
+          if (rootId && loaded.has(rootId) && !incomingIds.has(rootId) &&
+            loaded.get(message.id)?.displayThreadRootId !== rootId) pendingReplyRoots.add(rootId)
+        }
+        setMessages((current) => mergeRoomMessages(current, incoming))
         setTasks((current) => {
           const merged = new Map(current.map((task) => [task.id, task]))
           for (const task of [...(taskResult?.tasks ?? []), ...changedTasks.map((value) => value.task)]) {
@@ -143,6 +176,16 @@ export function useRooms() {
         if (first) {
           setMessageCursor(page?.nextCursor ?? null)
           setTaskCursor(taskResult?.nextCursor ?? null)
+        }
+        const replyRoots = [...pendingReplyRoots]
+        for (let offset = 0; offset < replyRoots.length; offset += 50) {
+          const ids = replyRoots.slice(offset, offset + 50)
+          const projected = await roomsRequest<{ messages: RoomMessage[] }>(
+            `${roomPath(selectedId)}/messages?message_ids=${encodeURIComponent(ids.join(','))}`,
+            'GET', undefined, controller.signal)
+          if (controller.signal.aborted || version !== refreshVersion) return
+          setMessages((current) => mergeRoomMessages(current, projected.messages))
+          for (const id of ids) pendingReplyRoots.delete(id)
         }
         setError('')
         first = false
@@ -169,7 +212,7 @@ export function useRooms() {
       if (event.roomId !== selectedId) return
       if (event.kind.startsWith('room.')) pending.add('room')
       if (event.kind.startsWith('rule.')) pending.add('rules')
-      if (event.kind === 'message.created') pending.add('messages')
+      if (event.kind === 'message.created' || event.kind === 'message.presentation.created') pending.add('messages')
       if (event.kind === 'message.updated' && event.payload?.id) messageIds.add(event.payload.id)
       if (event.kind === 'task.created') pending.add('tasks')
       if (event.kind.startsWith('task.') && event.payload?.id) taskIds.add(event.payload.id)
@@ -208,19 +251,28 @@ export function useRooms() {
   const loadMoreRooms = async (): Promise<void> => {
     if (!roomCursor || moreBusy) return
     const generation = listGenerationRef.current
+    const scope = listScopeRef.current
     setMoreBusy(true)
     try {
       const page = await roomsClient.list(
         archived,
         roomCursor,
         undefined,
-        search
+        search,
+        { unreadOnly: filter === 'unread', attentionOnly: filter === 'attention', repositoryRoot: repositoryRoot || undefined }
       )
-      if (generation !== listGenerationRef.current) return
+      if (scope !== listScopeRef.current) return
+      let rows = page.rooms
+      if (generation !== listGenerationRef.current && rows.length) {
+        const latest = await roomsClient.list(archived, undefined, undefined, search, {
+          unreadOnly: filter === 'unread', attentionOnly: filter === 'attention',
+          repositoryRoot: repositoryRoot || undefined, ids: rows.map((item) => item.id)
+        })
+        if (scope !== listScopeRef.current) return
+        rows = latest.rooms
+      }
       setRooms((current) => [
-        ...new Map(
-          [...current, ...page.rooms].map((value) => [value.id, value])
-        ).values()
+        ...current, ...rows.filter((item) => !current.some((old) => old.id === item.id))
       ])
       setRoomCursor(page.nextCursor ?? null)
     } catch (cause) {
@@ -262,6 +314,7 @@ export function useRooms() {
   return {
     search,
     setSearch,
+    filter, setFilter, repositoryRoot, setRepositoryRoot,
     rooms,
     room,
     messages,

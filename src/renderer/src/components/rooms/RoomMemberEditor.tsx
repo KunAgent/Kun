@@ -4,6 +4,7 @@ import type { RoomMember } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import type { RoomPresetCatalog, RoomRepositoryInput } from './rooms-client'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
+import { RoomAvatarPicker } from './RoomAvatarPicker'
 
 const words = (value: string) =>
   value
@@ -87,6 +88,7 @@ export function RoomMemberEditor({
       <legend className="px-1 text-sm text-ds-muted">
         {member.displayName}
       </legend>
+      <RoomAvatarPicker member={member} onChange={(avatar) => onChange({ avatar })} />
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs text-ds-muted">
           {t('roomsMemberName')}

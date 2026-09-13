@@ -1,0 +1,48 @@
+.rooms-rich-input-wrap { position: relative; min-width: 0; }
+.rooms-rich-input { min-height: 44px; max-height: 200px; overflow-y: auto; outline: none; padding: 8px 12px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rooms-rich-input p { margin: 0; min-height: 1.7em; }
+.rooms-rich-input[contenteditable="false"] { opacity: .65; }
+.rooms-rich-input:has(>p:only-child>br.ProseMirror-trailingBreak:only-child)::before { content: attr(data-placeholder); color: var(--ds-muted); pointer-events: none; height: 0; float: left; }
+.rooms-inline-mention, .rooms-mention-body a[href^="#kun-room-member-"] { display: inline; border-radius: 5px; padding: 1px 4px; color: var(--ds-accent); background: color-mix(in srgb, var(--ds-accent) 12%, transparent); text-decoration: none; font-weight: 500; }
+.rooms-rich-mentions { position: absolute; bottom: 100%; left: 8px; right: 8px; max-height: 220px; overflow: auto; z-index: 15; border: 1px solid var(--ds-border); border-radius: 10px; background: var(--ds-surface); padding: 4px; box-shadow: 0 8px 24px #0002; }
+.rooms-rich-mentions button { display: block; width: 100%; padding: 7px 10px; text-align: left; border-radius: 6px; }
+.rooms-rich-mentions button[aria-selected="true"] { background: color-mix(in srgb, var(--ds-accent) 12%, transparent); }
+.rooms-emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; padding: 7px; }
+.rooms-emoji-grid button { width: 32px; height: 32px; border-radius: 6px; font-size: 20px; }
+.rooms-emoji-grid button:hover, .rooms-emoji-grid button:focus-visible { background: color-mix(in srgb, var(--ds-accent) 12%, transparent); outline: 2px solid var(--ds-accent); }
+.rooms-message-interactions { min-width: 0; margin-top: 5px; }
+.rooms-reactions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.rooms-reactions > button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--ds-border); border-radius: 12px; padding: 1px 7px; font-size: 12px; line-height: 21px; }
+.rooms-reactions > button.is-reacted { border-color: color-mix(in srgb, var(--ds-accent) 55%, var(--ds-border)); background: color-mix(in srgb, var(--ds-accent) 8%, transparent); }
+.rooms-reactions .rooms-popover-anchor { opacity: .6; }
+.rooms-interaction-error { color: #d35b62; font-size: 12px; margin: 5px 0; overflow-wrap: anywhere; }
+.rooms-interaction-note { color: var(--ds-muted); font-size: 12px; }
+.rooms-poll-create, .rooms-poll-card { border: 1px solid var(--ds-border); border-radius: 10px; padding: 12px; margin: 8px 0; min-width: 0; max-width: 100%; background: var(--ds-surface); }
+.rooms-poll-create { margin: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
+.rooms-poll-create-header, .rooms-poll-heading { display: flex; gap: 8px; align-items: flex-start; }
+.rooms-poll-create-header strong, .rooms-poll-heading strong { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.rooms-poll-create input:not([type="checkbox"]), .rooms-poll-create label:not(.rooms-poll-check) { width: 100%; min-width: 0; }
+.rooms-poll-create input:not([type="checkbox"]) { border: 1px solid var(--ds-border); border-radius: 6px; padding: 6px 8px; background: transparent; font-size: 12px; }
+.rooms-poll-option-edit, .rooms-poll-check, .rooms-poll-inline-action { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+.rooms-poll-inline-action { color: var(--ds-accent); align-self: flex-start; }
+.rooms-poll-primary { background: var(--ds-accent); color: white; align-self: flex-end; border-radius: 6px; padding: 5px 10px; font-size: 12px; }
+.rooms-poll-create button:disabled, .rooms-poll-card button:disabled { opacity: .5; cursor: default; }
+.rooms-poll-heading > span { font-size: 10px; white-space: nowrap; color: var(--ds-muted); }
+.rooms-poll-options { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.rooms-poll-choice { display: flex; align-items: center; position: relative; overflow: hidden; gap: 7px; border: 1px solid var(--ds-border); border-radius: 7px; padding: 8px; font-size: 12px; }
+.rooms-poll-choice > *:not(.rooms-poll-fill) { position: relative; z-index: 1; }
+.rooms-poll-choice > input { flex-shrink: 0; }
+.rooms-poll-choice > span:not(.rooms-poll-count):not(.rooms-poll-fill) { flex: 1; overflow-wrap: anywhere; }
+.rooms-poll-fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--ds-accent) 10%, transparent); transition: width 160ms ease; }
+.rooms-poll-count { color: var(--ds-muted); font-variant-numeric: tabular-nums; }
+.rooms-poll-meta, .rooms-poll-actions { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; color: var(--ds-muted); font-size: 11px; }
+.rooms-poll-meta { justify-content: space-between; margin-bottom: 8px; }
+.rooms-poll-actions > button { padding: 4px 6px; border: 1px solid var(--ds-border); border-radius: 6px; color: var(--ds-text); }
+.rooms-poll-invite { padding: 10px; display: flex; gap: 7px; flex-direction: column; font-size: 12px; }
+.rooms-poll-invite label { display: flex; gap: 7px; }
+.rooms-poll-invite button { padding: 6px; border-radius: 6px; background: var(--ds-accent); color: white; }
+.rooms-poll-create input:focus-visible, .rooms-poll-card button:focus-visible, .rooms-poll-choice input:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+@media (max-width: 560px) { .rooms-poll-card { padding: 9px; } .rooms-poll-heading { flex-wrap: wrap; } .rooms-poll-heading strong { flex-basis: calc(100% - 30px); } }
+
+.rooms-poll-create { max-height: min(340px, 40vh); overflow-y: auto; }
+.rooms-composer-surface:has(.rooms-poll-create) .rooms-rich-input { max-height: 80px; }

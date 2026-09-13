@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next'
 import type { CoreTurnItemJson } from '../../agent/kun-contract'
 import { RoomMessageBody } from './RoomMessageBody'
 import { RoomRunItemContent } from './RoomRunItemContent'
+import { groupRoomRunItems, roomRunEntryMatches } from './room-run-groups'
+import { RoomRunToolCard } from './RoomRunToolCard'
 
 const hiddenKinds = new Set([
   'model_context',
@@ -19,18 +21,25 @@ function printable(value: unknown): string {
 export function RoomRunItems({
   items,
   roomId,
-  runId
+  runId,
+  filter = 'all', query = '', runStatus
 }: {
   items: CoreTurnItemJson[]
   roomId: string
   runId: string
+  filter?: string
+  query?: string
+  runStatus?: string
 }) {
   const { t } = useTranslation('common')
   return (
     <ol className="rooms-run-items">
-      {items
-        .filter((item) => !hiddenKinds.has(item.kind))
-        .map((item) => {
+      {groupRoomRunItems(items.filter((item) => !hiddenKinds.has(item.kind)))
+        .filter((entry) => roomRunEntryMatches(entry, filter, query))
+        .map((entry) => {
+          if (entry.kind === 'tool') return <RoomRunToolCard key={entry.callId} roomId={roomId} runId={runId}
+            callId={entry.callId} call={entry.call} result={entry.result} runStatus={runStatus} />
+          const item = entry.item
           const isTool =
             item.kind === 'tool_call' || item.kind === 'tool_result'
           const error =

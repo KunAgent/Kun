@@ -9,15 +9,18 @@ import './rooms-runs.css'
 export function RoomRunInspector({
   roomId,
   runId,
-  onOpenThread
+  onOpenThread,
+  active = true
 }: {
   roomId: string
   runId: string
   onOpenThread: (threadId: string, turnId?: string) => void | Promise<void>
+  active?: boolean
 }) {
   const { t } = useTranslation('common')
-  const state = useRoomRun(roomId, runId)
+  const state = useRoomRun(roomId, runId, active)
   const [navigationError, setNavigationError] = useState('')
+  const [processFilter, setProcessFilter] = useState('all'), [processSearch, setProcessSearch] = useState('')
   const scroll = useRef<HTMLDivElement>(null)
   const anchor = useRef<{
     height: number
@@ -175,7 +178,14 @@ export function RoomRunInspector({
                 )}
               </button>
             ) : null}
-            <RoomRunItems roomId={roomId} runId={runId} items={state.items} />
+            <div className="rooms-run-process-filters">
+              <select aria-label={t('roomsRunFilter')} value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}>
+                <option value="all">{t('roomsRunProcessAll')}</option><option value="tools">{t('roomsRunProcessTools')}</option><option value="errors">{t('roomsRunProcessErrors')}</option>
+              </select>
+              <input aria-label={t('roomsRunProcessSearch')} placeholder={t('roomsRunProcessSearch')} value={processSearch} onChange={(event) => setProcessSearch(event.target.value)} />
+            </div>
+            {processFilter !== 'all' || processSearch ? <p className="rooms-run-note">{t('roomsRunSearchLoadedOnly')}</p> : null}
+            <RoomRunItems roomId={roomId} runId={runId} items={state.items} filter={processFilter} query={processSearch} runStatus={run.status} />
             {!state.items.length &&
             !state.error &&
             state.itemsAvailability?.status === 'available' ? (

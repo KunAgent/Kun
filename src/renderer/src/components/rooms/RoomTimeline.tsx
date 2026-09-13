@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowDown, Search, X } from 'lucide-react'
-import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
+import type { Room, RoomContentReference, RoomMessage, RoomTask } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
   writeBrowserStorageItem
@@ -38,7 +38,9 @@ export function RoomTimeline({
   searchOpen = false,
   onSearchClose,
   onMember,
-  onRun
+  onRun,
+  onReplyThread,
+  onOpenContent
 }: {
   room: Room
   messages: RoomMessage[]
@@ -54,6 +56,8 @@ export function RoomTimeline({
   onSearchClose?: () => void
   onMember?: (id: string, rootRequestId?: string) => void
   onRun?: (id: string) => void
+  onReplyThread?: (message: RoomMessage) => void
+  onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
 }) {
   const { t } = useTranslation('common')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -312,6 +316,8 @@ export function RoomTimeline({
   }
   const renderMessage = (message: RoomMessage) => (
     <RoomMessageRow
+      room={room}
+      onOpenContent={onOpenContent}
       onRun={onRun ? (id) => { setFocused(null); onRun(id) } : undefined}
       message={message}
       member={room.members.find(
@@ -323,7 +329,7 @@ export function RoomTimeline({
           ? messageById.get(message.replyToMessageId)
           : undefined
       }
-      onReply={reply}
+      onReply={onReplyThread ?? reply}
       onPin={onPin}
       onTask={(id) => {
         setFocused(null)
