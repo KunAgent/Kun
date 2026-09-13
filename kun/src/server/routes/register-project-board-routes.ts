@@ -6,6 +6,7 @@ import {
   createProjectBoardCard,
   deleteProjectBoardCard,
   getProjectBoardSnapshot,
+  getProjectBoardCard,
   getProjectBoardSummaries,
   patchProjectBoardCard,
   patchProjectBoardCardStatuses,
@@ -30,6 +31,11 @@ export function registerProjectBoardRoutes(router: Router, runtime: ServerRuntim
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return service
       ? createProjectBoardCard(service, request)
+      : ERRORS.unavailable('project boards are not available')
+  })
+  router.add('GET', '/v1/project-boards/cards/:cardId', (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return service ? getProjectBoardCard(service, ctx.params.cardId, request)
       : ERRORS.unavailable('project boards are not available')
   })
   router.add('PATCH', '/v1/project-boards/cards/status', (request) => {

@@ -10,6 +10,7 @@ import {
   RoomListOptionsSchema
 } from '../rooms/room-store.js'
 import { RoomOutcomeQuerySchema } from '../rooms/room-store.js'
+import { RoomSearchQuerySchema, RoomRunSummaryQuerySchema } from '../contracts/room-experience.js'
 import type { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import {
   ManagerResourceFenceSchema,
@@ -23,7 +24,8 @@ import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from
 
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
-const Operations = z.enum(['get', 'list', 'listRooms', 'commit', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
+const Operations = z.enum(['get', 'list', 'listRooms', 'replyPage', 'searchRooms', 'roomRepositories', 'runSummary',
+  'commit', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
 
 export function addManagerRoomRoutes(router: Router, input: {
   managerToken: string
@@ -50,6 +52,14 @@ export function addManagerRoomRoutes(router: Router, input: {
       try {
         let result: unknown
         switch (operation.data) {
+          case 'replyPage': {
+            const value = z.object({ roomId: Id, messageId: Id,
+              beforeSeq: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(100).optional() }).strict().parse(body.value)
+            result = await input.roomStore.replyPage(value); break
+          }
+          case 'searchRooms': result = await input.roomStore.searchRooms(RoomSearchQuerySchema.parse(body.value)); break
+          case 'roomRepositories': z.object({}).strict().parse(body.value); result = await input.roomStore.roomRepositories(); break
+          case 'runSummary': result = await input.roomStore.runSummary(RoomRunSummaryQuerySchema.parse(body.value)); break
           case 'latestEventSeq': result = await input.roomStore.latestEventSeq(); break
           case 'eventScope': result = await input.roomStore.eventScope(); break
           case 'requestOutcomes': result = await input.roomStore.requestOutcomes(RoomOutcomeQuerySchema.parse(body.value)); break
@@ -83,7 +93,8 @@ export function addManagerRoomRoutes(router: Router, input: {
           case 'commit': {
             const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional() })
               .strict().parse(body.value)
-            if (!value.fence && value.input.puts.some((put) => (put.kind.startsWith('peer_') || put.kind === 'room_run'))) {
+            if (!value.fence && value.input.puts.some((put) => (put.kind.startsWith('peer_') ||
+              ['room_run', 'room_poll', 'room_reactions', 'room_avatar'].includes(put.kind)))) {
               throw new ResourceFenceStaleError()
             }
             if (value.fence) assertCurrent(value.fence)

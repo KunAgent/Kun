@@ -1,9 +1,11 @@
+import { roomPollInvitationPrompt } from './room-poll-invitations.js'
 import { randomUUID } from 'node:crypto'
 import type { RoomMember, RoomMessage } from '../contracts/rooms.js'
 import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
 import type { RoomPeerUpdates } from './room-peer-types.js'
 import { boundedRoomText, roomContext, roomContextBudget } from './room-context.js'
 import { roomDiscussionContext } from './room-discussion-evidence.js'
+import { uniqueRoomReplyTrigger } from './room-replies.js'
 
 export type RoomPeerTurnContext = {
   id: string
@@ -16,6 +18,8 @@ export type RoomPeerTurnContext = {
   publicationRevision: number
   generation: number
   triageInput?: unknown
+  replyToMessageId?: string
+  displayThreadRootId?: string
 }
 
 /** Freeze the precise supplied prefix before recording its admission identity. */
@@ -85,6 +89,7 @@ export async function prepareRoomPeerContext(deps: RoomRuntimeDeps, updates: Roo
     triageInput,
     itemIds: reference.updates.map((item) => item.inboxId), attachmentIds: request.message.attachmentIds,
     prompt: [
+      roomPollInvitationPrompt(request.pollInvitation, member.id),
       'Participate as this Kun room member. Other members decide independently whether to contribute.',
       'Give concrete new evidence, a correction, an answer or a useful handoff. Do not repeat peers or exchange acknowledgements.',
       'You may inspect the explicitly scoped repository read-only. Do not execute commands or implement changes.',
@@ -98,6 +103,12 @@ export async function prepareRoomPeerContext(deps: RoomRuntimeDeps, updates: Roo
         responsesRemaining: 32 - topic.responseCount, memberResponsesRemaining: 8 - (topic.memberResponses[member.id] ?? 0)
       }, reference })
     ].join('\n')
+  }
+  const displayReply = reference.updates.some((item) => item.kind === 'task') ? { checks: [] } :
+    await uniqueRoomReplyTrigger(deps.store, topic.roomId, reference.updates.map((item) => item.sourceId))
+  if ('replyToMessageId' in displayReply) {
+    result.replyToMessageId = displayReply.replyToMessageId
+    result.displayThreadRootId = displayReply.displayThreadRootId
   }
   await deps.store.commit({ requestId: result.id,
     checks: [{ kind: 'context', id: result.id, expectedRevision: null }],

@@ -19,6 +19,10 @@ import { roomRequestAction } from '../../rooms/room-request-actions.js'
 import { roomHistoryPage } from '../../rooms/room-history.js'
 import { registerRoomEvidenceRoutes } from './register-room-evidence-routes.js'
 import { registerRoomRunRoutes } from './register-room-run-routes.js'
+import { registerRoomExperienceRoutes } from './register-room-experience-routes.js'
+import { registerRoomReplyRoutes } from './register-room-reply-routes.js'
+import { registerRoomContentRoutes } from './register-room-content-routes.js'
+import { registerRoomInteractionRoutes } from './register-room-interaction-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
 
 const PageSchema = z.object({
@@ -64,6 +68,10 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
 
   registerRoomEvidenceRoutes(add)
   registerRoomRunRoutes(add, runtime)
+  registerRoomExperienceRoutes(add)
+  registerRoomReplyRoutes(add)
+  registerRoomContentRoutes(add, runtime)
+  registerRoomInteractionRoutes(add)
   add('GET', '/v1/rooms/:roomId/topics', (rooms, request, context) => {
     const page = pagination(request)
     return rooms.peerTopics(context.params.roomId, page.limit, page.cursor)
@@ -111,7 +119,11 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const params = new URL(request.url).searchParams
     const archived = z.enum(['true', 'false']).parse(params.get('archived_only') ?? 'false')
     return rooms.listRooms(RoomListOptionsSchema.parse({ search: params.get('search') ?? undefined, limit: params.has('limit') ? Number(params.get('limit')) : undefined,
-      cursor: params.get('cursor') ?? undefined, archivedOnly: archived === 'true' }))
+      cursor: params.get('cursor') ?? undefined, archivedOnly: archived === 'true',
+      unreadOnly: z.enum(['true', 'false']).parse(params.get('unread_only') ?? 'false') === 'true',
+      attentionOnly: z.enum(['true', 'false']).parse(params.get('attention_only') ?? 'false') === 'true',
+      ids: params.get('room_ids')?.split(',') ?? undefined,
+      repositoryRoot: params.get('repository_root') ?? undefined }))
   })
   add('POST', '/v1/rooms', async (rooms, request) => rooms.service.create(await body(request)))
   add('GET', '/v1/rooms/:roomId', async (rooms, _request, context) => ({ room: await rooms.service.get(context.params.roomId) }))
@@ -119,7 +131,16 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const input = await body(request)
     return rooms.exclusive(() => rooms.service.update(context.params.roomId, input))
   })
-  add('GET', '/v1/rooms/:roomId/messages', (rooms, request, context) => {
+  add('GET', '/v1/rooms/:roomId/messages', async (rooms, request, context) => {
+    const params = new URL(request.url).searchParams
+    if (params.has('message_ids')) {
+      const ids = [...new Set(z.array(RoomIdSchema).min(1).max(50).parse(params.get('message_ids')!.split(',')))]
+      z.literal(undefined).parse(params.get('cursor') ?? undefined)
+      await rooms.service.get(context.params.roomId)
+      const rows = await Promise.all(ids.map((id) => rooms.service.store.list<import('../../contracts/rooms.js').RoomMessage>('message',
+        { roomId: context.params.roomId, documentId: id, limit: 1 })))
+      return { messages: rows.flat().map((row) => ({ ...row.value, messageSeq: row.seq })) }
+    }
     const page = pagination(request)
     return rooms.messages(context.params.roomId, page.limit, page.cursor)
   })
@@ -128,8 +149,9 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     return rooms.exclusive(() => rooms.service.send(context.params.roomId, input))
   })
   add('GET', '/v1/rooms/:roomId/messages/:messageId', async (rooms, _request, { params }) => {
-    const message = await rooms.service.store.get<import('../../contracts/rooms.js').RoomMessage>('message', params.messageId)
-    if (!message || message.roomId !== params.roomId) throw new Error('message not found')
+    const message = (await rooms.service.store.list<import('../../contracts/rooms.js').RoomMessage>('message',
+      { roomId: params.roomId, documentId: RoomIdSchema.parse(params.messageId), limit: 1 }))[0]
+    if (!message) throw new Error('message not found')
     return { message: { ...message.value, messageSeq: message.seq } }
   })
   add('GET', '/v1/rooms/:roomId/search', async (rooms, request, context) => {

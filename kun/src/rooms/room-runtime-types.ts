@@ -14,6 +14,7 @@ import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 
 export type RoomRequestState = {
+  pollInvitation?: import('../contracts/room-interactions.js').RoomPollInvitation
   id: string
   roomId: string
   rootRequestId?: string

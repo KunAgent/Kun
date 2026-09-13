@@ -15,13 +15,15 @@ const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(25),
   cursor: z.coerce.number().int().nonnegative().optional(),
   root_request_id: RoomIdSchema.optional(), member_id: RoomIdSchema.optional(), task_id: RoomIdSchema.optional(),
-  request_id: RoomIdSchema.optional(), phase: RoomRunPhaseSchema.optional(), status: RoomRunStatusSchema.optional()
+  request_id: RoomIdSchema.optional(), phase: RoomRunPhaseSchema.optional(), status: RoomRunStatusSchema.optional(),
+  search: z.string().trim().max(200).optional()
 }).strict()
 const ItemsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(40),
   max_bytes: z.coerce.number().int().min(4096).max(256 * 1024).default(128 * 1024),
   cursor: z.string().min(1).max(2048).optional(),
   item_id: z.string().min(1).max(256).optional(),
+  call_id: z.string().min(1).max(256).optional(),
   content_offset: z.coerce.number().int().nonnegative().max(64 * 1024 * 1024).optional()
 }).strict().refine((value) => value.content_offset === undefined || Boolean(value.item_id),
   'content offset requires an item id')
@@ -33,7 +35,7 @@ export function registerRoomRunRoutes(add: Add, runtime: ServerRuntime): void {
     const input = ListQuery.parse(query(request))
     return roomRunList(rooms.deps, params.roomId, { limit: input.limit, beforeSeq: input.cursor,
       rootRequestId: input.root_request_id, memberId: input.member_id, taskId: input.task_id,
-      requestId: input.request_id, phase: input.phase, status: input.status })
+      requestId: input.request_id, phase: input.phase, status: input.status, search: input.search })
   })
   add('GET', '/v1/rooms/:roomId/messages/:messageId/run', async (rooms, _request, { params }) => {
     await rooms.service.get(params.roomId)
@@ -48,7 +50,7 @@ export function registerRoomRunRoutes(add: Add, runtime: ServerRuntime): void {
     const input = ItemsQuery.parse(query(request))
     return roomRunItems(rooms.deps, params.roomId, Id.parse(params.runId), {
       limit: input.limit, maxBytes: input.max_bytes, before: input.cursor,
-      itemId: input.item_id, contentOffset: input.content_offset })
+      itemId: input.item_id, callId: input.call_id, contentOffset: input.content_offset })
   })
   add('GET', '/v1/rooms/:roomId/runs/:runId/events', async (rooms, request, { params }) => {
     await rooms.service.get(params.roomId)

@@ -35,6 +35,7 @@ import {
   type ProjectBoardCounts,
   type ProjectBoardDocumentV1,
   type ProjectBoardSnapshotResponse,
+  type ProjectBoardCardResponse,
   type ProjectBoardSummary,
   type ProjectBoardTodoOverlay
 } from '../contracts/project-board.js'
@@ -67,9 +68,29 @@ export class ProjectBoardService {
     workspace: string
     includeArchived?: boolean
     cursor?: string
+    readOnly?: boolean
   }): Promise<ProjectBoardSnapshotResponse> {
     const workspaceRoot = await canonicalWorkspaceRoot(input.workspace)
     return this.snapshotCanonical(workspaceRoot, input)
+  }
+
+  /** Resolve a projected card identity directly; viewing never repairs board documents. */
+  async card(input: { workspace: string; cardId: string }): Promise<ProjectBoardCardResponse> {
+    const workspaceRoot = await canonicalWorkspaceRoot(input.workspace)
+    const read = await this.options.store.read(workspaceRoot, { repair: false })
+    const manualId = input.cardId.startsWith('manual:') ? input.cardId.slice('manual:'.length) : undefined
+    const direct = manualId !== undefined && Object.hasOwn(read.document.manualCards, manualId)
+      ? read.document.manualCards[manualId] : undefined
+    const manual = direct?.id === manualId ? direct : manualId === undefined ? undefined :
+      Object.values(read.document.manualCards).find((value) => value.id === manualId)
+    const card = manual ? projectManualCard(workspaceRoot, manual) : manualId !== undefined ? undefined :
+      (await this.allCards(workspaceRoot, read.document)).cards.find((value) => value.id === input.cardId)
+    if (!card) {
+      if (read.warning) throw new ProjectBoardReadUnavailableError(read.warning)
+      throw new ProjectBoardNotFoundError(`project board card not found: ${input.cardId}`)
+    }
+    return { workspaceRoot, revision: read.document.revision, card,
+      ...(read.warning ? { warning: read.warning } : {}) }
   }
 
   async summaries(workspaces: readonly string[]): Promise<ProjectBoardSummary[]> {
@@ -355,10 +376,10 @@ export class ProjectBoardService {
 
   private async snapshotCanonical(
     workspaceRoot: string,
-    input: { includeArchived?: boolean; cursor?: string }
+    input: { includeArchived?: boolean; cursor?: string; readOnly?: boolean }
   ): Promise<ProjectBoardSnapshotResponse> {
     const startedAt = performance.now()
-    const read = await this.options.store.read(workspaceRoot)
+    const read = await this.options.store.read(workspaceRoot, { repair: input.readOnly !== true })
     const projection = await this.allCards(workspaceRoot, read.document)
     const allCards = projection.cards
     const counts = countCards(allCards)
@@ -396,19 +417,7 @@ export class ProjectBoardService {
     metadataCacheHits: number
   }> {
     const threads = knownThreads ?? await this.boardThreads(workspaceRoot)
-    const cards: ProjectBoardCard[] = Object.values(document.manualCards).map((card) => ({
-      id: `manual:${card.id}`,
-      kind: 'manual',
-      workspaceRoot,
-      title: card.title,
-      description: card.description,
-      status: card.status,
-      category: card.category,
-      priority: card.priority,
-      archived: card.archived,
-      updatedAt: card.updatedAt,
-      source: { label: 'Manual' }
-    }))
+    const cards: ProjectBoardCard[] = Object.values(document.manualCards).map((card) => projectManualCard(workspaceRoot, card))
     const planPaths = new Set<string>()
     for (const thread of threads) {
       for (const todo of thread.todos?.items ?? []) {
@@ -497,6 +506,16 @@ export class ProjectBoardService {
 
 export class ProjectBoardNotFoundError extends Error {
   override name = 'ProjectBoardNotFoundError'
+}
+
+export class ProjectBoardReadUnavailableError extends Error {
+  override name = 'ProjectBoardReadUnavailableError'
+}
+
+function projectManualCard(workspaceRoot: string, card: ManualProjectBoardCard): ProjectBoardCard {
+  return { id: `manual:${card.id}`, kind: 'manual', workspaceRoot, title: card.title,
+    description: card.description, status: card.status, category: card.category, priority: card.priority,
+    archived: card.archived, updatedAt: card.updatedAt, source: { label: 'Manual' } }
 }
 
 export { ProjectBoardBulkConflictError } from './project-board-bulk-status-support.js'

@@ -83,6 +83,19 @@ describe('room product agreements and read state', () => {
     await expect(f.product.read(f.room.id, newSeq, 'no-op')).rejects.toThrow('identity conflict')
     expect((await f.store.get<{ seq: number }>('read_state', f.room.id))!.value.seq).toBe(newSeq)
   })
+  it('publishes room.read atomically with an advancing cursor and emits nothing for no-op or replayed reads', async () => {
+    const f = await fixture()
+    await f.service.append(f.room.id, 'read-target', 'Read me')
+    const seq = (await f.store.get('message', 'read-target'))!.seq
+    const committed = await f.product.read(f.room.id, seq, 'advance')
+    expect(committed.events).toEqual([expect.objectContaining({ roomId: f.room.id, kind: 'room.read', payload: { id: f.room.id, seq } })])
+    expect((await f.store.get<{ seq: number }>('read_state', f.room.id))!.value.seq).toBe(seq)
+    const replay = await f.product.read(f.room.id, seq, 'advance')
+    expect(replay.result).toEqual(committed.result)
+    await f.product.read(f.room.id, 0, 'older-read')
+    await f.product.read(f.room.id, seq, 'same-read')
+    expect((await f.store.events(f.room.id)).filter((event) => event.kind === 'room.read')).toHaveLength(1)
+  })
 })
 
 describe('original request outcomes', () => {

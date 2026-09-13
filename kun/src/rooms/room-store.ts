@@ -2,13 +2,16 @@ import { z } from 'zod'
 import type { Room } from '../contracts/rooms.js'
 import type { RoomLatestMessage } from '../contracts/room-list.js'
 import type { RoomRequestOutcome } from '../contracts/rooms-product.js'
+import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replies.js'
+import type { RoomRepositoryChoice, RoomSearchPage, RoomSearchQuery, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 
 export const RoomDocumentKindSchema = z.enum([
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
   'request_input', 'rule_bundle', 'rule_compression',
-  'room_run', 'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
+  'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar',
+  'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>
 const Id = z.string().min(1).max(256)
@@ -73,6 +76,10 @@ export const RoomListOptionsSchema = z.object({
     catch { return false }
   }, 'invalid room page cursor').optional(),
   archivedOnly: z.boolean().default(false),
+  unreadOnly: z.boolean().default(false),
+  attentionOnly: z.boolean().default(false),
+  repositoryRoot: z.string().min(1).max(4096).optional(),
+  ids: z.array(z.string().min(1).max(128)).min(1).max(100).optional(),
   search: z.string().trim().max(200).optional(),
   limit: z.number().int().min(1).max(1000).default(50)
 }).strict()
@@ -126,6 +133,10 @@ export interface RoomStore {
   get<T = unknown>(kind: RoomDocumentKind, id: string): Promise<RoomStoredDocument<T> | null>
   list<T = unknown>(kind: RoomDocumentKind, options?: RoomStoreListOptions): Promise<RoomStoredDocument<T>[]>
   listRooms(options?: RoomListOptions): Promise<RoomListPage>
+  replyPage(input: RoomReplyPageInput): Promise<RoomReplyPage>
+  searchRooms(input: RoomSearchQuery): Promise<RoomSearchPage>
+  roomRepositories(): Promise<RoomRepositoryChoice[]>
+  runSummary(input: RoomRunSummaryQuery): Promise<RoomRunSummary>
   commit(input: RoomStoreCommit): Promise<RoomStoreCommitResult>
   getRequest(requestId: string): Promise<RoomStoreRequest | null>
   events(roomId: string, sinceSeq?: number, limit?: number): Promise<RoomStoreEvent[]>

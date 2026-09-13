@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { makeUserItem } from '../domain/item.js'
+import { makeToolCallItem, makeToolResultItem, makeUserItem } from '../domain/item.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
 import { ManagerRemoteSessionStore } from './remote-data-stores.js'
 import type { ServiceManagerConnection } from './manager-client.js'
@@ -34,4 +34,26 @@ it('preserves exact turn and item content across Manager request and remote resp
   await expect(remote.loadItemPage(threadId, { itemId: 'old', maxItems: 1, maxBytes: 4096 })).rejects.toThrow()
   await expect(remote.loadItemPage(threadId, { turnId: 'old', itemId: 'old', contentOffset: -1, maxItems: 1, maxBytes: 4096 })).rejects.toThrow()
   await shared.close()
+})
+
+it('preserves exact call scope through Manager and rejects an unbound call filter', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-manager-call-'))
+  roots.push(root)
+  const shared = await ManagerSharedDataStore.create(root)
+  const threadId = 'thread'
+  try {
+    for (const turnId of ['old', 'new']) {
+      await shared.executeSession('appendItem', { threadId, item: makeToolCallItem({ id: turnId + '-call', threadId, turnId, callId: 'same-call', toolName: 'bash', arguments: { command: turnId } }) })
+      await shared.executeSession('appendItem', { threadId, item: makeToolResultItem({ id: turnId + '-result', threadId, turnId, callId: 'same-call', toolName: 'bash', output: turnId }) })
+    }
+    bridge.call.mockImplementation(async (_manager, entity, operation, value) => {
+      expect(entity).toBe('session')
+      return shared.executeSession(operation, value)
+    })
+    const remote = new ManagerRemoteSessionStore({} as ServiceManagerConnection)
+    const result = await remote.loadItemPage(threadId, { turnId: 'old', callId: 'same-call', maxItems: 4, maxBytes: 4096 })
+    expect(result.items.map((item) => item.id)).toEqual(['old-call', 'old-result'])
+    await expect(remote.loadItemPage(threadId, { callId: 'same-call', maxItems: 4, maxBytes: 4096 })).rejects.toThrow('turnId')
+    expect((await remote.loadItemPage(threadId, { turnId: 'old', callId: 'wrong-call', itemId: 'old-result', maxItems: 1, maxBytes: 4096 })).content).toBeUndefined()
+  } finally { await shared.close() }
 })

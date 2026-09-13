@@ -1,3 +1,4 @@
+import { roomPollInvitationPrompt } from './room-poll-invitations.js'
 import { roomDiscussionMessageId } from './room-discussion-message.js'
 import { roomTurnRunId } from './room-run-recording.js'
 import { join } from 'node:path'
@@ -173,7 +174,8 @@ export class RoomRequestRunner {
         discussion.turnId = await enqueueRoomTurn(this.deps, discussion.threadId,
           'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id + '-' + (discussion.attempt ?? 0) +
             (request.continuation ? '-continuation-' + request.continuation : ''),
-          ['Participate as this room member. Discuss or inspect read-only. Do not implement or run commands.',
+          [roomPollInvitationPrompt(request.pollInvitation, member.id),
+            'Participate as this room member. Discuss or inspect read-only. Do not implement or run commands.',
             ...(request.referencedTask ? [
               !discussionWorkspace ? 'The task worktree is not created yet. Answer from the requirement and status; do not claim code inspection.' :
               request.referencedTask.delivery ? 'Inspect the pinned delivered commit read-only; its identity is included below.' :

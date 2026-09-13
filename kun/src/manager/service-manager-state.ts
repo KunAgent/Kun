@@ -74,10 +74,12 @@ export const KUN_MANAGER_CAPABILITIES = [
   'durable-leases-v1',
   'item-page-v1',
   'item-turn-page-v1',
+  'item-call-page-v1',
   'room-store-v1',
   'room-store-v2',
   'room-store-v3',
-  'room-store-v4'
+  'room-store-v4',
+  'room-store-v5'
 ] as const
 
 export const ThreadStoreOperationSchema = z.enum(MANAGER_THREAD_STORE_OPERATIONS)

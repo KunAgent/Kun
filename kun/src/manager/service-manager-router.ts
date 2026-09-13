@@ -111,7 +111,7 @@ export function buildServiceManagerRouter(input: {
         capability !== 'atomic-json-v1' &&
         capability !== 'history-reference-cleanup-v1' &&
         !capability.startsWith('room-store-') &&
-        capability !== 'item-turn-page-v1'
+        capability !== 'item-turn-page-v1' && capability !== 'item-call-page-v1'
       )
   router.add('GET', '/health', () => {
     const persistence = input.statePersistence?.()

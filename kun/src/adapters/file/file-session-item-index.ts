@@ -4,6 +4,7 @@ import { TurnItem as TurnItemSchema, isPublicTurnItem, type TurnItem } from '../
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../../ports/session-store.js'
 import { timelineSafeItem } from '../../services/item-history-page.js'
 import { buildItemContentPage, isItemContentRequest } from '../../services/item-history-content.js'
+import { assertItemHistoryScope, itemMatchesHistoryScope } from '../../services/item-history-scope.js'
 import { atomicWriteFile } from './atomic-write.js'
 import { ITEM_HISTORY_MAX_RECORD_BYTES } from './file-session-live-items.js'
 import { ensureItemTailReady } from './file-session-item-tail.js'
@@ -117,6 +118,7 @@ export class FileSessionItemIndex {
     statePath: string
     options: ItemHistoryPageOptions
   }): Promise<ItemHistoryPage | null> {
+    assertItemHistoryScope(input.options)
     const source = await stat(input.sourcePath).catch(() => null)
     if (!source) return { items: [], hasMore: false, itemBytes: 0 }
     const state = await readIndexState(input.statePath)
@@ -276,7 +278,19 @@ async function readIndexedPage(
     try { return buildItemContentPage(await readIndexedItem(handle, row), options) }
     finally { await handle.close() }
   }
-  const rows = options.turnId ? view.publicRows.filter((row) => row.turnId === options.turnId) : view.publicRows
+  let rows = options.turnId ? view.publicRows.filter((row) => row.turnId === options.turnId) : view.publicRows
+  if (options.callId) {
+    const candidates = rows.filter((row) => row.kind === 'tool_call' || row.kind === 'tool_result')
+    const matching: ItemIndexRow[] = []
+    const handle = candidates.some((row) => row.callId === undefined) ? await open(sourcePath, 'r') : undefined
+    try {
+      for (const row of candidates) {
+        if (row.callId === options.callId || row.callId === undefined && handle &&
+          itemMatchesHistoryScope(await readIndexedItem(handle, row), options)) matching.push(row)
+      }
+    } finally { await handle?.close() }
+    rows = matching
+  }
   const cursorIndex = options.before ? rows.findIndex((row) => row.itemId === options.before) : rows.length
   const endExclusive = options.before
     ? (cursorIndex >= 0 ? cursorIndex : rows.length)
@@ -296,6 +310,7 @@ async function readIndexedPage(
   try {
     for (const candidate of candidates) {
       const item = timelineSafeItem(await readIndexedItem(handle, candidate.row), options.maxBytes)
+      if (!itemMatchesHistoryScope(item, options)) continue
       const bytes = Buffer.byteLength(JSON.stringify(item), 'utf8')
       if (selected.length > 0 && itemBytes + bytes > options.maxBytes) break
       selected.push({ item, index: candidate.index, bytes })
@@ -470,6 +485,7 @@ function rowForItem(item: TurnItem, offset: number, recordBytes: number): ItemIn
     itemId: item.id,
     turnId: item.turnId,
     kind: item.kind,
+    ...((item.kind === 'tool_call' || item.kind === 'tool_result') ? { callId: item.callId } : {}),
     isPublic: isPublicTurnItem(item),
     baseline: isBaselineItem(item),
     offset,
@@ -484,6 +500,7 @@ function parseIndexRow(value: unknown): ItemIndexRow | null {
     typeof row.itemId !== 'string' ||
     typeof row.turnId !== 'string' ||
     typeof row.kind !== 'string' ||
+    (row.callId !== undefined && (typeof row.callId !== 'string' || !row.callId)) ||
     typeof row.isPublic !== 'boolean' ||
     !Number.isSafeInteger(row.offset) || row.offset! < 0 ||
     !Number.isSafeInteger(row.recordBytes) || row.recordBytes! <= 0

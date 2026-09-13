@@ -91,6 +91,8 @@ export type ItemHistoryPageOptions = {
   anchorTurnId?: string
   /** Filter to this exact turn before applying cursor, count or byte limits. */
   turnId?: string
+  /** Filter tool call/result records by exact call identity; requires turnId. */
+  callId?: string
   /** Read a bounded content fragment of one public item in the exact turn. */
   itemId?: string
   contentOffset?: number

@@ -1,3 +1,4 @@
+import { createRoomPoll, readRoomPoll } from './room-polls.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,7 +18,7 @@ import { bindRoomPeerStore } from './room-peer-tools.js'
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close() })
 type Call = { memberId: string; rootId: string; roomId: string; request: ModelRequest; attempt: number }
-type Reply = { body?: string; skip?: boolean; inviteMemberIds?: string[]; partial?: string; wait?: Promise<void> }
+type Reply = { vote?: { pollId: string; optionIds: string[] }; body?: string; skip?: boolean; inviteMemberIds?: string[]; partial?: string; wait?: Promise<void> }
 function gate() {
   let release!: () => void
   const promise = new Promise<void>((resolve) => { release = resolve })
@@ -65,6 +66,10 @@ async function fixture() {
     const value = reply(call)
     if (value.partial) yield { kind: 'assistant_text_delta', text: value.partial }
     if (value.wait) await awaitGate(value.wait, request.abortSignal!)
+    if (value.vote) {
+      expect(request.tools.some((tool) => tool.name === 'vote_room_poll')).toBe(true)
+      yield { kind: 'tool_call_complete', callId: 'explicit-vote', toolName: 'vote_room_poll', arguments: value.vote }
+    }
     yield { kind: 'tool_call_complete', callId: 'public-reply', toolName: 'send_room_message',
       arguments: value.skip ? { skip: true } : { body: value.body ?? '', inviteMemberIds: value.inviteMemberIds ?? [] } }
     yield { kind: 'completed', stopReason: 'tool_calls' }
@@ -95,9 +100,9 @@ async function fixture() {
   cleanups.push(async () => { await runner.close(); await h.turns.interruptActiveTurns(); await dispatcher.dispose() })
   const service = new RoomService(store, () => {})
   const room = (await service.create({ clientRequestId: 'room', name: 'Peer room', collaborationMode: 'peer' })).room
-  const send = async (id: string, input: { room?: Room; mentions?: string[]; body?: string; rootRequestId?: string } = {}) => {
+  const send = async (id: string, input: { room?: Room; mentions?: string[]; body?: string; rootRequestId?: string; pollInvitation?: { pollId: string; memberIds: string[] } } = {}) => {
     const sent = await service.send((input.room ?? room).id, { clientRequestId: id, body: input.body ?? 'Compare alternatives only',
-      rootRequestId: input.rootRequestId, executionIntent: 'discussion', mentionMemberIds: input.mentions ?? [] })
+      rootRequestId: input.rootRequestId, pollInvitation: input.pollInvitation, executionIntent: 'discussion', mentionMemberIds: input.mentions ?? [] })
     const request = (await store.get<RoomRequestState>('request', sent.requestId))!.value
     await runner.state.initialize(request)
     return request
@@ -131,6 +136,22 @@ describe('peer store, queue and AgentLoop integration', () => {
     const count = f.calls.length + f.triages.length
     for (let i = 0; i < 3; i++) await f.runner.tick()
     expect(f.calls.length + f.triages.length).toBe(count)
+  })
+
+  it('runs an explicitly invited ballot through the native queue and tool host without granting execution', async () => {
+    const f = await fixture()
+    const poll = (await createRoomPoll(f.store, f.room.id, { clientRequestId: 'queue-poll', question: 'Pick API', options: ['A', 'B'] })).poll
+    f.reply(() => ({ body: 'I voted for the smaller API.', vote: { pollId: poll.pollId, optionIds: ['option-1'] } }))
+    const request = await f.send('vote-request', { mentions: ['developer'],
+      pollInvitation: { pollId: poll.pollId, memberIds: ['developer'] } })
+    await f.pump(async () => expect(await f.messages(request.id)).toHaveLength(1))
+    const recorded = await readRoomPoll(f.store, f.room.id, poll.pollId)
+    expect(recorded.ballots['member-developer']).toMatchObject({ optionIds: ['option-1'], requestId: request.id,
+      threadId: f.calls[0].request.threadId, turnId: f.calls[0].request.turnId })
+    expect(Object.keys(recorded.ballots)).toHaveLength(1)
+    expect(f.calls).toHaveLength(1)
+    expect((await f.runner.state.topic(request.id))?.value.responseCount).toBe(1)
+    expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
   })
 
   it('invites a relevant peer directly and publishes only the submitted final message', async () => {

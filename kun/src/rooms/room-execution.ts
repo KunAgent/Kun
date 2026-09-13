@@ -34,11 +34,14 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   if (binding.providerId && deps.unsupportedProviderIds?.().includes(binding.providerId)) {
     throw new Error('Rooms require a native API model; the selected provider uses an unsupported execution engine')
   }
+  const invitationRequest = input.requestId ? await deps.store.get<import('./room-runtime-types.js').RoomRequestState>('request', input.requestId) : null
+  const pollInvited = input.kind === 'discussion' && invitationRequest?.value.pollInvitation?.memberIds.includes(input.member.id)
   const overrides = input.member.capabilityOverrides
   const readOnly = input.kind !== 'execution' || profile?.toolPolicy === 'readOnly'
   const resultTool = input.kind === 'coordination' ? 'submit_room_plan' : input.kind === 'review' ? 'submit_room_review' :
     input.kind === 'execution' ? 'declare_room_checks' : undefined
   let allowed = input.kind === 'coordination' ? [] : readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES] : profile?.allowedTools
+  if (pollInvited) allowed = [...(allowed ?? []), 'vote_room_poll']
   for (const ceiling of [profile?.allowedTools, overrides?.allowedTools]) {
     if (ceiling) allowed = allowed ? allowed.filter((name) => ceiling.includes(name)) : [...ceiling]
   }

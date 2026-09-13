@@ -8,6 +8,7 @@ import {
   PatchThreadTodoResponseSchema,
   ProjectBoardBulkStatusResponseSchema,
   ProjectBoardSnapshotResponseSchema,
+  ProjectBoardCardResponseSchema,
   ProjectBoardSummariesRequestSchema,
   ProjectBoardSummariesResponseSchema
 } from '../../contracts/project-board.js'
@@ -15,6 +16,7 @@ import { ProjectBoardRevisionConflictError } from '../../ports/project-board-sto
 import {
   ProjectBoardBulkConflictError,
   ProjectBoardNotFoundError,
+  ProjectBoardReadUnavailableError,
   type ProjectBoardService
 } from '../../services/project-board-service.js'
 import type { ThreadService } from '../../services/thread-service.js'
@@ -40,6 +42,14 @@ export async function getProjectBoardSnapshot(
   } catch (error) {
     return boardError(error)
   }
+}
+
+export async function getProjectBoardCard(service: ProjectBoardService, cardId: string,
+  request: Request): Promise<JsonResponse> {
+  const workspace = new URL(request.url).searchParams.get('workspace')?.trim() ?? ''
+  if (!workspace || !cardId) return ERRORS.validation('project board workspace and card id are required')
+  try { return jsonResponse(ProjectBoardCardResponseSchema.parse(await service.card({ workspace, cardId }))) }
+  catch (error) { return boardError(error) }
 }
 
 export async function getProjectBoardSummaries(
@@ -190,6 +200,7 @@ async function boardMutationError(
 }
 
 function boardError(error: unknown): JsonResponse {
+  if (error instanceof ProjectBoardReadUnavailableError) return ERRORS.unavailable(error.message)
   if (error instanceof ProjectBoardNotFoundError) return ERRORS.notFound(error.message)
   const message = error instanceof Error ? error.message : String(error)
   if (/workspace|cursor|absolute path|ENOENT|EACCES|permission/i.test(message)) {

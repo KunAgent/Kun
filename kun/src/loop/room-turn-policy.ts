@@ -19,9 +19,10 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   const readOnly = policy.kind !== 'execution' || thread.sandboxMode === 'read-only'
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []
+  const pollTools = policy.kind === 'discussion' && policy.allowedToolNames?.includes('vote_room_poll') ? ['vote_room_poll'] : []
   const allowed = intersectAllowedToolNames(context.allowedToolNames,
     intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules'] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
   return {
     ...context,
     roomStepKind: policy.kind,

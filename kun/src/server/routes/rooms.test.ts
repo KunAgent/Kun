@@ -47,6 +47,28 @@ async function fixture() {
 }
 
 describe('Rooms HTTP routes and durable storage', () => {
+  it('projects reply counts for exact loaded roots in bounded batches without crossing rooms or publishing events', async () => {
+    const f = await fixture(), path = `/v1/rooms/${f.room.id}`
+    const root = (await f.call(path + '/messages', 'POST', { body: 'Old root', clientRequestId: 'root', executionIntent: 'discussion' })).body.message
+    const reply = (await f.call(path + '/messages', 'POST', { body: 'User reply', clientRequestId: 'reply', replyToMessageId: root.id, executionIntent: 'discussion' })).body.message
+    await f.store.commit({ requestId: 'peer-reply', checks: [{ kind: 'message', id: 'peer-reply', expectedRevision: null }], puts: [{ kind: 'message', id: 'peer-reply', roomId: f.room.id,
+      value: { ...reply, id: 'peer-reply', authorKind: 'member', authorMemberId: 'developer', authorLabelSnapshot: 'Developer', body: 'Peer reply' } }] })
+    for (let index = 0; index < 55; index += 1) await f.rooms.service.append(f.room.id, 'later-' + index, 'Later message')
+    const other = (await f.call('/v1/rooms', 'POST', { name: 'Other room', clientRequestId: 'other-room' })).body.room
+    const foreign = (await f.call(`/v1/rooms/${other.id}/messages`, 'POST', { body: 'Foreign secret', clientRequestId: 'foreign', executionIntent: 'discussion' })).body.message
+    const before = await f.store.events(f.room.id)
+    expect((await f.call(path + '/messages?limit=50')).body.messages.some((message: { id: string }) => message.id === root.id)).toBe(false)
+    const batch = await f.call(path + '/messages?message_ids=' + encodeURIComponent([root.id, foreign.id].join(',')))
+    expect(batch.status).toBe(200)
+    expect(batch.body.messages).toEqual([expect.objectContaining({ id: root.id, replyCount: 2 })])
+    expect((await f.call(path + '/messages/' + root.id)).body.message.replyCount).toBe(2)
+    expect((await f.call(path + '/messages/' + foreign.id)).status).toBe(404)
+    expect((await f.call(path + '/messages?message_ids=' + Array.from({ length: 51 }, (_, index) => 'id-' + index).join(','))).status).toBe(400)
+    expect((await f.call(path + '/messages?message_ids=valid%3Binvalid')).status).toBe(400)
+    expect((await f.call(path + '/messages?message_ids=' + root.id + '&cursor=1')).status).toBe(400)
+    expect(await f.store.events(f.room.id)).toEqual(before)
+    expect((await f.store.get<{ replyCount?: number }>('message', root.id))!.value.replyCount).toBeUndefined()
+  })
   it('creates, sends idempotently, pages history, pins an agreement and archives without discarding data', async () => {
     const f = await fixture()
     const path = `/v1/rooms/${f.room.id}`

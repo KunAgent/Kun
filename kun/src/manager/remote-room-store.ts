@@ -22,6 +22,8 @@ import { ServiceManagerHttpError } from './usage-errors.js'
 import type { RoomOutcomeQuery } from '../rooms/room-store.js'
 import type { RoomRequestOutcome } from '../contracts/rooms-product.js'
 import { RoomLatestMessageSchema } from '../contracts/room-list.js'
+import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replies.js'
+import type { RoomSearchQuery, RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 
 /** Runtime proxy. Canonical room data never opens a local file in this process. */
 export class RemoteRoomStore implements RoomStore {
@@ -49,6 +51,11 @@ export class RemoteRoomStore implements RoomStore {
     })),
       nextCursor: z.string().optional() }).strict().parse(await this.call('listRooms', { options })) as RoomListPage
   }
+
+  async replyPage(input: RoomReplyPageInput): Promise<RoomReplyPage> { return await this.call('replyPage', input) as RoomReplyPage }
+  async searchRooms(input: RoomSearchQuery): Promise<RoomSearchPage> { return await this.call('searchRooms', input) as RoomSearchPage }
+  async roomRepositories(): Promise<RoomRepositoryChoice[]> { return await this.call('roomRepositories', {}) as RoomRepositoryChoice[] }
+  async runSummary(input: RoomRunSummaryQuery): Promise<RoomRunSummary> { return await this.call('runSummary', input) as RoomRunSummary }
 
   async getRequest(requestId: string): Promise<RoomStoreRequest | null> {
     return RoomStoreRequestSchema.nullable().parse(await this.call('getRequest', { requestId }))

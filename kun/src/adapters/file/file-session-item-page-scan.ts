@@ -3,6 +3,7 @@ import { isPublicTurnItem, type TurnItem } from '../../contracts/items.js'
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../../ports/session-store.js'
 import { buildPublicItemHistoryPage, timelineSafeItem } from '../../services/item-history-page.js'
 import { buildItemContentPage, isItemContentRequest } from '../../services/item-history-content.js'
+import { itemMatchesHistoryScope } from '../../services/item-history-scope.js'
 
 const DEFAULT_ITEM_HISTORY_MAX_RECORD_BYTES = 16 * 1024 * 1024
 const serializedBytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value), 'utf8')
@@ -42,11 +43,11 @@ export async function readItemPageFromJsonl(
     }
     if (!item || typeof item !== 'object' || typeof item.id !== 'string' || !item.id) return
 
-    if (options.turnId && item.turnId !== options.turnId) return
     if (contentMode) {
-      if (item.id === options.itemId && isPublicTurnItem(item)) contentItem = item
+      if (item.id === options.itemId) contentItem = isPublicTurnItem(item) && itemMatchesHistoryScope(item, options) ? item : undefined
       return
     }
+    if (!itemMatchesHistoryScope(item, options)) return
     const safeItem = isPublicTurnItem(item) ? timelineSafeItem(item, maxBytes) : item
     const firstSeen = !seenIds.has(item.id)
     if (firstSeen) {

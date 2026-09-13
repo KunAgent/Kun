@@ -35,9 +35,9 @@ export class FileProjectBoardStore implements ProjectBoardStore {
     }))
   }
 
-  async read(workspaceRoot: string): Promise<ProjectBoardDocumentRead> {
+  async read(workspaceRoot: string, options: { repair?: boolean } = {}): Promise<ProjectBoardDocumentRead> {
     const path = this.documentPath(workspaceRoot)
-    return withFileMutationQueue(path, () => this.readUnlocked(workspaceRoot, path))
+    return withFileMutationQueue(path, () => this.readUnlocked(workspaceRoot, path, options.repair !== false))
   }
 
   async mutate(
@@ -66,7 +66,7 @@ export class FileProjectBoardStore implements ProjectBoardStore {
     })
   }
 
-  private async readUnlocked(workspaceRoot: string, path: string): Promise<ProjectBoardDocumentRead> {
+  private async readUnlocked(workspaceRoot: string, path: string, repair = true): Promise<ProjectBoardDocumentRead> {
     let raw: string
     try {
       raw = await readFile(path, 'utf8')
@@ -81,6 +81,8 @@ export class FileProjectBoardStore implements ProjectBoardStore {
       }
       return { document: parsed }
     } catch (error) {
+      if (!repair) return { document: emptyDocument(workspaceRoot, this.nowIso()),
+        warning: 'The project board data is corrupt. Read-only inspection has left the source unchanged.' }
       const suffix = this.nowIso().replace(/[^0-9]/g, '')
       const corruptPath = `${path}.corrupt-${suffix}`
       await rename(path, corruptPath)

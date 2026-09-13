@@ -410,7 +410,8 @@ export abstract class ManagerSharedDataStoreCore {
     if (!store) {
       store = new FileAttachmentStore({
         rootDir: resolve(this.dataDir, 'attachments'),
-        config
+        config,
+        isRetained: (id) => this.roomStore.isAttachmentReferenced(id)
       })
       this.attachmentStores.set(key, store)
     }

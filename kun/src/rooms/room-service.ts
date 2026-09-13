@@ -9,6 +9,8 @@ import { RoomStoreConflictError } from './room-store.js'
 import { observeRoomRepository } from './task-workspace-service.js'
 import type { RoomRequestState } from './room-runtime-types.js'
 import { assertRoomMemberRemovalAllowed } from './room-member-dependencies.js'
+import { appendRoomReplyChecks, attachRoomPublicationReply, prepareRoomReplyContext } from './room-replies.js'
+import { prepareRoomPollInvitation } from './room-poll-invitations.js'
 
 export const roomId = (): string => randomUUID()
 export const roomFingerprint = (value: unknown): string =>
@@ -37,7 +39,16 @@ export function defaultRoomMembers(repositoryIds: string[]) {
 }
 
 export class RoomService {
+  private memberAvatarValidator?: (members: import('../contracts/rooms.js').RoomMember[]) => Promise<void>
+  private contentReferenceValidator?: (room: Room, references: NonNullable<import('../contracts/rooms.js').SendRoomMessage['references']>) => Promise<void>
   constructor(readonly store: RoomStore, private readonly wake: () => void) {}
+
+  setContentReferenceValidator(validator: NonNullable<RoomService['contentReferenceValidator']>): void {
+    this.contentReferenceValidator = validator
+  }
+  setMemberAvatarValidator(validator: NonNullable<RoomService['memberAvatarValidator']>): void {
+    this.memberAvatarValidator = validator
+  }
 
   async get(id: string): Promise<Room> {
     const row = await this.store.get<Room>('room', id)
@@ -58,6 +69,10 @@ export class RoomService {
       maxConcurrentTasks: body.maxConcurrentTasks,
       defaultMemberId: body.defaultMemberId ?? members[0].id, members, repositories,
       revision: 0, createdAt: now, updatedAt: now })
+    if (room.members.some((member) => member.avatar?.kind === 'uploaded')) {
+      if (!this.memberAvatarValidator) throw new Error('avatar storage unavailable')
+      await this.memberAvatarValidator(room.members)
+    }
     const result = { room }
     const committed = await this.store.commit({
       requestId: key, fingerprint: roomFingerprint(body),
@@ -80,6 +95,12 @@ export class RoomService {
       ...(repositories ? { repositories: await this.repositories(repositories) } : {}),
       ...(archived !== undefined ? { archivedAt: archived ? new Date().toISOString() : undefined } : {}),
       revision: expectedRevision + 1, updatedAt: new Date().toISOString() })
+    const changedAvatars = room.members.filter((member) => member.avatar?.kind === 'uploaded' &&
+      JSON.stringify(member.avatar) !== JSON.stringify(old.members.find((previous) => previous.id === member.id)?.avatar))
+    if (changedAvatars.length) {
+      if (!this.memberAvatarValidator) throw new Error('avatar storage unavailable')
+      await this.memberAvatarValidator(changedAvatars)
+    }
     await assertRoomMemberRemovalAllowed(this.store, old, room)
     const result = { room }
     const saved = await this.store.commit({ requestId: key, fingerprint: roomFingerprint(body),
@@ -91,12 +112,20 @@ export class RoomService {
 
   async send(id: string, input: unknown, internal?: { ruleAdoption: import('../contracts/rooms-product.js').RoomRule }): Promise<{ message: RoomMessage; requestId: string }> {
     const body = SendRoomMessageSchema.parse(input)
+    // Sharing a card alone supplies reference data, not an implementation goal.
+    if (!body.body.trim() && body.references?.length && body.executionIntent === 'auto') body.executionIntent = 'discussion'
     const identity = internal ? { ...body, ruleAdoption: internal.ruleAdoption } : body
     const key = 'room-message:' + id + ':' + body.clientRequestId
     const replay = await this.replay(key, identity)
     if (replay) return replay as { message: RoomMessage; requestId: string }
     const room = await this.get(id)
     if (room.archivedAt) throw new RoomStoreConflictError('restore the room before sending')
+    if (body.references?.length) {
+      if (!this.contentReferenceValidator) throw new Error('Room content reference validation is unavailable')
+      await this.contentReferenceValidator(room, body.references)
+    }
+    const replyContext = await prepareRoomReplyContext(this.store, id, body.replyToMessageId)
+    const pollContext = await prepareRoomPollInvitation(this.store, room, body)
     const reply = body.replyToMessageId
       ? await this.store.get<RoomMessage>('message', body.replyToMessageId) : null
     if (body.replyToMessageId && (!reply || reply.roomId !== id)) {
@@ -121,6 +150,8 @@ export class RoomService {
       rootRequestId, sourceRequestId: requestId, status: 'final',
       body: body.body, bodyRevision: 0, mentionMemberIds: body.mentionMemberIds,
       replyToMessageId: body.replyToMessageId, taskId: body.taskId,
+      displayThreadRootId: replyContext.displayThreadRootId,
+      references: body.references,
       attachmentIds: body.attachmentIds, clientRequestId: body.clientRequestId,
       requestFingerprint: roomFingerprint(body), createdAt: new Date().toISOString()
     })
@@ -128,10 +159,11 @@ export class RoomService {
       rootRequestId, collaborationProtocol: protocol,
       ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}),
       message: body, sourceMessageId: message.id,
+      ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
       roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
       threadId: 'room-discussion-' + roomId(), ...(internal ? { ruleAdoption: internal.ruleAdoption } : {}) }
     const result = { message, requestId: request.id }
-    const saved = await this.store.commit({ requestId: key, fingerprint: roomFingerprint(identity),
+    const commit: RoomStoreCommit = { requestId: key, fingerprint: roomFingerprint(identity),
       checks: [{ kind: 'room', id, expectedRevision: room.revision },
         { kind: 'message', id: message.id, expectedRevision: null },
         { kind: 'request', id: request.id, expectedRevision: null },
@@ -140,7 +172,10 @@ export class RoomService {
         { kind: 'request', id: request.id, roomId: id, value: request },
         ...(root && protocol === 'peer' ? [{ kind: 'request' as const, id: root.id, roomId: id,
           value: { ...root.value, peerLatestRequestId: requestId } }] : [])],
-      events: [{ roomId: id, kind: 'message.created', payload: { id: message.id } }], result })
+      events: [{ roomId: id, kind: 'message.created', payload: { id: message.id } }], result }
+    appendRoomReplyChecks(commit, replyContext.checks)
+    appendRoomReplyChecks(commit, pollContext.checks)
+    const saved = await this.store.commit(commit)
     this.wake()
     return saved.result as typeof result
   }
@@ -159,6 +194,7 @@ export class RoomService {
       puts: [{ kind: 'message', id: key, roomId: id, value: message }],
       events: [{ roomId: id, kind: 'message.created', payload: { id: key } }], result: { id: key } }
     await attachRoomRunPublication(this.store, commit, message, originRunId)
+    await attachRoomPublicationReply(this.store, commit, message, originRunId)
     await this.store.commit(commit)
   }
 

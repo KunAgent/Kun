@@ -139,6 +139,7 @@ export class RoomProductService {
         return await this.service.store.commit({ requestId: key, fingerprint,
           checks: [{ kind: 'read_state', id: roomId, expectedRevision: old?.revision ?? null }],
           puts: next === old?.value.seq ? [] : [{ kind: 'read_state', id: roomId, roomId, value: { seq: next } }],
+          events: next === old?.value.seq ? [] : [{ roomId, kind: 'room.read', payload: { id: roomId, seq: next } }],
           result: { seq: next } })
       } catch (error) {
         if (!(error instanceof RoomStoreConflictError) || attempt === 4) throw error

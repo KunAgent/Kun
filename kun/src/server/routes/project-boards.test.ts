@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   ProjectBoardBulkConflictError,
+  ProjectBoardNotFoundError,
+  ProjectBoardReadUnavailableError,
   type ProjectBoardService
 } from '../../services/project-board-service.js'
-import { patchProjectBoardCardStatuses } from './project-boards.js'
+import { getProjectBoardCard, patchProjectBoardCardStatuses } from './project-boards.js'
 
 function request(body: unknown): Request {
   return new Request('http://localhost/v1/project-boards/cards/status', {
@@ -20,6 +22,28 @@ const validBody = {
   fromStatus: 'pending',
   status: 'completed'
 }
+
+describe('exact project board card route', () => {
+  it('returns one full projected identity and passes the exact prefixed ID to the service', async () => {
+    const result = { workspaceRoot: '/project', revision: 7, card: { id: 'manual:card-1000', kind: 'manual', workspaceRoot: '/project',
+      title: 'Deep card', description: '', status: 'pending', category: 'other', priority: null, archived: true,
+      updatedAt: '2026-09-15T00:00:00Z', source: { label: 'Manual' } } }
+    const card = vi.fn().mockResolvedValue(result)
+    const response = await getProjectBoardCard({ card } as unknown as ProjectBoardService, 'manual:card-1000',
+      new Request('http://localhost/v1/project-boards/cards/manual%3Acard-1000?workspace=%2Fproject'))
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body)).toEqual(result)
+    expect(card).toHaveBeenCalledWith({ workspace: '/project', cardId: 'manual:card-1000' })
+  })
+  it('uses 404 only for actual absence and preserves unavailable data as 503', async () => {
+    const card = vi.fn().mockRejectedValue(new ProjectBoardNotFoundError('missing'))
+    const request = new Request('http://localhost/v1/project-boards/cards/manual%3Aone?workspace=%2Fproject')
+    expect((await getProjectBoardCard({ card } as unknown as ProjectBoardService, 'manual:one', request)).status).toBe(404)
+    card.mockRejectedValue(new ProjectBoardReadUnavailableError('corrupt data'))
+    expect((await getProjectBoardCard({ card } as unknown as ProjectBoardService, 'manual:one', request)).status).toBe(503)
+    expect((await getProjectBoardCard({ card } as unknown as ProjectBoardService, 'manual:one', new Request('http://localhost/cards/manual%3Aone'))).status).toBe(400)
+  })
+})
 
 describe('project board bulk status route', () => {
   it('returns 207 when the service reports partial failures', async () => {

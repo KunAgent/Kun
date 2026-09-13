@@ -627,12 +627,15 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             before: z.string().min(1).max(256).optional(),
             anchorTurnId: z.string().min(1).max(256).optional(),
             turnId: z.string().min(1).max(256).optional(),
+            callId: z.string().min(1).max(256).optional(),
             itemId: z.string().min(1).max(256).optional(),
             contentOffset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
             maxItems: z.number().int().positive().max(1_000),
             maxBytes: z.number().int().positive().max(16 * 1024 * 1024)
           }).strict().refine((options) => !(options.itemId || options.contentOffset !== undefined) || Boolean(options.turnId && options.itemId), {
             message: 'item content requires turnId and itemId'
+          }).refine((options) => !options.callId || Boolean(options.turnId), {
+            message: 'tool call history requires turnId'
           })
         }).strict().parse(value) as { threadId: string; options: ItemHistoryPageOptions }
         if (this.sessionStore.loadItemPage) {

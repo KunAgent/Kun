@@ -157,6 +157,14 @@ export const ProjectBoardSnapshotResponseSchema = z.object({
 }).strict()
 export type ProjectBoardSnapshotResponse = z.infer<typeof ProjectBoardSnapshotResponseSchema>
 
+export const ProjectBoardCardResponseSchema = z.object({
+  workspaceRoot: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  card: ProjectBoardCardSchema,
+  warning: z.string().optional()
+}).strict()
+export type ProjectBoardCardResponse = z.infer<typeof ProjectBoardCardResponseSchema>
+
 export const ProjectBoardSummarySchema = z.object({
   workspaceRoot: z.string().min(1),
   total: z.number().int().nonnegative(),

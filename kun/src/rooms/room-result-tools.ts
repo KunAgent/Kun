@@ -5,7 +5,8 @@ import type { CapabilityToolProvider } from '../adapters/tool/capability-registr
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { RoomCoordinationPlanSchema } from './room-coordination-plan.js'
 import { roomRuleReadTool } from './room-rule-read-tool.js'
-import { roomPeerTools } from './room-peer-tools.js'
+import { roomPollVoteTool } from './room-poll-vote-tool.js'
+import { roomPeerTools, roomPeerStoreBinding } from './room-peer-tools.js'
 
 export const RoomReviewResultSchema = z.object({
   verdict: RoomReviewSchema.shape.verdict,
@@ -23,7 +24,7 @@ export function roomResultProvider(threads: ThreadStore): CapabilityToolProvider
   return {
     id: 'room-results', kind: 'built-in', enabled: true, available: true,
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
-    tools: [roomRuleReadTool(threads), ...roomPeerTools(threads), ...[
+    tools: [roomRuleReadTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), ...[
       { name: 'submit_room_plan', kind: 'coordination', schema: RoomCoordinationPlanSchema,
         description: 'Submit the structured room decision for the current user request.' },
       { name: 'submit_room_review', kind: 'review', schema: RoomReviewResultSchema,

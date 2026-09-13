@@ -42,5 +42,5 @@ export const RoomRequestContinueSchema = z.object({
   clientRequestId: RoomIdSchema,
   expectedRevision: z.number().int().nonnegative(),
   message: z.object(SendRoomMessageSchema.shape).omit({ clientRequestId: true }).strict()
-    .refine((value) => Boolean(value.body.trim() || value.attachmentIds.length), 'continuation requires text or an attachment')
+    .refine((value) => Boolean(value.body.trim() || value.attachmentIds.length || value.references?.length), 'continuation requires text or an attachment')
 }).strict()

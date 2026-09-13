@@ -1,7 +1,9 @@
 import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../ports/session-store.js'
+import { assertItemHistoryScope, itemMatchesHistoryScope } from './item-history-scope.js'
 
 export function isItemContentRequest(options: ItemHistoryPageOptions): boolean {
+  assertItemHistoryScope(options)
   if (options.itemId !== undefined || options.contentOffset !== undefined) {
     if (!options.turnId || !options.itemId || (options.contentOffset !== undefined &&
       (!Number.isSafeInteger(options.contentOffset) || options.contentOffset < 0))) {
@@ -16,7 +18,7 @@ export function isItemContentRequest(options: ItemHistoryPageOptions): boolean {
 export function buildItemContentPage(item: TurnItem | undefined, options: ItemHistoryPageOptions): ItemHistoryPage {
   isItemContentRequest(options)
   const empty = { items: [], hasMore: false, itemBytes: 0 } satisfies ItemHistoryPage
-  if (!item || !isPublicTurnItem(item) || item.id !== options.itemId || item.turnId !== options.turnId) return empty
+  if (!item || !isPublicTurnItem(item) || item.id !== options.itemId || !itemMatchesHistoryScope(item, options)) return empty
   const record = item as TurnItem & Record<string, unknown>
   const field = item.kind === 'tool_call' ? 'arguments'
     : item.kind === 'tool_result' ? 'output'

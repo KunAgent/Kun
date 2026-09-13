@@ -16,7 +16,7 @@ export class ProjectBoardRevisionConflictError extends Error {
 }
 
 export interface ProjectBoardStore {
-  read(workspaceRoot: string): Promise<ProjectBoardDocumentRead>
+  read(workspaceRoot: string, options?: { repair?: boolean }): Promise<ProjectBoardDocumentRead>
   mutate(
     workspaceRoot: string,
     expectedRevision: number,

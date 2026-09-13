@@ -17,7 +17,7 @@ export type BrokerDnsResolver = (
   hostname: string
 ) => Promise<readonly BrokerResolvedAddress[]>
 
-export type BrokeredNetworkMode = 'remote-https' | 'loopback-http'
+export type BrokeredNetworkMode = 'remote-https' | 'loopback-http' | 'remote-http'
 
 export type BrokeredNetworkTarget = {
   hostname: string
@@ -27,6 +27,8 @@ export type BrokeredNetworkTarget = {
 
 export type SafeNetworkFetchOptions = {
   resolve?: BrokerDnsResolver
+  /** Preview-only HTTP support: require public unicast and disable the loopback exception. */
+  publicHttp?: boolean
 }
 
 const LOOPBACK_HTTP_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
@@ -58,7 +60,7 @@ export function createSafeNetworkFetch(options: SafeNetworkFetchOptions = {}): t
     if (request.redirect === 'follow') {
       throw new Error('Brokered requests must use manual or error redirect handling')
     }
-    const target = await resolveBrokeredNetworkTarget(url, resolver)
+    const target = await resolveBrokeredNetworkTarget(url, resolver, options.publicHttp)
     if (request.signal.aborted) throw request.signal.reason
 
     const headers = new Headers(request.headers)
@@ -103,10 +105,11 @@ export function normalizedBrokerHostname(url: URL): string {
     : hostname
 }
 
-export function brokeredNetworkMode(url: URL): BrokeredNetworkMode {
+export function brokeredNetworkMode(url: URL, publicHttp = false): BrokeredNetworkMode {
   if (url.username || url.password) throw new Error('Brokered URLs must not contain credentials')
   const hostname = normalizedBrokerHostname(url)
   if (url.protocol === 'https:') return 'remote-https'
+  if (url.protocol === 'http:' && publicHttp) return 'remote-http'
   if (url.protocol === 'http:' && LOOPBACK_HTTP_HOSTS.has(hostname)) return 'loopback-http'
   throw new Error('Brokered requests require HTTPS (explicit loopback HTTP is allowed)')
 }
@@ -117,9 +120,10 @@ export function assertBrokeredNetworkUrl(url: URL): void {
 
 export async function resolveBrokeredNetworkTarget(
   url: URL,
-  resolver: BrokerDnsResolver = systemDnsResolver
+  resolver: BrokerDnsResolver = systemDnsResolver,
+  publicHttp = false
 ): Promise<BrokeredNetworkTarget> {
-  const mode = brokeredNetworkMode(url)
+  const mode = brokeredNetworkMode(url, publicHttp)
   const hostname = normalizedBrokerHostname(url)
   const literalFamily = isIP(hostname)
   const rawAddresses = literalFamily === 0

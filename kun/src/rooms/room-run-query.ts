@@ -102,7 +102,7 @@ export async function roomRunDetail(deps: RoomRuntimeDeps, roomId: string, runId
 }
 
 export async function roomRunItems(deps: RoomRuntimeDeps, roomId: string, runId: string, options: {
-  before?: string; limit?: number; maxBytes?: number; itemId?: string; contentOffset?: number
+  before?: string; limit?: number; maxBytes?: number; itemId?: string; callId?: string; contentOffset?: number
 } = {}): Promise<RoomRunItemsPage> {
   const current = await inspectRoomRun(deps, roomId, runId)
   const { run } = current
@@ -118,7 +118,7 @@ export async function roomRunItems(deps: RoomRuntimeDeps, roomId: string, runId:
     status: 'history_unavailable', reason: '当前会话存储不支持有界运行查询。' } }
   const page = await deps.sessions.loadItemPage(run.threadId, { turnId: run.turnId, before: options.before,
     maxItems: options.limit ?? 40, maxBytes: options.maxBytes ?? 128 * 1024,
-    itemId: options.itemId, contentOffset: options.contentOffset })
+    itemId: options.itemId, callId: options.callId, contentOffset: options.contentOffset })
   if (page.replayAfterSeq !== undefined) {
     const floor = await deps.sessions.eventReplayFloorSeq?.(run.threadId) ?? 0
     eventsCursor = encodeRunCursor({ v: 1, id: runId, revision: current.row.revision,

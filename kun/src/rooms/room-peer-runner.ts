@@ -302,9 +302,10 @@ export class RoomPeerRunner {
       await recordPeerResponseMetric(this.deps, topic.value, member, 'skipped', observed.turn)
     }
     else {
+      const context = await this.context(member)
       const result = await this.state.publish({ rootRequestId: topic.id, memberId: member.value.memberId,
         clientRequestId: active.clientRequestId, activationClientRequestId: active.clientRequestId,
-        ...submitted, replyToMessageId: submitted.replyToMessageId ?? topic.value.sourceMessageId })
+        ...submitted, replyToMessageId: submitted.replyToMessageId ?? context.replyToMessageId })
       if (result.status === 'stale') {
         await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId), { status: 'completed', outcome: 'stale' })
         await releasePeerActivation(this.deps, member)

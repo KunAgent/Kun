@@ -5,7 +5,7 @@ import { RoomRequestRunner } from './room-request-runner.js'
 import { RoomTaskRunner } from './room-task-runner.js'
 import { roomTaskAction } from './room-task-actions.js'
 import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
-import type { RoomStore, RoomStoredDocument } from './room-store.js'
+import type { RoomStore, RoomStoredDocument, RoomListOptions } from './room-store.js'
 import { roomTaskActivity } from './room-task-activity.js'
 import { RoomProductService } from './room-product-service.js'
 import { RoomIntegrationService } from './room-integration.js'
@@ -102,7 +102,7 @@ export class RoomRuntime {
       approvals: controlThreadId ? this.deps.approvals.pending(controlThreadId) : [],
       userInputs: controlThreadId ? this.deps.inputs.pending(controlThreadId) : [] }
   }
-  async listRooms(input: { cursor?: string; archivedOnly?: boolean; limit: number }) {
+  async listRooms(input: RoomListOptions) {
     const page = await this.service.store.listRooms(input)
     return { rooms: await Promise.all(page.rooms.map(async (row) => {
       const { runningCount, attentionCount } = await roomActivitySummary(this.service.store, row.id)

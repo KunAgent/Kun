@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RoomAvatarReferenceSchema, RoomContentReferenceSchema } from './room-content.js'
 
 export const RoomIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
 const Revision = z.number().int().nonnegative()
@@ -13,6 +14,7 @@ export const RoomMemberSchema = z.object({
   presetId: z.string().min(1).max(256),
   role: z.enum(['coordinator', 'developer', 'reviewer', 'diagnostician']),
   roleNotes: z.string().max(8000).default(''),
+  avatar: RoomAvatarReferenceSchema.optional(),
   enabled: z.boolean().default(true),
   removedAt: Timestamp.optional(),
   defaultRepositoryId: RoomIdSchema.optional(),
@@ -97,10 +99,12 @@ export const SendRoomMessageSchema = z.object({
   body: z.string().max(64000),
   mentionMemberIds: UniqueIds.default([]),
   replyToMessageId: RoomIdSchema.optional(),
+  references: z.array(RoomContentReferenceSchema).max(20).optional(),
+  pollInvitation: z.object({ pollId: RoomIdSchema, memberIds: UniqueIds }).strict().optional(),
   taskId: RoomIdSchema.optional(),
   repositoryId: RoomIdSchema.optional(),
   attachmentIds: z.array(z.string().min(1).max(256)).max(20).default([])
-}).strict().refine((value) => value.body.trim().length > 0 || value.attachmentIds.length > 0,
+}).strict().refine((value) => value.body.trim().length > 0 || value.attachmentIds.length > 0 || Boolean(value.references?.length),
   'message requires text or an attachment')
 export type SendRoomMessage = z.infer<typeof SendRoomMessageSchema>
 
@@ -110,6 +114,11 @@ export const RoomMessageSchema = z.object({
   rootRequestId: RoomIdSchema.optional(),
   sourceRequestId: RoomIdSchema.optional(),
   originRunId: RoomIdSchema.optional(),
+  displayThreadRootId: RoomIdSchema.optional(),
+  replyCount: z.number().int().nonnegative().optional(),
+  presentationKind: z.literal('poll').optional(),
+  pollId: RoomIdSchema.optional(),
+  references: z.array(RoomContentReferenceSchema).max(20).optional(),
   status: z.enum(['streaming', 'final', 'failed']).optional(),
   messageSeq: z.number().int().positive(),
   authorKind: z.enum(['user', 'member', 'system']),

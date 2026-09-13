@@ -4,6 +4,7 @@ import type { RoomStoreCommit } from './room-store.js'
 import { appendPeerInbox, peerId, peerInboxRows } from './room-peer-inbox.js'
 import { peerFingerprint, retryPeerConflict, type RoomPeerStore } from './room-peer-state.js'
 import type { RoomPeerPublishInput, RoomPeerPublishResult, RoomPeerRequestInput, RoomPeerInboxItem } from './room-peer-types.js'
+import { appendRoomReplyChecks, prepareRoomReplyContext } from './room-replies.js'
 
 /** Publication is the only peer output boundary: no unfinished model text enters the room. */
 export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPublishInput): Promise<RoomPeerPublishResult> {
@@ -61,6 +62,7 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
         throw new Error('peer reply must refer to this topic')
       }
     }
+    const replyContext = await prepareRoomReplyContext(peer.store, topic.value.roomId, input.replyToMessageId)
     const contentId = peerId('content', input.rootRequestId, activation.generation,
       activation.basePublicationRevision, input.replyToMessageId ?? null, [...invites].sort(), input.body)
     const content = await peer.store.get<{ messageId: string }>('peer_publication', contentId)
@@ -76,6 +78,7 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
       messageSeq: 1, status: 'final', authorKind: 'member', authorMemberId: input.memberId,
       authorLabelSnapshot: sender.displayName, body: input.body, bodyRevision: 0,
       mentionMemberIds: [...new Set([...mentions, ...invites])], replyToMessageId: input.replyToMessageId,
+      displayThreadRootId: replyContext.displayThreadRootId,
       attachmentIds: [], createdAt: now })
     if (!message.body.trim()) throw new Error('peer message requires text')
     const handled = Math.max(member.value.handledInboxSeq, activation.seenThroughSeq)
@@ -103,7 +106,8 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
     const runId = roomRunId(topic.value.roomId, activation.clientRequestId)
     // Historical activations from older runtimes can still finish without fabricating provenance.
     if (await peer.store.get('room_run', runId)) await attachRoomRunPublication(peer.store, commit, message, runId)
-    commit.checks!.push(...sourceChecks)
+    appendRoomReplyChecks(commit, sourceChecks)
+    appendRoomReplyChecks(commit, replyContext.checks)
     const recipients = nextTopic.memberIds.filter((id) => id !== input.memberId)
     await appendPeerInbox(peer.store, commit, nextTopic, recipients.filter((id) => !invites.includes(id)), {
       sourceKind: 'message', sourceId: message.id, sourceRevision: message.bodyRevision,

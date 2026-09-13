@@ -1,4 +1,8 @@
 import { RoomRunRecordSchema } from '../contracts/room-runs.js'
+import { initializeRoomReplyIndex, roomReplyPage, projectRoomReplyCounts } from './room-replies-sqlite.js'
+import type { RoomReplyPageInput } from '../contracts/room-replies.js'
+import type { RoomSearchQuery, RoomRunSummaryQuery } from '../contracts/room-experience.js'
+import { queryRoomSearch, queryRoomRepositories, queryRoomRunSummary } from './room-experience-sqlite.js'
 import { createHash } from 'node:crypto'
 import { chmod, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -91,14 +95,17 @@ export class SqliteRoomStore implements RoomStore {
     if (parsed.repositoryId) { clauses.push("json_extract(document, '$.task.repositoryId') = ?"); args.push(parsed.repositoryId) }
     if (parsed.requestId) { clauses.push(kind === 'room_run' ? "json_extract(document, '$.requestId') = ?" : kind.startsWith('peer_') ? "json_extract(document, '$.rootRequestId') = ?" :
       "json_extract(document, '$.task.requestId') = ?"); args.push(parsed.requestId) }
-    if (parsed.documentId) { clauses.push("json_extract(document, '$.id') = ?"); args.push(parsed.documentId) }
+    if (parsed.documentId) { clauses.push(kind === 'message' ? 'id = ?' : "json_extract(document, '$.id') = ?"); args.push(parsed.documentId) }
     if (parsed.deliveryId) { clauses.push("json_extract(document, '$.deliveryId') = ?"); args.push(parsed.deliveryId) }
     if (parsed.threadId) {
       clauses.push("(json_extract(document,'$.threadId') = ? OR EXISTS (SELECT 1 FROM json_each(json_extract(document,'$.discussions')) d WHERE json_extract(d.value,'$.threadId') = ?))")
       args.push(parsed.threadId, parsed.threadId)
     }
     if (parsed.search) {
-      if (kind === 'message' && parsed.search.length >= 3 && roomIndexReady(db)) {
+      if (kind === 'room_run') {
+        clauses.push("instr(lower(COALESCE(json_extract(document,'$.input'),'') || ' ' || COALESCE(json_extract(document,'$.memberLabel'),'') || ' ' || COALESCE(json_extract(document,'$.reason'),'') || ' ' || COALESCE(json_extract(document,'$.error'),'')),lower(?))>0")
+        args.push(parsed.search)
+      } else if (kind === 'message' && parsed.search.length >= 3 && roomIndexReady(db)) {
         clauses.push('seq IN (SELECT rowid FROM room_message_fts WHERE room_message_fts MATCH ?)')
         args.push('"' + parsed.search.replaceAll('"', '""') + '"')
       } else {
@@ -134,21 +141,55 @@ export class SqliteRoomStore implements RoomStore {
       ELSE document END AS document` : '*'
     const rows = db.prepare(`SELECT ${columns} FROM room_documents WHERE ${clauses.join(' AND ')}
       ORDER BY seq ${parsed.order === 'asc' ? 'ASC' : 'DESC'} LIMIT ?`).all(...args) as DocumentRow[]
-    return rows.map((row) => document<T>(row))
+    const documents = rows.map((row) => document<T>(row))
+    if (kind !== 'message') return documents
+    const values = projectRoomReplyCounts(db, documents.map((row) => row.value) as import('../contracts/rooms.js').RoomMessage[])
+    return documents.map((row, index) => ({ ...row, value: values[index] as T }))
+  }
+
+  async replyPage(input: RoomReplyPageInput) { return roomReplyPage(await this.database(), input) }
+  async searchRooms(input: RoomSearchQuery) { return queryRoomSearch(await this.database(), input) }
+  async roomRepositories() { return queryRoomRepositories(await this.database()) }
+  async runSummary(input: RoomRunSummaryQuery) { return queryRoomRunSummary(await this.database(), input) }
+
+  /** Canonical room history and managed portraits remain attachment owners after temporary leases expire. */
+  async isAttachmentReferenced(id: string): Promise<boolean> {
+    const db = await this.database()
+    if (db.prepare("SELECT 1 FROM room_documents WHERE kind='room_avatar' AND id=? LIMIT 1").get(id)) return true
+    return Boolean(db.prepare(`SELECT 1 FROM room_documents m WHERE m.kind='message' AND (
+      EXISTS(SELECT 1 FROM json_each(m.document,'$.attachmentIds') a WHERE a.value=?) OR
+      EXISTS(SELECT 1 FROM json_each(m.document,'$.references') a WHERE json_extract(a.value,'$.kind')='attachment'
+        AND json_extract(a.value,'$.attachmentId')=?)) LIMIT 1`).get(id, id))
   }
 
   async listRooms(options: RoomListOptions = {}): Promise<RoomListPage> {
     const input = RoomListOptionsSchema.parse(options)
     const cursor = input.cursor ? decodeRoomCursor(input.cursor) : undefined
     const db = await this.database()
+    const conditions: string[] = [], filterArgs: Array<string | number> = []
+    if (input.ids) { conditions.push(`room.id IN (${input.ids.map(() => '?').join(',')})`); filterArgs.push(...input.ids) }
+    if (input.repositoryRoot) {
+      conditions.push("EXISTS(SELECT 1 FROM json_each(room.document,'$.repositories') repo WHERE json_extract(repo.value,'$.canonicalRoot')=?)")
+      filterArgs.push(input.repositoryRoot)
+    }
+    if (input.attentionOnly) conditions.push(`EXISTS(SELECT 1 FROM room_documents a WHERE a.room_id=room.id AND (
+      (a.kind='task' AND a.status IN ('needs_input','needs_approval','recovery_required','failed','awaiting_acceptance')) OR
+      (a.kind='request' AND a.status IN ('needs_input','failed','recovery_required')) OR
+      (a.kind='integration' AND a.status IN ('preparing','validating','recovery_required','conflict','ready','failed') AND
+        NOT(a.status='failed' AND COALESCE(json_extract(a.document,'$.cancelRequested'),0)=1 AND json_extract(a.document,'$.applyIntent') IS NULL) AND
+        (a.status IN ('recovery_required','conflict','ready','failed') OR json_extract(a.document,'$.applyIntent') IS NOT NULL OR
+          COALESCE(json_array_length(a.document,'$.attention.approvalIds'),0)>0 OR
+          COALESCE(json_array_length(a.document,'$.attention.userInputIds'),0)>0))))`)
     const rows = db.prepare(`WITH candidates AS (
       SELECT room.*, COALESCE(json_extract(room.document, '$.pinned'), 0) AS pinned,
         COALESCE((SELECT MAX(message.seq) FROM room_documents message
           WHERE message.kind = 'message' AND message.room_id = room.id), 0) AS latest_message_seq
       FROM room_documents room WHERE room.kind = 'room' AND room.archived = ?
       AND instr(lower(COALESCE(json_extract(room.document, '$.name'), '')), lower(?)) > 0
+      ${conditions.length ? 'AND ' + conditions.join(' AND ') : ''}
     ), ordered AS (
       SELECT *, CASE WHEN latest_message_seq > 0 THEN latest_message_seq ELSE seq END AS activity_seq FROM candidates
+      ${input.unreadOnly ? "WHERE latest_message_seq>COALESCE((SELECT json_extract(read.document,'$.seq') FROM room_documents read WHERE read.kind='read_state' AND read.id=candidates.id),0)" : ''}
     ), page AS (
       SELECT * FROM ordered ${cursor ? 'WHERE (pinned, activity_seq, id) < (?, ?, ?)' : ''}
       ORDER BY pinned DESC, activity_seq DESC, id DESC LIMIT ?
@@ -165,7 +206,7 @@ export class SqliteRoomStore implements RoomStore {
       ORDER BY page.pinned DESC, page.activity_seq DESC, page.id DESC`).all(
       input.archivedOnly ? 1 : 0,
       input.search ?? '',
-      ...(cursor ? [cursor.pinned, cursor.activitySeq, cursor.id] : []), input.limit + 1
+      ...filterArgs, ...(cursor ? [cursor.pinned, cursor.activitySeq, cursor.id] : []), input.limit + 1
     ) as Array<DocumentRow & { pinned: number; latest_message_seq: number; activity_seq: number; latest_message: string | null }>
     const visible = rows.slice(0, input.limit)
     const last = visible.at(-1)
@@ -366,6 +407,7 @@ export class SqliteRoomStore implements RoomStore {
       `)
       immediateTransaction(db, () => {
         initializeRoomIndex(db, previousVersion < 2)
+        initializeRoomReplyIndex(db)
         initializeRoomProjections(db)
         db.exec("CREATE INDEX IF NOT EXISTS room_peer_root_member ON room_documents(kind, json_extract(document, '$.rootRequestId'), json_extract(document, '$.memberId'), seq);")
         db.exec("CREATE TABLE IF NOT EXISTS room_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); INSERT OR IGNORE INTO room_metadata VALUES('event_scope',lower(hex(randomblob(16))));")

@@ -5,6 +5,7 @@ import type { RoomPeerMemberState, RoomPeerTopic, RoomPeerInboxItem } from './ro
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 
 const bindings = new WeakMap<ThreadStore, RoomStore>()
+export function roomPeerStoreBinding(threads: ThreadStore) { return bindings.get(threads) }
 export function bindRoomPeerStore(threads: ThreadStore, store: RoomStore) { bindings.set(threads, store) }
 export const RoomPeerMessageInput = z.object({
   body: z.string().max(16000).default(''),

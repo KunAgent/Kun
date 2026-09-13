@@ -1,5 +1,12 @@
 // Type-only aliases keep the desktop and HTTP contracts in sync without
 // bundling runtime implementation code in the renderer.
+export type { RoomContentReference, RoomAvatarReference, RoomContentResult,
+  RoomContentOpenTarget, RoomLinkPreview, RoomPreviewImage } from '../../kun/src/contracts/room-content'
+export type { RoomPoll, RoomPollInvitation, RoomMessageReactions,
+  RoomMessageInteractions } from '../../kun/src/contracts/room-interactions'
+export type { RoomReplyPage, RoomReplyPageInput } from '../../kun/src/contracts/room-replies'
+export type { RoomNotificationPreference, RoomPreferenceDetail, RoomSearchQuery, RoomSearchHit,
+  RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../../kun/src/contracts/room-experience'
 export type {
   RoomRunDetail, RoomRunAvailability, RoomRunContentPage, RoomRunItemsPage,
   RoomRunListPage, RoomMessageRunSource, RoomRunEvent
