@@ -88,7 +88,7 @@ export class AgentIdentityService {
     const now = new Date().toISOString()
     const agent = AgentIdentitySchema.parse({ ...(copy ?? {}), ...fields,
       ...(copy ? { title: copy.title, instructions: copy.instructions, defaultRole: copy.defaultRole,
-        presetId: copy.presetId, avatar: input.avatar ?? copy.avatar, modelRef: copy.modelRef,
+        presetId: copy.presetId, avatar: input.avatar ?? copy.avatar, modelRef: copy.modelRef, fastModelRef: copy.fastModelRef,
         capabilityOverrides: copy.capabilityOverrides, allowedRepositoryRoots: copy.allowedRepositoryRoots,
         reviewerAgentId: copy.reviewerAgentId, memory: copy.memory } : {}),
       id: 'agent-' + randomUUID(), schemaVersion: 1, revision: 0, createdAt: now, updatedAt: now,

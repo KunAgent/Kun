@@ -31,7 +31,7 @@ export function buildTurnModeInstruction(
       if (item.isError && ++rejected >= 3) throw new Error('Room result format failed after two repairs; retry this room step explicitly')
     }
   }
-  const readOnlyRoomInstruction = roomContext ? [
+  const readOnlyRoomInstruction = roomContext && roomContext.kind !== 'conversation' ? [
     'This is a read-only Kun room ' + roomContext.kind + ' step. Use only advertised tools; do not modify source files or execute commands.',
     'Room discussion is coordinated by the host. Do not create standalone plans, goals, or delegated agents.',
     roomContext.kind === 'coordination' ? 'Submit the room decision with submit_room_plan when available; otherwise return the requested JSON object.' :

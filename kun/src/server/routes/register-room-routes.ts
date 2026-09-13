@@ -1,3 +1,4 @@
+import { registerAgentChatRoutes } from './register-agent-chat-routes.js'
 import { registerRoomProfileRoutes } from './register-room-profile-routes.js'
 import { registerAgentHandoffRoutes } from './register-agent-handoff-routes.js'
 import { registerAgentIdentityRoutes } from './register-agent-identity-routes.js'
@@ -69,6 +70,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     }
   })
 
+  registerAgentChatRoutes(add, runtime)
   registerRoomProfileRoutes(add, runtime)
   registerAgentIdentityRoutes(add)
   registerAgentHandoffRoutes(add)

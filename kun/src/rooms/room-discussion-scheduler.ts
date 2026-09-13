@@ -52,7 +52,7 @@ export async function roomDiscussionBusy(deps: RoomRuntimeDeps, includePeer = fa
     const rows = await deps.store.list<RoomRunRecord>('room_run', { status: ['queued', 'running', 'recovery_required'],
       order: 'asc', afterSeq: runCursor, limit: 100, summaryOnly: true })
     for (const row of rows) {
-      if (!['discussion', 'coordination'].includes(row.value.phase)) continue
+      if (!['discussion', 'coordination', 'conversation'].includes(row.value.phase)) continue
       if (!includePeer && row.value.phase === 'discussion' && !row.value.handoffId) {
         // Active peer reservations are counted by the peer runner itself.
         const topic = row.value.rootRequestId ? await deps.store.get('peer_topic', row.value.rootRequestId) : null

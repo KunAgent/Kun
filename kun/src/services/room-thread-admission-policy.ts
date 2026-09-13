@@ -6,7 +6,7 @@ import { TurnConflictError } from './turn-service-core.js'
 export function assertRoomTurnAdmission(thread: ThreadRecord, request: StartTurnRequest): void {
   if (!thread.roomContext) return
   const frozen = ['approvalPolicy', 'sandboxMode', 'approvalReviewer', 'model', 'providerId', 'accountId', 'mode'] as const
-  if (frozen.some((key) => request[key] !== undefined && request[key] !== thread[key]) ||
+  if (frozen.some((key) => !(key === 'model' && thread.roomContext?.kind === 'conversation') && request[key] !== undefined && request[key] !== thread[key]) ||
     request.orchestration === 'graph' || request.guiPlan || request.guiDesignMode ||
     request.guiDesignCanvas || request.guiDesignArtifact || request.designDocumentTarget || request.writeContext ||
     (request.agentSurface !== undefined && request.agentSurface !== 'code')) {

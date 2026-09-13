@@ -13,7 +13,7 @@ export const roomRunId = (roomId: string, clientRequestId: string, triage = fals
   'run-' + createHash('sha256').update(JSON.stringify([roomId, clientRequestId, triage])).digest('hex').slice(0, 40)
 export type RoomRunAdmission = Partial<Pick<RoomRunRecord,
   'phase' | 'requestId' | 'rootRequestId' | 'triggerMessageId' | 'contextId' | 'generation' |
-  'attempt' | 'previousRunId' | 'integrationId' | 'integrationStage' | 'input'>>
+  'attempt' | 'previousRunId' | 'integrationId' | 'integrationStage' | 'input' | 'model' | 'providerId' | 'accountId'>>
 
 async function retry<T>(work: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {

@@ -17,7 +17,7 @@ export function roomBlockedProviders(thread: ThreadRecord): string[] {
 export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadRecord): ToolHostContext {
   const policy = thread.roomContext
   if (!policy) return context
-  const readOnly = policy.kind !== 'execution' || thread.sandboxMode === 'read-only'
+  const readOnly = !['execution', 'conversation'].includes(policy.kind) || thread.sandboxMode === 'read-only'
   const agentTools = policy.participantAgentId ? [...AGENT_COLLABORATION_TOOLS] : []
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []

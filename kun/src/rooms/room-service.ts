@@ -41,6 +41,8 @@ export function defaultRoomMembers(repositoryIds: string[]) {
 }
 
 export class RoomService {
+  private directModel?: (room: Room) => Promise<import('../agents/agent-models.js').AgentModelBinding>
+  setDirectModelResolver(resolver: NonNullable<RoomService['directModel']>) { this.directModel = resolver }
   private agents?: AgentIdentityService
   setAgentDirectory(agents: AgentIdentityService): void { this.agents = agents }
   private memberAvatarValidator?: (members: import('../contracts/rooms.js').RoomMember[]) => Promise<void>
@@ -172,8 +174,9 @@ export class RoomService {
       requestFingerprint: roomFingerprint(body), createdAt: new Date().toISOString()
     })
     const taskParticipants = this.agents ? await prepareAgentTaskParticipants(this.agents, room, body) : undefined
-    const request: RoomRequestState = { taskParticipants, id: requestId, roomId: id, status: 'pending',
-      rootRequestId, collaborationProtocol: protocol,
+    const request: RoomRequestState = {
+      ...(room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId ? { privateProtocol: 'direct-v1' as const, privateModel: await this.directModel?.(room) } : {}), taskParticipants, id: requestId, roomId: id, status: 'pending',
+      rootRequestId, collaborationProtocol: room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId ? 'legacy' : protocol,
       ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}),
       message: body, sourceMessageId: message.id,
       ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),

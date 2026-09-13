@@ -71,6 +71,7 @@ export async function uniqueRoomReplyTrigger(store: RoomStore, roomId: string,
 /** Legacy coordination/execution has one saved triggering request; notices have no run. */
 export async function attachRoomPublicationReply(store: RoomStore, commit: RoomStoreCommit,
   message: RoomMessage, originRunId?: string): Promise<void> {
+  if (originRunId && (await store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', originRunId))?.value.phase === 'conversation') return
   if (!originRunId || message.replyToMessageId || message.displayThreadRootId) return
   const run = await store.get<RoomRunRecord>('room_run', originRunId)
   if (!run || run.roomId !== message.roomId || !run.value.triggerMessageId) return

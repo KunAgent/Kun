@@ -28,6 +28,7 @@ const fields = {
   presetId: z.string().min(1).max(256).default('general'),
   avatar: RoomAvatarReferenceSchema.optional(),
   modelRef: AgentModelRef.optional(),
+  fastModelRef: AgentModelRef.optional(),
   capabilityOverrides: AgentCapabilityOverrides.optional(),
   allowedRepositoryRoots: z.array(z.string().min(1).max(4096)).max(100).optional(),
   reviewerAgentId: ParticipantAgentId.optional(),
@@ -51,7 +52,7 @@ export const UpdateAgentRequest = z.object({
   },
   expectedRevision: z.number().int().nonnegative(), clientRequestId: ParticipantAgentId,
   archived: z.boolean().optional(),
-  modelRef: AgentModelRef.nullable().optional(), avatar: RoomAvatarReferenceSchema.nullable().optional(),
+  modelRef: AgentModelRef.nullable().optional(), fastModelRef: AgentModelRef.nullable().optional(), avatar: RoomAvatarReferenceSchema.nullable().optional(),
   capabilityOverrides: AgentCapabilityOverrides.nullable().optional(),
   allowedRepositoryRoots: z.array(z.string().min(1).max(4096)).max(100).nullable().optional(),
   reviewerAgentId: ParticipantAgentId.nullable().optional()

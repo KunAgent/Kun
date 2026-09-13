@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { UsageSnapshotSchema } from './usage.js'
 
 const Id = z.string().min(1).max(256)
-export const RoomRunPhaseSchema = z.enum(['coordination', 'discussion', 'execution', 'review', 'integration', 'triage', 'memory'])
+export const RoomRunPhaseSchema = z.enum(['coordination', 'discussion', 'execution', 'review', 'integration', 'triage', 'memory', 'conversation'])
 export const RoomRunStatusSchema = z.enum(['queued', 'running', 'completed', 'failed', 'cancelled', 'recovery_required'])
 export const RoomRunOutcomeSchema = z.enum(['published', 'skipped', 'stale', 'duplicate', 'respond', 'failed', 'cancelled'])
 export const RoomRunRecordSchema = z.object({
@@ -20,7 +20,7 @@ export const RoomRunRecordSchema = z.object({
   reason: z.string().max(4000).optional(), error: z.string().max(4000).optional(),
   publishedMessageId: Id.optional(), integrationId: Id.optional(), integrationStage: z.string().max(80).optional(),
   createdAt: z.string(), updatedAt: z.string(), startedAt: z.string().optional(), endedAt: z.string().optional(),
-  model: z.string().optional(), usage: UsageSnapshotSchema.optional(),
+  model: z.string().optional(), providerId: z.string().optional(), accountId: z.string().optional(), usage: UsageSnapshotSchema.optional(),
   usageStatus: z.enum(['complete', 'partial', 'unavailable']).optional(), elapsedMs: z.number().nonnegative().optional(),
   // Captured before admission; these allow exact turn usage to exclude earlier conversation usage.
   usageSinceSeq: z.number().int().nonnegative().optional(), usageBaseline: UsageSnapshotSchema.optional()

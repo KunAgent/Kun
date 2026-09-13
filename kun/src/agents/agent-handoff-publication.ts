@@ -60,7 +60,7 @@ export async function publishAgentHandoff(service: AgentHandoffService, row: Roo
     } else {
       const requestId = agentStableId('handoff-return', handoff.id)
       const original = source.request!.value
-      const request: RoomRequestState = { id: requestId, roomId: handoff.sourceRoomId,
+      const request: RoomRequestState = { privateProtocol: original.privateProtocol, id: requestId, roomId: handoff.sourceRoomId,
         rootRequestId: handoff.sourceRootRequestId, status: 'pending', stage: 'discuss', collaborationProtocol: 'legacy',
         sourceMessageId: notice.id, roomSnapshot: original.roomSnapshot,
         threadId: agentStableId('handoff-return-thread', handoff.id),

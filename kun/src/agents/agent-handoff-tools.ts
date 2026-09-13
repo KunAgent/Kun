@@ -1,3 +1,4 @@
+import { roomRunId } from '../rooms/room-run-recording.js'
 import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
@@ -14,7 +15,13 @@ export const AGENT_COLLABORATION_TOOLS = ['list_collaboration_agents', 'send_age
 const Id = z.string().min(1).max(128)
 async function boundOrigin(threads: ThreadStore, context: ToolHostContext): Promise<{ service: AgentHandoffService; origin: HandoffOrigin }> {
   const service = bindings.get(threads)
-  const thread = await (threads.getMetadata?.(context.threadId) ?? threads.get(context.threadId))
+  let thread = await (threads.getMetadata?.(context.threadId) ?? threads.get(context.threadId))
+  if (thread?.roomContext?.kind === 'conversation') {
+    const turn = thread.turns.find((item) => item.id === context.turnId)
+    const run = turn?.clientRequestId && service ? await service.deps.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', roomRunId(thread.roomContext.roomId, turn.clientRequestId)) : null
+    if (!run || run.value.threadId !== thread.id || run.value.turnId !== context.turnId) throw new Error('Private run binding unavailable')
+    thread = { ...thread, roomContext: { ...thread.roomContext, requestId: run.value.requestId, rootRequestId: run.value.rootRequestId } }
+  }
   const scope = thread?.roomContext
   const turn = thread?.turns.find((turn) => turn.id === context.turnId)
   if (!service) throw new Error('agent collaboration service binding unavailable')

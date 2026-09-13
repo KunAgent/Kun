@@ -7,6 +7,7 @@ const relativePath = z.string().min(1).max(4096).refine((value) => !value.starts
   !value.split('/').some((part) => !part || part === '.' || part === '..'), 'relative repository path required')
 
 export const RoomContentReferenceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('agent_file'), workspaceId: Id, relativePath, titleSnapshot }).strict(),
   z.object({ kind: z.literal('attachment'), attachmentId: Id, titleSnapshot }).strict(),
   z.object({ kind: z.literal('repository_file'), repositoryId: Id, relativePath, titleSnapshot }).strict(),
   z.object({ kind: z.literal('task'), taskId: Id, titleSnapshot }).strict(),

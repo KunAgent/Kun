@@ -14,6 +14,11 @@ import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 
 export type RoomRequestState = {
+  privateProtocol?: 'direct-v1'
+  privateInput?: string
+  privateModel?: { model: string; providerId?: string; accountId?: string }
+  privateRunId?: string
+  privateWorkspace?: string
   handoffReturnId?: string
   taskParticipants?: RoomMember[]
   pollInvitation?: import('../contracts/room-interactions.js').RoomPollInvitation
@@ -105,7 +110,8 @@ export type RoomRuntimeDeps = {
   inputs: UserInputGate
   runTurn: (threadId: string, turnId: string) => Promise<unknown>
   dataDir: string
-  model: () => { model: string; providerId?: string }
+  model: () => { model: string; providerId?: string; accountId?: string }
+  modelSnapshot?: () => Promise<import('../contracts/model-connections.js').ModelConnectionSnapshot>
   profiles: () => Record<string, SubagentProfileConfig>
   peerModels?: {
     client: import('../ports/model-client.js').ModelClient

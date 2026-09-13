@@ -60,7 +60,7 @@ export async function listRoomContentOptions(runtime: ServerRuntime, room: Room,
   }
   const files = await roomGit(repository.canonicalRoot, ['ls-files', '-z', '--cached', '--others', '--exclude-standard'])
   const options = [...new Set(files.split('\0'))].filter(Boolean).map((relativePath): RoomContentReference => ({
-    kind, repositoryId, relativePath, titleSnapshot: relativePath }))
+    kind: 'repository_file', repositoryId, relativePath, titleSnapshot: relativePath }))
   const selected = selectOptions(options, query, page.offset)
   return { references: selected.references,
     ...(selected.index < options.length ? { nextCursor: encode({ scope, offset: selected.index }) } : {}) }

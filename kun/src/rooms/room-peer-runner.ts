@@ -1,3 +1,4 @@
+import { agentMainModel, agentFastModel, assertAgentModel } from '../agents/agent-models.js'
 import { peerBudgetMember, discussionAgentLane } from '../agents/agent-discussion-scope.js'
 import { roomRunId, updateRoomRun } from './room-run-recording.js'
 import { randomUUID } from 'node:crypto'
@@ -212,11 +213,21 @@ export class RoomPeerRunner {
       await releasePeerActivation(this.deps, member, { error: 'Room participation model is unavailable', retry: false })
       return
     }
+    const main = agentMainModel(this.deps, profile)
+    const fast = agentFastModel(this.deps, profile, main)
+    try { if (fast) await assertAgentModel(this.deps, fast, true) } catch (error) {
+      await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId, true),
+        { status: 'failed', outcome: 'failed', endedAt: new Date().toISOString(), error: String(error) })
+      await releasePeerActivation(this.deps, member, { error: String(error), retry: false })
+      return
+    }
+    await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId, true),
+      { model: fast?.model, providerId: fast?.providerId, accountId: fast?.accountId })
     const controller = new AbortController()
     const run: TriageRun = { controller, done: false, promise: Promise.resolve() }
     this.triages.set(active.clientRequestId, run)
-    run.promise = roomPeerTriage({ client: model.client, roles: model.roles(),
-      mainModel: this.deps.model().model, mainProviderId: this.deps.model().providerId,
+    run.promise = roomPeerTriage({ client: model.client, roles: fast ? { ...model.roles(), smallModel: fast.model, smallModelProviderId: fast.providerId, smallModelAccountId: fast.accountId } : model.roles(),
+      mainModel: main.model, mainProviderId: main.providerId, mainAccountId: main.accountId,
       identity: active.clientRequestId, member: profile, updates: context.triageInput ?? context.prompt, signal: controller.signal
     }).then((result) => { run.result = result }, (error: unknown) => {
       run.error = error instanceof Error ? error.message : String(error)

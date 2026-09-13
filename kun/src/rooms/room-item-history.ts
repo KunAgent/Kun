@@ -15,7 +15,7 @@ export async function* roomTurnItems(sessions: SessionStore, threadId: string, t
   const cursors = new Set<string>()
   const seen = new Set<string>()
   do {
-    const page = await sessions.loadItemPage(threadId, { before, maxItems: 200, maxBytes: 1024 * 1024 })
+    const page = await sessions.loadItemPage(threadId, { before, turnId, maxItems: 200, maxBytes: 1024 * 1024 })
     for (const item of [...page.items].reverse()) {
       if (seen.has(item.id)) continue
       seen.add(item.id)

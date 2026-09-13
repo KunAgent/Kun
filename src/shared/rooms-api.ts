@@ -80,3 +80,8 @@ export type { AgentHandoff } from '../../kun/src/contracts/agent-handoffs'
 
 export type { OnboardingState, RoomUserProfileDetail } from '../../kun/src/contracts/room-onboarding'
 export type { RoomSidebarEntry, RoomSidebarPage, RoomSidebarQuery } from '../../kun/src/contracts/room-sidebar'
+
+export type { AgentModelBinding } from '../../kun/src/agents/agent-models'
+export type AgentModelOptions = Awaited<ReturnType<typeof import('../../kun/src/agents/agent-models').agentModelOptions>>
+export type AgentChatEntry = Awaited<ReturnType<typeof import('../../kun/src/agents/agent-chat-entry').chatEntryState>>
+export type AgentDirectActivity = Awaited<ReturnType<typeof import('../../kun/src/agents/agent-direct-service').directActivity>>

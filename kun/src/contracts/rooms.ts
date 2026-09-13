@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ConversationKind, ParticipantAgentId } from './agent-identities.js'
+import { ConversationKind, ParticipantAgentId, AgentModelRef } from './agent-identities.js'
 import { SubagentProfileConfig } from './capabilities-core.js'
 import { RoomAvatarReferenceSchema, RoomContentReferenceSchema } from './room-content.js'
 
@@ -24,6 +24,7 @@ export const RoomMemberSchema = z.object({
   roleNotes: z.string().max(8000).default(''),
   avatar: RoomAvatarReferenceSchema.optional(),
   agentTitle: z.string().max(160).optional(),
+  fastModelRef: AgentModelRef.optional(),
   enabled: z.boolean().default(true),
   removedAt: Timestamp.optional(),
   defaultRepositoryId: RoomIdSchema.optional(),
@@ -63,6 +64,8 @@ export type RoomRepository = z.infer<typeof RoomRepositorySchema>
 export const RoomSchema = z.object({
   conversationKind: ConversationKind.optional(),
   participantAgentIds: z.array(ParticipantAgentId).max(100).optional(),
+  privateWorkspace: z.string().max(4096).optional(),
+  privateEpoch: z.number().int().nonnegative().optional(),
   schemaVersion: z.literal(1),
   id: RoomIdSchema,
   name: z.string().trim().min(1).max(120),

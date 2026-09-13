@@ -168,7 +168,7 @@ export class AgentMemoryCoordinator {
         participantAgentId: job.participantAgentId, memberId: job.memberId, memberLabel: actor.name,
         phase: 'memory', attempt: job.attempts + 1, clientRequestId: runId, contextId: job.id,
         input: snapshot.input, status: 'running', createdAt: now, updatedAt: now, startedAt: now,
-        model: snapshot.model, usageStatus: 'unavailable' })
+        model: snapshot.model, providerId: snapshot.providerId, accountId: snapshot.accountId, usageStatus: 'unavailable' })
       await this.deps.store.commit({ requestId: runId,
         checks: [{ kind: 'agent_memory_job', id: job.id, expectedRevision: row.revision },
           { kind: 'room_run', id: runId, expectedRevision: null },

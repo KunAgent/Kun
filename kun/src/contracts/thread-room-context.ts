@@ -12,7 +12,7 @@ export const RoomThreadContextSchema = z.object({
   roomId: z.string().min(1),
   taskId: z.string().min(1).optional(),
   memberId: z.string().min(1),
-  kind: z.enum(['coordination', 'discussion', 'execution', 'review']),
+  kind: z.enum(['coordination', 'discussion', 'execution', 'review', 'conversation']),
   allowedToolNames: z.array(z.string()).optional(),
   blockedToolNames: z.array(z.string()).default([]),
   blockedProviderIds: z.array(z.string()).default([]),

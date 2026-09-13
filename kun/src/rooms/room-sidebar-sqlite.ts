@@ -71,7 +71,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
           (r.kind='integration' AND r.status IN ('preparing','validating')))) OR
         (r.kind='room_run' AND r.status IN ('queued','running','recovery_required') AND (
           (e.agent_id IS NOT NULL AND json_extract(r.document,'$.participantAgentId')=e.agent_id) OR
-          (e.agent_id IS NULL AND r.room_id=e.room_id AND json_extract(r.document,'$.phase') IN ('discussion','triage'))))) AS running_count
+          (e.agent_id IS NULL AND r.room_id=e.room_id AND json_extract(r.document,'$.phase') IN ('discussion','triage','conversation'))))) AS running_count
     FROM entries e
   ), ordered AS (
     SELECT s.*, CASE WHEN s.message_seq>0 THEN s.message_seq ELSE s.created_seq END AS activity_seq,

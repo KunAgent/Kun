@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { RoomMessage, RoomMember } from '../contracts/rooms.js'
 import type { RoomRequestState, RoomRuntimeDeps, RoomTaskExecution } from '../rooms/room-runtime-types.js'
 import type { RoomDelivery, RoomReview } from '../contracts/room-deliveries.js'
-import { resolveRoleModel } from '../loop/title-generator.js'
+import { agentFastModel, assertAgentModel } from './agent-models.js'
 import { boundedRoomText } from '../rooms/room-context.js'
 import { MemoryDistillationExtractionResponse } from '../contracts/memory-distillation-runtime.js'
 import { decideMemoryCandidate } from '../memory/memory-distillation.js'
@@ -53,10 +53,10 @@ export async function prepareAgentMemoryCapture(deps: RoomRuntimeDeps, job: Agen
   if (!sources.length || !texts.some((item) => item.author !== 'user')) throw new Error('no complete agent evidence to remember')
   const actor = actorHint ?? request?.value.roomSnapshot.members.find((member) => member.participantAgentId === job.participantAgentId)
   const profile = actor?.presetSnapshot ?? (actor ? deps.profiles()[actor.presetId] : undefined)
-  const main = actor?.modelRef ?? (profile?.model && profile.providerId ? { model: profile.model, providerId: profile.providerId } : deps.model())
-  const binding = resolveRoleModel({ roles: deps.peerModels?.roles(), mainModel: main.model,
-    mainProviderId: main.providerId, mainAccountId: 'accountId' in main && typeof main.accountId === 'string' ? main.accountId : undefined })
+  const main = request?.value.privateModel ?? actor?.modelRef ?? (profile?.model && profile.providerId ? { model: profile.model, providerId: profile.providerId } : deps.model())
+  const binding = agentFastModel(deps, actor ?? {}, main)
   if (!binding) throw new Error('no model is available for agent memory')
+  await assertAgentModel(deps, binding, true)
   const query = texts.map((item) => item.text).join('\n').slice(0, 4096)
   const memory = deps.agentMemory!
   const retrieved = (await memory.context(job.participantAgentId, job.memoryConversationId ?? job.roomId, query, undefined, job.memoryConversationId === job.roomId ? job.handoffId : undefined, 4000, job.taskScopeId)).records

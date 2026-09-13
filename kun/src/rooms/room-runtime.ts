@@ -1,3 +1,4 @@
+import { AgentDirectRunner } from '../agents/agent-direct-runner.js'
 import { AgentDiscussionFairness } from '../agents/agent-discussion-fairness.js'
 import { AgentHandoffService } from '../agents/agent-handoff-service.js'
 import { AgentHandoffRunner } from '../agents/agent-handoff-runner.js'
@@ -35,6 +36,7 @@ export class RoomRuntime {
   readonly product: RoomProductService
   readonly integrations: RoomIntegrationService
   readonly peers: RoomPeerRunner
+  private readonly direct: AgentDirectRunner
   private readonly requests: RoomRequestRunner
   private readonly tasks: RoomTaskRunner
   private timer?: ReturnType<typeof setTimeout>
@@ -66,6 +68,7 @@ export class RoomRuntime {
     bindAgentHandoffService(deps.threadStore, this.handoffs)
     this.product = new RoomProductService(deps, this.service)
     this.integrations = new RoomIntegrationService(deps)
+    this.direct = new AgentDirectRunner(deps, this.executionService)
     this.requests = new RoomRequestRunner(deps, this.executionService)
     this.tasks = new RoomTaskRunner(deps, this.executionService)
     this.peers = new RoomPeerRunner(deps, () => this.wake())
@@ -175,7 +178,7 @@ export class RoomRuntime {
         if (row.value.handoffReturnId && !await this.handoffs.current(row.value.handoffReturnId)) {
           await cancelSupersededRoomRequest(this.deps, row.id); continue
         }
-        if (row.value.collaborationProtocol === 'peer') {
+        if (!row.value.privateProtocol && row.value.collaborationProtocol === 'peer') {
           if (await pendingPeerRoomAmendment(this.deps, row.value)) {
             await this.requests.tick(row)
             continue
@@ -203,7 +206,8 @@ export class RoomRuntime {
           discussionBusy.add(key)
           if (agent) { discussionBusy.add(agent); this.deps.discussionFairness!.started(agent.slice('agent:'.length), priority) }
         }
-        await this.requests.tick(row)
+        if (row.value.privateProtocol) await this.direct.tick(row)
+        else await this.requests.tick(row)
       } catch (error) {
         if (error instanceof RoomContextPending) continue
         const current = await this.deps.store.get<RoomRequestState>('request', row.id)
@@ -212,7 +216,7 @@ export class RoomRuntime {
         const dispatchedAmendment = await pendingPeerRoomAmendment(this.deps, row.value)
         // Retry an interrupted admitted operation once; retain its receipt for an explicit retry after persistent failure.
         const status = dispatchedAmendment ? row.value.status === 'recovery_required' ? 'needs_input' : 'recovery_required' : 'failed'
-        await this.executionService.append(row.roomId!, 'error-' + row.id, message)
+        if (!row.value.privateProtocol) await this.executionService.append(row.roomId!, 'error-' + row.id, message)
         await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!,
           { ...row.value, status, error: message }, row)
       }

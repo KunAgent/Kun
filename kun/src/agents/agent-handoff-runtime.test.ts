@@ -99,7 +99,10 @@ async function fixture() {
   const source = async (id: string, body: string, designatedAgentIds: string[] = []) => {
     const sent = await rooms.send(room.id, { clientRequestId: id, body, executionIntent: 'discussion', designatedAgentIds })
     const request = (await store.get<RoomRequestState>('request', sent.requestId))!
-    await peers.initialize(request.value)
+    // Restore the persisted protocol of an already-running pre-direct-chat request.
+    const legacy = { ...request.value, privateProtocol: undefined, collaborationProtocol: 'peer' as const }
+    await putRoomDocument(store, 'request', request.id, room.id, legacy, request)
+    await peers.initialize(legacy)
     return sent
   }
   const create = (sent: Awaited<ReturnType<typeof source>>, id: string, recipient = b.id) => handoffs.create({

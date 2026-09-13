@@ -1,3 +1,4 @@
+import { privateWorkspace } from '../agents/agent-direct-service.js'
 import { constants } from 'node:fs'
 import { open, realpath, stat } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve } from 'node:path'
@@ -31,7 +32,7 @@ function inside(root: string, path: string): boolean {
   const pathWithin = relative(root, path)
   return pathWithin !== '..' && !pathWithin.startsWith('../') && !isAbsolute(pathWithin)
 }
-export async function readRoomRepositoryFile(repository: RoomRepository, relativePath: string, maxBytes: number) {
+export async function readRoomRepositoryFile(repository: Pick<RoomRepository, 'canonicalRoot'>, relativePath: string, maxBytes: number) {
   const path = await realpath(resolve(repository.canonicalRoot, relativePath))
   if (!inside(repository.canonicalRoot, path)) throw new Error('file_unauthorized')
   const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
@@ -109,7 +110,16 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
   try {
     await assertReferenceSource(runtime, room, reference, messageId)
     const store = runtime.rooms!.deps.store
-    if (reference.kind === 'attachment') {
+    if (reference.kind === 'agent_file') {
+      let workspace = await privateWorkspace(runtime.rooms!, room)
+      if (workspace.id !== reference.workspaceId) workspace = await privateWorkspace(runtime.rooms!, { ...room, privateWorkspace: undefined })
+      if (workspace.id !== reference.workspaceId) throw new Error('workspace_changed')
+      const root = await realpath(workspace.path)
+      const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, 128 * 1024)
+      Object.assign(result, { title: reference.relativePath, kind: 'file', byteSize: file.size,
+        openTarget: { kind: 'code_file', workspaceRoot: root, relativePath: reference.relativePath } })
+      if (mode === 'preview' && !file.data.includes(0)) result.preview = { type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
+    } else if (reference.kind === 'attachment') {
       const { metadata, scope } = await attachmentScope(runtime, room, reference.attachmentId, messageId, allowDraft && mode === 'summary')
       Object.assign(result, attachmentSummary(metadata))
       if (mode === 'thumbnail' && metadata.kind === 'image') {
