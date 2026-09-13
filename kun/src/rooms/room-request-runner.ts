@@ -78,11 +78,17 @@ export class RoomRequestRunner {
     }
     const observed = await observeRoomTurn(this.deps, request.threadId, request.turnId)
     if (observed.status === 'queued' || observed.status === 'running') return
-    if (observed.status !== 'completed') {
+    // An accepted scoped submission is durable; a post-acceptance failure
+    // (for example a transport error on the final synthesis round) must not
+    // void the already-submitted plan.
+    const recoveredPlan = observed.status !== 'completed' && observed.structured !== undefined
+      ? RoomCoordinationPlanSchema.safeParse(observed.structured)
+      : undefined
+    if (observed.status !== 'completed' && !recoveredPlan?.success) {
       return this.finish(row, 'failed', observed.error ?? '协调未完成，请重发或补充要求。')
     }
     let plan
-    try { plan = RoomCoordinationPlanSchema.parse(observed.structured ?? parseRoomJson(observed.text)) }
+    try { plan = recoveredPlan?.success ? recoveredPlan.data : RoomCoordinationPlanSchema.parse(observed.structured ?? parseRoomJson(observed.text)) }
     catch (error) {
       if ((request.resultRepairs ?? 0) >= 2) throw new Error('协调结果格式连续无效；可单独重试协调。')
       request.resultRepairs = (request.resultRepairs ?? 0) + 1

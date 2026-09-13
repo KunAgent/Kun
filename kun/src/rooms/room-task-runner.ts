@@ -247,9 +247,17 @@ export class RoomTaskRunner {
       task.status = 'cancelled'
       return this.save(row, execution)
     }
-    if (observed.status !== 'completed') throw new Error(observed.error ?? 'review interrupted; preserve delivery')
+    // An accepted scoped submission is durable; a post-acceptance failure
+    // (for example a transport error on the final synthesis round) must not
+    // void the already-submitted review.
+    const recoveredReview = observed.status !== 'completed' && observed.structured !== undefined
+      ? RoomReviewResultSchema.safeParse(observed.structured)
+      : undefined
+    if (observed.status !== 'completed' && !recoveredReview?.success) {
+      throw new Error(observed.error ?? 'review interrupted; preserve delivery')
+    }
     let submitted
-    try { submitted = RoomReviewResultSchema.parse(observed.structured ?? parseRoomJson(observed.text)) }
+    try { submitted = recoveredReview?.success ? recoveredReview.data : RoomReviewResultSchema.parse(observed.structured ?? parseRoomJson(observed.text)) }
     catch (error) {
       if ((execution.reviewRepairs ?? 0) >= 2) throw new Error('评审结果格式连续无效；请单独重试评审。')
       execution.reviewRepairs = (execution.reviewRepairs ?? 0) + 1

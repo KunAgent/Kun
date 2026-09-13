@@ -79,6 +79,33 @@ async function createTask(f: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe('Room request admission and coordination', () => {
+  it('applies an accepted coordination plan even when the turn ends failed', async () => {
+    const f = await fixture()
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'post-accept-failure', body: 'hi' })
+    await f.tick(sent.requestId)
+    execution.observe.mockResolvedValueOnce({ status: 'failed', text: '', error: 'stream failed after submission',
+      structured: { kind: 'answer', response: 'Hi! How can I help?', participants: [], assignments: [] } })
+    await f.tick(sent.requestId)
+    const request = (await f.request(sent.requestId)).value
+    expect(request.status).toBe('completed')
+    const messages = (await f.store.list<RoomMessage>('message', { roomId: f.room.id }))
+      .map((row) => row.value.body)
+    expect(messages).toContain('Hi! How can I help?')
+  })
+
+  it('still fails the request when a failed turn has no accepted submission', async () => {
+    const f = await fixture()
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'plain-failure', body: 'hi' })
+    await f.tick(sent.requestId)
+    execution.observe.mockResolvedValueOnce({ status: 'failed', text: '', error: 'provider exploded' })
+    await f.tick(sent.requestId)
+    const request = (await f.request(sent.requestId)).value
+    expect(request.status).toBe('failed')
+    const messages = (await f.store.list<RoomMessage>('message', { roomId: f.room.id }))
+      .map((row) => row.value.body)
+    expect(messages).toContain('provider exploded')
+  })
+
   it('rejects the entire assignment batch before storing tasks if a later repository is unauthorized', async () => {
     const f = await fixture()
     const sent = await f.service.send(f.room.id, { clientRequestId: 'batch', body: 'Implement both', executionIntent: 'execute' })

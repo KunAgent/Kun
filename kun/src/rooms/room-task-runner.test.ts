@@ -8,7 +8,7 @@ import { makeFakeModel, makeHarness } from '../../tests/loop-test-harness.js'
 import { RoomTaskSchema } from '../contracts/room-tasks.js'
 import { type RoomDelivery, type RoomReview } from '../contracts/room-deliveries.js'
 import { createTurnRecord } from '../domain/turn.js'
-import { makeAssistantTextItem } from '../domain/item.js'
+import { makeAssistantTextItem, makeToolResultItem } from '../domain/item.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import { RoomService, putRoomDocument } from './room-service.js'
 import type { RoomRuntimeDeps, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
@@ -306,6 +306,34 @@ describe('room dependency and review lifecycle', () => {
 })
 
 describe('bounded room review format repairs', () => {
+  it('applies an accepted review even when the review turn ends failed', async () => {
+    const f = await fixture()
+    const value = await f.task('review-post-failure')
+    const delivery = await f.deliver(value.execution, value.workspace)
+    const reviewer = f.room.members.find((member) => member.id === 'reviewer')!
+    const execution = value.execution
+    execution.reviewer = reviewer
+    execution.reviewThreadId = 'review-failed'
+    execution.reviewTurnId = 'review-failed-turn'
+    execution.task.stage = 'review'
+    execution.task.status = 'running'
+    const thread = await ensureRoomThread(f.deps, { id: 'review-failed', roomId: f.room.id,
+      taskId: execution.task.id, member: reviewer, kind: 'review' })
+    await f.h.threadStore.upsert({ ...thread, turns: [createTurnRecord({ id: execution.reviewTurnId!,
+      threadId: thread.id, prompt: 'Review', status: 'failed', clientRequestId: 'review-review-failed' })] })
+    await f.h.sessionStore.appendItem(thread.id, makeToolResultItem({ id: 'result-review-failed',
+      threadId: thread.id, turnId: execution.reviewTurnId!, callId: 'call-review',
+      toolName: 'submit_room_review',
+      output: { accepted: true, value: { verdict: 'passed', findings: [], limitations: [] } } }))
+    const row = await f.save(execution)
+    await f.runner.tick(row, true)
+    const after = (await f.store.get<RoomTaskExecution>('task', execution.task.id))!
+    expect(after.value.task.status).toBe('awaiting_acceptance')
+    expect(after.value.task.latestDeliveryId).toBe(delivery.id)
+    expect((await f.store.get<RoomReview>('review', 'review-review-failed'))?.value.verdict).toBe('passed')
+  })
+
+
   it('retries only the pinned review twice and retains the developer attempt and immutable delivery', async () => {
     const f = await fixture()
     const value = await f.task('format-repair')
