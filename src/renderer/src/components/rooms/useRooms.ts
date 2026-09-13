@@ -90,6 +90,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group') {
         )
         if (reset) setRoomCursor(result.nextCursor ?? null)
         if (!selectedRef.current && result.rooms[0]) select(result.rooms[0].id)
+        setError('')
       } catch (cause) {
         if (generation === listGenerationRef.current) setError(cause instanceof Error ? cause.message : String(cause))
       } finally {
