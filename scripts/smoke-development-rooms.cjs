@@ -28,6 +28,7 @@ const { exerciseRoomHardening } = require('./smoke-rooms-hardening-controls.cjs'
 const { roomPeerModelFixture, exercisePeerRoom } = require('./smoke-rooms-peer-controls.cjs')
 const { exerciseRoomsUi } = require('./smoke-rooms-ui-controls.cjs')
 const { exerciseTaskRoomRuns } = require('./smoke-rooms-run-inspector.cjs')
+const { roomExperienceModelFixture, exerciseRoomsExperience } = require('./smoke-rooms-experience-controls.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 
 const exec = promisify(execFile)
@@ -152,6 +153,17 @@ async function main() {
     const uiScenario = () => exerciseRoomsUi({ page, request: runtimeRequest, poll, capture,
       fixture: modelFixture, home, profile, workspaceRoot,
       resize: (width, height) => resize(electronApplication, width, height) })
+    const experienceScenario = () => exerciseRoomsExperience({ page, request: runtimeRequest, poll, capture,
+      fixture: modelFixture, home, profile, workspaceRoot, application: electronApplication,
+      resize: (width, height) => resize(electronApplication, width, height) })
+    if (process.argv.includes('--experience-only')) {
+      const experience = await experienceScenario()
+      assert.deepEqual(pageErrors, [])
+      result = { ok: true, scenario: 'experience-only', experience, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
+      await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+      return
+    }
     if (process.argv.includes('--ui-only')) {
       const ui = await uiScenario()
       assert.deepEqual(pageErrors, [])
@@ -359,6 +371,7 @@ async function main() {
     }), 'Underlying mode trigger paints above the narrow task overlay')
     const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
       resize: (width, height) => resize(electronApplication, width, height) })
+    const experience = await experienceScenario()
     const ui = process.argv.includes('--ui-visual') ? await uiScenario() : undefined
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
     assert.equal(approvalsResolved, 1, 'Expected the on-request tool approval path')
@@ -366,7 +379,7 @@ async function main() {
     assert.equal(integrationInputsResolved, 1, 'Expected integration execution-specific structured input')
     result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
-      baselineSha, targetSha, agreement, hardening, peer, ui, taskRuns, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      baselineSha, targetSha, agreement, hardening, peer, experience, ui, taskRuns, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
       nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
       narrowViewport, pageErrors, screenshots,
@@ -423,7 +436,10 @@ async function main() {
 
 async function exerciseRoomProductControls(page, roomId, capture) {
   await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
-  const userMessage = page.locator('article').filter({ hasText: TASK_PROMPT })
+  const sent = (await runtimeRequest(page, `/v1/rooms/${roomId}/messages?limit=200`)).messages
+    .filter((message) => message.authorKind === 'user' && message.body === TASK_PROMPT)
+  assert.equal(sent.length, 1, 'Expected one exact original user task request')
+  const userMessage = page.locator('#room-message-' + sent[0].id)
   await userMessage.hover()
   await userMessage.getByRole('button', { name: 'Pin as project agreement', exact: true }).click()
   await openRoomDetails(page, 'Room overview')
@@ -444,7 +460,7 @@ async function exerciseRoomProductControls(page, roomId, capture) {
   const search = page.getByRole('textbox', { name: 'Search messages (2+ characters)', exact: true })
   await page.getByRole('button', { name: 'Search messages (2+ characters)', exact: true }).click()
   await search.fill('desktop-smoke.txt')
-  await page.locator('article').filter({ hasText: TASK_PROMPT }).waitFor()
+  await userMessage.waitFor()
   await capture('message-search')
   await search.fill('')
   await search.press('Escape')
@@ -521,8 +537,10 @@ async function switchMode(page, mode) {
 async function openRoomDetails(page, section) {
   const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
   if (!(await drawer.count())) await page.getByRole('button', { name: 'Room details', exact: true }).click()
-  const back = drawer.getByRole('button', { name: 'Back to tasks', exact: true })
-  if (await back.count()) await back.click()
+  while (await drawer.count() && !await drawer.locator('.rooms-details-tabs').count()) {
+    await drawer.getByRole('button', { name: 'Back to previous view', exact: true }).click()
+  }
+  if (!(await drawer.count())) await page.getByRole('button', { name: 'Room details', exact: true }).click()
   await drawer.getByRole('button', { name: section, exact: true }).click()
 }
 
@@ -548,7 +566,7 @@ async function poll(check, timeoutMs, description) {
 }
 
 async function startModelFixture() {
-  const peerFixture = roomPeerModelFixture()
+  const peerFixture = roomPeerModelFixture(), experienceFixture = roomExperienceModelFixture()
   let releaseExecution
   const gate = new Promise((resolve) => { releaseExecution = resolve })
   let releaseCoordination
@@ -574,7 +592,8 @@ async function startModelFixture() {
       let content = 'Completed.', toolCalls
       const called = (name) => messages.some((message) => message.tool_calls?.some((tool) => tool.function?.name === name))
       const tool = (name, args) => [{ index: 0, id: 'smoke-' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
-      const peerResponse = await peerFixture.respond({ body, prompt, called, tool })
+      const peerResponse = experienceFixture.respond({ body, prompt, called, tool }) ??
+        await peerFixture.respond({ body, prompt, called, tool })
       if (peerResponse) { content = peerResponse.content; toolCalls = peerResponse.toolCalls }
       else if (prompt.includes('Compress project agreements')) {
         state.compressionRequests = (state.compressionRequests ?? 0) + 1
@@ -636,7 +655,7 @@ async function startModelFixture() {
   })
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution, releaseCoordination, releaseUi, releasePeer: peerFixture.release,
-    snapshot: () => ({ ...state, ...peerFixture.snapshot() }), close: () => new Promise((resolve, reject) => {
+    snapshot: () => ({ ...state, ...peerFixture.snapshot(), ...experienceFixture.snapshot() }), close: () => new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
       server.closeAllConnections?.()
     }) }

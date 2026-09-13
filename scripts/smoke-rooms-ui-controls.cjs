@@ -80,7 +80,7 @@ async function assertViewport(page, label) {
     }
     return { width: innerWidth, height: innerHeight, root: rect('[data-rooms-workspace]'),
       timeline: rect('.rooms-timeline-scroll'), composer: rect('.rooms-composer'),
-      textarea: rect('.rooms-composer-textarea'), send: rect('.rooms-composer-send'),
+      textarea: rect('.rooms-rich-input'), send: rect('.rooms-composer-send'),
       bodyScrollWidth: document.documentElement.scrollWidth }
   })
   assert(metrics.timeline && metrics.composer && metrics.send, label + ': missing chat surface')
@@ -116,6 +116,10 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
     applyUiFontScale(value)
   }, scale)
   await setScale(1)
+  await page.evaluate(async () => {
+    const { useRoomPresentationPreferences } = await import('/src/components/rooms/room-presentation-preferences.ts')
+    useRoomPresentationPreferences.getState().setPreference({ layout: 'thread', listWidth: 320, detailWidth: 400 })
+  })
   const initial = await request(page, '/v1/rooms', 'POST', {
     clientRequestId: 'ui-room', name: NAME, description: 'A focused conversation for planning, development, and review.',
     collaborationMode: 'autonomous', repositories: [{ id: 'repo', displayPath: workspaceRoot, displayName: 'Architecture workspace' }]
@@ -163,7 +167,7 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   await search.waitFor({ state: 'detached' })
   assert(await searchButton.evaluate((node) => node === document.activeElement), 'Search close must return focus')
 
-  const input = page.getByRole('textbox', { name: INPUT_NAME, exact: true })
+  const input = page.locator('[data-rooms-workspace] > section > .rooms-composer').getByRole('textbox', { name: INPUT_NAME, exact: true })
   await input.fill('A short draft')
   const shortHeight = (await input.boundingBox()).height
   assert(shortHeight >= 39.5 && shortHeight <= 80, 'Short composer has an unexpected height: ' + shortHeight)
@@ -184,18 +188,20 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   const finalMessage = page.locator('#room-message-' + seeded.finalMessageId)
   await finalMessage.hover()
   await finalMessage.getByRole('button', { name: 'Reply', exact: true }).click()
-  await page.locator('.rooms-composer-reply').waitFor()
+  await drawer.getByRole('region', { name: 'Reply thread', exact: true }).locator('.rooms-composer-reply').waitFor()
   await capture('ui-input-context-and-reply')
-  await page.locator('.rooms-composer-reply').getByRole('button', { name: 'Cancel', exact: true }).click()
-  while (await page.locator('.rooms-composer-chip').count()) await page.locator('.rooms-composer-chip').first().click()
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  await drawer.waitFor({ state: 'detached' })
+  const mainChips = page.locator('[data-rooms-workspace] > section > .rooms-composer .rooms-composer-chip')
+  while (await mainChips.count()) await mainChips.first().click()
   await input.fill('')
 
-  await page.getByRole('button', { name: ATTACHMENT_NAME, exact: true }).click()
-  const attachment = page.getByRole('dialog', { name: ATTACHMENT_NAME, exact: true })
+  await finalMessage.getByRole('button', { name: ATTACHMENT_NAME, exact: true }).click()
+  const attachment = drawer.locator('[data-active-drawer-page="true"] .rooms-content-preview')
   await attachment.locator('pre').waitFor()
-  assert((await attachment.locator('pre').innerText()).includes('Architecture decisions'))
+  assert((await attachment.locator('pre').innerText()).includes('Keep discussions bounded.'))
   await capture('ui-attachment-preview')
-  await attachment.getByRole('button', { name: 'Close', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
 
   const timeline = page.locator('.rooms-timeline-scroll')
   await timeline.evaluate((element) => { element.scrollTop = 0; element.dispatchEvent(new Event('scroll')) })

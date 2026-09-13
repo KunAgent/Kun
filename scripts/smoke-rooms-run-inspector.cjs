@@ -48,7 +48,7 @@ async function viewRunningRoomRun({ page, request, roomId, poll, capture }) {
   assert.equal(await viewer.getAttribute('data-run-id'), current.currentRunId)
   assert((await viewer.innerText()).includes('Running') || (await viewer.innerText()).includes('Queued'))
   await capture('run-inspector-live')
-  await drawer.getByRole('button', { name: 'Back to previous details', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Back to previous view', exact: true }).click()
   await button.waitFor()
   assert(await button.evaluate((node) => node === document.activeElement), 'Back did not restore the activity entry focus')
   await poll(() => page.evaluate(() => globalThis.__roomRunInspection.opened.every((entry) =>
@@ -76,10 +76,11 @@ async function exerciseFinishedRoomRuns({ page, request, roomId, messages, poll,
   await viewer.getByText('Published', { exact: false }).waitFor()
   assert.equal(await viewer.getAttribute('data-run-id'), older.originRunId)
   assert.equal(await viewer.getByRole('button', { name: 'Open this run in Code', exact: true }).getAttribute('data-thread-target-turn-id'), detail.run.turnId)
-  await viewer.getByText('Tool result', { exact: true }).first().click()
-  const tool = viewer.locator('.rooms-run-item').filter({ hasText: 'Tool result' }).first()
-  await tool.getByRole('button', { name: 'Read full recorded content', exact: true }).click()
-  await tool.getByText(/characters loaded/).waitFor()
+  const tool = viewer.locator('[data-run-tool-call-id]').first()
+  await tool.getByText('Tool result', { exact: true }).click()
+  const output = tool.locator('details[open]')
+  await output.getByRole('button', { name: 'Read full recorded content', exact: true }).click()
+  await output.getByText(/characters loaded/).waitFor()
   await capture('run-inspector-completed-tools')
   for (const theme of ['light', 'dark']) {
     await page.evaluate(async (value) => {
@@ -131,13 +132,14 @@ async function exerciseTaskRoomRuns({ page, request, roomId, taskId, poll, captu
   assert(noticesChecked > 0, 'No task status notice was checked')
   const drawer = page.getByRole('dialog', { name: 'Room details', exact: true })
   const list = drawer.getByRole('region', { name: 'Current and past runs', exact: true })
-  await list.getByRole('button').filter({ hasText: 'Execution' }).first().click()
+  await list.getByRole('combobox', { name: 'Run phase', exact: true }).selectOption('execution')
+  await list.locator('.rooms-run-list-entry').first().click()
   const viewer = drawer.getByRole('region', { name: 'Run details', exact: true })
   await viewer.locator('.rooms-run-header').waitFor()
   const runId = await viewer.getAttribute('data-run-id')
   assert(runs.some((run) => run.id === runId && run.phase === 'execution'), 'Task entry selected wrong run phase')
   await capture('run-inspector-task-execution')
-  await drawer.getByRole('button', { name: 'Back to previous details', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Back to previous view', exact: true }).click()
   await poll(() => list.isVisible(), 5000, 'run inspector returned to same task history')
   return { execution: true, review: true, integration: true, noticesChecked, inspectedRunId: runId }
 }
