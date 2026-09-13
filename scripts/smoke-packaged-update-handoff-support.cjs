@@ -13,6 +13,7 @@ const {
 } = require('node:fs/promises')
 const { createServer } = require('node:http')
 const { dirname, join, resolve } = require('node:path')
+const { availablePort } = require('./smoke-packaged-extension-desktop-process.cjs')
 
 const PROCESS_OUTPUT_LIMIT = 128 * 1024
 const MODEL_NAME = 'packaged-handoff-smoke-model'
@@ -173,49 +174,92 @@ async function launchPredecessorOwners(input) {
 
   const runtimes = []
   for (const flavor of ['production', 'development']) {
-    const port = flavor === 'production' ? input.productionPort : input.developmentPort
-    const token = `${flavor}-${randomBytes(16).toString('hex')}`
-    const environment = {
-      ...input.environment,
-      ELECTRON_RUN_AS_NODE: '1',
-      KUN_RUNTIME_LAUNCH_MODE: 'shared',
-      KUN_RUNTIME_FLAVOR: flavor,
-      KUN_MANAGER_CONTROL_DIR: input.controlDir,
-      KUN_MANAGER_SETTINGS_PATH: input.settingsPath,
-      KUN_DISABLE_OS_CREDENTIAL_STORE: '1'
+    let port = flavor === 'production' ? input.productionPort : input.developmentPort
+    let runtime
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const token = `${flavor}-${randomBytes(16).toString('hex')}`
+      const environment = {
+        ...input.environment,
+        ELECTRON_RUN_AS_NODE: '1',
+        KUN_RUNTIME_LAUNCH_MODE: 'shared',
+        KUN_RUNTIME_FLAVOR: flavor,
+        KUN_MANAGER_CONTROL_DIR: input.controlDir,
+        KUN_MANAGER_SETTINGS_PATH: input.settingsPath,
+        KUN_DISABLE_OS_CREDENTIAL_STORE: '1'
+      }
+      const args = [
+        serveEntry,
+        'serve',
+        '--host', '127.0.0.1',
+        '--port', String(port),
+        '--data-dir', input.dataDir,
+        '--runtime-token', token,
+        '--api-key', 'packaged-handoff-smoke-key',
+        '--base-url', input.baseUrl,
+        '--endpoint-format', 'chat_completions',
+        '--model', MODEL_NAME,
+        '--approval-policy', 'auto',
+        '--sandbox-mode', 'workspace-write'
+      ]
+      const process = spawnTracked(input.runtimeExecutable, args, {
+        cwd: input.workspaceRoot,
+        env: environment
+      })
+      input.onSpawn?.(process)
+      const discoveryPath = flavor === 'production'
+        ? join(input.dataDir, 'runtime.json')
+        : join(input.controlDir, 'runtime.development.json')
+      const expectedBuildId = runtimeBuildIdForFlavor(input.buildId, flavor)
+      try {
+        const discovery = await waitForRuntimeDiscovery({
+          discoveryPath,
+          process,
+          expectedBuildId,
+          timeoutMs: input.timeoutMs
+        })
+        runtime = { flavor, discovery, discoveryPath, process }
+        break
+      } catch (error) {
+        const output = process.output()
+        const addressInUse = /EADDRINUSE|address already in use/iu.test(`${error.message ?? error}\n${output}`)
+        if (!addressInUse || attempt === 2) throw error
+        await waitForProcessExit(process.child, Math.min(input.timeoutMs, 5_000))
+        port = await availablePort()
+      }
     }
-    const args = [
-      serveEntry,
-      'serve',
-      '--host', '127.0.0.1',
-      '--port', String(port),
-      '--data-dir', input.dataDir,
-      '--runtime-token', token,
-      '--api-key', 'packaged-handoff-smoke-key',
-      '--base-url', input.baseUrl,
-      '--endpoint-format', 'chat_completions',
-      '--model', MODEL_NAME,
-      '--approval-policy', 'auto',
-      '--sandbox-mode', 'workspace-write'
-    ]
-    const process = spawnTracked(input.runtimeExecutable, args, {
-      cwd: input.workspaceRoot,
-      env: environment
-    })
-    input.onSpawn?.(process)
-    const discoveryPath = flavor === 'production'
-      ? join(input.dataDir, 'runtime.json')
-      : join(input.controlDir, 'runtime.development.json')
-    const expectedBuildId = runtimeBuildIdForFlavor(input.buildId, flavor)
-    const discovery = await waitForJson(
-      discoveryPath,
-      (value) => value?.pid === process.child.pid && value?.buildId === expectedBuildId,
-      input.timeoutMs,
-      () => childState(process.child, process.output())
-    )
-    runtimes.push({ flavor, discovery, discoveryPath, process })
+    if (!runtime) throw new Error(`Could not start predecessor ${flavor} Runtime`)
+    runtimes.push(runtime)
   }
   return { manager: { discovery: managerDiscovery, process: manager }, runtimes }
+}
+
+async function waitForRuntimeDiscovery({ discoveryPath, process, expectedBuildId, timeoutMs }) {
+  let onExit
+  let onError
+  const exited = new Promise((_, reject) => {
+    onExit = (code, signal) => reject(new Error(
+      `Predecessor Runtime exited before discovery: code=${code}, signal=${signal}\n${process.output()}`
+    ))
+    onError = (error) => reject(new Error(
+      `Predecessor Runtime failed before discovery: ${error.message}\n${process.output()}`
+    ))
+    process.child.once('exit', onExit)
+    process.child.once('error', onError)
+  })
+  try {
+    return await Promise.race([
+      waitForJson(
+        discoveryPath,
+        (value) => value?.pid === process.child.pid && value?.buildId === expectedBuildId,
+        timeoutMs,
+        () => childState(process.child, process.output())
+      ),
+      exited
+    ])
+  } finally {
+    process.child.off('exit', onExit)
+    process.child.off('error', onError)
+  }
 }
 
 async function startModelFixture() {
