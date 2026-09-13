@@ -12,6 +12,13 @@ function key(threadId: string, search: string): string {
 }
 
 describe('threadTimelineReadKey', () => {
+  it('separates history projections across laboratory transitions', () => {
+    expect(key('t1', '?historyRevision=2')).toBe(key('t1', '?limit=300&historyRevision=2'))
+    expect(key('t1', '?historyRevision=2')).not.toBe(key('t1', '?historyRevision=1'))
+    expect(key('t1', '?historyRevision=2')).not.toBe(key('t1', ''))
+    expect(parseThreadTimelineQuery(new URL('http://kun.local/x?historyRevision=-1')).success).toBe(false)
+    expect(parseThreadTimelineQuery(new URL('http://kun.local/x?historyRevision=nope')).success).toBe(false)
+  })
   it('normalizes an explicit default limit to match no query params', () => {
     expect(key('t1', '')).toBe(key('t1', '?limit=300'))
   })

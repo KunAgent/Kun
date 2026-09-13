@@ -77,7 +77,8 @@ export type ThreadServiceOptions = {
   lifecycleFence?: ThreadLifecycleFence
   /** Abort in-process work after the fence starts rejecting new writes. */
   onDeleting?: (threadId: string) => Promise<void> | void
-  onDeleted?: (threadId: string) => Promise<void> | void
+  onDeleted?: (threadId: string, historyRefId?: string) => Promise<void> | void
+  withHistoryReferenceMutation?: <T>(operation: () => Promise<T>) => Promise<T>
   onStatusChanged?: (
     threadId: string,
     status: ThreadStatus
@@ -142,7 +143,8 @@ export class ThreadService {
   private defaultModelRequestCaptureEnabled: boolean
   private readonly lifecycleFence?: ThreadLifecycleFence
   private readonly onDeleting?: (threadId: string) => Promise<void> | void
-  private readonly onDeleted?: (threadId: string) => Promise<void> | void
+  private readonly onDeleted?: (threadId: string, historyRefId?: string) => Promise<void> | void
+  private readonly withHistoryReferenceMutation?: ThreadServiceOptions['withHistoryReferenceMutation']
   private readonly onStatusChanged?: ThreadServiceOptions['onStatusChanged']
   private readonly onForked?: ThreadServiceOptions['onForked']
 
@@ -160,6 +162,7 @@ export class ThreadService {
     this.lifecycleFence = options.lifecycleFence
     this.onDeleting = options.onDeleting
     this.onDeleted = options.onDeleted
+    this.withHistoryReferenceMutation = options.withHistoryReferenceMutation
     this.onStatusChanged = options.onStatusChanged
     this.onForked = options.onForked
   }

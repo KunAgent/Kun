@@ -60,9 +60,10 @@ export function SourceHistoryTurnLabel({ referenceId, turnId }: { referenceId?: 
     setBusy(true); setError('')
     try {
       const state = useChatStore.getState()
+      const workspace = state.threads.find((thread) => thread.id === state.activeThreadId && thread.historyRefId === referenceId)?.workspace
       const result = await createReferenceBranch({
         referenceId, cutoffTurnId: turnId, idempotencyKey: crypto.randomUUID(),
-        ...(state.workspaceRoot ? { workspace: state.workspaceRoot } : {}),
+        ...(workspace ? { workspace } : {}),
         ...(state.composerModel ? { model: state.composerModel } : {}),
         ...(state.composerProviderId ? { providerId: state.composerProviderId } : {})
       })

@@ -36,7 +36,9 @@ export interface CodexIndex {
 
 export async function indexCodexFile(
   path: string,
-  options: { byteLimit?: number; parents?: Set<string>; parentLimits?: Map<string, number> } = {}
+  options: {
+    byteLimit?: number; parents?: Set<string>; parentLimits?: Map<string, number>; parentPaths?: Map<string, string>
+  } = {}
 ): Promise<CodexIndex> {
   path = resolve(path)
   const parents = new Set(options.parents)
@@ -49,6 +51,7 @@ export async function indexCodexFile(
   const warnings = new Set<string>()
   let current: IndexedTurn | undefined
   let turnContext = ''
+  let currentTurnId = ''
   let sequence = 0
   let explicitLifecycle = false
   let last: CodexLine | undefined
@@ -58,8 +61,8 @@ export async function indexCodexFile(
   })
   const includeParent = async (value: unknown): Promise<void> => {
     const base = object(value)
-    let relative = typeof value === 'string' ? value
-      : string(base.path) || string(base.rollout_path) || string(base.file_path)
+    let relative = options.parentPaths?.get(string(base.thread_id)) || (typeof value === 'string' ? value
+      : string(base.path) || string(base.rollout_path) || string(base.file_path))
     if (!relative && string(base.thread_id)) relative = await resolveCodexParentPath(path, string(base.thread_id)) || ''
     if (!relative || !isCodexPath(relative)) { warnings.add('Parent history file could not be resolved.'); return }
     const parentPath = isAbsolute(relative) ? relative : resolve(dirname(path), relative)
@@ -71,7 +74,7 @@ export async function indexCodexFile(
       const limit = options.parentLimits?.get(parentPath) ??
         (typeof base.end_byte_offset === 'number' ? base.end_byte_offset :
           typeof base.byte_length === 'number' ? base.byte_length : undefined)
-      const parent = await indexCodexFile(parentPath, { byteLimit: limit, parents, parentLimits: options.parentLimits })
+      const parent = await indexCodexFile(parentPath, { byteLimit: limit, parents, parentLimits: options.parentLimits, parentPaths: options.parentPaths })
       if (string(base.thread_id) && parent.sessionId !== base.thread_id) { warnings.add('Parent history identity does not match.'); return }
       if (typeof base.end_ordinal_exclusive === 'number' && parent.lastOrdinal !== undefined &&
         parent.lastOrdinal + 1 !== base.end_ordinal_exclusive) { warnings.add('Parent history ordinal boundary does not match.'); return }
@@ -91,6 +94,17 @@ export async function indexCodexFile(
       else if (parentSource) index.files.push(parentSource)
       parent.warnings.forEach((warning) => warnings.add(warning))
     } catch { warnings.add('Parent history file is missing or could not be read.') }
+  }
+  const beginTurn = (line: CodexLine, timestamp: string, identity: string): void => {
+    sequence += 1
+    currentTurnId = identity
+    current = {
+      id: `codex:${index.sessionId}:${identity || `record-${line.ordinal}`}`, createdAt: timestamp,
+      label: '', filePath: path, items: [], complete: false, boundary: source(line)
+    }
+    if (index.turns.some((turn) => turn.id === current?.id)) current.id += `:${sequence}`
+    index.turns.push(current)
+    pending = new Set()
   }
   for await (const line of readCodexLines(path, options.byteLimit)) {
     if (line.malformed) { warnings.add('Malformed, oversized or incomplete Codex records were skipped.'); continue }
@@ -113,14 +127,25 @@ export async function indexCodexFile(
       else await includeParent(record.payload)
       continue
     }
-    if (record.type === 'turn_context') { turnContext = string(payload.turn_id); continue }
+    if (record.type === 'turn_context') {
+      turnContext = string(payload.turn_id)
+      // Older start events omit the ID; the following context supplies it.
+      if (current && explicitLifecycle && !currentTurnId && turnContext) {
+        currentTurnId = turnContext
+        current.id = `codex:${index.sessionId}:${turnContext}`
+        if (index.turns.some((turn) => turn !== current && turn.id === current?.id)) current.id += `:${sequence}`
+      }
+      continue
+    }
     if (record.type === 'event_msg') {
       if (payload.type === 'task_started' || payload.type === 'turn_started') {
         explicitLifecycle = true
-        turnContext = string(payload.turn_id) || turnContext
+        const identity = string(payload.turn_id)
+        if (!current || current.complete || !identity || currentTurnId !== identity) beginTurn(line, timestamp, identity)
+        turnContext = identity
       }
       if (payload.type === 'task_complete' || payload.type === 'turn_complete' || payload.type === 'task_completed') {
-        if (current && (!string(payload.turn_id) || current.id.endsWith(`:${string(payload.turn_id)}`))) {
+        if (current && (!string(payload.turn_id) || currentTurnId === string(payload.turn_id))) {
           current.complete = pending.size === 0; current.boundary = source(line); explicitLifecycle = false
         }
       }
@@ -130,6 +155,8 @@ export async function indexCodexFile(
           index.turns.splice(Math.max(0, index.turns.length - count))
           current = undefined
           turnContext = ''
+          currentTurnId = ''
+          explicitLifecycle = false
           pending = new Set()
         }
       }
@@ -141,22 +168,17 @@ export async function indexCodexFile(
     }
     const projected = projectCodexRecord(record)
     for (const item of projected) {
-      if (item.kind === 'user_message' && (!current || current.complete || !turnContext || !current.id.endsWith(`:${turnContext}`))) {
-        sequence += 1
-        const identity = turnContext || `record-${line.ordinal}`
-        current = {
-          id: `codex:${index.sessionId}:${identity}`, createdAt: timestamp,
-          label: item.text.replace(/\s+/g, ' ').slice(0, 160), filePath: path,
-          items: [], complete: false, boundary: source(line)
-        }
-        if (index.turns.some((turn) => turn.id === current?.id)) current.id += `:${sequence}`
-        index.turns.push(current)
-        pending = new Set()
-        if (!index.title) index.title = current.label.slice(0, 120)
-      }
+      const newContext = Boolean(turnContext && currentTurnId !== turnContext)
+      const newUserTurn = item.kind === 'user_message' &&
+        (!current || current.complete || (!turnContext && !explicitLifecycle))
+      if (newContext || newUserTurn) beginTurn(line, timestamp, turnContext)
       if (!current) {
-        warnings.add('Codex content without a recoverable user turn was skipped.')
+        warnings.add('Codex content without a recoverable turn was skipped.')
         continue
+      }
+      if ('text' in item && (!current.label || (item.kind === 'user_message' && !current.items.some((entry) => entry.kind === 'user_message')))) {
+        current.label = item.text.replace(/\s+/g, ' ').slice(0, 160)
+        if (!index.title) index.title = current.label.slice(0, 120)
       }
       const pointer: IndexedItem = { offset: line.offset, ordinal: line.ordinal, kind: item.kind }
       if (item.kind === 'tool_call') {

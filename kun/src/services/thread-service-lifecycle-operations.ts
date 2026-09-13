@@ -58,11 +58,14 @@ import {
 } from '../domain/design-task-profile.js'
 
 const DESIGN_CLONE_COMMIT = Symbol('design-clone-commit')
+const HISTORY_REFERENCE_MUTATION = Symbol('history-reference-mutation')
 type InternalForkThreadOptions = ForkThreadOptions & {
   [DESIGN_CLONE_COMMIT]?: string
+  [HISTORY_REFERENCE_MUTATION]?: boolean
 }
 type InternalResumeSessionOptions = ResumeSessionOptions & {
   [DESIGN_CLONE_COMMIT]?: string
+  [HISTORY_REFERENCE_MUTATION]?: boolean
 }
 
 export const threadServiceLifecycleOperations = {
@@ -72,7 +75,7 @@ async delete(this: ThreadService, threadId: string): Promise<boolean> {
     }
     let rawDeleteCommitted = false
     try {
-      return await this['withThreadMutation'](threadId, async () => {
+      return await withHistoryReferenceLifecycle(this, threadId, () => this['withThreadMutation'](threadId, async () => {
         if ((await this.getMetadata(threadId))?.roomContext) {
           throw new Error('room execution history is retained; archive the room instead')
         }
@@ -88,6 +91,7 @@ async delete(this: ThreadService, threadId: string): Promise<boolean> {
         await this['lifecycleFence']?.drain(threadId)
         // Never route deletion through the fenced facade: it is the terminal
         // raw operation after all old-generation writes have drained.
+        const historyRefId = (await this.getMetadata(threadId))?.historyRefId
         const ok = await this['deleteThreadStore'].delete(threadId)
         if (!ok) {
           // A failed/no-op deletion must not leave a still-visible thread
@@ -99,9 +103,9 @@ async delete(this: ThreadService, threadId: string): Promise<boolean> {
         rawDeleteCommitted = true
         this['lifecycleFence']?.markDeleted(threadId)
         this['sessionStore'].clearThreadMemory(threadId)
-        await this['onDeleted']?.(threadId)
+        await this['onDeleted']?.(threadId, historyRefId)
         return true
-      })
+      }))
     } catch (error) {
       // Once raw deletion succeeds, keep the fence closed even when a
       // best-effort cleanup callback fails; reopening here would let a later
@@ -132,6 +136,11 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
       throw new Error('room threads cannot be forked; create a managed task in the room instead')
     }
     const internalOptions = options as InternalForkThreadOptions
+    if (!internalOptions[HISTORY_REFERENCE_MUTATION] && this['withHistoryReferenceMutation']) {
+      return withHistoryReferenceLifecycle(this, threadId, () => this.fork(threadId, {
+        ...options, [HISTORY_REFERENCE_MUTATION]: true
+      } as InternalForkThreadOptions))
+    }
     if (options.designCloneOperationId && !internalOptions[DESIGN_CLONE_COMMIT]) {
       const source = await this['threadStore'].get(threadId)
       if (!source) throw new Error(`thread not found: ${threadId}`)
@@ -258,6 +267,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
       forkedAt: now,
       forkedFromMessageCount: clonedPublicItems.filter((item) => item.kind === 'user_message').length,
       forkedFromTurnCount: clonedTurns.length,
+      forkedFromTurnId: clonedTurns.at(-1)?.id,
       ...(forkIncludesLatestTurn && current.todos ? { todos: cloneTodoListForThread(current.todos, forkId, now) } : {}),
       createdAt: now
     })
@@ -347,6 +357,11 @@ async resumeSession(this: ThreadService,
       throw new Error('room execution history must be resumed through its room task')
     }
     const internalOptions = options as InternalResumeSessionOptions
+    if (!internalOptions[HISTORY_REFERENCE_MUTATION] && this['withHistoryReferenceMutation']) {
+      return withHistoryReferenceLifecycle(this, sessionId, () => this.resumeSession(sessionId, {
+        ...options, [HISTORY_REFERENCE_MUTATION]: true
+      } as InternalResumeSessionOptions))
+    }
     if (options.designCloneOperationId && !internalOptions[DESIGN_CLONE_COMMIT]) {
       const threadId = designCloneThreadId(options.designCloneOperationId)
       return withThreadStoreMutation(this['threadStore'], threadId, async () => {
@@ -496,6 +511,7 @@ async resumeSession(this: ThreadService,
       forkedAt: now,
       forkedFromMessageCount: clonedPublicItems.filter((item) => item.kind === 'user_message').length,
       forkedFromTurnCount: clonedTurns.length,
+      forkedFromTurnId: clonedTurns.at(-1)?.id,
       ...(sourceThread?.todos ? { todos: cloneTodoListForThread(sourceThread.todos, threadId, now) } : {}),
       createdAt: now
     })
@@ -580,4 +596,13 @@ function validateExistingDesignClone(
     throw new Error(`Design clone operation is already committed to a different target: ${operationId}`)
   }
   return existing
+}
+
+/** Use the same lock order for create, clone and delete: history before thread. */
+async function withHistoryReferenceLifecycle<T>(
+  service: ThreadService, threadId: string, operation: () => Promise<T>
+): Promise<T> {
+  const mutate = service['withHistoryReferenceMutation']
+  if (mutate && (await service.getMetadata(threadId))?.historyRefId) return mutate(operation)
+  return operation()
 }

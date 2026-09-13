@@ -4,12 +4,14 @@ import { z } from 'zod'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { HistoryReference } from '../contracts/history-reference.js'
 import type { ThreadService } from '../services/thread-service.js'
+import type { ThreadStore } from '../ports/thread-store.js'
 import {
   createHistoryReference, createHistorySubreference, discoverCodexSessions, inspectCodexSession,
   HistorySourceError,
   readHistoryPage, readSourceHistory, relinkHistoryReference
 } from './codex-history.js'
 import { HistoryReferenceStore, historyKey } from './history-reference-store.js'
+import { invalidateCodexIndexCache } from './codex-index-cache.js'
 import { readHistoryAttachment } from './history-reference-attachments.js'
 
 export const CreateReferenceBranchSchema = z.object({
@@ -28,6 +30,7 @@ export type CreateReferenceBranchInput = z.infer<typeof CreateReferenceBranchSch
 export type HistoryReferenceServiceOptions = {
   dataDir: string
   threadService: ThreadService
+  threadStore?: ThreadStore
   enabled: () => boolean
   defaultModel: () => { model: string; providerId?: string; accountId?: string }
   codexHome?: string
@@ -84,13 +87,15 @@ export class HistoryReferenceService {
     this.assertEnabled()
     const input = CreateReferenceBranchSchema.parse(raw)
     const requestHash = historyKey(JSON.stringify(input))
-    return this.store.withMutation(async () => {
+    return this.store.withLifecycleMutation(async () => {
       this.assertEnabled()
       let reservation = await this.store.getReservation(input.idempotencyKey)
       if (reservation && reservation.requestHash !== requestHash) {
         throw new HistoryReferenceError('history_request_conflict',
           'This request ID was already used with different branch options.', 409)
       }
+      if (reservation?.deleted) throw new HistoryReferenceError('history_branch_deleted',
+        'The branch created by this request was deleted. Start a new branch request.', 409)
       if (!reservation) {
         const reference = await this.resolveBranchReference(input)
         this.assertEnabled()
@@ -115,14 +120,14 @@ export class HistoryReferenceService {
         }
         await this.store.saveReservation(input.idempotencyKey, reservation)
       }
-      const reference = await this.requireReference(reservation.referenceId)
       let thread = await this.options.threadService.getMetadata(reservation.threadId)
       if (!thread && reservation.completed) {
         throw new HistoryReferenceError('history_branch_deleted',
           'The branch created by this request was deleted. Start a new branch request.', 409)
       }
+      const reference = await this.requireReference(reservation.referenceId)
       this.assertEnabled()
-      if (!thread) thread = await this.options.threadService.create(reservation.request, {
+      if (!thread) thread = await this.options.threadService.create(reservation.request!, {
         id: reservation.threadId, historyRefId: reference.id
       })
       if (thread.historyRefId !== reference.id) throw new HistoryReferenceError(
@@ -131,6 +136,29 @@ export class HistoryReferenceService {
         ...reservation, completed: true
       })
       return { thread, reference }
+    })
+  }
+
+  /** Deletion is independent from the Labs switch and never touches source files. */
+  async cleanupDeletedThread(threadId: string, referenceId?: string): Promise<void> {
+    if (!referenceId) return
+    await this.store.withMutation(async () => {
+      const reservations = await this.store.reservations()
+      for (const { key, value } of reservations) {
+        if (value.referenceId !== referenceId || value.deleted) continue
+        const missingCompleted = value.completed &&
+          !(await this.options.threadService.getMetadata(value.threadId))
+        if (value.threadId === threadId || missingCompleted) {
+          await this.store.tombstoneReservation(key, value)
+        }
+      }
+      // Failed or interrupted creates remain retryable and keep the source alive.
+      if (reservations.some(({ value }) => value.referenceId === referenceId &&
+        value.threadId !== threadId && !value.deleted && !value.completed)) return
+      const lookup = this.options.threadStore?.hasHistoryReference
+      if (!lookup || await lookup.call(this.options.threadStore, referenceId)) return
+      await this.store.remove(referenceId)
+      invalidateCodexIndexCache(referenceId)
     })
   }
 
@@ -174,7 +202,9 @@ export class HistoryReferenceService {
       const current = await this.requireReference(id)
       const linked = await relinkHistoryReference(current, sourcePath(path))
       this.assertEnabled()
-      return this.store.put({ ...linked, id: current.id })
+      const saved = await this.store.put({ ...linked, id: current.id })
+      invalidateCodexIndexCache(current.id)
+      return saved
     })
   }
 

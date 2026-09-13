@@ -1,3 +1,4 @@
+import { sourceHistoryAllowed } from '../../history-reference/codex-reference-state'
 import { create } from 'zustand'
 import { useMemo } from 'react'
 import type { ChatBlock, ThreadDetail } from '../../agent/types'
@@ -24,6 +25,7 @@ export async function prepareThreadTurnTarget(threadId: string, turnId: string):
 }
 
 export function activateThreadTurnTarget(threadId: string, turnId: string, detail: ThreadDetail): void {
+  if (turnId.startsWith('codex:') && !sourceHistoryAllowed()) return
   useThreadTurnTarget.setState({ target: {
     threadId, turnId, blocks: detail.blocks.filter((block) => block.turnId === turnId), revision: ++revision
   } })

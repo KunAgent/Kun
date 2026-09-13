@@ -1,3 +1,4 @@
+import { timelineForkPointIndex } from './message-timeline-fork-point'
 import { SourceHistoryRecordViewer } from '../../history-reference/SourceHistoryRecordViewer'
 import { SourceHistoryAttachments } from '../../history-reference/SourceHistoryAttachments'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
@@ -265,10 +266,7 @@ export function MessageTimeline({
     [hiddenTurnCount, t, turns, visibleTurns]
   )
   const forkedFromTitle = activeThread?.forkedFromTitle?.trim() ?? ''
-  const forkBoundaryTurnCount =
-    typeof activeThread?.forkedFromTurnCount === 'number'
-      ? Math.max(0, activeThread.forkedFromTurnCount)
-      : undefined
+  const forkPointIndex = timelineForkPointIndex(turns, activeThread, threadHasMoreHistory)
   const filePreviewWorkspaceRoot = timelineFilePreviewWorkspaceRoot(activeThread, workspaceRoot)
 
   useTimelineJumpRail({ containerRef, turnRefMap, visibleTurnAnchors, setActiveTurnKey, setJumpRailLayout })
@@ -463,7 +461,7 @@ export function MessageTimeline({
             graphPlanningCorrectionTurnId
           })
           const showForkPoint =
-            forkBoundaryTurnCount !== undefined && absoluteTurnIndex === forkBoundaryTurnCount
+            forkPointIndex !== undefined && absoluteTurnIndex === forkPointIndex
           const turnKey = stableTurnKey(turn, absoluteTurnIndex)
           return (
             <div
@@ -575,8 +573,8 @@ export function MessageTimeline({
         })}
 
         {activeThread?.historyRefId && turns.length > 0 && isSourceHistoryTurn(turns[turns.length - 1]!) ? <SourceHistoryBoundary /> : null}
-        {forkBoundaryTurnCount !== undefined &&
-        forkBoundaryTurnCount === turns.length &&
+        {forkPointIndex !== undefined &&
+        forkPointIndex === turns.length &&
         hasContent ? (
           <ThreadForkPoint parentTitle={forkedFromTitle} />
         ) : null}

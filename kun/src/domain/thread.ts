@@ -84,6 +84,7 @@ export function createThreadRecord(input: {
   forkedAt?: string
   forkedFromMessageCount?: number
   forkedFromTurnCount?: number
+  forkedFromTurnId?: string
   goal?: ThreadGoal
   todos?: ThreadTodoList
   createdAt?: string
@@ -141,6 +142,7 @@ export function createThreadRecord(input: {
     ...(input.forkedAt ? { forkedAt: input.forkedAt } : {}),
     ...(input.forkedFromMessageCount !== undefined ? { forkedFromMessageCount: input.forkedFromMessageCount } : {}),
     ...(input.forkedFromTurnCount !== undefined ? { forkedFromTurnCount: input.forkedFromTurnCount } : {}),
+    ...(input.forkedFromTurnId ? { forkedFromTurnId: input.forkedFromTurnId } : {}),
     ...(input.goal ? { goal: input.goal } : {}),
     ...(input.todos ? { todos: input.todos } : {}),
     createdAt: now,
@@ -207,6 +209,7 @@ export function toThreadSummary(
     ...(thread.forkedAt ? { forkedAt: thread.forkedAt } : {}),
     ...(thread.forkedFromMessageCount !== undefined ? { forkedFromMessageCount: thread.forkedFromMessageCount } : {}),
     ...(thread.forkedFromTurnCount !== undefined ? { forkedFromTurnCount: thread.forkedFromTurnCount } : {}),
+    ...(thread.forkedFromTurnId ? { forkedFromTurnId: thread.forkedFromTurnId } : {}),
     ...(thread.goal ? { goal: thread.goal } : {}),
     ...(thread.todos ? { todos: thread.todos } : {}),
     createdAt: thread.createdAt,

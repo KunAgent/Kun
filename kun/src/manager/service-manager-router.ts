@@ -109,6 +109,7 @@ export function buildServiceManagerRouter(input: {
         capability !== 'shared-data-v1' &&
         capability !== 'artifact-memory-data-v1' &&
         capability !== 'atomic-json-v1' &&
+        capability !== 'history-reference-cleanup-v1' &&
         !capability.startsWith('room-store-') &&
         capability !== 'item-turn-page-v1'
       )
@@ -516,6 +517,10 @@ export function buildServiceManagerRouter(input: {
         throw error
       }
     }
+  ))
+  if (input.sharedData) router.add('POST', '/v1/data/history-reference-reservations', (request) => authorizedAsync(
+    request, input.managerToken,
+    async () => jsonResponse({ keys: await input.sharedData!.listHistoryReservationKeys() })
   ))
   if (input.sharedData) router.add('POST', '/v1/data/atomic-json/read', (request) => authorizedAsync(
     request,

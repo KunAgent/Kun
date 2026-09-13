@@ -168,7 +168,7 @@ const ManagerAtomicJsonSnapshotSchema = z.object({
   })
 })
 
-function managerAtomicJsonConfig(path: string): ManagerAtomicJsonConfig | null {
+export function managerAtomicJsonConfig(path: string): ManagerAtomicJsonConfig | null {
   const baseUrl = explicitManagerAtomicJsonConfig?.baseUrl ?? process.env.KUN_MANAGER_BASE_URL?.trim()
   const token = explicitManagerAtomicJsonConfig?.token ?? process.env.KUN_MANAGER_TOKEN?.trim()
   const configuredDataDir = explicitManagerAtomicJsonConfig?.dataDir ??

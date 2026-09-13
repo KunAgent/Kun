@@ -7,6 +7,9 @@ import { THREAD_TIMELINE_MAX_ITEMS } from '../../contracts/threads.js'
  * constitutes the same logical read.
  */
 export const ThreadTimelineQuerySchema = z.object({
+  /** Client projection epoch: a Labs toggle must not join an older in-flight history read. */
+  historyRevision: z.preprocess((value) => value === undefined ? undefined : Number(value),
+    z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional()),
   turnId: z.string().min(1).max(256).optional(),
   before: z.string().min(1).max(256).optional(),
   limit: z.preprocess((value) => {
@@ -19,6 +22,7 @@ export type ThreadTimelineQuery = z.infer<typeof ThreadTimelineQuerySchema>
 
 export function parseThreadTimelineQuery(url: URL) {
   return ThreadTimelineQuerySchema.safeParse({
+    historyRevision: url.searchParams.get('historyRevision') ?? undefined,
     turnId: url.searchParams.get('turnId') ?? undefined,
     before: url.searchParams.get('before') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined
@@ -40,5 +44,6 @@ export function threadTimelineReadKey(threadId: string, url: URL): string {
   }
   const before = parsed.data.before ? encodeURIComponent(parsed.data.before) : ''
   const turn = parsed.data.turnId ? `|turn:${encodeURIComponent(parsed.data.turnId)}` : ''
-  return `${threadId}|before:${before}|limit:${parsed.data.limit}${turn}`
+  const history = parsed.data.historyRevision === undefined ? '' : `|history:${parsed.data.historyRevision}`
+  return `${threadId}|before:${before}|limit:${parsed.data.limit}${turn}${history}`
 }

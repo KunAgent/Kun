@@ -28,14 +28,18 @@ async function harness() {
   const threadStore = new InMemoryThreadStore()
   const sessionStore = new InMemorySessionStore()
   const eventBus = new InMemoryEventBus()
+  let service: HistoryReferenceService
   const threadService = new ThreadService({ threadStore, sessionStore, ids: new SequentialIdGenerator(), nowIso,
+    withHistoryReferenceMutation: (operation) => service.store.withLifecycleMutation(operation),
+    onDeleted: (threadId, referenceId) => service.cleanupDeletedThread(threadId, referenceId),
     events: new RuntimeEventRecorder({ eventBus, sessionStore,
       allocateSeq: (threadId) => eventBus.allocateSeq(threadId), nowIso }) })
   let enabled = true
-  const options = { dataDir: join(root, 'data'), threadService, enabled: () => enabled,
+  const options = { dataDir: join(root, 'data'), threadService, threadStore, enabled: () => enabled,
     defaultModel: () => ({ model: 'kun-test-model', providerId: 'kun-test-provider' }) }
+  service = new HistoryReferenceService(options)
   return { root, path, threadStore, threadService, sessionStore, options,
-    service: new HistoryReferenceService(options), disable: () => { enabled = false } }
+    service, disable: () => { enabled = false } }
 }
 
 function fixture(workspace: string): string {
@@ -204,3 +208,152 @@ describe('reference branches', () => {
     expect((await h.threadService.list()).map((thread) => thread.id)).toEqual([recovered.thread.id])
   })
 })
+
+
+describe('history reference lifecycle cleanup', () => {
+  it('retains shared and forked references, then removes the last reference even while disabled', async () => {
+    const h = await harness()
+    const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'first' })
+    const second = await h.service.createBranch({ path: h.path, idempotencyKey: 'second' })
+    const fork = await h.threadService.fork(first.thread.id)
+    await h.threadService.update(fork.id, { status: 'archived' })
+    h.disable()
+    await h.threadService.delete(first.thread.id)
+    await h.threadService.delete(second.thread.id)
+    expect(await h.service.get(first.reference.id)).not.toBeNull()
+    await h.threadService.delete(fork.id)
+    expect(await h.service.get(first.reference.id)).toBeNull()
+    const persisted = await allJson(join(h.root, 'data'))
+    expect(persisted).not.toContain(h.root)
+    expect(persisted).not.toContain('Test history')
+    expect(await readFile(h.path, 'utf8')).toBe(fixture(h.root))
+  })
+
+  it('keeps only tombstones and returns deleted conflict after cleanup and restart', async () => {
+    const h = await harness()
+    const input = { path: h.path, idempotencyKey: 'deleted' }
+    const created = await h.service.createBranch(input)
+    await h.threadService.delete(created.thread.id)
+    expect(await h.service.store.getReservation(input.idempotencyKey)).toEqual({
+      threadId: created.thread.id, referenceId: created.reference.id,
+      requestHash: expect.any(String), completed: true, deleted: true
+    })
+    await rm(h.path)
+    const restarted = new HistoryReferenceService(h.options)
+    await expect(restarted.createBranch(input)).rejects.toMatchObject({
+      code: 'history_branch_deleted', statusCode: 409
+    })
+    expect(await h.threadService.list()).toEqual([])
+  })
+
+  it('preserves a pending reservation after a failed create so a retry can complete', async () => {
+    const h = await harness()
+    const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'first' })
+    const input = { path: h.path, idempotencyKey: 'retryable' }
+    vi.spyOn(h.threadService, 'create').mockRejectedValueOnce(new Error('create failed'))
+    await expect(h.service.createBranch(input)).rejects.toThrow('create failed')
+    await h.threadService.delete(first.thread.id)
+    expect(await h.service.get(first.reference.id)).not.toBeNull()
+    const retried = await h.service.createBranch(input)
+    expect(retried.reference.id).toBe(first.reference.id)
+    await h.threadService.delete(retried.thread.id)
+    expect(await h.service.get(first.reference.id)).toBeNull()
+  })
+
+  it('tombstones a committed branch even if its create notification failed', async () => {
+    const h = await harness()
+    const create = h.threadService.create.bind(h.threadService)
+    vi.spyOn(h.threadService, 'create').mockImplementationOnce(async (...args) => {
+      await create(...args)
+      throw new Error('notification failed')
+    })
+    const input = { path: h.path, idempotencyKey: 'uncertain' }
+    await expect(h.service.createBranch(input)).rejects.toThrow('notification failed')
+    const [thread] = await h.threadService.list()
+    await h.threadService.delete(thread!.id)
+    await expect(h.service.createBranch(input)).rejects.toMatchObject({ code: 'history_branch_deleted' })
+    expect(await h.service.get(thread!.historyRefId!)).toBeNull()
+  })
+
+  it.each(['fork', 'create'] as const)('serializes a concurrent %s and deletion without losing its reference', async (operation) => {
+    const h = await harness()
+    const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'first' })
+    const entered = deferred()
+    const release = deferred()
+    const upsert = h.threadStore.upsert.bind(h.threadStore)
+    vi.spyOn(h.threadStore, 'upsert').mockImplementationOnce(async (thread) => {
+      entered.resolve()
+      await release.promise
+      return upsert(thread)
+    })
+    const creating = operation === 'fork'
+      ? h.threadService.fork(first.thread.id)
+      : h.service.createBranch({ path: h.path, idempotencyKey: 'second' }).then((result) => result.thread)
+    await entered.promise
+    const deleting = h.threadService.delete(first.thread.id)
+    release.resolve()
+    const [created] = await Promise.all([creating, deleting])
+    expect(await h.service.get(first.reference.id)).not.toBeNull()
+    expect(created.historyRefId).toBe(first.reference.id)
+    await h.threadService.delete(created.id)
+    expect(await h.service.get(first.reference.id)).toBeNull()
+  })
+
+  it('does not revive a source when its deletion wins a concurrent fork', async () => {
+    const h = await harness()
+    const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'first' })
+    const entered = deferred()
+    const release = deferred()
+    const remove = h.threadStore.delete.bind(h.threadStore)
+    vi.spyOn(h.threadStore, 'delete').mockImplementationOnce(async (threadId) => {
+      entered.resolve()
+      await release.promise
+      return remove(threadId)
+    })
+    const deleting = h.threadService.delete(first.thread.id)
+    await entered.promise
+    const forking = h.threadService.fork(first.thread.id)
+    const expectedFailure = expect(forking).rejects.toThrow('thread not found')
+    release.resolve()
+    await Promise.all([deleting, expectedFailure])
+    expect(await h.service.get(first.reference.id)).toBeNull()
+    expect(await h.threadService.list()).toEqual([])
+  })
+
+  it('does not collect metadata after an unsuccessful physical deletion', async () => {
+    const h = await harness()
+    const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'first' })
+    vi.spyOn(h.threadStore, 'delete').mockResolvedValueOnce(false)
+    expect(await h.threadService.delete(first.thread.id)).toBe(false)
+    expect(await h.service.get(first.reference.id)).not.toBeNull()
+    expect(await h.service.store.getReservation('first')).toMatchObject({ completed: true })
+    expect((await h.service.store.getReservation('first'))?.deleted).toBeUndefined()
+  })
+
+  it('compacts completed requests from branches deleted before cleanup was installed', async () => {
+    const h = await harness()
+    const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'old' })
+    const second = await h.service.createBranch({ path: h.path, idempotencyKey: 'new' })
+    await h.threadStore.delete(first.thread.id)
+    await h.threadService.delete(second.thread.id)
+    expect(await h.service.get(first.reference.id)).toBeNull()
+    expect(await allJson(join(h.root, 'data'))).not.toContain(h.root)
+    expect(await h.service.store.getReservation('old')).toMatchObject({ deleted: true })
+  })
+
+  it('keeps references when the configured store cannot prove that they are unused', async () => {
+    const h = await harness()
+    const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'first' })
+    const legacy = new HistoryReferenceService({ ...h.options, threadStore: undefined })
+    await h.threadStore.delete(first.thread.id)
+    await legacy.cleanupDeletedThread(first.thread.id, first.reference.id)
+    expect(await legacy.get(first.reference.id)).not.toBeNull()
+    expect(await legacy.store.getReservation('first')).toMatchObject({ deleted: true })
+  })
+})
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}

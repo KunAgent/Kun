@@ -12,6 +12,7 @@ import { indexCodexFile, type CodexIndex, type IndexedItem, type IndexedTurn } f
 import { HistorySourceError, readCodexLines, validateSourceFile } from './codex-jsonl.js'
 import { clipped, projectCodexRecord, toTurnItem, type ItemContent } from './codex-projection.js'
 import { isCodexPath, summarizeCodexFile, resolveCodexParentPath } from './codex-discovery.js'
+import { getCachedCodexIndex } from './codex-index-cache.js'
 
 export { discoverCodexSessions } from './codex-discovery.js'
 export { HistorySourceError } from './codex-jsonl.js'
@@ -89,11 +90,16 @@ export async function createHistorySubreference(reference: HistoryReference, cut
 }
 
 export async function frozenHistoryIndex(reference: HistoryReference): Promise<CodexIndex> {
+  return getCachedCodexIndex(reference, () => buildFrozenHistoryIndex(reference))
+}
+
+async function buildFrozenHistoryIndex(reference: HistoryReference): Promise<CodexIndex> {
   const primary = reference.files[0]
   for (const file of reference.files) await validateSourceFile(file)
   const index = await indexCodexFile(primary.path, {
     byteLimit: primary.byteLength,
-    parentLimits: new Map(reference.files.slice(1).map((file) => [resolve(file.path), file.byteLength]))
+    parentLimits: new Map(reference.files.slice(1).map((file) => [resolve(file.path), file.byteLength])),
+    parentPaths: new Map(reference.files.slice(1).map((file) => [file.sessionId, resolve(file.path)]))
   })
   if (index.sessionId !== reference.sessionId) throw new HistorySourceError('changed', 'The Codex source session identity changed.')
   for (const file of reference.files) {

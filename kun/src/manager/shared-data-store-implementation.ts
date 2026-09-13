@@ -133,6 +133,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         const { threadId } = parseThreadId(value)
         return this.threadStore.get(threadId)
       }
+      case 'hasHistoryReference': {
+        const { referenceId } = z.object({ referenceId: z.string().min(1).max(256) }).strict().parse(value)
+        return this.hybridThreadStore.hasHistoryReference(referenceId)
+      }
       case 'getMetadata': {
         const { threadId } = parseThreadId(value)
         return this.threadStore.getMetadata?.(threadId) ?? this.threadStore.get(threadId)

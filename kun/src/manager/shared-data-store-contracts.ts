@@ -127,6 +127,7 @@ export const MANAGER_THREAD_STORE_OPERATIONS = [
   'listPage',
   'get',
   'getMetadata',
+  'hasHistoryReference',
   'touch',
   'upsert',
   'upsertIfRevision',

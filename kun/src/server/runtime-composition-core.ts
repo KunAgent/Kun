@@ -219,7 +219,7 @@ export async function createRuntimeCore(
     new FileDelegatedSessionBindingStore(delegatedSessionRoot(activeOptions.dataDir)),
     nowIso
   )
-  const threadService = new ThreadService({
+  const threadService: ThreadService = new ThreadService({
     threadStore,
     deleteThreadStore: rawThreadStore,
     sessionStore,
@@ -235,7 +235,8 @@ export async function createRuntimeCore(
       abortThreadExecution?.(threadId)
       await stopThreadAuxiliaryWork?.(threadId)
     },
-    onDeleted: async (threadId) => {
+    withHistoryReferenceMutation: (operation) => historyReferences.store.withLifecycleMutation(operation),
+    onDeleted: async (threadId, historyRefId) => {
       eventStreamRegistry.closeThread(threadId)
       usageService.reset(threadId)
       events.clearThread(threadId)
@@ -244,7 +245,8 @@ export async function createRuntimeCore(
         ...(llmDebug ? [llmDebug.deleteThread(threadId)] : []),
         delegatedSessions.invalidate(threadId),
         contextWindows.deleteThreadData(threadId),
-        contextWindowState.deleteThreadData(threadId)
+        contextWindowState.deleteThreadData(threadId),
+        historyReferences.cleanupDeletedThread(threadId, historyRefId)
       ])
     },
     onStatusChanged: (threadId, status) => handleGraphThreadStatus?.(threadId, status),
@@ -254,9 +256,10 @@ export async function createRuntimeCore(
         contextWindows.forkThreadData(sourceThreadId, targetThreadId)
       ]).then(() => undefined)
   })
-  const historyReferences = new HistoryReferenceService({
+  const historyReferences: HistoryReferenceService = new HistoryReferenceService({
     dataDir: options.dataDir,
     threadService,
+    threadStore: rawThreadStore,
     enabled: () => activeOptions.lab?.codexReferenceBranches?.enabled === true,
     defaultModel: () => ({ model: activeOptions.model, providerId: activeOptions.activeProviderId })
   })

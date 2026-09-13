@@ -67,6 +67,7 @@ export type CoreThreadSummaryJson = {
   forkedAt?: string
   forkedFromMessageCount?: number
   forkedFromTurnCount?: number
+  forkedFromTurnId?: string
   goal?: CoreThreadGoalJson | null
   todos?: CoreThreadTodoListJson | null
   createdAt: string

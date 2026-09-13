@@ -1,3 +1,5 @@
+import { loadEarlierThreadHistory } from './chat-store-thread-history'
+import { codexReferenceRevision } from '../history-reference/codex-reference-state'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -176,6 +178,7 @@ export function createThreadSelectionActions(
   selectThread: async (id, options) => {
     if (options?.selectionGuard?.() === false) return
     const currentState = get()
+    const historyRevision = codexReferenceRevision()
     if (threadIdBelongsToRemovedCodeProject(id, currentState)) {
       set({ error: i18n.t('common:sidebarWorkspaceRemoveDialogDetail') })
       return
@@ -245,6 +248,10 @@ export function createThreadSelectionActions(
       }, durableQueuedMessages.length > 0
         ? await fetchRuntimeQueuedTurnsBestEffort(p, id)
         : undefined)
+      if (historyRevision !== codexReferenceRevision()) {
+        if (selectionGeneration !== runtime.threadSelectionGeneration || options?.selectionGuard?.() === false) return
+        return get().selectThread(id, options)
+      }
       const remembersCodeThread = targetThread != null &&
         targetThread.archived !== true &&
         isCodeSidebarThread(
@@ -507,54 +514,7 @@ export function createThreadSelectionActions(
       })
     } finally { finishThreadHydration(runtime, hydrationAbort) }
   },
-  loadEarlierThreadHistory: async () => {
-    const state = get()
-    const threadId = state.activeThreadId
-    const cursor = state.threadHistoryCursor
-    if (
-      !threadId ||
-      !cursor ||
-      !state.threadHasMoreHistory ||
-      state.threadHistoryLoading
-    ) return false
-    set({ threadHistoryLoading: true })
-    try {
-      const detail = await getProvider().getThreadDetail(threadId, { before: cursor })
-      if (get().activeThreadId !== threadId) return false
-      const olderBlocks = hydrateBlockModelLabels(threadId, detail.blocks)
-      if (
-        detail.hasMoreHistory === true &&
-        (!detail.historyCursor || detail.historyCursor === cursor)
-      ) {
-        throw new Error('thread history cursor did not advance')
-      }
-      set((current) => {
-        if (current.activeThreadId !== threadId) return { threadHistoryLoading: false }
-        return {
-          blocks: prependOlderHistoryBlocks(current.blocks, olderBlocks),
-          threadHistoryCursor: detail.historyCursor ?? null,
-          threadHasMoreHistory: detail.hasMoreHistory === true,
-          threadHistoryLoading: false,
-          turnDurationByUserId: {
-            ...current.turnDurationByUserId,
-            ...(detail.turnDurationByUserId ?? {})
-          }
-        }
-      })
-      threadActionSharedState.expandedHistoryThreadIds.add(threadId)
-      // Expanded history can outgrow the projection cache; a later switch
-      // safely rehydrates the latest bounded page instead.
-      invalidateThreadSnapshot(threadId)
-      return true
-    } catch (error) {
-      if (get().activeThreadId !== threadId) return false
-      set({
-        threadHistoryLoading: false,
-        error: formatRuntimeError(error)
-      })
-      return false
-    }
-  },
+  loadEarlierThreadHistory: () => loadEarlierThreadHistory(set, get),
   subscribeThreadEventsLive: async (threadId) => {
     if (get().runtimeConnection !== 'ready') return
     const targetThreadId = threadId.trim()

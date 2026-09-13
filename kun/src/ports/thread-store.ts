@@ -46,6 +46,8 @@ export interface ThreadStore {
   listPage?(options?: ThreadStoreListOptions): Promise<ThreadStoreListPage>
   /** Rebuildable index lifecycle/progress; `unavailable` when no index exists. */
   indexStatus?(): ThreadIndexStatusInfo
+  /** Authoritative metadata-only lookup; includes archived and side threads. */
+  hasHistoryReference?(referenceId: string): Promise<boolean>
   get(threadId: string): Promise<ThreadRecord | null>
   /** Read the durable Thread/Turn projection without hydrating item history. */
   getMetadata?(threadId: string): Promise<ThreadRecord | null>

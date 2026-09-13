@@ -22,6 +22,36 @@ export interface ReadSourceHistoryResult {
 const MAX_RESULT_CHARS = 24_000
 const RECORD_CHARS = 6_000
 
+interface SourceCursor {
+  position: number
+  endPosition?: number
+  olderTurnEnd?: number
+  turnId?: string
+  contentOffset?: number
+}
+
+function sourceCursor(reference: HistoryReference, value: SourceCursor): string {
+  return Buffer.from(JSON.stringify({ reference: reference.id, ...value })).toString('base64url')
+}
+
+function parseSourceCursor(reference: HistoryReference, cursor: string | undefined, fallback: number): SourceCursor {
+  const position = parseHistoryCursor(reference, cursor, fallback)
+  if (!cursor) return { position }
+  const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as SourceCursor
+  for (const field of ['endPosition', 'olderTurnEnd', 'contentOffset'] as const) {
+    if (value[field] !== undefined && (!Number.isSafeInteger(value[field]) || value[field]! < 0)) {
+      throw new HistorySourceError('partial', 'Invalid Codex source history continuation.')
+    }
+  }
+  if (value.turnId !== undefined && typeof value.turnId !== 'string') {
+    throw new HistorySourceError('partial', 'Invalid Codex source history turn.')
+  }
+  if (value.endPosition !== undefined && value.endPosition < position) {
+    throw new HistorySourceError('partial', 'Invalid Codex source history range.')
+  }
+  return { ...value, position }
+}
+
 /** The model's explicit read is the only historical text allowed into new tool history. */
 export async function readSourceHistory(
   reference: HistoryReference, options: ReadSourceHistoryOptions
@@ -35,19 +65,23 @@ export async function readSourceHistory(
       throw new HistorySourceError('partial', 'Use recent or search first, then read a specific turnId.')
     }
     if (options.operation === 'search' && !query) throw new HistorySourceError('partial', 'A non-empty search query is required.')
-    let start = parseHistoryCursor(reference, options.cursor, options.operation === 'recent' ? index.turns.length : 0)
+    const continuation = parseSourceCursor(reference, options.cursor, options.operation === 'recent' ? index.turns.length : 0)
+    let start = continuation.position
+    let endPosition = continuation.endPosition ?? all.length
+    let olderTurnEnd = continuation.olderTurnEnd ?? 0
+    const turnId = options.operation === 'recent' ? undefined : continuation.turnId ?? options.turnId
     let pointers = all
-    let olderTurnEnd = 0
     if (options.operation === 'recent') {
       const end = Math.min(index.turns.length, start)
       olderTurnEnd = Math.max(0, end - limit)
       const turnIds = new Set(index.turns.slice(olderTurnEnd, end).map((turn) => turn.id))
       pointers = all.filter((pointer) => turnIds.has(pointer.turn.id))
       start = pointers.length ? all.indexOf(pointers[0]) : all.length
+      endPosition = start + pointers.length
     } else {
-      pointers = all.slice(start).filter((pointer) => !options.turnId || pointer.turn.id === options.turnId)
+      pointers = all.slice(start, endPosition).filter((pointer) => !turnId || pointer.turn.id === turnId)
     }
-    let contentOffset = Math.max(0, Math.floor(options.contentOffset ?? 0))
+    let contentOffset = continuation.contentOffset ?? Math.max(0, Math.floor(options.contentOffset ?? 0))
     const results: string[] = []
     let chars = 0
     let nextPosition: number | undefined
@@ -83,9 +117,12 @@ export async function readSourceHistory(
     let nextOperation: ReadSourceHistoryResult['nextOperation']
     let nextCursor: string | undefined
     if (nextPosition !== undefined) {
-      nextCursor = historyCursor(reference, nextPosition)
+      nextCursor = sourceCursor(reference, {
+        position: nextPosition, endPosition, olderTurnEnd,
+        ...(turnId ? { turnId } : {}), ...(nextContentOffset === undefined ? {} : { contentOffset: nextContentOffset })
+      })
       nextOperation = options.operation === 'search' ? 'search' : 'read'
-    } else if (options.operation === 'recent' && olderTurnEnd > 0) {
+    } else if (olderTurnEnd > 0) {
       nextCursor = historyCursor(reference, olderTurnEnd)
       nextOperation = 'recent'
     }

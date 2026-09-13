@@ -53,6 +53,7 @@ export type NormalizedThread = {
   forkedAt?: string
   forkedFromMessageCount?: number
   forkedFromTurnCount?: number
+  forkedFromTurnId?: string
   goal?: ThreadGoal | null
   todos?: ThreadTodoList | null
 }

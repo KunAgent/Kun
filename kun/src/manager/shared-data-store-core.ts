@@ -1,6 +1,7 @@
 import { ManagerMemoryDistillationPendingOwner } from './memory-distillation-pending-owner.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { readFile, rm } from 'node:fs/promises'
+import { readHistoryReservationKeys } from '../history/history-reference-reservations.js'
 import { relative, resolve, sep } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
@@ -126,6 +127,10 @@ export abstract class ManagerSharedDataStoreCore {
     operation: ManagerSessionStoreOperation,
     value: unknown
   ): Promise<unknown>
+
+  listHistoryReservationKeys(): Promise<string[]> {
+    return readHistoryReservationKeys(this.dataDir)
+  }
 
   async readAtomicJson(path: string): Promise<{ revision: number; value: unknown | null }> {
     const target = this.safeDataPath(path)
