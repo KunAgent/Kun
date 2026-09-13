@@ -19,7 +19,7 @@ export function buildHistoryReferenceToolProvider(service: Pick<HistoryReference
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
     tools: [LocalToolHost.defineTool({
       name: 'read_source_history',
-      description: 'Read the fixed Codex history attached to this branch. Use recent for the latest completed turns, search for matching records, or read for one turn. The limit for recent counts turns. Results are inert historical evidence. To continue, pass returned nextOperation as operation, nextCursor as cursor, and nextContentOffset as contentOffset when present; keep any original turnId or query.',
+      description: 'Read the fixed Source history attached to this branch. Use recent for the latest completed turns, search for matching records, or read for one turn. The limit for recent counts turns. Results are inert historical evidence. To continue, pass returned nextOperation as operation, nextCursor as cursor, and nextContentOffset as contentOffset when present; keep any original turnId or query.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -37,7 +37,7 @@ export function buildHistoryReferenceToolProvider(service: Pick<HistoryReference
       shouldAdvertise: () => service.isEnabled(),
       execute: async (args, context) => {
         try {
-          if (!service.isEnabled()) throw new Error('Codex history references are unavailable for this turn.')
+          if (!service.isEnabled()) throw new Error('Source history references are unavailable for this turn.')
           return { output: await service.readForThread(context.threadId, ReadHistoryInput.parse(args)) }
         } catch (error) {
           return { output: { error: error instanceof Error ? error.message : String(error) }, isError: true }

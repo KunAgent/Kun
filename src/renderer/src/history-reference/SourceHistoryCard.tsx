@@ -7,19 +7,20 @@ import { useCodexReferenceEnabled } from './use-codex-reference-enabled'
 
 export function SourceHistoryCard({ referenceId }: { referenceId: string }): ReactElement {
   const { t } = useTranslation('common')
-  const enabled = useCodexReferenceEnabled()
   const [source, setSource] = useState<{ reference: HistoryReference; status: HistoryPage['status'] } | null>(null)
+  const enabled = useCodexReferenceEnabled(source?.reference.provider)
   const [error, setError] = useState('')
   const [relinking, setRelinking] = useState(false)
   const [expanded, setExpanded] = useState(false)
   useEffect(() => {
-    setSource(null); setError('')
+    setError('')
     if (!enabled) return
     const controller = new AbortController()
     void historyRequest<{ reference: HistoryReference; status: HistoryPage['status'] }>(`/v1/history-sources/${encodeURIComponent(referenceId)}`, undefined, controller.signal)
-      .then(setSource).catch((err) => { if (!controller.signal.aborted) setError(String(err.message ?? err)) })
+      .then((result) => { if (!controller.signal.aborted) setSource(result) }).catch((err) => { if (!controller.signal.aborted) setError(String(err.message ?? err)) })
     return () => controller.abort()
   }, [referenceId, enabled])
+  useEffect(() => { setSource(null) }, [referenceId])
   async function relink(): Promise<void> {
     setRelinking(true); setError('')
     try {
@@ -35,10 +36,10 @@ export function SourceHistoryCard({ referenceId }: { referenceId: string }): Rea
   return <aside className="rounded-xl border border-ds-border-muted bg-ds-card p-4 text-sm" aria-label={t('codexHistorySource')}>
     <button type="button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded} className="flex w-full items-center gap-2 text-left">
       <FileText size={16} /><span className="flex-1 truncate font-medium">{source?.reference.title || t('codexHistorySource')}</span>
-      <span className="text-xs text-ds-muted">Codex · {t('codexHistoryReadOnly')}</span>
+      <span className="text-xs text-ds-muted">{source?.reference.provider === 'claude-code' ? 'Claude Code' : source?.reference.provider === 'codex' ? 'Codex' : t('codexHistorySource')} · {t('codexHistoryReadOnly')}</span>
     </button>
     <p className="mt-2 text-ds-muted">{t(enabled ? 'codexHistoryReferenceHint' : 'codexHistoryDisabled')}</p>
-    {enabled && source?.status && source.status !== 'available' ? <p className="mt-2 text-amber-600">{t(`codexHistoryStatus_${source.status}`)}</p> : null}
+    {enabled && source?.status && source.status !== 'available' && source.status !== 'disabled' ? <p className="mt-2 text-amber-600">{t(`codexHistoryStatus_${source.status}`)}</p> : null}
     {expanded ? <div className="mt-3 space-y-2 break-all text-xs text-ds-muted">
       <p>{t('codexHistoryVirtualFile')}: <code>{referenceId}</code></p>
       {source?.reference.files.map((file) => <p key={file.path}>{file.path}</p>)}
@@ -52,7 +53,7 @@ export function SourceHistoryCard({ referenceId }: { referenceId: string }): Rea
 
 export function SourceHistoryTurnLabel({ referenceId, turnId }: { referenceId?: string; turnId?: string }): ReactElement {
   const { t } = useTranslation('common')
-  const enabled = useCodexReferenceEnabled()
+  const enabled = useCodexReferenceEnabled(turnId?.startsWith('claude-code:') ? 'claude-code' : 'codex')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   async function branch(): Promise<void> {
@@ -73,7 +74,7 @@ export function SourceHistoryTurnLabel({ referenceId, turnId }: { referenceId?: 
     finally { setBusy(false) }
   }
   return <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-ds-muted">
-    <span>Codex · {t('codexHistoryReadOnly')}</span>
+    <span>{turnId?.startsWith('claude-code:') ? 'Claude Code' : 'Codex'} · {t('codexHistoryReadOnly')}</span>
     {enabled && referenceId ? <button type="button" disabled={busy} onClick={() => void branch()} className="flex items-center gap-1 hover:text-ds-ink">
       <GitBranch size={12} />{t('codexHistoryBranchHere')}
     </button> : null}

@@ -262,6 +262,8 @@ export async function createRuntimeCore(
     threadService,
     threadStore: rawThreadStore,
     enabled: () => activeOptions.lab?.codexReferenceBranches?.enabled === true,
+    enabledFor: (provider) => provider === 'codex' ? activeOptions.lab?.codexReferenceBranches?.enabled === true
+      : activeOptions.lab?.claudeCodeReferenceBranches?.enabled === true,
     defaultModel: () => ({ model: activeOptions.model, providerId: activeOptions.activeProviderId })
   })
   const projectBoardStore = new FileProjectBoardStore({

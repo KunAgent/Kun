@@ -9,8 +9,8 @@ import { UsageService } from '../services/usage-service.js'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
 
-it('sends only a descriptor initially, then persists requested excerpts for subsequent native turns', async () => {
-  const f = await historyReferenceFixture()
+it.each(['codex', 'claude-code'] as const)('%s sends only a descriptor initially, then persists requested excerpts for subsequent native turns', async (provider) => {
+  const f = await historyReferenceFixture(provider)
   const requests: string[] = []
   let step = 0
   const model: ModelClient = { provider: 'test', model: 'test',
@@ -40,7 +40,7 @@ it('sends only a descriptor initially, then persists requested excerpts for subs
     expect(requests[0]).not.toContain(SOURCE_TEXT)
     expect(requests[1]).toContain(SOURCE_TEXT)
     const items = await f.sessionStore.loadItems(f.thread.id)
-    expect(items.some((item) => item.id.startsWith('codex:'))).toBe(false)
+    expect(items.some((item) => item.id.startsWith(`${provider}:`))).toBe(false)
     expect(items.filter((item) => item.kind === 'user_message')).toHaveLength(1)
     expect(items.filter((item) => item.kind === 'tool_result')).toHaveLength(1)
     await rm(f.path)

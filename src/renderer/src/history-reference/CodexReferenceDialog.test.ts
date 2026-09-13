@@ -38,13 +38,39 @@ async function mount(): Promise<void> {
   await act(async () => { button('codexHistoryChooseFiles').props.onClick() })
 }
 async function chooseCutoff(): Promise<void> {
-  await act(async () => { renderer!.root.findByType('select').props.onChange({ target: { value: 'codex:a' } }) })
+  await act(async () => { renderer!.root.findAllByType('select').at(-1)!.props.onChange({ target: { value: 'codex:a' } }) })
 }
 async function submit(): Promise<void> {
   await act(async () => { button('codexHistoryCreate').props.onClick() })
 }
 
 describe('Codex branch workspace defaults', () => {
+  it('disables creation when the selected preview has no completed cutoff', async () => {
+    state.request.mockResolvedValue({ ...preview(), cutoffs: [] })
+    await mount()
+    expect(button('codexHistoryCreate').props.disabled).toBe(true)
+  })
+
+  it('shows the last completed cutoff workspace even if the preview has a newer unfinished tail', async () => {
+    const value = preview()
+    value.session.workspace = '/unfinished-workspace'
+    state.request.mockResolvedValue(value)
+    await mount()
+    expect(workspaceInput().props.value).toBe('/project-b')
+    await submit()
+    expect(state.create.mock.calls[0]![0]).not.toHaveProperty('workspace')
+  })
+
+  it('clears the old selection when changing sources and creates a Claude branch explicitly', async () => {
+    await mount()
+    await act(async () => { renderer!.root.findAllByType('select')[0]!.props.onChange({ target: { value: 'claude-code' } }) })
+    expect(button('codexHistoryCreate').props.disabled).toBe(true)
+    await act(async () => { button('codexHistoryChooseFiles').props.onClick() })
+    expect(state.request).toHaveBeenLastCalledWith('/v1/history-sources/claude-code/preview', expect.objectContaining({ path: '/source.jsonl' }))
+    await submit()
+    expect(state.create).toHaveBeenLastCalledWith(expect.objectContaining({ sourceProvider: 'claude-code' }))
+  })
+
   it('shows the selected cutoff directory and leaves its authoritative default to the runtime', async () => {
     await mount()
     expect(workspaceInput().props.value).toBe('/project-b')

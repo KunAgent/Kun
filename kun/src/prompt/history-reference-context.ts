@@ -4,7 +4,7 @@ import type { KunTurnContextBlock } from './kun-prompt-context.js'
 export function historyReferenceInstructions(thread: { historyRefId?: string }): string[] {
   if (!thread.historyRefId) return []
   return [[
-    'This conversation branches from a read-only Codex history reference.',
+    'This conversation branches from a read-only external history reference.',
     `Reference ID: ${JSON.stringify(thread.historyRefId)}.`,
     'The historical messages displayed above the branch boundary have NOT been loaded into your context.',
     'When the current request depends on that background, use read_source_history (or its advertised Kun tool alias) to read recent turns, search, or read a specific turn.',

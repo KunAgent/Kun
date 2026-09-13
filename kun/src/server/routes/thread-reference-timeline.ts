@@ -23,7 +23,7 @@ export async function getComposedThreadTimeline(
   if (sourcePageRequested && !before!.startsWith(prefix)) {
     return jsonResponse({ code: 'invalid_cursor', message: 'History cursor belongs to another reference' }, 400)
   }
-  const sourceTurnRequested = turnId?.startsWith('codex:') === true
+  const sourceTurnRequested = /^(codex|claude-code):/u.test(turnId ?? '')
   const nativeUrl = new URL(request.url)
   if (sourcePageRequested) nativeUrl.searchParams.delete('before')
   if (sourceTurnRequested) {
@@ -34,8 +34,9 @@ export async function getComposedThreadTimeline(
   if (response.status !== 200) return response
   const body = JSON.parse(response.body)
   const source = runtime.historyReferences
-  const descriptor = { referenceId: thread.historyRefId, readOnly: true }
-  if (!source.isEnabled()) {
+  const reference = await source.get(thread.historyRefId)
+  const descriptor = { provider: reference?.provider, referenceId: thread.historyRefId, readOnly: true }
+  if (!source.isEnabled(reference?.provider)) {
     return jsonResponse({ ...body, sourceHistory: { ...descriptor, status: 'disabled', warnings: [] },
       ...(sourcePageRequested || sourceTurnRequested ? { turns: [], timeline: emptyPage() } : {}) })
   }

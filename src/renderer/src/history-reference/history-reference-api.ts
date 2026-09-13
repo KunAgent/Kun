@@ -4,16 +4,18 @@ import type { CoreTurnJson } from '../agent/kun-contract-runtime'
 import { chatBlockFromItem, mergeChatBlocks } from '../agent/kun-mapper'
 import type { ChatBlock } from '../agent/types'
 
+export type HistorySourceProvider = 'codex' | 'claude-code'
 export type HistorySession = {
   sessionId: string; path: string; title: string; workspace: string; updatedAt: string; archived: boolean
 }
 export type HistoryReference = {
+  provider?: HistorySourceProvider
   id: string; sessionId: string; title: string; workspace: string; cutoffTurnId: string
   files: Array<{ path: string }>; warnings: string[]
 }
 export type HistoryPage = {
   turns: CoreTurnJson[]; nextCursor?: string; hasMore: boolean
-  status: 'available' | 'missing' | 'changed' | 'partial'; warnings: string[]
+  status: 'available' | 'missing' | 'changed' | 'partial' | 'disabled'; warnings: string[]
   content?: { itemId: string; field: 'text' | 'arguments' | 'output'; text: string; offset: number; nextOffset?: number; totalChars: number }
 }
 export type HistoryPreview = {
@@ -23,6 +25,7 @@ export type HistoryPreview = {
   page: HistoryPage
 }
 export type ReferenceBranchInput = {
+  sourceProvider?: HistorySourceProvider
   path?: string; referenceId?: string; cutoffTurnId?: string; workspace?: string
   model?: string; providerId?: string; idempotencyKey: string
 }
@@ -51,5 +54,5 @@ export function historyBlocks(turn: CoreTurnJson): ChatBlock[] {
 }
 
 export function isSourceHistoryTurn(turn: { turnId?: string }): boolean {
-  return turn.turnId?.startsWith('codex:') === true
+  return /^(codex|claude-code):/u.test(turn.turnId ?? '') === true
 }

@@ -58,8 +58,8 @@ export function registerHistoryReferenceRoutes(router: Router, runtime: ServerRu
         if (code.startsWith('EXTENSION_JSON_MANAGER_') || /Kun Service Manager|shared data resource/.test(message)) {
           return ERRORS.unavailable('History reference persistence is temporarily unavailable')
         }
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ERRORS.notFound('Codex history file was not found')
-        if ((error as NodeJS.ErrnoException).code === 'EACCES') return ERRORS.forbidden('Codex history file is not readable')
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ERRORS.notFound('Source history file was not found')
+        if ((error as NodeJS.ErrnoException).code === 'EACCES') return ERRORS.forbidden('Source history file is not readable')
         // Parser failures are user-recoverable input/source issues, never an invitation to mutate the source.
         return ERRORS.validation(message)
       }
@@ -71,6 +71,11 @@ export function registerHistoryReferenceRoutes(router: Router, runtime: ServerRu
   }))
   add('POST', '/v1/history-sources/codex/preview', async (history, request) =>
     history.preview(PreviewSchema.parse(await readBody(request))))
+  add('GET', '/v1/history-sources/claude-code/sessions', async (history, request) => ({
+    sessions: await history.discover(DiscoverySchema.parse(Object.fromEntries(new URL(request.url).searchParams)), 'claude-code')
+  }))
+  add('POST', '/v1/history-sources/claude-code/preview', async (history, request) =>
+    history.preview(PreviewSchema.parse(await readBody(request)), 'claude-code'))
   add('POST', '/v1/threads/reference-branches', async (history, request) =>
     history.createBranch(CreateReferenceBranchSchema.parse(await readBody(request))))
   add('GET', '/v1/history-sources/:id/timeline', async (history, request, context) => {
@@ -81,7 +86,8 @@ export function registerHistoryReferenceRoutes(router: Router, runtime: ServerRu
   add('GET', '/v1/history-sources/:id', async (history, _request, context) => {
     const reference = await history.get(context.params.id)
     if (!reference) throw new HistoryReferenceError('history_reference_not_found', 'History reference not found', 404)
-    return { reference, ...await history.status(context.params.id) }
+    return { reference, ...(history.isEnabled(reference.provider) ? await history.status(context.params.id)
+      : { status: 'disabled', warnings: [] }) }
   })
   add('GET', '/v1/history-sources/:id/attachments/:itemId/:index', async (history, _request, context) =>
     history.attachment(context.params.id, context.params.itemId,

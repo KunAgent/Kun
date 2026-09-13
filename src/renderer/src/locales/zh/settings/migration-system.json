@@ -251,8 +251,10 @@
   "labProjectBoardDescription": "实验性项目看板：在侧边栏按项目聚合任务卡片，管理各项目的计划与任务进度。",
   "labProjectBoardEnabled": "启用项目看板",
   "labProjectBoardEnabledDesc": "开启后侧边栏显示“看板”入口；默认关闭。",
-  "labCodexReferenceBranchesTitle": "Codex 历史分支",
-  "labCodexReferenceBranchesDescription": "从本机 Codex 会话创建引用式分支：Kun 渲染原历史，默认不把历史正文放入上下文，也不复制整份日志。模型按需读取的片段会保存在新对话中。原文件删除后无法恢复未读取的历史。",
+  "labCodexReferenceBranchesTitle": "历史引用分支",
+  "labCodexReferenceBranchesDescription": "从本机 Codex 或 Claude Code 历史创建 Kun 分支。旧历史只读引用，不自动加入模型上下文。",
   "labCodexReferenceBranchesEnabled": "启用 Codex 历史分支",
-  "labCodexReferenceBranchesEnabledDesc": "默认关闭。开启后显示创建入口并允许读取 Codex 日志；关闭后已有分支的新聊天仍可继续。"
+  "labCodexReferenceBranchesEnabledDesc": "默认关闭。开启后显示创建入口并允许读取 Codex 日志；关闭后已有分支的新聊天仍可继续。",
+  "labClaudeCodeReferenceBranchesEnabled": "Claude Code 历史分支",
+  "labClaudeCodeReferenceBranchesEnabledDesc": "发现本机主会话并创建引用分支；默认关闭。"
 }

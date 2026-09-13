@@ -1,3 +1,4 @@
+import { claudeAttachmentDescriptors } from './claude-projection.js'
 import { constants } from 'node:fs'
 import { open, realpath } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, parse, relative, resolve, sep } from 'node:path'
@@ -14,7 +15,7 @@ export async function readHistoryAttachment(
 ): Promise<HistoryAttachment> {
   const source = await readHistorySourceRecord(reference, itemId)
   if (!source) throw new Error('The source attachment record is unavailable.')
-  const attachment = codexAttachmentDescriptors(source.record).find((item) => item.index === attachmentIndex)
+  const attachment = (reference.provider === 'claude-code' ? claudeAttachmentDescriptors : codexAttachmentDescriptors)(source.record).find((item) => item.index === attachmentIndex)
   if (!attachment) throw new Error('The selected source attachment does not exist.')
   let data: Buffer
   if (attachment.dataUrl) data = decodeDataUrl(attachment.dataUrl)

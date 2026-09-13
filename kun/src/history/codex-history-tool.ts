@@ -40,14 +40,14 @@ function parseSourceCursor(reference: HistoryReference, cursor: string | undefin
   const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as SourceCursor
   for (const field of ['endPosition', 'olderTurnEnd', 'contentOffset'] as const) {
     if (value[field] !== undefined && (!Number.isSafeInteger(value[field]) || value[field]! < 0)) {
-      throw new HistorySourceError('partial', 'Invalid Codex source history continuation.')
+      throw new HistorySourceError('partial', 'Invalid Source history continuation.')
     }
   }
   if (value.turnId !== undefined && typeof value.turnId !== 'string') {
-    throw new HistorySourceError('partial', 'Invalid Codex source history turn.')
+    throw new HistorySourceError('partial', 'Invalid Source history turn.')
   }
   if (value.endPosition !== undefined && value.endPosition < position) {
-    throw new HistorySourceError('partial', 'Invalid Codex source history range.')
+    throw new HistorySourceError('partial', 'Invalid Source history range.')
   }
   return { ...value, position }
 }
@@ -135,7 +135,7 @@ export async function readSourceHistory(
   } catch (error) {
     const status = error instanceof HistorySourceError ? error.status
       : (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'partial'
-    return { text: 'Codex source history is unavailable. Continue using the new conversation or relink its original source.',
+    return { text: 'Source history is unavailable. Continue using the new conversation or relink its original source.',
       status, warnings: [error instanceof Error ? error.message : 'Unable to read history.'] }
   }
 }

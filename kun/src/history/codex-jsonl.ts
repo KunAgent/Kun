@@ -90,11 +90,11 @@ export async function validateSourceFile(file: HistorySourceFile): Promise<void>
     for await (const line of readCodexLines(file.path, file.byteLength)) last = line
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new HistorySourceError('missing', 'Codex history source is missing. Relink the original file.')
+      throw new HistorySourceError('missing', 'Source history source is missing. Relink the original file.')
     }
-    throw new HistorySourceError('changed', 'Codex history source cannot be decoded.')
+    throw new HistorySourceError('changed', 'Source history source cannot be decoded.')
   }
   if (!last || last.end !== file.byteLength || last.sha256 !== file.sha256) {
-    throw new HistorySourceError('changed', 'Codex history before the branch point has changed or was truncated.')
+    throw new HistorySourceError('changed', 'Source history before the branch point has changed or was truncated.')
   }
 }

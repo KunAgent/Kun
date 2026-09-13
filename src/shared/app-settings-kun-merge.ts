@@ -490,6 +490,7 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
         timeZone: ''
       }
     },
+    claudeCodeReferenceBranches: { enabled: false },
     codexReferenceBranches: { enabled: false },
     projectBoard: {
       enabled: false
@@ -530,6 +531,7 @@ export function mergeKunLabSettings(
         timeZone: stringOrFallback(legacyScheduled?.timeZone, '').trim()
       }
     },
+    claudeCodeReferenceBranches: { enabled: legacyCurrent?.claudeCodeReferenceBranches?.enabled === true },
     codexReferenceBranches: { enabled: legacyCurrent?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: legacyCurrent?.projectBoard?.enabled ?? defaults.projectBoard.enabled
@@ -576,6 +578,9 @@ export function mergeKunLabSettings(
           base.autoPlanBuild.scheduledDefaults.timeZone
         ).trim()
       }
+    },
+    claudeCodeReferenceBranches: {
+      enabled: patch.claudeCodeReferenceBranches?.enabled ?? base.claudeCodeReferenceBranches.enabled
     },
     codexReferenceBranches: {
       enabled: patch.codexReferenceBranches?.enabled ?? base.codexReferenceBranches.enabled

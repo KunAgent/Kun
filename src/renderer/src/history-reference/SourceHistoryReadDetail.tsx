@@ -13,17 +13,17 @@ export function sourceReadTargets(detail: string): SourceReadTarget[] {
     const parsed = JSON.parse(detail)
     if (typeof parsed?.text === 'string') text = parsed.text
   } catch { /* Plain-text tool responses also carry the record headings. */ }
-  const records = [...text.matchAll(/^\[(codex:[^\s/]+) \/ ([^\s/]+) \/ /gm)]
+  const records = [...text.matchAll(/^\[((?:codex|claude-code):[^\s/]+) \/ ([^\s/]+) \/ /gm)]
     .map((match) => ({ turnId: match[1]!, itemId: match[2]! }))
   return [...new Map(records.map((record) => [`${record.turnId}/${record.itemId}`, record])).values()].slice(0, 20)
 }
 
 export function SourceHistoryReadDetail({ block }: { block: ToolBlock }): ReactElement {
   const { t } = useTranslation('common')
-  const enabled = useCodexReferenceEnabled()
+  const targets = sourceReadTargets(block.detail ?? '')
+  const enabled = useCodexReferenceEnabled(targets[0]?.turnId.startsWith('claude-code:') ? 'claude-code' : 'codex')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const targets = sourceReadTargets(block.detail ?? '')
   async function jump({ turnId, itemId }: SourceReadTarget): Promise<void> {
     const threadId = useChatStore.getState().activeThreadId
     if (!threadId || !enabled || busy) return

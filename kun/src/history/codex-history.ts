@@ -1,3 +1,4 @@
+import { historySourceAdapter } from './history-source-adapter.js'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import type { z } from 'zod'
@@ -6,11 +7,11 @@ import type { TurnItem } from '../contracts/items.js'
 import { TurnSchema, type Turn } from '../contracts/turns.js'
 import {
   HistoryReferenceSchema, type HistoryReference, type HistorySourceStatus,
-  type CodexSessionSummary, type HistoryCutoff
+  type CodexSessionSummary, type HistoryCutoff, type HistorySourceProvider
 } from '../contracts/history-reference.js'
-import { indexCodexFile, type CodexIndex, type IndexedItem, type IndexedTurn } from './codex-index.js'
+import { type CodexIndex, type IndexedItem, type IndexedTurn } from './codex-index.js'
 import { HistorySourceError, readCodexLines, validateSourceFile } from './codex-jsonl.js'
-import { clipped, projectCodexRecord, toTurnItem, type ItemContent } from './codex-projection.js'
+import { clipped, toTurnItem, type ItemContent } from './codex-projection.js'
 import { isCodexPath, summarizeCodexFile, resolveCodexParentPath } from './codex-discovery.js'
 import { getCachedCodexIndex } from './codex-index-cache.js'
 import { historyTargetPage, resolveHistoryTargetRange, type HistoryTarget } from './codex-history-target.js'
@@ -43,12 +44,12 @@ export interface HistoryPage {
 }
 export interface HistoryPointer { turn: IndexedTurn; item: IndexedItem; id: string; turnIndex: number }
 
-export async function inspectCodexSession(path: string): Promise<{
+export async function inspectCodexSession(path: string, provider: HistorySourceProvider = 'codex'): Promise<{
   session: CodexSessionSummary; cutoffs: HistoryCutoff[]; warnings: string[]
 }> {
   assertPath(path)
-  const index = await indexCodexFile(path)
-  const session = await summarizeCodexFile(path)
+  const index = await historySourceAdapter(provider).index(path)
+  const session = provider === 'codex' ? await summarizeCodexFile(path) : { sessionId: index.sessionId, path: index.path, title: index.title, workspace: index.workspace, updatedAt: index.updatedAt, archived: false }
   return {
     session: { ...session, title: index.title, workspace: index.workspace },
     cutoffs: index.turns.filter((turn) => turn.complete).map((turn) => ({
@@ -58,28 +59,35 @@ export async function inspectCodexSession(path: string): Promise<{
 }
 
 function assertPath(path: string): void {
-  if (!isCodexPath(path)) throw new HistorySourceError('partial', 'Select a Codex .jsonl or .jsonl.zst history file.')
+  if (!isCodexPath(path)) throw new HistorySourceError('partial', 'Select a source .jsonl or .jsonl.zst history file.')
 }
 
-export async function createHistoryReference(path: string, cutoffTurnId?: string): Promise<HistoryReference> {
+export async function createHistoryReference(path: string, cutoffTurnId?: string, provider: HistorySourceProvider = 'codex'): Promise<HistoryReference> {
   assertPath(path)
-  const index = await indexCodexFile(path)
+  const index = await historySourceAdapter(provider).index(path)
   const cutoff = cutoffTurnId
     ? index.turns.find((turn) => turn.id === cutoffTurnId && turn.complete)
     : [...index.turns].reverse().find((turn) => turn.complete)
-  if (!cutoff) throw new HistorySourceError('partial', 'No completed Codex turn is available at the selected branch point.')
-  return referenceFromIndex(index, cutoff)
+  if (!cutoff) throw new HistorySourceError('partial', 'No completed source turn is available at the selected branch point.')
+  return referenceFromIndex(index, cutoff, provider)
 }
 
-function referenceFromIndex(index: CodexIndex, cutoff: IndexedTurn): HistoryReference {
+/** Preview can display an unfinished tail without making it a valid branch cutoff. */
+export async function createHistoryPreviewReference(path: string, provider: HistorySourceProvider): Promise<HistoryReference | undefined> {
+  const index = await historySourceAdapter(provider).index(path)
+  const last = index.turns.at(-1)
+  return last ? referenceFromIndex(index, last, provider) : undefined
+}
+
+function referenceFromIndex(index: CodexIndex, cutoff: IndexedTurn, provider: HistorySourceProvider): HistoryReference {
   const primary = cutoff.filePath === index.path ? cutoff.boundary : index.files.find((file) => file.path === index.path)
-  if (!primary) throw new HistorySourceError('partial', 'The Codex source has no complete records.')
+  if (!primary) throw new HistorySourceError('partial', 'The history source has no complete records.')
   const files = [primary, ...index.files.filter((file) => file.path !== index.path)]
-  const identity = JSON.stringify({ sessionId: index.sessionId, cutoff: cutoff.id,
+  const identity = JSON.stringify({ ...(provider === 'codex' ? {} : { provider }), sessionId: index.sessionId, cutoff: cutoff.id,
     files: files.map(({ sessionId, byteLength, sha256 }) => ({ sessionId, byteLength, sha256 })) })
   return HistoryReferenceSchema.parse({
     id: `history_${createHash('sha256').update(identity).digest('hex').slice(0, 32)}`,
-    provider: 'codex', sessionId: index.sessionId, title: index.title,
+    provider, sessionId: index.sessionId, title: index.title,
     workspace: cutoff.workspace, createdAt: new Date().toISOString(), cutoffTurnId: cutoff.id,
     files, parserVersion: 1, warnings: index.warnings
   })
@@ -91,7 +99,7 @@ export async function createHistorySubreference(reference: HistoryReference, cut
   const cutoff = index.turns.find((turn) => turn.id === cutoffTurnId && turn.complete)
   if (!cutoff) throw new HistorySourceError('partial', 'The selected completed turn is outside this branch history.')
   index.files = reference.files
-  return referenceFromIndex(index, cutoff)
+  return referenceFromIndex(index, cutoff, reference.provider)
 }
 
 export async function frozenHistoryIndex(reference: HistoryReference): Promise<CodexIndex> {
@@ -101,20 +109,20 @@ export async function frozenHistoryIndex(reference: HistoryReference): Promise<C
 async function buildFrozenHistoryIndex(reference: HistoryReference): Promise<CodexIndex> {
   const primary = reference.files[0]
   for (const file of reference.files) await validateSourceFile(file)
-  const index = await indexCodexFile(primary.path, {
+  const index = await historySourceAdapter(reference.provider).index(primary.path, {
     byteLimit: primary.byteLength,
     parentLimits: new Map(reference.files.slice(1).map((file) => [resolve(file.path), file.byteLength])),
     parentPaths: new Map(reference.files.slice(1).map((file) => [file.sessionId, resolve(file.path)]))
   })
-  if (index.sessionId !== reference.sessionId) throw new HistorySourceError('changed', 'The Codex source session identity changed.')
+  if (index.sessionId !== reference.sessionId) throw new HistorySourceError('changed', 'The history source session identity changed.')
   for (const file of reference.files) {
     const actual = index.files.find((entry) => resolve(entry.path) === resolve(file.path))
     if (!actual || actual.sha256 !== file.sha256 || actual.byteLength !== file.byteLength) {
-      throw new HistorySourceError('changed', 'Codex history changed while it was being read.')
+      throw new HistorySourceError('changed', 'Source history changed while it was being read.')
     }
   }
   const position = index.turns.findIndex((turn) => turn.id === reference.cutoffTurnId)
-  if (position < 0) throw new HistorySourceError('partial', 'The selected Codex branch point is unavailable.')
+  if (position < 0) throw new HistorySourceError('partial', 'The selected source branch point is unavailable.')
   index.turns = index.turns.slice(0, position + 1)
   index.warnings = [...new Set([...reference.warnings, ...index.warnings])]
   return index
@@ -133,25 +141,30 @@ export async function hydrateHistory(
   const values = new Map<string, ItemContent>()
   const orderedFiles = [...reference.files].sort((a, b) => pointers.findIndex((pointer) => pointer.turn.filePath === a.path) - pointers.findIndex((pointer) => pointer.turn.filePath === b.path))
   for (const file of orderedFiles) {
-    const selected = new Map(pointers.filter((pointer) => resolve(pointer.turn.filePath) === resolve(file.path))
-      .map((pointer) => [pointer.item.offset, pointer]))
+    const selected = new Map<number, HistoryPointer[]>()
+    for (const pointer of pointers.filter((entry) => resolve(entry.turn.filePath) === resolve(file.path))) {
+      selected.set(pointer.item.offset, [...(selected.get(pointer.item.offset) ?? []), pointer])
+    }
     if (!selected.size) continue
     let sha256 = ''
     let byteLength = 0
     for await (const line of readCodexLines(file.path, file.byteLength)) {
       sha256 = line.sha256
       byteLength = line.end
-      const pointer = selected.get(line.offset)
-      if (!pointer) continue
-      const item = projectCodexRecord(line.value, true)[0]
-      if (!item) throw new HistorySourceError('changed', 'A Codex history record changed during reading.')
-      if (item.kind === 'tool_call' && pointer.item.missingResult) item.summary = 'Read-only Codex tool call; result was not recorded.'
-      if (item.kind === 'tool_result' && pointer.item.toolName) item.toolName = pointer.item.toolName
-      const transformed = transform ? transform(item, pointer) : boundContent(item)
-      if (transformed) values.set(pointer.id, transformed)
+      const matches = selected.get(line.offset)
+      if (!matches) continue
+      const projected = historySourceAdapter(reference.provider).project(line.value, true)
+      for (const pointer of matches) {
+        const item = projected[pointer.item.blockIndex ?? 0]
+        if (!item) throw new HistorySourceError('changed', 'A source history record changed during reading.')
+        if (item.kind === 'tool_call' && pointer.item.missingResult) item.summary = 'Read-only source tool call; result was not recorded.'
+        if (item.kind === 'tool_result' && pointer.item.toolName) item.toolName = pointer.item.toolName
+        const transformed = transform ? transform(item, pointer) : boundContent(item)
+        if (transformed) values.set(pointer.id, transformed)
+      }
     }
     if (byteLength !== file.byteLength || sha256 !== file.sha256) {
-      throw new HistorySourceError('changed', 'Codex history changed while it was being read.')
+      throw new HistorySourceError('changed', 'Source history changed while it was being read.')
     }
   }
   return values
@@ -176,7 +189,7 @@ export function parseHistoryCursor(reference: HistoryReference, cursor: string |
     const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { reference?: unknown; position?: unknown }
     if (value.reference !== reference.id || typeof value.position !== 'number' || !Number.isSafeInteger(value.position) || value.position < 0) throw new Error()
     return value.position
-  } catch { throw new HistorySourceError('partial', 'Invalid Codex history cursor for this branch.') }
+  } catch { throw new HistorySourceError('partial', 'Invalid Source history cursor for this branch.') }
 }
 
 export async function readHistoryPage(reference: HistoryReference, options: HistoryPageOptions): Promise<HistoryPage> {
@@ -249,7 +262,7 @@ export async function readHistoryPage(reference: HistoryReference, options: Hist
       itemCount += 1
       let turn = turns.at(-1)
       if (!turn || turn.id !== pointer.turn.id) {
-        turn = TurnSchema.parse({ id: pointer.turn.id, threadId: options.threadId, status: 'completed',
+        turn = TurnSchema.parse({ id: pointer.turn.id, threadId: options.threadId, status: pointer.turn.complete ? 'completed' : 'aborted',
           prompt: pointer.turn.label, createdAt: pointer.turn.createdAt, finishedAt: pointer.turn.createdAt })
         turns.push(turn)
       }
@@ -263,7 +276,7 @@ export async function readHistoryPage(reference: HistoryReference, options: Hist
     const status = error instanceof HistorySourceError ? error.status
       : (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'partial'
     return { turns: [], hasMore: false, itemCount: 0, itemBytes: 0, status,
-      warnings: [error instanceof Error ? error.message : 'Unable to read Codex history.'] }
+      warnings: [error instanceof Error ? error.message : 'Unable to read Source history.'] }
   }
 }
 
@@ -300,6 +313,7 @@ export async function readHistorySourceRecord(reference: HistoryReference, itemI
   let digest = ''
   let bytes = 0
   for await (const line of readCodexLines(file.path, file.byteLength)) {
+    if (reference.provider === 'claude-code' && typeof line.value.cwd === 'string') sourceWorkspace = line.value.cwd
     if (line.value.type === 'session_meta' || line.value.type === 'turn_context') {
       const payload = line.value.payload as { cwd?: unknown } | undefined
       if (typeof payload?.cwd === 'string') sourceWorkspace = payload.cwd
@@ -308,6 +322,6 @@ export async function readHistorySourceRecord(reference: HistoryReference, itemI
     digest = line.sha256
     bytes = line.end
   }
-  if (bytes !== file.byteLength || digest !== file.sha256) throw new HistorySourceError('changed', 'Codex history changed while reading the attachment.')
+  if (bytes !== file.byteLength || digest !== file.sha256) throw new HistorySourceError('changed', 'Source history changed while reading the attachment.')
   return record ? { record, sourcePath: file.path, workspace } : undefined
 }

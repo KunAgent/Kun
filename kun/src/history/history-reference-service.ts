@@ -1,3 +1,5 @@
+import { historySourceAdapter } from './history-source-adapter.js'
+import { HistorySourceProviderSchema, type HistorySourceProvider } from '../contracts/history-reference.js'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
 import { z } from 'zod'
@@ -6,7 +8,7 @@ import type { HistoryReference } from '../contracts/history-reference.js'
 import type { ThreadService } from '../services/thread-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import {
-  createHistoryReference, createHistorySubreference, discoverCodexSessions, inspectCodexSession,
+  createHistoryReference, createHistoryPreviewReference, createHistorySubreference, discoverCodexSessions, inspectCodexSession,
   HistorySourceError,
   readHistoryPage, readSourceHistory, relinkHistoryReference
 } from './codex-history.js'
@@ -15,6 +17,7 @@ import { invalidateCodexIndexCache } from './codex-index-cache.js'
 import { readHistoryAttachment } from './history-reference-attachments.js'
 
 export const CreateReferenceBranchSchema = z.object({
+  sourceProvider: HistorySourceProviderSchema.optional(),
   path: z.string().min(1).optional(),
   referenceId: z.string().min(1).optional(),
   cutoffTurnId: z.string().min(1).optional(),
@@ -32,6 +35,8 @@ export type HistoryReferenceServiceOptions = {
   threadService: ThreadService
   threadStore?: ThreadStore
   enabled: () => boolean
+  enabledFor?: (provider: HistorySourceProvider) => boolean
+  claudeHome?: string
   defaultModel: () => { model: string; providerId?: string; accountId?: string }
   codexHome?: string
 }
@@ -49,11 +54,14 @@ export class HistoryReferenceService {
     this.store = new HistoryReferenceStore(options.dataDir)
   }
 
-  isEnabled(): boolean { return this.options.enabled() }
+  isEnabled(provider?: HistorySourceProvider): boolean {
+    return provider ? this.options.enabledFor?.(provider) ?? (provider === 'codex' && this.options.enabled())
+      : this.options.enabled() || this.options.enabledFor?.('claude-code') === true
+  }
 
-  assertEnabled(): void {
-    if (!this.isEnabled()) throw new HistoryReferenceError('history_reference_disabled',
-      'Enable Codex history branches in Labs to access external history.', 403)
+  assertEnabled(provider?: HistorySourceProvider): void {
+    if (!this.isEnabled(provider)) throw new HistoryReferenceError('history_reference_disabled',
+      'Enable the source history branches in Labs to access external history.', 403)
   }
 
   get(id: string): Promise<HistoryReference | null> { return this.store.get(id) }
@@ -68,26 +76,32 @@ export class HistoryReferenceService {
     return null
   }
 
-  async discover(options: Omit<Parameters<typeof discoverCodexSessions>[0], 'codexHome'> = {}) {
+  async discover(options: Omit<Parameters<typeof discoverCodexSessions>[0], 'codexHome'> = {}, provider: HistorySourceProvider = 'codex') {
     this.assertEnabled()
-    const sessions = await discoverCodexSessions({ ...options, codexHome: this.options.codexHome })
+    this.assertEnabled(provider)
+    const sessions = await historySourceAdapter(provider).discover({ ...options, codexHome: this.options.codexHome, claudeHome: this.options.claudeHome })
+    this.assertEnabled(provider)
     this.assertEnabled()
     return sessions
   }
 
-  async preview(input: { path: string; cursor?: string; limit?: number }) {
+  async preview(input: { path: string; cursor?: string; limit?: number }, provider: HistorySourceProvider = 'codex') {
     this.assertEnabled()
+    this.assertEnabled(provider)
     const path = sourcePath(input.path)
-    const inspected = await inspectCodexSession(path)
-    if (!inspected.cutoffs.length) return { ...inspected, page: {
+    const inspected = await inspectCodexSession(path, provider)
+    this.assertEnabled(provider)
+    const previewReference = provider === 'claude-code' ? await createHistoryPreviewReference(path, provider) : undefined
+    if (!inspected.cutoffs.length && !previewReference) return { ...inspected, page: {
       turns: [], hasMore: false, itemCount: 0, itemBytes: 0,
       status: 'partial' as const, warnings: ['No completed turn is available for branching.']
     } }
-    const reference = await createHistoryReference(path)
+    const reference = previewReference ?? await createHistoryReference(path, undefined, provider)
     const page = await readHistoryPage(reference, {
       threadId: `preview:${reference.sessionId}`, cursor: input.cursor, limit: input.limit
     })
     this.assertEnabled()
+    this.assertEnabled(provider)
     return { ...inspected, page }
   }
 
@@ -96,9 +110,11 @@ export class HistoryReferenceService {
   }> {
     this.assertEnabled()
     const input = CreateReferenceBranchSchema.parse(raw)
+    const sourceProvider = input.referenceId ? (await this.requireReference(input.referenceId)).provider : input.sourceProvider ?? 'codex'
+    this.assertEnabled(sourceProvider)
     const requestHash = historyKey(JSON.stringify(input))
     return this.store.withLifecycleMutation(async () => {
-      this.assertEnabled()
+      this.assertEnabled(sourceProvider)
       let reservation = await this.store.getReservation(input.idempotencyKey)
       if (reservation && reservation.requestHash !== requestHash) {
         throw new HistoryReferenceError('history_request_conflict',
@@ -108,7 +124,7 @@ export class HistoryReferenceService {
         'The branch created by this request was deleted. Start a new branch request.', 409)
       if (!reservation) {
         const reference = await this.resolveBranchReference(input)
-        this.assertEnabled()
+        this.assertEnabled(sourceProvider)
         const existing = await this.store.get(reference.id)
         const defaults = this.options.defaultModel()
         const workspace = input.workspace?.trim() || reference.workspace
@@ -121,7 +137,7 @@ export class HistoryReferenceService {
         reservation = {
           requestHash, referenceId: reference.id, threadId: `thr_${randomUUID()}`,
           request: {
-            title: reference.title || 'Codex history branch', workspace: resolve(workspace),
+            title: reference.title || 'History branch', workspace: resolve(workspace),
             model: input.model ?? defaults.model,
             providerId: input.providerId ?? defaults.providerId,
             accountId: input.accountId ?? defaults.accountId,
@@ -136,7 +152,7 @@ export class HistoryReferenceService {
           'The branch created by this request was deleted. Start a new branch request.', 409)
       }
       const reference = await this.requireReference(reservation.referenceId)
-      this.assertEnabled()
+      this.assertEnabled(sourceProvider)
       if (!thread) thread = await this.options.threadService.create(reservation.request!, {
         id: reservation.threadId, historyRefId: reference.id
       })
@@ -172,7 +188,7 @@ export class HistoryReferenceService {
   async page(id: string, options: Parameters<typeof readHistoryPage>[1]) {
     this.assertEnabled()
     const page = await readHistoryPage(await this.requireReference(id), options)
-    this.assertEnabled()
+    await this.requireReference(id)
     return page
   }
 
@@ -192,14 +208,14 @@ export class HistoryReferenceService {
         'This history reference is not attached to the current thread.', 403)
     }
     const result = await readSourceHistory(await this.requireReference(thread.historyRefId), input)
-    this.assertEnabled()
+    await this.requireReference(thread.historyRefId)
     return result
   }
 
   async attachment(id: string, itemId: string, index: number) {
     this.assertEnabled()
     const attachment = await readHistoryAttachment(await this.requireReference(id), itemId, index)
-    this.assertEnabled()
+    await this.requireReference(id)
     return attachment
   }
 
@@ -208,7 +224,7 @@ export class HistoryReferenceService {
     return this.store.withMutation(async () => {
       const current = await this.requireReference(id)
       const linked = await relinkHistoryReference(current, sourcePath(path))
-      this.assertEnabled()
+      this.assertEnabled(current.provider)
       const saved = await this.store.put({ ...linked, id: current.id })
       invalidateCodexIndexCache(current.id)
       return saved
@@ -218,13 +234,15 @@ export class HistoryReferenceService {
   private async requireReference(id: string): Promise<HistoryReference> {
     const reference = await this.store.get(id)
     if (!reference) throw new HistoryReferenceError('history_reference_not_found',
-      'The Codex history reference was not found.', 404)
+      'The history reference was not found.', 404)
+    this.assertEnabled(reference.provider)
     return reference
   }
 
   private async resolveBranchReference(input: CreateReferenceBranchInput): Promise<HistoryReference> {
-    if (input.path) return createHistoryReference(sourcePath(input.path), input.cutoffTurnId)
+    if (input.path) return createHistoryReference(sourcePath(input.path), input.cutoffTurnId, input.sourceProvider ?? 'codex')
     const reference = await this.requireReference(input.referenceId!)
+    if (input.sourceProvider && input.sourceProvider !== reference.provider) throw new HistoryReferenceError('history_source_mismatch', 'The source provider does not match the reference.')
     if (!input.cutoffTurnId || input.cutoffTurnId === reference.cutoffTurnId) {
       // Old descriptors stored only session_meta.cwd; derive the default from
       // the fixed cutoff again without changing any existing thread workspace.
@@ -247,7 +265,7 @@ export class HistoryReferenceService {
 
 function sourcePath(path: string): string {
   if (!isAbsolute(path) || !/\.jsonl(?:\.zst)?$/iu.test(path)) {
-    throw new HistoryReferenceError('history_path_invalid', 'Select an absolute Codex .jsonl or .jsonl.zst path.')
+    throw new HistoryReferenceError('history_path_invalid', 'Select an absolute source .jsonl or .jsonl.zst path.')
   }
   return resolve(path)
 }

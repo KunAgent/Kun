@@ -15,7 +15,7 @@ let generation = 0
 export async function getCachedCodexIndex(
   reference: HistoryReference, build: () => Promise<CodexIndex>
 ): Promise<CodexIndex> {
-  const key = JSON.stringify([reference.id, reference.parserVersion, reference.cutoffTurnId,
+  const key = JSON.stringify([reference.id, reference.provider, reference.parserVersion, reference.cutoffTurnId,
     reference.files.map((file) => [resolve(file.path), file.byteLength, file.sha256])])
   let signature: string
   try { signature = await sourceSignature(reference) }

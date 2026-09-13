@@ -359,6 +359,7 @@ export const LabConfigSchema = z
     projectBoard: LabProjectBoardConfigSchema.default({
       enabled: false
     }),
+    claudeCodeReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     codexReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({
       enabled: false
     })

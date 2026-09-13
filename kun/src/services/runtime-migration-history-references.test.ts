@@ -47,6 +47,14 @@ async function harness() {
 }
 
 describe('reference-aware runtime migration', () => {
+  it('preserves Claude Code descriptors when migrating without the original file', async () => {
+    const h = await harness()
+    const descriptor = { ...reference(), provider: 'claude-code' as const }
+    const preflight = await h.service.preflight(control(), records([threadRecord(), { ...refRecord(), value: descriptor }]))
+    await h.service.commit(preflight.importId)
+    expect(await h.historyReferences.get(descriptor.id)).toMatchObject({ provider: 'claude-code', files: descriptor.files })
+  })
+
   it('keeps introduced descriptors when a store cannot authoritatively prove non-use on rollback', async () => {
     const h = await harness()
     const preflight = await h.service.preflight(control(), records([threadRecord(), refRecord()]))

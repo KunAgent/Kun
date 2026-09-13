@@ -14,7 +14,7 @@ import { ContextCompactor } from '../../src/loop/context-compactor.js'
 import { HistoryReferenceService } from '../../src/history/history-reference-service.js'
 
 export const SOURCE_TEXT = 'SOURCE_ONLY_e8e27a677_previous_investigation'
-export async function historyReferenceFixture() {
+export async function historyReferenceFixture(provider: 'codex' | 'claude-code' = 'codex') {
   const root = await mkdtemp(join(tmpdir(), 'kun-ref-integration-'))
   const path = join(root, 'rollout-fixture.jsonl')
   const nowIso = () => '2026-09-13T00:00:00.000Z'
@@ -25,6 +25,15 @@ export async function historyReferenceFixture() {
     { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: `${SOURCE_TEXT} ${i}` }] } },
     { type: 'event_msg', payload: { type: 'task_complete', turn_id: `old-${i}` } }
   )
+  if (provider === 'claude-code') {
+    records.length = 0
+    for (let i = 1; i <= 2; i += 1) records.push(
+      { type: 'user', uuid: `old-${i}`, parentUuid: i === 1 ? null : `answer-${i - 1}`, sessionId: 'source-test', cwd: root,
+        message: { content: [{ type: 'text', text: `Task ${i}` }] } },
+      { type: 'assistant', uuid: `answer-${i}`, parentUuid: `old-${i}`, sessionId: 'source-test', cwd: root,
+        message: { content: [{ type: 'text', text: `${SOURCE_TEXT} ${i}` }], stop_reason: 'end_turn' } }
+    )
+  }
   await writeFile(path, records.map((record) => JSON.stringify({ timestamp: nowIso(), ...record as object })).join('\n') + '\n')
   const threadStore = new InMemoryThreadStore()
   const sessionStore = new InMemorySessionStore()
@@ -39,8 +48,8 @@ export async function historyReferenceFixture() {
   const turnService = new TurnService({ threadStore, sessionStore, events, inflight, steering, compactor, ids, nowIso })
   let enabled = true
   const historyReferences = new HistoryReferenceService({ dataDir: join(root, 'data'), threadService,
-    enabled: () => enabled, defaultModel: () => ({ model: 'test' }) })
-  const { thread, reference } = await historyReferences.createBranch({ path, idempotencyKey: 'first' })
+    enabled: () => enabled, enabledFor: () => enabled, defaultModel: () => ({ model: 'test' }) })
+  const { thread, reference } = await historyReferences.createBranch({ path, sourceProvider: provider, idempotencyKey: 'first' })
   return { root, path, thread, reference, threadStore, sessionStore, eventBus, ids, events,
     threadService, turnService, inflight, steering, compactor, nowIso, historyReferences,
     disable: () => { enabled = false } }

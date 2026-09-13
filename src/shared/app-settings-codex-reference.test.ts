@@ -3,6 +3,15 @@ import { defaultKunLabSettings, mergeKunLabSettings } from './app-settings-kun-m
 import { kunLabPatchSchema } from '../main/ipc/app-ipc-schemas/settings-lab'
 
 describe('Codex reference branch laboratory settings', () => {
+  it('keeps the two source settings independent and Claude Code off by default', () => {
+    expect(defaultKunLabSettings().claudeCodeReferenceBranches.enabled).toBe(false)
+    const enabled = mergeKunLabSettings(undefined, { claudeCodeReferenceBranches: { enabled: true } })
+    expect(enabled.codexReferenceBranches.enabled).toBe(false)
+    expect(enabled.claudeCodeReferenceBranches.enabled).toBe(true)
+    expect(mergeKunLabSettings(enabled, { codexReferenceBranches: { enabled: false } }).claudeCodeReferenceBranches.enabled).toBe(true)
+    expect(kunLabPatchSchema.safeParse({ claudeCodeReferenceBranches: { enabled: true } }).success).toBe(true)
+    expect(kunLabPatchSchema.safeParse({ claudeCodeReferenceBranches: { enabled: 'yes' } }).success).toBe(false)
+  })
   it('defaults off for new and legacy settings', () => {
     expect(defaultKunLabSettings().codexReferenceBranches.enabled).toBe(false)
     expect(mergeKunLabSettings(undefined, undefined).codexReferenceBranches.enabled).toBe(false)

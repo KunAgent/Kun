@@ -444,7 +444,7 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
     }
     // A paged source result is final even if a later page only brings the
     // matching call. Loading that call must not replace output with arguments.
-    const resultOwnsContent = existing.turnId?.startsWith('codex:') &&
+    const resultOwnsContent = /^(codex|claude-code):/u.test(existing.turnId ?? '') &&
       existing.meta?.sourceItemKind === 'tool_result' && block.meta?.sourceItemKind !== 'tool_result'
     const first = resultOwnsContent ? block : existing
     const last = resultOwnsContent ? existing : block

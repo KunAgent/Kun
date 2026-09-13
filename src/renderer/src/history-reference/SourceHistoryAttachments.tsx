@@ -9,7 +9,7 @@ type Preview = { name: string; mimeType: string; url: string; text?: string }
 
 export function SourceHistoryAttachments({ blocks, referenceId }: { blocks: ChatBlock[]; referenceId?: string }): ReactElement | null {
   const { t } = useTranslation('common')
-  const enabled = useCodexReferenceEnabled()
+  const enabled = useCodexReferenceEnabled(blocks.some((block) => block.turnId?.startsWith('claude-code:')) ? 'claude-code' : 'codex')
   const [preview, setPreview] = useState<Preview | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

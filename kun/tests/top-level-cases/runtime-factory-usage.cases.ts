@@ -292,7 +292,7 @@ describe('runtime factory usage carryover', () => {
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
       lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
-        codexReferenceBranches: { enabled: false } },
+        claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -361,7 +361,7 @@ describe('runtime factory usage carryover', () => {
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
       lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
-        codexReferenceBranches: { enabled: false } },
+        claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
       })
@@ -400,13 +400,13 @@ describe('runtime factory usage carryover', () => {
 
       expect(await runtime.applyConfig({
         lab: { pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
-        codexReferenceBranches: { enabled: false } }
+        claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(false)
 
       expect(await runtime.applyConfig({
         lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
-        codexReferenceBranches: { enabled: false } }
+        claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(true)
     } finally {

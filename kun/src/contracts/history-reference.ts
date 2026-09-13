@@ -1,5 +1,8 @@
 import { z } from 'zod'
 
+export const HistorySourceProviderSchema = z.enum(['codex', 'claude-code'])
+export type HistorySourceProvider = z.infer<typeof HistorySourceProviderSchema>
+
 export const HistorySourceStatusSchema = z.enum(['available', 'missing', 'changed', 'partial'])
 export type HistorySourceStatus = z.infer<typeof HistorySourceStatusSchema>
 
@@ -16,7 +19,7 @@ export type HistorySourceFile = z.infer<typeof HistorySourceFileSchema>
 /** Contains identity and positions only, never historical message bodies. */
 export const HistoryReferenceSchema = z.object({
   id: z.string().min(1),
-  provider: z.literal('codex'),
+  provider: HistorySourceProviderSchema,
   sessionId: z.string().min(1),
   title: z.string(),
   workspace: z.string(),

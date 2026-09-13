@@ -67,6 +67,34 @@ async function allJson(root: string): Promise<string> {
 }
 
 describe('reference branches', () => {
+  it('creates and recovers Claude branches without persisting transcript bodies, with independent gates', async () => {
+    const h = await harness()
+    const codexPath = h.path
+    const path = join(h.root, 'claude.jsonl')
+    await writeFile(path, [
+      { type: 'user', uuid: 'u', parentUuid: null, sessionId: 'claude', cwd: h.root, message: { content: 'Question' } },
+      { type: 'assistant', uuid: 'a', parentUuid: 'u', sessionId: 'claude', cwd: h.root,
+        message: { content: sourceSecret, stop_reason: 'end_turn' } }
+    ].map((r) => JSON.stringify(r)).join('\n') + '\n')
+    let claudeEnabled = true
+    const service = new HistoryReferenceService({ ...h.options, enabledFor: (provider) => provider === 'claude-code' && claudeEnabled })
+    const input = { path, sourceProvider: 'claude-code' as const, idempotencyKey: 'claude' }
+    const created = await service.createBranch(input)
+    expect(created.thread.turns).toEqual([])
+    expect(await h.sessionStore.loadItems(created.thread.id)).toEqual([])
+    expect(await allJson(join(h.root, 'data'))).not.toContain(sourceSecret)
+    expect((await service.createBranch(input)).thread.id).toBe(created.thread.id)
+    expect(await service.readForThread(created.thread.id, { operation: 'recent' })).toMatchObject({ status: 'available' })
+    await h.threadStore.delete(created.thread.id)
+    const recovered = await h.threadService.resumeSession(created.thread.id)
+    expect(recovered.thread.historyRefId).toBe(created.reference.id)
+    await expect(service.createBranch({ path: codexPath, idempotencyKey: 'disabled-codex' })).rejects.toMatchObject({ code: 'history_reference_disabled' })
+    claudeEnabled = false
+    await expect(service.page(created.reference.id, { threadId: recovered.thread.id })).rejects.toMatchObject({ code: 'history_reference_disabled' })
+    await expect(service.readForThread(recovered.thread.id, { operation: 'recent' })).rejects.toMatchObject({ code: 'history_reference_disabled' })
+    expect(await h.threadService.getMetadata(recovered.thread.id)).not.toBeNull()
+  })
+
   it('recovers legacy original branches from trusted reservations without parsing message text', async () => {
     const h = await harness()
     const created = await h.service.createBranch({ path: h.path, idempotencyKey: 'legacy-recover' })

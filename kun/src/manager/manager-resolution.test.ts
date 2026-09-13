@@ -46,7 +46,7 @@ describe('Service Manager resolution', () => {
     expect(new Headers(statusCall?.[1]?.headers).get('authorization')).toBe('Bearer manager-token')
   })
 
-  it.each(['item-turn-page-v1', 'room-store-v4', 'history-reference-recovery-v1'])('requires %s before accepting manager features', async (missing) => {
+  it.each(['item-turn-page-v1', 'room-store-v4', 'history-reference-recovery-v1', 'history-reference-sources-v1'])('requires %s before accepting manager features', async (missing) => {
     const fixture = await managerFixture(KUN_MANAGER_CAPABILITIES.filter((value) => value !== missing))
     const fetchImpl = managerFetch(fixture)
     await expect(resolveServiceManager(fixture.controlDir, fetchImpl)).resolves.toBeNull()

@@ -1,8 +1,8 @@
 {
-  "codexHistoryCreate": "从 Codex 创建分支",
+  "codexHistoryCreate": "从历史创建分支",
   "codexHistoryReferenceHint": "历史仅引用原文件，浏览不会加入模型上下文。续聊时模型可按需读取；读取片段会保存在新对话中。",
-  "codexHistoryDisabled": "Codex 历史引用已在实验室中关闭。新对话仍可继续；启用后可读取原历史。",
-  "codexHistorySearch": "搜索 Codex 会话",
+  "codexHistoryDisabled": "此来源的历史引用已在实验室中关闭。新对话仍可继续。",
+  "codexHistorySearch": "搜索会话",
   "codexHistoryCurrentProject": "当前项目",
   "codexHistoryArchived": "包含归档",
   "codexHistoryAfter": "起始日期",
@@ -18,7 +18,7 @@
   "codexHistorySelected": "已选择 {{count}} 个会话",
   "codexHistoryOpen": "打开分支",
   "codexHistoryMore": "显示更早的历史",
-  "codexHistorySource": "Codex 历史文件引用",
+  "codexHistorySource": "历史文件引用",
   "codexHistoryReadOnly": "只读历史",
   "codexHistoryVirtualFile": "历史文件引用",
   "codexHistoryRelink": "重新关联源文件",
@@ -27,7 +27,7 @@
   "codexHistoryStatus_missing": "源文件已移动或删除。已保存的新对话及读取片段仍可使用；可重新关联原文件。",
   "codexHistoryStatus_changed": "源文件内容已变化，无法验证固定分支点。请重新关联匹配的原文件。",
   "codexHistoryStatus_partial": "部分历史或附件无法读取。可用的历史仍然展示。",
-  "codexHistoryReadTool": "读取 Codex 历史",
+  "codexHistoryReadTool": "读取来源历史",
   "codexHistoryEarlierRecords": "加载本回合更早记录",
   "codexHistoryLaterRecords": "加载本回合更晚记录",
   "codexHistoryReadTurn": "查看历史片段 {{index}}",
@@ -50,5 +50,6 @@
   "codexHistoryRecord_assistant_text": "助手回答",
   "codexHistoryRecord_assistant_reasoning": "思考摘要",
   "codexHistoryRecord_tool_call": "工具参数",
-  "codexHistoryRecord_tool_result": "工具结果"
+  "codexHistoryRecord_tool_result": "工具结果",
+  "historySourceLabel": "历史来源"
 }

@@ -1,8 +1,8 @@
 {
-  "codexHistoryCreate": "Branch from Codex",
+  "codexHistoryCreate": "Branch from history",
   "codexHistoryReferenceHint": "History references the original files and is not added to model context when browsed. The model can read excerpts when needed; those excerpts are saved in the new conversation.",
-  "codexHistoryDisabled": "Codex history references are disabled in Laboratory. New conversations remain usable; enable this feature to read source history.",
-  "codexHistorySearch": "Search Codex sessions",
+  "codexHistoryDisabled": "History references for this source are disabled in Labs. New conversation can continue.",
+  "codexHistorySearch": "Search sessions",
   "codexHistoryCurrentProject": "Current project",
   "codexHistoryArchived": "Include archived",
   "codexHistoryAfter": "Start date",
@@ -18,7 +18,7 @@
   "codexHistorySelected": "{{count}} sessions selected",
   "codexHistoryOpen": "Open branch",
   "codexHistoryMore": "Show earlier history",
-  "codexHistorySource": "Codex history file reference",
+  "codexHistorySource": "History file reference",
   "codexHistoryReadOnly": "Read-only history",
   "codexHistoryVirtualFile": "History file reference",
   "codexHistoryRelink": "Relink source file",
@@ -27,7 +27,7 @@
   "codexHistoryStatus_missing": "The source file was moved or deleted. Saved new messages and excerpts remain available. Relink the original file to restore history.",
   "codexHistoryStatus_changed": "The source changed and the fixed branch point cannot be verified. Relink a matching original file.",
   "codexHistoryStatus_partial": "Some history or attachments are unavailable. Available history is still shown.",
-  "codexHistoryReadTool": "Read Codex history",
+  "codexHistoryReadTool": "Read source history",
   "codexHistoryEarlierRecords": "Earlier records in this turn",
   "codexHistoryLaterRecords": "Later records in this turn",
   "codexHistoryReadTurn": "View history excerpt {{index}}",
@@ -50,5 +50,6 @@
   "codexHistoryRecord_assistant_text": "Assistant response",
   "codexHistoryRecord_assistant_reasoning": "Reasoning summary",
   "codexHistoryRecord_tool_call": "Tool arguments",
-  "codexHistoryRecord_tool_result": "Tool result"
+  "codexHistoryRecord_tool_result": "Tool result",
+  "historySourceLabel": "History source"
 }

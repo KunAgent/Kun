@@ -111,6 +111,7 @@ export function buildServiceManagerRouter(input: {
         capability !== 'atomic-json-v1' &&
         capability !== 'history-reference-cleanup-v1' &&
         capability !== 'history-reference-recovery-v1' &&
+        capability !== 'history-reference-sources-v1' &&
         !capability.startsWith('room-store-') &&
         capability !== 'item-turn-page-v1' && capability !== 'item-call-page-v1'
       )

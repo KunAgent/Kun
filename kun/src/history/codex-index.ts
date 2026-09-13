@@ -6,6 +6,7 @@ import { projectCodexRecord } from './codex-projection.js'
 import { isCodexUserTurnBoundary } from './codex-turn-boundary.js'
 
 export interface IndexedItem {
+  blockIndex?: number
   offset: number
   ordinal: number
   kind: string

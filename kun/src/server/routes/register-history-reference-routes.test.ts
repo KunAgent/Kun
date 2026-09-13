@@ -7,6 +7,7 @@ import { registerHistoryReferenceRoutes } from './register-history-reference-rou
 
 function harness(enabled = true) {
   const history = {
+    isEnabled: vi.fn(() => enabled),
     assertEnabled: vi.fn(() => {
       if (!enabled) throw new HistoryReferenceError('history_reference_disabled', 'Enable the experiment', 403)
     }),
@@ -32,6 +33,15 @@ function harness(enabled = true) {
 }
 
 describe('history reference routes', () => {
+  it('dispatches Claude discovery and preview with an explicit source provider', async () => {
+    const { history, request } = harness()
+    expect((await request('GET', '/v1/history-sources/claude-code/sessions?limit=10')).status).toBe(200)
+    expect(history.discover).toHaveBeenCalledWith({ limit: 10, includeArchived: false }, 'claude-code')
+    expect((await request('POST', '/v1/history-sources/claude-code/preview', { path: '/claude/session.jsonl' })).status).toBe(200)
+    expect(history.preview).toHaveBeenCalledWith({ path: '/claude/session.jsonl' }, 'claude-code')
+    expect((await request('GET', '/v1/history-sources/ref-1')).status).toBe(200)
+  })
+
   it('requires authorization and rejects disabled source operations before any scan', async () => {
     const { history, request } = harness(false)
     expect((await request('GET', '/v1/history-sources/codex/sessions', undefined, false)).status).toBe(401)

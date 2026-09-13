@@ -20,10 +20,11 @@ let refreshController: AbortController | undefined
 /** Refresh only the history projection: never reselect, reset live state or SSE. */
 export async function applyCodexReferenceSettings(settings: AppSettingsV1): Promise<void> {
   const enabled = codexReferenceEnabled(settings)
+  const claudeEnabled = getKunRuntimeSettings(settings).lab.claudeCodeReferenceBranches?.enabled === true
   const previous = useCodexReferenceState.getState()
-  if (previous.enabled === enabled) return
+  if (previous.enabled === enabled && previous.claudeEnabled === claudeEnabled) return
   const revision = previous.revision + 1
-  useCodexReferenceState.setState({ enabled, revision })
+  useCodexReferenceState.setState({ enabled, claudeEnabled, revision })
   refreshController?.abort()
   clearThreadSnapshotCache()
   const target = useThreadTurnTarget.getState().target
@@ -57,7 +58,7 @@ export async function applyCodexReferenceSettings(settings: AppSettingsV1): Prom
     if (!current()) return
     useChatStore.setState((latest) => ({
       blocks: [
-        ...(enabled ? detail.blocks.filter(isSourceHistoryTurn) : []),
+        ...((enabled || claudeEnabled) ? detail.blocks.filter(isSourceHistoryTurn) : []),
         ...latest.blocks.filter((block) => !isSourceHistoryTurn(block))
       ],
       threadHistoryCursor: detail.historyCursor ?? null,
