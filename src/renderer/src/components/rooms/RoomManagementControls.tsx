@@ -39,12 +39,10 @@ export function RoomAppearanceMenu() {
   const preferences = useRoomPresentationPreferences()
   return <RoomPopover label={t('roomsAppearance')} trigger={<SlidersHorizontal size={16} />} align="end" className="rooms-icon-button" width={256}>
     {() => <div className="rooms-appearance-menu">
-      <label>{t('roomsMessageLayout')}<select value={preferences.layout} onChange={(event) => preferences.setPreference({ layout: event.target.value as 'thread' | 'bubble' })}>
-        <option value="thread">{t('roomsLayoutThread')}</option><option value="bubble">{t('roomsLayoutBubble')}</option>
-      </select></label>
       <label className="rooms-appearance-check"><input type="checkbox" checked={preferences.autoLinkPreviews}
         onChange={(event) => preferences.setPreference({ autoLinkPreviews: event.target.checked })} />{t('roomsAutomaticLinkPreviews')}</label>
-      <button type="button" onClick={() => preferences.setPreference({ listWidth: 320, detailWidth: 400 })}>{t('roomsResetWidths')}</button>
+      <button type="button" onClick={() => window.dispatchEvent(new Event('kun-room-user-avatar'))}>{t('roomsMyAvatar')}</button>
+      <button type="button" onClick={() => preferences.setPreference({ listWidth: 300, detailWidth: 400 })}>{t('roomsResetWidths')}</button>
     </div>}
   </RoomPopover>
 }

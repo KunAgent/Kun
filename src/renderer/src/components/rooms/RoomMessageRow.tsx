@@ -86,7 +86,7 @@ export function RoomMessageRow({
         <div className="rooms-message-meta">
           <strong>{message.authorLabelSnapshot}</strong>
           {member && !system ? (
-            <span className="rooms-message-role">{t(roles[member.role])}</span>
+            <span className="rooms-message-role">{member.agentTitle || t(roles[member.role])}</span>
           ) : null}
           <time
             dateTime={message.createdAt}
