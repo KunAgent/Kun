@@ -60,7 +60,7 @@ export async function freezeAgentRoom(directory: AgentIdentityService, room: Roo
     const roots = agent.allowedRepositoryRoots
     const repositories = member.allowedRepositoryIds.filter((id) => !roots ||
       room.repositories.some((repo) => repo.id === id && roots.includes(repo.canonicalRoot)))
-    members.push(RoomMemberSchema.parse({ ...member, displayName: agent.name, avatar: agent.avatar,
+    members.push(RoomMemberSchema.parse({ ...member, displayName: agent.name, avatar: agent.avatar, agentTitle: agent.title,
       enabled: member.enabled && !agent.archivedAt, agentRevision: agent.revision,
       presetId: agent.presetId, presetSnapshot: profile, agentInstructions: agent.instructions,
       configuredReviewerAgentId: agent.reviewerAgentId,

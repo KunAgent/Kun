@@ -92,7 +92,7 @@ describe('peer topic API and Runtime admission', () => {
     const otherPage = await f.runtime.peerTopics(other.id, 50)
     expect(firstPage.topics.map((topic) => topic.rootRequestId)).toEqual([f.sent.requestId])
     expect(JSON.stringify(firstPage)).not.toContain('Other secret discussion')
-    expect(firstPage.topics[0]).toMatchObject({ pendingCount: 3, responseCount: 0, triageCount: 0 })
+    expect(firstPage.topics[0]).toMatchObject({ pendingCount: f.room.members.length, responseCount: 0, triageCount: 0 })
     expect(otherPage.topics.map((topic) => topic.rootRequestId)).toEqual([sent.requestId])
     await expect(f.runtime.stopPeerTopic(other.id, f.sent.requestId, {
       clientRequestId: 'wrong-room-stop', expectedRevision: firstPage.topics[0].revision
@@ -128,7 +128,7 @@ describe('peer topic API and Runtime admission', () => {
     await putRoomDocument(f.store, 'task', task.id, f.room.id, execution, null, task.id)
     await deliverRoomPeerTaskProgress(f.deps, f.peer)
     const firstCount = (await f.store.list('peer_inbox', { rootRequestId: f.sent.requestId, limit: 100 })).length
-    expect(firstCount).toBe(6)
+    expect(firstCount).toBe(f.room.members.length * 2)
     await deliverRoomPeerTaskProgress(f.deps, f.peer)
     expect(await f.store.list('peer_inbox', { rootRequestId: f.sent.requestId, limit: 100 })).toHaveLength(firstCount)
     const previous = (await f.store.get<RoomTaskExecution>('task', task.id))!
@@ -140,7 +140,7 @@ describe('peer topic API and Runtime admission', () => {
     await putRoomDocument(f.store, 'task', task.id, f.room.id,
       { ...changed.value, task: { ...changed.value.task, status: 'awaiting_acceptance', latestDeliveryId: 'delivery', revision: 2 } }, changed, task.id)
     await deliverRoomPeerTaskProgress(f.deps, f.peer)
-    expect(await f.store.list('peer_inbox', { rootRequestId: f.sent.requestId, limit: 100 })).toHaveLength(firstCount + 3)
+    expect(await f.store.list('peer_inbox', { rootRequestId: f.sent.requestId, limit: 100 })).toHaveLength(firstCount + f.room.members.length)
   })
 
   it('validates and persists the public per-room execution concurrency setting', async () => {

@@ -52,10 +52,10 @@ export class AgentIdentityService {
       if (rows.length < 50) break
       afterSeq = rows.at(-1)!.seq
     }
-    if (!found) await this.defaultMembers([])
+    const fresh = !found && !(await this.store.list('agent_identity', { includeArchived: true, limit: 1 })).length
     await this.store.commit({ requestId: 'agent-bootstrap:identities-v1',
       checks: [{ kind: 'agent_bootstrap', id: 'identities-v1', expectedRevision: null }],
-      puts: [{ kind: 'agent_bootstrap', id: 'identities-v1', value: { completedAt: new Date().toISOString() } }] })
+      puts: [{ kind: 'agent_bootstrap', id: 'identities-v1', value: { completedAt: new Date().toISOString(), fresh } }] })
   }
   async get(id: string): Promise<AgentIdentity> {
     const row = await this.store.get<AgentIdentity>('agent_identity', id)
@@ -141,24 +141,25 @@ export class AgentIdentityService {
     }
   }
   asMember(agent: AgentIdentity, repositoryIds: string[] = []): RoomMember {
-    return RoomMemberSchema.parse({ id: agent.id, participantAgentId: agent.id, displayName: agent.name,
+    return RoomMemberSchema.parse({ id: agent.id, participantAgentId: agent.id, displayName: agent.name, agentTitle: agent.title,
       presetId: agent.presetId, role: agent.defaultRole, avatar: agent.avatar, revision: 0,
       allowedRepositoryIds: repositoryIds, ...(repositoryIds.length === 1 ? { defaultRepositoryId: repositoryIds[0] } : {}) })
   }
   async defaultMembers(repositoryIds: string[]): Promise<RoomMember[]> {
     const members: RoomMember[] = []
     for (const template of DEFAULT_AGENT_TEMPLATES) {
-      const id = 'agent-default-' + template.defaultRole
+      const id = 'agent-default-' + template.templateId
       let row = await this.store.get<AgentIdentity>('agent_identity', id)
       if (!row) {
         const now = new Date().toISOString()
-        const agent = AgentIdentitySchema.parse({ ...template, schemaVersion: 1, id, revision: 0, createdAt: now, updatedAt: now })
+        const { examples: _examples, ...fields } = template
+        const agent = AgentIdentitySchema.parse({ ...fields, schemaVersion: 1, id, revision: 0, createdAt: now, updatedAt: now })
         await this.store.commit({ requestId: 'agent-default:' + id,
           checks: [{ kind: 'agent_identity', id, expectedRevision: null }],
           puts: [{ kind: 'agent_identity', id, value: agent }] })
         row = await this.store.get<AgentIdentity>('agent_identity', id)
       }
-      if (!row!.value.archivedAt) members.push({ ...this.asMember(row!.value, repositoryIds), id: template.defaultRole! })
+      if (!row!.value.archivedAt) members.push({ ...this.asMember(row!.value, repositoryIds), id: template.templateId })
     }
     if (!members.length) throw new RoomStoreConflictError('choose an active agent for the room')
     return members
@@ -167,7 +168,7 @@ export class AgentIdentityService {
     const members = await Promise.all(room.members.map(async (member) => {
       if (!member.participantAgentId) return member
       const row = await this.store.get<AgentIdentity>('agent_identity', member.participantAgentId)
-      return row ? { ...member, displayName: row.value.name, avatar: row.value.avatar } : member
+      return row ? { ...member, displayName: row.value.name, avatar: row.value.avatar, agentTitle: row.value.title } : member
     }))
     return { ...room, members,
       ...(room.conversationKind === 'user_agent' ? { name: members[0].displayName } : {}) }

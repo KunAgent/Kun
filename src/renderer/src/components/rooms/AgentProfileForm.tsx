@@ -13,8 +13,9 @@ export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }
   const { t } = useTranslation('common')
   const [agent] = useState(initialAgent)
   const catalog = useAgentResource<RoomPresetCatalog>('/v1/rooms/presets', active)
-  const templates = useAgentResource<{ templates: Array<Pick<AgentIdentity, 'name' | 'title' | 'instructions' | 'defaultRole' | 'presetId' | 'avatar'>> }>('/v1/agents/templates', active)
+  const templates = useAgentResource<{ templates: Array<Pick<AgentIdentity, 'name' | 'title' | 'instructions' | 'defaultRole' | 'presetId' | 'avatar' | 'templateId' | 'templateVersion'>> }>('/v1/agents/templates', active)
   const groups = useChatStore((state) => state.composerModelGroups)
+  const [templateRef, setTemplateRef] = useState({ templateId: agent?.templateId, templateVersion: agent?.templateVersion })
   const [name, setName] = useState(agent?.name ?? ''), [title, setTitle] = useState(agent?.title ?? '')
   const [instructions, setInstructions] = useState(agent?.instructions ?? '')
   const [role, setRole] = useState(agent?.defaultRole ?? 'developer'), [presetId, setPreset] = useState(agent?.presetId ?? 'general')
@@ -32,7 +33,7 @@ export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }
   const preview = agentMember({ ...(agent ?? {}), id: agent?.id ?? 'new-agent', name, avatar, defaultRole: role, presetId } as AgentIdentity)
   const save = async () => {
     if (busy) return
-    const fields = { name, title, instructions, defaultRole: role, presetId, avatar: avatar ?? null, modelRef: modelRef ?? null,
+    const fields = { ...templateRef, name, title, instructions, defaultRole: role, presetId, avatar: avatar ?? null, modelRef: modelRef ?? null,
       allowedRepositoryRoots: lines(roots).length ? lines(roots) : null, reviewerAgentId: reviewerId ?? null, memory,
       capabilityOverrides: { blockedTools: lines(tools), allowedTools: lines(allowedTools).length ? lines(allowedTools) : undefined,
         blockedMcpServers: lines(mcp), blockedSkills: lines(skills), skillsEnabled } }
@@ -49,12 +50,13 @@ export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }
   }
   return <form className="agent-profile-form" onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void save() }}>
     {!agent ? <label>{t('agentsTemplate')}<select defaultValue="" aria-label={t('agentsTemplate')} onChange={(event) => {
-      const template = templates.data?.templates.find((value) => value.defaultRole === event.target.value)
-      if (!template) return
+      const template = templates.data?.templates.find((value) => value.templateId === event.target.value)
+      if (!template) { setTemplateRef({ templateId: undefined, templateVersion: undefined }); return }
+      setTemplateRef({ templateId: template.templateId, templateVersion: template.templateVersion })
       if (!name) setName(template.name)
       setTitle(template.title); setInstructions(template.instructions); setRole(template.defaultRole); setPreset(template.presetId); setAvatar(template.avatar)
     }}><option value="">{t('agentsCustomTemplate')}</option>{templates.data?.templates.map((template) =>
-      <option key={template.defaultRole} value={template.defaultRole}>{template.name}</option>)}</select></label> : null}
+      <option key={template.templateId} value={template.templateId}>{template.name}</option>)}</select></label> : null}
     <RoomAvatarPicker member={preview} onChange={setAvatar} />
     <label>{t('agentsName')}<input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} /></label>
     <label>{t('agentsTitle')}<input maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} /></label>

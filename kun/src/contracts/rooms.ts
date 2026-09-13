@@ -23,6 +23,7 @@ export const RoomMemberSchema = z.object({
   role: z.enum(['coordinator', 'developer', 'reviewer', 'diagnostician']),
   roleNotes: z.string().max(8000).default(''),
   avatar: RoomAvatarReferenceSchema.optional(),
+  agentTitle: z.string().max(160).optional(),
   enabled: z.boolean().default(true),
   removedAt: Timestamp.optional(),
   defaultRepositoryId: RoomIdSchema.optional(),

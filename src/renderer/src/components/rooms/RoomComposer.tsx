@@ -180,11 +180,19 @@ function RoomComposerEditor({
       }))
       editorRef.current?.focus()
     }
+    const example = (event: Event) => {
+      const detail = (event as CustomEvent<{ roomId: string; body: string }>).detail
+      if (detail.roomId !== room.id) return
+      setDraft((current) => current.body.trim() ? current : { ...current, body: detail.body, intent: 'discussion' })
+      editorRef.current?.focus()
+    }
     if (draftId) return
+    window.addEventListener('kun-room-example', example)
     window.addEventListener?.('kun-room-continue-topic', continueTopic)
     window.addEventListener?.('kun-room-reply', reply)
     window.addEventListener?.('kun-room-task-reply', taskReply)
     return () => {
+      window.removeEventListener('kun-room-example', example)
       window.removeEventListener?.('kun-room-continue-topic', continueTopic)
       window.removeEventListener?.('kun-room-reply', reply)
       window.removeEventListener?.('kun-room-task-reply', taskReply)

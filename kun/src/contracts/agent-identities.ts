@@ -19,6 +19,8 @@ export const AgentMemorySettings = z.object({
   readEnabled: z.boolean().default(true), captureEnabled: z.boolean().default(true)
 }).strict()
 const fields = {
+  templateId: z.string().min(1).max(80).optional(),
+  templateVersion: z.number().int().positive().optional(),
   name: z.string().trim().min(1).max(80),
   title: z.string().trim().max(160).default(''),
   instructions: z.string().max(8000).default(''),

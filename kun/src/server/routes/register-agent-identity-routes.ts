@@ -1,3 +1,4 @@
+import { agentOnboardingState, updateAgentOnboarding } from '../../agents/agent-onboarding.js'
 import { listAgentMemoryCandidates, decideAgentMemoryCandidate } from '../../agents/agent-memory-candidates.js'
 import { agentDirectoryPage } from '../../agents/agent-directory-query.js'
 import { AgentMemoryPage } from '../../agents/agent-memory-service.js'
@@ -16,6 +17,11 @@ async function body(request: Request) {
   return parsed.value
 }
 export function registerAgentIdentityRoutes(add: Add): void {
+  add('GET', '/v1/agents/onboarding', (rooms) => rooms.exclusive(() => agentOnboardingState(rooms.agents)))
+  add('POST', '/v1/agents/onboarding', async (rooms, request) => {
+    const input = await body(request)
+    return rooms.exclusive(() => updateAgentOnboarding(rooms.agents, input))
+  })
   add('POST', '/v1/agents/default-members', (rooms) => rooms.exclusive(async () => ({ members: await rooms.agents.defaultMembers([]) })))
   add('GET', '/v1/agents/templates', () => ({ templates: [...DEFAULT_AGENT_TEMPLATES, DIAGNOSTICIAN_AGENT_TEMPLATE] }))
   add('GET', '/v1/agents/features', async (rooms) => {

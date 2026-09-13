@@ -5,7 +5,7 @@ import { subscribeRoomEvents } from './useRoomEvents'
 
 export const agentPath = (id: string) => '/v1/agents/' + encodeURIComponent(id)
 export function agentMember(agent: AgentIdentity, repositoryIds: string[] = []): RoomMember {
-  return { id: agent.id, participantAgentId: agent.id, displayName: agent.name, avatar: agent.avatar,
+  return { id: agent.id, participantAgentId: agent.id, displayName: agent.name, avatar: agent.avatar, agentTitle: agent.title,
     role: agent.defaultRole, presetId: agent.presetId, roleNotes: '', enabled: !agent.archivedAt,
     revision: 0, allowedRepositoryIds: repositoryIds }
 }
