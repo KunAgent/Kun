@@ -1,3 +1,4 @@
+import { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
 import { Router } from '../server/router.js'
 import { readJsonBody } from '../server/read-json-body.js'
@@ -24,7 +25,7 @@ import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from
 
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
-const Operations = z.enum(['get', 'list', 'listRooms', 'replyPage', 'searchRooms', 'roomRepositories', 'runSummary',
+const Operations = z.enum(['get', 'list', 'listRooms', 'sidebarPage', 'replyPage', 'searchRooms', 'roomRepositories', 'runSummary',
   'commit', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
 
 export function addManagerRoomRoutes(router: Router, input: {
@@ -57,6 +58,7 @@ export function addManagerRoomRoutes(router: Router, input: {
               beforeSeq: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(100).optional() }).strict().parse(body.value)
             result = await input.roomStore.replyPage(value); break
           }
+          case 'sidebarPage': result = await input.roomStore.sidebarPage(RoomSidebarQuery.parse(body.value)); break
           case 'searchRooms': result = await input.roomStore.searchRooms(RoomSearchQuerySchema.parse(body.value)); break
           case 'roomRepositories': z.object({}).strict().parse(body.value); result = await input.roomStore.roomRepositories(); break
           case 'runSummary': result = await input.roomStore.runSummary(RoomRunSummaryQuerySchema.parse(body.value)); break

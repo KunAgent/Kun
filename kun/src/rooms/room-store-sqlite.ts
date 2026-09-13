@@ -1,3 +1,5 @@
+import { queryRoomSidebar } from './room-sidebar-sqlite.js'
+import type { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { RoomRunRecordSchema } from '../contracts/room-runs.js'
 import { initializeRoomReplyIndex, roomReplyPage, projectRoomReplyCounts } from './room-replies-sqlite.js'
 import type { RoomReplyPageInput } from '../contracts/room-replies.js'
@@ -159,6 +161,7 @@ export class SqliteRoomStore implements RoomStore {
   }
 
   async replyPage(input: RoomReplyPageInput) { return roomReplyPage(await this.database(), input) }
+  async sidebarPage(input: RoomSidebarQuery) { return queryRoomSidebar(await this.database(), input) }
   async searchRooms(input: RoomSearchQuery) { return queryRoomSearch(await this.database(), input) }
   async roomRepositories() { return queryRoomRepositories(await this.database()) }
   async runSummary(input: RoomRunSummaryQuery) { return queryRoomRunSummary(await this.database(), input) }

@@ -1,19 +1,19 @@
+import { RoomSidebar } from './RoomSidebar'
+import { RoomModal } from './RoomModal'
+import { RoomOnboardingDialog, RoomWelcomeCard, useRoomOnboarding } from './RoomOnboarding'
+import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
+import { useRoomUserProfileSync } from './room-user-profile'
+import './rooms-init-im.css'
 import { AgentHandoffPanel } from './AgentHandoffPanel'
 import { AgentDirectory } from './AgentDirectory'
 import { AgentDetails } from './AgentDetails'
 import { agentPath } from './agent-client'
-import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 import type { Room } from '@shared/rooms-api'
 import { roomsRequest } from './rooms-client'
 import { useEffect, useState, useRef, type ReactElement, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Archive,
   MessagesSquare,
-  MoreHorizontal,
-  Search,
-  Plus,
-  RefreshCw,
   X
 } from 'lucide-react'
 import type { RoomContentOpenTarget, RoomContentReference, RoomMessage, SendRoomMessage, RoomSearchHit } from '@shared/rooms-api'
@@ -23,13 +23,11 @@ import { RoomSettings, roomButtonClass } from './RoomSettings'
 import { RoomComposer } from './RoomComposer'
 import { RoomHeader } from './RoomHeader'
 import { RoomMemberDetails } from './RoomMemberDetails'
-import { RoomPopover } from './RoomPopover'
 import { roomsClient } from './rooms-client'
 import { useRooms } from './useRooms'
 import './rooms.css'
 import { RoomTimeline } from './RoomTimeline'
 import { RoomTaskStrip } from './RoomTaskStrip'
-import { RoomList } from './RoomList'
 import { RoomOverview } from './RoomOverview'
 import { useRoomTopics } from './useRoomTopics'
 import {
@@ -42,8 +40,6 @@ import { RoomDrawerNavigation, useRoomDrawerNavigation } from './RoomDrawerNavig
 import { RoomDrawerTask } from './RoomDrawerTask'
 import { RoomReplyThread } from './RoomReplyThread'
 import { RoomContentPreview } from './RoomContentPreview'
-import { RoomListFilters } from './RoomManagementControls'
-import { RoomUnifiedSearch } from './RoomUnifiedSearch'
 import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
 import { RoomRunSummary } from './RoomRunSummary'
 import { useRoomPresentationPreferences } from './room-presentation-preferences'
@@ -57,11 +53,14 @@ export function RoomsWorkspaceView({
   onOpenContentTarget?: (target: RoomContentOpenTarget) => void | Promise<void>
 }): ReactElement {
   const { t } = useTranslation('common')
-  const [agentSection, setAgentSection] = useState<'agents' | 'group' | 'agent_agent'>(() => {
-    const stored = readBrowserStorageItem('kun.rooms.section')
-    return stored === 'agents' || stored === 'agent_agent' ? stored : 'group'
-  })
-  const state = useRooms(agentSection === 'agent_agent' ? 'agent_agent' : 'group')
+  const state = useRooms('group', false)
+  const [teamOpen, setTeamOpen] = useState(false), [profileOpen, setProfileOpen] = useState(false), [manageOpen, setManageOpen] = useState(false)
+  useRoomUserProfileSync()
+  useEffect(() => {
+    const open = () => setProfileOpen(true)
+    window.addEventListener('kun-room-user-avatar', open)
+    return () => window.removeEventListener('kun-room-user-avatar', open)
+  }, [])
   const navigationSerial = useRef(0)
   const [agentRunTarget, setAgentRunTarget] = useState<{ roomId: string; runId: string } | null>(null)
   const [settings, setSettings] = useState<'create' | 'edit' | null>(null)
@@ -116,7 +115,7 @@ export function RoomsWorkspaceView({
     try {
       const result = await roomsRequest<{ room: Room }>(agentPath(agentId) + '/conversation', 'POST', {})
       if (serial !== navigationSerial.current) return
-      setAgentSection('agents'); writeBrowserStorageItem('kun.rooms.section', 'agents'); chooseRoom(result.room.id)
+      chooseRoom(result.room.id)
     } catch (cause) { if (serial === navigationSerial.current) state.setError(String(cause)) }
   }
   useEffect(() => {
@@ -124,6 +123,7 @@ export function RoomsWorkspaceView({
       drawer.open({ kind: 'run', runId: agentRunTarget.runId }); setAgentRunTarget(null)
     }
   }, [agentRunTarget, room?.id, drawer])
+  const onboarding = useRoomOnboarding(chooseRoom)
   const openRun = (runId: string): void => drawer.open({ kind: 'run', runId })
   const openTask = (taskId: string): void => drawer.open({ kind: 'task', taskId })
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
@@ -173,45 +173,11 @@ export function RoomsWorkspaceView({
             <X size={18} />
           </button>
         </div>
-        <nav className="agent-sidebar-tabs" aria-label={t('agentsSections')}>
-          {(['agents', 'group', 'agent_agent'] as const).map((section) => <button type="button" key={section}
-            aria-pressed={agentSection === section} onClick={() => { setAgentSection(section); writeBrowserStorageItem('kun.rooms.section', section) }}>
-            {t('agentsSection_' + section)}</button>)}
-        </nav>
-        {agentSection === 'agents' ? <AgentDirectory selectedAgentId={room?.conversationKind === 'user_agent' ? room.members[0]?.participantAgentId : undefined}
-          onOpen={(id) => void openAgent(id)} onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
-          onCreate={() => drawer.open({ kind: 'agent' })} /> : <>
-        <div className="rooms-sidebar-heading">
-          <h2>{t('roomsConversations')}</h2>
-          <button type="button" className="rooms-icon-button" onClick={() => setSettings('create')}
-            aria-label={t('roomsNew')} title={t('roomsNew')}><Plus size={19} /></button>
-          <RoomPopover label={t('roomsListOptions')} trigger={<MoreHorizontal size={18} />} className="rooms-icon-button" width={224} align="end">
-            {(close) => <div className="rooms-menu-list">
-              <button type="button" onClick={() => { close(); void state.refreshList() }}><RefreshCw size={15} />{t('roomsRefresh')}</button>
-              <button type="button" onClick={() => { close(); state.setArchived(!state.archived); drawer.close() }}><Archive size={15} />{t(state.archived ? 'roomsActive' : 'roomsArchived')}</button>
-            </div>}
-          </RoomPopover>
-        </div>
-        <div className="rooms-list-search"><Search size={15} aria-hidden="true" />
-          <input aria-label={t('roomsSearchRooms')} placeholder={t('roomsSearchRooms')}
-            value={state.search} onChange={(event) => state.setSearch(event.target.value)} />
-        </div>
-        {state.archived ? <button className="rooms-archived-filter" onClick={() => state.setArchived(false)}>
-          <Archive size={13} />{t('roomsArchived')}<X size={12} />
-        </button> : null}
-        <RoomListFilters filter={state.filter} archived={state.archived} repositoryRoot={state.repositoryRoot}
-          onFilter={(value) => { state.setArchived(value === 'archived'); state.setFilter(value === 'archived' ? 'all' : value) }}
-          onRepository={state.setRepositoryRoot} />
-        {state.search.trim().length >= 2 ? <RoomUnifiedSearch query={state.search} repositoryRoot={state.repositoryRoot} includeArchived={state.archived}
-          onSelect={(hit) => { chooseRoom(hit.roomId); state.setSearch(''); setSearchTarget(hit) }} /> : <RoomList
-          rooms={state.rooms}
-          selectedId={state.selectedId}
-          select={chooseRoom}
-          cursor={state.roomCursor}
-          moreBusy={state.moreBusy}
-          loadMore={state.loadMoreRooms}
-        />}
-        </>}
+        <RoomSidebar selectedRoomId={selectedId} onOpenAgent={(id) => void openAgent(id)} onSelect={chooseRoom}
+          onCreateAgent={() => drawer.open({ kind: 'agent' })} onCreateGroup={() => setSettings('create')}
+          onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
+          onSearch={(hit) => { chooseRoom(hit.roomId); setSearchTarget(hit) }}
+          onProfile={() => setProfileOpen(true)} onTeam={() => setTeamOpen(true)} onManage={() => setManageOpen(true)} />
       </aside>
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
@@ -225,6 +191,8 @@ export function RoomsWorkspaceView({
             state.saved(result.room)
           }) }}
         />
+        {onboarding.data && !onboarding.data.completed && !onboarding.data.dismissed && !onboarding.data.fresh ? <div className="rooms-init-banner"><span>{t('roomsInitBanner')}</span><button onClick={() => setTeamOpen(true)}>{t('roomsInitReview')}</button><button aria-label={t('roomsClose')} onClick={() => void onboarding.dismiss()}><X size={15} /></button></div> : null}
+        {onboarding.error ? <p role="alert" className="rooms-run-error">{onboarding.error}<button onClick={onboarding.retry}>{t('roomsRefresh')}</button></p> : null}
         {state.error ? (
           <div
             role="alert"
@@ -258,7 +226,8 @@ export function RoomsWorkspaceView({
             <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
               {room.conversationKind === 'user_agent' && room.members[0]?.participantAgentId ? <button type="button" onClick={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })}>{t('agentsProfileAndMemory')}</button> : null}
             </div>
-            <RoomTimeline
+            {!messages.length && room.conversationKind === 'user_agent' ? <RoomWelcomeCard room={room}
+              onTeam={() => setTeamOpen(true)} onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0]?.participantAgentId })} /> : <RoomTimeline
               key={room.id + '-timeline'}
               searchOpen={searchOpen}
               onSearchClose={() => setSearchOpen(false)}
@@ -277,7 +246,7 @@ export function RoomsWorkspaceView({
               onTask={openTask}
               jumpMessageId={jumpMessageId}
               onJumped={() => setJumpMessageId(null)}
-            />
+            />}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <RoomComposer
               key={room.id + '-composer'}
               room={room}
@@ -306,14 +275,14 @@ export function RoomsWorkspaceView({
         onBack={drawer.back} onClose={drawer.close} onSection={drawer.section}
         render={(target, key, active) => {
           if (target.kind === 'agent') return <AgentDetails key={key} agentId={target.agentId} active={active}
-            onSaved={(agent) => { drawer.replaceTop({ kind: 'agent', agentId: agent.id }); void state.refresh() }}
+            onSaved={(agent) => { if (!target.agentId) { void openAgent(agent.id) } else { drawer.replaceTop({ kind: 'agent', agentId: agent.id }); void state.refresh() } }}
             onOpen={(id) => void openAgent(id)} onConversation={chooseRoom}
             onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }}
             onSource={(roomId, messageId) => { chooseRoom(roomId); if (messageId) setSearchTarget({
               kind: 'messages', id: messageId, roomId, roomName: '', title: '', preview: '', messageId }) }} />
           if (!room) return null
           if (target.kind === 'handoffs') return <AgentHandoffPanel key={key} room={room} messages={messages} topics={topicState.topics}
-            active={active} selectedId={target.selectedId} onOpenPair={(id) => { setAgentSection('agent_agent'); chooseRoom(id) }}
+            active={active} selectedId={target.selectedId} onOpenPair={(id) => { chooseRoom(id) }}
             onSource={chooseRoom} onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }} />
           if (target.kind === 'run') return <RoomRunInspector key={key} roomId={room.id} runId={target.runId} active={active} onOpenThread={onOpenThread} />
           if (target.kind === 'task') return <RoomDrawerTask key={key} roomId={room.id} taskId={target.taskId} tasks={state.tasks}
@@ -334,7 +303,16 @@ export function RoomsWorkspaceView({
           return <RoomTaskStrip key={key} stacked room={room} tasks={state.tasks} selectedId={null} onTask={openTask}
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />
         }} /> : null}
+      {teamOpen && onboarding.data ? <RoomOnboardingDialog key={onboarding.data.revision ?? 'fresh'} state={onboarding.data}
+        onOpenGroup={(id) => { setTeamOpen(false); chooseRoom(id) }} onClose={() => setTeamOpen(false)} onOpenAgent={(id) => { setTeamOpen(false); void openAgent(id) }}
+        onComplete={(value) => { setTeamOpen(false); onboarding.refresh(); if (value.coordinatorRoomId) chooseRoom(value.coordinatorRoomId) }} /> : null}
+      {profileOpen ? <RoomUserAvatarEditor onClose={() => setProfileOpen(false)} /> : null}
+      {manageOpen ? <RoomModal title={t('agentsDirectory')} onClose={() => setManageOpen(false)}>
+        <AgentDirectory onOpen={(id) => { setManageOpen(false); void openAgent(id) }} onDetails={(agentId) => { setManageOpen(false); drawer.open({ kind: 'agent', agentId }) }}
+          onCreate={() => { setManageOpen(false); drawer.open({ kind: 'agent' }) }} />
+      </RoomModal> : null}
       {settings ? (
+
         <RoomSettings
           key={`${settings}:${room?.id ?? 'new'}`}
           room={settings === 'edit' ? room : null}

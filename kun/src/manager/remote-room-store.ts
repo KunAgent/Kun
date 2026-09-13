@@ -1,3 +1,4 @@
+import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
 import {
   RoomStoredDocumentSchema,
@@ -53,6 +54,7 @@ export class RemoteRoomStore implements RoomStore {
   }
 
   async replyPage(input: RoomReplyPageInput): Promise<RoomReplyPage> { return await this.call('replyPage', input) as RoomReplyPage }
+  async sidebarPage(input: RoomSidebarQuery): Promise<RoomSidebarPage> { return await this.call('sidebarPage', input) as RoomSidebarPage }
   async searchRooms(input: RoomSearchQuery): Promise<RoomSearchPage> { return await this.call('searchRooms', input) as RoomSearchPage }
   async roomRepositories(): Promise<RoomRepositoryChoice[]> { return await this.call('roomRepositories', {}) as RoomRepositoryChoice[] }
   async runSummary(input: RoomRunSummaryQuery): Promise<RoomRunSummary> { return await this.call('runSummary', input) as RoomRunSummary }

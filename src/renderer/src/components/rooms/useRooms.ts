@@ -14,7 +14,7 @@ import {
   type RoomListEntry
 } from './rooms-client'
 
-export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group') {
+export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', listEnabled = true) {
   const [rooms, setRooms] = useState<RoomListEntry[]>([])
   const [archived, setArchived] = useState(false)
   const [search, setSearch] = useState('')
@@ -50,6 +50,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group') {
   }, [])
   const refreshList = useCallback(
     async (reset = false, changedIds?: string[]): Promise<void> => {
+      if (!listEnabled) { setLoading(false); return }
       const generation = ++listGenerationRef.current
       try {
         const result = await roomsClient.list(
@@ -97,7 +98,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group') {
         if (!selectedRef.current) setLoading(false)
       }
     },
-    [archived, select, search, filter, repositoryRoot, conversationKind]
+    [archived, select, search, filter, repositoryRoot, conversationKind, listEnabled]
   )
   useEffect(() => {
     void refreshList(true)

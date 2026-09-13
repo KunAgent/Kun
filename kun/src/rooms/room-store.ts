@@ -1,3 +1,4 @@
+import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
 import type { Room } from '../contracts/rooms.js'
 import type { RoomLatestMessage } from '../contracts/room-list.js'
@@ -11,7 +12,7 @@ export const RoomDocumentKindSchema = z.enum([
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
   'request_input', 'rule_bundle', 'rule_compression',
-  'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar',
+  'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar', 'room_user_profile',
   'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>
@@ -140,6 +141,7 @@ export interface RoomStore {
   list<T = unknown>(kind: RoomDocumentKind, options?: RoomStoreListOptions): Promise<RoomStoredDocument<T>[]>
   listRooms(options?: RoomListOptions): Promise<RoomListPage>
   replyPage(input: RoomReplyPageInput): Promise<RoomReplyPage>
+  sidebarPage(input: RoomSidebarQuery): Promise<RoomSidebarPage>
   searchRooms(input: RoomSearchQuery): Promise<RoomSearchPage>
   roomRepositories(): Promise<RoomRepositoryChoice[]>
   runSummary(input: RoomRunSummaryQuery): Promise<RoomRunSummary>

@@ -77,3 +77,6 @@ export type { RoomRunRecord, RoomRunPhase, RoomRunStatus } from '../../kun/src/c
 export type { AgentIdentity, AgentPage, AgentFeatures } from '../../kun/src/contracts/agent-identities'
 
 export type { AgentHandoff } from '../../kun/src/contracts/agent-handoffs'
+
+export type { OnboardingState, RoomUserProfileDetail } from '../../kun/src/contracts/room-onboarding'
+export type { RoomSidebarEntry, RoomSidebarPage, RoomSidebarQuery } from '../../kun/src/contracts/room-sidebar'

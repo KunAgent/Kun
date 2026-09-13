@@ -83,7 +83,7 @@ export const KUN_MANAGER_CAPABILITIES = [
   'room-store-v3',
   'room-store-v4',
   'room-store-v5',
-  'agent-identities-v1'
+  'rooms-init-im-v1', 'agent-identities-v1'
 ] as const
 
 export const ThreadStoreOperationSchema = z.enum(MANAGER_THREAD_STORE_OPERATIONS)
