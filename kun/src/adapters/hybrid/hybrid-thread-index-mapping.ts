@@ -49,9 +49,10 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
     forked_from_turn_count: thread.forkedFromTurnCount ?? null,
     goal_json: thread.goal ? JSON.stringify(thread.goal) : null,
     todos_json: thread.todos ? JSON.stringify(thread.todos) : null,
-    extension_metadata_json: thread.ownerExtensionId || thread.planBuildRunId
+    extension_metadata_json: thread.historyRefId || thread.ownerExtensionId || thread.planBuildRunId
       || thread.planBuildAdmissionFingerprint || thread.planBuildAdmissionCapabilityHash
       || thread.planBuildAdmissionFrozen !== undefined ? JSON.stringify({
+      historyRefId: thread.historyRefId,
       ownerExtensionId: thread.ownerExtensionId,
       ownerExtensionVersion: thread.ownerExtensionVersion,
       accountId: thread.accountId,
@@ -98,7 +99,7 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
 }
 
 type ExtensionThreadMetadata = Pick<ThreadRecord,
-  'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
+  'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
   | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
   | 'planBuildAdmissionFrozen'>

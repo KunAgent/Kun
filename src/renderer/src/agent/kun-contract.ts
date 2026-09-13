@@ -20,6 +20,7 @@ export type CoreItemStatus =
   | string
 
 export type CoreThreadSummaryJson = {
+  historyRefId?: string
   roomContext?: RoomThreadSource
   id: string
   title: string

@@ -8,6 +8,7 @@ import type {
 import { goalContextTexts } from '../../contracts/items.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { makeAssistantTextItem } from '../../domain/item.js'
+import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   filterGoalContextsForGoalKey,
   goalContextKey
@@ -237,6 +238,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       this.deps.systemPrompt?.trim(),
       buildClientSurfaceInstruction(resolveTurnClientSurface(turn)),
       thread.systemPrompt?.trim(),
+      ...historyReferenceInstructions(thread),
       ...turnDynamicContext.instructions
     ].filter((value, index, all): value is string =>
       Boolean(value) && all.indexOf(value) === index

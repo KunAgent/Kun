@@ -18,6 +18,7 @@ import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { MigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
+import { assertHistoryReferenceWorkspace } from './history-reference-workspace.js'
 import {
   ThreadExecutionBusyError,
   type ThreadExecutionLeasePort
@@ -122,6 +123,7 @@ async startTurn(this: TurnService, input: {
         }
         const thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        await assertHistoryReferenceWorkspace(thread)
         assertRoomTurnAdmission(thread, input.request)
         if (thread.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')) {
           if (

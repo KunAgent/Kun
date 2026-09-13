@@ -38,7 +38,11 @@ export const TurnItemBase = z.object({
   role: TurnItemRole,
   status: TurnItemStatus,
   createdAt: z.string(),
-  finishedAt: z.string().optional()
+  finishedAt: z.string().optional(),
+  /** Ephemeral external-history projection; these are not Kun attachment IDs. */
+  sourceAttachments: z.array(z.object({
+    index: z.number().int().nonnegative(), name: z.string(), mimeType: z.string().optional()
+  })).max(32).optional()
 })
 
 export const UserInputOptionSchema = z.object({

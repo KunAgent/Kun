@@ -343,6 +343,8 @@ export type DesignCloneOperation = z.infer<typeof DesignCloneOperationSchema>
 export const ThreadSchemaBase = z.object({
   /** Host-owned Rooms execution provenance and frozen capability ceiling. */
   roomContext: RoomThreadContextSchema.optional(),
+  /** Read-only external history; never part of the native session stream. */
+  historyRefId: z.string().min(1).optional(),
   id: z.string().min(1),
   /** Internal optimistic-concurrency version; defaults for legacy records. */
   revision: z.number().int().nonnegative().optional(),
@@ -455,6 +457,7 @@ export type ThreadTimelineResponse = z.infer<typeof ThreadTimelineResponseSchema
 
 export const ThreadSummarySchema = ThreadSchemaBase.pick({
   id: true,
+  historyRefId: true,
   title: true,
   titleAuto: true,
   summary: true,

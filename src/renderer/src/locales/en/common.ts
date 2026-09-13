@@ -1,3 +1,4 @@
+import codexHistory from './common/codex-history.json'
 import rooms from './common/rooms.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
@@ -19,6 +20,7 @@ import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 
 const common = {
+  ...codexHistory,
   ...rooms,
   queuedMessageEditAccountUnavailable: 'The original model account is unavailable or has changed. The queued message has been kept.',
   queuedMessageEditSteering: 'This message is being delivered as guidance; editing is temporarily unavailable.',

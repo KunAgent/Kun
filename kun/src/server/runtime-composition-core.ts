@@ -65,6 +65,7 @@ import {
 import { modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import { HistoryReferenceService } from '../history/history-reference-service.js'
 
 export async function createRuntimeCore(
   options: KunServeRuntimeOptions,
@@ -253,6 +254,12 @@ export async function createRuntimeCore(
         contextWindows.forkThreadData(sourceThreadId, targetThreadId)
       ]).then(() => undefined)
   })
+  const historyReferences = new HistoryReferenceService({
+    dataDir: options.dataDir,
+    threadService,
+    enabled: () => activeOptions.lab?.codexReferenceBranches?.enabled === true,
+    defaultModel: () => ({ model: activeOptions.model, providerId: activeOptions.activeProviderId })
+  })
   const projectBoardStore = new FileProjectBoardStore({
     dataDir: options.dataDir,
     nowIso
@@ -382,6 +389,7 @@ export async function createRuntimeCore(
     delegatedSessions,
     threadService,
     projectBoardStore,
+    historyReferences,
     projectBoardService,
     artifactStore,
     graphConfig,

@@ -384,7 +384,12 @@ export type ChartBlock = {
   spec: RendererChartSpec
 }
 
-export type ChatBlock =
+export type SourceHistoryAttachment = { index: number; name: string; mimeType?: string }
+export type ChatBlock = ({
+  sourceAttachments?: SourceHistoryAttachment[]
+  sourceRecords?: Array<{ itemId: string; kind: string }>
+  sourceItemId?: string
+} & (
   | {
       kind: 'user'
       id: string
@@ -463,6 +468,8 @@ export type ChatBlock =
       /** True only while the live runtime awaits this request (see #606). */
       live?: boolean
     }
+
+))
 
 export type ApprovalRequestPayload = {
   approvalId: string

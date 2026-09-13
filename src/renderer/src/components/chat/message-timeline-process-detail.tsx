@@ -1,3 +1,4 @@
+import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
@@ -72,6 +73,8 @@ export function builtInToolLabel(
   t: (key: string, opts?: Record<string, unknown>) => string
 ): string | undefined {
   switch (toolName) {
+    case 'read_source_history':
+      return t('codexHistoryReadTool')
     case 'read':
     case 'read_file':
       return t('toolBuiltinRead')
@@ -396,6 +399,9 @@ export function ProcessEntryDetail({
     )
   }
   if (detail.kind === 'tool') {
+    if (block.kind === 'tool' && toolNameForBlock(block) === 'read_source_history' && !block.turnId?.startsWith('codex:')) {
+      return <SourceHistoryReadDetail block={block} />
+    }
     if (detail.isPatch) {
       return <DiffView patch={detail.text} filePath={detail.filePath} />
     }

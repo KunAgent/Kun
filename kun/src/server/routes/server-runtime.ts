@@ -173,6 +173,7 @@ export type ExtensionPlatformRuntime = {
  * file-backed adapters without leaking concrete types into routes.
  */
 export type ServerRuntime = {
+  historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
   rooms?: RoomRuntime
   projectBoardService?: ProjectBoardService

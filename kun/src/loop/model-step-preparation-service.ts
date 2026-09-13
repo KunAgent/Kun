@@ -42,10 +42,8 @@ import {
   turnHasUnverifiedSourceChanges,
   verificationSuggestionInstruction
 } from './plan-mode.js'
-import {
-  buildRuntimeContextInstruction,
-  shouldInjectInitialRuntimeContext
-} from './runtime-context.js'
+import { initialRuntimeContextInstruction } from './runtime-context.js'
+import { historyReferenceContextBlocks } from '../prompt/history-reference-context.js'
 import { GRAPH_CREATE_RUN_TOOL_NAME } from './round-outcome-coordinator.js'
 import { svgArtifactCompletionState } from './svg-artifact-completion.js'
 import { imageGenerationReferenceInstructions } from './turn-attachment-service.js'
@@ -493,18 +491,16 @@ export abstract class ModelStepPreparationService {
           : `The selected model does not support the required tool \`${hardRequiredToolName}\`.`
       })
     }
-    const runtimeContextInstruction = shouldInjectInitialRuntimeContext({
+    const runtimeContextInstruction = initialRuntimeContextInstruction({
       stepIndex,
       turnId,
-      historyItems
+      historyItems,
+      workspace: thread.workspace,
+      nowIso: this.deps.nowIso
     })
-      ? buildRuntimeContextInstruction({
-          workspace: thread?.workspace,
-          nowIso: this.deps.nowIso()
-        })
-      : null
     const toolPreferenceInstruction = buildToolPreferenceInstruction(requestToolSpecs)
     const contextBlocks: KunTurnContextBlock[] = [
+      ...historyReferenceContextBlocks(thread),
       kunContextBlock(
         'client-surface',
         'runtime',

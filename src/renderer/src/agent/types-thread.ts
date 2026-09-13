@@ -3,6 +3,7 @@ import type { RoomThreadSource } from '@shared/rooms-api'
 import type { KnowledgeBaseMount, ThreadGoal, ThreadTodoList } from './types'
 
 export type NormalizedThread = {
+  historyRefId?: string
   roomContext?: RoomThreadSource
   id: string
   title: string

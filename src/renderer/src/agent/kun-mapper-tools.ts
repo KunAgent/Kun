@@ -449,7 +449,11 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
       detail: block.detail ?? existing.detail,
       filePath: block.filePath ?? existing.filePath,
       toolKind: block.toolKind ?? existing.toolKind,
-      meta: { ...(existing.meta ?? {}), ...(block.meta ?? {}) }
+      meta: { ...(existing.meta ?? {}), ...(block.meta ?? {}) },
+      ...(existing.sourceRecords || block.sourceRecords ? {
+        sourceRecords: [...new Map([...(existing.sourceRecords ?? []), ...(block.sourceRecords ?? [])]
+          .map((record) => [record.itemId, record])).values()]
+      } : {})
     }
   }
   return dedupeTimelineTextBlocks(merged)

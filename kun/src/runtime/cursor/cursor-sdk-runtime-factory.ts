@@ -11,6 +11,7 @@ import type { TurnItem } from '../../contracts/items.js'
 import { makeUserInputItem } from '../../domain/item.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
+import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   DESIGN_MODE_INSTRUCTION,
   SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
@@ -476,6 +477,7 @@ export function createCursorSdkRuntime(
       }
       const todoInstruction = plan.planMode ? null : todoContinuationInstruction(thread.todos)
       const instructionBlocks = [
+        ...historyReferenceInstructions(thread),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
         ...(plan.planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn.guiDesignArtifact?.kind === 'svg'

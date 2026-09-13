@@ -159,6 +159,7 @@ async create(this: ThreadService,
       /** Broker-derived metadata. Never populated from the public thread request body. */
       extensionMetadata?: ExtensionThreadMetadata
       roomContext?: ThreadRecord['roomContext']
+      historyRefId?: string
     } = {}
   ): Promise<ThreadRecord> {
     // Always advance the id generator so externally-supplied ids
@@ -178,6 +179,7 @@ async create(this: ThreadService,
       ...(request.accountId?.trim() ? { accountId: request.accountId.trim() } : {}),
       ...(options.extensionMetadata ?? {}),
       ...(options.roomContext ? { roomContext: options.roomContext } : {}),
+      ...(options.historyRefId ? { historyRefId: options.historyRefId } : {}),
       ...(request.agentId?.trim() ? { agentId: request.agentId.trim() } : {}),
       ...(request.systemPrompt?.trim() ? { systemPrompt: request.systemPrompt.trim() } : {}),
       mode: request.mode,

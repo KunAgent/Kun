@@ -188,6 +188,13 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  compileEndpoint('/v1/history-sources/codex/sessions', ['GET']),
+  compileEndpoint('/v1/history-sources/codex/preview', ['POST']),
+  compileEndpoint('/v1/history-sources/{id}', ['GET']),
+  compileEndpoint('/v1/history-sources/{id}/timeline', ['GET']),
+  compileEndpoint('/v1/history-sources/{id}/attachments/{itemId}/{index}', ['GET']),
+  compileEndpoint('/v1/history-sources/{id}/relink', ['POST']),
+  compileEndpoint('/v1/threads/reference-branches', ['POST']),
   compileEndpoint(ROOM_ENDPOINTS.list, ['GET', 'POST']),
   compileEndpoint(ROOM_ENDPOINTS.presets, ['GET']),
   compileEndpoint('/v1/rooms/events', ['GET']),

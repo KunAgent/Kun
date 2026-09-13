@@ -210,6 +210,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
     const forkIncludesLatestTurn = !targetTurnId || clonedTurns.length === current.turns.length
     const fork = createThreadRecord({
       id: forkId,
+      historyRefId: current.historyRefId,
       title: options.title?.trim() || defaultTitle,
       workspace: current.workspace,
       additionalWorkspaces: current.additionalWorkspaces,
@@ -461,6 +462,7 @@ async resumeSession(this: ThreadService,
     const record = createThreadRecord({
       id: threadId,
       title: `${sourceTitle} resumed`,
+      historyRefId: sourceThread?.historyRefId,
       workspace: sourceDesignProfile
         ? sourceWorkspace!
         : options.workspace ?? sourceThread?.workspace ?? '~',

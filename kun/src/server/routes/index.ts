@@ -7,6 +7,7 @@ import { registerResourceRoutes } from './register-resource-routes.js'
 import { registerThreadRoutes } from './register-thread-routes.js'
 import { registerProjectBoardRoutes } from './register-project-board-routes.js'
 import { registerRoomRoutes } from './register-room-routes.js'
+import { registerHistoryReferenceRoutes } from './register-history-reference-routes.js'
 
 /** Build the full HTTP router while preserving first-match registration order. */
 export function buildRouter(runtime: ServerRuntime): Router {
@@ -17,6 +18,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   registerResourceRoutes(router, runtime)
   registerProjectBoardRoutes(router, runtime)
   registerRoomRoutes(router, runtime)
+  registerHistoryReferenceRoutes(router, runtime)
   registerThreadRoutes(router, runtime, approvalConsent)
   return router
 }

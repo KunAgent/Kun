@@ -250,5 +250,9 @@
   "labProjectBoardTitle": "Project board",
   "labProjectBoardDescription": "Experimental project board that aggregates task cards per project in the sidebar and tracks plan and task progress.",
   "labProjectBoardEnabled": "Enable project board",
-  "labProjectBoardEnabledDesc": "Shows the Board entry in the sidebar. Off by default."
+  "labProjectBoardEnabledDesc": "Shows the Board entry in the sidebar. Off by default.",
+  "labCodexReferenceBranchesTitle": "Codex history branches",
+  "labCodexReferenceBranchesDescription": "Create branches from local Codex sessions. Kun renders source history without copying entire logs or loading history into context. Excerpts read by the model are saved in the new conversation. Unread history cannot be restored if the source is deleted.",
+  "labCodexReferenceBranchesEnabled": "Enable Codex history branches",
+  "labCodexReferenceBranchesEnabledDesc": "Off by default. Enables the branch entry and Codex log access. Existing branches can continue new conversations when disabled."
 }

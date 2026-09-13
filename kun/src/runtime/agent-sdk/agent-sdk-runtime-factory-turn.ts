@@ -3,6 +3,7 @@
  * This is the only place that touches the SDK package and kun's concrete stores,
  * keeping the orchestration (and its tests) free of both.
  */
+import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   AgentSdkCredentialUnavailableError,
   AgentSdkRuntime,
@@ -383,6 +384,7 @@ export function createAgentSdkTurnRuntimeDeps(
       const contextInstructions = managedPptScope ? [
         ...turnDynamicContext.instructions
       ] : [
+        ...historyReferenceInstructions(thread),
         buildClientSurfaceInstruction(clientSurface),
         ...(thread.additionalWorkspaces?.length
           ? [`Additional workspace roots explicitly added by the user:\n${thread.additionalWorkspaces.map((path) => `- ${JSON.stringify(path)}`).join('\n')}`]

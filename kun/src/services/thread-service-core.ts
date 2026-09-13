@@ -191,6 +191,7 @@ export interface ThreadService {
       /** Broker-derived metadata. Never populated from the public thread request body. */
       extensionMetadata?: ExtensionThreadMetadata
       roomContext?: ThreadRecord['roomContext']
+      historyRefId?: string
     }
   ): Promise<ThreadRecord>;
   update(threadId: string, patch: {

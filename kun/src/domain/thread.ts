@@ -43,6 +43,7 @@ const LEGACY_WRITE_INTERACTION_AGREEMENT =
 
 export function createThreadRecord(input: {
   roomContext?: ThreadRecord['roomContext']
+  historyRefId?: string
   id: string
   title: string
   titleAuto?: boolean
@@ -90,6 +91,7 @@ export function createThreadRecord(input: {
   const now = input.createdAt ?? new Date().toISOString()
   return {
     id: input.id,
+    ...(input.historyRefId ? { historyRefId: input.historyRefId } : {}),
     revision: 0,
     title: input.title,
     ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
@@ -157,6 +159,7 @@ export function toThreadSummary(
   const lockedTaskSurface = resolveThreadLockedTaskSurface(thread)
   return {
     id: thread.id,
+    ...(thread.historyRefId ? { historyRefId: thread.historyRefId } : {}),
     title: thread.title,
     ...(thread.titleAuto !== undefined ? { titleAuto: thread.titleAuto } : {}),
     ...(thread.summary ? { summary: thread.summary } : {}),

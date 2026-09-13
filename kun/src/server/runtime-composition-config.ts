@@ -1,3 +1,4 @@
+import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import {
   join,
   isDeepStrictEqual,
@@ -398,6 +399,7 @@ export function createRuntimeConfigController(
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
     const nextRegistry = new CapabilityRegistry([
+      buildHistoryReferenceToolProvider(services.model.core.historyReferences),
       roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,
 	      ...nextComputerUseProviders.providers,

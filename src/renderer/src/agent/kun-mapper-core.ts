@@ -58,6 +58,7 @@ import { cloneDesignDocumentTarget, cloneDesignTaskProfile } from './design-task
 export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread {
   return {
     id: thread.id,
+    ...(thread.historyRefId ? { historyRefId: thread.historyRefId } : {}),
     title: thread.title?.trim() || thread.id.slice(0, 8),
     ...(thread.agentSurface ? { agentSurface: thread.agentSurface } : {}),
     ...(thread.lockedTaskSurface ? { lockedTaskSurface: thread.lockedTaskSurface } : {}),

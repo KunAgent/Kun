@@ -28,6 +28,9 @@ export const kunLabPatchSchema = z.object({
       timeZone: z.string().trim().max(128).optional()
     }).strict().optional()
   }).strict().optional(),
+  codexReferenceBranches: z.object({
+    enabled: z.boolean().optional()
+  }).strict().optional(),
   projectBoard: z.object({
     enabled: z.boolean().optional()
   }).strict().optional()

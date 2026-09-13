@@ -151,6 +151,7 @@ export function createServerRuntimeComposition(
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
   return {
     threadService,
+    historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,
     turnService,

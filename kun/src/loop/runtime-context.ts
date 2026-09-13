@@ -28,6 +28,18 @@ export function shouldInjectInitialRuntimeContext(input: {
   return input.stepIndex === 0 && input.historyItems.every((item) => item.turnId === input.turnId)
 }
 
+export function initialRuntimeContextInstruction(input: {
+  stepIndex: number
+  turnId: string
+  historyItems: readonly TurnItem[]
+  workspace?: string
+  nowIso: () => string
+}): string | null {
+  return shouldInjectInitialRuntimeContext(input)
+    ? buildRuntimeContextInstruction({ workspace: input.workspace, nowIso: input.nowIso() })
+    : null
+}
+
 function formatLocalDateTimeForPrompt(nowIso: string, timeZone?: string): string {
   const date = new Date(nowIso)
   const fallback = nowIso.trim()

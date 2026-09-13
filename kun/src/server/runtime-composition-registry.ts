@@ -27,6 +27,7 @@ import {
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import { diffUsage, hasUsage } from '../domain/usage.js'
 import { roomResultProvider } from '../rooms/room-result-tools.js'
+import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -340,6 +341,7 @@ export function createRuntimeRegistry(
     }
   })
   let registry = new CapabilityRegistry([
+    buildHistoryReferenceToolProvider(core.historyReferences),
     roomResultProvider(threadStore),
     ...services.baseToolProviders,
     // Host control is available to the top-level agent only, never to

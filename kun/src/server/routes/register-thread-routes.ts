@@ -1,4 +1,5 @@
 import type { Router } from '../router.js'
+import { getComposedThreadTimeline } from './thread-reference-timeline.js'
 import {
   normalizeThreadRuntimeStateWire,
   type ThreadRuntimeState
@@ -140,15 +141,7 @@ export function registerThreadRoutes(
       ? 'background' : 'foreground'
     const key = threadTimelineReadKey(ctx.params.id, new URL(request.url))
     try {
-      return await timelineReads.run(key, priority, () => getThreadTimeline(
-        runtime.threadService,
-        ctx.params.id,
-        request,
-        runtime.sessionStore,
-        runtime.userInputGate,
-        runtime.approvalGate,
-        runtime.delegationRuntime
-      ))
+      return await timelineReads.run(key, priority, () => getComposedThreadTimeline(runtime, ctx.params.id, request))
     } catch (error) {
       if (!(error instanceof ThreadReadOverloadedError)) throw error
       const response = jsonResponse({

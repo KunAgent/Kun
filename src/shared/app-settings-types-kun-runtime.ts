@@ -177,6 +177,7 @@ export type KunLabSettingsV1 = {
   pptAgent: KunLabPptAgentSettingsV1
   conversationVisualization: KunLabConversationVisualizationSettingsV1
   autoPlanBuild: KunLabAutoPlanBuildSettingsV1
+  codexReferenceBranches: { enabled: boolean }
   projectBoard: KunLabProjectBoardSettingsV1
 }
 
@@ -187,6 +188,7 @@ export type KunLabSettingsPatchV1 = {
   autoPlanBuild?: Partial<Omit<KunLabAutoPlanBuildSettingsV1, 'scheduledDefaults'>> & {
     scheduledDefaults?: Partial<KunLabAutoPlanBuildScheduledDefaultsV1>
   }
+  codexReferenceBranches?: { enabled?: boolean }
   projectBoard?: Partial<KunLabProjectBoardSettingsV1>
 }
 
