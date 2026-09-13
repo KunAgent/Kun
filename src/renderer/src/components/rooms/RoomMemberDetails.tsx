@@ -4,9 +4,10 @@ import type { Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomRunList } from './RoomRunList'
 
-export function RoomMemberDetails({ room, selectedMemberId, rootRequestId, topics = [], onSelectMember, onRun }: {
+export function RoomMemberDetails({ room, selectedMemberId, rootRequestId, topics = [], onSelectMember, onRun, onOpenAgent, onAgentDetails }: {
   room: Room; selectedMemberId: string | null; rootRequestId?: string | null
   topics?: Array<{ rootRequestId: string; title: string }>
+  onOpenAgent?: (id: string) => void; onAgentDetails?: (id: string) => void
   onSelectMember?: (id: string) => void; onRun?: (id: string) => void
 }) {
   const { t } = useTranslation('common')
@@ -22,6 +23,10 @@ export function RoomMemberDetails({ room, selectedMemberId, rootRequestId, topic
         <RoomAvatar member={member} label={member.displayName} size={38} />
         <div><h3>{member.displayName}</h3><p>{t(`rooms${member.role[0].toUpperCase()}${member.role.slice(1)}`)} · {t(member.enabled ? 'roomsEnabled' : 'roomsDisabled')}</p></div>
       </div>
+      {member.participantAgentId ? <div className="agent-memory-actions">
+        <button type="button" onClick={() => onOpenAgent?.(member.participantAgentId!)}>{t('agentsOpenPrivate')}</button>
+        <button type="button" onClick={() => onAgentDetails?.(member.participantAgentId!)}>{t('agentsProfileAndMemory')}</button>
+      </div> : null}
       {member.roleNotes ? <p className="rooms-member-notes">{member.roleNotes}</p> : null}
       {member.allowedRepositoryIds?.length ? <p className="rooms-member-repositories">{room.repositories.filter((repo) => member.allowedRepositoryIds.includes(repo.id)).map((repo) => repo.displayName).join(' · ')}</p> : null}
       {onRun && selectedMemberId === member.id ? <>

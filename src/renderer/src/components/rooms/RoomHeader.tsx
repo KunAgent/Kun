@@ -24,7 +24,7 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
       <div className="rooms-header-members" title={t('roomsMembers')}>
         <RoomAvatarGroup members={enabled} size={36} onClick={onMembers} />
       </div>
-      <div className="rooms-mode-control">
+      {room.conversationKind && room.conversationKind !== 'group' ? <span className="rooms-run-note">{t('agentsConversation_' + room.conversationKind)}</span> : <div className="rooms-mode-control">
         <select aria-label={t('roomsMode')} value={room.collaborationMode} disabled={busy}
           title={t(room.collaborationMode === 'peer' ? 'roomsPeer' : room.collaborationMode === 'directed' ? 'roomsDirected' : 'roomsAutonomous')}
           onChange={(event) => onUpdate({ collaborationMode: event.target.value as Room['collaborationMode'] })}>
@@ -33,7 +33,7 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
           <option value="directed">{t('roomsDirected')}</option>
         </select>
         <ChevronDown size={12} aria-hidden="true" />
-      </div>
+      </div>}
       <button type="button" className="rooms-icon-button" aria-label={t('roomsSearchMessages')}
         title={t('roomsSearchMessages')} aria-pressed={searchOpen} onClick={onSearch}><Search size={18} /></button>
       <button type="button" className="rooms-icon-button" aria-label={t('roomsRoomDetails')}

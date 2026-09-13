@@ -1,3 +1,4 @@
+import independentAgents from './common/independent-agents.json'
 import codexHistory from './common/codex-history.json'
 import rooms from './common/rooms.json'
 import roomsReplies from './common/rooms-replies.json'
@@ -24,6 +25,7 @@ import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 
 const common = {
+  ...independentAgents,
   ...codexHistory,
   ...rooms,
   ...roomsReplies,

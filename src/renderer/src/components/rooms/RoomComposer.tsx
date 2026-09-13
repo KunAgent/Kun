@@ -1,3 +1,4 @@
+import { AgentPicker } from './AgentPicker'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomTask, SendRoomMessage, RoomContentReference } from '@shared/rooms-api'
@@ -21,6 +22,8 @@ import './rooms-interactions.css'
 import './rooms-composer.css'
 
 type Draft = {
+  executionAgentId?: string
+  executionAgentName?: string
   body: string
   references: RoomContentReference[]
   mentions: string[]
@@ -157,7 +160,7 @@ function RoomComposerEditor({
       if (detail.roomId === room.id) {
         setDraft((draft) => ({
           ...draft,
-          taskId: detail.taskId,
+          taskId: detail.taskId, executionAgentId: undefined, executionAgentName: undefined,
           body: draft.body.trim() ? draft.body : detail.body,
           intent: 'execute'
         }))
@@ -221,6 +224,7 @@ function RoomComposerEditor({
       ...(draft.taskId ? { taskId: draft.taskId } : {}),
       ...(draft.repositoryId ? { repositoryId: draft.repositoryId } : {}),
       executionIntent: draft.intent,
+      ...(draft.executionAgentId ? { executionAgentId: draft.executionAgentId, designatedAgentIds: [draft.executionAgentId] } : {}),
       attachmentIds: draft.attachments.map(({ id }) => id)
     }
     const fingerprint = JSON.stringify(content)
@@ -311,6 +315,11 @@ function RoomComposerEditor({
           onRepository={() => patch({ repositoryId: '' })}
           onClearReply={() => patch({ replyToMessageId: undefined, replyBody: undefined })} />
         <RoomContentReferenceChips references={draft.references} onChange={(references) => patch({ references })} disabled={disabled} />
+        {room.conversationKind === 'user_agent' && !draft.taskId && draft.intent !== 'discussion' ? <div className="agent-memory-actions">
+          <AgentPicker label={draft.executionAgentName ? t('agentsExecutionOwner', { name: draft.executionAgentName }) : t('agentsChooseExecutionOwner')}
+            onSelect={(agent) => patch({ executionAgentId: agent.id, executionAgentName: agent.name })} />
+          {draft.executionAgentId ? <button type="button" onClick={() => patch({ executionAgentId: undefined, executionAgentName: undefined })}>{t('agentsUseCurrentAgent')}</button> : null}
+        </div> : null}
         <RoomRichInput ref={editorRef} room={room} value={draft.body} mentions={draft.mentions}
           disabled={disabled} placeholder={t('roomsComposerPlaceholder')} onChange={patch}
           onSubmit={() => void submit()} onPasteFiles={(files) => void attach(files)} />
@@ -330,7 +339,7 @@ function RoomComposerEditor({
           onAttach={() => fileRef.current?.click()}
           onMention={() => editorRef.current?.insertText('@')}
           onEmoji={(emoji) => editorRef.current?.insertText(emoji)} onPoll={() => setPollOpen((value) => !value)}
-          onTask={(taskId) => patch({ taskId })}
+          onTask={(taskId) => patch({ taskId, executionAgentId: undefined, executionAgentName: undefined })}
           onRepository={(repositoryId) => patch({ repositoryId })}
           onTopic={(id) => patch({ rootRequestId: id || undefined, replyToMessageId: undefined, replyBody: undefined })}
           onIntent={(intent) => patch({ intent })} />

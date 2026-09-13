@@ -76,7 +76,7 @@ export function RoomReplyThread({ room, messageId, tasks, active = true, onSend,
       {state.error || jumpError ? <p className="rooms-message-error" role="alert">{state.error || jumpError}</p> : null}
       {state.error ? <button type="button" className="rooms-run-secondary" onClick={() => void state.refresh()}>{t('roomsRefresh')}</button> : null}
     </div>
-    {root && target ? <RoomComposer room={room} tasks={tasks} draftId={`reply:${room.id}:${root.id}`}
+    {root && target && room.conversationKind !== 'agent_agent' ? <RoomComposer room={room} tasks={tasks} draftId={`reply:${room.id}:${root.id}`}
       replyTarget={{ messageId: target.id, body: target.body, rootRequestId: target.rootRequestId }}
       onSend={async (input) => {
         await onSend({ ...input, replyToMessageId: input.replyToMessageId ?? target.id })

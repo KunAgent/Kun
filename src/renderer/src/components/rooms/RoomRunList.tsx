@@ -138,7 +138,7 @@ export function RoomRunList({
       <div className="rooms-run-process-filters">
         <select aria-label={t('roomsRunPhaseFilter')} value={phase} onChange={(event) => setPhase(event.target.value)}>
           <option value="">{t('roomsRunAllPhases')}</option>
-          {['coordination', 'discussion', 'execution', 'review', 'integration', 'triage'].map((value) => <option key={value} value={value}>{t('roomsRunPhase_' + value)}</option>)}
+          {['coordination', 'discussion', 'execution', 'review', 'integration', 'triage', 'memory'].map((value) => <option key={value} value={value}>{t('roomsRunPhase_' + value)}</option>)}
         </select>
         <select aria-label={t('roomsRunStatusFilter')} value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="">{t('roomsRunAllStatuses')}</option>

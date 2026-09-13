@@ -1,4 +1,11 @@
-import { useEffect, useState, type ReactElement, type CSSProperties } from 'react'
+import { AgentHandoffPanel } from './AgentHandoffPanel'
+import { AgentDirectory } from './AgentDirectory'
+import { AgentDetails } from './AgentDetails'
+import { agentPath } from './agent-client'
+import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
+import type { Room } from '@shared/rooms-api'
+import { roomsRequest } from './rooms-client'
+import { useEffect, useState, useRef, type ReactElement, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
@@ -50,7 +57,13 @@ export function RoomsWorkspaceView({
   onOpenContentTarget?: (target: RoomContentOpenTarget) => void | Promise<void>
 }): ReactElement {
   const { t } = useTranslation('common')
-  const state = useRooms()
+  const [agentSection, setAgentSection] = useState<'agents' | 'group' | 'agent_agent'>(() => {
+    const stored = readBrowserStorageItem('kun.rooms.section')
+    return stored === 'agents' || stored === 'agent_agent' ? stored : 'group'
+  })
+  const state = useRooms(agentSection === 'agent_agent' ? 'agent_agent' : 'group')
+  const navigationSerial = useRef(0)
+  const [agentRunTarget, setAgentRunTarget] = useState<{ roomId: string; runId: string } | null>(null)
   const [settings, setSettings] = useState<'create' | 'edit' | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -92,11 +105,25 @@ export function RoomsWorkspaceView({
     )
   }
   const chooseRoom = (id: string): void => {
+    navigationSerial.current++
     state.select(id)
     drawer.close()
     setSidebarOpen(false)
     setJumpMessageId(null)
   }
+  const openAgent = async (agentId: string) => {
+    const serial = ++navigationSerial.current
+    try {
+      const result = await roomsRequest<{ room: Room }>(agentPath(agentId) + '/conversation', 'POST', {})
+      if (serial !== navigationSerial.current) return
+      setAgentSection('agents'); writeBrowserStorageItem('kun.rooms.section', 'agents'); chooseRoom(result.room.id)
+    } catch (cause) { if (serial === navigationSerial.current) state.setError(String(cause)) }
+  }
+  useEffect(() => {
+    if (agentRunTarget && room?.id === agentRunTarget.roomId) {
+      drawer.open({ kind: 'run', runId: agentRunTarget.runId }); setAgentRunTarget(null)
+    }
+  }, [agentRunTarget, room?.id, drawer])
   const openRun = (runId: string): void => drawer.open({ kind: 'run', runId })
   const openTask = (taskId: string): void => drawer.open({ kind: 'task', taskId })
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
@@ -146,6 +173,14 @@ export function RoomsWorkspaceView({
             <X size={18} />
           </button>
         </div>
+        <nav className="agent-sidebar-tabs" aria-label={t('agentsSections')}>
+          {(['agents', 'group', 'agent_agent'] as const).map((section) => <button type="button" key={section}
+            aria-pressed={agentSection === section} onClick={() => { setAgentSection(section); writeBrowserStorageItem('kun.rooms.section', section) }}>
+            {t('agentsSection_' + section)}</button>)}
+        </nav>
+        {agentSection === 'agents' ? <AgentDirectory selectedAgentId={room?.conversationKind === 'user_agent' ? room.members[0]?.participantAgentId : undefined}
+          onOpen={(id) => void openAgent(id)} onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
+          onCreate={() => drawer.open({ kind: 'agent' })} /> : <>
         <div className="rooms-sidebar-heading">
           <h2>{t('roomsConversations')}</h2>
           <button type="button" className="rooms-icon-button" onClick={() => setSettings('create')}
@@ -176,6 +211,7 @@ export function RoomsWorkspaceView({
           moreBusy={state.moreBusy}
           loadMore={state.loadMoreRooms}
         />}
+        </>}
       </aside>
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
@@ -219,12 +255,16 @@ export function RoomsWorkspaceView({
               onTasks={() => drawer.section('tasks')}
               taskCounts={state.rooms.find((entry) => entry.id === room.id)}
             />
+            <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
+              {room.conversationKind === 'user_agent' && room.members[0]?.participantAgentId ? <button type="button" onClick={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })}>{t('agentsProfileAndMemory')}</button> : null}
+            </div>
             <RoomTimeline
               key={room.id + '-timeline'}
               searchOpen={searchOpen}
               onSearchClose={() => setSearchOpen(false)}
               onMember={openMember}
               onRun={openRun}
+              onHandoff={(selectedId) => drawer.open({ kind: 'handoffs', selectedId })}
               onReplyThread={(message) => drawer.open({ kind: 'reply', messageId: message.displayThreadRootId ?? message.id })}
               onOpenContent={openContent}
               room={room}
@@ -238,7 +278,7 @@ export function RoomsWorkspaceView({
               jumpMessageId={jumpMessageId}
               onJumped={() => setJumpMessageId(null)}
             />
-            <RoomComposer
+            {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <RoomComposer
               key={room.id + '-composer'}
               room={room}
               tasks={state.tasks}
@@ -247,7 +287,7 @@ export function RoomsWorkspaceView({
                 title: topic.title
               }))}
               onSend={send}
-            />
+            />}
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center text-ds-muted">
@@ -262,9 +302,19 @@ export function RoomsWorkspaceView({
           </div>
         )}
       </section>
-      {room && drawer.frames.length ? <RoomDrawerNavigation key={room.id + '-details'} frames={drawer.frames}
+      {drawer.frames.length ? <RoomDrawerNavigation key={(room?.id ?? 'agents') + '-details'} frames={drawer.frames}
         onBack={drawer.back} onClose={drawer.close} onSection={drawer.section}
         render={(target, key, active) => {
+          if (target.kind === 'agent') return <AgentDetails key={key} agentId={target.agentId} active={active}
+            onSaved={(agent) => { drawer.replaceTop({ kind: 'agent', agentId: agent.id }); void state.refresh() }}
+            onOpen={(id) => void openAgent(id)} onConversation={chooseRoom}
+            onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }}
+            onSource={(roomId, messageId) => { chooseRoom(roomId); if (messageId) setSearchTarget({
+              kind: 'messages', id: messageId, roomId, roomName: '', title: '', preview: '', messageId }) }} />
+          if (!room) return null
+          if (target.kind === 'handoffs') return <AgentHandoffPanel key={key} room={room} messages={messages} topics={topicState.topics}
+            active={active} selectedId={target.selectedId} onOpenPair={(id) => { setAgentSection('agent_agent'); chooseRoom(id) }}
+            onSource={chooseRoom} onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }} />
           if (target.kind === 'run') return <RoomRunInspector key={key} roomId={room.id} runId={target.runId} active={active} onOpenThread={onOpenThread} />
           if (target.kind === 'task') return <RoomDrawerTask key={key} roomId={room.id} taskId={target.taskId} tasks={state.tasks}
             onClose={drawer.back} onRun={openRun} onOpenThread={onOpenThread} onUpdated={() => void state.refresh()} />
@@ -279,6 +329,7 @@ export function RoomsWorkspaceView({
               onTask={openTask} onMessage={(id) => { setJumpMessageId(id); drawer.close() }} /></>
           if (target.section === 'members') return <RoomMemberDetails room={room} selectedMemberId={target.memberId ?? null}
             rootRequestId={target.rootRequestId} topics={topicState.topics.map((topic) => ({ rootRequestId: topic.rootRequestId, title: topic.title }))}
+            onOpenAgent={(id) => void openAgent(id)} onAgentDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
             onSelectMember={(memberId) => drawer.open({ kind: 'section', section: 'members', memberId })} onRun={openRun} />
           return <RoomTaskStrip key={key} stacked room={room} tasks={state.tasks} selectedId={null} onTask={openTask}
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />

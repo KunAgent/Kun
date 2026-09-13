@@ -14,7 +14,7 @@ import {
   type RoomListEntry
 } from './rooms-client'
 
-export function useRooms() {
+export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group') {
   const [rooms, setRooms] = useState<RoomListEntry[]>([])
   const [archived, setArchived] = useState(false)
   const [search, setSearch] = useState('')
@@ -41,7 +41,7 @@ export function useRooms() {
   messagesRef.current = messages
   const listGenerationRef = useRef(0)
   const listScopeRef = useRef('')
-  listScopeRef.current = JSON.stringify([archived, search, filter, repositoryRoot])
+  listScopeRef.current = JSON.stringify([archived, search, filter, repositoryRoot, conversationKind])
   const refreshRef = useRef<() => Promise<void>>(async () => undefined)
 
   const select = useCallback((id: string): void => {
@@ -57,7 +57,7 @@ export function useRooms() {
           undefined,
           undefined,
           search,
-          { unreadOnly: filter === 'unread', attentionOnly: filter === 'attention', repositoryRoot: repositoryRoot || undefined }
+          { ...(conversationKind !== 'group' ? { conversationKind } : {}), unreadOnly: filter === 'unread', attentionOnly: filter === 'attention', repositoryRoot: repositoryRoot || undefined }
         )
         if (generation !== listGenerationRef.current) return
         // Revalidate only loaded rows affected by live events; the original
@@ -69,7 +69,7 @@ export function useRooms() {
         for (let offset = 0; offset < recheckIds.length; offset += 50) {
           if (generation !== listGenerationRef.current) return
           const page = await roomsClient.list(archived, undefined, undefined, search, {
-            unreadOnly: filter === 'unread', attentionOnly: filter === 'attention',
+            ...(conversationKind !== 'group' ? { conversationKind } : {}), unreadOnly: filter === 'unread', attentionOnly: filter === 'attention',
             repositoryRoot: repositoryRoot || undefined, ids: recheckIds.slice(offset, offset + 50)
           })
           for (const item of page.rooms) stillVisible.set(item.id, item)
@@ -96,7 +96,7 @@ export function useRooms() {
         if (!selectedRef.current) setLoading(false)
       }
     },
-    [archived, select, search, filter, repositoryRoot]
+    [archived, select, search, filter, repositoryRoot, conversationKind]
   )
   useEffect(() => {
     void refreshList(true)
@@ -259,13 +259,13 @@ export function useRooms() {
         roomCursor,
         undefined,
         search,
-        { unreadOnly: filter === 'unread', attentionOnly: filter === 'attention', repositoryRoot: repositoryRoot || undefined }
+        { ...(conversationKind !== 'group' ? { conversationKind } : {}), unreadOnly: filter === 'unread', attentionOnly: filter === 'attention', repositoryRoot: repositoryRoot || undefined }
       )
       if (scope !== listScopeRef.current) return
       let rows = page.rooms
       if (generation !== listGenerationRef.current && rows.length) {
         const latest = await roomsClient.list(archived, undefined, undefined, search, {
-          unreadOnly: filter === 'unread', attentionOnly: filter === 'attention',
+          ...(conversationKind !== 'group' ? { conversationKind } : {}), unreadOnly: filter === 'unread', attentionOnly: filter === 'attention',
           repositoryRoot: repositoryRoot || undefined, ids: rows.map((item) => item.id)
         })
         if (scope !== listScopeRef.current) return

@@ -138,10 +138,10 @@ export const roomsClient = {
     cursor?: string,
     signal?: AbortSignal,
     search = '',
-    filters?: { unreadOnly?: boolean; attentionOnly?: boolean; repositoryRoot?: string; ids?: string[] }
+    filters?: { conversationKind?: 'group' | 'user_agent' | 'agent_agent'; unreadOnly?: boolean; attentionOnly?: boolean; repositoryRoot?: string; ids?: string[] }
   ) =>
     roomsRequest<RoomPage<{ rooms: RoomListEntry[] }>>(
-      `/v1/rooms?limit=50&archived_only=${archived}&search=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${filters?.unreadOnly ? '&unread_only=true' : ''}${filters?.attentionOnly ? '&attention_only=true' : ''}${filters?.repositoryRoot ? '&repository_root=' + encodeURIComponent(filters.repositoryRoot) : ''}${filters?.ids ? '&room_ids=' + encodeURIComponent(filters.ids.join(',')) : ''}`,
+      `/v1/rooms?limit=50&archived_only=${archived}&search=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${filters?.conversationKind && filters.conversationKind !== 'group' ? '&conversation_kind=' + filters.conversationKind : ''}${filters?.unreadOnly ? '&unread_only=true' : ''}${filters?.attentionOnly ? '&attention_only=true' : ''}${filters?.repositoryRoot ? '&repository_root=' + encodeURIComponent(filters.repositoryRoot) : ''}${filters?.ids ? '&room_ids=' + encodeURIComponent(filters.ids.join(',')) : ''}`,
       'GET',
       undefined,
       signal

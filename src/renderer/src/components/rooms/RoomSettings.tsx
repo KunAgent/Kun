@@ -1,3 +1,9 @@
+import { roomsRequest } from './rooms-client'
+import { AgentPicker } from './AgentPicker'
+import { AgentProfileForm } from './AgentProfileForm'
+import { RoomPopover } from './RoomPopover'
+import { agentMember } from './agent-client'
+import type { AgentIdentity } from '@shared/rooms-api'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, X } from 'lucide-react'
@@ -37,17 +43,7 @@ export function RoomSettings({
     room?.collaborationMode ?? 'peer'
   )
   const [members, setMembers] = useState<RoomMember[]>(
-    room?.members ??
-      (['coordinator', 'developer', 'reviewer'] as const).map((role) => ({
-        id: role,
-        displayName: t(`rooms${role[0].toUpperCase()}${role.slice(1)}`),
-        presetId: role,
-        role,
-        roleNotes: '',
-        enabled: true,
-        allowedRepositoryIds: [],
-        revision: 0
-      }))
+    room?.members ?? []
   )
   const [defaultMemberId, setDefaultMemberId] = useState(
     room?.defaultMemberId ?? 'coordinator'
@@ -85,6 +81,27 @@ export function RoomSettings({
     }
   }, [])
 
+  useEffect(() => {
+    if (room) return
+    const controller = new AbortController()
+    void roomsRequest<{ members: RoomMember[] }>('/v1/agents/default-members', 'POST', {}, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) {
+        setMembers((current) => current.length ? current : result.members)
+        setDefaultMemberId((current) => result.members.some((member) => member.id === current) ? current : result.members[0].id)
+      } }).catch((cause) => { if (!controller.signal.aborted) setError(String(cause)) })
+    return () => controller.abort()
+  }, [room])
+  const copyMember = async (member: RoomMember) => {
+    if (!member.participantAgentId) return
+    setBusy(true); setError('')
+    try {
+      const result = await roomsRequest<{ agent: AgentIdentity }>('/v1/agents', 'POST', {
+        clientRequestId: roomRequestId(), copyFromAgentId: member.participantAgentId,
+        name: member.displayName.slice(0, 72) + ' (2)' })
+      setMembers((current) => [...current, { ...agentMember(result.agent, member.allowedRepositoryIds),
+        role: member.role, roleNotes: member.roleNotes, defaultRepositoryId: member.defaultRepositoryId }])
+    } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
+  }
   const updateMember = (id: string, patch: Partial<RoomMember>): void => {
     setMembers((current) =>
       current.map((member) =>
@@ -333,27 +350,15 @@ export function RoomSettings({
                 >
                   {t('roomsManagePresets')}
                 </button>
-                <button
-                  type="button"
-                  className={roomButtonClass}
-                  onClick={() =>
-                    setMembers((current) => [
-                      ...current,
-                      {
-                        id: roomRequestId(),
-                        displayName: t('roomsDeveloper'),
-                        presetId: 'developer',
-                        role: 'developer',
-                        roleNotes: '',
-                        enabled: true,
-                        allowedRepositoryIds: [],
-                        revision: 0
-                      }
-                    ])
-                  }
-                >
-                  {t('roomsAddMember')}
-                </button>
+                {(!room?.conversationKind || room.conversationKind === 'group') ? <>
+                  <AgentPicker label={t('agentsAddExisting')} excluded={members.map((member) => member.participantAgentId ?? '')}
+                    onSelect={(agent) => setMembers((current) => [...current, agentMember(agent)])} />
+                  <RoomPopover label={t('agentsCreateAndAdd')} trigger={<span>{t('agentsCreateAndAdd')}</span>} width={380}>
+                    {(close) => <AgentProfileForm agent={null} onSaved={(agent) => {
+                      setMembers((current) => [...current, agentMember(agent)]); close()
+                    }} />}
+                  </RoomPopover>
+                </> : null}
               </div>
             </div>
             <label className="block text-sm text-ds-muted">
@@ -391,17 +396,7 @@ export function RoomSettings({
                       ))
                   )}
                   onChange={(patch) => updateMember(member.id, patch)}
-                  onCopy={() =>
-                    setMembers((current) => [
-                      ...current,
-                      {
-                        ...structuredClone(member),
-                        id: roomRequestId(),
-                        displayName: member.displayName.slice(0, 76) + ' (2)',
-                        revision: 0
-                      }
-                    ])
-                  }
+                  onCopy={() => void copyMember(member)}
                   onRemove={() =>
                     setMembers((current) =>
                       current
@@ -435,7 +430,7 @@ export function RoomSettings({
                 {t('roomsCancel')}
               </button>
               <button
-                disabled={busy || !name.trim()}
+                disabled={busy || !name.trim() || !members.length}
                 type="submit"
                 className={`${roomButtonClass} bg-accent/10`}
               >

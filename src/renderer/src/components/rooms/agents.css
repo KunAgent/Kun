@@ -1,0 +1,44 @@
+.agent-directory { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.agent-directory-list { overflow-y: auto; min-height: 0; padding: .4rem .65rem; }
+.agent-directory-archive { display: flex; align-items: center; gap: .4rem; padding: .4rem 1rem; color: var(--ds-text-muted); font-size: .75rem; }
+.agent-directory-row { display: flex; align-items: center; border-radius: .8rem; padding: .3rem; margin-bottom: .25rem; }
+.agent-directory-row:hover, .agent-directory-row.is-selected { background: var(--ds-surface-hover); }
+.agent-directory-open { display: flex; flex: 1; align-items: center; gap: .65rem; min-width: 0; padding: .45rem; text-align: left; }
+.agent-directory-label { min-width: 0; display: grid; gap: .18rem; }
+.agent-directory-open strong, .agent-directory-open small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-directory-open strong { font-size: .85rem; color: var(--ds-text); }
+.agent-directory-open small { font-size: .72rem; color: var(--ds-text-muted); }
+.agent-unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ds-accent); flex-shrink: 0; }
+.agent-sidebar-tabs, .agent-detail-tabs { display: flex; gap: .25rem; padding: .7rem; border-bottom: 1px solid var(--ds-border); }
+.agent-sidebar-tabs button, .agent-detail-tabs button { flex: 1; padding: .45rem .2rem; border-radius: .45rem; font-size: .75rem; color: var(--ds-text-muted); }
+.agent-sidebar-tabs button[aria-pressed='true'], .agent-detail-tabs button[aria-pressed='true'] { background: var(--ds-surface-hover); color: var(--ds-text); }
+.agent-profile-form { display: grid; gap: .8rem; padding: 1rem; font-size: .8rem; min-width: 0; }
+.agent-profile-form label, .agent-profile-form details { display: grid; gap: .4rem; min-width: 0; }
+.agent-profile-form input:not([type='checkbox']), .agent-profile-form select, .agent-profile-form textarea,
+.agent-memory-entry textarea, .agent-picker-list input { width: 100%; border: 1px solid var(--ds-border); background: var(--ds-surface-card); border-radius: .5rem; padding: .55rem; color: var(--ds-text); min-width: 0; }
+.agent-profile-form textarea, .agent-memory-entry textarea { resize: vertical; }
+.agent-checkbox { display: flex !important; align-items: center; gap: .45rem; font-size: .75rem; }
+.agent-profile-form details > label { margin-top: .5rem; }
+.agent-details-heading, .agent-memory-panel { padding: 1rem; }
+.agent-details-heading > p { font-size: .8rem; color: var(--ds-text-muted); margin: .3rem 0 .7rem; }
+.agent-memory-entry { padding: .8rem 0; border-bottom: 1px solid var(--ds-border); font-size: .8rem; overflow-wrap: anywhere; }
+.agent-memory-entry details { margin: .6rem 0; }
+.agent-memory-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .65rem; font-size: .75rem; }
+.agent-memory-actions button, .agent-memory-sharing button { padding: .3rem .5rem; border: 1px solid var(--ds-border); border-radius: .4rem; }
+.agent-memory-sharing { display: grid; gap: .5rem; margin-top: .75rem; }
+.agent-picker-list { display: grid; gap: .3rem; padding: .6rem; }
+.agent-picker-list button, .agent-record-list > button { display: grid; text-align: left; padding: .55rem; border-radius: .4rem; gap: .2rem; }
+.agent-picker-list button:hover, .agent-record-list > button:hover { background: var(--ds-surface-hover); }
+.agent-picker-list small, .agent-record-list small { color: var(--ds-text-muted); font-size: .7rem; }
+.agent-record-list { display: grid; padding: .6rem; gap: .3rem; }
+.agent-conversation-note { padding: .6rem 1rem; font-size: .75rem; color: var(--ds-text-muted); border-bottom: 1px solid var(--ds-border); }
+
+.agent-collaboration-strip { display: flex; gap: 1rem; padding: .35rem 1rem; font-size: .75rem; color: var(--ds-text-muted); border-bottom: 1px solid var(--ds-border); }
+.agent-collaboration-strip button:hover { color: var(--ds-accent); }
+.agent-handoff-panel { padding: 1rem; font-size: .8rem; }
+.agent-handoff-panel > label { display: grid; gap: .4rem; margin: .8rem 0; }
+.agent-handoff-panel select { min-width: 0; max-width: 100%; background: var(--ds-surface-card); color: var(--ds-text); border: 1px solid var(--ds-border); border-radius: .4rem; padding: .4rem; }
+.agent-handoff-detail { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--ds-border); }
+.agent-handoff-detail h3 { font-weight: 600; margin: .7rem 0; }
+.agent-handoff-create { margin: .8rem 0; }
+.agent-handoff-create .agent-profile-form { padding: .75rem 0; }

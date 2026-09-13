@@ -27,6 +27,7 @@ export function RoomMessageRow({
   onViewReply,
   onMember,
   onRun,
+  onHandoff,
   onOpenContent
 }: {
   message: RoomMessage
@@ -41,6 +42,7 @@ export function RoomMessageRow({
   onViewReply: (id: string) => void
   onMember?: (id: string, rootRequestId?: string) => void
   onRun?: (id: string) => void
+  onHandoff?: (id: string) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
 }) {
   const { t } = useTranslation('common')
@@ -52,7 +54,7 @@ export function RoomMessageRow({
     message.id.startsWith(progressPrefix) &&
     /^(0|[1-9]\d*)$/.test(message.id.slice(progressPrefix.length)))
   const canInspectRun = Boolean(message.originRunId ||
-    (message.authorKind === 'member' && (!message.taskId || legacyTaskProgress)))
+    (message.authorKind === 'member' && !message.handoffId && (!message.taskId || legacyTaskProgress)))
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(message.body)
@@ -134,6 +136,7 @@ export function RoomMessageRow({
           {room ? <RoomMessageInteractions room={room} message={message} onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined} /> : null}
         </div>
         <div className="rooms-message-footer">
+          {message.handoffId && onHandoff ? <button type="button" className="rooms-run-link" onClick={() => onHandoff(message.handoffId!)}>{t('agentsViewHandoff')}</button> : null}
           {message.replyCount ? <button type="button" className="rooms-reply-count" onClick={() => onReply(message)}><Reply size={13} />{t('roomsReplyCount', { count: message.replyCount })}</button> : null}
           {onRun && canInspectRun ? <RoomMessageRunButton message={message} onRun={onRun} /> : null}
           {message.taskId ? (
@@ -149,6 +152,7 @@ export function RoomMessageRow({
           <div className="rooms-message-actions">
             <button
               type="button"
+              disabled={room?.conversationKind === 'agent_agent'}
               title={t('roomsReply')}
               aria-label={t('roomsReply')}
               onClick={() => onReply(message)}

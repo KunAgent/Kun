@@ -4,6 +4,7 @@ import type { RoomMember } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import type { RoomPresetCatalog, RoomRepositoryInput } from './rooms-client'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
+import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
 
 const words = (value: string) =>
@@ -88,7 +89,8 @@ export function RoomMemberEditor({
       <legend className="px-1 text-sm text-ds-muted">
         {member.displayName}
       </legend>
-      <RoomAvatarPicker member={member} onChange={(avatar) => onChange({ avatar })} />
+      {member.participantAgentId ? <><RoomAvatar member={member} label={member.displayName} size={48} />
+        <p className="rooms-run-note">{t('agentsMembershipHint')}</p></> : <RoomAvatarPicker member={member} onChange={(avatar) => onChange({ avatar })} />}
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs text-ds-muted">
           {t('roomsMemberName')}
@@ -96,6 +98,7 @@ export function RoomMemberEditor({
             required
             maxLength={80}
             className={roomFieldClass}
+            disabled={Boolean(member.participantAgentId)}
             value={member.displayName}
             onChange={(event) => onChange({ displayName: event.target.value })}
           />
@@ -123,6 +126,7 @@ export function RoomMemberEditor({
         {t('roomsProfile')}
         <select
           className={roomFieldClass}
+          disabled={Boolean(member.participantAgentId)}
           value={member.presetId}
           onChange={(event) => onChange({ presetId: event.target.value })}
         >

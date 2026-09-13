@@ -39,6 +39,7 @@ export function RoomTimeline({
   onSearchClose,
   onMember,
   onRun,
+  onHandoff,
   onReplyThread,
   onOpenContent
 }: {
@@ -56,6 +57,7 @@ export function RoomTimeline({
   onSearchClose?: () => void
   onMember?: (id: string, rootRequestId?: string) => void
   onRun?: (id: string) => void
+  onHandoff?: (id: string) => void
   onReplyThread?: (message: RoomMessage) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
 }) {
@@ -318,6 +320,7 @@ export function RoomTimeline({
     <RoomMessageRow
       room={room}
       onOpenContent={onOpenContent}
+      onHandoff={onHandoff}
       onRun={onRun ? (id) => { setFocused(null); onRun(id) } : undefined}
       message={message}
       member={room.members.find(
