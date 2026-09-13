@@ -135,6 +135,16 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
   const idle = () => poll(async () => !(await requests()).some((entry) => ['pending', 'running', 'stopping', 'recovery_required'].includes(entry.status)) &&
     (await topics()).every((topic) => topic.status === 'idle' && topic.pendingCount === 0), 30000, 'experience topics settle')
   const quiet = async (label, action, allowed = [], expectedFixtureRequests = 0) => {
+    let stableSince = 0, previousModels = JSON.stringify(fixture.snapshot())
+    await poll(async () => {
+      const states = await Promise.all(room.members.filter((member) => member.participantAgentId)
+        .map((member) => request(page, '/v1/agents/' + member.participantAgentId + '/memory-work')))
+      const models = JSON.stringify(fixture.snapshot())
+      if (models !== previousModels || states.some((state) => state.jobs.some((job) => ['pending', 'running'].includes(job.status)))) stableSince = 0
+      else stableSince ||= Date.now()
+      previousModels = models
+      return stableSince > 0 && Date.now() - stableSince >= 1800
+    }, 30000, 'prior memory work settles before presentation assertions')
     const before = counts(), allModelsBefore = fixture.snapshot(), start = (await traffic(page)).length, requestCount = (await requests()).length
     const budget = (await topics()).map(({ rootRequestId, responseCount, triageCount, generation }) => ({ rootRequestId, responseCount, triageCount, generation }))
     await action(); await page.waitForTimeout(300)
@@ -299,31 +309,39 @@ async function exerciseRoomsExperience({ page, request, poll, capture, fixture, 
     })
 
     await quiet('avatar selection and upload change presentation only', async () => {
+      const agentId = room.members[0].participantAgentId
+      assert(agentId, 'Room member must reference a persistent Agent')
       const settings = async () => {
-        await page.getByRole('button', { name: 'More actions', exact: true }).click()
-        await page.getByRole('button', { name: 'Room settings', exact: true }).click()
-        const dialog = page.getByRole('dialog', { name: 'Room settings', exact: true }); await dialog.waitFor(); return dialog
+        await closeDrawer(page)
+        await page.getByRole('button', { name: 'Room details', exact: true }).click()
+        await drawer(page).getByRole('button', { name: 'Members', exact: true }).click()
+        await activeDrawer(page).locator('.rooms-member-card').first().getByRole('button', { name: 'Agent profile and memory', exact: true }).click()
+        await activeDrawer(page).getByRole('button', { name: 'Choose avatar', exact: true }).waitFor()
+        return activeDrawer(page)
       }
       let dialog = await settings()
-      await dialog.getByRole('button', { name: 'Choose avatar', exact: true }).first().click()
+      await dialog.getByRole('button', { name: 'Choose avatar', exact: true }).click()
       const choice = page.getByRole('dialog', { name: 'Choose avatar', exact: true }).locator('.rooms-avatar-picker-option').nth(5)
       const avatarId = await choice.locator('[data-avatar-id]').getAttribute('data-avatar-id')
       await choice.click()
-      await dialog.getByRole('button', { name: 'Choose avatar', exact: true }).first().click()
+      await dialog.getByRole('button', { name: 'Choose avatar', exact: true }).click()
       assert.equal(await page.getByRole('dialog', { name: 'Choose avatar', exact: true }).locator('[aria-pressed="true"]').count(), 1)
       await shot('avatar-selected-marker'); await page.keyboard.press('Escape')
-      await dialog.getByRole('button', { name: 'Save changes', exact: true }).click()
-      await dialog.waitFor({ state: 'detached' })
+      await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+      await poll(async () => (await request(page, '/v1/agents/' + agentId)).agent.avatar?.id === avatarId, 10000, 'global avatar selected')
+      await closeDrawer(page)
       room = (await request(page, base)).room
       assert.deepEqual(room.members[0].avatar, { kind: 'builtin', id: avatarId })
       dialog = await settings()
-      await dialog.locator('.rooms-avatar-picker-field input[type="file"]').first().setInputFiles({ name: 'experience-avatar.png', mimeType: 'image/png', buffer: Buffer.from(imageData, 'base64') })
-      await dialog.locator('.rooms-avatar-picker-field .rooms-avatar img').first().waitFor()
+      await dialog.locator('.rooms-avatar-picker-field input[type="file"]').setInputFiles({ name: 'experience-avatar.png', mimeType: 'image/png', buffer: Buffer.from(imageData, 'base64') })
+      await dialog.locator('.rooms-avatar-picker-field .rooms-avatar img').waitFor()
       await shot('avatar-upload-preview')
-      await dialog.getByRole('button', { name: 'Save changes', exact: true }).click(); await dialog.waitFor({ state: 'detached' })
+      await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+      await poll(async () => (await request(page, '/v1/agents/' + agentId)).agent.avatar?.kind === 'uploaded', 10000, 'global uploaded avatar saved')
+      await closeDrawer(page)
       room = (await request(page, base)).room
       assert.equal(room.members[0].avatar.kind, 'uploaded')
-    }, [/\/v1\/rooms\/avatars$/, new RegExp('^' + base + '$')])
+    }, [/\/v1\/rooms\/avatars$/, /^\/v1\/agents\/[^/]+$/])
 
     // Preferences and filtered lists update from SSE without changing execution or reviving muted notices.
     const { room: other } = await request(page, '/v1/rooms', 'POST', { clientRequestId: 'experience-other', name: 'Experience other room' })

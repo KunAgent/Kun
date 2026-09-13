@@ -28,6 +28,7 @@ const { exerciseRoomHardening } = require('./smoke-rooms-hardening-controls.cjs'
 const { roomPeerModelFixture, exercisePeerRoom } = require('./smoke-rooms-peer-controls.cjs')
 const { exerciseRoomsUi } = require('./smoke-rooms-ui-controls.cjs')
 const { exerciseTaskRoomRuns } = require('./smoke-rooms-run-inspector.cjs')
+const { independentAgentModelFixture, exerciseIndependentAgents } = require('./smoke-independent-agents.cjs')
 const { roomExperienceModelFixture, exerciseRoomsExperience } = require('./smoke-rooms-experience-controls.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 
@@ -156,6 +157,15 @@ async function main() {
     const experienceScenario = () => exerciseRoomsExperience({ page, request: runtimeRequest, poll, capture,
       fixture: modelFixture, home, profile, workspaceRoot, application: electronApplication,
       resize: (width, height) => resize(electronApplication, width, height) })
+    if (process.argv.includes('--agents-only')) {
+      const agents = await exerciseIndependentAgents({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+        resize: (width, height) => resize(electronApplication, width, height) })
+      assert.deepEqual(pageErrors, [])
+      result = { ok: true, scenario: 'agents-only', agents, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
+      await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+      return
+    }
     if (process.argv.includes('--experience-only')) {
       const experience = await experienceScenario()
       assert.deepEqual(pageErrors, [])
@@ -371,6 +381,8 @@ async function main() {
     }), 'Underlying mode trigger paints above the narrow task overlay')
     const peer = await exercisePeerRoom({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
       resize: (width, height) => resize(electronApplication, width, height) })
+    const agents = process.argv.includes('--with-agents') ? await exerciseIndependentAgents({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+      resize: (width, height) => resize(electronApplication, width, height) }) : undefined
     const experience = await experienceScenario()
     const ui = process.argv.includes('--ui-visual') ? await uiScenario() : undefined
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
@@ -379,7 +391,7 @@ async function main() {
     assert.equal(integrationInputsResolved, 1, 'Expected integration execution-specific structured input')
     result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
-      baselineSha, targetSha, agreement, hardening, peer, experience, ui, taskRuns, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      baselineSha, targetSha, agreement, hardening, peer, agents, experience, ui, taskRuns, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
       nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
       narrowViewport, pageErrors, screenshots,
@@ -566,7 +578,7 @@ async function poll(check, timeoutMs, description) {
 }
 
 async function startModelFixture() {
-  const peerFixture = roomPeerModelFixture(), experienceFixture = roomExperienceModelFixture()
+  const peerFixture = roomPeerModelFixture(), experienceFixture = roomExperienceModelFixture(), agentFixture = independentAgentModelFixture()
   let releaseExecution
   const gate = new Promise((resolve) => { releaseExecution = resolve })
   let releaseCoordination
@@ -586,13 +598,13 @@ async function startModelFixture() {
       for await (const chunk of request) chunks.push(chunk)
       const body = JSON.parse(Buffer.concat(chunks).toString())
       const messageText = (message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? '')
-      const principal = body.messages.findLastIndex((message) => message.role === 'user' && /You coordinate a personal Kun room|Complete this authorized room task|Review this immutable|Run exactly the declared|Compress project agreements|Participate as this Kun room member/.test(messageText(message)))
+      const principal = body.messages.findLastIndex((message) => message.role === 'user' && /You coordinate a personal Kun room|Complete this authorized room task|Review this immutable|Run exactly the declared|Compress project agreements|Participate as this Kun room member|Provide read-only assistance for this scoped Agent handoff/.test(messageText(message)))
       const messages = body.messages.slice(Math.max(0, principal))
       const prompt = JSON.stringify(messages)
       let content = 'Completed.', toolCalls
       const called = (name) => messages.some((message) => message.tool_calls?.some((tool) => tool.function?.name === name))
       const tool = (name, args) => [{ index: 0, id: 'smoke-' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
-      const peerResponse = experienceFixture.respond({ body, prompt, called, tool }) ??
+      const peerResponse = agentFixture.respond({ body, prompt, called, tool }) ?? experienceFixture.respond({ body, prompt, called, tool }) ??
         await peerFixture.respond({ body, prompt, called, tool })
       if (peerResponse) { content = peerResponse.content; toolCalls = peerResponse.toolCalls }
       else if (prompt.includes('Compress project agreements')) {
@@ -655,7 +667,7 @@ async function startModelFixture() {
   })
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   return { baseUrl: `http://127.0.0.1:${server.address().port}`, releaseExecution, releaseCoordination, releaseUi, releasePeer: peerFixture.release,
-    snapshot: () => ({ ...state, ...peerFixture.snapshot(), ...experienceFixture.snapshot() }), close: () => new Promise((resolve, reject) => {
+    snapshot: () => ({ ...state, ...peerFixture.snapshot(), ...experienceFixture.snapshot(), ...agentFixture.snapshot() }), close: () => new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
       server.closeAllConnections?.()
     }) }
