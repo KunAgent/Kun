@@ -50,6 +50,43 @@ class ReasoningOnlyModel implements ModelClient {
   }
 }
 
+/**
+ * Mirrors the room coordination incident: the model submits the scoped room
+ * result tool, then the provider finishes the follow-up round with a bare
+ * reasoning item (HTTP 200, real usage, no visible content).
+ */
+class SubmitThenEmptyModel implements ModelClient {
+  readonly provider = 'test'
+  readonly model = 'submit-then-empty-model'
+  private calls = 0
+
+  async *stream(): AsyncIterable<ModelStreamChunk> {
+    this.calls += 1
+    if (this.calls === 1) {
+      yield {
+        kind: 'tool_call_complete',
+        callId: 'call_room_plan',
+        toolName: 'submit_room_plan',
+        arguments: { kind: 'answer', response: 'Hi! How can I help?', participants: [], assignments: [] }
+      }
+      yield { kind: 'completed', stopReason: 'tool_calls' }
+      return
+    }
+    yield { kind: 'completed', stopReason: 'stop' }
+  }
+}
+
+const submitRoomPlanTool = LocalToolHost.defineTool({
+  name: 'submit_room_plan',
+  description: 'Submit the structured room decision for the current user request.',
+  toolKind: 'tool_call',
+  inputSchema: { type: 'object' },
+  policy: 'auto',
+  sideEffect: 'read-only',
+  shouldAdvertise: (context) => context.roomStepKind === 'coordination',
+  execute: async (args) => ({ output: { accepted: true, value: args } })
+})
+
 describe('AgentLoop empty model response safety net', () => {
   it('fails the turn visibly instead of persisting a completed empty answer', async () => {
     const harness = createHarness(new UsageOnlyModel())
@@ -88,9 +125,31 @@ describe('AgentLoop empty model response safety net', () => {
       .toBe(false)
     expect(events.some((event) => event.kind === 'turn_completed')).toBe(true)
   })
+
+  it('completes a room step when the scoped result was already submitted', async () => {
+    const harness = createHarness(new SubmitThenEmptyModel(), {
+      toolHost: new LocalToolHost({ tools: [submitRoomPlanTool] })
+    })
+    const started = await startTurn(harness, 'thr_room', {
+      roomId: 'room-1',
+      memberId: 'member-1',
+      kind: 'coordination',
+      allowedToolNames: ['submit_room_plan'],
+      blockedToolNames: [],
+      blockedProviderIds: [],
+      blockedSkillIds: []
+    })
+
+    await expect(harness.loop.runTurn('thr_room', started.turnId)).resolves.toBe('completed')
+
+    const events = harness.eventBus.snapshotSince('thr_room', 0)
+    expect(events.some((event) => event.kind === 'error' && event.code === 'model_empty_response'))
+      .toBe(false)
+    expect(events.some((event) => event.kind === 'turn_completed')).toBe(true)
+  })
 })
 
-function createHarness(model: ModelClient) {
+function createHarness(model: ModelClient, options: { toolHost?: LocalToolHost } = {}) {
   const sessionStore = new InMemorySessionStore()
   const threadStore = new InMemoryThreadStore()
   const eventBus = new InMemoryEventBus()
@@ -114,7 +173,7 @@ function createHarness(model: ModelClient) {
     approvalGate: { request: async () => 'allow' } as never,
     userInputGate: {} as never,
     model,
-    toolHost: new LocalToolHost({ tools: [] }),
+    toolHost: options.toolHost ?? new LocalToolHost({ tools: [] }),
     usage: new UsageService(),
     events,
     turns,
@@ -130,13 +189,15 @@ function createHarness(model: ModelClient) {
 
 async function startTurn(
   harness: ReturnType<typeof createHarness>,
-  threadId: string
+  threadId: string,
+  roomContext?: Parameters<typeof createThreadRecord>[0]['roomContext']
 ) {
   await harness.threadStore.upsert(createThreadRecord({
     id: threadId,
     title: 'Empty response',
     workspace: '/tmp/workspace',
-    model: harness.model.model
+    model: harness.model.model,
+    ...(roomContext ? { roomContext } : {})
   }))
   return harness.turns.startTurn({
     threadId,
