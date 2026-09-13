@@ -24,9 +24,11 @@ export async function createKunServeRuntime(
     const services = await createRuntimeServices(model)
     const registry = createRuntimeRegistry(services)
     const agent = await createRuntimeAgentComposition(registry)
-    const extensions = await createRuntimeExtensionComposition(agent)
+    let runtime: ServerRuntime | undefined
+    const extensions = await createRuntimeExtensionComposition(agent, () => runtime?.rooms)
     const config = createRuntimeConfigController(extensions)
-    return createServerRuntimeComposition(extensions, config)
+    runtime = createServerRuntimeComposition(extensions, config)
+    return runtime
   } catch (error) {
     await dataDirLease?.release().catch(() => undefined)
     throw error

@@ -141,6 +141,7 @@ import {
 } from './tools.js'
 
 import { ExtensionHostClient } from './client.js'
+import type { RoomsApi } from './rooms.js'
 
 export interface ExtensionContext extends ActivationContextData {
   readonly subscriptions: DisposableStore
@@ -152,6 +153,7 @@ export interface ExtensionContext extends ActivationContextData {
   readonly network: NetworkApi
   readonly ui: UiApi
   readonly agent: AgentApi
+  readonly rooms: RoomsApi
   readonly threads: ThreadsApi
   readonly tools: ToolsApi
   readonly modelProviders: ModelProvidersApi
@@ -181,6 +183,7 @@ export function createExtensionContext(
     network: client.network,
     ui: client.ui,
     agent: client.agent,
+    rooms: client.rooms,
     threads: client.threads,
     tools: client.tools,
     modelProviders: client.modelProviders,

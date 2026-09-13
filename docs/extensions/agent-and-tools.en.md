@@ -12,6 +12,8 @@ An extension can ask the Kun Agent to do work for its application and can regist
 | --- | --- |
 | Create, steer, and cancel owned Runs | `agent.run` |
 | Query projections of owned threads/runs | `agent.threads.readOwn` |
+| Read global turn capacity | `agent.capacity.read` |
+| Read all local room projections | `rooms.read` |
 | Register Manifest-declared tools | `tools.register` |
 | Read/write workspace, network, or account during work | Corresponding `workspace.*`, `network:*`, and `accounts.use:*` |
 
@@ -21,6 +23,7 @@ Permissions authorize broker operations only. Every model/tool step rechecks gra
 
 v1 provides:
 
+- `agent.capacity` (v1.5)
 - `agent.getRunOptions`
 - `agent.createRun`
 - `agent.listRunEvents`
@@ -47,6 +50,31 @@ const { run } = await context.agent.createRun({
 ```
 
 `model` and `reasoningEffort` apply only to a new Run/Turn; `steer` cannot change an active Run. The Host rejects unconfigured models, efforts unsupported by that model, and requests that combine a Host model choice with an extension-owned `providerBinding`. The Run projection's `model` and optional `reasoningEffort` are the values actually admitted.
+
+## Global capacity and read-only Rooms (v1.5)
+
+`agent.capacity()` requires `agent.capacity.read` and returns only `{ activeTurns, queuedTurns, maxConcurrentTurns, busy }`. Counts include GUI, TUI, CLI, API, IM, extension, and room turns sharing Kun's admission queue. `busy` is `activeTurns > 0 || queuedTurns > 0`; it signals local activity rather than whether another turn can be admitted. No thread, turn, owner, or lease identity is returned.
+
+`context.rooms` requires `rooms.read` on every call. This grant covers all local rooms in the same trust domain; it does not change ownership checks on Agent or thread APIs and does not grant any room mutation or approval operation.
+
+```ts
+const capacity = await context.agent.capacity()
+const rooms = await context.rooms.list({ limit: 50 })
+const roomId = rooms.items[0]?.id
+if (roomId) {
+  const messages = await context.rooms.listMessages({ roomId, limit: 50 })
+  const tasks = await context.rooms.listTasks({ roomId, status: 'running' })
+  const events = await context.rooms.listEvents({ roomId, after: 0 })
+}
+```
+
+All four Rooms methods default to 50 items and accept integer limits from 1 to 100. `list`, `listMessages`, and `listTasks` return `{ items, page: { hasMore, nextCursor? } }`; pass the returned cursor unchanged to the same method and filters. Room listing uses the local pin/activity ordering and an opaque cursor. Message/task history pages move toward older records; messages within each page are chronological and tasks are newest-first. The requested limit is an upper bound: message pages can be shorter to fit Host transport size limits while preserving complete message bodies. `listEvents` returns `{ items, cursor, hasMore }` after the numeric `after` cursor. Its cursor advances over omitted internal events too, so persist the response cursor even when `items` is empty.
+
+Room summaries contain only `id`, `name`, `collaborationMode`, `updatedAt`, `memberCount`, and counts for each public task status. Messages contain `id`, optional `authorMemberId`, `authorDisplayName`, `body`, `createdAt`, optional `replyToMessageId`, `mentionedMemberIds`, and attachment `{ id, displayName }` values. Message text is readable under this scope. Task summaries contain `id`, `status`, `title`, `memberId`, optional `repositoryDisplayName`, and `updatedAt`.
+
+Events expose only `type`, `sequence`, `timestamp`, `roomId`, and a strict `{ id, taskId? }` payload. Public types are `room.created`, `room.updated`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.cleaned`, `task.recovered`, and `task.amended`; use them to refresh the corresponding projection. Repository/attachment filesystem metadata, tool arguments/results, prompts, credentials, and internal turn/lease/dispatch state are omitted.
+
+New consumers declare `apiVersion: 1.5.0` and the required read scopes. Manifest compatibility checks are unchanged. Extensions targeting older hosts can feature-detect `context.agent.capacity?.()` and omit local busy information when the method is absent.
 
 ## Create a Run
 

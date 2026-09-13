@@ -105,7 +105,7 @@
   "dependencies": {
     "@computer-use/nut-js": "^4.2.0",
     "@google/design.md": "0.3.0",
-    "@kun/extension-api": "1.4.0",
+    "@kun/extension-api": "1.5.0",
     "@kun/provider-catalog": "0.1.0",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "@modelcontextprotocol/sdk": "^1.29.0",

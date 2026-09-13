@@ -8,6 +8,7 @@ import type {
   RevealSecretRequest
 } from './accounts.js'
 import type {
+  AgentCapacitySnapshot,
   AgentCancelRequest,
   AgentCreateRunRequest,
   AgentCreateRunResponse,
@@ -281,6 +282,8 @@ export interface AgentRunSubscription extends Disposable {
 }
 
 export interface AgentApi {
+  /** Requires agent.capacity.read; busy means at least one running or queued turn. */
+  capacity(): Promise<AgentCapacitySnapshot>
   getRunOptions(): Promise<AgentRunOptions>
   createRun(request: AgentCreateRunRequest): Promise<AgentCreateRunResponse>
   getRun(runId: string): Promise<AgentRun>
