@@ -40,6 +40,7 @@ export const RuntimeMigrationSnapshotRecord = z.object({
   type: z.enum([
     'metadata',
     'thread',
+    'history-reference',
     'session',
     'item',
     'event',

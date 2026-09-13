@@ -51,8 +51,14 @@ export function projectCodexRecord(record: JsonObject, fullContent = false): Ite
 
 function projectCodexContent(record: JsonObject, fullContent = false): ItemContent[] {
   const payload = object(record.payload)
+  if (record.type === 'inter_agent_communication') return [{
+    kind: 'assistant_text', text: string(payload.content) || '[Encrypted Codex agent message is unavailable.]'
+  }]
   if (record.type !== 'response_item') return []
   const type = string(payload.type)
+  if (type === 'agent_message') return [{
+    kind: 'assistant_text', text: contentText(payload.content) || '[Encrypted Codex agent message is unavailable.]'
+  }]
   if (type === 'message') {
     const role = string(payload.role)
     if (role !== 'user' && role !== 'assistant') return []
@@ -95,7 +101,7 @@ function projectCodexContent(record: JsonObject, fullContent = false): ItemConte
 
 export function toTurnItem(
   item: ItemContent,
-  base: { id: string; turnId: string; threadId: string; createdAt: string }
+  base: { id: string; turnId: string; threadId: string; createdAt: string; sourceHistoryOrder?: TurnItem['sourceHistoryOrder'] }
 ): TurnItem {
   const common = { ...base, status: 'completed' as const, finishedAt: base.createdAt }
   if (item.kind === 'tool_call') return {

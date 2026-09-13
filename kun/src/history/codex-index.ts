@@ -3,6 +3,7 @@ import type { HistorySourceFile } from '../contracts/history-reference.js'
 import { readCodexLines, object, string, type CodexLine } from './codex-jsonl.js'
 import { isCodexPath, resolveCodexParentPath } from './codex-discovery.js'
 import { projectCodexRecord } from './codex-projection.js'
+import { isCodexUserTurnBoundary } from './codex-turn-boundary.js'
 
 export interface IndexedItem {
   offset: number
@@ -17,8 +18,10 @@ export interface IndexedTurn {
   createdAt: string
   label: string
   filePath: string
+  workspace: string
   items: IndexedItem[]
   complete: boolean
+  countsAsUserTurn: boolean
   boundary: HistorySourceFile
 }
 export interface CodexIndex {
@@ -52,6 +55,7 @@ export async function indexCodexFile(
   let current: IndexedTurn | undefined
   let turnContext = ''
   let currentTurnId = ''
+  let initialWorkspace = ''
   let sequence = 0
   let explicitLifecycle = false
   let last: CodexLine | undefined
@@ -89,6 +93,7 @@ export async function indexCodexFile(
       }
       index.turns.push(...turns)
       const final = turns.at(-1)
+      index.workspace ||= final?.workspace || parent.workspace
       index.files.push(...parent.files.filter((file) => file.path !== parent.path))
       if (cutoff && final) index.files.push(final.boundary)
       else if (parentSource) index.files.push(parentSource)
@@ -100,7 +105,8 @@ export async function indexCodexFile(
     currentTurnId = identity
     current = {
       id: `codex:${index.sessionId}:${identity || `record-${line.ordinal}`}`, createdAt: timestamp,
-      label: '', filePath: path, items: [], complete: false, boundary: source(line)
+      label: '', filePath: path, workspace: index.workspace, items: [], complete: false,
+      countsAsUserTurn: false, boundary: source(line)
     }
     if (index.turns.some((turn) => turn.id === current?.id)) current.id += `:${sequence}`
     index.turns.push(current)
@@ -116,19 +122,27 @@ export async function indexCodexFile(
     index.updatedAt = timestamp
     if (record.type === 'session_meta') {
       index.sessionId = string(payload.id) || index.sessionId
-      index.workspace = string(payload.cwd)
+      index.workspace = string(payload.cwd) || index.workspace
       index.createdAt = string(payload.timestamp) || timestamp
       index.title = string(payload.title).slice(0, 120)
       if (payload.history_base) await includeParent(payload.history_base)
+      initialWorkspace = index.workspace
       continue
     }
     if (record.type === 'history_base') {
       if (current) warnings.add('A parent reference after conversation content was skipped.')
-      else await includeParent(record.payload)
+      else {
+        await includeParent(record.payload)
+        initialWorkspace ||= index.workspace
+      }
       continue
     }
     if (record.type === 'turn_context') {
       turnContext = string(payload.turn_id)
+      index.workspace = string(payload.cwd) || index.workspace
+      if (current && !current.complete && (!turnContext || !currentTurnId || currentTurnId === turnContext)) {
+        current.workspace = index.workspace
+      }
       // Older start events omit the ID; the following context supplies it.
       if (current && explicitLifecycle && !currentTurnId && turnContext) {
         currentTurnId = turnContext
@@ -152,7 +166,20 @@ export async function indexCodexFile(
       if (payload.type === 'thread_rolled_back' || payload.type === 'session_rollback') {
         const count = Number(payload.num_turns ?? payload.turns)
         if (Number.isSafeInteger(count) && count > 0) {
-          index.turns.splice(Math.max(0, index.turns.length - count))
+          let start = index.turns.length
+          let remaining = count
+          let cutoff: number | undefined
+          while (start > 0 && remaining > 0) {
+            start -= 1
+            if (index.turns[start].countsAsUserTurn) {
+              remaining -= 1
+              cutoff = start
+            }
+          }
+          // Like Codex, retain records before the earliest actual input when
+          // a rollback exceeds the number of available input boundaries.
+          if (cutoff !== undefined) index.turns.splice(cutoff)
+          index.workspace = index.turns.at(-1)?.workspace || initialWorkspace
           current = undefined
           turnContext = ''
           currentTurnId = ''
@@ -167,11 +194,16 @@ export async function indexCodexFile(
       continue
     }
     const projected = projectCodexRecord(record)
+    const inputBoundary = isCodexUserTurnBoundary(record)
+    const newContext = Boolean(turnContext && currentTurnId !== turnContext)
+    const newUserTurn = inputBoundary &&
+      (!current || current.complete || (!turnContext && !explicitLifecycle))
+    if ((projected.length || inputBoundary) && (newContext || newUserTurn)) beginTurn(line, timestamp, turnContext)
+    if (current && inputBoundary) {
+      current.countsAsUserTurn = true
+      current.boundary = source(line)
+    }
     for (const item of projected) {
-      const newContext = Boolean(turnContext && currentTurnId !== turnContext)
-      const newUserTurn = item.kind === 'user_message' &&
-        (!current || current.complete || (!turnContext && !explicitLifecycle))
-      if (newContext || newUserTurn) beginTurn(line, timestamp, turnContext)
       if (!current) {
         warnings.add('Codex content without a recoverable turn was skipped.')
         continue
@@ -194,7 +226,7 @@ export async function indexCodexFile(
       }
       current.items.push(pointer)
       current.boundary = source(line)
-      if (item.kind === 'assistant_text' && (payload.channel ?? payload.phase) !== 'commentary' && !explicitLifecycle && pending.size === 0) {
+      if (item.kind === 'assistant_text' && !inputBoundary && (payload.channel ?? payload.phase) !== 'commentary' && !explicitLifecycle && pending.size === 0) {
         current.complete = true
       }
     }

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import type { ChatBlock } from '../agent/types'
 import { historyRequest, type HistoryPage } from './history-reference-api'
 import { useCodexReferenceEnabled } from './use-codex-reference-enabled'
+import { useThreadTurnTarget } from '../components/chat/thread-turn-target'
 
 type SourceRecord = { itemId: string; turnId: string; kind: string; label?: string }
 type Content = NonNullable<HistoryPage['content']>
@@ -21,10 +22,13 @@ export function sourceHistoryRecords(blocks: ChatBlock[]): SourceRecord[] {
 }
 
 /** Reads one bounded source segment into component memory; never adds it to chat history. */
-export function SourceHistoryRecordViewer({ blocks, referenceId }: { blocks: ChatBlock[]; referenceId?: string }): ReactElement | null {
+export function SourceHistoryRecordViewer({ blocks, referenceId, threadId }: { blocks: ChatBlock[]; referenceId?: string; threadId?: string | null }): ReactElement | null {
   const { t } = useTranslation('common')
   const enabled = useCodexReferenceEnabled()
-  const records = sourceHistoryRecords(blocks)
+  const records = useMemo(() => sourceHistoryRecords(blocks), [blocks])
+  const target = useThreadTurnTarget((state) => state.target)
+  const targetRecord = target && target.threadId === threadId ? records.find((record) => record.itemId === target.itemId && record.turnId === target.turnId) : undefined
+  const handledTarget = useRef<number | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [selected, setSelected] = useState<SourceRecord | null>(null)
   const [content, setContent] = useState<Content | null>(null)
@@ -33,11 +37,12 @@ export function SourceHistoryRecordViewer({ blocks, referenceId }: { blocks: Cha
   const [error, setError] = useState('')
   const request = useRef<AbortController | null>(null)
   useEffect(() => {
+    handledTarget.current = null
     setExpanded(false); setContent(null); setSelected(null); setLoading(false); setError('')
     return () => { request.current?.abort(); request.current = null }
   }, [referenceId, enabled])
 
-  async function read(record: SourceRecord, offset: number, previous: number[]): Promise<void> {
+  const read = useCallback(async (record: SourceRecord, offset: number, previous: number[]): Promise<void> => {
     if (!enabled || !referenceId) return
     request.current?.abort()
     const controller = new AbortController()
@@ -53,7 +58,13 @@ export function SourceHistoryRecordViewer({ blocks, referenceId }: { blocks: Cha
       setContent(page.content); setPreviousOffsets(previous)
     } catch (err) { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : String(err)) }
     finally { if (!controller.signal.aborted) setLoading(false) }
-  }
+  }, [enabled, referenceId, t])
+  useEffect(() => {
+    if (!enabled || !referenceId || !targetRecord || !target || handledTarget.current === target.revision) return
+    handledTarget.current = target.revision
+    setExpanded(true)
+    void read(targetRecord, 0, [])
+  }, [enabled, referenceId, targetRecord, target, read])
   function toggle(): void {
     if (expanded) {
       request.current?.abort(); request.current = null
@@ -62,7 +73,7 @@ export function SourceHistoryRecordViewer({ blocks, referenceId }: { blocks: Cha
     setExpanded(!expanded)
   }
   if (!records.length) return null
-  return <section className="mt-3 text-xs text-ds-muted" aria-label={t('codexHistoryRecordViewer')}>
+  return <section data-source-history-target={targetRecord ? 'true' : undefined} className="mt-3 text-xs text-ds-muted" aria-label={t('codexHistoryRecordViewer')}>
     <button type="button" onClick={toggle} aria-expanded={expanded} className="flex items-center gap-1.5 hover:text-ds-ink">
       {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<FileText size={13} />{t('codexHistoryRecordViewer')}
     </button>

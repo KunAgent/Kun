@@ -1,3 +1,4 @@
+import type { HistoryReferenceStore } from '../history/history-reference-store.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { appendFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
@@ -44,6 +45,7 @@ export class RuntimeMigrationService {
 
   constructor(private readonly deps: {
     rootDir: string
+    historyReferences?: HistoryReferenceStore
     threads: Pick<ThreadService, 'get'>
     turns: Pick<TurnService, 'interruptTurn'>
     sessions: SessionStore
@@ -69,6 +71,7 @@ export class RuntimeMigrationService {
     const exportedAttachmentIds = new Set<string>()
     const exportedArtifactIds = new Set<string>()
     const exportedMemoryIds = new Set<string>()
+    const exportedHistoryReferences = new Set<string>()
     let recordCount = 0
 
     try {
@@ -102,7 +105,8 @@ export class RuntimeMigrationService {
           request,
           exportedAttachmentIds,
           exportedArtifactIds,
-          exportedMemoryIds
+          exportedMemoryIds,
+          exportedHistoryReferences
         })
         recordCount += exported.records
         exportedThreadIds.push(threadId)
@@ -211,6 +215,7 @@ export class RuntimeMigrationService {
     exportedAttachmentIds: Set<string>
     exportedArtifactIds: Set<string>
     exportedMemoryIds: Set<string>
+    exportedHistoryReferences: Set<string>
   }): Promise<{ records: number }> {
     for (let attempt = 1; attempt <= SNAPSHOT_MUTATION_RETRIES; attempt += 1) {
       const temporaryPath = join(this.rootDir, `.${input.snapshotId}.${input.threadId}.${attempt}.tmp`)
@@ -241,12 +246,21 @@ export class RuntimeMigrationService {
           ownerId: input.threadId,
           value: normalizeThreadForHistory(thread, this.deps.nowIso())
         }, 'wx')
+        if (thread.historyRefId && !input.exportedHistoryReferences.has(thread.historyRefId)) {
+          const reference = await this.deps.historyReferences?.get(thread.historyRefId)
+          if (!reference) throw new RuntimeMigrationSnapshotError(
+            `history reference is missing: ${thread.historyRefId}`, 'malformed_history')
+          records += await appendSnapshotRecord(temporaryPath, { schemaVersion: 1,
+            type: 'history-reference', value: reference })
+        }
         if (session) {
           records += await appendSnapshotRecord(temporaryPath, {
             schemaVersion: SNAPSHOT_SCHEMA_VERSION,
             type: 'session',
             ownerId: input.threadId,
-            value: sanitizeMigrationValue({ ...session, items: [], events: [], closed: true })
+            value: sanitizeMigrationValue({ ...session,
+              ...(thread.historyRefId ? { historyRefId: thread.historyRefId, workspace: thread.workspace } : {}),
+              items: [], events: [], closed: true })
           })
         }
         for (const item of itemSnapshot.items) {
@@ -320,6 +334,7 @@ export class RuntimeMigrationService {
           for (const id of attemptContent.exportedAttachmentIds) input.exportedAttachmentIds.add(id)
           for (const id of attemptContent.exportedArtifactIds) input.exportedArtifactIds.add(id)
           for (const id of attemptContent.exportedMemoryIds) input.exportedMemoryIds.add(id)
+          if (thread.historyRefId) input.exportedHistoryReferences.add(thread.historyRefId)
           return { records }
         }
       } finally {

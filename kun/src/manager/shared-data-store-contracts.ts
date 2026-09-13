@@ -85,14 +85,19 @@ export function ownerLeaseExpiredItemId(turnId: string): string {
 }
 
 export const AgentSessionSchema = z.object({
+  historyRefId: z.string().min(1).optional(),
+  workspace: z.string().min(1).optional(),
   threadId: ThreadIdSchema,
-  turnId: z.string().min(1).max(256),
+  turnId: z.string().max(256),
   startedAt: z.string(),
   updatedAt: z.string(),
   items: z.array(TurnItem),
   events: z.array(RuntimeEvent),
   closed: z.boolean()
-})
+}).refine((session) => session.turnId.length > 0 || (
+  Boolean(session.historyRefId) && session.items.length === 0 &&
+  session.events.every((event) => !event.turnId)
+), { message: 'An empty turn ID is only valid for an empty external-history branch snapshot' })
 
 export const SessionUsageQuerySchema = z.object({
   threadId: ThreadIdSchema.optional(),

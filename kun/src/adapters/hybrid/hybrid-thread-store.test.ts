@@ -263,8 +263,8 @@ describe('HybridThreadStore filesystem surface fallback', () => {
     await Promise.all(records.map((record) => writeThreadDocument(root, record)))
     await store.ready()
     store.close()
-    const source = store as unknown as { threadIdsFromFilesystem(): Promise<string[]> }
-    const scan = vi.spyOn(source, 'threadIdsFromFilesystem')
+    const source = store as unknown as { filesystemThreadIds(): Promise<string[]> }
+    const scan = vi.spyOn(source, 'filesystemThreadIds')
 
     const first = await store.listPage({ includeArchived: true, limit: 1 })
     const second = await store.listPage({
@@ -403,10 +403,10 @@ describe('HybridThreadStore index backfill failure fallback', () => {
     await writeThreadDocument(root, diskOnly)
 
     const store = new HybridThreadStore({ dataDir: root })
-    const source = store as unknown as { threadIdsFromFilesystem(): Promise<string[]> }
-    const real = source.threadIdsFromFilesystem.bind(source)
+    const source = store as unknown as { filesystemThreadIds(): Promise<string[]> }
+    const real = source.filesystemThreadIds.bind(source)
     let failNext = true
-    const enumeration = vi.spyOn(source, 'threadIdsFromFilesystem').mockImplementation(async () => {
+    const enumeration = vi.spyOn(source, 'filesystemThreadIds').mockImplementation(async () => {
       if (failNext) { failNext = false; throw new Error('simulated enumeration failure') }
       return real()
     })

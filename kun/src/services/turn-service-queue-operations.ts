@@ -191,6 +191,7 @@ export const turnServiceQueueOperations = {
       fileReferences: input.request.fileReferences ?? [],
       workspaceCheckpointId: input.request.workspaceCheckpointId,
       workspace: thread.workspace,
+      historyRefId: thread.historyRefId,
       threadAgentSurface: designAdmission.locksSurface && designAdmission.effectiveSurface
         ? designAdmission.effectiveSurface
         : resolveThreadAgentSurface(thread),

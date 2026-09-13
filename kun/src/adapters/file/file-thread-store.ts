@@ -1,3 +1,4 @@
+import { hasThreadHistoryReference } from '../hybrid/hybrid-thread-reference-lookup.js'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type {
@@ -47,6 +48,10 @@ export class FileThreadStore implements ThreadStore {
     this.dataDir = resolve(options.dataDir, 'threads')
     this.now = options.now ?? (() => new Date())
     this.writeFile = options.writeFile ?? atomicWriteFile
+  }
+
+  hasHistoryReference(referenceId: string): Promise<boolean> {
+    return hasThreadHistoryReference(this.dataDir, referenceId, (id) => this.get(id))
   }
 
   async list(options: ThreadStoreListOptions = {}): Promise<ThreadSummary[]> {

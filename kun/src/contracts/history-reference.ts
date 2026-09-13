@@ -40,6 +40,8 @@ export interface CodexSessionSummary {
 export interface HistoryCutoff {
   turnId: string
   createdAt: string
+  /** Effective source workspace at this completed branch point. */
+  workspace?: string
   /** Bounded preview only; never stored in HistoryReference. */
   label: string
 }

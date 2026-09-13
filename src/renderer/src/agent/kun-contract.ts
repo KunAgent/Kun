@@ -87,6 +87,7 @@ export type CoreThreadTimelineJson = CoreThreadJson & {
   activeTurn?: Omit<CoreTurnJson, 'items'> | null
   latestTurn?: Omit<CoreTurnJson, 'items'> | null
   timeline: {
+    target?: { turnId: string; itemId?: string; previousCursor?: string; nextCursor?: string }
     nextCursor?: string
     hasMore: boolean
     itemCount: number

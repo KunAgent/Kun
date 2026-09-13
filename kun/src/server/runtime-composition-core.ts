@@ -235,6 +235,7 @@ export async function createRuntimeCore(
       abortThreadExecution?.(threadId)
       await stopThreadAuxiliaryWork?.(threadId)
     },
+    recoverHistoryReference: (threadId) => historyReferences.recoverBinding(threadId),
     withHistoryReferenceMutation: (operation) => historyReferences.store.withLifecycleMutation(operation),
     onDeleted: async (threadId, historyRefId) => {
       eventStreamRegistry.closeThread(threadId)

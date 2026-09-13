@@ -384,8 +384,10 @@ export type ChartBlock = {
   spec: RendererChartSpec
 }
 
+export type SourceHistoryOrder = { referenceId: string; turnIndex: number; itemIndex: number }
 export type SourceHistoryAttachment = { index: number; name: string; mimeType?: string }
 export type ChatBlock = ({
+  sourceHistoryOrder?: SourceHistoryOrder
   sourceAttachments?: SourceHistoryAttachment[]
   sourceRecords?: Array<{ itemId: string; kind: string }>
   sourceItemId?: string

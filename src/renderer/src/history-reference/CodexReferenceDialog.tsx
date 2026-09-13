@@ -23,7 +23,11 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
   const [before, setBefore] = useState('')
   const [preview, setPreview] = useState<HistoryPreview | null>(null)
   const [cutoff, setCutoff] = useState('')
-  const [workspace, setWorkspace] = useState('')
+  const [workspaceOverride, setWorkspaceOverride] = useState('')
+  const [workspaceDirty, setWorkspaceDirty] = useState(false)
+  const sourceWorkspace = (cutoff ? preview?.cutoffs.find((entry) => entry.turnId === cutoff)?.workspace : undefined) ?? preview?.session.workspace ?? ''
+  const workspace = workspaceDirty ? workspaceOverride : sourceWorkspace || workspaceRoot
+  const editWorkspace = (value: string): void => { setWorkspaceOverride(value); setWorkspaceDirty(true) }
   const [loading, setLoading] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -66,7 +70,7 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
       setPreview((current) => more && current?.session.path === path ? {
         ...result, page: { ...result.page, turns: [...result.page.turns, ...current.page.turns] }
       } : result)
-      if (!more) { setCutoff(''); setWorkspace(result.session.workspace || workspaceRoot) }
+      if (!more && preview?.session.path !== path) { setCutoff(''); setWorkspaceOverride(''); setWorkspaceDirty(false) }
     } catch (err) {
       if (version === previewVersion.current) setError(err instanceof Error ? err.message : String(err))
     } finally { if (version === previewVersion.current) setPreviewLoading(false) }
@@ -80,7 +84,7 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
     if (!paths.length) return
     setSelected(paths)
     if (paths.length === 1) await showPreview(paths[0]!)
-    else { setPreview(null); setCutoff('') }
+    else { ++previewVersion.current; setPreview(null); setCutoff(''); setWorkspaceDirty(false) }
   }
 
   async function createBranches(): Promise<void> {
@@ -92,7 +96,7 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
       const input = {
         path,
         ...(selected.length === 1 && preview?.session.path === path && cutoff ? { cutoffTurnId: cutoff } : {}),
-        ...(selected.length === 1 && preview?.session.path === path && workspace ? { workspace } : {}),
+        ...(selected.length === 1 && preview?.session.path === path && workspace && (workspaceDirty || !sourceWorkspace) ? { workspace } : {}),
         ...(current.composerModel ? { model: current.composerModel } : {}),
         ...(current.composerProviderId ? { providerId: current.composerProviderId } : {})
       }
@@ -167,8 +171,8 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
                   </select>
                 </label>
                 <label className="flex items-center gap-2 text-sm">{t('codexHistoryWorkspace')}
-                  <input className={`${control} flex-1`} value={workspace} onChange={(event) => setWorkspace(event.target.value)} />
-                  <button type="button" className={control} onClick={() => void window.kunGui.pickWorkspaceDirectory(workspace).then((picked) => { if (!picked.canceled && picked.path) setWorkspace(picked.path) })}>{t('codexHistoryChoose')}</button>
+                  <input className={`${control} flex-1`} value={workspace} onChange={(event) => editWorkspace(event.target.value)} />
+                  <button type="button" className={control} onClick={() => void window.kunGui.pickWorkspaceDirectory(workspace).then((picked) => { if (!picked.canceled && picked.path) editWorkspace(picked.path) })}>{t('codexHistoryChoose')}</button>
                 </label>
               </> : null}
             </> : <p className="p-4 text-sm text-ds-muted">{previewLoading ? t('loading') : t('codexHistoryPreviewHint')}</p>}

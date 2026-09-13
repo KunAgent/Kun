@@ -3,8 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SourceHistoryRecordViewer, sourceHistoryRecords } from './SourceHistoryRecordViewer'
 import type { ChatBlock } from '../agent/types'
+import { useThreadTurnTarget } from '../components/chat/thread-turn-target'
 
 const state = vi.hoisted(() => ({ enabled: true, request: vi.fn() }))
+vi.mock('../agent/registry', () => ({ getProvider: vi.fn() }))
+vi.mock('../store/chat-store', () => ({ useChatStore: { getState: vi.fn() } }))
 vi.mock('./use-codex-reference-enabled', () => ({ useCodexReferenceEnabled: () => state.enabled }))
 vi.mock('./history-reference-api', () => ({ historyRequest: state.request }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
@@ -14,7 +17,7 @@ const blocks: ChatBlock[] = [{ kind: 'tool', id: 'merged-call', turnId,
   summary: 'shell', detail: 'truncated preview', status: 'success', meta: { sourceItemId: itemId } }]
 let renderer: ReactTestRenderer | undefined
 beforeEach(() => { state.enabled = true; state.request.mockReset(); (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true })
-afterEach(async () => { if (renderer) await act(async () => renderer?.unmount()); renderer = undefined })
+afterEach(async () => { if (renderer) await act(async () => renderer?.unmount()); renderer = undefined; useThreadTurnTarget.setState({ target: null }) })
 const button = (label: string) => renderer!.root.findAllByType('button').find((node) => node.children.includes(label))!
 const page = (text: string, offset: number, nextOffset?: number) => ({
   status: 'available', warnings: [], turns: [], hasMore: false,
@@ -73,6 +76,32 @@ describe('source record viewer', () => {
     await act(async () => { renderer!.root.findByProps({ title: itemId }).props.onClick() })
     expect(renderer!.root.findByProps({ role: 'alert' }).children).toEqual(['Source was removed'])
     expect(renderer!.root.findAllByType('pre')).toHaveLength(0)
+  })
+
+  it('automatically selects and opens the original record requested by a history jump', async () => {
+    state.request.mockResolvedValue(page('Exact original tool result', 0))
+    useThreadTurnTarget.setState({ target: { threadId: 'thread', turnId, itemId, blocks, revision: 10 } })
+    await act(async () => { renderer = create(createElement(SourceHistoryRecordViewer, {
+      blocks, referenceId: 'reference-1', threadId: 'thread'
+    })) })
+    expect(renderer!.root.findByProps({ 'aria-expanded': true })).toBeDefined()
+    expect(renderer!.root.findByType('pre').children).toEqual(['Exact original tool result'])
+    expect(renderer!.root.findByProps({ title: itemId }).props['aria-pressed']).toBe(true)
+    const url = new URL(state.request.mock.calls[0]![0], 'http://localhost')
+    expect(url.searchParams.get('itemId')).toBe(itemId)
+    await act(async () => { renderer!.update(createElement(SourceHistoryRecordViewer, {
+      blocks: [...blocks], referenceId: 'reference-1', threadId: 'thread'
+    })) })
+    expect(state.request).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not follow an item target from another thread', async () => {
+    useThreadTurnTarget.setState({ target: { threadId: 'other-thread', turnId, itemId, blocks, revision: 10 } })
+    await act(async () => { renderer = create(createElement(SourceHistoryRecordViewer, {
+      blocks, referenceId: 'reference-1', threadId: 'thread'
+    })) })
+    expect(state.request).not.toHaveBeenCalled()
+    expect(renderer!.root.findByProps({ 'aria-expanded': false })).toBeDefined()
   })
 
   it('addresses original tool-result IDs and ignores native conversation blocks', () => {

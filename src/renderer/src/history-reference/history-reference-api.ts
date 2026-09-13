@@ -18,7 +18,7 @@ export type HistoryPage = {
 }
 export type HistoryPreview = {
   session: HistorySession
-  cutoffs: Array<{ turnId: string; createdAt: string; label: string }>
+  cutoffs: Array<{ turnId: string; createdAt: string; label: string; workspace?: string }>
   warnings: string[]
   page: HistoryPage
 }

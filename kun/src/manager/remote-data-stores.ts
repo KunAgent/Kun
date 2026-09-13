@@ -119,6 +119,8 @@ const LatestUsageSchema = z.object({
   usage: z.record(z.string(), z.unknown())
 })
 const AgentSessionSchema = z.object({
+  historyRefId: z.string().min(1).optional(),
+  workspace: z.string().min(1).optional(),
   threadId: z.string(),
   turnId: z.string(),
   startedAt: z.string(),

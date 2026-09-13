@@ -70,6 +70,7 @@ export const KUN_MANAGER_CAPABILITIES = [
   'artifact-memory-data-v1',
   'atomic-json-v1',
   'history-reference-cleanup-v1',
+  'history-reference-recovery-v1',
   'thread-leases-v1',
   'durable-leases-v1',
   'item-page-v1',

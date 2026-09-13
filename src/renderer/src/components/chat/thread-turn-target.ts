@@ -1,34 +1,68 @@
-import { sourceHistoryAllowed } from '../../history-reference/codex-reference-state'
+import { codexReferenceRevision, sourceHistoryAllowed } from '../../history-reference/codex-reference-state'
 import { create } from 'zustand'
 import { useMemo } from 'react'
 import type { ChatBlock, ThreadDetail } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
 import { mergeChatBlocks } from '../../agent/kun-mapper'
+import { orderSourceHistoryBlocks } from '../../agent/source-history-order'
 import { useChatStore } from '../../store/chat-store'
 
 export type ThreadTurnTarget = {
   threadId: string
   turnId: string
+  itemId?: string
   blocks: ChatBlock[]
+  historyTarget?: ThreadDetail['historyTarget']
   revision: number
 }
 
 export const useThreadTurnTarget = create<{ target: ThreadTurnTarget | null }>(() => ({ target: null }))
 let revision = 0
 
-export async function prepareThreadTurnTarget(threadId: string, turnId: string): Promise<ThreadDetail> {
-  const detail = await getProvider().getThreadDetail(threadId, { turnId, priority: 'foreground' })
-  if (detail.latestTurnId !== turnId || !detail.blocks.some((block) => block.turnId === turnId)) {
+export function blockContainsHistoryItem(block: ChatBlock, itemId: string): boolean {
+  return block.id === itemId || block.sourceRecords?.some((record) => record.itemId === itemId) === true ||
+    block.sourceItemId === itemId || (block.kind === 'tool' && block.meta?.sourceItemId === itemId)
+}
+
+export async function prepareThreadTurnTarget(threadId: string, turnId: string, itemId?: string): Promise<ThreadDetail> {
+  const detail = await getProvider().getThreadDetail(threadId, {
+    turnId, ...(itemId ? { itemId } : {}), priority: 'foreground'
+  })
+  if ((!turnId.startsWith('codex:') && detail.latestTurnId !== turnId) ||
+    !detail.blocks.some((block) => block.turnId === turnId && (!itemId || blockContainsHistoryItem(block, itemId)))) {
     throw new Error(`Requested turn history is unavailable: ${turnId}`)
   }
   return detail
 }
 
-export function activateThreadTurnTarget(threadId: string, turnId: string, detail: ThreadDetail): void {
+export function activateThreadTurnTarget(threadId: string, turnId: string, detail: ThreadDetail, itemId?: string): void {
   if (turnId.startsWith('codex:') && !sourceHistoryAllowed()) return
   useThreadTurnTarget.setState({ target: {
-    threadId, turnId, blocks: detail.blocks.filter((block) => block.turnId === turnId), revision: ++revision
+    threadId, turnId, itemId: itemId ?? detail.historyTarget?.itemId,
+    blocks: detail.blocks.filter((block) => block.turnId === turnId),
+    historyTarget: detail.historyTarget, revision: ++revision
   } })
+}
+
+export async function loadThreadTurnTargetPage(direction: 'previous' | 'next'): Promise<void> {
+  const target = useThreadTurnTarget.getState().target
+  const cursor = direction === 'previous' ? target?.historyTarget?.previousCursor : target?.historyTarget?.nextCursor
+  if (!target || !cursor || !sourceHistoryAllowed()) return
+  const historyRevision = codexReferenceRevision()
+  const detail = await getProvider().getThreadDetail(target.threadId, {
+    turnId: target.turnId, before: cursor, priority: 'foreground'
+  })
+  if (!sourceHistoryAllowed() || codexReferenceRevision() !== historyRevision ||
+    useThreadTurnTarget.getState().target?.revision !== target.revision ||
+    useChatStore.getState().activeThreadId !== target.threadId) return
+  if (detail.historyTarget?.turnId !== target.turnId) throw new Error('Requested history page is unavailable')
+  const blocks = mergeThreadTurnTarget(target.blocks, {
+    ...target, blocks: detail.blocks.filter((block) => block.turnId === target.turnId)
+  }, target.threadId)
+  useThreadTurnTarget.setState({ target: { ...target, blocks, historyTarget: {
+    ...target.historyTarget!,
+    ...(direction === 'previous' ? { previousCursor: detail.historyTarget.previousCursor } : { nextCursor: detail.historyTarget.nextCursor })
+  } } })
 }
 
 /** Merge a bounded historical segment for display; never replace live store state. */
@@ -40,10 +74,24 @@ export function mergeThreadTurnTarget(
   const merged = mergeChatBlocks([...target.blocks.filter((block) => !liveItemIds.includes(block.id)), ...blocks])
   const ids = new Map<string, ChatBlock>()
   for (const block of merged) ids.set(block.id, block)
-  return [...ids.values()].sort((left, right) => {
+  if (target.turnId.startsWith('codex:')) {
+    // Existing pages define the fallback order for legacy sources. Explicit
+    // source ordinals then place both overlaps and new records without relying
+    // on identical per-turn timestamps. Native/SSE blocks retain their order.
+    const loadedIds = new Set(blocks.map((block) => block.id))
+    const source = orderSourceHistoryBlocks([
+      ...blocks.filter((block) => block.turnId?.startsWith('codex:')).map((block) => ids.get(block.id)!),
+      ...[...ids.values()].filter((block) => block.turnId?.startsWith('codex:') && !loadedIds.has(block.id))
+    ])
+    return [...new Map(source.map((block) => [block.id, block])).values(),
+      ...[...ids.values()].filter((block) => !block.turnId?.startsWith('codex:'))]
+  }
+  const source = orderSourceHistoryBlocks([...ids.values()].filter((block) => block.turnId?.startsWith('codex:')))
+  const native = [...ids.values()].filter((block) => !block.turnId?.startsWith('codex:')).sort((left, right) => {
     const a = Date.parse(left.createdAt ?? ''), b = Date.parse(right.createdAt ?? '')
     return Number.isFinite(a) && Number.isFinite(b) ? a - b : 0
   })
+  return [...source, ...native]
 }
 
 export function useTimelineTurnTargetBlocks(blocks: ChatBlock[], threadId: string | null): ChatBlock[] {

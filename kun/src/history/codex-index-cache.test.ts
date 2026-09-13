@@ -79,7 +79,7 @@ it('bounds entry count and does not retain oversized metadata indexes', async ()
   expect(codexIndexCacheStats().entries).toBe(8)
   const huge: CodexIndex = { ...f.index, turns: Array.from({ length: 10_000 }, (_, i) => ({
     id: `turn-${i}`, createdAt: '2026-09-13', label: 'x'.repeat(160), filePath: f.path,
-    items: [], complete: true, boundary: f.reference.files[0]!
+    items: [], complete: true, workspace: f.root, countsAsUserTurn: true, boundary: f.reference.files[0]!
   })) }
   const build = vi.fn(async () => huge)
   const big = { ...f.reference, id: 'oversized' }

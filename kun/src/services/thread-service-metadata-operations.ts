@@ -201,6 +201,9 @@ async create(this: ThreadService,
       // id after deletion. It deliberately starts a fresh generation so
       // delayed writes captured by the previous lifetime remain stale.
       this['lifecycleFence']?.reopen(id)
+      if (thread.historyRefId) await this['sessionStore'].upsertSession(
+        toSessionSnapshot(thread, this['nowIso']())
+      )
       await this['threadStore'].upsert(thread)
     })
     await this['events'].record({
@@ -298,6 +301,12 @@ async update(this: ThreadService, threadId: string, patch: {
       }
       const next = touchThread(merged, this['nowIso']())
       await this['threadStore'].upsert(next)
+      if (next.historyRefId && patch.workspace !== undefined) {
+        const snapshot = await this['sessionStore'].loadSession(threadId) ??
+          toSessionSnapshot(next, next.updatedAt, await this['sessionStore'].loadItems(threadId))
+        await this['sessionStore'].upsertSession({ ...snapshot, historyRefId: next.historyRefId,
+          workspace: next.workspace, updatedAt: next.updatedAt })
+      }
       return next
     })
     await this['events'].record({

@@ -30,6 +30,7 @@ async function harness() {
   const eventBus = new InMemoryEventBus()
   let service: HistoryReferenceService
   const threadService = new ThreadService({ threadStore, sessionStore, ids: new SequentialIdGenerator(), nowIso,
+    recoverHistoryReference: (threadId) => service.recoverBinding(threadId),
     withHistoryReferenceMutation: (operation) => service.store.withLifecycleMutation(operation),
     onDeleted: (threadId, referenceId) => service.cleanupDeletedThread(threadId, referenceId),
     events: new RuntimeEventRecorder({ eventBus, sessionStore,
@@ -66,6 +67,16 @@ async function allJson(root: string): Promise<string> {
 }
 
 describe('reference branches', () => {
+  it('recovers legacy original branches from trusted reservations without parsing message text', async () => {
+    const h = await harness()
+    const created = await h.service.createBranch({ path: h.path, idempotencyKey: 'legacy-recover' })
+    await h.threadStore.delete(created.thread.id)
+    h.sessionStore.clearThreadMemory(created.thread.id)
+    const restored = await h.threadService.resumeSession(created.thread.id)
+    expect(restored.thread).toMatchObject({ historyRefId: created.reference.id, workspace: h.root, turns: [] })
+    expect((await h.sessionStore.loadSession(restored.thread.id))?.historyRefId).toBe(created.reference.id)
+  })
+
   it('creates an empty native thread, shares source snapshots and stores no source bodies', async () => {
     const h = await harness()
     const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'first' })
@@ -330,15 +341,16 @@ describe('history reference lifecycle cleanup', () => {
     expect((await h.service.store.getReservation('first'))?.deleted).toBeUndefined()
   })
 
-  it('compacts completed requests from branches deleted before cleanup was installed', async () => {
+  it('retains completed requests when another branch metadata is missing without explicit deletion', async () => {
     const h = await harness()
     const first = await h.service.createBranch({ path: h.path, idempotencyKey: 'old' })
     const second = await h.service.createBranch({ path: h.path, idempotencyKey: 'new' })
     await h.threadStore.delete(first.thread.id)
     await h.threadService.delete(second.thread.id)
-    expect(await h.service.get(first.reference.id)).toBeNull()
-    expect(await allJson(join(h.root, 'data'))).not.toContain(h.root)
-    expect(await h.service.store.getReservation('old')).toMatchObject({ deleted: true })
+    expect(await h.service.get(first.reference.id)).not.toBeNull()
+    expect(await h.service.store.getReservation('old')).toMatchObject({ completed: true })
+    expect((await h.service.store.getReservation('old'))?.deleted).toBeUndefined()
+    expect((await h.threadService.resumeSession(first.thread.id)).thread.historyRefId).toBe(first.reference.id)
   })
 
   it('keeps references when the configured store cannot prove that they are unused', async () => {

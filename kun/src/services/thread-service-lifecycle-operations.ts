@@ -91,7 +91,7 @@ async delete(this: ThreadService, threadId: string): Promise<boolean> {
         await this['lifecycleFence']?.drain(threadId)
         // Never route deletion through the fenced facade: it is the terminal
         // raw operation after all old-generation writes have drained.
-        const historyRefId = (await this.getMetadata(threadId))?.historyRefId
+        const historyRefId = await lifecycleHistoryReferenceId(this, threadId)
         const ok = await this['deleteThreadStore'].delete(threadId)
         if (!ok) {
           // A failed/no-op deletion must not leave a still-visible thread
@@ -282,6 +282,9 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
     // This is the lifecycle commit boundary. Once the target thread exists,
     // the successful return is authoritative; notification/callback failures
     // must not make a client delete an already-cloned Design document.
+    if (record.historyRefId) await this['sessionStore'].upsertSession(
+      toSessionSnapshot(record, now, clonedSessionItems)
+    )
     await this['threadStore'].upsert(record)
     try {
       await this['events'].record({
@@ -316,18 +319,21 @@ async getResumeSessionMetadata(this: ThreadService,
       : sourceSession?.items.length
         ? sourceSession.items
         : sourceThread?.turns.flatMap((turn) => turn.items) ?? []
-    if (!sourceThread && !sourceSession && sourceSessionItems.length === 0) {
+    const persistedHistoryRefId = sourceThread?.historyRefId ?? sourceSession?.historyRefId ??
+      sourceSessionItems.find((item): item is Extract<TurnItem, { kind: 'user_message' }> =>
+        item.kind === 'user_message' && Boolean(item.historyRefId))?.historyRefId
+    const legacyReference = !sourceThread && !persistedHistoryRefId
+      ? await this['recoverHistoryReference']?.(sessionId) : undefined
+    const sourceHistoryRefId = persistedHistoryRefId ?? legacyReference?.historyRefId
+    if (!sourceThread && !sourceSession && sourceSessionItems.length === 0 && !sourceHistoryRefId) {
       throw new Error(`session not found: ${sessionId}`)
     }
     const sourceDesignProfile = sourceThread?.designProfile ?? sourceSessionItems.find(
       (item): item is Extract<TurnItem, { kind: 'user_message' }> =>
         item.kind === 'user_message' && Boolean(item.designProfile)
     )?.designProfile
-    const sourceWorkspace = sourceThread?.workspace ?? (sourceDesignProfile
-      ? sourceSessionItems.find(
-          (item): item is Extract<TurnItem, { kind: 'user_message' }> =>
-            item.kind === 'user_message' && Boolean(item.workspace)
-        )?.workspace
+    const sourceWorkspace = sourceThread?.workspace ?? sourceSession?.workspace ?? legacyReference?.workspace ?? (sourceDesignProfile || sourceHistoryRefId
+      ? latestSessionWorkspace(sourceSessionItems)
       : undefined)
     const sourceAgentSurface = sourceThread
       ? resolveThreadAgentSurface(sourceThread)
@@ -358,7 +364,7 @@ async resumeSession(this: ThreadService,
     }
     const internalOptions = options as InternalResumeSessionOptions
     if (!internalOptions[HISTORY_REFERENCE_MUTATION] && this['withHistoryReferenceMutation']) {
-      return withHistoryReferenceLifecycle(this, sessionId, () => this.resumeSession(sessionId, {
+      return this['withHistoryReferenceMutation'](() => this.resumeSession(sessionId, {
         ...options, [HISTORY_REFERENCE_MUTATION]: true
       } as InternalResumeSessionOptions))
     }
@@ -393,18 +399,21 @@ async resumeSession(this: ThreadService,
       : sourceSession?.items.length
         ? sourceSession.items
         : sourceThread?.turns.flatMap((turn) => turn.items) ?? []
-    if (!sourceThread && !sourceSession && sourceSessionItems.length === 0) {
+    const persistedHistoryRefId = sourceThread?.historyRefId ?? sourceSession?.historyRefId ??
+      sourceSessionItems.find((item): item is Extract<TurnItem, { kind: 'user_message' }> =>
+        item.kind === 'user_message' && Boolean(item.historyRefId))?.historyRefId
+    const legacyReference = !sourceThread && !persistedHistoryRefId
+      ? await this['recoverHistoryReference']?.(sessionId) : undefined
+    const sourceHistoryRefId = persistedHistoryRefId ?? legacyReference?.historyRefId
+    if (!sourceThread && !sourceSession && sourceSessionItems.length === 0 && !sourceHistoryRefId) {
       throw new Error(`session not found: ${sessionId}`)
     }
     const sourceDesignProfile = sourceThread?.designProfile ?? sourceSessionItems.find(
       (item): item is Extract<TurnItem, { kind: 'user_message' }> =>
         item.kind === 'user_message' && Boolean(item.designProfile)
     )?.designProfile
-    const sourceWorkspace = sourceThread?.workspace ?? (sourceDesignProfile
-      ? sourceSessionItems.find(
-          (item): item is Extract<TurnItem, { kind: 'user_message' }> =>
-            item.kind === 'user_message' && Boolean(item.workspace)
-        )?.workspace
+    const sourceWorkspace = sourceThread?.workspace ?? sourceSession?.workspace ?? legacyReference?.workspace ?? (sourceDesignProfile || sourceHistoryRefId
+      ? latestSessionWorkspace(sourceSessionItems)
       : undefined)
     const sourceAgentSurface = sourceThread
       ? resolveThreadAgentSurface(sourceThread)
@@ -451,7 +460,7 @@ async resumeSession(this: ThreadService,
     const threadId = internalOptions[DESIGN_CLONE_COMMIT] ?? this['ids'].next('thr')
     const sourceTurns = sourceThread
       ? sourceThread.turns
-      : rebuildTurnsFromItems({
+      : sourceHistoryRefId && sourceSessionItems.length === 0 ? [] : rebuildTurnsFromItems({
           // Reconstructed public turns intentionally exclude internal model
           // context; the full ordered stream is cloned separately below.
           items: sourceSessionItems.filter(isPublicTurnItem),
@@ -477,10 +486,10 @@ async resumeSession(this: ThreadService,
     const record = createThreadRecord({
       id: threadId,
       title: `${sourceTitle} resumed`,
-      historyRefId: sourceThread?.historyRefId,
+      historyRefId: sourceHistoryRefId,
       workspace: sourceDesignProfile
         ? sourceWorkspace!
-        : options.workspace ?? sourceThread?.workspace ?? '~',
+        : options.workspace ?? sourceWorkspace ?? '~',
       model: options.model ?? sourceThread?.model ?? DEFAULT_KUN_MODEL,
       agentSurface: sourceAgentSurface,
       ...(sourceDesignProfile && options.designDocumentTarget
@@ -523,10 +532,14 @@ async resumeSession(this: ThreadService,
     for (const item of clonedSessionItems) {
       await this['sessionStore'].appendItem(resumed.id, item)
     }
+    // Preserve an empty branch's recovery identity before the metadata commit.
+    if (resumed.historyRefId) await this['sessionStore'].upsertSession(
+      toSessionSnapshot(resumed, now, clonedSessionItems)
+    )
     // As with fork, target ThreadRecord persistence is the response commit.
     await this['threadStore'].upsert(resumed)
     try {
-      await this['sessionStore'].upsertSession(toSessionSnapshot(resumed, now, clonedSessionItems))
+      if (!resumed.historyRefId) await this['sessionStore'].upsertSession(toSessionSnapshot(resumed, now, clonedSessionItems))
     } catch (error) {
       warnPostCommitFailure('resume session snapshot', resumed.id, error)
     }
@@ -603,6 +616,26 @@ async function withHistoryReferenceLifecycle<T>(
   service: ThreadService, threadId: string, operation: () => Promise<T>
 ): Promise<T> {
   const mutate = service['withHistoryReferenceMutation']
-  if (mutate && (await service.getMetadata(threadId))?.historyRefId) return mutate(operation)
+  if (mutate && await lifecycleHistoryReferenceId(service, threadId)) return mutate(operation)
   return operation()
+}
+
+/** Structured host metadata remains authoritative when the thread projection is lost. */
+async function lifecycleHistoryReferenceId(service: ThreadService, threadId: string): Promise<string | undefined> {
+  const thread = await service.getMetadata(threadId)
+  if (thread) return thread.historyRefId
+  const session = await service['sessionStore'].loadSession(threadId)
+  if (session?.historyRefId) return session.historyRefId
+  const items = await service['sessionStore'].loadItems(threadId)
+  const user = items.find((item): item is Extract<TurnItem, { kind: 'user_message' }> =>
+    item.kind === 'user_message' && Boolean(item.historyRefId))
+  return user?.historyRefId ?? (await service['recoverHistoryReference']?.(threadId))?.historyRefId
+}
+
+function latestSessionWorkspace(items: readonly TurnItem[]): string | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!
+    if (item.kind === 'user_message' && item.workspace) return item.workspace
+  }
+  return undefined
 }

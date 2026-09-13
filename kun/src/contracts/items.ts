@@ -32,6 +32,12 @@ export const TurnItemStatus = z.enum([
 export type TurnItemStatus = z.infer<typeof TurnItemStatus>
 
 export const TurnItemBase = z.object({
+  /** Read-only source projection position; never a native event sequence. */
+  sourceHistoryOrder: z.object({
+    referenceId: z.string().min(1),
+    turnIndex: z.number().int().nonnegative(),
+    itemIndex: z.number().int().nonnegative()
+  }).optional(),
   id: z.string().min(1),
   turnId: z.string().min(1),
   threadId: z.string().min(1),
@@ -87,6 +93,8 @@ export const UserMessageSource = z.enum([
 export type UserMessageSource = z.infer<typeof UserMessageSource>
 
 export const UserTurnItem = TurnItemBase.extend({
+  /** Host-owned identity for JSONL-only branch recovery; never user-provided. */
+  historyRefId: z.string().min(1).optional(),
   kind: z.literal('user_message'),
   text: z.string(),
   displayText: z.string().optional(),

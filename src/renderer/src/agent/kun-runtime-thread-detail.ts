@@ -12,12 +12,14 @@ import { buildTurnDurationByUserId, resolveRunningTurnStartedAtMs } from './thre
 export async function getKunThreadDetail(threadId: string, options: {
   before?: string
   turnId?: string
+  itemId?: string
   signal?: AbortSignal
   priority?: 'foreground' | 'background'
 } = {}): Promise<ThreadDetail> {
   const historyRevision = codexReferenceRevision()
   const timelinePath = kunThreadTimelinePath(threadId, {
       ...(options.turnId ? { turnId: options.turnId } : {}),
+      ...(options.itemId ? { itemId: options.itemId } : {}),
       ...(options.before ? { before: options.before } : {}),
       limit: 300
     })
@@ -34,6 +36,7 @@ export async function getKunThreadDetail(threadId: string, options: {
     !response.ok &&
     !options.before &&
     !options.turnId &&
+    !options.itemId &&
     (response.status === 404 || response.status === 405)
   ) {
     response = await rendererRuntimeClient.runtimeRequest(
@@ -44,7 +47,7 @@ export async function getKunThreadDetail(threadId: string, options: {
     )
   }
   if (historyRevision !== codexReferenceRevision()) {
-    if (options.before || options.turnId) throw new DOMException('History settings changed', 'AbortError')
+    if (options.before || options.turnId || options.itemId) throw new DOMException('History settings changed', 'AbortError')
     return getKunThreadDetail(threadId, options)
   }
   if (!response.ok) {
@@ -166,6 +169,7 @@ export async function getKunThreadDetail(threadId: string, options: {
     payloadBytes: response.body.length,
     ...(thread.timeline?.nextCursor ? { historyCursor: thread.timeline.nextCursor } : {}),
     hasMoreHistory: thread.timeline?.hasMore === true,
+    ...(thread.timeline?.target && sourceHistoryAllowed() ? { historyTarget: thread.timeline.target } : {}),
     ...(thread.designProfile ? { designProfile: thread.designProfile } : {})
   }
 }

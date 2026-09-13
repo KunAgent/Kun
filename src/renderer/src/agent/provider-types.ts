@@ -147,6 +147,7 @@ export type ThreadDetail = {
   todos?: ThreadTodoList | null
   /** Original detail response size, used only to bound renderer snapshots. */
   payloadBytes?: number
+  historyTarget?: { turnId: string; itemId?: string; previousCursor?: string; nextCursor?: string }
   historyCursor?: string
   hasMoreHistory?: boolean
   designProfile?: DesignTaskProfile
@@ -221,6 +222,7 @@ export interface AgentProvider {
   getThreadDetail(threadId: string, options?: {
     before?: string
     turnId?: string
+    itemId?: string
     signal?: AbortSignal
     priority?: 'foreground' | 'background'
   }): Promise<ThreadDetail>

@@ -78,6 +78,7 @@ export type ThreadServiceOptions = {
   /** Abort in-process work after the fence starts rejecting new writes. */
   onDeleting?: (threadId: string) => Promise<void> | void
   onDeleted?: (threadId: string, historyRefId?: string) => Promise<void> | void
+  recoverHistoryReference?: (threadId: string) => Promise<{ historyRefId: string; workspace: string } | null>
   withHistoryReferenceMutation?: <T>(operation: () => Promise<T>) => Promise<T>
   onStatusChanged?: (
     threadId: string,
@@ -144,6 +145,7 @@ export class ThreadService {
   private readonly lifecycleFence?: ThreadLifecycleFence
   private readonly onDeleting?: (threadId: string) => Promise<void> | void
   private readonly onDeleted?: (threadId: string, historyRefId?: string) => Promise<void> | void
+  private readonly recoverHistoryReference?: ThreadServiceOptions['recoverHistoryReference']
   private readonly withHistoryReferenceMutation?: ThreadServiceOptions['withHistoryReferenceMutation']
   private readonly onStatusChanged?: ThreadServiceOptions['onStatusChanged']
   private readonly onForked?: ThreadServiceOptions['onForked']
@@ -162,6 +164,7 @@ export class ThreadService {
     this.lifecycleFence = options.lifecycleFence
     this.onDeleting = options.onDeleting
     this.onDeleted = options.onDeleted
+    this.recoverHistoryReference = options.recoverHistoryReference
     this.withHistoryReferenceMutation = options.withHistoryReferenceMutation
     this.onStatusChanged = options.onStatusChanged
     this.onForked = options.onForked
@@ -672,6 +675,7 @@ export function toSessionSnapshot(
   const firstTurn = thread.turns[0]
   return {
     threadId: thread.id,
+    ...(thread.historyRefId ? { historyRefId: thread.historyRefId, workspace: thread.workspace } : {}),
     turnId: firstTurn?.id ?? '',
     startedAt: firstTurn?.createdAt ?? thread.createdAt,
     updatedAt: now,

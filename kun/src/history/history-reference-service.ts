@@ -58,6 +58,16 @@ export class HistoryReferenceService {
 
   get(id: string): Promise<HistoryReference | null> { return this.store.get(id) }
 
+  /** Legacy branches already have a trusted host reservation even without a session snapshot. */
+  async recoverBinding(threadId: string): Promise<{ historyRefId: string; workspace: string } | null> {
+    for (const { value } of await this.store.reservations()) {
+      if (value.threadId !== threadId || !value.completed || value.deleted) continue
+      const reference = await this.store.get(value.referenceId)
+      if (reference) return { historyRefId: reference.id, workspace: value.request?.workspace ?? reference.workspace }
+    }
+    return null
+  }
+
   async discover(options: Omit<Parameters<typeof discoverCodexSessions>[0], 'codexHome'> = {}) {
     this.assertEnabled()
     const sessions = await discoverCodexSessions({ ...options, codexHome: this.options.codexHome })
@@ -107,7 +117,7 @@ export class HistoryReferenceService {
             'Choose an absolute workspace directory for this branch.')
         }
         // A user-selected equivalent snapshot can also repair its shared source location.
-        await this.store.put(existing ? { ...existing, files: reference.files } : reference)
+        await this.store.put(existing ? { ...existing, files: reference.files, workspace: reference.workspace } : reference)
         reservation = {
           requestHash, referenceId: reference.id, threadId: `thr_${randomUUID()}`,
           request: {
@@ -146,15 +156,12 @@ export class HistoryReferenceService {
       const reservations = await this.store.reservations()
       for (const { key, value } of reservations) {
         if (value.referenceId !== referenceId || value.deleted) continue
-        const missingCompleted = value.completed &&
-          !(await this.options.threadService.getMetadata(value.threadId))
-        if (value.threadId === threadId || missingCompleted) {
-          await this.store.tombstoneReservation(key, value)
-        }
+        if (value.threadId === threadId) await this.store.tombstoneReservation(key, value)
       }
-      // Failed or interrupted creates remain retryable and keep the source alive.
+      // Only an explicit successful deletion retires a reservation. Missing thread metadata
+      // can still be recovered from this host binding, including pre-snapshot empty branches.
       if (reservations.some(({ value }) => value.referenceId === referenceId &&
-        value.threadId !== threadId && !value.deleted && !value.completed)) return
+        value.threadId !== threadId && !value.deleted)) return
       const lookup = this.options.threadStore?.hasHistoryReference
       if (!lookup || await lookup.call(this.options.threadStore, referenceId)) return
       await this.store.remove(referenceId)
@@ -219,10 +226,13 @@ export class HistoryReferenceService {
     if (input.path) return createHistoryReference(sourcePath(input.path), input.cutoffTurnId)
     const reference = await this.requireReference(input.referenceId!)
     if (!input.cutoffTurnId || input.cutoffTurnId === reference.cutoffTurnId) {
-      const page = await readHistoryPage(reference, { threadId: 'validate-source', limit: 1 })
-      if (page.status === 'missing' || page.status === 'changed') throw new HistoryReferenceError(
-        'history_source_unavailable', 'Relink the original history before creating a new branch.', 409)
-      return reference
+      // Old descriptors stored only session_meta.cwd; derive the default from
+      // the fixed cutoff again without changing any existing thread workspace.
+      try { return await createHistorySubreference(reference, reference.cutoffTurnId) }
+      catch (error) {
+        throw new HistoryReferenceError('history_source_unavailable',
+          error instanceof Error ? error.message : 'Relink the original history before creating a new branch.', 409)
+      }
     }
     // Derive from the frozen prefix even when Codex later appends rollback/parent records.
     try {

@@ -639,8 +639,9 @@ export class HybridThreadStore implements ThreadStore {
       : { status: 'unavailable', indexed: 0, total: 0 }
   }
 
-  hasHistoryReference(referenceId: string): Promise<boolean> {
-    return hasThreadHistoryReference(this, referenceId)
+  async hasHistoryReference(referenceId: string): Promise<boolean> {
+    await this.ready()
+    return hasThreadHistoryReference(this.dataDir, referenceId, (id) => this.getMetadata(id))
   }
 
   filesystemThreadIds(): Promise<string[]> {

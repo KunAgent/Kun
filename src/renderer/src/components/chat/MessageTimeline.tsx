@@ -1,4 +1,5 @@
 import { timelineForkPointIndex } from './message-timeline-fork-point'
+import { SourceHistoryTargetPager } from '../../history-reference/SourceHistoryTargetPager'
 import { SourceHistoryRecordViewer } from '../../history-reference/SourceHistoryRecordViewer'
 import { SourceHistoryAttachments } from '../../history-reference/SourceHistoryAttachments'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
@@ -508,6 +509,7 @@ export function MessageTimeline({
             >
               {activeThread?.historyRefId && !sourceHistory && (absoluteTurnIndex === 0 || isSourceHistoryTurn(turns[absoluteTurnIndex - 1]!)) ? <SourceHistoryBoundary /> : null}
               {sourceHistory ? <SourceHistoryTurnLabel referenceId={activeThread?.historyRefId} turnId={turn.turnId} /> : null}
+              {sourceHistory ? <SourceHistoryTargetPager threadId={activeThreadId} turnId={turn.turnId} /> : null}
               {showForkPoint ? <ThreadForkPoint parentTitle={forkedFromTitle} /> : null}
               <MemoMessageTurn
                 turn={turn}
@@ -542,7 +544,7 @@ export function MessageTimeline({
                 turnUsage={!sourceHistory && turn.turnId ? turnUsage.byTurnId.get(turn.turnId) : undefined}
                 turnUsageStale={turnUsage.stale}
               />
-              {sourceHistory ? <SourceHistoryRecordViewer blocks={turn.user ? [turn.user, ...turn.blocks] : turn.blocks} referenceId={activeThread?.historyRefId} /> : null}
+              {sourceHistory ? <SourceHistoryRecordViewer threadId={activeThreadId} blocks={turn.user ? [turn.user, ...turn.blocks] : turn.blocks} referenceId={activeThread?.historyRefId} /> : null}
               {sourceHistory ? <SourceHistoryAttachments blocks={turn.user ? [turn.user, ...turn.blocks] : turn.blocks} referenceId={activeThread?.historyRefId} /> : null}
               {!sourceHistory && !turnIsProcessing && turnMessageActions.length && onExtensionCommand ? (
                 <div className="mt-1 flex justify-end">

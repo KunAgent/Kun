@@ -12,6 +12,11 @@ function key(threadId: string, search: string): string {
 }
 
 describe('threadTimelineReadKey', () => {
+  it('binds item anchors to a turn and keeps their read keys distinct', () => {
+    expect(key('t1', '?turnId=codex:t&itemId=early')).not.toBe(key('t1', '?turnId=codex:t&itemId=late'))
+    expect(parseThreadTimelineQuery(new URL('http://kun.local/x?itemId=early')).success).toBe(false)
+    expect(parseThreadTimelineQuery(new URL(`http://kun.local/x?turnId=codex:t&before=${'x'.repeat(1024)}`)).success).toBe(true)
+  })
   it('separates history projections across laboratory transitions', () => {
     expect(key('t1', '?historyRevision=2')).toBe(key('t1', '?limit=300&historyRevision=2'))
     expect(key('t1', '?historyRevision=2')).not.toBe(key('t1', '?historyRevision=1'))

@@ -33,6 +33,7 @@ export function useTimelineTurnNavigation({
     const frame = window.requestAnimationFrame(() => {
       if (!turnRefMap.current.has(target.turnId)) return
       jump(target.turnId)
+      if (target.itemId) turnRefMap.current.get(target.turnId)?.querySelector?.<HTMLElement>('[data-source-history-target="true"]')?.scrollIntoView({ behavior: 'auto', block: 'start' })
       jumped.current = target.revision
     })
     return () => window.cancelAnimationFrame(frame)

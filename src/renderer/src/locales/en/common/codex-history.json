@@ -28,6 +28,8 @@
   "codexHistoryStatus_changed": "The source changed and the fixed branch point cannot be verified. Relink a matching original file.",
   "codexHistoryStatus_partial": "Some history or attachments are unavailable. Available history is still shown.",
   "codexHistoryReadTool": "Read Codex history",
+  "codexHistoryEarlierRecords": "Earlier records in this turn",
+  "codexHistoryLaterRecords": "Later records in this turn",
   "codexHistoryReadTurn": "View history excerpt {{index}}",
   "codexHistoryAttachments": "Source attachments",
   "codexHistoryAttachmentAfterBranch": "Create a branch to view source attachments on demand.",

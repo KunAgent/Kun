@@ -11,11 +11,14 @@ export const ThreadTimelineQuerySchema = z.object({
   historyRevision: z.preprocess((value) => value === undefined ? undefined : Number(value),
     z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional()),
   turnId: z.string().min(1).max(256).optional(),
-  before: z.string().min(1).max(256).optional(),
+  itemId: z.string().min(1).max(512).optional(),
+  before: z.string().min(1).max(4096).optional(),
   limit: z.preprocess((value) => {
     if (typeof value !== 'string' || value.trim() === '') return THREAD_TIMELINE_MAX_ITEMS
     return Number(value)
   }, z.number().int().positive().max(THREAD_TIMELINE_MAX_ITEMS))
+}).refine((value) => !value.itemId || Boolean(value.turnId), {
+  message: 'An item anchor requires its turnId'
 })
 
 export type ThreadTimelineQuery = z.infer<typeof ThreadTimelineQuerySchema>
@@ -24,6 +27,7 @@ export function parseThreadTimelineQuery(url: URL) {
   return ThreadTimelineQuerySchema.safeParse({
     historyRevision: url.searchParams.get('historyRevision') ?? undefined,
     turnId: url.searchParams.get('turnId') ?? undefined,
+    itemId: url.searchParams.get('itemId') ?? undefined,
     before: url.searchParams.get('before') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined
   })
@@ -44,6 +48,7 @@ export function threadTimelineReadKey(threadId: string, url: URL): string {
   }
   const before = parsed.data.before ? encodeURIComponent(parsed.data.before) : ''
   const turn = parsed.data.turnId ? `|turn:${encodeURIComponent(parsed.data.turnId)}` : ''
+  const item = parsed.data.itemId ? `|item:${encodeURIComponent(parsed.data.itemId)}` : ''
   const history = parsed.data.historyRevision === undefined ? '' : `|history:${parsed.data.historyRevision}`
-  return `${threadId}|before:${before}|limit:${parsed.data.limit}${turn}${history}`
+  return `${threadId}|before:${before}|limit:${parsed.data.limit}${turn}${item}${history}`
 }

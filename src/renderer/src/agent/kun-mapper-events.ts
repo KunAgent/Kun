@@ -94,7 +94,7 @@ import {
 export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ChatBlock | null {
   const block = baseChatBlockFromItem(item, child)
   if (!block || !item.turnId?.startsWith('codex:')) return block
-  return { ...block, sourceRecords: [{ itemId: item.id, kind: item.kind }],
+  return { ...block, ...(item.sourceHistoryOrder ? { sourceHistoryOrder: item.sourceHistoryOrder } : {}), sourceRecords: [{ itemId: item.id, kind: item.kind }],
     ...(item.sourceAttachments?.length ? {
       sourceItemId: item.id, sourceAttachments: item.sourceAttachments.map((entry) => ({ ...entry }))
     } : {}) }

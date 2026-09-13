@@ -13,6 +13,7 @@ import { HistorySourceError, readCodexLines, validateSourceFile } from './codex-
 import { clipped, projectCodexRecord, toTurnItem, type ItemContent } from './codex-projection.js'
 import { isCodexPath, summarizeCodexFile, resolveCodexParentPath } from './codex-discovery.js'
 import { getCachedCodexIndex } from './codex-index-cache.js'
+import { historyTargetPage, resolveHistoryTargetRange, type HistoryTarget } from './codex-history-target.js'
 
 export { discoverCodexSessions } from './codex-discovery.js'
 export { HistorySourceError } from './codex-jsonl.js'
@@ -25,6 +26,9 @@ export interface HistoryPageOptions {
   turnId?: string
   itemId?: string
   contentOffset?: number
+  target?: boolean
+  anchorItemId?: string
+  targetCursor?: string
 }
 export interface HistoryPage {
   turns: Turn[]
@@ -35,8 +39,9 @@ export interface HistoryPage {
   status: HistorySourceStatus
   warnings: string[]
   content?: z.infer<typeof ItemHistoryContentSchema>
+  target?: HistoryTarget
 }
-export interface HistoryPointer { turn: IndexedTurn; item: IndexedItem; id: string }
+export interface HistoryPointer { turn: IndexedTurn; item: IndexedItem; id: string; turnIndex: number }
 
 export async function inspectCodexSession(path: string): Promise<{
   session: CodexSessionSummary; cutoffs: HistoryCutoff[]; warnings: string[]
@@ -47,7 +52,7 @@ export async function inspectCodexSession(path: string): Promise<{
   return {
     session: { ...session, title: index.title, workspace: index.workspace },
     cutoffs: index.turns.filter((turn) => turn.complete).map((turn) => ({
-      turnId: turn.id, createdAt: turn.createdAt, label: turn.label
+      turnId: turn.id, createdAt: turn.createdAt, workspace: turn.workspace, label: turn.label
     })), warnings: index.warnings
   }
 }
@@ -75,7 +80,7 @@ function referenceFromIndex(index: CodexIndex, cutoff: IndexedTurn): HistoryRefe
   return HistoryReferenceSchema.parse({
     id: `history_${createHash('sha256').update(identity).digest('hex').slice(0, 32)}`,
     provider: 'codex', sessionId: index.sessionId, title: index.title,
-    workspace: index.workspace, createdAt: new Date().toISOString(), cutoffTurnId: cutoff.id,
+    workspace: cutoff.workspace, createdAt: new Date().toISOString(), cutoffTurnId: cutoff.id,
     files, parserVersion: 1, warnings: index.warnings
   })
 }
@@ -116,8 +121,8 @@ async function buildFrozenHistoryIndex(reference: HistoryReference): Promise<Cod
 }
 
 export function historyPointers(index: CodexIndex): HistoryPointer[] {
-  return index.turns.flatMap((turn) => turn.items.map((item) => ({
-    turn, item, id: `${turn.id}:item:${item.ordinal}`
+  return index.turns.flatMap((turn, turnIndex) => turn.items.map((item) => ({
+    turn, item, turnIndex, id: `${turn.id}:item:${item.ordinal}`
   })))
 }
 
@@ -180,9 +185,13 @@ export async function readHistoryPage(reference: HistoryReference, options: Hist
     let pointers = historyPointers(index)
     if (options.turnId) pointers = pointers.filter((pointer) => pointer.turn.id === options.turnId)
     if (options.itemId) pointers = pointers.filter((pointer) => pointer.id === options.itemId)
-    const end = Math.min(pointers.length, parseHistoryCursor(reference, options.cursor, pointers.length))
     const limit = Math.min(100, Math.max(1, options.limit ?? 50))
-    let start = Math.max(0, end - limit)
+    const target = options.target && options.turnId ? resolveHistoryTargetRange({
+      reference, turnId: options.turnId, itemIds: pointers.map((pointer) => pointer.id), limit,
+      itemId: options.anchorItemId, cursor: options.targetCursor
+    }) : undefined
+    let end = target?.end ?? Math.min(pointers.length, parseHistoryCursor(reference, options.cursor, pointers.length))
+    let start = target?.start ?? Math.max(0, end - limit)
     let selected = pointers.slice(start, end)
     const offset = Math.max(0, Math.floor(options.contentOffset ?? 0))
     let content: HistoryPage['content']
@@ -199,29 +208,43 @@ export async function readHistoryPage(reference: HistoryReference, options: Hist
       if (item.kind === 'tool_result' && typeof item.output === 'string') return { ...item, output: clipped(item.output.slice(offset)) }
       return boundContent(item)
     })
-    let budgetBytes = 0
-    let accepted = 0
-    for (const pointer of [...selected].reverse()) {
+    const itemBase = (pointer: HistoryPointer) => ({
+      id: pointer.id, turnId: pointer.turn.id, threadId: options.threadId, createdAt: pointer.turn.createdAt,
+      sourceHistoryOrder: { referenceId: reference.id, turnIndex: pointer.turnIndex, itemIndex: pointer.item.ordinal }
+    })
+    const itemSize = (pointer: HistoryPointer): number => {
       const projected = values.get(pointer.id)
-      if (!projected) continue
-      const bytes = Buffer.byteLength(JSON.stringify(toTurnItem(projected, {
-        id: pointer.id, turnId: pointer.turn.id, threadId: options.threadId, createdAt: pointer.turn.createdAt
-      })), 'utf8')
-      if (budgetBytes + bytes > 4 * 1024 * 1024 - 64 * 1024) break
-      budgetBytes += bytes
-      accepted += 1
+      return projected ? Buffer.byteLength(JSON.stringify(toTurnItem(projected, itemBase(pointer))), 'utf8') : 0
     }
-    selected = selected.slice(selected.length - accepted)
-    start = end - selected.length
+    const maxBytes = 4 * 1024 * 1024 - 64 * 1024
+    if (target) {
+      let budgetBytes = selected.reduce((total, pointer) => total + itemSize(pointer), 0)
+      const anchor = target.anchor ?? end - 1
+      while (budgetBytes > maxBytes && end - start > 1) {
+        if (anchor - start >= end - 1 - anchor && start < anchor) budgetBytes -= itemSize(pointers[start++]!)
+        else budgetBytes -= itemSize(pointers[--end]!)
+      }
+      if (budgetBytes > maxBytes) throw new HistorySourceError('partial', 'The requested record exceeds the history page budget.')
+      selected = pointers.slice(start, end)
+    } else {
+      let budgetBytes = 0
+      let accepted = 0
+      for (const pointer of [...selected].reverse()) {
+        const bytes = itemSize(pointer)
+        if (budgetBytes + bytes > maxBytes) break
+        budgetBytes += bytes
+        accepted += 1
+      }
+      selected = selected.slice(selected.length - accepted)
+      start = end - selected.length
+    }
     const turns: Turn[] = []
     let itemBytes = 0
     let itemCount = 0
     for (const pointer of selected) {
       const content = values.get(pointer.id)
       if (!content) continue
-      const item: TurnItem = toTurnItem(content, {
-        id: pointer.id, turnId: pointer.turn.id, threadId: options.threadId, createdAt: pointer.turn.createdAt
-      })
+      const item: TurnItem = toTurnItem(content, itemBase(pointer))
       itemBytes += Buffer.byteLength(JSON.stringify(item), 'utf8')
       itemCount += 1
       let turn = turns.at(-1)
@@ -233,6 +256,8 @@ export async function readHistoryPage(reference: HistoryReference, options: Hist
       turn.items.push(item)
     }
     return { turns, hasMore: start > 0, ...(start > 0 ? { nextCursor: historyCursor(reference, start) } : {}),
+      ...(target && options.turnId ? { target: historyTargetPage({ reference, turnId: options.turnId,
+        itemId: options.anchorItemId, count: pointers.length, start, end, limit }) } : {}),
       itemCount, itemBytes, ...(content ? { content } : {}), status: index.warnings.length ? 'partial' : 'available', warnings: index.warnings }
   } catch (error) {
     const status = error instanceof HistorySourceError ? error.status
@@ -270,7 +295,7 @@ export async function readHistorySourceRecord(reference: HistoryReference, itemI
   const file = reference.files.find((entry) => entry.path === pointer.turn.filePath)
   if (!file) return undefined
   let record: Record<string, unknown> | undefined
-  let workspace = index.workspace
+  let workspace = pointer.turn.workspace
   let sourceWorkspace = workspace
   let digest = ''
   let bytes = 0

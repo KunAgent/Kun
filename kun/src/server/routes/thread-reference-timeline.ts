@@ -2,6 +2,7 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { getThreadTimeline } from './threads.js'
 import { parseThreadTimelineQuery } from './thread-timeline-read-key.js'
+import { HISTORY_TARGET_CURSOR_PREFIX } from '../../history/codex-history-target.js'
 
 const SOURCE_CURSOR = 'history:'
 
@@ -16,7 +17,7 @@ export async function getComposedThreadTimeline(
   if (!thread?.historyRefId) return native()
   const query = parseThreadTimelineQuery(new URL(request.url))
   if (!query.success) return jsonResponse({ code: 'invalid_request', message: 'Invalid timeline query' }, 400)
-  const { before, turnId, limit } = query.data
+  const { before, turnId, itemId, limit } = query.data
   const prefix = `${SOURCE_CURSOR}${thread.historyRefId}:`
   const sourcePageRequested = before?.startsWith(SOURCE_CURSOR) === true
   if (sourcePageRequested && !before!.startsWith(prefix)) {
@@ -25,7 +26,10 @@ export async function getComposedThreadTimeline(
   const sourceTurnRequested = turnId?.startsWith('codex:') === true
   const nativeUrl = new URL(request.url)
   if (sourcePageRequested) nativeUrl.searchParams.delete('before')
-  if (sourceTurnRequested) nativeUrl.searchParams.delete('turnId')
+  if (sourceTurnRequested) {
+    nativeUrl.searchParams.delete('turnId')
+    nativeUrl.searchParams.delete('itemId')
+  }
   const response = await native(new Request(nativeUrl, request))
   if (response.status !== 200) return response
   const body = JSON.parse(response.body)
@@ -43,11 +47,16 @@ export async function getComposedThreadTimeline(
   }
   if (turnId && !sourceTurnRequested) return response
   try {
+    const cursor = sourcePageRequested && before!.slice(prefix.length)
+      ? decodeURIComponent(before!.slice(prefix.length)) : undefined
+    const targetCursor = cursor?.startsWith(HISTORY_TARGET_CURSOR_PREFIX) ? cursor : undefined
+    if (targetCursor && !sourceTurnRequested) {
+      return jsonResponse({ code: 'invalid_cursor', message: 'A history target cursor requires its source turn' }, 400)
+    }
     const page = await source.page(thread.historyRefId, {
       threadId, limit,
-      ...(sourcePageRequested && before!.slice(prefix.length)
-        ? { cursor: decodeURIComponent(before!.slice(prefix.length)) } : {}),
-      ...(sourceTurnRequested ? { turnId } : {})
+      ...(cursor && !targetCursor ? { cursor } : {}),
+      ...(sourceTurnRequested ? { turnId, target: !cursor || Boolean(targetCursor), anchorItemId: itemId, targetCursor } : {})
     })
     if (sourceTurnRequested && !page.turns.length && page.status === 'available') {
       return jsonResponse({ code: 'not_found', message: 'Source turn is outside this branch' }, 404)
@@ -59,7 +68,12 @@ export async function getComposedThreadTimeline(
       timeline: {
         hasMore: page.hasMore,
         ...(page.nextCursor ? { nextCursor: `${prefix}${encodeURIComponent(page.nextCursor)}` } : {}),
-        itemCount: page.itemCount, itemBytes: page.itemBytes
+        itemCount: page.itemCount, itemBytes: page.itemBytes,
+        ...(page.target ? { target: {
+          ...page.target,
+          ...(page.target.previousCursor ? { previousCursor: `${prefix}${encodeURIComponent(page.target.previousCursor)}` } : {}),
+          ...(page.target.nextCursor ? { nextCursor: `${prefix}${encodeURIComponent(page.target.nextCursor)}` } : {})
+        } } : {})
       }
     })
   } catch (error) {

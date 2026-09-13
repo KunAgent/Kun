@@ -28,6 +28,8 @@
   "codexHistoryStatus_changed": "源文件内容已变化，无法验证固定分支点。请重新关联匹配的原文件。",
   "codexHistoryStatus_partial": "部分历史或附件无法读取。可用的历史仍然展示。",
   "codexHistoryReadTool": "读取 Codex 历史",
+  "codexHistoryEarlierRecords": "加载本回合更早记录",
+  "codexHistoryLaterRecords": "加载本回合更晚记录",
   "codexHistoryReadTurn": "查看历史片段 {{index}}",
   "codexHistoryAttachments": "来源附件",
   "codexHistoryAttachmentAfterBranch": "创建分支后可按需查看源附件。",

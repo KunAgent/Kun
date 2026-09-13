@@ -43,14 +43,15 @@ describe('Codex lifecycle boundaries', () => {
     expect(full.turns[1].items.every((item) => item.turnId === 'codex:session-a:b')).toBe(true)
   })
 
-  it('rolls back an assistant-only turn without removing the preceding user turn', async () => {
-    await save([meta(), ...turn('a'), ...turn('b', false),
+  it('skips a pure output turn when counting the latest user turn to roll back', async () => {
+    await save([meta(), ...turn('a'), ...turn('b'), ...turn('standalone', false),
       record('event_msg', { type: 'thread_rolled_back', num_turns: 1 })])
     expect((await inspectCodexSession(path)).cutoffs.map((entry) => entry.turnId)).toEqual(['codex:session-a:a'])
     const page = await readHistoryPage(await createHistoryReference(path), { threadId: 'branch' })
     expect(page.turns).toHaveLength(1)
     expect(JSON.stringify(page)).toContain('Answer a')
     expect(JSON.stringify(page)).not.toContain('Answer b')
+    expect(JSON.stringify(page)).not.toContain('Answer standalone')
   })
 
   it('keeps incomplete autonomous turns outside the default branch boundary', async () => {

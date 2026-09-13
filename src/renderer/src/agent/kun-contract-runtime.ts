@@ -257,6 +257,7 @@ export type CoreTurnJson = {
 }
 
 export type CoreTurnItemJson = {
+  sourceHistoryOrder?: { referenceId: string; turnIndex: number; itemIndex: number }
   sourceAttachments?: Array<{ index: number; name: string; mimeType?: string }>
   id: string
   turnId: string
