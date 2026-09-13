@@ -5,6 +5,7 @@ import type { Room, RoomMember, RoomMessage } from '@shared/rooms-api'
 import i18n from '../../i18n'
 import { RoomTimeline } from './RoomTimeline'
 import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
+import { RoomMessageRunButton } from './RoomMessageRunButton'
 
 const api = vi.hoisted(() => ({
   request: vi.fn(),
@@ -152,7 +153,7 @@ describe('RoomTimeline conversation interactions', () => {
     })
 
   it('keeps historical author names and routes avatar and message actions to stable IDs', async () => {
-    await render()
+    await render({ messages: [message('one', 1, { rootRequestId: 'topic' })] })
     expect(
       renderer.root
         .findAllByType('strong')
@@ -164,7 +165,7 @@ describe('RoomTimeline conversation interactions', () => {
         .some((item) => item.children.includes('Renamed developer'))
     ).toBe(false)
     act(() => button('Original developer').props.onClick())
-    expect(onMember).toHaveBeenCalledWith(member.id)
+    expect(onMember).toHaveBeenCalledWith(member.id, 'topic')
     await act(async () => button('Copy message').props.onClick())
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Message one')
     act(() => button('Pin as project agreement').props.onClick())
@@ -196,6 +197,32 @@ describe('RoomTimeline conversation interactions', () => {
       'POST',
       expect.objectContaining({ seq: 2 })
     )
+  })
+  it('keeps task notices task-linked while exposing only actual or resolvable reply runs', async () => {
+    const onRun = vi.fn()
+    await render({ onRun, messages: [
+      message('queued-task', 1, { taskId: 'task', body: 'Queued' }),
+      message('review-task', 2, { taskId: 'task', body: 'Review complete, awaiting acceptance' }),
+      message('progress-task-2-status', 3, { taskId: 'task' }),
+      message('progress-task-02', 4, { taskId: 'task' }),
+      message('progress-task-2', 5, { taskId: 'task' }),
+      message('recorded-task-reply', 6, { taskId: 'task', originRunId: 'exact-run' }),
+      message('ordinary-historical-reply', 7)
+    ] })
+    const article = (id: string) => renderer.root.findByProps({ id: 'room-message-' + id })
+    for (const id of ['queued-task', 'review-task', 'progress-task-2-status', 'progress-task-02']) {
+      expect(article(id).findAllByType(RoomMessageRunButton)).toHaveLength(0)
+      act(() => article(id).findByProps({ className: 'rooms-message-task' }).props.onClick())
+    }
+    expect(onTask.mock.calls).toEqual([['task'], ['task'], ['task'], ['task']])
+    expect(article('ordinary-historical-reply').findAllByType(RoomMessageRunButton)).toHaveLength(1)
+    api.request.mockClear().mockResolvedValue({ runId: 'historical-progress-run' })
+    await act(async () => article('progress-task-2').findByType(RoomMessageRunButton).findByType('button').props.onClick())
+    expect(api.request).toHaveBeenCalledWith('/v1/rooms/room/messages/progress-task-2/run', 'GET', undefined, expect.any(AbortSignal))
+    expect(onRun).toHaveBeenCalledWith('historical-progress-run')
+    act(() => article('recorded-task-reply').findByType(RoomMessageRunButton).findByType('button').props.onClick())
+    expect(onRun).toHaveBeenLastCalledWith('exact-run')
+    expect(api.request).toHaveBeenCalledTimes(1)
   })
 
   it('preserves the prepend anchor across the loading render and restores it when history arrives', async () => {

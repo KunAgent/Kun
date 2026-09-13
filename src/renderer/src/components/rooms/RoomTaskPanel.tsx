@@ -8,6 +8,7 @@ import { useRoomMutation, useRoomResource } from './useRoomResource'
 import { RoomTaskGates } from './RoomTaskGates'
 import { RoomDeliveryHistory } from './RoomDeliveryHistory'
 import { RoomIntegrationPanel } from './RoomIntegrationPanel'
+import { RoomRunList } from './RoomRunList'
 
 export function roomTaskActions(task: RoomTask): RoomTaskAction[] {
   const actions: RoomTaskAction[] = []
@@ -51,11 +52,13 @@ export function RoomTaskPanel({
   onClose,
   onOpenThread,
   onUpdated,
+  onRun,
   embedded = false
 }: {
   task: RoomTask
   onClose: () => void
-  onOpenThread: (id: string) => void
+  onOpenThread: (id: string, turnId?: string) => void | Promise<void>
+  onRun?: (id: string) => void
   onUpdated: () => void
   embedded?: boolean
 }) {
@@ -130,6 +133,7 @@ export function RoomTaskPanel({
           roomId={task.roomId}
           agreements={detail?.agreements}
         />
+        {onRun ? <RoomRunList roomId={current.roomId} taskId={current.id} onOpenRun={onRun} /> : null}
         <RoomTaskGates task={current} detail={detail} onUpdated={refresh} />
         <dl className="space-y-2 text-sm text-ds-muted">
           <div>

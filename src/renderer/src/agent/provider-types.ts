@@ -220,6 +220,7 @@ export interface AgentProvider {
   createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string
+    turnId?: string
     signal?: AbortSignal
     priority?: 'foreground' | 'background'
   }): Promise<ThreadDetail>

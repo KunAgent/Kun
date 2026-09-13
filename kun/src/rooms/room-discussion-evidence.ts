@@ -1,9 +1,10 @@
+import { roomDiscussionSourceId } from './room-discussion-message.js'
 import type { RoomContextSnapshot } from '../contracts/rooms-product.js'
 import type { RoomRequestState } from './room-runtime-types.js'
 import { boundedRoomText } from './room-context.js'
 
 type Discussion = NonNullable<RoomRequestState['discussions']>[number]
-type EvidenceItem = Pick<Discussion, 'memberId' | 'threadId' | 'turnId' | 'round' | 'continuation' | 'sourceMessageId'> & {
+type EvidenceItem = Pick<Discussion, 'memberId' | 'threadId' | 'turnId' | 'round' | 'continuation' | 'sourceMessageId' | 'attempt'> & {
   messageId: string
   response: string
 }
@@ -30,7 +31,7 @@ function attributed(request: RoomRequestState, discussion: Discussion): Discussi
 function completed(request: RoomRequestState): Discussion[] {
   const unique = new Map<string, Discussion>()
   for (const discussion of [...(request.previousDiscussions ?? []), ...(request.discussions ?? [])]) {
-    if (discussion.response !== undefined) unique.set(discussion.threadId, attributed(request, discussion))
+    if (discussion.response !== undefined) unique.set(roomDiscussionSourceId(discussion), attributed(request, discussion))
   }
   return [...unique.values()]
 }
@@ -57,9 +58,9 @@ function evidence(request: RoomRequestState, budget: number): RoomDiscussionEvid
   const all = completed(request)
   const result: RoomDiscussionEvidence = { authority: 'reference_only',
     truncated: Boolean(request.discussionHistoryTruncated) || all.length > HISTORY_ITEMS,
-    responses: all.slice(-HISTORY_ITEMS).map(({ memberId, threadId, turnId, round, continuation, sourceMessageId, response }) => ({
-      memberId, threadId, turnId, round, continuation, sourceMessageId,
-      messageId: 'reply-' + threadId, response: boundedRoomText(response!, 2048)
+    responses: all.slice(-HISTORY_ITEMS).map(({ memberId, threadId, turnId, round, continuation, sourceMessageId, response, attempt, messageId }) => ({
+      memberId, threadId, turnId, round, continuation, sourceMessageId, attempt,
+      messageId: roomDiscussionSourceId({ threadId, messageId }), response: boundedRoomText(response!, 2048)
     })) }
   result.truncated ||= result.responses.some((entry, index) => entry.response !== all[all.length - result.responses.length + index].response)
   while (bytes(result) > budget && result.responses.length) {

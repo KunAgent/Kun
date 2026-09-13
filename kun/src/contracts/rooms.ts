@@ -109,6 +109,7 @@ export const RoomMessageSchema = z.object({
   roomId: RoomIdSchema,
   rootRequestId: RoomIdSchema.optional(),
   sourceRequestId: RoomIdSchema.optional(),
+  originRunId: RoomIdSchema.optional(),
   status: z.enum(['streaming', 'final', 'failed']).optional(),
   messageSeq: z.number().int().positive(),
   authorKind: z.enum(['user', 'member', 'system']),

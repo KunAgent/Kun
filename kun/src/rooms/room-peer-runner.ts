@@ -1,3 +1,4 @@
+import { roomRunId, updateRoomRun } from './room-run-recording.js'
 import { randomUUID } from 'node:crypto'
 import type { Room, RoomMember } from '../contracts/rooms.js'
 import type { Turn } from '../contracts/turns.js'
@@ -163,6 +164,8 @@ export class RoomPeerRunner {
     const active = member.value.activation!
     const context = await this.context(member)
     const profile = topic.value.roomSnapshot.members.find((entry) => entry.id === member.value.memberId)!
+    await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId, true),
+      { status: 'running', startedAt: new Date().toISOString() })
     const model = this.deps.peerModels
     if (!model) {
       await recordPeerMetric(this.deps, { id: active.clientRequestId, rootRequestId: topic.id,
@@ -192,6 +195,9 @@ export class RoomPeerRunner {
       if (admitted.prompt !== context.prompt || JSON.stringify(admitted.attachmentIds) !== JSON.stringify(context.attachmentIds)) {
         throw new Error('Peer admission belongs to different input')
       }
+      await enqueueRoomTurn(this.deps, active.threadId, active.clientRequestId, context.prompt, context.attachmentIds, {
+        requestId: topic.value.requestId, rootRequestId: topic.id, generation: active.generation, attempt: active.attempt,
+        contextId: active.contextId })
       await this.state.updateActivation(topic.id, member.value.memberId, active.clientRequestId, { turnId: admitted.id })
       if (admitted.status === 'queued') this.deps.turns.notifyTurnQueued(active.threadId)
       return
@@ -206,7 +212,9 @@ export class RoomPeerRunner {
       member: participant, kind: 'discussion', workspace: await this.workspace(topic, participant) })
     await this.state.updateActivation(topic.id, member.value.memberId, active.clientRequestId,
       { admissionAttempted: true, ...await capturePeerUsageBaseline(this.deps, active.threadId) })
-    const turnId = await enqueueRoomTurn(this.deps, active.threadId, active.clientRequestId, context.prompt, context.attachmentIds)
+    const turnId = await enqueueRoomTurn(this.deps, active.threadId, active.clientRequestId, context.prompt, context.attachmentIds, {
+      requestId: topic.value.requestId, rootRequestId: topic.id, generation: active.generation, attempt: active.attempt,
+      contextId: active.contextId })
     await this.state.updateActivation(topic.id, member.value.memberId, active.clientRequestId, { turnId })
   }
 
@@ -235,8 +243,10 @@ export class RoomPeerRunner {
           const accounting = run.result ?? run.failure
           await recordPeerMetric(this.deps, { id: active.clientRequestId, roomId: topic.value.roomId,
             rootRequestId: topic.id, memberId: member.value.memberId, phase: 'triage', outcome: 'cancelled',
-            generation: active.generation, model: accounting?.model, elapsedMs: accounting?.elapsedMs, usage: accounting?.usage })
+            generation: active.generation, model: accounting?.model, elapsedMs: accounting?.elapsedMs, usage: accounting?.usage }).catch(() => undefined)
         }
+        await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId, true),
+          { status: 'cancelled', outcome: 'cancelled', endedAt: new Date().toISOString() })
         this.triages.delete(active.clientRequestId)
         await releasePeerActivation(this.deps, member)
         return
@@ -249,9 +259,13 @@ export class RoomPeerRunner {
       this.triages.delete(active.clientRequestId)
       const result = run.result
       const accounting = result ?? run.failure
+      await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId, true), {
+        status: result ? 'completed' : 'failed', outcome: result?.action === 'skip' ? 'skipped' : result?.action ?? 'failed',
+        reason: result?.reason, error: run.error?.slice(0, 4000), endedAt: new Date().toISOString(),
+        model: accounting?.model, usage: accounting?.usage, elapsedMs: accounting?.elapsedMs })
       await recordPeerMetric(this.deps, { id: active.clientRequestId, roomId: topic.value.roomId,
         rootRequestId: topic.id, memberId: member.value.memberId, phase: 'triage', outcome: result?.action ?? 'failed',
-        generation: active.generation, model: accounting?.model, elapsedMs: accounting?.elapsedMs, usage: accounting?.usage })
+        generation: active.generation, model: accounting?.model, elapsedMs: accounting?.elapsedMs, usage: accounting?.usage }).catch(() => undefined)
       if (!result) {
         await releasePeerActivation(this.deps, member, { error: run.error ?? 'Participation check failed', retry: true })
       } else if (result.action === 'skip') await this.state.skip(topic.id, member.value.memberId, active.clientRequestId)
@@ -284,16 +298,19 @@ export class RoomPeerRunner {
       body: observed.text.trim(), skip: !observed.text.trim()
     })
     if (submitted.skip) {
-      await recordPeerResponseMetric(this.deps, topic.value, member, 'skipped', observed.turn)
       await this.state.skip(topic.id, member.value.memberId, active.clientRequestId)
+      await recordPeerResponseMetric(this.deps, topic.value, member, 'skipped', observed.turn)
     }
     else {
       const result = await this.state.publish({ rootRequestId: topic.id, memberId: member.value.memberId,
         clientRequestId: active.clientRequestId, activationClientRequestId: active.clientRequestId,
         ...submitted, replyToMessageId: submitted.replyToMessageId ?? topic.value.sourceMessageId })
-      await recordPeerResponseMetric(this.deps, topic.value, member, result.status, observed.turn, result.message)
-      if (result.status === 'stale') await releasePeerActivation(this.deps, member)
+      if (result.status === 'stale') {
+        await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId), { status: 'completed', outcome: 'stale' })
+        await releasePeerActivation(this.deps, member)
+      }
       if (result.status === 'stopped') await this.stopActivation(topic, member)
+      await recordPeerResponseMetric(this.deps, topic.value, member, result.status, observed.turn, result.message)
     }
   }
 
@@ -353,6 +370,8 @@ export class RoomPeerRunner {
       return
     }
     if (this.deps.backgroundExecutionActive?.(active.threadId)) return
+    await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId),
+      { status: 'cancelled', outcome: 'cancelled', endedAt: new Date().toISOString() })
     await releasePeerActivation(this.deps, member)
   }
 }

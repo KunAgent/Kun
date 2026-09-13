@@ -1,3 +1,4 @@
+import { roomRunId, updateRoomRun } from './room-run-recording.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,9 +34,13 @@ async function fixture() {
     const contextId = peerId('context', key)
     await store.commit({ requestId: contextId, checks: [{ kind: 'context', id: contextId, expectedRevision: null }],
       puts: [{ kind: 'context', id: contextId, roomId: room.id, value: { id: contextId, roomId: room.id, prompt: 'Frozen prompt' } }] })
-    return peer.begin(rootId, memberId, { clientRequestId: key, threadId: 'thread-' + key, contextId, attempt,
+    const active = await peer.begin(rootId, memberId, { clientRequestId: key, threadId: 'thread-' + key, contextId, attempt,
       phase, generation: updates!.topic.value.generation, basePublicationRevision: updates!.topic.value.publicationRevision,
       itemIds: updates!.items.slice(0, selected).map((item) => item.id) })
+    // This store-only fixture represents the confirmed native queue receipt.
+    if (active && phase === 'respond') await updateRoomRun(store, roomRunId(room.id, key),
+      { threadId: 'thread-' + key, turnId: 'turn-' + key })
+    return active
   }
   return { directory, path, store, service, room, peer, sent, rootId, begin, initialize }
 }

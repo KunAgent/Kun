@@ -1,3 +1,4 @@
+import { attachRoomRunPublication, roomRunId } from './room-run-recording.js'
 import { RoomMessageSchema, type Room, type RoomMessage } from '../contracts/rooms.js'
 import type { RoomStoreCommit } from './room-store.js'
 import { appendPeerInbox, peerId, peerInboxRows } from './room-peer-inbox.js'
@@ -65,7 +66,7 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
     const content = await peer.store.get<{ messageId: string }>('peer_publication', contentId)
     if (content) {
       const message = await peer.store.get<RoomMessage>('message', content.value.messageId)
-      await peer.skip(input.rootRequestId, input.memberId, input.activationClientRequestId)
+      await peer.skip(input.rootRequestId, input.memberId, input.activationClientRequestId, 'duplicate')
       return { status: 'duplicate', message: message?.value }
     }
     if (activation.basePublicationRevision !== topic.value.publicationRevision) return { status: 'stale' }
@@ -99,6 +100,9 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
       events: [{ roomId: topic.value.roomId, kind: 'message.created', payload: { id: message.id, rootRequestId: input.rootRequestId } },
         { roomId: topic.value.roomId, kind: 'peer.topic.updated', payload: { rootRequestId: input.rootRequestId } },
         { roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: input.rootRequestId, memberId: input.memberId } }], result }
+    const runId = roomRunId(topic.value.roomId, activation.clientRequestId)
+    // Historical activations from older runtimes can still finish without fabricating provenance.
+    if (await peer.store.get('room_run', runId)) await attachRoomRunPublication(peer.store, commit, message, runId)
     commit.checks!.push(...sourceChecks)
     const recipients = nextTopic.memberIds.filter((id) => id !== input.memberId)
     await appendPeerInbox(peer.store, commit, nextTopic, recipients.filter((id) => !invites.includes(id)), {

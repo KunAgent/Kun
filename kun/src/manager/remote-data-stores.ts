@@ -2,6 +2,7 @@ import type { PendingMemoryCandidate } from '../contracts/memory-distillation-ru
 import { MemoryDistillationCommitResult } from '../contracts/memory-distillation-storage.js'
 import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
 import { z } from 'zod'
+import { ItemHistoryContentSchema } from '../contracts/item-history.js'
 import type {
   ArtifactStore,
   PutArtifactInput,
@@ -106,6 +107,7 @@ const EventPageSchema = z.object({
   eventBytes: z.number().int().nonnegative()
 })
 const ItemPageSchema = z.object({
+  content: ItemHistoryContentSchema.optional(),
   items: z.array(TurnItem),
   nextCursor: z.string().optional(),
   hasMore: z.boolean(),

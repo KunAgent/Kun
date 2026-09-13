@@ -29,6 +29,17 @@ describe('bounded discussion evidence', () => {
     expect(discussionEvidence?.authority).toBe('reference_only')
   })
 
+  it('preserves old retry source IDs while keeping newly recorded attempts distinct', () => {
+    const req = request()
+    const old = { ...discussion(0, 0), attempt: 1 }
+    req.previousDiscussions = [old]
+    req.discussions = [{ ...old, attempt: 2, turnId: 'new-turn', messageId: 'reply-' + old.threadId + '-attempt-2' }]
+    const evidence = roomDiscussionContext(req, context(), 8000).discussionEvidence!
+    expect(evidence.responses.map((entry) => entry.messageId)).toEqual([
+      'reply-' + old.threadId, 'reply-' + old.threadId + '-attempt-2'
+    ])
+  })
+
   it('bounds escaped CJK/emoji evidence together with background and retains each round without mutating the snapshot', () => {
     const req = request()
     req.previousDiscussions = Array.from({ length: 3 }, (_, round) =>

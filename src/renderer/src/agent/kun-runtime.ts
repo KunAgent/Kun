@@ -365,11 +365,13 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
 
   async getThreadDetail(threadId: string, options: {
     before?: string
+    turnId?: string
     signal?: AbortSignal
     priority?: 'foreground' | 'background'
   } = {}): Promise<ThreadDetail> {
     let response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTimelinePath(threadId, {
+        ...(options.turnId ? { turnId: options.turnId } : {}),
         ...(options.before ? { before: options.before } : {}),
         limit: 300
       }),
@@ -383,6 +385,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     if (
       !response.ok &&
       !options.before &&
+      !options.turnId &&
       (response.status === 404 || response.status === 405)
     ) {
       response = await rendererRuntimeClient.runtimeRequest(

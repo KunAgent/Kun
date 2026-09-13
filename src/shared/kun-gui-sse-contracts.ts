@@ -17,6 +17,14 @@ export type SseErrorPayload = {
   batchId?: string
 }
 
+export type SseStartOptions = {
+  acknowledgedBatches?: boolean
+  scope?: 'rooms' | 'room-run'
+  roomId?: string
+  runId?: string
+  cursor?: string
+}
+
 /**
  * The SSE subscription slice of the GUI bridge. Kept here so the 700-line
  * `KunGuiApi` surface stays under the file-line gate while the transport
@@ -27,7 +35,7 @@ export interface KunGuiSseSurface {
     threadId: string,
     sinceSeq: number,
     streamId?: string,
-    options?: { acknowledgedBatches?: boolean; scope?: 'rooms' }
+    options?: SseStartOptions
   ) => Promise<{ streamId: string }>
   stopSse: (streamId: string) => Promise<boolean>
   ackSse: (streamId: string, batchId: string) => Promise<boolean>

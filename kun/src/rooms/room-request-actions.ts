@@ -1,3 +1,4 @@
+import { reconcileRecordedRoomRuns } from './room-run-recording.js'
 import { RoomRequestContinueSchema, RoomTaskActionSchema } from '../contracts/rooms-api.js'
 import { RoomMessageSchema } from '../contracts/rooms.js'
 import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
@@ -55,6 +56,7 @@ export async function settleRoomRequestStop(deps: RoomRuntimeDeps, row: RoomStor
     activity.state === 'unknown' ? 'recovery_required' : 'stopping'
   if (row.value.status !== status || row.value.error !== failure) await putRoomDocument(deps.store, 'request', row.id, row.roomId!,
     { ...row.value, status, error: failure, cancellationRequested: true }, row)
+  await reconcileRecordedRoomRuns(deps, { roomId: row.value.roomId, requestId: row.id })
   return { status, state: activity.state }
 }
 
@@ -82,6 +84,7 @@ export async function roomRequestAction(deps: RoomRuntimeDeps, service: RoomServ
       checks: [{ kind: 'request', id, expectedRevision: row.revision }],
       puts: [{ kind: 'request', id, roomId, value }],
       events: [{ roomId, kind: 'request.updated', payload: { id } }], result: { id, status: value.status } })
+    await reconcileRecordedRoomRuns(deps, { roomId, requestId: id })
     return { id, status: value.status }
   }
   if (!['needs_input', 'failed', 'cancelled'].includes(value.status)) throw new RoomStoreConflictError('request is not awaiting continuation')

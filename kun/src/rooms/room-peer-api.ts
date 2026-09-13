@@ -1,3 +1,5 @@
+import { roomRunId } from './room-run-recording.js'
+import type { RoomRunRecord } from '../contracts/room-runs.js'
 import { RoomTaskActionSchema } from '../contracts/rooms-api.js'
 import type { Room } from '../contracts/rooms.js'
 import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
@@ -20,7 +22,12 @@ export async function roomPeerTopicPage(peer: RoomPeerStore, roomId: string, lim
       const pendingCount = updates?.items.length ?? 0
       const blockedReason = !member.value.activation && !enabled.has(member.value.memberId) ? 'member_unavailable' :
         !member.value.activation && (row.value.memberResponses[member.value.memberId] ?? 0) >= 8 ? 'member_budget_exhausted' : undefined
-      members.push({ memberId: member.value.memberId, state: member.value.state, pendingCount,
+      const activation = member.value.activation
+      const activeRun = activation ? await peer.store.get<RoomRunRecord>('room_run',
+        roomRunId(roomId, activation.clientRequestId, activation.phase === 'triage')) : null
+      const currentRunId = activeRun?.roomId === roomId && activeRun.value.rootRequestId === row.id &&
+        activeRun.value.memberId === member.value.memberId ? activeRun.id : undefined
+      members.push({ memberId: member.value.memberId, currentRunId, state: member.value.state, pendingCount,
         seenInboxSeq: member.value.seenInboxSeq, handledInboxSeq: member.value.handledInboxSeq,
         responseCount: row.value.memberResponses[member.value.memberId] ?? 0,
         error: member.value.lastError, waitingReason: blockedReason ??

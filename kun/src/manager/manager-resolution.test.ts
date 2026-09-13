@@ -46,6 +46,13 @@ describe('Service Manager resolution', () => {
     expect(new Headers(statusCall?.[1]?.headers).get('authorization')).toBe('Bearer manager-token')
   })
 
+  it.each(['item-turn-page-v1', 'room-store-v4'])('requires %s before using run inspection', async (missing) => {
+    const fixture = await managerFixture(KUN_MANAGER_CAPABILITIES.filter((value) => value !== missing))
+    const fetchImpl = managerFetch(fixture)
+    await expect(resolveServiceManager(fixture.controlDir, fetchImpl)).resolves.toBeNull()
+    await expect(resolveServiceManagerForMigration(fixture.controlDir, fetchImpl)).resolves.toEqual({ discovery: fixture.discovery })
+  })
+
   it('rejects a capability-incompatible manager when status authentication fails', async () => {
     const capabilities = KUN_MANAGER_CAPABILITIES.filter((value) => value !== 'item-page-v1')
     const fixture = await managerFixture(capabilities)

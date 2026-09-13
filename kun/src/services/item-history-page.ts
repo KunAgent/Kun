@@ -1,5 +1,6 @@
 import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../ports/session-store.js'
+import { buildItemContentPage, isItemContentRequest } from './item-history-content.js'
 
 const TIMELINE_ITEM_PREVIEW_CHARS = 64 * 1024
 const TIMELINE_ARRAY_PREVIEW_ITEMS = 32
@@ -9,7 +10,14 @@ export function buildPublicItemHistoryPage(
   items: readonly TurnItem[],
   options: ItemHistoryPageOptions
 ): ItemHistoryPage {
-  const publicItems = items.filter(isPublicTurnItem)
+  if (isItemContentRequest(options)) {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index]!
+      if (item.id === options.itemId && item.turnId === options.turnId) return buildItemContentPage(item, options)
+    }
+    return buildItemContentPage(undefined, options)
+  }
+  const publicItems = items.filter((item) => isPublicTurnItem(item) && (!options.turnId || item.turnId === options.turnId))
   const maxItems = Math.max(1, Math.floor(options.maxItems))
   const maxBytes = Math.max(1, Math.floor(options.maxBytes))
   const cursorIndex = options.before

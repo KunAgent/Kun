@@ -1,3 +1,6 @@
+import type { RoomRunRecord } from '../contracts/room-runs.js'
+import type { RoomMessage } from '../contracts/rooms.js'
+import { roomRunId } from './room-run-recording.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -162,5 +165,83 @@ describe('bounded exact-turn peer metrics', () => {
     const result = await readPeerTurnUsage(f.deps, { ...activation, usageSinceSeq: 0, usageBaseline: emptyUsageSnapshot() })
     expect(result.usageStatus).toBe('partial')
     expect(yielded).toBeLessThanOrEqual(4097)
+  })
+})
+
+describe('persistent room run provenance', () => {
+  it('reserves a response before thread creation and retains failures without a public reply', async () => {
+    const f = await fixture()
+    vi.spyOn(f.h.threads, 'create').mockImplementation(async () => {
+      const runs = await f.store.list<RoomRunRecord>('room_run', { roomId: f.room.id, phase: 'discussion' })
+      expect(runs).toHaveLength(1)
+      expect(runs[0].value).toMatchObject({ status: 'queued', input: 'Discuss the current design.' })
+      expect(runs[0].value.threadId).toBeUndefined()
+      throw new Error('Provider unavailable')
+    })
+    await f.runner.tick()
+    const run = (await f.store.list<RoomRunRecord>('room_run', { roomId: f.room.id }))[0].value
+    expect(run).toMatchObject({ status: 'failed', outcome: 'failed', error: 'Provider unavailable' })
+    expect(run.contextId).toBeDefined()
+    expect(run.endedAt).toBeDefined()
+    expect((await f.active()).value.activation).toBeUndefined()
+    expect(await f.store.list('message', { roomId: f.room.id })).toHaveLength(1)
+  })
+
+  it('reconciles a lost admission receipt using the original identity across runner restart', async () => {
+    const f = await fixture()
+    const original = f.h.turns.enqueueTurn.bind(f.h.turns)
+    const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn').mockImplementation(async (input) => {
+      const row = await f.store.get<RoomRunRecord>('room_run', roomRunId(f.room.id, input.request.clientRequestId!))
+      expect(row?.value.status).toBe('queued')
+      await original(input)
+      throw new Error('Receipt lost')
+    })
+    await f.runner.tick()
+    const active = (await f.active()).value.activation!
+    expect(active.turnId).toBeDefined()
+    const record = (await f.store.get<RoomRunRecord>('room_run', roomRunId(f.room.id, active.clientRequestId)))!.value
+    expect(record).toMatchObject({ threadId: active.threadId, turnId: active.turnId })
+    await f.runner.close()
+    const restarted = new RoomPeerRunner(f.deps, () => {})
+    try { await restarted.tick(); await restarted.tick() } finally { await restarted.close() }
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    expect(await f.store.list('room_run', { roomId: f.room.id, phase: 'discussion' })).toHaveLength(1)
+  })
+
+  it('publishes message provenance atomically even when the subsequent metric write fails', async () => {
+    const f = await fixture()
+    await f.runner.tick()
+    const active = (await f.active()).value.activation!
+    const turn = await f.finish()
+    vi.spyOn(execution, 'observeRoomTurn').mockResolvedValue({ status: 'completed', text: '',
+      structured: { body: 'A durable concrete finding.' }, turn })
+    const commit = f.store.commit.bind(f.store)
+    vi.spyOn(f.store, 'commit').mockImplementation(async (input) => {
+      if (input.puts?.some((put) => put.kind === 'peer_metric')) throw new Error('Metric storage failed')
+      return commit(input)
+    })
+    await f.runner.tick()
+    const message = (await f.store.list<RoomMessage>('message', { roomId: f.room.id }))
+      .find((row) => row.value.authorKind === 'member')!.value
+    expect(message.originRunId).toBe(roomRunId(f.room.id, active.clientRequestId))
+    expect((await f.store.get<RoomRunRecord>('room_run', message.originRunId!))?.value)
+      .toMatchObject({ turnId: active.turnId, outcome: 'published', publishedMessageId: message.id })
+    expect((await f.active()).value.activation).toBeUndefined()
+    await f.runner.tick()
+    expect((await f.store.list<RoomMessage>('message', { roomId: f.room.id }))
+      .filter((row) => row.value.authorKind === 'member')).toHaveLength(1)
+  })
+
+  it('keeps a failed lightweight check separate from a native conversation', async () => {
+    const f = await fixture(true)
+    const runner = new RoomPeerRunner(f.deps, () => {}, { debounceMs: 0 })
+    try {
+      await runner.tick(new Set([f.room.id + ':coordinator']))
+      const runs = await f.store.list<RoomRunRecord>('room_run', { roomId: f.room.id, memberId: 'developer', phase: 'triage' })
+      expect(runs).toHaveLength(1)
+      expect(runs[0].value).toMatchObject({ status: 'failed', outcome: 'failed', phase: 'triage' })
+      expect(runs[0].value.threadId).toBeUndefined()
+      expect(runs[0].value.turnId).toBeUndefined()
+    } finally { await runner.close() }
   })
 })

@@ -1,9 +1,10 @@
+import { attachRoomRunPublication } from './room-run-recording.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import { RoomSchema, RoomMessageSchema, RoomMemberSchema, SendRoomMessageSchema,
   type Room, type RoomMessage } from '../contracts/rooms.js'
 import { CreateRoomRequestSchema, UpdateRoomRequestSchema } from '../contracts/rooms-api.js'
-import type { RoomStore, RoomDocumentKind, RoomStoredDocument } from './room-store.js'
+import type { RoomStore, RoomStoreCommit, RoomDocumentKind, RoomStoredDocument } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
 import { observeRoomRepository } from './task-workspace-service.js'
 import type { RoomRequestState } from './room-runtime-types.js'
@@ -144,7 +145,7 @@ export class RoomService {
     return saved.result as typeof result
   }
 
-  async append(id: string, key: string, body: string, memberId?: string, taskId?: string) {
+  async append(id: string, key: string, body: string, memberId?: string, taskId?: string, originRunId?: string) {
     const room = await this.get(id)
     const member = room.members.find((member) => member.id === memberId)
     const message = RoomMessageSchema.parse({ id: key, roomId: id, messageSeq: 1,
@@ -152,22 +153,29 @@ export class RoomService {
       authorLabelSnapshot: member?.displayName ?? 'Kun', body: body.slice(0, 64000),
       bodyRevision: 0, mentionMemberIds: [], attachmentIds: [], taskId,
       createdAt: new Date().toISOString() })
-    await this.store.commit({ requestId: 'append:' + key,
-      fingerprint: roomFingerprint({ body, memberId, taskId }),
+    const commit: RoomStoreCommit = { requestId: 'append:' + key,
+      fingerprint: roomFingerprint({ body, memberId, taskId, ...(originRunId ? { originRunId } : {}) }),
       checks: [{ kind: 'message', id: key, expectedRevision: null }],
       puts: [{ kind: 'message', id: key, roomId: id, value: message }],
-      events: [{ roomId: id, kind: 'message.created', payload: { id: key } }], result: { id: key } })
+      events: [{ roomId: id, kind: 'message.created', payload: { id: key } }], result: { id: key } }
+    await attachRoomRunPublication(this.store, commit, message, originRunId)
+    await this.store.commit(commit)
   }
 
-  async publish(id: string, key: string, body: string, memberId: string, taskId?: string) {
+  async publish(id: string, key: string, body: string, memberId: string, taskId?: string, originRunId?: string) {
     if (!body.trim()) return
     const old = await this.store.get<RoomMessage>('message', key)
-    if (!old) return this.append(id, key, body, memberId, taskId)
+    if (!old) return this.append(id, key, body, memberId, taskId, originRunId)
     if (old.roomId !== id || old.value.authorMemberId !== memberId) throw new Error('message identity mismatch')
     const text = body.slice(0, 64000)
-    if (old.value.body === text) return
-    await putRoomDocument(this.store, 'message', key, id,
-      { ...old.value, body: text, bodyRevision: old.value.bodyRevision + 1 }, old, taskId)
+    if (old.value.body === text && (!originRunId || old.value.originRunId === originRunId)) return
+    const message = { ...old.value, body: text, bodyRevision: old.value.bodyRevision + 1 }
+    const commit: RoomStoreCommit = { requestId: randomUUID(),
+      checks: [{ kind: 'message', id: key, expectedRevision: old.revision }],
+      puts: [{ kind: 'message', id: key, roomId: id, value: message }],
+      events: [{ roomId: id, kind: 'message.updated', payload: { id: key } }] }
+    await attachRoomRunPublication(this.store, commit, message, originRunId)
+    await this.store.commit(commit)
   }
 
   async rule(id: string, messageId: string, clientRequestId: string) {

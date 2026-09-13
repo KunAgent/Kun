@@ -245,9 +245,15 @@ export const sseStartPayloadSchema = z
     sinceSeq: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     streamId: optionalTrimmedString(MAX_ID_LENGTH),
     acknowledgedBatches: z.boolean().optional(),
-    scope: z.literal('rooms').optional()
+    scope: z.enum(['rooms', 'room-run']).optional(),
+    roomId: trimmedString(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/).optional(),
+    runId: trimmedString(256).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/).optional(),
+    cursor: trimmedString(2048).regex(/^[A-Za-z0-9_-]+$/).optional()
   })
   .strict()
+  .refine((value) => value.scope === 'room-run'
+    ? Boolean(value.roomId && value.runId)
+    : !value.roomId && !value.runId && !value.cursor, 'invalid SSE scope identity')
 
 export const sseAckPayloadSchema = z
   .object({

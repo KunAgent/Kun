@@ -10,6 +10,8 @@ import { startKunServe, type KunServeHandle } from './runtime-factory.js'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
 import type { RoomTask } from '../contracts/room-tasks.js'
 import type { RoomPeerTopicSummary } from '../rooms/room-peer-types.js'
+import type { RoomRunRecord } from '../contracts/room-runs.js'
+import type { RoomRunDetail, RoomRunItemsPage } from '../contracts/room-run-query.js'
 import { heartbeatRuntimeWithManager } from '../manager/manager-client.js'
 
 const exec = promisify(execFile)
@@ -42,11 +44,15 @@ async function modelServer() {
         content = JSON.stringify({ action: 'skip', reason: 'No additional evidence to contribute.' })
       } else if (prompt.includes('Participate as this Kun room member.')) {
         peerToolAdvertised ||= Boolean(body.tools?.some((tool) => tool.function?.name === 'send_room_message'))
-        const toolResult = [...body.messages].reverse().find((message) => message.role === 'tool')
+        let latestUser = 0
+        for (let index = body.messages.length - 1; index >= 0; index -= 1) {
+          if (body.messages[index].role === 'user') { latestUser = index; break }
+        }
+        const toolResult = body.messages.slice(latestUser).find((message) => message.role === 'tool')
         if (!toolResult) {
           peerSubmissions++
           content = ''
-          toolCalls = [{ index: 0, id: 'scoped-peer-message', type: 'function', function: {
+          toolCalls = [{ index: 0, id: `scoped-peer-message-${peerSubmissions}`, type: 'function', function: {
             name: 'send_room_message', arguments: JSON.stringify({ body: PEER_REPLY })
           } }]
         } else {
@@ -239,5 +245,56 @@ describe('Rooms full managed Runtime HTTP composition', () => {
     expect(model.peer().triageCalls).toBeGreaterThanOrEqual(2)
     expect((await api<{ tasks: RoomTask[] }>(`/v1/rooms/${room.id}/tasks`)).tasks).toEqual([])
     expect(model.calls()).toBe(0)
+
+    const runBase = `/v1/rooms/${room.id}/runs`
+    const firstOrigin = replies[0].originRunId
+    expect(firstOrigin).toBeTruthy()
+    expect(await api(`/v1/rooms/${room.id}/messages/${replies[0].id}/run`)).toEqual({ runId: firstOrigin })
+    const firstRun = await api<RoomRunDetail>(`${runBase}/${firstOrigin}`)
+    expect(firstRun.run).toMatchObject({ phase: 'discussion', outcome: 'published',
+      memberId: room.defaultMemberId, publishedMessageId: replies[0].id })
+    expect(firstRun.availability.status).toBe('available')
+    const firstItems = await api<RoomRunItemsPage>(`${runBase}/${firstOrigin}/items?limit=2`)
+    expect(firstItems.items.length).toBeGreaterThan(0)
+    expect(firstItems.items.every((item) => item.turnId === firstRun.run.turnId)).toBe(true)
+
+    await api(`/v1/rooms/${room.id}/messages`, { clientRequestId: 'peer-follow-up',
+      rootRequestId: sent.requestId, body: 'Continue this topic with one more concrete reply.',
+      executionIntent: 'discussion', mentionMemberIds: [room.defaultMemberId] })
+    let continuedReplies: RoomMessage[] = []
+    await vi.waitFor(async () => {
+      const history = await api<{ messages: RoomMessage[] }>(`/v1/rooms/${room.id}/messages`)
+      continuedReplies = history.messages.filter((message) => message.authorKind === 'member')
+      expect(continuedReplies).toHaveLength(2)
+      const { topics } = await api<{ topics: RoomPeerTopicSummary[] }>(`/v1/rooms/${room.id}/topics`)
+      expect(topics.find((topic) => topic.rootRequestId === sent.requestId)?.status).toBe('idle')
+    }, { timeout: 20000, interval: 250 })
+    const followup = continuedReplies.find((message) => message.id !== replies[0].id)!
+    expect(followup.originRunId).toBeTruthy()
+    expect(followup.originRunId).not.toBe(firstOrigin)
+    const secondRun = await api<RoomRunDetail>(`${runBase}/${followup.originRunId}`)
+    // Explicit continuation starts a fresh generation/session for this member.
+    expect(secondRun.run.threadId).toBeTruthy()
+    expect(secondRun.run.turnId).not.toBe(firstRun.run.turnId)
+    expect(secondRun.run.memberId).toBe(firstRun.run.memberId)
+    const afterAdmissions = model.peer()
+    const listing = await api<{ runs: RoomRunRecord[] }>(`${runBase}?root_request_id=${sent.requestId}&limit=50`)
+    const skipped = listing.runs.filter((run) => run.phase === 'triage' && run.outcome === 'skipped')
+    expect(skipped.length).toBeGreaterThan(0)
+    expect(skipped.every((run) => run.status === 'completed' && !run.turnId)).toBe(true)
+    const triageDetail = await api<RoomRunDetail>(`${runBase}/${skipped[0].id}`)
+    expect(triageDetail.availability.status).toBe('no_session')
+    expect((await api<RoomRunItemsPage>(`${runBase}/${skipped[0].id}/items`)).items).toEqual([])
+    for (const run of [firstRun.run, secondRun.run]) {
+      const page = await api<RoomRunItemsPage>(`${runBase}/${run.id}/items?limit=1`)
+      expect(page.items).toHaveLength(1)
+      expect(page.items[0].turnId).toBe(run.turnId)
+      expect(page.items[0].threadId).toBe(run.threadId)
+      const earlier = await api<RoomRunItemsPage>(`${runBase}/${run.id}/items?limit=2&cursor=${encodeURIComponent(page.nextCursor!)}`)
+      expect(earlier.items.every((item) => item.turnId === run.turnId)).toBe(true)
+    }
+    expect(model.peer()).toEqual(afterAdmissions)
+    expect((await api<{ runs: RoomRunRecord[] }>(`${runBase}?root_request_id=${sent.requestId}&limit=50`))
+      .runs.map((run) => run.id)).toEqual(listing.runs.map((run) => run.id))
   }, 60000)
 })

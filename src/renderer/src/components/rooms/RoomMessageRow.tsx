@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomMessageBody } from './RoomMessageBody'
+import { RoomMessageRunButton } from './RoomMessageRunButton'
 
 const roles = {
   coordinator: 'roomsCoordinator',
@@ -21,7 +22,8 @@ export function RoomMessageRow({
   onPin,
   onTask,
   onViewReply,
-  onMember
+  onMember,
+  onRun
 }: {
   message: RoomMessage
   member?: RoomMember
@@ -31,12 +33,19 @@ export function RoomMessageRow({
   onPin: (message: RoomMessage) => void
   onTask: (id: string) => void
   onViewReply: (id: string) => void
-  onMember?: (id: string) => void
+  onMember?: (id: string, rootRequestId?: string) => void
+  onRun?: (id: string) => void
 }) {
   const { t } = useTranslation('common')
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const system = message.authorKind === 'system'
+  const progressPrefix = message.taskId ? `progress-${message.taskId}-` : ''
+  const legacyTaskProgress = Boolean(message.taskId &&
+    message.id.startsWith(progressPrefix) &&
+    /^(0|[1-9]\d*)$/.test(message.id.slice(progressPrefix.length)))
+  const canInspectRun = Boolean(message.originRunId ||
+    (message.authorKind === 'member' && (!message.taskId || legacyTaskProgress)))
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(message.body)
@@ -58,7 +67,7 @@ export function RoomMessageRow({
           label={message.authorLabelSnapshot}
           onClick={
             message.authorMemberId && member && !member.removedAt && onMember
-              ? () => onMember(message.authorMemberId!)
+              ? () => onMember(message.authorMemberId!, message.rootRequestId)
               : undefined
           }
         />
@@ -110,6 +119,7 @@ export function RoomMessageRow({
           />
         </div>
         <div className="rooms-message-footer">
+          {onRun && canInspectRun ? <RoomMessageRunButton message={message} onRun={onRun} /> : null}
           {message.taskId ? (
             <button
               type="button"

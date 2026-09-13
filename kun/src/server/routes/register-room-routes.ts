@@ -18,6 +18,7 @@ import { roomGit } from '../../rooms/room-git.js'
 import { roomRequestAction } from '../../rooms/room-request-actions.js'
 import { roomHistoryPage } from '../../rooms/room-history.js'
 import { registerRoomEvidenceRoutes } from './register-room-evidence-routes.js'
+import { registerRoomRunRoutes } from './register-room-run-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
 
 const PageSchema = z.object({
@@ -62,6 +63,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   })
 
   registerRoomEvidenceRoutes(add)
+  registerRoomRunRoutes(add, runtime)
   add('GET', '/v1/rooms/:roomId/topics', (rooms, request, context) => {
     const page = pagination(request)
     return rooms.peerTopics(context.params.roomId, page.limit, page.cursor)

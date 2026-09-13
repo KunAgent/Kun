@@ -1,3 +1,4 @@
+import { RoomRunRecordSchema } from '../contracts/room-runs.js'
 import { createHash } from 'node:crypto'
 import { chmod, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -69,6 +70,8 @@ export class SqliteRoomStore implements RoomStore {
     if (parsed.roomId) { clauses.push('room_id = ?'); args.push(parsed.roomId) }
     if (parsed.taskId) { clauses.push('task_id = ?'); args.push(parsed.taskId) }
     if (parsed.rootRequestId) { clauses.push("json_extract(document, '$.rootRequestId') = ?"); args.push(parsed.rootRequestId) }
+    if (parsed.phase) { clauses.push("json_extract(document, '$.phase') = ?"); args.push(parsed.phase) }
+    if (parsed.clientRequestId) { clauses.push("json_extract(document, '$.clientRequestId') = ?"); args.push(parsed.clientRequestId) }
     if (parsed.peerGeneration !== undefined) { clauses.push("json_extract(document, '$.generation') = ?"); args.push(parsed.peerGeneration) }
     if (parsed.coalescePeerMessages) clauses.push(`(
       json_extract(document, '$.sourceKind') NOT IN ('message', 'invitation') OR NOT EXISTS (
@@ -83,10 +86,10 @@ export class SqliteRoomStore implements RoomStore {
             OR (json_extract(newer.document, '$.sourceRevision') = json_extract(room_documents.document, '$.sourceRevision')
               AND newer.seq > room_documents.seq))
       ))`)
-    if (parsed.memberId) { clauses.push(kind.startsWith('peer_') ? "json_extract(document, '$.memberId') = ?" :
+    if (parsed.memberId) { clauses.push((kind.startsWith('peer_') || kind === 'room_run') ? "json_extract(document, '$.memberId') = ?" :
       "json_extract(document, '$.task.ownerMemberId') = ?"); args.push(parsed.memberId) }
     if (parsed.repositoryId) { clauses.push("json_extract(document, '$.task.repositoryId') = ?"); args.push(parsed.repositoryId) }
-    if (parsed.requestId) { clauses.push(kind.startsWith('peer_') ? "json_extract(document, '$.rootRequestId') = ?" :
+    if (parsed.requestId) { clauses.push(kind === 'room_run' ? "json_extract(document, '$.requestId') = ?" : kind.startsWith('peer_') ? "json_extract(document, '$.rootRequestId') = ?" :
       "json_extract(document, '$.task.requestId') = ?"); args.push(parsed.requestId) }
     if (parsed.documentId) { clauses.push("json_extract(document, '$.id') = ?"); args.push(parsed.documentId) }
     if (parsed.deliveryId) { clauses.push("json_extract(document, '$.deliveryId') = ?"); args.push(parsed.deliveryId) }
@@ -258,6 +261,19 @@ export class SqliteRoomStore implements RoomStore {
           'peer_inbox', 'peer_publication', 'peer_metric'].includes(put.kind)) {
           throw new RoomStoreConflictError(`room ${put.kind} versions are immutable`, current.revision)
         }
+        if (put.kind === 'room_run') {
+          const run = RoomRunRecordSchema.parse(put.value)
+          if (run.id !== put.id) throw new RoomStoreConflictError('room run id mismatch')
+          if (current) {
+            const before = RoomRunRecordSchema.parse(JSON.parse(current.document))
+            for (const key of ['id', 'roomId', 'memberId', 'phase', 'clientRequestId', 'rootRequestId', 'taskId',
+              'requestId', 'attempt', 'previousRunId', 'contextId', 'generation', 'threadId', 'turnId'] as const) {
+              if (before[key] !== undefined && before[key] !== run[key]) {
+                throw new RoomStoreConflictError('room run identity cannot change: ' + key, current.revision)
+              }
+            }
+          }
+        }
         const metadata = record(put.value)
         const roomId = put.roomId ?? stringValue(metadata.roomId) ?? (put.kind === 'room' ? put.id : undefined)
         const taskId = put.taskId ?? stringValue(metadata.taskId)
@@ -333,6 +349,9 @@ export class SqliteRoomStore implements RoomStore {
           archived INTEGER NOT NULL DEFAULT 0, document TEXT NOT NULL, UNIQUE(kind, id)
         );
         CREATE INDEX IF NOT EXISTS room_documents_room ON room_documents(kind, room_id, seq);
+        CREATE INDEX IF NOT EXISTS room_run_scope ON room_documents(kind, room_id, json_extract(document, '$.rootRequestId'), json_extract(document, '$.memberId'), seq);
+        CREATE INDEX IF NOT EXISTS room_run_phase ON room_documents(kind, room_id, json_extract(document, '$.phase'), seq);
+        CREATE INDEX IF NOT EXISTS room_run_client ON room_documents(kind, room_id, json_extract(document, '$.clientRequestId'), seq);
         CREATE INDEX IF NOT EXISTS room_documents_task ON room_documents(kind, task_id, seq);
         CREATE INDEX IF NOT EXISTS room_documents_status ON room_documents(kind, status, seq);
         CREATE INDEX IF NOT EXISTS room_documents_archived ON room_documents(kind, archived, seq);

@@ -1,6 +1,7 @@
+import { appendPeerRunOutcome } from './room-peer-run-recording.js'
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
 import type { RoomPeerMemberState, RoomPeerTopic } from './room-peer-types.js'
-import type { RoomStoredDocument } from './room-store.js'
+import type { RoomStoreCommit, RoomStoredDocument } from './room-store.js'
 import { RoomPeerStore, retryPeerConflict } from './room-peer-state.js'
 import { peerId } from './room-peer-inbox.js'
 
@@ -46,7 +47,7 @@ export async function releasePeerActivation(deps: RoomRuntimeDeps, member: RoomS
     const current = await deps.store.get<RoomPeerMemberState>('peer_member', member.id)
     if (current?.value.activation?.clientRequestId !== activation.clientRequestId) return
     const failures = input.error ? (current.value.retryCount ?? 0) + 1 : input.resetFailures ? 0 : current.value.retryCount ?? 0
-    await deps.store.commit({ requestId: peerId('release', activation.clientRequestId, current.revision),
+    const commit: RoomStoreCommit = { requestId: peerId('release', activation.clientRequestId, current.revision),
       checks: [{ kind: 'peer_member', id: current.id, expectedRevision: current.revision }],
       puts: [{ kind: 'peer_member', id: current.id, roomId: current.roomId, value: {
         ...current.value, activation: undefined, state: input.error ? 'failed' : 'pending',
@@ -54,7 +55,9 @@ export async function releasePeerActivation(deps: RoomRuntimeDeps, member: RoomS
         retryAt: input.error && input.retry && failures <= 2 ? new Date(Date.now() + failures * 15_000).toISOString() : undefined,
         updatedAt: new Date().toISOString()
       } }], events: [{ roomId: member.value.roomId, kind: 'peer.member.updated',
-        payload: { rootRequestId: member.value.rootRequestId, memberId: member.value.memberId } }] })
+        payload: { rootRequestId: member.value.rootRequestId, memberId: member.value.memberId } }] }
+    await appendPeerRunOutcome(deps.store, commit, current.value, input.error ? { status: 'failed', outcome: 'failed', error: input.error.slice(0, 4000) } : {})
+    await deps.store.commit(commit)
   })
 }
 

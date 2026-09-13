@@ -1,3 +1,4 @@
+import { appendPeerActivationRun, appendPeerRunOutcome } from './room-peer-run-recording.js'
 import { createHash } from 'node:crypto'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
 import type { RoomStore, RoomStoreCommit, RoomStoredDocument } from './room-store.js'
@@ -121,12 +122,14 @@ export class RoomPeerStore {
         seenInboxSeq: Math.max(member.value.seenInboxSeq, activation.seenThroughSeq),
         state: input.phase === 'triage' ? 'triaging' : 'responding', lastError: undefined, waitingReason: undefined,
         updatedAt: new Date().toISOString() }
-      await this.store.commit({ requestId: receiptId, fingerprint: peerFingerprint([rootId, memberId, input]),
+      const commit: RoomStoreCommit = { requestId: receiptId, fingerprint: peerFingerprint([rootId, memberId, input]),
         checks: [{ kind: 'peer_topic', id: rootId, expectedRevision: topic.revision },
           { kind: 'peer_member', id: member.id, expectedRevision: member.revision }],
         puts: [{ kind: 'peer_topic', id: rootId, roomId: topic.roomId, value: nextTopic },
           { kind: 'peer_member', id: member.id, roomId: topic.roomId, value: next }],
-        events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] })
+        events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] }
+      await appendPeerActivationRun(this.store, commit, topic.value, member.value, activation)
+      await this.store.commit(commit)
       return this.member(rootId, memberId)
     })
   }
@@ -148,19 +151,21 @@ export class RoomPeerStore {
       if (!nextTopic) { await this.exhaustBudget(topic, member, 'respond'); return null }
       const next: RoomPeerMemberState = { ...member.value, activation: { ...active, ...patch },
         state: (patch.phase ?? active.phase) === 'respond' ? 'responding' : 'triaging', updatedAt: new Date().toISOString() }
-      await this.store.commit({ requestId: receiptId, fingerprint: peerFingerprint([rootId, memberId, activationClientRequestId, patch]),
+      const commit: RoomStoreCommit = { requestId: receiptId, fingerprint: peerFingerprint([rootId, memberId, activationClientRequestId, patch]),
         checks: [{ kind: 'peer_topic', id: rootId, expectedRevision: topic.revision },
           { kind: 'peer_member', id: member.id, expectedRevision: member.revision }],
         puts: [...(promotion ? [{ kind: 'peer_topic' as const, id: rootId, roomId: topic.roomId, value: nextTopic }] : []),
           { kind: 'peer_member', id: member.id, roomId: topic.roomId, value: next }],
-        events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] })
+        events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] }
+      if (promotion) await appendPeerActivationRun(this.store, commit, topic.value, member.value, next.activation!)
+      await this.store.commit(commit)
       return this.member(rootId, memberId)
     })
   }
 
   publish(input: RoomPeerPublishInput) { return publishPeerMessage(this, input) }
 
-  async skip(rootId: string, memberId: string, activationClientRequestId: string): Promise<void> {
+  async skip(rootId: string, memberId: string, activationClientRequestId: string, outcome: 'skipped' | 'duplicate' = 'skipped'): Promise<void> {
     await retryPeerConflict(async () => {
       const topic = await this.topic(rootId), member = await this.member(rootId, memberId)
       const activation = member?.value.activation
@@ -169,13 +174,15 @@ export class RoomPeerStore {
         activation.basePublicationRevision === topic.value.publicationRevision && await this.current(topic)
       const handled = fresh ? Math.max(member.value.handledInboxSeq, activation.seenThroughSeq) : member.value.handledInboxSeq
       const pending = (await peerInboxRows(this.store, rootId, memberId, handled, topic.value.generation)).length > 0
-      await this.store.commit({ requestId: peerId('skip', activationClientRequestId),
+      const commit: RoomStoreCommit = { requestId: peerId('skip', activationClientRequestId),
         fingerprint: peerFingerprint([rootId, memberId, activationClientRequestId]),
         checks: [{ kind: 'peer_topic', id: rootId, expectedRevision: topic.revision },
           { kind: 'peer_member', id: member.id, expectedRevision: member.revision }],
         puts: [{ kind: 'peer_member', id: member.id, roomId: topic.roomId, value: { ...member.value,
           handledInboxSeq: handled, activation: undefined, state: pending ? 'pending' : 'idle', updatedAt: new Date().toISOString() } }],
-        events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] })
+        events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] }
+      await appendPeerRunOutcome(this.store, commit, member.value, { status: 'completed', outcome: fresh ? outcome : 'stale' })
+      await this.store.commit(commit)
     })
   }
 
@@ -183,13 +190,15 @@ export class RoomPeerStore {
     await retryPeerConflict(async () => {
       const member = await this.member(rootId, memberId)
       if (!member || member.value.activation?.clientRequestId !== activationClientRequestId) return
-      await this.store.commit({ requestId: peerId('failed', activationClientRequestId, error, recovery),
+      const commit: RoomStoreCommit = { requestId: peerId('failed', activationClientRequestId, error, recovery),
         fingerprint: peerFingerprint([rootId, memberId, activationClientRequestId, error, recovery]),
         checks: [{ kind: 'peer_member', id: member.id, expectedRevision: member.revision }],
         puts: [{ kind: 'peer_member', id: member.id, roomId: member.roomId, value: { ...member.value,
           state: recovery ? 'recovery_required' : 'failed', lastError: error.slice(0, 4000),
           updatedAt: new Date().toISOString() } }],
-        events: [{ roomId: member.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] })
+        events: [{ roomId: member.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] }
+      await appendPeerRunOutcome(this.store, commit, member.value, { status: recovery ? 'recovery_required' : 'failed', outcome: 'failed', error: error.slice(0, 4000) })
+      await this.store.commit(commit)
     })
   }
 

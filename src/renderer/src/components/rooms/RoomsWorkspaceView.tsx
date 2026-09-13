@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
@@ -32,11 +32,12 @@ import {
   RoomPeerSummary
 } from './RoomPeerActivity'
 import { RoomDetailsDrawer, type RoomDetailsSection } from './RoomDetailsDrawer'
+import { RoomRunInspector } from './RoomRunInspector'
 
 export function RoomsWorkspaceView({
   onOpenThread
 }: {
-  onOpenThread: (id: string) => void
+  onOpenThread: (id: string, turnId?: string) => void | Promise<void>
 }): ReactElement {
   const { t } = useTranslation('common')
   const state = useRooms()
@@ -47,6 +48,9 @@ export function RoomsWorkspaceView({
   const [busy, setBusy] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
+  const [memberTopicId, setMemberTopicId] = useState<string | null>(null)
+  const [runId, setRunId] = useState<string | null>(null)
+  const runSourceFocus = useRef<HTMLElement | null>(null)
   const [details, setDetails] = useState<RoomDetailsSection | null>(null)
   const [jumpMessageId, setJumpMessageId] = useState<string | null>(null)
   const { room, messages } = state
@@ -64,6 +68,8 @@ export function RoomsWorkspaceView({
     setDetails(null)
     setSearchOpen(false)
     setSelectedMemberId(null)
+    setMemberTopicId(null)
+    setRunId(null)
   }, [selectedId])
 
   useEffect(() => {
@@ -104,6 +110,16 @@ export function RoomsWorkspaceView({
     setDetails(null)
     setSidebarOpen(false)
     setJumpMessageId(null)
+    setRunId(null)
+  }
+  const openRun = (id: string): void => {
+    runSourceFocus.current = document.activeElement as HTMLElement | null
+    if (!details && !taskId) setDetails('discussion')
+    setRunId(id)
+  }
+  const backFromRun = (): void => {
+    setRunId(null)
+    requestAnimationFrame(() => { if (runSourceFocus.current?.isConnected) runSourceFocus.current.focus() })
   }
   const openCode = (): void => {
     useChatStore.getState().setRoute('chat')
@@ -215,7 +231,8 @@ export function RoomsWorkspaceView({
               key={room.id + '-timeline'}
               searchOpen={searchOpen}
               onSearchClose={() => setSearchOpen(false)}
-              onMember={(id) => { setSelectedMemberId(id); setDetails('members') }}
+              onMember={(id, topicId) => { setSelectedMemberId(id); setMemberTopicId(topicId ?? null); setRunId(null); setDetails('members') }}
+              onRun={openRun}
               room={room}
               messages={messages}
               tasks={state.tasks}
@@ -254,24 +271,29 @@ export function RoomsWorkspaceView({
           </div>
         )}
       </section>
-      {room && (details || taskId) ? (
+      {room && (details || taskId || runId) ? (
         <RoomDetailsDrawer
           key={room.id + '-details'}
           section={details ?? 'tasks'}
           onSection={(value) => {
             setTaskId(null)
+            setRunId(null)
             setDetails(value)
           }}
           onClose={() => {
             setTaskId(null)
+            setRunId(null)
             setDetails(null)
           }}
           taskOpen={Boolean(taskId)}
+          runOpen={Boolean(runId)}
           onBack={() => {
+            if (runId) { backFromRun(); return }
             setTaskId(null)
             setDetails('tasks')
           }}
         >
+          <div className={`rooms-run-drawer-parent${taskId ? ' is-task' : ''}`} aria-hidden={runId ? true : undefined} inert={runId ? true : undefined} style={runId ? { position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none' } : undefined}>
           {taskId ? (
             selectedTask ? (
               <RoomTaskPanel
@@ -283,6 +305,7 @@ export function RoomsWorkspaceView({
                   setDetails('tasks')
                 }}
                 onOpenThread={onOpenThread}
+                onRun={openRun}
                 onUpdated={() => void state.refresh()}
               />
             ) : (
@@ -293,6 +316,8 @@ export function RoomsWorkspaceView({
               room={room}
               {...topicState}
               onUpdated={topicState.refresh}
+              onMember={(id, topicId) => { setSelectedMemberId(id); setMemberTopicId(topicId); setDetails('members') }}
+              onOpenRun={openRun}
               onContinue={(rootRequestId) => {
                 continueRoomTopic(room.id, rootRequestId)
                 setDetails(null)
@@ -310,7 +335,9 @@ export function RoomsWorkspaceView({
               }}
             />
           ) : details === 'members' ? (
-            <RoomMemberDetails room={room} selectedMemberId={selectedMemberId} />
+            <RoomMemberDetails room={room} selectedMemberId={selectedMemberId} rootRequestId={memberTopicId}
+              topics={topicState.topics.map((topic) => ({ rootRequestId: topic.rootRequestId, title: topic.title }))}
+              onSelectMember={(id) => { setSelectedMemberId(id); setMemberTopicId(null) }} onRun={openRun} />
           ) : (
             <RoomTaskStrip
               key={room.id + '-tasks'}
@@ -324,6 +351,8 @@ export function RoomsWorkspaceView({
               loadMore={state.loadMoreTasks}
             />
           )}
+          </div>
+          {runId ? <RoomRunInspector key={room.id + ':' + runId} roomId={room.id} runId={runId} onOpenThread={onOpenThread} /> : null}
         </RoomDetailsDrawer>
       ) : null}
       {settings ? (

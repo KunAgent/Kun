@@ -17,6 +17,7 @@ export function RoomDetailsDrawer({
   onClose,
   taskOpen,
   onBack,
+  runOpen = false,
   children
 }: {
   section: RoomDetailsSection
@@ -24,6 +25,7 @@ export function RoomDetailsDrawer({
   onClose: () => void
   taskOpen: boolean
   onBack: () => void
+  runOpen?: boolean
   children: ReactNode
 }) {
   const { t } = useTranslation('common')
@@ -56,7 +58,7 @@ export function RoomDetailsDrawer({
           event.currentTarget.querySelectorAll<HTMLElement>(
             'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]'
           )
-        )
+        ).filter((control) => !control.closest('[inert]'))
         const first = controls[0],
           last = controls.at(-1)
         if (event.shiftKey && document.activeElement === first) {
@@ -69,17 +71,17 @@ export function RoomDetailsDrawer({
       }}
     >
       <header className="rooms-detail-titlebar flex items-center gap-2 border-b border-ds-border p-4">
-        {taskOpen ? (
+        {taskOpen || runOpen ? (
           <button
             className={roomButtonClass}
-            aria-label={t('roomsBackToTasks')}
+            aria-label={t(runOpen ? 'roomsRunBack' : 'roomsBackToTasks')}
             onClick={onBack}
           >
             <ArrowLeft size={16} />
           </button>
         ) : null}
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-ds-ink">
-          {t(taskOpen ? 'roomsDetails' : 'roomsRoomDetails')}
+          {t(runOpen ? 'roomsRunDetails' : taskOpen ? 'roomsDetails' : 'roomsRoomDetails')}
         </h2>
         <button
           className={roomButtonClass}
@@ -89,7 +91,7 @@ export function RoomDetailsDrawer({
           <X size={16} />
         </button>
       </header>
-      {!taskOpen ? (
+      {!taskOpen && !runOpen ? (
         <nav
           aria-label={t('roomsRoomDetails')}
           className="rooms-details-tabs shrink-0"
@@ -107,7 +109,7 @@ export function RoomDetailsDrawer({
         </nav>
       ) : null}
       <div
-        className={`min-h-0 flex-1 ${taskOpen ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}
+        className="relative min-h-0 flex-1 flex flex-col overflow-hidden"
       >
         {children}
       </div>

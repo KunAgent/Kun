@@ -1,3 +1,5 @@
+import { roomDiscussionMessageId } from './room-discussion-message.js'
+import { roomTurnRunId } from './room-run-recording.js'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { RoomMember, RoomMessage } from '../contracts/rooms.js'
@@ -169,7 +171,8 @@ export class RoomRequestRunner {
           row = (await this.deps.store.get<RoomRequestState>('request', row.id))!
         }
         discussion.turnId = await enqueueRoomTurn(this.deps, discussion.threadId,
-          'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id + '-' + (discussion.attempt ?? 0),
+          'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id + '-' + (discussion.attempt ?? 0) +
+            (request.continuation ? '-continuation-' + request.continuation : ''),
           ['Participate as this room member. Discuss or inspect read-only. Do not implement or run commands.',
             ...(request.referencedTask ? [
               !discussionWorkspace ? 'The task worktree is not created yet. Answer from the requirement and status; do not claim code inspection.' :
@@ -184,19 +187,21 @@ export class RoomRequestRunner {
         return this.save(row, request)
       }
       const observed = await observeRoomTurn(this.deps, discussion.threadId, discussion.turnId)
+      const originRunId = await roomTurnRunId(this.deps, request.roomId, discussion.threadId, discussion.turnId)
+      discussion.messageId ??= roomDiscussionMessageId(discussion.threadId, discussion.attempt)
       if (observed.status === 'running' || observed.status === 'queued') {
-        if (observed.text) await this.service.publish(request.roomId, 'reply-' + discussion.threadId, observed.text, member.id)
+        if (observed.text) await this.service.publish(request.roomId, discussion.messageId, observed.text, member.id, undefined, originRunId)
         return
       }
       if (observed.status !== 'completed') {
         discussion.error = observed.error ?? '成员本轮未完成，可重试此成员。'
         request.error = discussion.error
         request.status = 'failed'
-        await this.service.publish(request.roomId, 'reply-' + discussion.threadId, discussion.error, member.id)
+        await this.service.publish(request.roomId, discussion.messageId, discussion.error, member.id, undefined, originRunId)
         return this.save(row, request)
       }
       discussion.response = observed.text
-      await this.service.publish(request.roomId, 'reply-' + discussion.threadId, discussion.response, member.id)
+      await this.service.publish(request.roomId, discussion.messageId, discussion.response, member.id, undefined, originRunId)
       return this.save(row, request)
     }
     request.round = (request.round ?? 0) + 1
@@ -395,7 +400,8 @@ export class RoomRequestRunner {
   private async finish(row: RoomStoredDocument<RoomRequestState>, status: RoomRequestState['status'], body: string) {
     const suffix = (row.value.stepAttempt ?? 0) ? '-step-' + row.value.stepAttempt : ''
     await this.service.append(row.roomId!, 'result-' + row.id + suffix, body || '本次讨论已结束。',
-      row.value.roomSnapshot.defaultMemberId, row.value.message.taskId)
+      row.value.roomSnapshot.defaultMemberId, row.value.message.taskId,
+      row.value.message.taskId ? undefined : await roomTurnRunId(this.deps, row.value.roomId, row.value.threadId, row.value.turnId))
     await this.save(row, { ...row.value, status, clarification: status === 'needs_input' ? body : undefined,
       ...(row.value.collaborationProtocol === 'peer' && (status === 'completed' || status === 'needs_input')
         ? { peerCoordinationDone: true } : {}) })

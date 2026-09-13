@@ -1,3 +1,4 @@
+import { roomTurnRunId } from './room-run-recording.js'
 import { access, mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { RoomReviewSchema, type RoomDelivery, type RoomReview } from '../contracts/room-deliveries.js'
@@ -109,7 +110,8 @@ export class RoomTaskRunner {
     }
     if (observed.status === 'running') {
       if (observed.text) await this.service.publish(task.roomId, `progress-${task.id}-${execution.attempt}`,
-        observed.text, task.ownerMemberId, task.id)
+        observed.text, task.ownerMemberId, task.id,
+        await roomTurnRunId(this.deps, task.roomId, task.executionThreadId, execution.turnId))
       if (task.status === 'stopping') {
         await stopRoomTaskTurn(this.deps, task.executionThreadId, execution.turnId)
         return

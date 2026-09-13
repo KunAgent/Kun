@@ -100,7 +100,7 @@ export class RoomProductService {
       stepAttempt: (row.value.stepAttempt ?? 0) + 1 }
     if (value.stage === 'discuss') {
       value.discussions = value.discussions?.map((discussion) => discussion.error
-        ? { ...discussion, error: undefined, turnId: undefined, response: undefined, attempt: (discussion.attempt ?? 0) + 1 }
+        ? { ...discussion, error: undefined, turnId: undefined, response: undefined, messageId: undefined, attempt: (discussion.attempt ?? 0) + 1 }
         : discussion)
     }
     return this.deps.store.commit({ requestId: key, fingerprint,

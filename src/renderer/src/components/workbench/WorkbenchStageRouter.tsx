@@ -44,7 +44,7 @@ export type WorkbenchStageRouterProps = {
   route: string
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
-  onOpenThread: (threadId: string) => void
+  onOpenThread: (threadId: string, turnId?: string) => Promise<void> | void
   onConnectWeixin?: () => void
   write: WriteStageProps
   conversation: WorkbenchConversationStageProps

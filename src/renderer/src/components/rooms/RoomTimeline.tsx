@@ -37,7 +37,8 @@ export function RoomTimeline({
   onJumped,
   searchOpen = false,
   onSearchClose,
-  onMember
+  onMember,
+  onRun
 }: {
   room: Room
   messages: RoomMessage[]
@@ -51,7 +52,8 @@ export function RoomTimeline({
   onJumped: () => void
   searchOpen?: boolean
   onSearchClose?: () => void
-  onMember?: (id: string) => void
+  onMember?: (id: string, rootRequestId?: string) => void
+  onRun?: (id: string) => void
 }) {
   const { t } = useTranslation('common')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -310,6 +312,7 @@ export function RoomTimeline({
   }
   const renderMessage = (message: RoomMessage) => (
     <RoomMessageRow
+      onRun={onRun ? (id) => { setFocused(null); onRun(id) } : undefined}
       message={message}
       member={room.members.find(
         (member) => member.id === message.authorMemberId
@@ -329,9 +332,9 @@ export function RoomTimeline({
       onViewReply={viewReply}
       onMember={
         onMember
-          ? (id) => {
+          ? (id, rootRequestId) => {
               setFocused(null)
-              onMember(id)
+              onMember(id, rootRequestId)
             }
           : undefined
       }

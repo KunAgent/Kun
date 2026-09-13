@@ -1,3 +1,5 @@
+import { roomRunId } from './room-run-recording.js'
+import type { RoomRunRecord } from '../contracts/room-runs.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,6 +55,8 @@ describe('peer topic API and Runtime admission', () => {
     })
     expect(await f.h.threads.getMetadata((await f.request()).value.threadId)).toBeNull()
     expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
+    const active = (await f.runtime.peerTopics(f.room.id, 50)).topics[0].members.find((member) => member.memberId === f.room.defaultMemberId)!
+    expect(active.currentRunId).toBe(roomRunId(f.room.id, enqueue.mock.calls[0][0].request.clientRequestId!))
   })
 
   it('persists and replays stop before signalling the original coordinator', async () => {
@@ -73,6 +77,7 @@ describe('peer topic API and Runtime admission', () => {
     expect(await f.store.events(f.room.id)).toEqual(events)
     await f.tick()
     expect(cancel).toHaveBeenCalledWith({ threadId: original.value.threadId, turnId: original.value.turnId })
+    expect((await f.store.list<RoomRunRecord>('room_run', { roomId: f.room.id, phase: 'coordination' }))[0].value.status).toBe('cancelled')
     expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
     await expect(f.runtime.stopPeerTopic(f.room.id, f.sent.requestId, { ...input, body: 'changed payload' })).rejects.toThrow('identity conflict')
   })

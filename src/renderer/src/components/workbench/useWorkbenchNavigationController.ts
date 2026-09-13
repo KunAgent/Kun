@@ -20,6 +20,7 @@ import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-er
 import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../../lib/workspace-path'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
+import { activateThreadTurnTarget, prepareThreadTurnTarget, useThreadTurnTarget } from '../chat/thread-turn-target'
 import {
   workbenchTaskIntentScope,
   writeWorkbenchTaskIntent,
@@ -77,7 +78,7 @@ export type WorkbenchNavigationController = {
   openBoardView: () => void
   openExtensionsView: () => void
   openScheduleView: () => void
-  openThread: (id: string) => void
+  openThread: (id: string, turnId?: string) => Promise<void>
   openWorkflowView: () => void
   openWriteMode: () => void
   pickWriteAssistantWorkspace: () => Promise<void>
@@ -185,11 +186,24 @@ export function useWorkbenchNavigationController({
     return 'chat'
   }, [pluginHostRoute, route])
 
-  const openThread = useCallback((id: string): void => {
+  const openThread = useCallback((id: string, turnId?: string): Promise<void> => {
     const requestId = beginNavigation()
     const isCurrentRequest = (): boolean => navigationIsCurrent(requestId)
     setConnectPhoneSidebarOpen(false)
-    void (async () => {
+    return (async () => {
+      if (turnId) {
+        const detail = await prepareThreadTurnTarget(id, turnId)
+        if (!isCurrentRequest()) return
+        if (useSddDraftStore.getState().activeDraft) dismissActiveSddDraft({ closeAssistant: true })
+        await selectThread(id, { selectionGuard: isCurrentRequest })
+        if (!isCurrentRequest()) return
+        const selected = useChatStore.getState()
+        if (selected.activeThreadId !== id || selected.error) throw new Error(selected.error ?? 'Requested thread is unavailable')
+        activateThreadTurnTarget(id, turnId, detail)
+        setRoute('chat')
+        return
+      }
+      useThreadTurnTarget.setState({ target: null })
       const thread = threads.find((item) => item.id === id) ?? null
       const designRegistry = readDesignThreadRegistry()
       if (isWorkbenchDesignThread(id, thread, designRegistry)) {

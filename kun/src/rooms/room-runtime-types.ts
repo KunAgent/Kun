@@ -45,7 +45,7 @@ export type RoomRequestState = {
   contextState?: 'compressing' | 'ready'
   summaryThreadId?: string
   ruleAdoption?: import('../contracts/rooms-product.js').RoomRule
-  discussions?: Array<{ memberId: string; threadId: string; turnId?: string; admissionAttempted?: boolean; response?: string; error?: string; attempt?: number; round?: number; continuation?: number; sourceMessageId?: string }>
+  discussions?: Array<{ memberId: string; threadId: string; turnId?: string; admissionAttempted?: boolean; response?: string; error?: string; attempt?: number; round?: number; continuation?: number; sourceMessageId?: string; messageId?: string }>
   referencedTask?: { task: RoomTask; requirement: string; delivery?: RoomDelivery; diffExcerpt?: string }
 }
 export type RoomWorkspace = {

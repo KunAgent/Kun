@@ -1,3 +1,4 @@
+import { observeRecordedRoomTurn } from './room-run-recording.js'
 import type { RoomRuntimeDeps, RoomTaskExecution } from './room-runtime-types.js'
 
 export type RoomTaskActivity = {
@@ -41,10 +42,16 @@ export async function stopRoomTaskTurn(deps: RoomRuntimeDeps, threadId: string, 
     const thread = await deps.threads.getMetadata(threadId)
     const turn = thread?.turns.find((candidate) => candidate.id === turnId)
     if (!turn) throw new Error('execution identity is missing; cancellation cannot be confirmed')
-    if (turn.status !== 'queued' && turn.status !== 'running') return
+    if (turn.status !== 'queued' && turn.status !== 'running') {
+      await observeRecordedRoomTurn(deps, thread!, turn)
+      return
+    }
     try {
       if (turn.status === 'queued') await deps.turns.cancelQueuedTurn({ threadId, turnId })
       else await deps.turns.interruptTurn({ threadId, turnId })
+      const settled = await deps.threads.getMetadata(threadId)
+      const result = settled?.turns.find((value) => value.id === turnId)
+      if (result) await observeRecordedRoomTurn(deps, settled!, result)
       return
     } catch (error) { lastError = error }
   }

@@ -27,6 +27,7 @@ const { developmentRendererEnvironment } = require('./development-renderer-envir
 const { exerciseRoomHardening } = require('./smoke-rooms-hardening-controls.cjs')
 const { roomPeerModelFixture, exercisePeerRoom } = require('./smoke-rooms-peer-controls.cjs')
 const { exerciseRoomsUi } = require('./smoke-rooms-ui-controls.cjs')
+const { exerciseTaskRoomRuns } = require('./smoke-rooms-run-inspector.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 
 const exec = promisify(execFile)
@@ -342,6 +343,8 @@ async function main() {
     await page.getByRole('button', { name: new RegExp(ROOM_NAME) }).click()
     await openTask(page)
     await capture('7-applied-delivery')
+    const taskRuns = await exerciseTaskRoomRuns({ page, request: runtimeRequest,
+      roomId: room.id, taskId: task.id, poll, capture })
     await resize(electronApplication, 760, 780)
     await page.waitForTimeout(400)
     await capture('8-narrow-task-details')
@@ -363,7 +366,7 @@ async function main() {
     assert.equal(integrationInputsResolved, 1, 'Expected integration execution-specific structured input')
     result = { ok: true, platform: process.platform, arch: process.arch, roomId: room.id, taskId: task.id,
       executionThreadId: task.executionThreadId, deliveryId: task.latestDeliveryId,
-      baselineSha, targetSha, agreement, hardening, peer, ui, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
+      baselineSha, targetSha, agreement, hardening, peer, ui, taskRuns, inputsResolved, integrationInputsResolved, integrationApprovalsResolved, appliedSha: (await git(['rev-parse', 'HEAD'])).stdout.trim(),
       modelFixture: modelFixture.snapshot(), approvalsResolved,
       nativeConsent: 'fixture response through real trusted IPC; native OS click not exercised',
       narrowViewport, pageErrors, screenshots,

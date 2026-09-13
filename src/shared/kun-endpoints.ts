@@ -280,9 +280,10 @@ export function kunThreadStatePath(threadId: string): string {
 export const KUN_THREAD_TIMELINE_TEMPLATE = '/v1/threads/{id}/timeline'
 export function kunThreadTimelinePath(
   threadId: string,
-  options: { before?: string; limit?: number } = {}
+  options: { before?: string; limit?: number; turnId?: string } = {}
 ): string {
   const params = new URLSearchParams()
+  if (options.turnId) params.set('turnId', options.turnId)
   if (options.before) params.set('before', options.before)
   if (options.limit !== undefined) params.set('limit', String(options.limit))
   const query = params.toString()

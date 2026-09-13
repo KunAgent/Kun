@@ -242,6 +242,7 @@ export function registerRuntimeSseIpc(options: {
 
     ;(async () => {
       let nextSinceSeq = request.sinceSeq
+      let nextRunCursor = request.cursor
       let reconnectDelayMs = SSE_RECONNECT_BASE_MS
       let notFoundRetries = 0
 
@@ -260,8 +261,13 @@ export function registerRuntimeSseIpc(options: {
             runtimeAuthHeaders(connectionSettings).forEach((value, key) => {
               headers[key] = value
             })
-            const url = new URL(`${base}${request.scope === 'rooms' ? '/v1/rooms/events' : kunThreadEventsPath(request.threadId)}`)
-            url.searchParams.set('since_seq', String(nextSinceSeq))
+            const path = request.scope === 'room-run'
+              ? `/v1/rooms/${encodeURIComponent(request.roomId!)}/runs/${encodeURIComponent(request.runId!)}/events`
+              : request.scope === 'rooms' ? '/v1/rooms/events' : kunThreadEventsPath(request.threadId)
+            const url = new URL(`${base}${path}`)
+            if (request.scope === 'room-run') {
+              if (nextRunCursor) url.searchParams.set('cursor', nextRunCursor)
+            } else url.searchParams.set('since_seq', String(nextSinceSeq))
             const requestHeaders = { ...headers }
             if (nextSinceSeq > 0) {
               requestHeaders['Last-Event-ID'] = String(nextSinceSeq)
@@ -364,6 +370,10 @@ export function registerRuntimeSseIpc(options: {
               // a dead renderer re-subscribes from its snapshot cursor, so no
               // event can be lost or duplicated across those paths.
               nextSinceSeq = batchMaxSeq
+              if (request.scope === 'room-run') {
+                const last = batch.at(-1)
+                if (last && last.runId === request.runId && typeof last.cursor === 'string') nextRunCursor = last.cursor
+              }
               return true
             }
 

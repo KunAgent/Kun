@@ -110,6 +110,19 @@ describe('Peer discussion controls', () => {
     expect(button('Stop discussion')).toBeUndefined()
     expect(JSON.stringify(renderer.toJSON())).toContain('Stopped by you')
   })
+  it('opens the exact current activation and disables the shortcut when no run identity was retained', async () => {
+    const onOpenRun = vi.fn(), onMember = vi.fn()
+    const props = { room, topics: [{ ...topic, members: [{ ...topic.members[0], currentRunId: 'triage-attempt-2' }] }],
+      loading: false, error: '', nextCursor: null, moreBusy: false, loadMore: vi.fn(), onUpdated: vi.fn(), onContinue: vi.fn(), onOpenRun, onMember }
+    await act(async () => { renderer = create(createElement(RoomPeerActivity, props)) })
+    act(() => button('View current run').props.onClick())
+    expect(onOpenRun).toHaveBeenCalledWith('triage-attempt-2')
+    expect(onMember).not.toHaveBeenCalled()
+    act(() => renderer.update(createElement(RoomPeerActivity, { ...props, topics: [topic] })))
+    expect(button('View current run').props.disabled).toBe(true)
+    act(() => button('Current and past runs').props.onClick())
+    expect(onMember).toHaveBeenCalledWith('dev', 'topic')
+  })
   it('shows a quiet empty summary without inventing members or available budget', async () => {
     await act(async () => {
       renderer = create(

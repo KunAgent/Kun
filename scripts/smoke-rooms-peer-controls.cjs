@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { viewRunningRoomRun, exerciseFinishedRoomRuns } = require('./smoke-rooms-run-inspector.cjs')
 const NAME = 'Peer discussion desktop smoke'
 const PROMPT = 'ROOM_PEER_SMOKE_FIRST: discuss a safe queue design without using external tools or creating tasks.'
 const CONTINUATION = 'ROOM_PEER_SMOKE_CONTINUE: continue this same discussion with a short new conclusion.'
@@ -69,6 +70,7 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   await drawer.getByText(/^Responding(?: ·|$)/).waitFor()
   await drawer.getByText('31 / 32', { exact: true }).waitFor()
   await capture('peer-desktop-responding')
+  const liveRun = await viewRunningRoomRun({ page, request, roomId: room.id, poll, capture })
   await resize(760, 780)
   await page.waitForTimeout(250)
   await capture('peer-narrow-responding')
@@ -125,7 +127,14 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
     clientRequestId: 'smoke-peer-stop-' + topic.rootRequestId, expectedRevision: topic.revision
   })
   await poll(async () => (await topics()).every((topic) => topic.status === 'stopped'), 30000, 'all smoke peer discussions stopped')
+  const runInspector = await exerciseFinishedRoomRuns({ page, request, roomId: room.id,
+    messages: finalMessages, poll, capture, fixture, resize })
+  await page.evaluate(async () => {
+    const { useChatStore } = await import('/src/store/chat-store.ts')
+    useChatStore.getState().setRoute('rooms')
+  })
   return { roomId: room.id, rootRequestId, newRootRequestId: newMessage.rootRequestId, viewport,
+    liveRun, runInspector,
     defaultMode: 'peer', latePublicationSuppressed: true, continuedSameTopic: true, newTopicIndependent: true,
     submittedBodiesHonored: true, taskCount: 0, finalMessages: finalMessages.filter((message) => message.authorKind === 'member' && message.status === 'final').length }
 }

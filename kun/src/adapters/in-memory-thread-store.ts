@@ -28,6 +28,11 @@ export class InMemoryThreadStore implements ThreadStore {
     return this.threads.get(threadId) ?? null
   }
 
+  async getMetadata(threadId: string): Promise<ThreadRecord | null> {
+    const thread = this.threads.get(threadId)
+    return thread ? { ...thread, turns: thread.turns.map((turn) => ({ ...turn, items: [] })) } : null
+  }
+
   async upsert(thread: ThreadRecord): Promise<ThreadRecord> {
     const current = this.threads.get(thread.id)
     const normalized = this.normalize({ ...thread, revision: (current?.revision ?? -1) + 1 })

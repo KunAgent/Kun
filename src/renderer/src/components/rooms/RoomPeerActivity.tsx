@@ -103,7 +103,9 @@ export function RoomPeerActivity({
   moreBusy,
   loadMore,
   onUpdated,
-  onContinue
+  onContinue,
+  onMember,
+  onOpenRun
 }: {
   room: Room
   topics: RoomPeerTopicSummary[]
@@ -114,6 +116,8 @@ export function RoomPeerActivity({
   loadMore: () => Promise<void>
   onUpdated: () => Promise<void>
   onContinue: (rootRequestId: string) => void
+  onMember?: (memberId: string, rootRequestId: string) => void
+  onOpenRun?: (runId: string) => void
 }) {
   const { t } = useTranslation('common')
   const mutation = useRoomMutation(onUpdated)
@@ -211,6 +215,10 @@ export function RoomPeerActivity({
                     {member.error}
                   </p>
                 ) : null}
+                {onMember ? <button type="button" className="rooms-run-secondary" onClick={() => onMember(member.memberId, topic.rootRequestId)}>{t('roomsRunHistory')}</button> : null}
+                {onOpenRun ? <button type="button" className="rooms-run-secondary" disabled={!member.currentRunId}
+                  title={member.currentRunId ? undefined : t('roomsRunCurrentUnavailable')}
+                  onClick={() => { if (member.currentRunId) onOpenRun(member.currentRunId) }}>{t('roomsViewCurrentRun')}</button> : null}
               </li>
             ))}
           </ul>

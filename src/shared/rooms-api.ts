@@ -1,6 +1,10 @@
 // Type-only aliases keep the desktop and HTTP contracts in sync without
 // bundling runtime implementation code in the renderer.
 export type {
+  RoomRunDetail, RoomRunAvailability, RoomRunContentPage, RoomRunItemsPage,
+  RoomRunListPage, RoomMessageRunSource, RoomRunEvent
+} from '../../kun/src/contracts/room-run-query'
+export type {
   Room,
   RoomMember,
   RoomRepository,
@@ -60,3 +64,5 @@ export const ROOM_TASK_ACTIONS = [
   'retry-review'
 ] as const
 export type RoomTaskAction = (typeof ROOM_TASK_ACTIONS)[number]
+
+export type { RoomRunRecord, RoomRunPhase, RoomRunStatus } from '../../kun/src/contracts/room-runs'

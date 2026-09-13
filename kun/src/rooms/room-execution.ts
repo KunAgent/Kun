@@ -1,3 +1,4 @@
+import { prepareRoomRun, observeRecordedRoomTurn, updateRoomRun, roomRunId, type RoomRunAdmission } from './room-run-recording.js'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RoomMember } from '../contracts/rooms.js'
@@ -68,24 +69,32 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
 }
 
 export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
-  clientRequestId: string, prompt: string, attachmentIds: string[] = []): Promise<string> {
+  clientRequestId: string, prompt: string, attachmentIds: string[] = [], runInput: RoomRunAdmission = {}): Promise<string> {
   await deps.assertOwnership()
   const thread = await deps.threads.getMetadata(threadId)
   if (!thread?.roomContext) throw new Error('room thread not found')
+  const run = await prepareRoomRun(deps, thread, clientRequestId, prompt, attachmentIds, runInput)
   const existing = thread.turns.find((turn) => turn.clientRequestId === clientRequestId)
-  const reuse = (turn: NonNullable<typeof existing>): string => {
+  const reuse = async (turn: NonNullable<typeof existing>): Promise<string> => {
     if (turn.prompt !== prompt || JSON.stringify(turn.attachmentIds ?? []) !== JSON.stringify(attachmentIds)) {
       throw new Error('room admission identity belongs to a different request')
     }
+    await updateRoomRun(deps.store, run.id, { turnId: turn.id })
     if (turn.status === 'queued') deps.turns.notifyTurnQueued(threadId)
     return turn.id
   }
   if (existing) return reuse(existing)
+  if (run.admissionAttempted) {
+    await updateRoomRun(deps.store, run.id, { status: 'recovery_required' })
+    throw new Error('Original room run admission requires reconciliation')
+  }
+  await updateRoomRun(deps.store, run.id, { admissionAttempted: true })
   try {
     const admitted = await deps.turns.enqueueTurn({ threadId, request: {
       prompt, clientRequestId, attachmentIds, clientSurface: 'gui', agentSurface: 'code',
       mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true
     } })
+    await updateRoomRun(deps.store, run.id, { turnId: admitted.turnId })
     deps.turns.notifyTurnQueued(threadId)
     return admitted.turnId
   } catch (error) {
@@ -94,6 +103,7 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
     const after = await deps.threads.getMetadata(threadId)
     const found = after?.turns.find((turn) => turn.clientRequestId === clientRequestId)
     if (found) return reuse(found)
+    await updateRoomRun(deps.store, run.id, { status: 'recovery_required', error: String(error).slice(0, 4000) })
     throw error
   }
 }
@@ -111,6 +121,7 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
   const thread = await deps.threads.getMetadata(threadId)
   const turn = thread?.turns.find((candidate) => candidate.id === turnId)
   if (!turn) return { status: 'missing' as const, text: '' }
+  await observeRecordedRoomTurn(deps, thread!, turn)
   if (turn.status === 'queued') {
     return { status: turn.status, text: '', turn }
   }
@@ -140,5 +151,7 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
       typeof item.output === 'object' && item.output !== null && 'accepted' in item.output && item.output.accepted === true)?.item
     if (exact && 'output' in exact) structured = (exact.output as { value?: unknown }).value
   }
+  if (error && thread?.roomContext && turn.clientRequestId) await updateRoomRun(deps.store,
+    roomRunId(thread.roomContext.roomId, turn.clientRequestId), { error: error.slice(0, 4000) })
   return { status: turn.status, text: textParts.join('\n'), turn, structured, error, resultError }
 }

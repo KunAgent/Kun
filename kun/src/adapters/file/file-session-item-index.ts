@@ -3,6 +3,7 @@ import { appendFile, open, readFile, rm, stat, type FileHandle } from 'node:fs/p
 import { TurnItem as TurnItemSchema, isPublicTurnItem, type TurnItem } from '../../contracts/items.js'
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../../ports/session-store.js'
 import { timelineSafeItem } from '../../services/item-history-page.js'
+import { buildItemContentPage, isItemContentRequest } from '../../services/item-history-content.js'
 import { atomicWriteFile } from './atomic-write.js'
 import { ITEM_HISTORY_MAX_RECORD_BYTES } from './file-session-live-items.js'
 import { ensureItemTailReady } from './file-session-item-tail.js'
@@ -268,15 +269,24 @@ async function readIndexedPage(
   view: ItemIndexView,
   options: ItemHistoryPageOptions
 ): Promise<ItemHistoryPage> {
+  if (isItemContentRequest(options)) {
+    const row = view.latest.get(options.itemId!)
+    if (!row?.isPublic || row.turnId !== options.turnId) return { items: [], hasMore: false, itemBytes: 0 }
+    const handle = await open(sourcePath, 'r')
+    try { return buildItemContentPage(await readIndexedItem(handle, row), options) }
+    finally { await handle.close() }
+  }
+  const rows = options.turnId ? view.publicRows.filter((row) => row.turnId === options.turnId) : view.publicRows
+  const cursorIndex = options.before ? rows.findIndex((row) => row.itemId === options.before) : rows.length
   const endExclusive = options.before
-    ? (view.publicPositions.get(options.before) ?? view.publicRows.length)
-    : view.publicRows.length
+    ? (cursorIndex >= 0 ? cursorIndex : rows.length)
+    : rows.length
   const candidates: Array<{ row: ItemIndexRow; index: number }> = []
   for (let index = endExclusive - 1; index >= 0 && candidates.length < options.maxItems; index -= 1) {
-    candidates.push({ row: view.publicRows[index]!, index })
+    candidates.push({ row: rows[index]!, index })
   }
   const anchorIndex = !options.before && options.anchorTurnId
-    ? (view.anchorPositions.get(options.anchorTurnId) ?? -1)
+    ? rows.findIndex((row) => row.turnId === options.anchorTurnId && row.kind === 'user_message')
     : -1
 
   const selected: Array<{ item: TurnItem; index: number; bytes: number }> = []
@@ -296,7 +306,7 @@ async function readIndexedPage(
 
     let anchoredIndex = -1
     const anchorRow = anchorIndex >= 0 && anchorIndex < windowStartIndex
-      ? view.publicRows[anchorIndex]
+      ? rows[anchorIndex]
       : undefined
     if (anchorRow) {
       const item = timelineSafeItem(await readIndexedItem(handle, anchorRow), options.maxBytes)

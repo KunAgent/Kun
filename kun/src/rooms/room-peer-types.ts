@@ -124,6 +124,7 @@ export type RoomPeerTopicSummary = RoomPeerTopic & {
     seenInboxSeq: number
     handledInboxSeq: number
     responseCount: number
+    currentRunId?: string
     error?: string
     waitingReason?: string
     invitedByMemberId?: string

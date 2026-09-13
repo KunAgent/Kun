@@ -1,5 +1,4 @@
-import type { ReactElement } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GitCommitHorizontal, Hash } from 'lucide-react'
 import type { ToolBlock } from '../../agent/types'
@@ -7,6 +6,8 @@ import { useChatStore } from '../../store/chat-store'
 import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 import { useTimelineStores } from './use-timeline-stores'
 import { useTimelineScroll } from './use-timeline-scroll'
+import { useTimelineTurnTargetBlocks } from './thread-turn-target'
+import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
 import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
 import {
   activeTimelineTurnIndex,
@@ -76,7 +77,7 @@ export {
 
 const TURN_PAGE_SIZE = 18
 export function MessageTimeline({
-  blocks,
+  blocks: storedBlocks,
   liveReasoning,
   live,
   activeThreadId,
@@ -108,6 +109,7 @@ export function MessageTimeline({
   onExtensionCommand
 }: MessageTimelineProps): ReactElement {
   const { t } = useTranslation('common')
+  const blocks = useTimelineTurnTargetBlocks(storedBlocks, activeThreadId)
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
@@ -193,6 +195,7 @@ export function MessageTimeline({
     hiddenTurnCount,
     hasEarlierTurns,
     loadEarlierTurns,
+    revealTurnAtIndex,
     collapseEarlierTurns
   } = useTimelineScroll({
     containerRef, contentRef, endRef,
@@ -329,12 +332,8 @@ export function MessageTimeline({
     return () => window.clearInterval(id)
   }, [busy, currentTurnUserId, graphPlanningPaused])
 
-  const jumpToTurn = (key: string): void => {
-    const target = turnRefMap.current.get(key)
-    if (!target) return
-    setActiveTurnKey(key)
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const jumpToTurn = useTimelineTurnNavigation({ activeThreadId, turns, hiddenTurnCount,
+    turnRefMap, revealTurnAtIndex, onActive: setActiveTurnKey })
 
   const showJumpRailPreview = (
     anchor: {
@@ -525,6 +524,7 @@ export function MessageTimeline({
                 }
               }}
               className="scroll-mt-6"
+              data-turn-id={turn.turnId}
               data-extension-message-context
               onContextMenu={(event) => {
                 const attachmentItem = event.target instanceof Element

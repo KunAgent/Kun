@@ -7,6 +7,7 @@ import { THREAD_TIMELINE_MAX_ITEMS } from '../../contracts/threads.js'
  * constitutes the same logical read.
  */
 export const ThreadTimelineQuerySchema = z.object({
+  turnId: z.string().min(1).max(256).optional(),
   before: z.string().min(1).max(256).optional(),
   limit: z.preprocess((value) => {
     if (typeof value !== 'string' || value.trim() === '') return THREAD_TIMELINE_MAX_ITEMS
@@ -18,6 +19,7 @@ export type ThreadTimelineQuery = z.infer<typeof ThreadTimelineQuerySchema>
 
 export function parseThreadTimelineQuery(url: URL) {
   return ThreadTimelineQuerySchema.safeParse({
+    turnId: url.searchParams.get('turnId') ?? undefined,
     before: url.searchParams.get('before') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined
   })
@@ -37,5 +39,6 @@ export function threadTimelineReadKey(threadId: string, url: URL): string {
     return `${threadId}|raw:${url.search}`
   }
   const before = parsed.data.before ? encodeURIComponent(parsed.data.before) : ''
-  return `${threadId}|before:${before}|limit:${parsed.data.limit}`
+  const turn = parsed.data.turnId ? `|turn:${encodeURIComponent(parsed.data.turnId)}` : ''
+  return `${threadId}|before:${before}|limit:${parsed.data.limit}${turn}`
 }

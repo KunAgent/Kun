@@ -1,3 +1,4 @@
+import { reconcileRecordedRoomRuns } from './room-run-recording.js'
 import { join } from 'node:path'
 import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import { RoomReviewSchema } from '../contracts/room-deliveries.js'
@@ -180,7 +181,10 @@ export class RoomIntegrationService {
         checks: [{ kind: 'integration', id, expectedRevision: row.revision }],
         puts: [{ kind: 'integration', id, roomId, taskId, value }],
         events: [{ roomId, kind: 'integration.updated', payload: { id, taskId, status: value.status } }], result })
-      if (value.cancelRequested && value.threadId) await this.deps.stopBackgroundExecution?.(value.threadId)
+      if (value.cancelRequested && value.threadId) {
+        await this.deps.stopBackgroundExecution?.(value.threadId)
+        await reconcileRecordedRoomRuns(this.deps, { roomId: value.roomId, threadId: value.threadId })
+      }
       if (value.cancelRequested && value.threadId && value.turnId && await this.activity(value) === 'active') {
         await stopRoomTaskTurn(this.deps, value.threadId, value.turnId)
       }
@@ -332,6 +336,7 @@ export class RoomIntegrationService {
           if (value.threadId && value.turnId) await stopRoomTaskTurn(this.deps, value.threadId, value.turnId)
           return
         }
+        if (value.threadId) await reconcileRecordedRoomRuns(this.deps, { roomId: value.roomId, threadId: value.threadId })
         value.status = 'failed'
         value.error = 'Integration cancelled; candidate and workspace preserved.'
         value.attention = undefined
@@ -435,7 +440,8 @@ export class RoomIntegrationService {
       JSON.stringify({ requirement: execution.prompt, sourceSha: value.sourceSha, targetSha: value.targetSha,
         candidateSha: value.candidateSha, conflicts: value.conflicts, findings: value.review?.findings,
         diffExcerpt: value.diff.slice(0, 64000), diffTruncated: value.diff.length > 64000,
-        commands: value.validationCommands, projectContext: roomTaskContext(execution), priorError: value.error }))
+        commands: value.validationCommands, projectContext: roomTaskContext(execution), priorError: value.error }), [],
+      { phase: 'integration', integrationId: value.id, integrationStage: value.runKind, attempt: (value.stepAttempt ?? 0) + 1 })
   }
   private nextStage(value: RoomIntegration, kind: RoomIntegration['runKind']) {
     value.runKind = kind

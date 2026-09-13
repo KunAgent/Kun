@@ -89,6 +89,11 @@ export type SessionArchiveInput = {
 export type ItemHistoryPageOptions = {
   before?: string
   anchorTurnId?: string
+  /** Filter to this exact turn before applying cursor, count or byte limits. */
+  turnId?: string
+  /** Read a bounded content fragment of one public item in the exact turn. */
+  itemId?: string
+  contentOffset?: number
   maxItems: number
   maxBytes: number
 }
@@ -100,6 +105,14 @@ export type ItemHistoryPage = {
   itemBytes: number
   /** Replay events after this sequence to close a live-checkpoint gap. */
   replayAfterSeq?: number
+  content?: {
+    itemId: string
+    field: 'text' | 'arguments' | 'output' | 'details'
+    text: string
+    offset: number
+    nextOffset?: number
+    totalChars: number
+  }
 }
 
 export type LiveItemCheckpoint = {
