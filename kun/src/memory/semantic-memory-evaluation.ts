@@ -1,8 +1,8 @@
 import { performance } from 'node:perf_hooks'
 import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
 import type { MemoryRecord } from '../contracts/memory.js'
-import { memoryInScope, memoryLifecycleState } from './memory-ranking.js'
 import { retrieveMemoryRecords } from './memory-retrieval.js'
+import { prepareSemanticMemoryV3EvaluatorInput } from './semantic-memory-evaluation-v3-boundary.js'
 
 export type SemanticMemoryEvaluationQueryInput = {
   id: string
@@ -150,18 +150,23 @@ export async function runSemanticMemoryEvaluation(input: {
   const queries = split === 'all'
     ? input.dataset.queries
     : input.dataset.queries.filter((query) => query.split === split)
-  const nowMs = Date.parse(input.dataset.manifest.evaluationNow)
   const results: SemanticMemoryQueryResult[] = []
 
   for (const query of queries) {
-    const filtered = filterCandidateRecords(input.dataset.records, query, nowMs)
-    const started = performance.now()
-    const selected = await input.candidate.retrieve({
+    const filtered = prepareSemanticMemoryV3EvaluatorInput({
+      records: input.dataset.records,
       query,
-      records: filtered.eligible,
       limit: input.dataset.manifest.defaultK,
       promptCharacterBudget: input.dataset.manifest.promptCharacterBudget,
       nowIso: input.dataset.manifest.evaluationNow
+    })
+    const started = performance.now()
+    const selected = await input.candidate.retrieve({
+      query,
+      records: filtered.records,
+      limit: filtered.limit,
+      promptCharacterBudget: filtered.promptCharacterBudget,
+      nowIso: filtered.nowIso
     })
     const latencyMs = performance.now() - started
     if (selected.length > input.dataset.manifest.defaultK) {
@@ -174,7 +179,7 @@ export async function runSemanticMemoryEvaluation(input: {
     results.push(scoreQuery({
       query,
       selected,
-      eligibleCount: filtered.eligible.length,
+      eligibleCount: filtered.records.length,
       scopeExcluded: filtered.scopeExcluded,
       lifecycleExcluded: filtered.lifecycleExcluded,
       sourceRecords: input.dataset.records,
@@ -293,22 +298,6 @@ export function createDeterministicLexicalBaseline(
     safetyGatePassed: report.safetyGatePassed,
     networkAttempts: report.networkAttempts,
     fallbackMismatches: report.fallbackMismatches
-  }
-}
-
-function filterCandidateRecords(
-  records: readonly MemoryRecord[],
-  query: SemanticMemoryEvaluationQueryInput,
-  nowMs: number
-) {
-  const scoped = records.filter((record) => memoryInScope(record, query))
-  const lifecycleEligible = scoped.filter((record) => memoryLifecycleState(record, nowMs) === 'active')
-  const supersededIds = new Set(lifecycleEligible.flatMap((record) => record.supersedes ? [record.supersedes] : []))
-  const eligible = lifecycleEligible.filter((record) => !supersededIds.has(record.id))
-  return {
-    eligible,
-    scopeExcluded: new Set(records.filter((record) => !memoryInScope(record, query)).map((record) => record.id)),
-    lifecycleExcluded: new Set(scoped.filter((record) => !eligible.includes(record)).map((record) => record.id))
   }
 }
 
