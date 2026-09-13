@@ -46,7 +46,6 @@ export const RoomRichInput = forwardRef<RoomRichInputHandle, {
       attributes: { class: 'rooms-rich-input', role: 'textbox', 'aria-multiline': 'true', 'aria-label': props.placeholder, 'data-placeholder': props.placeholder },
       handleKeyDown: (view, event) => {
         if (event.isComposing || view.composing || event.keyCode === 229) return false
-        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); latest.current.onSubmit(); return true }
         if (queryRef.current !== null) {
           if (event.key === 'Escape') { setQuery(null); return true }
           const choices = candidatesRef.current
@@ -55,6 +54,7 @@ export const RoomRichInput = forwardRef<RoomRichInputHandle, {
           }
           if (event.key === 'Enter' && choices[selectedRef.current]) { chooseRef.current(choices[selectedRef.current].id); return true }
         }
+        if (event.key === 'Enter' && (!event.shiftKey || event.metaKey || event.ctrlKey)) { event.preventDefault(); latest.current.onSubmit(); return true }
         return false
       },
       handlePaste: (view, event) => {

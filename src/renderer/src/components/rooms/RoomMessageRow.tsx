@@ -138,7 +138,6 @@ export function RoomMessageRow({
         <div className="rooms-message-footer">
           {message.handoffId && onHandoff ? <button type="button" className="rooms-run-link" onClick={() => onHandoff(message.handoffId!)}>{t('agentsViewHandoff')}</button> : null}
           {message.replyCount ? <button type="button" className="rooms-reply-count" onClick={() => onReply(message)}><Reply size={13} />{t('roomsReplyCount', { count: message.replyCount })}</button> : null}
-          {onRun && canInspectRun ? <RoomMessageRunButton message={message} onRun={onRun} /> : null}
           {message.taskId ? (
             <button
               type="button"
@@ -150,6 +149,7 @@ export function RoomMessageRow({
             </button>
           ) : null}
           <div className="rooms-message-actions">
+            {onRun && canInspectRun ? <RoomMessageRunButton compact message={message} onRun={onRun} /> : null}
             <button
               type="button"
               disabled={room?.conversationKind === 'agent_agent'}

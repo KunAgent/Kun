@@ -85,6 +85,6 @@ export function RoomPopover({ label, trigger, children, side = 'bottom', align =
       className={className} onClick={() => { setPlacement(null); setOpen((value) => !value) }}
       onKeyDown={(event) => { if (open && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() } }}>{trigger}</button>
     {content && typeof document !== 'undefined' && document.body?.nodeType === 1
-      ? createPortal(content, anchor.current?.closest('dialog') ?? document.body) : content}
+      ? createPortal(content, anchor.current?.closest('.rooms-popover-surface, dialog') ?? document.body) : content}
   </>
 }

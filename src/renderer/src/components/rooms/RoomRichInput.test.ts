@@ -45,16 +45,18 @@ describe('minimal room rich editor', () => {
     expect(f.submit).not.toHaveBeenCalled()
   })
 
-  it('keeps Enter as newline and protects IME before modifier-send', async () => {
+  it('sends with Enter, inserts a newline with Shift, and protects IME', async () => {
     const f = await render('Discuss')
     await act(async () => { f.editor.commands.setTextSelection(f.editor.state.doc.content.size - 1) })
-    await f.key({ key: 'Enter' })
+    await f.key({ key: 'Enter', shiftKey: true })
     expect(roomRichDraft(f.editor.getJSON()).body).toContain('\n')
     expect(f.submit).not.toHaveBeenCalled()
     await f.key({ key: 'Enter', metaKey: true, isComposing: true, keyCode: 229 })
     expect(f.submit).not.toHaveBeenCalled()
     await f.key({ key: 'Enter', metaKey: true })
     expect(f.submit).toHaveBeenCalledTimes(1)
+    await f.key({ key: 'Enter' })
+    expect(f.submit).toHaveBeenCalledTimes(2)
   })
 
   it('pastes plain content and never turns pasted mention syntax into recipients', async () => {

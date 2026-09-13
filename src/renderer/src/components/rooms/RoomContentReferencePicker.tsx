@@ -75,13 +75,13 @@ function ReferenceOptions({ room, tasks, references, onChoose }: {
   </div>
 }
 
-export function RoomContentReferencePicker({ room, tasks, references, onChange, disabled }: {
+export function RoomContentReferencePicker({ room, tasks, references, onChange, disabled, showLabel = false }: {
   room: Room; tasks: RoomTask[]; references: RoomContentReference[]
-  onChange: (references: RoomContentReference[]) => void; disabled?: boolean
+  onChange: (references: RoomContentReference[]) => void; disabled?: boolean; showLabel?: boolean
 }) {
   const { t } = useTranslation('common')
-  return <RoomPopover label={t('roomsContentAddReference')} trigger={<FilePlus2 size={17} />} side="top"
-    disabled={disabled || references.length >= 20} className="rooms-composer-tool">
+  return <RoomPopover label={t('roomsContentAddReference')} trigger={<><FilePlus2 size={17} />{showLabel ? <span>{t('roomsContentAddReference')}</span> : null}</>} side="top"
+    disabled={disabled || references.length >= 20} className={showLabel ? 'direct-reference-button' : 'rooms-composer-tool'}>
     {(close) => <ReferenceOptions room={room} tasks={tasks} references={references} onChoose={(reference) => {
       if (references.length < 20 && !references.some((item) => roomContentKey(item) === roomContentKey(reference))) onChange([...references, reference])
       close()

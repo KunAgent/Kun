@@ -1,3 +1,4 @@
+import roomsDirect from './common/rooms-direct.json'
 import roomsInitIm from './common/rooms-init-im.json'
 import independentAgents from './common/independent-agents.json'
 import codexHistory from './common/codex-history.json'
@@ -27,6 +28,7 @@ import speak from './common/speak.json'
 
 const common = {
   ...roomsInitIm,
+  ...roomsDirect,
   ...independentAgents,
   ...codexHistory,
   ...rooms,

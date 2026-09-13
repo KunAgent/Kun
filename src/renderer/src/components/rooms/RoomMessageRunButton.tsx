@@ -6,9 +6,11 @@ import { roomPath, roomsRequest } from './rooms-client'
 
 export function RoomMessageRunButton({
   message,
+  compact = false,
   onRun
 }: {
   message: RoomMessage
+  compact?: boolean
   onRun: (id: string) => void
 }) {
   const { t } = useTranslation('common')
@@ -47,11 +49,13 @@ export function RoomMessageRunButton({
       <button
         type="button"
         className="rooms-message-task"
+        title={t('roomsViewRun')}
+        aria-label={t('roomsViewRun')}
         disabled={busy}
         onClick={() => void open()}
       >
         <ListTree size={13} />
-        {t(busy ? 'roomsLoading' : 'roomsViewRun')}
+        {compact ? null : t(busy ? 'roomsLoading' : 'roomsViewRun')}
       </button>
       {error ? (
         <span role="alert" className="rooms-run-error">

@@ -1,3 +1,4 @@
+import { AgentModelSettings } from './AgentModelSettings'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity, Room, RoomRunRecord } from '@shared/rooms-api'
@@ -14,6 +15,7 @@ export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation,
 }) {
   const { t } = useTranslation('common')
   const resource = useAgentResource<{ agent: AgentIdentity }>(agentId ? agentPath(agentId) : null, active)
+  const [modelsOpen, setModelsOpen] = useState(false)
   const [tab, setTab] = useState<'profile' | 'conversations' | 'memory' | 'runs'>('profile')
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const agent = resource.data?.agent
@@ -36,6 +38,8 @@ export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation,
           <button type="button" disabled={busy} onClick={() => void action('copy')}>{t('agentsCopy')}</button></div>
         {agent.archivedAt ? <p className="rooms-run-note">{t('agentsArchiveHint')}</p> : null}
       </div>
+      <button type="button" onClick={() => setModelsOpen(true)}>{t('directModels')}</button>
+      {modelsOpen ? <AgentModelSettings agentId={agent.id} onClose={() => setModelsOpen(false)} onSaved={resource.refresh} /> : null}
       <nav className="agent-detail-tabs" aria-label={t('agentsProfileAndMemory')}>
         {(['profile', 'conversations', 'memory', 'runs'] as const).map((value) => <button type="button" aria-pressed={tab === value} key={value} onClick={() => setTab(value)}>{t('agentsTab_' + value)}</button>)}
       </nav>

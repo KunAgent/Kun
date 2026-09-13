@@ -39,7 +39,7 @@ export function RoomMessageInteractions({ room, message }: { room: Room; message
     {value?.poll ? <RoomPollCard room={room} poll={value.poll} onUpdate={(poll) => setValue((previous) => previous ? { ...previous, poll } : previous)} /> : null}
     <div className="rooms-reactions">{value?.reactions.reactions.map((reaction) => <button type="button" key={reaction.emoji} className={reaction.reacted ? 'is-reacted' : ''}
       aria-pressed={reaction.reacted} disabled={busy || Boolean(room.archivedAt)} onClick={() => void react(reaction.emoji, !reaction.reacted)}>{reaction.emoji}<span>{reaction.count}</span></button>)}
-      <RoomEmojiPicker reactions disabled={busy || Boolean(room.archivedAt)} onChoose={(emoji) => void react(emoji, !value?.reactions.reactions.some((entry) => entry.emoji === emoji && entry.reacted))} />
+      <span className="rooms-reaction-add"><RoomEmojiPicker reactions disabled={busy || Boolean(room.archivedAt)} onChoose={(emoji) => void react(emoji, !value?.reactions.reactions.some((entry) => entry.emoji === emoji && entry.reacted))} /></span>
     </div>
     {error ? <p role="alert" className="rooms-interaction-error">{error}</p> : null}
   </div>

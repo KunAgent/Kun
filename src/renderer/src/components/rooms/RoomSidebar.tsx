@@ -12,7 +12,7 @@ import { roomsClient, roomsRequest, roomRequestId } from './rooms-client'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 
 type Kind = 'all' | 'agents' | 'group' | 'agent_agent'
-export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAgent, onCreateGroup, onDetails, onSearch,
+export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAgent, onDetails, onSearch,
   onProfile, onTeam, onManage, onActivity }: {
   selectedRoomId: string; onOpenAgent: (id: string) => void; onSelect: (id: string) => void
   onCreateAgent: () => void; onCreateGroup: () => void; onDetails: (id: string) => void
@@ -51,10 +51,7 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
   }
   return <div className="rooms-im-sidebar">
     <div className="rooms-im-sidebar-toolbar"><strong>{t('roomsConversations')}</strong>
-      <RoomPopover label={t('roomsSidebarNew')} trigger={<Plus size={18} />} className="rooms-icon-button" align="end">
-        {(close) => <div className="rooms-menu-list"><button onClick={() => { close(); onCreateAgent() }}>{t('agentsCreate')}</button>
-          <button onClick={() => { close(); onCreateGroup() }}>{t('roomsNew')}</button></div>}
-      </RoomPopover>
+      <button type="button" aria-label={t('roomsSidebarNew')} className="rooms-icon-button" onClick={onCreateAgent}><Plus size={18} /></button>
       <RoomPopover label={t('roomsSidebarFilter')} trigger={<SlidersHorizontal size={16} />} className="rooms-icon-button" align="end" width={280}>
         {() => <div className="rooms-sidebar-filter-menu"><label>{t('roomsSidebarKind')}<select value={kind} onChange={(e) => {
           const value = e.target.value as Kind; setKind(value); writeBrowserStorageItem('kun.rooms.sidebar.kind', value)
@@ -104,7 +101,7 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
     <footer className="rooms-im-sidebar-footer"><button className="rooms-sidebar-self" aria-label={t('roomsMyAvatar')} onClick={onProfile}><RoomAvatar id="user" label={t('roomsMyAvatar')} size={30} /><span>{t('roomsSidebarYou')}</span></button>
       <RoomPopover label={t('roomsSidebarManage')} trigger={<Settings size={17} />} className="rooms-icon-button" align="end">
         {(close) => <div className="rooms-menu-list"><button onClick={() => { close(); onProfile() }}>{t('roomsMyAvatar')}</button>
-          <button onClick={() => { close(); onManage() }}>{t('agentsDirectory')}</button><button onClick={() => { close(); onTeam() }}>{t('roomsInitTeam')}</button>
+          <button onClick={() => { close(); onManage() }}>{t('agentsDirectory')}</button><button onClick={() => { close(); onTeam() }}>{t('directTemplates')}</button>
           <button onClick={() => { close(); setArchived(!archived) }}>{t(archived ? 'roomsActive' : 'roomsArchived')}</button></div>}
       </RoomPopover>
     </footer>

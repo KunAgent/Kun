@@ -7,7 +7,7 @@ import { roomsRequest } from './rooms-client'
 import { RoomImageLightbox } from './RoomImageLightbox'
 import './rooms-content.css'
 
-const icons = { attachment: File, repository_file: FolderGit2, task: ListTodo, delivery: PackageCheck, board_card: KanbanSquare }
+const icons = { agent_file: File, attachment: File, repository_file: FolderGit2, task: ListTodo, delivery: PackageCheck, board_card: KanbanSquare }
 export function RoomContentCard({ room, reference, messageId, onOpen }: {
   room: Room
   reference: RoomContentReference

@@ -102,15 +102,11 @@ describe('RoomComposer', () => {
       'Implement the corrected feature'
     )
   })
-  it('sends mentions as stable IDs and honors explicit discussion intent', async () => {
+  it('sends mentions as stable IDs and preserves an existing discussion draft', async () => {
+    stored.set('kun.rooms.draft.room', JSON.stringify({ body: '', intent: 'discussion' }))
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)
     act(() => renderer.root.findByProps({ 'data-room-rich-input': true }).props.onChange({ body: '', mentions: ['developer'] }))
-    act(() =>
-      renderer.root
-        .findByProps({ 'aria-label': 'Automatic intent' })
-        .props.onChange({ target: { value: 'discussion' } })
-    )
     input('What are our options?')
     await submit()
     expect(send.mock.calls[0][0]).toMatchObject({
@@ -186,6 +182,7 @@ describe('RoomComposer', () => {
     expect(send.mock.calls[1][0].clientRequestId).toBe(
       send.mock.calls[0][0].clientRequestId
     )
+    act(() => renderer.root.findByProps({ 'aria-label': i18n.t('roomsAddContext') }).props.onClick())
     act(() =>
       renderer.root
         .findByProps({ 'aria-label': 'Topic' })
@@ -236,6 +233,7 @@ describe('RoomComposer', () => {
   it('uses the rich editor submit callback and keeps reference-only sends valid', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)
+    act(() => renderer.root.findByProps({ 'aria-label': i18n.t('roomsAddContext') }).props.onClick())
     const picker = renderer.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'RoomContentReferencePicker')[0]
     act(() => picker.props.onChange([{ kind: 'task', taskId: 'task', titleSnapshot: 'Read the task' }]))
     await act(async () => renderer.root.findByProps({ 'data-room-rich-input': true }).props.onSubmit())
@@ -248,10 +246,11 @@ describe('RoomComposer', () => {
       room: { ...room, collaborationMode: 'peer' },
       topicChoices: [{ rootRequestId: 'topic', title: 'Resolve rendering performance' }]
     })
+    act(() => renderer.root.findByProps({ 'aria-label': i18n.t('roomsAddContext') }).props.onClick())
     act(() => renderer.root.findByProps({ 'aria-label': 'Topic' })
       .props.onChange({ target: { value: 'topic' } }))
-    expect(renderer.root.findByProps({ className: 'rooms-composer-select rooms-composer-topic' }).props.title)
-      .toContain('Resolve rendering performance')
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).rootRequestId).toBe('topic')
+    expect(renderer.root.findAllByProps({ 'aria-label': 'Topic' })).toHaveLength(0)
     input('Keep this draft')
     act(() => renderer.unmount())
     await render(send, { draftId: 'request-task' })
@@ -274,6 +273,7 @@ describe('RoomComposer', () => {
       target: { files: Array.from({ length: 22 }, () => ({ name: 'image.png', type: 'image/png' })) }
     }))
     expect(upload).toHaveBeenCalledTimes(20)
+    act(() => renderer.root.findByProps({ 'aria-label': i18n.t('roomsAddContext') }).props.onClick())
     expect(renderer.root.findByProps({ 'aria-label': i18n.t('roomsAttach') }).props.disabled).toBe(true)
     act(() => renderer.root.findByProps({ title: 'image-1.png', className: 'rooms-composer-chip' })
       .props.onClick())
