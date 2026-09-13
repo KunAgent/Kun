@@ -183,7 +183,7 @@ function RoomComposerEditor({
     const example = (event: Event) => {
       const detail = (event as CustomEvent<{ roomId: string; body: string }>).detail
       if (detail.roomId !== room.id) return
-      setDraft((current) => current.body.trim() ? current : { ...current, body: detail.body, intent: 'discussion' })
+      setDraft((current) => current.body.trim() ? current : { ...current, body: detail.body })
       editorRef.current?.focus()
     }
     if (draftId) return

@@ -4,6 +4,7 @@
 // Exercise the real Electron renderer/preload/main/Manager/Runtime composition.
 // All model responses are deterministic and offline. Application settings, data,
 // discovery/control files, Git repositories and processes belong to this run.
+const { exerciseRoomsInitIm, exerciseRoomsUpgrade } = require('./smoke-rooms-init-im.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -143,14 +144,33 @@ async function main() {
     page.on('console', (message) => { if (message.type() === 'error' && message.text().includes('same key')) pageErrors.push(message.text()) })
     await page.waitForLoadState('domcontentloaded')
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
+    if (process.argv.includes('--init-im-only')) {
+      const initIm = await exerciseRoomsInitIm({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+        resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms') })
+      assert.deepEqual(pageErrors, [])
+      result = { ok: true, scenario: 'init-im', initIm, modelFixture: modelFixture.snapshot(), pageErrors, screenshots }
+      await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+      return
+    }
     const { room } = await runtimeRequest(page, '/v1/rooms', 'POST', {
       clientRequestId: 'desktop-create-room', name: ROOM_NAME, collaborationMode: 'autonomous',
       repositories: [{ id: 'repo', displayPath: workspaceRoot, defaultBaseRef: 'develop' }]
     })
     assert.equal(room.collaborationMode, 'autonomous')
     await switchMode(page, 'rooms')
+    await page.locator('.rooms-im-sidebar').getByRole('button', { name: ROOM_NAME, exact: true }).click()
     await page.getByRole('heading', { name: ROOM_NAME, exact: true }).waitFor()
     await capture('1-room-ready')
+    if (process.argv.includes('--init-upgrade-only')) {
+      const upgrade = await exerciseRoomsUpgrade({ page, request: runtimeRequest, poll, capture, fixture: modelFixture })
+      assert.deepEqual(pageErrors, [])
+      result = { ok: true, scenario: 'init-upgrade', upgrade, pageErrors, screenshots }
+      await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+      return
+    }
+
     const uiScenario = () => exerciseRoomsUi({ page, request: runtimeRequest, poll, capture,
       fixture: modelFixture, home, profile, workspaceRoot,
       resize: (width, height) => resize(electronApplication, width, height) })

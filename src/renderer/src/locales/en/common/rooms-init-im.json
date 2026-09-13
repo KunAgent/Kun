@@ -36,5 +36,6 @@
   "roomsAvatarRestoreKun": "Restore Kun avatar",
   "roomsAvatarFileHint": "PNG, JPEG, WebP · Up to 2MB · Used across all chats",
   "roomsInitOpenTeam": "Open team chat",
-  "roomsSearchNoResults": "No matching conversations"
+  "roomsSearchNoResults": "No matching conversations",
+  "roomsInitRefreshPreview": "Refresh team preview"
 }

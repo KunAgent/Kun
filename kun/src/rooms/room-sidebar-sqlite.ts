@@ -6,7 +6,7 @@ import { RoomSidebarQuery, type RoomSidebarEntry, type RoomSidebarPage } from '.
 import { roomMessagePreview } from './room-message-preview.js'
 import { RoomSchema, type RoomMessage } from '../contracts/rooms.js'
 
-const Cursor = z.object({ scope: z.string(), pinned: z.number().int().min(0).max(1), at: z.string(), id: z.string() }).strict()
+const Cursor = z.object({ scope: z.string(), pinned: z.number().int().min(0).max(1), activitySeq: z.number().int().nonnegative(), id: z.string() }).strict()
 /** One keyset across both persisted conversations and identities with no private chat yet. */
 export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomSidebarPage {
   const input = RoomSidebarQuery.parse(raw)
@@ -29,7 +29,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
   if (input.unreadOnly) conditions.push('message_seq>read_seq')
   if (input.attentionOnly) conditions.push('attention_count>0')
   const rows = db.prepare(`WITH identities AS (
-    SELECT a.id AS agent_id, a.document AS agent_document, a.archived AS agent_archived,
+    SELECT a.id AS agent_id, a.document AS agent_document, a.archived AS agent_archived, a.seq AS created_seq,
       (SELECT r.id FROM room_documents r WHERE r.kind='room' AND json_extract(r.document,'$.conversationKind')='user_agent'
         AND json_extract(r.document,'$.members[0].participantAgentId')=a.id ORDER BY r.seq LIMIT 1) AS room_id
     FROM room_documents a WHERE a.kind='agent_identity'
@@ -39,40 +39,53 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
       COALESCE(json_extract(a.agent_document,'$.title'),'') AS title,
       CASE WHEN a.agent_archived=1 OR r.archived=1 THEN 1 ELSE 0 END AS archived,
       COALESCE(json_extract(r.document,'$.pinned'),0) AS pinned,
-      json_extract(a.agent_document,'$.createdAt') AS created_at
+      a.created_seq AS created_seq
     FROM identities a LEFT JOIN room_documents r ON r.kind='room' AND r.id=a.room_id
     UNION ALL
     SELECT 'room:' || r.id, NULL, NULL, r.id, r.document, COALESCE(json_extract(r.document,'$.conversationKind'),'group'),
       json_extract(r.document,'$.name'), COALESCE(json_extract(r.document,'$.description'),''), r.archived,
-      COALESCE(json_extract(r.document,'$.pinned'),0), json_extract(r.document,'$.createdAt')
+      COALESCE(json_extract(r.document,'$.pinned'),0), r.seq
     FROM room_documents r WHERE r.kind='room' AND COALESCE(json_extract(r.document,'$.conversationKind'),'group')<>'user_agent'
   ), summaries AS (
     SELECT e.*,
       COALESCE((SELECT m.seq FROM room_documents m WHERE m.kind='message' AND m.room_id=e.room_id
         AND COALESCE(json_extract(m.document,'$.status'),'final')<>'streaming'
-        ORDER BY json_extract(m.document,'$.createdAt') DESC, m.seq DESC LIMIT 1),0) AS message_seq,
+        ORDER BY m.seq DESC LIMIT 1),0) AS message_seq,
       COALESCE((SELECT json_extract(r.document,'$.seq') FROM room_documents r WHERE r.kind='read_state' AND r.id=e.room_id),0) AS read_seq,
-      (SELECT COUNT(*) FROM room_documents t WHERE t.room_id=e.room_id AND (
+      (SELECT COUNT(DISTINCT CASE WHEN t.kind='request' THEN 'request:' || t.id
+        WHEN COALESCE(json_extract(t.document,'$.task.requestId'),json_extract(t.document,'$.requestId')) IS NOT NULL
+          THEN 'request:' || COALESCE(json_extract(t.document,'$.task.requestId'),json_extract(t.document,'$.requestId'))
+        ELSE 'task:' || COALESCE(t.task_id,json_extract(t.document,'$.taskId'),t.id) END)
+        FROM room_documents t WHERE t.room_id=e.room_id AND (
         (t.kind='task' AND t.status IN ('needs_input','needs_approval','recovery_required','failed','awaiting_acceptance')) OR
         (t.kind='request' AND t.status IN ('needs_input','failed','recovery_required')) OR
-        (t.kind='integration' AND t.status IN ('recovery_required','conflict','ready')))) AS attention_count,
-      (SELECT COUNT(*) FROM room_documents r WHERE r.kind='room_run' AND r.status IN ('queued','running','recovery_required') AND
-        ((e.agent_id IS NOT NULL AND json_extract(r.document,'$.participantAgentId')=e.agent_id) OR
-        (e.agent_id IS NULL AND r.room_id=e.room_id))) AS running_count
+        (t.kind='integration' AND t.status IN ('preparing','validating','recovery_required','conflict','ready','failed') AND
+          NOT(t.status='failed' AND COALESCE(json_extract(t.document,'$.cancelRequested'),0)=1 AND json_extract(t.document,'$.applyIntent') IS NULL) AND
+          (t.status IN ('recovery_required','conflict','ready','failed') OR json_extract(t.document,'$.applyIntent') IS NOT NULL OR
+          COALESCE(json_array_length(t.document,'$.attention.approvalIds'),0)>0 OR COALESCE(json_array_length(t.document,'$.attention.userInputIds'),0)>0)))) AS attention_count,
+      (SELECT COUNT(DISTINCT CASE WHEN r.kind='request' THEN 'request:' || r.id
+        WHEN r.kind='room_run' THEN 'run:' || r.id ELSE 'task:' || COALESCE(r.task_id,json_extract(r.document,'$.taskId'),r.id) END)
+        FROM room_documents r WHERE
+        (r.room_id=e.room_id AND ((r.kind='task' AND r.status IN ('queued','running','waiting_dependency','stopping')) OR
+          (r.kind='request' AND r.status IN ('pending','running','stopping')) OR
+          (r.kind='integration' AND r.status IN ('preparing','validating')))) OR
+        (r.kind='room_run' AND r.status IN ('queued','running','recovery_required') AND (
+          (e.agent_id IS NOT NULL AND json_extract(r.document,'$.participantAgentId')=e.agent_id) OR
+          (e.agent_id IS NULL AND r.room_id=e.room_id AND json_extract(r.document,'$.phase') IN ('discussion','triage'))))) AS running_count
     FROM entries e
   ), ordered AS (
-    SELECT s.*, COALESCE(json_extract(m.document,'$.createdAt'),s.created_at) AS activity_at,
+    SELECT s.*, CASE WHEN s.message_seq>0 THEN s.message_seq ELSE s.created_seq END AS activity_seq,
       CASE WHEN m.id IS NOT NULL THEN json_object('id',m.id,'authorKind',json_extract(m.document,'$.authorKind'),
       'authorLabelSnapshot',json_extract(m.document,'$.authorLabelSnapshot'),'createdAt',json_extract(m.document,'$.createdAt'),
       'body',substr(COALESCE(json_extract(m.document,'$.body'),''),1,2000),
       'attachmentIds',json(COALESCE(json_extract(m.document,'$.attachmentIds'),'[]'))) END AS latest_message
     FROM summaries s LEFT JOIN room_documents m ON m.kind='message' AND m.seq=s.message_seq
     WHERE ${conditions.join(' AND ')}
-  ) SELECT * FROM ordered ${cursor ? 'WHERE (pinned,activity_at,stable_id)<(?,?,?)' : ''}
-  ORDER BY pinned DESC, activity_at DESC, stable_id DESC LIMIT ?`).all(...args,
-    ...(cursor ? [cursor.pinned, cursor.at, cursor.id] : []), limit + 1) as Array<{
+  ) SELECT * FROM ordered ${cursor ? 'WHERE (pinned,activity_seq,stable_id)<(?,?,?)' : ''}
+  ORDER BY pinned DESC, activity_seq DESC, stable_id DESC LIMIT ?`).all(...args,
+    ...(cursor ? [cursor.pinned, cursor.activitySeq, cursor.id] : []), limit + 1) as Array<{
       stable_id: string; agent_document: string | null; agent_id: string | null; room_document: string | null; room_id: string | null
-      conversation_kind: RoomSidebarEntry['kind']; name: string; title: string; archived: number; pinned: number; activity_at: string
+      conversation_kind: RoomSidebarEntry['kind']; name: string; title: string; archived: number; pinned: number; activity_seq: number
       latest_message: string | null; message_seq: number; read_seq: number; running_count: number; attention_count: number
     }>
   const page = rows.slice(0, limit), last = page.at(-1)
@@ -87,5 +100,5 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
       latestMessage: message ? { id: message.id, authorKind: message.authorKind, authorLabelSnapshot: message.authorLabelSnapshot,
         createdAt: message.createdAt, preview: roomMessagePreview(message.body), attachmentCount: message.attachmentIds.length } : undefined }
   }), ...(rows.length > limit && last ? { nextCursor: Buffer.from(JSON.stringify({ scope, pinned: last.pinned,
-    at: last.activity_at, id: last.stable_id })).toString('base64url') } : {}) }
+    activitySeq: last.activity_seq, id: last.stable_id })).toString('base64url') } : {}) }
 }

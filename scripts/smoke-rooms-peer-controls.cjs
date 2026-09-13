@@ -40,7 +40,8 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   const existing = page.getByRole('dialog', { name: 'Room details', exact: true })
   if (await existing.count()) await existing.getByRole('button', { name: 'Close', exact: true }).click()
   await resize(1360, 900)
-  await page.getByRole('button', { name: 'New room', exact: true }).click()
+  await page.locator('.rooms-im-sidebar').getByRole('button', { name: 'New conversation', exact: true }).click()
+  await page.getByRole('dialog', { name: 'New conversation', exact: true }).getByRole('button', { name: 'New room', exact: true }).click()
   const settings = page.getByRole('dialog', { name: 'New room', exact: true })
   assert.equal(await settings.getByLabel('Collaboration', { exact: true }).inputValue(), 'peer')
   await settings.getByLabel('Room name', { exact: true }).fill(NAME)
@@ -49,7 +50,8 @@ async function exercisePeerRoom({ page, request, poll, capture, fixture, resize 
   const room = (await request(page, '/v1/rooms?search=' + encodeURIComponent(NAME))).rooms.find((value) => value.name === NAME)
   assert(room && room.collaborationMode === 'peer')
   assert.equal(room.repositories.length, 0)
-  assert.equal(room.members.length, 3)
+  assert.equal(room.members.length, 5)
+  assert.equal(new Set(room.members.map((member) => member.participantAgentId)).size, 5)
   const base = '/v1/rooms/' + room.id
   const topics = async () => (await request(page, base + '/topics')).topics
   const send = async (body) => {

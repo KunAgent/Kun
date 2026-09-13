@@ -54,3 +54,34 @@ it('ignores streaming drafts and profile edits for recency while keeping unread 
   expect((await store.sidebarPage({ archivedOnly: true })).entries[0].agentId).toBe(a.id)
   expect((await store.sidebarPage({})).entries).toHaveLength(1)
 })
+it('keeps a long paged catalog stable while an unloaded Agent gets its first private conversation', async () => {
+  const { store, agents, service } = await fixture()
+  for (let index = 0; index < 75; index++) await agents.create({ clientRequestId: 'bulk-' + index, name: 'Bulk ' + index })
+  const first = await store.sidebarPage({ limit: 17 })
+  const allBefore = await store.sidebarPage({ limit: 100 })
+  const tailAgent = allBefore.entries.at(-1)!.agentId!
+  await openAgentConversation(agents, service, tailAgent)
+  const entries = [...first.entries]; let cursor = first.nextCursor
+  while (cursor) {
+    const next = await store.sidebarPage({ limit: 17, cursor })
+    expect(next.entries.length).toBeLessThanOrEqual(17)
+    entries.push(...next.entries); cursor = next.nextCursor
+  }
+  expect(entries.map((entry) => entry.id)).toEqual(allBefore.entries.map((entry) => entry.id))
+  expect(new Set(entries.map((entry) => entry.id)).size).toBe(77)
+})
+it('retains queued work and integration attention, excluding cancelled integration failures', async () => {
+  const { store, agents, service, a } = await fixture()
+  const room = (await openAgentConversation(agents, service, a.id)).room
+  await store.commit({ requestId: 'activities', checks: [
+    { kind: 'task', id: 'queued', expectedRevision: null }, { kind: 'integration', id: 'integration', expectedRevision: null }
+  ], puts: [
+    { kind: 'task', id: 'queued', roomId: room.id, value: { task: { id: 'queued', status: 'waiting_dependency' } } },
+    { kind: 'integration', id: 'integration', roomId: room.id, value: { taskId: 'done', status: 'failed' } }
+  ] })
+  const entry = (await store.sidebarPage({ attentionOnly: true })).entries[0]
+  expect(entry.roomId).toBe(room.id); expect(entry.attentionCount).toBe(1); expect(entry.runningCount).toBe(1)
+  await store.commit({ requestId: 'cancelled-integration', checks: [{ kind: 'integration', id: 'integration', expectedRevision: 0 }],
+    puts: [{ kind: 'integration', id: 'integration', roomId: room.id, value: { taskId: 'done', status: 'failed', cancelRequested: true } }] })
+  expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
+})

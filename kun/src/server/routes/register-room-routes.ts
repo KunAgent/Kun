@@ -1,3 +1,4 @@
+import { registerRoomProfileRoutes } from './register-room-profile-routes.js'
 import { registerAgentHandoffRoutes } from './register-agent-handoff-routes.js'
 import { registerAgentIdentityRoutes } from './register-agent-identity-routes.js'
 import { z } from 'zod'
@@ -68,6 +69,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     }
   })
 
+  registerRoomProfileRoutes(add, runtime)
   registerAgentIdentityRoutes(add)
   registerAgentHandoffRoutes(add)
   registerRoomEvidenceRoutes(add)

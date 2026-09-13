@@ -21,7 +21,7 @@ export function RoomMemberDetails({ room, selectedMemberId, rootRequestId, topic
       className={`rooms-member-card ${member.id === selectedMemberId ? 'is-selected' : ''}`}>
       <div className="rooms-member-card-heading">
         <RoomAvatar member={member} label={member.displayName} size={38} />
-        <div><h3>{member.displayName}</h3><p>{t(`rooms${member.role[0].toUpperCase()}${member.role.slice(1)}`)} · {t(member.enabled ? 'roomsEnabled' : 'roomsDisabled')}</p></div>
+        <div><h3>{member.displayName}</h3><p>{member.agentTitle || t(`rooms${member.role[0].toUpperCase()}${member.role.slice(1)}`)} · {t(member.enabled ? 'roomsEnabled' : 'roomsDisabled')}</p></div>
       </div>
       {member.participantAgentId ? <div className="agent-memory-actions">
         <button type="button" onClick={() => onOpenAgent?.(member.participantAgentId!)}>{t('agentsOpenPrivate')}</button>

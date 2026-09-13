@@ -118,7 +118,7 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   await setScale(1)
   await page.evaluate(async () => {
     const { useRoomPresentationPreferences } = await import('/src/components/rooms/room-presentation-preferences.ts')
-    useRoomPresentationPreferences.getState().setPreference({ layout: 'thread', listWidth: 320, detailWidth: 400 })
+    useRoomPresentationPreferences.getState().setPreference({ layout: 'bubble', listWidth: 300, detailWidth: 400 })
   })
   const initial = await request(page, '/v1/rooms', 'POST', {
     clientRequestId: 'ui-room', name: NAME, description: 'A focused conversation for planning, development, and review.',
@@ -145,8 +145,11 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   const list = (await request(page, '/v1/rooms')).rooms.find((value) => value.id === room.id)
   assert.equal(list.latestMessage.id, seeded.finalMessageId)
   assert(list.runningCount > 0 && list.attentionCount > 0, 'Expected real running state and inert awaiting-review display fixture')
-  await poll(() => page.getByRole('button', { name: NAME, exact: true }).locator('.rooms-conversation-preview')
-    .innerText().then((text) => text.includes('The acceptance notes are attached.')), 15000, 'SSE updates the rendered list preview')
+  await poll(async () => {
+    const current = (await request(page, '/v1/rooms/sidebar?search=' + encodeURIComponent(NAME))).entries.find((entry) => entry.roomId === room.id)
+    const text = await page.getByRole('button', { name: NAME, exact: true }).locator('.rooms-im-sidebar-preview').innerText()
+    return current?.latestMessage?.preview && text.includes(current.latestMessage.preview)
+  }, 15000, 'SSE updates the rendered list to the latest committed message, including live task progress')
   const metrics = []
   const setTheme = async (theme) => page.evaluate(async (value) => {
     const { applyTheme } = await import('/src/lib/apply-theme.ts')
@@ -155,7 +158,7 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   const settle = () => page.waitForTimeout(250)
 
   await keyboardPopover(page, 'More actions', { role: 'button', name: 'Room settings' })
-  await keyboardPopover(page, 'Conversation options', { role: 'button', name: 'Refresh' })
+  await keyboardPopover(page, 'Chat management', { role: 'button', name: 'Agents' })
   await keyboardPopover(page, 'Add context', { role: 'combobox', name: 'Reference task' })
   const searchButton = page.getByRole('button', { name: SEARCH_NAME, exact: true })
   await searchButton.click()
@@ -273,7 +276,7 @@ async function exerciseRoomsUi({ page, request, poll, capture, fixture, home, pr
   metrics.push(await assertViewport(page, 'renderer-emulated-720x780-light'))
   await capture('ui-renderer-emulated-720x780-light')
   await page.getByRole('button', { name: 'Rooms', exact: true }).click()
-  await page.getByRole('button', { name: 'New room', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'New conversation', exact: true }).waitFor()
   await capture('ui-renderer-emulated-720x780-list')
   await emulation.send('Emulation.clearDeviceMetricsOverride')
   await emulation.detach()

@@ -52,7 +52,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   const panel = () => page.getByRole('dialog', { name: 'Room details', exact: true })
   const active = () => panel().locator('[data-active-drawer-page="true"]')
   const composer = () => page.locator('[data-rooms-workspace] > section').first().locator(':scope > .rooms-composer')
-  const sections = page.getByRole('navigation', { name: 'Conversation sections', exact: true })
+  const sections = page.locator('.rooms-im-sidebar')
   const count = () => Object.values(fixture.snapshot()).reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0)
   const close = async () => { if (await panel().count()) await panel().getByRole('button', { name: 'Close', exact: true }).click() }
   const send = async (body) => {
@@ -77,21 +77,20 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
       return stableSince > 0 && Date.now() - stableSince >= 1800
     }, 30000, 'native Agent responses and memory jobs settle')
   }
-  await sections.getByRole('button', { name: 'Agents', exact: true }).click()
-  await page.getByRole('region', { name: 'Agents', exact: true }).waitFor()
+  await sections.getByRole('button', { name: 'New conversation', exact: true }).click()
   const beforeCreate = count()
   await page.getByRole('button', { name: 'Create Agent', exact: true }).click()
   await active().getByLabel('Name', { exact: true }).fill('Ada independent fixture')
   await active().getByLabel('Job / title', { exact: true }).fill('Evidence and scoped collaboration')
   await active().getByLabel('Long-term responsibilities', { exact: true }).fill(MARK + ': provide concise evidence and respect the current scope.')
   await active().getByRole('button', { name: 'Save', exact: true }).click()
-  await active().getByRole('button', { name: 'Chat privately with this Agent', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Ada independent fixture', exact: true, level: 1 }).waitFor()
   const agents = await request(page, '/v1/agents?search=Ada%20independent%20fixture')
   assert.equal(agents.agents.length, 1)
   const ada = agents.agents[0]
   const bea = (await request(page, '/v1/agents', 'POST', { clientRequestId: 'independent-bea', name: 'Bea independent fixture',
     instructions: MARK + ': inspect only the supplied evidence.', defaultRole: 'reviewer' })).agent
-  await active().getByRole('button', { name: 'Chat privately with this Agent', exact: true }).click()
+  await sections.getByRole('button', { name: ada.name, exact: true }).click()
   await page.getByRole('heading', { name: ada.name, exact: true, level: 1 }).waitFor()
   const direct = (await request(page, '/v1/agents/' + ada.id + '/conversation', 'POST', {})).room
   const repeated = (await request(page, '/v1/agents/' + ada.id + '/conversation', 'POST', {})).room
@@ -102,7 +101,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   await send(MARK + ': remember that reports use Chinese and include source links.')
   await poll(async () => (await request(page, '/v1/agents/' + ada.id + '/memories')).memories.length === 1, 30000, 'automatic scoped memory is persisted')
   await quiet([ada.id], direct.id)
-  const portraitBounds = await page.locator('.agent-directory-row .rooms-avatar-art').evaluateAll((elements) =>
+  const portraitBounds = await page.locator('.rooms-im-sidebar-open > .rooms-avatar .rooms-avatar-art').evaluateAll((elements) =>
     elements.map((element) => ({ width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height })))
   assert(portraitBounds.length >= 3 && portraitBounds.every((bounds) => bounds.width >= 16 && bounds.height >= 16),
     'Agent directory portraits must retain their image dimensions')
@@ -115,7 +114,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
       participantAgentId: agent.id, displayName: agent.name, presetId: agent.presetId,
       role: agent.defaultRole, roleNotes: '', enabled: true, allowedRepositoryIds: [], revision: 0 })) })).room
   const chooseGroup = async () => {
-    await close(); await sections.getByRole('button', { name: 'Groups', exact: true }).click()
+    await close()
     await page.getByRole('button', { name: group.name, exact: true }).click()
     await page.getByRole('heading', { name: group.name, exact: true }).waitFor()
   }
@@ -127,8 +126,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   const beforeSharing = await request(page, '/v1/rooms/' + group.id + '/runs/' + firstRuns[0].id)
   assert(!beforeSharing.context?.memoryIds?.includes(learned.memory.id), 'Unshared private memory reached a group')
   assertions.push('one identity participates in a private chat and a group, while work memory stays isolated')
-  await sections.getByRole('button', { name: 'Agents', exact: true }).click()
-  await page.getByRole('region', { name: 'Agents', exact: true }).getByRole('button', { name: ada.name, exact: true }).click()
+  await sections.getByRole('button', { name: ada.name, exact: true }).click()
   await page.getByRole('heading', { name: ada.name, exact: true, level: 1 }).waitFor()
   await composer().getByRole('textbox', { name: INPUT, exact: true }).fill('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW')
   const beforeView = count()
@@ -198,8 +196,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   await shot('exact-handoff-run')
   await close()
   assert.equal(count(), beforeRead)
-  await sections.getByRole('button', { name: 'Agents', exact: true }).click()
-  await page.getByRole('region', { name: 'Agents', exact: true }).getByRole('button', { name: ada.name, exact: true }).click()
+  await sections.getByRole('button', { name: ada.name, exact: true }).click()
   await page.getByRole('heading', { name: ada.name, exact: true, level: 1 }).waitFor()
   assert((await composer().getByRole('textbox', { name: INPUT, exact: true }).innerText()).includes('PRIVATE_DRAFT_SURVIVES_MEMORY_VIEW'))
   await page.locator('.agent-collaboration-strip').getByRole('button', { name: 'Agent profile and memory', exact: true }).click()
@@ -208,6 +205,8 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   await poll(async () => (await request(page, '/v1/agents/' + ada.id + '/memories')).memories.length === 0, 10000, 'forgotten memory excluded')
   await shot('memory-forgotten')
   await close()
+  await sections.getByRole('button', { name: 'Chat management', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Chat management', exact: true }).getByRole('button', { name: 'Agents', exact: true }).click()
   await page.getByRole('button', { name: 'Agent features', exact: true }).click()
   const features = page.getByRole('dialog', { name: 'Agent features', exact: true })
   const collaboration = features.getByLabel('Agent collaboration', { exact: true })
@@ -218,6 +217,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
   await collaboration.check()
   await poll(async () => (await request(page, '/v1/agents/features')).features.collaboration, 10000, 'collaboration restored')
   await page.keyboard.press('Escape')
+  await page.getByRole('dialog', { name: 'Agents', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
   await page.locator('.agent-collaboration-strip').getByRole('button', { name: 'Agent profile and memory', exact: true }).click()
   await active().getByRole('button', { name: 'Archive Agent', exact: true }).click()
   await active().getByRole('button', { name: 'Restore', exact: true }).waitFor()
@@ -230,7 +230,7 @@ async function exerciseIndependentAgents({ page, request, poll, capture, fixture
     await shot('narrow-' + theme)
   }
   await resize(1360, 900); await close()
-  await sections.getByRole('button', { name: 'Groups', exact: true }).click()
+  await sections.waitFor()
   assertions.push('archive/restore, independent feature controls, exact run inspection, draft restoration, and narrow themes')
   return { agentIds: [ada.id, bea.id], privateRoomId: direct.id, groupRoomId: group.id, pairRoomId: pair.id,
     memoryId: learned.memory.id, handoffId: handoff.id, runId: handoff.runId, screenshots, assertions }

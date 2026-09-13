@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
-import { UserRound } from 'lucide-react'
-import type { RoomMember } from '@shared/rooms-api'
+import kunGreet from '../../../../asset/img/kun_greet.png'
+import { useRoomUserProfile } from './room-user-profile'
+import type { RoomMember, RoomAvatarReference } from '@shared/rooms-api'
 import avatarAtlas from '../../../../asset/img/room-avatars/kun-avatar-atlas.png'
 import { avatarForIdentity, ROOM_AVATARS, ROOM_AVATAR_BACKGROUND_SIZE } from './room-avatar-catalog'
 import './rooms-avatars.css'
@@ -39,20 +40,27 @@ export function RoomAvatarPortrait({ index }: { index: number }) {
 
 export function RoomAvatar({
   member,
+  avatar,
+  user = false,
   id,
   label,
   size = 38,
   onClick
 }: {
   member?: RoomMember
+  avatar?: RoomAvatarReference | null
+  user?: boolean
   id?: string
   label: string
   size?: number
   onClick?: () => void
 }) {
   const identity = id ?? member?.id ?? 'kun'
-  const uploaded = useRoomUploadedAvatar(member?.avatar?.kind === 'uploaded' ? member.avatar.attachmentId : undefined)
-  const builtinId = member?.avatar?.kind === 'builtin' ? member.avatar.id : undefined
+  const profileAvatar = useRoomUserProfile((state) => state.profile.avatar)
+  const isUser = user || identity === 'user'
+  const reference = avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
+  const uploaded = useRoomUploadedAvatar(reference?.kind === 'uploaded' ? reference.attachmentId : undefined)
+  const builtinId = reference?.kind === 'builtin' ? reference.id : undefined
   const selected = ROOM_AVATARS.find((item) => item.id === builtinId)
   const style = {
     '--rooms-avatar-size': `${size / 16}rem`,
@@ -60,16 +68,16 @@ export function RoomAvatar({
   } as CSSProperties
   const content = (
     <>
-      {identity === 'user' ? (
-        <UserRound aria-hidden="true" className="rooms-avatar-user" />
-      ) : uploaded ? (
+      {uploaded ? (
         <img className="rooms-avatar-art object-cover" src={uploaded} alt="" aria-hidden="true" />
+      ) : isUser && !selected ? (
+        <img className="rooms-avatar-art rooms-user-kun" src={kunGreet} alt="" aria-hidden="true" />
       ) : (
         <RoomAvatarPortrait index={selected?.index ?? avatarForIdentity(identity).index} />
       )}
-      <span className="rooms-avatar-letter" aria-hidden="true">
+      {!isUser ? <span className="rooms-avatar-letter" aria-hidden="true">
         {Array.from(label.trim())[0]?.toLocaleUpperCase() ?? 'K'}
-      </span>
+      </span> : null}
     </>
   )
   return onClick ? (

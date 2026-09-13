@@ -33,8 +33,8 @@ export function useRoomOnboarding(onOpen: (id: string) => void) {
     dismiss: async () => { if (resource.data) { try { await perform(resource.data, 'dismiss'); resource.refresh() } catch (cause) { setError(String(cause)) } } } }
 }
 
-export function RoomOnboardingDialog({ state, onClose, onComplete, onOpenAgent, onOpenGroup }: {
-  state: OnboardingState; onClose: () => void; onComplete: (state: OnboardingState) => void; onOpenAgent: (id: string) => void; onOpenGroup: (id: string) => void
+export function RoomOnboardingDialog({ state, onClose, onComplete, onOpenAgent, onOpenGroup, onRefresh }: {
+  state: OnboardingState; onClose: () => void; onComplete: (state: OnboardingState) => void; onOpenAgent: (id: string) => void; onOpenGroup: (id: string) => void; onRefresh: () => void
 }) {
   const { t } = useTranslation('common')
   const [selections, setSelections] = useState(() => state.slots.map((slot) => ({ templateId: slot.templateId, agent: slot.agent })))
@@ -64,7 +64,7 @@ export function RoomOnboardingDialog({ state, onClose, onComplete, onOpenAgent, 
         </>}
       </section>
     })}</div>
-    {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
+    {error ? <div role="alert" className="rooms-run-error">{error}<button type="button" disabled={busy} onClick={onRefresh}>{t('roomsInitRefreshPreview')}</button></div> : null}
     {state.groupId ? <button type="button" className="rooms-run-primary" onClick={() => onOpenGroup(state.groupId!)}>{t('roomsInitOpenTeam')}</button> : null}
     {!state.completed ? <button type="button" className="rooms-run-primary" disabled={busy} onClick={() => void submit()}>{t(busy ? 'roomsLoading' : 'roomsInitComplete')}</button> : null}
   </RoomModal>

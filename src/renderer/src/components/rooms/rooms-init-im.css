@@ -15,7 +15,7 @@
 .rooms-im-sidebar-preview > b { color: var(--ds-danger); font-size: 12px; }
 .rooms-im-sidebar-preview > i { color: var(--ds-accent); font-size: 8px; font-style: normal; }
 .rooms-sidebar-row-menu { position: absolute; right: 6px; bottom: 6px; visibility: hidden; background: var(--ds-surface-card); }
-.rooms-im-sidebar-row:hover .rooms-sidebar-row-menu, .rooms-im-sidebar-row:focus-within .rooms-sidebar-row-menu { visibility: visible; }
+.rooms-sidebar-row-menu[aria-expanded='true'], .rooms-im-sidebar-row:hover .rooms-sidebar-row-menu, .rooms-im-sidebar-row:focus-within .rooms-sidebar-row-menu { visibility: visible; }
 .rooms-sidebar-active-filter, .rooms-sidebar-search-all { display: flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 11px; color: var(--ds-text-muted); text-align: left; }
 .rooms-sidebar-filter-menu { padding: 12px; display: grid; gap: 10px; font-size: 12px; }
 .rooms-sidebar-filter-menu > label { display: grid; gap: 8px; }

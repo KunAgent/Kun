@@ -43,3 +43,13 @@ it('clears a transient error after a successful refresh and keeps loaded pages i
   expect(value.entries.map((entry) => entry.id)).toEqual(['a', 'b'])
   expect(mocks.request.mock.calls.at(-1)![0]).toContain('cursor=next')
 })
+it('does not starve status refreshes during a stream of presentation updates', async () => {
+  mocks.request.mockResolvedValue({ entries: [] })
+  await act(async () => { renderer = create(createElement(Probe)) }); await flush()
+  const event = mocks.subscribe.mock.calls.at(-1)![0]
+  for (let i = 0; i < 10; i++) await act(async () => {
+    event({ kind: 'message.updated' }); await vi.advanceTimersByTimeAsync(100)
+  })
+  expect(mocks.request.mock.calls.length).toBeGreaterThan(2)
+  expect(mocks.request.mock.calls.length).toBeLessThanOrEqual(4)
+})

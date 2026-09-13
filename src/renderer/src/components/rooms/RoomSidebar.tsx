@@ -13,10 +13,10 @@ import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/brows
 
 type Kind = 'all' | 'agents' | 'group' | 'agent_agent'
 export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAgent, onCreateGroup, onDetails, onSearch,
-  onProfile, onTeam, onManage }: {
+  onProfile, onTeam, onManage, onActivity }: {
   selectedRoomId: string; onOpenAgent: (id: string) => void; onSelect: (id: string) => void
   onCreateAgent: () => void; onCreateGroup: () => void; onDetails: (id: string) => void
-  onSearch: (hit: RoomSearchHit) => void; onProfile: () => void; onTeam: () => void; onManage: () => void
+  onSearch: (hit: RoomSearchHit) => void; onProfile: () => void; onTeam: () => void; onManage: () => void; onActivity?: (entry: RoomSidebarEntry | undefined) => void
 }) {
   const { t } = useTranslation('common')
   const [kind, setKind] = useState<Kind>(() => {
@@ -30,6 +30,7 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
     const first = page.entries[0]
     if (!selectedRoomId && first) { if (first.agentId) onOpenAgent(first.agentId); else if (first.roomId) onSelect(first.roomId) }
   }, [selectedRoomId, page.entries, onOpenAgent, onSelect])
+  useEffect(() => { onActivity?.(page.entries.find((entry) => entry.roomId === selectedRoomId)) }, [page.entries, selectedRoomId, onActivity])
   const scroll = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({ count: page.entries.length, getScrollElement: () => scroll.current, estimateSize: () => 64,
     getItemKey: (index) => page.entries[index].id, overscan: 8 })

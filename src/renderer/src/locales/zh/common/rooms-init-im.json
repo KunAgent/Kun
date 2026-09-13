@@ -36,5 +36,6 @@
   "roomsAvatarRestoreKun": "恢复小 Kun 头像",
   "roomsAvatarFileHint": "PNG、JPEG、WebP · 最大 2MB · 保存后应用于全部聊天室",
   "roomsInitOpenTeam": "进入团队群",
-  "roomsSearchNoResults": "没有匹配的会话"
+  "roomsSearchNoResults": "没有匹配的会话",
+  "roomsInitRefreshPreview": "刷新团队预览"
 }

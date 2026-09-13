@@ -93,7 +93,7 @@ export function RoomComposerMentions({ room, tasks, candidates, mentionIndex, li
           <span className="rooms-composer-mention-copy">
             <strong>{member.displayName}</strong>
             <span>
-              {member.role ? t(`rooms${member.role[0].toUpperCase()}${member.role.slice(1)}`) : ''}
+              {member.agentTitle || (member.role ? t(`rooms${member.role[0].toUpperCase()}${member.role.slice(1)}`) : '')}
               {' · '}{room.repositories.find((repo) => repo.id === member.defaultRepositoryId)?.displayName ?? t('roomsNoRepository')}
               {tasks.some((task) => task.ownerMemberId === member.id &&
                 ['running', 'needs_input', 'needs_approval'].includes(task.status))

@@ -8,9 +8,9 @@ import { AgentHandoffPanel } from './AgentHandoffPanel'
 import { AgentDirectory } from './AgentDirectory'
 import { AgentDetails } from './AgentDetails'
 import { agentPath } from './agent-client'
-import type { Room } from '@shared/rooms-api'
+import type { Room, OnboardingState, RoomSidebarEntry } from '@shared/rooms-api'
 import { roomsRequest } from './rooms-client'
-import { useEffect, useState, useRef, type ReactElement, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, useRef, type ReactElement, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MessagesSquare,
@@ -55,6 +55,17 @@ export function RoomsWorkspaceView({
   const { t } = useTranslation('common')
   const state = useRooms('group', false)
   const [teamOpen, setTeamOpen] = useState(false), [profileOpen, setProfileOpen] = useState(false), [manageOpen, setManageOpen] = useState(false)
+  const [sidebarActivity, setSidebarActivity] = useState<RoomSidebarEntry>()
+  const receiveSidebarActivity = useCallback((entry: RoomSidebarEntry | undefined) => setSidebarActivity((previous) =>
+    previous?.roomId === entry?.roomId && previous?.runningCount === entry?.runningCount && previous?.attentionCount === entry?.attentionCount ? previous : entry), [])
+  const [teamPreview, setTeamPreview] = useState<OnboardingState | null>(null)
+  const [previewVersion, setPreviewVersion] = useState(0)
+  const openTeam = async () => {
+    try {
+      const preview = await roomsRequest<OnboardingState>('/v1/agents/onboarding')
+      setTeamPreview(preview); setPreviewVersion((version) => version + 1); setTeamOpen(true)
+    } catch (cause) { state.setError(String(cause)) }
+  }
   useRoomUserProfileSync()
   useEffect(() => {
     const open = () => setProfileOpen(true)
@@ -173,11 +184,11 @@ export function RoomsWorkspaceView({
             <X size={18} />
           </button>
         </div>
-        <RoomSidebar selectedRoomId={selectedId} onOpenAgent={(id) => void openAgent(id)} onSelect={chooseRoom}
+        <RoomSidebar onActivity={receiveSidebarActivity} selectedRoomId={selectedId} onOpenAgent={(id) => void openAgent(id)} onSelect={chooseRoom}
           onCreateAgent={() => drawer.open({ kind: 'agent' })} onCreateGroup={() => setSettings('create')}
           onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
           onSearch={(hit) => { chooseRoom(hit.roomId); setSearchTarget(hit) }}
-          onProfile={() => setProfileOpen(true)} onTeam={() => setTeamOpen(true)} onManage={() => setManageOpen(true)} />
+          onProfile={() => setProfileOpen(true)} onTeam={() => void openTeam()} onManage={() => setManageOpen(true)} />
       </aside>
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
@@ -191,7 +202,7 @@ export function RoomsWorkspaceView({
             state.saved(result.room)
           }) }}
         />
-        {onboarding.data && !onboarding.data.completed && !onboarding.data.dismissed && !onboarding.data.fresh ? <div className="rooms-init-banner"><span>{t('roomsInitBanner')}</span><button onClick={() => setTeamOpen(true)}>{t('roomsInitReview')}</button><button aria-label={t('roomsClose')} onClick={() => void onboarding.dismiss()}><X size={15} /></button></div> : null}
+        {onboarding.data && !onboarding.data.completed && !onboarding.data.dismissed && !onboarding.data.fresh ? <div className="rooms-init-banner"><span>{t('roomsInitBanner')}</span><button onClick={() => void openTeam()}>{t('roomsInitReview')}</button><button aria-label={t('roomsClose')} onClick={() => void onboarding.dismiss()}><X size={15} /></button></div> : null}
         {onboarding.error ? <p role="alert" className="rooms-run-error">{onboarding.error}<button onClick={onboarding.retry}>{t('roomsRefresh')}</button></p> : null}
         {state.error ? (
           <div
@@ -221,13 +232,13 @@ export function RoomsWorkspaceView({
               loading={topicState.loading}
               onOpen={() => drawer.section('discussion')}
               onTasks={() => drawer.section('tasks')}
-              taskCounts={state.rooms.find((entry) => entry.id === room.id)}
+              taskCounts={sidebarActivity?.roomId === room.id ? sidebarActivity : undefined}
             />
             <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
               {room.conversationKind === 'user_agent' && room.members[0]?.participantAgentId ? <button type="button" onClick={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })}>{t('agentsProfileAndMemory')}</button> : null}
             </div>
             {!messages.length && room.conversationKind === 'user_agent' ? <RoomWelcomeCard room={room}
-              onTeam={() => setTeamOpen(true)} onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0]?.participantAgentId })} /> : <RoomTimeline
+              onTeam={() => void openTeam()} onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0]?.participantAgentId })} /> : <RoomTimeline
               key={room.id + '-timeline'}
               searchOpen={searchOpen}
               onSearchClose={() => setSearchOpen(false)}
@@ -303,7 +314,7 @@ export function RoomsWorkspaceView({
           return <RoomTaskStrip key={key} stacked room={room} tasks={state.tasks} selectedId={null} onTask={openTask}
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />
         }} /> : null}
-      {teamOpen && onboarding.data ? <RoomOnboardingDialog key={onboarding.data.revision ?? 'fresh'} state={onboarding.data}
+      {teamOpen && teamPreview ? <RoomOnboardingDialog key={previewVersion} state={teamPreview} onRefresh={() => void openTeam()}
         onOpenGroup={(id) => { setTeamOpen(false); chooseRoom(id) }} onClose={() => setTeamOpen(false)} onOpenAgent={(id) => { setTeamOpen(false); void openAgent(id) }}
         onComplete={(value) => { setTeamOpen(false); onboarding.refresh(); if (value.coordinatorRoomId) chooseRoom(value.coordinatorRoomId) }} /> : null}
       {profileOpen ? <RoomUserAvatarEditor onClose={() => setProfileOpen(false)} /> : null}
