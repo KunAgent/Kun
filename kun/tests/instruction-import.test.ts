@@ -122,6 +122,29 @@ describe('instruction-import', () => {
     expect(text).not.toContain('description: x')
   })
 
+  it('adds a non-enforced condition note for a scoped Cursor rule (globs)', async () => {
+    await mkdir(join(workspace, '.cursor', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.cursor', 'rules', 'ts.mdc'), '---\nglobs: "**/*.ts"\n---\nPrefer const.', 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['cursor'] })
+    const text = plan.targets[0]?.mergedText ?? ''
+
+    expect(text).toContain('NOT enforced by Kun')
+    expect(text).toContain('globs=**/*.ts')
+    expect(text).toContain('Prefer const.')
+  })
+
+  it('does not add a condition note for an alwaysApply Cursor rule', async () => {
+    await mkdir(join(workspace, '.cursor', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.cursor', 'rules', 'all.mdc'), '---\nalwaysApply: true\nglobs: "**/*.ts"\n---\nGlobal rule.', 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['cursor'] })
+    const text = plan.targets[0]?.mergedText ?? ''
+
+    expect(text).toContain('Global rule.')
+    expect(text).not.toContain('NOT enforced by Kun')
+  })
+
   it('skips a Codex workspace AGENTS.md that is the target itself', async () => {
     await writeFile(join(workspace, 'AGENTS.md'), 'Existing kun rule.', 'utf8')
 

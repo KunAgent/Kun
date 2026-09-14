@@ -167,10 +167,45 @@ async function expandSpec(base: string, spec: SourceFileSpec): Promise<string[]>
   return []
 }
 
-function stripFrontmatter(text: string): string {
-  if (!text.startsWith('---')) return text
-  const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/u.exec(text)
-  return match ? text.slice(match[0].length) : text
+type FrontmatterSplit = { frontmatter: string; body: string }
+
+function splitFrontmatter(text: string): FrontmatterSplit {
+  if (!text.startsWith('---')) return { frontmatter: '', body: text }
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/u.exec(text)
+  if (!match) return { frontmatter: '', body: text }
+  return { frontmatter: match[1] ?? '', body: text.slice(match[0].length) }
+}
+
+/**
+ * Inspect a source file's frontmatter and decide whether it encodes a real
+ * file-scoping condition (e.g. Cursor `globs`, Copilot `applyTo` pattern, Kiro
+ * `inclusion: fileMatch` + `fileMatchPattern`). Unconditional/always-apply
+ * rules return no note. Kun cannot enforce these conditions, so a scoped rule
+ * gets a visible note recording the original condition.
+ */
+function scopedConditionNote(frontmatter: string): string | null {
+  if (!frontmatter.trim()) return null
+  const fields = new Map<string, string>()
+  for (const line of frontmatter.split(/\r?\n/u)) {
+    const m = /^([A-Za-z0-9_]+)\s*:\s*(.*)$/u.exec(line.trim())
+    if (m) fields.set(m[1]!.toLowerCase(), (m[2] ?? '').trim())
+  }
+  const clean = (value: string): string => value.replace(/^["']|["']$/gu, '').trim()
+  const isTruthy = (value: string): boolean => /^(true|yes|always)$/iu.test(clean(value))
+
+  // Cursor: alwaysApply true means global; globs present means scoped.
+  if (isTruthy(fields.get('alwaysapply') ?? '')) return null
+  const conditions: string[] = []
+  const globs = fields.get('globs')
+  if (globs && clean(globs)) conditions.push(`globs=${clean(globs)}`)
+  const applyTo = fields.get('applyto')
+  if (applyTo && clean(applyTo) && clean(applyTo) !== '**') conditions.push(`applyTo=${clean(applyTo)}`)
+  const inclusion = fields.get('inclusion')
+  if (inclusion && /filematch/iu.test(clean(inclusion))) {
+    const pattern = fields.get('filematchpattern')
+    conditions.push(pattern ? `inclusion=fileMatch(${clean(pattern)})` : 'inclusion=fileMatch')
+  }
+  return conditions.length > 0 ? conditions.join(', ') : null
 }
 
 function normalizeBody(text: string): string {
@@ -274,12 +309,21 @@ function resolveImportPath(rawPath: string, baseDir: string, homeDir: string): s
 
 async function renderSourceFile(source: DetectedSourceFile, ctx: ResolveCtx): Promise<string> {
   let text = await readFile(source.path, 'utf8')
-  if (source.spec.stripFrontmatter) text = stripFrontmatter(text)
+  let conditionNote: string | null = null
+  if (source.spec.stripFrontmatter) {
+    const split = splitFrontmatter(text)
+    conditionNote = scopedConditionNote(split.frontmatter)
+    text = split.body
+  }
   if (source.spec.resolveImports) {
     ctx.visited.add(await realpath(source.path).catch(() => source.path))
     text = await resolveClaudeImports(text, dirname(source.path), 0, ctx)
   }
-  return normalizeBody(text)
+  const body = normalizeBody(text)
+  if (conditionNote && body.length > 0) {
+    return `<!-- Imported condition (NOT enforced by Kun): ${conditionNote} -->\n${body}`
+  }
+  return body
 }
 
 /** Replace the managed block for `tool`, appending a fresh block if none exists. Content outside markers is preserved verbatim. */
