@@ -1,5 +1,6 @@
 import { lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import {
   DEFAULT_INSTRUCTION_MAX_FILE_BYTES,
   DEFAULT_INSTRUCTION_MAX_TOTAL_BYTES,
@@ -60,6 +61,7 @@ export type ImportWarning =
   | { code: 'unresolved-import'; path: string; detail: string }
   | { code: 'import-cycle'; path: string }
   | { code: 'oversized-import'; path: string; bytes: number }
+  | { code: 'oversized-source-imported'; path: string; bytes: number; limit: number }
   | { code: 'out-of-bounds-import'; path: string; detail: string }
   | { code: 'identity-skip'; tool: SourceToolId; path: string }
   | { code: 'budget-exceeded'; target: string; bytes: number; limit: number }
@@ -189,25 +191,44 @@ function splitFrontmatter(text: string): FrontmatterSplit {
  */
 function scopedConditionNote(frontmatter: string): string | null {
   if (!frontmatter.trim()) return null
-  const fields = new Map<string, string>()
-  for (const line of frontmatter.split(/\r?\n/u)) {
-    const m = /^([A-Za-z0-9_]+)\s*:\s*(.*)$/u.exec(line.trim())
-    if (m) fields.set(m[1]!.toLowerCase(), (m[2] ?? '').trim())
+  let parsed: unknown
+  try {
+    parsed = parseYaml(frontmatter)
+  } catch {
+    return /^(?:alwaysApply|globs|applyTo|inclusion|fileMatchPattern)\s*:/imu.test(frontmatter)
+      ? 'conditional frontmatter could not be parsed'
+      : null
   }
-  const clean = (value: string): string => value.replace(/^["']|["']$/gu, '').trim()
-  const isTruthy = (value: string): boolean => /^(true|yes|always)$/iu.test(clean(value))
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  const fields = new Map(
+    Object.entries(parsed).map(([key, value]) => [key.toLowerCase(), value])
+  )
+  const values = (value: unknown): string[] => {
+    const entries = Array.isArray(value) ? value : [value]
+    return entries
+      .filter((entry): entry is string | number | boolean => ['string', 'number', 'boolean'].includes(typeof entry))
+      .map((entry) => String(entry).trim())
+      .filter(Boolean)
+  }
+  const display = (value: unknown): string => values(value).join(', ')
+  const isTruthy = (value: unknown): boolean => values(value).some((entry) => /^(true|yes|always)$/iu.test(entry))
 
   // Cursor: alwaysApply true means global; globs present means scoped.
-  if (isTruthy(fields.get('alwaysapply') ?? '')) return null
+  const alwaysApply = fields.get('alwaysapply')
+  if (isTruthy(alwaysApply)) return null
   const conditions: string[] = []
+  if (alwaysApply === false || values(alwaysApply).some((entry) => /^(false|no|never)$/iu.test(entry))) {
+    conditions.push('alwaysApply=false')
+  }
   const globs = fields.get('globs')
-  if (globs && clean(globs)) conditions.push(`globs=${clean(globs)}`)
+  if (display(globs)) conditions.push(`globs=${display(globs)}`)
   const applyTo = fields.get('applyto')
-  if (applyTo && clean(applyTo) && clean(applyTo) !== '**') conditions.push(`applyTo=${clean(applyTo)}`)
+  const applyToValues = values(applyTo).filter((entry) => entry !== '**')
+  if (applyToValues.length > 0) conditions.push(`applyTo=${applyToValues.join(', ')}`)
   const inclusion = fields.get('inclusion')
-  if (inclusion && /filematch/iu.test(clean(inclusion))) {
+  if (/filematch/iu.test(display(inclusion))) {
     const pattern = fields.get('filematchpattern')
-    conditions.push(pattern ? `inclusion=fileMatch(${clean(pattern)})` : 'inclusion=fileMatch')
+    conditions.push(display(pattern) ? `inclusion=fileMatch(${display(pattern)})` : 'inclusion=fileMatch')
   }
   return conditions.length > 0 ? conditions.join(', ') : null
 }
@@ -364,7 +385,7 @@ function isMissingFileError(error: unknown): boolean {
 export async function buildImportPlan(input: BuildImportPlanInput): Promise<ImportPlan> {
   const maxFileBytes = input.maxFileBytes ?? DEFAULT_INSTRUCTION_MAX_FILE_BYTES
   const maxTotalBytes = input.maxTotalBytes ?? DEFAULT_INSTRUCTION_MAX_TOTAL_BYTES
-  const maxSourceBytes = input.maxSourceBytes ?? MAX_IMPORT_SOURCE_BYTES
+  const maxSourceBytes = Math.min(input.maxSourceBytes ?? MAX_IMPORT_SOURCE_BYTES, MAX_IMPORT_SOURCE_BYTES)
   const warnings: ImportWarning[] = []
   const detected = await detectImportSources({
     workspace: input.workspace,
@@ -400,7 +421,7 @@ export async function buildImportPlan(input: BuildImportPlanInput): Promise<Impo
         }
         // Within the hard cap but over the per-file budget: still import, but warn (never truncate instruction meaning).
         if (source.bytes > maxFileBytes) {
-          warnings.push({ code: 'oversized-import', path: source.path, bytes: source.bytes })
+          warnings.push({ code: 'oversized-source-imported', path: source.path, bytes: source.bytes, limit: maxFileBytes })
         }
         const ctx: ResolveCtx = {
           homeDir: input.homeDir,
@@ -483,6 +504,8 @@ export function describeWarning(warning: ImportWarning): string {
       return `Skipped @import cycle at ${warning.path}`
     case 'oversized-import':
       return `Skipped oversized @import (${warning.bytes} bytes) at ${warning.path}`
+    case 'oversized-source-imported':
+      return `Imported oversized source (${warning.bytes} > ${warning.limit} bytes) without truncation at ${warning.path}`
     case 'out-of-bounds-import':
       return `Skipped out-of-bounds @import "${warning.detail}" outside the workspace or home: ${warning.path}`
     case 'identity-skip':
