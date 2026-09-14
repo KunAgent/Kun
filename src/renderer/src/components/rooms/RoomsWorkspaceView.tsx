@@ -30,7 +30,7 @@ import { RoomMemberDetails } from './RoomMemberDetails'
 import { roomsClient } from './rooms-client'
 import { useRooms } from './useRooms'
 import './rooms.css'
-import { RoomTimeline } from './RoomTimeline'
+import { RoomStreamingTimeline } from './RoomStreamingTimeline'
 import { RoomTaskStrip } from './RoomTaskStrip'
 import { RoomOverview } from './RoomOverview'
 import { useRoomTopics } from './useRoomTopics'
@@ -237,7 +237,7 @@ export function RoomsWorkspaceView({
             />
             <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
             </div></> : null}
-            {!messages.length && privateChat ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2><p>{t('directWelcomeHint')}</p></div> : <RoomTimeline
+            {!messages.length && privateChat && !direct.data?.active?.runId ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2><p>{t('directWelcomeHint')}</p></div> : <RoomStreamingTimeline runId={privateChat ? direct.data?.active?.runId ?? (direct.data?.requests[0]?.status === 'completed' ? direct.data.requests[0].runId : undefined) : undefined}
               key={room.id + '-timeline'}
               searchOpen={searchOpen}
               onSearchClose={() => setSearchOpen(false)}

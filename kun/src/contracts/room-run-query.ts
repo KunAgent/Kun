@@ -34,8 +34,9 @@ export type RoomRunItemsPage = {
 export type RoomRunListPage = { runs: RoomRunRecord[]; nextCursor?: string }
 export type RoomMessageRunSource = { runId?: string; unavailableReason?: string }
 export type RoomRunEvent = {
-  kind: 'run.updated' | 'run.items_changed' | 'run.cursor' | 'run.reset'
+  kind: 'run.updated' | 'run.items_changed' | 'run.cursor' | 'run.reset' | 'run.text'
   roomId: string
   runId: string
   cursor: string
+  message?: RoomMessage | null
 }

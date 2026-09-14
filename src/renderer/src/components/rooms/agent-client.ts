@@ -33,7 +33,7 @@ export function useAgentResource<T>(path: string | null, active = true) {
     void refresh()
     const off = subscribeRoomEvents((event) => {
       if (!/^(agent\.|room_run\.|room\.|message\.|request\.|peer\.)/.test(event.kind)) return
-      clearTimeout(timer); timer = setTimeout(() => void refresh(), 300)
+      if (!timer) timer = setTimeout(() => { timer = undefined; void refresh() }, path.endsWith('/direct') ? 80 : 300)
     })
     const fallback = setInterval(() => void refresh(), path.endsWith('/direct') || path.includes('/items?') ? 1500 : 15000)
     return () => { controller.abort(); clearTimeout(timer); clearInterval(fallback); off() }

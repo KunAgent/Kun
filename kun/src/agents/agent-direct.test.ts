@@ -1,3 +1,4 @@
+import { RoomRunTextStream } from '../server/routes/room-run-text-stream.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -156,4 +157,41 @@ it('keeps explicit reply branches while ordinary assistant messages have no auto
   const response = (await f.store.list<import('../contracts/rooms.js').RoomMessage>('message')).find((row) => row.value.originRunId === done.privateRunId)!.value
   expect(response.replyToMessageId).toBeUndefined()
   expect(response.displayThreadRootId).toBe(first.message.id)
+})
+
+it('hydrates a scoped stream and drops late text after persisted cancellation without new execution', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'stream', body: 'Create hello.txt' })
+  const done = await f.advance(sent.requestId)
+  const values: Array<import('../contracts/rooms.js').RoomMessage | null> = []
+  const feed = new RoomRunTextStream(f.deps, f.h.bus, f.created.roomId, done.privateRunId!, (message) => { values.push(message); return true })
+  await feed.start()
+  await vi.waitFor(() => expect(values.at(-1)?.body).toContain('The file is ready'))
+  const count = f.seen.length
+  const row = (await f.store.get<RoomRequestState>('request', done.id))!
+  await f.store.commit({ requestId: 'stream-stop', checks: [{ kind: 'request', id: done.id, expectedRevision: row.revision }],
+    puts: [{ kind: 'request', id: done.id, roomId: done.roomId, value: { ...row.value, cancellationRequested: true, status: 'cancelled' } }] })
+  f.h.bus.publish({ kind: 'assistant_text_delta', threadId: done.threadId, turnId: done.turnId,
+    seq: 99999, deltaOffset: 0, item: { id: 'late', threadId: done.threadId, turnId: done.turnId, kind: 'assistant_text', text: 'LATE_TEXT' } } as import('../contracts/events.js').RuntimeEvent)
+  await vi.waitFor(() => expect(values.at(-1)).toBeNull())
+  expect(JSON.stringify(values)).not.toContain('LATE_TEXT')
+  expect(f.seen.length).toBe(count)
+  feed.close()
+})
+
+it('replays durable deltas beyond a stale checkpoint without depending on bus history', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'checkpoint', body: 'Create hello.txt' })
+  const done = await f.advance(sent.requestId)
+  const load = f.h.sessionStore.loadItemPage.bind(f.h.sessionStore)
+  vi.spyOn(f.h.sessionStore, 'loadItemPage').mockImplementationOnce(async (...args) => {
+    const page = await load(...args)
+    return { ...page, replayAfterSeq: 0, items: page.items.map((item) => item.kind === 'assistant_text' ? { ...item, text: 'The' } : item) }
+  })
+  vi.spyOn(f.h.bus, 'snapshotSince').mockImplementation(() => { throw new Error('production has no bus tail') })
+  const values: Array<import('../contracts/rooms.js').RoomMessage | null> = []
+  const feed = new RoomRunTextStream(f.deps, f.h.bus, f.created.roomId, done.privateRunId!, (message) => { values.push(message); return true })
+  await feed.start()
+  await vi.waitFor(() => expect(values.at(-1)?.body).toBe('The file is ready.'))
+  feed.close()
 })

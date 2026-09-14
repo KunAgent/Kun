@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   useCallback,
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -116,7 +117,7 @@ export function RoomTimeline({
       !atBottom.current
     )
       return
-    const seq = messages.at(-1)?.messageSeq ?? 0
+    const seq = messages.filter((message) => message.status !== 'streaming').at(-1)?.messageSeq ?? 0
     if (seq <= readSeq.current || seq <= readPending.current) return
     readPending.current = seq
     void roomsRequest<{ seq?: number; result?: { seq: number } }>(
@@ -316,12 +317,21 @@ export function RoomTimeline({
         .then((result) => setFocused(result.message))
         .catch((cause) => setError(String(cause)))
   }
+  const actions = useRef({ onRun, onReplyThread, reply, viewReply, onTask, onMember })
+  actions.current = { onRun, onReplyThread, reply, viewReply, onTask, onMember }
+  const stableActions = useMemo(() => ({
+    task: (id: string) => { setFocused(null); actions.current.onTask(id) },
+    member: (id: string, rootRequestId?: string) => { setFocused(null); actions.current.onMember?.(id, rootRequestId) },
+    run: (id: string) => { setFocused(null); actions.current.onRun?.(id) },
+    reply: (message: RoomMessage) => (actions.current.onReplyThread ?? actions.current.reply)(message),
+    viewReply: (id: string) => actions.current.viewReply(id)
+  }), [])
   const renderMessage = (message: RoomMessage) => (
-    <RoomMessageRow
+    <StableMessageRow
       room={room}
       onOpenContent={onOpenContent}
       onHandoff={onHandoff}
-      onRun={onRun ? (id) => { setFocused(null); onRun(id) } : undefined}
+      onRun={onRun ? stableActions.run : undefined}
       message={message}
       member={room.members.find(
         (member) => member.id === message.authorMemberId
@@ -332,21 +342,11 @@ export function RoomTimeline({
           ? messageById.get(message.replyToMessageId)
           : undefined
       }
-      onReply={onReplyThread ?? reply}
+      onReply={stableActions.reply}
       onPin={onPin}
-      onTask={(id) => {
-        setFocused(null)
-        onTask(id)
-      }}
-      onViewReply={viewReply}
-      onMember={
-        onMember
-          ? (id, rootRequestId) => {
-              setFocused(null)
-              onMember(id, rootRequestId)
-            }
-          : undefined
-      }
+      onTask={stableActions.task}
+      onViewReply={stableActions.viewReply}
+      onMember={onMember ? stableActions.member : undefined}
     />
   )
   return (
@@ -560,3 +560,9 @@ export function RoomTimeline({
     </div>
   )
 }
+
+// Handlers read current timeline state even when an unchanged historical row skips rendering.
+const StableMessageRow = memo(function StableMessageRow(props: Parameters<typeof RoomMessageRow>[0]) {
+  return <RoomMessageRow {...props} />
+}, (a, b) => a.message === b.message && a.room === b.room && a.member === b.member && a.task === b.task && a.referencedMessage === b.referencedMessage &&
+  a.onPin === b.onPin && a.onTask === b.onTask && a.onMember === b.onMember && a.onOpenContent === b.onOpenContent && a.onHandoff === b.onHandoff && a.onReply === b.onReply && a.onRun === b.onRun && a.onViewReply === b.onViewReply)
