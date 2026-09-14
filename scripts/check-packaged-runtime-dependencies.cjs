@@ -23,7 +23,8 @@ const RENDERER_BUNDLED_ONLY_PACKAGES = [
   '@univerjs/presets',
   '@univerjs/preset-sheets-core',
   'pptx-preview',
-  'docx-preview'
+  'docx-preview',
+  '@tanstack/react-virtual'
 ]
 
 function packageNameFromSpecifier(specifier) {
@@ -38,6 +39,10 @@ function packageNameFromSpecifier(specifier) {
   }
   const first = specifier.split('/')[0]
   if (BUILTIN_MODULES.has(specifier) || BUILTIN_MODULES.has(first)) return undefined
+  // Reject fragments that cannot be a bare or scoped npm package name. The
+  // minified-specifier scanner below can otherwise capture string-literal
+  // content such as `"before export"` and report code as a missing package.
+  if (!/^@?[a-zA-Z0-9][a-zA-Z0-9._~-]*$/u.test(first)) return undefined
   if (!specifier.startsWith('@')) return first
   const [scope, name] = specifier.split('/')
   return scope && name ? `${scope}/${name}` : undefined
@@ -45,7 +50,10 @@ function packageNameFromSpecifier(specifier) {
 
 function sourceSpecifiers(source) {
   const specifiers = []
-  const pattern = /(?:\b(?:import|export)\s+(?:[^'"\n;]*?\s+from\s+)?|\bimport\s*\(\s*|\brequire(?:\.resolve)?\s*\(\s*)['"]([^'"]+)['"]/gu
+  // The keyword must sit at a statement boundary (start, `;`, `{`, `}`, `(`,
+  // `)`, `=`, or whitespace) so `"import"` / `"before export"` string literals
+  // and `/^(?:export\s+)?/` regex literals are not mistaken for imports.
+  const pattern = /(?<=[;{}()=\s]|^)(?:(?:import|export)\s*(?:[^'"\n;]*?\s*from\s*)?|import\s*\(\s*|require(?:\.resolve)?\s*\(\s*)['"]([^'"]+)['"]/gu
   for (const match of source.matchAll(pattern)) specifiers.push(match[1])
   return specifiers
 }

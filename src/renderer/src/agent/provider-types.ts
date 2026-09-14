@@ -151,6 +151,11 @@ export type ThreadDetail = {
 }
 
 export type ThreadEventSink = {
+  /**
+   * Wrap one inbound event batch so intermediate store writes commit once.
+   * Optional: sinks without it dispatch event-by-event as before.
+   */
+  runEventBatch?<T>(work: () => Promise<T>): Promise<T>
   /** The HTTP/SSE stream is established, even when no replay or live event is pending. */
   onConnected?(): void
   /** Persisted replay reached the server's fixed synchronization boundary. */

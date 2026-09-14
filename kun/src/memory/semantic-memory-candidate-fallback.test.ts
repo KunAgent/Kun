@@ -5,6 +5,7 @@ import {
   type SemanticMemoryCandidate
 } from './semantic-memory-evaluation.js'
 import { loadSemanticMemoryEvaluationDataset } from './semantic-memory-evaluation-dataset.js'
+import { loadSemanticMemoryV3EvaluationDataset } from './semantic-memory-evaluation-v3-dataset.js'
 import {
   initializeSemanticMemoryEvaluationCandidate,
   SemanticMemoryCandidateUnavailableError,
@@ -40,6 +41,26 @@ describe('semantic Memory candidate fallback', () => {
     expect(result.reason).toBe('initialization-failed')
     expect(JSON.stringify(result)).not.toContain('private')
     expect(JSON.stringify(result)).not.toContain('secret')
+  })
+
+  it('keeps the v3 evaluator on the lexical path when the local model is missing', async () => {
+    const dataset = await loadSemanticMemoryV3EvaluationDataset()
+    const fallback = createLexicalSemanticMemoryCandidate({ relevanceMode: 'foundation-v1' })
+    const initialized = await initializeSemanticMemoryEvaluationCandidate({
+      initialize: async () => { throw new SemanticMemoryCandidateUnavailableError('missing') },
+      fallback
+    })
+
+    const report = await runSemanticMemoryEvaluation({
+      dataset,
+      candidate: initialized.candidate,
+      split: 'development'
+    })
+
+    expect(initialized).toMatchObject({ status: 'fallback', reason: 'missing' })
+    expect(report.dataset.id).toBe('kun-memory-semantic-retrieval-anonymous-v3')
+    expect(report.safetyGatePassed).toBe(true)
+    expect(report.networkAttempts).toBe(0)
   })
 })
 

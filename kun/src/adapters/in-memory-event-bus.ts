@@ -33,33 +33,46 @@ export class InMemoryEventBus implements EventBus {
   constructor(private readonly options: {
     maxRetainedBytes?: number
     maxRetainedEventsPerThread?: number
+    /**
+     * Retain a per-thread tail so `snapshotSince` can answer. Disable when no
+     * consumer replays from the bus (production SSE replays the durable
+     * session store) — retention costs one JSON.stringify per published
+     * event just to account its bytes.
+     */
+    retainTail?: boolean
   } = {}) {}
+
+  private get retainsTail(): boolean {
+    return this.options.retainTail !== false
+  }
 
   publish(event: RuntimeEvent): void {
     const highest = this.highestSeqByThread.get(event.threadId) ?? 0
     if (event.seq > highest) this.highestSeqByThread.set(event.threadId, event.seq)
 
-    const maxRetainedBytes = Math.max(
-      1,
-      Math.floor(this.options.maxRetainedBytes ?? DEFAULT_MAX_RETAINED_EVENT_BYTES)
-    )
-    const bytes = Buffer.byteLength(JSON.stringify(event), 'utf-8')
-    if (bytes <= maxRetainedBytes / 2 && bytes <= maxRetainedBytes) {
-      const list = this.events.get(event.threadId) ?? []
-      const retained = { threadId: event.threadId, event, bytes }
-      list.push(retained)
-      this.retainedOrder.push(retained)
-      this.retainedBytes += bytes
-      this.events.set(event.threadId, list)
-      const maxPerThread = Math.max(
+    if (this.retainsTail) {
+      const maxRetainedBytes = Math.max(
         1,
-        Math.floor(this.options.maxRetainedEventsPerThread ?? MAX_RETAINED_EVENTS_PER_THREAD)
+        Math.floor(this.options.maxRetainedBytes ?? DEFAULT_MAX_RETAINED_EVENT_BYTES)
       )
-      while (list.length > maxPerThread) this.evict(list[0]!)
-      while (this.retainedBytes > maxRetainedBytes) {
-        const oldest = this.retainedOrder[0]
-        if (!oldest) break
-        this.evict(oldest)
+      const bytes = Buffer.byteLength(JSON.stringify(event), 'utf-8')
+      if (bytes <= maxRetainedBytes / 2 && bytes <= maxRetainedBytes) {
+        const list = this.events.get(event.threadId) ?? []
+        const retained = { threadId: event.threadId, event, bytes }
+        list.push(retained)
+        this.retainedOrder.push(retained)
+        this.retainedBytes += bytes
+        this.events.set(event.threadId, list)
+        const maxPerThread = Math.max(
+          1,
+          Math.floor(this.options.maxRetainedEventsPerThread ?? MAX_RETAINED_EVENTS_PER_THREAD)
+        )
+        while (list.length > maxPerThread) this.evict(list[0]!)
+        while (this.retainedBytes > maxRetainedBytes) {
+          const oldest = this.retainedOrder[0]
+          if (!oldest) break
+          this.evict(oldest)
+        }
       }
     }
 
@@ -87,6 +100,7 @@ export class InMemoryEventBus implements EventBus {
   }
 
   snapshotSince(threadId: string, sinceSeq: number): RuntimeEvent[] {
+    if (!this.retainsTail) return []
     const list = this.events.get(threadId) ?? []
     return list.map(({ event }) => event).filter((event) => event.seq > sinceSeq)
   }

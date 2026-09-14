@@ -6,9 +6,9 @@ const { extname, join, resolve } = require('node:path')
 
 const MIB = 1024 * 1024
 const MAC_ARM64_BUDGETS = {
-  app: 800 * MIB,
-  dmg: 270 * MIB,
-  zip: 290 * MIB
+  app: 750 * MIB,
+  dmg: 265 * MIB,
+  zip: 285 * MIB
 }
 
 function parseArgs(argv) {

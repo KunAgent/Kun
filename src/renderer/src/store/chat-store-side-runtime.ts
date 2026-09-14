@@ -18,6 +18,7 @@ import {
   providerIdForComposerModel
 } from './chat-store-helpers'
 import { upsertUserBlock } from './chat-store-runtime-helpers'
+import { createBatchedStoreAccess } from './chat-store-batch'
 import { monotonicToolStatus } from './chat-projection-reducer'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import { serviceTierForComposerSelection } from '../components/chat/composer-fast-mode'
@@ -173,12 +174,16 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
   // Replayed or re-delivered deltas duplicate text already on screen;
   // drop anything at or below the subscription's replay floor.
   let appliedDeltaSeqFloor = sinceSeq
+  const batch = createBatchedStoreAccess(ctx.set, ctx.get)
+  const set = batch.set
+  const get = batch.get
   return {
+    runEventBatch: (work) => batch.run(work),
     onSeq: (seq) => {
-      ctx.set((s) => patchSide(s, sideId, (side) => ({ ...side, lastSeq: Math.max(side.lastSeq, seq) })))
+      set((s) => patchSide(s, sideId, (side) => ({ ...side, lastSeq: Math.max(side.lastSeq, seq) })))
     },
     onUserMessage: (ev) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => {
           const flushed = flushSideLiveBlocks(side)
           const blocks = upsertUserBlock(flushed.blocks, ev)
@@ -203,7 +208,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
         deltas.push(delta)
       }
       if (deltas.length === 0) return
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => {
           const seqs = deltas
             .map((delta) => delta.seq)
@@ -288,7 +293,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
     },
     onAssistantItem: (item) => {
       if (item.threadId !== sideId) return
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => {
           const block: ChatBlock = item.kind === 'agent_message'
             ? {
@@ -323,7 +328,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       )
     },
     onTool: (ev: ToolEventPayload) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => {
           const idx = side.blocks.findIndex((b) => b.kind === 'tool' && b.id === ev.itemId)
           let blocks: ChatBlock[]
@@ -362,7 +367,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       )
     },
     onCompaction: (ev) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => {
           const index = side.blocks.findIndex(
             (block) => block.kind === 'compaction' && block.id === ev.itemId
@@ -390,7 +395,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       )
     },
     onApproval: (req) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => ({
           ...side,
           blocks: [
@@ -411,7 +416,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       )
     },
     onApprovalStatus: (ev) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => ({
           ...side,
           blocks: side.blocks.map((block) =>
@@ -427,7 +432,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       )
     },
     onApprovalReview: (ev) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => {
           const id = `approval-review-${ev.reviewId}`
           const current = side.blocks.find(
@@ -457,7 +462,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       )
     },
     onUserInput: (req) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => ({
           ...side,
           blocks: [
@@ -478,7 +483,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       )
     },
     onUserInputStatus: (ev) => {
-      ctx.set((s) =>
+      set((s) =>
         patchSide(s, sideId, (side) => ({
           ...side,
           blocks: side.blocks.map((block) =>
@@ -501,8 +506,8 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       // Side conversations do not render runtime todo chips yet.
     },
     onTurnComplete: () => {
-      const completedTurnId = ctx.get().sideConversations[sideId]?.turnId
-      ctx.set((s) => {
+      const completedTurnId = get().sideConversations[sideId]?.turnId
+      set((s) => {
         const sidePatch = patchSide(s, sideId, (side) => {
           const flushed = flushSideLiveBlocks(side)
           return { ...flushed.side, busy: false, turnId: null }
@@ -525,7 +530,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       ) {
         void ctx.getProvider().getThreadDetail(sideId).then((detail) => {
           if (sideAbortControllers.get(sideId)?.signal.aborted) return
-          ctx.set((state) => patchSide(state, sideId, (side) => ({
+          set((state) => patchSide(state, sideId, (side) => ({
             ...side,
             blocks: detail.blocks,
             lastSeq: detail.latestSeq,
@@ -535,7 +540,7 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
           })))
           startSideSubscription(sideId, detail.latestSeq, ctx)
         }).catch((error) => {
-          ctx.set((state) => patchSide(state, sideId, (side) => ({
+          set((state) => patchSide(state, sideId, (side) => ({
             ...side,
             busy: false,
             error: ctx.formatRuntimeError(error)
@@ -543,8 +548,8 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
         })
         return
       }
-      const completedTurnId = ctx.get().sideConversations[sideId]?.turnId
-      ctx.set((s) =>
+      const completedTurnId = get().sideConversations[sideId]?.turnId
+      set((s) =>
         patchSide(s, sideId, (side) => ({
           ...side,
           busy: false,

@@ -33,6 +33,7 @@ import {
   withoutAwaitingUserInput
 } from './awaiting-user-input-registry'
 import { reconcileCompletedTurnFromThreadDetail } from './chat-store-runtime-reconcile'
+import { createBatchedStoreAccess } from './chat-store-batch'
 import { hydrateBlockModelLabels, isClawThread } from './chat-store-helpers'
 import {
   collectAssistantTextForTurn,
@@ -61,8 +62,6 @@ import {
 } from '../sdd/sdd-thread-registry'
 import { isDesignThreadId, type DesignThreadRegistry } from '../design/design-thread-registry'
 import { readThreadWorktreeRegistry, saveThreadWorktreeRegistry, forgetThreadWorktree } from '../lib/thread-worktree-registry'
-import { notifySddChatTranscriptMirror } from '../sdd/sdd-chat-transcript'
-import { notifyDesignChatTranscriptMirror } from '../design/design-chat-transcript'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { recordCanvasTurnTerminal } from '../design/canvas/canvas-turn-terminal-registry'
 import {
@@ -74,9 +73,9 @@ import {
 } from './chat-projection-reducer'
 import {
   completionProjectionEffects,
-  terminalFailureProjectionEffects,
-  type ChatProjectionEffect
+  terminalFailureProjectionEffects
 } from './chat-projection-effects'
+import { createChatRuntimeEffectRunner } from './chat-store-runtime-effects'
 import {
   receiveGraphChildRuntimeEvent,
   receiveGraphPlanningRuntimeEvent,
@@ -110,9 +109,7 @@ import {
   flushLiveBlocks,
   goalTimelineText,
   isDetachedSubagentToolEvent,
-  notifyWriteWorkspaceFileRefresh,
   publishLiveOfficePreviewForToolEvent,
-  releaseThreadWorktreeIfNeeded,
   runtimeErrorPayloadToError,
   runtimeStatusText,
   upsertRuntimeErrorBlock
@@ -296,6 +293,9 @@ export function buildThreadEventSink(
   get: () => ChatState,
   binding: ThreadEventSinkBinding = {}
 ): ThreadEventSink {
+  const batch = createBatchedStoreAccess<ChatState>(set, get)
+  set = batch.set
+  get = batch.get
   const boundThreadId = binding.threadId?.trim() ?? ''
   let appliedDeltaSeqFloor = binding.sinceSeq ?? 0
   // Hydrated threads subscribe exactly at their snapshot's high-water mark, so
@@ -328,57 +328,17 @@ export function buildThreadEventSink(
     if (binding.signal?.aborted) return false
     return !boundThreadId || get().activeThreadId === boundThreadId
   }
-  const runEffects = (effects: readonly ChatProjectionEffect[]): void => {
-    for (const effect of effects) {
-      switch (effect.type) {
-        case 'arm_stream_watchdog':
-          armBusyWatchdog(set, get)
-          break
-        case 'refresh_write_workspace':
-          notifyWriteWorkspaceFileRefresh(get, effect.event)
-          break
-        case 'mirror_claw_reply':
-          if (typeof window.kunGui?.mirrorClawChannelMessage === 'function') {
-            void window.kunGui.mirrorClawChannelMessage(effect.threadId, effect.text, 'assistant')
-              .catch(() => undefined)
-          }
-          break
-        case 'notify_turn_complete':
-          notifyTurnComplete(effect.threadId, effect.state, effect.dedupeKey, undefined, effect.turnId)
-          break
-        case 'mirror_sdd_transcript':
-          notifySddChatTranscriptMirror(get)
-          break
-        case 'mirror_design_transcript':
-          notifyDesignChatTranscriptMirror(get)
-          break
-        case 'sync_completion_poll':
-          syncTurnCompletionPoll(set, get)
-          break
-        case 'reload_completed_turn':
-          void reconcileCompletedTurnFromThreadDetail({
-            threadId: effect.threadId,
-            turnId: effect.turnId,
-            userBlockId: effect.userBlockId,
-            loadThreadDetail,
-            set,
-            get
-          })
-          break
-        case 'refresh_threads':
-          void get().refreshThreads?.()
-          break
-        case 'release_worktree':
-          releaseThreadWorktreeIfNeeded(effect.threadId)
-          break
-        case 'drain_queued_messages':
-          void get().drainQueuedMessages?.()
-          break
-      }
-    }
-  }
+  const runEffects = createChatRuntimeEffectRunner({
+    set,
+    get,
+    afterCommit: batch.afterCommit,
+    armBusyWatchdog,
+    syncTurnCompletionPoll,
+    loadThreadDetail
+  })
 
   return {
+    runEventBatch: (work) => batch.run(work),
     onSeq: (seq) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()
@@ -441,31 +401,31 @@ export function buildThreadEventSink(
       if (!get().busy && !event.updateOnly && !isDetachedSubagentToolEvent(event)) {
         armBusyWatchdog(set, get)
       }
-      set((state) => {
-        const eventChildKey = toolEventChildProjectionKey(event)
-        const existing = findMatchingToolBlockIndex(state.blocks, event) >= 0
-        if (!existing && event.updateOnly) {
-          if (eventChildKey) {
-            pendingChildToolUpdates.delete(eventChildKey)
-            pendingChildToolUpdates.set(eventChildKey, event)
-            while (pendingChildToolUpdates.size > MAX_PENDING_CHILD_TOOL_UPDATES) {
-              const oldestChildKey = pendingChildToolUpdates.keys().next().value
-              if (!oldestChildKey) break
-              pendingChildToolUpdates.delete(oldestChildKey)
-            }
-          }
-          return {}
-        }
-        let projectedEvent = event
+      // Consume stream-local repair state once. The batched store can replay
+      // the pure projection below against a newer shared store snapshot.
+      const eventChildKey = toolEventChildProjectionKey(event)
+      const existing = findMatchingToolBlockIndex(get().blocks, event) >= 0
+      let projectedEvent = event
+      if (!existing && event.updateOnly) {
         if (eventChildKey) {
-          const pending = pendingChildToolUpdates.get(eventChildKey)
-          if (pending) {
-            pendingChildToolUpdates.delete(eventChildKey)
-            projectedEvent = mergeToolProjectionEvents(event, pending)
+          pendingChildToolUpdates.delete(eventChildKey)
+          pendingChildToolUpdates.set(eventChildKey, event)
+          while (pendingChildToolUpdates.size > MAX_PENDING_CHILD_TOOL_UPDATES) {
+            const oldestChildKey = pendingChildToolUpdates.keys().next().value
+            if (!oldestChildKey) break
+            pendingChildToolUpdates.delete(oldestChildKey)
           }
         }
-        return reduce(state, { type: 'tool_updated', payload: projectedEvent })
-      })
+      } else if (eventChildKey) {
+        const pending = pendingChildToolUpdates.get(eventChildKey)
+        if (pending) {
+          pendingChildToolUpdates.delete(eventChildKey)
+          projectedEvent = mergeToolProjectionEvents(event, pending)
+        }
+      }
+      // Still queue update-only projections: another sink may commit the
+      // wrapper while this batch is open. The reducer ignores missing cards.
+      set((state) => reduce(state, { type: 'tool_updated', payload: projectedEvent }))
     },
     onCompaction: (event) => {
       if (!isCurrentStream()) return

@@ -33,6 +33,7 @@ import {
   highlightCodeHtml,
   renderFallbackCodeHtml
 } from '../../lib/code-highlighting'
+import { useLiveAssistantStreaming } from './live-assistant-streaming'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { ChartRenderer } from './ChartRenderer'
 import { parseRendererChartSpec } from '../../agent/chart-spec-adapter'
@@ -42,6 +43,7 @@ const TRAILING_NEWLINES_REGEX = /\n+$/
 const PLAIN_TEXT_LANGUAGES = new Set(['', 'plain', 'plaintext', 'text', 'txt'])
 const COLLAPSE_HEIGHT = 200
 const COPY_RESET_MS = 2000
+const STREAMING_HIGHLIGHT_DEBOUNCE_MS = 300
 
 type CodeProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & {
   'data-block'?: string | boolean
@@ -210,6 +212,7 @@ function CodeBlock({
 }): ReactNode {
   const { t } = useTranslation('common')
   const { isAnimating } = useContext(StreamdownContext)
+  const liveStreaming = useLiveAssistantStreaming()
   const trimmedCode = useMemo(() => code.replace(TRAILING_NEWLINES_REGEX, ''), [code])
   const [html, setHtml] = useState(() => renderFallbackCodeHtml(trimmedCode))
   const [isCopied, setIsCopied] = useState(false)
@@ -223,14 +226,25 @@ function CodeBlock({
     let cancelled = false
     setHtml(renderFallbackCodeHtml(trimmedCode))
 
-    void highlightCodeHtml(trimmedCode, language).then((nextHtml) => {
-      if (!cancelled) setHtml(nextHtml)
-    })
+    const runHighlight = (): void => {
+      void highlightCodeHtml(trimmedCode, language).then((nextHtml) => {
+        if (!cancelled) setHtml(nextHtml)
+      })
+    }
+    // While the live typewriter is growing this block its code text changes
+    // every frame; highlighting each intermediate snapshot multiplies Shiki's
+    // parse cost by the frame count. Defer until the text briefly settles —
+    // the effect re-fires with liveStreaming=false once the stream ends.
+    const timer = liveStreaming
+      ? window.setTimeout(runHighlight, STREAMING_HIGHLIGHT_DEBOUNCE_MS)
+      : undefined
+    if (timer === undefined) runHighlight()
 
     return () => {
       cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
     }
-  }, [trimmedCode, language])
+  }, [trimmedCode, language, liveStreaming])
 
   useEffect(() => {
     const el = bodyRef.current

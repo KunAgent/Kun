@@ -84,6 +84,12 @@ export type KunServeRuntimeOptions = {
   logPath?: string
   faultInjection?: FaultInjectionController
   extensionHostRunnerPath?: string
+  /**
+   * Keep the live event bus's retained tail (`snapshotSince`). Production
+   * replay reads the durable session store, so serve omits the tail by
+   * default; tests that inspect the bus opt back in here.
+   */
+  eventBusRetainTail?: boolean
 }
 
 export type KunServeHandle = NodeHttpServerHandle & {
