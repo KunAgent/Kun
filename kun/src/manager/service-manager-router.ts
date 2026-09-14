@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { AppSessionOwner } from '../contracts/app-session-owner.js'
+import { addIdleManagerRetirementRoute } from './service-manager-router-retirement.js'
 import {
   RuntimeFlavorSchema
 } from '../contracts/runtime-flavor.js'
@@ -79,6 +81,10 @@ export function buildServiceManagerRouter(input: {
   instanceId: string
   startedAt: string
   buildId?: string
+  appOwner?: AppSessionOwner
+  isDraining?: () => boolean
+  beginDrain?: () => void
+  recordParticipant?: (participant: { pid: number; instanceId: string; startedAt: string }) => Promise<void>
   state: ServiceManagerState
   sharedData?: ManagerSharedDataStore
   documents?: RevisionedDocumentStore
@@ -128,6 +134,7 @@ export function buildServiceManagerRouter(input: {
       startedAt: input.startedAt,
       serviceVersion: KUN_VERSION,
       ...(input.buildId ? { buildId: input.buildId } : {}),
+      ...(input.appOwner ? { appOwner: input.appOwner } : {}),
       capabilities,
       persistence: {
         state: persistence?.degraded ? 'degraded' : 'healthy',
@@ -144,6 +151,7 @@ export function buildServiceManagerRouter(input: {
       startedAt: input.startedAt,
       serviceVersion: KUN_VERSION,
       ...(input.buildId ? { buildId: input.buildId } : {}),
+      ...(input.appOwner ? { appOwner: input.appOwner } : {}),
       capabilities,
       slots: input.state.snapshot(),
       ...(persistence?.stats ? { statePersistence: persistence.stats } : {})
@@ -371,6 +379,9 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      // A data connection never confers application owner control. Owned Managers
+      // accept their shutdown command only on the private parent IPC channel.
+      if (input.appOwner) return jsonResponse({ code: 'manager_owner_control_required' }, 403)
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = z.object({ instanceId: z.literal(input.instanceId) }).strict().safeParse(body.value)
@@ -379,6 +390,7 @@ export function buildServiceManagerRouter(input: {
       return jsonResponse({ accepted: true, instanceId: input.instanceId })
     }
   ))
+  addIdleManagerRetirementRoute(router, input)
   if (input.sharedData) router.add('POST', '/v1/data/thread/:operation', (request, context) => authorizedAsync(
     request,
     input.managerToken,

@@ -591,6 +591,7 @@ function resourceFenceFrom(input: ManagerResourceFence): ManagerResourceFence {
 }
 
 export type ServiceManagerHandle = NodeHttpServerHandle & {
+  beginDrain(): void
   instanceId: string
   discovery: ManagerDiscoveryRecord
   state: ServiceManagerState

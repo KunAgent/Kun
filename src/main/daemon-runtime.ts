@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../../kun/src/process/owned-process.js'
 import { existsSync, appendFileSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import type { JsonSettingsStore } from './settings-store'
@@ -38,10 +39,10 @@ export type DaemonRuntimeDeps = {
   restartBackoffMs?: readonly number[]
   /** Test seam: how long a healthy run takes before the restart counter resets. */
   healthyResetMs?: number
-  /** Test seam: process-tree killer for Windows (taskkill /T /F). */
-  killProcessTree?: (pid: number) => void
-  /** Test seam: process spawner (defaults to node:child_process spawn). */
-  spawnProcess?: typeof spawn
+  /** Test seam for bounded graceful process-tree shutdown. */
+  stopGraceMs?: number
+  /** Test seam; production always uses the owned process launcher. */
+  spawnProcess?: typeof spawnOwnedProcess
 }
 
 type RunningDaemon = {
@@ -56,8 +57,8 @@ type RunningDaemon = {
   lastError?: string
   generation: number
   restartTimer: NodeJS.Timeout | null
-  stopTimer: NodeJS.Timeout | null
-  exitPromise: Promise<void>
+  startPromise: Promise<void>
+  cleanupPromise: Promise<void> | null
   pushTimestamps: number[]
   lastPushAt?: string
   lastPushStatus?: 'sent' | 'failed'
@@ -108,12 +109,14 @@ export class DaemonRuntime {
         this.restartEntry(entry, 'config changed')
       } else {
         entry.daemon = daemon
+        if (entry.state === 'paused') this.restartEntry(entry, 'enabled again')
       }
     }
     for (const [id, entry] of [...this.running]) {
       if (!desired.has(id)) {
-        this.stopEntry(entry)
-        this.running.delete(id)
+        void this.stopEntry(entry).then(() => {
+          if (this.running.get(id) === entry && entry.state === 'paused') this.running.delete(id)
+        }).catch((error) => this.logCleanupFailure(entry, error))
       }
     }
     this.syncPowerSave()
@@ -189,11 +192,25 @@ export class DaemonRuntime {
       this.silenceTimer = null
     }
     const entries = [...this.running.values()]
-    for (const entry of entries) this.stopEntry(entry)
-    this.running.clear()
     this.releasePowerSave()
-    this.stopPromise = Promise.allSettled(entries.map((entry) => entry.exitPromise)).then(() => undefined)
+    this.stopPromise = Promise.allSettled(entries.map((entry) => this.stopEntry(entry))).then((results) => {
+      const failures: unknown[] = []
+      results.forEach((result, index) => {
+        const entry = entries[index]
+        if (result.status === 'fulfilled') {
+          if (this.running.get(entry.daemon.id) === entry) this.running.delete(entry.daemon.id)
+        } else {
+          this.logCleanupFailure(entry, result.reason)
+          failures.push(result.reason)
+        }
+      })
+      if (failures.length) throw new AggregateError(failures, 'Failed to stop daemon process trees.')
+    })
     return this.stopPromise
+  }
+
+  disposeAllAndWait(): Promise<void> {
+    return this.stop()
   }
 
   // ---------------------------------------------------------------------------
@@ -208,8 +225,8 @@ export class DaemonRuntime {
       restartCount: 0,
       generation: 0,
       restartTimer: null,
-      stopTimer: null,
-      exitPromise: Promise.resolve(),
+      startPromise: Promise.resolve(),
+      cleanupPromise: null,
       pushTimestamps: []
     }
     this.running.set(daemon.id, entry)
@@ -218,6 +235,13 @@ export class DaemonRuntime {
   }
 
   private startEntry(entry: RunningDaemon): void {
+    if (this.stopped) return
+    entry.startPromise = this.spawnEntry(entry).catch((error) => {
+      this.failEntry(entry, `Failed to start: ${error instanceof Error ? error.message : String(error)}`)
+    })
+  }
+
+  private async spawnEntry(entry: RunningDaemon): Promise<void> {
     if (this.stopped) return
     const daemon = entry.daemon
     const scriptPath = this.resolveScriptPath(daemon)
@@ -236,78 +260,79 @@ export class DaemonRuntime {
     entry.lastOutputAt = Date.now()
     this.appendLog(daemon.id, `[kun] starting daemon interpreter=${interpreter} script=${scriptPath}\n`)
     const generation = entry.generation
-    let exitResolve: () => void = () => undefined
-    entry.exitPromise = new Promise((resolve) => { exitResolve = resolve })
-    const child = this.deps.spawnProcess
-      ? this.deps.spawnProcess(interpreter, [scriptPath], this.spawnOptions(daemon, scriptPath))
-      : spawn(interpreter, [scriptPath], this.spawnOptions(daemon, scriptPath))
+    const child = await (this.deps.spawnProcess ?? spawnOwnedProcess)(interpreter, [scriptPath], this.spawnOptions(daemon))
     entry.child = child
+    entry.cleanupPromise = null
+    entry.pid = child.pid
+    entry.startedAt = Date.now()
+    if (!this.stopped && (entry.state as DaemonProcessState) === 'starting') entry.state = 'running'
+    this.appendLog(daemon.id, `[kun] daemon started pid=${child.pid ?? 'unknown'}\n`)
+    this.syncPowerSave()
     child.once('error', (error) => {
       if (entry.generation !== generation) return
-      exitResolve()
-      this.appendLog(daemon.id, `[kun] spawn error: ${error.message}\n`)
       this.failEntry(entry, `Failed to start: ${error.message}`)
-    })
-    child.once('spawn', () => {
-      if (entry.generation !== generation) return
-      entry.pid = child.pid
-      entry.startedAt = Date.now()
-      entry.state = 'running'
-      this.appendLog(daemon.id, `[kun] daemon started pid=${child.pid ?? 'unknown'}\n`)
-      this.syncPowerSave()
     })
     child.stdout?.on('data', (chunk: Buffer) => this.handleOutput(entry, chunk, generation))
     child.stderr?.on('data', (chunk: Buffer) => this.handleOutput(entry, chunk, generation))
-    child.once('exit', (code, signal) => {
-      exitResolve()
+    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       if (entry.generation !== generation) return
-      entry.child = null
-      if (entry.stopTimer) {
-        clearTimeout(entry.stopTimer)
-        entry.stopTimer = null
-      }
-      if (this.stopped || entry.state === 'paused') return
       this.appendLog(daemon.id, `[kun] daemon exited code=${code ?? 'null'} signal=${signal ?? 'null'}\n`)
-      this.scheduleRestart(entry, `exited with code ${code ?? 'null'}`)
-    })
+      // A wrapper can exit while its grandchildren remain. Finish the old tree
+      // before scheduling any replacement, keeping its identity until then.
+      void this.stopChild(entry).then(() => {
+        if (this.stopped || entry.state === 'paused' || entry.state === 'restarting') return
+        this.scheduleRestart(entry, `exited with code ${code ?? 'null'}`)
+      }).catch((error) => this.logCleanupFailure(entry, error))
+    }
+    child.once('exit', onExit)
+    if (child.exitCode !== null || child.signalCode !== null) onExit(child.exitCode, child.signalCode)
   }
 
-  private stopEntry(entry: RunningDaemon): void {
+  private stopEntry(entry: RunningDaemon): Promise<void> {
     if (entry.restartTimer) {
       clearTimeout(entry.restartTimer)
       entry.restartTimer = null
     }
     entry.state = 'paused'
-    this.stopChild(entry)
+    return entry.startPromise.then(() => this.stopChild(entry))
   }
 
-  private stopChild(entry: RunningDaemon): void {
+  private stopChild(entry: RunningDaemon): Promise<void> {
+    if (entry.cleanupPromise) return entry.cleanupPromise
     const child = entry.child
-    entry.child = null
-    if (!child || child.pid == null || child.exitCode !== null || child.signalCode !== null) return
-    const generation = entry.generation
-    const pid = child.pid
-    const force = (): void => {
-      if (entry.generation !== generation) return
-      try { child.kill('SIGKILL') } catch { /* already gone */ }
-      this.deps.killProcessTree?.(pid)
-    }
-    try {
-      child.kill('SIGTERM')
-    } catch {
-      force()
-      return
-    }
-    const timer = setTimeout(force, STOP_GRACE_MS)
-    timer.unref?.()
-    entry.stopTimer = timer
+    if (!child) return Promise.resolve()
+    const cleanup = stopOwnedProcess(child, {
+      graceMs: this.deps.stopGraceMs ?? STOP_GRACE_MS,
+      timeoutMs: (this.deps.stopGraceMs ?? STOP_GRACE_MS) + 2_000
+    }).then(() => {
+      if (entry.child === child) {
+        entry.child = null
+        entry.pid = undefined
+      }
+    })
+    entry.cleanupPromise = cleanup
+    return cleanup
   }
 
   private restartEntry(entry: RunningDaemon, reason: string): void {
-    this.stopChild(entry)
+    if (this.stopped) return
+    if (entry.restartTimer) {
+      clearTimeout(entry.restartTimer)
+      entry.restartTimer = null
+    }
     this.appendLog(entry.daemon.id, `[kun] restart requested: ${reason}\n`)
     entry.state = 'restarting'
-    this.startEntry(entry)
+    void entry.startPromise.then(() => this.stopChild(entry)).then(() => {
+      if (!this.stopped && entry.state === 'restarting' && this.running.get(entry.daemon.id) === entry) {
+        this.startEntry(entry)
+      }
+    }).catch((error) => this.logCleanupFailure(entry, error))
+  }
+
+  private logCleanupFailure(entry: RunningDaemon, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error)
+    this.failEntry(entry, message)
+    this.deps.logError('daemon', 'Failed to stop owned daemon tree', { daemonId: entry.daemon.id, pid: entry.pid, message })
   }
 
   private scheduleRestart(entry: RunningDaemon, reason: string): void {
@@ -454,10 +479,11 @@ export class DaemonRuntime {
     return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)
   }
 
-  private spawnOptions(daemon: SessionDaemonV1, scriptPath: string): {
+  private spawnOptions(daemon: SessionDaemonV1): {
     cwd: string
     env: NodeJS.ProcessEnv
     windowsHide: boolean
+    detached: boolean
   } {
     const workspaceRoot = daemon.workspaceRoot.trim() || '.'
     return {
@@ -471,7 +497,8 @@ export class DaemonRuntime {
         KUN_DAEMON_LOG: this.logPath(daemon.id),
         KUN_DAEMON_SILENCE_TIMEOUT: String(daemon.silenceTimeoutSeconds)
       },
-      windowsHide: true
+      windowsHide: true,
+      detached: process.platform !== 'win32'
     }
   }
 

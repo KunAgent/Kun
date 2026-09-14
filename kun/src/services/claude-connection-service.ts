@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 import { createWriteStream } from 'node:fs'
 import { access, chmod, mkdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -62,15 +62,13 @@ export class ClaudeConnectionService {
   async setupToken(timeoutMs = 10 * 60 * 1000, signal?: AbortSignal): Promise<string> {
     const binary = await this.resolveBinary()
     if (!binary) throw new Error('Claude Code is not installed')
+    const child = await spawnOwnedProcess(binary, ['setup-token'], {
+      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false, env: process.env
+    })
     return new Promise((resolve, reject) => {
       let settled = false
       let output = ''
       let timer: ReturnType<typeof setTimeout> | undefined
-      const child = spawn(binary, ['setup-token'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: false,
-        env: process.env
-      })
       const done = (error?: Error, token?: string): void => {
         if (settled) return
         settled = true
@@ -92,11 +90,11 @@ export class ClaudeConnectionService {
         else done(new Error(`claude setup-token exited with code ${code ?? 'unknown'}`))
       })
       timer = setTimeout(() => {
-        try { child.kill() } catch { /* already exited */ }
+        void stopOwnedProcess(child).catch(reject)
         done(new Error('Claude login timed out'))
       }, timeoutMs)
       const abort = (): void => {
-        try { child.kill() } catch { /* already exited */ }
+        void stopOwnedProcess(child).catch(reject)
         done(new Error('Claude login cancelled'))
       }
       signal?.addEventListener('abort', abort, { once: true })
@@ -161,9 +159,9 @@ export class ClaudeConnectionService {
   }
 }
 
-function runTar(args: string[]): Promise<void> {
+async function runTar(args: string[]): Promise<void> {
+  const child = await spawnOwnedProcess('tar', args, { stdio: 'ignore', windowsHide: true })
   return new Promise((resolve, reject) => {
-    const child = spawn('tar', args, { stdio: 'ignore', windowsHide: true })
     child.once('error', reject)
     child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`tar exited with code ${code}`)))
   })

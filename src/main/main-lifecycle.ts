@@ -1,4 +1,8 @@
 import { revokeBrowserBindingBeforeQuit } from './runtime/partial-startup-quit'
+import { desktopProcessStack } from './runtime/desktop-process-stack'
+import { DesktopShutdownSteps } from './runtime/desktop-shutdown-steps'
+import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../../kun/src/process/owned-process.js'
+import { closeManagerClientAdmission } from '../../kun/src/manager/manager-client-lifetime.js'
 import {
   app,
   protocol,
@@ -26,9 +30,6 @@ import {
 import {
   resolveKunDataDir
 } from './kun-process'
-import {
-  stopSharedRuntime
-} from '../../kun/src/cli/shared-runtime.js'
 import {
   expandHomePath
 } from './settings-store'
@@ -97,6 +98,8 @@ export function isAppQuitInProgress(): boolean {
 
 export function setUpdateInstallQuitting(active: boolean): void {
   runtimeShutdown.setUpdateInstallQuit(active)
+  // Failed installers relaunch through GuiUpdateInstaller and the ordinary
+  // quit barrier. Closed resources/admission must never reopen in this process.
 }
 
 export async function runCheckpointCleanup(
@@ -176,69 +179,84 @@ export function syncCheckpointCleanupTimer(settings: AppSettingsV1): void {
 }
 
 export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () => {
-  const browserUseBinding = beginBrowserUseHostShutdown()
-  mainState.terminalPtyController?.disposeAll()
-  await mainState.shutdownDesktopResourceLeases?.()
-  mainState.shutdownDesktopResourceLeases = null
-  await mainState.scheduleRuntime?.stop()
-  await mainState.workflowRuntime?.stop()
-  await Promise.all([
-    mainState.clawRuntime?.stop(),
-    mainState.telegramRuntime?.stop()
-  ])
-  await stopWeixinBridgeRuntime()
-  await shutdownLocalWhisperService()
-  shutdownLocalKokoroDownloads()
-  await shutdownLocalKokoroSynthesis()
-  await Promise.all([
-    waitForBrowserUseHostLifecycle(),
-    mainState.waitForRuntimeOperationsIdle?.() ?? Promise.resolve()
-  ])
-  // Update installation and storage relocation retain their stronger shared
-  // handoff paths. An ordinary desktop quit stops only the exact GUI-owned
-  // child below and leaves Service Manager and foreign clients untouched.
-  if (runtimeShutdown.isUpdateInstallQuit || runtimeShutdown.isStorageRelocationQuit) {
-    const settings = await mainState.store.load()
-    if (runtimeShutdown.isUpdateInstallQuit) {
-      await kunRuntimeAdapter.stopSharedForReplacementAndWait(settings)
-    } else {
-      await kunRuntimeAdapter.stopSharedAndWait(settings)
-    }
-    if (runtimeShutdown.isUpdateInstallQuit) {
-      await mainState.shutdownActiveServiceManagerForUpdate()
-    }
-    if (runtimeShutdown.isStorageRelocationQuit) {
-      const dataDir = resolveKunDataDir(resolveKunRuntimeSettings(settings))
-      await Promise.all([
-        stopSharedRuntime(dataDir, fetch, { runtimeFlavor: 'production' }),
-        stopSharedRuntime(dataDir, fetch, { runtimeFlavor: 'development' })
-      ])
-    }
-  } else {
-    // Revoke the ephemeral Browser host authority while the GUI-owned Runtime
-    // is still reachable, then await that exact child before Electron exits.
-    try {
-      await revokeBrowserBindingBeforeQuit({
+  const terminal = runtimeShutdown.isQuitRequested || runtimeShutdown.isStorageRelocationQuit
+  desktopProcessStack.beginStop(terminal)
+  beginOwnedProcessShutdown()
+  const cleanup = new DesktopShutdownSteps(runtimeShutdown.shutdownStartedAt, (name, error) => {
+    logWarn('application-shutdown', `${name}: ${error.message}`)
+  })
+  let browserUseBinding: ReturnType<typeof beginBrowserUseHostShutdown> | undefined
+  await cleanup.group([
+    { name: 'browser-admission', run: () => { browserUseBinding = beginBrowserUseHostShutdown() } },
+    { name: 'kokoro-downloads', run: shutdownLocalKokoroDownloads }
+  ], cleanup.deadline(1_000))
+  await cleanup.settle({
+    name: 'browser-authority',
+    run: () => revokeBrowserBindingBeforeQuit({
         store: mainState.store,
         hasBinding: Boolean(browserUseBinding),
         runtimeIsLive: kunRuntimeAdapter.isChildRunning(),
         revoke: (settings) => revokeManagedRuntimeBrowserUseBinding(settings, browserUseBinding)
       })
-    } catch (error) {
-      logWarn('browser-use-shutdown', 'Kun Browser Use authority revoke failed closed', {
-        message: error instanceof Error ? error.message : String(error)
-      })
-    }
-    await kunRuntimeAdapter.stopAndWait()
+  }, cleanup.deadline(2_000))
+  const releaseLeases = mainState.shutdownDesktopResourceLeases
+  const {
+    scheduleRuntime: schedule, workflowRuntime: workflow, clawRuntime: phone,
+    telegramRuntime: telegram, daemonRuntime: daemon, terminalPtyController: terminalPty
+  } = mainState
+  mainState.shutdownDesktopResourceLeases = null
+  await cleanup.group([
+    { name: 'desktop-leases', run: () => releaseLeases?.() },
+    { name: 'schedule', run: () => schedule?.stop() },
+    { name: 'workflow', run: () => workflow?.stop() },
+    { name: 'phone', run: () => phone?.stop() },
+    { name: 'telegram', run: () => telegram?.stop() },
+    { name: 'weixin', run: stopWeixinBridgeRuntime },
+    { name: 'daemon', run: () => daemon?.stop() },
+    { name: 'terminal', run: () => terminalPty?.disposeAllAndWait() },
+    { name: 'whisper', run: shutdownLocalWhisperService },
+    { name: 'kokoro', run: shutdownLocalKokoroSynthesis },
+    { name: 'browser-startup', run: waitForBrowserUseHostLifecycle },
+    { name: 'runtime-operations', run: () => mainState.waitForRuntimeOperationsIdle?.() },
+    { name: 'runtime', run: () => kunRuntimeAdapter.stopAndWait({ deadline: cleanup.deadline(20_000) }) }
+  ], cleanup.deadline(12_000))
+  // Main cannot be killed before its writer: fence every in-flight and future
+  // Manager request from delayed callbacks before closing the physical stores.
+  closeManagerClientAdmission()
+  const managerChild = desktopProcessStack.managerChild()
+  const workersStopped = await cleanup.settle({
+    name: 'worker-processes',
+    run: () => shutdownOwnedProcesses({
+      graceMs: 0,
+      timeoutMs: Math.max(1, cleanup.deadline(20_000) - Date.now()),
+      exclude: managerChild ? [managerChild] : []
+    })
+  }, cleanup.deadline(20_000))
+  await cleanup.group([
+    { name: 'browser', run: stopBrowserUseHost },
+    { name: 'computer', run: stopComputerUseHost }
+  ], cleanup.deadline(20_000))
+  // A live execution process must not lose its data writer or let another
+  // application claim that data directory. Keep ownership if containment failed.
+  if (workersStopped) {
+    const managerStopped = await cleanup.settle({
+      name: 'service-manager',
+      run: () => desktopProcessStack.stopManager(cleanup.deadline(29_000), terminal)
+    }, cleanup.deadline(29_000))
+    if (managerStopped) mainState.activeServiceManager = null
+    await cleanup.settle({
+      name: 'process-guard',
+      run: () => shutdownOwnedProcesses({ graceMs: 0, timeoutMs: Math.max(1, cleanup.deadline(30_000) - Date.now()) })
+    }, cleanup.deadline(30_000))
   }
-  await Promise.all([
-    stopBrowserUseHost(),
-    stopComputerUseHost()
-  ])
+  cleanup.assertComplete()
 })
 
-export function stopManagedRuntimesForQuit(): Promise<void> {
-  return runtimeShutdown.stopForQuit()
+export async function stopManagedRuntimesForQuit(): Promise<void> {
+  await runtimeShutdown.stopForQuit()
+  // Update preparation stops processes but keeps the session reservation for
+  // a failed-installer retry. Real quit releases that final reservation too.
+  await desktopProcessStack.stopManager(runtimeShutdown.shutdownStartedAt + 30_000, true)
 }
 
 export function stopManagedRuntimes(): Promise<void> {

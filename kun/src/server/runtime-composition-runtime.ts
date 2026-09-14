@@ -24,6 +24,8 @@ import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
+import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
+import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -427,6 +429,7 @@ export function createServerRuntimeComposition(
       return result
     },
     shutdown: async () => {
+      beginOwnedProcessShutdown()
       await settleCleanupSteps([
         async () => {
           await shutdownRuntimeExecutionForHost({
@@ -449,35 +452,28 @@ export function createServerRuntimeComposition(
           })
         },
         async () => { await services.memoryDistillation.shutdown() },
-        async () => {
-          try {
-            await backgroundShellRuntime.shutdown()
-            await extensionJobs.handleRuntimeShutdown()
-            extensionMediaJobs.dispose()
-            extensionAudioAnalysisJobs.dispose()
-            extensionMediaArchiveJobs.dispose()
-            stopExtensionModelListener()
-            extensionViewSessions.disposeAll()
-            await extensionManager.shutdown()
-            await extensionBroker.dispose()
-            extensionSecretReveals.dispose()
-            await extensionAccountAudit.flush()
-            extensionTools.disposeAll()
-            await extensionModelProviders.disposeAll()
-            shutdownAllLspSessions()
-            await services.mcpProviders.close()
-            await migrationService.shutdown()
-            await migrationImportService.shutdown()
-            await routeHealth.flush()
-          } finally {
-            try {
-              await llmDebug?.shutdown()
-              await agentObservability?.shutdown()
-            } finally {
-              await stores.shutdown?.()
-            }
-          }
-        },
+        () => backgroundShellRuntime.shutdown(),
+        () => extensionJobs.handleRuntimeShutdown(),
+        () => { extensionMediaJobs.dispose() },
+        () => { extensionAudioAnalysisJobs.dispose() },
+        () => { extensionMediaArchiveJobs.dispose() },
+        () => { stopExtensionModelListener() },
+        () => { extensionViewSessions.disposeAll() },
+        () => extensionManager.shutdown(),
+        () => extensionBroker.dispose(),
+        () => { extensionSecretReveals.dispose() },
+        () => extensionAccountAudit.flush(),
+        () => { extensionTools.disposeAll() },
+        () => extensionModelProviders.disposeAll(),
+        () => shutdownAllLspSessions(),
+        () => services.mcpProviders.close(),
+        () => migrationService.shutdown(),
+        () => migrationImportService.shutdown(),
+        () => routeHealth.flush(),
+        () => shutdownOwnedProcesses({ graceMs: 500, timeoutMs: 3000, exclude: ownedServiceManagerProcesses() }),
+        async () => { await llmDebug?.shutdown() },
+        async () => { await agentObservability?.shutdown() },
+        async () => { await stores.shutdown?.() },
         async () => { await dataDirLease?.release() },
         () => { disposeProxyAgents() }
       ])

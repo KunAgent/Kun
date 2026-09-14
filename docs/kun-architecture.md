@@ -1,11 +1,12 @@
 # Kun 客户端持有单运行时方案
 
 本文记录 Kun 桌面应用和独立 TUI 如何使用同一套 Kun 协议与持久化数据，
-但各自持有自己的运行时进程。结论先说清楚：GUI 只保留一个 agent，唯一
+但各自持有本次应用会话的完整服务进程。GUI 只保留一个 agent，唯一
 ID 是 `kun`；GUI、TUI、脚本、扩展和连接手机都通过同一条 `kun serve`
-HTTP/SSE 边界工作。正常 GUI/TUI 在同一 `(规范化 dataDir, runtime flavor)`
-槽位内互斥：谁启动 Runtime，谁负责在真实退出时关闭它。对话、设置、记忆
-和用量继续由 Service Manager 持久化并可被后续客户端顺序复用。历史运行时、
+HTTP/SSE 边界工作。同一规范化 `dataDir` 在所有 runtime flavor 之间只有一个
+应用所有者：谁启动 Manager、Runtime 和工作进程，谁负责在退出时关闭整套服务。
+主窗口关闭即退出应用。对话、设置、记忆和用量继续由 Service Manager 持久化，
+后续客户端顺序打开时读取原址历史。历史运行时、
 旧绘画/设计 starter、运行时诊断面板、agent 切换都不再是产品表面。
 
 Graph 编排、自进化项目 Agent、恢复与治理仍运行在同一个 Kun 边界内，完整设计与
@@ -52,8 +53,9 @@ Preload IPC bridge
         |
         v
 Main process
-  RuntimeHost -> kunRuntimeAdapter
-  exact GUI child/config/port/token management only
+  DesktopProcessStack -> owned Service Manager
+  RuntimeHost -> kunRuntimeAdapter -> owned Runtime
+  session / generation / admission / ordered shutdown
         |
         v
 GUI-owned kun serve (TypeScript package)
@@ -70,15 +72,16 @@ GUI-owned kun serve (TypeScript package)
 
 Default TUI process
         |
-        | starts/stops its exact owned Runtime
+        | owns/stops its Service Manager and exact Runtime
         v
 TUI-owned kun serve
 
 GUI/TUI-owned Runtime
         |
         v
-Service Manager
+Application-owned Service Manager
   election / fencing / canonical persisted data
+  closes after Runtime and desktop data consumers
 ```
 
 这个边界采用本地 HTTP 服务架构：GUI 不直接嵌 agent loop，不通过
@@ -86,33 +89,50 @@ stdio/RPC 混跑多个状态机，只把 `kun serve` 当成稳定协议。Kun �
 cache-first loop：immutable prefix、append-only log、bounded LRU/TTL cache、
 inflight cleanup、steering queue、context compaction、usage/cache telemetry。
 
-## 客户端持有的生命周期
+## 应用会话持有的生命周期
 
-- GUI 在 `autoStart` 开启且目标槽位空闲时启动一个受监督的非 detached
-  Runtime 子进程，只把请求路由到这个精确子进程。关闭自动启动时，GUI
-  不启动也不接管已有 Runtime。
-- 真正的应用 Quit、平台退出快捷键、保存的 `closeAction: quit`、更新退出和
-  非 macOS 最后窗口退出都进入同一 quit barrier：停止恢复调度、优雅关闭
-  精确 GUI 子进程并等待退出。隐藏窗口、最小化到托盘以及 Electron 仍存活的
-  macOS 无窗口状态不算退出，Runtime 继续运行。
-- 默认 TUI 启动自己的 Runtime，并在 `/quit`、信号退出、初始化失败或其他
-  command 退出路径的 `finally` 中关闭精确实例。`--url` 和 `--no-start` 是
-  显式外部连接例外：它们不拥有、不启动，也不停止目标 Runtime；目标 owner
-  退出时，这类连接可以随之断开。
-- 同一 `(Service Manager profile, runtime flavor)` 已有 live/starting GUI 或
-  TUI owner 时，另一个正常客户端必须返回可操作的 ownership conflict，不能
-  attach、steal、replace 或 silent kill。默认 Manager profile 绑定一个 canonical
-  dataDir，production/development flavor 仍是独立槽位；若确实需要并行的第二套
-  profile，必须显式隔离 Manager control directory，不能只换 `dataDir` 参数。
-- GUI 顶部重启只优雅停止并重拉当前 Electron 持有的 Runtime；不再扫描当前
-  用户的所有 `kun serve`，不触碰 TUI、其他 dataDir/flavor 或 Service Manager。
-- Service Manager 是独立、轻量的选举与数据面进程。普通 GUI/TUI 退出和 Runtime
-  restart 都不停止 Manager；Manager 可以在没有 Runtime slot 时继续保留持久化
-  状态，但它自身不执行 Agent turn。
-- 首次升级到 client-owned 生命周期时，可以只对同一 canonical dataDir 中、
-  已认证且身份精确、`launchMode: shared` 且无 client-owner 元数据的旧 daemon
-  做一次优雅退休并等待 PID 退出。任何 discovery、PID、endpoint、dataDir、
-  Manager registration 或认证歧义都必须 fail closed，禁止扩大为全用户进程扫描。
+- `DesktopProcessStack` 统一持有 GUI 的 Manager、启动代次和退出状态。GUI
+  在 `autoStart` 开启时启动受监督的 Runtime，只向精确 owned 实例发送请求。
+  `autoStart: false` 只关闭 Runtime 自动启动；GUI 数据服务使用的 Manager
+  仍属于本次应用，不能在 GUI 退出后常驻。
+- 主窗口关闭、平台 Quit、更新安装和数据搬迁退出进入同一 quit barrier。
+  macOS 不保留关闭主窗口后的无窗口驻留。旧 `ask` / `tray` / `closeToTray`
+  设置迁移为 `closeAction: quit` / `closeToTray: false`。普通最小化、mini
+  模式切换和辅助窗口关闭保持局部行为；mini 模式下关闭主窗口仍退出应用。
+- 退出先同步禁止新工作、恢复和重启，再 flush GUI 修改、撤销 GUI 工具授权、
+  停止调度/手机入口并 drain Main/Runtime 的数据消费者。每个资源独立收尾；
+  单项失败不能跳过其他资源。消费者退出后才关闭 Manager 的队列、存储和端口。
+  共享截止时间必须给消费者升级终止、Manager 落盘和最后的 guard 回收留出预算。
+- 退出完成以实际进程死亡为准，不能用 shutdown accepted、已发 TERM/KILL 或
+  stopped 标志替代。清理仅删除匹配自身 session/instance/generation 的登记。
+  活跃 writer 或执行进程尚未退出时保留所有权并记录失败，避免另一个实例抢占。
+- POSIX 受管启动使用独立进程组、执行前登记 gate 和独立 owner-loss guard；
+  Windows native launcher 先创建 suspended 子进程、纳入 Job Object 再恢复执行。
+  PTY 使用同一所有权工具，支持等待 shell 后台 job 和包装器的后代退出；默认
+  session daemon、LSP、MCP 等也必须等待整棵受管树，不因直接 child 先退就
+  取消后续回收。外部浏览器、编辑器和远程服务只断开 Kun 的连接。
+- 进程组及后代轮询不等价于能阻挡任意快速 `setsid` / double-fork 的 OS 沙箱。
+  受支持适配器、父强杀场景和各平台打包产物需要真实进程证据；未验证的平台与
+  不能纳管的特殊脱离方式必须保留为明确限制，不能由 mock 或单平台测试推断。
+- 默认 TUI 与前台 serve 自行 bootstrap 时持有完整 stack，并在退出、信号和
+  初始化失败的 finally 中按先 Runtime 后 Manager 的顺序清理。`--url` 和
+  `--no-start` 仅连接外部服务，不能停止或延长目标 owner 的生命周期。
+- 同一 canonical `dataDir`、settingsPath 已有 live/starting 应用 session 时，
+  第二个正常 GUI/TUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  production/development 不能共享同一数据 owner；并行实例必须显式隔离
+  dataDir、Manager controlDir 和 settingsPath，不能自动换历史目录。
+- GUI Runtime 重启只替换本次 Runtime，Manager 保持本次 session。Manager
+  崩溃恢复由应用 owner 决定：先停旧 Runtime 与消费者，再启动下一 generation
+  并统一重绑。app-owned Runtime 不能因 Manager 断连自行 ensure 或 re-election。
+- 旧版常驻实例只有在认证身份、规范化目录、原子冻结新接入和空闲状态均可证明时
+  才允许退休。discovery、PID、endpoint、owner 或 Manager registration 存在歧义，
+  或旧协议不能证明无活跃外部工作时，必须停止接管并提示关闭旧应用。确认旧客户端
+  已关闭后，可在匹配的 `KUN_MANAGER_CONTROL_DIR` / `KUN_MANAGER_SETTINGS_PATH`
+  下显式运行 `kun manager retire --data-dir <旧目录>`；该命令拒绝 app-owned
+  Manager 或 live Runtime slot，不能作为 GUI 自动接管入口。
+- GUI 关闭后手机连接、定时执行和本地后台任务停止；已有任务定义、会话、配置、
+  记忆和用量仍保存在原址。重开沿用已有到期策略，不重复派发已完成任务。回滚前
+  先退出新版整套服务并确认 writer 释放，再打开旧版本，不回滚或删除业务历史。
 
 ## 缓存命中优化
 
@@ -558,11 +578,13 @@ npm run build
    “暂无用量”，而显示 token、回合、缓存命中等指标。
 8. 线程搜索、归档视图、fork、resume session、request_user_input 回答/取消
    都能通过 Kun HTTP 路径完成。
-9. 最小化到托盘后 GUI Runtime PID 不变；真正退出应用后该精确 PID 退出，
-   Service Manager 仍可用且 Runtime slot 已释放。
-10. 默认 TUI 退出后没有遗留 owned Runtime；`--url` / `--no-start` 退出不停止
-    外部 Runtime。
-11. 同一 `(dataDir, flavor)` 的第二个正常 GUI/TUI 启动明确报 ownership conflict，
-    首个 owner 退出后另一个客户端能启动并读取原有会话。
-12. GUI 顶部重启只更换自己的 Runtime PID/instance，不停止 TUI、其他 dataDir /
-    flavor 或 Service Manager。
+9. 普通最小化后 GUI Runtime/Manager PID 不变；关闭主窗口或平台 Quit 后，
+   本次 Runtime、Manager、guard 和已登记工作进程退出，端口与匹配登记释放。
+10. 默认 TUI 退出后没有遗留 owned Runtime/Manager；`--url` / `--no-start`
+    退出不停止外部 stack。
+11. 同一 canonical `dataDir` 的第二个正常 GUI/TUI 启动报 ownership conflict，
+    即使 flavor 不同；显式隔离三类路径后可并行，关闭一套不影响另一套。
+    首个 owner 退出后重开继续读取原有会话、设置和任务定义。
+12. GUI Runtime 重启只更换自己的 Runtime PID/instance，不停止同 session 的
+    Service Manager 或其他隔离 profile。启动中关闭、父强杀、清理抛错与
+    恢复/退出竞争需要真实进程测试；各目标平台的打包验收结果分别记录。

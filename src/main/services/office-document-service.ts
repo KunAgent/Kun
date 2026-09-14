@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { runOwnedCommand } from '../owned-command'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -360,59 +360,16 @@ export async function runOfficeCli(
   const profileDir = join(app.getPath('userData'), 'runtime', 'officecli-profile')
   try {
     await mkdir(profileDir, { recursive: true, mode: 0o700 })
-    return await new Promise<OfficeCliResult>((resolve, reject) => {
-      let child: ChildProcess
-      try {
-        child = spawn(binaryPath, args, {
-          shell: false,
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: officeCliEnvironment(profileDir)
-        })
-      } catch (error) {
-        reject(error)
-        return
+    const result = await runOwnedCommand(binaryPath, args, {
+      env: officeCliEnvironment(profileDir), signal,
+      timeoutMs: OFFICECLI_TIMEOUT_MS, maxOutputBytes: OFFICECLI_MAX_OUTPUT_BYTES,
+      messages: {
+        aborted: 'OfficeCLI operation was cancelled.',
+        timeout: `OfficeCLI timed out after ${OFFICECLI_TIMEOUT_MS}ms.`,
+        outputLimit: `OfficeCLI output exceeds ${OFFICECLI_MAX_OUTPUT_BYTES} bytes.`
       }
-      let stdout: Buffer<ArrayBufferLike> = Buffer.alloc(0)
-      let stderr: Buffer<ArrayBufferLike> = Buffer.alloc(0)
-      let settled = false
-      let timeout: NodeJS.Timeout | undefined
-      const finish = (result: () => void): void => {
-        if (settled) return
-        settled = true
-        if (timeout) clearTimeout(timeout)
-        signal?.removeEventListener('abort', onAbort)
-        result()
-      }
-      const onAbort = (): void => {
-        child.kill()
-        finish(() => reject(abortError()))
-      }
-      const append = (
-        current: Buffer<ArrayBufferLike>,
-        chunk: Buffer<ArrayBufferLike>
-      ): Buffer<ArrayBufferLike> => {
-        if (current.length + chunk.length > OFFICECLI_MAX_OUTPUT_BYTES) {
-          child.kill()
-          finish(() => reject(new Error(`OfficeCLI output exceeds ${OFFICECLI_MAX_OUTPUT_BYTES} bytes.`)))
-          return current
-        }
-        return Buffer.concat([current, chunk])
-      }
-      child.stdout?.on('data', (chunk: Buffer) => { stdout = append(stdout, chunk) })
-      child.stderr?.on('data', (chunk: Buffer) => { stderr = append(stderr, chunk) })
-      child.once('error', (error) => finish(() => reject(error)))
-      child.once('close', (code) => finish(() => resolve({
-        stdout: stdout.toString('utf8'),
-        stderr: stderr.toString('utf8'),
-        exitCode: code ?? 1
-      })))
-      signal?.addEventListener('abort', onAbort, { once: true })
-      timeout = setTimeout(() => {
-        child.kill()
-        finish(() => reject(new Error(`OfficeCLI timed out after ${OFFICECLI_TIMEOUT_MS}ms.`)))
-      }, OFFICECLI_TIMEOUT_MS)
     })
+    return { ...result, exitCode: result.exitCode ?? 1 }
   } finally {
     release()
   }

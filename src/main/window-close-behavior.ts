@@ -1,9 +1,8 @@
-import type { WindowCloseAction } from '../shared/app-settings'
-
-export type MainWindowCloseDecision = 'allow' | 'hide-to-tray' | 'quit-app' | 'prompt'
+export type MainWindowCloseDecision = 'allow' | 'quit-app'
 
 export type MainWindowCloseState = {
-  closeAction?: WindowCloseAction
+  /** Ignored legacy preferences: the main window always owns application lifetime. */
+  closeAction?: unknown
   isQuitting: boolean
   isUpdateInstallQuitting: boolean
   trayAvailable?: boolean
@@ -11,7 +10,5 @@ export type MainWindowCloseState = {
 
 export function resolveMainWindowCloseDecision(state: MainWindowCloseState): MainWindowCloseDecision {
   if (state.isQuitting || state.isUpdateInstallQuitting) return 'allow'
-  if (state.closeAction === 'quit') return 'quit-app'
-  if (state.closeAction === 'tray' && state.trayAvailable !== false) return 'hide-to-tray'
-  return 'prompt'
+  return 'quit-app'
 }

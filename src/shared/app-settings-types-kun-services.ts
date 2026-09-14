@@ -412,7 +412,7 @@ export type NotificationConfigV1 = {
   subagentTurnComplete?: boolean
 }
 
-export const WINDOW_CLOSE_ACTIONS = ['ask', 'tray', 'quit'] as const
+export const WINDOW_CLOSE_ACTIONS = ['quit'] as const
 
 export type WindowCloseAction = typeof WINDOW_CLOSE_ACTIONS[number]
 
@@ -424,7 +424,7 @@ export type AppBehaviorConfigV1 = {
   /** Linux only. Use the desktop environment/window manager title bar after restart. */
   useSystemTitleBar?: boolean
   closeAction?: WindowCloseAction
-  /** Legacy compatibility field. New code should use closeAction. */
+  /** Legacy migration input; normalization always writes false. */
   closeToTray: boolean
 }
 

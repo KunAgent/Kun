@@ -1,18 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createUpdater, type MockUpdater } from './gui-updater-test-support'
 
-type MockUpdater = EventEmitter & {
-  autoDownload: boolean
-  autoInstallOnAppQuit: boolean
-  allowPrerelease: boolean
-  allowDowngrade: boolean
-  forceDevUpdateConfig: boolean
-  logger: unknown
-  setFeedURL: ReturnType<typeof vi.fn>
-  checkForUpdates: ReturnType<typeof vi.fn>
-  downloadUpdate: ReturnType<typeof vi.fn>
-  quitAndInstall: ReturnType<typeof vi.fn>
-}
 
 let updater: MockUpdater
 let nativeUpdater: EventEmitter
@@ -24,22 +13,9 @@ let showMessageBox: ReturnType<typeof vi.fn>
 let openExternal: ReturnType<typeof vi.fn>
 let relaunchApp: ReturnType<typeof vi.fn>
 let exitApp: ReturnType<typeof vi.fn>
+let quitApp: ReturnType<typeof vi.fn>
 let appListeners: Map<string, () => void>
 
-function createUpdater(): MockUpdater {
-  return Object.assign(new EventEmitter(), {
-    autoDownload: true,
-    autoInstallOnAppQuit: true,
-    allowPrerelease: false,
-    allowDowngrade: true,
-    forceDevUpdateConfig: false,
-    logger: null,
-    setFeedURL: vi.fn(),
-    checkForUpdates: vi.fn(),
-    downloadUpdate: vi.fn(),
-    quitAndInstall: vi.fn()
-  })
-}
 
 beforeEach(() => {
   originalEnv = { ...process.env }
@@ -54,6 +30,7 @@ beforeEach(() => {
   openExternal = vi.fn().mockResolvedValue(undefined)
   relaunchApp = vi.fn()
   exitApp = vi.fn()
+  quitApp = vi.fn()
   appListeners = new Map()
   vi.doMock('node:fs/promises', () => ({
     mkdir: vi.fn().mockResolvedValue(undefined),
@@ -93,6 +70,7 @@ beforeEach(() => {
       getLocale: () => 'en-US',
       relaunch: relaunchApp,
       exit: exitApp,
+      quit: quitApp,
       on: (event: string, listener: () => void) => appListeners.set(event, listener)
     },
     autoUpdater: nativeUpdater,
@@ -452,7 +430,10 @@ describe('installGuiUpdate', () => {
     })
     expect(setUpdateInstallQuitting.mock.calls).toEqual([[true], [false]])
     expect(relaunchApp).toHaveBeenCalledOnce()
-    expect(exitApp).toHaveBeenCalledWith(0)
+    expect(quitApp).toHaveBeenCalledOnce()
+    expect(exitApp).not.toHaveBeenCalled()
+    expect(updater.autoInstallOnAppQuit).toBe(false)
+    expect(updater.quitAndInstall).toHaveBeenCalledOnce()
   })
 
   it('relaunches the old application when electron-updater emits an install error', async () => {
@@ -477,7 +458,8 @@ describe('installGuiUpdate', () => {
     })
     expect(setUpdateInstallQuitting.mock.calls).toEqual([[true], [false]])
     expect(relaunchApp).toHaveBeenCalledOnce()
-    expect(exitApp).toHaveBeenCalledWith(0)
+    expect(quitApp).toHaveBeenCalledOnce()
+    expect(exitApp).not.toHaveBeenCalled()
   })
 
   it('recovers when electron-updater reports an asynchronous NSIS launch failure', async () => {
@@ -505,7 +487,8 @@ describe('installGuiUpdate', () => {
     })
     expect(setUpdateInstallQuitting.mock.calls).toEqual([[true], [false]])
     expect(relaunchApp).toHaveBeenCalledOnce()
-    expect(exitApp).toHaveBeenCalledWith(0)
+    expect(quitApp).toHaveBeenCalledOnce()
+    expect(exitApp).not.toHaveBeenCalled()
   })
 
   it('relaunches after a partially completed update preflight fails', async () => {
@@ -531,7 +514,8 @@ describe('installGuiUpdate', () => {
 
     expect(setUpdateInstallQuitting.mock.calls).toEqual([[true], [false]])
     expect(relaunchApp).toHaveBeenCalledOnce()
-    expect(exitApp).toHaveBeenCalledWith(0)
+    expect(quitApp).toHaveBeenCalledOnce()
+    expect(exitApp).not.toHaveBeenCalled()
   })
 
   it('writes pending installer state before handing off to NSIS', async () => {

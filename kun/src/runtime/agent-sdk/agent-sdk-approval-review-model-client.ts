@@ -71,6 +71,7 @@ export class AgentSdkApprovalReviewModelClient implements ModelClient {
       activeQuery = sdk.query({
         prompt,
         options: {
+          spawnClaudeCodeProcess: spawnOwnedSdkProcess,
           cwd: this.options.cwd,
           ...(request.systemPrompt?.trim()
             ? { systemPrompt: request.systemPrompt.trim() }
@@ -210,3 +211,4 @@ function finiteNonNegativeNumber(value: unknown): number | undefined {
     ? value
     : undefined
 }
+import { spawnOwnedSdkProcess } from './owned-sdk-process.js'

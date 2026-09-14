@@ -20,7 +20,8 @@ describe('Kun Manager launch environment', () => {
       KUN_MANAGER_INSTANCE_ID: manager.discovery.instanceId,
       KUN_MANAGER_TOKEN: manager.discovery.managerToken,
       KUN_MANAGER_DATA_DIR: manager.discovery.dataDir,
-      KUN_MANAGER_SETTINGS_PATH: manager.discovery.settingsPath
+      KUN_MANAGER_SETTINGS_PATH: manager.discovery.settingsPath,
+      KUN_APP_SESSION_OWNER: ''
     })
   })
 

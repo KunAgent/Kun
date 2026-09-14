@@ -11,6 +11,7 @@ import {
 } from './manager-discovery.js'
 import { KUN_MANAGER_CAPABILITIES } from './service-manager.js'
 import { processIsAlive, safeManagerUrl } from './manager-client-support.js'
+import { AppSessionOwnerSchema, sameAppSessionOwner } from '../contracts/app-session-owner.js'
 
 const ManagerHealthSchema = z.object({
   status: z.literal('ok'),
@@ -21,6 +22,7 @@ const ManagerHealthSchema = z.object({
   startedAt: z.string().datetime(),
   serviceVersion: z.string(),
   buildId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  appOwner: AppSessionOwnerSchema.optional(),
   capabilities: z.array(z.string())
 })
 
@@ -182,7 +184,8 @@ function managerIdentityMatchesDiscovery(
     identity.pid === discovery.pid &&
     identity.startedAt === discovery.startedAt &&
     identity.serviceVersion === discovery.serviceVersion &&
-    identity.buildId === discovery.buildId
+    identity.buildId === discovery.buildId &&
+    ((!identity.appOwner && !discovery.appOwner) || sameAppSessionOwner(identity.appOwner, discovery.appOwner))
 }
 
 function sameManagerIdentity(
@@ -194,7 +197,8 @@ function sameManagerIdentity(
     status.pid === health.pid &&
     status.startedAt === health.startedAt &&
     status.serviceVersion === health.serviceVersion &&
-    status.buildId === health.buildId
+    status.buildId === health.buildId &&
+    ((!status.appOwner && !health.appOwner) || sameAppSessionOwner(status.appOwner, health.appOwner))
 }
 
 function sameStringSet(left: string[], right: string[]): boolean {

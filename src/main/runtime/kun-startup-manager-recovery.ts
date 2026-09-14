@@ -5,6 +5,7 @@ import { sameCanonicalPath } from '../../../kun/src/manager/canonical-path.js'
 import { defaultKunControlDir, readManagerHandoffDiscoveryStrict, withManagerStartLock } from '../../../kun/src/manager/manager-discovery.js'
 import { drainKunOwnersForHandoffWithLock } from './kun-installed-build-handoff'
 import { logKunHandoffEvent } from './kun-handoff-logging'
+import { desktopProcessStack } from './desktop-process-stack'
 
 /** Trusted launch inputs are captured before initialization can fail, never parsed from an error. */
 let startupInput: EnsureServiceManagerInput | undefined
@@ -17,7 +18,10 @@ export function rememberManagerStartupInput(input: EnsureServiceManagerInput): v
 
 export async function recoverStartupManager(forceReplacement = false): Promise<ServiceManagerConnection> {
   if (!startupInput) throw new Error('Manager startup context is unavailable. Quit and launch the installed application again.')
-  return recoverManager(startupInput, forceReplacement)
+  // The caller has stopped the GUI-owned Runtime. Never run the legacy
+  // cross-flavor handoff path to recover an application-owned Manager.
+  const recovered = await desktopProcessStack.recoverManager(async () => undefined, forceReplacement)
+  return recovered ?? desktopProcessStack.ensureManager(startupInput)
 }
 
 export async function recoverManager(

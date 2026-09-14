@@ -286,5 +286,5 @@ function isTheme(value: unknown): value is AppSettingsV1['theme'] {
 }
 
 function isCloseAction(value: unknown): value is NonNullable<AppSettingsV1['appBehavior']['closeAction']> {
-  return value === 'ask' || value === 'tray' || value === 'quit'
+  return value === 'quit'
 }

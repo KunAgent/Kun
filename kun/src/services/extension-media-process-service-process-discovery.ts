@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import { access, realpath, stat } from 'node:fs/promises'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { constants } from 'node:fs'
-import { spawn, type ChildProcessByStdio } from 'node:child_process'
+import type { ChildProcessByStdio } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 import type { Readable } from 'node:stream'
-import { terminateSpawnTree } from '../adapters/tool/builtin-tool-utils.js'
 import type { ExtensionPrincipal } from './extension-agent-service.js'
 import {
   ExtensionMediaHandleService,
@@ -173,39 +173,35 @@ export async function runBoundedProcess(
   if (options.signal?.aborted) {
     throw new ExtensionMediaProcessError('process_cancelled', 'Media process was cancelled')
   }
+  let child: ChildProcessByStdio<null, Readable, Readable>
+  try {
+    child = await spawnOwnedProcess(executable, args, {
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: options.env
+    }) as ChildProcessByStdio<null, Readable, Readable>
+  } catch {
+    throw new ExtensionMediaProcessError('executable_unavailable', 'Media executable could not be started', true)
+  }
   return await new Promise<RunResult>((resolvePromise, rejectPromise) => {
-    let child: ChildProcessByStdio<null, Readable, Readable>
-    try {
-      child = spawn(executable, args, {
-        shell: false,
-        windowsHide: true,
-        detached: process.platform !== 'win32',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: options.env
-      })
-    } catch {
-      rejectPromise(new ExtensionMediaProcessError('executable_unavailable', 'Media executable could not be started', true))
-      return
-    }
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []
     let stdoutBytes = 0
     let stderrBytes = 0
     let settled = false
     let terminationReason: 'timeout' | 'cancelled' | 'limit' | undefined
-    let forceTimer: NodeJS.Timeout | undefined
 
     const stop = (reason: typeof terminationReason) => {
       if (terminationReason) return
       terminationReason = reason
-      terminateSpawnTree(child)
-      forceTimer = setTimeout(() => terminateSpawnTree(child, { signal: 'SIGKILL' }), 500)
-      forceTimer.unref?.()
+      void stopOwnedProcess(child, { graceMs: 500 }).catch(rejectPromise)
     }
     const deadline = setTimeout(() => stop('timeout'), options.timeoutMs)
     deadline.unref?.()
     const abort = () => stop('cancelled')
     options.signal?.addEventListener('abort', abort, { once: true })
+    if (options.signal?.aborted) abort()
 
     child.stdout.on('data', (value: Buffer | string) => {
       const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value)
@@ -253,7 +249,6 @@ export async function runBoundedProcess(
 
     function cleanup() {
       clearTimeout(deadline)
-      if (forceTimer) clearTimeout(forceTimer)
       options.signal?.removeEventListener('abort', abort)
       child.stdout.destroy()
       child.stderr.destroy()

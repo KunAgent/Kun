@@ -1,5 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
-import { StringDecoder } from 'node:string_decoder'
+import type { spawn } from 'node:child_process'
 import type { ServeProviderConfig } from '../../config/kun-config.js'
 import type {
   ActingTurnModelRoute,
@@ -46,11 +45,9 @@ import {
   priorItemsForDelegatedTurn,
   type DelegatedSessionCoordinator
 } from '../delegated-session-binding.js'
-import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
+import { runAntigravityProcess } from './antigravity-process.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 
-const MAX_STDOUT_BYTES = 8 * 1024 * 1024
-const MAX_STDERR_BYTES = 256 * 1024
 const ANTIGRAVITY_MODEL_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/i
 const ANTIGRAVITY_MODEL_ID_MAX_LENGTH = 128
 
@@ -518,95 +515,6 @@ export function antigravityCapabilities(): DelegatedRuntimeCapabilities {
   }
 }
 
-function runAntigravityProcess(input: {
-  binaryPath: string
-  args: string[]
-  cwd: string
-  signal: AbortSignal
-  timeoutMs: number
-  spawnFn?: typeof spawn
-}): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const spawnFn = input.spawnFn ?? spawn
-    let child: ChildProcess
-    try {
-      child = spawnFn(input.binaryPath, input.args, {
-        cwd: input.cwd,
-        // The Antigravity CLI is model-controlled. Never inherit Kun/Main
-        // credentials (including the browser-use bridge bearer and signing
-        // key); pass only the same small execution allow-list as shell tools.
-        env: shellSpawnEnv(),
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: false
-      })
-    } catch (error) {
-      reject(error)
-      return
-    }
-    let stdout = ''
-    let stderr = ''
-    let stdoutBytes = 0
-    const stdoutDecoder = new StringDecoder('utf8')
-    const stderrDecoder = new StringDecoder('utf8')
-    let settled = false
-    let timedOut = false
-    const terminate = (): void => {
-      try {
-        child.kill()
-      } catch {
-        // best effort
-      }
-    }
-    const onAbort = (): void => terminate()
-    const done = (error?: Error): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      input.signal.removeEventListener('abort', onAbort)
-      if (error) reject(error)
-      else resolve(stdout)
-    }
-    const timer = setTimeout(() => {
-      timedOut = true
-      terminate()
-    }, input.timeoutMs)
-    if (input.signal.aborted) terminate()
-    else input.signal.addEventListener('abort', onAbort, { once: true })
-    child.stdout?.on('data', (chunk: Buffer | string) => {
-      if (settled) return
-      // Child-process streams may split one UTF-8 character across multiple
-      // data events. Decode incrementally so Chinese and other multibyte text
-      // survives those boundaries intact.
-      stdoutBytes += Buffer.byteLength(chunk)
-      if (stdoutBytes > MAX_STDOUT_BYTES) {
-        terminate()
-        done(new Error('Antigravity CLI response exceeded the output limit'))
-        return
-      }
-      stdout += stdoutDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-    })
-    child.stderr?.on('data', (chunk: Buffer | string) => {
-      if (settled) return
-      stderr = `${stderr}${stderrDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))}`
-        .slice(-MAX_STDERR_BYTES)
-    })
-    child.on('error', (error) => done(error))
-    child.on('exit', (code) => {
-      if (settled) return
-      stdout += stdoutDecoder.end()
-      stderr = `${stderr}${stderrDecoder.end()}`.slice(-MAX_STDERR_BYTES)
-      if (input.signal.aborted) {
-        done(new Error('Antigravity CLI turn was aborted'))
-      } else if (timedOut) {
-        done(new Error(`Antigravity CLI turn exceeded ${input.timeoutMs}ms wall time`))
-      } else if (code !== 0) {
-        done(new Error(stderr.trim() || `Antigravity CLI exited with code ${code}`))
-      } else {
-        done()
-      }
-    })
-  })
-}
 
 type AntigravityTrace = {
   sink: LlmDebugSink

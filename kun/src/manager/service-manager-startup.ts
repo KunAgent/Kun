@@ -23,6 +23,9 @@ import {
   type ManagerStateWriter
 } from './service-manager-state-write-queue.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
+import { sameAppSessionOwner, type AppSessionOwner } from '../contracts/app-session-owner.js'
+import { assertManagerSessionReservation, assertNoAppSessionReservation, recordAppSessionParticipant } from './app-session-reservation.js'
+import { runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
 
 export const MANAGER_STATE_DEFERRED_FLUSH_SAFE_MS = 2_000
 
@@ -34,6 +37,8 @@ export async function startServiceManager(input: {
   instanceId: string
   startedAt: string
   buildId?: string
+  appOwner?: AppSessionOwner
+  reservationPath?: string
   logPath?: string
   state?: ServiceManagerState
   dataDir: string
@@ -45,6 +50,10 @@ export async function startServiceManager(input: {
   /** Test seam: tune the write-failure retry budget. */
   stateWriteRetry?: { attempts: number; baseDelayMs: number }
 }): Promise<ServiceManagerHandle> {
+  if (input.appOwner) {
+    if (!input.reservationPath) throw new Error('Owned Manager requires an application session reservation')
+    await assertManagerSessionReservation(input.reservationPath, input.appOwner, input)
+  } else await assertNoAppSessionReservation(input)
   const dataDirLease = await acquireRuntimeDataDirLease(input.dataDir)
   const managerStatePath = join(input.controlDir, 'manager-state.json')
   let state: ServiceManagerState
@@ -54,6 +63,10 @@ export async function startServiceManager(input: {
       input.state ?? readPersistedManagerState(managerStatePath),
       readForcedRuntimeRecovery(input.controlDir)
     ])
+    if (input.appOwner && state.snapshot().some(({ registration }) =>
+      runtimeProcessIsAlive(registration.pid, registration) && !sameAppSessionOwner(registration.appOwner, input.appOwner))) {
+      throw new Error('A previous Manager generation still has a live Runtime; its application must stop it before Manager recovery')
+    }
   } catch (error) {
     await dataDirLease.release().catch(() => undefined)
     throw error
@@ -61,6 +74,7 @@ export async function startServiceManager(input: {
   let requestShutdown!: () => void
   const shutdownRequested = new Promise<void>((resolve) => { requestShutdown = resolve })
   let shutdownTimer: ReturnType<typeof setTimeout> | undefined
+  let draining = false
   const deferShutdown = () => {
     if (shutdownTimer) return
     shutdownTimer = setTimeout(requestShutdown, 25)
@@ -163,6 +177,12 @@ export async function startServiceManager(input: {
       instanceId: input.instanceId,
       startedAt: input.startedAt,
       ...(input.buildId ? { buildId: input.buildId } : {}),
+      ...(input.appOwner ? { appOwner: input.appOwner } : {}),
+      isDraining: () => draining,
+      beginDrain: () => { draining = true },
+      ...(input.appOwner && input.reservationPath ? {
+        recordParticipant: (participant) => recordAppSessionParticipant(input.reservationPath!, input.appOwner!, participant)
+      } : {}),
       state,
       sharedData,
       documents,
@@ -186,6 +206,7 @@ export async function startServiceManager(input: {
       managerToken: input.managerToken,
       serviceVersion: KUN_VERSION,
       ...(input.buildId ? { buildId: input.buildId } : {}),
+      ...(input.appOwner ? { appOwner: input.appOwner } : {}),
       dataDir: input.dataDir,
       settingsPath: input.settingsPath,
       ...(input.logPath ? { logPath: input.logPath } : {})
@@ -205,6 +226,7 @@ export async function startServiceManager(input: {
     instanceId: input.instanceId,
     discovery,
     state,
+    beginDrain: () => { draining = true },
     shutdownRequested,
     statePersistence,
     close: async () => {
@@ -224,7 +246,7 @@ export async function startServiceManager(input: {
       await settle(() => stateQueue.flush())
       state.onMutation(undefined)
       await settle(() => sharedData.close())
-      await settle(() => removeManagerDiscovery(input.controlDir, input.instanceId))
+      await settle(() => removeManagerDiscovery(input.controlDir, input.instanceId, discovery))
       await settle(() => dataDirLease.release())
       if (firstError !== undefined) throw firstError
     }

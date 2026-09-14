@@ -8,6 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+vi.mock('../../../kun/src/process/owned-process', () => ({
+  spawnOwnedProcess: async (...args: unknown[]) => spawnMock(...args),
+  stopOwnedProcess: async (child: { kill(signal: string): void }) => { child.kill('SIGKILL') }
+}))
 
 vi.mock('electron', () => ({
   app: {
@@ -111,7 +115,7 @@ describe('local-whisper-service helpers', () => {
     child.stdout = new EventEmitter()
     child.stderr = new EventEmitter()
     child.kill = vi.fn((signal: string) => {
-      queueMicrotask(() => child.emit('exit', null, signal))
+      queueMicrotask(() => { child.emit('exit', null, signal); child.emit('close', null, signal) })
       return true
     })
     spawnMock.mockReturnValue(child)

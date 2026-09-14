@@ -73,6 +73,8 @@ import { ensureServiceManager } from '../manager/manager-client.js'
 import { IncrementalSseParser, parseRuntimeEventFrame } from './sse.js'
 import { TuiClientError, type TuiConnection } from './client-types.js'
 import { KunTuiClient } from './kun-tui-client.js'
+import { createOwnedServiceManagerSession } from '../manager/owned-service-manager-session.js'
+import { shutdownOwnedProcesses } from '../process/owned-process.js'
 
 export async function resolveTuiConnection(
   options: TuiOptions,
@@ -100,35 +102,51 @@ export async function resolveTuiConnection(
   const controlDir = process.env.KUN_MANAGER_CONTROL_DIR?.trim() || defaultKunControlDir()
   const managerSettingsPath = process.env.KUN_MANAGER_SETTINGS_PATH?.trim()
   const startExpectedRuntime = async (): Promise<TuiConnection> => {
-    const manager = deps?.startOwnedRuntime
-      ? undefined
-      : await ensureServiceManager({
-          flavor: runtimeFlavor,
-          allowDevelopmentBootstrap: allowsDevelopmentManagerBootstrap({
+    const managerSession = deps?.startOwnedRuntime ? undefined : createOwnedServiceManagerSession({ ownerKind: 'tui' })
+    try {
+      const manager = deps?.startOwnedRuntime
+        ? undefined
+        : await managerSession!.ensure({
             flavor: runtimeFlavor,
-            env: process.env
-          }),
-          controlDir,
-          dataDir: options.dataDir,
-          ...(managerSettingsPath ? { settingsPath: managerSettingsPath } : {}),
-          fetch: fetchImpl
-        })
-    const owned: ClientOwnedRuntimeHandle = await startOwnedRuntime({
-      dataDir: options.dataDir,
-      ownerKind: 'tui',
-      fetch: fetchImpl,
-      runtimeFlavor,
-      controlDir,
-      ...(manager ? { manager } : {}),
-      ...(sourceBuildId ? { expectedBuildId: sourceBuildId } : {})
-    })
-    const started = owned.connection
-    return {
-      baseUrl: started.discovery.baseUrl,
-      runtimeToken: started.discovery.runtimeToken,
-      runtimeInfo: started.info,
-      discovered: true,
-      ownedRuntime: owned
+            allowDevelopmentBootstrap: allowsDevelopmentManagerBootstrap({
+              flavor: runtimeFlavor,
+              env: process.env
+            }),
+            controlDir,
+            dataDir: options.dataDir,
+            ...(managerSettingsPath ? { settingsPath: managerSettingsPath } : {}),
+            fetch: fetchImpl
+          })
+      const owned: ClientOwnedRuntimeHandle = await startOwnedRuntime({
+        dataDir: options.dataDir,
+        ownerKind: 'tui',
+        fetch: fetchImpl,
+        runtimeFlavor,
+        controlDir,
+        ...(manager ? { manager } : {}),
+        ...(sourceBuildId ? { expectedBuildId: sourceBuildId } : {})
+      })
+      const started = owned.connection
+      return {
+        baseUrl: started.discovery.baseUrl,
+        runtimeToken: started.discovery.runtimeToken,
+        runtimeInfo: started.info,
+        discovered: true,
+        ownedRuntime: managerSession ? {
+          ...owned,
+          stop: async () => {
+            const stopped = await owned.stop()
+            if (!stopped) throw new Error('TUI-owned Runtime did not exit; preserving Manager ownership')
+            await managerSession.close()
+            await shutdownOwnedProcesses({ timeoutMs: 5_000 })
+            return true
+          }
+        } : owned
+      }
+    } catch (error) {
+      await managerSession?.close()
+      if (managerSession) await shutdownOwnedProcesses({ timeoutMs: 5_000 })
+      throw error
     }
   }
   const discoveryDir = runtimeDiscoveryDirectory(options.dataDir, runtimeFlavor, controlDir)

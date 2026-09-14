@@ -40,6 +40,7 @@ import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-le
 
 import { ServiceManagerHttpError, ServiceManagerTransportError } from './usage-errors.js'
 import type { ServiceManagerConnection } from './manager-client.js'
+import { managerClientRequestSignal } from './manager-client-lifetime.js'
 
 export type ManagerRequestOptions = {
   method?: string
@@ -77,9 +78,7 @@ async function performManagerRequest<T>(
   const method = (options.method ?? 'GET').toUpperCase()
   const retrySafe = options.retrySafe === true || method === 'GET' || method === 'HEAD'
   // All attempts share the original budget. A cancelled request never retries.
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs ?? 5_000)])
-    : AbortSignal.timeout(options.timeoutMs ?? 5_000)
+  const signal = managerClientRequestSignal(options.signal, options.timeoutMs ?? 5_000)
   const body = options.body === undefined ? undefined : JSON.stringify(options.body)
   for (let attempt = 0; ; attempt += 1) {
     signal.throwIfAborted()

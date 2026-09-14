@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
+import { rm } from 'node:fs/promises'
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import type { AppSettingsV1 } from '../../shared/app-settings'
@@ -8,7 +9,7 @@ import {
   type UninstallPerformResult,
   type UninstallStatus
 } from '../../shared/uninstall'
-import { writeCleanupScripts } from './cleanup-script'
+import { writeCleanupScripts, type CleanupScriptOutput } from './cleanup-script'
 import {
   assertSafeUninstallPath,
   collectUninstallPaths,
@@ -30,6 +31,8 @@ export type UninstallControllerOptions = {
 }
 
 export class UninstallController {
+  private uninstallInProgress = false
+  private recoveryScheduled = false
   constructor(private readonly options: UninstallControllerOptions) {}
 
   registerIpc(): void {
@@ -81,6 +84,15 @@ export class UninstallController {
   }
 
   private async perform(input: z.infer<typeof UninstallOptionsSchema>): Promise<UninstallPerformResult> {
+    if (this.uninstallInProgress || this.recoveryScheduled) throw new Error('uninstall_in_progress: An uninstall operation is already in progress.')
+    this.uninstallInProgress = true
+    try { return await this.performOnce(input) } catch (error) {
+      this.uninstallInProgress = false
+      throw error
+    }
+  }
+
+  private async performOnce(input: z.infer<typeof UninstallOptionsSchema>): Promise<UninstallPerformResult> {
     const { deleteAllData, removeApp } = input
     if (!deleteAllData && !removeApp) {
       throw new Error('nothing_to_do: Choose at least one of "delete data" or "remove the app".')
@@ -119,22 +131,29 @@ export class UninstallController {
     }
 
     const operationId = randomUUID()
-    const output = await writeCleanupScripts({
-      operationId,
-      mainPid: process.pid,
-      guardCommandSubstring: this.options.getExecPath(),
-      deleteDataPaths,
-      appRemovalMode,
-      appRemovalTarget,
-      platform: process.platform,
-      tempRoot: app.getPath('temp')
-    })
-
-    spawnCleanupScript(process.platform, output.scriptPath)
-
-    // The cleanup script waits for this process to exit, so runtimes must be
-    // stopped first to release data files before app.quit().
-    await this.options.prepareForUninstall?.()
+    let output: CleanupScriptOutput | undefined
+    let preparationStarted = false
+    try {
+      // Do not arm a detached deletion plan until the old service stack has
+      // actually released its writers. Failed preparation must delete nothing.
+      preparationStarted = Boolean(this.options.prepareForUninstall)
+      await this.options.prepareForUninstall?.()
+      output = await writeCleanupScripts({
+        operationId, mainPid: process.pid, guardCommandSubstring: this.options.getExecPath(),
+        deleteDataPaths, appRemovalMode, appRemovalTarget, platform: process.platform,
+        tempRoot: app.getPath('temp')
+      })
+      await spawnCleanupScript(process.platform, output.scriptPath)
+    } catch (error) {
+      if (output) await rm(output.markerDir, { recursive: true, force: true }).catch(() => undefined)
+      // Preparation may have closed Main admission even when it threw. A new
+      // normal application session restores the GUI without replaying deletion.
+      if (preparationStarted && !this.recoveryScheduled) {
+        this.recoveryScheduled = true
+        try { app.relaunch() } finally { app.quit() }
+      }
+      throw error
+    }
     app.quit()
 
     return {
@@ -150,18 +169,15 @@ export class UninstallController {
 export function spawnCleanupScript(
   platform: NodeJS.Platform,
   scriptPath: string
-): void {
-  if (platform === 'win32') {
-    const child = spawn(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
-      { detached: true, stdio: 'ignore', windowsHide: true }
-    )
-    child.unref()
-    return
-  }
-  const child = spawn('sh', [scriptPath], { detached: true, stdio: 'ignore' })
-  child.unref()
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = platform === 'win32'
+      ? spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+        { detached: true, stdio: 'ignore', windowsHide: true })
+      : spawn('sh', [scriptPath], { detached: true, stdio: 'ignore' })
+    child.once('error', reject)
+    child.once('spawn', () => { child.unref(); resolve() })
+  })
 }
 
 export function assertTrustedUninstallSender(

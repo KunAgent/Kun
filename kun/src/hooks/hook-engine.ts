@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 import type { ToolCallLike, ToolHostContext } from '../ports/tool-host.js'
-import { shellSpawnEnv, terminateSpawnTree } from '../adapters/tool/builtin-tool-utils.js'
+import { shellSpawnEnv } from '../adapters/tool/builtin-tool-utils.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
 import { normalizeRawToolArgumentsEnvelope } from '../domain/tool-argument-envelope.js'
 
@@ -384,19 +384,19 @@ async function runCommandHook(
   invocation: HookInvocation
 ): Promise<HookExecutionOutcome> {
   const payload = JSON.stringify(invocation)
-  const child = spawn(hook.command, {
+  const child = await spawnOwnedProcess(process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
+    process.platform === 'win32' ? ['/d', '/s', '/c', hook.command] : ['-c', hook.command], {
     cwd: hook.cwd || workspaceOf(invocation) || undefined,
     env: shellSpawnEnv(),
-    shell: true,
     stdio: ['pipe', 'pipe', 'pipe']
   })
-  child.stdin.end(payload)
+  child.stdin?.end(payload)
   let stdout = ''
   let stderr = ''
-  child.stdout.on('data', (chunk) => {
+  child.stdout?.on('data', (chunk) => {
     stdout += String(chunk)
   })
-  child.stderr.on('data', (chunk) => {
+  child.stderr?.on('data', (chunk) => {
     stderr += String(chunk)
   })
   const exitCode = await withTimeout(
@@ -405,8 +405,8 @@ async function runCommandHook(
     }),
     hook.timeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
     `${hook.phase} command hook timed out`
-  ).catch((error) => {
-    terminateSpawnTree(child)
+  ).catch(async (error) => {
+    await stopOwnedProcess(child)
     throw error
   })
   if (exitCode === HOOK_BLOCKING_EXIT_CODE) {

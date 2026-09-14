@@ -448,7 +448,7 @@ describe('app behavior settings', () => {
       startMinimized: false,
       keepAwake: false,
       useSystemTitleBar: false,
-      closeAction: 'ask',
+      closeAction: 'quit',
       closeToTray: false
     })
   })
@@ -470,8 +470,8 @@ describe('app behavior settings', () => {
       startMinimized: false,
       keepAwake: true,
       useSystemTitleBar: true,
-      closeAction: 'tray',
-      closeToTray: true
+      closeAction: 'quit',
+      closeToTray: false
     })
   })
 
@@ -488,7 +488,7 @@ describe('app behavior settings', () => {
 
     expect(current.appBehavior.keepAwake).toBe(true)
     expect(mergeAppBehaviorSettings(current.appBehavior, { keepAwake: false }))
-      .toMatchObject({ keepAwake: false, openAtLogin: false, closeAction: 'ask' })
+      .toMatchObject({ keepAwake: false, openAtLogin: false, closeAction: 'quit' })
   })
 
   it('maps legacy closeToTray patches to explicit close actions', () => {
@@ -497,8 +497,8 @@ describe('app behavior settings', () => {
       appBehavior: undefined
     } as unknown as AppSettingsV1)
 
-    expect(current.appBehavior.closeAction).toBe('ask')
-    expect(mergeAppBehaviorSettings(current.appBehavior, { closeToTray: true }).closeAction).toBe('tray')
+    expect(current.appBehavior.closeAction).toBe('quit')
+    expect(mergeAppBehaviorSettings(current.appBehavior, { closeToTray: true }).closeAction).toBe('quit')
     expect(mergeAppBehaviorSettings(current.appBehavior, { closeToTray: false }).closeAction).toBe('quit')
   })
 

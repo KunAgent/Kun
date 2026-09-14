@@ -27,7 +27,6 @@ import {
 import {
   configureKunManagerDataPlaneForCurrentProcess,
   ensureKunServiceManager,
-  preparePackagedKunBuildHandoff,
   resolveKunManagerDataDirFromSettings,
   setKunUnexpectedExitHandler
 } from './kun-process'
@@ -136,34 +135,17 @@ export async function initializeMainServices(input: {
     detail?: string
   ) => void
 }): Promise<MainServices | null> {
+    desktopProcessStack.assertCanStart()
     if (mainState.updateHealthProbeOnly) {
       throw new Error('Update health probes must not initialize desktop services or migrate user data.')
     }
-    // A detached Runtime and its Service Manager are shared by GUI, TUI, and
-    // other local clients. Desktop startup must attach through the Manager,
-    // not terminate processes by name before their registrations can be
-    // reconciled. Broad historical-process cleanup remains an explicit
-    // replacement/update action only.
+    // Normal startup obtains an application-owned Manager. Build differences
+    // never authorize taking over a live GUI/TUI or another profile.
     const productionSettingsUserDataPath = appIdentity.flavor === 'production'
       ? app.getPath('userData')
       : join(app.getPath('appData'), 'Kun')
     const productionSettingsPath = input.productionSettingsPath
     if (appIdentity.flavor === 'production') {
-      input.onPhase?.('services_starting', 'Checking the installed Kun runtime...')
-      const preMigrationDataDir = await resolveKunManagerDataDirFromSettings(productionSettingsPath)
-      if (await preparePackagedKunBuildHandoff({
-        dataDir: preMigrationDataDir,
-        settingsPath: productionSettingsPath,
-        onHandoffEvent: (event) => {
-          if (event.phase === 'quiesce-runtimes') {
-            input.onPhase?.('services_starting', 'Waiting for the previous Kun runtime to finish...')
-          } else if (event.phase === 'stop-runtimes') {
-            input.onPhase?.('services_starting', 'Switching to the installed Kun runtime...')
-          }
-        }
-      })) {
-        traceStartup('installed Runtime build handoff:done')
-      }
       traceStartup('runtime data migration:start')
       input.onPhase?.('data_migrating', 'Migrating Kun data safely...')
       const migrationResult = await runStartupLegacyMigrations()
@@ -201,8 +183,9 @@ export async function initializeMainServices(input: {
         }
       }
     })
+    desktopProcessStack.assertCanStart()
     mainState.activeServiceManager = serviceManager
-    logInfo('startup', 'Service Manager attached.', {
+    logInfo('startup', 'Application-owned Service Manager started.', {
       pid: serviceManager.discovery.pid,
       instanceId: serviceManager.discovery.instanceId.slice(0, 12),
       serviceVersion: serviceManager.discovery.serviceVersion,
@@ -252,6 +235,7 @@ export async function initializeMainServices(input: {
         })
     traceStartup('settings load:start')
     const initial = await mainState.store.load()
+    desktopProcessStack.assertCanStart()
     mainState.settledRuntimeSettings = initial
     runtimeSupervisor.noteLatest(initial)
     mainState.disposeTrayQuotaIpc = registerTrayQuotaIpc({
@@ -383,9 +367,11 @@ export async function initializeMainServices(input: {
     syncTray(initial)
     let ownsDesktopBackgroundServices = false
     const startDesktopBackgroundServices = async (): Promise<void> => {
+      desktopProcessStack.assertCanStart()
       if (mainState.scheduleRuntime || mainState.workflowRuntime || mainState.clawRuntime || mainState.telegramRuntime || mainState.daemonRuntime) return
       ownsDesktopBackgroundServices = true
       let settings = await mainState.store.load()
+      desktopProcessStack.assertCanStart()
       await syncClawScheduleMcpConfig(settings, getClawScheduleMcpLaunchConfig()).catch((error) => {
         console.error('[claw-schedule-mcp] failed to sync config on desktop-host acquisition:', error)
       })
@@ -393,6 +379,7 @@ export async function initializeMainServices(input: {
       // controller yet. Reload before publishing the controller so an older
       // keep-awake snapshot cannot overwrite the committed preference.
       settings = await mainState.store.load()
+      desktopProcessStack.assertCanStart()
       void runCheckpointCleanup(settings, { force: true, reason: 'startup' })
       syncCheckpointCleanupTimer(settings)
       mainState.powerSaveController = createPowerSaveController(powerSaveBlocker)
@@ -462,7 +449,7 @@ export async function initializeMainServices(input: {
       mainState.telegramRuntime = null
       mainState.daemonRuntime = null
       mainState.powerSaveController = null
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         schedule?.stop(),
         workflow?.stop(),
         claw?.stop(),
@@ -471,23 +458,37 @@ export async function initializeMainServices(input: {
         stopWeixinBridgeRuntime()
       ])
       powerSaveController?.reset()
+      const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      if (failures.length) throw new AggregateError(failures.map((result) => result.reason), 'Desktop services did not stop')
     }
-    const desktopResourceLeases = new ManagerResourceLeaseClient(
-      serviceManager,
-      appIdentity.runtimeFlavor,
-      randomUUID()
-    )
-    await desktopResourceLeases.maintain({
-      resource: 'desktop-background-services',
-      onAcquired: startDesktopBackgroundServices,
-      onLost: stopDesktopBackgroundServices
-    })
-    await desktopResourceLeases.maintain({
-      resource: 'desktop-host',
-      onAcquired: () => undefined,
-      onLost: () => undefined
-    })
-    mainState.shutdownDesktopResourceLeases = () => desktopResourceLeases.shutdown()
+    const createDesktopLeases = () => new ManagerResourceLeaseClient(serviceManager, appIdentity.runtimeFlavor, randomUUID())
+    let desktopResourceLeases = createDesktopLeases()
+    mainState.pauseDesktopServicesForManagerRecovery = stopDesktopBackgroundServices
+    const maintainDesktopLeases = async () => {
+      mainState.shutdownDesktopResourceLeases = async () => {
+        await desktopResourceLeases.shutdown()
+        await stopDesktopBackgroundServices()
+      }
+      await desktopResourceLeases.maintain({
+        resource: 'desktop-background-services',
+        onAcquired: startDesktopBackgroundServices,
+        onLost: stopDesktopBackgroundServices
+      })
+      desktopProcessStack.assertCanStart()
+      await desktopResourceLeases.maintain({
+        resource: 'desktop-host',
+        onAcquired: () => undefined,
+        onLost: () => undefined
+      })
+      desktopProcessStack.assertCanStart()
+    }
+    mainState.resumeDesktopServicesForManagerRecovery = async () => {
+      desktopProcessStack.assertCanStart()
+      await desktopResourceLeases.shutdown()
+      desktopResourceLeases = createDesktopLeases()
+      await maintainDesktopLeases()
+    }
+    await maintainDesktopLeases()
     configureWeixinBridgeRuntimeContextProvider(async () => {
       const settings = await mainState.store.load()
       const channel = settings.claw.channels.find((item) => item.enabled && item.provider === 'weixin')
@@ -532,3 +533,4 @@ export async function initializeMainServices(input: {
     ownsDesktopBackgroundServices: () => ownsDesktopBackgroundServices
   }
 }
+import { desktopProcessStack } from './runtime/desktop-process-stack'

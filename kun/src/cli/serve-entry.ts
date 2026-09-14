@@ -41,6 +41,7 @@ import {
   unregisterRuntimeWithManager,
   heartbeatRuntimeWithManager
 } from '../manager/manager-client.js'
+import type { ServiceManagerConnection } from '../manager/manager-client.js'
 import {
   allowsDevelopmentManagerBootstrap,
   resolveCliRuntimeFlavor,
@@ -48,6 +49,11 @@ import {
 } from './runtime-flavor.js'
 import { settleCleanupBeforeDeadline } from '../server/runtime-factory-cleanup.js'
 import { installLiveProcessLog } from './live-process-log.js'
+import { appSessionOwnerFromEnvironment } from '../contracts/app-session-owner.js'
+import { createOwnedServiceManagerSession } from '../manager/owned-service-manager-session.js'
+import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from '../manager/owned-manager-binding.js'
+import { shutdownOwnedProcesses } from '../process/owned-process.js'
+import { runManagerRetireCommand } from './manager-retire.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 // Replacement clients wait 15 seconds before escalating to a hard kill. Keep
@@ -109,240 +115,270 @@ async function serveMain(argv: readonly string[]): Promise<number> {
     flavor: runtimeFlavor,
     env: process.env
   })
-  const manager = await ensureServiceManager({
-    flavor: runtimeFlavor,
-    allowDevelopmentBootstrap,
-    ...(buildId ? { buildId } : {}),
-    controlDir,
-    dataDir: parsed.options.dataDir,
-    ...(process.env.KUN_MANAGER_SETTINGS_PATH?.trim()
-      ? { settingsPath: process.env.KUN_MANAGER_SETTINGS_PATH.trim() }
-      : {})
-  })
-  process.env.KUN_MANAGER_BASE_URL = manager.discovery.baseUrl
-  process.env.KUN_MANAGER_TOKEN = manager.discovery.managerToken
-  process.env.KUN_MANAGER_DATA_DIR = manager.discovery.dataDir
-  const start = async (): Promise<
-    { kind: 'existing'; existing: NonNullable<Awaited<ReturnType<typeof resolveSharedRuntime>>> } |
-    { kind: 'started'; server: KunServeHandle }
-  > => {
-    const inspected = await inspectSharedRuntime(parsed.options.dataDir, fetch, {
-      runtimeFlavor,
-      controlDir,
-      manager
-    })
-    const existing = inspected?.connection ?? null
-    if (existing) return { kind: 'existing', existing }
-    if (inspected) {
-      throw new Error(
-        `Kun shared runtime process ${inspected.discovery.pid} is still alive but is not responding; ` +
-        'preserving the manager owner instead of starting a second runtime'
-      )
-    }
-    return {
-      kind: 'started',
-      server: await startKunServe({
-        ...parsed.options,
-        launchMode,
-        runtimeFlavor,
-        ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
-        discoveryDir,
-        serviceManager: manager,
-        ...(buildId ? { buildId } : {}),
-        sharedMcpConfigPath: process.env.KUN_MCP_CONFIG_PATH || join(homedir(), '.kun', 'mcp.json'),
-        ...(process.env.KUN_RUNTIME_LOG_PATH ? { logPath: process.env.KUN_RUNTIME_LOG_PATH } : {})
-      })
-    }
-  }
-  // Detached startup is already elected by the parent shared-runtime manager.
-  // Foreground `kun serve` performs the same data-dir election itself.
-  const elected = launchMode === 'foreground'
-    ? await withRuntimeStartLock(discoveryDir, start, runtimeFlavor)
-    : await start()
-  if (elected.kind === 'existing') {
-    process.stderr.write(
-      `kun serve: runtime already running at ${elected.existing.discovery.baseUrl} (PID ${elected.existing.discovery.pid}); ` +
-      'use `kun runtime stop` first or choose another --data-dir.\n'
-    )
-    return ServeExitCode.runtime
-  }
-  let handle: KunServeHandle | null = null
-  installServeCrashHandlers(() => handle)
-  const server = elected.server
-  handle = server
-  process.title = runtimeFlavor === 'development' ? 'kun-dv-runtime' : 'kun-runtime'
-  const info = server.runtime.info()
-  let managerHeartbeat: ReturnType<typeof setInterval> | null = null
-  const registration = {
-    flavor: runtimeFlavor,
-    instanceId: server.instanceId,
-    pid: process.pid,
-    startedAt: info.startedAt,
-    host: server.host,
-    port: server.port,
-    baseUrl: `http://${server.host}:${server.port}`,
-    runtimeToken: parsed.options.runtimeToken,
-    ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
-    ...(buildId ? { buildId } : {}),
-    ...(process.env.KUN_RUNTIME_LOG_PATH ? { logPath: process.env.KUN_RUNTIME_LOG_PATH } : {})
-  }
-  let ownershipShutdownSignaled = false
-  let requestOwnershipShutdown!: () => void
-  const ownershipShutdownRequested = new Promise<void>((resolve) => {
-    requestOwnershipShutdown = resolve
-  })
-  const signalOwnershipShutdown = (ownerInstanceId?: string): void => {
-    if (ownershipShutdownSignaled) return
-    ownershipShutdownSignaled = true
-    process.stderr.write(
-      `kun serve: ${runtimeFlavor} runtime registration is owned by ` +
-      `${ownerInstanceId ?? 'another instance'}; stopping duplicate PID ${process.pid}.\n`
-    )
-    requestOwnershipShutdown()
-  }
-  let managerRecovery: Promise<void> | null = null
-  const applyManagerConnection = (connection: typeof manager): void => {
-    manager.discovery = connection.discovery
-    process.env.KUN_MANAGER_BASE_URL = connection.discovery.baseUrl
-    process.env.KUN_MANAGER_TOKEN = connection.discovery.managerToken
-    process.env.KUN_MANAGER_DATA_DIR = connection.discovery.dataDir
-  }
-  const recoverManagerConnection = async (): Promise<void> => {
-    let recovered = await resolveServiceManager(controlDir)
-    if (!recovered && (runtimeFlavor === 'production' || allowDevelopmentBootstrap)) {
-      recovered = await ensureServiceManager({
-        flavor: runtimeFlavor,
-        allowDevelopmentBootstrap,
-        controlDir,
-        dataDir: parsed.options.dataDir,
-        settingsPath: manager.discovery.settingsPath
-      })
-    }
-    if (!recovered) throw new Error('Kun Service Manager is unavailable')
-    applyManagerConnection(recovered)
-    await registerRuntimeWithManager({ manager, registration })
-  }
-  const heartbeatManager = async (): Promise<void> => {
-    try {
-      const accepted = await heartbeatRuntimeWithManager({
-        manager,
-        flavor: runtimeFlavor,
-        instanceId: server.instanceId
-      })
-      if (!accepted) {
-        signalOwnershipShutdown()
-        return
-      }
-    } catch (error) {
-      if (error instanceof ManagerRuntimeSlotBusyError) {
-        signalOwnershipShutdown(error.owner.instanceId)
-        return
-      }
-      if (!managerRecovery) {
-        managerRecovery = recoverManagerConnection().finally(() => { managerRecovery = null })
-      }
-      try {
-        await managerRecovery
-      } catch (recoveryError) {
-        if (recoveryError instanceof ManagerRuntimeSlotBusyError) {
-          signalOwnershipShutdown(recoveryError.owner.instanceId)
-          return
-        }
-        throw recoveryError
-      }
-    }
-  }
+  const injectedOwner = appSessionOwnerFromEnvironment()
+  if (ownerKind && !injectedOwner) throw new Error('Client-owned Runtime requires an application-owned Manager binding')
+  if (injectedOwner && !ownerMonitor) throw new Error('An injected application Manager requires a live Runtime owner IPC channel')
+  const ownedManagerSession = injectedOwner ? undefined : createOwnedServiceManagerSession({ ownerKind: 'cli' })
+  let cleanupServer: KunServeHandle | undefined
+  let cleanupManager: ServiceManagerConnection | undefined
+  let cleanupCompleted = false
   try {
-    await registerRuntimeWithManager({
-      manager,
-      registration
+    const manager = injectedOwner
+      ? await connectInjectedServiceManager({ owner: injectedOwner, dataDir: parsed.options.dataDir })
+      : await ownedManagerSession!.ensure({
+      flavor: runtimeFlavor,
+      allowDevelopmentBootstrap,
+      ...(buildId ? { buildId } : {}),
+      controlDir,
+      dataDir: parsed.options.dataDir,
+      ...(process.env.KUN_MANAGER_SETTINGS_PATH?.trim()
+        ? { settingsPath: process.env.KUN_MANAGER_SETTINGS_PATH.trim() }
+        : {})
     })
-    managerHeartbeat = setInterval(() => {
-      void heartbeatManager().catch(() => undefined)
-    }, 5_000)
-    managerHeartbeat.unref?.()
-  } catch (error) {
-    await server.close().catch(() => undefined)
-    throw error
-  }
-  // The startup bridge refreshed this registration immediately before
-  // discovery publication. Install steady liveness before self-verification
-  // so even a slow local health probe cannot reopen a heartbeat gap.
-  await selfVerifyHealth(server.host, server.port)
-  const startupInfo = {
-    service: 'kun',
-    mode: 'serve',
-    host: server.host,
-    port: server.port,
-    configPath: info.configPath,
-    dataDir: info.dataDir,
-    model: info.model,
-    approvalPolicy: info.approvalPolicy,
-    sandboxMode: info.sandboxMode,
-    approvalReviewer: info.approvalReviewer,
-    insecure: info.insecure,
-    instanceId: info.instanceId ?? server.instanceId,
-    ...(info.buildId ? { buildId: info.buildId } : {}),
-    startedAt: info.startedAt,
-    pid: info.pid,
-    message: `kun runtime listening on http://${server.host}:${server.port}`
-  }
-  process.stdout.write(`${KUN_READY_PREFIX}${JSON.stringify(startupInfo)}\n`)
-  process.stdout.write(JSON.stringify(startupInfo, null, 2) + '\n')
-  // Watch for event-loop stalls so a hang that starves /health (and trips the
-  // GUI watchdog) is attributable to CPU starvation vs a hard deadlock (#621).
-  // Attach non-sensitive identity so multi-instance log streams stay traceable.
-  const loopMonitor = startEventLoopMonitor({
-    stallThresholdMs: resolveEventLoopStallThresholdMs(process.env),
-    hardStallThresholdMs: resolveEventLoopHardStallThresholdMs(process.env),
-    context: () => {
-      const counters = server.runtime.liveCounters?.()
-      return [
-        `instance ${startupInfo.instanceId}`,
-        ...(startupInfo.buildId ? [`build ${startupInfo.buildId.slice(0, 12)}`] : []),
-        ...(counters
-          ? [`active inflight ${counters.inflight}`, `active captures ${counters.activeCaptures}`]
-          : [])
-      ]
+    cleanupManager = manager
+    bindRuntimeManagerDataPlane(parsed.options, manager)
+    const start = async (): Promise<
+      { kind: 'existing'; existing: NonNullable<Awaited<ReturnType<typeof resolveSharedRuntime>>> } |
+      { kind: 'started'; server: KunServeHandle }
+    > => {
+      const inspected = await inspectSharedRuntime(parsed.options.dataDir, fetch, {
+        runtimeFlavor,
+        controlDir,
+        manager
+      })
+      const existing = inspected?.connection ?? null
+      if (existing) return { kind: 'existing', existing }
+      if (inspected) {
+        throw new Error(
+          `Kun shared runtime process ${inspected.discovery.pid} is still alive but is not responding; ` +
+          'preserving the manager owner instead of starting a second runtime'
+        )
+      }
+      return {
+        kind: 'started',
+        server: await startKunServe({
+          ...parsed.options,
+          launchMode,
+          runtimeFlavor,
+          ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
+          discoveryDir,
+          serviceManager: manager,
+          ...(buildId ? { buildId } : {}),
+          sharedMcpConfigPath: process.env.KUN_MCP_CONFIG_PATH || join(homedir(), '.kun', 'mcp.json'),
+          ...(process.env.KUN_RUNTIME_LOG_PATH ? { logPath: process.env.KUN_RUNTIME_LOG_PATH } : {})
+        })
+      }
     }
-  })
-  await new Promise<void>((resolve) => {
-    let stopping = false
-    const stop = () => {
-      if (stopping) return
-      stopping = true
-      if (managerHeartbeat) clearInterval(managerHeartbeat)
-      loopMonitor.stop()
-      // Keep the manager slot owned until the server has closed its stores and
-      // released filesystem handles. A concurrent client must not elect a
-      // replacement in the gap between unregister and process teardown.
-      void settleCleanupBeforeDeadline(
-        () => server.close().finally(() => unregisterRuntimeWithManager({
+    // Detached startup is already elected by the parent shared-runtime manager.
+    // Foreground `kun serve` performs the same data-dir election itself.
+    const elected = launchMode === 'foreground'
+      ? await withRuntimeStartLock(discoveryDir, start, runtimeFlavor)
+      : await start()
+    if (elected.kind === 'existing') {
+      process.stderr.write(
+        `kun serve: runtime already running at ${elected.existing.discovery.baseUrl} (PID ${elected.existing.discovery.pid}); ` +
+        'use `kun runtime stop` first or choose another --data-dir.\n'
+      )
+      return ServeExitCode.runtime
+    }
+    let handle: KunServeHandle | null = null
+    installServeCrashHandlers(() => handle)
+    const server = elected.server
+    cleanupServer = server
+    handle = server
+    process.title = runtimeFlavor === 'development' ? 'kun-dv-runtime' : 'kun-runtime'
+    const info = server.runtime.info()
+    let managerHeartbeat: ReturnType<typeof setInterval> | null = null
+    const registration = {
+      flavor: runtimeFlavor,
+      instanceId: server.instanceId,
+      pid: process.pid,
+      startedAt: info.startedAt,
+      host: server.host,
+      port: server.port,
+      baseUrl: `http://${server.host}:${server.port}`,
+      runtimeToken: parsed.options.runtimeToken,
+      ...(ownerKind ? { clientOwnerKind: ownerKind } : {}),
+      ...(buildId ? { buildId } : {}),
+      ...(process.env.KUN_RUNTIME_LOG_PATH ? { logPath: process.env.KUN_RUNTIME_LOG_PATH } : {})
+    }
+    let ownershipShutdownSignaled = false
+    let requestOwnershipShutdown!: () => void
+    const ownershipShutdownRequested = new Promise<void>((resolve) => {
+      requestOwnershipShutdown = resolve
+    })
+    const signalOwnershipShutdown = (ownerInstanceId?: string): void => {
+      if (ownershipShutdownSignaled) return
+      ownershipShutdownSignaled = true
+      process.stderr.write(
+        `kun serve: ${runtimeFlavor} runtime registration is owned by ` +
+        `${ownerInstanceId ?? 'another instance'}; stopping duplicate PID ${process.pid}.\n`
+      )
+      requestOwnershipShutdown()
+    }
+    let managerRecovery: Promise<void> | null = null
+    const applyManagerConnection = (connection: typeof manager): void => {
+      manager.discovery = connection.discovery
+      process.env.KUN_MANAGER_BASE_URL = connection.discovery.baseUrl
+      process.env.KUN_MANAGER_TOKEN = connection.discovery.managerToken
+      process.env.KUN_MANAGER_DATA_DIR = connection.discovery.dataDir
+    }
+    const recoverManagerConnection = async (): Promise<void> => {
+      if (manager.discovery.appOwner) {
+        requestOwnershipShutdown()
+        throw new Error('Application-owned Manager disconnected; Runtime cannot elect or replace its Manager')
+      }
+      let recovered = await resolveServiceManager(controlDir)
+      if (!recovered && (runtimeFlavor === 'production' || allowDevelopmentBootstrap)) {
+        recovered = await ensureServiceManager({
+          flavor: runtimeFlavor,
+          allowDevelopmentBootstrap,
+          controlDir,
+          dataDir: parsed.options.dataDir,
+          settingsPath: manager.discovery.settingsPath
+        })
+      }
+      if (!recovered) throw new Error('Kun Service Manager is unavailable')
+      applyManagerConnection(recovered)
+      await registerRuntimeWithManager({ manager, registration })
+    }
+    const heartbeatManager = async (): Promise<void> => {
+      try {
+        const accepted = await heartbeatRuntimeWithManager({
           manager,
           flavor: runtimeFlavor,
           instanceId: server.instanceId
-        })),
-        SERVE_SHUTDOWN_TIMEOUT_MS
-      ).then((closed) => {
-        if (!closed) {
-          process.stderr.write(
-            `kun serve: graceful shutdown exceeded ${SERVE_SHUTDOWN_TIMEOUT_MS}ms; forcing process exit\n`
-          )
+        })
+        if (!accepted) {
+          signalOwnershipShutdown()
+          return
         }
-      }).catch((error) => {
-        process.stderr.write(
-          `kun serve: failed to close runtime cleanly: ${error instanceof Error ? error.message : String(error)}\n`
-        )
-      }).finally(resolve)
+      } catch (error) {
+        if (error instanceof ManagerRuntimeSlotBusyError) {
+          signalOwnershipShutdown(error.owner.instanceId)
+          return
+        }
+        if (!managerRecovery) {
+          managerRecovery = recoverManagerConnection().finally(() => { managerRecovery = null })
+        }
+        try {
+          await managerRecovery
+        } catch (recoveryError) {
+          if (recoveryError instanceof ManagerRuntimeSlotBusyError) {
+            signalOwnershipShutdown(recoveryError.owner.instanceId)
+            return
+          }
+          throw recoveryError
+        }
+      }
     }
-    process.once('SIGTERM', stop)
-    process.once('SIGINT', stop)
-    void server.shutdownRequested.then(stop)
-    void ownershipShutdownRequested.then(stop)
-    if (ownerMonitor) void ownerMonitor.disconnected.then(stop)
-  })
-  ownerMonitor?.dispose()
-  return ServeExitCode.ok
+    try {
+      await registerRuntimeWithManager({
+        manager,
+        registration
+      })
+      managerHeartbeat = setInterval(() => {
+        void heartbeatManager().catch(() => undefined)
+      }, 5_000)
+      managerHeartbeat.unref?.()
+    } catch (error) {
+      await server.close().catch(() => undefined)
+      throw error
+    }
+    // The startup bridge refreshed this registration immediately before
+    // discovery publication. Install steady liveness before self-verification
+    // so even a slow local health probe cannot reopen a heartbeat gap.
+    await selfVerifyHealth(server.host, server.port)
+    const startupInfo = {
+      service: 'kun',
+      mode: 'serve',
+      host: server.host,
+      port: server.port,
+      configPath: info.configPath,
+      dataDir: info.dataDir,
+      model: info.model,
+      approvalPolicy: info.approvalPolicy,
+      sandboxMode: info.sandboxMode,
+      approvalReviewer: info.approvalReviewer,
+      insecure: info.insecure,
+      instanceId: info.instanceId ?? server.instanceId,
+      ...(info.buildId ? { buildId: info.buildId } : {}),
+      startedAt: info.startedAt,
+      pid: info.pid,
+      message: `kun runtime listening on http://${server.host}:${server.port}`
+    }
+    process.stdout.write(`${KUN_READY_PREFIX}${JSON.stringify(startupInfo)}\n`)
+    process.stdout.write(JSON.stringify(startupInfo, null, 2) + '\n')
+    // Watch for event-loop stalls so a hang that starves /health (and trips the
+    // GUI watchdog) is attributable to CPU starvation vs a hard deadlock (#621).
+    // Attach non-sensitive identity so multi-instance log streams stay traceable.
+    const loopMonitor = startEventLoopMonitor({
+      stallThresholdMs: resolveEventLoopStallThresholdMs(process.env),
+      hardStallThresholdMs: resolveEventLoopHardStallThresholdMs(process.env),
+      context: () => {
+        const counters = server.runtime.liveCounters?.()
+        return [
+          `instance ${startupInfo.instanceId}`,
+          ...(startupInfo.buildId ? [`build ${startupInfo.buildId.slice(0, 12)}`] : []),
+          ...(counters
+            ? [`active inflight ${counters.inflight}`, `active captures ${counters.activeCaptures}`]
+            : [])
+        ]
+      }
+    })
+    await new Promise<void>((resolve) => {
+      let stopping = false
+      const stop = () => {
+        if (stopping) return
+        stopping = true
+        if (managerHeartbeat) clearInterval(managerHeartbeat)
+        loopMonitor.stop()
+        // Keep the manager slot owned until the server has closed its stores and
+        // released filesystem handles. A concurrent client must not elect a
+        // replacement in the gap between unregister and process teardown.
+        void settleCleanupBeforeDeadline(
+          () => server.close().finally(() => unregisterRuntimeWithManager({
+            manager,
+            flavor: runtimeFlavor,
+            instanceId: server.instanceId
+          })),
+          SERVE_SHUTDOWN_TIMEOUT_MS
+        ).then((closed) => {
+          if (!closed) {
+            process.stderr.write(
+              `kun serve: graceful shutdown exceeded ${SERVE_SHUTDOWN_TIMEOUT_MS}ms; forcing process exit\n`
+            )
+          }
+        }).catch((error) => {
+          process.stderr.write(
+            `kun serve: failed to close runtime cleanly: ${error instanceof Error ? error.message : String(error)}\n`
+          )
+        }).finally(resolve)
+      }
+      process.once('SIGTERM', stop)
+      process.once('SIGINT', stop)
+      void server.shutdownRequested.then(stop)
+      void ownershipShutdownRequested.then(stop)
+      if (ownerMonitor) void ownerMonitor.disconnected.then(stop)
+    })
+    ownerMonitor?.dispose()
+    cleanupCompleted = true
+    return ServeExitCode.ok
+  } finally {
+    ownerMonitor?.dispose()
+    if (!cleanupCompleted && cleanupServer) {
+      const server = cleanupServer
+      await settleCleanupBeforeDeadline(() => server.close().finally(async () => {
+        if (cleanupManager) await unregisterRuntimeWithManager({
+          manager: cleanupManager, flavor: runtimeFlavor, instanceId: server.instanceId
+        })
+      }), SERVE_SHUTDOWN_TIMEOUT_MS).catch((error) => {
+        process.stderr.write(`kun serve startup cleanup failed: ${String(error)}\n`)
+      })
+    }
+    await ownedManagerSession?.close()
+    if (ownedManagerSession) await shutdownOwnedProcesses({ timeoutMs: 5_000 })
+  }
 }
 
 const SELF_VERIFY_TIMEOUT_MS = 5_000
@@ -376,6 +412,9 @@ export async function main(argv: readonly string[]): Promise<number> {
     executablePath: process.argv[1]
   })
   process.title = process.env.KUN_RUNTIME_FLAVOR === 'development' ? 'kun-dv' : 'kun'
+  if (argv[0] === 'manager') return runManagerRetireCommand(argv.slice(1), {
+    stdout: process.stdout, stderr: process.stderr, env: process.env
+  })
   if (argv[0] === 'extension') {
     return runExtensionCommand(argv.slice(1), {
       stdout: process.stdout,

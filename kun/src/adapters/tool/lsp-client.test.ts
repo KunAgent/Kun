@@ -12,6 +12,10 @@ const { accessMock, existsSyncMock, spawnMock } = vi.hoisted(() => ({
 vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
+vi.mock('../../process/owned-process.js', () => ({
+  spawnOwnedProcess: async (...args: unknown[]) => spawnMock(...args),
+  stopOwnedProcess: async (child: { kill(signal: string): void }) => { child.kill('SIGTERM') }
+}))
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
@@ -74,8 +78,8 @@ beforeEach(() => {
   existsSyncMock.mockReturnValue(false)
 })
 
-afterEach(() => {
-  shutdownAllLspSessions()
+afterEach(async () => {
+  await shutdownAllLspSessions()
   spawnMock.mockReset()
   accessMock.mockReset()
   existsSyncMock.mockReset()
@@ -246,7 +250,7 @@ describe('LSP shutdown', () => {
     const acquiring = acquireLspSession('/workspace/shutdown', 'typescript')
     await vi.waitFor(() => expect(serverProcess?.stdin.write).toHaveBeenCalledTimes(1))
 
-    shutdownAllLspSessions()
+    await shutdownAllLspSessions()
 
     expect(serverProcess?.kill).toHaveBeenCalledWith('SIGTERM')
     await expect(acquiring).rejects.toThrow('LSP session closed')

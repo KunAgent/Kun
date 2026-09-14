@@ -67,6 +67,20 @@ export async function discoverCursorSubscription(
   const nodePath = options.nodePath ?? process.execPath
   const script = cursorDiscoveryScript()
 
+  if (!options.spawnFn) {
+    try {
+      const result = await runOwnedCommand(nodePath, ['--input-type=module', '-e', script], {
+        cwd: kunDir, env: cursorDiscoveryEnvironment(), input: apiKey,
+        timeoutMs, maxOutputBytes: MAX_STDOUT_BYTES,
+        messages: {
+          timeout: `Cursor SDK discovery timed out after ${timeoutMs}ms.`,
+          outputLimit: 'Cursor SDK discovery response exceeded the output limit.'
+        }
+      })
+      return parseCursorDiscoveryOutput(result.stdout, apiKey)
+    } catch (error) { throw new Error(sanitizeCursorError(error, apiKey)) }
+  }
+
   return new Promise((resolve, reject) => {
     let child: ReturnType<typeof spawn> | undefined
     let stdout = ''
@@ -348,3 +362,4 @@ function normalizeCursorAccount(value: unknown): CursorSubscriptionAccount {
 function boundedString(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 }
+import { runOwnedCommand } from './owned-command'

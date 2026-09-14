@@ -365,19 +365,19 @@ export function normalizeAppBehaviorSettings(
   settings?: Partial<AppBehaviorConfigV1>
 ): AppBehaviorConfigV1 {
   const openAtLogin = settings?.openAtLogin === true
-  const closeAction = normalizeWindowCloseAction(settings?.closeAction)
-    ?? (settings?.closeToTray === true ? 'tray' : 'ask')
+  const closeAction = normalizeWindowCloseAction(settings?.closeAction) ?? 'quit'
   return {
     openAtLogin,
     startMinimized: openAtLogin && settings?.startMinimized === true,
     keepAwake: settings?.keepAwake === true,
     useSystemTitleBar: settings?.useSystemTitleBar === true,
     closeAction,
-    closeToTray: closeAction === 'tray'
+    closeToTray: false
   }
 }
 
 export function normalizeWindowCloseAction(value: unknown): WindowCloseAction | null {
+  if (value === 'ask' || value === 'tray') return 'quit'
   return typeof value === 'string' && WINDOW_CLOSE_ACTIONS.includes(value as WindowCloseAction)
     ? value as WindowCloseAction
     : null
@@ -387,17 +387,7 @@ export function mergeAppBehaviorSettings(
   current: AppBehaviorConfigV1,
   patch?: Partial<AppBehaviorConfigV1>
 ): AppBehaviorConfigV1 {
-  const translatedPatch: Partial<AppBehaviorConfigV1> | undefined =
-    patch && patch.closeAction === undefined && patch.closeToTray !== undefined
-      ? {
-          ...patch,
-          closeAction: patch.closeToTray ? 'tray' : 'quit'
-        }
-      : patch
-  return normalizeAppBehaviorSettings({
-    ...current,
-    ...(translatedPatch ?? {})
-  })
+  return normalizeAppBehaviorSettings({ ...current, ...patch })
 }
 
 function shouldMigrateLegacySettings(settings: AppSettingsV1): boolean {
