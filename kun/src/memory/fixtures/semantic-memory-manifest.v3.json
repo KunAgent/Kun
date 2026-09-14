@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 3,
+  "datasetId": "kun-memory-semantic-retrieval-anonymous-v3",
+  "status": "frozen",
+  "evaluationNow": "2026-09-11T00:00:00.000Z",
+  "defaultK": 5,
+  "promptCharacterBudget": 2000,
+  "scoringVersion": 3,
+  "splitRule": "query ordinals 001-040 development; 041-080 holdout",
+  "hashes": {
+    "recordsSha256": "88d31cca185a91f5e8fbcb3fe979d7ea00d35ef2f52766e25fe6e5323fbd582a",
+    "queriesSha256": "8c56c3b665b4074a389d46f910caf4118a2b5620b91c8e8458c9afa456d5419f"
+  },
+  "counts": {
+    "records": 44,
+    "queries": 80,
+    "development": 40,
+    "holdout": 40,
+    "english": 40,
+    "chinese": 40,
+    "emptyExpected": 17,
+    "zeroOverlapPositive": 8
+  },
+  "categoryQuotas": {
+    "lexical-control": { "development": 4, "holdout": 4 },
+    "semantic-paraphrase": { "development": 4, "holdout": 4 },
+    "cross-lingual": { "development": 4, "holdout": 4 },
+    "cross-lingual-zero-overlap-positive": { "development": 4, "holdout": 4 },
+    "terse-abstract": { "development": 4, "holdout": 4 },
+    "irrelevant-no-evidence": { "development": 4, "holdout": 4 },
+    "same-category-near-miss": { "development": 4, "holdout": 4 },
+    "scope-lifecycle-negative": { "development": 4, "holdout": 4 },
+    "no-result-authority-safety": { "development": 4, "holdout": 4 },
+    "multi-relevant": { "development": 4, "holdout": 4 }
+  },
+  "candidateIdentity": {
+    "modelId": "multilingual-e5-small-q8",
+    "modelSha256": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193",
+    "tokenizerSha256": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39",
+    "queryPrefix": "query: ",
+    "documentPrefix": "passage: ",
+    "pooling": "attention-mask-mean",
+    "normalization": "l2",
+    "quantization": "onnx/model_quantized.onnx; dtype=q8",
+    "runtime": "@huggingface/transformers@4.2.0; onnxruntime-node",
+    "dimensions": 384
+  },
+  "normalization": {
+    "tokenizerVersion": "XLMRobertaTokenizer@multilingual-e5-small@761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+    "zeroOverlapRule": "case-fold Unicode NFKC, strip punctuation, split CJK characters, tokenize non-CJK runs, remove declared stopwords, and compare before terminology mapping"
+  },
+  "bootstrap": {
+    "method": "paired-percentile",
+    "seed": 20260911,
+    "resamples": 10000,
+    "confidenceLevel": 0.95
+  },
+  "developmentGrid": {
+    "minimumSimilarities": [0.7, 0.75, 0.8],
+    "marginGaps": [0.02, 0.05, 0.1],
+    "semanticWeights": [0.5, 1, 1.5],
+    "lexicalWeights": [1],
+    "rankConstants": [30, 60]
+  },
+  "thresholds": {
+    "scopeLeaks": 0,
+    "lifecycleLeaks": 0,
+    "authorityViolations": 0,
+    "networkAttempts": 0,
+    "fallbackMismatches": 0,
+    "emptyResultAccuracy": 1,
+    "minimumRecallGainLowerBound": 0.15,
+    "minimumMrrGainLowerBound": 0.1,
+    "maximumOverallPrecisionDecline": 0.05,
+    "maximumZeroOverlapRecallDecline": 0.05,
+    "deterministicRuns": 3,
+    "maximumCompressedModelBytes": 209715200,
+    "maximumWarmQueryP95Ms": 250,
+    "maximumColdReadinessMs": 5000,
+    "maximumTenThousandRecordBuildMs": 120000,
+    "maximumAdditionalPeakRssBytes": 536870912,
+    "maximumTenThousandRecordIndexBytes": 67108864
+  },
+  "review": {
+    "privacyPatternsChecked": [
+      "Windows drive paths",
+      "UNC paths",
+      "POSIX absolute paths",
+      "file URLs",
+      "credentials",
+      "email addresses",
+      "GitHub user paths"
+    ],
+    "labelingRule": "Expected ids must directly answer the query; forbidden ids are reviewed same-topic distractors or unsafe records.",
+    "notes": "Synthetic names and /fixtures paths are deliberate. Development and holdout use identical quotas; holdout labels are not tuning input."
+  }
+}
