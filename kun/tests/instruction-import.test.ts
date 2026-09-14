@@ -295,6 +295,29 @@ describe('instruction-import', () => {
     expect(plan.warnings.some((w) => w.code === 'budget-exceeded')).toBe(true)
   })
 
+  it('still imports an over-budget top-level file but warns it is oversized', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'A'.repeat(200), 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'], maxFileBytes: 64
+    })
+
+    expect(plan.warnings.some((w) => w.code === 'oversized-import')).toBe(true)
+    expect(plan.targets[0]?.mergedText).toContain('A'.repeat(200))
+  })
+
+  it('skips a top-level source above the hard source ceiling', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'B'.repeat(2048), 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'],
+      maxFileBytes: 64, maxSourceBytes: 1024
+    })
+
+    expect(plan.warnings.some((w) => w.code === 'oversized-import')).toBe(true)
+    expect(plan.targets[0]?.changed).toBe(false)
+  })
+
   it('applies only workspace target and creates ~/.kun for global', async () => {
     await writeFile(join(workspace, 'CLAUDE.md'), 'WS rule.', 'utf8')
     await mkdir(join(home, '.claude'), { recursive: true })

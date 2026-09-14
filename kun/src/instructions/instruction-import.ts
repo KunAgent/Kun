@@ -8,6 +8,9 @@ import {
 
 export const MAX_IMPORT_DEPTH = 4
 
+/** Independent hard ceiling: a single source file larger than this is skipped entirely rather than imported. */
+export const MAX_IMPORT_SOURCE_BYTES = 512 * 1024
+
 export type ImportScope = 'workspace' | 'global'
 
 export type SourceToolId =
@@ -85,6 +88,7 @@ export type BuildImportPlanInput = {
   tools?: SourceToolId[]
   maxFileBytes?: number
   maxTotalBytes?: number
+  maxSourceBytes?: number
 }
 
 const BEGIN = 'kun:import:begin'
@@ -360,6 +364,7 @@ function isMissingFileError(error: unknown): boolean {
 export async function buildImportPlan(input: BuildImportPlanInput): Promise<ImportPlan> {
   const maxFileBytes = input.maxFileBytes ?? DEFAULT_INSTRUCTION_MAX_FILE_BYTES
   const maxTotalBytes = input.maxTotalBytes ?? DEFAULT_INSTRUCTION_MAX_TOTAL_BYTES
+  const maxSourceBytes = input.maxSourceBytes ?? MAX_IMPORT_SOURCE_BYTES
   const warnings: ImportWarning[] = []
   const detected = await detectImportSources({
     workspace: input.workspace,
@@ -387,6 +392,15 @@ export async function buildImportPlan(input: BuildImportPlanInput): Promise<Impo
         if (resolve(source.path) === resolve(target)) {
           warnings.push({ code: 'identity-skip', tool: source.tool, path: source.path })
           continue
+        }
+        // Independent hard ceiling: skip an oversized top-level source entirely rather than importing a huge file.
+        if (source.bytes > maxSourceBytes) {
+          warnings.push({ code: 'oversized-import', path: source.path, bytes: source.bytes })
+          continue
+        }
+        // Within the hard cap but over the per-file budget: still import, but warn (never truncate instruction meaning).
+        if (source.bytes > maxFileBytes) {
+          warnings.push({ code: 'oversized-import', path: source.path, bytes: source.bytes })
         }
         const ctx: ResolveCtx = {
           homeDir: input.homeDir,
