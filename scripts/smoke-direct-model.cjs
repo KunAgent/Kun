@@ -26,7 +26,7 @@ async function startDirectModel({ real = false } = {}) {
     realModel = registry.defaultProviderId === 'deepseek' ? registry.defaultModel : provider.selectedModel
     assert(provider.models.includes(realModel))
   }
-  const stats = { real, model: realModel ?? 'deepseek-chat', calls: 0, mainCalls: 0, backgroundCalls: 0, byPrompt: {}, models: {}, blocked: 0 }
+  const stats = { real, model: realModel ?? 'deepseek-chat', calls: 0, mainCalls: 0, backgroundCalls: 0, byPrompt: {}, models: {}, blocked: 0, benchmarkChunks: [] }
   let held = false, releaseHold = () => {}, lastPrompt = 'background'
   const server = createServer(async (request, response) => {
     try {
@@ -49,6 +49,16 @@ async function startDirectModel({ real = false } = {}) {
         response.writeHead(result.status, { 'Content-Type': result.headers.get('content-type') ?? 'application/json' })
         for await (const chunk of result.body) response.write(chunk)
         response.end(); return
+      }
+      if (!real && prompt?.includes('STREAM_BENCH')) {
+        response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+        for (let i = 0; i < 100; i++) {
+          stats.benchmarkChunks.push(Date.now())
+          response.write('data: ' + JSON.stringify({ choices: [{ index: 0, delta: { content: 'word' + i + ' ' }, finish_reason: null }] }) + '\n\n')
+          await new Promise((resolve) => setTimeout(resolve, 40))
+        }
+        response.write('data: ' + JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }) + '\n\n')
+        response.end('data: [DONE]\n\n'); return
       }
       if (prompt?.includes('HOLD_RESPONSE') && !held) { held = true; await new Promise((resolve) => { releaseHold = resolve }); held = false }
       const memory = JSON.stringify(messages).includes('agent_memory_capture')

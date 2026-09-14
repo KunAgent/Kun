@@ -6,6 +6,7 @@
 // discovery/control files, Git repositories and processes belong to this run.
 const { startDirectModel } = require('./smoke-direct-model.cjs')
 const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
+const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -140,7 +141,7 @@ async function main() {
     page.on('console', (message) => { if (message.type() === 'error' && message.text().includes('same key')) pageErrors.push(message.text()) })
     await page.waitForLoadState('domcontentloaded')
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    const direct = await exerciseDirectChat({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+    const direct = await (process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat)({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
       application: electronApplication, workspaceRoot, real: process.argv.includes('--real-model'),
       resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms'),
       approve: (ref) => installNativeConsentFixture(electronApplication, ref) })
