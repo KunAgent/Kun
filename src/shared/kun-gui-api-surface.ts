@@ -383,6 +383,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   convertWorkspaceSpreadsheet: (
     payload: WorkspaceSpreadsheetConvertPayload
   ) => Promise<WorkspaceSpreadsheetConvertResult>
+  setRoomPermissions: (request: import('./kun-gui-api-protected-approval').RoomPermissionChange) => Promise<import('./kun-gui-api-protected-approval').RoomPermissionChangeResult>
   resolveKunApproval: (request: KunProtectedApprovalRequest) => Promise<KunProtectedApprovalResult>
   restartRuntime: () => Promise<void>
   restartKunServe: () => Promise<{ accepted: boolean; error?: string }>

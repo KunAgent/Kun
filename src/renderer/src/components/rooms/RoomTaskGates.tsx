@@ -1,3 +1,4 @@
+import { RoomApprovalCard } from './RoomApprovalCard'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RoomRecoveryInfo, RoomTask } from '@shared/rooms-api'
@@ -174,41 +175,7 @@ export function RoomExecutionGates({
   const mutation = useRoomMutation(onUpdated)
   return (
     <div className="space-y-3">
-      {detail?.approvals?.map((approval) => (
-        <section
-          key={approval.id}
-          className="space-y-2 rounded-lg border border-amber-500/40 p-3"
-        >
-          <h4 className="text-sm font-medium text-ds-ink">
-            {t('roomsState_needs_approval')} · {approval.toolName}
-          </h4>
-          <pre className="whitespace-pre-wrap break-words text-xs text-ds-muted">
-            {approval.summary}
-          </pre>
-          <div className="flex gap-2">
-            {(['allow', 'deny'] as const).map((decision) => (
-              <button
-                key={decision}
-                className={roomButtonClass}
-                disabled={mutation.busy}
-                onClick={() =>
-                  void mutation.run(`${approval.id}:${decision}`, async () => {
-                    const result = await window.kunGui.resolveKunApproval({
-                      approvalId: approval.id,
-                      decision,
-                      source: 'user'
-                    })
-                    if (result.confirmed && !result.response.ok)
-                      throw new Error(result.response.body)
-                  })
-                }
-              >
-                {t(decision === 'allow' ? 'roomsAllow' : 'roomsDeny')}
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+      {detail?.approvals?.map((approval) => <RoomApprovalCard key={approval.id} approval={approval} onUpdated={onUpdated} />)}
       {detail?.userInputs?.map((input) => (
         <RoomInputForm key={input.id} input={input} onUpdated={onUpdated} />
       ))}

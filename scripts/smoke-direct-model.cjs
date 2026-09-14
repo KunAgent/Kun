@@ -26,7 +26,7 @@ async function startDirectModel({ real = false } = {}) {
     realModel = registry.defaultProviderId === 'deepseek' ? registry.defaultModel : provider.selectedModel
     assert(provider.models.includes(realModel))
   }
-  const stats = { real, model: realModel ?? 'deepseek-chat', calls: 0, mainCalls: 0, backgroundCalls: 0, byPrompt: {}, models: {}, blocked: 0, benchmarkChunks: [] }
+  const stats = { real, model: realModel ?? 'deepseek-chat', calls: 0, mainCalls: 0, backgroundCalls: 0, byPrompt: {}, models: {}, blocked: 0, automaticReviews: 0, benchmarkChunks: [] }
   let held = false, releaseHold = () => {}, lastPrompt = 'background'
   const server = createServer(async (request, response) => {
     try {
@@ -62,16 +62,21 @@ async function startDirectModel({ real = false } = {}) {
       }
       if (prompt?.includes('HOLD_RESPONSE') && !held) { held = true; await new Promise((resolve) => { releaseHold = resolve }); held = false }
       const memory = JSON.stringify(messages).includes('agent_memory_capture')
+      const review = JSON.stringify(messages).includes('hostApprovalReason')
+      if (review) stats.automaticReviews++
       const last = messages.at(-1)
-      let content = memory ? '{"candidates":[]}' : prompt ? '你好！我可以帮你处理问题和文件。' : 'Private chat'
+      const intentIndex = messages.findLastIndex((item) => item.role === 'user' && JSON.stringify(item.content).includes('User message:'))
+      const wrote = messages.findLastIndex((item) => item.role === 'tool') > intentIndex
+      let content = review ? JSON.stringify({ decision: 'allow', riskLevel: 'low', rationale: 'Isolated fixture write requested by the user.' }) : memory ? '{"candidates":[]}' : prompt ? '你好！我可以帮你处理问题和文件。' : 'Private chat'
       let tool
-      if (prompt && last?.role !== 'tool' && !memory) {
-        const command = prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
+      if (prompt && !wrote && !memory && !review) {
+        const external = /EXTERNAL_FILE_B64:([A-Za-z0-9_-]+)/.exec(prompt)
+        const command = external ? { path: Buffer.from(external[1], 'base64url').toString(), content: 'external verified\n' } : prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
           prompt.includes('UPDATE_FILE') ? { path: 'hello.txt', content: 'updated by Kun\n' } :
           prompt.includes('CREATE_FILE') ? { path: 'hello.txt', content: 'hello from Kun\n' } : undefined
         if (command) tool = { id: 'call_' + stats.calls, type: 'function', function: { name: 'write', arguments: JSON.stringify(command) } }
       }
-      if (last?.role === 'tool') content = '文件已完成，并保存在当前工作目录。'
+      if (wrote && !review && !memory) content = /denied|not allowed/i.test(JSON.stringify(messages.findLast((item) => item.role === 'tool')?.content)) ? '这一步已被拒绝，未修改文件。' : '文件已完成，并保存在当前工作目录。'
       if (body.stream === false) {
         response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content, ...(tool ? { tool_calls: [tool] } : {}) }, finish_reason: tool ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 20, completion_tokens: 10 } })); return
       }

@@ -429,6 +429,15 @@ export function registerThreadRoutes(
       sinceSeq
     })
   })
+  router.add('GET', '/v1/approvals/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const forwarded = await runtime.forwardControlById?.(request, 'approval', ctx.params.id)
+    if (forwarded) return forwarded
+    const approval = runtime.approvalGate.get(ctx.params.id)
+    if (!approval) return jsonResponse({ error: 'Approval not found' }, 404)
+    const thread = await runtime.threadService.getMetadata(approval.threadId)
+    return jsonResponse({ approval, title: thread?.title ?? 'Kun' })
+  })
   router.add('POST', '/v1/approvals/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     const forwarded = await runtime.forwardControlById?.(request, 'approval', ctx.params.id)

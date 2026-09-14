@@ -26,6 +26,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/preload/index.ts'),
+          'protected-room-dialog': resolve('src/preload/protected-room-dialog.ts'),
           'extension-view': resolve('src/preload/extension-view.ts'),
           'extension-protected-surface': resolve('src/preload/extension-protected-surface.ts'),
           'storage-relocation-recovery': resolve('src/preload/storage-relocation-recovery.ts'),

@@ -200,6 +200,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/agents/quick-create', ['POST']),
   compileEndpoint('/v1/agents/{agentId}/models', ['GET', 'PUT']),
   compileEndpoint('/v1/rooms/{roomId}/direct', ['GET']),
+  compileEndpoint('/v1/rooms/{roomId}/direct/permissions', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/files', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/direct/context', ['POST']),
   compileEndpoint('/v1/rooms/{roomId}/direct/{requestId}', ['POST']),
@@ -445,6 +446,7 @@ export const runtimeRequestCancelPayloadSchema = z.object({
 
 export const kunProtectedApprovalPayloadSchema = z
   .object({
+    presentation: z.literal('room').optional(),
     approvalId: z.string().trim().min(1).max(256).regex(/^[A-Za-z0-9._:-]+$/),
     decision: z.enum(['allow', 'deny']),
     source: z.enum(['policy', 'user'])

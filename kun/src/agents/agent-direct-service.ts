@@ -1,3 +1,4 @@
+import { freezeAgentPermissions } from './agent-permission-snapshot.js'
 import { realpath, stat, readdir } from 'node:fs/promises'
 import { relative, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -76,7 +77,9 @@ export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, r
       events: [{ roomId, kind: 'request.updated', payload: { id: requestId } }] })
   } else {
     if (!['failed', 'cancelled'].includes(value.status) || value.admissionAttempted && (!turn || ['queued', 'running'].includes(turn.status))) throw new RoomStoreConflictError('Reconcile the original execution before retrying')
-    const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze(value.roomSnapshot)
+    const currentRoom = await rooms.service.get(roomId)
+    const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze({ ...value.roomSnapshot, privateExecutionPolicy: currentRoom.privateExecutionPolicy })
+    await freezeAgentPermissions(rooms.agents, snapshot)
     const request: RoomRequestState = { id, roomId, privateProtocol: 'direct-v1', status: 'pending', rootRequestId: id,
       sourceMessageId: value.sourceMessageId, roomSnapshot: snapshot, message: value.message, threadId: 'private-pending-' + id }
     await store.commit({ requestId: key, fingerprint, checks: [{ kind: 'request', id: requestId, expectedRevision: input.expectedRevision },

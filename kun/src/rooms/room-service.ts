@@ -1,3 +1,4 @@
+import { freezeAgentPermissions } from '../agents/agent-permission-snapshot.js'
 import { prepareAgentTaskParticipants } from '../agents/agent-task-participants.js'
 import type { AgentIdentityService } from '../agents/agent-identity-service.js'
 import { attachRoomRunPublication } from './room-run-recording.js'
@@ -173,6 +174,9 @@ export class RoomService {
       attachmentIds: body.attachmentIds, clientRequestId: body.clientRequestId,
       requestFingerprint: roomFingerprint(body), createdAt: new Date().toISOString()
     })
+    if (room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId && this.agents) {
+      await freezeAgentPermissions(this.agents, room)
+    }
     const taskParticipants = this.agents ? await prepareAgentTaskParticipants(this.agents, room, body) : undefined
     const request: RoomRequestState = {
       ...(room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId ? { privateProtocol: 'direct-v1' as const, privateModel: await this.directModel?.(room) } : {}), taskParticipants, id: requestId, roomId: id, status: 'pending',

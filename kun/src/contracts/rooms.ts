@@ -1,3 +1,4 @@
+import { RoomExecutionPolicySchema } from './room-permissions.js'
 import { z } from 'zod'
 import { ConversationKind, ParticipantAgentId, AgentModelRef } from './agent-identities.js'
 import { SubagentProfileConfig } from './capabilities-core.js'
@@ -64,6 +65,7 @@ export type RoomRepository = z.infer<typeof RoomRepositorySchema>
 export const RoomSchema = z.object({
   conversationKind: ConversationKind.optional(),
   participantAgentIds: z.array(ParticipantAgentId).max(100).optional(),
+  privateExecutionPolicy: RoomExecutionPolicySchema.optional(),
   privateWorkspace: z.string().max(4096).optional(),
   privateEpoch: z.number().int().nonnegative().optional(),
   schemaVersion: z.literal(1),

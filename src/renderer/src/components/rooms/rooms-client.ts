@@ -1,3 +1,4 @@
+import type { RoomApprovalView } from '@shared/room-approval-presentation'
 import type {
   CreateRoomRequest,
   Room,
@@ -31,7 +32,7 @@ export type RoomPatch = Partial<RoomInput> & {
   archived?: boolean
 }
 export type RoomTaskDetail = {
-  approvals?: Array<{ id: string; toolName: string; summary: string }>
+  approvals?: RoomApprovalView[]
   userInputs?: RoomUserInput[]
   task: RoomTask
   controlThreadId?: string

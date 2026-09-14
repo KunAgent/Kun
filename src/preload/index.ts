@@ -95,6 +95,7 @@ const api = {
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
   ...runtimeRequestPreloadApi,
+  setRoomPermissions: (request) => ipcRenderer.invoke('room:permissions:set', request),
   gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),

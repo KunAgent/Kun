@@ -82,11 +82,11 @@ describe('Room product interactions', () => {
     await renderGates({
       approvals: [{ id: 'approval', toolName: 'exec', summary: 'Run tests' }]
     })
-    await act(async () => button('Allow').props.onClick())
+    await act(async () => button('Review and allow').props.onClick({ isTrusted: true }))
     expect(protectedApproval).toHaveBeenCalledWith({
       approvalId: 'approval',
       decision: 'allow',
-      source: 'user'
+      source: 'user', presentation: 'room'
     })
     expect(api.request).not.toHaveBeenCalled()
   })
@@ -302,11 +302,11 @@ describe('Room product interactions', () => {
         })
       )
     })
-    await act(async () => button('Allow').props.onClick())
+    await act(async () => button('Review and allow').props.onClick({ isTrusted: true }))
     expect(protectedApproval).toHaveBeenCalledWith({
       approvalId: 'integration-approval',
       decision: 'allow',
-      source: 'user'
+      source: 'user', presentation: 'room'
     })
     act(() =>
       renderer.root

@@ -85,3 +85,6 @@ export type { AgentModelBinding } from '../../kun/src/agents/agent-models'
 export type AgentModelOptions = Awaited<ReturnType<typeof import('../../kun/src/agents/agent-models').agentModelOptions>>
 export type AgentChatEntry = Awaited<ReturnType<typeof import('../../kun/src/agents/agent-chat-entry').chatEntryState>>
 export type AgentDirectActivity = Awaited<ReturnType<typeof import('../../kun/src/agents/agent-direct-service').directActivity>>
+
+export type { RoomPermissionRequest, RoomExecutionPolicy } from '../../kun/src/contracts/room-permissions'
+export type RoomPermissionState = Awaited<ReturnType<typeof import('../../kun/src/agents/agent-permissions').agentPermissions>>

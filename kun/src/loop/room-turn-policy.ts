@@ -18,6 +18,7 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   const policy = thread.roomContext
   if (!policy) return context
   const readOnly = !['execution', 'conversation'].includes(policy.kind) || thread.sandboxMode === 'read-only'
+  const fullAccess = policy.kind === 'conversation' && thread.sandboxMode === 'danger-full-access'
   const agentTools = policy.participantAgentId ? [...AGENT_COLLABORATION_TOOLS] : []
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []
@@ -32,15 +33,15 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
     workspace: thread.workspace,
     additionalWorkspaces: undefined,
     knowledgeBases: undefined,
-    sandboxMode: readOnly ? 'read-only' : 'workspace-write',
+    sandboxMode: readOnly ? 'read-only' : fullAccess ? 'danger-full-access' : 'workspace-write',
     approvalPolicy: thread.approvalPolicy,
     approvalReviewer: thread.approvalReviewer,
     memoryPolicy: { enabled: false },
     allowedToolNames: allowed,
     // These scopes also block externally approved file writes. A room's
     // authorization is the single task checkout, not a new mutable root list.
-    allowedReadPaths: context.allowedReadPaths ?? ['.'],
-    allowedWritePaths: readOnly ? [] : context.allowedWritePaths ?? ['.'],
+    allowedReadPaths: fullAccess ? context.allowedReadPaths : context.allowedReadPaths ?? ['.'],
+    allowedWritePaths: readOnly ? [] : fullAccess ? context.allowedWritePaths : context.allowedWritePaths ?? ['.'],
     allowedSkillIds: policy.skillsEnabled === false ? [] : context.allowedSkillIds,
     blockedSkillIds: mergeRoomDeniedIds(context.blockedSkillIds, policy.blockedSkillIds),
     blockedProviderIds: mergeRoomDeniedIds(context.blockedProviderIds, roomBlockedProviders(thread)),

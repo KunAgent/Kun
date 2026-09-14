@@ -1,3 +1,4 @@
+import { RoomPermissionPicker } from './RoomPermissionPicker'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomTask, SendRoomMessage, RoomContentReference } from '@shared/rooms-api'
@@ -350,6 +351,7 @@ function RoomComposerEditor({
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} />
       </fieldset>
+      {room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId ? <RoomPermissionPicker roomId={room.id} /> : null}
       {unavailableMembers.length ? (
         <p role="alert" className="mt-2 text-xs text-amber-600">
           {t('roomsSdkUnavailable')} ·{' '}

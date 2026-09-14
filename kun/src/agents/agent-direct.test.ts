@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+import { setAgentPermissions, agentPermissions } from './agent-permissions.js'
 import { RoomRunTextStream } from '../server/routes/room-run-text-stream.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
@@ -14,13 +16,13 @@ import { AgentDirectRunner } from './agent-direct-runner.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
-async function fixture() {
+async function fixture(outputPath = 'hello.txt') {
   const root = await mkdtemp(join(tmpdir(), 'kun-direct-'))
   const seen: ModelRequest[] = []
   const client: ModelClient = { provider: 'test', model: 'first', async *stream(request) {
     seen.push(request)
     const wrote = request.history.some((item) => item.turnId === request.turnId && item.kind === 'tool_result')
-    if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: 'hello.txt', content: request.model === 'second' ? 'updated' : 'hello' } }
+    if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
     else yield { kind: 'assistant_text_delta', text: 'The file is ready.' }
     yield { kind: 'completed', stopReason: wrote ? 'stop' : 'tool_calls' }
   } }
@@ -194,4 +196,55 @@ it('replays durable deltas beyond a stale checkpoint without depending on bus hi
   await feed.start()
   await vi.waitFor(() => expect(values.at(-1)?.body).toBe('The file is ready.'))
   feed.close()
+})
+
+it('freezes accepted permissions and applies full access only to the next private turn', async () => {
+  const f = await fixture()
+  const approvals = vi.spyOn(f.h.approvalGate, 'request')
+  const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'before-policy', body: 'Keep context: ALPHA. Create hello.txt.' })
+  const state = await agentPermissions(f.runtime, f.created.roomId)
+  expect(state.mode).toBe('ask-for-approval')
+  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'full-policy', expectedRevision: state.revision, mode: 'full-access' })
+  expect(f.seen).toHaveLength(0)
+  const a = await f.advance(first.requestId)
+  expect(a.roomSnapshot.privateExecutionPolicy?.sandboxMode).toBe('workspace-write')
+  expect(approvals).toHaveBeenCalledTimes(1)
+  const next = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'after-policy', body: 'Update hello.txt.' })
+  const b = await f.advance(next.requestId)
+  expect(b.roomSnapshot.privateExecutionPolicy?.sandboxMode).toBe('danger-full-access')
+  expect(b.threadId).not.toBe(a.threadId)
+  expect(approvals).toHaveBeenCalledTimes(1)
+  expect(JSON.stringify(f.seen.filter((request) => request.threadId === b.threadId))).toContain('ALPHA')
+  const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other-policy' })
+  expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('ask-for-approval')
+})
+it('full access performs an explicitly selected external file write and respects later Agent directory limits', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'kun-permission-external-'))
+  cleanup.push(() => rm(outside, { recursive: true, force: true }))
+  const file = join(outside, 'hello.txt'), f = await fixture(file)
+  const state = await agentPermissions(f.runtime, f.created.roomId)
+  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'external-permission', expectedRevision: state.revision, mode: 'full-access' })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'external-file', body: 'Create the requested file at ' + file })
+  await f.advance(sent.requestId)
+  expect(await readFile(file, 'utf8')).toBe('hello')
+  execFileSync('git', ['init', '--quiet', outside])
+  execFileSync('git', ['-C', outside, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgSign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'test: initialize scope'])
+  const agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'limit-after', expectedRevision: agent.revision, allowedRepositoryRoots: [outside] })
+  await expect(f.runtime.service.send(f.created.roomId, { clientRequestId: 'after-limit', body: 'Write again' })).rejects.toThrow('Agent limits changed')
+})
+
+it('uses current confirmed permissions for a new retry while retaining the original workspace', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'retry-policy', body: 'Create hello.txt' })
+  const original = (await f.store.get<RoomRequestState>('request', sent.requestId))!
+  await controlDirectRequest(f.runtime, f.created.roomId, sent.requestId, { action: 'stop', clientRequestId: 'cancel-retry', expectedRevision: original.revision })
+  await f.advance(sent.requestId)
+  const policy = await agentPermissions(f.runtime, f.created.roomId)
+  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'retry-full', expectedRevision: policy.revision, mode: 'full-access' })
+  const cancelled = (await f.store.get<RoomRequestState>('request', sent.requestId))!
+  await controlDirectRequest(f.runtime, f.created.roomId, sent.requestId, { action: 'retry', clientRequestId: 'retry-now', expectedRevision: cancelled.revision })
+  const retry = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))[0]
+  expect(retry.value.roomSnapshot.privateExecutionPolicy?.sandboxMode).toBe('danger-full-access')
+  expect(retry.value.roomSnapshot.privateWorkspace).toBe(original.value.roomSnapshot.privateWorkspace)
 })

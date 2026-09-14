@@ -36,9 +36,10 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     await poll(async () => {
       const data = await request(page, `/v1/rooms/${roomId}/direct`)
       for (const gate of data.approvals) {
-        const ref = 'sha256:' + createHash('sha256').update(gate.id).digest('hex').slice(0, 16)
-        await approve(ref)
-        await page.getByRole('button', { name: 'Allow', exact: true }).first().click()
+        const next = application.waitForEvent('window')
+        await page.getByRole('button', { name: 'Review and allow', exact: true }).first().click()
+        const consent = await next
+        await consent.getByRole('button', { name: 'Allow once', exact: true }).click()
         approvals++
       }
       const candidate = data.requests[0]?.id !== before ? data.requests[0] : undefined

@@ -1,3 +1,5 @@
+import { showCoordinatedMessageBox } from '../native-message-box'
+import { roomProtectedControls } from './room-protected-controls'
 import {
   app,
   clipboard,
@@ -145,12 +147,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
   const showMainWindowMessageBox = (
     parent: BrowserWindow,
     messageBoxOptions: Electron.MessageBoxOptions
-  ): Promise<Electron.MessageBoxReturnValue> => nativeDialogs.run(parent.webContents, async () => {
-    if (parent.isDestroyed()) {
-      throw new Error('Native dialog parent window is unavailable.')
-    }
-    return dialog.showMessageBox(parent, messageBoxOptions)
-  })
+  ): Promise<Electron.MessageBoxReturnValue> => showCoordinatedMessageBox(nativeDialogs, parent, messageBoxOptions)
   const executionSettingsConsents = new KunExecutionSettingsConsentService()
   const approvalReviewSelectionLabel = (
     selection: KunExecutionSecuritySettings['approvalReview']
@@ -510,6 +507,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     return uploadRuntimeDocumentAttachment(request, { runtimeRequest })
   })
 
+  const decideRoomApproval = roomProtectedControls(options, nativeDialogs)
   ipcMain.handle('approval:decide', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
@@ -518,6 +516,8 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       kunProtectedApprovalPayloadSchema,
       payload
     )
+    if (request.source === 'policy' && request.decision === 'allow') throw new Error('Policy allow decisions are Runtime-owned.')
+    if (request.presentation === 'room') return decideRoomApproval(event, request)
     if (request.source === 'user') {
       const parent = getMainWindow()
       if (!parent || parent.isDestroyed()) throw new Error('Protected approval window is unavailable.')
