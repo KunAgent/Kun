@@ -59,6 +59,13 @@ export const MemoryFeedbackAggregate = z.object({
 }).strict()
 export type MemoryFeedbackAggregate = z.infer<typeof MemoryFeedbackAggregate>
 
+export const MemoryFeedbackProjection = z.object({
+  schemaVersion: z.literal(MEMORY_FEEDBACK_SCHEMA_VERSION),
+  eventCount: z.number().int().nonnegative(),
+  aggregates: z.array(MemoryFeedbackAggregate)
+}).strict()
+export type MemoryFeedbackProjection = z.infer<typeof MemoryFeedbackProjection>
+
 export const MemoryFeedbackDiagnostics = z.object({
   enabled: z.boolean(),
   state: z.enum(['disabled', 'ready', 'degraded']),
