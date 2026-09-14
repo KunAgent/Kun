@@ -496,27 +496,34 @@ export function describeImportPlan(plan: ImportPlan): string[] {
 export type ParsedImportArgs = {
   tools: SourceToolId[]
   unknownTools: string[]
+  unknownFlags: string[]
   scopes: ImportScope[]
   dryRun: boolean
 }
 
+const KNOWN_IMPORT_FLAGS = new Set(['--global', '--workspace', '--dry-run'])
+
 /**
  * Parse `/import` arguments into a typed request. Tool tokens are split into
- * known (`tools`) and `unknownTools` against `knownTools`. Scope defaults to
- * workspace; `--global` alone means global only, and passing both flags means
- * both. Pure and free of any filesystem or adapter dependency.
+ * known (`tools`) and `unknownTools` against `knownTools`; flags outside the
+ * known set are collected in `unknownFlags` so the caller can reject typos like
+ * `--gloabl` instead of silently ignoring them. Scope defaults to workspace;
+ * `--global` alone means global only, and passing both flags means both. Pure
+ * and free of any filesystem or adapter dependency.
  */
 export function parseImportArgs(args: string | undefined, knownTools: SourceToolId[]): ParsedImportArgs {
   const tokens = (args ?? '').trim().split(/\s+/u).filter((token) => token.length > 0)
-  const flags = new Set(tokens.filter((token) => token.startsWith('--')))
+  const flags = tokens.filter((token) => token.startsWith('--'))
+  const flagSet = new Set(flags)
+  const unknownFlags = flags.filter((flag) => !KNOWN_IMPORT_FLAGS.has(flag))
   const requested = tokens.filter((token) => !token.startsWith('--'))
   const known = new Set<string>(knownTools)
   const tools = requested.filter((token): token is SourceToolId => known.has(token))
   const unknownTools = requested.filter((token) => !known.has(token))
-  const wantGlobal = flags.has('--global')
-  const wantWorkspace = flags.has('--workspace') || !wantGlobal
+  const wantGlobal = flagSet.has('--global')
+  const wantWorkspace = flagSet.has('--workspace') || !wantGlobal
   const scopes: ImportScope[] = []
   if (wantWorkspace) scopes.push('workspace')
   if (wantGlobal) scopes.push('global')
-  return { tools, unknownTools, scopes, dryRun: flags.has('--dry-run') }
+  return { tools, unknownTools, unknownFlags, scopes, dryRun: flagSet.has('--dry-run') }
 }

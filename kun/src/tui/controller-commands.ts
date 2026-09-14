@@ -312,7 +312,11 @@ export abstract class TuiControllerCommands extends TuiControllerIntegrations {
   }
 
   async importAgentContext(args?: string): Promise<void> {
-    const { tools, unknownTools, scopes, dryRun } = parseImportArgs(args, supportedToolIds())
+    const { tools, unknownTools, unknownFlags, scopes, dryRun } = parseImportArgs(args, supportedToolIds())
+    if (unknownFlags.length > 0) {
+      this.notify(`Unknown flag(s): ${unknownFlags.join(', ')}. Supported: --global, --workspace, --dry-run.`, 'error')
+      return
+    }
     if (unknownTools.length > 0) {
       this.notify(`Unknown tool(s): ${unknownTools.join(', ')}. Supported: ${supportedToolIds().join(', ')}.`, 'error')
       return

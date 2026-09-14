@@ -17,7 +17,7 @@ const KNOWN: SourceToolId[] = ['claude-code', 'codex', 'cursor']
 describe('parseImportArgs', () => {
   it('defaults to workspace scope, no tools, no dry-run', () => {
     expect(parseImportArgs(undefined, KNOWN)).toEqual({
-      tools: [], unknownTools: [], scopes: ['workspace'], dryRun: false
+      tools: [], unknownTools: [], unknownFlags: [], scopes: ['workspace'], dryRun: false
     })
   })
 
@@ -43,6 +43,16 @@ describe('parseImportArgs', () => {
     const parsed = parseImportArgs('claude-code bogus cursor', KNOWN)
     expect(parsed.tools).toEqual(['claude-code', 'cursor'])
     expect(parsed.unknownTools).toEqual(['bogus'])
+  })
+
+  it('collects unknown flags instead of silently ignoring them', () => {
+    const parsed = parseImportArgs('--gloabl', KNOWN)
+    expect(parsed.unknownFlags).toEqual(['--gloabl'])
+  })
+
+  it('accepts the three known flags without flagging them unknown', () => {
+    const parsed = parseImportArgs('--global --workspace --dry-run', KNOWN)
+    expect(parsed.unknownFlags).toEqual([])
   })
 })
 
