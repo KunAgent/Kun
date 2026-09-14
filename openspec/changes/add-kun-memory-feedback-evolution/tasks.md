@@ -1,8 +1,8 @@
 ## 1. Feedback Contracts and Privacy Fixtures
 
-- [ ] 1.1 Add versioned feedback event, aggregate, diagnostics, and opt-in configuration contracts for `retrieved`, `confirmed`, and `corrected` events; verify contract tests reject unknown fields, unbounded identities, content, queries, paths, credentials, and conflicting event-id replays.
-- [ ] 1.2 Add shared confirm/correct request and result contracts with stable operation ids, same-scope version links, and bounded errors; verify schema tests cover unauthorized, cross-scope, inactive, and retry inputs.
-- [ ] 1.3 Add anonymous deterministic Memory/feedback fixtures for repeated retrieval, explicit confirmation, correction, inactive records, and scope violations; verify fixture validation and snapshot hashes are stable.
+- [x] 1.1 Add versioned feedback event, aggregate, diagnostics, and opt-in configuration contracts for `retrieved`, `confirmed`, and `corrected` events; verify contract tests reject unknown fields, unbounded identities, content, queries, paths, credentials, and conflicting event-id replays.
+- [x] 1.2 Add shared confirm/correct request and result contracts with stable operation ids, same-scope version links, and bounded errors; verify schema tests cover unauthorized, cross-scope, inactive, and retry inputs.
+- [x] 1.3 Add anonymous deterministic Memory/feedback fixtures for repeated retrieval, explicit confirmation, correction, inactive records, and scope violations; verify fixture validation and snapshot hashes are stable.
 
 ## 2. Ledger Persistence and Rebuildable Aggregates
 
