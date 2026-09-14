@@ -109,7 +109,7 @@ describe('TUI slash commands', () => {
       'compact', 'export', 'status', 'copy', 'undo', 'redo', 'connect', 'model',
       'usage', 'quota',
       'variants', 'thinking', 'mouse', 'details', 'permission', 'plan', 'graph', 'agent', 'subagents', 'tasks', 'goal',
-      'attach', 'paste', 'memory', 'shells', 'extensions', 'queue', 'skills', 'mcp', 'init', 'editor', 'add-dir', 'btw', 'context',
+      'attach', 'paste', 'memory', 'shells', 'extensions', 'queue', 'skills', 'mcp', 'init', 'import', 'editor', 'add-dir', 'btw', 'context',
       'capabilities', 'theme', 'share', 'unshare', 'console', 'diff', 'terminal', 'update', 'help', 'quit'
     ]))
   })

@@ -37,6 +37,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import type { UserInputAnswer } from './client.js'
 import { execFile as execFileCallback } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import {
   KunTuiClient,
@@ -79,6 +80,13 @@ import { parseTuiFileMentions } from './file-mentions.js'
 const execFile = promisify(execFileCallback)
 import { safeMessage, modelConnectionUnavailableMessage, isRefreshConflict, isMissingThread, replaceGraphRun, splitWords, extensionGrantArguments, todoInput, resolveTodo, attachmentIdsFromProjection, mergeAttachmentMetadata, attachmentMimeType, isLikelyUtf8Text, isVideoPath, formatBytes, normalizeSkillId, skillTemplate, assertPathMissing, writeTextAtomically, isPathInside, validateSkillImportTree } from './controller-utils.js'
 import { TuiControllerIntegrations } from './controller-integrations.js'
+import {
+  applyImportPlan,
+  buildImportPlan,
+  describeImportPlan,
+  parseImportArgs
+} from '../instructions/instruction-import.js'
+import { IMPORT_ADAPTERS, supportedToolIds } from '../instructions/import-adapters.js'
 
 export abstract class TuiControllerCommands extends TuiControllerIntegrations {
   setTheme(value?: string): void {
@@ -301,6 +309,39 @@ export abstract class TuiControllerCommands extends TuiControllerIntegrations {
     await this.submit(
       'Analyze this repository and create or update the workspace-root AGENTS.md with accurate project structure, development commands, conventions, validation steps, and safety constraints. Preserve useful existing instructions, verify facts from the repository, and keep the file concise and actionable.' + suffix
     )
+  }
+
+  async importAgentContext(args?: string): Promise<void> {
+    const { tools, unknownTools, scopes, dryRun } = parseImportArgs(args, supportedToolIds())
+    if (unknownTools.length > 0) {
+      this.notify(`Unknown tool(s): ${unknownTools.join(', ')}. Supported: ${supportedToolIds().join(', ')}.`, 'error')
+      return
+    }
+
+    const workspace = this.stateValue.projection?.thread.workspace ?? this.options.workspace
+    try {
+      const plan = await buildImportPlan({
+        workspace,
+        homeDir: homedir(),
+        adapters: IMPORT_ADAPTERS,
+        scopes,
+        ...(tools.length > 0 ? { tools } : {})
+      })
+      if (dryRun) {
+        this.inspect('Import agent context (dry run)', describeImportPlan(plan))
+        return
+      }
+      const applied = await applyImportPlan(plan, { workspace })
+      if (applied.length === 0) {
+        this.inspect('Import agent context', ['Nothing to import.', '', ...describeImportPlan(plan)])
+        return
+      }
+      const imported = [...new Set(plan.targets.flatMap((target) => target.tools))]
+      this.notify(`Imported ${imported.join(', ')} into ${applied.length} AGENTS.md file(s).`)
+      this.inspect('Import complete', describeImportPlan(plan))
+    } catch (error) {
+      this.fail(error)
+    }
   }
 
   async invokeSkill(name: string, prompt?: string): Promise<void> {

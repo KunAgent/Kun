@@ -38,6 +38,7 @@ export type TuiCommand =
   | { kind: 'undo' }
   | { kind: 'redo' }
   | { kind: 'init'; instructions?: string }
+  | { kind: 'import'; args?: string }
   | { kind: 'mcp'; action?: string }
   | { kind: 'timeline'; query?: string }
   | { kind: 'jump'; target?: string }
@@ -104,6 +105,7 @@ export const TUI_SLASH_COMMANDS: SlashCommand[] = [
   { name: 'undo', description: 'Undo the last user turn in a preserved branch' },
   { name: 'redo', description: 'Move to the next preserved branch when available' },
   { name: 'init', description: 'Analyze the project and create or update AGENTS.md', argumentHint: '[guidance]' },
+  { name: 'import', description: 'Import instruction context from other coding agents into AGENTS.md', argumentHint: '[tools] [--global] [--workspace] [--dry-run]' },
   { name: 'mcp', description: 'Add, edit, remove, reconnect, or authorize shared MCP servers', argumentHint: '[add|edit|enable|disable|reconnect|delete|authorize|reset]' },
   { name: 'timeline', description: 'Browse turns and fork at a turn', argumentHint: '[search]' },
   { name: 'jump', description: 'Jump to a numbered or matching turn', argumentHint: '[target]' },
@@ -193,6 +195,7 @@ export const TUI_COMMAND_DEFINITIONS: readonly TuiCommandDefinition[] = [
   { id: 'skills', title: 'Browse skills', category: 'Workspace', slash: 'skills', available: true },
   { id: 'mcp', title: 'Show MCP status', category: 'Workspace', slash: 'mcp', available: true },
   { id: 'init', title: 'Initialize workspace instructions', category: 'Workspace', slash: 'init', available: true },
+  { id: 'import', title: 'Import agent context', category: 'Workspace', slash: 'import', available: true },
   { id: 'editor', title: 'Open external editor', category: 'Workspace', slash: 'editor', keyAction: 'input_editor', available: true },
   { id: 'steer', title: 'Steer the running turn', category: 'Session', keyAction: 'input_steer', available: true },
   { id: 'add-dir', title: 'Add workspace directory', category: 'Workspace', slash: 'add-dir', argumentRequired: true, available: true },
@@ -248,6 +251,7 @@ export function parseTuiCommand(text: string): TuiCommand | null {
     case 'undo': return { kind: 'undo' }
     case 'redo': return { kind: 'redo' }
     case 'init': return { kind: 'init', ...(rest ? { instructions: rest } : {}) }
+    case 'import': return { kind: 'import', ...(rest ? { args: rest } : {}) }
     case 'mcp': return { kind: 'mcp', ...(rest ? { action: rest } : {}) }
     case 'timeline': return { kind: 'timeline', ...(rest ? { query: rest } : {}) }
     case 'jump': return { kind: 'jump', ...(rest ? { target: rest } : {}) }
