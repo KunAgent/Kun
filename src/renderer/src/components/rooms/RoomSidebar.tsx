@@ -1,3 +1,4 @@
+import { useRoomSidebarMotion } from './useRoomSidebarMotion'
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useTranslation } from 'react-i18next'
@@ -32,19 +33,20 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
   }, [selectedRoomId, page.entries, onOpenAgent, onSelect])
   useEffect(() => { onActivity?.(page.entries.find((entry) => entry.roomId === selectedRoomId)) }, [page.entries, selectedRoomId, onActivity])
   const scroll = useRef<HTMLDivElement>(null)
+  const rememberScroll = useRoomSidebarMotion(scroll, page.entries, JSON.stringify([kind, search, archived, filter, repository]))
   const virtualizer = useVirtualizer({ count: page.entries.length, getScrollElement: () => scroll.current, estimateSize: () => 64,
     getItemKey: (index) => page.entries[index].id, overscan: 8 })
   const virtual = page.entries.length > 60
   const rows = virtual ? virtualizer.getVirtualItems() : page.entries.map((item, index) => ({ key: item.id, index, start: 0 }))
-  const act = async (entry: RoomSidebarEntry, action: 'pin' | 'archive') => {
+  const act = async (entry: RoomSidebarEntry, action: 'archive') => {
     setActionError('')
     try {
-      if (action === 'archive' && entry.agentId) {
+      if (entry.agentId) {
         const { agent } = await roomsRequest<{ agent: { revision: number } }>('/v1/agents/' + entry.agentId)
         await roomsRequest('/v1/agents/' + entry.agentId, 'PATCH', { clientRequestId: roomRequestId(), expectedRevision: agent.revision, archived: !entry.archived })
       } else {
         const { room } = entry.roomId ? await roomsClient.get(entry.roomId) : await roomsRequest<{ room: Room }>('/v1/agents/' + entry.agentId + '/conversation', 'POST', {})
-        await roomsClient.update(room, action === 'pin' ? { pinned: !entry.pinned } : { archived: !entry.archived })
+        await roomsClient.update(room, { archived: !entry.archived })
       }
       page.refresh()
     } catch (cause) { setActionError(String(cause)) }
@@ -68,14 +70,14 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
     }}>{t('roomsSidebar_' + kind)}{archived ? ' · ' + t('roomsArchived') : ''}{filter !== 'all' ? ' · ' + t('roomsFilter_' + filter) : ''}{repository ? ' · ' + repository.split('/').at(-1) : ''}<X size={12} /></button> : null}
     {search.trim().length >= 2 ? <button className="rooms-sidebar-search-all" onClick={() => setFullSearch(!fullSearch)}>{t(fullSearch ? 'roomsSidebarChatsOnly' : 'roomsSidebarSearchAll')}</button> : null}
     {fullSearch && search.trim().length >= 2 ? <RoomUnifiedSearch query={search} repositoryRoot={repository} includeArchived={archived} onSelect={(hit) => { onSearch(hit); setSearch(''); setFullSearch(false) }} /> :
-      <div className="rooms-im-sidebar-list" ref={scroll} aria-label={t('roomsConversations')}>
-        <div style={virtual ? { height: virtualizer.getTotalSize(), position: 'relative' } : undefined}>{rows.map((row) => {
+      <div className="rooms-im-sidebar-list" ref={scroll} onScroll={rememberScroll} tabIndex={-1} aria-label={t('roomsConversations')}>
+        <div style={{ ...(virtual ? { height: virtualizer.getTotalSize() } : {}), position: 'relative' }}>{rows.map((row) => {
           const entry = page.entries[row.index], latest = entry.latestMessage
           const selected = Boolean(entry.roomId && entry.roomId === selectedRoomId)
           const date = latest ? new Date(latest.createdAt) : null
           const preview = latest ? (latest.authorKind === 'user' ? t('roomsSidebarYou') + ': ' : entry.kind !== 'user_agent' ? latest.authorLabelSnapshot + ': ' : '') +
             (latest.preview || (latest.attachmentCount ? t('roomsAttachmentSummary', { count: latest.attachmentCount }) : '')) : entry.title
-          return <div key={row.key} data-index={row.index} ref={virtual ? virtualizer.measureElement : undefined}
+          return <div key={row.key} data-sidebar-entry={entry.id} data-pinned={entry.pinned} data-index={row.index} ref={virtual ? virtualizer.measureElement : undefined}
             className={'rooms-im-sidebar-row' + (selected ? ' is-selected' : '')}
             style={virtual ? { position: 'absolute', top: row.start, width: '100%' } : undefined}>
             <button className="rooms-im-sidebar-open" aria-label={entry.name} aria-current={selected ? 'page' : undefined}
@@ -89,7 +91,9 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
             </button>
             <RoomPopover label={t('agentsActions', { name: entry.name })} trigger={<MoreHorizontal size={15} />} className="rooms-sidebar-row-menu rooms-icon-button" align="end">
               {(close) => <div className="rooms-menu-list">{entry.agentId ? <button onClick={() => { close(); onDetails(entry.agentId!) }}>{t('agentsProfileAndMemory')}</button> : null}
-                <button onClick={() => { close(); void act(entry, 'pin') }}>{t(entry.pinned ? 'roomsSidebarUnpin' : 'roomsPin')}</button>
+                <button onClick={() => { close(); page.togglePin(entry); requestAnimationFrame(() => {
+                  if (document.activeElement === document.body) scroll.current?.focus({ preventScroll: true })
+                }) }}>{t(entry.pinned ? 'roomsSidebarUnpin' : 'roomsPin')}</button>
                 <button onClick={() => { close(); void act(entry, 'archive') }}>{t(entry.archived ? 'agentsRestore' : 'agentsArchive')}</button></div>}
             </RoomPopover>
           </div>

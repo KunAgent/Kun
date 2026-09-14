@@ -75,3 +75,5 @@
   .rooms-init-banner { flex-wrap: wrap; }
 }
 @media (hover: none) { .rooms-sidebar-row-menu { visibility: visible; position: static; } .rooms-message-actions { opacity: 1; } }
+
+.rooms-im-sidebar-list { overflow-anchor: none; }

@@ -1,3 +1,4 @@
+import { RoomSidebarPins } from './room-sidebar-pins'
 import { useEffect, useRef, useState } from 'react'
 import type { RoomSidebarPage, RoomSidebarQuery } from '@shared/rooms-api'
 import { roomsRequest } from './rooms-client'
@@ -9,6 +10,8 @@ export function useRoomSidebar(query: RoomSidebarQuery, refreshKey = '') {
     attention_only: String(Boolean(query.attentionOnly)), ...(query.repositoryRoot ? { repository_root: query.repositoryRoot } : {}), limit: '40' })
   const [state, setState] = useState<RoomSidebarPage>({ entries: [] }), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [pages, setPages] = useState(1), [version, setVersion] = useState(0)
+  const [, redraw] = useState(0)
+  const [pins] = useState(() => new RoomSidebarPins(() => redraw((v) => v + 1), () => setVersion((v) => v + 1), setError))
   const previousPath = useRef(path)
   useEffect(() => {
     const changed = previousPath.current !== path
@@ -24,6 +27,7 @@ export function useRoomSidebar(query: RoomSidebarQuery, refreshKey = '') {
     }
     const refresh = async () => {
       const serial = ++refreshSerial
+      const pinCheckpoint = pins.checkpoint()
       refreshing = true; setBusy(true)
       try {
         const entries: RoomSidebarPage['entries'] = []
@@ -34,6 +38,7 @@ export function useRoomSidebar(query: RoomSidebarQuery, refreshKey = '') {
           entries.push(...result.entries); cursor = result.nextCursor
           if (!cursor) break
         }
+        pins.received(pinCheckpoint)
         setState({ entries: [...new Map(entries.map((entry) => [entry.id, entry])).values()], nextCursor: cursor }); setError('')
       } catch (cause) { if (!controller.signal.aborted && serial === refreshSerial) setError(String(cause)) }
       finally {
@@ -51,6 +56,6 @@ export function useRoomSidebar(query: RoomSidebarQuery, refreshKey = '') {
     })
     const fallback = setInterval(() => { if (!roomEventsLive()) schedule(0) }, 10000)
     return () => { controller.abort(); off(); clearTimeout(timer); clearInterval(fallback) }
-  }, [path, pages, version, query.search, refreshKey])
-  return { ...state, busy, error, refresh: () => setVersion((v) => v + 1), more: () => setPages((v) => v + 1) }
+  }, [path, pages, version, query.search, refreshKey, pins])
+  return { ...state, entries: pins.project(state.entries), togglePin: (entry: RoomSidebarPage['entries'][number]) => pins.toggle(entry), busy, error, refresh: () => setVersion((v) => v + 1), more: () => setPages((v) => v + 1) }
 }

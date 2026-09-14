@@ -95,7 +95,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     const message = row.latest_message ? JSON.parse(row.latest_message) as RoomMessage : undefined
     return { id: row.stable_id, agentId: row.agent_id ?? undefined, roomId: row.room_id ?? undefined,
       name: row.name, title: row.title, avatar: agent?.avatar, kind: row.conversation_kind, members: room?.members ?? [],
-      pinned: Boolean(row.pinned), archived: Boolean(row.archived), latestMessageSeq: row.message_seq, readSeq: row.read_seq,
+      activitySeq: row.activity_seq, pinned: Boolean(row.pinned), archived: Boolean(row.archived), latestMessageSeq: row.message_seq, readSeq: row.read_seq,
       runningCount: row.running_count, attentionCount: row.attention_count,
       latestMessage: message ? { id: message.id, authorKind: message.authorKind, authorLabelSnapshot: message.authorLabelSnapshot,
         createdAt: message.createdAt, preview: roomMessagePreview(message.body), attachmentCount: message.attachmentIds.length } : undefined }
