@@ -57,6 +57,7 @@ export type ImportWarning =
   | { code: 'unresolved-import'; path: string; detail: string }
   | { code: 'import-cycle'; path: string }
   | { code: 'oversized-import'; path: string; bytes: number }
+  | { code: 'out-of-bounds-import'; path: string; detail: string }
   | { code: 'identity-skip'; tool: SourceToolId; path: string }
   | { code: 'budget-exceeded'; target: string; bytes: number; limit: number }
 
@@ -184,12 +185,28 @@ function normalizeBody(text: string): string {
 
 type ResolveCtx = {
   homeDir: string
+  roots: string[]
   visited: Set<string>
   warnings: ImportWarning[]
   maxFileBytes: number
 }
 
 const IMPORT_TOKEN = /(^|[^\w`@])@([^\s'"()]+)/gu
+
+/**
+ * True when `candidate`, after symlink resolution, resides within one of
+ * `roots` (also symlink-resolved). Guards @import against `..`, absolute,
+ * UNC/drive, and symlink-escape reads outside the workspace root or home.
+ */
+async function isPathWithinRoots(candidate: string, roots: string[]): Promise<boolean> {
+  const real = await realpath(candidate).catch(() => resolve(candidate))
+  for (const root of roots) {
+    const realRoot = await realpath(root).catch(() => resolve(root))
+    const rel = relative(realRoot, real)
+    if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))) return true
+  }
+  return false
+}
 
 async function resolveClaudeImports(
   text: string,
@@ -216,6 +233,11 @@ async function resolveClaudeImports(
     const info = await statSafe(resolved)
     if (!info || !info.isFile) {
       if (looksLikePath) ctx.warnings.push({ code: 'unresolved-import', path: resolved, detail: rawPath })
+      out += `@${rawPath}`
+      continue
+    }
+    if (!(await isPathWithinRoots(resolved, ctx.roots))) {
+      ctx.warnings.push({ code: 'out-of-bounds-import', path: resolved, detail: rawPath })
       out += `@${rawPath}`
       continue
     }
@@ -280,9 +302,14 @@ function escapeRegExp(value: string): string {
 async function readTargetText(path: string): Promise<string> {
   try {
     return await readFile(path, 'utf8')
-  } catch {
-    return ''
+  } catch (error) {
+    if (isMissingFileError(error)) return ''
+    throw error
   }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT'
 }
 
 /** Pure-ish planning step: reads source files and produces the merged target text without writing anything. */
@@ -317,7 +344,13 @@ export async function buildImportPlan(input: BuildImportPlanInput): Promise<Impo
           warnings.push({ code: 'identity-skip', tool: source.tool, path: source.path })
           continue
         }
-        const ctx: ResolveCtx = { homeDir: input.homeDir, visited: new Set(), warnings, maxFileBytes }
+        const ctx: ResolveCtx = {
+          homeDir: input.homeDir,
+          roots: [input.workspace, input.homeDir],
+          visited: new Set(),
+          warnings,
+          maxFileBytes
+        }
         const body = await renderSourceFile(source, ctx)
         if (body.length > 0) parts.push(`<!-- from: ${source.kind} -->\n${body}`)
       }
@@ -392,6 +425,8 @@ export function describeWarning(warning: ImportWarning): string {
       return `Skipped @import cycle at ${warning.path}`
     case 'oversized-import':
       return `Skipped oversized @import (${warning.bytes} bytes) at ${warning.path}`
+    case 'out-of-bounds-import':
+      return `Skipped out-of-bounds @import "${warning.detail}" outside the workspace or home: ${warning.path}`
     case 'identity-skip':
       return `Skipped ${warning.tool} source identical to the target: ${warning.path}`
     case 'budget-exceeded':

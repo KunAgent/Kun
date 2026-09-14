@@ -169,6 +169,49 @@ describe('instruction-import', () => {
     expect(plan.targets[0]?.mergedText).toContain('@docs/missing.md')
   })
 
+  it('blocks an @import that resolves outside the workspace and home', async () => {
+    const outside = join(root, 'outside', 'secret.md')
+    await mkdir(join(root, 'outside'), { recursive: true })
+    await writeFile(outside, 'TOP SECRET', 'utf8')
+    await writeFile(join(workspace, 'CLAUDE.md'), `Root.\n@${outside.replace(/\\/gu, '/')}`, 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+
+    expect(plan.warnings.some((w) => w.code === 'out-of-bounds-import')).toBe(true)
+    expect(plan.targets[0]?.mergedText).not.toContain('TOP SECRET')
+  })
+
+  it('blocks a ../ traversal @import above the workspace', async () => {
+    const outside = join(root, 'sibling-secret.md')
+    await writeFile(outside, 'SIBLING SECRET', 'utf8')
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Root.\n@../sibling-secret.md', 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+
+    expect(plan.warnings.some((w) => w.code === 'out-of-bounds-import')).toBe(true)
+    expect(plan.targets[0]?.mergedText).not.toContain('SIBLING SECRET')
+  })
+
+  it('allows an @import inside the home directory', async () => {
+    await mkdir(join(home, 'shared'), { recursive: true })
+    await writeFile(join(home, 'shared', 'rules.md'), 'Home shared rule.', 'utf8')
+    await writeFile(join(workspace, 'CLAUDE.md'), `Root.\n@${join(home, 'shared', 'rules.md').replace(/\\/gu, '/')}`, 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+
+    expect(plan.targets[0]?.mergedText).toContain('Home shared rule.')
+  })
+
+  it('rethrows non-ENOENT errors when reading the target file', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Root rule.', 'utf8')
+    // Make the target a directory so reading it fails with EISDIR, not ENOENT.
+    await mkdir(join(workspace, 'AGENTS.md'), { recursive: true })
+
+    await expect(
+      buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    ).rejects.toThrow()
+  })
+
   it('appends a managed block on first import and is idempotent on re-import', async () => {
     await writeFile(join(workspace, 'CLAUDE.md'), 'Claude rule.', 'utf8')
 
