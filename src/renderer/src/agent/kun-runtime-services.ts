@@ -87,6 +87,10 @@ import {
   listRuntimeMemoryCandidates
 } from './kun-runtime-memory-distillation'
 import {
+  confirmRuntimeMemory,
+  correctRuntimeMemory
+} from './kun-runtime-memory-feedback'
+import {
   buildQuery,
   chatBlockFromItem,
   dispatchKunRuntimeEvents,
@@ -374,6 +378,10 @@ export class KunRuntimeProviderServices {
       'runtime returned an invalid memory diagnostics response'
     )
   }
+
+  confirmMemory = confirmRuntimeMemory
+
+  correctMemory = correctRuntimeMemory
 
   listMemoryDistillationCandidates = listRuntimeMemoryCandidates
 

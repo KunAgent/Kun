@@ -334,6 +334,21 @@ export type CoreMemoryDiagnosticsJson = {
   }
 }
 
+export type CoreMemoryConfirmResultJson = {
+  memoryId: string
+  eventId: string
+  confirmedAt: string
+  replayed: boolean
+}
+
+export type CoreMemoryCorrectResultJson = {
+  previousMemoryId: string
+  replacementMemoryId: string
+  eventId: string
+  correctedAt: string
+  replayed: boolean
+}
+
 export type CoreRuntimeCapabilityStateJson = {
   status: 'available' | 'disabled' | 'unavailable' | 'interaction-required'
   enabled: boolean
