@@ -140,6 +140,34 @@ describe('FileMemoryFeedbackStore', () => {
     expect(diagnostics.degradedReason?.length).toBeLessThanOrEqual(512)
   })
 
+  it('redacts every local path, credential, query, and content shape while retaining ABI context', async () => {
+    const root = await temporaryRoot()
+    const store = new FileMemoryFeedbackStore({
+      dataDir: root,
+      config: feedbackConfig,
+      writeProjection: async () => {
+        throw new Error(
+          'NODE_MODULE_VERSION 148 platform=win32 arch=x64 ' +
+          'C:\\Users\\Fixture\\private.db \\\\server\\share\\secret.sqlite ' +
+          '/home/fixture/private/store.db file:///Users/fixture/private.node ' +
+          'api_key=key-value token=token-value secret=secret-value password=password-value ' +
+          'content="private memory body" query="private search phrase"'
+        )
+      }
+    })
+
+    await expect(store.append(retrieved(0))).rejects.toThrow(/NODE_MODULE_VERSION/u)
+    const reason = (await store.diagnostics()).degradedReason ?? ''
+    expect(reason).toContain('NODE_MODULE_VERSION 148')
+    expect(reason).toContain('platform=win32')
+    expect(reason).toContain('arch=x64')
+    expect(reason).toContain('content=[redacted]')
+    expect(reason).toContain('query=[redacted]')
+    expect(reason).not.toMatch(/Fixture|server|\/home|file:\/\/|key-value|token-value|secret-value|password-value/u)
+    expect(reason).not.toMatch(/private memory body|private search phrase/u)
+    expect(reason.length).toBeLessThanOrEqual(512)
+  })
+
   it('checkpoints bounded segments while retaining exact replay and explicit audit', async () => {
     const root = await temporaryRoot()
     const store = new FileMemoryFeedbackStore({

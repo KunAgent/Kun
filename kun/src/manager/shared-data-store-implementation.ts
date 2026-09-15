@@ -236,6 +236,12 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
       this.memoryQueue = run.then(() => undefined, () => undefined)
       return run
     }
+    if (operation.startsWith('feedback')) {
+      const run = this.memoryQueue.catch(() => undefined)
+        .then(() => this.memoryFeedback.execute(operation, value))
+      this.memoryQueue = run.then(() => undefined, () => undefined)
+      return run
+    }
     const body = z.object({ config: MemoryCapabilityConfig, value: z.unknown().optional() })
       .strict()
       .parse(value)

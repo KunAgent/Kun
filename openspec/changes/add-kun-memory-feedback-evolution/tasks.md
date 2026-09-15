@@ -19,9 +19,9 @@
 
 ## 4. Manager Ownership and Remote Parity
 
-- [ ] 4.1 Add Manager shared-data RPC operations for feedback append, aggregate/diagnostics reads, confirmation, and correction; verify remote clients cannot create private competing ledgers.
-- [ ] 4.2 Wire hybrid/local and Manager-backed stores to one feedback contract; verify local and remote conformance suites produce identical events, aggregates, correction versions, errors, and degradation states.
-- [ ] 4.3 Redact feedback diagnostics through the existing bounded-reason policy; verify Windows, UNC, POSIX, file-URL, credential, content, and query samples cannot leak while module/platform/ABI diagnostics remain actionable.
+- [x] 4.1 Add Manager shared-data RPC operations for feedback append, aggregate/diagnostics reads, confirmation, and correction; verify remote clients cannot create private competing ledgers.
+- [x] 4.2 Wire hybrid/local and Manager-backed stores to one feedback contract; verify local and remote conformance suites produce identical events, aggregates, correction versions, errors, and degradation states.
+- [x] 4.3 Redact feedback diagnostics through the existing bounded-reason policy; verify Windows, UNC, POSIX, file-URL, credential, content, and query samples cannot leak while module/platform/ABI diagnostics remain actionable.
 
 ## 5. Actual-Injection Feedback Capture
 

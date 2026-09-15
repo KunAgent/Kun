@@ -189,6 +189,14 @@ export type ManagerMemoryStoreOperation =
   | 'list'
   | 'retrieve'
   | 'diagnostics'
+  | 'feedbackReady'
+  | 'feedbackAppend'
+  | 'feedbackEvent'
+  | 'feedbackAggregate'
+  | 'feedbackAggregates'
+  | 'feedbackDiagnostics'
+  | 'feedbackConfirm'
+  | 'feedbackCorrect'
 
 export type ManagerGraphStoreOperation =
   | 'create'

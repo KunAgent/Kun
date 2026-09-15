@@ -61,6 +61,7 @@ import type { ThreadStore, ThreadStoreListOptions } from '../ports/thread-store.
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { RevisionConflictError } from './revisioned-document-store.js'
 import { buildPublicItemHistoryPage } from '../services/item-history-page.js'
+import { ManagerMemoryFeedbackOwner } from './memory-feedback-owner.js'
 
 import {
   finishedTurnStatus,
@@ -81,6 +82,7 @@ export abstract class ManagerSharedDataStoreCore {
   protected graphQueue: Promise<unknown> = Promise.resolve()
   protected memoryRepository: MemoryStore | undefined
   protected readonly memoryDistillationPending: ManagerMemoryDistillationPendingOwner
+  protected readonly memoryFeedback: ManagerMemoryFeedbackOwner
   protected memoryQueue: Promise<unknown> = Promise.resolve()
   protected readonly seqFloors = new Map<string, number>()
   protected readonly reservedSeqs = new Map<string, Set<number>>()
@@ -102,6 +104,10 @@ export abstract class ManagerSharedDataStoreCore {
   }) {
     this.dataDir = resolve(input.dataDir)
     this.memoryDistillationPending = new ManagerMemoryDistillationPendingOwner(this.dataDir)
+    this.memoryFeedback = new ManagerMemoryFeedbackOwner({
+      dataDir: this.dataDir,
+      memoryStore: (config) => this.memoryStore(config)
+    })
     this.hybridThreadStore = input.threadStore
     this.threadStore = input.threadStore
     this.sessionStore = input.sessionStore

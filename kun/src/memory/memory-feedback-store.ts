@@ -20,6 +20,15 @@ import { withMemoryMutation } from './memory-mutation-queue.js'
 
 export type MemoryFeedbackAppendResult = 'appended' | 'replayed'
 
+export type MemoryFeedbackStore = {
+  ready(): Promise<void>
+  append(event: MemoryFeedbackEventValue): Promise<MemoryFeedbackAppendResult>
+  aggregate(memoryId: string): Promise<MemoryFeedbackAggregateValue | undefined>
+  event(eventId: string): Promise<MemoryFeedbackEventValue | undefined>
+  listAggregates(): Promise<MemoryFeedbackAggregateValue[]>
+  diagnostics(): Promise<MemoryFeedbackDiagnosticsValue>
+}
+
 type FeedbackState = {
   identityHashes: Map<string, string>
   explicitEvents: Map<string, MemoryFeedbackEventValue>
@@ -34,7 +43,7 @@ type FeedbackState = {
   degradedReason?: string
 }
 
-export class FileMemoryFeedbackStore {
+export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
   private state: FeedbackState | undefined
   private lastFailure: string | undefined
 
@@ -394,5 +403,13 @@ function laterTimestamp(current: string | undefined, next: string): string {
 
 function feedbackFailure(action: string, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
-  return sanitizeMemoryDegradedReason(`${action}: ${message}`)
+  return sanitizeMemoryFeedbackReason(`${action}: ${message}`)
+}
+
+export function sanitizeMemoryFeedbackReason(value: string): string {
+  const withoutPayloads = value.replace(
+    /\b(content|query)\s*[=:]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,
+    '$1=[redacted]'
+  )
+  return sanitizeMemoryDegradedReason(withoutPayloads)
 }
