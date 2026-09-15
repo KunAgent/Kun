@@ -10,6 +10,7 @@ import {
   saveThreadRightPanelExpansionRegistry
 } from '../lib/thread-right-panel-expansion'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
+import { isNarrowViewportNow, isRemoteWeb } from '../lib/remote-mobile'
 import {
   CODE_CANVAS_OPEN_REQUEST_EVENT,
   CODE_CANVAS_FOCUS_REQUEST_EVENT,
@@ -132,7 +133,9 @@ export function useWorkbenchLayout({
     readStoredWidth(LEFT_PANEL_WIDTH_KEY, LEFT_PANEL_DEFAULT)
   )
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(() =>
-    readStoredBoolean(LEFT_PANEL_COLLAPSED_KEY, false)
+    // Remote web on a phone starts with the drawer closed; the stored value
+    // only wins once the user has toggled it deliberately.
+    readStoredBoolean(LEFT_PANEL_COLLAPSED_KEY, isRemoteWeb() && isNarrowViewportNow())
   )
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
     const scoped = widthsRegistryRef.current.workspaces[initialScopeRef.current]

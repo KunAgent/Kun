@@ -106,26 +106,70 @@ export const REMOTE_LOGIN_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Kun Remote</title>
 <style>
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #10141f; color: #e6e9ef; font-family: -apple-system, system-ui, sans-serif; }
-  form { width: min(320px, 86vw); display: flex; flex-direction: column; gap: 12px; }
-  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
-  p { font-size: 13px; color: #9aa3b5; margin: 0 0 8px; }
-  input { padding: 10px 12px; border-radius: 10px; border: 1px solid #2c3444; background: #171c29; color: inherit; font-size: 15px; }
-  button { padding: 10px 12px; border-radius: 10px; border: 0; background: #4f7cff; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
-  .error { color: #ff8a8a; font-size: 13px; min-height: 1em; margin: 0; }
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; min-height: 100dvh;
+    display: grid; place-items: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: #e8ecf4;
+    background:
+      radial-gradient(60vw 60vh at 75% -10%, rgba(79, 124, 255, 0.22), transparent 60%),
+      radial-gradient(50vw 50vh at 15% 110%, rgba(91, 155, 213, 0.14), transparent 60%),
+      #0b0f1a;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  .card {
+    width: min(380px, 100%);
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 34px 26px 26px;
+    border-radius: 22px;
+    background: rgba(23, 28, 41, 0.72);
+    border: 1px solid rgba(120, 145, 200, 0.18);
+    box-shadow: 0 24px 64px rgba(4, 8, 20, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .mascot { width: 132px; height: auto; animation: bob 3.2s ease-in-out infinite; filter: drop-shadow(0 10px 20px rgba(79, 124, 255, 0.35)); }
+  @keyframes bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+  @media (prefers-reduced-motion: reduce) { .mascot { animation: none } }
+  h1 { font-size: 21px; font-weight: 650; margin: 0; letter-spacing: 0.2px; }
+  .sub { font-size: 13.5px; color: #9aa7bd; margin: -6px 0 2px; text-align: center; line-height: 1.55; }
+  form { width: 100%; display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+  input {
+    width: 100%; min-height: 48px; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid #2c364a; background: rgba(11, 15, 26, 0.8); color: inherit;
+    font-size: 16px; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input:focus { border-color: #4f7cff; outline: none; box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.22); }
+  button {
+    min-height: 48px; padding: 12px 14px; border-radius: 12px; border: 0;
+    background: linear-gradient(180deg, #5a86ff, #4f7cff); color: #fff;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 6px 20px rgba(79, 124, 255, 0.35);
+    transition: transform 0.08s, box-shadow 0.15s, filter 0.15s;
+  }
+  button:hover { filter: brightness(1.06); }
+  button:active { transform: translateY(1px); }
+  .error { color: #ff9c9c; font-size: 14px; min-height: 1.2em; margin: -2px 0 0; text-align: center; }
+  .foot { font-size: 11.5px; color: #647089; margin: 4px 0 0; text-align: center; line-height: 1.5; }
 </style>
 </head>
 <body>
-<form id="login" method="post">
+<main class="card">
+  <img class="mascot" src="__KUN_LOGIN_ART__" alt="Kun" draggable="false" />
   <h1>Kun Remote</h1>
-  <p>Enter the Remote access password configured on the host.</p>
-  <input id="password" type="password" autocomplete="current-password" placeholder="Password" required autofocus />
-  <button type="submit">Sign in</button>
-  <p class="error" id="error"></p>
-</form>
+  <p class="sub">Enter the Remote access password<br/>configured on the host.</p>
+  <form id="login" method="post">
+    <input id="password" type="password" autocomplete="current-password" placeholder="Password" required autofocus />
+    <button type="submit">Sign in</button>
+    <p class="error" id="error"></p>
+  </form>
+  <p class="foot">Runs on your local network &middot; secured by the host password</p>
+</main>
 <script>
 document.getElementById('login').addEventListener('submit', async (event) => {
   event.preventDefault()

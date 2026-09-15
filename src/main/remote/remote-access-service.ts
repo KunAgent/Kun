@@ -23,6 +23,7 @@ import {
 import { RemoteEventHub, remoteSseHeaders, startSseHeartbeat } from './remote-events'
 import { dispatchRemoteInvoke, RemoteInvokeError } from './remote-invoke'
 import { lanUrlsForPort } from './remote-lan-urls'
+import { KUN_LOGIN_ART_DATA_URL } from './remote-login-art'
 import {
   proxyRemoteDevRequest,
   REMOTE_LOGIN_HTML,
@@ -311,7 +312,7 @@ export class RemoteAccessService {
         return
       }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-      res.end(REMOTE_LOGIN_HTML)
+      res.end(REMOTE_LOGIN_HTML.replace('__KUN_LOGIN_ART__', KUN_LOGIN_ART_DATA_URL))
       return
     }
     if (pathname === '/remote-bridge.js' && method === 'GET') {

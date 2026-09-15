@@ -1,6 +1,7 @@
-import { lazy, Suspense, type ComponentProps, type ReactElement, type ReactNode } from 'react'
+import { lazy, Suspense, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchSideRail } from '../chat/WorkbenchTopBar'
 import { WorkbenchChatStage, type WorkbenchChatStageProps } from './WorkbenchChatStage'
+import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 
 const SddDraftEditorView = lazy(() =>
   import('../sdd/SddDraftEditorView').then((module) => ({ default: module.SddDraftEditorView }))
@@ -43,6 +44,9 @@ export function WorkbenchConversationStage({
   rightPanel,
   sideRail
 }: WorkbenchConversationStageProps): ReactElement {
+  const remoteMobile = useRemoteMobileLayout()
+  const [mobileRailOpen, setMobileRailOpen] = useState(false)
+  const showRail = route === 'chat' && !activeSddDraft
   return (
     <>
       {runtimeBanner}
@@ -53,12 +57,22 @@ export function WorkbenchConversationStage({
               <SddDraftEditorView {...sdd} />
             </Suspense>
           ) : (
-            <WorkbenchChatStage {...chat} />
+            <WorkbenchChatStage
+              {...chat}
+              onOpenMobileRail={remoteMobile && showRail ? () => setMobileRailOpen(true) : undefined}
+            />
           )}
         </div>
 
         {rightPanel}
-        {route === 'chat' && !activeSddDraft ? <WorkbenchSideRail {...sideRail} /> : null}
+        {showRail ? (
+          <WorkbenchSideRail
+            {...sideRail}
+            presentation={remoteMobile ? 'sheet' : 'rail'}
+            sheetOpen={mobileRailOpen}
+            onCloseSheet={() => setMobileRailOpen(false)}
+          />
+        ) : null}
       </div>
     </>
   )
