@@ -1,6 +1,6 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { app, type BrowserWindow, type WebContents } from 'electron'
 import type { AppSettingsV1, RemoteAccessSettingsPatchV1 } from '../../shared/app-settings'
@@ -28,6 +28,7 @@ import {
   REMOTE_LOGIN_HTML,
   remoteBridgeFileExists,
   remoteBridgeScript,
+  remoteMimeType,
   serveRemoteIndex,
   serveRemoteStaticFile
 } from './remote-static'
@@ -39,6 +40,9 @@ import {
   sendRemoteJson,
   sendRemoteText
 } from './remote-http-utils'
+import { resolveOpenTargetPath } from '../services/workspace-paths'
+import { createReadStream } from 'node:fs'
+import { mkdtemp, stat, writeFile } from 'node:fs/promises'
 
 const REMOTE_PORT_SCAN_START = 18_900
 const REMOTE_PORT_RANDOM_ATTEMPTS = 25
@@ -154,9 +158,25 @@ export class RemoteAccessService {
         this.appliedPort = port
         this.lastError = ''
       } catch (error) {
-        this.lastError = error instanceof Error ? error.message : String(error)
-        this.emitStatus()
-        return
+        // A persisted port may have been claimed by another process between
+        // runs (dev servers grab ephemeral ports); fall back to a fresh one.
+        if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') {
+          this.lastError = error instanceof Error ? error.message : String(error)
+          this.emitStatus()
+          return
+        }
+        try {
+          port = await findInitialRemotePort(0, host)
+          await this.listen(port, host)
+          this.appliedBind = bind
+          this.appliedPort = port
+          this.lastError = ''
+          await this.persistRemotePatch({ port }).catch(() => undefined)
+        } catch (retryError) {
+          this.lastError = retryError instanceof Error ? retryError.message : String(retryError)
+          this.emitStatus()
+          return
+        }
       }
     }
     this.attachWindowMirroring()
@@ -314,8 +334,16 @@ export class RemoteAccessService {
       this.handleEvents(req, res)
       return
     }
+    if (pathname === '/remote/file-preview' && method === 'GET') {
+      await this.handleFilePreview(req, res)
+      return
+    }
     if (pathname === '/remote/invoke' && method === 'POST') {
       await this.handleInvoke(req, res)
+      return
+    }
+    if (pathname === '/remote/upload' && method === 'POST') {
+      await this.handleUpload(req, res)
       return
     }
     if (pathname === '/remote/status' && method === 'GET') {
@@ -357,6 +385,66 @@ export class RemoteAccessService {
       'set-cookie':
         `${REMOTE_SESSION_COOKIE}=${session.token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(settings.remote.sessionTtlHours * 3600)}`
     })
+  }
+
+  /**
+   * Streams a workspace file to the browser. Replaces the kun-workspace-preview
+   * custom protocol that only exists inside Electron; the workspace boundary
+   * is still enforced by resolveOpenTargetPath.
+   */
+  private async handleFilePreview(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const params = new URL(req.url ?? '/', 'http://remote.local').searchParams
+    const workspaceRoot = params.get('workspaceRoot') ?? ''
+    const path = params.get('path') ?? ''
+    // A workspace root is mandatory: without it the boundary check would not
+    // apply and any absolute host path could be streamed to the browser.
+    if (!workspaceRoot.trim() || !path.trim() || workspaceRoot.length > 4096 || path.length > 4096) {
+      sendRemoteJson(res, 400, { error: 'workspaceRoot and path are required' })
+      return
+    }
+    try {
+      const resolved = await resolveOpenTargetPath(path, workspaceRoot, { allowBasenameFallback: false })
+      const info = await stat(resolved)
+      if (!info.isFile() || info.size > 512 * 1024 * 1024) {
+        sendRemoteJson(res, 404, { error: 'File not previewable' })
+        return
+      }
+      res.writeHead(200, {
+        'content-type': remoteMimeType(resolved),
+        'content-length': info.size,
+        'cache-control': 'no-store'
+      })
+      createReadStream(resolved).pipe(res)
+    } catch {
+      sendRemoteJson(res, 404, { error: 'File not found' })
+    }
+  }
+
+  /**
+   * Accepts one file from a Remote browser ({ name, dataBase64 }) and writes
+   * it to a per-upload temp directory so downstream flows can reference a real
+   * host path, matching the desktop webUtils.getPathForFile contract.
+   */
+  private async handleUpload(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      const body = await readRemoteRequestBody(req, 64 * 1024 * 1024)
+      const parsed = JSON.parse(body || '{}') as { name?: unknown; dataBase64?: unknown }
+      const rawName = typeof parsed.name === 'string' ? parsed.name : ''
+      const dataBase64 = typeof parsed.dataBase64 === 'string' ? parsed.dataBase64 : ''
+      if (!dataBase64) {
+        sendRemoteJson(res, 400, { error: 'Missing file data' })
+        return
+      }
+      const safeName = rawName.replaceAll(/[^\w. -]/gu, '_').replaceAll('..', '_').slice(-120) || 'upload.bin'
+      const dir = await mkdtemp(join(tmpdir(), 'kun-remote-upload-'))
+      const target = join(dir, safeName)
+      await writeFile(target, Buffer.from(dataBase64, 'base64'), { mode: 0o600 })
+      sendRemoteJson(res, 200, { ok: true, path: target, name: safeName })
+    } catch (error) {
+      sendRemoteJson(res, error instanceof RemoteRequestBodyTooLargeError ? 413 : 400, {
+        error: error instanceof Error ? error.message : 'Upload failed'
+      })
+    }
   }
 
   private handleEvents(req: IncomingMessage, res: ServerResponse): void {
@@ -423,7 +511,7 @@ export class RemoteAccessService {
           homeDir: homedir(),
           appEnvironment,
           desktopTitleBarMode: 'system'
-        })
+        }, devMode)
       : null
     if (!script) {
       sendRemoteText(res, 404, 'remote bridge unavailable')

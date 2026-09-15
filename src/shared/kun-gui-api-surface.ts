@@ -440,6 +440,12 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   pickWorkspaceDirectory: (defaultPath?: string) => Promise<WorkspacePickResult>
   workspaceDirectoryExists: (workspaceRoot: string) => Promise<boolean>
   pickLocalFiles: (defaultPath?: string) => Promise<LocalFilesPickResult>
+  /**
+   * Remote-web only: uploads a browser File to a host temp directory and
+   * resolves with the resulting host path (the remote equivalent of
+   * webUtils.getPathForFile). Undefined on the desktop bridge.
+   */
+  uploadRemoteFile?: (file: File) => Promise<string>
   /** 在对话工作目录根下创建一个时间戳子目录作为新对话的工作目录。 */
   createConversationWorkspace: (root?: string) => Promise<ConversationWorkspaceCreateResult>
   alertDialog: (options: AlertDialogOptions) => Promise<void>

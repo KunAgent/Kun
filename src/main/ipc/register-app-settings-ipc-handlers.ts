@@ -1,5 +1,6 @@
 import { showCoordinatedMessageBox } from '../native-message-box'
 import { roomProtectedControls } from './room-protected-controls'
+import { isRemoteClientSender } from '../remote/remote-sender'
 import {
   app,
   clipboard,
@@ -511,11 +512,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
   ipcMain.handle('approval:decide', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
-    const request = parseIpcPayload(
-      'approval:decide',
-      kunProtectedApprovalPayloadSchema,
-      payload
-    )
+    const request = parseIpcPayload('approval:decide', kunProtectedApprovalPayloadSchema, payload)
     if (request.source === 'policy' && request.decision === 'allow') throw new Error('Policy allow decisions are Runtime-owned.')
     if (request.presentation === 'room') return decideRoomApproval(event, request)
     if (request.source === 'user') {
@@ -526,7 +523,10 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       const startedAt = Date.now()
       let confirmation: Electron.MessageBoxReturnValue
       try {
-        confirmation = await nativeDialogs.run(parent.webContents, async () => {
+        // Remote clients confirm in their own UI; their invoke is the consent.
+        confirmation = isRemoteClientSender(event.sender)
+          ? { response: 0, checkboxChecked: false }
+          : await nativeDialogs.run(parent.webContents, async () => {
           if (parent.isDestroyed()) {
             throw new Error('Protected approval window was closed before confirmation.')
           }

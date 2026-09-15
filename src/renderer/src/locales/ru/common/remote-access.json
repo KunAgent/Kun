@@ -8,6 +8,8 @@
   "remoteAccessChangePassword": "Change password",
   "remoteAccessPasswordPlaceholder": "Password (at least 6 characters)",
   "remoteAccessPasswordConfirmPlaceholder": "Confirm password",
+  "remoteAccessShowPassword": "Показать пароль",
+  "remoteAccessHidePassword": "Скрыть пароль",
   "remoteAccessSavePassword": "Save password",
   "remoteAccessCancel": "Cancel",
   "remoteAccessPasswordHint": "The password is required to sign in from a browser and is stored hashed on this machine.",
@@ -26,5 +28,16 @@
   "remoteAccessClients": "{{count}} connected client(s)",
   "remoteAccessRevokeSessions": "Sign out all",
   "remoteAccessSecurityHint": "Remote traffic is plain HTTP on your local network. Only enable it on networks you trust.",
-  "remoteAccessExternalHint": "For access away from home, run this through your own VPN or tunnel (e.g. Tailscale, WireGuard, cloudflared) — Kun does not provide a public relay."
+  "remoteAccessExternalHint": "For access away from home, run this through your own VPN or tunnel (e.g. Tailscale, WireGuard, cloudflared) — Kun does not provide a public relay.",
+  "remoteAccessQrHint": "Отсканируйте телефоном или планшетом в той же сети",
+  "remoteAccessPasswordSection": "Пароль",
+  "remoteAccessPasswordSet": "Задан",
+  "remoteAccessPasswordUnset": "Не задан",
+  "remoteAccessPasswordRequired": "Сначала задайте пароль — он защищает Remote в вашей сети.",
+  "remoteAccessNetworkSection": "Сеть",
+  "remoteAccessStopToChange": "Чтобы изменить параметры прослушивания, остановите Remote.",
+  "remoteAccessClientsSection": "Подключённые клиенты",
+  "remoteAccessNoClients": "Нет подключённых клиентов",
+  "remoteAccessShowQr": "Показать QR-код",
+  "remoteAccessHideQr": "Скрыть QR-код"
 }

@@ -27,7 +27,7 @@ const REMOTE_MIME_TYPES: Record<string, string> = {
   '.webmanifest': 'application/manifest+json'
 }
 
-function remoteMimeType(filePath: string): string {
+export function remoteMimeType(filePath: string): string {
   return REMOTE_MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
 }
 
@@ -85,10 +85,15 @@ let cachedBridgeSource: { path: string; source: string } | null = null
  * the renderer bundle (public/); the bootstrap JSON is prepended per host so
  * platform/homeDir/appEnvironment match the desktop preload constants.
  */
-export function remoteBridgeScript(bridgePath: string, bootstrap: unknown): string | null {
+export function remoteBridgeScript(
+  bridgePath: string,
+  bootstrap: unknown,
+  noCache = false
+): string | null {
   try {
-    if (!cachedBridgeSource || cachedBridgeSource.path !== bridgePath) {
-      cachedBridgeSource = { path: bridgePath, source: readFileSync(bridgePath, 'utf8') }
+    if (noCache || !cachedBridgeSource || cachedBridgeSource.path !== bridgePath) {
+      const source = readFileSync(bridgePath, 'utf8')
+      cachedBridgeSource = { path: bridgePath, source }
     }
   } catch {
     return null

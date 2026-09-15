@@ -108,6 +108,6 @@ describe('remote allowlist shape', () => {
     expect(REMOTE_ALLOWED_EVENT_CHANNELS.has('runtime:sse-event')).toBe(true)
     expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('runtime:status')).toBe(true)
     expect(REMOTE_ALLOWED_EVENT_CHANNELS.has('gui:update-state')).toBe(false)
-    expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('gui:update-state')).toBe(false)
+    expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('gui:update-state')).toBe(true)
   })
 })

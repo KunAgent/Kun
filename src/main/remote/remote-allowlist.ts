@@ -38,11 +38,9 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'window:mini-mode:get',
   'notification:turn-complete',
   // Workspace selection + file operations.
-  'workspace:pick-directory',
   'workspace:directory-exists',
   'workspace:creation-times',
   'conversation:create-workspace',
-  'file:pick-local-files',
   'file:list-workspace-directory',
   'file:resolve-workspace',
   'file:read-workspace',
@@ -57,12 +55,8 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'file:read-workspace-pdf',
   'file:open-workspace-preview',
   'file:release-workspace-preview',
-  'file:open-workspace-system',
-  'file:reveal-workspace-file',
   'file:save-workspace-clipboard-image',
-  'file:pick-workspace-image',
   'file:save-workspace-image-bytes',
-  'file:save-as',
   'file:read-local-office-document',
   'file:read-workspace-office-preview',
   'file:read-workspace-office-semantic',
@@ -106,7 +100,6 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'remote-ssh:disconnect',
   'remote-ssh:host-key:reset',
   'remote-ssh:host-key:confirm',
-  'remote-ssh:pick-identity-file',
   'remote-ssh:terminal:create',
   'remote-ssh:terminal:write',
   'remote-ssh:terminal:resize',
@@ -149,7 +142,6 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   // Legacy session import.
   'kun:sessions:detect-legacy',
   'kun:sessions:import-legacy',
-  'kun:sessions:pick-source-dir',
   // UI plugins (read + theme activation only; install/remove stay local).
   'ui-plugin:list',
   'ui-plugin:load',
@@ -172,7 +164,6 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'memory:export-markdown',
   'design:export-prototype',
   'design:lint-project-design-md',
-  'extension:artifact:open',
   // Browser-use control surfaces (the browser runs on the host Runtime).
   'browser-use:state:get',
   'browser-use:mount',
@@ -184,7 +175,8 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'browser-use:clear',
   'cli-install:status',
   'cli-install:action',
-  'speech:transcribe'
+  'speech:transcribe',
+  'gui:update-state'
 ])
 
 /** Event channels a Remote client's sender stub may receive via send(). */
@@ -211,5 +203,15 @@ export const REMOTE_BROADCAST_EVENT_CHANNELS: ReadonlySet<string> = new Set([
   'startup:state',
   'schedule:status-changed',
   'claw:channel-activity',
-  'window:mini-mode'
+  'window:mini-mode',
+  'gui:update-state',
+  'claude-subscription:sdk-progress',
+  'gemini-subscription:cli-progress',
+  'speech:local-whisper:progress',
+  'speak:kokoro:progress',
+  'extension:view-session:invalidated',
+  'extension:external-browser-state',
+  'extension:view-event',
+  'extension:composer-context-attached',
+  'extension:notifications'
 ])

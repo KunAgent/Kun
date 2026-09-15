@@ -8,6 +8,8 @@
   "remoteAccessChangePassword": "Change password",
   "remoteAccessPasswordPlaceholder": "Password (at least 6 characters)",
   "remoteAccessPasswordConfirmPlaceholder": "Confirm password",
+  "remoteAccessShowPassword": "비밀번호 표시",
+  "remoteAccessHidePassword": "비밀번호 숨기기",
   "remoteAccessSavePassword": "Save password",
   "remoteAccessCancel": "Cancel",
   "remoteAccessPasswordHint": "The password is required to sign in from a browser and is stored hashed on this machine.",
@@ -26,5 +28,16 @@
   "remoteAccessClients": "{{count}} connected client(s)",
   "remoteAccessRevokeSessions": "Sign out all",
   "remoteAccessSecurityHint": "Remote traffic is plain HTTP on your local network. Only enable it on networks you trust.",
-  "remoteAccessExternalHint": "For access away from home, run this through your own VPN or tunnel (e.g. Tailscale, WireGuard, cloudflared) — Kun does not provide a public relay."
+  "remoteAccessExternalHint": "For access away from home, run this through your own VPN or tunnel (e.g. Tailscale, WireGuard, cloudflared) — Kun does not provide a public relay.",
+  "remoteAccessQrHint": "같은 네트워크의 휴대폰이나 태블릿으로 스캔하세요",
+  "remoteAccessPasswordSection": "비밀번호",
+  "remoteAccessPasswordSet": "설정됨",
+  "remoteAccessPasswordUnset": "설정되지 않음",
+  "remoteAccessPasswordRequired": "먼저 비밀번호를 설정하세요. 네트워크의 Remote를 보호합니다.",
+  "remoteAccessNetworkSection": "네트워크",
+  "remoteAccessStopToChange": "수신 설정을 변경하려면 Remote를 중지하세요.",
+  "remoteAccessClientsSection": "연결된 클라이언트",
+  "remoteAccessNoClients": "연결된 클라이언트가 없습니다",
+  "remoteAccessShowQr": "QR 코드 보기",
+  "remoteAccessHideQr": "QR 코드 닫기"
 }

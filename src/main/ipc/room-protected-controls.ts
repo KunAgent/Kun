@@ -7,6 +7,7 @@ import type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from '..
 import { roomApprovalCopy, roomApprovalPresentation } from '../../shared/room-approval-presentation'
 import { createApprovalConsentToken, KUN_APPROVAL_CONSENT_HEADER } from '../approval-consent'
 import { showProtectedRoomDialog } from '../protected-room-dialog'
+import { isRemoteClientSender } from '../remote/remote-sender'
 import type { NativeDialogCoordinator } from '../native-dialog-coordinator'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { assertTrustedWorkbenchSender, trustedWorkbenchSenderIsCurrent, revealDialogParent } from './app-ipc-handler-utils'
@@ -35,13 +36,17 @@ export function roomProtectedControls(options: RegisterAppIpcHandlersOptions, di
     if (input.mode === 'full-access' && before.fullAccessUnavailable) throw new Error(before.fullAccessUnavailable)
     if (input.mode === before.mode) return { confirmed: true, state: before }
     const { copy, dark } = await settings()
-    const allowed = await dialogs.run(parent.webContents, async () => {
-      if (!trustedWorkbenchSenderIsCurrent(event, parent)) return false
-      revealDialogParent(parent)
-      return showProtectedRoomDialog(parent, { title: copy.changeTitle, subtitle: copy.modes[input.mode],
-        body: input.mode === 'full-access' ? copy.full : input.mode === 'approve-for-me' ? copy.auto : copy.ask,
-        workspaceLabel: copy.workspace, footnote: copy.next, cancelLabel: copy.cancel, confirmLabel: copy.apply, dark, accent: input.mode === 'full-access' })
-    })
+    // Remote clients confirm inside the browser UI; the host-side protected
+    // dialog would be invisible to them, so their explicit invoke is the consent.
+    const allowed = isRemoteClientSender(event.sender)
+      ? true
+      : await dialogs.run(parent.webContents, async () => {
+        if (!trustedWorkbenchSenderIsCurrent(event, parent)) return false
+        revealDialogParent(parent)
+        return showProtectedRoomDialog(parent, { title: copy.changeTitle, subtitle: copy.modes[input.mode],
+          body: input.mode === 'full-access' ? copy.full : input.mode === 'approve-for-me' ? copy.auto : copy.ask,
+          workspaceLabel: copy.workspace, footnote: copy.next, cancelLabel: copy.cancel, confirmLabel: copy.apply, dark, accent: input.mode === 'full-access' })
+      })
     if (!allowed || !trustedWorkbenchSenderIsCurrent(event, parent)) return { confirmed: false }
     const token = createApprovalConsentToken({ runtimeToken: lease.runtimeToken, approvalId: roomPermissionConsentSubject(roomId, input), decision: 'allow', expiresAt: Date.now() + 30000 })
     const saved = await lease.request(path, 'PUT', JSON.stringify(input), { [KUN_APPROVAL_CONSENT_HEADER]: token })
@@ -61,13 +66,18 @@ export function roomProtectedControls(options: RegisterAppIpcHandlersOptions, di
       const next = await lease.request(path)
       return next.ok && JSON.parse(next.body).approval?.status === 'pending'
     }
-    const allowed = await dialogs.run(parent.webContents, async () => {
-      if (!trustedWorkbenchSenderIsCurrent(event, parent) || !await current()) return false
-      revealDialogParent(parent)
-      return showProtectedRoomDialog(parent, { title: copy[presentation.kind], subtitle: title + ' · ' + presentation.tool,
-        body: presentation.content, workspace: presentation.workspace, workspaceLabel: copy.workspace,
-        footnote: copy.once, cancelLabel: copy.cancel, confirmLabel: request.decision === 'allow' ? copy.allow : copy.deny, dark }, current)
-    })
+    // Remote clients already reviewed the approval card in their own UI; the
+    // protected host dialog is unreachable for them, so skip it but still
+    // verify the approval is pending before granting.
+    const allowed = isRemoteClientSender(event.sender)
+      ? await current()
+      : await dialogs.run(parent.webContents, async () => {
+        if (!trustedWorkbenchSenderIsCurrent(event, parent) || !await current()) return false
+        revealDialogParent(parent)
+        return showProtectedRoomDialog(parent, { title: copy[presentation.kind], subtitle: title + ' · ' + presentation.tool,
+          body: presentation.content, workspace: presentation.workspace, workspaceLabel: copy.workspace,
+          footnote: copy.once, cancelLabel: copy.cancel, confirmLabel: request.decision === 'allow' ? copy.allow : copy.deny, dark }, current)
+      })
     if (!allowed || !trustedWorkbenchSenderIsCurrent(event, parent)) return { confirmed: false }
     const token = createApprovalConsentToken({ runtimeToken: lease.runtimeToken, approvalId: request.approvalId, decision: request.decision, expiresAt: Date.now() + 30000 })
     return { confirmed: true, response: await lease.request(path, 'POST', JSON.stringify({ decision: request.decision }), { [KUN_APPROVAL_CONSENT_HEADER]: token }) }

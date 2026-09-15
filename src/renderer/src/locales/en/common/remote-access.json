@@ -8,6 +8,8 @@
   "remoteAccessChangePassword": "Change password",
   "remoteAccessPasswordPlaceholder": "Password (at least 6 characters)",
   "remoteAccessPasswordConfirmPlaceholder": "Confirm password",
+  "remoteAccessShowPassword": "Show password",
+  "remoteAccessHidePassword": "Hide password",
   "remoteAccessSavePassword": "Save password",
   "remoteAccessCancel": "Cancel",
   "remoteAccessPasswordHint": "The password is required to sign in from a browser and is stored hashed on this machine.",
@@ -26,5 +28,16 @@
   "remoteAccessClients": "{{count}} connected client(s)",
   "remoteAccessRevokeSessions": "Sign out all",
   "remoteAccessSecurityHint": "Remote traffic is plain HTTP on your local network. Only enable it on networks you trust.",
-  "remoteAccessExternalHint": "For access away from home, run this through your own VPN or tunnel (e.g. Tailscale, WireGuard, cloudflared) — Kun does not provide a public relay."
+  "remoteAccessExternalHint": "For access away from home, run this through your own VPN or tunnel (e.g. Tailscale, WireGuard, cloudflared) — Kun does not provide a public relay.",
+  "remoteAccessQrHint": "Scan with a phone or tablet on the same network",
+  "remoteAccessPasswordSection": "Password",
+  "remoteAccessPasswordSet": "Set",
+  "remoteAccessPasswordUnset": "Not set",
+  "remoteAccessPasswordRequired": "Set a password first — it protects Remote on your network.",
+  "remoteAccessNetworkSection": "Network",
+  "remoteAccessStopToChange": "Stop Remote to change listen settings.",
+  "remoteAccessClientsSection": "Clients",
+  "remoteAccessNoClients": "No connected clients",
+  "remoteAccessShowQr": "Show QR code",
+  "remoteAccessHideQr": "Hide QR code"
 }

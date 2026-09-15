@@ -66,7 +66,7 @@ describe('RemoteEventHub', () => {
     hub.attachStream('a', a)
     hub.attachStream('b', b)
     hub.broadcast('runtime:status', { state: 'ready' })
-    hub.broadcast('gui:update-state', { state: 'x' })
+    hub.broadcast('tray:internal-refresh', { state: 'x' })
     expect(a.written.length).toBe(1)
     expect(a.written[0]).toContain('"channel":"runtime:status"')
     expect(b.written.length).toBe(1)

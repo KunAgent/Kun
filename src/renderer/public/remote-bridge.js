@@ -121,11 +121,86 @@
     }
   }
 
+  function bufferToBase64(buffer) {
+    var bytes = new Uint8Array(buffer)
+    var out = ''
+    var chunk = 0x8000
+    for (var offset = 0; offset < bytes.length; offset += chunk) {
+      out += String.fromCharCode.apply(null, bytes.subarray(offset, offset + chunk))
+    }
+    return btoa(out)
+  }
+
+  function uploadRemoteFile(file) {
+    return file.arrayBuffer().then(function (buffer) {
+      return fetch('/remote/upload', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'content-type': 'application/json',
+          'x-kun-remote-request': '1',
+          'x-kun-remote-client': clientId
+        },
+        body: JSON.stringify({ name: file.name || 'file', dataBase64: bufferToBase64(buffer) })
+      }).then(function (response) {
+        if (response.status === 401) {
+          window.location.href = '/remote/login'
+          return new Promise(function () {})
+        }
+        return response.json().then(function (body) {
+          if (!body || body.ok !== true) {
+            throw new Error(body && body.error ? body.error : 'Remote upload failed')
+          }
+          return body.path
+        })
+      })
+    })
+  }
+
+  function pickFilesWithBrowser(multiple) {
+    return new Promise(function (resolve) {
+      var input = document.createElement('input')
+      input.type = 'file'
+      input.multiple = multiple !== false
+      input.style.display = 'none'
+      var settled = false
+      function finish(files) {
+        if (settled) return
+        settled = true
+        input.remove()
+        resolve(files)
+      }
+      input.addEventListener('change', function () {
+        finish(Array.prototype.slice.call(input.files || []))
+      })
+      // No reliable cancel event across browsers; blur+focus fallback.
+      window.addEventListener('focus', function onFocus() {
+        window.removeEventListener('focus', onFocus)
+        setTimeout(function () {
+          if (!settled && !(input.files && input.files.length)) finish([])
+        }, 300)
+      })
+      document.body.appendChild(input)
+      input.click()
+    })
+  }
+
+  function noopSubscription() {
+    return function () {}
+  }
+
+  function unavailableMember(name, prop) {
+    // onXxx members are event subscriptions: return a no-op unsubscribe so
+    // useEffect(() => obj.onXxx(cb)) never hands React a rejected Promise.
+    if (typeof prop === 'string' && /^on[A-Z]/.test(prop)) return noopSubscription
+    return unavailable(name + '.' + String(prop))
+  }
+
   function unavailableObject(name) {
     return new Proxy({}, {
       get: function (target, prop) {
         if (prop === 'then') return undefined
-        return unavailable(name + '.' + String(prop))
+        return unavailableMember(name, prop)
       }
     })
   }
@@ -222,29 +297,118 @@
     cliInstallAction: function (action) { return invoke('cli-install:action', [action]) },
 
     // Workspace selection + files. Native pickers open on the host machine.
-    pickWorkspaceDirectory: function (defaultPath) { return invoke('workspace:pick-directory', [defaultPath]) },
+    pickWorkspaceDirectory: function () {
+      // Host pickers open on the Kun machine, out of reach for a remote user;
+      // accept a typed host path instead.
+      var entered = window.prompt('Workspace directory on the Kun host (e.g. /Users/me/project):', '')
+      var path = entered === null ? null : entered.trim()
+      return Promise.resolve({ canceled: !path, path: path || null })
+    },
     workspaceDirectoryExists: function (root) { return invoke('workspace:directory-exists', [root]) },
     getWorkspaceCreationTimes: function (workspaceRoots) {
       return invoke('workspace:creation-times', [{ workspaceRoots: workspaceRoots }])
     },
     createConversationWorkspace: function (root) { return invoke('conversation:create-workspace', [{ root: root }]) },
-    pickLocalFiles: function (defaultPath) { return invoke('file:pick-local-files', [defaultPath]) },
+    pickLocalFiles: function () {
+      // A remote device picks its own files; they are uploaded to a host temp
+      // directory and the returned host paths feed the normal reference flow.
+      return pickFilesWithBrowser(true).then(function (files) {
+        if (!files.length) return { canceled: true, paths: [] }
+        return Promise.all(files.map(uploadRemoteFile)).then(function (paths) {
+          return { canceled: false, paths: paths }
+        })
+      })
+    },
+    uploadRemoteFile: uploadRemoteFile,
     listWorkspaceDirectory: invokePayload('file:list-workspace-directory'),
     resolveWorkspaceFile: invokePayload('file:resolve-workspace'),
-    openWorkspaceFileInSystem: invokePayload('file:open-workspace-system'),
-    revealWorkspaceFileInFolder: invokePayload('file:reveal-workspace-file'),
+    openWorkspaceFileInSystem: function (options) {
+      // The host file manager is unreachable remotely; download instead.
+      if (!options || !options.path || !options.workspaceRoot) {
+        return Promise.resolve({ ok: false, message: 'Opening files is only available on the Kun host.' })
+      }
+      var anchor = document.createElement('a')
+      anchor.href = '/remote/file-preview?workspaceRoot=' + encodeURIComponent(options.workspaceRoot) +
+        '&path=' + encodeURIComponent(options.path)
+      anchor.download = String(options.path).split(/[\\/]/).pop() || 'download'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      return Promise.resolve({ ok: true })
+    },
+    revealWorkspaceFileInFolder: function (options) {
+      return api.openWorkspaceFileInSystem(options)
+    },
     readWorkspaceFile: invokePayload('file:read-workspace'),
     readWorkspaceImage: invokePayload('file:read-workspace-image'),
     readWorkspacePdf: invokePayload('file:read-workspace-pdf'),
-    openWorkspacePreviewResource: invokePayload('file:open-workspace-preview'),
-    releaseWorkspacePreviewResource: invokePayload('file:release-workspace-preview'),
+    openWorkspacePreviewResource: function (options) {
+      // The kun-workspace-preview:// protocol only exists inside Electron; in
+      // the browser the same workspace file is streamed by the Remote gateway.
+      if (!options || !options.path || !options.workspaceRoot) {
+        return Promise.resolve({ ok: false, message: 'Preview target is missing.' })
+      }
+      var url = '/remote/file-preview?workspaceRoot=' + encodeURIComponent(options.workspaceRoot) +
+        '&path=' + encodeURIComponent(options.path)
+      return Promise.resolve({ ok: true, leaseId: 'remote', url: url })
+    },
+    releaseWorkspacePreviewResource: function () { return Promise.resolve({ ok: true }) },
     readLocalPdfText: invokePayload('file:read-local-pdf-text'),
-    saveWorkspaceFileAs: invokePayload('file:save-as'),
+    saveWorkspaceFileAs: function (payload) {
+      // Browsers cannot open a host save dialog; download via an anchor instead.
+      if (!payload) return Promise.resolve({ ok: false, message: 'No file data was provided.' })
+      var fileName = String(payload.suggestedName || 'download').replace(/[\\/:*?"<>|]/g, '_')
+      var triggerDownload = function (blob) {
+        var objectUrl = URL.createObjectURL(blob)
+        var anchor = document.createElement('a')
+        anchor.href = objectUrl
+        anchor.download = fileName
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        setTimeout(function () { URL.revokeObjectURL(objectUrl) }, 30000)
+        return { ok: true, path: fileName }
+      }
+      if (payload.dataBase64) {
+        var binary = atob(payload.dataBase64)
+        var bytes = new Uint8Array(binary.length)
+        for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+        return Promise.resolve(triggerDownload(new Blob([bytes], { type: payload.mimeType || 'application/octet-stream' })))
+      }
+      if (payload.sourcePath) {
+        if (!payload.workspaceRoot) {
+          return Promise.resolve({ ok: false, message: 'A workspace is required to save this file.' })
+        }
+        var downloadUrl = '/remote/file-preview?path=' + encodeURIComponent(payload.sourcePath) +
+          '&workspaceRoot=' + encodeURIComponent(payload.workspaceRoot)
+        var anchor = document.createElement('a')
+        anchor.href = downloadUrl
+        anchor.download = fileName
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        return Promise.resolve({ ok: true, path: fileName })
+      }
+      return Promise.resolve({ ok: false, message: 'No file data was available to save.' })
+    },
     writeWorkspaceFile: invokePayload('file:write-workspace'),
     createWorkspaceFile: invokePayload('file:create-workspace'),
     createWorkspaceDirectory: invokePayload('file:create-workspace-directory'),
     saveWorkspaceClipboardImage: invokePayload('file:save-workspace-clipboard-image'),
-    pickWorkspaceImage: invokePayload('file:pick-workspace-image'),
+    pickWorkspaceImage: function (payload) {
+      return pickFilesWithBrowser(false).then(function (files) {
+        if (!files.length) return { ok: false, canceled: true }
+        return files[0].arrayBuffer().then(function (buffer) {
+          return invoke('file:save-workspace-image-bytes', [{
+            workspaceRoot: payload && payload.workspaceRoot,
+            dataBase64: bufferToBase64(buffer),
+            mimeType: files[0].type || undefined,
+            imageDirectory: payload && payload.imageDirectory,
+            fileName: files[0].name
+          }])
+        })
+      })
+    },
     saveWorkspaceImageBytes: invokePayload('file:save-workspace-image-bytes'),
     renameWorkspaceEntry: invokePayload('file:rename-workspace-entry'),
     deleteWorkspaceEntry: invokePayload('file:delete-workspace-entry'),
@@ -308,7 +472,11 @@
     disconnectRemoteSshHost: function (hostId) { return invoke('remote-ssh:disconnect', [hostId]) },
     resetRemoteSshHostKey: function (hostId) { return invoke('remote-ssh:host-key:reset', [hostId]) },
     confirmRemoteSshHostKey: invokePayload('remote-ssh:host-key:confirm'),
-    pickRemoteSshIdentityFile: invokeRaw('remote-ssh:pick-identity-file'),
+    pickRemoteSshIdentityFile: function () {
+      var entered = window.prompt('SSH identity file path on the Kun host:', '')
+      var path = entered === null ? '' : entered.trim()
+      return Promise.resolve(path || null)
+    },
     createRemoteSshTerminal: invokePayload('remote-ssh:terminal:create'),
     writeToRemoteSshTerminal: invokePayload('remote-ssh:terminal:write'),
     resizeRemoteSshTerminal: invokePayload('remote-ssh:terminal:resize'),
@@ -409,7 +577,11 @@
     // Legacy session import + plugins + editors.
     detectLegacySessions: invokeRaw('kun:sessions:detect-legacy'),
     importLegacySessions: function (sourceDir) { return invoke('kun:sessions:import-legacy', [{ sourceDir: sourceDir }]) },
-    pickLegacySessionDir: invokeRaw('kun:sessions:pick-source-dir'),
+    pickLegacySessionDir: function () {
+      var entered = window.prompt('Folder on the Kun host containing previous conversations:', '')
+      var path = entered === null ? '' : entered.trim()
+      return Promise.resolve(path ? { canceled: false, path: path } : { canceled: true, path: null })
+    },
     listUiPlugins: invokeRaw('ui-plugin:list'),
     loadUiPlugin: function (id) { return invoke('ui-plugin:load', [{ id: id }]) },
     activateUiPluginTheme: function (id) { return invoke('ui-plugin:theme:activate', [{ id: id }]) },
@@ -443,6 +615,17 @@
     stopBrowserUse: function (threadId) { return invoke('browser-use:stop', [{ threadId: threadId }]) },
     clearBrowserUse: function (threadId) { return invoke('browser-use:clear', [{ threadId: threadId }]) },
     onBrowserUseState: on('browser-use:state'),
+    getGuiUpdateState: function () { return invoke('gui:update-state') },
+    onGuiUpdateState: on('gui:update-state'),
+    onClaudeSubscriptionSdkProgress: on('claude-subscription:sdk-progress'),
+    onGeminiSubscriptionCliProgress: on('gemini-subscription:cli-progress'),
+    onLocalWhisperModelProgress: on('speech:local-whisper:progress'),
+    onLocalKokoroModelProgress: on('speak:kokoro:progress'),
+    onExtensionViewSessionInvalidated: on('extension:view-session:invalidated'),
+    onExtensionExternalBrowserState: on('extension:external-browser-state'),
+    onExtensionComposerContext: on('extension:composer-context-attached'),
+    onExtensionNotifications: on('extension:notifications'),
+    onExtensionViewEvent: on('extension:view-event'),
 
     // Browser-local replacements for desktop-only APIs.
     openExternal: function (url) {
@@ -468,6 +651,11 @@
     get: function (target, prop) {
       if (typeof prop === 'symbol') return undefined
       if (prop in target) return target[prop]
+      // Event subscribers follow the onXxx convention and are often used as
+      // useEffect cleanups; an unimplemented one must return a no-op
+      // unsubscribe instead of a rejected Promise (React would throw
+      // "destroy is not a function" on the non-function cleanup).
+      if (typeof prop === 'string' && /^on[A-Z]/.test(prop)) return noopSubscription
       return unavailable(String(prop))
     }
   })

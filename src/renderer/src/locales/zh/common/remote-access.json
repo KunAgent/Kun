@@ -8,6 +8,8 @@
   "remoteAccessChangePassword": "修改密码",
   "remoteAccessPasswordPlaceholder": "密码（至少 6 个字符）",
   "remoteAccessPasswordConfirmPlaceholder": "确认密码",
+  "remoteAccessShowPassword": "显示密码",
+  "remoteAccessHidePassword": "隐藏密码",
   "remoteAccessSavePassword": "保存密码",
   "remoteAccessCancel": "取消",
   "remoteAccessPasswordHint": "浏览器登录时需要该密码，本机仅以哈希形式保存。",
@@ -26,5 +28,16 @@
   "remoteAccessClients": "已连接 {{count}} 个客户端",
   "remoteAccessRevokeSessions": "全部登出",
   "remoteAccessSecurityHint": "远程流量在局域网内为明文 HTTP，请仅在可信网络中启用。",
-  "remoteAccessExternalHint": "异地访问请通过你自己的 VPN 或隧道（如 Tailscale、WireGuard、cloudflared）转发，Kun 不提供公网中继。"
+  "remoteAccessExternalHint": "异地访问请通过你自己的 VPN 或隧道（如 Tailscale、WireGuard、cloudflared）转发，Kun 不提供公网中继。",
+  "remoteAccessQrHint": "同一网络下的手机或平板扫码即可打开",
+  "remoteAccessPasswordSection": "访问密码",
+  "remoteAccessPasswordSet": "已设置",
+  "remoteAccessPasswordUnset": "未设置",
+  "remoteAccessPasswordRequired": "请先设置密码——它保护局域网内的远程访问。",
+  "remoteAccessNetworkSection": "网络",
+  "remoteAccessStopToChange": "停止远程访问后可修改监听设置。",
+  "remoteAccessClientsSection": "已连接客户端",
+  "remoteAccessNoClients": "暂无连接的客户端",
+  "remoteAccessShowQr": "显示二维码",
+  "remoteAccessHideQr": "收起二维码"
 }

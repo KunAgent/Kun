@@ -22,6 +22,10 @@ vi.mock('../main-app-context', () => ({
 import type { AppSettingsV1 } from '../../shared/app-settings'
 import { hashRemoteAccessPassword } from './remote-auth'
 import { RemoteAccessService } from './remote-access-service'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { createServer as createNetServer } from 'node:net'
 
 const PASSWORD = 'test-password-1'
 
@@ -36,6 +40,42 @@ function makeSettings(): AppSettingsV1 {
     }
   } as unknown as AppSettingsV1
 }
+
+describe('RemoteAccessService port fallback', () => {
+  it('rebinds to a fresh port when the persisted one is occupied', async () => {
+    const blocker = createNetServer()
+    await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve))
+    const occupied = (blocker.address() as { port: number }).port
+    const persisted: number[] = []
+    const service = new RemoteAccessService({
+      getSettings: async () => ({
+        remote: {
+          enabled: true,
+          bind: 'loopback',
+          port: occupied,
+          passwordHash: hashRemoteAccessPassword('pw-123456'),
+          sessionTtlHours: 1
+        }
+      }) as unknown as AppSettingsV1,
+      persistRemotePatch: async (patch) => {
+        if (typeof patch.port === 'number') persisted.push(patch.port)
+      },
+      getMainWindow: () => null,
+      logError: () => undefined
+    })
+    try {
+      await service.sync()
+      expect(service.running).toBe(true)
+      const status = service.status(makeSettings())
+      expect(status.port).not.toBe(occupied)
+      expect(status.port).toBeGreaterThan(0)
+      expect(persisted).toContain(status.port)
+    } finally {
+      await service.destroy()
+      await new Promise<void>((resolve) => blocker.close(() => resolve()))
+    }
+  })
+})
 
 describe('RemoteAccessService HTTP surface', () => {
   let service: RemoteAccessService
@@ -134,6 +174,48 @@ describe('RemoteAccessService HTTP surface', () => {
       body: JSON.stringify({ channel: 'app:version' })
     })
     expect(missingHandler.status).toBe(404)
+  })
+
+  it('streams workspace files to authenticated browsers within the workspace', async () => {
+    const cookie = await login()
+    const dir = await mkdtemp(join(tmpdir(), 'kun-remote-test-ws-'))
+    await writeFile(join(dir, 'note.txt'), 'hello remote', 'utf8')
+    const url = `${baseUrl}/remote/file-preview?workspaceRoot=${encodeURIComponent(dir)}&path=note.txt`
+    const response = await fetch(url, { headers: { cookie } })
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('hello remote')
+
+    const outside = await fetch(
+      `${baseUrl}/remote/file-preview?workspaceRoot=${encodeURIComponent(dir)}&path=${encodeURIComponent('/etc/hosts')}`,
+      { headers: { cookie } }
+    )
+    expect(outside.status).toBe(404)
+
+    const noRoot = await fetch(`${baseUrl}/remote/file-preview?path=${encodeURIComponent('/etc/hosts')}`, {
+      headers: { cookie }
+    })
+    expect(noRoot.status).toBe(400)
+  })
+
+  it('accepts uploads and stores them in a host temp directory', async () => {
+    const cookie = await login()
+    const response = await fetch(`${baseUrl}/remote/upload`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie,
+        'x-kun-remote-request': '1',
+        'x-kun-remote-client': 'test-client'
+      },
+      body: JSON.stringify({ name: '../evil/shot.png', dataBase64: Buffer.from('img').toString('base64') })
+    })
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.name).not.toContain('..')
+    const written = await readFile(body.path, 'utf8')
+    expect(written).toBe('img')
+    await rm(dirname(body.path), { recursive: true, force: true })
   })
 
   it('opens the SSE event stream for authenticated clients', async () => {
