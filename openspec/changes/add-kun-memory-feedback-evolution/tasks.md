@@ -13,9 +13,9 @@
 
 ## 3. Explicit Confirmation and Versioned Correction
 
-- [ ] 3.1 Add explicit confirmation to the local Memory service with authorization, lifecycle, opt-in, and stable event identity checks; verify search, preview, model continuation, and repeated retrieval never create confirmation events.
-- [ ] 3.2 Add versioned correction that creates one same-scope replacement, sets `supersedes`, marks the old record superseded, and preserves old content/evidence; verify active retrieval exposes only the new version.
-- [ ] 3.3 Add a durable correction receipt and idempotent reconciliation across canonical mutation and feedback append; verify retries at every interruption point return the same new Memory id and one correction event.
+- [x] 3.1 Add explicit confirmation to the local Memory service with authorization, lifecycle, opt-in, and stable event identity checks; verify search, preview, model continuation, and repeated retrieval never create confirmation events.
+- [x] 3.2 Add versioned correction that creates one same-scope replacement, sets `supersedes`, marks the old record superseded, and preserves old content/evidence; verify active retrieval exposes only the new version.
+- [x] 3.3 Add a durable correction receipt and idempotent reconciliation across canonical mutation and feedback append; verify retries at every interruption point return the same new Memory id and one correction event.
 
 ## 4. Manager Ownership and Remote Parity
 

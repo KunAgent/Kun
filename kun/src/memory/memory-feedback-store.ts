@@ -101,6 +101,13 @@ export class FileMemoryFeedbackStore {
     })
   }
 
+  async event(eventId: string): Promise<MemoryFeedbackEventValue | undefined> {
+    return this.withMutation(async () => {
+      const event = (await this.load()).explicitEvents.get(eventId)
+      return event ? MemoryFeedbackEvent.parse(event) : undefined
+    })
+  }
+
   async listAggregates(): Promise<MemoryFeedbackAggregateValue[]> {
     return this.withMutation(async () => sortedAggregates((await this.load()).aggregates))
   }
