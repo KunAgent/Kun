@@ -539,8 +539,9 @@ export class RemoteAccessService {
         await proxyRemoteDevRequest(devUrl, req, res)
         return
       } catch {
-        sendRemoteJson(res, 502, { error: 'Renderer dev server unavailable' })
-        return
+        // Vite may be gone while the Electron main process still runs (orphaned
+        // dev session). Fall through to the last bundled renderer instead of
+        // leaving Remote clients with a dead 502 page.
       }
     }
     const root = this.rendererRoot()
