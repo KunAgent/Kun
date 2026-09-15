@@ -117,6 +117,30 @@ The evaluator SHALL support a pre-declared finite grid of similarity thresholds,
 - **WHEN** the same dataset, grid, candidate artifacts, and seed are evaluated again
 - **THEN** the configuration order, selected ids, scores, and selected configuration are reproducible within the declared tolerance
 
+### Requirement: A low-cost lexical enhancement is exploratory
+
+The evaluator SHALL keep deterministic, checked-in terminology-map normalization as a separately labeled exploratory candidate and SHALL compare it under the same authorization, ranking, K, prompt-budget, and resource rules as primary candidates. The terminology-map candidate SHALL NOT be selected as the primary candidate or authorize production changes by itself.
+
+#### Scenario: Compare terminology normalization with embeddings
+
+- **WHEN** the development evaluation includes both the terminology-map candidate and primary lexical or semantic candidates
+- **THEN** the terminology-map result is reported independently against the unmodified lexical baseline and cannot be selected as the primary candidate
+
+#### Scenario: Change a terminology mapping
+
+- **WHEN** any checked-in mapping entry changes
+- **THEN** the exploratory candidate identity or version and artifact hash change before new results are accepted
+
+#### Scenario: Normalize an unrelated query
+
+- **WHEN** no declared terminology entry matches a query token or phrase
+- **THEN** the exploratory candidate submits the original query to lexical retrieval unchanged
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: A low-cost lexical enhancement is a first-class candidate`
+- TO: `### Requirement: A low-cost lexical enhancement is exploratory`
+
 ## ADDED Requirements
 
 ### Requirement: Candidate rejection architectures are compared offline
