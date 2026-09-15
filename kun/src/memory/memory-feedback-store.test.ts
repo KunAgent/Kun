@@ -1,10 +1,11 @@
-import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
   MemoryFeedbackConfig,
+  MemoryFeedbackCheckpoint,
   MemoryFeedbackEvent,
   MemoryFeedbackProjection,
   type MemoryFeedbackEvent as MemoryFeedbackEventValue
@@ -15,6 +16,11 @@ import { FileMemoryStore } from './memory-store.js'
 const roots: string[] = []
 const feedbackConfig = MemoryFeedbackConfig.parse({ enabled: true })
 const memoryConfig = MemoryCapabilityConfig.parse({ enabled: true })
+const compactingConfig = {
+  ...feedbackConfig,
+  maxSegmentBytes: 1_000,
+  maxTotalBytes: 8_000
+}
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -85,7 +91,7 @@ describe('FileMemoryFeedbackStore', () => {
     const root = await temporaryRoot()
     const store = new FileMemoryFeedbackStore({ dataDir: root, config: feedbackConfig })
     await store.append(retrieved(0))
-    await appendFile(join(root, 'memory-feedback', 'events.jsonl'), '{"schemaVersion":1')
+    await appendFile(join(root, 'memory-feedback', 'events-000001.jsonl'), '{"schemaVersion":1')
 
     const restarted = new FileMemoryFeedbackStore({ dataDir: root, config: feedbackConfig })
     await restarted.ready()
@@ -98,7 +104,7 @@ describe('FileMemoryFeedbackStore', () => {
 
   it('fails an interior corruption without disabling canonical Memory operations', async () => {
     const root = await temporaryRoot()
-    const path = join(root, 'memory-feedback', 'events.jsonl')
+    const path = join(root, 'memory-feedback', 'events-000001.jsonl')
     await mkdir(join(root, 'memory-feedback'), { recursive: true })
     const first = JSON.stringify(retrieved(0))
     const second = JSON.stringify(retrieved(1))
@@ -133,6 +139,92 @@ describe('FileMemoryFeedbackStore', () => {
     expect(diagnostics.degradedReason).not.toContain('Fixture')
     expect(diagnostics.degradedReason?.length).toBeLessThanOrEqual(512)
   })
+
+  it('checkpoints bounded segments while retaining exact replay and explicit audit', async () => {
+    const root = await temporaryRoot()
+    const store = new FileMemoryFeedbackStore({
+      dataDir: root,
+      config: compactingConfig,
+      nowIso: () => '2026-09-15T02:00:00.000Z'
+    })
+    await store.append(MemoryFeedbackEvent.parse({
+      schemaVersion: 1,
+      id: 'evt_confirmed_compacted',
+      kind: 'confirmed',
+      memoryId: 'mem_1',
+      occurredAt: '2026-09-15T01:00:00.000Z'
+    }))
+    const events = Array.from({ length: 5 }, (_, index) => largeRetrieved(index))
+    for (const event of events) await store.append(event)
+
+    const checkpoint = MemoryFeedbackCheckpoint.parse(JSON.parse(
+      await readFile(join(root, 'memory-feedback', 'checkpoint.json'), 'utf8')
+    ))
+    expect(checkpoint.explicitEvents).toMatchObject([{ id: 'evt_confirmed_compacted', kind: 'confirmed' }])
+    expect(checkpoint.eventReceipts.some((receipt) => receipt.id === events[0]!.id)).toBe(true)
+    expect((await readdir(join(root, 'memory-feedback'))).some((entry) => entry === 'events-000001.jsonl'))
+      .toBe(false)
+
+    const restarted = new FileMemoryFeedbackStore({ dataDir: root, config: compactingConfig })
+    await restarted.ready()
+    expect(await restarted.aggregate('mem_1')).toMatchObject({ retrievalCount: 5, confirmationCount: 1 })
+    expect(await restarted.append(events[0]!)).toBe('replayed')
+  })
+
+  it('recovers equivalently when compaction stops before or after checkpoint commit', async () => {
+    const beforeRoot = await temporaryRoot()
+    const before = new FileMemoryFeedbackStore({
+      dataDir: beforeRoot,
+      config: compactingConfig,
+      writeCheckpoint: async () => { throw new Error('before checkpoint commit') }
+    })
+    const beforeEvents = [largeRetrieved(0), largeRetrieved(1)]
+    await before.append(beforeEvents[0]!)
+    await expect(before.append(beforeEvents[1]!)).rejects.toThrow(/before checkpoint/u)
+    const beforeRestart = new FileMemoryFeedbackStore({ dataDir: beforeRoot, config: compactingConfig })
+    await beforeRestart.ready()
+    expect((await beforeRestart.aggregate('mem_1'))?.retrievalCount).toBe(2)
+
+    const afterRoot = await temporaryRoot()
+    let interrupted = false
+    const after = new FileMemoryFeedbackStore({
+      dataDir: afterRoot,
+      config: compactingConfig,
+      afterCheckpointWrite: async () => {
+        if (!interrupted) {
+          interrupted = true
+          throw new Error('after checkpoint commit')
+        }
+      }
+    })
+    const afterEvents = [largeRetrieved(0), largeRetrieved(1)]
+    await after.append(afterEvents[0]!)
+    await expect(after.append(afterEvents[1]!)).rejects.toThrow(/after checkpoint/u)
+    const afterRestart = new FileMemoryFeedbackStore({ dataDir: afterRoot, config: compactingConfig })
+    await afterRestart.ready()
+    expect((await afterRestart.aggregate('mem_1'))?.retrievalCount).toBe(2)
+    expect(await afterRestart.append(afterEvents[1]!)).toBe('replayed')
+  })
+
+  it('stops feedback growth at the configured hard capacity', async () => {
+    const root = await temporaryRoot()
+    const store = new FileMemoryFeedbackStore({
+      dataDir: root,
+      config: { ...compactingConfig, maxTotalBytes: 1_600 }
+    })
+    let rejected = false
+    for (let index = 0; index < 12; index += 1) {
+      try {
+        await store.append(largeRetrieved(index))
+      } catch (error) {
+        expect(String(error)).toMatch(/storage capacity|checkpoint exceeds/u)
+        rejected = true
+        break
+      }
+    }
+    expect(rejected).toBe(true)
+    expect(await store.diagnostics()).toMatchObject({ state: 'degraded' })
+  })
 })
 
 function retrieved(index: number): MemoryFeedbackEventValue {
@@ -144,6 +236,14 @@ function retrieved(index: number): MemoryFeedbackEventValue {
     occurredAt: `2026-09-15T00:00:${String(index).padStart(2, '0')}.000Z`,
     threadId: 'thread_1',
     turnId: `turn_${index}`
+  })
+}
+
+function largeRetrieved(index: number): MemoryFeedbackEventValue {
+  return MemoryFeedbackEvent.parse({
+    ...retrieved(index),
+    threadId: `thread_${'x'.repeat(220)}`,
+    turnId: `turn_${index}_${'y'.repeat(210)}`
   })
 }
 

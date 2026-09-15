@@ -9,7 +9,7 @@
 - [x] 2.1 Implement a local append-only feedback ledger with serialized writes and same-id/same-payload idempotency; verify restart, concurrent append, duplicate replay, and conflicting replay tests pass.
 - [x] 2.2 Implement the rebuildable per-Memory aggregate projection without writing canonical Memory records; verify counts and last-event timestamps rebuild identically while canonical content and freshness timestamps remain byte-for-byte unchanged.
 - [x] 2.3 Add bounded ledger diagnostics and recovery for malformed tails, invalid interior events, missing projections, and write failures; verify valid prefixes remain usable and canonical Memory CRUD/retrieval stays available.
-- [ ] 2.4 Add bounded retrieval-event segments and atomic aggregate checkpoints while retaining explicit confirmation/correction audit events; verify crash-before/after-checkpoint recovery produces equivalent aggregates and no duplicate counts.
+- [x] 2.4 Add bounded retrieval-event segments and atomic aggregate checkpoints while retaining explicit confirmation/correction audit events; verify crash-before/after-checkpoint recovery produces equivalent aggregates and no duplicate counts.
 
 ## 3. Explicit Confirmation and Versioned Correction
 

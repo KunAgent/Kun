@@ -66,6 +66,34 @@ export const MemoryFeedbackProjection = z.object({
 }).strict()
 export type MemoryFeedbackProjection = z.infer<typeof MemoryFeedbackProjection>
 
+export const MemoryFeedbackEventReceipt = z.object({
+  id: FeedbackId,
+  payloadHash: z.string().regex(/^[a-f0-9]{64}$/u)
+}).strict()
+export type MemoryFeedbackEventReceipt = z.infer<typeof MemoryFeedbackEventReceipt>
+
+export const MemoryFeedbackCheckpoint = z.object({
+  schemaVersion: z.literal(MEMORY_FEEDBACK_SCHEMA_VERSION),
+  createdAt: FeedbackTimestamp,
+  coveredSegment: z.number().int().nonnegative(),
+  eventReceipts: z.array(MemoryFeedbackEventReceipt),
+  explicitEvents: z.array(MemoryFeedbackEvent),
+  aggregates: z.array(MemoryFeedbackAggregate)
+}).strict().superRefine((checkpoint, context) => {
+  reportDuplicateIds(checkpoint.eventReceipts, 'eventReceipts', context)
+  reportDuplicateIds(checkpoint.explicitEvents, 'explicitEvents', context)
+  reportDuplicateIds(checkpoint.aggregates, 'aggregates', context, 'memoryId')
+  for (let index = 0; index < checkpoint.explicitEvents.length; index += 1) {
+    if (checkpoint.explicitEvents[index]?.kind !== 'retrieved') continue
+    context.addIssue({
+      code: 'custom',
+      path: ['explicitEvents', index, 'kind'],
+      message: 'retrieval impressions must be compacted into aggregate state'
+    })
+  }
+})
+export type MemoryFeedbackCheckpoint = z.infer<typeof MemoryFeedbackCheckpoint>
+
 export const MemoryFeedbackDiagnostics = z.object({
   enabled: z.boolean(),
   state: z.enum(['disabled', 'ready', 'degraded']),
@@ -169,3 +197,20 @@ export const MemoryFeedbackOperationError = z.object({
   message: z.string().min(1).max(MEMORY_FEEDBACK_MAX_DIAGNOSTIC_CHARS)
 }).strict()
 export type MemoryFeedbackOperationError = z.infer<typeof MemoryFeedbackOperationError>
+
+function reportDuplicateIds(
+  values: ReadonlyArray<Record<string, unknown>>,
+  path: string,
+  context: z.RefinementCtx,
+  key = 'id'
+): void {
+  const seen = new Set<unknown>()
+  for (let index = 0; index < values.length; index += 1) {
+    const id = values[index]?.[key]
+    if (!seen.has(id)) {
+      seen.add(id)
+      continue
+    }
+    context.addIssue({ code: 'custom', path: [path, index, key], message: `${path} ids must be unique` })
+  }
+}

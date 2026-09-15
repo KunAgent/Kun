@@ -56,7 +56,7 @@ A shadow-only offline evaluator consumes anonymous Memory and feedback fixtures.
 
 ### 6. Bound data growth without erasing explicit audit evidence
 
-Ledger configuration declares segment and total-byte ceilings. Retrieval impressions may be compacted into a versioned aggregate checkpoint once the event segment reaches its bound; explicit confirmation/correction events and their operation identities remain auditable. Compaction writes a new checkpoint atomically before removing covered retrieval segments, and recovery can select the last valid checkpoint plus later events.
+Ledger configuration declares segment and total-byte ceilings. Once a segment reaches its bound, Kun writes a versioned aggregate checkpoint before removing covered segments. The checkpoint retains each compacted event's id and payload hash so same-payload replay remains a no-op and same-id/different-payload replay still fails closed; explicit confirmation/correction events remain in full for audit. Recovery ignores segments covered by the last valid checkpoint, which makes interruption before or after segment removal equivalent. If the checkpoint receipts plus later segments reach the hard total ceiling, feedback persistence degrades and stops accepting new events rather than deleting identity or explicit audit evidence; core Memory behavior remains available.
 
 Unbounded JSONL and per-turn canonical Memory rewrites were rejected. Fixed time-based deletion of all events was also rejected because it could erase correction audit history.
 
@@ -66,7 +66,7 @@ Unbounded JSONL and per-turn canonical Memory rewrites were rejected. Fixed time
 - **Three runtime surfaces can drift** → expose one shared context-assembly recording helper and contract tests for main, Cursor SDK, and Agent SDK paths.
 - **Retrieval frequency can self-reinforce** → production ranking never reads feedback in this change; offline frequency is log-scaled, bounded, and reported separately from confirmation.
 - **Feedback history can reveal behavior patterns** → store ids/timestamps only, omit query/content/path data, bound diagnostics, and keep collection opt-in/local.
-- **Ledger growth can become unbounded** → segment, checkpoint, and compact retrieval impressions while retaining explicit correction/confirmation audit events.
+- **Ledger growth can become unbounded** → segment and checkpoint events, compact retrieval payloads into exact identity receipts plus aggregates, and stop feedback collection at the hard capacity instead of deleting explicit audit evidence.
 - **Disabled/degraded paths can accidentally alter output timing or results** → require result, order, trace, context, and turn-outcome parity tests with failing ledger adapters.
 
 ## Migration Plan
