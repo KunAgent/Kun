@@ -25,5 +25,5 @@
     {"stratum":"lifecycle-safety","development":2,"holdout":2},
     {"stratum":"misleading-feedback-control","development":2,"holdout":2}
   ],
-  "fixtureSha256": "d029107fe91ef3503239a66892ce2bbfc93c46d5dcdecac9aa0496f3f9dcb380"
+  "fixtureSha256": "a6a37e35a5da6afdfbdae42b9abe8a9f182dcad19167fc82361f662873d7e259"
 }
