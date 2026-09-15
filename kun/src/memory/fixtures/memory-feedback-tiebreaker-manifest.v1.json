@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-tiebreaker-v1",
+  "datasetId": "kun-memory-feedback-tiebreaker-anonymous-v1",
+  "status": "frozen",
+  "evaluationNow": "2026-09-16T00:00:00.000Z",
+  "normalization": {
+    "unicode": "NFKC",
+    "caseFold": "unicode-lowercase",
+    "punctuation": "strip",
+    "nearDuplicateTokenJaccard": 0.75
+  },
+  "splitCounts": {
+    "development": 18,
+    "holdout": 18
+  },
+  "stratumQuotas": [
+    {"stratum":"confirmed-near-tie","development":2,"holdout":2},
+    {"stratum":"corrected-replacement-near-tie","development":2,"holdout":2},
+    {"stratum":"frequent-unconfirmed-control","development":2,"holdout":2},
+    {"stratum":"no-feedback-control","development":2,"holdout":2},
+    {"stratum":"wide-gap-control","development":2,"holdout":2},
+    {"stratum":"no-result-control","development":2,"holdout":2},
+    {"stratum":"scope-safety","development":2,"holdout":2},
+    {"stratum":"lifecycle-safety","development":2,"holdout":2},
+    {"stratum":"misleading-feedback-control","development":2,"holdout":2}
+  ],
+  "fixtureSha256": "d029107fe91ef3503239a66892ce2bbfc93c46d5dcdecac9aa0496f3f9dcb380"
+}

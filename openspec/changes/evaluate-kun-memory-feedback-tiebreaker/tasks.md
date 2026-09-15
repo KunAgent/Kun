@@ -7,10 +7,10 @@
 
 ## 2. Anonymous Decision Data
 
-- [ ] 2.1 Create a synthetic Memory and feedback corpus with near-tie confirmation, active corrected replacement, high-frequency-unconfirmed, no-feedback, wide-gap, no-result, scope, and lifecycle strata; verify every record and event passes the production contracts without using real user data.
-- [ ] 2.2 Add development and holdout queries with expected sets, preferred/unpreferred pairs, explicit hard negatives, stratum labels, and human-readable rationales; verify exact quotas and referenced ids through the fixture validator.
-- [ ] 2.3 Reject normalized duplicate and near-duplicate cases across splits and reject ambiguous labels or invalid preference targets; verify focused negative fixtures fail before retrieval executes.
-- [ ] 2.4 Publish the versioned manifest and SHA-256 checksums for all frozen inputs; verify a one-byte fixture change invalidates the manifest.
+- [x] 2.1 Create a synthetic Memory and feedback corpus with near-tie confirmation, active corrected replacement, high-frequency-unconfirmed, no-feedback, wide-gap, no-result, scope, and lifecycle strata; verify every record and event passes the production contracts without using real user data.
+- [x] 2.2 Add development and holdout queries with expected sets, preferred/unpreferred pairs, explicit hard negatives, stratum labels, and human-readable rationales; verify exact quotas and referenced ids through the fixture validator.
+- [x] 2.3 Reject normalized duplicate and near-duplicate cases across splits and reject ambiguous labels or invalid preference targets; verify focused negative fixtures fail before retrieval executes.
+- [x] 2.4 Publish the versioned manifest and SHA-256 checksums for all frozen inputs; verify a one-byte fixture change invalidates the manifest.
 
 ## 3. Offline Candidate Evaluation
 
