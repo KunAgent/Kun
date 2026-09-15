@@ -676,6 +676,18 @@ const api = {
     ) => handler(payload)
     ipcRenderer.on('terminal:exit', wrapped)
     return () => ipcRenderer.removeListener('terminal:exit', wrapped)
+  },
+  remoteAccessGetStatus: () => ipcRenderer.invoke('remote:status:get'),
+  remoteAccessSetConfig: (patch) => ipcRenderer.invoke('remote:config:set', patch),
+  remoteAccessSetPassword: (password) => ipcRenderer.invoke('remote:password:set', password),
+  remoteAccessRevokeSessions: () => ipcRenderer.invoke('remote:sessions:revoke'),
+  onRemoteAccessStatusChanged: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('remote:status-changed', wrapped)
+    return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
   }
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

@@ -14,7 +14,8 @@ export const BUILTIN_RIGHT_PANEL_IDS = {
   mcpSkills: 'builtin:right-panel-mcp-skills',
   providerQuotas: 'builtin:right-panel-provider-quotas',
   agentPerspective: 'builtin:right-panel-agent-perspective',
-  graph: 'builtin:right-panel-graph'
+  graph: 'builtin:right-panel-graph',
+  remote: 'builtin:right-panel-remote'
 } as const
 
 export type BuiltinRightPanelId = (typeof BUILTIN_RIGHT_PANEL_IDS)[keyof typeof BUILTIN_RIGHT_PANEL_IDS]
@@ -38,7 +39,8 @@ const LEGACY_RIGHT_PANEL_IDS: Readonly<Record<string, BuiltinRightPanelId>> = {
   'mcp-skills': BUILTIN_RIGHT_PANEL_IDS.mcpSkills,
   'provider-quotas': BUILTIN_RIGHT_PANEL_IDS.providerQuotas,
   'agent-perspective': BUILTIN_RIGHT_PANEL_IDS.agentPerspective,
-  graph: BUILTIN_RIGHT_PANEL_IDS.graph
+  graph: BUILTIN_RIGHT_PANEL_IDS.graph,
+  remote: BUILTIN_RIGHT_PANEL_IDS.remote
 }
 
 export function isExtensionContributionId(value: string): value is ExtensionContributionId {

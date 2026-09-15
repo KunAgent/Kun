@@ -37,6 +37,8 @@ import {
   mergeWriteSettings,
   defaultTerminalSettings,
   mergeTerminalSettings,
+  defaultRemoteAccessSettings,
+  mergeRemoteAccessSettings,
   mergeDarkUiColors,
   DEFAULT_CHAT_CONTENT_MAX_WIDTH_PX,
   DEFAULT_COMPOSER_SEND_KEY,
@@ -334,7 +336,8 @@ export const defaultSettings = (): AppSettingsV1 => ({
   schedule: defaultScheduleSettings(),
   workflow: defaultWorkflowSettings(),
   design: defaultDesignSettings(),
-  terminal: defaultTerminalSettings()
+  terminal: defaultTerminalSettings(),
+  remote: defaultRemoteAccessSettings()
 })
 
 export function buildMergedSettings(parsed: Partial<AppSettingsV1>): AppSettingsV1 {
@@ -510,6 +513,7 @@ export function applySettingsPatchToSnapshot(
     workflow: mergeWorkflowSettings(current.workflow, partial.workflow),
     design: mergeDesignSettings(current.design, partial.design),
     terminal: mergeTerminalSettings(current.terminal, partial.terminal),
+    remote: mergeRemoteAccessSettings(current.remote, partial.remote),
     guiUpdate: { ...current.guiUpdate, ...(partial.guiUpdate ?? {}) }
   })
 }

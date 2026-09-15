@@ -19,6 +19,7 @@ import {
   MessageCircleMore,
   PanelRight,
   Puzzle,
+  Radio,
   RefreshCw,
   Search,
   Shapes,
@@ -326,6 +327,8 @@ export function WorkbenchSideRail({
   onSelectExtension
 }: Props): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
+  // The Remote panel configures this host; hide the entry inside Remote clients.
+  const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
   const items = [
     ...(planPanelEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.plan, label: t('rightPanelPlan'), icon: ClipboardList }] : []),
     { mode: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
@@ -342,7 +345,8 @@ export function WorkbenchSideRail({
       mode: BUILTIN_RIGHT_PANEL_IDS.providerQuotas,
       label: t('rightPanelProviderQuotas'),
       icon: Gauge
-    }
+    },
+    ...(isRemoteWeb ? [] : [{ mode: BUILTIN_RIGHT_PANEL_IDS.remote, label: t('rightPanelRemote'), icon: Radio }])
   ]
 
   return (

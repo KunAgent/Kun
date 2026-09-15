@@ -26,6 +26,7 @@ import commandPalette from './common/command-palette.json'
 import workConversations from './common/work-conversations.json'
 import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
+import remoteAccess from './common/remote-access.json'
 
 const common = {
   ...roomsInitIm,
@@ -62,6 +63,7 @@ const common = {
   ...workConversations,
   ...projectBoard,
   ...speak,
+  ...remoteAccess,
 }
 
 export default common

@@ -3,6 +3,7 @@ import {
   mainState,
   runningClawScheduleMcpServer
 } from './main-app-context'
+import { installRemoteIpcRegistry } from './remote/remote-ipc-registry'
 import { runClawScheduleMcpServerFromArgv } from './claw-schedule-mcp-server'
 import { releaseRuntimeDataRecoveryMigrationLock } from './main-migrations'
 import {
@@ -22,6 +23,9 @@ import {
 } from './packaged-update-handoff-smoke'
 
 export function startDesktopMainEntry(): void {
+  // Record every ipcMain.handle channel before any registration so the Remote
+  // gateway can dispatch browser invokes through the same handlers.
+  installRemoteIpcRegistry()
   if (runningClawScheduleMcpServer) {
     void runClawScheduleMcpServerFromArgv(process.argv).catch((error) => {
       console.error('[claw-schedule-mcp] server failed:', error)

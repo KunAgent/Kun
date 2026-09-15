@@ -214,6 +214,14 @@ const terminalSettingsPatchSchema = z.object({
   colors: terminalColorPatchSchema.optional()
 }).strict()
 
+const remoteAccessSettingsPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  bind: z.enum(['lan', 'loopback']).optional(),
+  port: z.number().int().min(0).max(65_535).optional(),
+  passwordHash: z.string().max(512).optional(),
+  sessionTtlHours: z.number().int().min(1).max(720).optional()
+}).strict()
+
 const clawSkillPatchSchema = z.object({
   defaultNames: z.array(trimmedString(128)).max(128).optional(),
   extraDirs: z.array(trimmedString(MAX_PATH_LENGTH)).max(128).optional(),
@@ -520,6 +528,7 @@ const settingsPatchObjectSchema = z.object({
   workflow: workflowSettingsPatchSchema.optional(),
   design: designSettingsPatchSchema.optional(),
   terminal: terminalSettingsPatchSchema.optional(),
+  remote: remoteAccessSettingsPatchSchema.optional(),
   guiUpdate: z.object({
     channel: z.enum(GUI_UPDATE_CHANNELS).optional()
   }).strict().optional(),

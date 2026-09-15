@@ -155,6 +155,10 @@ import type {
 } from './memory-import-export'
 import type { RemoteSshApi } from './remote-ssh'
 import type {
+  RemoteAccessConfigPatch,
+  RemoteAccessStatus
+} from './remote-access'
+import type {
   TerminalCreatePayload,
   TerminalCreateResult,
   TerminalDataPayload,
@@ -248,6 +252,8 @@ import {
 } from './kun-gui-api-contracts'
 export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & {
   platform: string
+  /** True only in the browser Remote build served by the Remote gateway. */
+  isRemoteWeb?: boolean
   /** Immutable mode selected before the BrowserWindow and renderer are created. */
   desktopTitleBarMode: DesktopTitleBarMode
   homeDir: string
@@ -361,6 +367,11 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
+  remoteAccessGetStatus: () => Promise<RemoteAccessStatus>
+  remoteAccessSetConfig: (patch: RemoteAccessConfigPatch) => Promise<RemoteAccessStatus>
+  remoteAccessSetPassword: (password: string) => Promise<RemoteAccessStatus>
+  remoteAccessRevokeSessions: () => Promise<RemoteAccessStatus>
+  onRemoteAccessStatusChanged: (handler: (status: RemoteAccessStatus) => void) => () => void
   uploadRuntimeImageAttachment: (
     request: RuntimeImageAttachmentUploadRequest
   ) => Promise<RuntimeImageAttachmentUploadResult>

@@ -64,6 +64,9 @@ const McpSkillsPanel = lazy(() =>
 const UsageQuotaPanel = lazy(() =>
   import('./UsageQuotaPanel').then((module) => ({ default: module.UsageQuotaPanel }))
 )
+const RemoteAccessPanel = lazy(() =>
+  import('../remote/RemoteAccessPanel').then((module) => ({ default: module.RemoteAccessPanel }))
+)
 const GraphModePanel = lazy(() =>
   import('../graph/GraphModePanel').then((module) => ({ default: module.GraphModePanel }))
 )
@@ -355,6 +358,9 @@ function CodeRightPanelWorkspace({
           active={visible && code.state.activeId === id}
         />
       )
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.remote) {
+      return <RemoteAccessPanel className="h-full max-h-full w-full" />
     }
     if (isExtensionContributionId(id)) {
       const contribution = code.extensionViews.find((view) => view.id === id)

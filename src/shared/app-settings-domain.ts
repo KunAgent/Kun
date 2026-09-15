@@ -2,7 +2,7 @@ import type { AppSettingsV1 } from './app-settings-types'
 
 export type SettingsFieldOwner =
   | 'core' | 'provider' | 'kun' | 'write' | 'claw' | 'schedule' | 'workflow'
-  | 'design' | 'terminal' | 'keyboard' | 'update'
+  | 'design' | 'terminal' | 'remote' | 'keyboard' | 'update'
 
 /** Compile-time complete inventory of every persisted top-level settings field. */
 export const APP_SETTINGS_FIELD_OWNERS: { readonly [K in keyof AppSettingsV1]-?: SettingsFieldOwner } = {
@@ -11,7 +11,7 @@ export const APP_SETTINGS_FIELD_OWNERS: { readonly [K in keyof AppSettingsV1]-?:
   workspaceRoot: 'core', conversationWorkspaceRoot: 'core', log: 'core', checkpointCleanup: 'core',
   gitBranchPrefix: 'core', notifications: 'core', appBehavior: 'core', keyboardShortcuts: 'keyboard',
   write: 'write', claw: 'claw', schedule: 'schedule', workflow: 'workflow', design: 'design',
-  guiUpdate: 'update', terminal: 'terminal', codePromptPrefix: 'core', chatWelcomeMessage: 'core',
+  guiUpdate: 'update', terminal: 'terminal', remote: 'remote', codePromptPrefix: 'core', chatWelcomeMessage: 'core',
   codeAgentPersonaEnabled: 'core',
   codeAgentPresets: 'core',
   disabledSkillIds: 'core'

@@ -174,6 +174,10 @@ export function withoutRendererPlaintextCredentials(settings: AppSettingsV1): Ap
         musicGeneration: redactMedia(runtime.musicGeneration),
         videoGeneration: redactMedia(runtime.videoGeneration)
       }
+    },
+    remote: {
+      ...settings.remote,
+      passwordHash: ''
     }
   }
 }

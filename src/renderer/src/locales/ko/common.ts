@@ -11,6 +11,7 @@ import sidebar from './common/sidebar.json'
 import commandPalette from './common/command-palette.json'
 import projectBoard from '../en/common/project-board.json'
 import speak from './common/speak.json'
+import remoteAccess from './common/remote-access.json'
 
 const common = {
   ...shellWorkflow,
@@ -26,6 +27,7 @@ const common = {
   ...commandPalette,
   ...projectBoard,
   ...speak,
+  ...remoteAccess,
 }
 
 export default common
