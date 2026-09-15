@@ -40,5 +40,11 @@
   "remoteAccessClientsSection": "연결된 클라이언트",
   "remoteAccessNoClients": "연결된 클라이언트가 없습니다",
   "remoteAccessShowQr": "QR 코드 보기",
-  "remoteAccessHideQr": "QR 코드 닫기"
+  "remoteAccessHideQr": "QR 코드 닫기",
+  "remoteAccessTailscaleSection": "LAN 외부 접근 (Tailscale)",
+  "remoteAccessDetectTailscale": "Tailscale 감지",
+  "remoteAccessTailscaleHint": "LAN 외부에서 Kun에 접근하려면 이 호스트의 Tailscale 설정을 확인하세요.",
+  "remoteAccessTailscaleFound": "Tailscale 연결됨 — 같은 tailnet의 기기가 이 주소로 접근할 수 있습니다.",
+  "remoteAccessTailscaleInstalled": "Tailscale이 설치되어 있지만 연결되어 있지 않습니다. 연결 후 다시 감지하세요.",
+  "remoteAccessTailscaleMissing": "이 호스트에서 Tailscale이 감지되지 않았습니다."
 }

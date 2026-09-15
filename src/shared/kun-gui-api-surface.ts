@@ -156,7 +156,8 @@ import type {
 import type { RemoteSshApi } from './remote-ssh'
 import type {
   RemoteAccessConfigPatch,
-  RemoteAccessStatus
+  RemoteAccessStatus,
+  RemoteTailscaleInfo
 } from './remote-access'
 import type {
   TerminalCreatePayload,
@@ -371,6 +372,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   remoteAccessSetConfig: (patch: RemoteAccessConfigPatch) => Promise<RemoteAccessStatus>
   remoteAccessSetPassword: (password: string) => Promise<RemoteAccessStatus>
   remoteAccessRevokeSessions: () => Promise<RemoteAccessStatus>
+  remoteAccessDetectTailscale: () => Promise<RemoteTailscaleInfo>
   onRemoteAccessStatusChanged: (handler: (status: RemoteAccessStatus) => void) => () => void
   uploadRuntimeImageAttachment: (
     request: RuntimeImageAttachmentUploadRequest

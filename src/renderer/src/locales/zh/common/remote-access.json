@@ -40,5 +40,11 @@
   "remoteAccessClientsSection": "已连接客户端",
   "remoteAccessNoClients": "暂无连接的客户端",
   "remoteAccessShowQr": "显示二维码",
-  "remoteAccessHideQr": "收起二维码"
+  "remoteAccessHideQr": "收起二维码",
+  "remoteAccessTailscaleSection": "异地访问 (Tailscale)",
+  "remoteAccessDetectTailscale": "检测 Tailscale",
+  "remoteAccessTailscaleHint": "检测本机是否装有 Tailscale，用于在局域网之外远程访问 Kun。",
+  "remoteAccessTailscaleFound": "Tailscale 已连接 —— 同一 tailnet 中的设备可直接使用此地址访问。",
+  "remoteAccessTailscaleInstalled": "已安装 Tailscale，但当前未连接。请打开 Tailscale 连接后再检测。",
+  "remoteAccessTailscaleMissing": "未在本机检测到 Tailscale。"
 }

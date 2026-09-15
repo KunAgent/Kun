@@ -6,6 +6,7 @@ import type {
 } from '../../shared/app-settings'
 import type { RemoteAccessConfigPatch, RemoteAccessStatus } from '../../shared/remote-access'
 import { hashRemoteAccessPassword } from './remote-auth'
+import { detectTailscaleAccess } from './remote-tailscale'
 import type { RemoteAccessService } from './remote-access-service'
 
 const REMOTE_PASSWORD_MIN_LENGTH = 6
@@ -76,4 +77,7 @@ export function registerRemoteAccessIpc(options: RegisterRemoteAccessIpcOptions)
     service.revokeAllSessions()
     return service.status(await getSettings())
   })
+
+  // Host-only probe: remote clients cannot invoke it (not in the allowlist).
+  ipcMain.handle('remote:tailscale:detect', () => detectTailscaleAccess())
 }

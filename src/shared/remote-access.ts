@@ -37,4 +37,14 @@ export type RemoteAccessConfigPatch = {
   port?: number
 }
 
+/** Result of the host-side Tailscale probe used by the Remote panel. */
+export type RemoteTailscaleInfo = {
+  /** A Tailscale CLI/app was found on this host. */
+  installed: boolean
+  /** The tailnet is up and a 100.x IPv4 address is assigned. */
+  connected: boolean
+  /** Host's Tailscale IPv4 (e.g. 100.111.83.99) when connected. */
+  ipv4: string | null
+}
+
 export const REMOTE_ACCESS_STATUS_CHANNEL = 'remote:status-changed'

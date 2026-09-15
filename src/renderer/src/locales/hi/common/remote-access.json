@@ -40,5 +40,11 @@
   "remoteAccessClientsSection": "जुड़े क्लाइंट",
   "remoteAccessNoClients": "कोई क्लाइंट जुड़ा नहीं है",
   "remoteAccessShowQr": "QR कोड दिखाएँ",
-  "remoteAccessHideQr": "QR कोड छिपाएँ"
+  "remoteAccessHideQr": "QR कोड छिपाएँ",
+  "remoteAccessTailscaleSection": "LAN से बाहर पहुँच (Tailscale)",
+  "remoteAccessDetectTailscale": "Tailscale खोजें",
+  "remoteAccessTailscaleHint": "LAN से बाहर Kun तक पहुँचने के लिए इस होस्ट पर Tailscale जाँचें।",
+  "remoteAccessTailscaleFound": "Tailscale जुड़ा है — आपके tailnet के डिवाइस इस पते का उपयोग कर सकते हैं।",
+  "remoteAccessTailscaleInstalled": "Tailscale इंस्टॉल है पर कनेक्ट नहीं है। कनेक्ट करके दोबारा जाँचें।",
+  "remoteAccessTailscaleMissing": "इस होस्ट पर Tailscale नहीं मिला।"
 }

@@ -40,5 +40,11 @@
   "remoteAccessClientsSection": "Clients",
   "remoteAccessNoClients": "No connected clients",
   "remoteAccessShowQr": "Show QR code",
-  "remoteAccessHideQr": "Hide QR code"
+  "remoteAccessHideQr": "Hide QR code",
+  "remoteAccessTailscaleSection": "Access beyond LAN",
+  "remoteAccessDetectTailscale": "Detect Tailscale",
+  "remoteAccessTailscaleHint": "Check whether Tailscale is set up on this host to reach Kun from outside your LAN.",
+  "remoteAccessTailscaleFound": "Tailscale is connected — devices on your tailnet can use this address.",
+  "remoteAccessTailscaleInstalled": "Tailscale is installed but not connected. Open Tailscale and connect, then detect again.",
+  "remoteAccessTailscaleMissing": "Tailscale was not detected on this host."
 }

@@ -40,5 +40,11 @@
   "remoteAccessClientsSection": "Подключённые клиенты",
   "remoteAccessNoClients": "Нет подключённых клиентов",
   "remoteAccessShowQr": "Показать QR-код",
-  "remoteAccessHideQr": "Скрыть QR-код"
+  "remoteAccessHideQr": "Скрыть QR-код",
+  "remoteAccessTailscaleSection": "Доступ вне LAN (Tailscale)",
+  "remoteAccessDetectTailscale": "Найти Tailscale",
+  "remoteAccessTailscaleHint": "Проверьте, настроен ли на этом хосте Tailscale для доступа к Kun вне LAN.",
+  "remoteAccessTailscaleFound": "Tailscale подключён — устройства в вашем tailnet могут использовать этот адрес.",
+  "remoteAccessTailscaleInstalled": "Tailscale установлен, но не подключён. Подключитесь и повторите проверку.",
+  "remoteAccessTailscaleMissing": "Tailscale на этом хосте не обнаружен."
 }

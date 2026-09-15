@@ -40,5 +40,11 @@
   "remoteAccessClientsSection": "接続中のクライアント",
   "remoteAccessNoClients": "接続中のクライアントはありません",
   "remoteAccessShowQr": "QR コードを表示",
-  "remoteAccessHideQr": "QR コードを閉じる"
+  "remoteAccessHideQr": "QR コードを閉じる",
+  "remoteAccessTailscaleSection": "LAN 外アクセス (Tailscale)",
+  "remoteAccessDetectTailscale": "Tailscale を検出",
+  "remoteAccessTailscaleHint": "LAN 外から Kun にアクセスするため、このホストの Tailscale を検出します。",
+  "remoteAccessTailscaleFound": "Tailscale 接続中 — 同じ tailnet のデバイスはこのアドレスでアクセスできます。",
+  "remoteAccessTailscaleInstalled": "Tailscale はインストール済みですが未接続です。接続してから再検出してください。",
+  "remoteAccessTailscaleMissing": "このホストで Tailscale が見つかりません。"
 }

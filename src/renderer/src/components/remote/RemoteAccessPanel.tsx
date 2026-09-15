@@ -10,14 +10,16 @@ import {
   Lock,
   MonitorSmartphone,
   QrCode,
+  Radar,
   Radio,
   RefreshCw,
   ShieldAlert,
-  Users
+  Users,
+  Waypoints
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useTranslation } from 'react-i18next'
-import type { RemoteAccessStatus } from '@shared/remote-access'
+import type { RemoteAccessStatus, RemoteTailscaleInfo } from '@shared/remote-access'
 
 type Props = {
   className?: string
@@ -82,6 +84,8 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
   const [passwordEditorOpen, setPasswordEditorOpen] = useState(false)
   const [portInput, setPortInput] = useState('')
   const [qrVisible, setQrVisible] = useState(true)
+  const [tailscale, setTailscale] = useState<RemoteTailscaleInfo | null>(null)
+  const [tailscaleBusy, setTailscaleBusy] = useState(false)
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!kunGui?.remoteAccessGetStatus) return
@@ -147,6 +151,18 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
       setStatus(await kunGui.remoteAccessRevokeSessions())
     } finally {
       setBusy(false)
+    }
+  }, [kunGui])
+
+  const detectTailscale = useCallback(async (): Promise<void> => {
+    if (!kunGui?.remoteAccessDetectTailscale) return
+    setTailscaleBusy(true)
+    try {
+      setTailscale(await kunGui.remoteAccessDetectTailscale())
+    } catch {
+      setTailscale({ installed: false, connected: false, ipv4: null })
+    } finally {
+      setTailscaleBusy(false)
     }
   }, [kunGui])
 
@@ -351,6 +367,51 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
                 </div>
               </div>
             ) : null}
+
+            {/* Remote access beyond LAN — Tailscale probe */}
+            <div className={CARD_CLASS}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Waypoints size={14} className="shrink-0 text-ds-muted" aria-hidden="true" />
+                  <span className="text-[12px] font-medium text-ds-ink">
+                    {t('remoteAccessTailscaleSection')}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={tailscaleBusy}
+                  onClick={() => void detectTailscale()}
+                  className={BUTTON_CLASS}
+                >
+                  {tailscaleBusy ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Radar size={12} />
+                  )}
+                  {t('remoteAccessDetectTailscale')}
+                </button>
+              </div>
+              {tailscale?.connected && tailscale.ipv4 && status ? (
+                <>
+                  <RemoteUrlRow url={`http://${tailscale.ipv4}:${status.port}`} emphasized />
+                  <p className="text-[11px] leading-4 text-emerald-600 dark:text-emerald-400">
+                    {t('remoteAccessTailscaleFound')}
+                  </p>
+                </>
+              ) : tailscale?.installed ? (
+                <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">
+                  {t('remoteAccessTailscaleInstalled')}
+                </p>
+              ) : tailscale ? (
+                <p className="text-[11px] leading-4 text-ds-muted">
+                  {t('remoteAccessTailscaleMissing')}
+                </p>
+              ) : (
+                <p className="text-[11px] leading-4 text-ds-muted">
+                  {t('remoteAccessTailscaleHint')}
+                </p>
+              )}
+            </div>
 
             {/* Password */}
             <div className={CARD_CLASS}>

@@ -644,6 +644,7 @@
     remoteAccessSetConfig: unavailable('remoteAccessSetConfig'),
     remoteAccessSetPassword: unavailable('remoteAccessSetPassword'),
     remoteAccessRevokeSessions: unavailable('remoteAccessRevokeSessions'),
+    remoteAccessDetectTailscale: unavailable('remoteAccessDetectTailscale'),
     onRemoteAccessStatusChanged: function () { return function () {} }
   }
 

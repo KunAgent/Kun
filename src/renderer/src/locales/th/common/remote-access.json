@@ -40,5 +40,11 @@
   "remoteAccessClientsSection": "ไคลเอนต์ที่เชื่อมต่อ",
   "remoteAccessNoClients": "ไม่มีไคลเอนต์ที่เชื่อมต่อ",
   "remoteAccessShowQr": "แสดงคิวอาร์โค้ด",
-  "remoteAccessHideQr": "ซ่อนคิวอาร์โค้ด"
+  "remoteAccessHideQr": "ซ่อนคิวอาร์โค้ด",
+  "remoteAccessTailscaleSection": "เข้าถึงนอก LAN (Tailscale)",
+  "remoteAccessDetectTailscale": "ตรวจหา Tailscale",
+  "remoteAccessTailscaleHint": "ตรวจสอบว่าโฮสต์นี้ตั้งค่า Tailscale ไว้เพื่อเข้าถึง Kun จากภายนอก LAN",
+  "remoteAccessTailscaleFound": "Tailscale เชื่อมต่อแล้ว — อุปกรณ์ใน tailnet เดียวกันใช้ที่อยู่นี้ได้",
+  "remoteAccessTailscaleInstalled": "ติดตั้ง Tailscale แล้วแต่ยังไม่ได้เชื่อมต่อ เชื่อมต่อแล้วตรวจอีกครั้ง",
+  "remoteAccessTailscaleMissing": "ไม่พบ Tailscale บนโฮสต์นี้"
 }

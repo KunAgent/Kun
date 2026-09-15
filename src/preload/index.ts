@@ -681,6 +681,7 @@ const api = {
   remoteAccessSetConfig: (patch) => ipcRenderer.invoke('remote:config:set', patch),
   remoteAccessSetPassword: (password) => ipcRenderer.invoke('remote:password:set', password),
   remoteAccessRevokeSessions: () => ipcRenderer.invoke('remote:sessions:revoke'),
+  remoteAccessDetectTailscale: () => ipcRenderer.invoke('remote:tailscale:detect'),
   onRemoteAccessStatusChanged: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
