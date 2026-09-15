@@ -26,7 +26,7 @@
 - [x] 4.2 Add deterministic paired-bootstrap intervals using the locked seed, resample count, confidence level, and unit; verify repeated runs produce identical intervals and lower-bound results.
 - [x] 4.3 Run the complete finite grid on development data and write a calibration report containing every evaluated configuration; verify configuration ordering and selected ids are reproducible.
 - [x] 4.4 Apply the pre-registered selection rule and write one candidate lock containing artifact hashes, evaluator identity, selected candidate, gates, seed, and resource ceilings; verify tampering with any dependency invalidates the lock.
-- [ ] 4.5 Prevent holdout scoring without a valid lock and prevent overwriting completed holdout evidence for the same decision version; verify rejected attempts emit no holdout metrics or per-case results.
+- [x] 4.5 Prevent holdout scoring without a valid lock and prevent overwriting completed holdout evidence for the same decision version; verify rejected attempts emit no holdout metrics or per-case results.
 - [ ] 4.6 After independent review confirms the lock and frozen inputs, run holdout exactly once and publish immutable go/no-go evidence; verify the result applies every local-benefit, global, uncertainty, safety, privacy, determinism, and resource gate without post-hoc changes.
 
 ## 5. Safety, Privacy, And Resource Coverage
