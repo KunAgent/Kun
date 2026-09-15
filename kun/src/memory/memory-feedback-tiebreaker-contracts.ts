@@ -188,6 +188,40 @@ const Bootstrap = z.object({
   holdoutRuns: z.literal(1)
 }).strict()
 
+const DecisionGates = z.object({
+  localBenefit: z.object({
+    minimumPairAccuracyGain: z.number().min(-1).max(1),
+    minimumPairAccuracyGainLowerBound: z.number().min(-1).max(1)
+  }).strict(),
+  globalNonRegression: z.object({
+    minimumRecallGainLowerBound: z.number().min(-1).max(1),
+    minimumMrrGainLowerBound: z.number().min(-1).max(1),
+    maximumPrecisionDecline: z.number().min(0).max(1),
+    maximumAbstentionDecline: z.number().min(0).max(1)
+  }).strict(),
+  safety: z.object({
+    maximumExplicitForbiddenSelections: z.literal(0),
+    maximumAuthorizationOrLifecycleViolations: z.literal(0),
+    maximumProductionRankingChanges: z.literal(0)
+  }).strict(),
+  privacy: z.object({
+    queryTextInTrace: z.literal(false),
+    memoryContentInTrace: z.literal(false),
+    sourceExcerptInTrace: z.literal(false),
+    machinePathInTrace: z.literal(false),
+    credentialInTrace: z.literal(false)
+  }).strict(),
+  determinism: z.object({
+    repeatedRuns: z.number().int().min(2).max(10),
+    numericTolerance: z.number().min(0).max(1e-6)
+  }).strict(),
+  resource: z.object({
+    maximumEvaluationMilliseconds: z.number().int().positive(),
+    maximumTraceRankings: z.number().int().positive().max(64),
+    maximumEvidenceBytes: z.number().int().positive()
+  }).strict()
+}).strict()
+
 export const MemoryFeedbackTiebreakerDecisionPlan = z.object({
   schemaVersion: z.literal(1),
   evaluationVersion: z.literal(MEMORY_FEEDBACK_TIEBREAKER_EVALUATION_VERSION),
@@ -209,39 +243,7 @@ export const MemoryFeedbackTiebreakerDecisionPlan = z.object({
     ]),
     fallback: z.literal('foundation-control')
   }).strict(),
-  gates: z.object({
-    localBenefit: z.object({
-      minimumPairAccuracyGain: z.number().min(-1).max(1),
-      minimumPairAccuracyGainLowerBound: z.number().min(-1).max(1)
-    }).strict(),
-    globalNonRegression: z.object({
-      minimumRecallGainLowerBound: z.number().min(-1).max(1),
-      minimumMrrGainLowerBound: z.number().min(-1).max(1),
-      maximumPrecisionDecline: z.number().min(0).max(1),
-      maximumAbstentionDecline: z.number().min(0).max(1)
-    }).strict(),
-    safety: z.object({
-      maximumExplicitForbiddenSelections: z.literal(0),
-      maximumAuthorizationOrLifecycleViolations: z.literal(0),
-      maximumProductionRankingChanges: z.literal(0)
-    }).strict(),
-    privacy: z.object({
-      queryTextInTrace: z.literal(false),
-      memoryContentInTrace: z.literal(false),
-      sourceExcerptInTrace: z.literal(false),
-      machinePathInTrace: z.literal(false),
-      credentialInTrace: z.literal(false)
-    }).strict(),
-    determinism: z.object({
-      repeatedRuns: z.number().int().min(2).max(10),
-      numericTolerance: z.number().min(0).max(1e-6)
-    }).strict(),
-    resource: z.object({
-      maximumEvaluationMilliseconds: z.number().int().positive(),
-      maximumTraceRankings: z.number().int().positive().max(64),
-      maximumEvidenceBytes: z.number().int().positive()
-    }).strict()
-  }).strict(),
+  gates: DecisionGates,
   bootstrap: Bootstrap,
   production: z.object({
     rankingChanged: z.literal(false),
@@ -258,8 +260,12 @@ export const MemoryFeedbackTiebreakerCandidateLock = z.object({
   evaluationVersion: z.literal(MEMORY_FEEDBACK_TIEBREAKER_EVALUATION_VERSION),
   decisionId: z.string().regex(/^kun-memory-[a-z0-9-]+$/u),
   status: z.literal('locked'),
-  artifactHashes: ArtifactHashes.extend({ decisionPlanSha256: Hash }).strict(),
+  artifactHashes: ArtifactHashes.extend({
+    decisionPlanSha256: Hash,
+    developmentReportSha256: Hash
+  }).strict(),
   selectedCandidateId: ArtifactId,
+  gates: DecisionGates,
   evaluatorIdentity: z.string().min(1),
   bootstrapSeed: z.number().int().nonnegative().max(0xffffffff),
   holdoutRunLimit: z.literal(1),
@@ -350,6 +356,7 @@ export type MemoryFeedbackTiebreakerFixture = z.infer<typeof MemoryFeedbackTiebr
 export type MemoryFeedbackTiebreakerManifestValue = z.infer<typeof MemoryFeedbackTiebreakerManifest>
 export type MemoryFeedbackTiebreakerCalibration = z.infer<typeof MemoryFeedbackTiebreakerCalibrationReport>
 export type MemoryFeedbackTiebreakerCandidateValue = z.infer<typeof MemoryFeedbackTiebreakerCandidate>
+export type MemoryFeedbackTiebreakerLock = z.infer<typeof MemoryFeedbackTiebreakerCandidateLock>
 export type MemoryFeedbackTiebreakerSignalRuleValue = z.infer<typeof MemoryFeedbackTiebreakerSignalRule>
 export type MemoryFeedbackTiebreakerPlan = z.infer<typeof MemoryFeedbackTiebreakerDecisionPlan>
 

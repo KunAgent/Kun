@@ -264,9 +264,11 @@ function makeLock() {
       fixtureSha256: HASH_A,
       manifestSha256: HASH_B,
       calibrationSha256: HASH_A,
-      decisionPlanSha256: HASH_B
+      decisionPlanSha256: HASH_B,
+      developmentReportSha256: HASH_A
     },
     selectedCandidateId: 'foundation-control',
+    gates: makePlan().gates,
     evaluatorIdentity: 'memory-feedback-tiebreaker-v1',
     bootstrapSeed: 20260916,
     holdoutRunLimit: 1,
