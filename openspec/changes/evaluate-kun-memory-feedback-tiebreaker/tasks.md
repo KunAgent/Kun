@@ -15,9 +15,9 @@
 ## 3. Offline Candidate Evaluation
 
 - [x] 3.1 Reproduce the unchanged post-#1308 lexical foundation ranking from authorized active fixture records and emit adjacent foundation-score gaps; verify selected ids and scores match direct foundation retrieval for every case.
-- [ ] 3.2 Implement deterministic near-tie grouping for every declared boundary with foundation-score and stable-id fallback order; verify exact-boundary, multi-record group, and wide-gap behavior.
-- [ ] 3.3 Implement confirmation-aware and confirmation-plus-correction-aware evaluator comparators that reorder only admitted near-tie candidates; verify they cannot add candidates, fill abstentions, cross budgets, or restore inactive records.
-- [ ] 3.4 Emit retrieval count and last-retrieved time as bounded shadow features; verify changing only retrieval frequency leaves every candidate order and selected id byte-for-byte unchanged.
+- [x] 3.2 Implement deterministic near-tie grouping for every declared boundary with foundation-score and stable-id fallback order; verify exact-boundary, multi-record group, and wide-gap behavior.
+- [x] 3.3 Implement confirmation-aware and confirmation-plus-correction-aware evaluator comparators that reorder only admitted near-tie candidates; verify they cannot add candidates, fill abstentions, cross budgets, or restore inactive records.
+- [x] 3.4 Emit retrieval count and last-retrieved time as bounded shadow features; verify changing only retrieval frequency leaves every candidate order and selected id byte-for-byte unchanged.
 - [ ] 3.5 Enforce evaluator-only imports and offline execution; verify production Memory, Manager, server, runtime, and renderer modules do not import P3-B evaluator modules and an instrumented network attempt count remains zero.
 
 ## 4. Metrics, Locking, And Holdout Discipline
