@@ -18,6 +18,10 @@ Work 工作区可以按线程挂载为 Code 的只读、无向量结构知识库
 长期记忆使用“原子 JSON 标准数据 + 可重建 SQLite FTS5 投影”。检索必须先做作用域和生命周期
 过滤，记忆只能作为动态、不可信的 `reference` 证据，不能进入稳定 system 前缀或获得指令权限。
 数据布局、迁移、降级与验证见 [`docs/memory-foundation.md`](./memory-foundation.md)。
+反馈账本是独立的、默认关闭的本地审计投影：`retrieved` 只记录实际注入，`confirmed` 只接受
+显式用户动作，`corrected` 创建同作用域的新版本并保留 `supersedes` 链。它不保存查询、正文、
+模型输出、凭据或本机路径，也不参与当前 lexical/FTS5 生产排序；离线候选若未通过预注册门禁，
+不得添加隐藏权重或 dormant flag。详见记忆基础文档的 Feedback ledger 章节。
 
 ## 客户端能力边界
 

@@ -18,6 +18,23 @@ canonical files. Set `KUN_MEMORY_STORE_BACKEND=file` before startup for an expli
 Diagnostics expose canonical/index counts, malformed/stale counts, backfill/degraded state, sanitized
 failure reasons, and a bounded content-free retrieval trace with independent ranking features.
 
+## Feedback ledger and ranking evolution
+
+Feedback is stored in a separate `memory-feedback/` root as an append-only, rebuildable audit
+projection owned by Manager. It never replaces `memory/*.json` as the authority and never rewrites
+`updatedAt`, `observedAt`, `confidence`, `importance`, or freshness. `retrieved` means that a record
+was actually assembled into model context; `confirmed` requires an explicit user action; `corrected`
+creates a same-scope replacement linked with `supersedes` while retaining the old fact. Events omit
+queries, bodies, model output, source excerpts, credentials, and local paths. Collection defaults to
+`memory.feedback.enabled=false`, and ledger failure is isolated from retrieval and turn completion.
+
+Retrieval frequency, confirmation, correction, freshness, importance, and confidence are currently
+observed only by an offline evaluator over anonymous fixtures and are traced independently. The
+pre-registered P3 v1 candidate passed development but had no holdout bootstrap gain, so the decision
+is no-go: production remains on the lexical/FTS5 foundation with no hidden weight or dormant flag.
+Any future production-ranking proposal must use a new version and pass relevance, uncertainty,
+safety, privacy, determinism, and resource gates.
+
 ## Source setup and validation
 
 Install Git, Node.js 22.19+ (Node 22 LTS is recommended), npm, and configure at least one model

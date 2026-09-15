@@ -77,6 +77,21 @@ npm run dev
 
 诊断只保存有界元数据和记录 ID，不保存查询文本或记忆正文。
 
+## Feedback ledger 与排序演化
+
+反馈账本位于独立的 `memory-feedback/` 数据根下，是追加写入、可重建投影、由
+Manager 统一拥有的审计数据；它不改变 `memory/*.json` 的权威性，也不会更新记忆的
+`updatedAt`、`observedAt`、`confidence`、`importance` 或 freshness。`retrieved` 只表示
+记录实际进入模型上下文，`confirmed` 必须来自用户明确操作，`corrected` 会在同一作用域
+创建新版本并用 `supersedes` 保留旧事实。事件不保存查询、正文、模型输出、来源摘录、凭据
+或本机路径；默认 `memory.feedback.enabled=false`，账本不可用时检索和回合继续使用原路径。
+
+反馈频次、确认、纠正、freshness、importance 和 confidence 目前只在匿名 fixture 上通过
+离线 evaluator 观察，并分别出现在 trace 中。预注册的 P3 v1 候选在开发集通过、留出集
+bootstrap 下界仍无收益，故结论为 no-go；生产仍使用 lexical/FTS5 foundation，不存在
+隐藏权重或 dormant flag。任何未来生产排序提案都必须另建版本并重新通过相关性、不确定性、
+安全、隐私、确定性和资源门禁。
+
 ## 从源码运行
 
 必需项：
