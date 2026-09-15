@@ -44,6 +44,7 @@ export function defaultRoomMembers(repositoryIds: string[]) {
 export class RoomService {
   private directModel?: (room: Room) => Promise<import('../agents/agent-models.js').AgentModelBinding>
   setDirectModelResolver(resolver: NonNullable<RoomService['directModel']>) { this.directModel = resolver }
+  async directBinding(room: Room) { return this.directModel?.(room) }
   private agents?: AgentIdentityService
   setAgentDirectory(agents: AgentIdentityService): void { this.agents = agents }
   private memberAvatarValidator?: (members: import('../contracts/rooms.js').RoomMember[]) => Promise<void>

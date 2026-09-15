@@ -11,9 +11,9 @@ import './rooms-init-im.css'
 import { AgentHandoffPanel } from './AgentHandoffPanel'
 import { AgentDirectory } from './AgentDirectory'
 import { AgentDetails } from './AgentDetails'
-import { agentPath } from './agent-client'
-import type { Room, RoomSidebarEntry } from '@shared/rooms-api'
-import { roomsRequest } from './rooms-client'
+import { agentPath, useAgentResource } from './agent-client'
+import type { AgentIdentity, Room, RoomSidebarEntry } from '@shared/rooms-api'
+import { roomRequestId, roomsRequest } from './rooms-client'
 import { useCallback, useEffect, useState, useRef, type ReactElement, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -48,6 +48,7 @@ import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
 import { RoomRunSummary } from './RoomRunSummary'
 import { useRoomPresentationPreferences } from './room-presentation-preferences'
 import { openRoomContentTarget } from './room-content-navigation'
+import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from './RoomChoiceCard'
 
 export function RoomsWorkspaceView({
   onOpenThread,
@@ -133,14 +134,31 @@ export function RoomsWorkspaceView({
   const onboarding = useAgentChatEntry(chooseRoom, navigationSerial)
   const direct = useDirectChat(room, state.refresh)
   const privateChat = room?.conversationKind === 'user_agent'
+  const agentId = privateChat ? room?.members[0]?.participantAgentId : undefined
+  const agentProfile = useAgentResource<{ agent: AgentIdentity }>(agentId ? agentPath(agentId) : null)
+  const setupPending = agentProfile.data?.agent.setup?.status === 'pending'
+  const choiceInputs = privateChat ? direct.data?.userInputs ?? [] : []
   const openRun = (runId: string): void => drawer.open({ kind: 'run', runId })
   const openTask = (taskId: string): void => drawer.open({ kind: 'task', taskId })
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
   const openContent = (reference: RoomContentReference, messageId?: string): void => drawer.open({ kind: 'content', reference, messageId })
   const send = async (message: SendRoomMessage): Promise<void> => {
     if (!room) return
+    const pending = choiceInputs[0]
+    if (privateChat && pending && message.body.trim()) {
+      await submitRoomUserInput(pending.id, { answers: otherUserInputAnswers(pending, message.body) })
+      await Promise.all([state.refresh(), direct.refresh(), topicState.refresh()])
+      return
+    }
     await roomsClient.send(room.id, message)
     await Promise.all([state.refresh(), topicState.refresh()])
+  }
+  const skipSetup = async (): Promise<void> => {
+    if (!agentId || !setupPending) return
+    await roomsRequest('/v1/agents/' + encodeURIComponent(agentId) + '/setup', 'POST', {
+      clientRequestId: roomRequestId(), action: 'skip'
+    })
+    await Promise.all([agentProfile.refresh(), direct.refresh(), state.refresh()])
   }
   const openCode = (): void => {
     useChatStore.getState().setRoute('chat')
@@ -237,7 +255,10 @@ export function RoomsWorkspaceView({
             />
             <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
             </div></> : null}
-            {!messages.length && privateChat && !direct.data?.active?.runId ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2><p>{t('directWelcomeHint')}</p></div> : <RoomStreamingTimeline runId={privateChat ? direct.data?.active?.runId ?? (direct.data?.requests[0]?.status === 'completed' ? direct.data.requests[0].runId : undefined) : undefined}
+            {!messages.length && privateChat && !direct.data?.active?.runId && !choiceInputs.length ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2>
+              <p>{t(setupPending ? 'directSetupWelcomeHint' : 'directWelcomeHint')}</p>
+              {setupPending ? <button type="button" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
+            </div> : <RoomStreamingTimeline runId={privateChat ? direct.data?.active?.runId ?? (direct.data?.requests[0]?.status === 'completed' ? direct.data.requests[0].runId : undefined) : undefined}
               key={room.id + '-timeline'}
               searchOpen={searchOpen}
               onSearchClose={() => setSearchOpen(false)}
@@ -256,6 +277,13 @@ export function RoomsWorkspaceView({
               onTask={openTask}
               jumpMessageId={jumpMessageId}
               onJumped={() => setJumpMessageId(null)}
+              afterMessages={<>
+                {choiceInputs.filter((input) => !messages.some((message) => message.clientRequestId === input.id)).map((input) =>
+                  <RoomChoiceCard key={input.id} input={input} setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />)}
+                {setupPending && !choiceInputs.length ? <button type="button" className="direct-choice-skip" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
+              </>}
+              renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
+                setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />}
             />}
             {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} onModels={() => setModelsOpen(true)} /> : null}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <RoomComposer
@@ -287,7 +315,11 @@ export function RoomsWorkspaceView({
         onBack={drawer.back} onClose={drawer.close} onSection={drawer.section}
         render={(target, key, active) => {
           if (target.kind === 'agent') return <AgentDetails key={key} agentId={target.agentId} active={active}
-            onSaved={(agent) => { if (!target.agentId) { void openAgent(agent.id) } else { drawer.replaceTop({ kind: 'agent', agentId: agent.id }); void state.refresh() } }}
+            onSaved={(agent) => {
+              void agentProfile.refresh()
+              if (!target.agentId) { void openAgent(agent.id) }
+              else { drawer.replaceTop({ kind: 'agent', agentId: agent.id }); void Promise.all([state.refresh(), direct.refresh()]) }
+            }}
             onOpen={(id) => void openAgent(id)} onConversation={chooseRoom}
             onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }}
             onSource={(roomId, messageId) => { chooseRoom(roomId); if (messageId) setSearchTarget({
@@ -315,7 +347,8 @@ export function RoomsWorkspaceView({
           return <RoomTaskStrip key={key} stacked room={room} tasks={state.tasks} selectedId={null} onTask={openTask}
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />
         }} /> : null}
-      {newChatOpen ? <RoomNewChat onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={(id) => void openAgent(id)} /> : null}
+      {newChatOpen ? <RoomNewChat onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={(id) => void openAgent(id)}
+        onFill={() => drawer.open({ kind: 'agent' })} /> : null}
       {modelsOpen && room?.members[0]?.participantAgentId ? <AgentModelSettings key={room.id} agentId={room.members[0].participantAgentId} room={room}
         onClose={() => setModelsOpen(false)} onSaved={() => void state.refresh()} /> : null}
       {filesOpen && room ? <RoomDirectFiles room={room} onClose={() => setFilesOpen(false)} onOpen={openContent} /> : null}

@@ -36,6 +36,7 @@ describe('Rooms desktop HTTP boundary', () => {
     ...['cleanup', 'integrations'].map((part) => [`/v1/rooms/room-1/tasks/task-1/${part}`, ['GET', 'POST']]),
     ...['recovery', 'deliveries', 'compare'].map((part) => [`/v1/rooms/room-1/tasks/task-1/${part}`, ['GET']]),
     ['/v1/rooms/room-1/tasks/task-1/deliveries/delivery-1', ['GET']],
+    ['/v1/agents/agent-1/setup', ['POST']],
     ...['resolve', 'apply', 'cancel', 'open', 'validate'].map((action) => [`/v1/rooms/room-1/tasks/task-1/integrations/integration-1/${action}`, ['POST']]),
     ...['cancel', 'retry', 'retry-review', 'review', 'accept', 'apply', 'recover'].map((action) => [`/v1/rooms/room-1/tasks/task-1/${action}`, ['POST']])
   ])('allows modeled methods for %s', (path, methods) => {

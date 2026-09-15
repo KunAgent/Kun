@@ -138,7 +138,7 @@ export const RoomMessageSchema = z.object({
   handoffId: RoomIdSchema.optional(),
   displayThreadRootId: RoomIdSchema.optional(),
   replyCount: z.number().int().nonnegative().optional(),
-  presentationKind: z.literal('poll').optional(),
+  presentationKind: z.enum(['poll', 'choice', 'setup']).optional(),
   pollId: RoomIdSchema.optional(),
   references: z.array(RoomContentReferenceSchema).max(20).optional(),
   status: z.enum(['streaming', 'final', 'failed']).optional(),

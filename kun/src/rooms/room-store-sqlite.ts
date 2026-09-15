@@ -201,7 +201,8 @@ export class SqliteRoomStore implements RoomStore {
     const rows = db.prepare(`WITH candidates AS (
       SELECT room.*, COALESCE(json_extract(room.document, '$.pinned'), 0) AS pinned,
         COALESCE((SELECT MAX(message.seq) FROM room_documents message
-          WHERE message.kind = 'message' AND message.room_id = room.id), 0) AS latest_message_seq
+          WHERE message.kind = 'message' AND message.room_id = room.id
+          AND COALESCE(json_extract(message.document, '$.presentationKind'), '') <> 'setup'), 0) AS latest_message_seq
       FROM room_documents room WHERE room.kind = 'room' AND room.archived = ?
       AND instr(lower(COALESCE(json_extract(room.document, '$.name'), '')), lower(?)) > 0
       ${conditions.length ? 'AND ' + conditions.join(' AND ') : ''}

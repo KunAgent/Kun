@@ -13,6 +13,7 @@ import type { createRuntimeConfigController } from './runtime-composition-config
 import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
 import { bindRoomPeerStore } from '../rooms/room-peer-tools.js'
 import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
+import { bindAgentSetupDirectory } from '../agents/agent-setup-tools.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -154,6 +155,7 @@ export function createServerRuntimeComposition(
   // retains the backing store. Bind both identities to the same room scope.
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
+  bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
   return {
     threadService,
     historyReferences: core.historyReferences,

@@ -16,8 +16,14 @@ and independent-selection workflow.
 
 - The v3 entry marker records first positioning independently from the old
   five-person setup. Existing drafts and explicit navigation take precedence.
-- New creates a recipient chooser: existing Agent, group selection, quick new
-  Agent, or a professional template. Identity and private room commit together.
+- New creates a recipient chooser: existing Agent, group selection, a
+  chat-defined Agent, a filled-in profile, or a professional template.
+  Identity and private room commit together. Chat definition starts a
+  pending interview (`setup.status = pending`) with structured
+  `user_input` cards and `commit_agent_setup`. Filling the profile, using
+  a template, copying an Agent, or opening the default 小 Kun Agent skips
+  the interview. Saving name/title/instructions during an interview, or
+  choosing Skip, marks setup skipped and cancels the in-flight turn.
 - Private headers show identity and the effective main model. Profile, memory,
   run history, files and context reset are in menus. Advanced policy controls
   stay collapsed; basic profile edits do not overwrite model or policy fields.
@@ -28,7 +34,11 @@ and independent-selection workflow.
 - Ordinary responses have no implicit quote or reply count. Explicit reply
   branches retain their host-proven root. Run inspection is a hover/focus action.
 - A busy private chat accepts queued messages and shows a brief status. Tool
-  details are expandable; approvals and user-input requests use existing gates.
+  details are expandable. Approvals stay in the progress strip. Pending
+  `user_input` requests render as Grok-style choice cards in the private
+  timeline; with a card open, composer send is the current question's Other
+  answer instead of a new direct turn. Interview prompts stay in private
+  turn input, never the stable system prefix.
 
 ## Runtime and persistence
 
@@ -79,7 +89,8 @@ limits to make a connection selectable. Existing global provider configuration i
 unchanged. Old per-group model overrides can explicitly return to Agent inheritance.
 
 The new HTTP paths are chat-entry, quick-create, per-Agent models, private
-activity/control/context and scoped files. Main IPC allowlists and shared types
+activity/control/context, scoped files, and `POST /v1/agents/:agentId/setup`
+to skip an in-flight interview. Main IPC allowlists and shared types
 are updated. Storage and ownership remain in the single Kun Runtime and Manager.
 
 ## Validation

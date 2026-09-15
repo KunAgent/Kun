@@ -77,7 +77,7 @@ export function RoomDirectProgress({ room, state, onRun, onModels }: { room: Roo
       {runId ? <button aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t('directToolProgress')}</button> : null}</div> : null}
     {expanded && runId ? <div className="direct-tool-progress"><RoomRunItems items={items.data?.items ?? []} roomId={room.id} runId={runId} filter="tools" runStatus={active?.status} />
       <button onClick={() => onRun(runId)}>{t('roomsViewRun')}</button></div> : null}
-    {state.data ? <RoomExecutionGates detail={state.data} onUpdated={async () => state.refresh()} /> : null}
+    {state.data ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
     {failed ? <div className="direct-failed" role="status"><span>{failed.error || t(failed.status === 'cancelled' ? 'directStopped' : 'directFailed')}</span>
       {failed.runId ? <button onClick={() => onRun(failed.runId!)}>{t('roomsViewRun')}</button> : null}
       {failed.status !== 'recovery_required' ? <button onClick={() => void state.act('retry', failed)}>{t('directRetry')}</button> : null}

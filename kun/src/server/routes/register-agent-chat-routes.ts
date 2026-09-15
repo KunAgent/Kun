@@ -4,7 +4,8 @@ import type { RouteContext } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { readJsonBody } from '../read-json-body.js'
 import { AgentModelRef } from '../../contracts/agent-identities.js'
-import { chatEntryState, quickCreateAgent, CHAT_ENTRY_ID } from '../../agents/agent-chat-entry.js'
+import { chatEntryState, quickCreateAgent, CHAT_ENTRY_ID, QuickAgentRequest } from '../../agents/agent-chat-entry.js'
+import { startAgentSetupTurn } from '../../agents/agent-setup.js'
 import { agentModelOptions, assertAgentModel } from '../../agents/agent-models.js'
 import { directActivity, directFiles, controlDirectRequest, updateDirectWorkspace } from '../../agents/agent-direct-service.js'
 
@@ -39,7 +40,17 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
       return chatEntryState(rooms.agents)
     })
   })
-  add('POST', '/v1/agents/quick-create', async (rooms, request) => { const input = await body(request); return rooms.exclusive(() => quickCreateAgent(rooms.agents, input)) })
+  add('POST', '/v1/agents/quick-create', async (rooms, request) => {
+    const input = await body(request)
+    return rooms.exclusive(async () => {
+      const created = await quickCreateAgent(rooms.agents, input)
+      await startAgentSetupTurn({
+        service: rooms.service, store: rooms.deps.store, agents: rooms.agents, wake: () => rooms.wake(),
+        created, clientRequestId: QuickAgentRequest.parse(input).clientRequestId
+      })
+      return created
+    })
+  })
   add('GET', '/v1/agents/:agentId/models', async (rooms, request, { params }) => {
     const agent = await rooms.agents.get(params.agentId)
     return { agent, ...await agentModelOptions(rooms.deps, agent, new URL(request.url).searchParams.get('room_id') ?? undefined) }

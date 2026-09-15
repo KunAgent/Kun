@@ -90,3 +90,16 @@
 
 .direct-current-model > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .direct-current-model > svg { flex-shrink: 0; }
+.direct-choice-card { display: grid; gap: 8px; margin: 8px 8px 16px; padding: 16px; border: 1px solid var(--ds-border); border-radius: 16px; background: var(--ds-surface-card); }
+.direct-choice-card header { display: flex; gap: 10px; align-items: flex-start; }
+.direct-choice-card header strong { flex: 1; min-width: 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.direct-choice-close { width: 28px; height: 28px; border-radius: 50%; color: var(--ds-text-muted); }
+.direct-choice-close:hover { background: var(--ds-surface-hover); }
+.direct-choice-option { display: flex; gap: 10px; align-items: center; width: 100%; padding: 12px 14px; border: 1px solid var(--ds-border); border-radius: 12px; text-align: left; font-size: 14px; }
+.direct-choice-option:hover, .direct-choice-option:focus-visible { background: var(--ds-surface-hover); }
+.direct-choice-option > span:first-child { width: 22px; color: var(--ds-text-muted); font-weight: 600; }
+.direct-choice-card form { display: grid; gap: 8px; }
+.direct-choice-card input { width: 100%; padding: 10px 12px; border: 1px solid var(--ds-border); border-radius: 12px; background: transparent; color: var(--ds-text); }
+.direct-choice-card form button, .direct-choice-skip { justify-self: start; padding: 6px 10px; font-size: 12px; color: var(--ds-text-muted); }
+.direct-choice-card.is-answered { grid-template-columns: minmax(0, 1fr) auto; align-items: center; color: var(--ds-text-muted); }
+.direct-empty-chat button { margin-top: 6px; font-size: 13px; color: var(--ds-text-muted); text-decoration: underline; text-underline-offset: 3px; }

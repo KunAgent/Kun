@@ -124,7 +124,7 @@ it('preserves accepted model settings and separates Agent workspaces and history
   await f.runtime.agents.update(agent.id, { clientRequestId: 'changed', expectedRevision: agent.revision, modelRef: { providerId: 'test', model: 'second' } })
   const a = await f.advance(first.requestId)
   expect(a.privateModel?.model).toBe('first')
-  const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other' })
+  const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other', setupMode: 'form' })
   const sent = await f.runtime.service.send(other.roomId, { clientRequestId: 'other-chat', body: 'PRIVATE_BETA Create hello.txt' })
   const b = await f.advance(sent.requestId)
   expect(b.threadId).not.toBe(a.threadId)
@@ -215,7 +215,7 @@ it('freezes accepted permissions and applies full access only to the next privat
   expect(b.threadId).not.toBe(a.threadId)
   expect(approvals).toHaveBeenCalledTimes(1)
   expect(JSON.stringify(f.seen.filter((request) => request.threadId === b.threadId))).toContain('ALPHA')
-  const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other-policy' })
+  const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other-policy', setupMode: 'form' })
   expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('ask-for-approval')
 })
 it('full access performs an explicitly selected external file write and respects later Agent directory limits', async () => {

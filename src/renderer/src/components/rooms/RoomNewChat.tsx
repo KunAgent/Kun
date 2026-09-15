@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Search, Plus, Users } from 'lucide-react'
+import { Search, Users, MessageSquare, PenLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
@@ -7,7 +7,9 @@ import { RoomAvatar } from './RoomAvatar'
 import { agentMember, useAgentCatalog, useAgentResource } from './agent-client'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
 
-export function RoomNewChat({ onClose, onOpen, onAgent }: { onClose: () => void; onOpen: (roomId: string) => void; onAgent: (agentId: string) => void }) {
+export function RoomNewChat({ onClose, onOpen, onAgent, onFill }: {
+  onClose: () => void; onOpen: (roomId: string) => void; onAgent: (agentId: string) => void; onFill: () => void
+}) {
   const { t } = useTranslation('common')
   const [query, setQuery] = useState(''), [group, setGroup] = useState(false), [templatesOpen, setTemplatesOpen] = useState(false)
   const [selected, setSelected] = useState<AgentIdentity[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -21,14 +23,19 @@ export function RoomNewChat({ onClose, onOpen, onAgent }: { onClose: () => void;
     try { await action(pending.current.id); onClose() } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
   }
   const create = (templateId?: string) => void run('create:' + (templateId ?? ''), async (clientRequestId) => {
-    const result = await roomsRequest<{ roomId: string }>('/v1/agents/quick-create', 'POST', { clientRequestId, templateId, ...(!templateId ? { name: t('directNewAgentName') } : {}) })
+    const result = await roomsRequest<{ roomId: string }>('/v1/agents/quick-create', 'POST', {
+      clientRequestId, templateId, ...(!templateId ? { name: t('directNewAgentName'), setupMode: 'chat' } : {})
+    })
     onOpen(result.roomId)
   })
   return <RoomModal title={t('directNewChat')} busy={busy} onClose={onClose}>
     <div className="direct-new-chat">
       <label className="direct-recipient"><span>{t('directTo')}</span><Search size={17} /><input autoFocus value={query} placeholder={t('directFindAgent')} onChange={(e) => setQuery(e.target.value)} /></label>
-      <div className="direct-create-actions"><button disabled={busy} onClick={() => create()}><Plus size={18} />{t('directCreateAgent')}</button>
-        <button aria-pressed={group} disabled={busy} onClick={() => setGroup(!group)}><Users size={18} />{t('directCreateGroup')}</button></div>
+      <div className="direct-create-actions">
+        <button disabled={busy} onClick={() => create()}><MessageSquare size={18} />{t('directDefineByChat')}</button>
+        <button disabled={busy} onClick={() => { onFill(); onClose() }}><PenLine size={18} />{t('directFillYourself')}</button>
+        <button aria-pressed={group} disabled={busy} onClick={() => setGroup(!group)}><Users size={18} />{t('directCreateGroup')}</button>
+      </div>
       {selected.length && group ? <div className="direct-selected">{selected.map((agent) => <button key={agent.id} onClick={() => setSelected(selected.filter((item) => item.id !== agent.id))}>{agent.name} ×</button>)}</div> : null}
       <div className="direct-agent-choices">{catalog.agents.map((agent) => <button type="button" key={agent.id} disabled={busy} aria-pressed={group && selected.some((item) => item.id === agent.id)}
         onClick={() => { if (group) setSelected((old) => old.some((item) => item.id === agent.id) ? old.filter((item) => item.id !== agent.id) : [...old, agent]); else { onAgent(agent.id); onClose() } }}>

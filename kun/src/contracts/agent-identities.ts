@@ -18,6 +18,12 @@ export const AgentCapabilityOverrides = z.object({
 export const AgentMemorySettings = z.object({
   readEnabled: z.boolean().default(true), captureEnabled: z.boolean().default(true)
 }).strict()
+export const AgentSetupStateSchema = z.object({
+  status: z.enum(['pending', 'completed', 'skipped']),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime().optional()
+}).strict()
+export type AgentSetupState = z.infer<typeof AgentSetupStateSchema>
 const fields = {
   templateId: z.string().min(1).max(80).optional(),
   templateVersion: z.number().int().positive().optional(),
@@ -36,6 +42,7 @@ const fields = {
 }
 export const AgentIdentitySchema = z.object({
   schemaVersion: z.literal(1), id: ParticipantAgentId, ...fields,
+  setup: AgentSetupStateSchema.optional(),
   revision: z.number().int().nonnegative(), createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(), archivedAt: z.string().datetime().optional(),
   migratedFrom: z.object({ roomId: ParticipantAgentId, memberId: ParticipantAgentId,
@@ -52,6 +59,7 @@ export const UpdateAgentRequest = z.object({
   },
   expectedRevision: z.number().int().nonnegative(), clientRequestId: ParticipantAgentId,
   archived: z.boolean().optional(),
+  setup: AgentSetupStateSchema.optional(),
   modelRef: AgentModelRef.nullable().optional(), fastModelRef: AgentModelRef.nullable().optional(), avatar: RoomAvatarReferenceSchema.nullable().optional(),
   capabilityOverrides: AgentCapabilityOverrides.nullable().optional(),
   allowedRepositoryRoots: z.array(z.string().min(1).max(4096)).max(100).nullable().optional(),

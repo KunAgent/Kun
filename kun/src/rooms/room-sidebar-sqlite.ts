@@ -50,6 +50,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     SELECT e.*,
       COALESCE((SELECT m.seq FROM room_documents m WHERE m.kind='message' AND m.room_id=e.room_id
         AND COALESCE(json_extract(m.document,'$.status'),'final')<>'streaming'
+        AND COALESCE(json_extract(m.document,'$.presentationKind'),'')<>'setup'
         ORDER BY m.seq DESC LIMIT 1),0) AS message_seq,
       COALESCE((SELECT json_extract(r.document,'$.seq') FROM room_documents r WHERE r.kind='read_state' AND r.id=e.room_id),0) AS read_seq,
       (SELECT COUNT(DISTINCT CASE WHEN t.kind='request' THEN 'request:' || t.id

@@ -208,6 +208,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/agents/features', ['GET', 'PUT']),
   compileEndpoint('/v1/agents', ['GET', 'POST']),
   compileEndpoint('/v1/agents/{agentId}', ['GET', 'PATCH']),
+  compileEndpoint('/v1/agents/{agentId}/setup', ['POST']),
   compileEndpoint('/v1/agents/{agentId}/conversation', ['POST']),
   compileEndpoint('/v1/agents/{agentId}/runs', ['GET']),
   compileEndpoint('/v1/agents/{agentId}/conversations', ['GET']),

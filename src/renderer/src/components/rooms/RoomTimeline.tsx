@@ -6,7 +6,8 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState
+  useState,
+  type ReactNode
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowDown, Search, X } from 'lucide-react'
@@ -42,7 +43,9 @@ export function RoomTimeline({
   onRun,
   onHandoff,
   onReplyThread,
-  onOpenContent
+  onOpenContent,
+  afterMessages,
+  renderChoice
 }: {
   room: Room
   messages: RoomMessage[]
@@ -61,6 +64,8 @@ export function RoomTimeline({
   onHandoff?: (id: string) => void
   onReplyThread?: (message: RoomMessage) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
+  afterMessages?: ReactNode
+  renderChoice?: (message: RoomMessage) => ReactNode
 }) {
   const { t } = useTranslation('common')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -327,7 +332,7 @@ export function RoomTimeline({
     viewReply: (id: string) => actions.current.viewReply(id)
   }), [])
   const renderMessage = (message: RoomMessage) => (
-    <StableMessageRow
+    message.presentationKind === 'choice' && renderChoice ? renderChoice(message) : <StableMessageRow
       room={room}
       onOpenContent={onOpenContent}
       onHandoff={onHandoff}
@@ -468,6 +473,7 @@ export function RoomTimeline({
               {renderMessage(rows[row.index])}
             </div>
           ))}
+          {afterMessages}
         </div>
         {results && searchCursor ? (
           <button

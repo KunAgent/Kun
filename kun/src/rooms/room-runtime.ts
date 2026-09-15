@@ -3,10 +3,12 @@ import { AgentDiscussionFairness } from '../agents/agent-discussion-fairness.js'
 import { AgentHandoffService } from '../agents/agent-handoff-service.js'
 import { AgentHandoffRunner } from '../agents/agent-handoff-runner.js'
 import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
+import { bindAgentSetupDirectory } from '../agents/agent-setup-tools.js'
 import { discussionAgentLane } from '../agents/agent-discussion-scope.js'
 import { AgentMemoryCoordinator } from '../agents/agent-memory-coordinator.js'
 import { AgentMemoryService } from '../agents/agent-memory-service.js'
 import { AgentIdentityService } from '../agents/agent-identity-service.js'
+import { isHiddenAgentSetupMessage } from '../agents/agent-setup.js'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
 import type { RoomDelivery, RoomReview } from '../contracts/room-deliveries.js'
 import { RoomService, putRoomDocument } from './room-service.js'
@@ -66,6 +68,7 @@ export class RoomRuntime {
     deps.agentHandoffs = this.handoffs
     this.handoffRunner = new AgentHandoffRunner(this.handoffs)
     bindAgentHandoffService(deps.threadStore, this.handoffs)
+    bindAgentSetupDirectory(deps.threadStore, this.agents)
     this.product = new RoomProductService(deps, this.service)
     this.integrations = new RoomIntegrationService(deps)
     this.direct = new AgentDirectRunner(deps, this.executionService)
@@ -148,7 +151,7 @@ export class RoomRuntime {
   async messages(roomId: string, limit: number, cursor?: number) {
     await this.service.get(roomId)
     const rows = await this.deps.store.list<RoomMessage>('message', { roomId, limit, beforeSeq: cursor })
-    return { messages: [...rows].reverse().map((row) => ({ ...row.value, messageSeq: row.seq })),
+    return { messages: [...rows].reverse().filter((row) => !isHiddenAgentSetupMessage(row.value)).map((row) => ({ ...row.value, messageSeq: row.seq })),
       nextCursor: rows.length === limit ? String(rows.at(-1)!.seq) : undefined }
   }
   private async tick() {

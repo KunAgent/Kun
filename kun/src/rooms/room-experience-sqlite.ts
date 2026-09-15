@@ -42,6 +42,7 @@ export function queryRoomSearch(db: DatabaseSync, raw: RoomSearchQuery): RoomSea
     title = input.kind === 'messages' ? "json_extract(m.document,'$.authorLabelSnapshot')" : "json_extract(m.document,'$.task.title')"
     preview = input.kind === 'messages' ? "COALESCE(json_extract(m.document,'$.body'),'')" : "COALESCE(json_extract(m.document,'$.task.latestProgress'),'')"
     predicate = input.kind === 'messages' ? preview : `${title} || ' ' || ${preview}`
+    if (input.kind === 'messages') common.push("COALESCE(json_extract(m.document,'$.presentationKind'),'')<>'setup'")
   }
   common.push(`instr(lower(${predicate}),lower(?))>0`); args.push(input.q)
   if (cursor) { common.push(`(${seq}<? OR (${seq}=? AND ${id}>?))`); args.push(cursor.seq, cursor.seq, cursor.id) }

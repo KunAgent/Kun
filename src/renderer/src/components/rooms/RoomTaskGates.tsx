@@ -8,29 +8,11 @@ import {
   type RoomTaskDetail,
   type RoomUserInput
 } from './rooms-client'
+import { roomInputAnswers, submitRoomUserInput } from './RoomChoiceCard'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
 import { useRoomMutation, useRoomResource } from './useRoomResource'
 
-export function roomInputAnswers(
-  input: RoomUserInput,
-  selected: Record<string, string[]>,
-  freeform: Record<string, string>
-) {
-  return input.questions.map((question) => {
-    const values = [
-      ...(selected[question.id] ?? []),
-      ...(freeform[question.id]?.trim() ? [freeform[question.id].trim()] : [])
-    ]
-    return {
-      id: question.id,
-      label: values.join(', '),
-      value: values.join('\n'),
-      ...(question.selectionMode === 'multiple'
-        ? { labels: values, values }
-        : {})
-    }
-  })
-}
+export { roomInputAnswers } from './RoomChoiceCard'
 
 function RoomInputForm({
   input,
@@ -60,11 +42,7 @@ function RoomInputForm({
     mutation.run(
       `${input.id}:${cancelled ? 'cancel' : JSON.stringify(answers)}`,
       () =>
-        roomsRequest(
-          `/v1/user-inputs/${encodeURIComponent(input.id)}`,
-          'POST',
-          cancelled ? { cancelled: true } : { answers }
-        )
+        submitRoomUserInput(input.id, cancelled ? { cancelled: true } : { answers })
     )
   return (
     <form

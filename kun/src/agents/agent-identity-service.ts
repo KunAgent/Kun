@@ -92,7 +92,8 @@ export class AgentIdentityService {
         capabilityOverrides: copy.capabilityOverrides, allowedRepositoryRoots: copy.allowedRepositoryRoots,
         reviewerAgentId: copy.reviewerAgentId, memory: copy.memory } : {}),
       id: 'agent-' + randomUUID(), schemaVersion: 1, revision: 0, createdAt: now, updatedAt: now,
-      archivedAt: undefined, migratedFrom: undefined })
+      archivedAt: undefined, migratedFrom: undefined,
+      setup: copy ? undefined : { status: 'completed' as const, startedAt: now, completedAt: now } })
     await this.validate(agent)
     const result = { agent }
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
@@ -116,9 +117,14 @@ export class AgentIdentityService {
     const old = await this.get(id)
     const { clientRequestId: _, expectedRevision, archived, ...patch } = input
     const normalizedPatch = Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === null ? undefined : value]))
+    const now = new Date().toISOString()
+    const takeover = old.setup?.status === 'pending' && !Object.hasOwn(raw as object, 'setup') &&
+      ['name', 'title', 'instructions'].some((key) => Object.hasOwn(raw as object, key) &&
+        String((normalizedPatch as Record<string, unknown>)[key] ?? '') !== String((old as Record<string, unknown>)[key] ?? ''))
     const agent = AgentIdentitySchema.parse({ ...old, ...normalizedPatch, revision: expectedRevision + 1,
-      updatedAt: new Date().toISOString(), ...(archived === undefined ? {} : {
-        archivedAt: archived ? new Date().toISOString() : undefined }) })
+      updatedAt: now, ...(archived === undefined ? {} : {
+        archivedAt: archived ? now : undefined }),
+      ...(takeover ? { setup: { status: 'skipped', startedAt: old.setup!.startedAt, completedAt: now } } : {}) })
     await this.validate(agent)
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
       checks: [{ kind: 'agent_identity', id, expectedRevision }],

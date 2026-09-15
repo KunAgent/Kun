@@ -7,6 +7,7 @@ import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import type { RouteContext } from '../router.js'
 import { ParticipantAgentId, AgentFeaturesSchema } from '../../contracts/agent-identities.js'
 import { openAgentConversation } from '../../agents/agent-conversations.js'
+import { cancelPendingAgentSetup, skipAgentSetup } from '../../agents/agent-setup.js'
 import { readJsonBody } from '../read-json-body.js'
 import { DEFAULT_AGENT_TEMPLATES, DIAGNOSTICIAN_AGENT_TEMPLATE } from '../../agents/agent-defaults.js'
 
@@ -47,7 +48,23 @@ export function registerAgentIdentityRoutes(add: Add): void {
     ({ agent: await rooms.agents.get(ParticipantAgentId.parse(params.agentId)) }))
   add('PATCH', '/v1/agents/:agentId', async (rooms, request, { params }) => {
     const id = ParticipantAgentId.parse(params.agentId), input = await body(request)
-    return rooms.exclusive(() => rooms.agents.update(id, input))
+    return rooms.exclusive(async () => {
+      const previous = await rooms.agents.get(id)
+      const result = await rooms.agents.update(id, input)
+      if (previous.setup?.status === 'pending' && result.agent.setup?.status === 'skipped') {
+        await cancelPendingAgentSetup({ store: rooms.deps.store, inputs: rooms.deps.inputs, turns: rooms.deps.turns, agentId: id })
+        rooms.wake()
+      }
+      return result
+    })
+  })
+  add('POST', '/v1/agents/:agentId/setup', async (rooms, request, { params }) => {
+    const id = ParticipantAgentId.parse(params.agentId)
+    const input = z.object({ clientRequestId: ParticipantAgentId, action: z.enum(['skip']) }).strict().parse(await body(request))
+    return rooms.exclusive(() => skipAgentSetup({
+      agents: rooms.agents, store: rooms.deps.store, inputs: rooms.deps.inputs, turns: rooms.deps.turns,
+      agentId: id, clientRequestId: input.clientRequestId, wake: () => rooms.wake()
+    }))
   })
   add('GET', '/v1/agents/:agentId/runs', async (rooms, request, { params }) => {
     const id = ParticipantAgentId.parse(params.agentId), query = new URL(request.url).searchParams

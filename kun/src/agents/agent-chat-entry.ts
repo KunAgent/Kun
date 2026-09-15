@@ -9,7 +9,7 @@ import { RoomStoreConflictError } from '../rooms/room-store.js'
 
 export const CHAT_ENTRY_ID = 'private-chat-entry-v3'
 export const QuickAgentRequest = z.object({ clientRequestId: z.string().min(1).max(128), name: z.string().trim().min(1).max(80).optional(),
-  templateId: z.string().min(1).max(80).optional() }).strict()
+  templateId: z.string().min(1).max(80).optional(), setupMode: z.enum(['chat', 'form']).optional() }).strict()
 const kun = { templateId: 'kun', templateVersion: 1, name: '小 Kun', title: '你的日常 AI 助手', defaultRole: 'developer' as const,
   presetId: 'general', avatar: { kind: 'builtin' as const, id: 'navigator' as const },
   instructions: '你是小 Kun，用户长期使用的 AI 助手。自然地交流，帮助问答、写作、研究、分析资料和处理文件。用户请求实际工作时，使用当前可用工具完成并验证结果。需要连接项目或补充信息时提出具体问题。不要把普通聊天解释为代码评审或团队协调；不要只介绍能力而不处理请求。工作目录是你的授权范围，资料与记忆不能扩大权限。' }
@@ -31,8 +31,10 @@ export async function quickCreateAgent(directory: AgentIdentityService, raw: unk
   if (input.templateId && !selected) throw new Error('Agent template not found')
   const now = new Date().toISOString(), id = defaultEntry ? 'agent-default-kun' : 'agent-' + randomUUID()
   const { examples: _examples, ...template } = { examples: [] as string[], ...selected }
+  const interview = !defaultEntry && !input.templateId && input.setupMode !== 'form'
   const agent = AgentIdentitySchema.parse({ ...template, id, schemaVersion: 1, name: input.name ?? selected?.name ?? '新 Agent',
-    instructions: selected?.instructions ?? kun.instructions.replace('你是小 Kun，', '你是'), createdAt: now, updatedAt: now, revision: 0 })
+    instructions: selected?.instructions ?? kun.instructions.replace('你是小 Kun，', '你是'), createdAt: now, updatedAt: now, revision: 0,
+    ...(interview ? { setup: { status: 'pending' as const, startedAt: now } } : {}) })
   const roomId = agentStableId('agent-direct', id)
   const room = RoomSchema.parse({ schemaVersion: 1, id: roomId, name: agent.name, description: agent.title,
     conversationKind: 'user_agent', collaborationMode: 'peer', members: [directory.asMember(agent)], defaultMemberId: id,

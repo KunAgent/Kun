@@ -170,8 +170,8 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const page = pagination(request)
     const rows = await rooms.service.store.list<import('../../contracts/rooms.js').RoomMessage>('message', {
       roomId: context.params.roomId, search: query, limit: page.limit, beforeSeq: page.cursor })
-    return { messages: rows.map((row) => ({ ...row.value, messageSeq: row.seq })),
-      nextCursor: rows.length === page.limit ? String(rows.at(-1)!.seq) : undefined }
+    const messages = rows.filter((row) => row.value.presentationKind !== 'setup').map((row) => ({ ...row.value, messageSeq: row.seq }))
+    return { messages, nextCursor: rows.length === page.limit ? String(rows.at(-1)!.seq) : undefined }
   })
   add('POST', '/v1/rooms/:roomId/read', async (rooms, request, context) => {
     const input = z.object({ seq: z.number().int().nonnegative(), clientRequestId: RoomIdSchema }).parse(await body(request))
