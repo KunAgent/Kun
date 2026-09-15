@@ -51,6 +51,7 @@ export type MemoryDialogState =
   | { mode: 'create' }
   | { mode: 'view'; memory: CoreMemoryRecordJson }
   | { mode: 'edit'; memory: CoreMemoryRecordJson }
+  | { mode: 'correct'; memory: CoreMemoryRecordJson }
 
 const EMPTY_DRAFT: MemoryDraft = {
   content: '',
@@ -106,7 +107,7 @@ export function isMemoryDraftDirty(
   draft: MemoryDraft
 ): boolean {
   if (dialog.mode === 'view') return false
-  if (dialog.mode === 'edit') {
+  if (dialog.mode === 'edit' || dialog.mode === 'correct') {
     const original = dialog.memory
     const originalTags = serializeMemoryTags(original.tags)
     return (
@@ -177,6 +178,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     memoryDiagnostics,
     createMemoryRecord,
     updateMemoryRecord,
+    confirmMemoryRecord,
+    correctMemoryRecord,
     disableMemoryRecord,
     restoreMemoryRecord,
     deleteMemoryRecord,
@@ -236,6 +239,25 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     })
     setMemoryDialogNotice(null)
     setDialog({ mode: 'edit', memory: record })
+  }
+
+  const beginCorrection = (record: CoreMemoryRecordJson): void => {
+    setDraft({
+      content: record.content,
+      scope: record.scope,
+      targetPath: projectForMemory(record) ?? '',
+      tags: (record.tags ?? []).join(', '),
+      confidence: record.confidence ?? 1,
+      type: record.type ?? 'fact',
+      importance: record.importance ?? 0.5
+    })
+    setMemoryDialogNotice(null)
+    setDialog({ mode: 'correct', memory: record })
+  }
+
+  const confirmMemory = async (record: CoreMemoryRecordJson): Promise<void> => {
+    const confirmed = await confirmMemoryRecord(record.id)
+    setMemoryDialogNotice(confirmed ? t('memoryConfirmed') : t('memoryConfirmFailed'))
   }
 
   const closeDialog = (): void => {
@@ -339,6 +361,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       })
     } else if (dialog?.mode === 'edit') {
       ok = await updateMemoryRecord(dialog.memory.id, mutation)
+    } else if (dialog?.mode === 'correct') {
+      ok = await correctMemoryRecord(dialog.memory.id, mutation)
     }
     if (ok) closeDialog()
     else setMemoryDialogNotice(t('memorySaveFailed'))
@@ -591,6 +615,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
           notice={memoryDialogNotice}
           onClose={() => void requestCloseDialog()}
           onBeginEdit={beginEdit}
+          onBeginCorrection={beginCorrection}
+          onConfirm={(memory) => void confirmMemory(memory)}
           onDraftChange={setDraft}
           onSave={() => void saveDraft()}
         />

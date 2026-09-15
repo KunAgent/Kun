@@ -436,6 +436,55 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     }
   }
 
+  const confirmMemoryRecord = async (memoryId: string): Promise<boolean> => {
+    const provider = getProvider()
+    if (typeof provider.confirmMemory !== 'function') return false
+    try {
+      await provider.confirmMemory(memoryId, memoryOperationId('confirm'), memoryMutationAccess(memoryId))
+      return true
+    } catch (error) {
+      setRuntimeDiagnosticsNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+      return false
+    }
+  }
+
+  const correctMemoryRecord = async (
+    memoryId: string,
+    replacement: {
+      content: string
+      tags?: string[]
+      confidence?: number
+      importance?: number
+      type?: CoreMemoryRecordJson['type']
+      observedAt?: string
+      validFrom?: string | null
+      validTo?: string | null
+      expiresAt?: string | null
+    }
+  ): Promise<boolean> => {
+    const provider = getProvider()
+    if (typeof provider.correctMemory !== 'function') return false
+    try {
+      await provider.correctMemory(
+        memoryId,
+        memoryOperationId('correct'),
+        replacement,
+        memoryMutationAccess(memoryId)
+      )
+      await refreshKunDiagnostics()
+      return true
+    } catch (error) {
+      setRuntimeDiagnosticsNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+      return false
+    }
+  }
+
   const setMemoryRecordDisabled = async (memoryId: string, disabled: boolean): Promise<void> => {
     const provider = getProvider()
     if (typeof provider.updateMemory !== 'function') return
@@ -518,5 +567,9 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     }
     refs[target]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
-  return { loadMcpConfig, openSkillRoot, toggleSkillRoot, saveMcpConfig, openMcpConfigDir, loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir, refreshKunDiagnostics, createMemoryRecord, updateMemoryRecord, disableMemoryRecord, restoreMemoryRecord, deleteMemoryRecord, decideMemoryCandidate, scrollToAgentSection }
+  return { loadMcpConfig, openSkillRoot, toggleSkillRoot, saveMcpConfig, openMcpConfigDir, loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir, refreshKunDiagnostics, createMemoryRecord, updateMemoryRecord, confirmMemoryRecord, correctMemoryRecord, disableMemoryRecord, restoreMemoryRecord, deleteMemoryRecord, decideMemoryCandidate, scrollToAgentSection }
+}
+
+function memoryOperationId(prefix: 'confirm' | 'correct'): string {
+  return `memory-${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`}`
 }

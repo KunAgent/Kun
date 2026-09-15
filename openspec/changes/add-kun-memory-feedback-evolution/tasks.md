@@ -33,7 +33,7 @@
 ## 6. User-Facing Confirmation and Correction
 
 - [x] 6.1 Add HTTP, main/preload, and renderer adapters for explicit confirmation and correction using the shared contracts; verify authorization, scope, stable operation id, and Manager ownership are preserved end to end.
-- [ ] 6.2 Add clearly labeled Confirm and Correct actions to Memory settings without changing ordinary metadata editing; verify correction shows the new active version and retains the superseded record in audit views.
+- [x] 6.2 Add clearly labeled Confirm and Correct actions to Memory settings without changing ordinary metadata editing; verify correction shows the new active version and retains the superseded record in audit views.
 - [ ] 6.3 Add feedback capability and bounded degradation status to Memory diagnostics while keeping collection disabled by default; verify disabling collection stops new retrieval/confirmation events and does not disable explicit canonical correction.
 
 ## 7. Offline Feedback-Ranking Decision

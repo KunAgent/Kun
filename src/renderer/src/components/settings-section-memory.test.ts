@@ -75,6 +75,7 @@ const labels: Record<string, string> = {
   memoryCreate: 'New',
   memoryCreateTitle: 'Create memory',
   memoryEditTitle: 'Edit memory',
+  memoryCorrectTitle: 'Correct memory',
   memoryContentPlaceholder: 'Memory content',
   memoryTagsPlaceholder: 'Tags',
   memoryConfidence: 'Confidence',
@@ -85,12 +86,17 @@ const labels: Record<string, string> = {
   memorySaveFailed: 'Memory save failed',
   memoryEmpty: 'No memory records',
   memoryEdit: 'Edit',
+  memoryConfirm: 'Confirm',
+  memoryCorrect: 'Correct',
+  memoryConfirmed: 'Memory confirmed.',
+  memoryConfirmFailed: 'Memory confirmation failed.',
   memoryDetails: 'Details',
   memoryClose: 'Close',
   memoryDisable: 'Disable',
   memoryRestore: 'Restore',
   memoryDelete: 'Delete',
   memoryDisabled: 'Disabled',
+  memorySuperseded: 'Superseded',
   memoryProject: 'Project',
   memoryLastInjected: 'Last injected',
   memoryLastInjectedDesc: 'Last injected description',
@@ -296,6 +302,7 @@ describe('MemorySettingsSection', () => {
     expect(html).not.toContain('aria-label="Disable"')
     expect(html).toContain('Disabled')
   })
+
 })
 
 describe('serializeMemoryTags', () => {
@@ -473,6 +480,8 @@ describe('MemoryRecordDialog', () => {
       notice: null,
       onClose: () => undefined,
       onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
       onDraftChange: () => undefined,
       onSave: () => undefined
     }))
@@ -481,6 +490,43 @@ describe('MemoryRecordDialog', () => {
     expect(html).toContain('value="decision" selected=""')
     expect(html).toContain('Importance')
     expect(html).toContain('value="0.9"')
+  })
+
+  it('shows correction as a separate action while retaining ordinary edit', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord() },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).toContain('Confirm')
+    expect(html).toContain('Correct')
+    expect(html).toContain('Edit')
+  })
+
+  it('does not offer feedback actions for an inactive record', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord({ disabledAt: '2026-09-01T00:00:00.000Z' }) },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).not.toContain('Confirm')
+    expect(html).not.toContain('Correct')
   })
 
   it('clamps confidence and importance inputs to their contract bounds', () => {

@@ -182,6 +182,9 @@ export type CoreMemoryRecordJson = {
   validFrom?: string
   validTo?: string
   expiresAt?: string
+  supersedes?: string
+  supersededAt?: string
+  correctedFrom?: string
   sources?: CoreMemorySourceEvidenceJson[]
   createdAt: string
   updatedAt: string
