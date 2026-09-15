@@ -132,7 +132,9 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
 - No `ConnectionStatusBar`.
 - No `RuntimeDiagnosticsDialog` or runtime self-check UI.
 - No CodeWhale/Reasonix adapter, process manager, RPC bridge, updater, or
-  importer.
+  importer. (This bans the legacy external-tool/diagnostics importer; it does
+  not cover the `/import` command that brings other coding agents' instruction
+  files into Kun's own `AGENTS.md`.)
 - No legacy drawing/painting starter card outside the current Design mode.
 - No `/usage` or `/runtime` slash command that opens a runtime control panel.
   The standalone TUI may expose `/usage` as a read-only report backed by

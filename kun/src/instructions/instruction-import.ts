@@ -1,5 +1,6 @@
 import { lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import {
   DEFAULT_INSTRUCTION_MAX_FILE_BYTES,
   DEFAULT_INSTRUCTION_MAX_TOTAL_BYTES,
@@ -7,6 +8,9 @@ import {
 } from './instruction-runtime.js'
 
 export const MAX_IMPORT_DEPTH = 4
+
+/** Independent hard ceiling: a single source file larger than this is skipped entirely rather than imported. */
+export const MAX_IMPORT_SOURCE_BYTES = 512 * 1024
 
 export type ImportScope = 'workspace' | 'global'
 
@@ -57,6 +61,8 @@ export type ImportWarning =
   | { code: 'unresolved-import'; path: string; detail: string }
   | { code: 'import-cycle'; path: string }
   | { code: 'oversized-import'; path: string; bytes: number }
+  | { code: 'oversized-source-imported'; path: string; bytes: number; limit: number }
+  | { code: 'out-of-bounds-import'; path: string; detail: string }
   | { code: 'identity-skip'; tool: SourceToolId; path: string }
   | { code: 'budget-exceeded'; target: string; bytes: number; limit: number }
 
@@ -84,6 +90,7 @@ export type BuildImportPlanInput = {
   tools?: SourceToolId[]
   maxFileBytes?: number
   maxTotalBytes?: number
+  maxSourceBytes?: number
 }
 
 const BEGIN = 'kun:import:begin'
@@ -166,10 +173,64 @@ async function expandSpec(base: string, spec: SourceFileSpec): Promise<string[]>
   return []
 }
 
-function stripFrontmatter(text: string): string {
-  if (!text.startsWith('---')) return text
-  const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/u.exec(text)
-  return match ? text.slice(match[0].length) : text
+type FrontmatterSplit = { frontmatter: string; body: string }
+
+function splitFrontmatter(text: string): FrontmatterSplit {
+  if (!text.startsWith('---')) return { frontmatter: '', body: text }
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/u.exec(text)
+  if (!match) return { frontmatter: '', body: text }
+  return { frontmatter: match[1] ?? '', body: text.slice(match[0].length) }
+}
+
+/**
+ * Inspect a source file's frontmatter and decide whether it encodes a real
+ * file-scoping condition (e.g. Cursor `globs`, Copilot `applyTo` pattern, Kiro
+ * `inclusion: fileMatch` + `fileMatchPattern`). Unconditional/always-apply
+ * rules return no note. Kun cannot enforce these conditions, so a scoped rule
+ * gets a visible note recording the original condition.
+ */
+function scopedConditionNote(frontmatter: string): string | null {
+  if (!frontmatter.trim()) return null
+  let parsed: unknown
+  try {
+    parsed = parseYaml(frontmatter)
+  } catch {
+    return /^(?:alwaysApply|globs|applyTo|inclusion|fileMatchPattern)\s*:/imu.test(frontmatter)
+      ? 'conditional frontmatter could not be parsed'
+      : null
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  const fields = new Map(
+    Object.entries(parsed).map(([key, value]) => [key.toLowerCase(), value])
+  )
+  const values = (value: unknown): string[] => {
+    const entries = Array.isArray(value) ? value : [value]
+    return entries
+      .filter((entry): entry is string | number | boolean => ['string', 'number', 'boolean'].includes(typeof entry))
+      .map((entry) => String(entry).trim())
+      .filter(Boolean)
+  }
+  const display = (value: unknown): string => values(value).join(', ')
+  const isTruthy = (value: unknown): boolean => values(value).some((entry) => /^(true|yes|always)$/iu.test(entry))
+
+  // Cursor: alwaysApply true means global; globs present means scoped.
+  const alwaysApply = fields.get('alwaysapply')
+  if (isTruthy(alwaysApply)) return null
+  const conditions: string[] = []
+  if (alwaysApply === false || values(alwaysApply).some((entry) => /^(false|no|never)$/iu.test(entry))) {
+    conditions.push('alwaysApply=false')
+  }
+  const globs = fields.get('globs')
+  if (display(globs)) conditions.push(`globs=${display(globs)}`)
+  const applyTo = fields.get('applyto')
+  const applyToValues = values(applyTo).filter((entry) => entry !== '**')
+  if (applyToValues.length > 0) conditions.push(`applyTo=${applyToValues.join(', ')}`)
+  const inclusion = fields.get('inclusion')
+  if (/filematch/iu.test(display(inclusion))) {
+    const pattern = fields.get('filematchpattern')
+    conditions.push(display(pattern) ? `inclusion=fileMatch(${display(pattern)})` : 'inclusion=fileMatch')
+  }
+  return conditions.length > 0 ? conditions.join(', ') : null
 }
 
 function normalizeBody(text: string): string {
@@ -184,12 +245,28 @@ function normalizeBody(text: string): string {
 
 type ResolveCtx = {
   homeDir: string
+  roots: string[]
   visited: Set<string>
   warnings: ImportWarning[]
   maxFileBytes: number
 }
 
 const IMPORT_TOKEN = /(^|[^\w`@])@([^\s'"()]+)/gu
+
+/**
+ * True when `candidate`, after symlink resolution, resides within one of
+ * `roots` (also symlink-resolved). Guards @import against `..`, absolute,
+ * UNC/drive, and symlink-escape reads outside the workspace root or home.
+ */
+async function isPathWithinRoots(candidate: string, roots: string[]): Promise<boolean> {
+  const real = await realpath(candidate).catch(() => resolve(candidate))
+  for (const root of roots) {
+    const realRoot = await realpath(root).catch(() => resolve(root))
+    const rel = relative(realRoot, real)
+    if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))) return true
+  }
+  return false
+}
 
 async function resolveClaudeImports(
   text: string,
@@ -216,6 +293,11 @@ async function resolveClaudeImports(
     const info = await statSafe(resolved)
     if (!info || !info.isFile) {
       if (looksLikePath) ctx.warnings.push({ code: 'unresolved-import', path: resolved, detail: rawPath })
+      out += `@${rawPath}`
+      continue
+    }
+    if (!(await isPathWithinRoots(resolved, ctx.roots))) {
+      ctx.warnings.push({ code: 'out-of-bounds-import', path: resolved, detail: rawPath })
       out += `@${rawPath}`
       continue
     }
@@ -252,12 +334,21 @@ function resolveImportPath(rawPath: string, baseDir: string, homeDir: string): s
 
 async function renderSourceFile(source: DetectedSourceFile, ctx: ResolveCtx): Promise<string> {
   let text = await readFile(source.path, 'utf8')
-  if (source.spec.stripFrontmatter) text = stripFrontmatter(text)
+  let conditionNote: string | null = null
+  if (source.spec.stripFrontmatter) {
+    const split = splitFrontmatter(text)
+    conditionNote = scopedConditionNote(split.frontmatter)
+    text = split.body
+  }
   if (source.spec.resolveImports) {
     ctx.visited.add(await realpath(source.path).catch(() => source.path))
     text = await resolveClaudeImports(text, dirname(source.path), 0, ctx)
   }
-  return normalizeBody(text)
+  const body = normalizeBody(text)
+  if (conditionNote && body.length > 0) {
+    return `<!-- Imported condition (NOT enforced by Kun): ${conditionNote} -->\n${body}`
+  }
+  return body
 }
 
 /** Replace the managed block for `tool`, appending a fresh block if none exists. Content outside markers is preserved verbatim. */
@@ -280,15 +371,21 @@ function escapeRegExp(value: string): string {
 async function readTargetText(path: string): Promise<string> {
   try {
     return await readFile(path, 'utf8')
-  } catch {
-    return ''
+  } catch (error) {
+    if (isMissingFileError(error)) return ''
+    throw error
   }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT'
 }
 
 /** Pure-ish planning step: reads source files and produces the merged target text without writing anything. */
 export async function buildImportPlan(input: BuildImportPlanInput): Promise<ImportPlan> {
   const maxFileBytes = input.maxFileBytes ?? DEFAULT_INSTRUCTION_MAX_FILE_BYTES
   const maxTotalBytes = input.maxTotalBytes ?? DEFAULT_INSTRUCTION_MAX_TOTAL_BYTES
+  const maxSourceBytes = Math.min(input.maxSourceBytes ?? MAX_IMPORT_SOURCE_BYTES, MAX_IMPORT_SOURCE_BYTES)
   const warnings: ImportWarning[] = []
   const detected = await detectImportSources({
     workspace: input.workspace,
@@ -317,7 +414,22 @@ export async function buildImportPlan(input: BuildImportPlanInput): Promise<Impo
           warnings.push({ code: 'identity-skip', tool: source.tool, path: source.path })
           continue
         }
-        const ctx: ResolveCtx = { homeDir: input.homeDir, visited: new Set(), warnings, maxFileBytes }
+        // Independent hard ceiling: skip an oversized top-level source entirely rather than importing a huge file.
+        if (source.bytes > maxSourceBytes) {
+          warnings.push({ code: 'oversized-import', path: source.path, bytes: source.bytes })
+          continue
+        }
+        // Within the hard cap but over the per-file budget: still import, but warn (never truncate instruction meaning).
+        if (source.bytes > maxFileBytes) {
+          warnings.push({ code: 'oversized-source-imported', path: source.path, bytes: source.bytes, limit: maxFileBytes })
+        }
+        const ctx: ResolveCtx = {
+          homeDir: input.homeDir,
+          roots: [input.workspace, input.homeDir],
+          visited: new Set(),
+          warnings,
+          maxFileBytes
+        }
         const body = await renderSourceFile(source, ctx)
         if (body.length > 0) parts.push(`<!-- from: ${source.kind} -->\n${body}`)
       }
@@ -392,6 +504,10 @@ export function describeWarning(warning: ImportWarning): string {
       return `Skipped @import cycle at ${warning.path}`
     case 'oversized-import':
       return `Skipped oversized @import (${warning.bytes} bytes) at ${warning.path}`
+    case 'oversized-source-imported':
+      return `Imported oversized source (${warning.bytes} > ${warning.limit} bytes) without truncation at ${warning.path}`
+    case 'out-of-bounds-import':
+      return `Skipped out-of-bounds @import "${warning.detail}" outside the workspace or home: ${warning.path}`
     case 'identity-skip':
       return `Skipped ${warning.tool} source identical to the target: ${warning.path}`
     case 'budget-exceeded':
@@ -417,27 +533,34 @@ export function describeImportPlan(plan: ImportPlan): string[] {
 export type ParsedImportArgs = {
   tools: SourceToolId[]
   unknownTools: string[]
+  unknownFlags: string[]
   scopes: ImportScope[]
   dryRun: boolean
 }
 
+const KNOWN_IMPORT_FLAGS = new Set(['--global', '--workspace', '--dry-run'])
+
 /**
  * Parse `/import` arguments into a typed request. Tool tokens are split into
- * known (`tools`) and `unknownTools` against `knownTools`. Scope defaults to
- * workspace; `--global` alone means global only, and passing both flags means
- * both. Pure and free of any filesystem or adapter dependency.
+ * known (`tools`) and `unknownTools` against `knownTools`; flags outside the
+ * known set are collected in `unknownFlags` so the caller can reject typos like
+ * `--gloabl` instead of silently ignoring them. Scope defaults to workspace;
+ * `--global` alone means global only, and passing both flags means both. Pure
+ * and free of any filesystem or adapter dependency.
  */
 export function parseImportArgs(args: string | undefined, knownTools: SourceToolId[]): ParsedImportArgs {
   const tokens = (args ?? '').trim().split(/\s+/u).filter((token) => token.length > 0)
-  const flags = new Set(tokens.filter((token) => token.startsWith('--')))
+  const flags = tokens.filter((token) => token.startsWith('--'))
+  const flagSet = new Set(flags)
+  const unknownFlags = flags.filter((flag) => !KNOWN_IMPORT_FLAGS.has(flag))
   const requested = tokens.filter((token) => !token.startsWith('--'))
   const known = new Set<string>(knownTools)
   const tools = requested.filter((token): token is SourceToolId => known.has(token))
   const unknownTools = requested.filter((token) => !known.has(token))
-  const wantGlobal = flags.has('--global')
-  const wantWorkspace = flags.has('--workspace') || !wantGlobal
+  const wantGlobal = flagSet.has('--global')
+  const wantWorkspace = flagSet.has('--workspace') || !wantGlobal
   const scopes: ImportScope[] = []
   if (wantWorkspace) scopes.push('workspace')
   if (wantGlobal) scopes.push('global')
-  return { tools, unknownTools, scopes, dryRun: flags.has('--dry-run') }
+  return { tools, unknownTools, unknownFlags, scopes, dryRun: flagSet.has('--dry-run') }
 }
