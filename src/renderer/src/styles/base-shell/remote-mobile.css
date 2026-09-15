@@ -6,7 +6,7 @@
 
 @media (max-width: 767px) {
   html[data-remote-web='true'] {
-    /* Global overflow + scrolling guards */
+    /* ---- Global overflow + scrolling guards ---- */
     .ds-workbench-shell {
       overflow-x: clip;
     }
@@ -31,19 +31,23 @@
       display: none !important;
     }
 
-    /* Top bar: single row, icon buttons keep a usable touch target. */
+    /* ---- Top bar: one row, title-first, icon-only affordances ---- */
     .chat-topbar {
       padding-left: env(safe-area-inset-left, 0px);
       padding-right: env(safe-area-inset-right, 0px);
     }
     .chat-topbar-grid {
       grid-template-columns: minmax(0, 1fr) auto;
-      padding-left: 8px;
-      padding-right: 8px;
+      padding: 6px 8px;
       gap: 6px;
     }
+    .chat-topbar-session {
+      gap: 8px;
+      min-width: 0;
+    }
     .chat-topbar-actions {
-      gap: 4px;
+      flex-wrap: nowrap !important;
+      gap: 2px;
     }
     .chat-topbar-actions .ds-topbar-action-button,
     .ds-topbar-action-button {
@@ -51,9 +55,37 @@
       min-height: 36px;
     }
 
-    /* Session title stays on one line. */
-    .chat-topbar-session {
+    /* Compact session header keeps only the title; workspace/branch chips
+       move out of the way on a phone-width row. */
+    .session-header-compact {
       gap: 6px;
+    }
+    .session-header-compact-workspace,
+    .session-header-compact-branch,
+    .session-header-compact-chevron {
+      display: none;
+    }
+    .session-header-compact-title {
+      font-size: 15px;
+    }
+    /* Trajectory + requirement-draft become icon-only 36px targets. */
+    .session-header-compact-trajectory {
+      width: 36px;
+      height: 36px;
+      padding: 0 !important;
+      justify-content: center;
+      gap: 0;
+    }
+    .session-header-compact-trajectory > span:not([class*='absolute']) {
+      display: none;
+    }
+    .session-header-compact-requirement {
+      width: 36px;
+      padding: 0 !important;
+      justify-content: center;
+    }
+    .session-header-compact-requirement > span {
+      display: none;
     }
 
     /* Right rail collapses into a sheet trigger; the rail itself is rendered
@@ -73,7 +105,23 @@
       padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    /* Composer: larger touch targets, iOS zoom-safe input size, safe-area pad. */
+    /* ---- Empty-state hero: compact, no orphan characters ---- */
+    .ds-chat-empty-hero {
+      min-height: 0 !important;
+      padding: 30px 20px 8px;
+    }
+    #chat-empty-hero-title {
+      font-size: 22px;
+      line-height: 1.28;
+      text-wrap: balance;
+    }
+    .ds-chat-empty-hero p {
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* ---- Composer ---- */
     .ds-composer-dock {
       padding-left: 8px;
       padding-right: 8px;
@@ -81,7 +129,20 @@
     }
     .ds-composer-shell {
       width: 100%;
-      border-radius: 16px;
+      border-radius: 20px;
+    }
+    /* Workspace / task selector rows scroll sideways instead of wrapping. */
+    .ds-composer-task-controls,
+    .ds-composer-workspace-controls {
+      flex-wrap: nowrap !important;
+      justify-content: flex-start;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .ds-composer-task-controls::-webkit-scrollbar,
+    .ds-composer-workspace-controls::-webkit-scrollbar {
+      display: none;
     }
     .ds-composer-textarea {
       font-size: 16px !important; /* below 16px iOS auto-zooms on focus */
@@ -89,10 +150,11 @@
       padding-top: 10px;
       padding-bottom: 10px;
     }
+    /* Single-line toolbar: mode/reasoning pills scroll with toolbar-start. */
     .ds-composer-toolbar {
-      min-height: 44px;
-      flex-wrap: wrap;
-      row-gap: 4px;
+      min-height: 48px;
+      flex-wrap: nowrap !important;
+      gap: 6px;
     }
     .ds-composer-menu-button,
     .ds-composer-toolbar button,
@@ -106,6 +168,7 @@
       min-height: 40px;
       padding-left: 12px;
       padding-right: 12px;
+      white-space: nowrap;
     }
     .ds-composer-toolbar-start {
       scrollbar-width: none;
@@ -113,8 +176,20 @@
     .ds-composer-toolbar-start::-webkit-scrollbar {
       display: none;
     }
+    /* Usage footer slims down; empty state hides the "暂无用量" placeholder. */
+    .ds-composer-footer {
+      height: 2rem;
+      margin-top: 2px;
+    }
+    .ds-chat-stage[data-empty-task-layout='true'] .ds-composer-footer {
+      display: none;
+    }
 
-    /* Message stream: readable type, horizontal scroll for wide blocks. */
+    /* ---- Message stream ---- */
+    .ds-chat-main-stack {
+      font-size: 15px;
+      line-height: 1.55;
+    }
     .ds-chat-main-stack pre,
     .ds-chat-main-stack code[class*='language-'],
     .ds-markdown pre {
@@ -132,9 +207,9 @@
       max-width: 100%;
       height: auto;
     }
-    .ds-chat-main-stack {
-      font-size: 15px;
-      line-height: 1.55;
+    .ds-user-message-bubble {
+      border-radius: 18px;
+      max-width: 92%;
     }
 
     /* Dense hover-only affordances stay reachable on touch. */

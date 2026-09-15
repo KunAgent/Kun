@@ -287,7 +287,9 @@ export function WorkbenchTopActions({
         </button>
       ) : null}
 
-      {onToggleRightWorkspace ? (
+      {/* On Remote mobile the right rail opens as the "…" bottom sheet, so
+          the expand-workspace toggle only duplicates it. */}
+      {onToggleRightWorkspace && !(remoteMobile && onOpenMobileRail) ? (
         <button
           type="button"
           onClick={onToggleRightWorkspace}
