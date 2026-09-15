@@ -266,7 +266,7 @@ export const MemoryFeedbackTiebreakerCandidateLock = z.object({
   lockedAt: z.string().datetime()
 }).strict()
 
-const MetricSet = z.object({
+export const MemoryFeedbackTiebreakerMetricSet = z.object({
   pairAccuracy: z.number().min(0).max(1),
   pairCount: z.number().int().nonnegative(),
   recallAtK: z.number().min(0).max(1),
@@ -280,9 +280,39 @@ const MetricSet = z.object({
   caseCount: z.number().int().positive()
 }).strict()
 
+export const MemoryFeedbackTiebreakerDevelopmentArtifact = z.object({
+  schemaVersion: z.literal(1),
+  evaluationVersion: z.literal(MEMORY_FEEDBACK_TIEBREAKER_EVALUATION_VERSION),
+  partition: z.literal('development'),
+  artifactHashes: ArtifactHashes.extend({ decisionPlanSha256: Hash }).strict(),
+  foundation: MemoryFeedbackTiebreakerMetricSet,
+  configurations: z.array(z.object({
+    candidateId: ArtifactId,
+    boundaryId: z.string().regex(/^gap_[0-9]+$/u).nullable(),
+    maximumGap: z.number().min(0).max(1),
+    signalRule: MemoryFeedbackTiebreakerSignalRule,
+    metrics: MemoryFeedbackTiebreakerMetricSet,
+    bootstrapLowerBounds: z.object({
+      pairAccuracyGain: z.number().min(-1).max(1),
+      recallGain: z.number().min(-1).max(1),
+      mrrGain: z.number().min(-1).max(1)
+    }).strict(),
+    gates: z.object({
+      localBenefit: z.boolean(),
+      globalNonRegression: z.boolean(),
+      safety: z.boolean(),
+      passed: z.boolean()
+    }).strict(),
+    selectedIdsSha256: Hash
+  }).strict()).min(3).max(16)
+}).strict()
+export type MemoryFeedbackTiebreakerDevelopmentArtifactValue = z.infer<
+  typeof MemoryFeedbackTiebreakerDevelopmentArtifact
+>
+
 const PartitionEvidence = z.object({
-  foundation: MetricSet,
-  candidate: MetricSet,
+  foundation: MemoryFeedbackTiebreakerMetricSet,
+  candidate: MemoryFeedbackTiebreakerMetricSet,
   bootstrapLowerBounds: z.object({
     pairAccuracyGain: z.number().min(-1).max(1),
     recallGain: z.number().min(-1).max(1),
