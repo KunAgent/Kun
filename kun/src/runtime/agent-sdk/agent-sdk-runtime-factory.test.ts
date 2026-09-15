@@ -13,6 +13,7 @@ import { LocalToolHost } from '../../adapters/tool/local-tool-host.js'
 import { InMemoryApprovalGate } from '../../adapters/in-memory-approval-gate.js'
 import { InMemoryUserInputGate } from '../../adapters/in-memory-user-input-gate.js'
 import { goalContextKey } from '../../loop/continuation-instructions.js'
+import { MemoryRecord } from '../../contracts/memory.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import {
   DelegatedSessionCoordinator,
@@ -137,6 +138,80 @@ describe('resolveTurnPlanContext', () => {
 })
 
 describe('createAgentSdkRuntime delegated session binding', () => {
+  test('records only Agent SDK memories included in the assembled context', async () => {
+    const createdAt = '2026-09-15T03:00:00.000Z'
+    const thread = threadWith({
+      id: 'thread_memory',
+      providerId: 'claude-subscription',
+      workspace: '/tmp/agent-sdk-memory',
+      turns: [{
+        id: 'turn_memory',
+        prompt: 'Use my saved preference.',
+        createdAt
+      } as ThreadRecord['turns'][number]]
+    })
+    const memory = MemoryRecord.parse({
+      id: 'memory_agent_sdk',
+      content: 'Prefer concise release notes.',
+      scope: 'workspace',
+      workspace: '/tmp/agent-sdk-memory',
+      createdAt: '2026-09-15T02:00:00.000Z',
+      updatedAt: '2026-09-15T02:00:00.000Z'
+    })
+    const memoryStore = {
+      retrieve: vi.fn(async () => [memory]),
+      setLastInjected: vi.fn()
+    }
+    const append = vi.fn(async () => ({ status: 'appended' as const }))
+    const runtime = createAgentSdkRuntime({
+      registry: CapabilityRegistry.fromLocalTools([]),
+      turns: { updateTurnMetadata: async () => undefined } as never,
+      sessionStore: {
+        loadItems: async () => [{
+          id: 'item_memory',
+          turnId: 'turn_memory',
+          threadId: 'thread_memory',
+          kind: 'user_message',
+          role: 'user',
+          status: 'completed',
+          text: 'Use my saved preference.',
+          createdAt
+        }]
+      } as never,
+      threadStore: { get: async () => thread } as never,
+      events: {} as never,
+      ids: { next: (prefix) => prefix },
+      prefix: { systemPrompt: 'Kun system prompt' },
+      providerConfigs: {
+        'claude-subscription': { kind: 'agent-sdk', apiKey: 'sk-ant-oat01-oauth-secret' }
+      } as never,
+      agentSdkProviderIds: new Set(['claude-subscription']),
+      defaultApprovalPolicy: 'auto',
+      memoryStore: memoryStore as never,
+      memoryFeedback: { enabled: () => true, append }
+    })
+    const loadTurnContext = (runtime as unknown as {
+      deps: {
+        loadTurnContext(threadId: string, turnId: string): Promise<{
+          contextInstructions?: string[]
+        } | null>
+      }
+    }).deps.loadTurnContext
+
+    const context = await loadTurnContext('thread_memory', 'turn_memory')
+
+    expect(context?.contextInstructions?.join('\n')).toContain('Prefer concise release notes.')
+    expect(memoryStore.setLastInjected).toHaveBeenCalledWith(['memory_agent_sdk'])
+    expect(append).toHaveBeenCalledOnce()
+    expect(append).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'retrieved',
+      memoryId: 'memory_agent_sdk',
+      threadId: 'thread_memory',
+      turnId: 'turn_memory',
+      occurredAt: createdAt
+    }))
+  })
+
   test('restores a compatible Claude session and scopes OAuth state under Kun data', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-claude-binding-'))
     try {

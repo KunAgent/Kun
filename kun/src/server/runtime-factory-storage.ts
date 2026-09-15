@@ -11,6 +11,7 @@ import {
   createManagerRemoteStores,
   ManagerRemoteAttachmentStore,
   ManagerRemoteMemoryStore,
+  ManagerRemoteMemoryFeedback,
   type ServiceManagerConnection,
   DEFAULT_STORAGE_CONFIG,
   expandHomePath,
@@ -19,7 +20,12 @@ import {
   type ThreadStore,
   UsageService,
   FileMemoryStore,
-  type MemoryStore
+  type MemoryStore,
+  FileMemoryFeedbackStore,
+  MemoryFeedbackService,
+  MemoryFeedbackConfig,
+  LocalMemoryFeedbackRuntime,
+  type MemoryFeedbackRuntime
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { findLatestUsageEvent } from '../adapters/session-event-query.js'
@@ -111,6 +117,39 @@ export function createPersistentMemoryStore(
           config,
           nowIso
         })
+}
+
+export function createPersistentMemoryFeedback(
+  options: KunServeRuntimeOptions,
+  memoryStore: MemoryStore | undefined
+): MemoryFeedbackRuntime | undefined {
+  const config = options.capabilities?.memory
+  if (!config?.enabled || !memoryStore) return undefined
+  const feedbackConfig = config.feedback ?? MemoryFeedbackConfig.parse({})
+  if (options.serviceManager) {
+    return new ManagerRemoteMemoryFeedback(options.serviceManager, config, feedbackConfig)
+  }
+  const store = new FileMemoryFeedbackStore({
+    dataDir: options.dataDir,
+    config: feedbackConfig
+  })
+  return new LocalMemoryFeedbackRuntime(store, new MemoryFeedbackService({
+    dataDir: options.dataDir,
+    memoryStore,
+    feedbackStore: store,
+    config: feedbackConfig
+  }), feedbackConfig.enabled)
+}
+
+export async function createReadyPersistentMemoryFeedback(
+  options: KunServeRuntimeOptions,
+  memoryStore: MemoryStore | undefined
+): Promise<MemoryFeedbackRuntime | undefined> {
+  const feedback = createPersistentMemoryFeedback(options, memoryStore)
+  await feedback?.ready().catch((error) => {
+    console.warn('[kun] memory feedback initialization failed:', error)
+  })
+  return feedback
 }
 
 export function createPersistentAttachmentStore(

@@ -25,10 +25,10 @@
 
 ## 5. Actual-Injection Feedback Capture
 
-- [ ] 5.1 Add one asynchronous best-effort `recordRetrieved` helper that accepts only final selected ids plus stable bounded turn identity; verify it never changes retrieval results, traces, formatted context, or canonical Memory timestamps.
-- [ ] 5.2 Invoke the helper after final Memory context assembly in the main agent loop, Cursor SDK runtime, and Agent SDK runtime; verify parity tests record only records actually included after record and prompt budgets.
-- [ ] 5.3 Verify GUI search, list, diagnostics, evaluator runs, rejected candidates, and prompt-budget omissions emit no production retrieval events, including during SQLite fallback and stale recovery.
-- [ ] 5.4 Inject disabled and failing feedback adapters into all three runtime surfaces; verify selected ids, order, trace, context bytes, model request, and turn outcome match the no-feedback baseline.
+- [x] 5.1 Add one asynchronous best-effort `recordRetrieved` helper that accepts only final selected ids plus stable bounded turn identity; verify it never changes retrieval results, traces, formatted context, or canonical Memory timestamps.
+- [x] 5.2 Invoke the helper after final Memory context assembly in the main agent loop, Cursor SDK runtime, and Agent SDK runtime; verify parity tests record only records actually included after record and prompt budgets.
+- [x] 5.3 Verify GUI search, list, diagnostics, evaluator runs, rejected candidates, and prompt-budget omissions emit no production retrieval events, including during SQLite fallback and stale recovery.
+- [x] 5.4 Inject disabled and failing feedback adapters into all three runtime surfaces; verify selected ids, order, trace, context bytes, model request, and turn outcome match the no-feedback baseline.
 
 ## 6. User-Facing Confirmation and Correction
 

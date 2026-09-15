@@ -13,9 +13,9 @@ import {
   type MemoryFeedbackEvent as MemoryFeedbackEventValue
 } from '../contracts/memory-feedback.js'
 import { MemoryFeedbackServiceError } from '../memory/memory-feedback-service.js'
+import type { MemoryFeedbackRuntime } from '../memory/memory-feedback-runtime.js'
 import type {
-  MemoryFeedbackAppendResult,
-  MemoryFeedbackStore
+  MemoryFeedbackAppendResult
 } from '../memory/memory-feedback-store.js'
 import type { ServiceManagerConnection } from './manager-client.js'
 import { callManagerStore } from './remote-data-store-request.js'
@@ -31,12 +31,16 @@ const CorrectOutcome = z.discriminatedUnion('ok', [
 ])
 
 /** RPC-only feedback adapter. Durable ledger and correction receipts remain Manager-owned. */
-export class ManagerRemoteMemoryFeedback implements MemoryFeedbackStore {
+export class ManagerRemoteMemoryFeedback implements MemoryFeedbackRuntime {
   constructor(
     private readonly manager: ServiceManagerConnection,
     private readonly memoryConfig: MemoryCapabilityConfig,
     private readonly feedbackConfig: MemoryFeedbackConfig
   ) {}
+
+  enabled(): boolean {
+    return this.feedbackConfig.enabled
+  }
 
   async ready(): Promise<void> {
     await this.call('feedbackReady')

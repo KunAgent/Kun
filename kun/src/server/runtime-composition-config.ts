@@ -56,7 +56,7 @@ import {
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
-import { createPersistentAttachmentStore, createPersistentMemoryStore } from './runtime-factory-storage.js'
+import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
 
 export function createRuntimeConfigController(
@@ -306,6 +306,7 @@ export function createRuntimeConfigController(
 	    const nextAttachmentStore = createPersistentAttachmentStore(nextOptions, nowIso)
 	    await pruneUnsentAttachments(nextAttachmentStore)
 	    const nextMemoryStore = createPersistentMemoryStore(nextOptions, nowIso)
+            const nextMemoryFeedback = await createReadyPersistentMemoryFeedback(nextOptions, nextMemoryStore)
 	    const nextWebProviders = buildWebToolProviders(nextOptions.capabilities?.web)
 	    const nextImageGenProviders = buildImageGenToolProviders(nextOptions.capabilities?.imageGen, {
 	      attachmentStore: nextAttachmentStore,
@@ -495,7 +496,8 @@ export function createRuntimeConfigController(
 	      skillRuntime: nextSkillRuntime,
 	      instructionRuntime: nextInstructionRuntime,
 	      attachmentStore: nextAttachmentStore,
-	      memoryStore: nextMemoryStore
+	      memoryStore: nextMemoryStore,
+	      memoryFeedback: nextMemoryFeedback
 	    })
 	    const nextLoopOptions: AgentLoopOptions = {
 	      ...loopOptions,
@@ -509,7 +511,8 @@ export function createRuntimeConfigController(
 	      toolArgumentRepair: nextOptions.runtime?.toolArgumentRepair,
 	      hooks: nextResolvedHooks,
 	      attachmentStore: nextAttachmentStore,
-	      memoryStore: nextMemoryStore
+	      memoryStore: nextMemoryStore,
+	      memoryFeedback: nextMemoryFeedback
 	    }
 	    const nextLoop = new AgentLoop(nextLoopOptions)
 	    const previousLoop = loop
@@ -559,6 +562,7 @@ export function createRuntimeConfigController(
 	    webProviders = nextWebProviders
 	    attachmentStore = nextAttachmentStore
 	    memoryStore = nextMemoryStore
+            services.memoryFeedback = nextMemoryFeedback
 	    imageGenProviders = nextImageGenProviders
 	    speechGenProviders = nextSpeechGenProviders
 	    musicGenProviders = nextMusicGenProviders

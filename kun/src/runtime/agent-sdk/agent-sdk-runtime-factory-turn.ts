@@ -44,6 +44,7 @@ import type { SkillRuntime } from '../../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
+import { recordRetrieved } from '../../memory/memory-retrieval-feedback.js'
 import {
   PLAN_MODE_INSTRUCTION,
   todoContinuationInstruction,
@@ -359,13 +360,15 @@ export function createAgentSdkTurnRuntimeDeps(
         : undefined
 
       let memoryBlocks: string[] = []
+      let memoryIds: string[] = []
       if (deps.memoryStore && userText.trim()) {
         const memories = await deps.memoryStore.retrieve({
           query: userText,
           workspace: thread.workspace,
           limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
         })
-        deps.memoryStore.setLastInjected(memories.map((memory) => memory.id))
+        memoryIds = memories.map((memory) => memory.id)
+        deps.memoryStore.setLastInjected(memoryIds)
         memoryBlocks = memoryInstructions(memories)
       }
 
@@ -448,6 +451,13 @@ export function createAgentSdkTurnRuntimeDeps(
         sessionGoalContextKeysByTurn.set(skillTurnKey(threadId, turnId), goalContextKeyForHistory)
       }
 
+      void recordRetrieved({
+        feedback: deps.memoryFeedback,
+        selectedIds: memoryIds,
+        threadId,
+        turnId,
+        occurredAt: turn.createdAt
+      })
       return {
         workspace: thread.workspace,
         additionalWorkspaces: thread.additionalWorkspaces,

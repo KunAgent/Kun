@@ -16,8 +16,98 @@ import { AgentLoop } from './agent-loop.js'
 import { ContextCompactor } from './context-compactor.js'
 import { InflightTracker } from './inflight-tracker.js'
 import { SteeringQueue } from './steering-queue.js'
+import { MemoryRecord } from '../contracts/memory.js'
 
 describe('AgentLoop Memory distillation lifecycle', () => {
+  it('records only the memories included in the main model request', async () => {
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const eventBus = new InMemoryEventBus()
+    const inflight = new InflightTracker()
+    const steering = new SteeringQueue()
+    const ids = new SequentialIdGenerator()
+    const nowIso = () => '2026-09-03T01:00:00.000Z'
+    const events = new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+      nowIso
+    })
+    const compactor = new ContextCompactor()
+    const turns = new TurnService({
+      threadStore,
+      sessionStore,
+      events,
+      inflight,
+      steering,
+      compactor,
+      ids,
+      nowIso,
+      executionLeases: testExecutionLeases()
+    })
+    const model: ModelClient = {
+      provider: 'test',
+      model: 'test-model',
+      async *stream() {
+        yield { kind: 'assistant_text_delta' as const, text: 'Done.' }
+        yield { kind: 'completed' as const, stopReason: 'stop' as const }
+      }
+    }
+    const memory = MemoryRecord.parse({
+      id: 'memory_injected',
+      content: 'Use the stable test fixture.',
+      scope: 'workspace',
+      workspace: '/tmp/workspace',
+      createdAt: nowIso(),
+      updatedAt: nowIso()
+    })
+    const memoryStore = {
+      retrieve: vi.fn(async () => [memory]),
+      setLastInjected: vi.fn()
+    }
+    const append = vi.fn(async () => ({ status: 'appended' as const }))
+    const loop = new AgentLoop({
+      threadStore,
+      sessionStore,
+      approvalGate: { request: async () => 'allow' } as never,
+      userInputGate: {} as never,
+      model,
+      toolHost: new LocalToolHost({ tools: [] }),
+      usage: new UsageService(),
+      events,
+      turns,
+      inflight,
+      steering,
+      compactor,
+      prefix: createImmutablePrefix({ systemPrompt: 'test' }),
+      ids,
+      nowIso,
+      memoryStore: memoryStore as never,
+      memoryFeedback: { enabled: () => true, append }
+    })
+    await threadStore.upsert(createThreadRecord({
+      id: 'thread_memory_feedback',
+      title: 'Memory feedback',
+      workspace: '/tmp/workspace',
+      model: model.model
+    }))
+    const started = await turns.startTurn({
+      threadId: 'thread_memory_feedback',
+      request: { prompt: 'Use my memory.', model: model.model }
+    })
+
+    await expect(loop.runTurn('thread_memory_feedback', started.turnId)).resolves.toBe('completed')
+    expect(memoryStore.retrieve).toHaveBeenCalledOnce()
+    expect(memoryStore.setLastInjected).toHaveBeenCalledWith(['memory_injected'])
+    expect(append).toHaveBeenCalledOnce()
+    expect(append).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'retrieved',
+      memoryId: 'memory_injected',
+      threadId: 'thread_memory_feedback',
+      turnId: started.turnId
+    }))
+  })
+
   it('notifies the coordinator only after the completed turn is durable', async () => {
     const sessionStore = new InMemorySessionStore()
     const threadStore = new InMemoryThreadStore()

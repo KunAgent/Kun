@@ -23,6 +23,7 @@ import type { SkillRuntime } from '../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import type { MemoryRetrievalFeedbackTarget } from '../memory/memory-retrieval-feedback.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { ResolvedHook } from '../hooks/hook-engine.js'
@@ -57,6 +58,7 @@ export type AgentLoopOptions = {
   instructionRuntime?: InstructionRuntime
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   memoryDistillation?: {
     schedule(input: {
       threadId: string

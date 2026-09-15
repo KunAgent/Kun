@@ -78,10 +78,10 @@ import {
   toolCatalogPolicyScope
 } from './model-step-preparation-helpers.js'
 import { failRequiredToolConstraint } from './model-step-failure.js'
+import { recordRetrieved } from '../memory/memory-retrieval-feedback.js'
 export abstract class ModelStepPreparationService {
   protected readonly turnToolCatalogs = new TurnToolCatalogFreezer()
   constructor(protected readonly deps: ModelStepServiceDeps) {}
-
   protected async prepareModelStep(
     threadId: string,
     turnId: string,
@@ -657,6 +657,7 @@ export abstract class ModelStepPreparationService {
     const items = repairModelHistoryItemsForModel(
       effectiveHistoryAfterLatestCompaction(historyItems)
     )
+    void recordRetrieved({ feedback: this.deps.memoryFeedback, selectedIds: memories.map((memory) => memory.id), threadId, turnId, occurredAt: turn.createdAt })
     return {
       thread,
       turn,

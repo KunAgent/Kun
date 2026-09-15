@@ -115,6 +115,9 @@ export function createRuntimeRegistry(
           ...(child.memoryEnabled && services.memoryStore
             ? { memoryStore: services.memoryStore }
             : {}),
+          ...(child.memoryEnabled && services.memoryFeedback
+            ? { memoryFeedback: services.memoryFeedback }
+            : {}),
           ...(services.attachmentStore
             ? { attachmentStore: services.attachmentStore }
             : {}),
@@ -246,6 +249,7 @@ export function createRuntimeRegistry(
           usage: usageService,
 	          ...(core.activeOptions.runtime ? { runtime: core.activeOptions.runtime } : {}),
 	          ...(services.memoryStore ? { memoryStore: services.memoryStore } : {}),
+	          ...(services.memoryFeedback ? { memoryFeedback: services.memoryFeedback } : {}),
           attachmentStore: () => services.attachmentStore,
           artifactStore,
           nowIso

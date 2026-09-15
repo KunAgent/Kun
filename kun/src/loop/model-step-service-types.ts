@@ -21,6 +21,7 @@ import type { TurnContextResolver } from './turn-context-resolver.js'
 import type { TurnExecutionFailure } from './turn-execution-types.js'
 import type { TokenEconomyConfig } from './token-economy.js'
 import type { TurnLimitsConfig } from './turn-limits.js'
+import type { MemoryRetrievalFeedbackTarget } from '../memory/memory-retrieval-feedback.js'
 
 export type ModelStepServiceDeps = {
   threadStore: ThreadStore
@@ -32,6 +33,7 @@ export type ModelStepServiceDeps = {
   prefix: ImmutablePrefix
   ids: Pick<IdGenerator, 'next'>
   nowIso: () => string
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   modelCapabilities?: (model: string, providerId?: string) => ModelCapabilityMetadata
   activePlanContext?: GuiPlanContext
   tokenEconomy?: TokenEconomyConfig

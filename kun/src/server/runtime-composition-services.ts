@@ -57,6 +57,7 @@ import {
 } from './runtime-factory-config.js'
 import {
   createPersistentAttachmentStore,
+  createPersistentMemoryFeedback,
   createPersistentMemoryStore,
   seedUsageCarryover
 } from './runtime-factory-storage.js'
@@ -287,6 +288,10 @@ export async function createRuntimeServices(
   })
   sessionStore.setEventIndexRebuildWake?.(() => backgroundMaintenance.wake())
   let memoryStore = createPersistentMemoryStore(core.activeOptions, nowIso)
+  let memoryFeedback = createPersistentMemoryFeedback(core.activeOptions, memoryStore)
+  await memoryFeedback?.ready().catch((error) => {
+    console.warn('[kun] memory feedback initialization failed:', error)
+  })
   const memoryDistillationPending = core.activeOptions.serviceManager
     ? new ManagerRemoteMemoryDistillationPendingStore(core.activeOptions.serviceManager)
     : new MemoryDistillationPendingStore({ dataDir: core.activeOptions.dataDir, nowIso })
@@ -515,6 +520,8 @@ export async function createRuntimeServices(
     set attachmentStore(value: typeof attachmentStore) { attachmentStore = value },
     get memoryStore() { return memoryStore },
     set memoryStore(value: typeof memoryStore) { memoryStore = value },
+    get memoryFeedback() { return memoryFeedback },
+    set memoryFeedback(value: typeof memoryFeedback) { memoryFeedback = value },
     get webProviders() { return webProviders },
     set webProviders(value: typeof webProviders) { webProviders = value },
     get imageGenProviders() { return imageGenProviders },

@@ -25,6 +25,7 @@ import { InflightTracker } from '../loop/inflight-tracker.js'
 import { SteeringQueue } from '../loop/steering-queue.js'
 import type { TokenEconomyConfig } from '../loop/token-economy.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import type { MemoryRetrievalFeedbackTarget } from '../memory/memory-retrieval-feedback.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { ModelClient } from '../ports/model-client.js'
@@ -112,6 +113,7 @@ export type ChildAgentExecutorOptions = {
   skillRuntime?: SkillRuntime
   instructionRuntime?: InstructionRuntime
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   attachmentStore?: () => AttachmentStore | undefined
   artifactStore?: ArtifactStore
   /** Runtime-owned approval channel shared with the HTTP decision endpoint. */
@@ -345,6 +347,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         : {}),
       ...(input.fastContext !== true && options.memoryStore && input.security?.memoryEnabled !== false
         ? { memoryStore: options.memoryStore }
+        : {}),
+      ...(input.fastContext !== true && options.memoryFeedback && input.security?.memoryEnabled !== false
+        ? { memoryFeedback: options.memoryFeedback }
         : {}),
       ...(attachmentStore ? { attachmentStore } : {}),
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {}),

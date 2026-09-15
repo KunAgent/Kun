@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
+import { MemoryFeedbackConfig } from './memory-feedback.js'
 
 import {
   CapabilityToggleConfig,
@@ -52,7 +53,8 @@ export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   maxInjectedRecords: z.number().int().positive().default(8),
   distillation: z.object({
     enabled: z.boolean().default(false)
-  }).strict().default(() => ({ enabled: false }))
+  }).strict().default(() => ({ enabled: false })),
+  feedback: MemoryFeedbackConfig.optional()
 }).strict()
 export type MemoryCapabilityConfig = z.infer<typeof MemoryCapabilityConfig>
 
