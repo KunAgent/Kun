@@ -277,12 +277,15 @@ function makeLock() {
 function makeEvidence() {
   const metrics = {
     pairAccuracy: 0.5,
+    pairCount: 1,
     recallAtK: 1,
     precisionAtK: 1,
     meanReciprocalRank: 1,
     abstentionAccuracy: 1,
     explicitForbiddenSelections: 0,
     authorizationOrLifecycleViolations: 0,
+    rankedCaseCount: 1,
+    noResultCaseCount: 0,
     caseCount: 1
   }
   const partition = {

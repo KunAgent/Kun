@@ -268,12 +268,15 @@ export const MemoryFeedbackTiebreakerCandidateLock = z.object({
 
 const MetricSet = z.object({
   pairAccuracy: z.number().min(0).max(1),
+  pairCount: z.number().int().nonnegative(),
   recallAtK: z.number().min(0).max(1),
   precisionAtK: z.number().min(0).max(1),
   meanReciprocalRank: z.number().min(0).max(1),
   abstentionAccuracy: z.number().min(0).max(1),
   explicitForbiddenSelections: z.number().int().nonnegative(),
   authorizationOrLifecycleViolations: z.number().int().nonnegative(),
+  rankedCaseCount: z.number().int().nonnegative(),
+  noResultCaseCount: z.number().int().nonnegative(),
   caseCount: z.number().int().positive()
 }).strict()
 

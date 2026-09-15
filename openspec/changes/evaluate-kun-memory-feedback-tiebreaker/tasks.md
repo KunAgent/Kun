@@ -22,7 +22,7 @@
 
 ## 4. Metrics, Locking, And Holdout Discipline
 
-- [ ] 4.1 Report near-tie pair-ordering accuracy separately from Recall@K, Precision@K, MRR, abstention, explicit hard-negative selection, and authorization violations; verify metric denominators and per-case deltas on hand-calculated fixtures.
+- [x] 4.1 Report near-tie pair-ordering accuracy separately from Recall@K, Precision@K, MRR, abstention, explicit hard-negative selection, and authorization violations; verify metric denominators and per-case deltas on hand-calculated fixtures.
 - [ ] 4.2 Add deterministic paired-bootstrap intervals using the locked seed, resample count, confidence level, and unit; verify repeated runs produce identical intervals and lower-bound results.
 - [ ] 4.3 Run the complete finite grid on development data and write a calibration report containing every evaluated configuration; verify configuration ordering and selected ids are reproducible.
 - [ ] 4.4 Apply the pre-registered selection rule and write one candidate lock containing artifact hashes, evaluator identity, selected candidate, gates, seed, and resource ceilings; verify tampering with any dependency invalidates the lock.
