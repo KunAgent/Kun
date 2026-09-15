@@ -7,6 +7,7 @@ import {
 } from './memory-feedback-evaluation.js'
 import {
   loadMemoryFeedbackFixtures,
+  DEFAULT_MEMORY_FEEDBACK_FIXTURE_PATHS,
   memoryFeedbackFixtureSha256,
   type MemoryFeedbackFixtureDataset
 } from './memory-feedback-fixtures.js'
@@ -96,12 +97,13 @@ export const DEFAULT_MEMORY_FEEDBACK_EVALUATION_PLAN_PATHS = Object.freeze({
 })
 
 export async function loadMemoryFeedbackEvaluationPlan(
-  paths = DEFAULT_MEMORY_FEEDBACK_EVALUATION_PLAN_PATHS
+  paths = DEFAULT_MEMORY_FEEDBACK_EVALUATION_PLAN_PATHS,
+  fixturePaths = DEFAULT_MEMORY_FEEDBACK_FIXTURE_PATHS
 ): Promise<{ plan: MemoryFeedbackEvaluationPlan; fixture: MemoryFeedbackFixtureDataset; sourceHashes: { manifest: string; fixture: string } }> {
   const [manifestText, checksumsText, fixture] = await Promise.all([
     readFile(paths.manifest, 'utf8'),
     readFile(paths.checksums, 'utf8'),
-    loadMemoryFeedbackFixtures()
+    loadMemoryFeedbackFixtures(fixturePaths)
   ])
   const plan = Plan.parse(parseJson(manifestText, 'evaluation plan'))
   const checksums = Checksums.parse(parseJson(checksumsText, 'evaluation checksums'))
