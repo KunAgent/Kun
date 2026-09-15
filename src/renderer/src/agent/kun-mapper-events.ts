@@ -122,6 +122,7 @@ export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
       return block.questions.length > 0 ? block : null
     }
     case 'compaction':
+    case 'context_window':
       return compactionBlockFromItem(item)
     case 'review':
       return reviewBlockFromItem(item)
@@ -188,15 +189,17 @@ export function childLifecycleToolEventFromRuntimeEvent(event: CoreRuntimeEventJ
 }
 
 export function compactionFromItem(item: CoreTurnItemJson): CompactionEventPayload {
+  const isWindow = item.kind === 'context_window'
   return {
     itemId: item.id,
     turnId: item.turnId,
-    summary: item.summary?.trim() || 'Context compacted',
+    summary: item.summary?.trim() || (isWindow ? '' : 'Context compacted'),
     status: item.status === 'failed' ? 'error' : item.status === 'running' ? 'running' : 'success',
     createdAt: itemCreatedAt(item),
     messagesBefore: item.replacedTokens,
     detail: item.pinnedConstraints?.length ? item.pinnedConstraints.join('\n') : undefined,
-    auto: item.auto ?? true
+    auto: item.auto ?? true,
+    variant: isWindow ? 'window' : 'summary'
   }
 }
 
@@ -225,15 +228,17 @@ export function compactionFromEvent(
   event: CoreRuntimeEventJson,
   status: CompactionEventPayload['status']
 ): CompactionEventPayload {
+  const isWindow = event.item?.kind === 'context_window'
   return {
-    itemId: event.itemId ?? `compaction_${event.seq ?? Date.now()}`,
+    itemId: event.item?.id ?? event.itemId ?? `compaction_${event.seq ?? Date.now()}`,
     turnId: event.turnId,
-    summary: event.summary ?? 'Context compacted',
+    summary: event.summary ?? (isWindow ? '' : 'Context compacted'),
     status,
     createdAt: event.timestamp,
-    messagesBefore: event.replacedTokens,
+    messagesBefore: event.replacedTokens ?? event.item?.replacedTokens,
     detail: event.pinnedConstraints?.join('\n'),
-    auto: event.auto ?? true
+    auto: event.auto ?? true,
+    variant: isWindow ? 'window' : 'summary'
   }
 }
 

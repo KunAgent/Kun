@@ -5,11 +5,6 @@ import type {
   CoreRuntimeSkillJson, CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
-import type {
-  DelegatedRuntimeState,
-  RequestContextSnapshot,
-  ThreadUsageSnapshot
-} from './thread-runtime-types'
 import type { CoreModelRequestFailureJson } from './kun-contract'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { RendererChartSpec } from './chart-spec-adapter'
@@ -390,6 +385,9 @@ export type CompactionBlock = {
   auto?: boolean
   messagesBefore?: number
   messagesAfter?: number
+  // 'window' marks a committed context-window checkpoint; it renders the fixed
+  // marker label and no generated summary, unlike summary compaction.
+  variant?: 'summary' | 'window'
 }
 
 export type ReviewTarget =
@@ -612,6 +610,7 @@ export type CompactionEventPayload = {
   messagesBefore?: number
   messagesAfter?: number
   createdAt?: string
+  variant?: 'summary' | 'window' // see CompactionBlock.variant
 }
 
 export type ReviewEventPayload = {

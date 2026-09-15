@@ -16,5 +16,6 @@
   "writeConversationLockedRunning": "Conversation actions are locked while this resource has a running task.",
   "writeConversationWorkflowLocked": "This review whiteboard stays bound to its workflow conversation.",
   "writeConversationArchiveTitle": "Archive conversation?",
-  "writeConversationArchiveDescription": "The conversation will leave this resource's active history. You can restore it from archived conversations."
+  "writeConversationArchiveDescription": "The conversation will leave this resource's active history. You can restore it from archived conversations.",
+  "contextWindowSwitched": "Switched context window"
 }

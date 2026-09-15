@@ -159,7 +159,7 @@ describe('SettingsTabs', () => {
     expect(renderedPanels[1]?.props.className).toContain('hidden')
   })
 
-  it('can size tabs to readable labels while retaining horizontal scrolling', () => {
+  it('sizes laboratory tabs to readable labels and wraps instead of clipping', () => {
     let renderer!: ReactTestRenderer
     act(() => {
       renderer = create(createElement(SettingsTabs<TabId>, {
@@ -173,8 +173,8 @@ describe('SettingsTabs', () => {
     })
 
     const tablist = renderer.root.findByProps({ role: 'tablist' })
-    expect(tablist.props.className).toContain('auto-cols-max')
-    expect(tablist.props.className).toContain('overflow-x-auto')
+    expect(tablist.props.className).toContain('grid-cols-[repeat(auto-fit,minmax(9.5rem,max-content))]')
+    expect(tablist.props.className).not.toContain('overflow-x-auto')
     expect(tabs(renderer).every((tab) => tab.props.className.includes('min-w-max'))).toBe(true)
     expect(tabs(renderer).flatMap((tab) => tab.findAllByType('span'))
       .every((label) => !label.props.className.includes('truncate'))).toBe(true)

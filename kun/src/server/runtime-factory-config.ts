@@ -8,6 +8,8 @@ import {
   AtomicJsonFile
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import type { ContextWindowModeSource } from '../adapters/tool/context-window-tool-provider.js'
+import type { ContextWindowMode } from '../contracts/context-windows.js'
 
 export function mergeRuntimeConfigApplyOptions(
   current: KunServeRuntimeOptions,
@@ -73,6 +75,24 @@ export function modelRequestCaptureDefaultEnabled(
   options: Pick<KunServeRuntimeOptions, 'runtime'>
 ): boolean {
   return options.runtime?.llmDebug?.defaultThreadCaptureEnabled === true
+}
+
+/**
+ * Live-config fallback for the turn-modes registry. Turn admission freezes
+ * the accepted mode per turn; only threads without any snapshot (or brand
+ * new turns) read the current effective option here.
+ */
+export function liveContextWindowMode(
+  read: () => KunServeRuntimeOptions
+): () => ContextWindowMode {
+  return () => read().contextCompaction?.windowModeEnabled === true ? 'windows' : 'summary'
+}
+
+/** Frozen per-call mode resolution for the window tool provider. */
+export function contextWindowModeFor(modes: {
+  modeFor(threadId: string, turnId: string | undefined): ContextWindowMode
+}): ContextWindowModeSource {
+  return (context) => modes.modeFor(context.threadId, context.turnId)
 }
 
 export async function persistRuntimeMcpConfig(

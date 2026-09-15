@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   isPublicTurnItem,
+  ContextWindowTurnItem,
   TurnItem,
   UserInputAnswerSchema,
   UserInputQuestionSchema,
@@ -76,6 +77,7 @@ export const RuntimeEventKind = z.enum([
   'user_input_resolved',
   'compaction_started',
   'compaction_completed',
+  'context_window',
   'goal_updated',
   'goal_cleared',
   'todos_updated',
@@ -427,6 +429,13 @@ export const CompactionEvent = RuntimeEventBase.extend({
 })
 export type CompactionEvent = z.infer<typeof CompactionEvent>
 
+export const ContextWindowEvent = RuntimeEventBase.extend({
+  kind: z.literal('context_window'),
+  /** Checkpoint item snapshot; replay reconstructs it once in seq order. */
+  item: ContextWindowTurnItem
+})
+export type ContextWindowEvent = z.infer<typeof ContextWindowEvent>
+
 export const GoalEvent = RuntimeEventBase.extend({
   kind: z.enum(['goal_updated', 'goal_cleared']),
   goal: ThreadGoalSchema.nullable().optional(),
@@ -594,6 +603,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   SourceToolPageEvent,
   ToolCatalogEvent,
   CompactionEvent,
+  ContextWindowEvent,
   GoalEvent,
   TodoEvent,
   BashSessionEvent,

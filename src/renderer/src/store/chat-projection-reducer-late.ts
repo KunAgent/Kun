@@ -90,6 +90,7 @@ export function reduceLateChatProjection(
           auto: event.auto ?? current.auto,
           messagesBefore: event.messagesBefore ?? current.messagesBefore,
           messagesAfter: event.messagesAfter ?? current.messagesAfter,
+          variant: event.variant ?? current.variant,
           createdAt: current.createdAt ?? event.createdAt
         }
         return { ...base, blocks, error: context.clearRecoveringError(state.error) }
@@ -104,7 +105,8 @@ export function reduceLateChatProjection(
         detail: event.detail,
         auto: event.auto,
         messagesBefore: event.messagesBefore,
-        messagesAfter: event.messagesAfter
+        messagesAfter: event.messagesAfter,
+        variant: event.variant
       }
       const blocks = upsertProjectedTimelineBlock(state, block)
       if (blocks === state.blocks) return base

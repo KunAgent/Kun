@@ -38,6 +38,18 @@ import {
   ThreadLifecycleFence,
   LlmDebugRecorder,
   ThreadService,
+  ContextWindowService,
+  ContextWindowNotes,
+  ContextWindowTurnModes,
+  ContextWindowTransitionCoordinator,
+  ContextWindowBudget,
+  ContextWindowStateRestore,
+  FileContextWindowStateStore,
+  countOrdinaryWorkItems,
+  FileContextWindowStore,
+  CONTEXT_WINDOWS_NOTE_FILE_MAX_BYTES,
+  CONTEXT_WINDOWS_NOTE_MAX_FILES_PER_THREAD,
+  CONTEXT_WINDOWS_NOTE_TOTAL_MAX_BYTES,
   FileProjectBoardStore,
   ProjectBoardService,
   UsageService,
@@ -45,6 +57,7 @@ import {
   type RuntimeDataDirLease
 } from './runtime-factory-dependencies.js'
 import {
+  liveContextWindowMode,
   llmDebugCaptureEnabled,
   modelRequestCaptureDefaultEnabled,
   tokenEconomyConfigForOptions
@@ -117,6 +130,33 @@ export async function createRuntimeCore(
     dataDir: activeOptions.dataDir
   })
   const threadActivity = new ThreadActivityRegistry()
+  const contextWindowModes = new ContextWindowTurnModes(
+    liveContextWindowMode(() => activeOptions)
+  )
+  const contextWindowBudget = new ContextWindowBudget({
+    profiles: modelProfiles,
+    nowIso
+  })
+  const contextWindowNotes: ContextWindowNotes = new ContextWindowNotes({
+    store: new FileContextWindowStore({
+      dataDir: activeOptions.dataDir,
+      limits: {
+        maxFileBytes: CONTEXT_WINDOWS_NOTE_FILE_MAX_BYTES,
+        maxFilesPerThread: CONTEXT_WINDOWS_NOTE_MAX_FILES_PER_THREAD,
+        maxTotalBytes: CONTEXT_WINDOWS_NOTE_TOTAL_MAX_BYTES
+      }
+    }),
+    // Version stamps need the thread's public history position at commit
+    // time so a fork can copy only the revisions available at the fork
+    // point; the closure resolves once `contextWindows` is assigned below.
+    commitPosition: (threadId): Promise<number> => contextWindows.historyPosition(threadId)
+  })
+  const contextWindows: ContextWindowService = new ContextWindowService({
+    sessionStore,
+    notes: contextWindowNotes,
+    ids,
+    nowIso
+  })
   const observers = [
     threadActivity,
     ...(agentObservability ? [agentObservability] : [])
@@ -129,6 +169,35 @@ export async function createRuntimeCore(
     lifecycleFence,
     observers
   })
+  const contextWindowState = new FileContextWindowStateStore({ dataDir: activeOptions.dataDir })
+  const contextWindowStateRestore = new ContextWindowStateRestore({
+    store: contextWindowState,
+    modes: contextWindowModes,
+    budget: contextWindowBudget,
+    sessionStore,
+    nowIso
+  })
+  const contextWindowTransition = new ContextWindowTransitionCoordinator({
+    contextWindows,
+    events,
+    modes: contextWindowModes,
+    budget: contextWindowBudget,
+    ids,
+    sessionStore,
+    stateRestore: contextWindowStateRestore,
+    hasPendingInteractions: (threadId, excludedCallId) =>
+      approvalGate.pending(threadId).length > 0 ||
+      userInputGate.pending(threadId).length > 0 ||
+      inflight.list().some((record) =>
+        record.threadId === threadId && record.kind === 'tool' && record.callId !== excludedCallId),
+    requestItemCount: async (threadId) =>
+      countOrdinaryWorkItems(await sessionStore.loadItems(threadId)),
+    committedOperation: (threadId, operationId) => contextWindows.hasWindowOperation(threadId, operationId)
+  })
+  // Late binding: restart restore completes the durable window initialization
+  // for the restored checkpoint before any model request is served.
+  contextWindowStateRestore.ensureInitialization = (checkpoint) =>
+    contextWindowTransition.ensureInitialization(checkpoint)
   let prefix = createImmutablePrefix({
     systemPrompt: KUN_SYSTEM_PROMPT,
     pinnedConstraints: [
@@ -172,12 +241,17 @@ export async function createRuntimeCore(
       eventBus.clearThread(threadId)
       await Promise.all([
         ...(llmDebug ? [llmDebug.deleteThread(threadId)] : []),
-        delegatedSessions.invalidate(threadId)
+        delegatedSessions.invalidate(threadId),
+        contextWindows.deleteThreadData(threadId),
+        contextWindowState.deleteThreadData(threadId)
       ])
     },
     onStatusChanged: (threadId, status) => handleGraphThreadStatus?.(threadId, status),
     onForked: (sourceThreadId, targetThreadId) =>
-      handleGraphThreadFork?.(sourceThreadId, targetThreadId)
+      Promise.all([
+        handleGraphThreadFork?.(sourceThreadId, targetThreadId),
+        contextWindows.forkThreadData(sourceThreadId, targetThreadId)
+      ]).then(() => undefined)
   })
   const projectBoardStore = new FileProjectBoardStore({
     dataDir: options.dataDir,
@@ -297,6 +371,11 @@ export async function createRuntimeCore(
     allocateSeq,
     llmDebug,
     agentObservability,
+    contextWindows,
+    contextWindowModes,
+    contextWindowTransition,
+    contextWindowBudget,
+    contextWindowStateRestore,
     events,
     threadActivity,
     prefix,

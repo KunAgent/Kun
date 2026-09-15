@@ -464,6 +464,7 @@ export function describeProcessBlock(
     return block.meta?.displayText?.trim() || t('backgroundSubagentNotice.title', { defaultValue: 'Background subagent completed' })
   }
   if (block.kind === 'compaction') {
+    if (block.variant === 'window') return t('contextWindowSwitched')
     if (block.status === 'running') return t('compactionRunning')
     if (block.status === 'error') return block.summary || t('compactionFailed')
     if (typeof block.messagesBefore === 'number' && typeof block.messagesAfter === 'number') {

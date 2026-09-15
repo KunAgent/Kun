@@ -95,6 +95,8 @@ function projectItem(item: TurnItem): Record<string, unknown> {
       }
     case 'compaction':
       return { ...base, summary: boundedGraphSupervisionText(item.summary) }
+    case 'context_window':
+      return { ...base, windowId: item.windowId, reason: item.reason }
     case 'review':
       return {
         ...base,

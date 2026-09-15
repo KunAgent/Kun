@@ -304,6 +304,51 @@ export const CompactionTurnItem = TurnItemBase.extend({
 })
 export type CompactionTurnItem = z.infer<typeof CompactionTurnItem>
 
+export const ContextWindowTransitionReasonSchema = z.enum([
+  'model',
+  'pressure',
+  'overflow',
+  'manual-summary'
+])
+export type ContextWindowTransitionReason = z.infer<typeof ContextWindowTransitionReasonSchema>
+
+/** Position in retained history before which a window cut happened. */
+export const ContextWindowSplitPositionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('item'),
+    itemId: z.string().min(1)
+  }).strict(),
+  z.object({
+    kind: z.literal('seq'),
+    seq: z.number().int().nonnegative()
+  }).strict()
+])
+export type ContextWindowSplitPosition = z.infer<typeof ContextWindowSplitPositionSchema>
+
+/**
+ * Durable, versioned boundary committed when the active context window
+ * changes. Unlike compaction it never carries a generated summary: the
+ * boundary is fully described by its own fields and old items stay
+ * retrievable through the history tools.
+ */
+export const ContextWindowTurnItem = TurnItemBase.extend({
+  kind: z.literal('context_window'),
+  schemaVersion: z.literal(1),
+  windowId: z.string().min(1),
+  /** null/absent only for window 0 (first enablement over retained history). */
+  previousWindowId: z.string().min(1).nullable().optional(),
+  reason: ContextWindowTransitionReasonSchema,
+  /** Session-store CAS revision captured at the cut. */
+  sourceHistoryRevision: z.number().int().nonnegative(),
+  splitBefore: ContextWindowSplitPositionSchema,
+  /** Reference to the rebuilt initial context recorded for the new window. */
+  initializationRef: z.string().min(1),
+  /** Idempotent operation identity; replays return the committed result. */
+  operationId: z.string().min(1),
+  replacedTokens: z.number().int().nonnegative()
+})
+export type ContextWindowTurnItem = z.infer<typeof ContextWindowTurnItem>
+
 export const ReviewTurnItem = TurnItemBase.extend({
   kind: z.literal('review'),
   target: ReviewTargetSchema,
@@ -336,6 +381,7 @@ export const TurnItem = z.discriminatedUnion('kind', [
   ApprovalTurnItem,
   UserInputTurnItem,
   CompactionTurnItem,
+  ContextWindowTurnItem,
   ReviewTurnItem,
   ErrorTurnItem
 ])

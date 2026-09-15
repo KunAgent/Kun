@@ -184,6 +184,29 @@ export {
   ThreadLifecycleFence
 } from '../services/thread-lifecycle-fence.js'
 export { LlmDebugRecorder } from '../services/llm-debug-recorder.js'
+export { ContextWindowService } from '../services/context-window-service.js'
+export { ContextWindowNotes } from '../services/context-window-notes.js'
+export { FileContextWindowStore } from '../adapters/file/file-context-window-store.js'
+export { buildContextWindowToolProviders } from '../adapters/tool/context-window-tool-provider.js'
+export { ContextWindowBudget } from '../loop/context-window-budget.js'
+export { ContextWindowTurnModes } from '../services/context-window-turn-modes.js'
+export {
+  ContextWindowTransitionCoordinator,
+  countOrdinaryWorkItems,
+  exclusiveNewContextBatchError
+} from '../services/context-window-transition-coordinator.js'
+export {
+  ContextWindowStateRestore,
+  type ContextWindowStateStore
+} from '../services/context-window-state.js'
+export { FileContextWindowStateStore } from '../adapters/file/file-context-window-state.js'
+export { ContextWindowStrategyCoordinator } from '../loop/context-window-strategy.js'
+export { buildWindowInitializationText } from '../services/context-window-initialization.js'
+export {
+  CONTEXT_WINDOWS_NOTE_FILE_MAX_BYTES,
+  CONTEXT_WINDOWS_NOTE_MAX_FILES_PER_THREAD,
+  CONTEXT_WINDOWS_NOTE_TOTAL_MAX_BYTES
+} from '../contracts/context-windows.js'
 export { waitForWorkspaceCheckpoint } from '../services/workspace-checkpoint-gate.js'
 export { ThreadService } from '../services/thread-service.js'
 export { ProjectBoardService } from '../services/project-board-service.js'

@@ -168,6 +168,7 @@ function timelinePreviewItem(item: TurnItem, maxBytes: number): TurnItem {
       }
     case 'goal_context':
     case 'interruption_note':
+    case 'context_window':
       return item
   }
 }
@@ -263,6 +264,22 @@ function minimalTimelineItem(item: TurnItem): TurnItem {
         status: 'completed',
         sourceTurnId: truncateText(item.sourceTurnId, 1_024),
         text: marker
+      }
+    case 'context_window':
+      return {
+        ...minimalTimelineItemBase(item),
+        kind: item.kind,
+        schemaVersion: item.schemaVersion,
+        windowId: truncateText(item.windowId, 1_024),
+        previousWindowId: item.previousWindowId
+          ? truncateText(item.previousWindowId, 1_024)
+          : item.previousWindowId,
+        reason: item.reason,
+        sourceHistoryRevision: item.sourceHistoryRevision,
+        splitBefore: item.splitBefore,
+        initializationRef: truncateText(item.initializationRef, 1_024),
+        operationId: truncateText(item.operationId, 1_024),
+        replacedTokens: item.replacedTokens
       }
   }
 }

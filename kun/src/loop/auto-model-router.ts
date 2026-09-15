@@ -314,6 +314,8 @@ function routerTextForItem(item: TurnItem): string {
       return `[tool result] ${typeof item.output === 'string' ? item.output : JSON.stringify(item.output)}`
     case 'compaction':
       return item.summary
+    case 'context_window':
+      return `[context window: ${item.windowId}]`
     case 'approval':
       return `[approval: ${item.toolName}] ${item.summary}`
     case 'user_input':

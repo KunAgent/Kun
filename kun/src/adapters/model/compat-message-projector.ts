@@ -339,6 +339,10 @@ class CompatMessageProjector {
               [COMPAT_HISTORY_CONTEXT]: true
             }
           : null
+      // A window boundary carries no summary text; the new window's history
+      // is rebuilt from the initialization reference, so nothing is forwarded.
+      case 'context_window':
+        return null
       case 'review':
         return item.status === 'completed' && item.reviewText?.trim()
           ? {

@@ -277,6 +277,43 @@ describe('Kun runtime config service', () => {
     expect(body.modelSelection).toBeUndefined()
   })
 
+  it('projects the window mode toggle into persisted and hot-applied config', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-window-mode-'))
+    const base = normalizeAppSettings({} as AppSettingsV1)
+    const project = async (enabled: boolean): Promise<RuntimeConfigApplyPayload> => {
+      const defaults = defaultKunRuntimeSettings()
+      const runtime = {
+        ...defaults,
+        contextCompaction: {
+          ...defaults.contextCompaction,
+          windowModeEnabled: enabled
+        }
+      }
+      const settings = normalizeAppSettings({
+        ...base,
+        provider: defaultModelProviderSettings(),
+        agents: { kun: runtime }
+      })
+      const config = await syncGuiManagedKunConfig(dataDir, runtime)
+      expect(config.contextCompaction?.windowModeEnabled).toBe(enabled)
+      expect(config.contextCompaction?.summaryMaxTokens).toBe(
+        defaults.contextCompaction.summaryMaxTokens
+      )
+      return buildManagedRuntimeHotApplyBody(settings, config)
+    }
+
+    try {
+      const enabledBody = await project(true)
+      expect(enabledBody.contextCompaction?.windowModeEnabled).toBe(true)
+      expect(enabledBody.contextCompaction?.summaryMaxTokens).toBe(2_048)
+
+      const disabledBody = await project(false)
+      expect(disabledBody.contextCompaction?.windowModeEnabled).toBe(false)
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('maps conversation visualization settings into persisted and hot-applied config', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-visualization-'))
     const base = normalizeAppSettings({} as AppSettingsV1)

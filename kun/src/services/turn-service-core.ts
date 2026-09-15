@@ -29,6 +29,9 @@ import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { InflightTracker } from '../loop/inflight-tracker.js'
 import type { SteeringQueue } from '../loop/steering-queue.js'
+import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import type { ContextWindowTurnModes } from './context-window-turn-modes.js'
+import type { ContextWindowService } from './context-window-service.js'
 import { ContextCompactor, extractSkillPins } from '../loop/context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
@@ -93,6 +96,15 @@ export type TurnServiceDeps = {
   executionLeases?: ThreadExecutionLeasePort
   /** Dispose machine-local continuation state after a successful manual compaction. */
   onCompacted?: (threadId: string) => Promise<void>
+  /** Per-turn context-window mode snapshots frozen at turn admission. */
+  contextWindowModes?: ContextWindowTurnModes
+  /** Window service used to register summary boundaries after manual compaction. */
+  contextWindows?: ContextWindowService
+  /**
+   * Resolve effective model capabilities for the route a turn would use.
+   * Window-mode admission fails closed when the route cannot execute tools.
+   */
+  modelCapabilities?: (model: string, providerId?: string) => ModelCapabilityMetadata
   /** Resolve durable Graph ownership without coupling TurnService to the Graph store. */
   resolveGraphLeadRun?: (input: {
     threadId: string
