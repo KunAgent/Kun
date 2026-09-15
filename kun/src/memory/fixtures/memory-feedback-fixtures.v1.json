@@ -115,13 +115,40 @@
   ],
   "cases": [
     {
-      "id": "case_workspace_a",
+      "id": "case_workspace_a_concise_port",
       "query": "Keep fixture workspace A output concise and use current fixture port.",
       "workspace": "fixture-workspace-a",
       "candidateIds": ["mem_feedback_frequent", "mem_feedback_confirmed", "mem_feedback_replacement", "mem_feedback_disabled", "mem_feedback_cross_scope"],
       "expectedIds": ["mem_feedback_confirmed", "mem_feedback_replacement"],
       "forbiddenIds": ["mem_feedback_disabled", "mem_feedback_cross_scope"],
       "limit": 2
+    },
+    {
+      "id": "case_workspace_a_command",
+      "query": "Use the stable package command for fixture workspace A.",
+      "workspace": "fixture-workspace-a",
+      "candidateIds": ["mem_feedback_frequent", "mem_feedback_confirmed", "mem_feedback_replacement", "mem_feedback_disabled", "mem_feedback_cross_scope"],
+      "expectedIds": ["mem_feedback_frequent"],
+      "forbiddenIds": ["mem_feedback_disabled", "mem_feedback_cross_scope"],
+      "limit": 1
+    },
+    {
+      "id": "case_workspace_a_port",
+      "query": "Use the current fixture port.",
+      "workspace": "fixture-workspace-a",
+      "candidateIds": ["mem_feedback_frequent", "mem_feedback_confirmed", "mem_feedback_replacement", "mem_feedback_disabled", "mem_feedback_cross_scope"],
+      "expectedIds": ["mem_feedback_replacement"],
+      "forbiddenIds": ["mem_feedback_disabled", "mem_feedback_cross_scope"],
+      "limit": 1
+    },
+    {
+      "id": "case_workspace_b_scope",
+      "query": "Which record belongs only to workspace B?",
+      "workspace": "fixture-workspace-b",
+      "candidateIds": ["mem_feedback_frequent", "mem_feedback_confirmed", "mem_feedback_replacement", "mem_feedback_disabled", "mem_feedback_cross_scope"],
+      "expectedIds": ["mem_feedback_cross_scope"],
+      "forbiddenIds": ["mem_feedback_disabled"],
+      "limit": 1
     }
   ]
 }

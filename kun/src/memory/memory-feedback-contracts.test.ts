@@ -138,7 +138,7 @@ describe('anonymous memory feedback fixtures', () => {
     const byId = new Map(dataset.records.map((record) => [record.id, record]))
     const fixtureText = await readFile(DEFAULT_MEMORY_FEEDBACK_FIXTURE_PATHS.fixture, 'utf8')
 
-    expect(dataset.fixtureSha256).toBe('84b5d0122a09610008ce5766d4e29fa761d26890135ad768094ff32ba9884c9b')
+    expect(dataset.fixtureSha256).toBe('a1268bfbfaa364c5b5d920a100b54edeedd5dbda67c0f525ae340ca5d436f21a')
     expect(memoryFeedbackFixtureSha256(fixtureText.replace(/\n/gu, '\r\n'))).toBe(dataset.fixtureSha256)
     expect(dataset.events.filter((event) => event.kind === 'retrieved')).toHaveLength(5)
     expect(dataset.events.some((event) => event.kind === 'confirmed')).toBe(true)

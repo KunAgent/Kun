@@ -16,8 +16,8 @@ describe('offline memory feedback evaluation', () => {
     const replacement = candidate.rankings.find((item) => item.memoryId === 'mem_feedback_replacement')!
 
     expect(result.version).toBe(MEMORY_FEEDBACK_EVALUATION_VERSION)
-    expect(result.foundation.queryCount).toBe(1)
-    expect(result.candidate.queryCount).toBe(1)
+    expect(result.foundation.queryCount).toBe(4)
+    expect(result.candidate.queryCount).toBe(4)
     expect(frequent.features.retrievalFrequency).toBeCloseTo(
       Math.log1p(3) / Math.log1p(MEMORY_FEEDBACK_RETRIEVAL_LOG_CAP)
     )

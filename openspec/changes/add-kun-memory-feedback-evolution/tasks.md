@@ -39,7 +39,7 @@
 ## 7. Offline Feedback-Ranking Decision
 
 - [x] 7.1 Implement a deterministic evaluator wrapper over the unchanged lexical foundation using separately traced importance, confidence, freshness, `log1p(retrievalCount)`, confirmation, and correction features; verify no evaluator code is imported by production retrieval.
-- [ ] 7.2 Pre-register bounded candidate formulas, relevance/uncertainty/safety/privacy/resource gates, anonymous dev/holdout partitions, and bootstrap lower-bound rules before reading holdout results; verify the manifest and fixture hashes are frozen.
+- [x] 7.2 Pre-register bounded candidate formulas, relevance/uncertainty/safety/privacy/resource gates, anonymous dev/holdout partitions, and bootstrap lower-bound rules before reading holdout results; verify the manifest and fixture hashes are frozen.
 - [ ] 7.3 Run development evaluation, freeze one candidate only if every development gate passes, then run holdout at most once; publish traces and a reproducible go/no-go decision without modifying production weights or adding a dormant ranking flag.
 
 ## 8. Validation and Stage Closeout
