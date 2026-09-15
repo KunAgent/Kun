@@ -4,7 +4,8 @@ import {
 } from '../../memory/memory-feedback-service.js'
 import {
   confirmMemory,
-  correctMemory
+  correctMemory,
+  memoryDiagnostics
 } from './memory.js'
 
 function jsonBody(response: Response | { body: string }): unknown {
@@ -109,5 +110,32 @@ describe('memory feedback routes', () => {
     if (unavailable instanceof Response) throw new Error('expected JSON response')
     expect(unavailable.status).toBe(409)
     expect(jsonBody(unavailable)).toMatchObject({ code: 'conflict' })
+  })
+
+  it('adds bounded feedback diagnostics without changing memory diagnostics', async () => {
+    const response = await memoryDiagnostics(
+      { diagnostics: vi.fn(async () => ({
+        enabled: true,
+        rootDir: 'D:/workspace/.kun/memory',
+        activeCount: 1,
+        tombstoneCount: 0
+      })) } as never,
+      { diagnostics: vi.fn(async () => ({
+        enabled: false,
+        state: 'disabled' as const,
+        projection: 'ready' as const,
+        eventCount: 0,
+        aggregateCount: 0,
+        duplicateCount: 0,
+        malformedCount: 0
+      })) } as never
+    )
+
+    expect(response.status).toBe(200)
+    expect(jsonBody(response)).toMatchObject({
+      enabled: true,
+      activeCount: 1,
+      feedback: { enabled: false, state: 'disabled', eventCount: 0 }
+    })
   })
 })

@@ -89,7 +89,7 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
   })
   router.add('GET', '/v1/memory/diagnostics', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return memoryDiagnostics(runtime.memoryStore)
+    return memoryDiagnostics(runtime.memoryStore, runtime.memoryFeedback)
   })
   router.add('POST', '/v1/memory/:id/confirm', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

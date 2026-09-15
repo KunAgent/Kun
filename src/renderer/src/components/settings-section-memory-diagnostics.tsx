@@ -10,6 +10,7 @@ type Props = {
 
 export function MemoryDiagnosticsPanel({ diagnostics, fallbackRecordCount, t }: Props): ReactElement {
   const retrieval = diagnostics?.lastRetrieval
+  const feedback = diagnostics?.feedback
   const rankings = retrieval?.rankings.slice(0, 8) ?? []
   const indexState = diagnostics?.indexState ?? 'filesystem'
   return (
@@ -46,6 +47,29 @@ export function MemoryDiagnosticsPanel({ diagnostics, fallbackRecordCount, t }: 
                 {diagnostics.backfill?.scanned ?? 0} / {(diagnostics.backfill?.scanned ?? 0) + (diagnostics.backfill?.remaining ?? 0)}
               </div>
             )
+          }
+        />
+      ) : null}
+
+      {feedback ? (
+        <SettingRow
+          title={t('memoryFeedback')}
+          description={t(`memoryFeedbackState_${feedback.state}`)}
+          wideControl
+          control={
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-4">
+                <Metric label={t('memoryFeedbackState')} value={t(`memoryFeedbackState_${feedback.state}`)} />
+                <Metric label={t('memoryFeedbackEvents')} value={feedback.eventCount} />
+                <Metric label={t('memoryFeedbackAggregates')} value={feedback.aggregateCount} />
+                <Metric label={t('memoryFeedbackMalformed')} value={feedback.malformedCount} />
+              </div>
+              {feedback.degradedReason ? (
+                <div className="rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-700/50 dark:bg-amber-500/10 dark:text-amber-200">
+                  {feedback.degradedReason}
+                </div>
+              ) : null}
+            </div>
           }
         />
       ) : null}

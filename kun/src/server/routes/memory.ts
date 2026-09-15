@@ -60,9 +60,14 @@ export async function deleteMemory(store: MemoryStore | undefined, id: string, r
   }
 }
 
-export async function memoryDiagnostics(store: MemoryStore | undefined): Promise<JsonResponse> {
+export async function memoryDiagnostics(
+  store: MemoryStore | undefined,
+  feedback?: MemoryFeedbackRuntime
+): Promise<JsonResponse> {
   if (!store) return jsonResponse({ enabled: false, rootDir: '', activeCount: 0, tombstoneCount: 0, lastInjectedIds: [] })
-  return jsonResponse(await store.diagnostics())
+  const diagnostics = await store.diagnostics()
+  if (!feedback) return jsonResponse(diagnostics)
+  return jsonResponse({ ...diagnostics, feedback: await feedback.diagnostics() })
 }
 
 export async function confirmMemory(

@@ -306,6 +306,17 @@ export type CoreMemoryDiagnosticsJson = {
   staleCount?: number
   backfill?: { running: boolean; scanned: number; remaining: number }
   degradedReason?: string
+  feedback?: {
+    enabled: boolean
+    state: 'disabled' | 'ready' | 'degraded'
+    projection: 'missing' | 'ready' | 'rebuilding' | 'degraded'
+    eventCount: number
+    aggregateCount: number
+    duplicateCount: number
+    malformedCount: number
+    lastCheckpointAt?: string
+    degradedReason?: string
+  }
   lastRetrieval?: {
     timestamp: string
     mode: 'sqlite-fts5' | 'filesystem-fallback'
