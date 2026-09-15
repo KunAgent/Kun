@@ -312,9 +312,9 @@ export abstract class TuiControllerCommands extends TuiControllerIntegrations {
   }
 
   async importAgentContext(args?: string): Promise<void> {
-    const { tools, unknownTools, unknownFlags, scopes, dryRun } = parseImportArgs(args, supportedToolIds())
+    const { tools, unknownTools, unknownFlags, scopes, dryRun, force } = parseImportArgs(args, supportedToolIds())
     if (unknownFlags.length > 0) {
-      this.notify(`Unknown flag(s): ${unknownFlags.join(', ')}. Supported: --global, --workspace, --dry-run.`, 'error')
+      this.notify(`Unknown flag(s): ${unknownFlags.join(', ')}. Supported: --global, --workspace, --dry-run, --force.`, 'error')
       return
     }
     if (unknownTools.length > 0) {
@@ -329,6 +329,7 @@ export abstract class TuiControllerCommands extends TuiControllerIntegrations {
         homeDir: homedir(),
         adapters: IMPORT_ADAPTERS,
         scopes,
+        force,
         ...(tools.length > 0 ? { tools } : {})
       })
       if (dryRun) {

@@ -43,7 +43,7 @@ describe('import-adapters (round 1)', () => {
     expect(text).toContain('Base rule.')
     expect(text).toContain('Local rule.')
     expect(text).toContain('Rule A.')
-    expect(text).toContain('<!-- kun:import:begin tool=claude-code -->')
+    expect(text).toContain('<!-- kun:import:begin tool=claude-code sha=')
   })
 
   it('imports Claude Code global CLAUDE.md into ~/.kun/AGENTS.md', async () => {
@@ -86,7 +86,7 @@ describe('import-adapters (round 1)', () => {
     const text = await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')
 
     expect(text).toContain('Global codex rule.')
-    expect(text).toContain('<!-- kun:import:begin tool=codex -->')
+    expect(text).toContain('<!-- kun:import:begin tool=codex sha=')
   })
 })
 
@@ -121,7 +121,7 @@ describe('import-adapters (round 2: cursor, gemini)', () => {
     expect(text).toContain('Use tabs.')
     expect(text).toContain('Legacy cursor rule.')
     expect(text).not.toContain('description: style')
-    expect(text).toContain('<!-- kun:import:begin tool=cursor -->')
+    expect(text).toContain('<!-- kun:import:begin tool=cursor sha=')
   })
 
   it('imports Gemini GEMINI.md at workspace and global scope', async () => {

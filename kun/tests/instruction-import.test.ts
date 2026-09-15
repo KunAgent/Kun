@@ -7,6 +7,7 @@ import {
   buildImportPlan,
   describeWarning,
   detectImportSources,
+  isManagedBlockModified,
   MAX_IMPORT_SOURCE_BYTES,
   mergeManagedBlock,
   parseImportArgs,
@@ -19,7 +20,7 @@ const KNOWN: SourceToolId[] = ['claude-code', 'codex', 'cursor']
 describe('parseImportArgs', () => {
   it('defaults to workspace scope, no tools, no dry-run', () => {
     expect(parseImportArgs(undefined, KNOWN)).toEqual({
-      tools: [], unknownTools: [], unknownFlags: [], scopes: ['workspace'], dryRun: false
+      tools: [], unknownTools: [], unknownFlags: [], scopes: ['workspace'], dryRun: false, force: false
     })
   })
 
@@ -281,6 +282,40 @@ describe('instruction-import', () => {
 
     const second = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
     expect(second.targets[0]?.changed).toBe(false)
+  })
+
+  it('writes a content hash in the begin marker and detects a hand-edited block', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Original rule.', 'utf8')
+    const first = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    await applyImportPlan(first, { workspace })
+
+    const written = await readIfExists(join(workspace, 'AGENTS.md'))
+    expect(written).toMatch(/<!-- kun:import:begin tool=claude-code sha=[0-9a-f]+ -->/u)
+    expect(isManagedBlockModified(written, 'claude-code')).toBe(false)
+
+    const tampered = written.replace('Original rule.', 'Hand-edited by user.')
+    expect(isManagedBlockModified(tampered, 'claude-code')).toBe(true)
+  })
+
+  it('skips a hand-edited managed block on re-import and warns, unless forced', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Rule v1.', 'utf8')
+    await applyImportPlan(
+      await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] }),
+      { workspace }
+    )
+    // User hand-edits inside the managed block, then the source changes.
+    const target = join(workspace, 'AGENTS.md')
+    const edited = (await readIfExists(target)).replace('Rule v1.', 'Rule v1 (user tweaked).')
+    await writeFile(target, edited, 'utf8')
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Rule v2.', 'utf8')
+
+    const guarded = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    expect(guarded.warnings.some((w) => w.code === 'block-modified')).toBe(true)
+    expect(guarded.targets[0]?.changed).toBe(false)
+
+    const forced = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'], force: true })
+    expect(forced.warnings.some((w) => w.code === 'block-modified')).toBe(false)
+    expect(forced.targets[0]?.mergedText).toContain('Rule v2.')
   })
 
   it('replaces only its own block and preserves user text and other blocks', () => {
