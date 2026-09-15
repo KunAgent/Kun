@@ -1,8 +1,8 @@
 ## 1. Versioned Contracts And Pre-registration
 
-- [ ] 1.1 Add strict schemas for the P3-B fixture, manifest, calibration report, decision plan, candidate lock, and evidence artifacts; verify unknown fields, unsupported versions, duplicate ids, and invalid hashes are rejected by focused contract tests.
-- [ ] 1.2 Define the baseline-only adjacent-gap calibration procedure, including exact-tie/no-rerank controls, finite grid-size ceiling, boundary inclusivity, group construction, and maximum reorder window; verify a deterministic fixture produces the expected ordered grid.
-- [ ] 1.3 Define the pre-registered candidate family and selection rule for foundation-only, confirmation-aware, and confirmation-plus-correction-aware comparators; verify retrieval frequency is present only as a shadow trace field and cannot affect comparator output.
+- [x] 1.1 Add strict schemas for the P3-B fixture, manifest, calibration report, decision plan, candidate lock, and evidence artifacts; verify unknown fields, unsupported versions, duplicate ids, and invalid hashes are rejected by focused contract tests.
+- [x] 1.2 Define the baseline-only adjacent-gap calibration procedure, including exact-tie/no-rerank controls, finite grid-size ceiling, boundary inclusivity, group construction, and maximum reorder window; verify a deterministic fixture produces the expected ordered grid.
+- [x] 1.3 Define the pre-registered candidate family and selection rule for foundation-only, confirmation-aware, and confirmation-plus-correction-aware comparators; verify retrieval frequency is present only as a shadow trace field and cannot affect comparator output.
 - [ ] 1.4 Define local-benefit, global non-regression, bootstrap, safety, privacy, determinism, and resource gates in the versioned plan before candidate holdout scoring; verify the plan hash changes when any gate or candidate rule changes.
 
 ## 2. Anonymous Decision Data
