@@ -116,10 +116,12 @@
   "cases": [
     {
       "id": "case_workspace_a",
+      "query": "Keep fixture workspace A output concise and use current fixture port.",
       "workspace": "fixture-workspace-a",
       "candidateIds": ["mem_feedback_frequent", "mem_feedback_confirmed", "mem_feedback_replacement", "mem_feedback_disabled", "mem_feedback_cross_scope"],
       "expectedIds": ["mem_feedback_confirmed", "mem_feedback_replacement"],
-      "forbiddenIds": ["mem_feedback_disabled", "mem_feedback_cross_scope"]
+      "forbiddenIds": ["mem_feedback_disabled", "mem_feedback_cross_scope"],
+      "limit": 2
     }
   ]
 }

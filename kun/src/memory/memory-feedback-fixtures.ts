@@ -9,11 +9,14 @@ export const MEMORY_FEEDBACK_FIXTURE_DATASET_ID = 'kun-memory-feedback-anonymous
 
 const FixtureCase = z.object({
   id: z.string().regex(/^case_[a-z0-9_]+$/u),
+  query: z.string().min(1),
   workspace: z.string().min(1),
   candidateIds: z.array(z.string().min(1)).min(1),
   expectedIds: z.array(z.string().min(1)).min(1),
-  forbiddenIds: z.array(z.string().min(1)).min(1)
+  forbiddenIds: z.array(z.string().min(1)).min(1),
+  limit: z.number().int().positive().max(64)
 }).strict()
+export type MemoryFeedbackFixtureCase = z.infer<typeof FixtureCase>
 
 const FixtureFile = z.object({
   schemaVersion: z.literal(1),
@@ -36,7 +39,7 @@ export type MemoryFeedbackFixtureDataset = {
   evaluationNow: string
   records: MemoryRecordValue[]
   events: MemoryFeedbackEvent[]
-  cases: z.infer<typeof FixtureCase>[]
+  cases: MemoryFeedbackFixtureCase[]
   fixtureSha256: string
 }
 
