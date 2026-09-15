@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   applyImportPlan,
   buildImportPlan,
+  describeWarning,
   detectImportSources,
+  MAX_IMPORT_SOURCE_BYTES,
   mergeManagedBlock,
   parseImportArgs,
   type SourceAdapter,
@@ -17,7 +19,7 @@ const KNOWN: SourceToolId[] = ['claude-code', 'codex', 'cursor']
 describe('parseImportArgs', () => {
   it('defaults to workspace scope, no tools, no dry-run', () => {
     expect(parseImportArgs(undefined, KNOWN)).toEqual({
-      tools: [], unknownTools: [], scopes: ['workspace'], dryRun: false
+      tools: [], unknownTools: [], unknownFlags: [], scopes: ['workspace'], dryRun: false
     })
   })
 
@@ -43,6 +45,16 @@ describe('parseImportArgs', () => {
     const parsed = parseImportArgs('claude-code bogus cursor', KNOWN)
     expect(parsed.tools).toEqual(['claude-code', 'cursor'])
     expect(parsed.unknownTools).toEqual(['bogus'])
+  })
+
+  it('collects unknown flags instead of silently ignoring them', () => {
+    const parsed = parseImportArgs('--gloabl', KNOWN)
+    expect(parsed.unknownFlags).toEqual(['--gloabl'])
+  })
+
+  it('accepts the three known flags without flagging them unknown', () => {
+    const parsed = parseImportArgs('--global --workspace --dry-run', KNOWN)
+    expect(parsed.unknownFlags).toEqual([])
   })
 })
 
@@ -122,6 +134,54 @@ describe('instruction-import', () => {
     expect(text).not.toContain('description: x')
   })
 
+  it('adds a non-enforced condition note for a scoped Cursor rule (globs)', async () => {
+    await mkdir(join(workspace, '.cursor', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.cursor', 'rules', 'ts.mdc'), '---\nglobs: "**/*.ts"\n---\nPrefer const.', 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['cursor'] })
+    const text = plan.targets[0]?.mergedText ?? ''
+
+    expect(text).toContain('NOT enforced by Kun')
+    expect(text).toContain('globs=**/*.ts')
+    expect(text).toContain('Prefer const.')
+  })
+
+  it('does not add a condition note for an alwaysApply Cursor rule', async () => {
+    await mkdir(join(workspace, '.cursor', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.cursor', 'rules', 'all.mdc'), '---\nalwaysApply: true\nglobs: "**/*.ts"\n---\nGlobal rule.', 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['cursor'] })
+    const text = plan.targets[0]?.mergedText ?? ''
+
+    expect(text).toContain('Global rule.')
+    expect(text).not.toContain('NOT enforced by Kun')
+  })
+
+  it('preserves list-form globs from scoped Cursor frontmatter', async () => {
+    await mkdir(join(workspace, '.cursor', 'rules'), { recursive: true })
+    await writeFile(
+      join(workspace, '.cursor', 'rules', 'web.mdc'),
+      '---\nglobs:\n  - "**/*.ts"\n  - "**/*.tsx"\n---\nPrefer const.',
+      'utf8'
+    )
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['cursor'] })
+    const text = plan.targets[0]?.mergedText ?? ''
+
+    expect(text).toContain('globs=**/*.ts, **/*.tsx')
+    expect(text).toContain('NOT enforced by Kun')
+  })
+
+  it('marks alwaysApply false as a non-enforced condition', async () => {
+    await mkdir(join(workspace, '.cursor', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.cursor', 'rules', 'manual.mdc'), '---\nalwaysApply: false\n---\nManual rule.', 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['cursor'] })
+
+    expect(plan.targets[0]?.mergedText).toContain('alwaysApply=false')
+    expect(plan.targets[0]?.mergedText).toContain('NOT enforced by Kun')
+  })
+
   it('skips a Codex workspace AGENTS.md that is the target itself', async () => {
     await writeFile(join(workspace, 'AGENTS.md'), 'Existing kun rule.', 'utf8')
 
@@ -167,6 +227,49 @@ describe('instruction-import', () => {
 
     expect(plan.warnings.some((w) => w.code === 'unresolved-import')).toBe(true)
     expect(plan.targets[0]?.mergedText).toContain('@docs/missing.md')
+  })
+
+  it('blocks an @import that resolves outside the workspace and home', async () => {
+    const outside = join(root, 'outside', 'secret.md')
+    await mkdir(join(root, 'outside'), { recursive: true })
+    await writeFile(outside, 'TOP SECRET', 'utf8')
+    await writeFile(join(workspace, 'CLAUDE.md'), `Root.\n@${outside.replace(/\\/gu, '/')}`, 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+
+    expect(plan.warnings.some((w) => w.code === 'out-of-bounds-import')).toBe(true)
+    expect(plan.targets[0]?.mergedText).not.toContain('TOP SECRET')
+  })
+
+  it('blocks a ../ traversal @import above the workspace', async () => {
+    const outside = join(root, 'sibling-secret.md')
+    await writeFile(outside, 'SIBLING SECRET', 'utf8')
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Root.\n@../sibling-secret.md', 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+
+    expect(plan.warnings.some((w) => w.code === 'out-of-bounds-import')).toBe(true)
+    expect(plan.targets[0]?.mergedText).not.toContain('SIBLING SECRET')
+  })
+
+  it('allows an @import inside the home directory', async () => {
+    await mkdir(join(home, 'shared'), { recursive: true })
+    await writeFile(join(home, 'shared', 'rules.md'), 'Home shared rule.', 'utf8')
+    await writeFile(join(workspace, 'CLAUDE.md'), `Root.\n@${join(home, 'shared', 'rules.md').replace(/\\/gu, '/')}`, 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+
+    expect(plan.targets[0]?.mergedText).toContain('Home shared rule.')
+  })
+
+  it('rethrows non-ENOENT errors when reading the target file', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Root rule.', 'utf8')
+    // Make the target a directory so reading it fails with EISDIR, not ENOENT.
+    await mkdir(join(workspace, 'AGENTS.md'), { recursive: true })
+
+    await expect(
+      buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    ).rejects.toThrow()
   })
 
   it('appends a managed block on first import and is idempotent on re-import', async () => {
@@ -217,6 +320,45 @@ describe('instruction-import', () => {
     })
 
     expect(plan.warnings.some((w) => w.code === 'budget-exceeded')).toBe(true)
+  })
+
+  it('still imports an over-budget top-level file but warns it is oversized', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'A'.repeat(200), 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'], maxFileBytes: 64
+    })
+
+    const warning = plan.warnings.find((item) => item.code === 'oversized-source-imported')
+    expect(warning).toBeDefined()
+    expect(warning && describeWarning(warning)).toContain('Imported oversized source')
+    expect(plan.targets[0]?.mergedText).toContain('A'.repeat(200))
+  })
+
+  it('skips a top-level source above the hard source ceiling', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'B'.repeat(2048), 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'],
+      maxFileBytes: 64, maxSourceBytes: 1024
+    })
+
+    expect(plan.warnings.some((w) => w.code === 'oversized-import')).toBe(true)
+    expect(plan.targets[0]?.changed).toBe(false)
+  })
+
+  it('does not allow maxSourceBytes to raise the independent hard ceiling', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'C'.repeat(MAX_IMPORT_SOURCE_BYTES + 1), 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'],
+      maxSourceBytes: MAX_IMPORT_SOURCE_BYTES * 2
+    })
+
+    const warning = plan.warnings.find((item) => item.code === 'oversized-import')
+    expect(warning).toBeDefined()
+    expect(warning && describeWarning(warning)).toContain('Skipped oversized @import')
+    expect(plan.targets[0]?.changed).toBe(false)
   })
 
   it('applies only workspace target and creates ~/.kun for global', async () => {

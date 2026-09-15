@@ -276,7 +276,9 @@ describe('import-adapters (round 4: zed, opencode, kiro)', () => {
 
     expect(text).toContain('Product steering.')
     expect(text).toContain('TS steering.')
-    expect(text).not.toContain('inclusion: fileMatch')
+    expect(text).not.toContain('inclusion: fileMatch\n')
+    expect(text).toContain('NOT enforced by Kun')
+    expect(text).toContain('inclusion=fileMatch(**/*.ts)')
   })
 
   it('exposes all ten tools', () => {
