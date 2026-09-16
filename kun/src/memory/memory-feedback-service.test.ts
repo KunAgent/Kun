@@ -97,6 +97,31 @@ describe('MemoryFeedbackService correction', () => {
     expect(JSON.parse(completedReceipt)).not.toHaveProperty('request')
   })
 
+  it('keeps explicit correction available while feedback collection is disabled', async () => {
+    const harness = await createHarness()
+    await harness.memories.createWithId('mem_disabled_correction', {
+      content: 'Disabled collection correction fixture', scope: 'workspace', workspace: 'workspace-a'
+    })
+    const disabled = new MemoryFeedbackService({
+      dataDir: harness.root,
+      memoryStore: harness.memories,
+      feedbackStore: harness.feedback,
+      config: disabledFeedback,
+      nowIso: () => NOW
+    })
+
+    const result = await disabled.correct({
+      operationId: 'correct-disabled',
+      memoryId: 'mem_disabled_correction',
+      access: { workspace: 'workspace-a' },
+      replacement: { content: 'Corrected while collection is disabled' }
+    })
+
+    expect(result.replayed).toBe(false)
+    expect(await harness.feedback.aggregate('mem_disabled_correction'))
+      .toMatchObject({ correctionCount: 1 })
+  })
+
   it('rejects cross-scope, inactive, and conflicting correction operations', async () => {
     const harness = await createHarness()
     await harness.memories.createWithId('mem_scope', {

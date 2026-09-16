@@ -22,6 +22,7 @@ import { ManagerSharedDataStore } from './shared-data-store.js'
 const roots: string[] = []
 const memoryConfig = MemoryCapabilityConfig.parse({ enabled: true })
 const feedbackConfig = MemoryFeedbackConfig.parse({ enabled: true })
+const disabledFeedback = MemoryFeedbackConfig.parse({ enabled: false })
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -65,6 +66,36 @@ describe('Manager memory feedback ownership', () => {
       )
 
       expect(remoteResult).toEqual(localResult)
+    } finally {
+      await manager.close()
+    }
+  })
+
+  it('keeps explicit correction available while Manager collection is disabled', async () => {
+    const manager = await managerHarness()
+    try {
+      const remoteMemory = new ManagerRemoteMemoryStore(manager.connection, memoryConfig)
+      const remoteFeedback = new ManagerRemoteMemoryFeedback(
+        manager.connection,
+        memoryConfig,
+        disabledFeedback
+      )
+      await remoteMemory.createWithId('mem_disabled_remote', {
+        content: 'Disabled Manager correction fixture',
+        scope: 'workspace',
+        workspace: 'workspace-a'
+      })
+
+      const result = await remoteFeedback.correct({
+        operationId: 'correct-disabled-remote',
+        memoryId: 'mem_disabled_remote',
+        access: { workspace: 'workspace-a' },
+        replacement: { content: 'Corrected while Manager collection is disabled' }
+      })
+
+      expect(result.replayed).toBe(false)
+      await expect(remoteFeedback.aggregate('mem_disabled_remote'))
+        .resolves.toMatchObject({ correctionCount: 1 })
     } finally {
       await manager.close()
     }
