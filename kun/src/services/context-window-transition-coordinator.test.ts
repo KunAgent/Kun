@@ -348,4 +348,68 @@ describe('ContextWindowTransitionCoordinator', () => {
     expect(budget.stateFor('threadA', (committed.output as { windowId: string }).windowId))
       .toMatchObject({ model: 'm' })
   })
+
+  it('replays a committed new_context transition for a retried tool call', async () => {
+    await sessionStore.appendItem('threadA', message('u1', 'task'))
+    const run = coordinator.asToolTransition('m')
+    const toolContext = (callId: string): ToolHostContext => ({
+      threadId: 'threadA',
+      turnId: 'turn-1',
+      workspace: '/tmp',
+      approvalPolicy: 'auto',
+      sandboxMode: 'workspace-write',
+      abortSignal: new AbortController().signal,
+      awaitApproval: async () => 'allow' as const,
+      activeToolCallId: callId
+    })
+
+    const first = await run(toolContext('call_nc1'), {})
+    expect(first.isError).toBeUndefined()
+
+    // Retried execution of the SAME call replays the committed boundary
+    // instead of minting a new operation that the progress guard rejects.
+    const retry = await run(toolContext('call_nc1'), {})
+    expect(retry.isError).toBeUndefined()
+    expect(retry.output).toMatchObject({ replayed: true })
+    expect(
+      (await sessionStore.loadItems('threadA'))
+        .filter((item) => item.kind === 'context_window')
+    ).toHaveLength(1)
+
+    // A genuinely new call still hits the no-progress guard.
+    const fresh = await run(toolContext('call_nc2'), {})
+    expect(fresh.isError).toBe(true)
+    expect(JSON.stringify(fresh.output)).toContain('no model or tool progress')
+  })
+
+  it('keeps the no-progress guard after a coordinator restart via durable history', async () => {
+    await sessionStore.appendItem('threadA', message('u1', 'task'))
+    const first = await coordinator.transition({
+      threadId: 'threadA', turnId: 'turn-1', reason: 'model', operationId: 'op-rs-1'
+    })
+    expect(first.status).toBe('committed')
+
+    // A fresh coordinator (runtime restart) has no in-memory progress marker;
+    // the guard must still see the latest boundary has no ordinary work after
+    // it, derived from the persisted items themselves.
+    const restarted = new ContextWindowTransitionCoordinator({
+      contextWindows,
+      events,
+      modes,
+      ids: new SequentialIdGenerator(),
+      sessionStore,
+      requestItemCount: async (threadId) =>
+        countOrdinaryWorkItems(await sessionStore.loadItems(threadId)),
+      committedOperation: (threadId, operationId) =>
+        contextWindows.hasWindowOperation(threadId, operationId)
+    })
+    const second = await restarted.transition({
+      threadId: 'threadA', turnId: 'turn-1', reason: 'model', operationId: 'op-rs-2'
+    })
+    expect(second.status).toBe('blocked')
+    expect(second.status === 'blocked' ? second.reason : '')
+      .toContain('no model or tool progress')
+    expect((await sessionStore.loadItems('threadA'))
+      .filter((item) => item.kind === 'context_window')).toHaveLength(1)
+  })
 })

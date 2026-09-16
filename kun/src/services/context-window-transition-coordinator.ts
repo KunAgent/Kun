@@ -103,6 +103,32 @@ export class ContextWindowTransitionCoordinator {
     return this.deps.modes.windowFor(threadId) ?? { windowId: 'win-0', windowSeq: 0 }
   }
 
+  /**
+   * Whether ordinary model/tool work exists after the latest committed
+   * boundary. Derived from durable items when the session store is wired so
+   * a restart cannot reset the guard; otherwise falls back to the marker
+   * written after each committed transition.
+   */
+  private async progressSinceLastBoundary(
+    threadId: string,
+    items: readonly TurnItem[] | undefined
+  ): Promise<boolean> {
+    if (items !== undefined) {
+      let boundaryIndex = -1
+      for (let index = items.length - 1; index >= 0; index -= 1) {
+        if (items[index]!.kind === 'context_window') {
+          boundaryIndex = index
+          break
+        }
+      }
+      if (boundaryIndex < 0) return true
+      return countOrdinaryWorkItems(items.slice(boundaryIndex + 1)) > 0
+    }
+    const itemCount = await this.deps.requestItemCount?.(threadId)
+    const marker = this.progressAtTransition.get(threadId)
+    return itemCount === undefined || marker === undefined || itemCount > marker.itemCount
+  }
+
   async transition(input: {
     threadId: string
     turnId: string
@@ -120,22 +146,25 @@ export class ContextWindowTransitionCoordinator {
     }
 
     // No-progress guard: a previous transition in this thread must have been
-    // followed by ordinary model/tool work (new persisted items). Idempotent
-    // replays of the same operation bypass the guard and return the committed
-    // result without a second boundary.
-    const itemCount = await this.deps.requestItemCount?.(input.threadId)
-    if (itemCount !== undefined) {
-      const marker = this.progressAtTransition.get(input.threadId)
-      if (marker && itemCount <= marker.itemCount) {
-        // Idempotent replays of an already committed operation bypass the
-        // progress guard and return the committed boundary unchanged.
-        const alreadyCommitted = await this.deps.committedOperation
-          ?.call(null, input.threadId, input.operationId)
-        if (!alreadyCommitted) {
-          return {
-            status: 'blocked',
-            reason: 'no model or tool progress since the last window transition; continue the task before starting another window'
-          }
+    // followed by ordinary model/tool work (new persisted items). Derived
+    // from durable history (ordinary items after the latest boundary) so the
+    // guard survives restarts; the in-memory marker only covers stores
+    // without item loading. Idempotent replays of the same operation bypass
+    // the guard and return the committed boundary unchanged.
+    const historyItems = this.deps.sessionStore
+      ? await this.deps.sessionStore.loadItems(input.threadId)
+      : undefined
+    if (!(await this.progressSinceLastBoundary(input.threadId, historyItems))) {
+      const alreadyCommitted = historyItems !== undefined
+        ? historyItems.some(
+            (item) => item.kind === 'context_window' && item.operationId === input.operationId
+          )
+        : await this.deps.committedOperation
+            ?.call(null, input.threadId, input.operationId)
+      if (!alreadyCommitted) {
+        return {
+          status: 'blocked',
+          reason: 'no model or tool progress since the last window transition; continue the task before starting another window'
         }
       }
     }
@@ -293,7 +322,11 @@ export class ContextWindowTransitionCoordinator {
         threadId: context.threadId,
         turnId: context.turnId,
         reason: 'model',
-        operationId: `new_context_${context.turnId}_${Date.now()}`,
+        // Idempotency is scoped to the tool call, not wall time: a retried or
+        // crash-replayed call carries the same callId and must replay the
+        // committed boundary instead of minting a fresh operation that the
+        // no-progress guard would block with a misleading error.
+        operationId: `new_context_${context.turnId}_${context.activeToolCallId ?? Date.now()}`,
         ...(model ? { model } : {}),
         signal: context.abortSignal,
         excludeInflightCallId: context.activeToolCallId

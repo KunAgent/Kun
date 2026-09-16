@@ -226,7 +226,10 @@ export class ContextWindowService {
           stopped = true
           break
         }
-        chunk.push(item)
+        // Internal records (goal/model context, runtime sources, interruption
+        // notes) are never public: leaking them through the history tools
+        // would also break the recorded itemCount vs emitted items.
+        if (isPublicTurnItem(item)) chunk.push(item)
       }
       if (chunk.length > 0) chunks.push(chunk)
       if (!page.hasMore || !page.nextCursor) break

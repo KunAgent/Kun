@@ -608,5 +608,42 @@ describe('ContextWindowService', () => {
         .toEqual(['m0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'])
       expect(fullArrayReads()).toBe(0)
     })
+
+    it('excludes internal records from window listings, reads, and search on the paged path', async () => {
+      const { paged, fullArrayReads } = smallPageStore(3)
+      const pagedService = makeService({ sessionStore: paged })
+      const internal = (id: string, content: string): TurnItem => ({
+        id, turnId: 'turn-1', threadId: 'thread1',
+        kind: 'runtime_context_source', role: 'system', status: 'completed',
+        createdAt: '2026-09-14T00:00:00.000Z', contextKind: 'host-control', content
+      })
+      await seed([
+        message('m0', 'message 0'),
+        boundary('win-1'),
+        internal('init-1', 'window init with needle secret'),
+        message('m1', 'message 1'),
+        internal('init-2', 'another internal record'),
+        message('m2', 'message 2 newest')
+      ])
+
+      const windows = await pagedService.listWindows('thread1', {})
+      expect(windows.windows[0]!.itemRange.itemCount).toBe(2)
+
+      const listed = await pagedService.listItems('thread1', { windowId: 'win-1' })
+      expect(listed.items.map((entry) => entry.itemId)).toEqual(['m1', 'm2'])
+
+      // The newest public item stays reachable even though internal records
+      // share the window range and the recorded itemCount.
+      const newest = await pagedService.readItem('thread1', { windowId: 'win-1', itemId: 'm2' })
+      expect(newest.segments[0]?.text).toBe('message 2 newest')
+      await expect(
+        pagedService.readItem('thread1', { windowId: 'win-1', itemId: 'init-1' })
+      ).rejects.toThrow('not found')
+
+      // Internal record text is not searchable through the history tools.
+      const search = await pagedService.searchContents('thread1', { query: 'needle' })
+      expect(search.matches).toEqual([])
+      expect(fullArrayReads()).toBe(0)
+    })
   })
 })

@@ -138,6 +138,16 @@ describe('ContextWindowStateRestore (P2-1)', () => {
     // Simulated restart: every in-memory map is dropped and rebuilt from disk.
     const restarted = makeCoordinator()
     expect(restarted.modes.windowFor('threadA')).toBeUndefined()
+    // The no-progress guard derives from durable history, so it survives the
+    // restart: with no ordinary work since the last boundary it still blocks.
+    const premature = await restarted.coordinator.transition({
+      threadId: 'threadA', turnId: 'turn-1', reason: 'model', operationId: 'op-early'
+    })
+    expect(premature.status).toBe('blocked')
+    await sessionStore.appendItem('threadA', {
+      id: 'u3', turnId: 'turn-1', threadId: 'threadA',
+      kind: 'user_message', role: 'user', status: 'completed', createdAt: NOW(), text: 'post-restart progress'
+    })
     const t3 = await restarted.coordinator.transition({
       threadId: 'threadA', turnId: 'turn-1', reason: 'model', operationId: 'op-3'
     })

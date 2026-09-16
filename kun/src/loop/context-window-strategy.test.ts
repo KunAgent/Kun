@@ -209,6 +209,25 @@ describe('ContextWindowStrategyCoordinator', () => {
     expect(summarySpy).not.toHaveBeenCalled()
   })
 
+  it('honors the caller request hard cap below the capacity ratio', async () => {
+    // When model capabilities lack contextWindowTokens the send-boundary cap
+    // falls back to the configured hard threshold, which can sit far below
+    // capacity * 0.85. A request exceeding only the caller cap must still
+    // transition instead of sailing through to a send-guard failure.
+    const outcome = await strategy.compactIfNeeded(compactInput({
+      requestOverheadTokens: 5_000,
+      requestInputTokens: 40_000,
+      outputBudgetTokens: 1_000,
+      requestHardCapTokens: 30_000
+    }))
+    expect(summarySpy).not.toHaveBeenCalled()
+    expect(outcome.compacted).toBe(true)
+    expect(outcome.windowTransition?.windowSeq).toBe(1)
+    const boundaries = (await sessionStore.loadItems('threadA'))
+      .filter((item) => item.kind === 'context_window')
+    expect(boundaries).toHaveLength(1)
+  })
+
   it('P1-c: two pressure crossings in one turn commit two distinct windows', async () => {
     const hardInput = () => ({
       requestOverheadTokens: 10_000,

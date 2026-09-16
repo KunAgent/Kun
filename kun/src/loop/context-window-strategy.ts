@@ -100,7 +100,15 @@ export class ContextWindowStrategyCoordinator implements CompactionDispatch {
   private async compactWindows(input: CompactIfNeededInput): Promise<HistoryCompactionOutcome> {
     await this.deps.stateRestore?.restore(input.threadId)
     const capacity = this.capacityFor(input)
-    const hardCap = Math.floor(capacity * OUTPUT_RESERVE_CAP_RATIO)
+    // The caller's request hard cap is authoritative too: without model
+    // capability metadata it falls back to the configured compaction hard
+    // threshold, which can sit far below capacity * 0.85. Using only the
+    // capacity-derived cap would skip a transition the send-boundary guard
+    // then fails on, losing the turn instead of freeing space.
+    const callerCap = Math.max(0, Math.floor(input.requestHardCapTokens ?? 0))
+    const hardCap = callerCap > 0
+      ? Math.min(Math.floor(capacity * OUTPUT_RESERVE_CAP_RATIO), callerCap)
+      : Math.floor(capacity * OUTPUT_RESERVE_CAP_RATIO)
     const overhead = Math.max(0, Math.floor(input.requestOverheadTokens ?? 0))
     const estimatedInput = Math.max(0, Math.floor(input.requestInputTokens ?? 0))
     const outputReserve = Math.max(0, Math.floor(input.outputBudgetTokens ?? 0))
