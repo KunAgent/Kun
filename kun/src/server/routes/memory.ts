@@ -71,7 +71,8 @@ export async function memoryDiagnostics(
   let feedbackDiagnostics
   try {
     feedbackDiagnostics = await feedback.diagnostics()
-  } catch {
+  } catch (error) {
+    console.warn('[kun] memory feedback diagnostics failed:', error)
     feedbackDiagnostics = degradedFeedbackDiagnostics(feedback)
   }
   return jsonResponse({ ...diagnostics, feedback: feedbackDiagnostics })

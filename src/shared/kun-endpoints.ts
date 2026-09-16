@@ -89,7 +89,8 @@ export const KUN_MEMORY_RECORD_TEMPLATE = '/v1/memory/{id}'
 export function kunMemoryRecordPath(memoryId: string): string {
   return `/v1/memory/${encodeURIComponent(memoryId)}`
 }
-export const KUN_MEMORY_FEEDBACK_ACTION_TEMPLATE = '/v1/memory/{id}/{action}'
+export const KUN_MEMORY_CONFIRM_TEMPLATE = '/v1/memory/{id}/confirm'
+export const KUN_MEMORY_CORRECT_TEMPLATE = '/v1/memory/{id}/correct'
 export function kunMemoryFeedbackActionPath(
   memoryId: string,
   action: 'confirm' | 'correct'

@@ -332,6 +332,20 @@ describe('app-ipc-schemas runtime', () => {
       method: 'PATCH',
       body: '{}'
     }).path).toBe('/v1/memory/mem_1')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/memory/mem_1/confirm',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/memory/mem_1/confirm')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/memory/mem_1/correct',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/memory/mem_1/correct')
+    expect(runtimeRequestPayloadSchema.safeParse({
+      path: '/v1/memory/mem_1/confirm',
+      method: 'GET'
+    }).success).toBe(false)
   })
 
   it('accepts https GitHub skill import URLs and rejects other schemes', () => {
