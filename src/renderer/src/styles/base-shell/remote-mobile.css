@@ -212,6 +212,15 @@
       max-width: 92%;
     }
 
+    /* Left sidebar drawer: safe-area aware, touch-sized rows. */
+    [data-workbench-left-sidebar] {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    [data-workbench-left-sidebar] button {
+      min-height: 40px;
+    }
+
     /* Dense hover-only affordances stay reachable on touch. */
     .ds-topbar-action-button,
     .chat-topbar-actions button {
