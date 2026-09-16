@@ -133,6 +133,30 @@ export const kiloCodeAdapter: SourceAdapter = {
   ]
 }
 
+export const continueAdapter: SourceAdapter = {
+  tool: 'continue',
+  label: 'Continue',
+  // Root AGENTS.md resolves to the Kun target and is reported as an identity skip.
+  // Rule files under .continue/rules carry scoping frontmatter (globs/regex/alwaysApply).
+  workspace: [
+    { kind: 'AGENTS.md', relFile: 'AGENTS.md' },
+    { kind: '.continue/rules', relDir: '.continue/rules', exts: ['.md'], stripFrontmatter: true }
+  ],
+  global: [{ kind: '~/.continue/rules', relDir: '.continue/rules', exts: ['.md'], stripFrontmatter: true }]
+}
+
+export const ampAdapter: SourceAdapter = {
+  tool: 'amp',
+  label: 'Amp',
+  // Root AGENTS.md resolves to the Kun target and is reported as an identity skip.
+  // Memory files under .agents/memories carry scoping frontmatter (globs).
+  workspace: [
+    { kind: 'AGENTS.md', relFile: 'AGENTS.md' },
+    { kind: '.agents/memories', relDir: '.agents/memories', exts: ['.md'], stripFrontmatter: true }
+  ],
+  global: [{ kind: '~/.config/amp/AGENTS.md', relFile: '.config/amp/AGENTS.md' }]
+}
+
 export const IMPORT_ADAPTERS: SourceAdapter[] = [
   claudeCodeAdapter,
   codexAdapter,
@@ -145,7 +169,9 @@ export const IMPORT_ADAPTERS: SourceAdapter[] = [
   opencodeAdapter,
   kiroAdapter,
   rooCodeAdapter,
-  kiloCodeAdapter
+  kiloCodeAdapter,
+  continueAdapter,
+  ampAdapter
 ]
 
 export function adapterById(id: string): SourceAdapter | undefined {

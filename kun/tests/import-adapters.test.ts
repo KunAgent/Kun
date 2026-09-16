@@ -366,3 +366,85 @@ describe('import-adapters (round 5: roo-code, kilo-code)', () => {
     expect(text).toContain('Kilo global dir rule.')
   })
 })
+
+describe('import-adapters (round 6: continue, amp)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters6-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('skips Continue root AGENTS.md as identity and notes scoped rule frontmatter', async () => {
+    await writeFile(join(workspace, 'AGENTS.md'), 'Kun native rule.', 'utf8')
+    await mkdir(join(workspace, '.continue', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.continue', 'rules', 'all.md'), '---\nalwaysApply: true\n---\nContinue always rule.', 'utf8')
+    await writeFile(join(workspace, '.continue', 'rules', 'ts.md'), '---\nglobs: "**/*.ts"\n---\nContinue TS rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['continue']
+    })
+
+    expect(plan.warnings).toContainEqual({ code: 'identity-skip', tool: 'continue', path: join(workspace, 'AGENTS.md') })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Kun native rule.')
+    expect(text).toContain('Continue always rule.')
+    expect(text).toContain('Continue TS rule.')
+    expect(text).toContain('globs=**/*.ts')
+    expect(text).toContain('NOT enforced by Kun')
+  })
+
+  it('imports Continue global ~/.continue/rules into ~/.kun/AGENTS.md', async () => {
+    await mkdir(join(home, '.continue', 'rules'), { recursive: true })
+    await writeFile(join(home, '.continue', 'rules', 'g.md'), 'Continue global rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['global'], tools: ['continue']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Continue global rule.')
+  })
+
+  it('skips Amp root AGENTS.md as identity and imports .agents/memories with scope note', async () => {
+    await writeFile(join(workspace, 'AGENTS.md'), 'Kun native rule.', 'utf8')
+    await mkdir(join(workspace, '.agents', 'memories'), { recursive: true })
+    await writeFile(join(workspace, '.agents', 'memories', 'ts.md'), '---\nglobs: "**/*.ts"\n---\nAmp TS memory.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['amp']
+    })
+
+    expect(plan.warnings).toContainEqual({ code: 'identity-skip', tool: 'amp', path: join(workspace, 'AGENTS.md') })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Kun native rule.')
+    expect(text).toContain('Amp TS memory.')
+    expect(text).toContain('globs=**/*.ts')
+    expect(text).toContain('NOT enforced by Kun')
+  })
+
+  it('imports Amp global config AGENTS.md into ~/.kun/AGENTS.md', async () => {
+    await mkdir(join(home, '.config', 'amp'), { recursive: true })
+    await writeFile(join(home, '.config', 'amp', 'AGENTS.md'), 'Amp global rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['global'], tools: ['amp']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Amp global rule.')
+  })
+})
