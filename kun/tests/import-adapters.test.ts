@@ -448,3 +448,42 @@ describe('import-adapters (round 6: continue, amp)', () => {
     expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Amp global rule.')
   })
 })
+
+describe('import-adapters (round 7: goose)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters7-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('imports Goose .goosehints at workspace and global scope', async () => {
+    await writeFile(join(workspace, '.goosehints'), 'Goose workspace hint.', 'utf8')
+    await mkdir(join(home, '.config', 'goose'), { recursive: true })
+    await writeFile(join(home, '.config', 'goose', '.goosehints'), 'Goose global hint.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace', 'global'], tools: ['goose']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(workspace, 'AGENTS.md'), 'utf8')).toContain('Goose workspace hint.')
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Goose global hint.')
+  })
+
+  it('exposes all fifteen tools in registration order', () => {
+    expect(supportedToolIds()).toEqual([
+      'claude-code', 'codex', 'cursor', 'gemini', 'copilot', 'windsurf', 'cline', 'zed', 'opencode', 'kiro',
+      'roo-code', 'kilo-code', 'continue', 'amp', 'goose'
+    ])
+  })
+})

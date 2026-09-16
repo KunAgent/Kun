@@ -157,6 +157,14 @@ export const ampAdapter: SourceAdapter = {
   global: [{ kind: '~/.config/amp/AGENTS.md', relFile: '.config/amp/AGENTS.md' }]
 }
 
+export const gooseAdapter: SourceAdapter = {
+  tool: 'goose',
+  label: 'Goose',
+  // Goose uses a single flat .goosehints file (not markdown, no frontmatter).
+  workspace: [{ kind: '.goosehints', relFile: '.goosehints' }],
+  global: [{ kind: '~/.config/goose/.goosehints', relFile: '.config/goose/.goosehints' }]
+}
+
 export const IMPORT_ADAPTERS: SourceAdapter[] = [
   claudeCodeAdapter,
   codexAdapter,
@@ -171,7 +179,8 @@ export const IMPORT_ADAPTERS: SourceAdapter[] = [
   rooCodeAdapter,
   kiloCodeAdapter,
   continueAdapter,
-  ampAdapter
+  ampAdapter,
+  gooseAdapter
 ]
 
 export function adapterById(id: string): SourceAdapter | undefined {
