@@ -32,6 +32,10 @@ import type { TurnLimitsConfig } from './turn-limits.js'
 import type { GoalTurnCoordinatorOptions } from './goal-turn-coordinator.js'
 import type { InterruptedTurnResumeOptions } from './interrupted-turn-coordinator.js'
 import type { TurnRunOutcome } from './turn-execution-types.js'
+import type { ContextWindowTurnModes } from '../services/context-window-turn-modes.js'
+import type { ContextWindowTransitionCoordinator } from '../services/context-window-transition-coordinator.js'
+import type { ContextWindowBudget } from './context-window-budget.js'
+import type { ContextWindowStateRestore } from '../services/context-window-state.js'
 
 export type AgentLoopOptions = {
   threadStore: ThreadStore
@@ -185,4 +189,12 @@ export type AgentLoopOptions = {
    * Kun's HTTP model loop.
    */
   sdkRuntime?: DelegatedTurnRuntime
+  /** Accepted per-turn context-window mode snapshots (frozen at admission). */
+  contextWindowModes?: ContextWindowTurnModes
+  /** Window transition coordinator backing the new_context tool. */
+  contextWindowTransition?: ContextWindowTransitionCoordinator
+  /** Per-window budget for threshold notices in window mode. */
+  contextWindowBudget?: ContextWindowBudget
+  /** Restart restore for window identity and covered threshold marks. */
+  contextWindowStateRestore?: ContextWindowStateRestore
 }

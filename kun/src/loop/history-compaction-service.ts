@@ -52,6 +52,32 @@ export type HistoryCompactionOutcome = {
   /** A plan was committed and actually replaced history tokens. */
   compacted: boolean
   replacedTokens: number
+  /** Window-mode budget/pressure notice for the caller to surface after the stable prefix. */
+  notice?: string
+  /** Window-mode deterministic transition; never present in summary mode. */
+  windowTransition?: { windowId: string; windowSeq: number; itemId: string }
+  /** Window-mode only: the request cannot fit even after a transition. */
+  unrecoverable?: boolean
+}
+
+export type CompactIfNeededInput = {
+    items: TurnItem[]
+    model: string
+    providerId?: string
+    accountId?: string
+    serviceTier?: 'priority'
+    signal: AbortSignal
+    threadId: string
+    turnId: string
+    clientSurface?: TurnClientSurface
+    toolSpecs?: readonly ModelToolSpec[]
+    requestOverheadTokens?: number
+    requestInputTokens?: number
+    outputBudgetTokens?: number
+    requestHardCapTokens?: number
+    allowModelSummary?: boolean
+    reserveModelRequest?: () => Promise<{ allowed: boolean; reason?: string }>
+    force?: { reason: string; keepRecent?: number }
 }
 
 /**
@@ -81,45 +107,7 @@ export class HistoryCompactionService {
     return undefined
   }
 
-  async compactIfNeeded(input: {
-    items: TurnItem[]
-    model: string
-    providerId?: string
-    accountId?: string
-    serviceTier?: 'priority'
-    signal: AbortSignal
-    threadId: string
-    turnId: string
-    clientSurface?: TurnClientSurface
-    toolSpecs?: readonly ModelToolSpec[]
-    /**
-     * Complete non-history token estimate from the request that is about to be
-     * sent. When supplied this is authoritative over the legacy prefix/tool
-     * fallback so dynamic instructions, skills, and attachments participate
-     * in the compaction preflight.
-     */
-    requestOverheadTokens?: number
-    /**
-     * Exact local input-token estimate of the already-constructed request.
-     * Acts as a floor on input pressure so compaction cannot under-count
-     * dynamic context, attachments, or tools that live outside stored items.
-     */
-    requestInputTokens?: number
-    /** Tokens reserved for model output; mirrors the send-time guard. */
-    outputBudgetTokens?: number
-    /** Hard cap shared with the send-time `input + output` guard. */
-    requestHardCapTokens?: number
-    /**
-     * When false, skip the model-backed summary (no reservation and no
-     * summarizer request) and commit the deterministic heuristic directly.
-     * Used by the send-boundary fallback so a second model call cannot be
-     * issued just to make room for the first one. Defaults to true.
-     */
-    allowModelSummary?: boolean
-    reserveModelRequest?: () => Promise<{ allowed: boolean; reason?: string }>
-    /** Provider overflow recovery bypasses thresholds but still performs one bounded compaction. */
-    force?: { reason: string; keepRecent?: number }
-  }): Promise<HistoryCompactionOutcome> {
+  async compactIfNeeded(input: CompactIfNeededInput): Promise<HistoryCompactionOutcome> {
     const pressure = this.deps.telemetry.consumePromptPressure(input.threadId, input.model)
     const thresholdModel = pressure?.model || input.model
     const overheadTokens = input.requestOverheadTokens === undefined

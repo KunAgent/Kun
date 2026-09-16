@@ -230,6 +230,13 @@ export type KunContextCompactionSettingsV1 = {
   defaultSoftThreshold: number
   defaultHardThreshold: number
   summaryMode: KunCompactionSummaryMode
+  /**
+   * Experimental opt-in window-based context management. When enabled the
+   * model gets budget notices plus history/notes/new_context tools and
+   * pressure triggers a no-summary window transition instead of summary
+   * compaction. Missing or non-boolean values normalize to false.
+   */
+  windowModeEnabled: boolean
   summaryTimeoutMs: number
   summaryMaxTokens: number
   summaryInputMaxBytes: number

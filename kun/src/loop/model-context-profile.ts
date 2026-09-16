@@ -67,6 +67,12 @@ export type ContextCompactionConfig = {
   defaultSoftThreshold?: number
   defaultHardThreshold?: number
   summaryMode?: 'heuristic' | 'model'
+  /**
+   * Opt-in window-mode context strategy. When true, enabled turns advertise
+   * the history/notes/new_context tools and budget notices instead of the
+   * summary compaction path. Missing means summary mode.
+   */
+  windowModeEnabled?: boolean
   summaryTimeoutMs?: number
   summaryMaxTokens?: number
   summaryInputMaxBytes?: number

@@ -160,6 +160,7 @@ export const ContextCompactionConfigSchema = z
     defaultSoftThreshold: PositiveInt.optional(),
     defaultHardThreshold: PositiveInt.optional(),
     summaryMode: z.enum(['heuristic', 'model']).optional(),
+    windowModeEnabled: z.boolean().optional(),
     summaryTimeoutMs: PositiveInt.optional(),
     summaryMaxTokens: PositiveInt.optional(),
     summaryInputMaxBytes: PositiveInt.optional(),

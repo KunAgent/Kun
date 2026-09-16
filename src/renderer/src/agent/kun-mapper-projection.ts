@@ -502,16 +502,18 @@ export function userInputRequestFromCore(input: {
 }
 
 export function compactionBlockFromItem(item: CoreTurnItemJson): ChatBlock {
+  const isWindow = item.kind === 'context_window'
   return {
     kind: 'compaction',
     id: item.id,
     turnId: item.turnId,
     createdAt: itemCreatedAt(item),
-    summary: item.summary?.trim() || 'Context compacted',
+    summary: item.summary?.trim() || (isWindow ? '' : 'Context compacted'),
     status: item.status === 'failed' ? 'error' : 'success',
     messagesBefore: item.replacedTokens,
     detail: item.pinnedConstraints?.join('\n'),
-    auto: item.auto ?? true
+    auto: item.auto ?? true,
+    variant: isWindow ? 'window' : 'summary'
   }
 }
 

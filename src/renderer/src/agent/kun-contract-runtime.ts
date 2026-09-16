@@ -313,6 +313,11 @@ export type CoreTurnItemJson = {
   sourceDigest?: string
   digestMarker?: string
   sourceItemIds?: string[]
+  /** Context-window checkpoint identity (kind === 'context_window'). */
+  windowId?: string
+  previousWindowId?: string | null
+  /** Why the window transitioned: model, pressure, overflow, manual-summary. */
+  reason?: string
   message?: string
   code?: string
   details?: unknown

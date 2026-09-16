@@ -11,6 +11,7 @@ import {
   createReadArtifactTool,
   buildMcpToolProviders,
   buildMemoryToolProviders,
+  buildContextWindowToolProviders,
   buildKnowledgeToolProvider,
   buildSkillToolProviders,
   buildDelegationToolProviders,
@@ -48,6 +49,7 @@ import {
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import {
   builtinToolOptionsForOptions,
+  contextWindowModeFor,
   llmDebugCaptureEnabled,
   mergeRuntimeConfigApplyOptions,
   modelRequestCaptureDefaultEnabled,
@@ -383,6 +385,7 @@ export function createRuntimeConfigController(
 	      ...nextMcpProviders.providers,
 	      ...nextWebProviders.providers,
 	      ...buildMemoryToolProviders(nextMemoryStore),
+	      ...buildContextWindowToolProviders({ service: core.contextWindows, mode: contextWindowModeFor(core.contextWindowModes), newContextTransition: (context, args) => core.contextWindowTransition.asToolTransition(context.model?.id)(context, args) }),
 	      buildKnowledgeToolProvider(services.knowledgeBaseService),
 	      ...buildSkillToolProviders(nextSkillRuntime),
 	      ...nextImageGenProviders.providers,

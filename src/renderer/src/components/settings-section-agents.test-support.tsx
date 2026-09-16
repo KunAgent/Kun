@@ -36,6 +36,7 @@ import {
 } from './settings-section-agents'
 import { FastContextSettingsPanel } from './settings-section-assistant-fast-context'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
+import { laboratoryTestLabels } from './settings-section-agents.test-labels'
 import { ProviderModelsManager } from './settings-section-provider-models'
 import { providerProxyTestLabels } from './provider-proxy-test-labels'
 import {
@@ -57,11 +58,7 @@ const labels: Record<string, string> = {
   composerPersonaTitle: 'Personas',
   composerPersonaEnabled: 'Enable composer personas',
   composerPersonaEnabledDesc: 'Composer persona description',
-  labConversationVisualizationTitle: 'Conversation visualization',
-  labPlanWorktreeTitle: 'Prompt-managed worktree',
-  labPlanWorktreeDescription: 'Experimental Agent-managed Direct plan worktrees',
-  labPlanWorktreeEnabled: 'Enable prompt-managed plan worktrees',
-  labPlanWorktreeEnabledDesc: 'Disabled by default',
+  ...laboratoryTestLabels,
   fastContextTitle: 'Fast Context',
   fastContextDescription: 'Fast Context description',
   fastContextEnabled: 'Enable Fast Context',
@@ -79,23 +76,6 @@ const labels: Record<string, string> = {
   fastContextFast: 'Codex Fast mode',
   fastContextFastDesc: 'Fast description',
   fastContextFastUnsupportedHint: 'Fast unsupported hint',
-  labPptTitle: 'PPT agent', labProjectBoardTitle: 'Project board', labProjectBoardDescription: 'Project board description', labProjectBoardEnabled: 'Enable project board',
-  labPptDescription: 'PPT tool description',
-  labPptEnabled: 'Enable ppt_agent',
-  labPptEnabledDesc: 'Enable description',
-  labPptModelMode: 'Model policy',
-  labPptModelModeDesc: 'Model policy description',
-  labPptModelModeInherit: 'Follow main model',
-  labPptModelModeFixed: 'Use fixed model',
-  labPptModel: 'PPT model',
-  labPptModelDesc: 'PPT model description',
-  labPptProvider: 'PPT model provider',
-  labPptReasoning: 'PPT reasoning effort',
-  labPptReasoningDesc: 'Reasoning description',
-  labPptReasoningInherit: 'Follow main reasoning',
-  labPptFast: 'Codex Fast mode',
-  labPptFastDesc: 'Fast description',
-  labPptFastUnsupportedHint: 'Fast unsupported hint',
   agents: 'Agents',
   providers: 'Providers',
   providersDesc: 'Providers description',

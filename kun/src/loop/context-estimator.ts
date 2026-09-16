@@ -89,6 +89,8 @@ export class ContextEstimator {
         return item.prompt
       case 'compaction':
         return item.summary
+      case 'context_window':
+        return ''
       case 'review':
         return `${item.title} ${item.reviewText ?? ''} ${item.output ? JSON.stringify(item.output) : ''}`
       case 'error':

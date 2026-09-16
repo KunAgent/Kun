@@ -506,6 +506,7 @@ export class ItemComponent implements Component {
       case 'approval': return [` ${yellow('!')} Approval ${item.status}: ${sanitizeTerminalText(item.summary)}`]
       case 'user_input': return [` ${magenta('?')} Input ${item.status}: ${sanitizeTerminalText(item.prompt)}`]
       case 'compaction': return [` ${magenta('↺')} Compacted ${item.replacedTokens.toLocaleString()} tokens`]
+      case 'context_window': return [` ${magenta('⇢')} Switched context window (${item.reason})`]
       case 'review': return [magenta(' Review'), ...plainLines(item.reviewText ?? item.title, contentWidth, 2)]
       case 'error': {
         const warning = item.severity === 'warning' || item.status === 'aborted' || item.status === 'completed'

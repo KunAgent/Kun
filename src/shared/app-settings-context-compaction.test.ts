@@ -74,3 +74,36 @@ describe('Kun context compaction default migrations', () => {
     })
   })
 })
+
+describe('Kun context compaction window mode toggle', () => {
+  it('normalizes missing or non-boolean window mode to disabled', () => {
+    const missing = normalizeAppSettings(settingsWithCompaction({}))
+    expect(missing.agents.kun.contextCompaction.windowModeEnabled).toBe(false)
+
+    const illegal = normalizeAppSettings(settingsWithCompaction({
+      windowModeEnabled: 'yes' as unknown as boolean
+    }))
+    expect(illegal.agents.kun.contextCompaction.windowModeEnabled).toBe(false)
+  })
+
+  it('round-trips the toggle without touching summary parameters', () => {
+    const enabled = normalizeAppSettings(settingsWithCompaction({ windowModeEnabled: true }))
+    const compaction = enabled.agents.kun.contextCompaction
+    expect(compaction.windowModeEnabled).toBe(true)
+    expect(compaction.summaryMode).toBe('model')
+    expect(compaction.summaryTimeoutMs).toBe(15_000)
+    expect(compaction.summaryMaxTokens).toBe(2_048)
+    expect(compaction.summaryInputMaxBytes).toBe(96 * 1024)
+    expect(compaction.defaultSoftThreshold).toBe(192_000)
+    expect(compaction.defaultHardThreshold).toBe(217_600)
+
+    const merged = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
+      contextCompaction: { windowModeEnabled: true }
+    })
+    expect(merged.contextCompaction.windowModeEnabled).toBe(true)
+    expect(merged.contextCompaction.summaryMaxTokens).toBe(2_048)
+
+    const disabled = normalizeAppSettings(settingsWithCompaction({ windowModeEnabled: false }))
+    expect(disabled.agents.kun.contextCompaction.windowModeEnabled).toBe(false)
+  })
+})

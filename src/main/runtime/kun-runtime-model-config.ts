@@ -194,6 +194,7 @@ export function contextCompactionConfigForRuntime(
     defaultSoftThreshold: value.defaultSoftThreshold,
     defaultHardThreshold: value.defaultHardThreshold,
     summaryMode: value.summaryMode,
+    windowModeEnabled: value.windowModeEnabled,
     summaryTimeoutMs: value.summaryTimeoutMs,
     summaryMaxTokens: value.summaryMaxTokens,
     summaryInputMaxBytes: value.summaryInputMaxBytes,

@@ -4,11 +4,38 @@ import {
   squashModelContextHistory
 } from './model-context-squash.js'
 
+/**
+ * Project the model-facing history after the latest durable cut, whichever
+ * kind came last: a summary compaction with replaced tokens or a committed
+ * context-window boundary. Everything before the latest cut is excluded from
+ * the next request; tool-call/tool-result pairing repair runs downstream on
+ * the returned tail, and steering or user input appended after a window
+ * boundary stays because the tail is positional, not semantic.
+ */
 export function effectiveHistoryAfterLatestCompaction(items: readonly TurnItem[]): TurnItem[] {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
+    // A summary compaction keeps its marker in model history (the model reads
+    // the summary); a window boundary contributes no text and is excluded.
     if (item.kind === 'compaction' && item.replacedTokens > 0) {
       return items.slice(index)
+    }
+    if (item.kind === 'context_window') {
+      // A manual-summary boundary is registered AFTER the summary rewrite, so
+      // the summary marker and retained tail precede it in canonical order.
+      // The boundary cuts pre-summary history; the summary itself is the new
+      // window's initialization and must stay model-visible.
+      if (item.reason === 'manual-summary') {
+        for (let summaryIndex = index - 1; summaryIndex >= 0; summaryIndex -= 1) {
+          const candidate = items[summaryIndex]
+          if (candidate?.kind === 'compaction' && candidate.replacedTokens > 0) {
+            return items
+              .slice(summaryIndex)
+              .filter((entry) => entry.kind !== 'context_window')
+          }
+        }
+      }
+      return items.slice(index + 1)
     }
   }
   return [...items]

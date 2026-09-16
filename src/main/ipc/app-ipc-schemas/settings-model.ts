@@ -403,6 +403,7 @@ export const kunRuntimePatchSchema = z.object({
     defaultSoftThreshold: z.number().int().positive().optional(),
     defaultHardThreshold: z.number().int().positive().optional(),
     summaryMode: kunCompactionSummaryModeSchema.optional(),
+    windowModeEnabled: z.boolean().optional(),
     summaryTimeoutMs: z.number().int().positive().max(120_000).optional(),
     summaryMaxTokens: z.number().int().positive().max(16_000).optional(),
     summaryInputMaxBytes: z.number().int().positive().max(8 * 1024 * 1024).optional(),

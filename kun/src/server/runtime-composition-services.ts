@@ -17,6 +17,7 @@ import {
   createTaskGraphTool,
   buildMcpToolProviders,
   buildMemoryToolProviders,
+  buildContextWindowToolProviders,
   KnowledgeBaseService,
   buildKnowledgeToolProvider,
   buildSkillToolProviders,
@@ -52,6 +53,7 @@ import type { createRuntimeModelComposition } from './runtime-composition-model.
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import {
   builtinToolOptionsForOptions,
+  contextWindowModeFor,
   skillsConfigForRuntime,
   toolOutputLimitsForOptions
 } from './runtime-factory-config.js'
@@ -158,6 +160,9 @@ export async function createRuntimeServices(
     dataDir: core.activeOptions.dataDir,
     snapshots: threadSnapshots,
     onCompacted: (threadId) => delegatedSessions.invalidate(threadId),
+    contextWindowModes: core.contextWindowModes,
+    contextWindows: core.contextWindows,
+    modelCapabilities,
     resolveGraphLeadRun,
     createGraphPlanningDraft: (input) => graphRuntime.createPlanningDraft(input),
 	    resolveGraphPlanningDraft: (input) => graphRuntime.resolvePlanningDraft(input),
@@ -445,6 +450,11 @@ export async function createRuntimeServices(
     ...mcpProviders.providers,
     ...webProviders.providers,
     ...buildMemoryToolProviders(memoryStore),
+    ...buildContextWindowToolProviders({
+      service: core.contextWindows,
+      mode: contextWindowModeFor(core.contextWindowModes),
+      newContextTransition: (context, args) => core.contextWindowTransition.asToolTransition(context.model?.id)(context, args)
+    }),
     buildKnowledgeToolProvider(knowledgeBaseService),
     ...buildSkillToolProviders(skillRuntime),
     ...imageGenProviders.providers,

@@ -12,6 +12,7 @@ import type {
 } from './turn-execution-types.js'
 import { ModelRoutingService } from './model-routing-service.js'
 import { HistoryCompactionService } from './history-compaction-service.js'
+import { ContextWindowStrategyCoordinator, type CompactionDispatch } from './context-window-strategy.js'
 import { ToolStormBreaker } from './tool-storm-breaker.js'
 import { LoopTelemetry } from './loop-telemetry.js'
 import { ModelRoundEngine } from './model-round-engine.js'
@@ -60,7 +61,7 @@ export abstract class AgentLoopBase {
   protected readonly toolStormBreakers = new Map<string, ToolStormBreaker>()
   protected readonly telemetry: LoopTelemetry
   protected readonly threadItems: ThreadItemProjectionService
-  protected readonly historyCompaction: HistoryCompactionService
+  protected readonly historyCompaction: CompactionDispatch
   protected readonly modelRoundEngine: ModelRoundEngine
   protected readonly modelSteps: ModelStepService
   protected readonly roundOutcome: RoundOutcomeCoordinator
@@ -94,7 +95,7 @@ export abstract class AgentLoopBase {
       sessionStore: opts.sessionStore,
       nowIso: opts.nowIso
     })
-    this.historyCompaction = new HistoryCompactionService({
+    const summaryCompaction = new HistoryCompactionService({
       sessionStore: opts.sessionStore,
       compactor: opts.compactor,
       prefix: opts.prefix,
@@ -108,6 +109,31 @@ export abstract class AgentLoopBase {
       getHooks: () => opts.hooks,
       clearReadTracker: (threadId?: string) => opts.toolHost.clearReadTracker?.(threadId),
       rewriteThreadItemsFromSession: (threadId) => this.threadItems.syncFromSession(threadId)
+    })
+    // Every automatic compaction entry (auto preflight, send-boundary,
+    // memory-pressure, overflow recovery) funnels through this dispatch so the
+    // accepted turn mode picks the strategy exactly once.
+    this.historyCompaction = new ContextWindowStrategyCoordinator({
+      summary: summaryCompaction,
+      ...(opts.contextWindowModes
+        ? { mode: (threadId: string, turnId: string | undefined) => opts.contextWindowModes!.modeFor(threadId, turnId) }
+        : {}),
+      ...(opts.contextWindowTransition ? { transition: opts.contextWindowTransition } : {}),
+      ...(opts.contextWindowBudget ? { budget: opts.contextWindowBudget } : {}),
+      ...(opts.modelCapabilities
+        ? { capacityTokens: (model, providerId) => opts.modelCapabilities!(model, providerId).contextWindowTokens }
+        : {}),
+      ...(opts.contextWindowModes
+        ? { window: (threadId: string) => opts.contextWindowModes!.windowFor(threadId) }
+        : {}),
+      ...(opts.contextWindowModes
+        ? {
+            establishWindow: (threadId: string, window: { windowId: string; windowSeq: number }) =>
+              opts.contextWindowModes!.setWindow(threadId, window)
+          }
+        : {}),
+      sessionStore: opts.sessionStore,
+      ...(opts.contextWindowStateRestore ? { stateRestore: opts.contextWindowStateRestore } : {})
     })
     this.turnAttachments = new TurnAttachmentService(() => opts.attachmentStore)
     this.modelRouting = new ModelRoutingService(opts.model)

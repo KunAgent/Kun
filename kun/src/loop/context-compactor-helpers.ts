@@ -375,6 +375,8 @@ function summarizeItem(item: TurnItem): string {
       return item.replacedTokens > 0
         ? `- Earlier compaction summary: ${clipText(item.summary, 600)}`
         : ''
+    case 'context_window':
+      return ''
     case 'review':
       return `- Review ${item.title}: ${clipText(item.reviewText || stringifyCompact(item.output))}`
     case 'error':

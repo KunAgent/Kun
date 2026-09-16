@@ -385,7 +385,8 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
             detail: ev.detail ?? (current?.kind === 'compaction' ? current.detail : undefined),
             auto: ev.auto ?? (current?.kind === 'compaction' ? current.auto : undefined),
             messagesBefore: ev.messagesBefore ?? (current?.kind === 'compaction' ? current.messagesBefore : undefined),
-            messagesAfter: ev.messagesAfter ?? (current?.kind === 'compaction' ? current.messagesAfter : undefined)
+            messagesAfter: ev.messagesAfter ?? (current?.kind === 'compaction' ? current.messagesAfter : undefined),
+            variant: ev.variant ?? (current?.kind === 'compaction' ? current.variant : undefined)
           }
           const blocks = [...side.blocks]
           if (index >= 0) blocks[index] = block
