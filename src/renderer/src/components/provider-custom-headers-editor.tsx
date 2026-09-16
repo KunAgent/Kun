@@ -66,11 +66,11 @@ function rowsToMap(rows: HeaderRow[]): Record<string, string> {
 export function ProviderCustomHeadersEditor({
   providerId,
   zh,
-  isOpenCodeGo
+  needsOpenCodeSessionHeader
 }: {
   providerId: string
   zh: boolean
-  isOpenCodeGo: boolean
+  needsOpenCodeSessionHeader: boolean
 }): ReactElement {
   const [rows, setRows] = useState<HeaderRow[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -194,11 +194,11 @@ export function ProviderCustomHeadersEditor({
               ? '这些请求头会附加到该供应商发出的每个 Kun 控制的 HTTP 请求（模型聊天、探测、写作补全等）。值按敏感信息处理，默认隐藏。'
               : 'These headers are added to every Kun-controlled HTTP request for this provider (model chat, probing, write inline completion, etc.). Values are treated as sensitive and hidden by default.'}
           </p>
-          {isOpenCodeGo ? (
+          {needsOpenCodeSessionHeader ? (
             <p className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-[12px] leading-5 text-ds-muted">
               {zh
-                ? 'OpenCode Go：x-opencode-session 由 Kun 按当前会话自动填写，此处无需也不应手动配置。'
-                : 'OpenCode Go: x-opencode-session is filled automatically by Kun per active session; do not configure it here.'}
+                ? 'OpenCode：x-opencode-session 由 Kun 按当前会话自动填写，此处无需也不应手动配置。'
+                : 'OpenCode: x-opencode-session is filled automatically by Kun per active session; do not configure it here.'}
             </p>
           ) : null}
           <div className="grid gap-2">

@@ -14,6 +14,7 @@ import {
   normalizeCodexResponsesUrl,
   normalizeModelStreamLimits,
   normalizeStreamIdleTimeoutMs,
+  openCodeSessionRuntimeHeaders,
   readLimitedResponseJson,
   readLimitedResponseText,
   reasoningFromMessage,
@@ -145,10 +146,11 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     }
     const responsesLite = isCodexEndpoint(this.config.baseUrl) &&
       this.capabilitiesForModel(requestModel).responsesMode === 'lite'
-    const openCodeGoSessionId = this.openCodeGoSessionId(request.threadId)
-    const runtimeHeaders = openCodeGoSessionId
-      ? { 'x-opencode-session': openCodeGoSessionId }
-      : undefined
+    const runtimeHeaders = openCodeSessionRuntimeHeaders({
+      presetSource: this.config.presetSource,
+      providerId: this.config.providerId,
+      baseUrl: this.config.baseUrl
+    }, request.threadId)
     let headers = this.buildHeaders(stream, endpointFormat, responsesLite, credentials, runtimeHeaders)
     const retry = normalizeModelRequestRetryConfig(this.config.retry)
     const modelStreamLimits = normalizeModelStreamLimits(this.config.streamLimits)

@@ -14,6 +14,7 @@ import {
   type ModelEndpointFormat,
   type AppSettingsV1
 } from '../../shared/app-settings'
+import { openCodeSessionRuntimeHeaders } from '../../shared/opencode-session'
 import {
   upstreamDeepSeekFimCompletionsUrl,
   upstreamOpenAiCustomEndpointUrl,
@@ -150,7 +151,14 @@ export async function requestWriteInlineCompletion(
     })
     const response = await fetchWithOptionalProxy(url, {
       method: 'POST',
-      headers: buildProviderHeaders(auth.apiKey, responseFormat, auth.headers, responsesLite),
+      headers: {
+        ...buildProviderHeaders(auth.apiKey, responseFormat, auth.headers, responsesLite),
+        ...openCodeSessionRuntimeHeaders({
+          presetSource: provider.presetSource?.presetId,
+          providerId: provider.id,
+          baseUrl
+        })
+      },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(INLINE_COMPLETION_TIMEOUT_MS)
     }, resolveProviderProxyUrl(settings, provider))

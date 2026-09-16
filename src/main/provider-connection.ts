@@ -8,6 +8,7 @@ import {
   type ModelEndpointFormat
 } from '../shared/app-settings'
 import type { ModelProviderProbeRequest, ModelProviderProbeResult } from '../shared/kun-gui-api'
+import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
 import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
 import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/model-provider-presets'
 import { fetchWithOptionalProxy } from './proxy-fetch'
@@ -158,7 +159,15 @@ export async function probeModelProvider(
   const url = codexHeaders
     ? `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`
     : upstreamOpenAiModelsUrl(baseUrl)
-  const headers = codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey)
+  const headers = {
+    ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey)),
+    ...openCodeSessionRuntimeHeaders({
+      presetSource: settings?.provider.providers.find((provider) => provider.id === request.providerId)
+        ?.presetSource?.presetId,
+      providerId: request.providerId,
+      baseUrl
+    })
+  }
   const startedAt = Date.now()
   let res: Response
   let text: string
