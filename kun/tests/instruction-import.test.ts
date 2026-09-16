@@ -196,6 +196,35 @@ describe('instruction-import', () => {
     expect(plan.targets[0]?.changed).toBe(false)
   })
 
+  it('preserves blank lines and indentation inside fenced code blocks', async () => {
+    const body = [
+      'Intro paragraph.',
+      '',
+      '',
+      '',
+      'After many blanks.',
+      '',
+      '```ts',
+      'function demo() {',
+      '',
+      '',
+      '  return 1',
+      '}',
+      '```',
+      'Trailing prose.'
+    ].join('\n')
+    await writeFile(join(workspace, 'CLAUDE.md'), body, 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    const text = plan.targets[0]?.mergedText ?? ''
+
+    // Inside the fence, the two consecutive blank lines survive verbatim.
+    expect(text).toContain('function demo() {\n\n\n  return 1')
+    // Outside the fence, consecutive blank lines collapse to a single blank line.
+    expect(text).toContain('Intro paragraph.\n\nAfter many blanks.')
+    expect(text).not.toContain('Intro paragraph.\n\n\nAfter many blanks.')
+  })
+
   it('inlines nested @import references', async () => {
     await writeFile(join(workspace, 'CLAUDE.md'), 'Top.\n@docs/rules.md', 'utf8')
     await mkdir(join(workspace, 'docs'), { recursive: true })

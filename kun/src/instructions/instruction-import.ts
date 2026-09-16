@@ -260,13 +260,29 @@ function scopedConditionNote(frontmatter: string): string | null {
 }
 
 function normalizeBody(text: string): string {
-  return text
-    .replace(/\r\n/gu, '\n')
-    .split('\n')
-    .map((line) => line.replace(/[ \t]+$/u, ''))
-    .join('\n')
-    .replace(/\n{3,}/gu, '\n\n')
-    .trim()
+  const lines = text.replace(/\r\n/gu, '\n').split('\n')
+  const out: string[] = []
+  let inFence = false
+  let blankRun = 0
+  for (const line of lines) {
+    const isFence = /^\s*(```|~~~)/u.test(line)
+    if (isFence) inFence = !inFence
+    if (inFence || isFence) {
+      // Preserve code-fence lines verbatim (blank lines and trailing spaces included).
+      out.push(line)
+      blankRun = 0
+      continue
+    }
+    const trimmed = line.replace(/[ \t]+$/u, '')
+    if (trimmed === '') {
+      blankRun += 1
+      if (blankRun >= 2) continue // collapse consecutive blanks to one outside code fences
+    } else {
+      blankRun = 0
+    }
+    out.push(trimmed)
+  }
+  return out.join('\n').trim()
 }
 
 type ResolveCtx = {
