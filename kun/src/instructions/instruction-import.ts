@@ -26,6 +26,11 @@ export type SourceToolId =
   | 'zed'
   | 'opencode'
   | 'kiro'
+  | 'roo-code'
+  | 'kilo-code'
+  | 'continue'
+  | 'amp'
+  | 'goose'
 
 /**
  * One source location declared by an adapter. `relFile` is read directly;

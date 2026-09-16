@@ -109,6 +109,30 @@ export const kiroAdapter: SourceAdapter = {
   global: [{ kind: '~/.kiro/steering', relDir: '.kiro/steering', exts: ['.md'], stripFrontmatter: true }]
 }
 
+export const rooCodeAdapter: SourceAdapter = {
+  tool: 'roo-code',
+  label: 'Roo Code',
+  workspace: [
+    { kind: '.roo/rules', relDir: '.roo/rules', exts: ['.md'] },
+    { kind: '.roorules', relFile: '.roorules' }
+  ],
+  global: [{ kind: '~/.roo/rules', relDir: '.roo/rules', exts: ['.md'] }]
+}
+
+export const kiloCodeAdapter: SourceAdapter = {
+  tool: 'kilo-code',
+  label: 'Kilo Code',
+  // Root AGENTS.md resolves to the Kun target and is reported as an identity skip.
+  workspace: [
+    { kind: 'AGENTS.md', relFile: 'AGENTS.md' },
+    { kind: '.kilocode/rules', relDir: '.kilocode/rules', exts: ['.md'] }
+  ],
+  global: [
+    { kind: '~/.config/kilo/AGENTS.md', relFile: '.config/kilo/AGENTS.md' },
+    { kind: '~/.kilocode/rules', relDir: '.kilocode/rules', exts: ['.md'] }
+  ]
+}
+
 export const IMPORT_ADAPTERS: SourceAdapter[] = [
   claudeCodeAdapter,
   codexAdapter,
@@ -119,7 +143,9 @@ export const IMPORT_ADAPTERS: SourceAdapter[] = [
   clineAdapter,
   zedAdapter,
   opencodeAdapter,
-  kiroAdapter
+  kiroAdapter,
+  rooCodeAdapter,
+  kiloCodeAdapter
 ]
 
 export function adapterById(id: string): SourceAdapter | undefined {
