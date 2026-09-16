@@ -152,6 +152,9 @@ export function createServerRuntimeComposition(
 	    get memoryStore() {
 	      return services.memoryStore
 	    },
+	    get memoryFeedback() {
+	      return services.memoryFeedback
+	    },
 	    memoryDistillation: services.memoryDistillation,
 	    migrationService,
 	    migrationImportService,
