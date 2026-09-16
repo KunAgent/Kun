@@ -7,5 +7,15 @@
   "threadHydrationLoadingDescription": "メッセージを読み込み、最新の会話状態を復元しています。",
   "threadHydrationTakingLongTitle": "会話の復元に時間がかかっています",
   "threadHydrationTakingLongDescription": "イベントストリームがまだ追いついていません。接続を再試行できます。",
-  "threadHydrationRetry": "接続を再試行"
+  "threadHydrationRetry": "接続を再試行",
+  "sidebarWorkspaceAddFolder": "プロジェクトにフォルダーを追加",
+  "sidebarWorkspaceRemoveFolder": "プロジェクトから {{name}} を削除",
+  "workspaceFolderSameAsPrimary": "That folder is already the project root.",
+  "workspaceFolderDuplicate": "That folder is already in this project.",
+  "workspaceFolderNested": "That folder overlaps another folder in this project.",
+  "workspaceFolderLimit": "A project can include at most 32 extra folders.",
+  "workspaceFolderMissing": "Choose a folder to add to this project.",
+  "workspaceFolderMissingPrimary": "Open a project first, then add another folder to it.",
+  "composerWorkspaceExtraHint": "Git, plan worktrees, and the default shell stay on the primary folder.",
+  "fileTreeGitUsesPrimary": "Git and plan commands use the primary folder."
 }

@@ -48,6 +48,8 @@ import {
   type KunThreadMode
 } from '@shared/kun-endpoints'
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeError } from '@shared/runtime-error'
+import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
+import { additionalWorkspacesForThread, readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import {
   workspaceDirectoryExists,
   workspaceMissingError
@@ -288,6 +290,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
 
   async createThread(input: {
     workspace?: string
+    additionalWorkspaces?: string[]
     title?: string
     titleAuto?: boolean
     mode?: KunThreadMode
@@ -322,11 +325,16 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     ) {
       throw new Error('No connected model is selected. Connect a provider or choose an available shared model first.')
     }
+    const additionalWorkspaces = additionalWorkspacesForThread(
+      workspace,
+      input.additionalWorkspaces ?? extraRootsForWorkspace(workspace, readCodeWorkspaceFolderSets())
+    )
     const response = await rendererRuntimeClient.runtimeRequest(
       '/v1/threads',
       'POST',
       JSON.stringify({
         workspace,
+        ...(additionalWorkspaces.length ? { additionalWorkspaces } : {}),
         title: input.title,
         ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
         ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),

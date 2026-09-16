@@ -65,7 +65,6 @@ import {
   TOOL_KIND_BY_NAME,
   applyRuntimeDisclosureMeta,
   extractToolAttachments,
-  extractToolGeneratedFiles,
   extractToolSources,
   gatewayHasWorkspaceWriteSideEffect,
   itemCreatedAt,
@@ -77,6 +76,7 @@ import {
   toolBlockId,
   toolStatus
 } from './kun-mapper-core'
+import { extractToolGeneratedFiles } from './kun-mapper-generated-files'
 
 
 export function extractComponentPrototype(item: CoreTurnItemJson): ComponentPrototypeMetadata | undefined {

@@ -66,6 +66,7 @@ import {
   removedRegistryAfterRestore,
   threadBelongsToRemovedCodeProject
 } from './chat-store-navigation-workspace-removal'
+import { retainThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { preserveListedDesignProfiles } from '../design/design-locked-profile'
 import {
   clearedThreadSelection,
@@ -481,6 +482,7 @@ export function createNavigationWorkspaceActions(
       ) {
         displayThreads = [preservedLegacyDesignActiveThread, ...displayThreads]
       }
+      displayThreads = retainThreadAdditionalWorkspaces(displayThreads, get().threads)
       const writeWorkspaceRoots = await readWriteWorkspaceRoots()
       const writeRegistry = hydrateWriteThreadRegistry(
         displayThreads,

@@ -168,6 +168,7 @@ import {
   type StoreActionContext,
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
+import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 
 export function createThreadSelectionActions(
   context: StoreActionContext,
@@ -305,6 +306,14 @@ export function createThreadSelectionActions(
       subscribeThreadEventsWithRecovery(p, id, cached.lastSeq, sink, ac.signal, get)
       if (cached.busy) armBusyWatchdog(set, get)
       if (queuedMessages.length > 0) void get().drainQueuedMessages()
+      if (!cached.busy) {
+        void syncThreadAdditionalWorkspaces({
+          set,
+          get,
+          threadId: id,
+          mergeExtras: targetThread?.additionalWorkspaces
+        })
+      }
       return
     }
     // Give the sidebar its selected state in this render frame. The timeline
@@ -587,7 +596,8 @@ export function createThreadSelectionActions(
         goal,
         todos,
         historyCursor,
-        hasMoreHistory = false
+        hasMoreHistory = false,
+        additionalWorkspaces
       } = await p.getThreadDetail(targetThreadId)
       if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return
       const loaded = hydrateBlockModelLabels(targetThreadId, rawBlocks)
@@ -629,7 +639,8 @@ export function createThreadSelectionActions(
               ...thread,
               status: thread.archived ? thread.status : busy ? 'running' : 'idle',
               ...(latestTurnId ? { latestTurnId } : {}),
-              ...(latestTurnStatus ? { latestTurnStatus } : {})
+              ...(latestTurnStatus ? { latestTurnStatus } : {}),
+              ...(additionalWorkspaces ? { additionalWorkspaces } : {})
             }
           : thread)
       })
@@ -640,6 +651,14 @@ export function createThreadSelectionActions(
       if (busy) armBusyWatchdog(set, get)
       if (!busy && queuedMessages.some(isPendingQueuedMessage)) {
         void get().drainQueuedMessages()
+      }
+      if (!busy) {
+        void syncThreadAdditionalWorkspaces({
+          set,
+          get,
+          threadId: targetThreadId,
+          mergeExtras: additionalWorkspaces
+        })
       }
     } catch (e) {
       if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return

@@ -1,4 +1,8 @@
 import {
+  forgetCodeWorkspaceFolderSet,
+  saveCodeWorkspaceFolderSets
+} from '../lib/code-workspace-folder-sets'
+import {
   filterRemovedCodeWorkspaceRoots,
   isCodeWorkspaceRemoved,
   rememberRemovedCodeWorkspace,
@@ -170,9 +174,14 @@ export function createRemoveWorkspaceAction(
     }
     const codeWorkspaceRoots = visibility.patch.codeWorkspaceRoots ?? []
     saveCodeWorkspaceRoots(codeWorkspaceRoots)
+    const folderSets = forgetCodeWorkspaceFolderSet(
+      normalizedPath,
+      state.codeWorkspaceFolderSets ?? { version: 1, sets: [] }
+    )
+    saveCodeWorkspaceFolderSets(folderSets)
     // Local state is authoritative for UX and is committed before any IPC.
     // Settings persistence is best-effort and can never resurrect this root.
-    set({ ...visibility.patch, error: null })
+    set({ ...visibility.patch, codeWorkspaceFolderSets: folderSets, error: null })
     if (!visibility.selectedWorkspaceRemoved) return
     try {
       if (typeof window.kunGui?.setSettings === 'function') {

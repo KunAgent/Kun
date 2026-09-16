@@ -16,6 +16,10 @@ Work 工作区可以按线程挂载为 Code 的只读、无向量结构知识库
 与检索流程见 [`docs/knowledge-bases.md`](./knowledge-bases.md)。知识库挂载不会扩大
 普通文件工具或 sandbox 的可写根。
 
+GUI Code 项目可以把附加目录挂到主项目上（侧边栏「添加目录到项目」），写入该项目线程的
+`additionalWorkspaces`。附加目录不是新的侧边栏项目，也不是知识库。`git_inspect`、`/review`、
+plan worktree、bash 默认 cwd 和 `.kun/project.json` 仍只跟随主目录；文件工具用绝对路径访问附加根。
+
 长期记忆使用“原子 JSON 标准数据 + 可重建 SQLite FTS5 投影”。检索必须先做作用域和生命周期
 过滤，记忆只能作为动态、不可信的 `reference` 证据，不能进入稳定 system 前缀或获得指令权限。
 数据布局、迁移、降级与验证见 [`docs/memory-foundation.md`](./memory-foundation.md)。

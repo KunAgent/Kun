@@ -15,6 +15,7 @@ import { VERIFY_CHANGES_TOOL_NAME } from '../adapters/tool/builtin-verify-tool.j
 import { GRAPH_DEFINE_PLAN_TOOL_NAME } from '../adapters/tool/graph-define-plan-tool.js'
 import { buildToolPreferenceInstruction } from '../prompt/kun-system-prompt.js'
 import {
+  buildAdditionalWorkspacesInstruction,
   buildClientSurfaceInstruction,
   buildKunTurnContextInstructions,
   type KunTurnContextBlock
@@ -499,6 +500,7 @@ export abstract class ModelStepPreparationService {
       nowIso: this.deps.nowIso
     })
     const toolPreferenceInstruction = buildToolPreferenceInstruction(requestToolSpecs)
+    const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread?.additionalWorkspaces)
     const contextBlocks: KunTurnContextBlock[] = [
       ...historyReferenceContextBlocks(thread),
       kunContextBlock(
@@ -518,11 +520,11 @@ export abstract class ModelStepPreparationService {
             workflowGate.subagentResumeInstruction
           )]
         : []),
-      ...(thread?.additionalWorkspaces?.length
+      ...(additionalWorkspacesInstruction
         ? [kunContextBlock(
             'additional-workspaces',
             'workspace',
-            `Additional workspace roots explicitly added by the user:\n${thread.additionalWorkspaces.map((path) => `- ${JSON.stringify(path)}`).join('\n')}`
+            additionalWorkspacesInstruction
           )]
         : []),
       ...(thread?.knowledgeBases?.length

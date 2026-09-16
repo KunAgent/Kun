@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Check, ChevronDown, Folder, FolderPlus, Loader2, Search } from 'lucide-react'
+import { Check, ChevronDown, Folder, FolderPlus, Loader2, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
+import { extraRootsForPrimary } from '../../lib/code-workspace-folder-sets'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import {
   isClawWorkspacePath,
@@ -116,6 +117,8 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
   const removedCodeWorkspaces = useChatStore((s) => s.removedCodeWorkspaces)
   const selectWorkspaceRoot = useChatStore((s) => s.selectWorkspaceRoot)
   const chooseWorkspace = useChatStore((s) => s.chooseWorkspace)
+  const folderSets = useChatStore((s) => s.codeWorkspaceFolderSets)
+  const removeWorkspaceFolder = useChatStore((s) => s.removeWorkspaceFolder)
   const runtimeReady = useChatStore((s) => s.runtimeConnection === 'ready')
 
   const current = normalizeWorkspaceRoot(currentWorkspaceRoot)
@@ -164,6 +167,7 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
     return () => window.removeEventListener('pointerdown', onPointerDown)
   }, [open, showSearch])
 
+  const extraRoots = extraRootsForPrimary(currentRoot, folderSets)
   const label = currentRoot ? workspaceLabelFromPath(currentRoot) : t('selectWorkspace')
 
   const handleSelect = async (root: string): Promise<void> => {
@@ -199,6 +203,7 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
 
   return (
     <div ref={wrapRef} className="ds-workspace-project-picker ds-no-drag relative min-w-0">
+      <div className="flex min-w-0 items-center gap-1">
       <button
         type="button"
         className="flex h-8 max-w-[280px] min-w-0 items-center gap-2 rounded-lg px-2 text-[14px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
@@ -214,6 +219,29 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={2} />
         )}
       </button>
+      {extraRoots.map((root) => (
+        <span
+          key={root}
+          className="inline-flex h-7 max-w-[140px] min-w-0 items-center gap-1 rounded-full bg-ds-hover px-2 text-[12px] text-ds-muted"
+          title={`${root}\n${t('composerWorkspaceExtraHint')}`}
+        >
+          <span className="min-w-0 truncate">{workspaceLabelFromPath(root)}</span>
+          <button
+            type="button"
+            className="rounded-full p-0.5 text-ds-faint transition hover:bg-ds-card hover:text-ds-ink"
+            aria-label={t('sidebarWorkspaceRemoveFolder', { name: workspaceLabelFromPath(root) })}
+            disabled={!runtimeReady || acting}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void removeWorkspaceFolder(currentRoot, root)
+            }}
+          >
+            <X className="h-3 w-3" strokeWidth={2} />
+          </button>
+        </span>
+      ))}
+      </div>
 
       {open ? (
         <div className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-[min(360px,calc(100vw-48px))] overflow-hidden rounded-xl border border-ds-border bg-ds-elevated shadow-[0_24px_70px_rgba(44,55,78,0.18)] backdrop-blur-xl dark:shadow-[0_30px_80px_rgba(0,0,0,0.42)]">

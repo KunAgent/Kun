@@ -170,6 +170,9 @@ export async function getKunThreadDetail(threadId: string, options: {
     ...(thread.timeline?.nextCursor ? { historyCursor: thread.timeline.nextCursor } : {}),
     hasMoreHistory: thread.timeline?.hasMore === true,
     ...(thread.timeline?.target && sourceHistoryAllowed() ? { historyTarget: thread.timeline.target } : {}),
-    ...(thread.designProfile ? { designProfile: thread.designProfile } : {})
+    ...(thread.designProfile ? { designProfile: thread.designProfile } : {}),
+    ...(thread.additionalWorkspaces?.length
+      ? { additionalWorkspaces: thread.additionalWorkspaces.slice() }
+      : {})
   }
 }

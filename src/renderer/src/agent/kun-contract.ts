@@ -39,6 +39,7 @@ export type CoreThreadSummaryJson = {
   /** Optional whole-conversation summary produced by the summarize route. */
   summary?: string
   workspace?: string
+  additionalWorkspaces?: string[]
   knowledgeBases?: Array<{
     id: string
     root: string

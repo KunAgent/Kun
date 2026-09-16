@@ -18,13 +18,14 @@ export type WorkbenchFileTreeSidePanelProps = {
   view: WorkbenchFileTreeSidePanelView
   width: number
   workspaceRoot: string
+  extraWorkspaceRoots?: readonly string[]
   designWorkspaceRoot: string
   designDocuments: readonly DesignDocument[]
   activeDesignDocumentId?: string | null
   selectedTarget?: WorkspaceFileTarget | null
   generatedDocumentCollection?: GeneratedDocumentCollection | null
   onViewChange: (view: WorkbenchFileTreeSidePanelView) => void
-  onPreviewFile: (path: string) => void
+  onPreviewFile: (path: string, workspaceRoot?: string) => void
   onPreviewGeneratedDocument?: (file: GeneratedDocumentArtifact, workspaceRoot: string) => void
   onAddReference: (reference: ChatFileTreeReference) => void
   onOpenDesignInWhiteboard?: (documentId: string) => void
@@ -39,6 +40,7 @@ export function WorkbenchFileTreeSidePanel({
   designWorkspaceRoot,
   designDocuments,
   activeDesignDocumentId,
+  extraWorkspaceRoots = [],
   selectedTarget,
   generatedDocumentCollection,
   onViewChange,
@@ -119,6 +121,7 @@ export function WorkbenchFileTreeSidePanel({
                 ) : workspaceRoot ? (
                   <ChatFileTreePanel
                     workspaceRoot={workspaceRoot}
+                    extraRoots={extraWorkspaceRoots}
                     selectedPath={selectedTarget?.path}
                     onPreviewFile={onPreviewFile}
                     onAddReference={onAddReference}

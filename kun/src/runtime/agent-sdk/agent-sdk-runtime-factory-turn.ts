@@ -90,7 +90,7 @@ import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { mkdir } from 'node:fs/promises'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
-import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
+import { buildAdditionalWorkspacesInstruction, buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
   delegatedCapabilityFingerprint,
@@ -381,14 +381,13 @@ export function createAgentSdkTurnRuntimeDeps(
         })
       }
 
+      const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread.additionalWorkspaces)
       const contextInstructions = managedPptScope ? [
         ...turnDynamicContext.instructions
       ] : [
         ...historyReferenceInstructions(thread),
         buildClientSurfaceInstruction(clientSurface),
-        ...(thread.additionalWorkspaces?.length
-          ? [`Additional workspace roots explicitly added by the user:\n${thread.additionalWorkspaces.map((path) => `- ${JSON.stringify(path)}`).join('\n')}`]
-          : []),
+        ...(additionalWorkspacesInstruction ? [additionalWorkspacesInstruction] : []),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
         ...(planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn?.guiDesignArtifact?.kind === 'svg'

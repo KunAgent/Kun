@@ -24,6 +24,7 @@ export type NormalizedThread = {
   model: string
   mode: string
   workspace?: string
+  additionalWorkspaces?: string[]
   knowledgeBases?: KnowledgeBaseMount[]
   status?: string
   latestSeq?: number

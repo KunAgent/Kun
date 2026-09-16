@@ -49,7 +49,8 @@ describe('composerFileReferenceFromPath', () => {
       path: 'C:/repo/src/app.ts',
       relativePath: 'src/app.ts',
       name: 'app.ts',
-      type: 'file'
+      type: 'file',
+      workspaceRoot: 'C:/repo'
     })
     expect(composerFileReferenceFromPath('D:\\notes\\context.md', 'C:\\repo')).toEqual({
       path: 'D:/notes/context.md',
@@ -57,6 +58,13 @@ describe('composerFileReferenceFromPath', () => {
       name: 'context.md',
       type: 'file',
       workspaceRoot: null
+    })
+    expect(composerFileReferenceFromPath('C:\\backend\\src\\app.ts', ['C:\\repo', 'C:\\backend'])).toEqual({
+      path: 'C:/backend/src/app.ts',
+      relativePath: 'src/app.ts',
+      name: 'app.ts',
+      type: 'file',
+      workspaceRoot: 'C:/backend'
     })
   })
 
@@ -85,6 +93,18 @@ describe('composerFileReferenceFromPath', () => {
       workspaceRoot: 'C:/repo'
     })
     expect(parseComposerFileReferenceDragData(JSON.stringify(reference), 'C:/other')).toBeNull()
+    expect(parseComposerFileReferenceDragData(JSON.stringify({
+      ...reference,
+      path: 'C:\\backend\\src\\app.ts',
+      relativePath: 'src\\app.ts',
+      workspaceRoot: 'C:\\backend'
+    }), ['C:/repo', 'C:/backend'])).toEqual({
+      path: 'C:/backend/src/app.ts',
+      relativePath: 'src/app.ts',
+      name: 'plan.md',
+      type: 'file',
+      workspaceRoot: 'C:/backend'
+    })
     expect(parseComposerFileReferenceDragData(JSON.stringify({
       ...reference,
       path: 'C:\\outside\\plan.md',
