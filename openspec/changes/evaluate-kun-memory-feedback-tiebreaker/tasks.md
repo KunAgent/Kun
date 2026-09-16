@@ -45,8 +45,8 @@
 
 ## 7. Validation And Delivery
 
-- [ ] 7.1 Run the focused P3-B contract, fixture, evaluator, safety, privacy, determinism, and workflow tests; verify all new cases pass.
-- [ ] 7.2 Run the existing Kun Memory focused suites, `npm run build:kun`, `npm run typecheck`, `npm run build`, `npm run lint`, and `npm run check:file-lines`; separate any pre-existing baseline failures from change-introduced failures.
-- [ ] 7.3 Run strict OpenSpec validation and `git diff --check`; verify every authored text file remains within 700 physical lines.
-- [ ] 7.4 Commit each meaningful artifact group with Angular-style messages and push the preparation branch to SunwardL; verify no formal PR is opened before #1324 and the P3-A closeout are merged.
+- [x] 7.1 Run the focused P3-B contract, fixture, evaluator, safety, privacy, determinism, and workflow tests; verify all new cases pass.
+- [x] 7.2 Run the existing Kun Memory focused suites, `npm run build:kun`, `npm run typecheck`, `npm run build`, `npm run lint`, and `npm run check:file-lines`; separate any pre-existing baseline failures from change-introduced failures.
+- [x] 7.3 Run strict OpenSpec validation and `git diff --check`; verify every authored text file remains within 700 physical lines.
+- [x] 7.4 Commit each meaningful artifact group with Angular-style messages and push the preparation branch to SunwardL; verify no formal PR is opened before #1324 and the P3-A closeout are merged.
 - [ ] 7.5 After the baseline prerequisites and all decision tasks pass, create one PR targeting `KunAgent/Kun:develop` with Summary, Changes, Tests, decision outcome, evidence hashes, and an explicit statement that production ranking is unchanged.
