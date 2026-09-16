@@ -26,6 +26,7 @@ function looseObject(overrides: Record<string, unknown> = {}): object {
   let proxy: object
   proxy = new Proxy(overrides, {
     get(target, property) {
+      if (typeof property === 'symbol') return undefined
       return property in target ? target[property] : proxy
     }
   })
