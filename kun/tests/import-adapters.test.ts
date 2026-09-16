@@ -43,7 +43,7 @@ describe('import-adapters (round 1)', () => {
     expect(text).toContain('Base rule.')
     expect(text).toContain('Local rule.')
     expect(text).toContain('Rule A.')
-    expect(text).toContain('<!-- kun:import:begin tool=claude-code -->')
+    expect(text).toContain('<!-- kun:import:begin tool=claude-code sha=')
   })
 
   it('imports Claude Code global CLAUDE.md into ~/.kun/AGENTS.md', async () => {
@@ -86,7 +86,7 @@ describe('import-adapters (round 1)', () => {
     const text = await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')
 
     expect(text).toContain('Global codex rule.')
-    expect(text).toContain('<!-- kun:import:begin tool=codex -->')
+    expect(text).toContain('<!-- kun:import:begin tool=codex sha=')
   })
 })
 
@@ -121,7 +121,7 @@ describe('import-adapters (round 2: cursor, gemini)', () => {
     expect(text).toContain('Use tabs.')
     expect(text).toContain('Legacy cursor rule.')
     expect(text).not.toContain('description: style')
-    expect(text).toContain('<!-- kun:import:begin tool=cursor -->')
+    expect(text).toContain('<!-- kun:import:begin tool=cursor sha=')
   })
 
   it('imports Gemini GEMINI.md at workspace and global scope', async () => {
@@ -282,8 +282,221 @@ describe('import-adapters (round 4: zed, opencode, kiro)', () => {
   })
 
   it('exposes all ten tools', () => {
-    expect(supportedToolIds()).toEqual([
+    expect(supportedToolIds()).toEqual(expect.arrayContaining([
       'claude-code', 'codex', 'cursor', 'gemini', 'copilot', 'windsurf', 'cline', 'zed', 'opencode', 'kiro'
+    ]))
+  })
+})
+
+describe('import-adapters (round 5: roo-code, kilo-code)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters5-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('imports Roo Code .roo/rules and legacy .roorules at workspace scope', async () => {
+    await mkdir(join(workspace, '.roo', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.roo', 'rules', 'core.md'), 'Roo core rule.', 'utf8')
+    await writeFile(join(workspace, '.roorules'), 'Legacy roo rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['roo-code']
+    })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Roo core rule.')
+    expect(text).toContain('Legacy roo rule.')
+    expect(text).toContain('<!-- kun:import:begin tool=roo-code sha=')
+  })
+
+  it('imports Roo Code global ~/.roo/rules into ~/.kun/AGENTS.md', async () => {
+    await mkdir(join(home, '.roo', 'rules'), { recursive: true })
+    await writeFile(join(home, '.roo', 'rules', 'g.md'), 'Roo global rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['global'], tools: ['roo-code']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Roo global rule.')
+  })
+
+  it('skips Kilo Code root AGENTS.md as identity but imports .kilo/rules, .kilocode/rules, and .kilocoderules', async () => {
+    await writeFile(join(workspace, 'AGENTS.md'), 'Kun native rule.', 'utf8')
+    await mkdir(join(workspace, '.kilo', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.kilo', 'rules', 'k.md'), 'Kilo dot-kilo rule.', 'utf8')
+    await mkdir(join(workspace, '.kilocode', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.kilocode', 'rules', 'r.md'), 'Kilo rule.', 'utf8')
+    await writeFile(join(workspace, '.kilocoderules'), 'Kilo legacy rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['kilo-code']
+    })
+
+    expect(plan.warnings).toContainEqual({ code: 'identity-skip', tool: 'kilo-code', path: join(workspace, 'AGENTS.md') })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Kun native rule.')
+    expect(text).toContain('Kilo dot-kilo rule.')
+    expect(text).toContain('Kilo rule.')
+    expect(text).toContain('Kilo legacy rule.')
+  })
+
+  it('imports Kilo Code global config AGENTS.md and both global rules dirs', async () => {
+    await mkdir(join(home, '.config', 'kilo'), { recursive: true })
+    await writeFile(join(home, '.config', 'kilo', 'AGENTS.md'), 'Kilo global config rule.', 'utf8')
+    await mkdir(join(home, '.kilo', 'rules'), { recursive: true })
+    await writeFile(join(home, '.kilo', 'rules', 'k.md'), 'Kilo global dot-kilo rule.', 'utf8')
+    await mkdir(join(home, '.kilocode', 'rules'), { recursive: true })
+    await writeFile(join(home, '.kilocode', 'rules', 'g.md'), 'Kilo global dir rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['global'], tools: ['kilo-code']
+    })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Kilo global config rule.')
+    expect(text).toContain('Kilo global dot-kilo rule.')
+    expect(text).toContain('Kilo global dir rule.')
+  })
+})
+
+describe('import-adapters (round 6: continue, amp)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters6-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('skips Continue root AGENTS.md as identity and notes scoped rule frontmatter', async () => {
+    await writeFile(join(workspace, 'AGENTS.md'), 'Kun native rule.', 'utf8')
+    await mkdir(join(workspace, '.continue', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.continue', 'rules', 'all.md'), '---\nalwaysApply: true\n---\nContinue always rule.', 'utf8')
+    await writeFile(join(workspace, '.continue', 'rules', 'ts.md'), '---\nglobs: "**/*.ts"\n---\nContinue TS rule.', 'utf8')
+    await writeFile(join(workspace, '.continuerules'), 'Continue legacy rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['continue']
+    })
+
+    expect(plan.warnings).toContainEqual({ code: 'identity-skip', tool: 'continue', path: join(workspace, 'AGENTS.md') })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Kun native rule.')
+    expect(text).toContain('Continue always rule.')
+    expect(text).toContain('Continue TS rule.')
+    expect(text).toContain('Continue legacy rule.')
+    expect(text).toContain('globs=**/*.ts')
+    expect(text).toContain('NOT enforced by Kun')
+  })
+
+  it('imports Continue global ~/.continue/rules into ~/.kun/AGENTS.md', async () => {
+    await mkdir(join(home, '.continue', 'rules'), { recursive: true })
+    await writeFile(join(home, '.continue', 'rules', 'g.md'), 'Continue global rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['global'], tools: ['continue']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Continue global rule.')
+  })
+
+  it('skips Amp root AGENTS.md as identity and imports .agents/memories with scope note', async () => {
+    await writeFile(join(workspace, 'AGENTS.md'), 'Kun native rule.', 'utf8')
+    await mkdir(join(workspace, '.agents', 'memories'), { recursive: true })
+    await writeFile(join(workspace, '.agents', 'memories', 'ts.md'), '---\nglobs: "**/*.ts"\n---\nAmp TS memory.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['amp']
+    })
+
+    expect(plan.warnings).toContainEqual({ code: 'identity-skip', tool: 'amp', path: join(workspace, 'AGENTS.md') })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Kun native rule.')
+    expect(text).toContain('Amp TS memory.')
+    expect(text).toContain('globs=**/*.ts')
+    expect(text).toContain('NOT enforced by Kun')
+  })
+
+  it('imports Amp global config AGENTS.md files into ~/.kun/AGENTS.md', async () => {
+    await mkdir(join(home, '.config', 'amp'), { recursive: true })
+    await writeFile(join(home, '.config', 'amp', 'AGENTS.md'), 'Amp global rule.', 'utf8')
+    await writeFile(join(home, '.config', 'AGENTS.md'), 'Amp shared config rule.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['global'], tools: ['amp']
+    })
+    await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')
+
+    expect(text).toContain('Amp global rule.')
+    expect(text).toContain('Amp shared config rule.')
+  })
+})
+
+describe('import-adapters (round 7: goose)', () => {
+  let root = ''
+  let home = ''
+  let workspace = ''
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'kun-import-adapters7-'))
+    home = join(root, 'home')
+    workspace = join(root, 'workspace')
+    await mkdir(home, { recursive: true })
+    await mkdir(workspace, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('imports Goose .goosehints at workspace and global scope', async () => {
+    await writeFile(join(workspace, '.goosehints'), 'Goose workspace hint.', 'utf8')
+    await mkdir(join(home, '.config', 'goose'), { recursive: true })
+    await writeFile(join(home, '.config', 'goose', '.goosehints'), 'Goose global hint.', 'utf8')
+
+    const plan = await buildImportPlan({
+      workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace', 'global'], tools: ['goose']
+    })
+    await applyImportPlan(plan, { workspace })
+
+    expect(await readFile(join(workspace, 'AGENTS.md'), 'utf8')).toContain('Goose workspace hint.')
+    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Goose global hint.')
+  })
+
+  it('exposes all fifteen tools in registration order', () => {
+    expect(supportedToolIds()).toEqual([
+      'claude-code', 'codex', 'cursor', 'gemini', 'copilot', 'windsurf', 'cline', 'zed', 'opencode', 'kiro',
+      'roo-code', 'kilo-code', 'continue', 'amp', 'goose'
     ])
   })
 })

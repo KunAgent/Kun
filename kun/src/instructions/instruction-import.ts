@@ -1,5 +1,6 @@
 import { lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { createHash } from 'node:crypto'
 import { parse as parseYaml } from 'yaml'
 import {
   DEFAULT_INSTRUCTION_MAX_FILE_BYTES,
@@ -25,6 +26,11 @@ export type SourceToolId =
   | 'zed'
   | 'opencode'
   | 'kiro'
+  | 'roo-code'
+  | 'kilo-code'
+  | 'continue'
+  | 'amp'
+  | 'goose'
 
 /**
  * One source location declared by an adapter. `relFile` is read directly;
@@ -64,6 +70,7 @@ export type ImportWarning =
   | { code: 'oversized-source-imported'; path: string; bytes: number; limit: number }
   | { code: 'out-of-bounds-import'; path: string; detail: string }
   | { code: 'identity-skip'; tool: SourceToolId; path: string }
+  | { code: 'block-modified'; tool: SourceToolId; target: string }
   | { code: 'budget-exceeded'; target: string; bytes: number; limit: number }
 
 export type ImportTargetPlan = {
@@ -91,6 +98,8 @@ export type BuildImportPlanInput = {
   maxFileBytes?: number
   maxTotalBytes?: number
   maxSourceBytes?: number
+  /** Overwrite managed blocks even when they were hand-edited since the last import. */
+  force?: boolean
 }
 
 const BEGIN = 'kun:import:begin'
@@ -104,12 +113,44 @@ export function workspaceAgentsPath(workspace: string): string {
   return join(workspace, KUN_AGENTS_FILENAME)
 }
 
-function beginMarker(tool: SourceToolId): string {
-  return `<!-- ${BEGIN} tool=${tool} -->`
+function beginMarkerWithHash(tool: SourceToolId, blockBody: string): string {
+  return `<!-- ${BEGIN} tool=${tool} sha=${contentHash(blockBody)} -->`
 }
 
 function endMarker(tool: SourceToolId): string {
   return `<!-- ${END} tool=${tool} -->`
+}
+
+function contentHash(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 12)
+}
+
+/** Locate an existing managed block for `tool`, returning its recorded hash and current body (line endings normalized). */
+function findManagedBlock(existing: string, tool: SourceToolId): { recordedHash: string | null; body: string } | null {
+  // Tolerate CRLF files (e.g. git autocrlf on Windows): without \r? here the
+  // markers are never found and a hand-edited block would be silently replaced.
+  const pattern = new RegExp(
+    `<!-- ${escapeRegExp(BEGIN)} tool=${escapeRegExp(tool)}(?: sha=([0-9a-f]+))? -->\\r?\\n([\\s\\S]*?)\\r?\\n<!-- ${escapeRegExp(END)} tool=${escapeRegExp(tool)} -->`,
+    'u'
+  )
+  const match = pattern.exec(existing)
+  if (!match) return null
+  // Normalize line endings so a pristine CRLF file still hashes equal to the LF body we wrote.
+  return { recordedHash: match[1] ?? null, body: (match[2] ?? '').replace(/\r\n/gu, '\n') }
+}
+
+/**
+ * True when a managed block exists AND cannot be trusted as import-written:
+ * either its body no longer matches the recorded hash (hand-edited inside the
+ * fence), or it carries no hash at all (written before hashing existed — its
+ * provenance is unknown, so it is treated as modified rather than risk
+ * clobbering a hand-edit).
+ */
+export function isManagedBlockModified(existing: string, tool: SourceToolId): boolean {
+  const found = findManagedBlock(existing, tool)
+  if (!found) return false
+  if (found.recordedHash === null) return true
+  return contentHash(found.body) !== found.recordedHash
 }
 
 async function statSafe(path: string): Promise<{ isFile: boolean; bytes: number } | null> {
@@ -234,13 +275,42 @@ function scopedConditionNote(frontmatter: string): string | null {
 }
 
 function normalizeBody(text: string): string {
-  return text
-    .replace(/\r\n/gu, '\n')
-    .split('\n')
-    .map((line) => line.replace(/[ \t]+$/u, ''))
-    .join('\n')
-    .replace(/\n{3,}/gu, '\n\n')
-    .trim()
+  const lines = text.replace(/\r\n/gu, '\n').split('\n')
+  const out: string[] = []
+  // A fence closes only on the same char (` or ~) at the same-or-longer run,
+  // so a `~~~` line inside a ``` fence stays content instead of ending it early.
+  let fenceChar = ''
+  let fenceLen = 0
+  let blankRun = 0
+  for (const line of lines) {
+    const marker = /^\s*(`{3,}|~{3,})/u.exec(line)?.[1]
+    if (fenceChar) {
+      // Inside a code fence: preserve verbatim (blank lines and trailing spaces included).
+      out.push(line)
+      if (marker && marker[0] === fenceChar && marker.length >= fenceLen) {
+        fenceChar = ''
+        fenceLen = 0
+      }
+      blankRun = 0
+      continue
+    }
+    if (marker) {
+      fenceChar = marker[0] ?? ''
+      fenceLen = marker.length
+      out.push(line)
+      blankRun = 0
+      continue
+    }
+    const trimmed = line.replace(/[ \t]+$/u, '')
+    if (trimmed === '') {
+      blankRun += 1
+      if (blankRun >= 2) continue // collapse consecutive blanks to one outside code fences
+    } else {
+      blankRun = 0
+    }
+    out.push(trimmed)
+  }
+  return out.join('\n').trim()
 }
 
 type ResolveCtx = {
@@ -353,12 +423,18 @@ async function renderSourceFile(source: DetectedSourceFile, ctx: ResolveCtx): Pr
 
 /** Replace the managed block for `tool`, appending a fresh block if none exists. Content outside markers is preserved verbatim. */
 export function mergeManagedBlock(existing: string, tool: SourceToolId, blockBody: string): string {
-  const begin = beginMarker(tool)
+  const begin = beginMarkerWithHash(tool, blockBody)
   const end = endMarker(tool)
   const block = `${begin}\n${blockBody}\n${end}`
-  const pattern = new RegExp(`${escapeRegExp(begin)}[\\s\\S]*?${escapeRegExp(end)}`, 'u')
+  // Match the begin marker with or without a recorded sha= attribute so legacy blocks are replaced too.
+  const pattern = new RegExp(
+    `<!-- ${escapeRegExp(BEGIN)} tool=${escapeRegExp(tool)}(?: sha=[0-9a-f]+)? -->[\\s\\S]*?${escapeRegExp(end)}`,
+    'u'
+  )
   if (pattern.test(existing)) {
-    return existing.replace(pattern, block)
+    // Callback replacement: blockBody may contain $-sequences ($&, $', $1, ...)
+    // which String.replace would otherwise interpret as match references.
+    return existing.replace(pattern, () => block)
   }
   const trimmed = existing.replace(/\s+$/u, '')
   return trimmed.length > 0 ? `${trimmed}\n\n${block}\n` : `${block}\n`
@@ -407,6 +483,12 @@ export async function buildImportPlan(input: BuildImportPlanInput): Promise<Impo
     for (const adapter of input.adapters) {
       const sources = detected.filter((source) => source.scope === scope && source.tool === adapter.tool)
       if (sources.length === 0) continue
+      // Refuse to clobber a managed block whose contents we cannot verify (hand-edited since the
+      // last import, or written before hashing existed), unless forced.
+      if (!input.force && isManagedBlockModified(mergedText, adapter.tool)) {
+        warnings.push({ code: 'block-modified', tool: adapter.tool, target })
+        continue
+      }
       const parts: string[] = []
       for (const source of sources) {
         // A source that resolves to the target file itself is an identity import (e.g. Codex workspace AGENTS.md).
@@ -510,6 +592,8 @@ export function describeWarning(warning: ImportWarning): string {
       return `Skipped out-of-bounds @import "${warning.detail}" outside the workspace or home: ${warning.path}`
     case 'identity-skip':
       return `Skipped ${warning.tool} source identical to the target: ${warning.path}`
+    case 'block-modified':
+      return `Skipped ${warning.tool}: its managed block in ${warning.target} was hand-edited or predates hashing; re-run with --force to overwrite`
     case 'budget-exceeded':
       return `Instruction budget exceeded for ${warning.target}: ${warning.bytes} > ${warning.limit} bytes`
   }
@@ -536,9 +620,10 @@ export type ParsedImportArgs = {
   unknownFlags: string[]
   scopes: ImportScope[]
   dryRun: boolean
+  force: boolean
 }
 
-const KNOWN_IMPORT_FLAGS = new Set(['--global', '--workspace', '--dry-run'])
+const KNOWN_IMPORT_FLAGS = new Set(['--global', '--workspace', '--dry-run', '--force'])
 
 /**
  * Parse `/import` arguments into a typed request. Tool tokens are split into
@@ -562,5 +647,5 @@ export function parseImportArgs(args: string | undefined, knownTools: SourceTool
   const scopes: ImportScope[] = []
   if (wantWorkspace) scopes.push('workspace')
   if (wantGlobal) scopes.push('global')
-  return { tools, unknownTools, unknownFlags, scopes, dryRun: flagSet.has('--dry-run') }
+  return { tools, unknownTools, unknownFlags, scopes, dryRun: flagSet.has('--dry-run'), force: flagSet.has('--force') }
 }

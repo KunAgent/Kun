@@ -3,7 +3,7 @@ import type { SourceAdapter, SourceToolId } from './instruction-import.js'
 /**
  * Source adapters for importing other coding agents' instruction files into
  * Kun `AGENTS.md`. File locations follow the `rulesync` project as a reference.
- * Adapters are added per delivery round; this module now ships all ten tools.
+ * Adapters are added per delivery round; this module now ships all fifteen tools.
  */
 
 export const claudeCodeAdapter: SourceAdapter = {
@@ -109,6 +109,74 @@ export const kiroAdapter: SourceAdapter = {
   global: [{ kind: '~/.kiro/steering', relDir: '.kiro/steering', exts: ['.md'], stripFrontmatter: true }]
 }
 
+export const rooCodeAdapter: SourceAdapter = {
+  tool: 'roo-code',
+  label: 'Roo Code',
+  workspace: [
+    { kind: '.roo/rules', relDir: '.roo/rules', exts: ['.md'] },
+    { kind: '.roorules', relFile: '.roorules' }
+  ],
+  global: [{ kind: '~/.roo/rules', relDir: '.roo/rules', exts: ['.md'] }]
+}
+
+export const kiloCodeAdapter: SourceAdapter = {
+  tool: 'kilo-code',
+  label: 'Kilo Code',
+  // Root AGENTS.md resolves to the Kun target and is reported as an identity skip.
+  // Kilo reads both `.kilo/rules` and `.kilocode/rules` per scope, plus the
+  // legacy `.kilocoderules` file it still auto-migrates.
+  workspace: [
+    { kind: 'AGENTS.md', relFile: 'AGENTS.md' },
+    { kind: '.kilo/rules', relDir: '.kilo/rules', exts: ['.md'] },
+    { kind: '.kilocode/rules', relDir: '.kilocode/rules', exts: ['.md'] },
+    { kind: '.kilocoderules', relFile: '.kilocoderules' }
+  ],
+  global: [
+    { kind: '~/.config/kilo/AGENTS.md', relFile: '.config/kilo/AGENTS.md' },
+    { kind: '~/.kilo/rules', relDir: '.kilo/rules', exts: ['.md'] },
+    { kind: '~/.kilocode/rules', relDir: '.kilocode/rules', exts: ['.md'] }
+  ]
+}
+
+export const continueAdapter: SourceAdapter = {
+  tool: 'continue',
+  label: 'Continue',
+  // Root AGENTS.md resolves to the Kun target and is reported as an identity skip.
+  // Rule files under .continue/rules carry scoping frontmatter (globs/regex/alwaysApply);
+  // `.continuerules` is the legacy single file Continue still loads.
+  workspace: [
+    { kind: 'AGENTS.md', relFile: 'AGENTS.md' },
+    { kind: '.continue/rules', relDir: '.continue/rules', exts: ['.md'], stripFrontmatter: true },
+    { kind: '.continuerules', relFile: '.continuerules' }
+  ],
+  global: [{ kind: '~/.continue/rules', relDir: '.continue/rules', exts: ['.md'], stripFrontmatter: true }]
+}
+
+export const ampAdapter: SourceAdapter = {
+  tool: 'amp',
+  label: 'Amp',
+  // Root AGENTS.md resolves to the Kun target and is reported as an identity skip.
+  // `.agents/memories` is the rulesync convention dir (Amp reaches such files via
+  // @-mentions); its files carry scoping frontmatter (globs).
+  workspace: [
+    { kind: 'AGENTS.md', relFile: 'AGENTS.md' },
+    { kind: '.agents/memories', relDir: '.agents/memories', exts: ['.md'], stripFrontmatter: true }
+  ],
+  // Amp reads both ~/.config/amp/AGENTS.md and the shared ~/.config/AGENTS.md.
+  global: [
+    { kind: '~/.config/amp/AGENTS.md', relFile: '.config/amp/AGENTS.md' },
+    { kind: '~/.config/AGENTS.md', relFile: '.config/AGENTS.md' }
+  ]
+}
+
+export const gooseAdapter: SourceAdapter = {
+  tool: 'goose',
+  label: 'Goose',
+  // Goose uses a single flat .goosehints file (not markdown, no frontmatter).
+  workspace: [{ kind: '.goosehints', relFile: '.goosehints' }],
+  global: [{ kind: '~/.config/goose/.goosehints', relFile: '.config/goose/.goosehints' }]
+}
+
 export const IMPORT_ADAPTERS: SourceAdapter[] = [
   claudeCodeAdapter,
   codexAdapter,
@@ -119,7 +187,12 @@ export const IMPORT_ADAPTERS: SourceAdapter[] = [
   clineAdapter,
   zedAdapter,
   opencodeAdapter,
-  kiroAdapter
+  kiroAdapter,
+  rooCodeAdapter,
+  kiloCodeAdapter,
+  continueAdapter,
+  ampAdapter,
+  gooseAdapter
 ]
 
 export function adapterById(id: string): SourceAdapter | undefined {

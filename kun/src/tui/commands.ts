@@ -105,7 +105,7 @@ export const TUI_SLASH_COMMANDS: SlashCommand[] = [
   { name: 'undo', description: 'Undo the last user turn in a preserved branch' },
   { name: 'redo', description: 'Move to the next preserved branch when available' },
   { name: 'init', description: 'Analyze the project and create or update AGENTS.md', argumentHint: '[guidance]' },
-  { name: 'import', description: 'Import instruction context from other coding agents into AGENTS.md', argumentHint: '[tools] [--global] [--workspace] [--dry-run]' },
+  { name: 'import', description: 'Import instruction context from other coding agents into AGENTS.md', argumentHint: '[tools] [--global] [--workspace] [--dry-run] [--force]' },
   { name: 'mcp', description: 'Add, edit, remove, reconnect, or authorize shared MCP servers', argumentHint: '[add|edit|enable|disable|reconnect|delete|authorize|reset]' },
   { name: 'timeline', description: 'Browse turns and fork at a turn', argumentHint: '[search]' },
   { name: 'jump', description: 'Jump to a numbered or matching turn', argumentHint: '[target]' },
