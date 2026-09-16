@@ -42,6 +42,11 @@ describe('parseImportArgs', () => {
     expect(parseImportArgs('--dry-run', KNOWN).dryRun).toBe(true)
   })
 
+  it('flags --force', () => {
+    expect(parseImportArgs('--force', KNOWN).force).toBe(true)
+    expect(parseImportArgs('--dry-run --force', KNOWN)).toMatchObject({ dryRun: true, force: true })
+  })
+
   it('separates unknown tools from known tools', () => {
     const parsed = parseImportArgs('claude-code bogus cursor', KNOWN)
     expect(parsed.tools).toEqual(['claude-code', 'cursor'])
@@ -53,8 +58,8 @@ describe('parseImportArgs', () => {
     expect(parsed.unknownFlags).toEqual(['--gloabl'])
   })
 
-  it('accepts the three known flags without flagging them unknown', () => {
-    const parsed = parseImportArgs('--global --workspace --dry-run', KNOWN)
+  it('accepts the four known flags without flagging them unknown', () => {
+    const parsed = parseImportArgs('--global --workspace --dry-run --force', KNOWN)
     expect(parsed.unknownFlags).toEqual([])
   })
 })
@@ -225,6 +230,30 @@ describe('instruction-import', () => {
     expect(text).not.toContain('Intro paragraph.\n\n\nAfter many blanks.')
   })
 
+  it('only closes a fence on the same marker char, keeping mixed fences verbatim', async () => {
+    const body = [
+      '```md',
+      '~~~',
+      '',
+      '',
+      'still code',
+      '```',
+      'between',
+      '',
+      '',
+      'para'
+    ].join('\n')
+    await writeFile(join(workspace, 'CLAUDE.md'), body, 'utf8')
+
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    const text = plan.targets[0]?.mergedText ?? ''
+
+    // The ~~~ line inside the ``` fence is content, so its blank lines survive.
+    expect(text).toContain('~~~\n\n\nstill code')
+    // Prose after the fence still collapses.
+    expect(text).toContain('between\n\npara')
+  })
+
   it('inlines nested @import references', async () => {
     await writeFile(join(workspace, 'CLAUDE.md'), 'Top.\n@docs/rules.md', 'utf8')
     await mkdir(join(workspace, 'docs'), { recursive: true })
@@ -345,6 +374,50 @@ describe('instruction-import', () => {
     const forced = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'], force: true })
     expect(forced.warnings.some((w) => w.code === 'block-modified')).toBe(false)
     expect(forced.targets[0]?.mergedText).toContain('Rule v2.')
+  })
+
+  it('still detects a hand-edited block when the target file uses CRLF endings', async () => {
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Original rule.', 'utf8')
+    await applyImportPlan(
+      await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] }),
+      { workspace }
+    )
+
+    const target = join(workspace, 'AGENTS.md')
+    // An unedited block survives a LF->CRLF conversion without tripping the guard.
+    const crlf = (await readIfExists(target)).replace(/\n/g, '\r\n')
+    expect(isManagedBlockModified(crlf, 'claude-code')).toBe(false)
+    // A hand-edit inside the CRLF block is still caught (and warned, not clobbered).
+    const tampered = crlf.replace('Original rule.', 'Hand-edited by user.')
+    await writeFile(target, tampered, 'utf8')
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    expect(plan.warnings.some((w) => w.code === 'block-modified')).toBe(true)
+    expect(plan.targets[0]?.changed).toBe(false)
+  })
+
+  it('treats a legacy block without a recorded hash as modified', async () => {
+    const target = join(workspace, 'AGENTS.md')
+    await writeFile(
+      target,
+      'Note.\n\n<!-- kun:import:begin tool=claude-code -->\nLegacy body.\n<!-- kun:import:end tool=claude-code -->\n',
+      'utf8'
+    )
+    await writeFile(join(workspace, 'CLAUDE.md'), 'Fresh rule.', 'utf8')
+
+    expect(isManagedBlockModified(await readIfExists(target), 'claude-code')).toBe(true)
+    const plan = await buildImportPlan({ workspace, homeDir: home, adapters, scopes: ['workspace'], tools: ['claude-code'] })
+    expect(plan.warnings.some((w) => w.code === 'block-modified')).toBe(true)
+    // The unknown-provenance block is preserved until --force.
+    expect(plan.targets[0]?.mergedText).toContain('Legacy body.')
+  })
+
+  it('writes imported bodies containing $-sequences verbatim', () => {
+    const existing = '<!-- kun:import:begin tool=claude-code sha=abc123 -->\nOLD BODY\n<!-- kun:import:end tool=claude-code -->\n'
+    const body = 'Use $& and $` and $1 in scripts.'
+    const merged = mergeManagedBlock(existing, 'claude-code', body)
+    expect(merged).toContain(`\n${body}\n`)
+    // The recorded hash matches the written body, so the block is not flagged modified.
+    expect(isManagedBlockModified(merged, 'claude-code')).toBe(false)
   })
 
   it('replaces only its own block and preserves user text and other blocks', () => {

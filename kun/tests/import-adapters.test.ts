@@ -333,10 +333,13 @@ describe('import-adapters (round 5: roo-code, kilo-code)', () => {
     expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Roo global rule.')
   })
 
-  it('skips Kilo Code root AGENTS.md as identity but imports .kilocode/rules', async () => {
+  it('skips Kilo Code root AGENTS.md as identity but imports .kilo/rules, .kilocode/rules, and .kilocoderules', async () => {
     await writeFile(join(workspace, 'AGENTS.md'), 'Kun native rule.', 'utf8')
+    await mkdir(join(workspace, '.kilo', 'rules'), { recursive: true })
+    await writeFile(join(workspace, '.kilo', 'rules', 'k.md'), 'Kilo dot-kilo rule.', 'utf8')
     await mkdir(join(workspace, '.kilocode', 'rules'), { recursive: true })
     await writeFile(join(workspace, '.kilocode', 'rules', 'r.md'), 'Kilo rule.', 'utf8')
+    await writeFile(join(workspace, '.kilocoderules'), 'Kilo legacy rule.', 'utf8')
 
     const plan = await buildImportPlan({
       workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['kilo-code']
@@ -347,12 +350,16 @@ describe('import-adapters (round 5: roo-code, kilo-code)', () => {
     const text = await readFile(join(workspace, 'AGENTS.md'), 'utf8')
 
     expect(text).toContain('Kun native rule.')
+    expect(text).toContain('Kilo dot-kilo rule.')
     expect(text).toContain('Kilo rule.')
+    expect(text).toContain('Kilo legacy rule.')
   })
 
-  it('imports Kilo Code global config AGENTS.md and ~/.kilocode/rules', async () => {
+  it('imports Kilo Code global config AGENTS.md and both global rules dirs', async () => {
     await mkdir(join(home, '.config', 'kilo'), { recursive: true })
     await writeFile(join(home, '.config', 'kilo', 'AGENTS.md'), 'Kilo global config rule.', 'utf8')
+    await mkdir(join(home, '.kilo', 'rules'), { recursive: true })
+    await writeFile(join(home, '.kilo', 'rules', 'k.md'), 'Kilo global dot-kilo rule.', 'utf8')
     await mkdir(join(home, '.kilocode', 'rules'), { recursive: true })
     await writeFile(join(home, '.kilocode', 'rules', 'g.md'), 'Kilo global dir rule.', 'utf8')
 
@@ -363,6 +370,7 @@ describe('import-adapters (round 5: roo-code, kilo-code)', () => {
     const text = await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')
 
     expect(text).toContain('Kilo global config rule.')
+    expect(text).toContain('Kilo global dot-kilo rule.')
     expect(text).toContain('Kilo global dir rule.')
   })
 })
@@ -389,6 +397,7 @@ describe('import-adapters (round 6: continue, amp)', () => {
     await mkdir(join(workspace, '.continue', 'rules'), { recursive: true })
     await writeFile(join(workspace, '.continue', 'rules', 'all.md'), '---\nalwaysApply: true\n---\nContinue always rule.', 'utf8')
     await writeFile(join(workspace, '.continue', 'rules', 'ts.md'), '---\nglobs: "**/*.ts"\n---\nContinue TS rule.', 'utf8')
+    await writeFile(join(workspace, '.continuerules'), 'Continue legacy rule.', 'utf8')
 
     const plan = await buildImportPlan({
       workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['workspace'], tools: ['continue']
@@ -401,6 +410,7 @@ describe('import-adapters (round 6: continue, amp)', () => {
     expect(text).toContain('Kun native rule.')
     expect(text).toContain('Continue always rule.')
     expect(text).toContain('Continue TS rule.')
+    expect(text).toContain('Continue legacy rule.')
     expect(text).toContain('globs=**/*.ts')
     expect(text).toContain('NOT enforced by Kun')
   })
@@ -436,16 +446,19 @@ describe('import-adapters (round 6: continue, amp)', () => {
     expect(text).toContain('NOT enforced by Kun')
   })
 
-  it('imports Amp global config AGENTS.md into ~/.kun/AGENTS.md', async () => {
+  it('imports Amp global config AGENTS.md files into ~/.kun/AGENTS.md', async () => {
     await mkdir(join(home, '.config', 'amp'), { recursive: true })
     await writeFile(join(home, '.config', 'amp', 'AGENTS.md'), 'Amp global rule.', 'utf8')
+    await writeFile(join(home, '.config', 'AGENTS.md'), 'Amp shared config rule.', 'utf8')
 
     const plan = await buildImportPlan({
       workspace, homeDir: home, adapters: IMPORT_ADAPTERS, scopes: ['global'], tools: ['amp']
     })
     await applyImportPlan(plan, { workspace })
+    const text = await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')
 
-    expect(await readFile(join(home, '.kun', 'AGENTS.md'), 'utf8')).toContain('Amp global rule.')
+    expect(text).toContain('Amp global rule.')
+    expect(text).toContain('Amp shared config rule.')
   })
 })
 
