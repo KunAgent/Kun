@@ -72,6 +72,25 @@ describe('memory feedback tiebreaker development evaluation', () => {
 
     expect(frozen).toEqual(report)
   })
+
+  it('does not qualify local gains while explicit forbidden selections remain', async () => {
+    const report = evaluateMemoryFeedbackTiebreakerDevelopment(await loadInput())
+    const compact = compactMemoryFeedbackTiebreakerDevelopmentReport(report)
+    const improved = compact.configurations.filter((candidate) => candidate.gates.localBenefit)
+
+    expect(improved.map((candidate) => candidate.candidateId)).toEqual([
+      'confirmation-correction-gap_1',
+      'confirmation-correction-gap_2'
+    ])
+    for (const candidate of improved) {
+      expect(candidate.gates.globalNonRegression).toBe(true)
+      expect(candidate.metrics.explicitForbiddenSelections).toBe(3)
+      expect(candidate.metrics.authorizationOrLifecycleViolations).toBe(0)
+      expect(candidate.gates.safety).toBe(false)
+      expect(candidate.gates.passed).toBe(false)
+    }
+    expect(compact.configurations.some((candidate) => candidate.gates.passed)).toBe(false)
+  })
 })
 
 async function loadInput() {
