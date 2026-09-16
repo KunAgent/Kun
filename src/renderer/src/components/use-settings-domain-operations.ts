@@ -441,6 +441,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     if (typeof provider.confirmMemory !== 'function') return false
     try {
       await provider.confirmMemory(memoryId, memoryOperationId('confirm'), memoryMutationAccess(memoryId))
+      await refreshKunDiagnostics()
       return true
     } catch (error) {
       setRuntimeDiagnosticsNotice({

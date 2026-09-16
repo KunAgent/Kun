@@ -213,7 +213,8 @@ export function MemoryRecordDialog({
   onBeginCorrection,
   onConfirm,
   onDraftChange,
-  onSave
+  onSave,
+  feedbackEnabled = true
 }: {
   dialog: MemoryDialogState
   draft: MemoryDraft
@@ -225,6 +226,7 @@ export function MemoryRecordDialog({
   onConfirm: (record: CoreMemoryRecordJson) => void
   onDraftChange: (draft: MemoryDraft | ((prev: MemoryDraft) => MemoryDraft)) => void
   onSave: () => void
+  feedbackEnabled?: boolean
 }): ReactElement {
   const editing = dialog.mode === 'create' || dialog.mode === 'edit' || dialog.mode === 'correct'
   const memory = dialog.mode === 'create' ? null : dialog.memory
@@ -415,14 +417,16 @@ export function MemoryRecordDialog({
             <>
               {!memory.disabledAt && !memory.deletedAt && !memory.supersededAt ? (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => onConfirm(memory)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-500/10 dark:text-emerald-300"
-                  >
-                    <Check className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    {t('memoryConfirm')}
-                  </button>
+                  {feedbackEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => onConfirm(memory)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-500/10 dark:text-emerald-300"
+                    >
+                      <Check className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      {t('memoryConfirm')}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => onBeginCorrection(memory)}

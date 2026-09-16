@@ -511,6 +511,25 @@ describe('MemoryRecordDialog', () => {
     expect(html).toContain('Edit')
   })
 
+  it('hides confirmation when feedback collection is disabled but keeps correction', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord() },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      feedbackEnabled: false,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).not.toContain('Confirm')
+    expect(html).toContain('Correct')
+  })
+
   it('does not offer feedback actions for an inactive record', () => {
     const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
       dialog: { mode: 'view', memory: sampleRecord({ disabledAt: '2026-09-01T00:00:00.000Z' }) },

@@ -619,6 +619,7 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
           onConfirm={(memory) => void confirmMemory(memory)}
           onDraftChange={setDraft}
           onSave={() => void saveDraft()}
+          feedbackEnabled={memoryDiagnostics?.feedback?.enabled !== false}
         />
       ) : null}
 
