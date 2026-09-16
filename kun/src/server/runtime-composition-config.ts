@@ -448,9 +448,8 @@ export function createRuntimeConfigController(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
 	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization)
-	    ])
-
-	    // GUI/TUI own the live Registry through revisioned writes. Hot apply is
+            ])
+            // GUI/TUI own the live Registry through revisioned writes. Hot apply is
 	    // a read-only Registry consumer: startup composition or explicit
 	    // model-connection APIs perform initialization and selection mutations.
 	    // Keeping this path read-only guarantees failed preflight cannot leave a
@@ -478,19 +477,18 @@ export function createRuntimeConfigController(
 	        routePools: materializedConnections.routePools,
 	        localModelGateway: materializedConnections.localModelGateway
 	      }
-	    }
-	    await migrateLegacyProviderCredentials(nextOptions)
-
+            }
+            await migrateLegacyProviderCredentials(nextOptions)
 	    const nextModelClients = buildModelClientRouterInput(
 	      nextOptions,
 	      (model) => modelCapabilitiesForModel(model, nextModelProfiles),
 	      llmDebug,
 	      resolveLegacyRequestCredentials
 	    )
-	    for (const [providerId, client] of extensionModelProviders.clientMap()) {
-	      nextModelClients.providers.set(providerId, client)
-	    }
-	    const nextDelegatedRuntime = buildMainDelegatedRuntime({
+            for (const [providerId, client] of extensionModelProviders.clientMap()) {
+              nextModelClients.providers.set(providerId, client)
+            }
+            const nextDelegatedRuntime = buildMainDelegatedRuntime({
 	      options: nextOptions,
 	      registry: nextRegistry,
 	      skillRuntime: nextSkillRuntime,
