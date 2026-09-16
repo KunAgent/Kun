@@ -35,6 +35,18 @@ is no-go: production remains on the lexical/FTS5 foundation with no hidden weigh
 Any future production-ranking proposal must use a new version and pass relevance, uncertainty,
 safety, privacy, determinism, and resource gates.
 
+### Manual recovery for a malformed ledger tail
+
+When diagnostics report `malformed final event`, feedback appends remain paused so
+that unknown data is never followed by new audit events. To recover, stop Kun and
+Manager, make a complete backup of `memory-feedback/`, then remove only the final
+incomplete event line from the newest active `events-*.jsonl` segment and replace
+that segment atomically. Never edit interior events, `checkpoint.json`, or
+`aggregates.json`. Restart so `ready()` can rebuild the projection from the valid
+prefix, and resume appends only after diagnostics report `ready`. If the corruption
+is interior, affects the checkpoint, or its scope is uncertain, do not edit it
+manually; keep the backup and leave feedback degraded for maintainer recovery.
+
 ## Source setup and validation
 
 Install Git, Node.js 22.19+ (Node 22 LTS is recommended), npm, and configure at least one model
