@@ -34,7 +34,7 @@
 - [x] 5.1 Add scope, authority, disabled, deleted, expired, future-valid, and superseded hard-negative tests; verify every authorization or lifecycle violation forces no-go with zero tolerance.
 - [x] 5.2 Add no-result and positive-relevance tests; verify feedback candidates preserve lexical abstention and never fill the result budget with unrelated records.
 - [x] 5.3 Add privacy tests for query text, Memory content, source excerpts, credentials, Windows/UNC/POSIX/file URLs, and oversized diagnostics; verify traces retain only bounded synthetic ids, numeric features, and safe evaluator metadata.
-- [ ] 5.4 Add deterministic replay and serialization tests across supported runtime environments; verify selected ids, numeric scores within tolerance, metrics, hashes, and decisions remain stable.
+- [x] 5.4 Add deterministic replay and serialization tests across supported runtime environments; verify selected ids, numeric scores within tolerance, metrics, hashes, and decisions remain stable.
 - [ ] 5.5 Measure evaluation duration, trace count, and serialized artifact bytes against pre-registered ceilings; verify a synthetic over-limit candidate fails the resource gate without truncating decision-critical evidence.
 
 ## 6. Baseline Synchronization And Documentation
