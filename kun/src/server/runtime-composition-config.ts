@@ -58,7 +58,6 @@ import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
-
 export function createRuntimeConfigController(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>
 ) {
