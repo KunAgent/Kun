@@ -147,7 +147,7 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
           eventCount: 0,
           aggregateCount: 0,
           duplicateCount: 0,
-          malformedCount: 1,
+          malformedCount: 0,
           degradedReason: reason
         })
       }

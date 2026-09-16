@@ -1,4 +1,5 @@
 import { MemoryCreateRequest, MemoryUpdateRequest } from '../../contracts/memory.js'
+import { MemoryFeedbackDiagnostics } from '../../contracts/memory-feedback.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import {
   MemoryConfirmRequest,
@@ -67,7 +68,13 @@ export async function memoryDiagnostics(
   if (!store) return jsonResponse({ enabled: false, rootDir: '', activeCount: 0, tombstoneCount: 0, lastInjectedIds: [] })
   const diagnostics = await store.diagnostics()
   if (!feedback) return jsonResponse(diagnostics)
-  return jsonResponse({ ...diagnostics, feedback: await feedback.diagnostics() })
+  let feedbackDiagnostics
+  try {
+    feedbackDiagnostics = await feedback.diagnostics()
+  } catch {
+    feedbackDiagnostics = degradedFeedbackDiagnostics(feedback)
+  }
+  return jsonResponse({ ...diagnostics, feedback: feedbackDiagnostics })
 }
 
 export async function confirmMemory(
@@ -135,4 +142,23 @@ function parseFeedbackBody<T extends { memoryId: string }>(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function degradedFeedbackDiagnostics(feedback: MemoryFeedbackRuntime) {
+  let enabled = false
+  try {
+    enabled = feedback.enabled()
+  } catch {
+    // Keep the diagnostics fallback bounded even if the adapter is unhealthy.
+  }
+  return MemoryFeedbackDiagnostics.parse({
+    enabled,
+    state: 'degraded',
+    projection: 'degraded',
+    eventCount: 0,
+    aggregateCount: 0,
+    duplicateCount: 0,
+    malformedCount: 0,
+    degradedReason: 'feedback diagnostics unavailable'
+  })
 }
