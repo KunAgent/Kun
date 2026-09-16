@@ -12,6 +12,7 @@ import {
   type ModelEndpointFormat,
   type ModelProviderProfileV1
 } from '../../shared/app-settings'
+import { openCodeSessionRuntimeHeaders } from '../../shared/opencode-session'
 import type { PromptOptimizationResult } from '../../shared/kun-gui-api'
 import { fetchWithOptionalProxy } from '../proxy-fetch'
 import {
@@ -104,16 +105,25 @@ function buildPromptOptimizationRequest(input: {
   systemPrompt: string
   sourceText: string
   responsesMode?: 'lite'
+  providerId?: string
+  presetSource?: string
 }): PromptOptimizationRequestPayload | null {
   const endpointFormat = resolveModelEndpointFormat(input.endpointFormat, input.baseUrl)
   if (!endpointFormat) return null
   const auth = resolveCodexResponsesRequestAuth(input.baseUrl, input.apiKey)
   const responsesLite = usesCodexResponsesLite(input.baseUrl, input.responsesMode)
-  const headers: Record<string, string> = withCodexResponsesLiteHeader({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${auth.apiKey}`,
-    ...auth.headers
-  }, responsesLite)
+  const headers: Record<string, string> = {
+    ...withCodexResponsesLiteHeader({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${auth.apiKey}`,
+      ...auth.headers
+    }, responsesLite),
+    ...openCodeSessionRuntimeHeaders({
+      presetSource: input.presetSource,
+      providerId: input.providerId,
+      baseUrl: input.baseUrl
+    })
+  }
   if (endpointFormat === 'messages') {
     headers['x-api-key'] = auth.apiKey
     headers['anthropic-version'] = '2023-06-01'
@@ -306,7 +316,9 @@ export async function optimizePrompt(
     responsesMode: modelSettings.responsesMode,
     model: modelSettings.model,
     systemPrompt: modelSettings.systemPrompt,
-    sourceText: trimmed
+    sourceText: trimmed,
+    providerId: modelSettings.providerId,
+    presetSource: getModelProviderProfile(settings, modelSettings.providerId).presetSource?.presetId
   })
   if (!request) return { ok: false, message: 'Prompt optimization endpoint format is invalid.' }
 

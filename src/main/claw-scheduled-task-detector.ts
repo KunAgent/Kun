@@ -19,6 +19,7 @@ import {
   resolveModelEndpointFormat,
   resolveProviderProxyUrl
 } from '../shared/app-settings'
+import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import {
   codexResponsesLiteInput,
@@ -210,16 +211,25 @@ function buildDetectionRequest(input: {
   systemPrompt: string
   sourceText: string
   responsesMode?: 'lite'
+  providerId?: string
+  presetSource?: string
 }): DetectionRequestPayload | null {
   const endpointFormat = resolveModelEndpointFormat(input.endpointFormat, input.baseUrl)
   if (!endpointFormat) return null
   const auth = resolveCodexResponsesRequestAuth(input.baseUrl, input.apiKey)
   const responsesLite = usesCodexResponsesLite(input.baseUrl, input.responsesMode)
-  const headers: Record<string, string> = withCodexResponsesLiteHeader({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${auth.apiKey}`,
-    ...auth.headers
-  }, responsesLite)
+  const headers: Record<string, string> = {
+    ...withCodexResponsesLiteHeader({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${auth.apiKey}`,
+      ...auth.headers
+    }, responsesLite),
+    ...openCodeSessionRuntimeHeaders({
+      presetSource: input.presetSource,
+      providerId: input.providerId,
+      baseUrl: input.baseUrl
+    })
+  }
   if (endpointFormat === 'messages') {
     headers['x-api-key'] = auth.apiKey
     headers['anthropic-version'] = '2023-06-01'
@@ -353,7 +363,9 @@ export async function detectClawScheduledTaskRequest(
     model,
     systemPrompt: buildDetectionPrompt(now),
     sourceText,
-    responsesMode
+    responsesMode,
+    providerId: provider.id,
+    presetSource: provider.presetSource?.presetId
   })
   if (!detectionRequest) return null
   const response = await fetchWithOptionalProxy(detectionRequest.url, {

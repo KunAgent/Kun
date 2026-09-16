@@ -60,7 +60,7 @@ import {
 } from './anthropic-messages-stream-decoder.js'
 import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder.js'
 import type { CompatModelClientConfig, ChatMessage, CompatPostResult } from './compat-model-types.js'
-import { isCodexEndpoint, isOpenCodeGo, ignoreModelTraceFailure } from './compat-model-support.js'
+import { isCodexEndpoint, ignoreModelTraceFailure } from './compat-model-support.js'
 import { isDeepSeekHost } from './model-error-probe.js'
 
 export class CompatModelClientBase {
@@ -216,23 +216,6 @@ export class CompatModelClientBase {
       endpointFormat,
       responsesLite
     })
-  }
-
-  /**
-   * Resolve the per-session routing id for OpenCode Go requests. A real Kun
-   * thread id is propagated as-is; a non-session probe/inline completion that
-   * carries no thread id gets a stable, request-local routing id (never a
-   * client-instance UUID or the GUI's unrelated selected session).
-   */
-  protected openCodeGoSessionId(threadId?: string): string | undefined {
-    if (!isOpenCodeGo({
-      presetSource: this.config.presetSource,
-      providerId: this.config.providerId,
-      baseUrl: this.config.baseUrl
-    })) {
-      return undefined
-    }
-    return threadId?.trim() || randomUUID()
   }
 
   protected async classifyHttpError(status: number, text: string, retryAfter?: string | null) {
