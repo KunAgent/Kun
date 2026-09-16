@@ -160,7 +160,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       .filter((tab) => String(tab.props.id ?? '').startsWith('laboratory-settings-tab-'))
     expect(laboratoryTabs.map(instanceText)).toEqual([
       'Windowed context (experimental)',
-      'Conversation visualization',
+      'Session display optimization',
       'Automatic plan and build',
       'Computer control',
       'Browser',

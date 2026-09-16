@@ -21,7 +21,7 @@ import {
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
-import { ChartRenderer } from './ChartRenderer'
+import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
 import {
   AnimatedWorkLogo,
@@ -152,6 +152,7 @@ export function ConversationTurn({
     generatedFileBlocks,
     turnFileChanges,
     chartBlocks,
+    pendingChartBlocks,
     timelineEntries
   } = useMemo(
     () =>
@@ -290,6 +291,7 @@ export function ConversationTurn({
     componentPrototypeBlocks.length > 0 ||
     diagramPrototypeBlocks.length > 0 ||
     conversationVisualizationBlocks.length > 0 ||
+    pendingChartBlocks.length > 0 ||
     chartBlocks.length > 0 ||
     Boolean(devPreviewCard)
   )
@@ -428,14 +430,6 @@ export function ConversationTurn({
         />
       ))}
 
-      {conversationVisualizationBlocks.map((block) => (
-        <ConversationVisualizationCard key={block.id} block={block} />
-      ))}
-
-      {chartBlocks.map((block) => (
-        <ChartRenderer key={block.id} spec={block.spec} />
-      ))}
-
       {assistantContentBlocks.map((block) => (
         <MessageBubble
           key={block.id}
@@ -462,6 +456,18 @@ export function ConversationTurn({
               : undefined
           }
         />
+      ))}
+
+      {conversationVisualizationBlocks.map((block) => (
+        <ConversationVisualizationCard key={block.id} block={block} />
+      ))}
+
+      {pendingChartBlocks.map((block) => (
+        <ChartSkeleton key={block.id} title={block.summary} />
+      ))}
+
+      {chartBlocks.map((block) => (
+        <ChartRenderer key={block.id} spec={block.spec} />
       ))}
 
       {!isProcessing && (assistantContentBlocks.length > 0 || orderedAnswerBlocks.length > 0) && turnUsage ? (

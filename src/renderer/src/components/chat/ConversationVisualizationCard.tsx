@@ -119,8 +119,8 @@ export function ConversationVisualizationCard({ block }: { block: ToolBlock }): 
               return (
                 <section key={key} aria-label={section.title}>
                   {section.title ? <SectionTitle>{section.title}</SectionTitle> : null}
-                  <div className={`grid grid-cols-1 gap-3 ${columns}`}>
-                    {section.cards.map((card) => <ItemCard key={card.id} item={card} />)}
+                  <div className={`grid grid-cols-1 gap-2 ${columns}`}>
+                    {section.cards.map((card) => <ItemCard key={card.id} item={card} compact />)}
                   </div>
                 </section>
               )
@@ -157,28 +157,41 @@ function FlowSection({ section }: { section: FlowSectionValue }): ReactElement {
   )
 }
 
+function looksLikeMetricTitle(title: string): boolean {
+  return /^[+\-]?(?:\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?%?[KMBTkmbt]?$/.test(title.trim())
+}
+
 function ItemCard({
   item,
   index,
-  className = ''
+  className = '',
+  compact = false
 }: {
   item: ConversationVisualizationItem
   index?: number
   className?: string
+  compact?: boolean
 }): ReactElement {
   const tone = item.tone ?? 'neutral'
+  const metric = compact && !index && looksLikeMetricTitle(item.title)
   return (
-    <div className={`rounded-[14px] border px-4 py-3 ${toneClass[tone]} ${className}`}>
-      <div className="flex items-start gap-2.5">
+    <div className={`rounded-[14px] border ${metric ? 'px-3 py-2.5' : 'px-4 py-3'} ${toneClass[tone]} ${className}`}>
+      <div className="flex items-start gap-2">
         {index ? (
           <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${toneIconClass[tone]}`}>
             {index}
           </span>
-        ) : <ToneIcon tone={tone} />}
+        ) : metric ? null : <ToneIcon tone={tone} />}
         <div className="min-w-0">
-          <div className="break-words text-[13.5px] font-semibold leading-5">{item.title}</div>
+          {metric ? (
+            <div className="text-[22px] font-semibold leading-7 tracking-[-0.03em] tabular-nums">{item.title}</div>
+          ) : (
+            <div className="break-words text-[13.5px] font-semibold leading-5">{item.title}</div>
+          )}
           {item.description ? (
-            <p className="mt-1 break-words text-[12.5px] leading-5 text-ds-muted">{item.description}</p>
+            <p className={`mt-0.5 break-words text-ds-muted ${metric ? 'line-clamp-2 text-[12px] leading-4' : 'text-[12.5px] leading-5'}`}>
+              {item.description}
+            </p>
           ) : null}
         </div>
       </div>

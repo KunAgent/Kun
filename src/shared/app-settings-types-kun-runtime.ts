@@ -139,7 +139,7 @@ export type KunLabPptAgentSettingsV1 = {
   imageFirst: boolean
 }
 
-/** Experimental Lab feature settings for inline conversation visualizations. */
+/** Experimental Lab session-display optimization (charts, diagrams, structured visuals). */
 export type KunLabConversationVisualizationSettingsV1 = {
   /** Master switch. Default false while the feature is experimental. */
   enabled: boolean
