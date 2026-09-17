@@ -35,7 +35,9 @@ describe('minimal room rich editor', () => {
   it('inserts an atomic member at the caret while retaining trailing text', async () => {
     const f = await render('Ask @Dev about tests')
     await act(async () => { f.editor.commands.setTextSelection(9) })
-    expect(element.querySelector('[role="option"]')?.textContent).toBe('@Developer')
+    const option = document.querySelector('[role="option"]')
+    expect(option?.querySelector('.rooms-rich-mentions-copy')?.textContent).toBe('@Developer')
+    expect(option?.querySelector('.rooms-avatar')).not.toBeNull()
     await f.key({ key: 'Enter' })
     const saved = roomRichDraft(f.editor.getJSON())
     expect(saved.mentions).toEqual(['developer'])
@@ -76,5 +78,28 @@ describe('minimal room rich editor', () => {
     expect(roomSendMentionIds(['*'], room)).toEqual(['developer'])
     // Named draft recipients stay explicit; the host reports removal instead of routing to a default member.
     expect(roomSendMentionIds(['reviewer'], room)).toEqual(['reviewer'])
+  })
+
+  it('portals the mention menu onto document.body so timeline text cannot paint through it', async () => {
+    const f = await render('Ask @')
+    await act(async () => { f.editor.commands.setTextSelection(f.editor.state.doc.content.size - 1) })
+    const menu = document.body.querySelector('[data-room-mention-menu]') as HTMLElement | null
+    expect(menu).not.toBeNull()
+    expect(menu?.parentElement).toBe(document.body)
+    expect(element.contains(menu)).toBe(false)
+    expect(menu?.className).toContain('rooms-rich-mentions')
+    expect(menu?.style.visibility).toBe('visible')
+    expect(Number.parseFloat(String(menu?.style.width))).toBeGreaterThan(0)
+  })
+
+  it('shows member portraits and a combined avatar for @all', async () => {
+    const f = await render('Ask @')
+    await act(async () => { f.editor.commands.setTextSelection(f.editor.state.doc.content.size - 1) })
+    const options = [...document.querySelectorAll('[role="option"]')]
+    expect(options[0]?.querySelector('.rooms-avatar-group')).not.toBeNull()
+    expect(options[0]?.querySelector('.rooms-rich-mentions-copy')?.textContent).toBe('@all')
+    const developer = options.find((option) => option.querySelector('.rooms-rich-mentions-copy')?.textContent === '@Developer')
+    expect(developer?.querySelector('.rooms-avatar')).not.toBeNull()
+    expect(developer?.querySelector('.rooms-avatar-group')).toBeNull()
   })
 })

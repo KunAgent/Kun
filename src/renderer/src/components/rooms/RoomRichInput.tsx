@@ -1,10 +1,27 @@
-import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type RefObject
+} from 'react'
+import { createPortal } from 'react-dom'
 import { Node } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import type { Room } from '@shared/rooms-api'
 import { useTranslation } from 'react-i18next'
+import { currentComposerBodyZoom } from '../chat/floating-composer-popover-placement'
+import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
+import { roomPopoverPlacement } from './RoomPopover'
 import { ROOM_ALL_MENTION, roomMentionToken, roomRichContent, roomRichDraft } from './room-mentions'
+import './rooms-interactions.css'
 
 export type RoomRichInputHandle = { focus(): void; insertText(text: string): void; insertMention(id: string): void }
 const RoomMention = Node.create({ name: 'roomMention', group: 'inline', inline: true, atom: true,
@@ -13,17 +30,107 @@ const RoomMention = Node.create({ name: 'roomMention', group: 'inline', inline: 
   renderHTML: ({ node }) => ['span', { 'data-room-mention': node.attrs.id, class: 'rooms-inline-mention', contenteditable: 'false' }, '@' + node.attrs.label],
   renderText: ({ node }) => roomMentionToken(String(node.attrs.id), String(node.attrs.label)) })
 
+type MentionChoice = { id: string; label: string }
+
+function mentionAvatar(choice: MentionChoice, room: Room): ReactElement {
+  if (choice.id === ROOM_ALL_MENTION) {
+    return (
+      <RoomAvatarGroup
+        members={room.members.filter((member) => member.enabled && !member.removedAt)}
+        size={28}
+      />
+    )
+  }
+  const member = room.members.find((value) => value.id === choice.id)
+  return <RoomAvatar member={member} id={choice.id} label={choice.label} size={28} />
+}
+
+function RoomMentionMenu({
+  id, label, room, choices, selected, onChoose, anchorRef
+}: {
+  id: string
+  label: string
+  room: Room
+  choices: MentionChoice[]
+  selected: number
+  onChoose: (id: string) => void
+  anchorRef: RefObject<HTMLElement | null>
+}): ReactElement {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' })
+  const update = useCallback(() => {
+    const anchor = (anchorRef.current?.closest('.rooms-composer-surface') as HTMLElement | null)
+      ?? anchorRef.current
+    const menu = menuRef.current
+    if (!anchor || !menu) return
+    const rect = anchor.getBoundingClientRect()
+    setStyle({
+      ...roomPopoverPlacement({
+        anchor: rect,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        width: Math.max(rect.width, 240),
+        height: menu.scrollHeight,
+        side: 'top',
+        align: 'start',
+        zoom: currentComposerBodyZoom()
+      }),
+      visibility: 'visible'
+    })
+  }, [anchorRef])
+  useLayoutEffect(() => {
+    update()
+    const frame = window.requestAnimationFrame(update)
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [choices.length, selected, update])
+  const menu = (
+    <div
+      ref={menuRef}
+      id={id}
+      className="rooms-rich-mentions"
+      role="listbox"
+      aria-label={label}
+      data-room-mention-menu
+      style={style}
+    >
+      {choices.map((member, index) => (
+        <button
+          id={`${id}-${index}`}
+          role="option"
+          aria-selected={index === selected}
+          type="button"
+          key={member.id}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onChoose(member.id)}
+        >
+          {mentionAvatar(member, room)}
+          <span className="rooms-rich-mentions-copy">@{member.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+  if (typeof document === 'undefined' || document.body?.nodeType !== 1) return menu
+  return createPortal(menu, document.body)
+}
+
 export const RoomRichInput = forwardRef<RoomRichInputHandle, {
   room: Room; value: string; mentions: string[]; disabled?: boolean; placeholder: string;
   onChange: (value: { body: string; mentions: string[] }) => void; onSubmit: () => void; onPasteFiles?: (files: FileList) => void
 }>(function RoomRichInput(props, ref) {
   const { t } = useTranslation('common')
   const menuId = useId()
+  const wrapRef = useRef<HTMLDivElement>(null)
   const latest = useRef(props); latest.current = props
   const [query, setQuery] = useState<string | null>(null), [selected, setSelected] = useState(0)
   const queryRef = useRef(query); queryRef.current = query
   const selectedRef = useRef(selected); selectedRef.current = selected
-  const range = useRef({ from: 0, to: 0 }), candidatesRef = useRef<Array<{ id: string; label: string }>>([])
+  const range = useRef({ from: 0, to: 0 }), candidatesRef = useRef<MentionChoice[]>([])
   const chooseRef = useRef<(id: string) => void>(() => {})
   const editor = useEditor({
     immediatelyRender: false,
@@ -92,11 +199,20 @@ export const RoomRichInput = forwardRef<RoomRichInputHandle, {
       ...(query !== null && choices.length ? { 'aria-controls': menuId, 'aria-activedescendant': `${menuId}-${selected}` } : {})
     } } })
   }, [editor, props.placeholder, query, choices.length, menuId, selected])
-  return <div className="rooms-rich-input-wrap">
-    <EditorContent editor={editor} />
-    {query !== null && choices.length ? <div id={menuId} className="rooms-rich-mentions" role="listbox" aria-label={t('roomsMention')}>
-      {choices.map((member, index) => <button id={`${menuId}-${index}`} role="option" aria-selected={index === selected} type="button" key={member.id}
-        onMouseDown={(event) => event.preventDefault()} onClick={() => choose(member.id)}>@{member.label}</button>)}
-    </div> : null}
-  </div>
+  return (
+    <div ref={wrapRef} className="rooms-rich-input-wrap">
+      <EditorContent editor={editor} />
+      {query !== null && choices.length ? (
+        <RoomMentionMenu
+          id={menuId}
+          label={t('roomsMention')}
+          room={props.room}
+          choices={choices}
+          selected={selected}
+          onChoose={choose}
+          anchorRef={wrapRef}
+        />
+      ) : null}
+    </div>
+  )
 })

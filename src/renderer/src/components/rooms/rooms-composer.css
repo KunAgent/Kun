@@ -1,11 +1,15 @@
 .rooms-composer {
+  position: relative;
+  z-index: 20;
   min-width: 0;
   flex-shrink: 0;
+  overflow: visible;
   padding: 12px 20px 10px;
 }
 
 .rooms-composer-surface {
   position: relative;
+  overflow: visible;
   min-width: 0;
   margin: 0;
   padding: 10px;

@@ -4,9 +4,42 @@
 .rooms-rich-input[contenteditable="false"] { opacity: .65; }
 .rooms-rich-input:has(>p:only-child>br.ProseMirror-trailingBreak:only-child)::before { content: attr(data-placeholder); color: var(--ds-muted); pointer-events: none; height: 0; float: left; }
 .rooms-inline-mention, .rooms-mention-body a[href^="#kun-room-member-"] { display: inline; border-radius: 5px; padding: 1px 4px; color: var(--ds-accent); background: color-mix(in srgb, var(--ds-accent) 12%, transparent); text-decoration: none; font-weight: 500; }
-.rooms-rich-mentions { position: absolute; bottom: 100%; left: 8px; right: 8px; max-height: 220px; overflow: auto; z-index: 15; border: 1px solid var(--ds-border); border-radius: 10px; background: var(--ds-surface); padding: 4px; box-shadow: 0 8px 24px #0002; }
-.rooms-rich-mentions button { display: block; width: 100%; padding: 7px 10px; text-align: left; border-radius: 6px; }
-.rooms-rich-mentions button[aria-selected="true"] { background: color-mix(in srgb, var(--ds-accent) 12%, transparent); }
+.rooms-rich-mentions {
+  position: fixed;
+  z-index: 100;
+  box-sizing: border-box;
+  isolation: isolate;
+  max-height: 220px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  background: var(--ds-surface-elevated);
+  box-shadow: var(--ds-shadow-overlay);
+}
+.rooms-rich-mentions button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--ds-text);
+  text-align: left;
+}
+.rooms-rich-mentions button:hover,
+.rooms-rich-mentions button[aria-selected="true"] { background: var(--ds-surface-hover); }
+.rooms-rich-mentions-copy {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rooms-rich-mentions :is(.rooms-avatar, .rooms-avatar-group) { flex: 0 0 auto; }
 .rooms-emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; padding: 7px; }
 .rooms-emoji-grid button { width: 32px; height: 32px; border-radius: 6px; font-size: 20px; }
 .rooms-emoji-grid button:hover, .rooms-emoji-grid button:focus-visible { background: color-mix(in srgb, var(--ds-accent) 12%, transparent); outline: 2px solid var(--ds-accent); }
@@ -17,7 +50,7 @@
 .rooms-reactions .rooms-popover-anchor { opacity: .6; }
 .rooms-interaction-error { color: #d35b62; font-size: 12px; margin: 5px 0; overflow-wrap: anywhere; }
 .rooms-interaction-note { color: var(--ds-muted); font-size: 12px; }
-.rooms-poll-create, .rooms-poll-card { border: 1px solid var(--ds-border); border-radius: 10px; padding: 12px; margin: 8px 0; min-width: 0; max-width: 100%; background: var(--ds-surface); }
+.rooms-poll-create, .rooms-poll-card { border: 1px solid var(--ds-border); border-radius: 10px; padding: 12px; margin: 8px 0; min-width: 0; max-width: 100%; background: var(--ds-surface-card); }
 .rooms-poll-create { margin: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
 .rooms-poll-create-header, .rooms-poll-heading { display: flex; gap: 8px; align-items: flex-start; }
 .rooms-poll-create-header strong, .rooms-poll-heading strong { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
