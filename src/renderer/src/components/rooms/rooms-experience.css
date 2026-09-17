@@ -33,3 +33,26 @@
 .rooms-workspace[data-chat-layout='bubble'] .rooms-message-user .rooms-message-bubble { margin-left: auto; }
 .rooms-workspace[data-chat-layout='bubble'] .rooms-message-user .rooms-message-footer { justify-content: flex-end; }
 .rooms-workspace .rooms-message-wide:not(:has(pre, table)) { width: fit-content; max-width: min(100%,36.25rem); }
+/* Receipt / typing indicator pinned above the composer. Fixed height keeps
+   the timeline from shifting when the row appears or disappears. */
+.rooms-typing-row { display: flex; align-items: center; gap: .45rem; height: 1.25rem; padding: 0 .9rem; font-size: .72rem; color: var(--ds-text-muted); overflow: hidden; }
+.rooms-typing-row[data-visible] { animation: rooms-typing-fade .2s ease; }
+.rooms-typing-dots { display: inline-flex; gap: 3px; flex-shrink: 0; }
+.rooms-typing-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ds-accent); animation: rooms-typing-bounce 1s infinite ease-in-out; }
+.rooms-typing-dot:nth-child(2) { animation-delay: .15s; }
+.rooms-typing-dot:nth-child(3) { animation-delay: .3s; }
+.rooms-typing-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-typing-name { font-weight: 600; color: var(--ds-text); }
+@keyframes rooms-typing-bounce { 0%, 100% { transform: translateY(0); opacity: .45; } 50% { transform: translateY(-3px); opacity: 1; } }
+@keyframes rooms-typing-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .rooms-typing-dot { animation: none; opacity: 1; }
+  .rooms-typing-row[data-visible] { animation: none; }
+}
+/* Optimistic own-message bubble, cleared once the server echoes it. */
+.rooms-pending-row .rooms-message-bubble { opacity: .72; }
+.rooms-pending-failed .rooms-message-bubble { opacity: 1; outline: 1px solid color-mix(in srgb,#ef4444 45%,transparent); }
+.rooms-pending-status { font-size: .68rem; color: var(--ds-text-muted); }
+.rooms-pending-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rooms-pending-failed { display: flex; align-items: center; gap: .5rem; margin: .3rem 0 0; font-size: .72rem; color: #ef4444; }
+.rooms-pending-failed button { display: inline-flex; align-items: center; gap: .25rem; flex-shrink: 0; font-size: .72rem; color: var(--ds-accent); }

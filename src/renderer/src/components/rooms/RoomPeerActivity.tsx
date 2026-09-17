@@ -5,6 +5,7 @@ import { roomButtonClass } from './RoomSettings'
 import { roomsClient } from './rooms-client'
 import { useRoomMutation } from './useRoomResource'
 import { RoomAvatar } from './RoomAvatar'
+import { roomPeerMemberBlocked } from './room-receipt-helpers'
 
 export function continueRoomTopic(roomId: string, rootRequestId: string): void {
   window.dispatchEvent(
@@ -28,14 +29,7 @@ export function RoomPeerSummary({
   taskCounts?: { runningCount?: number; attentionCount?: number }
 }) {
   const { t } = useTranslation('common')
-  const blockedMember = (member: RoomPeerTopicSummary['members'][number]) =>
-    ['failed', 'recovery_required'].includes(member.state) ||
-    [
-      'member_unavailable',
-      'member_budget_exhausted',
-      'preparation_failed',
-      'response_failed'
-    ].includes(member.waitingReason ?? '')
+  const blockedMember = roomPeerMemberBlocked
   const activeMembers = topics
     .filter((topic) => topic.status === 'active')
     .flatMap((topic) => topic.members)

@@ -51,5 +51,18 @@
   "roomsRunToolWaiting": "Waiting for a recorded result",
   "roomsRunToolUnavailable": "No result was retained for this call",
   "roomsRunToolDuration": "Tool duration: {{seconds}} s",
-  "roomsRunSearchLoadedOnly": "Filters apply to loaded records. Load earlier process to include more history."
+  "roomsRunSearchLoadedOnly": "Filters apply to loaded records. Load earlier process to include more history.",
+  "roomsTyping_is": " is responding…",
+  "roomsTyping_are": " are responding…",
+  "roomsTyping_and": " and ",
+  "roomsTyping_sep": ", ",
+  "roomsTyping_nMore_one": "{{count}} more",
+  "roomsTyping_nMore_other": "{{count}} more",
+  "roomsReceipt_waiting_one": "Delivered · waiting for {{name}}…",
+  "roomsReceipt_waiting_other": "Delivered · waiting for {{name}} and {{count}} more…",
+  "roomsReceipt_fallback": "Delivered, waiting for a response…",
+  "roomsSend_pending": "Sending…",
+  "roomsSend_failed": "Failed to send",
+  "roomsSend_retry": "Retry",
+  "roomsSend_dismiss": "Discard"
 }

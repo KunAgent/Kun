@@ -14,7 +14,7 @@ import { AgentDetails } from './AgentDetails'
 import { agentPath, useAgentResource } from './agent-client'
 import type { AgentIdentity, Room, RoomSidebarEntry } from '@shared/rooms-api'
 import { roomRequestId, roomsRequest } from './rooms-client'
-import { useCallback, useEffect, useState, useRef, type ReactElement, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef, type ReactElement, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MessagesSquare,
@@ -39,6 +39,10 @@ import {
   RoomPeerActivity,
   RoomPeerSummary
 } from './RoomPeerActivity'
+import { RoomTypingRow } from './RoomTypingRow'
+import { RoomPendingSendRow } from './RoomPendingSendRow'
+import { useRoomPendingSends } from './useRoomPendingSends'
+import { roomRespondingMemberIds, roomWaitingMemberIds } from './room-receipt-helpers'
 import { RoomRunInspector } from './RoomRunInspector'
 import { RoomDrawerNavigation, useRoomDrawerNavigation } from './RoomDrawerNavigation'
 import { RoomDrawerTask } from './RoomDrawerTask'
@@ -142,6 +146,7 @@ export function RoomsWorkspaceView({
   const openTask = (taskId: string): void => drawer.open({ kind: 'task', taskId })
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
   const openContent = (reference: RoomContentReference, messageId?: string): void => drawer.open({ kind: 'content', reference, messageId })
+  const pendingSends = useRoomPendingSends(room?.id, messages)
   const send = async (message: SendRoomMessage): Promise<void> => {
     if (!room) return
     const pending = choiceInputs[0]
@@ -150,9 +155,44 @@ export function RoomsWorkspaceView({
       await Promise.all([state.refresh(), direct.refresh(), topicState.refresh()])
       return
     }
-    await roomsClient.send(room.id, message)
+    pendingSends.enqueue(message)
+    try {
+      await roomsClient.send(room.id, message)
+      pendingSends.markSent(message.clientRequestId)
+    } catch (cause) {
+      pendingSends.markFailed(
+        message.clientRequestId,
+        cause instanceof Error ? cause.message : String(cause)
+      )
+      throw cause
+    }
     await Promise.all([state.refresh(), topicState.refresh()])
   }
+  const retryPendingSend = (clientRequestId: string): void => {
+    const message = pendingSends.retry(clientRequestId)
+    if (message) void send(message).catch(() => undefined)
+  }
+  const memberName = useCallback(
+    (id: string) =>
+      room?.members.find((member) => member.id === id)?.displayName ?? id,
+    [room]
+  )
+  const typingNames = useMemo(
+    () =>
+      privateChat
+        ? direct.data?.active
+          ? [room?.members[0]?.displayName ?? '']
+          : []
+        : roomRespondingMemberIds(topicState.topics).map(memberName),
+    [direct.data?.active, memberName, privateChat, room, topicState.topics]
+  ).filter(Boolean)
+  const waitingNames = useMemo(
+    () =>
+      privateChat || !pendingSends.hasUnsettled
+        ? []
+        : roomWaitingMemberIds(topicState.topics).map(memberName),
+    [memberName, pendingSends.hasUnsettled, privateChat, topicState.topics]
+  )
   const skipSetup = async (): Promise<void> => {
     if (!agentId || !setupPending) return
     await roomsRequest('/v1/agents/' + encodeURIComponent(agentId) + '/setup', 'POST', {
@@ -281,12 +321,20 @@ export function RoomsWorkspaceView({
                 {choiceInputs.filter((input) => !messages.some((message) => message.clientRequestId === input.id)).map((input) =>
                   <RoomChoiceCard key={input.id} input={input} setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />)}
                 {setupPending && !choiceInputs.length ? <button type="button" className="direct-choice-skip" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
+                {pendingSends.pending.map((item) =>
+                  <RoomPendingSendRow key={item.clientRequestId} item={item} onRetry={retryPendingSend} onDismiss={pendingSends.dismiss} />)}
               </>}
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
                 setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />}
             />}
             {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} onModels={() => setModelsOpen(true)} /> : null}
-            {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <RoomComposer
+            {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
+              <RoomTypingRow
+                names={typingNames}
+                waitingNames={waitingNames}
+                fallback={!typingNames.length && pendingSends.hasUnsettled ? t('roomsReceipt_fallback') : ''}
+              />
+              <RoomComposer
               key={room.id + '-composer'}
               room={room}
               tasks={state.tasks}
@@ -296,7 +344,8 @@ export function RoomsWorkspaceView({
               }))}
               onSend={send} responding={Boolean(direct.data?.active)} onStop={() => void direct.act('stop')}
               onConnectProject={privateChat ? () => void direct.context('workspace') : undefined}
-            />}
+            />
+          </>}
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center text-ds-muted">
