@@ -42,6 +42,21 @@
 .rooms-header-title h1 > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rooms-header-title p { margin-top: .2rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   color: var(--ds-text-muted); font-size: .75rem; }
+.rooms-header-title .rooms-header-rename-trigger {
+  width: 1.5rem; height: 1.5rem; border-radius: .5rem; opacity: 0;
+  -webkit-app-region: no-drag;
+}
+.rooms-header-title .rooms-header-rename-trigger svg { color: inherit; }
+.rooms-header-title:hover .rooms-header-rename-trigger,
+.rooms-header-title:focus-within .rooms-header-rename-trigger,
+.rooms-header-rename-trigger:focus-visible { opacity: 1; }
+.rooms-header-rename {
+  min-width: 0; width: min(24rem, 100%); margin: 0; padding: 0;
+  font-size: 1.0625rem; font-weight: 600; line-height: 1.4; color: var(--ds-text);
+  background: transparent; border: none; border-bottom: 1px solid var(--ds-border); border-radius: 0;
+  outline: none; -webkit-app-region: no-drag;
+}
+.rooms-header-rename:focus { border-bottom-color: var(--ds-accent); }
 .rooms-header-members { flex-shrink: 0; margin-right: .125rem; }
 .rooms-mode-control { position: relative; max-width: 9.25rem; flex-shrink: 0; }
 .rooms-mode-control select { width: 100%; appearance: none; padding: .375rem 1.4rem .375rem .625rem;

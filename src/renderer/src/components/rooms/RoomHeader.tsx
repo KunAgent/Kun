@@ -1,4 +1,5 @@
-import { ChevronDown, Menu, MoreHorizontal, PanelRight, Pin, Search, Settings, Archive } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, Menu, MoreHorizontal, PanelRight, Pencil, Pin, Search, Settings, Archive } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room } from '@shared/rooms-api'
 import { RoomAvatarGroup } from './RoomAvatar'
@@ -8,16 +9,43 @@ import { RoomAppearanceMenu, RoomNotificationMenu } from './RoomManagementContro
 export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDetails, onMembers, onSettings, onUpdate }: {
   room: Room | null; busy: boolean; searchOpen: boolean
   onSidebar: () => void; onSearch: () => void; onDetails: () => void; onMembers: () => void; onSettings: () => void
-  onUpdate: (patch: { collaborationMode?: Room['collaborationMode']; pinned?: boolean; archived?: boolean }) => void
+  onUpdate: (patch: { name?: string; collaborationMode?: Room['collaborationMode']; pinned?: boolean; archived?: boolean }) => void
 }) {
   const { t } = useTranslation('common')
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
   const enabled = room?.members.filter((member) => member.enabled && !member.removedAt) ?? []
+  const startEdit = () => {
+    if (!room || busy) return
+    setDraft(room.name)
+    setEditing(true)
+  }
+  const cancelEdit = () => { setEditing(false); setDraft('') }
+  const submitRename = () => {
+    if (!room) { setEditing(false); setDraft(''); return }
+    const name = draft.trim()
+    setEditing(false)
+    setDraft('')
+    if (!name || name === room.name) return
+    onUpdate({ name })
+  }
   return <header className="rooms-main-titlebar rooms-header">
     <button type="button" className="rooms-icon-button rooms-sidebar-toggle" aria-label={t('roomsLabel')} onClick={onSidebar}>
       <Menu size={19} />
     </button>
     <div className="rooms-header-title">
-      <h1>{room?.pinned ? <Pin size={14} aria-hidden="true" /> : null}<span>{room?.name ?? t('roomsLabel')}</span></h1>
+      {editing && room ? <input className="rooms-header-rename" aria-label={t('roomsRename')} value={draft} maxLength={120}
+        disabled={busy} autoFocus onFocus={(event) => event.target.select()} onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') { event.preventDefault(); submitRename() }
+          else if (event.key === 'Escape') { event.preventDefault(); cancelEdit() }
+        }} onBlur={submitRename}
+      /> : <h1>
+        {room?.pinned ? <Pin size={14} aria-hidden="true" /> : null}
+        <span>{room?.name ?? t('roomsLabel')}</span>
+        {room ? <button type="button" className="rooms-icon-button rooms-header-rename-trigger" aria-label={t('roomsRename')}
+          title={t('roomsRename')} disabled={busy} onClick={startEdit}><Pencil size={14} /></button> : null}
+      </h1>}
       {room ? <p>{room.description || enabled.map((member) => member.displayName).join(' · ')}</p> : null}
     </div>
     {room ? <>
@@ -42,6 +70,7 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
       <RoomAppearanceMenu />
       <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={19} />} align="end" width={224} className="rooms-icon-button">
         {(close) => <div className="rooms-menu-list">
+          <button type="button" disabled={busy} onClick={() => { close(); startEdit() }}><Pencil size={16} />{t('roomsRename')}</button>
           <button type="button" onClick={() => { close(); onSettings() }}><Settings size={16} />{t('roomsSettings')}</button>
           <button type="button" disabled={busy} onClick={() => { close(); onUpdate({ pinned: !room.pinned }) }}><Pin size={16} />{t(room.pinned ? 'roomsUnpin' : 'roomsPin')}</button>
           <button type="button" disabled={busy} onClick={() => { close(); onUpdate({ archived: !room.archivedAt }) }}><Archive size={16} />{t(room.archivedAt ? 'roomsRestore' : 'roomsArchive')}</button>
