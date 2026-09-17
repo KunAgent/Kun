@@ -53,8 +53,8 @@ export type ModelRoundEngineInput = {
   streamToolMetadata: ReadonlyMap<string, ModelStreamToolMetadata>
   maxToolArgumentStringBytes?: number
   cacheSignature: CacheRequestSignature
-  preSendDetails: Record<string, unknown>
-  postSendDetails: Record<string, unknown>
+  preSendDetails: Record<string, unknown>; postSendDetails: Record<string, unknown>
+  onModelDispatched?: () => void // fires once the model stream request has been dispatched
   /**
    * Runs before the first committed route chunk is reduced or persisted.
    * Route pools suppress rejected pre-content targets, so this route owns any
@@ -227,7 +227,7 @@ export class ModelRoundEngine {
       // fetch/SDK request. Post-send telemetry can then overlap provider TTFB
       // instead of delaying the actual network dispatch.
       const firstChunk = streamIterator.next()
-      void firstChunk.catch(() => undefined)
+      input.onModelDispatched?.(); void firstChunk.catch(() => undefined)
       try {
         await this.deps.recordPipelineStage(
           input.threadId,

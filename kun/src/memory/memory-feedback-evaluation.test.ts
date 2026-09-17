@@ -23,7 +23,9 @@ describe('offline memory feedback evaluation', () => {
     )
     expect(frequent.features.confirmation).toBe(0)
     expect(confirmed.features.confirmation).toBe(1)
-    expect(replacement.features.correction).toBe(1)
+    // A correction attributes to the corrected record only, matching the
+    // persisted aggregate; the replacement carries no correction count.
+    expect(replacement.features.correction).toBe(0)
     expect(frequent.features.foundationScore).toBeGreaterThanOrEqual(0)
     expect(frequent.features.candidateScore).toBeGreaterThanOrEqual(frequent.features.foundationScore)
     expect(foundation.selectedIds).not.toContain('mem_feedback_disabled')

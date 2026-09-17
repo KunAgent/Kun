@@ -214,7 +214,7 @@ export function MemoryRecordDialog({
   onConfirm,
   onDraftChange,
   onSave,
-  feedbackEnabled = true
+  feedbackEnabled = false
 }: {
   dialog: MemoryDialogState
   draft: MemoryDraft

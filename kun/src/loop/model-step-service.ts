@@ -112,7 +112,6 @@ import { composeForwardedModelRequest } from './forwarded-model-request.js'
 export type { ModelStepServiceDeps } from './model-step-service-types.js'
 export { buildExtensionProfileInstruction } from './model-step-preparation-helpers.js'
 
-
 export class ModelStepService extends ModelStepPreparationService {
   private readonly workspaceCheckpointGates = new Map<string, Promise<void>>()
 
@@ -169,7 +168,7 @@ export class ModelStepService extends ModelStepPreparationService {
       contextInstructions,
       redactedRequestValues,
       skillContextInstructions,
-      modeInstruction
+      modeInstruction, recordMemoryRetrieved
     } = preparation
     const clientDiagnostics = modelClientDiagnostics(this.deps.model, providerId)
     const threadProfileInstruction = buildThreadProfileInstruction(thread.systemPrompt)
@@ -525,6 +524,7 @@ export class ModelStepService extends ModelStepPreparationService {
       turnId,
       signal,
       request,
+      onModelDispatched: recordMemoryRetrieved,
       maxToolCallsPerStep,
       // A retrieval model can occasionally emit one extra parallel call.
       // Preserve the bounded accepted batch instead of failing the whole child.

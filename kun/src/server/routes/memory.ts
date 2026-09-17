@@ -115,10 +115,8 @@ export async function correctMemory(
 function memoryFeedbackError(error: unknown): JsonResponse {
   if (!(error instanceof MemoryFeedbackServiceError)) return ERRORS.internal('memory feedback operation failed')
   switch (error.code) {
-    case 'unauthorized': return ERRORS.unauthorized(error.message)
     case 'not-found': return ERRORS.notFound(error.message)
     case 'inactive':
-    case 'cross-scope':
     case 'id-conflict': return ERRORS.conflict(error.message)
     case 'unavailable': return ERRORS.unavailable(error.message)
     case 'validation': return ERRORS.validation(error.message)

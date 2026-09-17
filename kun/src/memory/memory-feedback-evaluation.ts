@@ -178,13 +178,13 @@ function buildFeedbackSignals(events: readonly MemoryFeedbackEvent[]): Map<strin
     return created
   }
   for (const event of events) {
+    // One feedback event attributes to exactly one record, matching the
+    // persisted aggregate projection: a correction counts against the
+    // corrected (old) Memory, not the replacement it produced.
     const target = get(event.memoryId)
     if (event.kind === 'retrieved') target.retrievalCount += 1
     if (event.kind === 'confirmed') target.confirmationCount += 1
-    if (event.kind === 'corrected') {
-      target.correctionCount += 1
-      get(event.replacementMemoryId).correctionCount += 1
-    }
+    if (event.kind === 'corrected') target.correctionCount += 1
   }
   return signals
 }

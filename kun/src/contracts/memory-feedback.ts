@@ -39,14 +39,6 @@ export const MemoryFeedbackEvent = z.discriminatedUnion('kind', [
 ])
 export type MemoryFeedbackEvent = z.infer<typeof MemoryFeedbackEvent>
 
-export function classifyMemoryFeedbackReplay(
-  existing: MemoryFeedbackEvent,
-  incoming: MemoryFeedbackEvent
-): 'new' | 'replay' | 'conflict' {
-  if (existing.id !== incoming.id) return 'new'
-  return JSON.stringify(existing) === JSON.stringify(incoming) ? 'replay' : 'conflict'
-}
-
 export const MemoryFeedbackAggregate = z.object({
   schemaVersion: z.literal(MEMORY_FEEDBACK_SCHEMA_VERSION),
   memoryId: FeedbackId,
@@ -182,10 +174,8 @@ export const MemoryCorrectResult = z.object({
 export type MemoryCorrectResult = z.infer<typeof MemoryCorrectResult>
 
 export const MemoryFeedbackErrorCode = z.enum([
-  'unauthorized',
   'not-found',
   'inactive',
-  'cross-scope',
   'id-conflict',
   'unavailable',
   'validation'

@@ -657,8 +657,8 @@ export abstract class ModelStepPreparationService {
     const items = repairModelHistoryItemsForModel(
       effectiveHistoryAfterLatestCompaction(historyItems)
     )
-    void recordRetrieved({ feedback: this.deps.memoryFeedback, selectedIds: memories.map((memory) => memory.id), threadId, turnId, occurredAt: turn.createdAt })
     return {
+      recordMemoryRetrieved: () => void recordRetrieved({ feedback: this.deps.memoryFeedback, selectedIds: memories.map((memory) => memory.id), threadId, turnId, occurredAt: turn.createdAt }),
       thread,
       turn,
       dedicatedSvgTurn,

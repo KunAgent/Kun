@@ -12,8 +12,7 @@ import {
   MemoryFeedbackConfig,
   MemoryFeedbackDiagnostics,
   MemoryFeedbackEvent,
-  MemoryFeedbackOperationError,
-  classifyMemoryFeedbackReplay
+  MemoryFeedbackOperationError
 } from '../contracts/memory-feedback.js'
 import {
   DEFAULT_MEMORY_FEEDBACK_FIXTURE_PATHS,
@@ -42,13 +41,6 @@ describe('memory feedback contracts', () => {
       ...RETRIEVED,
       id: 'x'.repeat(MEMORY_FEEDBACK_MAX_ID_CHARS + 1)
     }).success).toBe(false)
-  })
-
-  it('classifies idempotent and conflicting event replays', () => {
-    expect(classifyMemoryFeedbackReplay(RETRIEVED, { ...RETRIEVED })).toBe('replay')
-    expect(classifyMemoryFeedbackReplay(RETRIEVED, { ...RETRIEVED, occurredAt: '2026-09-15T00:00:01.000Z' }))
-      .toBe('conflict')
-    expect(classifyMemoryFeedbackReplay(RETRIEVED, { ...RETRIEVED, id: 'evt_retrieved_2' })).toBe('new')
   })
 
   it('defaults collection off and validates bounded storage settings', () => {
@@ -125,7 +117,7 @@ describe('memory feedback contracts', () => {
   })
 
   it('keeps operation errors bounded and enumerable', () => {
-    for (const code of ['unauthorized', 'inactive', 'cross-scope', 'id-conflict'] as const) {
+    for (const code of ['not-found', 'inactive', 'id-conflict', 'unavailable', 'validation'] as const) {
       expect(MemoryFeedbackOperationError.parse({ code, message: 'bounded failure' }).code).toBe(code)
     }
     expect(MemoryFeedbackOperationError.safeParse({ code: 'unknown', message: 'failure' }).success).toBe(false)

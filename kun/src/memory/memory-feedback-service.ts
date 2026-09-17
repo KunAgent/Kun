@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
@@ -31,12 +31,16 @@ const CorrectionReceipt = z.object({
   replacementMemoryId: z.string().min(1).max(256),
   correctedAt: z.string().datetime(),
   request: MemoryCorrectRequest.optional(),
-  state: z.enum(['prepared', 'canonical-applied', 'feedback-recorded'])
+  state: z.enum(['prepared', 'canonical-applied', 'feedback-recorded', 'abandoned'])
 }).strict().superRefine((receipt, context) => {
-  if (receipt.state === 'feedback-recorded' || receipt.request) return
+  if (receipt.state === 'feedback-recorded' || receipt.state === 'abandoned' || receipt.request) return
   context.addIssue({ code: 'custom', path: ['request'], message: 'unfinished correction receipt requires request' })
 })
 type CorrectionReceipt = z.infer<typeof CorrectionReceipt>
+
+// Terminal receipts are retained so operation id replays resolve idempotently;
+// the directory is pruned to a bounded tail on every reconcile pass.
+const CORRECTION_RECEIPT_LIMIT = 64
 
 export type MemoryFeedbackLedgerPort = {
   append(event: MemoryFeedbackEventValue): Promise<'appended' | 'replayed'>
@@ -73,12 +77,31 @@ export class MemoryFeedbackService {
         throw error
       }
       for (const entry of entries.filter((value) => /^correction-[a-f0-9]{32}\.json$/u.test(value)).sort()) {
-        const receipt = await this.readReceiptPath(join(this.receiptRoot(), entry))
+        const path = join(this.receiptRoot(), entry)
+        // An unreadable receipt can never reconcile; moving it aside keeps the
+        // payload for forensics without warning on every startup.
+        const receipt = await this.readReceiptPath(path).catch(async () => {
+          await rename(path, `${path}.corrupt`).catch(() => undefined)
+          return undefined
+        })
+        if (!receipt) continue
         if (receipt.request && receipt.requestHash !== stableHash(receipt.request)) {
-          throw new MemoryFeedbackServiceError('validation', 'memory correction receipt request hash is invalid')
+          await rename(path, `${path}.corrupt`).catch(() => undefined)
+          continue
         }
-        if (receipt.state !== 'feedback-recorded') await this.reconcileCorrection(receipt)
+        if (receipt.state === 'feedback-recorded' || receipt.state === 'abandoned') continue
+        try {
+          await this.reconcileCorrection(receipt)
+        } catch (error) {
+          const current = await this.readReceipt(receipt.operationId).catch(() => undefined)
+          if (current?.state === 'abandoned') continue
+          // A temporarily inactive memory keeps the prepared receipt for the
+          // next startup instead of warning forever.
+          if (error instanceof MemoryFeedbackServiceError && error.code === 'inactive') continue
+          throw error
+        }
       }
+      await this.pruneTerminalReceipts()
     })
   }
 
@@ -141,6 +164,7 @@ export class MemoryFeedbackService {
         await this.options.afterReceiptPrepared?.()
       }
       const reconciled = await this.reconcileCorrection(receipt)
+      await this.pruneTerminalReceipts()
 
       return MemoryCorrectResult.parse({
         previousMemoryId: reconciled.receipt.previousMemoryId,
@@ -159,21 +183,32 @@ export class MemoryFeedbackService {
     let receipt = initial
     let feedbackReplayed = false
     const request = receipt.request
+    if (receipt.state === 'abandoned') {
+      throw new MemoryFeedbackServiceError('inactive', 'memory correction can no longer be applied')
+    }
     if (receipt.state !== 'feedback-recorded' && !request) {
       throw new MemoryFeedbackServiceError('validation', 'memory correction receipt request is missing')
     }
     if (receipt.state === 'prepared') {
       const previous = await this.findMemory(receipt.previousMemoryId, request!.access)
-      if (!previous) throw new MemoryFeedbackServiceError('not-found', 'memory not found')
+      if (!previous) return this.abandonCorrection(receipt, 'not-found', 'memory not found')
       const existingReplacement = await this.findMemory(receipt.replacementMemoryId, request!.access)
       if (existingReplacement && existingReplacement.supersedes !== previous.id) {
-        throw new MemoryFeedbackServiceError('id-conflict', 'memory correction replacement id conflicts')
+        return this.abandonCorrection(receipt, 'id-conflict', 'memory correction replacement id conflicts')
       }
-      if (!existingReplacement && memoryLifecycleState(previous, Date.parse(this.now())) !== 'active') {
-        throw new MemoryFeedbackServiceError('inactive', 'memory changed before correction could be applied')
+      if (!existingReplacement) {
+        const lifecycle = memoryLifecycleState(previous, Date.parse(this.now()))
+        // Disabled or not-yet-valid records can return to active, so those
+        // receipts stay prepared; every other state is terminal.
+        if (lifecycle === 'disabled' || lifecycle === 'not-yet-valid') {
+          throw new MemoryFeedbackServiceError('inactive', 'memory changed before correction could be applied')
+        }
+        if (lifecycle !== 'active') {
+          return this.abandonCorrection(receipt, 'inactive', 'memory can no longer be corrected')
+        }
       }
       if (!this.options.memoryStore.createWithId) {
-        throw new MemoryFeedbackServiceError('unavailable', 'memory store does not support correction identities')
+        return this.abandonCorrection(receipt, 'unavailable', 'memory store does not support correction identities')
       }
         await this.options.memoryStore.createWithId(
           receipt.replacementMemoryId,
@@ -232,14 +267,39 @@ export class MemoryFeedbackService {
     return CorrectionReceipt.parse(JSON.parse(await readFile(path, 'utf8')) as unknown)
   }
 
+  private async abandonCorrection(
+    receipt: CorrectionReceipt,
+    code: MemoryFeedbackErrorCode,
+    message: string
+  ): Promise<never> {
+    await this.advanceReceipt(receipt, 'abandoned')
+    throw new MemoryFeedbackServiceError(code, message)
+  }
+
   private async advanceReceipt(receipt: CorrectionReceipt, state: CorrectionReceipt['state']): Promise<CorrectionReceipt> {
     const next = CorrectionReceipt.parse({
       ...receipt,
       state,
-      ...(state === 'feedback-recorded' ? { request: undefined } : {})
+      ...(state === 'feedback-recorded' || state === 'abandoned' ? { request: undefined } : {})
     })
     await this.persistReceipt(next)
     return next
+  }
+
+  private async pruneTerminalReceipts(): Promise<void> {
+    const entries = await readdir(this.receiptRoot()).catch(() => [] as string[])
+    const terminal: Array<{ path: string; correctedAt: string }> = []
+    for (const entry of entries) {
+      if (!/^correction-[a-f0-9]{32}\.json$/u.test(entry)) continue
+      const path = join(this.receiptRoot(), entry)
+      const receipt = await this.readReceiptPath(path).catch(() => undefined)
+      if (receipt?.state === 'feedback-recorded' || receipt?.state === 'abandoned') {
+        terminal.push({ path, correctedAt: receipt.correctedAt })
+      }
+    }
+    if (terminal.length <= CORRECTION_RECEIPT_LIMIT) return
+    terminal.sort((left, right) => right.correctedAt.localeCompare(left.correctedAt) || right.path.localeCompare(left.path))
+    for (const entry of terminal.slice(CORRECTION_RECEIPT_LIMIT)) await rm(entry.path, { force: true })
   }
 
   private async persistReceipt(receipt: CorrectionReceipt): Promise<void> {

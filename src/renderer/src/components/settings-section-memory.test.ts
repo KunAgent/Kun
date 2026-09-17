@@ -498,6 +498,7 @@ describe('MemoryRecordDialog', () => {
       draft: memoryDraft(),
       t: (key: string) => labels[key] ?? key,
       notice: null,
+      feedbackEnabled: true,
       onClose: () => undefined,
       onBeginEdit: () => undefined,
       onBeginCorrection: () => undefined,
@@ -518,6 +519,24 @@ describe('MemoryRecordDialog', () => {
       t: (key: string) => labels[key] ?? key,
       notice: null,
       feedbackEnabled: false,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).not.toContain('Confirm')
+    expect(html).toContain('Correct')
+  })
+
+  it('hides confirmation until feedback capability is known to be enabled', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord() },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
       onClose: () => undefined,
       onBeginEdit: () => undefined,
       onBeginCorrection: () => undefined,

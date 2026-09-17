@@ -173,6 +173,7 @@ function harness(values: readonly ModelStreamChunk[]) {
       maxToolCallsPerStep?: number
       toolCallOverflowBehavior?: 'fail' | 'truncate'
       onRouteSelected?: (route: NonNullable<ModelStreamChunk['route']>) => Promise<void>
+      onModelDispatched?: () => void
     } = {}) => engine.run({
       threadId: 'thread_1',
       turnId: 'turn_1',
@@ -187,9 +188,7 @@ function harness(values: readonly ModelStreamChunk[]) {
         abortSignal: controller.signal
       },
       maxToolCallsPerStep: options.maxToolCallsPerStep ?? 1,
-      ...(options.toolCallOverflowBehavior
-        ? { toolCallOverflowBehavior: options.toolCallOverflowBehavior }
-        : {}),
+      ...(options.toolCallOverflowBehavior ? { toolCallOverflowBehavior: options.toolCallOverflowBehavior } : {}),
       streamToolMetadata: new Map([['read', { providerId: 'builtin' }]]),
       cacheSignature: {
         model: 'model_1', providerId: 'builtin', endpointFormat: 'openai', prefixFingerprint: 'prefix',
@@ -197,9 +196,8 @@ function harness(values: readonly ModelStreamChunk[]) {
       },
       preSendDetails: { model: 'model_1' },
       postSendDetails: { model: 'model_1' },
-      ...(options.onRouteSelected
-        ? { onRouteSelected: options.onRouteSelected }
-        : {}),
+      ...(options.onRouteSelected ? { onRouteSelected: options.onRouteSelected } : {}),
+      ...(options.onModelDispatched ? { onModelDispatched: options.onModelDispatched } : {}),
       writeGeneratedImage: async () => {
         trace.push('image:write')
         return { markdown: '\n![generated image](generated.png)\n' }
@@ -218,8 +216,10 @@ describe('ModelRoundEngine', () => {
       }
     }))
 
-    await test.run()
+    let dispatchedAt = ''
+    await test.run({ onModelDispatched: () => { dispatchedAt = test.trace.at(-1) ?? '' } })
 
+    expect(dispatchedAt).toBe('model:dispatched')
     expect(test.trace.indexOf('model:dispatched')).toBeLessThan(
       test.trace.indexOf('stage:post_send')
     )

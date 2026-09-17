@@ -112,7 +112,7 @@ function evaluatePartition(
   const delta = metricDelta(result.foundation, result.candidate)
   const safety = result.candidate.forbiddenSelections === 0 &&
     plan.gates.safety.productionRankingChanges === 0
-  const privacy = tracesArePrivate(result.traces) &&
+  const privacy = tracesArePrivate(result.traces, fixture) &&
     plan.gates.privacy.queryTextInTrace === false &&
     plan.gates.privacy.memoryContentInTrace === false &&
     plan.gates.privacy.localPathInTrace === false &&
@@ -226,12 +226,36 @@ function traceMetrics(fixture: MemoryFeedbackFixtureDataset['cases'][number], se
   }
 }
 
-function tracesArePrivate(traces: readonly MemoryFeedbackEvaluationTrace[]): boolean {
+// Traces may carry record/case ids and bounded numbers only. Every content,
+// scope, provenance, or query value present in the frozen dataset is forbidden.
+function tracesArePrivate(
+  traces: readonly MemoryFeedbackEvaluationTrace[],
+  fixture: MemoryFeedbackFixtureDataset
+): boolean {
   const serialized = JSON.stringify(traces)
-  return !serialized.includes('Keep fixture') && !serialized.includes('workspace-a') &&
-    !serialized.includes('workspace-b') && !serialized.includes('password') &&
+  return !forbiddenTraceValues(fixture).some((value) => serialized.includes(value)) &&
     traces.every((trace) => trace.rankings.every((item) => Object.values(item.features).every((value) =>
       typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)))
+}
+
+function forbiddenTraceValues(fixture: MemoryFeedbackFixtureDataset): string[] {
+  const values = new Set<string>()
+  for (const fixtureCase of fixture.cases) values.add(fixtureCase.query)
+  for (const record of fixture.records) {
+    for (const value of [
+      record.content, record.workspace, record.project, record.correctedFrom,
+      record.sourceThreadId, record.sourceTurnId, record.provenance?.file, record.provenance?.origin
+    ]) {
+      if (value) values.add(value)
+    }
+    for (const source of record.sources ?? []) {
+      for (const value of [source.id, source.locator, source.excerpt, source.threadId, source.turnId, source.itemId]) {
+        if (value) values.add(value)
+      }
+    }
+  }
+  for (const event of fixture.events) values.add(event.id)
+  return [...values].filter((value) => value.length >= 4)
 }
 
 function notRunPartition(reason: string): MemoryFeedbackPartitionResult {

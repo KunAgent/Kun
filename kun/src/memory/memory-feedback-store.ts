@@ -33,10 +33,15 @@ type FeedbackState = {
   identityHashes: Map<string, string>
   explicitEvents: Map<string, MemoryFeedbackEventValue>
   aggregates: Map<string, MemoryFeedbackAggregateValue>
-  segmentPaths: Map<number, string>
+  // segment -> byte length already consumed, including covered segments still
+  // present on disk. Lets each operation verify nothing external changed
+  // instead of reparsing the whole ledger.
+  segmentBytes: Map<number, number>
   activeSegment: number
   coveredSegment: number
   checkpointAt?: string
+  checkpointBytes: number
+  checkpointMtimeMs: number
   storageBytes: number
   duplicateCount: number
   malformedCount: number
@@ -65,6 +70,7 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
         await this.removeCoveredSegments(state)
         this.lastFailure = undefined
       } catch (error) {
+        this.state = undefined
         this.lastFailure = feedbackFailure('feedback rebuild failed', error)
         throw error
       }
@@ -81,7 +87,9 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
         const existingHash = state.identityHashes.get(event.id)
         if (existingHash) {
           if (existingHash !== payloadHash) throw new Error(`memory feedback event id conflict: ${event.id}`)
-          await this.persistProjection(state)
+          // An identical replay changes nothing; only rewrite the projection
+          // when it is missing instead of on every retried append.
+          if (await fileBytes(this.projectionPath()) === 0) await this.persistProjection(state)
           this.lastFailure = undefined
           return 'replayed'
         }
@@ -97,6 +105,7 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
         this.lastFailure = undefined
         return 'appended'
       } catch (error) {
+        this.state = undefined
         this.lastFailure = feedbackFailure('feedback append failed', error)
         throw error
       }
@@ -155,10 +164,15 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
   }
 
   private async load(): Promise<FeedbackState> {
-    if (this.state) return this.state
+    if (this.state && await this.stateIsCurrent(this.state)) return this.state
+    this.state = undefined
     const state = emptyState()
     const checkpoint = await this.readCheckpoint()
     if (checkpoint) applyCheckpoint(state, checkpoint)
+    const checkpointStat = await statSafe(this.checkpointPath())
+    state.checkpointBytes = checkpointStat?.size ?? 0
+    state.checkpointMtimeMs = checkpointStat?.mtimeMs ?? -1
+    state.storageBytes = state.checkpointBytes
 
     await mkdir(this.rootPath(), { recursive: true, mode: 0o700 })
     const entries = await readdir(this.rootPath())
@@ -167,16 +181,43 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
       const segment = segmentNumber(entry)
       if (segment === undefined) continue
       const path = join(this.rootPath(), entry)
-      state.segmentPaths.set(segment, path)
-      state.storageBytes += await fileBytes(path)
+      const bytes = await fileBytes(path)
+      state.segmentBytes.set(segment, bytes)
+      state.storageBytes += bytes
       if (segment <= state.coveredSegment) continue
       parseSegment(await readFile(path, 'utf8'), state, segment === newestSegment)
       state.activeSegment = Math.max(state.activeSegment, segment)
     }
-    state.storageBytes += await fileBytes(this.checkpointPath())
     state.activeSegment = Math.max(state.activeSegment, state.coveredSegment + 1)
     this.state = state
     return state
+  }
+
+  // A cheap freshness proof for the cached state: the checkpoint and every
+  // uncovered segment must still exist at their previously consumed sizes.
+  // Any external append, compaction, or repair falls back to a full reload.
+  private async stateIsCurrent(state: FeedbackState): Promise<boolean> {
+    const checkpointStat = await statSafe(this.checkpointPath())
+    if ((checkpointStat?.size ?? 0) !== state.checkpointBytes) return false
+    if ((checkpointStat?.mtimeMs ?? -1) !== state.checkpointMtimeMs) return false
+    let entries: string[]
+    try {
+      entries = await readdir(this.rootPath())
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+      throw error
+    }
+    const seen = new Set<number>()
+    for (const entry of entries) {
+      const segment = segmentNumber(entry)
+      if (segment === undefined || segment <= state.coveredSegment) continue
+      seen.add(segment)
+      if (await fileBytes(join(this.rootPath(), entry)) !== state.segmentBytes.get(segment)) return false
+    }
+    for (const segment of state.segmentBytes.keys()) {
+      if (segment > state.coveredSegment && !seen.has(segment)) return false
+    }
+    return true
   }
 
   private async readCheckpoint(): Promise<MemoryFeedbackCheckpointValue | undefined> {
@@ -210,8 +251,9 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
         await handle.close()
       }
     }
-    state.segmentPaths.set(state.activeSegment, path)
-    state.storageBytes += Buffer.byteLength(line)
+    const lineBytes = Buffer.byteLength(line)
+    state.segmentBytes.set(state.activeSegment, (state.segmentBytes.get(state.activeSegment) ?? 0) + lineBytes)
+    state.storageBytes += lineBytes
   }
 
   private async compact(state: FeedbackState): Promise<void> {
@@ -246,22 +288,26 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
     state.coveredSegment = coveredSegment
     state.checkpointAt = createdAt
     state.activeSegment = coveredSegment + 1
+    const checkpointStat = await statSafe(this.checkpointPath())
+    state.checkpointBytes = checkpointStat?.size ?? checkpointBytes
+    state.checkpointMtimeMs = checkpointStat?.mtimeMs ?? -1
     await this.removeCoveredSegments(state)
-    state.storageBytes = checkpointBytes + await this.uncoveredSegmentBytes(state)
+    state.storageBytes = state.checkpointBytes + await this.uncoveredSegmentBytes(state)
   }
 
   private async removeCoveredSegments(state: FeedbackState): Promise<void> {
-    for (const [segment, path] of [...state.segmentPaths.entries()]) {
+    for (const [segment, bytes] of [...state.segmentBytes.entries()]) {
       if (segment > state.coveredSegment) continue
-      await rm(path, { force: true })
-      state.segmentPaths.delete(segment)
+      await rm(this.segmentPath(segment), { force: true })
+      state.storageBytes = Math.max(0, state.storageBytes - bytes)
+      state.segmentBytes.delete(segment)
     }
   }
 
   private async uncoveredSegmentBytes(state: FeedbackState): Promise<number> {
     let bytes = 0
-    for (const [segment, path] of state.segmentPaths) {
-      if (segment > state.coveredSegment) bytes += await fileBytes(path)
+    for (const segment of state.segmentBytes.keys()) {
+      if (segment > state.coveredSegment) bytes += await fileBytes(this.segmentPath(segment))
     }
     return bytes
   }
@@ -295,10 +341,7 @@ export class FileMemoryFeedbackStore implements MemoryFeedbackStore {
   }
   private now(): string { return this.options.nowIso?.() ?? new Date().toISOString() }
   private withMutation<T>(operation: () => Promise<T>): Promise<T> {
-    return withMemoryMutation(this.rootPath(), async () => {
-      this.state = undefined
-      return operation()
-    })
+    return withMemoryMutation(this.rootPath(), operation)
   }
 }
 
@@ -366,8 +409,9 @@ function applyEvent(state: FeedbackState, event: MemoryFeedbackEventValue, paylo
 
 function emptyState(): FeedbackState {
   return {
-    identityHashes: new Map(), explicitEvents: new Map(), aggregates: new Map(), segmentPaths: new Map(),
-    activeSegment: 1, coveredSegment: 0, storageBytes: 0, duplicateCount: 0, malformedCount: 0
+    identityHashes: new Map(), explicitEvents: new Map(), aggregates: new Map(), segmentBytes: new Map(),
+    activeSegment: 1, coveredSegment: 0, checkpointBytes: 0, checkpointMtimeMs: -1,
+    storageBytes: 0, duplicateCount: 0, malformedCount: 0
   }
 }
 
@@ -390,7 +434,16 @@ function segmentNumber(entry: string): number | undefined {
 }
 
 async function fileBytes(path: string): Promise<number> {
-  try { return (await stat(path)).size } catch { return 0 }
+  return (await statSafe(path))?.size ?? 0
+}
+
+async function statSafe(path: string): Promise<{ size: number; mtimeMs: number } | undefined> {
+  try {
+    const result = await stat(path)
+    return { size: result.size, mtimeMs: result.mtimeMs }
+  } catch {
+    return undefined
+  }
 }
 
 function eventHash(event: MemoryFeedbackEventValue): string {

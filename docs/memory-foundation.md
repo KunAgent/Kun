@@ -81,16 +81,70 @@ npm run dev
 
 反馈账本位于独立的 `memory-feedback/` 数据根下，是追加写入、可重建投影、由
 Manager 统一拥有的审计数据；它不改变 `memory/*.json` 的权威性，也不会更新记忆的
-`updatedAt`、`observedAt`、`confidence`、`importance` 或 freshness。`retrieved` 只表示
-记录实际进入模型上下文，`confirmed` 必须来自用户明确操作，`corrected` 会在同一作用域
+`updatedAt`、`observedAt`、`confidence`、`importance` 或 freshness。`retrieved` 只在
+携带引用块的模型请求实际发出时记录，`confirmed` 必须来自用户明确操作，`corrected`
+会在同一作用域
 创建新版本并用 `supersedes` 保留旧事实。事件不保存查询、正文、模型输出、来源摘录、凭据
 或本机路径；默认 `memory.feedback.enabled=false`，账本不可用时检索和回合继续使用原路径。
+
+### 开启反馈采集
+
+反馈采集是显式 opt-in。在 `{dataDir}/config.json`（数据目录默认为 `~/.kun/data`，
+除非修改了 Kun 数据目录设置）中设置：
+
+```json
+{
+  "capabilities": {
+    "memory": {
+      "enabled": true,
+      "feedback": { "enabled": true }
+    }
+  }
+}
+```
+
+前提是 Memory 已开启（设置 -> Memory，或 `capabilities.memory.enabled`）；GUI 重写托管
+配置时会保留 `feedback` 子树。该标志在下一次配置热更新（例如保存 Kun 设置）或重启后
+生效。即使采集关闭，显式纠正仍然可用，因为纠正是对记忆的正式变更而非采集行为。
 
 反馈频次、确认、纠正、freshness、importance 和 confidence 目前只在匿名 fixture 上通过
 离线 evaluator 观察，并分别出现在 trace 中。预注册的 P3 v1 候选在开发集通过、留出集
 bootstrap 下界仍无收益，故结论为 no-go；生产仍使用 lexical/FTS5 foundation，不存在
 隐藏权重或 dormant flag。任何未来生产排序提案都必须另建版本并重新通过相关性、不确定性、
 安全、隐私、确定性和资源门禁。
+
+### 账本尾部损坏的手工恢复
+
+诊断报告 `malformed final event` 时，反馈写入保持暂停，避免在未知数据之后追加新的审计
+事件。恢复步骤：停止 Kun 与 Manager，完整备份 `memory-feedback/`，只删除最新活跃
+`events-*.jsonl` 段中最后一行不完整的事件，并原子替换该段。不要改动内部事件、
+`checkpoint.json` 或 `aggregates.json`。重启后 `ready()` 会从有效前缀重建投影；诊断恢复
+`ready` 之后再继续使用反馈。如果损坏位于段内部、涉及 checkpoint 或范围不确定，不要手工
+编辑，保留备份并保持反馈降级，等待维护者恢复。
+
+### 纠正回执的恢复
+
+每次纠正在变更正式记忆之前，都会在 `{dataDir}/memory-feedback-corrections/` 写入可恢复的
+回执，被中断的纠正会在下次启动时继续完成。当旧记录永远无法再被纠正——已 purge、删除、
+被取代或过期、replacement id 被占用、或存储不支持按 id 重建——回执进入终态 `abandoned`，
+不再每次启动重试告警。仅处于 `disabled` 或 `not-yet-valid` 的记录对应的回执保持
+`prepared`，下次启动继续重试。
+
+不可读或哈希不匹配的回执会被原地隔离为 `*.corrupt`，单个坏文件不会阻塞其余回执的协调；
+检查后可手工删除。终态回执（`feedback-recorded` 与 `abandoned`）在每次协调后裁剪到最新
+64 条，手工删除这两种状态也是安全的：只丢失 operationId 重放映射，审计事件仍保留在
+`memory-feedback/` 中。不要删除 `prepared` 或 `canonical-applied` 回执——它们仍持有未完成的
+变更。
+
+### 账本写满后的恢复
+
+账本受 `{dataDir}/config.json` 中 `capabilities.memory.feedback.maxSegmentBytes`
+（默认 4 MiB）与 `maxTotalBytes`（默认 32 MiB）约束。达到上限且压缩无法回收足够空间时，
+写入暂停、诊断报告 `degraded`；检索与回合不受影响。恢复步骤：停止 Kun 与 Manager，完整
+备份 `memory-feedback/`，然后提高限额或整体删除该目录以从空账本重新开始。删除整个目录会
+丢失全部反馈历史——检索计数以及 `checkpoint.json` 保存的显式确认/纠正审计记录——但不会
+影响正式记忆 `memory/*.json`。在已覆盖段被删除后不要单独删除 `checkpoint.json`，因为剩余
+`events-*.jsonl` 已不再包含那部分历史。重启并确认诊断恢复 `ready` 后再依赖反馈数据。
 
 ## 从源码运行
 

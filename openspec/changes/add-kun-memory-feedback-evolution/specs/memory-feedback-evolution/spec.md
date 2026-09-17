@@ -99,6 +99,11 @@ An explicit correction SHALL create a new canonical Memory in the same scope, li
 - **WHEN** a correction attempts to create the new version in a different user, workspace, or project scope
 - **THEN** Kun rejects the operation without mutating either record or the feedback ledger
 
+#### Scenario: Interrupted correction can never complete
+
+- **WHEN** a persisted correction receipt is reconciled after its prior Memory was purged or otherwise can never be corrected again
+- **THEN** Kun marks the receipt abandoned instead of retrying on every startup, keeps only a bounded tail of terminal receipts, and answers a later replay of the same operation id with a bounded error rather than duplicating work
+
 ### Requirement: Feedback collection is opt-in and failure-isolated
 
 Persistent feedback collection SHALL be disabled by default. When disabled or degraded, Kun SHALL preserve the same Memory selected ids, ordering, context text, retrieval trace, turn outcome, and canonical mutations except for an explicit correction request whose own validation or mutation fails.

@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -100,6 +100,14 @@ describe('FileMemoryFeedbackStore', () => {
       state: 'degraded', eventCount: 1, malformedCount: 1
     })
     await expect(restarted.append(retrieved(1))).rejects.toThrow(/must be repaired/u)
+
+    // Operator repair (truncating the malformed tail) is picked up without a restart.
+    await writeFile(
+      join(root, 'memory-feedback', 'events-000001.jsonl'),
+      `${JSON.stringify(retrieved(0))}\n`
+    )
+    expect(await restarted.append(retrieved(1))).toBe('appended')
+    expect(await restarted.diagnostics()).toMatchObject({ state: 'ready', malformedCount: 0 })
   })
 
   it('fails an interior corruption without disabling canonical Memory operations', async () => {
@@ -252,6 +260,36 @@ describe('FileMemoryFeedbackStore', () => {
     }
     expect(rejected).toBe(true)
     expect(await store.diagnostics()).toMatchObject({ state: 'degraded' })
+  })
+
+  it('observes appends from a second store sharing the same ledger', async () => {
+    const root = await temporaryRoot()
+    const first = new FileMemoryFeedbackStore({ dataDir: root, config: feedbackConfig })
+    const second = new FileMemoryFeedbackStore({ dataDir: root, config: feedbackConfig })
+    await first.ready()
+    await second.ready()
+
+    await first.append(retrieved(0))
+    expect(await second.aggregate('mem_1')).toMatchObject({ retrievalCount: 1 })
+    expect(await second.append(retrieved(0))).toBe('replayed')
+    expect(await second.diagnostics()).toMatchObject({ state: 'ready', eventCount: 1 })
+  })
+
+  it('skips rewriting the projection for identical replayed appends', async () => {
+    const root = await temporaryRoot()
+    const store = new FileMemoryFeedbackStore({ dataDir: root, config: feedbackConfig })
+    await store.append(retrieved(0))
+    const projectionPath = join(root, 'memory-feedback', 'aggregates.json')
+    const before = await stat(projectionPath)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(await store.append(retrieved(0))).toBe('replayed')
+    expect((await stat(projectionPath)).mtimeMs).toBe(before.mtimeMs)
+
+    // A missing projection is still healed by the next operation.
+    await rm(projectionPath)
+    expect(await store.append(retrieved(0))).toBe('replayed')
+    expect(MemoryFeedbackProjection.parse(JSON.parse(await readFile(projectionPath, 'utf8'))).eventCount).toBe(1)
   })
 })
 
