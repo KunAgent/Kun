@@ -60,6 +60,17 @@ export async function persistLockedMemoryFeedbackTiebreakerHoldout(input: Omit<
         memoryFeedbackTiebreakerArtifactSha256(expectedHashes)) {
       throw new Error('memory feedback tiebreaker evidence does not match lock')
     }
+    const selected = input.development.configurations.find((candidate) => candidate.candidateId === selectedCandidateId)!
+    const expectedDevelopment = {
+      foundation: input.development.foundation,
+      candidate: selected.metrics,
+      bootstrapLowerBounds: selected.bootstrapLowerBounds
+    }
+    const { foundation, candidate, bootstrapLowerBounds } = evidence.development
+    if (memoryFeedbackTiebreakerArtifactSha256({ foundation, candidate, bootstrapLowerBounds }) !==
+        memoryFeedbackTiebreakerArtifactSha256(expectedDevelopment)) {
+      throw new Error('memory feedback tiebreaker evidence rewrites locked development')
+    }
     for (const partition of [evidence.development, evidence.holdout]) {
       const recomputed = evaluateMemoryFeedbackTiebreakerGates(partition.foundation, {
         metrics: partition.candidate, bootstrapLowerBounds: partition.bootstrapLowerBounds

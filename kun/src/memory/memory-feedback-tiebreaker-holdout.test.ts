@@ -58,6 +58,30 @@ describe('memory feedback tiebreaker holdout guard', () => {
     expect(await readFile(join(input.outputDirectory, `${input.lock.decisionId}.json`), 'utf8')).toBe('')
   })
 
+  it('rejects mismatched identities and rewritten development metrics', async () => {
+    for (const mutation of ['identity', 'development'] as const) {
+      const input = await persistenceInput()
+      const evidence = syntheticEvidence(input)
+      if (mutation === 'identity') evidence.selectedCandidateId = 'confirmation-gap_1'
+      else evidence.development = {
+        ...evidence.development, candidate: { ...evidence.development.candidate, recallAtK: 1 }
+      }
+      await expect(persistLockedMemoryFeedbackTiebreakerHoldout({ ...input, evaluate: () => evidence }))
+        .rejects.toThrow(mutation === 'identity' ? /does not match lock/u : /rewrites locked development/u)
+    }
+  })
+
+  it('does not reserve or score an unreviewed attempt', async () => {
+    const input = await persistenceInput()
+    const evaluate = vi.fn()
+    await expect(persistLockedMemoryFeedbackTiebreakerHoldout({
+      ...input, independentReviewConfirmed: false, evaluate
+    })).rejects.toThrow(/requires independent lock review/u)
+    expect(evaluate).not.toHaveBeenCalled()
+    await expect(readFile(join(input.outputDirectory, `${input.lock.decisionId}.json`)))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('rejects an invalid lock before the evaluation callback runs', async () => {
     const input = await loadInput()
     const evaluate = vi.fn()
