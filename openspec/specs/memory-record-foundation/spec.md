@@ -107,7 +107,7 @@ Production serve mode SHALL route canonical memory and index operations through 
 
 ### Requirement: Lifecycle mutations keep projections consistent
 
-Create, update, disable, restore, supersede, delete, and purge operations SHALL update canonical state first and SHALL make every derived memory index converge to that state.
+Create, update, disable, restore, supersede, correct, delete, and purge operations SHALL update canonical state first and SHALL make every derived memory index converge to that state. An explicit correction SHALL create a new same-scope record and supersede the prior record rather than overwriting the prior content.
 
 #### Scenario: Delete an indexed memory
 
@@ -123,6 +123,11 @@ Create, update, disable, restore, supersede, delete, and purge operations SHALL 
 
 - **WHEN** canonical mutation succeeds but index projection fails
 - **THEN** the operation reports canonical success with degraded diagnostics and reconciliation repairs the projection later
+
+#### Scenario: Correct a canonical memory
+
+- **WHEN** an authorized user explicitly corrects the content of an active Memory
+- **THEN** the new record supersedes the old record in the same scope, the old record remains auditable, and derived indexes converge without exposing both versions as active
 
 ### Requirement: Memory index state is diagnosable without exposing secrets
 
