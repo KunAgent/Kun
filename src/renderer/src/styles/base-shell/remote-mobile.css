@@ -1,7 +1,9 @@
 /*
- * Remote-web mobile layout. Every rule is scoped to Remote browser clients
+ * Remote-web mobile layout. Rules are scoped to Remote browser clients
  * (html[data-remote-web="true"]) on phone-sized viewports, so the desktop
- * Electron workbench is untouched — including narrow desktop windows.
+ * Electron workbench is untouched — with one deliberate exception: the
+ * content-column gutter (fallback block below) also applies to any phone-sized
+ * viewport so the hidden side-rail reserve never wastes horizontal space.
  */
 
 @media (max-width: 767px) {
@@ -110,11 +112,11 @@
        5.25rem from the effective content width, leaving ~42px of dead space
        on both sides. Zero the reserve and use a uniform page gutter. */
     .ds-chat-stage {
-      --ds-chat-side-rail-reserve: 0rem;
-      --ds-chat-content-effective-max-width: 100cqw;
+      --ds-chat-side-rail-reserve: 0rem !important;
+      --ds-chat-content-effective-max-width: 100cqw !important;
     }
     .ds-chat-column-inset {
-      padding-inline: 12px;
+      padding-inline: 12px !important;
     }
 
     /* ---- Empty-state hero: compact, no orphan characters ---- */
@@ -242,6 +244,22 @@
     .ds-topbar-action-button,
     .chat-topbar-actions button {
       opacity: 1;
+    }
+  }
+
+  /* Fallback scope: any phone-sized viewport. Kept separate from the
+     remote-only block above so the no-rail/gutter layout also applies when
+     the remote bridge has not announced isRemoteWeb yet (e.g. first paint).
+     No code writes data-remote-web="false", so :not([data-remote-web='false'])
+     safely covers the "attribute absent" case while staying inert once it is
+     explicitly set to false. */
+  html:not([data-remote-web='false']) {
+    .ds-chat-stage {
+      --ds-chat-side-rail-reserve: 0rem !important;
+      --ds-chat-content-effective-max-width: 100cqw !important;
+    }
+    .ds-chat-column-inset {
+      padding-inline: 12px !important;
     }
   }
 }
