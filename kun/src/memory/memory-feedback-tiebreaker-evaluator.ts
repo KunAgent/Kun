@@ -112,6 +112,9 @@ function buildSignals(events: readonly MemoryFeedbackEvent[]): Map<string, Omit<
       }
     }
     if (event.kind === 'confirmed') get(event.memoryId).confirmationCount += 1
+    // Evaluator-only replacement evidence, NOT the production aggregate's
+    // correctionCount (which counts corrections of the old event.memoryId).
+    // Keep the frozen trace field name for v1 evidence compatibility.
     if (event.kind === 'corrected') get(event.replacementMemoryId).correctionCount += 1
   }
   return signals
