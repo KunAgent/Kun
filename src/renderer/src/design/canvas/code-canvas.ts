@@ -4,6 +4,8 @@ import { snapshotCanvas, type CanvasSnapshot } from './canvas-snapshot'
 import { loadDesignSystem } from './design-system-persistence'
 import { createEmptyDesignSystem, type DesignSystem } from './design-system-types'
 import { looksLikeStandaloneImageAssetPrompt } from '../design-image-intent'
+import { CODE_CANVAS_ENGINE_FILE, resolvePersistedCanvasEngine } from '../../whiteboard/excalidraw-persistence'
+import type { CanvasEngine } from '../../whiteboard/canvas-engine'
 
 /** Workspace subdir for code-mode canvases. Kept out of `.kun-design` so design
  * mode's artifact lister (which enumerates `.kun-design/*`) never sees them. */
@@ -15,6 +17,25 @@ export function codeCanvasArtifactId(threadId: string): string {
 
 export function codeCanvasThreadBaseDir(threadId: string): string {
   return `${CODE_CANVAS_DIR}/${codeCanvasArtifactId(threadId)}`
+}
+
+export function codeCanvasEnginePath(threadId: string): string {
+  return `${codeCanvasThreadBaseDir(threadId)}/${CODE_CANVAS_ENGINE_FILE}`
+}
+
+export async function resolveCodeCanvasEngine(
+  workspaceRoot: string,
+  threadId: string
+): Promise<CanvasEngine> {
+  return resolvePersistedCanvasEngine(workspaceRoot, codeCanvasEnginePath(threadId))
+}
+
+export async function codeCanvasAdvertisesShapeOps(
+  workspaceRoot: string,
+  threadId: string | null | undefined
+): Promise<boolean> {
+  if (!threadId?.trim()) return true
+  return (await resolveCodeCanvasEngine(workspaceRoot, threadId)) !== 'excalidraw'
 }
 
 export function codeCanvasErrorKey(threadId: string): string {

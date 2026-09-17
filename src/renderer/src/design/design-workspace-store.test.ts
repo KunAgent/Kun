@@ -124,6 +124,16 @@ describe('design workspace store', () => {
     expect(state.activeArtifactId).toBeNull()
   })
 
+  it('creates an Excalidraw drawing and refuses engine switches after HTML exists', () => {
+    const id = useDesignWorkspaceStore.getState().createDocument('Sketch', { engine: 'excalidraw' })
+    expect(useDesignWorkspaceStore.getState().documents.find((document) => document.id === id)?.engine)
+      .toBe('excalidraw')
+    expect(useDesignWorkspaceStore.getState().setDocumentEngine(id, 'kun')).toBe(true)
+    expect(useDesignWorkspaceStore.getState().documents.find((document) => document.id === id)?.engine)
+      .toBeUndefined()
+    expect(useDesignWorkspaceStore.getState().setDocumentEngine('doc', 'excalidraw')).toBe(false)
+  })
+
   it('marks explicit drawing renames so legacy-title backfill cannot overwrite them', () => {
     useDesignWorkspaceStore.getState().renameDocument('doc', '我的设计')
     expect(useDesignWorkspaceStore.getState().documents[0]).toMatchObject({

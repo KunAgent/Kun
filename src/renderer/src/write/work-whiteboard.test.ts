@@ -8,7 +8,9 @@ import {
   WORK_WHITEBOARD_INDEX,
   parseWorkWhiteboardRegistry,
   parseWorkWhiteboardRegistryResult,
-  serializeWorkWhiteboardRegistry
+  serializeWorkWhiteboardRegistry,
+  workWhiteboardEngineLocked,
+  workWhiteboardResolvedEngine
 } from './work-whiteboard'
 
 class MemoryStorage {
@@ -365,5 +367,31 @@ describe('Work whiteboard registry', () => {
     })
 
     expect(board?.title).toBe('brief · Presentation review')
+  })
+
+  it('stores an Excalidraw engine and keeps PPT boards on Kun', async () => {
+    seedRegistry({})
+    const sketch = await useWriteWorkspaceStore.getState().createWhiteboard('/work', {
+      title: 'Architecture', engine: 'excalidraw'
+    })
+    expect(sketch?.engine).toBe('excalidraw')
+    expect(parseWorkWhiteboardRegistry(files.get(WORK_WHITEBOARD_INDEX)!, '/work')[sketch!.id])
+      .toMatchObject({ engine: 'excalidraw' })
+
+    const ppt = await useWriteWorkspaceStore.getState().findOrCreatePptWhiteboard({
+      workspaceRoot: '/work', threadId: 'thread-ppt', workflowId: 'wf-ppt',
+      title: 'Deck', childId: 'child-ppt'
+    })
+    expect(ppt?.engine).toBeUndefined()
+    await expect(useWriteWorkspaceStore.getState().setWhiteboardEngine(ppt!.id, 'excalidraw'))
+      .resolves.toBe(false)
+    expect(useWriteWorkspaceStore.getState().whiteboards[ppt!.id]?.engine).toBeUndefined()
+  })
+
+  it('locks PPT workflow boards to Kun even if an engine field is present', () => {
+    expect(workWhiteboardResolvedEngine({ engine: 'excalidraw', workflowId: 'wf' })).toBe('kun')
+    expect(workWhiteboardEngineLocked({ workflowId: 'wf', phase: 'blank' })).toBe(true)
+    expect(workWhiteboardEngineLocked({ workflowId: undefined, phase: 'directions' })).toBe(true)
+    expect(workWhiteboardEngineLocked({ workflowId: undefined, phase: 'blank' })).toBe(false)
   })
 })

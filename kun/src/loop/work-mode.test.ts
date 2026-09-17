@@ -6,6 +6,7 @@ describe('WORK_MODE_INSTRUCTION', () => {
     expect(WORK_MODE_INSTRUCTION).toContain('The user message is the request')
     expect(WORK_MODE_INSTRUCTION).toContain('`work-reference-resource`')
     expect(WORK_MODE_INSTRUCTION).toContain('`work-reference-whiteboard`')
+    expect(WORK_MODE_INSTRUCTION).toContain('engine: "excalidraw"')
     expect(WORK_MODE_INSTRUCTION).toContain('`work_rename_whiteboard`')
     expect(WORK_MODE_INSTRUCTION).toContain('access: "read-write"')
     expect(WORK_MODE_INSTRUCTION).toContain('Architecture maps')

@@ -21,13 +21,14 @@ import { resolveCodeAgentPersona } from '../chat/code-agent-presets'
 import { parseGuiPlanCommand } from '../../plan/plan-command'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { buildComposerFileContextPrompt } from '../../lib/composer-file-references'
-import { resolveCodeCanvasComposerRoute } from '../../design/canvas/code-canvas'
+import { resolveCodeCanvasComposerRoute, codeCanvasAdvertisesShapeOps } from '../../design/canvas/code-canvas'
 import { useCanvasSelectionStore } from '../../design/canvas/canvas-selection-store'
 import { consumeLastCanvasOpErrors } from '../../design/canvas/apply-shape-ops'
 import { activePptReviewComposerContexts } from './workbench-ppt-review-context'
 import {
   activeWorkWhiteboardForSend,
   activeWorkWhiteboardComposerContexts,
+  workWhiteboardAdvertisesCanvasTools,
   workWhiteboardMessageFence,
   workWhiteboardSnapshotMatches
 } from './workbench-write-whiteboard-context'
@@ -365,7 +366,7 @@ export function useWorkbenchComposerSubmitController({
           ...(publicAttachments.length ? { attachments: publicAttachments } : {}),
           ...(composerContexts.length ? { composerContexts } : {}),
           ...(writeSource.fileReference ? { fileReferences: [writeSource.fileReference] } : {}),
-          ...(activeWhiteboard ? { guiDesignCanvas: true } : {}),
+          ...(workWhiteboardAdvertisesCanvasTools(activeWhiteboard) ? { guiDesignCanvas: true } : {}),
           ...(agentPersona ? { persona: agentPersona } : {}),
           writeContext: {
             workspaceRoot: writeWorkspaceRoot,
@@ -624,7 +625,8 @@ export function useWorkbenchComposerSubmitController({
           canvasBrief: codeCanvasRoute.canvasBrief
         })
         outboundDisplay = codeCanvasRoute.displayText
-        outboundGuiDesignCanvas = true
+        outboundGuiDesignCanvas = await codeCanvasAdvertisesShapeOps(
+          threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot, activeThreadId)
       }
       const pptReviewContexts = route === 'chat'
         ? await activePptReviewComposerContexts(workspaceRoot, activeThreadId)

@@ -1,4 +1,6 @@
 /** Artifact kind. `'canvas'` is the ShapeOps JSON board; `'svg'` is a real SVG document. */
+import { normalizeCanvasEngine, type CanvasEngine } from '../whiteboard/canvas-engine'
+
 export type DesignArtifactKind = 'html' | 'canvas' | 'svg'
 
 export function isFileDesignArtifactKind(
@@ -190,6 +192,8 @@ export type DesignDocument = {
   artifacts: DesignArtifact[]
   /** Last-active 画布 within this 设计稿; null when empty. */
   activeArtifactId: string | null
+  /** Renderer for this drawing. Missing means the legacy Kun canvas. */
+  engine?: CanvasEngine
 }
 
 export const DESIGN_ARTIFACT_NODE_DEFAULT_WIDTH = 420
@@ -220,4 +224,13 @@ export function createDesignArtifactId(): string {
 /** Short, collision-resistant id for a 设计稿 (design document) directory. */
 export function createDesignDocumentId(): string {
   return createDesignArtifactId()
+}
+
+export function designDocumentResolvedEngine(
+  document: Pick<DesignDocument, 'engine' | 'artifacts'>
+): CanvasEngine {
+  if (document.artifacts.some((artifact) => artifact.kind === 'html' || artifact.kind === 'svg')) {
+    return 'kun'
+  }
+  return normalizeCanvasEngine(document.engine)
 }

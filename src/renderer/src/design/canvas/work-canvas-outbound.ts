@@ -19,6 +19,7 @@ import type {
 } from './canvas-snapshot'
 import type { CanvasDocument, ViewBox } from './canvas-types'
 import type { OpError } from './shape-ops'
+import { summarizeExcalidrawScene } from '../../whiteboard/excalidraw-outbound'
 import {
   resolveWorkCanvasIdentity,
   snapshotWorkCanvasForPrompt
@@ -57,6 +58,8 @@ export type BuildWorkCanvasReferenceContextOptions = WorkCanvasOutboundDeps & {
   viewBox: ViewBox
   designContext: DesignContext
   intent?: WorkCanvasReferenceIntent
+  engine?: 'kun' | 'excalidraw'
+  excalidrawScene?: { elements?: unknown[] } | null
 }
 
 async function readSnapshot(
@@ -240,6 +243,36 @@ export async function buildWorkCanvasReferenceContext(
   options: BuildWorkCanvasReferenceContextOptions
 ): Promise<ComposerContextAttachment> {
   const identity = resolveWorkCanvasIdentity(options.workspaceRoot, options.boardId)
+  if (options.engine === 'excalidraw') {
+    const summary = summarizeExcalidrawScene(options.excalidrawScene)
+    const reference: JsonObject = {
+      kind: 'work-reference-whiteboard',
+      schemaVersion: 1,
+      boardId: compactText(identity.boardId, 128),
+      engine: 'excalidraw',
+      elementCount: summary.elementCount,
+      elements: summary.elements.map((element) => ({
+        type: compactText(element.type, 32),
+        ...(element.text ? { text: compactText(element.text, 120) } : {})
+      }))
+    }
+    if (!ComposerContextReferenceSchema.safeParse(reference).success) {
+      throw new Error('The current Work Excalidraw reference exceeds the bounded context budget.')
+    }
+    const workspaceId = await sha256Hex(options.workspaceRoot.trim() || '__default__')
+    const referenceId = await sha256Hex(JSON.stringify({ workspaceId, reference }))
+    return ComposerContextAttachmentSchema.parse({
+      schemaVersion: 1,
+      id: `work-whiteboard-${referenceId.slice(0, 24)}`,
+      title: 'Current Work whiteboard',
+      summary: `Excalidraw sketch · ${summary.elementCount} elements`,
+      reference,
+      revision: Math.max(0, Math.floor(options.boardRevision)),
+      generation: 0,
+      attachmentId: `workspace-view-context:${referenceId}`,
+      provenance: { source: 'workspace-view', workspaceId }
+    })
+  }
   const snapshot = await readSnapshot(options)
   const errors = (options.peekLastErrors ?? options.takeLastErrors ?? peekLastCanvasOpErrors)(identity.errorKey)
   const intent = options.intent ?? workCanvasReferenceIntent(options.workspaceRoot)

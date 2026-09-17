@@ -7,24 +7,11 @@ import {
   useImageGenerationProgressStore
 } from '../../../design/canvas/canvas-image-generation-progress'
 import { requestCodeCanvasPanelFocus } from '../../../lib/code-canvas-panel-event'
-import { CanvasViewport } from './CanvasViewport'
-import { PropertiesPanel } from './PropertiesPanel'
 import {
   DesignDocumentCanvasSurface,
   type DesignDocumentCanvasSurfaceProps
 } from './DesignDocumentCanvasSurface'
-import { useApplyShapeOpsLive } from '../../../design/canvas/use-apply-shape-ops-live'
-import type { ExecuteOpsOptions } from '../../../design/canvas/shape-ops'
-import {
-  CODE_CANVAS_DIR,
-  codeCanvasArtifactId,
-  codeCanvasErrorKey,
-  codeCanvasThreadBaseDir
-} from '../../../design/canvas/code-canvas'
-import {
-  exportActiveCodeCanvasToWorkspace,
-  type CanvasAgentExportRequest
-} from '../../../design/canvas/canvas-export'
+import { CodeCanvasNativeSurface } from './code-canvas-native-surface'
 import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 import {
   useCodeCanvasDesignSurface,
@@ -283,42 +270,6 @@ export function CodeCanvasPanel({
   }, [activeDesignSurface, activeThreadId])
 
   const ready = Boolean(workspaceRoot && activeThreadId)
-  const artifactId = activeThreadId ? codeCanvasArtifactId(activeThreadId) : ''
-  const designSystemBaseDir = activeThreadId ? codeCanvasThreadBaseDir(activeThreadId) : undefined
-  const feedbackKey = activeThreadId ? codeCanvasErrorKey(activeThreadId) : undefined
-  const expectedDocumentKey = ready
-    ? canvasDocumentKey(workspaceRoot, artifactId, CODE_CANVAS_DIR)
-    : undefined
-  const executeOptions = useMemo<ExecuteOpsOptions>(
-    () => ({
-      screenFallback: 'plain-frame',
-      shapePreset: 'diagram',
-      ...(feedbackKey ? { lintFeedbackKey: feedbackKey } : {})
-    }),
-    [feedbackKey]
-  )
-  const exportCanvas = useCallback(
-    (request: CanvasAgentExportRequest) => exportActiveCodeCanvasToWorkspace({
-      request,
-      workspaceRoot,
-      artifactId,
-      expectedDocumentKey
-    }),
-    [artifactId, expectedDocumentKey, workspaceRoot]
-  )
-  useApplyShapeOpsLive(
-    !designMode && ready,
-    undefined,
-    executeOptions,
-    feedbackKey,
-    activeThreadId,
-    undefined,
-    exportCanvas,
-    undefined,
-    expectedDocumentKey,
-    undefined,
-    'code'
-  )
   const designDoc = activeDesignSurface
     ? designDocuments.find((document) => document.id === activeDesignSurface.documentId) ?? null
     : null
@@ -581,17 +532,11 @@ export function CodeCanvasPanel({
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        {ready ? (
-          <>
-            <CanvasViewport
-              workspaceRoot={workspaceRoot}
-              artifactId={artifactId}
-              baseDir={CODE_CANVAS_DIR}
-              designSystemBaseDir={designSystemBaseDir}
-              surface="code"
-            />
-            <PropertiesPanel surface="code" />
-          </>
+        {ready && activeThreadId ? (
+          <CodeCanvasNativeSurface
+            workspaceRoot={workspaceRoot}
+            threadId={activeThreadId}
+          />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <div className="rounded-full bg-ds-surface-subtle p-3 text-ds-faint dark:bg-white/6">

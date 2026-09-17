@@ -32,6 +32,13 @@ import {
 } from '../../design/canvas/work-canvas'
 import { useWorkWhiteboardRenameLive } from './use-work-whiteboard-rename-live'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import {
+  workWhiteboardEngineLocked,
+  workWhiteboardResolvedEngine
+} from '../../write/work-whiteboard'
+import { canSwitchCanvasEngine, isKunCanvasDocumentEmpty } from '../../whiteboard/excalidraw-persistence'
+import { CanvasEngineSwitcher, ExcalidrawSurface } from '../../whiteboard/excalidraw-surface'
+import { WORK_WHITEBOARD_DIR } from '../../write/work-whiteboard'
 
 export type WorkWhiteboardSurfaceProps = {
   workspaceRoot: string
@@ -237,6 +244,63 @@ function WorkWhiteboardActions({
   )
 }
 
+function WorkEngineOverlay(props: {
+  boardId: string
+  locked: boolean
+  canSwitch: boolean
+  engine: 'kun' | 'excalidraw'
+}): ReactElement | null {
+  const { t } = useTranslation('common')
+  if (props.locked) return null
+  return (
+    <div className="pointer-events-none absolute right-3 top-3 z-50">
+      <CanvasEngineSwitcher
+        engine={props.engine}
+        canSwitch={props.canSwitch}
+        disabledReason={t('canvasEngineSwitchLocked')}
+        onChange={(engine) => {
+          void useWriteWorkspaceStore.getState().setWhiteboardEngine(props.boardId, engine)
+        }}
+        kunLabel={t('canvasEngineKun')}
+        excalidrawLabel={t('canvasEngineExcalidraw')}
+      />
+    </div>
+  )
+}
+
+function ExcalidrawWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement {
+  const { t } = useTranslation('common')
+  const [empty, setEmpty] = useState(true)
+  const identity = useMemo(
+    () => resolveWorkCanvasIdentity(props.workspaceRoot, props.boardId),
+    [props.boardId, props.workspaceRoot]
+  )
+  const handleEmptyChange = useCallback((next: boolean) => {
+    setEmpty(next)
+  }, [])
+  return (
+    <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="excalidraw">
+      <ExcalidrawSurface
+        workspaceRoot={identity.workspaceRoot}
+        identityId={identity.artifactId}
+        baseDir={WORK_WHITEBOARD_DIR}
+        onEmptyChange={handleEmptyChange}
+      />
+      <WorkWhiteboardStatus board={{
+        title: props.title ?? t('writeUntitledWhiteboard'),
+        phase: props.phase ?? 'blank',
+        ...(props.sourcePath ? { sourcePath: props.sourcePath } : {})
+      }} />
+      <WorkEngineOverlay
+        boardId={props.boardId}
+        locked={false}
+        canSwitch={empty}
+        engine="excalidraw"
+      />
+    </div>
+  )
+}
+
 function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement {
   const { t } = useTranslation('common')
   const phase = props.phase ?? 'blank'
@@ -312,7 +376,7 @@ function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement 
   )
 
   return (
-    <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId}>
+    <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="kun">
       <CanvasViewport
         workspaceRoot={identity.workspaceRoot}
         artifactId={identity.artifactId}
@@ -338,6 +402,19 @@ function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement 
         hasSelectedSlides={pptSelection.slides}
         onRequestAssistant={props.onRequestAssistant}
         onOpenOutput={props.onOpenOutput}
+      />
+      <WorkEngineOverlay
+        boardId={props.boardId}
+        locked={workWhiteboardEngineLocked({
+          workflowId: props.workflowId,
+          phase: props.phase ?? 'blank'
+        })}
+        canSwitch={canSwitchCanvasEngine({
+          currentEngine: 'kun',
+          kunEmpty: activeDocument && isKunCanvasDocumentEmpty(document),
+          excalidrawEmpty: true
+        })}
+        engine="kun"
       />
     </div>
   )
@@ -372,6 +449,11 @@ function WritableWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement
 
 /** Only the focused Work editor group is allowed to mount the singleton canvas stores. */
 export function WorkWhiteboardSurface(props: WorkWhiteboardSurfaceProps): ReactElement {
+  const board = useWriteWorkspaceStore((state) => state.whiteboards[props.boardId])
+  const engine = workWhiteboardResolvedEngine(board ?? {
+    workflowId: props.workflowId,
+    engine: undefined
+  })
   if (!props.writable) {
     return (
       <InactiveWorkWhiteboard
@@ -379,6 +461,9 @@ export function WorkWhiteboardSurface(props: WorkWhiteboardSurfaceProps): ReactE
         onActivate={props.onActivate}
       />
     )
+  }
+  if (engine === 'excalidraw') {
+    return <ExcalidrawWorkWhiteboard key={props.boardId} {...props} />
   }
   return <WritableWorkWhiteboard key={props.boardId} {...props} />
 }

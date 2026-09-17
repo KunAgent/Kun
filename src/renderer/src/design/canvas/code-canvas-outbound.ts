@@ -5,11 +5,15 @@ import type { CanvasSnapshot } from './canvas-snapshot'
 import type { CanvasDocument, ViewBox } from './canvas-types'
 import {
   codeCanvasErrorKey,
+  CODE_CANVAS_DIR,
+  codeCanvasArtifactId,
   loadCodeCanvasDesignSystemForPrompt,
+  resolveCodeCanvasEngine,
   snapshotCodeCanvasForPrompt
 } from './code-canvas'
 import type { DesignSystem } from './design-system-types'
 import type { OpError } from './shape-ops'
+import { resolveExcalidrawSceneForPrompt } from '../../whiteboard/excalidraw-persistence'
 
 export type CodeCanvasOutboundDeps = {
   snapshotForPrompt?: typeof snapshotCodeCanvasForPrompt
@@ -61,6 +65,24 @@ async function readCodeCanvasDesignSystem(
 export async function buildCodeCanvasOutboundText(
   options: BuildCodeCanvasOutboundTextOptions
 ): Promise<string> {
+  const engine = options.threadId
+    ? await resolveCodeCanvasEngine(options.workspaceRoot, options.threadId)
+    : 'kun'
+  if (engine === 'excalidraw') {
+    const scene = options.threadId
+      ? await resolveExcalidrawSceneForPrompt(
+          options.workspaceRoot,
+          codeCanvasArtifactId(options.threadId),
+          CODE_CANVAS_DIR
+        )
+      : null
+    return `${options.baseText}\n\n${buildCodeCanvasTurnPrompt({
+      workspaceRoot: options.workspaceRoot,
+      text: options.canvasBrief,
+      canvasEngine: 'excalidraw',
+      ...(scene ? { excalidrawScene: scene } : {})
+    })}`
+  }
   const snapshot = await readCodeCanvasSnapshot(options)
   const canvasFeedbackKey = options.threadId ? codeCanvasErrorKey(options.threadId) : undefined
   const canvasDesignSystem = await readCodeCanvasDesignSystem(options)

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeWorkWhiteboardTitle } from '../../write/work-whiteboard'
+import { DEFAULT_CANVAS_ENGINE, type CanvasEngine } from '../../whiteboard/canvas-engine'
+import { CanvasEngineSwitcher } from '../../whiteboard/excalidraw-surface'
 
 export const WORK_WHITEBOARD_TITLE_MAX_LENGTH = 160
 
 export type WorkWhiteboardTitleDialogProps = {
   submitting?: boolean
-  onSubmit: (title: string) => void
+  onSubmit: (title: string, engine: CanvasEngine) => void
   onClose: () => void
 }
 
@@ -21,6 +23,7 @@ export function WorkWhiteboardTitleDialog({
 }: WorkWhiteboardTitleDialogProps): ReactElement {
   const { t } = useTranslation('common')
   const [value, setValue] = useState('')
+  const [engine, setEngine] = useState<CanvasEngine>(DEFAULT_CANVAS_ENGINE)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -35,7 +38,7 @@ export function WorkWhiteboardTitleDialog({
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
     if (submitting || empty || tooLong) return
-    onSubmit(normalizeWorkWhiteboardTitle(value))
+    onSubmit(normalizeWorkWhiteboardTitle(value), engine)
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -74,11 +77,22 @@ export function WorkWhiteboardTitleDialog({
             defaultValue: `Title must be at most ${WORK_WHITEBOARD_TITLE_MAX_LENGTH} characters.`
           }) : undefined}
         />
+        <div className="mt-3">
+          <CanvasEngineSwitcher
+            engine={engine}
+            canSwitch
+            onChange={setEngine}
+            kunLabel={t('canvasEngineKun')}
+            excalidrawLabel={t('canvasEngineExcalidraw')}
+          />
+          <p className="mt-2 text-[11px] leading-4 text-ds-faint">{t('canvasEngineSwitchHint')}</p>
+        </div>
         <div className="mt-3 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
+            data-work-whiteboard-title-cancel="true"
             className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-50"
           >
             {t('writeEntryDialogCancel')}

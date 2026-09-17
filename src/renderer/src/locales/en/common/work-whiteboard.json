@@ -20,5 +20,13 @@
   "workWhiteboardOpenPptx": "Open PPTX",
   "writeNewWhiteboardTitlePlaceholder": "e.g. FastAPI service architecture",
   "writeWhiteboardTitleTooLong": "Title must be at most {{max}} characters.",
-  "writeWhiteboardTitleRequired": "Enter a title before creating the whiteboard."
+  "writeWhiteboardTitleRequired": "Enter a title before creating the whiteboard.",
+  "canvasEngineKun": "Kun canvas",
+  "canvasEngineExcalidraw": "Excalidraw",
+  "canvasEngineSwitchHint": "Choose a renderer. You can switch later only while the board is empty.",
+  "canvasEngineSwitchLocked": "Switching is available only on an empty whiteboard.",
+  "canvasEnginePptLocked": "Presentation review boards stay on the Kun canvas.",
+  "designExcalidrawUntitled": "Excalidraw sketch",
+  "designExcalidrawOpenBlank": "Open blank Excalidraw board",
+  "designDrawingStartExcalidrawDescription": "Sketch diagrams, flows, and architecture on Excalidraw. Agent tools will not draw on this board."
 }

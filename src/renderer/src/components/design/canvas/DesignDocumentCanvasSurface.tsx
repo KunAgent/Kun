@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { DesignArtifact } from '../../../design/design-types'
+import { designDocumentResolvedEngine } from '../../../design/design-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 import type { DesignRuntimeQualityPayload } from '../../../design/design-html-quality'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
-import { findDesignBoardArtifact, findDesignBoardArtifactById, ensureDesignBoardArtifact } from '../../../design/design-board'
+import {
+  findDesignBoardArtifact,
+  findDesignBoardArtifactById,
+  ensureDesignBoardArtifact
+} from '../../../design/design-board'
+import { CanvasEngineSwitcher, ExcalidrawSurface } from '../../../whiteboard/excalidraw-surface'
+import { canSwitchCanvasEngine, isKunCanvasDocumentEmpty } from '../../../whiteboard/excalidraw-persistence'
+import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { setScreenCreationFactory } from '../../../design/canvas/screen-artifact-bridge'
 import { createLinkedHtmlScreen } from '../../../design/canvas/screen-lifecycle'
 import { createLinkedSvgArtifact } from '../../../design/canvas/svg-artifact-lifecycle'
@@ -17,6 +26,8 @@ import {
   exportActiveCanvasToWorkspace,
   type CanvasAgentExportRequest
 } from '../../../design/canvas/canvas-export'
+
+const DESIGN_DOCUMENTS_DIR = '.kun-design'
 
 export type DesignDocumentCanvasSurfaceProps = {
   workspaceRoot: string
@@ -53,6 +64,28 @@ export function canvasDocumentReadyForRuntime(
   return Boolean(expectedDocumentKey && loadedDocumentKey === expectedDocumentKey)
 }
 
+function DesignEngineOverlay(props: {
+  documentId: string
+  engine: 'kun' | 'excalidraw'
+  canSwitch: boolean
+}): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <div className="pointer-events-none absolute right-3 top-3 z-50">
+      <CanvasEngineSwitcher
+        engine={props.engine}
+        canSwitch={props.canSwitch}
+        disabledReason={t('canvasEngineSwitchLocked')}
+        onChange={(engine) => {
+          useDesignWorkspaceStore.getState().setDocumentEngine(props.documentId, engine)
+        }}
+        kunLabel={t('canvasEngineKun')}
+        excalidrawLabel={t('canvasEngineExcalidraw')}
+      />
+    </div>
+  )
+}
+
 /** Full DesignDocument runtime shared by the legacy stage and Code's right whiteboard. */
 export function DesignDocumentCanvasSurface({
   workspaceRoot,
@@ -71,22 +104,28 @@ export function DesignDocumentCanvasSurface({
   onRuntimeQualityFindings,
   onRequestQualityRepair
 }: DesignDocumentCanvasSurfaceProps): ReactElement {
+  const document = useDesignWorkspaceStore((state) =>
+    state.documents.find((item) => item.id === documentId) ?? null)
   const settingsLoaded = useDesignWorkspaceStore((state) => state.settingsLoaded)
   const activeDocumentId = useDesignWorkspaceStore((state) => state.activeDocumentId)
-  const artifacts = useDesignWorkspaceStore((state) =>
-    state.documents.find((document) => document.id === documentId)?.artifacts ?? [])
+  const artifacts = document?.artifacts ?? []
+  const engine = document ? designDocumentResolvedEngine(document) : 'kun'
+  const excalidraw = engine === 'excalidraw'
   const requestedBoardArtifactId = boardArtifactId?.trim()
   const boardArtifact = requestedBoardArtifactId
     ? findDesignBoardArtifactById(artifacts, requestedBoardArtifactId)
     : findDesignBoardArtifact(artifacts)
   const lockedBoardMissing = Boolean(requestedBoardArtifactId && !boardArtifact)
   const documentIsActive = Boolean(documentId && activeDocumentId === documentId)
-  const baseDir = documentId ? `.kun-design/${documentId}` : undefined
+  const baseDir = documentId ? `${DESIGN_DOCUMENTS_DIR}/${documentId}` : undefined
   const liveOpsErrorKey = canvasOpErrorKey(workspaceRoot, documentId, boardArtifact?.id)
   const expectedCanvasDocumentKey = boardArtifact && baseDir
     ? canvasDocumentKey(workspaceRoot, boardArtifact.id, baseDir)
     : undefined
   const [loadedCanvasDocumentKey, setLoadedCanvasDocumentKey] = useState<string | null>(null)
+  const [excalidrawEmpty, setExcalidrawEmpty] = useState(true)
+  const canvasDocument = useCanvasShapeStore((state) => state.document)
+  const canvasDocumentKeyValue = useCanvasShapeStore((state) => state.documentKey)
   const canvasRuntimeReady = canvasDocumentReadyForRuntime(
     expectedCanvasDocumentKey,
     loadedCanvasDocumentKey
@@ -106,15 +145,15 @@ export function DesignDocumentCanvasSurface({
   }, [documentId, documentIsActive, readOnly, requestedBoardArtifactId, settingsLoaded, workspaceRoot, artifacts.length])
 
   useEffect(() => {
-    if (!boardArtifact || !documentId || !documentIsActive || readOnly) return
-    const boardArtifactId = boardArtifact.id
+    if (excalidraw || !boardArtifact || !documentId || !documentIsActive || readOnly) return
+    const activeBoardId = boardArtifact.id
     setScreenCreationFactory((request) => {
       const designState = useDesignWorkspaceStore.getState()
       if (designState.activeDocumentId !== documentId) return null
       const activeBoard = findDesignBoardArtifact(designState.artifacts)
-      if (activeBoard?.id !== boardArtifactId) return null
+      if (activeBoard?.id !== activeBoardId) return null
       const created = createLinkedHtmlScreen({
-        boardArtifactId,
+        boardArtifactId: activeBoardId,
         name: request.name,
         brief: request.brief,
         x: request.x,
@@ -129,7 +168,7 @@ export function DesignDocumentCanvasSurface({
       return created ? { artifactId: created.artifactId, shapeId: created.shape.id } : null
     })
     return () => setScreenCreationFactory(null)
-  }, [boardArtifact, documentId, documentIsActive, readOnly])
+  }, [boardArtifact, documentId, documentIsActive, excalidraw, readOnly])
 
   const exportCanvas = useCallback(
     (request: CanvasAgentExportRequest) => {
@@ -147,6 +186,7 @@ export function DesignDocumentCanvasSurface({
 
   useApplyShapeOpsLive(
     Boolean(
+      !excalidraw &&
       boardArtifact && activeThreadId && documentId && documentIsActive &&
       !readOnly && canvasRuntimeReady
     ),
@@ -154,7 +194,7 @@ export function DesignDocumentCanvasSurface({
     undefined,
     liveOpsErrorKey,
     activeThreadId,
-    boardArtifact
+    !excalidraw && boardArtifact
       ? async (request, userPrompt) => {
           try {
             const created = await createLinkedSvgArtifact({
@@ -190,12 +230,46 @@ export function DesignDocumentCanvasSurface({
           }
         }
       : undefined,
-    boardArtifact ? exportCanvas : undefined,
-    boardArtifact && documentId
+    !excalidraw && boardArtifact ? exportCanvas : undefined,
+    !excalidraw && boardArtifact && documentId
       ? { documentId, boardArtifactId: boardArtifact.id }
       : undefined,
     expectedCanvasDocumentKey
   )
+
+  const kunEmpty = !expectedCanvasDocumentKey ||
+    canvasDocumentKeyValue !== expectedCanvasDocumentKey ||
+    isKunCanvasDocumentEmpty(canvasDocument)
+  const engineLocked = artifacts.some((artifact) => artifact.kind === 'html' || artifact.kind === 'svg')
+  const canSwitch = !readOnly && !engineLocked && canSwitchCanvasEngine({
+    currentEngine: engine,
+    kunEmpty,
+    excalidrawEmpty
+  })
+
+  if (excalidraw && documentId && documentIsActive) {
+    return (
+      <div
+        className="ds-stage-design-canvas relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main w-full"
+        data-canvas-engine="excalidraw"
+      >
+        <ExcalidrawSurface
+          workspaceRoot={workspaceRoot}
+          identityId={documentId}
+          baseDir={DESIGN_DOCUMENTS_DIR}
+          readOnly={readOnly}
+          onEmptyChange={setExcalidrawEmpty}
+        />
+        {!readOnly && !engineLocked ? (
+          <DesignEngineOverlay
+            documentId={documentId}
+            engine="excalidraw"
+            canSwitch={canSwitch}
+          />
+        ) : null}
+      </div>
+    )
+  }
 
   if (!boardArtifact || !documentIsActive) {
     return (
@@ -208,7 +282,10 @@ export function DesignDocumentCanvasSurface({
   }
 
   return (
-    <div className="ds-stage-design-canvas relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main w-full">
+    <div
+      className="ds-stage-design-canvas relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main w-full"
+      data-canvas-engine="kun"
+    >
       <CanvasViewport
         workspaceRoot={workspaceRoot}
         artifactId={boardArtifact.id}
@@ -231,6 +308,13 @@ export function DesignDocumentCanvasSurface({
           surface="design"
           onImplementDesign={onImplementDesign}
           onRequestModify={(promptSeed) => onUseElementAsContext?.(null, promptSeed)}
+        />
+      ) : null}
+      {!readOnly && !engineLocked ? (
+        <DesignEngineOverlay
+          documentId={documentId!}
+          engine="kun"
+          canSwitch={canSwitch}
         />
       ) : null}
     </div>

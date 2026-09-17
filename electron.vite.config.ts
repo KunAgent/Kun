@@ -1,6 +1,27 @@
+import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+
+function copyExcalidrawAssets(): void {
+  const from = resolve('node_modules/@excalidraw/excalidraw/dist/prod/fonts')
+  const to = resolve('src/renderer/public/excalidraw/fonts')
+  if (!existsSync(from)) return
+  mkdirSync(resolve('src/renderer/public/excalidraw'), { recursive: true })
+  cpSync(from, to, { recursive: true })
+}
+
+function excalidrawAssetsPlugin() {
+  return {
+    name: 'copy-excalidraw-assets',
+    buildStart() {
+      copyExcalidrawAssets()
+    },
+    configureServer() {
+      copyExcalidrawAssets()
+    }
+  }
+}
 
 export default defineConfig({
   main: {
@@ -59,6 +80,6 @@ export default defineConfig({
         }
       }
     },
-    plugins: [react()]
+    plugins: [react(), excalidrawAssetsPlugin()]
   }
 })

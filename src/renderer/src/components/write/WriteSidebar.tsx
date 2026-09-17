@@ -584,7 +584,7 @@ export function WriteSidebar({
     {newWhiteboardDialogOpen ? (
       <WorkWhiteboardTitleDialog
         submitting={creatingWhiteboard}
-        onSubmit={(title) => { void submitNewWhiteboardTitle(title) }}
+        onSubmit={(title, engine) => { void submitNewWhiteboardTitle(title, engine) }}
         onClose={() => {
           if (!creatingWhiteboard) closeNewWhiteboardDialog()
         }}

@@ -8,6 +8,7 @@ import type { WriteEditorSelectionState } from '../components/write/WriteMarkdow
 import type { WriteQuotedSelection } from './quoted-selection'
 import type { WriteRecentEdit } from './recent-edits'
 import type { WorkspaceSpreadsheetMutation } from '@shared/workspace-spreadsheet'
+import type { CanvasEngine } from '../whiteboard/canvas-engine'
 
 export type WritePreviewMode = 'rich' | 'source' | 'live' | 'preview'
 export type WriteSaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
@@ -55,6 +56,8 @@ export type WorkWhiteboard = {
   revision: number
   createdAt: string
   updatedAt: string
+  /** Renderer for this board. Missing means the legacy Kun canvas. */
+  engine?: CanvasEngine
 }
 
 export type WriteEditorLayoutV1 = {
@@ -197,6 +200,7 @@ export type WriteWorkspaceState = {
     threadId?: string
     workflowId?: string
     childId?: string
+    engine?: CanvasEngine
   }) => Promise<WorkWhiteboard | null>
   openWhiteboard: (boardId: string, groupId?: WriteEditorGroupId) => void
   findOrCreatePptWhiteboard: (input: {
@@ -208,6 +212,7 @@ export type WriteWorkspaceState = {
     sourcePath?: string
   }) => Promise<WorkWhiteboard | null>
   renameWhiteboard: (boardId: string, title: string) => Promise<boolean>
+  setWhiteboardEngine: (boardId: string, engine: CanvasEngine) => Promise<boolean>
   deleteWhiteboard: (boardId: string) => Promise<boolean>
   bindWhiteboardThread: (boardId: string, threadId: string) => Promise<boolean>
   forgetWhiteboardThread: (threadId: string) => Promise<boolean>

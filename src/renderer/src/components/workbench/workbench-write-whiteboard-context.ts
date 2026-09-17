@@ -1,7 +1,8 @@
 import type { WriteAssistantMessageContext } from '../../store/chat-store-types'
 import { canvasDocumentKey } from '../../design/canvas/canvas-persistence'
 import type { WorkWhiteboard, WriteWorkspaceState } from '../../write/write-workspace-store-types'
-import { workWhiteboardArtifactId, workWhiteboardBaseDir } from '../../write/work-whiteboard'
+import { workWhiteboardArtifactId, workWhiteboardBaseDir, workWhiteboardResolvedEngine } from '../../write/work-whiteboard'
+import { resolveExcalidrawSceneForPrompt } from '../../whiteboard/excalidraw-persistence'
 import { activePptReviewComposerContexts } from './workbench-ppt-review-context'
 import { useCanvasShapeStore } from '../../design/canvas/canvas-shape-store'
 import { useCanvasSelectionStore } from '../../design/canvas/canvas-selection-store'
@@ -34,6 +35,12 @@ export function workWhiteboardSnapshotMatches(
     current.threadId === snapshot.threadId
 }
 
+export function workWhiteboardAdvertisesCanvasTools(
+  board: WorkWhiteboard | null | undefined
+): boolean {
+  return Boolean(board && workWhiteboardResolvedEngine(board) !== 'excalidraw')
+}
+
 export async function activeWorkWhiteboardComposerContexts(
   workspaceRoot: string,
   board: WorkWhiteboard | null,
@@ -41,6 +48,27 @@ export async function activeWorkWhiteboardComposerContexts(
   userPrompt?: string
 ) {
   if (!board) return []
+  const engine = workWhiteboardResolvedEngine(board)
+  if (engine === 'excalidraw') {
+    const scene = await resolveExcalidrawSceneForPrompt(
+      workspaceRoot,
+      workWhiteboardArtifactId(board.id),
+      workWhiteboardBaseDir()
+    )
+    const whiteboard = await buildWorkCanvasReferenceContext({
+      workspaceRoot,
+      boardId: board.id,
+      boardRevision: board.revision,
+      currentDocument: useCanvasShapeStore.getState().document,
+      currentDocumentKey: useCanvasShapeStore.getState().documentKey,
+      selectedIds: useCanvasSelectionStore.getState().selectedIds,
+      viewBox: useCanvasViewportStore.getState().vbox,
+      designContext: useDesignWorkspaceStore.getState().designContext,
+      engine: 'excalidraw',
+      excalidrawScene: scene
+    })
+    return [whiteboard]
+  }
   const canvas = useCanvasShapeStore.getState()
   const whiteboard = await buildWorkCanvasReferenceContext({
     workspaceRoot,

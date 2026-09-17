@@ -116,6 +116,18 @@ describe('design turn dispatch', () => {
     expect(overrides.guiDesignCanvas).toBeUndefined()
   })
 
+  it('does not advertise ShapeOps for an Excalidraw Design canvas turn', () => {
+    const overrides = buildDesignTurnSendOverrides({
+      displayText: 'Explain this sketch',
+      promptState: { assistantModel: '', assistantProviderId: '' },
+      resolveProviderId: () => '',
+      target: 'canvas',
+      canvasEngine: 'excalidraw'
+    })
+    expect(overrides.guiDesignCanvas).toBeUndefined()
+    expect(overrides.guiDesignMode).toBeUndefined()
+  })
+
   it('builds the code-canvas overrides as a canvas agent turn', () => {
     expect(buildCodeCanvasSendOverrides({
       displayText: 'Apply markup',
@@ -130,6 +142,9 @@ describe('design turn dispatch', () => {
     expect(buildCodeCanvasSendOverrides({})).toEqual({
       agentSurface: 'code',
       guiDesignCanvas: true
+    })
+    expect(buildCodeCanvasSendOverrides({ canvasEngine: 'excalidraw' })).toEqual({
+      agentSurface: 'code'
     })
   })
 })

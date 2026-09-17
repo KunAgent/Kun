@@ -210,4 +210,20 @@ describe('applyDesignOutputContract', () => {
     expect(prompt).toContain('#123456')
     expect(prompt).toContain('interactive HTML interface')
   })
+
+  it('blocks ShapeOps and HTML output when the locked drawing is Excalidraw', () => {
+    const prompt = applyDesignTaskProfileContract('What does this sketch show?', {
+      version: 1,
+      documentTarget,
+      outputMedium: 'html',
+      target: 'web',
+      preset: 'none',
+      canvasEngine: 'excalidraw',
+      context: { tone: [] }
+    })
+    expect(prompt).toContain('Canvas engine: excalidraw')
+    expect(prompt).toContain('EXCALIDRAW SKETCH CONTRACT')
+    expect(prompt).toContain('Do not call design_update_shapes')
+    expect(prompt).not.toContain('interactive HTML interface as the main deliverable')
+  })
 })

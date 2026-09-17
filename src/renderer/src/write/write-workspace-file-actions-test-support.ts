@@ -45,6 +45,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     bindWhiteboardThread: async () => false,
     forgetWhiteboardThread: async () => false,
     updateWhiteboardPptState: async () => false,
+    setWhiteboardEngine: async () => false,
     activateTab: () => undefined,
     closeTab: async () => true,
     moveTab: () => undefined,

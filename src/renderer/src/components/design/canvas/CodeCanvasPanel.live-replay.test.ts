@@ -13,6 +13,10 @@ vi.mock('../../../design/canvas/use-apply-shape-ops-live', () => ({
 
 vi.mock('./CanvasViewport', () => ({ CanvasViewport: () => createElement('div') }))
 vi.mock('./PropertiesPanel', () => ({ PropertiesPanel: () => createElement('div') }))
+vi.mock('../../../whiteboard/excalidraw-surface', () => ({
+  ExcalidrawSurface: () => createElement('div'),
+  CanvasEngineSwitcher: () => createElement('div')
+}))
 
 describe('CodeCanvasPanel live replay binding', () => {
   it('waits for the matching per-thread canvas document', () => {

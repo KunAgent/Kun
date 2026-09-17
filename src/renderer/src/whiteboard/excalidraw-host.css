@@ -1,0 +1,11 @@
+.kun-excalidraw-host,
+.kun-excalidraw-host .excalidraw,
+.kun-excalidraw-host .excalidraw .App-menu,
+.kun-excalidraw-host .excalidraw .App {
+  height: 100%;
+  width: 100%;
+}
+
+.kun-excalidraw-host .excalidraw {
+  --color-primary: var(--ds-accent, #4f46e5);
+}

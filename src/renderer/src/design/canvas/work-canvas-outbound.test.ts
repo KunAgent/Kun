@@ -203,4 +203,34 @@ describe('Work canvas outbound prompt', () => {
     // Peeking must not clear the bucket: the next send still sees the errors.
     expect(peekLastErrors).toHaveBeenCalledTimes(1)
   })
+
+  it('emits an Excalidraw element summary instead of a Kun snapshot', async () => {
+    const snapshotForPrompt = vi.fn()
+    const context = await buildWorkCanvasReferenceContext({
+      workspaceRoot: '/work',
+      boardId: 'board-exo',
+      boardRevision: 3,
+      currentDocument: createEmptyDocument(),
+      selectedIds: new Set(),
+      viewBox: { x: 0, y: 0, width: 1200, height: 800 },
+      designContext: { designTarget: 'web' },
+      snapshotForPrompt,
+      engine: 'excalidraw',
+      excalidrawScene: {
+        elements: [
+          { type: 'rectangle', isDeleted: false },
+          { type: 'text', text: 'Auth service', isDeleted: false }
+        ]
+      }
+    })
+
+    expect(ComposerContextAttachmentSchema.safeParse(context).success).toBe(true)
+    expect(context.reference).toMatchObject({
+      kind: 'work-reference-whiteboard',
+      engine: 'excalidraw',
+      elementCount: 2
+    })
+    expect(context.summary).toContain('Excalidraw')
+    expect(snapshotForPrompt).not.toHaveBeenCalled()
+  })
 })

@@ -10,7 +10,10 @@ import {
   peekLastCanvasOpErrors,
   consumeLastCanvasOpErrors
 } from '../../../design/canvas/apply-shape-ops'
-import { codeCanvasErrorKey } from '../../../design/canvas/code-canvas'
+import {
+  codeCanvasErrorKey,
+  resolveCodeCanvasEngine
+} from '../../../design/canvas/code-canvas'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
@@ -84,9 +87,13 @@ export function useCodeCanvasPromptController({
       canvasBrief: text
     })
     const reasoningEffort = composerReasoningEffortRequestValue(composerReasoningEffort)
+    const canvasEngine = activeThreadId
+      ? await resolveCodeCanvasEngine(activeCodeCanvasWorkspace, activeThreadId)
+      : 'kun'
     const admitted = await sendMessage(outboundText, 'agent', buildCodeCanvasSendOverrides({
       ...(options?.displayText ? { displayText: options.displayText } : {}),
-      ...(reasoningEffort ? { reasoningEffort } : {})
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+      canvasEngine
     }))
     if (admitted && activeThreadId) {
       consumeLastCanvasOpErrors(codeCanvasErrorKey(activeThreadId))

@@ -18,6 +18,11 @@ import {
   writeEditorItemKey
 } from './write-editor-layout'
 import { cancelPendingCanvasDocument } from '../design/canvas/canvas-persistence'
+import {
+  canvasEnginePersistField,
+  normalizeCanvasEngine,
+  type CanvasEngine
+} from '../whiteboard/canvas-engine'
 
 export const WORK_WHITEBOARD_DIR = '.kun-whiteboards'
 export const WORK_WHITEBOARD_INDEX = `${WORK_WHITEBOARD_DIR}/index.json`
@@ -74,7 +79,8 @@ function normalizeBoard(value: unknown, workspaceRoot: string): WorkWhiteboard |
     phase,
     revision: Number.isInteger(raw.revision) && Number(raw.revision) >= 0 ? Number(raw.revision) : 0,
     createdAt,
-    updatedAt
+    updatedAt,
+    ...canvasEnginePersistField(normalizeCanvasEngine(raw.engine))
   }
 }
 
@@ -96,6 +102,19 @@ export function workWhiteboardThreadIds(board: Pick<WorkWhiteboard, 'threadId' |
 /** Unified whiteboard title rule: trimmed, non-empty, at most 160 chars. */
 export function normalizeWorkWhiteboardTitle(raw: string | undefined | null): string {
   return raw?.trim().slice(0, 160) ?? ''
+}
+
+export function workWhiteboardResolvedEngine(
+  board: Pick<WorkWhiteboard, 'engine' | 'workflowId'>
+): CanvasEngine {
+  if (board.workflowId?.trim()) return 'kun'
+  return normalizeCanvasEngine(board.engine)
+}
+
+export function workWhiteboardEngineLocked(
+  board: Pick<WorkWhiteboard, 'workflowId' | 'phase'>
+): boolean {
+  return Boolean(board.workflowId?.trim()) || board.phase !== 'blank'
 }
 
 export function workWhiteboardBaseDir(): string {
@@ -253,6 +272,7 @@ type WhiteboardActions = Pick<WriteWorkspaceState,
   | 'openWhiteboard'
   | 'findOrCreatePptWhiteboard'
   | 'renameWhiteboard'
+  | 'setWhiteboardEngine'
   | 'deleteWhiteboard'
   | 'bindWhiteboardThread'
   | 'forgetWhiteboardThread'
@@ -314,7 +334,8 @@ export function createWorkWhiteboardActions(set: WriteWorkspaceSet, get: WriteWo
         phase: options.workflowId ? 'directions' : 'blank',
         revision: 0,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        ...canvasEnginePersistField(options.workflowId ? 'kun' : options.engine)
       }
       const whiteboards = { ...get().whiteboards, [board.id]: board }
       const persisted = await persistRegistry(normalizedWorkspaceRoot, whiteboards)
@@ -387,6 +408,20 @@ export function createWorkWhiteboardActions(set: WriteWorkspaceSet, get: WriteWo
       title: normalizeWorkWhiteboardTitle(title) || board.title,
       updatedAt: new Date().toISOString()
     })),
+
+    setWhiteboardEngine: async (boardId, engine) => {
+      const board = get().whiteboards[boardId]
+      if (!board || workWhiteboardEngineLocked(board)) return false
+      const nextEngine = normalizeCanvasEngine(engine)
+      if (workWhiteboardResolvedEngine(board) === nextEngine) return true
+      return updateBoard(boardId, (current) => {
+        if (nextEngine === 'excalidraw') {
+          return { ...current, engine: 'excalidraw', updatedAt: new Date().toISOString() }
+        }
+        const { engine: _removed, ...rest } = current
+        return { ...rest, updatedAt: new Date().toISOString() }
+      })
+    },
 
     bindWhiteboardThread: (boardId, threadId) => updateBoard(boardId, (board) => {
       // PPT board refs are tied to their originating parent thread. Normal
