@@ -100,8 +100,11 @@ A discussion referencing delivered code mounts a read-only checkout of the
 fixed delivery SHA. A discussion about an unfinished task can inspect its
 current worktree with enforced read-only tools and is told that files may change
 while execution continues. A reserved worktree that has not been created is not
-silently replaced with the source checkout. Discussion never amends or steers a
-task unless the current user explicitly requests execution.
+silently replaced with the source checkout. Discussion file tools may also read
+any local path the user names, including when the room has no attached
+repository; this does not authorize writes, shell commands, or a new execution
+repository. Discussion never amends or steers a task unless the current user
+explicitly requests execution.
 
 The coordinator submits `submit_room_plan`, and reviewers submit
 `submit_room_review`; validated JSON remains a compatibility path. Invalid

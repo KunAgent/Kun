@@ -72,16 +72,12 @@ export async function resolveWorkspacePath(
       relativePath: normalizeToolPath(relative(root, resolve(lexicalAbsolutePath)) || '.')
     }
   }
-  // In full-access mode the workspace boundary is not enforced: the user has
-  // explicitly opted into reaching paths outside the workspace. This mirrors
-  // canWritePath(), which already permits writes anywhere under
-  // danger-full-access, and lets read/ls/find/grep/lsp reach system paths
-  // (e.g. C:\Windows on Windows, /etc on POSIX) instead of failing with
-  // "path escapes the workspace root".
+  // Full-access and host-read discussion may reach paths outside the workspace.
+  // Writes still follow canWritePath()/sandboxMode; this only authorizes reads.
   if (
     !delegatedPathBoundary &&
     !options.enforceWorkspaceBoundary &&
-    effectiveSandboxMode(context) === 'danger-full-access'
+    (effectiveSandboxMode(context) === 'danger-full-access' || context.allowHostReads === true)
   ) {
     return {
       workspaceRoot: root,

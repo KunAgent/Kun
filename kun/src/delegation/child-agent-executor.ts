@@ -82,6 +82,7 @@ export type ChildDelegatedRuntimeFactory = (input: {
   allowedProviderIds?: readonly string[]
   allowedSkillIds?: readonly string[]
   allowedReadPaths?: readonly string[]
+  allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
   blockedToolNames?: readonly string[]
@@ -168,11 +169,13 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     const toolHost = input.fastContext
       ? createFastContextToolHost(options.toolHost, fastContextTaskCount)
       : options.toolHost
-    // Fast Context source calls are always confined to a parent-minted read
-    // scope. This remains true when the parent itself chose full access: an
-    // omitted scope means the captured workspace only, never the host.
+    // Fast Context source calls are confined to a parent-minted read scope.
+    // An omitted scope still means the captured workspace only, never the host,
+    // unless the parent explicitly granted host-wide reads.
+    const allowHostReads = input.security?.allowHostReads === true &&
+      input.security.allowedReadPaths === undefined
     const allowedReadPaths = input.fastContext
-      ? input.security?.allowedReadPaths ?? ['.']
+      ? input.security?.allowedReadPaths ?? (allowHostReads ? undefined : ['.'])
       : input.security?.allowedReadPaths
     const blockedSkillIds = unique([
       ...(input.security?.blockedSkillIds ?? []),
@@ -284,6 +287,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(allowedReadPaths
         ? { allowedReadPaths }
         : {}),
+      ...(allowHostReads ? { allowHostReads: true } : {}),
       ...(input.security?.allowedWritePaths
         ? { allowedWritePaths: input.security.allowedWritePaths }
         : {}),
@@ -328,6 +332,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(allowedReadPaths
         ? { allowedReadPaths }
         : {}),
+      ...(allowHostReads ? { allowHostReads: true } : {}),
       ...(input.security?.allowedWritePaths
         ? { allowedWritePaths: input.security.allowedWritePaths }
         : {}),

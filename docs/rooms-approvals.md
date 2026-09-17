@@ -46,8 +46,10 @@ Full access removes the private conversation's default workspace-only tool
 scope. Agent read-only presets, directory ceilings and explicit tool, MCP and
 skill restrictions remain enforced. An Agent with a directory ceiling cannot
 select full access. Limits changed after selection are rechecked at admission.
-Group discussions and legacy task execution retain their existing permissions;
-the private-chat picker is hidden for legacy task drafts.
+Group discussions stay read-only for writes and commands, but file-read tools
+may inspect local paths the user names. Legacy task execution remains confined
+to the authorized task checkout. The private-chat picker is hidden for legacy
+task drafts.
 
 The read endpoint is `GET /v1/rooms/:roomId/direct/permissions`. Mutation uses a
 dedicated protected preload method and a signed, one-use consent binding room,

@@ -7,6 +7,7 @@ export type ToolDiscoveryContextFactoryDeps = {
   allowedProviderIds?: readonly string[]
   allowedSkillIds?: readonly string[]
   allowedReadPaths?: readonly string[]
+  allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
   pptWorkflowScope?: PptWorkflowScope
@@ -63,6 +64,7 @@ export function createToolDiscoveryContext(
     ...(deps.allowedProviderIds ? { allowedProviderIds: deps.allowedProviderIds } : {}),
     ...(deps.allowedSkillIds ? { allowedSkillIds: deps.allowedSkillIds } : {}),
     ...(deps.allowedReadPaths ? { allowedReadPaths: deps.allowedReadPaths } : {}),
+    ...(deps.allowHostReads ? { allowHostReads: true } : {}),
     ...(deps.allowedWritePaths ? { allowedWritePaths: deps.allowedWritePaths } : {}),
     ...(deps.allowedArtifactIds ? { allowedArtifactIds: deps.allowedArtifactIds } : {}),
     ...(deps.pptWorkflowScope ? { pptWorkflowScope: deps.pptWorkflowScope } : {}),

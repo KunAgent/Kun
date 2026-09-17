@@ -188,7 +188,7 @@ export class RoomRequestRunner {
           'discussion-' + request.id + '-' + (request.round ?? 0) + '-' + member.id + '-' + (discussion.attempt ?? 0) +
             (request.continuation ? '-continuation-' + request.continuation : ''),
           [roomPollInvitationPrompt(request.pollInvitation, member.id),
-            'Participate as this room member. Discuss or inspect read-only. Do not implement or run commands.',
+            'Participate as this room member. Discuss or inspect read-only, including local paths the user names. Do not implement or run commands. Reading a path does not authorize new execution work.',
             ...(request.referencedTask ? [
               !discussionWorkspace ? 'The task worktree is not created yet. Answer from the requirement and status; do not claim code inspection.' :
               request.referencedTask.delivery ? 'Inspect the pinned delivered commit read-only; its identity is included below.' :

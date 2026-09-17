@@ -68,13 +68,15 @@ restarted. Task notifications do not restart a stopped topic; a new explicit
 user continuation is required. **Cancel task** remains a separate task action.
 Closing the drawer or leaving Rooms does not stop a discussion or execution.
 
-Discussion tools are scoped and read-only. A peer can propose work, but only the
-coordinator can submit an execution plan under the actual user's authorization.
-A peer message cannot create tasks, modify an existing task, expand repository
-permissions or adopt a project agreement. New chat evidence remains reference
-material; frozen user authority, repository scope and rule versions remain
-separate. There are no member private messages, cross-room memories or timed
-self-directed patrols in this version.
+Discussion tools are read-only. Peers may inspect a scoped repository checkout
+and any local path the user names; they cannot write files or run host commands.
+A peer can propose work, but only the coordinator can submit an execution plan
+under the actual user's authorization. A peer message cannot create tasks,
+modify an existing task, expand repository permissions or adopt a project
+agreement. Reading a path does not become execution authorization. New chat
+evidence remains reference material; frozen user authority, repository scope
+and rule versions remain separate. There are no member private messages,
+cross-room memories or timed self-directed patrols in this version.
 
 ## Desktop verification
 

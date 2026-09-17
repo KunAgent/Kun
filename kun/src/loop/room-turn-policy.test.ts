@@ -39,6 +39,28 @@ describe('frozen room turn policy', () => {
     expect(applyRoomToolPolicy(raw, roomThread({ kind: 'coordination' })).allowedToolNames).toEqual([])
   })
 
+  it('lets discussion read the host without a delegated read scope', () => {
+    const raw: ToolHostContext = {
+      threadId: 'room_thread', turnId: 'turn_one', workspace: '/other',
+      additionalWorkspaces: ['/outside'], sandboxMode: 'danger-full-access', approvalPolicy: 'auto',
+      allowedToolNames: ['read', 'write', 'fast_context'],
+      memoryPolicy: { enabled: true }, abortSignal: new AbortController().signal,
+      awaitApproval: async () => 'allow'
+    }
+    const discussion = applyRoomToolPolicy(raw, roomThread({ kind: 'discussion' }))
+    expect(discussion).toMatchObject({
+      workspace: '/workspace', sandboxMode: 'read-only', allowHostReads: true, allowedWritePaths: []
+    })
+    expect(discussion.allowedReadPaths).toBeUndefined()
+    expect(discussion.allowedToolNames).toEqual(expect.arrayContaining(['read', 'fast_context']))
+    const clamped = applyRoomToolPolicy({ ...raw, allowedReadPaths: ['src'] }, roomThread({ kind: 'discussion' }))
+    expect(clamped.allowHostReads).toBeUndefined()
+    expect(clamped.allowedReadPaths).toEqual(['src'])
+    const review = applyRoomToolPolicy({ ...raw, allowHostReads: true }, roomThread({ kind: 'review' }))
+    expect(review.allowHostReads).toBeUndefined()
+    expect(review.allowedReadPaths).toEqual(['.'])
+  })
+
   it('does not recall memories and passes frozen skill restrictions to discovery', async () => {
     const retrieve = vi.fn(async () => [])
     const skillResolve = vi.fn(async () => ({

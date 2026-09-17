@@ -159,6 +159,7 @@ export const ChildSecuritySnapshot = z.object({
   allowedToolNames: z.array(z.string().min(1)).optional(),
   allowedSkillIds: z.array(z.string().min(1)).optional(),
   allowedReadPaths: z.array(z.string().min(1)).optional(),
+  allowHostReads: z.boolean().optional(),
   allowedWritePaths: z.array(z.string().min(1)).optional(),
   allowedArtifactIds: z.array(z.string().min(1)).optional(),
   blockedProviderIds: z.array(z.string().min(1)).optional(),

@@ -242,6 +242,11 @@ export type ToolHostContext = {
   allowedSkillIds?: readonly string[]
   /** Workspace-relative read scopes captured at a delegated child boundary. */
   allowedReadPaths?: readonly string[]
+  /**
+   * When true and no delegated read scopes are set, file-read tools may resolve
+   * paths outside the thread workspace. Writes and commands stay on sandboxMode.
+   */
+  allowHostReads?: boolean
   /** Workspace-relative write scopes captured at a delegated child boundary. */
   allowedWritePaths?: readonly string[]
   /** Immutable artifact capability set captured at a delegated child boundary. */

@@ -571,6 +571,10 @@ export function intersectChildSecurity(
     ...intersectOptionalList('allowedToolNames', stored, current),
     ...intersectOptionalList('allowedSkillIds', stored, current),
     ...intersectOptionalPaths('allowedReadPaths', stored, current),
+    ...(stored.allowHostReads === true && current.allowHostReads === true &&
+      stored.allowedReadPaths === undefined && current.allowedReadPaths === undefined
+      ? { allowHostReads: true }
+      : {}),
     ...intersectOptionalPaths('allowedWritePaths', stored, current),
     ...intersectOptionalList('allowedArtifactIds', stored, current),
     ...unionOptionalList('blockedProviderIds', stored, current),
