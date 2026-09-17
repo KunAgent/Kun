@@ -16,7 +16,7 @@ import { useProjectDesignSystemStore } from './canvas/project-design-system-stor
 import type { DesignPromptSource } from './design-quality-repair-dispatch'
 import type { DesignArtifact } from './design-types'
 import { designDocumentResolvedEngine } from './design-types'
-import { resolveExcalidrawSceneForPrompt } from '../whiteboard/excalidraw-persistence'
+import { resolveExcalidrawSceneForPrompt, excalidrawScenePath } from '../whiteboard/excalidraw-persistence'
 import {
   buildDesignTurnSendOverrides,
   type DesignTurnPromptState
@@ -304,6 +304,9 @@ export async function submitDesignTurn(
       ...(canvasEngine === 'excalidraw'
         ? {
             canvasEngine: 'excalidraw' as const,
+            ...(turnContext.documentId
+              ? { excalidrawScenePath: excalidrawScenePath(turnContext.documentId, '.kun-design') }
+              : {}),
             ...(excalidrawScene ? { excalidrawScene } : {})
           }
         : {

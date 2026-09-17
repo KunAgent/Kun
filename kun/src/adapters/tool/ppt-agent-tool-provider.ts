@@ -479,6 +479,7 @@ export function buildPptAgentToolProvider(
                 ? { inheritedReasoningEffort: context.reasoningEffort.trim() }
                 : {}),
               ...(context.guiDesignCanvas === true ? { guiDesignCanvas: true } : {}),
+              ...(context.guiExcalidrawCanvas === true ? { guiExcalidrawCanvas: true } : {}),
               security: childSecurity,
               ...(executionBlockedTools ? { executionBlockedTools } : {}),
               approvalPolicy: context.approvalPolicy,

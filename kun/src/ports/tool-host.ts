@@ -182,6 +182,8 @@ export type ToolHostContext = {
   guiPlan?: GuiPlanContext
   /** True when the active GUI turn is allowed to mutate the design canvas. */
   guiDesignCanvas?: boolean
+  /** True when the active GUI turn may apply Excalidraw scene files. */
+  guiExcalidrawCanvas?: boolean
   /** True only for product Design turns (not Code sidebar canvas turns). */
   guiDesignMode?: boolean
   /** Code is the compatibility default when an older turn omits the field. */

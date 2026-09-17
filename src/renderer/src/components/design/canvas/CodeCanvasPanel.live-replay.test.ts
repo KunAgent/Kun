@@ -7,6 +7,10 @@ import { CodeCanvasPanel } from './CodeCanvasPanel'
 
 const mocks = vi.hoisted(() => ({ applyLive: vi.fn() }))
 
+vi.mock('../../../whiteboard/use-apply-excalidraw-live', () => ({
+  useApplyExcalidrawLive: () => undefined
+}))
+
 vi.mock('../../../design/canvas/use-apply-shape-ops-live', () => ({
   useApplyShapeOpsLive: (...args: unknown[]) => mocks.applyLive(...args)
 }))

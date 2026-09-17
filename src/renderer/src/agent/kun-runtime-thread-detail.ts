@@ -73,6 +73,7 @@ export async function getKunThreadDetail(threadId: string, options: {
       instructionInjectionBytes: turn.instructionInjectionBytes,
       mode: turn.mode === 'plan' || turn.mode === 'agent' ? turn.mode : undefined,
       guiDesignCanvas: turn.guiDesignCanvas,
+      guiExcalidrawCanvas: turn.guiExcalidrawCanvas,
       guiDesignMode: turn.guiDesignMode,
       designProfile: item.designProfile ?? turn.designProfile,
       designDocumentTarget: item.designDocumentTarget ?? turn.designDocumentTarget,

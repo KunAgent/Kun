@@ -49,6 +49,10 @@ vi.mock('../design/canvas/PropertiesPanel', async () => {
   }
 })
 
+vi.mock('../../whiteboard/use-apply-excalidraw-live', () => ({
+  useApplyExcalidrawLive: () => undefined
+}))
+
 vi.mock('../../design/canvas/use-apply-shape-ops-live', () => ({
   useApplyShapeOpsLive: (...args: unknown[]) => mocks.applyLive(...args)
 }))

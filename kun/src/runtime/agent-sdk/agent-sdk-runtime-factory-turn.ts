@@ -284,6 +284,7 @@ export function createAgentSdkTurnRuntimeDeps(
         additionalWorkspaces: thread.additionalWorkspaces,
         ...plan,
         ...(turn?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(turn?.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(turn?.guiDesignMode ? { guiDesignMode: true } : {}),
         ...(turn?.guiDesignArtifact ? { guiDesignArtifact: turn.guiDesignArtifact } : {}),
         activeSkillIds: [...new Set([...activeSkillIds, ...availableSkillIds])],

@@ -17,6 +17,7 @@ import { setScreenCreationFactory } from '../../../design/canvas/screen-artifact
 import { createLinkedHtmlScreen } from '../../../design/canvas/screen-lifecycle'
 import { createLinkedSvgArtifact } from '../../../design/canvas/svg-artifact-lifecycle'
 import { useApplyShapeOpsLive } from '../../../design/canvas/use-apply-shape-ops-live'
+import { useApplyExcalidrawLive } from '../../../whiteboard/use-apply-excalidraw-live'
 import { canvasOpErrorKey } from '../../../design/canvas/apply-shape-ops'
 import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 import { useSvgArtifactStatusMonitor } from '../../../design/svg/use-svg-artifact-status-monitor'
@@ -236,6 +237,14 @@ export function DesignDocumentCanvasSurface({
       : undefined,
     expectedCanvasDocumentKey
   )
+
+  useApplyExcalidrawLive({
+    enabled: Boolean(excalidraw && documentId && activeThreadId && documentIsActive && !readOnly),
+    threadId: activeThreadId,
+    workspaceRoot,
+    identityId: documentId ?? '',
+    baseDir: DESIGN_DOCUMENTS_DIR
+  })
 
   const kunEmpty = !expectedCanvasDocumentKey ||
     canvasDocumentKeyValue !== expectedCanvasDocumentKey ||

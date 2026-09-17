@@ -432,6 +432,7 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
       threadMode: prepared.mode,
       activePlanContext: prepared.activePlanContext,
       guiDesignCanvas: input.turn.guiDesignCanvas === true,
+      guiExcalidrawCanvas: input.turn.guiExcalidrawCanvas === true,
       guiDesignMode: input.turn.guiDesignMode === true,
       agentSurface: input.turn.agentSurface ?? 'code',
       guiDesignArtifact: input.turn.guiDesignArtifact,

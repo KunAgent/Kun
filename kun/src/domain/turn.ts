@@ -49,6 +49,7 @@ export function createTurnRecord(input: {
   composerContexts?: ComposerContextAttachmentJson[]
   guiPlan?: GuiPlanContextJson
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -106,6 +107,7 @@ export function createTurnRecord(input: {
     ...(input.approvalReviewer ? { approvalReviewer: input.approvalReviewer } : {}),
     ...(input.guiPlan ? { guiPlan: input.guiPlan } : {}),
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+    ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(input.guiDesignMode ? { guiDesignMode: true } : {}),
     ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),
     ...(input.designProfile ? { designProfile: input.designProfile } : {}),

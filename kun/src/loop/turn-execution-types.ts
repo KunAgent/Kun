@@ -123,6 +123,7 @@ export type ToolTurnContextInput = {
   threadMode?: 'agent' | 'plan'
   activePlanContext?: GuiPlanContext
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   guiDesignArtifact?: GuiDesignArtifactContext

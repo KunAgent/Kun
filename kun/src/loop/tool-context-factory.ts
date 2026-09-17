@@ -51,6 +51,7 @@ export function createToolExecutionContext(
     threadMode: input.threadMode,
     ...(input.activePlanContext ? { guiPlan: input.activePlanContext } : {}),
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+    ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(input.guiDesignMode ? { guiDesignMode: true } : {}),
     agentSurface: input.agentSurface ?? 'code',
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),

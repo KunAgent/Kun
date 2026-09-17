@@ -31,6 +31,7 @@ import {
   workCanvasPptWorkflowGate
 } from '../../design/canvas/work-canvas'
 import { useWorkWhiteboardRenameLive } from './use-work-whiteboard-rename-live'
+import { useApplyExcalidrawLive } from '../../whiteboard/use-apply-excalidraw-live'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import {
   workWhiteboardEngineLocked,
@@ -278,6 +279,13 @@ function ExcalidrawWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactEleme
   const handleEmptyChange = useCallback((next: boolean) => {
     setEmpty(next)
   }, [])
+  useApplyExcalidrawLive({
+    enabled: true,
+    threadId: props.activeThreadId,
+    workspaceRoot: identity.workspaceRoot,
+    identityId: identity.artifactId,
+    baseDir: WORK_WHITEBOARD_DIR
+  })
   return (
     <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="excalidraw">
       <ExcalidrawSurface

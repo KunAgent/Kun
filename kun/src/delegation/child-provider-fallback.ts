@@ -31,6 +31,7 @@ export type ChildExecutionArgs = {
   clientSurface: TurnClientSurface | undefined
   agentSurface: 'code' | 'write' | 'design' | undefined
   guiDesignCanvas: boolean
+  guiExcalidrawCanvas: boolean
   resolvedReasoningEffort: string | undefined
   resolvedServiceTier: 'priority' | undefined
   returnFormat: ChildReturnFormat

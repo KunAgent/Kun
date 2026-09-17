@@ -21,14 +21,14 @@ import { resolveCodeAgentPersona } from '../chat/code-agent-presets'
 import { parseGuiPlanCommand } from '../../plan/plan-command'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { buildComposerFileContextPrompt } from '../../lib/composer-file-references'
-import { resolveCodeCanvasComposerRoute, codeCanvasAdvertisesShapeOps } from '../../design/canvas/code-canvas'
+import { resolveCodeCanvasComposerRoute, codeCanvasAdvertisesShapeOps, codeCanvasAdvertisesExcalidraw } from '../../design/canvas/code-canvas'
 import { useCanvasSelectionStore } from '../../design/canvas/canvas-selection-store'
 import { consumeLastCanvasOpErrors } from '../../design/canvas/apply-shape-ops'
 import { activePptReviewComposerContexts } from './workbench-ppt-review-context'
 import {
   activeWorkWhiteboardForSend,
   activeWorkWhiteboardComposerContexts,
-  workWhiteboardAdvertisesCanvasTools,
+  workWhiteboardAdvertisesCanvasTools, workWhiteboardAdvertisesExcalidrawTools,
   workWhiteboardMessageFence,
   workWhiteboardSnapshotMatches
 } from './workbench-write-whiteboard-context'
@@ -366,7 +366,7 @@ export function useWorkbenchComposerSubmitController({
           ...(publicAttachments.length ? { attachments: publicAttachments } : {}),
           ...(composerContexts.length ? { composerContexts } : {}),
           ...(writeSource.fileReference ? { fileReferences: [writeSource.fileReference] } : {}),
-          ...(workWhiteboardAdvertisesCanvasTools(activeWhiteboard) ? { guiDesignCanvas: true } : {}),
+          ...(workWhiteboardAdvertisesCanvasTools(activeWhiteboard) ? { guiDesignCanvas: true } : workWhiteboardAdvertisesExcalidrawTools(activeWhiteboard) ? { guiExcalidrawCanvas: true } : {}),
           ...(agentPersona ? { persona: agentPersona } : {}),
           writeContext: {
             workspaceRoot: writeWorkspaceRoot,
@@ -608,7 +608,7 @@ export function useWorkbenchComposerSubmitController({
       clearComposerFileReferences()
       let outboundText = prepared.text
       let outboundDisplay = prepared.displayText
-      let outboundGuiDesignCanvas = false
+      let outboundGuiDesignCanvas = false, outboundGuiExcalidrawCanvas = false
       const codeCanvasRoute = resolveCodeCanvasComposerRoute({
         route,
         composerMode,
@@ -625,8 +625,9 @@ export function useWorkbenchComposerSubmitController({
           canvasBrief: codeCanvasRoute.canvasBrief
         })
         outboundDisplay = codeCanvasRoute.displayText
-        outboundGuiDesignCanvas = await codeCanvasAdvertisesShapeOps(
-          threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot, activeThreadId)
+        const codeWorkspace = threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot
+        outboundGuiDesignCanvas = await codeCanvasAdvertisesShapeOps(codeWorkspace, activeThreadId)
+        outboundGuiExcalidrawCanvas = await codeCanvasAdvertisesExcalidraw(codeWorkspace, activeThreadId)
       }
       const pptReviewContexts = route === 'chat'
         ? await activePptReviewComposerContexts(workspaceRoot, activeThreadId)
@@ -641,7 +642,7 @@ export function useWorkbenchComposerSubmitController({
       void sendMessage(outboundText, composerMode === 'plan' ? 'plan' : 'agent', {
         agentSurface: taskSurface,
         ...(outboundDisplay ? { displayText: outboundDisplay } : {}),
-        ...(outboundGuiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(outboundGuiDesignCanvas ? { guiDesignCanvas: true } : outboundGuiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(persona ? { persona } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(serviceTier ? { serviceTier } : {}),

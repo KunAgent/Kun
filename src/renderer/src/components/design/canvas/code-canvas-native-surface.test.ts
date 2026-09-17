@@ -27,6 +27,10 @@ vi.mock('../../../whiteboard/excalidraw-surface', () => ({
   CanvasEngineSwitcher: () => createElement('engine-switcher-stub', { 'data-canvas-engine-switcher': 'true' })
 }))
 
+vi.mock('../../../whiteboard/use-apply-excalidraw-live', () => ({
+  useApplyExcalidrawLive: () => undefined
+}))
+
 vi.mock('../../../design/canvas/use-apply-shape-ops-live', () => ({
   useApplyShapeOpsLive: () => undefined
 }))

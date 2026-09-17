@@ -21,6 +21,9 @@ import type { CanvasDocument, ViewBox } from './canvas-types'
 import type { OpError } from './shape-ops'
 import { summarizeExcalidrawScene } from '../../whiteboard/excalidraw-outbound'
 import {
+  excalidrawScenePath
+} from '../../whiteboard/excalidraw-persistence'
+import {
   resolveWorkCanvasIdentity,
   snapshotWorkCanvasForPrompt
 } from './work-canvas'
@@ -245,11 +248,13 @@ export async function buildWorkCanvasReferenceContext(
   const identity = resolveWorkCanvasIdentity(options.workspaceRoot, options.boardId)
   if (options.engine === 'excalidraw') {
     const summary = summarizeExcalidrawScene(options.excalidrawScene)
+    const scenePath = excalidrawScenePath(identity.artifactId, identity.baseDir)
     const reference: JsonObject = {
       kind: 'work-reference-whiteboard',
       schemaVersion: 1,
       boardId: compactText(identity.boardId, 128),
       engine: 'excalidraw',
+      scenePath: compactText(scenePath, 240),
       elementCount: summary.elementCount,
       elements: summary.elements.map((element) => ({
         type: compactText(element.type, 32),

@@ -344,6 +344,7 @@ export abstract class ModelStepPreparationService {
       allowedToolNames,
       userInputDisabled,
       guiDesignCanvas: turn?.guiDesignCanvas === true,
+      guiExcalidrawCanvas: turn?.guiExcalidrawCanvas === true,
       guiDesignMode: turn?.guiDesignMode === true,
       guiDesignArtifact: turn?.guiDesignArtifact,
       fingerprint: toolCatalog.fingerprint,

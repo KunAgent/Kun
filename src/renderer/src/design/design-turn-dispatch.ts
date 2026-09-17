@@ -86,6 +86,9 @@ export function buildDesignTurnSendOverrides(options: DesignTurnSendOptions): Se
     ...(options.target === 'canvas' && options.canvasEngine !== 'excalidraw'
       ? { guiDesignCanvas: true, guiDesignMode: true }
       : {}),
+    ...(options.target === 'canvas' && options.canvasEngine === 'excalidraw'
+      ? { guiExcalidrawCanvas: true }
+      : {}),
     ...(options.target === 'svg' ? {
       guiDesignMode: true,
       ...(options.guiDesignArtifact ? { guiDesignArtifact: options.guiDesignArtifact } : {})
@@ -97,7 +100,9 @@ export function buildDesignTurnSendOverrides(options: DesignTurnSendOptions): Se
 export function buildCodeCanvasSendOverrides(options: CodeCanvasSendOptions): SendMessageOverrides {
   return {
     ...(options.displayText ? { displayText: options.displayText } : {}),
-    ...(options.canvasEngine === 'excalidraw' ? {} : { guiDesignCanvas: true }),
+    ...(options.canvasEngine === 'excalidraw'
+      ? { guiExcalidrawCanvas: true }
+      : { guiDesignCanvas: true }),
     agentSurface: 'code',
     ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {})
   }

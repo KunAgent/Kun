@@ -206,6 +206,7 @@ function effectiveClientSurface(context: ToolHostContext): NonNullable<ToolHostC
   if (
     context.guiPlan ||
     context.guiDesignCanvas ||
+    context.guiExcalidrawCanvas ||
     context.guiDesignMode ||
     context.guiDesignArtifact ||
     context.agentSurface

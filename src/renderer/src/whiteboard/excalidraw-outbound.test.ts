@@ -17,12 +17,15 @@ describe('excalidraw outbound', () => {
     ])
   })
 
-  it('tells the agent not to mutate ShapeOps on an Excalidraw board', () => {
+  it('tells the agent to write the scene file and apply it', () => {
     const prompt = formatExcalidrawScenePrompt({
       elements: [{ type: 'text', text: 'Checkout' }]
-    })
+    }, { scenePath: '.kun-design/doc/excalidraw.json' })
     expect(prompt).toContain('Do not call design_update_shapes')
     expect(prompt).toContain('Checkout')
+    expect(prompt).toContain('.kun-design/doc/excalidraw.json')
+    expect(prompt).toContain('design_apply_excalidraw')
+    expect(prompt).not.toContain('The user draws in Excalidraw')
     expect(formatExcalidrawScenePrompt(null)).toContain('empty')
   })
 })

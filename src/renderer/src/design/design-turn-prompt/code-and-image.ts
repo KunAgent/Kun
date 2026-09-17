@@ -33,9 +33,12 @@ export function buildCodeCanvasTurnPrompt(options: {
   canvasDesignSystem?: DesignSystem
   canvasEngine?: 'kun' | 'excalidraw'
   excalidrawScene?: { elements?: unknown[] }
+  excalidrawScenePath?: string
 }): string {
   if (options.canvasEngine === 'excalidraw') {
-    return formatExcalidrawScenePrompt(options.excalidrawScene)
+    return formatExcalidrawScenePrompt(options.excalidrawScene, {
+      ...(options.excalidrawScenePath ? { scenePath: options.excalidrawScenePath } : {})
+    })
   }
   const base = buildCanvasTurnPrompt({
     target: 'canvas',

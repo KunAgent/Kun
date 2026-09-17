@@ -55,6 +55,7 @@ export type BuildDesignTurnPromptPayloadOptions = {
   canvasSnapshot?: CanvasSnapshot
   canvasEngine?: 'kun' | 'excalidraw'
   excalidrawScene?: { elements?: unknown[] }
+  excalidrawScenePath?: string
   htmlFrameContext?: DesignFrameContext
   selectedFrame?: CanvasShape | null
   previousOpErrors?: OpError[]
@@ -184,6 +185,7 @@ export async function buildDesignTurnPromptPayload(
     ...(options.canvasSnapshot ? { canvasSnapshot: options.canvasSnapshot } : {}),
     ...(options.canvasEngine ? { canvasEngine: options.canvasEngine } : {}),
     ...(options.excalidrawScene ? { excalidrawScene: options.excalidrawScene } : {}),
+    ...(options.excalidrawScenePath ? { excalidrawScenePath: options.excalidrawScenePath } : {}),
     canvasDesignSystem: options.designSystem,
     ...(options.projectDesignMdSourceHash ? { projectDesignMdSourceHash: options.projectDesignMdSourceHash } : {}),
     ...(options.htmlFrameContext ? { frameContext: options.htmlFrameContext } : {}),

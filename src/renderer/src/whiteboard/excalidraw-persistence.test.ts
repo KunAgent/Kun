@@ -4,6 +4,8 @@ import {
   canSwitchCanvasEngine,
   clearExcalidrawRuntimeCacheForTests,
   createEmptyExcalidrawScene,
+  discardPendingExcalidrawScene,
+  excalidrawPngPath,
   excalidrawScenePath,
   isExcalidrawSceneEmpty,
   liveCanvasEngine,
@@ -64,6 +66,7 @@ describe('excalidraw persistence', () => {
     expect(parseCanvasEngineRecord('not-json')).toBe('kun')
     expect(serializeCanvasEngineRecord('excalidraw')).toContain('"engine": "excalidraw"')
     expect(excalidrawScenePath('board-1', '.kun-whiteboards')).toBe('.kun-whiteboards/board-1/excalidraw.json')
+    expect(excalidrawPngPath('board-1', '.kun-whiteboards')).toBe('.kun-whiteboards/board-1/excalidraw.png')
   })
 
   it('debounces scene writes through the workspace file API', async () => {
@@ -88,6 +91,30 @@ describe('excalidraw persistence', () => {
       path: '.kun-whiteboards/board-1/excalidraw.json'
     })
     expect(String(payload?.content)).toContain('Note')
+  })
+
+  it('drops a pending persist without blocking later saves', async () => {
+    vi.useFakeTimers()
+    const writeWorkspaceFile = vi.fn(async (_request: {
+      workspaceRoot: string
+      path: string
+      content: string
+    }) => ({ ok: true as const, path: 'x', savedAt: 't' }))
+    vi.stubGlobal('window', { kunGui: { writeWorkspaceFile, readWorkspaceFile: vi.fn() } })
+    persistExcalidrawScene('/work', 'board-drop', '.kun-whiteboards', {
+      ...createEmptyExcalidrawScene(),
+      elements: [{ id: 'stale', type: 'text', text: 'Stale' }]
+    })
+    await discardPendingExcalidrawScene('/work', 'board-drop', '.kun-whiteboards')
+    await vi.runAllTimersAsync()
+    expect(writeWorkspaceFile).not.toHaveBeenCalled()
+    persistExcalidrawScene('/work', 'board-drop', '.kun-whiteboards', {
+      ...createEmptyExcalidrawScene(),
+      elements: [{ id: 'fresh', type: 'text', text: 'Fresh' }]
+    })
+    await vi.runAllTimersAsync()
+    expect(writeWorkspaceFile).toHaveBeenCalledTimes(1)
+    expect(String(writeWorkspaceFile.mock.calls[0]?.[0]?.content)).toContain('Fresh')
   })
 
   it('loads a persisted scene and allows switching only while empty', async () => {

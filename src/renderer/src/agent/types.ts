@@ -187,6 +187,7 @@ export type RuntimeDisclosureMetadata = {
   agentSurface?: 'code' | 'write' | 'design'
   /** Persisted turn routing hint so edit/resend can rebuild live canvas context. */
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   designProfile?: import('./design-task-profile').DesignTaskProfileInput | import('./design-task-profile').DesignTaskProfile
   designDocumentTarget?: import('./design-task-profile').DesignDocumentTarget

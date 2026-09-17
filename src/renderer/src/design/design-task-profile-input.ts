@@ -230,9 +230,10 @@ export function applyDesignTaskProfileContract(
   if (profile.canvasEngine === 'excalidraw') {
     return [
       immutableContext,
-      'EXCALIDRAW SKETCH CONTRACT: this bound drawing is a hand-drawn Excalidraw board.',
+      'EXCALIDRAW SKETCH CONTRACT: this bound drawing is an Excalidraw board.',
       'Do not call design_update_shapes, design_create_screen, design_arrange, or the HTML screen pipeline.',
-      'Discuss, review, or suggest edits in text. The user draws in Excalidraw.',
+      `Write or edit .kun-design/${profile.documentTarget.documentId}/excalidraw.json, then call design_apply_excalidraw.`,
+      'Preserve live user element ids unless the user asked to replace the sketch. An empty board may receive a full scene write.',
       prompt
     ].join('\n\n')
   }

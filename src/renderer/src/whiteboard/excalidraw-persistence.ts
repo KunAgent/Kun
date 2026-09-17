@@ -5,6 +5,7 @@ import {
 import { isKunCanvasDocumentEmpty, normalizeCanvasEngine, type CanvasEngine } from './canvas-engine'
 
 export const EXCALIDRAW_SCENE_FILE = 'excalidraw.json'
+export const EXCALIDRAW_PNG_FILE = 'excalidraw.png'
 export const CODE_CANVAS_ENGINE_FILE = 'engine.json'
 
 export type ExcalidrawSceneV1 = {
@@ -32,6 +33,10 @@ const _liveEngines = new Map<string, CanvasEngine>()
 
 export function excalidrawScenePath(identityId: string, baseDir: string): string {
   return `${baseDir}/${identityId}/${EXCALIDRAW_SCENE_FILE}`
+}
+
+export function excalidrawPngPath(identityId: string, baseDir: string): string {
+  return `${baseDir}/${identityId}/${EXCALIDRAW_PNG_FILE}`
 }
 
 export function excalidrawSceneKey(
@@ -202,6 +207,20 @@ export async function flushPendingExcalidrawScenes(workspaceRoot?: string): Prom
       if (!_cancelledSaveKeys.has(key)) await writePendingScene(key, pending)
     }))
   }
+}
+
+export async function discardPendingExcalidrawScene(
+  workspaceRoot: string,
+  identityId: string,
+  baseDir: string
+): Promise<void> {
+  const key = excalidrawSceneKey(workspaceRoot, identityId, baseDir)
+  const timer = _saveTimers.get(key)
+  if (timer) clearTimeout(timer)
+  _saveTimers.delete(key)
+  _pendingSaves.delete(key)
+  const writes = _inFlightSaves.get(key)
+  if (writes?.size) await Promise.all([...writes])
 }
 
 export async function cancelPendingExcalidrawScene(

@@ -38,6 +38,14 @@ export async function codeCanvasAdvertisesShapeOps(
   return (await resolveCodeCanvasEngine(workspaceRoot, threadId)) !== 'excalidraw'
 }
 
+export async function codeCanvasAdvertisesExcalidraw(
+  workspaceRoot: string,
+  threadId: string | null | undefined
+): Promise<boolean> {
+  if (!threadId?.trim()) return false
+  return (await resolveCodeCanvasEngine(workspaceRoot, threadId)) === 'excalidraw'
+}
+
 export function codeCanvasErrorKey(threadId: string): string {
   return `code-canvas:${threadId}`
 }

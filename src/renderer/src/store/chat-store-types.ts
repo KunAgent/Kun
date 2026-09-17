@@ -94,6 +94,7 @@ export type QueuedUserMessage = {
     title?: string
   }
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   /** True only for the product Design surface; Code whiteboards leave this unset. */
   guiDesignMode?: boolean
   /** Turn-scoped persona text resolved from the composer preset. */
@@ -174,6 +175,7 @@ export type SendMessageOverrides = {
   orchestration?: 'direct' | 'graph'
   guiPlan?: GuiPlanMessageContext
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   /** Turn-scoped persona text resolved from the composer preset. */
   persona?: string

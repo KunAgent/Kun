@@ -13,7 +13,7 @@ import {
 } from './code-canvas'
 import type { DesignSystem } from './design-system-types'
 import type { OpError } from './shape-ops'
-import { resolveExcalidrawSceneForPrompt } from '../../whiteboard/excalidraw-persistence'
+import { excalidrawScenePath, resolveExcalidrawSceneForPrompt } from '../../whiteboard/excalidraw-persistence'
 
 export type CodeCanvasOutboundDeps = {
   snapshotForPrompt?: typeof snapshotCodeCanvasForPrompt
@@ -80,6 +80,9 @@ export async function buildCodeCanvasOutboundText(
       workspaceRoot: options.workspaceRoot,
       text: options.canvasBrief,
       canvasEngine: 'excalidraw',
+      ...(options.threadId
+        ? { excalidrawScenePath: excalidrawScenePath(codeCanvasArtifactId(options.threadId), CODE_CANVAS_DIR) }
+        : {}),
       ...(scene ? { excalidrawScene: scene } : {})
     })}`
   }

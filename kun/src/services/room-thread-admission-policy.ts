@@ -8,7 +8,7 @@ export function assertRoomTurnAdmission(thread: ThreadRecord, request: StartTurn
   const frozen = ['approvalPolicy', 'sandboxMode', 'approvalReviewer', 'model', 'providerId', 'accountId', 'mode'] as const
   if (frozen.some((key) => !(key === 'model' && thread.roomContext?.kind === 'conversation') && request[key] !== undefined && request[key] !== thread[key]) ||
     request.orchestration === 'graph' || request.guiPlan || request.guiDesignMode ||
-    request.guiDesignCanvas || request.guiDesignArtifact || request.designDocumentTarget || request.writeContext ||
+    request.guiDesignCanvas || request.guiExcalidrawCanvas || request.guiDesignArtifact || request.designDocumentTarget || request.writeContext ||
     (request.agentSurface !== undefined && request.agentSurface !== 'code')) {
     throw new TurnConflictError('room thread execution policy is frozen; submit changes through its room task')
   }

@@ -258,6 +258,7 @@ export interface AgentProvider {
         title?: string
       }
       guiDesignCanvas?: boolean
+      guiExcalidrawCanvas?: boolean
       guiDesignMode?: boolean
       persona?: string
       agentSurface?: 'code' | 'write' | 'design'

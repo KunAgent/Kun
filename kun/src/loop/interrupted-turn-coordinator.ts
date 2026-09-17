@@ -175,6 +175,7 @@ export class InterruptedTurnCoordinator {
           ? {
               messageSource: 'design_continuation' as const,
               ...(lastTurn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+              ...(lastTurn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
               ...(lastTurn.guiDesignMode ? { guiDesignMode: true } : {})
             }
           : {}),

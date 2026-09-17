@@ -41,6 +41,12 @@ export function workWhiteboardAdvertisesCanvasTools(
   return Boolean(board && workWhiteboardResolvedEngine(board) !== 'excalidraw')
 }
 
+export function workWhiteboardAdvertisesExcalidrawTools(
+  board: WorkWhiteboard | null | undefined
+): boolean {
+  return Boolean(board && workWhiteboardResolvedEngine(board) === 'excalidraw')
+}
+
 export async function activeWorkWhiteboardComposerContexts(
   workspaceRoot: string,
   board: WorkWhiteboard | null,

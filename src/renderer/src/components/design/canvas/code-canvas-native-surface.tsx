@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { CanvasViewport } from './CanvasViewport'
 import { PropertiesPanel } from './PropertiesPanel'
 import { useApplyShapeOpsLive } from '../../../design/canvas/use-apply-shape-ops-live'
+import { useApplyExcalidrawLive } from '../../../whiteboard/use-apply-excalidraw-live'
 import type { ExecuteOpsOptions } from '../../../design/canvas/shape-ops'
 import {
   CODE_CANVAS_DIR,
@@ -86,6 +87,14 @@ export function CodeCanvasNativeSurface(props: {
     undefined,
     'code'
   )
+
+  useApplyExcalidrawLive({
+    enabled: engine === 'excalidraw',
+    threadId,
+    workspaceRoot,
+    identityId: artifactId,
+    baseDir: CODE_CANVAS_DIR
+  })
 
   const kunEmpty = canvasDocumentKeyValue !== expectedDocumentKey ||
     isKunCanvasDocumentEmpty(canvasDocument)

@@ -484,6 +484,7 @@ export async function sendThreadMessage(
           ...(expectedThreadId ? { expectedThreadId } : {}),
           ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
           ...((queued?.guiDesignCanvas ?? overrides?.guiDesignCanvas) ? { guiDesignCanvas: true } : {}),
+          ...((queued?.guiExcalidrawCanvas ?? overrides?.guiExcalidrawCanvas) ? { guiExcalidrawCanvas: true } : {}),
           ...((queued?.guiDesignMode ?? overrides?.guiDesignMode) ? { guiDesignMode: true } : {}),
           ...(persona ? { persona } : {}),
           ...(requestedAgentSurface ? { agentSurface: requestedAgentSurface } : {}),
@@ -570,6 +571,7 @@ export async function sendThreadMessage(
         : undefined
     const subagentResume = queued?.subagentResume ?? overrides?.subagentResume
     const guiDesignCanvas = (queued?.guiDesignCanvas ?? overrides?.guiDesignCanvas) === true
+    const guiExcalidrawCanvas = (queued?.guiExcalidrawCanvas ?? overrides?.guiExcalidrawCanvas) === true
     const guiDesignMode = (queued?.guiDesignMode ?? overrides?.guiDesignMode) === true
     const orchestration = queued?.orchestration ??
       overrides?.orchestration ??
@@ -608,6 +610,7 @@ export async function sendThreadMessage(
       ...(expectedThreadId ? { expectedThreadId } : {}),
       ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
       ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(guiDesignMode ? { guiDesignMode: true } : {}),
       ...(persona ? { persona } : {}),
       ...(requestedAgentSurface ? { agentSurface: requestedAgentSurface } : {}),
@@ -661,6 +664,7 @@ export async function sendThreadMessage(
       reasoningEffort,
       serviceTier,
       guiDesignCanvas,
+      guiExcalidrawCanvas,
       guiDesignMode,
       persona,
       orchestration,

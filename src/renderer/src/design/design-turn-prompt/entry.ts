@@ -91,7 +91,9 @@ export function buildParallelDesignPagesPrompt(options: ParallelDesignPagesPromp
 
 export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
   if (options.target === 'canvas' && options.canvasEngine === 'excalidraw') {
-    return formatExcalidrawScenePrompt(options.excalidrawScene)
+    return formatExcalidrawScenePrompt(options.excalidrawScene, {
+      ...(options.excalidrawScenePath ? { scenePath: options.excalidrawScenePath } : {})
+    })
   }
   if (options.target === 'canvas') {
     return buildCanvasTurnPrompt(options)

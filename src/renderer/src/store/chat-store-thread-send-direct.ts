@@ -100,7 +100,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     composerAccountId,
     reasoningEffort,
     serviceTier,
-    guiDesignCanvas,
+    guiDesignCanvas, guiExcalidrawCanvas,
     guiDesignMode,
     persona,
     orchestration,
@@ -134,7 +134,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           createdAt: new Date(now).toISOString(),
           text: displayText,
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
-          ...((requestedAgentSurface || writeContext || guiDesignMode) || mode || userDisplayText || messageSource || guiDesignCanvas || designProfile || designDocumentTarget || designImagePlacementTarget || attachmentIds.length || attachments.length || fileReferences.length || composerContexts.length
+          ...((requestedAgentSurface || writeContext || guiDesignMode) || mode || userDisplayText || messageSource || guiDesignCanvas || guiExcalidrawCanvas || designProfile || designDocumentTarget || designImagePlacementTarget || attachmentIds.length || attachments.length || fileReferences.length || composerContexts.length
             ? {
                 meta: {
                   agentSurface: requestedAgentSurface ??
@@ -142,7 +142,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
                   ...(mode === 'agent' || mode === 'plan' ? { mode } : {}),
                   ...(userDisplayText ? { displayText: userDisplayText } : {}),
                   ...(messageSource ? { messageSource } : {}),
-                  ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+                  ...(guiDesignCanvas ? { guiDesignCanvas: true } : guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
                   ...(guiDesignMode ? { guiDesignMode: true } : {}),
                   ...(designProfile ? { designProfile } : {}),
                   ...(designDocumentTarget ? { designDocumentTarget } : {}),
@@ -361,7 +361,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(messageSource ? { messageSource } : {}),
         ...(runtimeDisplayText ? { displayText: runtimeDisplayText } : {}),
         ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
-        ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(guiDesignCanvas ? { guiDesignCanvas: true } : guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(guiDesignMode ? { guiDesignMode: true } : {}),
         ...(designProfile ? { designProfile } : {}),
         ...(designDocumentTarget ? { designDocumentTarget } : {}),

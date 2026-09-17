@@ -187,6 +187,7 @@ export class TurnContextResolver {
       threadMode: input.mode.effectiveMode,
       ...(input.mode.activePlanContext ? { activePlanContext: input.mode.activePlanContext } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
       agentSurface: input.turn.agentSurface ?? 'code',
       ...(input.turn.guiDesignArtifact ? { guiDesignArtifact: input.turn.guiDesignArtifact } : {}),
@@ -286,6 +287,7 @@ export function resolveTurnClientSurface(turn: Pick<
   | 'imContext'
   | 'guiPlan'
   | 'guiDesignCanvas'
+  | 'guiExcalidrawCanvas'
   | 'guiDesignMode'
   | 'guiDesignArtifact'
   | 'agentSurface'
@@ -295,6 +297,7 @@ export function resolveTurnClientSurface(turn: Pick<
   if (
     turn.guiPlan ||
     turn.guiDesignCanvas ||
+    turn.guiExcalidrawCanvas ||
     turn.guiDesignMode ||
     turn.guiDesignArtifact ||
     turn.agentSurface

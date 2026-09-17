@@ -448,7 +448,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         ...(source?.composerContexts.length ? { composerContexts: source.composerContexts } : {}),
         ...(source?.fileReferences.length ? { fileReferences: source.fileReferences } : {}),
         model,
-        clientSurface: input.guiDesignCanvas ? 'gui' : input.clientSurface ?? 'api',
+        clientSurface: input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api',
         ...(input.providerId ? { providerId: input.providerId } : {}),
         ...(input.accountId ? { accountId: input.accountId } : {}),
         approvalPolicy,
@@ -458,6 +458,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         reasoningEffort: normalizeRoleReasoningEffort(input.reasoningEffort),
         ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
         ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(agentSurface ? { agentSurface } : {}),
         ...(designAdmission ?? {}),
         // Child runs have no independent interactive surface for structured prompts.

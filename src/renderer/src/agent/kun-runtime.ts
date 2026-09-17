@@ -389,6 +389,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         title?: string
       }
       guiDesignCanvas?: boolean
+      guiExcalidrawCanvas?: boolean
       guiDesignMode?: boolean
       persona?: string
       agentSurface?: 'code' | 'write' | 'design'
@@ -477,6 +478,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     if (options?.guiDesignCanvas) {
       body.guiDesignCanvas = true
+    }
+    if (options?.guiExcalidrawCanvas) {
+      body.guiExcalidrawCanvas = true
     }
     if (options?.guiDesignMode) {
       body.guiDesignMode = true

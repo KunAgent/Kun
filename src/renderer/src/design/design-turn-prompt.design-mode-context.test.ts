@@ -83,6 +83,7 @@ describe('design turn prompt design mode context', () => {
       artifactRelativePath: '.kun-design/doc/board.canvas.json',
       workspaceRoot: '/workspace',
       canvasEngine: 'excalidraw',
+      excalidrawScenePath: '.kun-design/doc/excalidraw.json',
       excalidrawScene: {
         elements: [
           { type: 'arrow', isDeleted: false },
@@ -90,9 +91,11 @@ describe('design turn prompt design mode context', () => {
         ]
       }
     })
-    expect(prompt).toContain('Excalidraw sketch')
+    expect(prompt).toContain('Excalidraw board')
     expect(prompt).toContain('Do not call design_update_shapes')
+    expect(prompt).toContain('.kun-design/doc/excalidraw.json')
     expect(prompt).toContain('Checkout')
+    expect(prompt).toContain('design_apply_excalidraw')
     expect(prompt).not.toContain('design_update_shapes: { "ops"')
     expect(prompt).not.toContain('Current canvas snapshot')
   })

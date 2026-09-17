@@ -398,6 +398,8 @@ export type ChildRunExecutor = (input: {
   promptPreamble?: string
   /** True when the parent turn is a GUI design-canvas turn. */
   guiDesignCanvas?: boolean
+  /** True when the parent turn is a GUI Excalidraw canvas turn. */
+  guiExcalidrawCanvas?: boolean
   /** Reasoning depth for this profile's child model requests (default 'off'). */
   reasoningEffort?: string
   /** Effective Codex service tier for this child's model requests ('fast' = priority). */

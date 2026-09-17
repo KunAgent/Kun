@@ -125,6 +125,7 @@ describe('design turn dispatch', () => {
       canvasEngine: 'excalidraw'
     })
     expect(overrides.guiDesignCanvas).toBeUndefined()
+    expect(overrides.guiExcalidrawCanvas).toBe(true)
     expect(overrides.guiDesignMode).toBeUndefined()
   })
 
@@ -144,7 +145,8 @@ describe('design turn dispatch', () => {
       guiDesignCanvas: true
     })
     expect(buildCodeCanvasSendOverrides({ canvasEngine: 'excalidraw' })).toEqual({
-      agentSurface: 'code'
+      agentSurface: 'code',
+      guiExcalidrawCanvas: true
     })
   })
 })

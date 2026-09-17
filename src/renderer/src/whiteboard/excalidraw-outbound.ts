@@ -36,18 +36,25 @@ export function summarizeExcalidrawScene(scene: {
   }
 }
 
-export function formatExcalidrawScenePrompt(scene: {
-  elements?: unknown[]
-} | null | undefined): string {
+export function formatExcalidrawScenePrompt(
+  scene: {
+    elements?: unknown[]
+  } | null | undefined,
+  options?: { scenePath?: string }
+): string {
   const summary = summarizeExcalidrawScene(scene)
   const lines = summary.elements.map((element, index) => {
     const text = element.text ? ` "${element.text.replace(/\s+/g, ' ')}"` : ''
     return `${index + 1}. ${element.type}${text}`
   })
+  const scenePath = options?.scenePath?.trim()
   return [
-    'The active whiteboard is an Excalidraw sketch (hand-drawn diagram), not the Kun ShapeOps canvas.',
+    'The active whiteboard is an Excalidraw board, not the Kun ShapeOps canvas.',
     'Do not call design_update_shapes, design_create_screen, design_arrange, or any HTML screen pipeline for this board.',
-    'Discuss, review, or suggest edits in text. The user draws in Excalidraw.',
+    scenePath
+      ? `Canonical scene file: ${scenePath}. Use write/edit on that path, then call design_apply_excalidraw so the open board reloads and exports excalidraw.png.`
+      : 'Use write/edit on the canonical excalidraw.json for this board, then call design_apply_excalidraw so the open board reloads and exports excalidraw.png.',
+    'Preserve live user element ids unless the user asked to replace the sketch. An empty board may receive a full scene write.',
     `Live elements: ${summary.elementCount}${summary.elementCount > MAX_SUMMARY_ELEMENTS ? ` (showing first ${MAX_SUMMARY_ELEMENTS})` : ''}.`,
     ...(lines.length > 0 ? ['Current elements:', ...lines] : ['The sketch is currently empty.'])
   ].join('\n')

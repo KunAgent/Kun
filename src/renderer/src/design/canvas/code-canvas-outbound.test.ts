@@ -120,8 +120,10 @@ describe('code canvas outbound prompt', () => {
       takeLastErrors
     })
 
-    expect(outbound).toContain('Excalidraw sketch')
+    expect(outbound).toContain('Excalidraw board')
     expect(outbound).toContain('Do not call design_update_shapes')
+    expect(outbound).toContain('.kun-canvas/code-thread_exo/excalidraw.json')
+    expect(outbound).toContain('design_apply_excalidraw')
     expect(outbound).not.toContain('design_update_shapes with arguments')
     expect(snapshotForPrompt).not.toHaveBeenCalled()
     expect(loadDesignSystemForPrompt).not.toHaveBeenCalled()

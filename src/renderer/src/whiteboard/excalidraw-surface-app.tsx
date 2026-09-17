@@ -13,6 +13,11 @@ import {
   type ExcalidrawSceneV1
 } from './excalidraw-persistence'
 import {
+  excalidrawApplyKey,
+  registerExcalidrawApplyHandler,
+  reloadAndExportExcalidrawScene
+} from './excalidraw-apply'
+import {
   ensureExcalidrawAssetPath,
   excalidrawLangCode,
   readDocumentTheme
@@ -47,6 +52,7 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
   const [initialScene, setInitialScene] = useState<ExcalidrawSceneV1 | null>(null)
   const [loadEpoch, setLoadEpoch] = useState(0)
   const emptyRef = useRef<boolean | null>(null)
+  const skipPersistRef = useRef(false)
   const onEmptyChangeRef = useRef(props.onEmptyChange)
   const onSceneChangeRef = useRef(props.onSceneChange)
   onEmptyChangeRef.current = props.onEmptyChange
@@ -86,13 +92,41 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
     }
   }, [identityKey, props.baseDir, props.identityId, props.workspaceRoot])
 
+  useEffect(() => {
+    const key = excalidrawApplyKey(props.workspaceRoot, props.identityId, props.baseDir)
+    return registerExcalidrawApplyHandler(key, () => reloadAndExportExcalidrawScene({
+      workspaceRoot: props.workspaceRoot,
+      identityId: props.identityId,
+      baseDir: props.baseDir,
+      onReload: (scene) => {
+        skipPersistRef.current = true
+        setInitialScene(scene)
+        setLoadEpoch((epoch) => epoch + 1)
+        const empty = isExcalidrawSceneEmpty(scene)
+        emptyRef.current = empty
+        onEmptyChangeRef.current?.(empty)
+      }
+    }))
+  }, [props.baseDir, props.identityId, props.workspaceRoot])
+
   const handleChange = useCallback((
     elements: readonly OrderedExcalidrawElement[],
     appState: AppState,
     files: BinaryFiles
   ): void => {
-    if (props.readOnly) return
     const scene = sceneFromLive(elements, appState, files)
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false
+      rememberLiveExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir, scene)
+      onSceneChangeRef.current?.(scene)
+      const empty = isExcalidrawSceneEmpty(scene)
+      if (emptyRef.current !== empty) {
+        emptyRef.current = empty
+        onEmptyChangeRef.current?.(empty)
+      }
+      return
+    }
+    if (props.readOnly) return
     persistExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir, scene)
     onSceneChangeRef.current?.(scene)
     const empty = isExcalidrawSceneEmpty(scene)

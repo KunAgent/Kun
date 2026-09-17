@@ -269,6 +269,7 @@ async startTurn(this: TurnService, input: {
             composerContexts,
             guiPlan: input.request.guiPlan,
             guiDesignCanvas: input.request.guiDesignCanvas,
+            guiExcalidrawCanvas: input.request.guiExcalidrawCanvas,
             guiDesignMode: input.request.guiDesignMode,
             agentSurface: designAdmission.effectiveSurface,
             designProfile: designAdmission.effectiveProfile,

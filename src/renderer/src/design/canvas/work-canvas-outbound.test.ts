@@ -228,6 +228,7 @@ describe('Work canvas outbound prompt', () => {
     expect(context.reference).toMatchObject({
       kind: 'work-reference-whiteboard',
       engine: 'excalidraw',
+      scenePath: '.kun-whiteboards/board-exo/excalidraw.json',
       elementCount: 2
     })
     expect(context.summary).toContain('Excalidraw')

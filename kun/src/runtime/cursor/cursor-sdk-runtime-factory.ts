@@ -341,6 +341,7 @@ export function createCursorSdkRuntime(
       ...(plan.planMode ? { threadMode: 'plan' as const } : {}),
       ...(plan.guiPlan ? { guiPlan: plan.guiPlan } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
       ...(input.turn.guiDesignArtifact
         ? { guiDesignArtifact: input.turn.guiDesignArtifact }

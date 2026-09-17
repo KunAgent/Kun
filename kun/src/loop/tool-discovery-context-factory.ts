@@ -48,6 +48,7 @@ export function createToolDiscoveryContext(
     threadMode: input.threadMode,
     ...(input.activePlanContext ? { guiPlan: input.activePlanContext } : {}),
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+    ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(input.guiDesignMode ? { guiDesignMode: true } : {}),
     agentSurface: input.agentSurface ?? 'code',
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
@@ -122,15 +123,22 @@ export function modelToolDiscoveryContexts(context: ToolHostContext): ToolHostCo
     agentSurface: _agentSurface,
     guiDesignArtifact: _guiDesignArtifact,
     guiDesignCanvas: _guiDesignCanvas,
+    guiExcalidrawCanvas: _guiExcalidrawCanvas,
     guiDesignMode: _guiDesignMode,
     ...stableContext
   } = context
   return [
-    { ...stableContext, agentSurface: 'code', guiDesignCanvas: true },
+    {
+      ...stableContext,
+      agentSurface: 'code',
+      guiDesignCanvas: true,
+      guiExcalidrawCanvas: true
+    },
     {
       ...stableContext,
       agentSurface: 'design',
       guiDesignCanvas: true,
+      guiExcalidrawCanvas: true,
       guiDesignMode: true
     }
   ]
