@@ -44,6 +44,13 @@ development rejection and `delivery-checklist.md` for post-merge verification.
 Tasks 4.6 and 6.1-6.3 remain open: independent review, final baseline sync and
 final decision/resource documentation are not replaced by preparation notes.
 
+Review hardening: tasks 4.4/4.5 now additionally cover recomputed gate flags,
+complete grid validation, exclusive evidence-file reservation, interruption and
+concurrent execution rejection, and binding final output to locked development.
+Correction integration now covers real service events through compaction/restart.
+The frozen fixtures and lock are unchanged; label concerns and holdout-label
+exposure are recorded in `development-review.md`, not silently resolved.
+
 - [ ] 6.1 After #1324 and its P3-A OpenSpec closeout are merged, fetch the latest `upstream/develop`, rebase this branch, and verify the diff contains only the P3-B evaluation capability and artifacts with no importer or production-ranking changes.
 - [ ] 6.2 Document the calibration method, candidate identities, local/global metrics, privacy model, resource results, and go/no-go interpretation; verify documentation states that go requires a separate production-integration change and no-go retains P3-A infrastructure.
 - [ ] 6.3 Update `D:\learning\Review_md\kun-memory-roadmap.md` and create a stage note under `D:\learning\Review_md\codex` after the decision; verify both record the commit series, checks, immutable evidence hashes, holdout run count, and remaining P4-A work.

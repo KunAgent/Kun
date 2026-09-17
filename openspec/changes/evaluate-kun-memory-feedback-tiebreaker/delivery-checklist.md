@@ -18,8 +18,10 @@ These are a dated checkpoint, not a claim that the branch is ready to merge.
 - [x] Keep data, evaluator, tests and documentation as meaningful separate commits.
 - [ ] Obtain independent review of labels, lock and the control-only holdout
   question described in `development-review.md`.
-- [ ] Review correction evidence against the latest P3-A event/aggregate contract;
-  do not assume an old evaluator's aggregate attribution matches persisted data.
+- [x] Review correction evidence against the P3-A event/aggregate contract and
+  test real correction, replay, compaction and restart. Replacement evidence is
+  deliberately distinct from the old record's aggregate correction count.
+  Repeat integration checks after the final P3-A baseline synchronization.
 
 ## After P3-A merges
 

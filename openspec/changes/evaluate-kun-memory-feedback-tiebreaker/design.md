@@ -88,6 +88,27 @@ Development execution has three ordered steps:
 
 The lock includes fixture and manifest hashes, selected candidate, gates, runtime/evaluator identity, seed, and resource ceilings. Holdout execution refuses to run without the lock and writes one immutable evidence file. Any later parameter or label change requires a new decision version.
 
+Preparation hardening (2026-09-17): lock validation recomputes relevance/safety
+gates from reported metrics and verifies the complete ordered candidate grid.
+This does not replace reproducing those metrics from frozen development inputs.
+The durable writer reserves `<decisionId>.json` with exclusive creation before
+calling the evaluator, validates output identity, development metrics and decision
+consistency, then flushes the evidence. A failed or interrupted attempt leaves an
+empty/partial file and remains consumed. Do not delete it to retry. All invocations
+must use the same reviewed output directory; this is not protection against a
+human copying the experiment elsewhere or deliberately bypassing the writer.
+The synchronous helper is a preflight guard, not a durable execution registry.
+Independent review remains external; a caller-supplied boolean is not proof of it.
+The final scoring runner must supply measured privacy/determinism/resource gates;
+the writer validates private strings and output size but does not invent those
+measurements. No formal holdout has run during this hardening work.
+
+Correction evidence retains the frozen v1 trace name `correctionCount`, but
+counts events whose `replacementMemoryId` is the admitted record. Production
+aggregates instead count corrections of `event.memoryId` (the old record).
+An integration test exercises real correction, replay, compaction and restart;
+only the active replacement is admitted and receives the evaluator signal.
+
 ### 8. Keep evaluator dependencies one-way
 
 Offline modules may import production contracts and pure foundation-ranking helpers. Production Memory, server, Manager, renderer, and runtime modules cannot import the evaluator. Tests enforce this boundary through import checks and production-parity assertions.

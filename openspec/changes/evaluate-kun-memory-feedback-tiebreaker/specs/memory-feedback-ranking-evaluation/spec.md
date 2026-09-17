@@ -118,6 +118,21 @@ The evaluator SHALL run only the pre-declared finite candidate grid on developme
 - **WHEN** a holdout decision exists and any candidate parameter or gate changes
 - **THEN** the evaluator requires a new decision version rather than overwriting the frozen evidence
 
+#### Scenario: Report flags contradict metrics
+
+- **WHEN** a development report's gate flags or candidate grid disagree with its metrics and pre-registered plan
+- **THEN** candidate lock creation fails rather than trusting a reported passing flag
+
+#### Scenario: Concurrent or interrupted holdout write
+
+- **WHEN** two executions use the same decision output directory or a previous execution was interrupted after reserving its evidence file
+- **THEN** exclusive creation permits at most one scoring attempt and preserves incomplete evidence for review instead of automatically retrying
+
+#### Scenario: Final output changes locked development evidence
+
+- **WHEN** a holdout callback returns another candidate identity, changed development metrics, or a decision inconsistent with its gates
+- **THEN** the writer rejects the payload and retains the consumed attempt without publishing it as valid evidence
+
 ### Requirement: Evaluation is deterministic, private, and resource-bounded
 
 Candidate identity SHALL include the evaluator version, foundation version, near-tie rule, signal rule, normalization, fixed evaluation time, and artifact hashes. Repeated runs SHALL produce identical selected ids and scores within the declared tolerance, SHALL perform no network request, SHALL omit query text, Memory content, source excerpts, credentials, and machine paths from bounded traces, and SHALL enforce pre-registered runtime and trace-size ceilings.

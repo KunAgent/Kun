@@ -25,5 +25,5 @@ None.
 ## Impact
 
 - Adds versioned anonymous fixtures, manifests, decision plans, evaluator code, traces, evidence, and focused tests under the Kun Memory evaluation surface.
-- Reads the existing lexical foundation scores and P3-A feedback aggregates through offline adapters only.
+- Reads existing lexical foundation scores and derives explicit replacement evidence from P3-A feedback events through offline adapters only; replacement evidence is not the old record's production aggregate correction count.
 - Does not modify production Memory retrieval, prompt injection, canonical records, Manager/HTTP/UI behavior, settings, packaged dependencies, or the frozen P3-A v1 plan and evidence.

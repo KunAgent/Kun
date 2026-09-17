@@ -77,3 +77,23 @@ close this version at development no-go. Do not silently mark holdout complete,
 change the locked gate, promote a rejected candidate, or invent holdout metrics.
 Any agreed workflow clarification must be explicit in the OpenSpec artifacts;
 frozen v1 evidence remains unchanged.
+
+## Label review limitations (2026-09-17)
+
+The frequent-unconfirmed development control labels package lint forbidden while
+package validation is expected, although both active records answer a broad
+package-check query and neither has explicit confirmation/correction evidence.
+The misleading-feedback control labels three review passes current while the
+two-pass record is active, confirmed and has higher importance. Such cases can
+expose the limits of feedback, but require acknowledging that a bounded
+tie-breaker lacks evidence to infer the hidden label and must also preserve
+neutral ordering. Absolute zero-forbidden selection is still the frozen rule;
+this review does not relax it or relabel examples to pass.
+
+These limitations constrain interpretation of the development rejection; they
+do not invalidate or rewrite its recorded numbers. A later independently
+reviewed dataset would need a new version, not edits to these frozen inputs.
+During source review, some holdout label text appeared in search output. No
+holdout metrics were computed and no parameters were tuned. Nevertheless, this
+review is not holdout-label-blind or an independent approval of the author's
+implementation. Obtain a separate review before resolving task 4.6.
