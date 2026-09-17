@@ -166,6 +166,10 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
     }
   }, [kunGui])
 
+  useEffect(() => {
+    void detectTailscale()
+  }, [detectTailscale])
+
   const urls = useMemo(() => status?.urls ?? EMPTY_URLS, [status])
   const lanUrls = useMemo(
     () => urls.lan.filter((url) => url !== urls.primary && url !== urls.local),
