@@ -182,6 +182,9 @@ export type CoreMemoryRecordJson = {
   validFrom?: string
   validTo?: string
   expiresAt?: string
+  supersedes?: string
+  supersededAt?: string
+  correctedFrom?: string
   sources?: CoreMemorySourceEvidenceJson[]
   createdAt: string
   updatedAt: string
@@ -303,6 +306,17 @@ export type CoreMemoryDiagnosticsJson = {
   staleCount?: number
   backfill?: { running: boolean; scanned: number; remaining: number }
   degradedReason?: string
+  feedback?: {
+    enabled: boolean
+    state: 'disabled' | 'ready' | 'degraded'
+    projection: 'missing' | 'ready' | 'rebuilding' | 'degraded'
+    eventCount: number
+    aggregateCount: number
+    duplicateCount: number
+    malformedCount: number
+    lastCheckpointAt?: string
+    degradedReason?: string
+  }
   lastRetrieval?: {
     timestamp: string
     mode: 'sqlite-fts5' | 'filesystem-fallback'
@@ -332,6 +346,21 @@ export type CoreMemoryDiagnosticsJson = {
     promptCharacterBudget: number
     rankingWeights: Record<string, number>
   }
+}
+
+export type CoreMemoryConfirmResultJson = {
+  memoryId: string
+  eventId: string
+  confirmedAt: string
+  replayed: boolean
+}
+
+export type CoreMemoryCorrectResultJson = {
+  previousMemoryId: string
+  replacementMemoryId: string
+  eventId: string
+  correctedAt: string
+  replayed: boolean
 }
 
 export type CoreRuntimeCapabilityStateJson = {

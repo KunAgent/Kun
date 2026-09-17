@@ -216,6 +216,17 @@ export const MemoryDiagnostics = z.object({
     remaining: z.number().int().nonnegative()
   }).strict().optional(),
   degradedReason: z.string().max(512).optional(),
+  feedback: z.object({
+    enabled: z.boolean(),
+    state: z.enum(['disabled', 'ready', 'degraded']),
+    projection: z.enum(['missing', 'ready', 'rebuilding', 'degraded']),
+    eventCount: z.number().int().nonnegative(),
+    aggregateCount: z.number().int().nonnegative(),
+    duplicateCount: z.number().int().nonnegative(),
+    malformedCount: z.number().int().nonnegative(),
+    lastCheckpointAt: z.string().datetime().optional(),
+    degradedReason: z.string().max(512).optional()
+  }).strict().optional(),
   lastRetrieval: MemoryRetrievalTrace.optional()
 }).strict()
 export type MemoryDiagnostics = z.infer<typeof MemoryDiagnostics>

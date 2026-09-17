@@ -256,6 +256,7 @@ export abstract class AgentLoopBase {
       prefix: opts.prefix,
       ids: opts.ids,
       nowIso: opts.nowIso,
+      ...(opts.memoryFeedback ? { memoryFeedback: opts.memoryFeedback } : {}),
       get modelCapabilities() { return opts.modelCapabilities },
       get activePlanContext() { return opts.activePlanContext },
       get tokenEconomy() { return opts.tokenEconomy },

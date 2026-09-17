@@ -58,9 +58,8 @@ import {
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
-import { createPersistentAttachmentStore, createPersistentMemoryStore } from './runtime-factory-storage.js'
+import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
-
 export function createRuntimeConfigController(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>
 ) {
@@ -308,6 +307,7 @@ export function createRuntimeConfigController(
 	    const nextAttachmentStore = createPersistentAttachmentStore(nextOptions, nowIso)
 	    await pruneUnsentAttachments(nextAttachmentStore)
 	    const nextMemoryStore = createPersistentMemoryStore(nextOptions, nowIso)
+            const nextMemoryFeedback = await createReadyPersistentMemoryFeedback(nextOptions, nextMemoryStore)
 	    const nextWebProviders = buildWebToolProviders(nextOptions.capabilities?.web)
 	    const nextImageGenProviders = buildImageGenToolProviders(nextOptions.capabilities?.imageGen, {
 	      attachmentStore: nextAttachmentStore,
@@ -450,9 +450,8 @@ export function createRuntimeConfigController(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
 	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization)
-	    ])
-
-	    // GUI/TUI own the live Registry through revisioned writes. Hot apply is
+            ])
+            // GUI/TUI own the live Registry through revisioned writes. Hot apply is
 	    // a read-only Registry consumer: startup composition or explicit
 	    // model-connection APIs perform initialization and selection mutations.
 	    // Keeping this path read-only guarantees failed preflight cannot leave a
@@ -480,25 +479,25 @@ export function createRuntimeConfigController(
 	        routePools: materializedConnections.routePools,
 	        localModelGateway: materializedConnections.localModelGateway
 	      }
-	    }
-	    await migrateLegacyProviderCredentials(nextOptions)
-
+            }
+            await migrateLegacyProviderCredentials(nextOptions)
 	    const nextModelClients = buildModelClientRouterInput(
 	      nextOptions,
 	      (model) => modelCapabilitiesForModel(model, nextModelProfiles),
 	      llmDebug,
 	      resolveLegacyRequestCredentials
 	    )
-	    for (const [providerId, client] of extensionModelProviders.clientMap()) {
-	      nextModelClients.providers.set(providerId, client)
-	    }
-	    const nextDelegatedRuntime = buildMainDelegatedRuntime({
+            for (const [providerId, client] of extensionModelProviders.clientMap()) {
+              nextModelClients.providers.set(providerId, client)
+            }
+            const nextDelegatedRuntime = buildMainDelegatedRuntime({
 	      options: nextOptions,
 	      registry: nextRegistry,
 	      skillRuntime: nextSkillRuntime,
 	      instructionRuntime: nextInstructionRuntime,
 	      attachmentStore: nextAttachmentStore,
-	      memoryStore: nextMemoryStore
+	      memoryStore: nextMemoryStore,
+	      memoryFeedback: nextMemoryFeedback
 	    })
 	    const nextLoopOptions: AgentLoopOptions = {
 	      ...loopOptions,
@@ -512,7 +511,8 @@ export function createRuntimeConfigController(
 	      toolArgumentRepair: nextOptions.runtime?.toolArgumentRepair,
 	      hooks: nextResolvedHooks,
 	      attachmentStore: nextAttachmentStore,
-	      memoryStore: nextMemoryStore
+	      memoryStore: nextMemoryStore,
+	      memoryFeedback: nextMemoryFeedback
 	    }
 	    const nextLoop = new AgentLoop(nextLoopOptions)
 	    const previousLoop = loop
@@ -562,6 +562,7 @@ export function createRuntimeConfigController(
 	    webProviders = nextWebProviders
 	    attachmentStore = nextAttachmentStore
 	    memoryStore = nextMemoryStore
+            services.memoryFeedback = nextMemoryFeedback
 	    imageGenProviders = nextImageGenProviders
 	    speechGenProviders = nextSpeechGenProviders
 	    musicGenProviders = nextMusicGenProviders

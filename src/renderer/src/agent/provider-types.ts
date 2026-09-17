@@ -3,6 +3,8 @@ import type {
   CoreAttachmentMetadataJson,
   CoreAttachmentTextFallbackJson,
   CoreMemoryDiagnosticsJson,
+  CoreMemoryConfirmResultJson,
+  CoreMemoryCorrectResultJson,
   CorePendingMemoryCandidateJson,
   CoreMemoryRecordJson,
   CoreMcpOAuthDiagnosticJson,
@@ -344,6 +346,27 @@ export interface AgentProvider {
   ): Promise<CoreMemoryRecordJson>
   deleteMemory?(memoryId: string, options?: { workspace?: string; project?: string }): Promise<CoreMemoryRecordJson>
   getMemoryDiagnostics?(): Promise<CoreMemoryDiagnosticsJson>
+  confirmMemory?(
+    memoryId: string,
+    operationId: string,
+    access?: { workspace?: string; project?: string }
+  ): Promise<CoreMemoryConfirmResultJson>
+  correctMemory?(
+    memoryId: string,
+    operationId: string,
+    replacement: {
+      content: string
+      tags?: string[]
+      confidence?: number
+      importance?: number
+      type?: CoreMemoryRecordJson['type']
+      observedAt?: string
+      validFrom?: string | null
+      validTo?: string | null
+      expiresAt?: string | null
+    },
+    access?: { workspace?: string; project?: string }
+  ): Promise<CoreMemoryCorrectResultJson>
   listMemoryDistillationCandidates?(workspace: string): Promise<CorePendingMemoryCandidateJson[]>
   decideMemoryDistillationCandidate?(
     candidateId: string,

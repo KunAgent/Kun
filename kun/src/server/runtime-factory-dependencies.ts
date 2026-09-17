@@ -31,6 +31,7 @@ export {
   ManagerRemoteArtifactStore,
   ManagerRemoteMemoryStore
 } from '../manager/remote-data-stores.js'
+export { ManagerRemoteMemoryFeedback } from '../manager/remote-memory-feedback.js'
 export {
   ManagerThreadExecutionLeaseClient,
   registerRuntimeWithManager,
@@ -235,6 +236,13 @@ export { SkillRuntime } from '../skills/skill-runtime.js'
 export { InstructionRuntime } from '../instructions/instruction-runtime.js'
 export { resolveConfiguredHooks, type HooksConfig } from '../hooks/hook-config.js'
 export { FileMemoryStore, type MemoryStore } from '../memory/memory-store.js'
+export { FileMemoryFeedbackStore } from '../memory/memory-feedback-store.js'
+export { MemoryFeedbackService } from '../memory/memory-feedback-service.js'
+export { MemoryFeedbackConfig } from '../contracts/memory-feedback.js'
+export {
+  LocalMemoryFeedbackRuntime,
+  type MemoryFeedbackRuntime
+} from '../memory/memory-feedback-runtime.js'
 export { AtomicJsonFile } from '../extensions/atomic-json.js'
 export { DelegationRuntime, FileDelegationStore } from '../delegation/delegation-runtime.js'
 export {

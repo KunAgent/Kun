@@ -11,6 +11,8 @@ import {
 } from './attachments.js'
 import {
   createMemory,
+  confirmMemory,
+  correctMemory,
   deleteMemory,
   listMemories,
   memoryDiagnostics,
@@ -87,7 +89,15 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
   })
   router.add('GET', '/v1/memory/diagnostics', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return memoryDiagnostics(runtime.memoryStore)
+    return memoryDiagnostics(runtime.memoryStore, runtime.memoryFeedback)
+  })
+  router.add('POST', '/v1/memory/:id/confirm', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return confirmMemory(runtime.memoryFeedback, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/memory/:id/correct', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return correctMemory(runtime.memoryFeedback, ctx.params.id, request)
   })
   router.add('GET', '/v1/memory/distillation', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

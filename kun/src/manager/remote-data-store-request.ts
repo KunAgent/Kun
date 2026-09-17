@@ -59,7 +59,10 @@ export function isManagerStoreRead(store: ManagerStore, operation: string): bool
       'loadItems', 'searchItemText', 'loadItemPage', 'loadSession', 'highestSeq',
       'loadUsageRecords', 'aggregateUsage', 'loadLatestUsageSnapshots'],
     artifact: ['list', 'get', 'readRange', 'stat'],
-    memory: ['list', 'retrieve', 'diagnostics', 'distillationPending'],
+    memory: [
+      'list', 'retrieve', 'diagnostics', 'distillationPending',
+      'feedbackEvent', 'feedbackAggregate', 'feedbackAggregates', 'feedbackDiagnostics'
+    ],
     graph: ['get', 'list', 'events', 'eventReplay', 'snapshot', 'diagnostics'],
     attachment: ['get', 'resolveContent', 'diagnostics']
   }

@@ -24,6 +24,10 @@ import {
 } from '../../loop/agent-loop.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
+import {
+  recordRetrieved,
+  type MemoryRetrievalFeedbackTarget
+} from '../../memory/memory-retrieval-feedback.js'
 import type { ApprovalGate } from '../../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../../ports/approval-review.js'
 import type {
@@ -81,6 +85,7 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
   skillRuntime?: SkillRuntime
   instructionRuntime?: InstructionRuntime
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   userInputGate?: UserInputGate
   approvalGate?: ApprovalGate
   approvalReview?: ApprovalReviewPort
@@ -114,6 +119,7 @@ export function createCursorSdkRuntime(
     skillRuntime,
     instructionRuntime,
     memoryStore,
+    memoryFeedback,
     userInputGate,
     approvalGate,
     approvalReview,
@@ -450,13 +456,15 @@ export function createCursorSdkRuntime(
         })
       }
       let memoryBlocks: string[] = []
+      let memoryIds: string[] = []
       if (memoryStore && userText.trim()) {
         const memories = await memoryStore.retrieve({
           query: userText,
           workspace: thread.workspace,
           limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
         })
-        memoryStore.setLastInjected(memories.map((memory) => memory.id))
+        memoryIds = memories.map((memory) => memory.id)
+        memoryStore.setLastInjected(memoryIds)
         memoryBlocks = memoryInstructions(memories)
       }
       const plan = resolveCursorPlanContext(thread, turnId)
@@ -576,6 +584,13 @@ export function createCursorSdkRuntime(
           })
         : {}
 
+      void recordRetrieved({
+        feedback: memoryFeedback,
+        selectedIds: memoryIds,
+        threadId,
+        turnId,
+        occurredAt: turn.createdAt
+      })
       return {
         instructionBlocks,
         activeSkillIds: [...(skillResolution?.activeSkillIds ?? activeSkillIds)],

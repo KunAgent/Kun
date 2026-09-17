@@ -88,7 +88,9 @@ export const ArtifactStoreOperationSchema = z.enum([
 ])
 export const MemoryStoreOperationSchema = z.enum([
   'distillationPending', 'commitDistillation',
-  'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'retrieve', 'diagnostics'
+  'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'retrieve', 'diagnostics',
+  'feedbackReady', 'feedbackAppend', 'feedbackEvent', 'feedbackAggregate',
+  'feedbackAggregates', 'feedbackDiagnostics', 'feedbackConfirm', 'feedbackCorrect'
 ])
 export const GraphStoreOperationSchema = z.enum([
   'create', 'append', 'get', 'list', 'events', 'eventReplay', 'snapshot', 'remove', 'diagnostics'

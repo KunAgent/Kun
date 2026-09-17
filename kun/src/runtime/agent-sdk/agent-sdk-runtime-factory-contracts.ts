@@ -42,6 +42,7 @@ import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { SkillRuntime } from '../../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
+import type { MemoryRetrievalFeedbackTarget } from '../../memory/memory-retrieval-feedback.js'
 import {
   PLAN_MODE_INSTRUCTION,
   todoContinuationInstruction,
@@ -162,6 +163,7 @@ export interface AgentSdkRuntimeFactoryDeps {
   instructionRuntime?: InstructionRuntime
   /** Long-term memory store — injects relevant memories per turn. */
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   /** Interactive-input gate rendered by whichever supported client initiated the turn. */
   userInputGate?: UserInputGate
   /** Approval gate shared with native tool execution. Missing means deny closed. */
