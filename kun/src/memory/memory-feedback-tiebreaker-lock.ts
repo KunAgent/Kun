@@ -7,6 +7,7 @@ import {
   type MemoryFeedbackTiebreakerPlan
 } from './memory-feedback-tiebreaker-contracts.js'
 import { MEMORY_FEEDBACK_TIEBREAKER_FOUNDATION_VERSION } from './memory-feedback-tiebreaker-calibration-report.js'
+import { evaluateMemoryFeedbackTiebreakerGates } from './memory-feedback-tiebreaker-gates.js'
 
 export const MEMORY_FEEDBACK_TIEBREAKER_EVALUATOR_IDENTITY =
   `memory-feedback-tiebreaker-v1|foundation=${MEMORY_FEEDBACK_TIEBREAKER_FOUNDATION_VERSION}|grouping=leader-relative`
@@ -55,6 +56,23 @@ function validateDependencies(input: {
       memoryFeedbackTiebreakerArtifactSha256(expectedDevelopmentHashes)) {
     throw new Error('memory feedback tiebreaker development dependency hash mismatch')
   }
+  const configurations = input.development.configurations
+  if (configurations.length !== input.plan.candidates.length) {
+    throw new Error('memory feedback tiebreaker candidate grid mismatch')
+  }
+  configurations.forEach((candidate, index) => {
+    const declared = input.plan.candidates[index]!
+    const gap = declared.boundaryId === null ? 0 : input.calibration.boundaryGrid
+      .find((boundary) => boundary.id === declared.boundaryId)?.maximumGap
+    if (candidate.candidateId !== declared.id || candidate.boundaryId !== declared.boundaryId ||
+        candidate.signalRule !== declared.signalRule || candidate.maximumGap !== gap) {
+      throw new Error('memory feedback tiebreaker candidate grid mismatch')
+    }
+    const gates = evaluateMemoryFeedbackTiebreakerGates(input.development.foundation, candidate, input.plan)
+    if (memoryFeedbackTiebreakerArtifactSha256(gates) !== memoryFeedbackTiebreakerArtifactSha256(candidate.gates)) {
+      throw new Error('memory feedback tiebreaker gates disagree with metrics')
+    }
+  })
 }
 
 export function validateMemoryFeedbackTiebreakerCandidateLock(input: {

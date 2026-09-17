@@ -15,6 +15,27 @@ import {
 const fixturePath = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url))
 
 describe('memory feedback tiebreaker candidate lock', () => {
+  it('rejects an internally inconsistent passing flag before creating a lock', async () => {
+    const input = await loadInput()
+    input.development.configurations[4]!.gates.passed = true
+    expect(() => createMemoryFeedbackTiebreakerCandidateLock(input))
+      .toThrow(/gates disagree with metrics/u)
+  })
+
+  it('rejects omitted, duplicated, reordered or redefined configurations', async () => {
+    for (const mutation of ['omit', 'duplicate', 'reorder', 'gap', 'signal'] as const) {
+      const input = await loadInput()
+      const configs = input.development.configurations
+      if (mutation === 'omit') configs.pop()
+      if (mutation === 'duplicate') configs[1] = configs[0]!
+      if (mutation === 'reorder') configs.reverse()
+      if (mutation === 'gap') configs[1]!.maximumGap = 0.9
+      if (mutation === 'signal') configs[1]!.signalRule = 'foundation-only'
+      expect(() => createMemoryFeedbackTiebreakerCandidateLock(input))
+        .toThrow(/candidate grid mismatch/u)
+    }
+  })
+
   it('uses the pre-registered fallback when no development candidate passes every gate', async () => {
     const input = await loadInput()
     const lock = createMemoryFeedbackTiebreakerCandidateLock(input)

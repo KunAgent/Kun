@@ -1,4 +1,5 @@
 import { memoryFeedbackPairedBootstrapLowerBound } from './memory-feedback-tiebreaker-bootstrap.js'
+import { evaluateMemoryFeedbackTiebreakerGates } from './memory-feedback-tiebreaker-gates.js'
 import type {
   MemoryFeedbackTiebreakerCalibration,
   MemoryFeedbackTiebreakerCandidateValue,
@@ -156,19 +157,9 @@ function evaluateCandidate(input: {
   }))
   const scored = scoreMemoryFeedbackTiebreakerCases({ fixture: input.fixture, results: cases })
   const lowerBounds = bootstrapLowerBounds(input.foundationCases, scored.cases, input.plan)
-  const pointPairGain = scored.metrics.pairAccuracy - input.foundationMetrics.pairAccuracy
-  const localBenefit = pointPairGain >= input.plan.gates.localBenefit.minimumPairAccuracyGain &&
-    lowerBounds.pairAccuracyGain >= input.plan.gates.localBenefit.minimumPairAccuracyGainLowerBound
-  const globalNonRegression = lowerBounds.recallGain >= input.plan.gates.globalNonRegression.minimumRecallGainLowerBound &&
-    lowerBounds.mrrGain >= input.plan.gates.globalNonRegression.minimumMrrGainLowerBound &&
-    input.foundationMetrics.precisionAtK - scored.metrics.precisionAtK <=
-      input.plan.gates.globalNonRegression.maximumPrecisionDecline &&
-    input.foundationMetrics.abstentionAccuracy - scored.metrics.abstentionAccuracy <=
-      input.plan.gates.globalNonRegression.maximumAbstentionDecline
-  const safety = scored.metrics.explicitForbiddenSelections <=
-    input.plan.gates.safety.maximumExplicitForbiddenSelections &&
-    scored.metrics.authorizationOrLifecycleViolations <=
-      input.plan.gates.safety.maximumAuthorizationOrLifecycleViolations
+  const gates = evaluateMemoryFeedbackTiebreakerGates(input.foundationMetrics, {
+    metrics: scored.metrics, bootstrapLowerBounds: lowerBounds
+  }, input.plan)
 
   return {
     candidateId: input.candidate.id,
@@ -177,7 +168,7 @@ function evaluateCandidate(input: {
     signalRule: input.candidate.signalRule,
     metrics: scored.metrics,
     bootstrapLowerBounds: lowerBounds,
-    gates: { localBenefit, globalNonRegression, safety, passed: localBenefit && globalNonRegression && safety },
+    gates,
     cases
   }
 }
