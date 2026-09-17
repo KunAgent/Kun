@@ -620,7 +620,7 @@
     onClaudeSubscriptionSdkProgress: on('claude-subscription:sdk-progress'),
     onGeminiSubscriptionCliProgress: on('gemini-subscription:cli-progress'),
     onLocalWhisperModelProgress: on('speech:local-whisper:progress'),
-    onLocalKokoroModelProgress: on('speak:kokoro:progress'),
+    onLocalSanottsAssetProgress: on('speak:sanotts:progress'),
     onExtensionViewSessionInvalidated: on('extension:view-session:invalidated'),
     onExtensionExternalBrowserState: on('extension:external-browser-state'),
     onExtensionComposerContext: on('extension:composer-context-attached'),

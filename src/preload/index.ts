@@ -10,7 +10,7 @@ import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorizati
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
-import { kokoroSpeechBridge } from './kokoro-speech-bridge'
+import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -366,7 +366,7 @@ const api = {
     ipcRenderer.on('speech:local-whisper:progress', wrapped)
     return () => ipcRenderer.removeListener('speech:local-whisper:progress', wrapped)
   },
-  ...kokoroSpeechBridge,
+  ...sanottsSpeechBridge,
   listWriteInlineCompletionDebugEntries: () =>
     ipcRenderer.invoke('write:inline-completion-debug:list'),
   clearWriteInlineCompletionDebugEntries: () =>

@@ -3,7 +3,7 @@ import { isValidTimeZone } from '../../../shared/zoned-date-time'
 import { DESKTOP_COMMANDS, MAX_APP_BADGE_COUNT } from '../../../shared/kun-gui-api'
 import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { SPEECH_TRANSCRIPTION_MAX_BASE64_CHARS, SPEECH_TRANSCRIPTION_MAX_DURATION_MS } from '../../../shared/speech-to-text'
-import { KOKORO_SPEAK_MAX_TEXT_CHARS } from '../../../shared/local-kokoro-speech'
+import { SANOTTS_SPEAK_MAX_TEXT_CHARS } from '../../../shared/local-sanotts-speech'
 import {
   TERMINAL_DEFAULT_COLS,
   TERMINAL_DEFAULT_ROWS,
@@ -29,9 +29,8 @@ import {
 import {
   clawImProviderSchema,
   clawRunModeSchema,
-  localKokoroDownloadSourceSchema,
-  localKokoroModelIdSchema,
-  localKokoroVoiceIdSchema,
+  localSanottsDownloadSourceSchema,
+  localSanottsVoiceIdSchema,
   localWhisperDownloadSourceSchema,
   localWhisperModelIdSchema,
   modelIdSchema,
@@ -60,56 +59,52 @@ export const localWhisperSourceStatusPayloadSchema = z
   })
   .strict()
 
-export const localKokoroModelIdPayloadSchema = localKokoroModelIdSchema.optional()
-export const localKokoroVoiceIdPayloadSchema = localKokoroVoiceIdSchema.optional()
-export const localKokoroDownloadPayloadSchema = z
+export const localSanottsVoiceIdPayloadSchema = localSanottsVoiceIdSchema.optional()
+export const localSanottsRuntimeDownloadPayloadSchema = z
   .object({
-    modelId: localKokoroModelIdSchema.optional(),
-    sourceId: localKokoroDownloadSourceSchema.optional(),
+    sourceId: localSanottsDownloadSourceSchema.optional(),
     ownerId: trimmedString(MAX_ID_LENGTH).optional()
   })
   .strict()
   .optional()
-export const localKokoroVoiceDownloadPayloadSchema = z
+export const localSanottsVoiceDownloadPayloadSchema = z
   .object({
-    voiceId: localKokoroVoiceIdSchema.optional(),
-    sourceId: localKokoroDownloadSourceSchema.optional(),
+    voiceId: localSanottsVoiceIdSchema.optional(),
+    sourceId: localSanottsDownloadSourceSchema.optional(),
     ownerId: trimmedString(MAX_ID_LENGTH).optional()
   })
   .strict()
   .optional()
-export const localKokoroReadinessPayloadSchema = z
+export const localSanottsReadinessPayloadSchema = z
   .object({
-    modelId: localKokoroModelIdSchema.optional(),
-    voiceId: localKokoroVoiceIdSchema.optional()
+    voiceId: localSanottsVoiceIdSchema.optional()
   })
   .strict()
   .optional()
-export const localKokoroSpeakPayloadSchema = z
+export const localSanottsSpeakPayloadSchema = z
   .object({
-    text: z.string().min(1).max(KOKORO_SPEAK_MAX_TEXT_CHARS),
+    text: z.string().min(1).max(SANOTTS_SPEAK_MAX_TEXT_CHARS),
     requestId: trimmedString(MAX_ID_LENGTH),
-    modelId: localKokoroModelIdSchema.optional(),
-    voiceId: localKokoroVoiceIdSchema.optional(),
+    voiceId: localSanottsVoiceIdSchema.optional(),
     speed: z.number().min(0.5).max(2).optional(),
     keepTrack: z.boolean().optional()
   })
   .strict()
-export const localKokoroSpeakCancelPayloadSchema = trimmedString(MAX_ID_LENGTH)
+export const localSanottsSpeakCancelPayloadSchema = trimmedString(MAX_ID_LENGTH)
 
-/** Recording identity produced by `localKokoroTrackKey`. */
-export const localKokoroTrackKeySchema = z
+/** Recording identity produced by `localSanottsTrackKey`. */
+export const localSanottsTrackKeySchema = z
   .string()
   .regex(/^[0-9a-f]{16}-[0-9a-z]{1,12}$/, 'Not a speech recording key')
-export const localKokoroTrackFinalizePayloadSchema = z
+export const localSanottsTrackFinalizePayloadSchema = z
   .object({
     requestId: trimmedString(MAX_ID_LENGTH),
-    key: localKokoroTrackKeySchema
+    key: localSanottsTrackKeySchema
   })
   .strict()
-export const localKokoroTrackExportPayloadSchema = z
+export const localSanottsTrackExportPayloadSchema = z
   .object({
-    key: localKokoroTrackKeySchema,
+    key: localSanottsTrackKeySchema,
     fileName: optionalTrimmedString(MAX_ID_LENGTH)
   })
   .strict()

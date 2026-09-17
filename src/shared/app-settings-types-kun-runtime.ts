@@ -396,7 +396,7 @@ export type KunRuntimeSettingsV1 = {
   imageGeneration: KunImageGenerationSettingsV1
   /** Speech-to-text provider used for voice input in the composer. */
   speechToText: KunSpeechToTextSettingsV1
-  /** Local Kokoro speech playback for assistant answers. */
+  /** Local sanoTTS speech playback for assistant answers. */
   speak: KunSpeakSettingsV1
   /** Text-to-speech provider exposed to agents as generate_speech. */
   textToSpeech: KunTextToSpeechSettingsV1

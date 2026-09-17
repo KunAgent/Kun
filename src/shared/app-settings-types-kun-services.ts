@@ -2,8 +2,8 @@ import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { LocalWhisperDownloadSourceId } from './local-whisper'
-import type { LocalKokoroDownloadSourceId, LocalKokoroModelId } from './local-kokoro'
-import type { LocalKokoroVoiceId } from './local-kokoro-voices'
+import type { LocalSanottsDownloadSourceId } from './local-sanotts'
+import type { LocalSanottsVoiceSetting } from './local-sanotts-voices'
 import type {
   ApprovalPolicy,
   ApprovalReviewer,
@@ -86,22 +86,23 @@ export type KunSpeechToTextSettingsV1 = {
 }
 
 /**
- * Local Kokoro speech playback for assistant answers ("Speak"). Independent
+ * Local sanoTTS speech playback for assistant answers ("Speak"). Independent
  * from `KunTextToSpeechSettingsV1`, which configures a remote TTS provider
  * exposed to agents as a tool.
  */
 export type KunSpeakSettingsV1 = {
   /** Whether the Speak action appears under assistant answers. */
   enabled: boolean
-  /** Kokoro weight tier downloaded and used for synthesis. */
-  model: LocalKokoroModelId
-  /** Voice whose style vector is applied. */
-  voice: LocalKokoroVoiceId
+  /**
+   * Stored voice selection. `auto` follows the UI locale at speak time and is
+   * not rewritten to a concrete id on disk.
+   */
+  voice: LocalSanottsVoiceSetting
   /** Playback rate passed to the model. 1 is the natural rate. */
   speed: number
-  /** Mirror used to download model weights and voice files. */
-  downloadSource: LocalKokoroDownloadSourceId
-  /** Start the model download automatically the first time Speak is used. */
+  /** Mirror used to download runtime WASM and voice files. */
+  downloadSource: LocalSanottsDownloadSourceId
+  /** Start the runtime and voice download automatically the first time Speak is used. */
   autoDownload: boolean
   /**
    * Keep the audio produced for an answer on disk, so it can be replayed

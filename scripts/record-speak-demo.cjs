@@ -4,12 +4,12 @@
  * Records a walkthrough of the local Speak provider in the running application.
  *
  * Drives the real Electron app with Playwright, captions each step on screen,
- * and writes an MP4. Pass --assets <dir> with the Kokoro weights so the demo
- * runs offline.
+ * and writes an MP4. Pass --assets <dir> with the sanoTTS runtime and amy
+ * voice so the demo runs offline.
  */
 const { spawn, execFileSync } = require('node:child_process')
 const { copyFileSync, createWriteStream, existsSync, readdirSync } = require('node:fs')
-const { mkdir, mkdtemp, symlink, writeFile } = require('node:fs/promises')
+const { mkdir, mkdtemp, writeFile } = require('node:fs/promises')
 const { createConnection, createServer } = require('node:net')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
@@ -24,6 +24,7 @@ const {
 } = require('./smoke-packaged-extension-desktop.cjs')
 const { developmentRendererEnvironment } = require('./development-renderer-environment.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
+const { linkSanottsTestAssets, sanottsTestAssetsPresent } = require('./sanotts-test-assets.cjs')
 
 function availablePort() {
   return new Promise((resolvePort, reject) => {
@@ -56,9 +57,6 @@ async function waitForPortOpen(port, timeoutMs, child) {
 
 const REPO = resolve(join(__dirname, '..'))
 const VIEWPORT = { width: 1280, height: 860 }
-const MODEL_ID = 'kokoro-82m-int8'
-const MODEL_FILE = 'model_quantized.onnx'
-const VOICE_ID = 'af_heart'
 
 function arg(flag, fallback) {
   const index = process.argv.indexOf(flag)
@@ -69,8 +67,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function main() {
   const assetDir = resolve(arg('--assets', ''))
-  if (!assetDir || !existsSync(join(assetDir, MODEL_FILE))) {
-    throw new Error(`--assets must hold ${MODEL_FILE} and ${VOICE_ID}.bin`)
+  if (!sanottsTestAssetsPresent(assetDir)) {
+    throw new Error('--assets must hold sanoTTS runtime/ and voices/amy/ files')
   }
   const outDir = resolve(arg('--out', join(REPO, 'dist', 'speak-demo')))
   await mkdir(outDir, { recursive: true })
@@ -96,11 +94,7 @@ async function main() {
   }
 
   // Link the weights into the isolated profile so nothing downloads.
-  const kokoro = join(userData, 'models', 'speech', 'kokoro')
-  await mkdir(join(kokoro, MODEL_ID), { recursive: true })
-  await mkdir(join(kokoro, 'voices'), { recursive: true })
-  await symlink(join(assetDir, MODEL_FILE), join(kokoro, MODEL_ID, MODEL_FILE))
-  await symlink(join(assetDir, `${VOICE_ID}.bin`), join(kokoro, 'voices', `${VOICE_ID}.bin`))
+  const linked = await linkSanottsTestAssets(assetDir, userData)
 
   const settings = {
     ...desktopSmokeSettings(runtimePort, workspaceRoot, profile),
@@ -213,7 +207,7 @@ async function main() {
   try {
     await wait(1200)
     await caption('Speak', 'Local, on-device speech for assistant answers',
-      'Kokoro runs on your machine. Nothing leaves it.', 3200)
+      'sanoTTS runs on your machine. Nothing leaves it.', 3200)
 
     // ---------------------------------------------------------------- settings
     await openSpeechSettings()
@@ -221,21 +215,21 @@ async function main() {
       'It sits beside the remote provider, and works whether or not that tool is on.', 3600)
 
     const panel = page.locator('#media-generation-settings-panel-speech')
-    await caption('2/11', '28 English voices, grouped by accent',
-      'Only English ships: the bundled phonemizer carries English data alone.', 1200)
-    const accent = page.getByLabel('Accent')
-    await accent.selectOption('en-gb')
+    await caption('2/11', 'Four voices, grouped by language',
+      'Auto follows the interface language. Chinese, Russian and Hindi ship beside English.', 1200)
+    const language = panel.getByLabel('Language')
+    await language.selectOption('zh')
     await wait(1500)
     const voice = page.getByLabel('Voice', { exact: true })
-    const british = await voice.locator('option').count()
-    await voice.selectOption('bf_emma')
+    const chinese = await voice.locator('option').count()
+    await voice.selectOption('chinese')
     await wait(1800)
-    await accent.selectOption('all')
-    await voice.selectOption('af_heart')
+    await language.selectOption('all')
+    await voice.selectOption('auto')
     await wait(1400)
 
     await caption('3/11', 'Playback rate, 0.5x to 2x',
-      'The summary line above tracks the model, the voice and the rate.', 1000)
+      'The summary line above tracks the voice and the rate.', 1000)
     const speed = page.getByLabel('Speed')
     await speed.fill('1.45')
     await wait(1600)
@@ -247,11 +241,11 @@ async function main() {
     await page.getByRole('button', { name: 'Play' }).click()
     await wait(6500)
 
-    await caption('5/11', 'Three weight tiers, verified by SHA-256',
-      'fp16 is recommended here: the quantized graph is the slower one on Apple Silicon.', 900)
-    await panel.locator('[data-speak-model="kokoro-82m-fp16"]').scrollIntoViewIfNeeded()
+    await caption('5/11', 'Shared runtime plus the selected voice, verified by SHA-256',
+      'First Chinese playback is about 10 MB: G2P WASM plus the Chinese voice.', 900)
+    await panel.locator('[data-speak-asset="speak-runtime"]').scrollIntoViewIfNeeded()
     await wait(3800)
-    const recommended = await panel.locator('[data-speak-model-recommended="true"]').getAttribute('data-speak-model')
+    const runtimeCard = await panel.locator('[data-speak-asset="speak-runtime"]').count()
 
     await caption('6/11', 'Keep generated tracks',
       'Off by default. Turning it on stores each answer so it can be replayed and saved.', 900)
@@ -294,10 +288,10 @@ async function main() {
     await download.waitFor({ timeout: 60_000 })
     await stage.hover()
     await caption('10/11', 'Download audio appears once the recording exists',
-      'It saves the file already produced, as a 24 kHz WAV.', 4200)
+      'It saves the file already produced, as a 22.05 kHz WAV.', 4200)
     // Copy the recording out now: the demo clears the store at the end, and
     // this file becomes the video's audio track.
-    const tracksDir = join(kokoro, 'tracks')
+    const tracksDir = linked.tracks
     const stored = existsSync(tracksDir)
       ? readdirSync(tracksDir).filter((name) => name.endsWith('.wav')).map((name) => join(tracksDir, name))
       : []
@@ -380,11 +374,11 @@ async function main() {
     await wait(2800)
 
     await caption('Speak', 'Local provider — off the Main thread, recordings kept on disk',
-      'Kokoro 82M · 28 English voices · 0.5x-2x · instant replay · WAV download', 4000)
+      'sanoTTS · 4 voices · auto by locale · 0.5x-2x · instant replay · WAV download', 4000)
 
     result.steps.push({
-      britishVoices: british,
-      recommendedTier: recommended,
+      chineseVoices: chinese,
+      runtimeCards: runtimeCard,
       firstAudioMs,
       replayMs,
       afterReloadMs,
@@ -402,7 +396,7 @@ async function main() {
     }
     const webm = video ? await video.path().catch(() => null) : null
     result.webm = webm
-    result.tracksDir = kokoro
+    result.tracksDir = linked.tracks
     await writeFile(join(outDir, 'demo.json'), `${JSON.stringify(result, null, 2)}\n`)
     if (webm && existsSync(webm)) {
       const mp4 = join(outDir, 'kun-speak-feature.mp4')

@@ -208,7 +208,7 @@ export const REMOTE_BROADCAST_EVENT_CHANNELS: ReadonlySet<string> = new Set([
   'claude-subscription:sdk-progress',
   'gemini-subscription:cli-progress',
   'speech:local-whisper:progress',
-  'speak:kokoro:progress',
+  'speak:sanotts:progress',
   'extension:view-session:invalidated',
   'extension:external-browser-state',
   'extension:view-event',

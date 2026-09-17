@@ -15,7 +15,7 @@ const {
   writeFileSync
 } = require('node:fs')
 const { join } = require('node:path')
-const { prunePackedOnnxRuntimeBinaries } = require('./after-pack-onnxruntime.cjs')
+const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
 const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
@@ -323,7 +323,7 @@ function prunePackedApplicationPayload(context) {
   prunePackedClaudeCodeBinary(context)
   prunePackedBetterSqliteBuildFiles(context)
   prunePackedTesseractResources(context)
-  prunePackedOnnxRuntimeBinaries(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
+  checkPackedSanottsRuntime(context, { unpackedAppRoot })
   trimPackedNodePtyPayload(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
   prunePackedHoistedKunDependencies(context)
 }
@@ -679,7 +679,7 @@ exports._internals = {
   maybeSignBundledOfficeCli,
   normalizeArch,
   normalizePlatform,
-  prunePackedOnnxRuntimeBinaries,
+  checkPackedSanottsRuntime,
   prunePackedWhisperResources,
   ensureNodePtyHelpersExecutable,
   assertElfExecutable,

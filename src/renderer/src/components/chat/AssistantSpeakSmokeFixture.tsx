@@ -17,7 +17,7 @@ const ANSWER = [
   '## Remaining limitations',
   '',
   'The run finished and every suite passed. Speak reads this answer aloud with',
-  'the selected Kokoro voice.',
+  'the selected sanoTTS voice.',
   '',
   '```sh',
   'npm test',

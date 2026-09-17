@@ -6,15 +6,16 @@
   "speakSynthesizing": "Generating speech...",
   "speakUnavailable": "Local speech is unavailable in this build.",
   "speakNothingToRead": "This answer has no text to read aloud.",
-  "speakModelMissing": "Download a Kokoro voice model in Settings to use Speak.",
+  "speakModelMissing": "Download the local speech runtime and voice in Settings to use Speak.",
   "speakVoiceMissing": "The selected voice could not be downloaded.",
   "speakFailed": "Could not generate speech: {{message}}",
   "speakDownloadingModel": "Downloading {{model}}",
+  "speakDownloadingRuntime": "Downloading {{runtime}}",
   "speakDownloadingVoice": "Downloading voice {{voice}}",
   "speakDownloadingHint": "Speaking starts automatically once the download finishes.",
   "speakTrackDownload": "Download audio",
   "speakTrackSaved": "Saved",
   "speakTrackSaveFailed": "Could not save the recording: {{message}}",
-  "speakUnsupportedLanguage": "Local speech supports English text only. This answer contains an unsupported language.",
+  "speakUnsupportedLanguage": "The selected voice cannot read this answer. Switch voice in Settings, or remove unsupported scripts.",
   "speakTrackNotSaved": "The recording was not saved because it was cleared, exceeded storage limits, or could not be written. Playback continues."
 }

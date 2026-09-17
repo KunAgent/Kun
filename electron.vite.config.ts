@@ -34,8 +34,8 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           'claw-schedule-mcp-node-entry': resolve('src/main/claw-schedule-mcp-node-entry.ts'),
-          // Kokoro inference blocks its JS thread, so it runs on a worker.
-          'local-kokoro-worker-entry': resolve('src/main/services/local-kokoro-worker-entry.ts')
+          // sanoTTS WASM inference blocks its JS thread, so it runs on a worker.
+          'local-sanotts-worker-entry': resolve('src/main/services/local-sanotts-worker-entry.ts')
         }
       }
     }
