@@ -40,6 +40,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     createWhiteboard: async () => null,
     openWhiteboard: () => undefined,
     findOrCreatePptWhiteboard: async () => null,
+    findOrCreateExcalidrawWhiteboard: async () => ({ ok: false, code: 'create_failed' as const }),
     renameWhiteboard: async () => false,
     deleteWhiteboard: async () => false,
     bindWhiteboardThread: async () => false,

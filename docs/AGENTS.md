@@ -69,9 +69,14 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
 - Default TUI/foreground serve bootstrap their own full stack and stop it on
   normal exit, signals, or startup failure. External `--url` / `--no-start`
   clients neither acquire shutdown authority nor extend an owner's lifetime.
-- Legacy retirement requires authenticated identity, matching canonical paths,
-  and an atomic idle/admission check. Ambiguous identity or live external work
-  blocks migration; it never authorizes a broad user-process or port scan. An
+- Legacy retirement has two tiers. Same-version Managers retire atomically
+  through `/v1/manager/retire-idle`. Incompatible legacy Managers
+  (protocol/capability) are retired during startup only after authenticated
+  identity on `/health` and `/v1/manager/status`, matching canonical
+  dataDir/settingsPath, no application owner, and an empty Runtime slot check,
+  then an instanceId-fenced `/v1/manager/shutdown` and verified process exit.
+  Ambiguous identity or live external work still blocks takeover and fails
+  closed; it never authorizes a broad user-process or port scan. An
   explicitly requested `kun manager retire --data-dir <directory>` can retire
   a verified idle legacy Manager under the matching control/settings profile;
   it rejects application-owned Managers and live Runtime slots.

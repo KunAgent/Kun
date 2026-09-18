@@ -284,7 +284,8 @@ function ExcalidrawWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactEleme
     threadId: props.activeThreadId,
     workspaceRoot: identity.workspaceRoot,
     identityId: identity.artifactId,
-    baseDir: WORK_WHITEBOARD_DIR
+    baseDir: WORK_WHITEBOARD_DIR,
+    surface: 'write'
   })
   return (
     <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="excalidraw">

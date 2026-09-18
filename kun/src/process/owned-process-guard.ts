@@ -10,6 +10,10 @@ const groups = new Map();
 let disconnected = false;
 let shutdownRequested = false;
 let ownerLostAt;
+// A dropped IPC channel is not proof of owner death. When the channel goes
+// away the guard keeps supervising through the liveness probe below and
+// only retires once nothing is left to guard.
+let channelGone = false;
 const now = () => Date.now();
 let processSnapshot;
 function identity(pid) {
@@ -99,9 +103,35 @@ function finish(group, error) {
     if (process.connected) process.send({ gone: group.pid }, () => {});
   }
 }
+let ticksSinceIdentityCheck = 0;
+let sweepPhase = 0;
+function ownerDead() {
+  // signal-0 is the definitive liveness probe: ESRCH means the owner is
+  // gone, while an alive owner (including EPERM for a foreign user) falls
+  // through. Unlike the ps lookup below it cannot stall under load.
+  try { process.kill(scopeOwnerPid, 0); }
+  catch (error) { if (error && error.code === 'ESRCH') return true; }
+  // The birth check only guards against pid reuse. The ps lookup spawns a
+  // subprocess, so it runs on a slow cadence, and an inconclusive result
+  // must never count as a death vote — a transient ps failure would
+  // otherwise SIGTERM every supervised group.
+  ticksSinceIdentityCheck += 1;
+  if (ticksSinceIdentityCheck < 50) return false;
+  ticksSinceIdentityCheck = 0;
+  const birth = identity(scopeOwnerPid);
+  if (birth === null) return false;
+  return birth !== scopeOwnerBirth;
+}
 function tick() {
   processSnapshot = undefined;
-  if (!disconnected && identity(scopeOwnerPid) !== scopeOwnerBirth) ownerLost();
+  if (!disconnected && ownerDead()) ownerLost();
+  // The group sweep walks a full process listing and is the expensive half
+  // of a tick. Every deadline enforced here is on the order of seconds, so
+  // a 500ms cadence changes nothing observable; during an owner-lost kill
+  // window keep the full-resolution sweep so grace timings stay precise.
+  sweepPhase += 1;
+  if (sweepPhase < 5 && !disconnected) return;
+  sweepPhase = 0;
   for (const group of groups.values()) {
     try {
       if (members(group).length === 0) { finish(group); continue; }
@@ -128,6 +158,10 @@ function tick() {
   if (shutdownRequested && groups.size === 0) {
     clearInterval(timer);
     process.disconnect?.();
+  }
+  if (channelGone && groups.size === 0) {
+    clearInterval(timer);
+    process.exit(0);
   }
 }
 process.on('message', (message) => {
@@ -163,7 +197,13 @@ function ownerLost() {
     group.deadline = now() + grace;
   }
 }
-process.once('disconnect', () => { ownerLost(); tick(); });
+process.once('disconnect', () => {
+  // The channel going away does not prove the owner died — the parent may
+  // still be alive and only the IPC pipe was lost. Keep supervising and let
+  // the liveness probe decide whether the stack must come down.
+  channelGone = true;
+  tick();
+});
 const scopeOwnerPid = Number(process.env.KUN_PROCESS_STACK_OWNER_PID || process.ppid);
 const scopeOwnerBirth = process.env.KUN_PROCESS_STACK_OWNER_BIRTH || identity(scopeOwnerPid);
 if (!scopeOwnerBirth) process.exit(1);

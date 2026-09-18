@@ -394,4 +394,92 @@ describe('Work whiteboard registry', () => {
     expect(workWhiteboardEngineLocked({ workflowId: undefined, phase: 'directions' })).toBe(true)
     expect(workWhiteboardEngineLocked({ workflowId: undefined, phase: 'blank' })).toBe(false)
   })
+
+  it('creates a board with an explicit id and rejects invalid or duplicate ids', async () => {
+    seedRegistry({})
+    const board = await useWriteWorkspaceStore.getState().createWhiteboard('/work', {
+      title: 'Stable', id: 'stable-board'
+    })
+    expect(board?.id).toBe('stable-board')
+
+    await expect(useWriteWorkspaceStore.getState().createWhiteboard('/work', {
+      title: 'Again', id: 'stable-board'
+    })).resolves.toBeNull()
+    await expect(useWriteWorkspaceStore.getState().createWhiteboard('/work', {
+      title: 'Bad', id: 'bad/id'
+    })).resolves.toBeNull()
+    expect(Object.keys(useWriteWorkspaceStore.getState().whiteboards)).toEqual(['stable-board'])
+  })
+
+  it('findOrCreateExcalidrawWhiteboard creates an Excalidraw board bound to the thread', async () => {
+    seedRegistry({})
+    const result = await useWriteWorkspaceStore.getState().findOrCreateExcalidrawWhiteboard({
+      workspaceRoot: '/work', boardId: 'auth-flow', title: 'Auth flow', threadId: 'thread-a'
+    })
+    expect(result).toMatchObject({ ok: true, created: true })
+    if (!result.ok) return
+    expect(result.board).toMatchObject({
+      id: 'auth-flow', title: 'Auth flow', engine: 'excalidraw',
+      threadId: 'thread-a', threadIds: ['thread-a']
+    })
+    expect(parseWorkWhiteboardRegistry(files.get(WORK_WHITEBOARD_INDEX)!, '/work')['auth-flow'])
+      .toMatchObject({ engine: 'excalidraw', threadId: 'thread-a' })
+    expect(useWriteWorkspaceStore.getState().editorLayout.groups[0]?.tabs)
+      .toContainEqual(expect.objectContaining({ kind: 'whiteboard', boardId: 'auth-flow' }))
+  })
+
+  it('findOrCreateExcalidrawWhiteboard reuses the thread-bound board without an id', async () => {
+    seedRegistry({})
+    const created = await useWriteWorkspaceStore.getState().findOrCreateExcalidrawWhiteboard({
+      workspaceRoot: '/work', title: 'Sketch', threadId: 'thread-b'
+    })
+    expect(created).toMatchObject({ ok: true, created: true })
+    if (!created.ok) return
+
+    const reused = await useWriteWorkspaceStore.getState().findOrCreateExcalidrawWhiteboard({
+      workspaceRoot: '/work', title: 'Ignored', threadId: 'thread-b'
+    })
+    expect(reused).toMatchObject({ ok: true, created: false })
+    if (reused.ok) expect(reused.board.id).toBe(created.board.id)
+    expect(Object.keys(useWriteWorkspaceStore.getState().whiteboards)).toEqual([created.board.id])
+  })
+
+  it('findOrCreateExcalidrawWhiteboard switches a blank board to Excalidraw and binds the thread', async () => {
+    seedRegistry({})
+    const board = await useWriteWorkspaceStore.getState().createWhiteboard('/work', {
+      title: 'Kun sketch', id: 'kun-board'
+    })
+    expect(board?.engine).toBeUndefined()
+
+    const result = await useWriteWorkspaceStore.getState().findOrCreateExcalidrawWhiteboard({
+      workspaceRoot: '/work', boardId: 'kun-board', threadId: 'thread-c'
+    })
+    expect(result).toMatchObject({ ok: true, created: false })
+    if (result.ok) {
+      expect(result.board).toMatchObject({ id: 'kun-board', engine: 'excalidraw' })
+    }
+    expect(useWriteWorkspaceStore.getState().whiteboards['kun-board'])
+      .toMatchObject({ engine: 'excalidraw', threadIds: ['thread-c'] })
+  })
+
+  it('findOrCreateExcalidrawWhiteboard fails closed for locked boards, bad ids, and stale workspaces', async () => {
+    seedRegistry({})
+    const locked = await useWriteWorkspaceStore.getState().createWhiteboard('/work', {
+      title: 'Locked', id: 'locked-board'
+    })
+    await useWriteWorkspaceStore.getState().updateWhiteboardPptState(locked!.id, {
+      phase: 'directions', revision: 1
+    })
+    await expect(useWriteWorkspaceStore.getState().findOrCreateExcalidrawWhiteboard({
+      workspaceRoot: '/work', boardId: 'locked-board'
+    })).resolves.toMatchObject({ ok: false, code: 'engine_locked' })
+
+    await expect(useWriteWorkspaceStore.getState().findOrCreateExcalidrawWhiteboard({
+      workspaceRoot: '/work', boardId: 'bad/id'
+    })).resolves.toMatchObject({ ok: false, code: 'invalid_id' })
+
+    await expect(useWriteWorkspaceStore.getState().findOrCreateExcalidrawWhiteboard({
+      workspaceRoot: '/other', boardId: 'auth-flow'
+    })).resolves.toMatchObject({ ok: false, code: 'workspace_mismatch' })
+  })
 })

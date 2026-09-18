@@ -266,11 +266,27 @@ function uniqueBoardId(): string {
   return `board-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+const BOARD_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/
+
+function boundExcalidrawBoardForThread(
+  whiteboards: Record<string, WorkWhiteboard>,
+  threadId: string
+): WorkWhiteboard | null {
+  let best: WorkWhiteboard | null = null
+  for (const board of Object.values(whiteboards)) {
+    if (workWhiteboardResolvedEngine(board) !== 'excalidraw') continue
+    if (!workWhiteboardThreadIds(board).includes(threadId)) continue
+    if (!best || board.updatedAt > best.updatedAt) best = board
+  }
+  return best
+}
+
 type WhiteboardActions = Pick<WriteWorkspaceState,
   | 'loadWhiteboards'
   | 'createWhiteboard'
   | 'openWhiteboard'
   | 'findOrCreatePptWhiteboard'
+  | 'findOrCreateExcalidrawWhiteboard'
   | 'renameWhiteboard'
   | 'setWhiteboardEngine'
   | 'deleteWhiteboard'
@@ -321,9 +337,13 @@ export function createWorkWhiteboardActions(set: WriteWorkspaceSet, get: WriteWo
         set({ fileError: i18n.t('common:writeWhiteboardTitleRequired') })
         return null
       }
+      const requestedId = options.id?.trim()
+      if (requestedId !== undefined && (!BOARD_ID_PATTERN.test(requestedId) || get().whiteboards[requestedId])) {
+        return null
+      }
       const now = new Date().toISOString()
       const board: WorkWhiteboard = {
-        id: uniqueBoardId(),
+        id: requestedId ?? uniqueBoardId(),
         title,
         workspaceRoot: normalizedWorkspaceRoot,
         threadId: options.threadId?.trim() || null,
@@ -401,6 +421,47 @@ export function createWorkWhiteboardActions(set: WriteWorkspaceSet, get: WriteWo
         workflowId: input.workflowId,
         childId: input.childId
       })
+    },
+
+    findOrCreateExcalidrawWhiteboard: async (input) => {
+      const workspaceRoot = normalizePath(input.workspaceRoot)
+      if (!workspaceRoot || !workspaceIsCurrent(get, workspaceRoot)) {
+        return { ok: false as const, code: 'workspace_mismatch' as const }
+      }
+      const requestedId = input.boardId?.trim()
+      if (requestedId && !BOARD_ID_PATTERN.test(requestedId)) {
+        return { ok: false as const, code: 'invalid_id' as const }
+      }
+      const threadId = input.threadId?.trim() || null
+      const existing = requestedId
+        ? get().whiteboards[requestedId] ?? null
+        : threadId
+          ? boundExcalidrawBoardForThread(get().whiteboards, threadId)
+          : null
+      if (existing) {
+        let board = existing
+        if (workWhiteboardResolvedEngine(board) !== 'excalidraw') {
+          const switched = await get().setWhiteboardEngine(board.id, 'excalidraw')
+          if (!switched) {
+            return { ok: false as const, code: 'engine_locked' as const, board }
+          }
+          board = get().whiteboards[board.id] ?? board
+        }
+        if (threadId && !workWhiteboardThreadIds(board).includes(threadId)) {
+          await get().bindWhiteboardThread(board.id, threadId)
+          board = get().whiteboards[board.id] ?? board
+        }
+        get().openWhiteboard(board.id)
+        return { ok: true as const, board, created: false }
+      }
+      const created = await get().createWhiteboard(workspaceRoot, {
+        ...(requestedId ? { id: requestedId } : {}),
+        title: normalizeWorkWhiteboardTitle(input.title) || requestedId || i18n.t('common:writeUntitledWhiteboard'),
+        ...(threadId ? { threadId } : {}),
+        engine: 'excalidraw'
+      })
+      if (!created) return { ok: false as const, code: 'create_failed' as const }
+      return { ok: true as const, board: created, created: true }
     },
 
     renameWhiteboard: (boardId, title) => updateBoard(boardId, (board) => ({

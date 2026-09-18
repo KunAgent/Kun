@@ -11,6 +11,18 @@ let startupProbeGeneration = 0
 // stays unready; afterwards Runtime status events or user actions take over.
 const STARTUP_PROBE_MAX_FALLBACKS = 5
 const STARTUP_PROBE_FALLBACK_MS = 900
+// Slow background re-probe that keeps retrying while the runtime connection
+// is offline. `probeRuntime` arms it after every failed probe and cancels it
+// on success, so the GUI reconnects on its own once the runtime comes back
+// (crash recovery, transient manager outage, missed status event). It only
+// ever calls `probeRuntime('background')`, which leaves user-facing error
+// state untouched.
+export const OFFLINE_RUNTIME_PROBE_INTERVAL_MS = 15_000
+let offlineRuntimeProbeTimer: ReturnType<typeof setTimeout> | null = null
+let offlineRuntimeProbeInFlight = false
+// Bumped only by cancelOfflineRuntimeProbe so a timer or in-flight probe
+// armed before a cancel can never continue the chain afterwards.
+let offlineProbeGeneration = 0
 let busyWatchdogTimer: ReturnType<typeof setTimeout> | null = null
 let busyRecoveryAttempts = 0
 let turnCompletionPollTimer: ReturnType<typeof setInterval> | null = null
@@ -130,6 +142,46 @@ function armStartupProbeFallback(get: ChatStoreGet, generation: number, attempt:
     }
     runStartupProbe(get, generation)
   }, STARTUP_PROBE_FALLBACK_MS)
+}
+
+export function scheduleOfflineRuntimeProbe(get: ChatStoreGet): void {
+  if (offlineRuntimeProbeTimer || offlineRuntimeProbeInFlight) return
+  armOfflineRuntimeProbe(get, offlineProbeGeneration)
+}
+
+export function cancelOfflineRuntimeProbe(): void {
+  offlineProbeGeneration += 1
+  if (offlineRuntimeProbeTimer) {
+    clearTimeout(offlineRuntimeProbeTimer)
+    offlineRuntimeProbeTimer = null
+  }
+}
+
+function armOfflineRuntimeProbe(get: ChatStoreGet, generation: number): void {
+  offlineRuntimeProbeTimer = setTimeout(() => {
+    offlineRuntimeProbeTimer = null
+    if (generation !== offlineProbeGeneration) return
+    const state = get()
+    if (state.runtimeConnection === 'ready') return
+    if (state.runtimeConnection === 'checking') {
+      // A user-initiated probe is already retrying; wait for its verdict
+      // instead of racing it with a background probe.
+      scheduleOfflineRuntimeProbe(get)
+      return
+    }
+    offlineRuntimeProbeInFlight = true
+    void Promise.resolve()
+      .then(() => state.probeRuntime('background'))
+      .catch(() => undefined)
+      .finally(() => {
+        offlineRuntimeProbeInFlight = false
+        if (generation !== offlineProbeGeneration) return
+        if (get().runtimeConnection === 'ready') return
+        // Still offline: re-arm so the chain keeps retrying until the
+        // runtime is reachable again.
+        scheduleOfflineRuntimeProbe(get)
+      })
+  }, OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
 }
 
 export function clearBusyWatchdog(): void {

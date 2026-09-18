@@ -60,6 +60,14 @@ export type WorkWhiteboard = {
   engine?: CanvasEngine
 }
 
+export type FindOrCreateExcalidrawWhiteboardResult =
+  | { ok: true; board: WorkWhiteboard; created: boolean }
+  | {
+      ok: false
+      code: 'workspace_mismatch' | 'invalid_id' | 'engine_locked' | 'create_failed'
+      board?: WorkWhiteboard
+    }
+
 export type WriteEditorLayoutV1 = {
   version: 1
   orientation: WriteEditorLayoutOrientation
@@ -195,6 +203,7 @@ export type WriteWorkspaceState = {
   loadWhiteboards: (workspaceRoot: string) => Promise<void>
   createWhiteboard: (workspaceRoot: string, options: {
     title: string
+    id?: string
     groupId?: WriteEditorGroupId
     sourcePath?: string
     threadId?: string
@@ -211,6 +220,12 @@ export type WriteWorkspaceState = {
     childId?: string
     sourcePath?: string
   }) => Promise<WorkWhiteboard | null>
+  findOrCreateExcalidrawWhiteboard: (input: {
+    workspaceRoot: string
+    boardId?: string
+    title?: string
+    threadId?: string
+  }) => Promise<FindOrCreateExcalidrawWhiteboardResult>
   renameWhiteboard: (boardId: string, title: string) => Promise<boolean>
   setWhiteboardEngine: (boardId: string, engine: CanvasEngine) => Promise<boolean>
   deleteWhiteboard: (boardId: string) => Promise<boolean>

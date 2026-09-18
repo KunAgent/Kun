@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,6 +29,17 @@ async function directory(): Promise<string> {
   const value = await mkdtemp(join(tmpdir(), 'kun-owned-process-'))
   directories.push(value)
   return value
+}
+
+function guardPid(): number {
+  const rows = execFileSync('/bin/ps', ['-axww', '-o', 'pid=,ppid=,command='], { encoding: 'utf8' }).split('\n')
+  for (const row of rows) {
+    const [pidText, ppidText, ...command] = row.trim().split(/\s+/)
+    if (Number(ppidText) === process.pid && command.join(' ').includes('KUN_PROCESS_STACK_OWNER_PID')) {
+      return Number(pidText)
+    }
+  }
+  throw new Error('Owned process guard not found')
 }
 
 afterEach(async () => {
@@ -93,6 +104,47 @@ describe.skipIf(process.platform === 'win32')('POSIX owned process containment',
     await spawnOwnedProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'])
     await shutdownOwnedProcesses({ graceMs: 50, timeoutMs: 4000 })
     await expect(shutdownOwnedProcesses()).resolves.toBeUndefined()
+  })
+
+  it('keeps a registered group alive when the owner channel drops but the owner lives', async () => {
+    const parent = spawn(process.execPath, ['-e', `
+      const {spawn}=require('node:child_process');
+      const guard=spawn(process.execPath,['-e',${JSON.stringify(OWNED_PROCESS_GUARD_SOURCE)}],
+        {stdio:['ignore','ignore','ignore','ipc'],detached:true});
+      let target;
+      guard.on('message',message=>{
+        if(message.ready){
+          target=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});
+          target.once('spawn',()=>guard.send({type:'register',id:1,pid:target.pid,ownerLossGraceMs:800}));
+        }else if(message.id===1){
+          guard.disconnect();
+          process.send({target:target.pid,guard:guard.pid});
+        }
+      });
+    `], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+    fixtures.push(parent)
+    const message = await new Promise<{ target: number; guard: number }>((resolve) => parent.once('message', resolve))
+    fixturePids.add(message.target)
+    fixturePids.add(message.guard)
+    // A lost channel is not proof of owner death: the stack must stay up.
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    expect(alive(message.target)).toBe(true)
+    expect(alive(message.guard)).toBe(true)
+    // Only a confirmed owner death brings the supervised group down.
+    parent.kill('SIGKILL')
+    await waitUntil(() => !alive(message.target) && !alive(message.guard), 8000)
+  })
+
+  it('starts a fresh guard for the next launch after the guard process dies', async () => {
+    const first = await spawnOwnedProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'])
+    fixturePids.add(first.pid!)
+    const deadGuard = guardPid()
+    process.kill(deadGuard, 'SIGKILL')
+    await waitUntil(() => !alive(deadGuard))
+    expect(alive(first.pid!)).toBe(true)
+    const second = await spawnOwnedProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'])
+    expect(alive(second.pid!)).toBe(true)
+    expect(guardPid()).not.toBe(deadGuard)
   })
 
   it('an independent guard reaps a stopped child after its owner is SIGKILLed', async () => {

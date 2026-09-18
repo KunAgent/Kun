@@ -105,8 +105,10 @@ import {
   readSddThreadRegistry
 } from '../sdd/sdd-thread-registry'
 import {
+  cancelOfflineRuntimeProbe,
   clearBusyWatchdog,
   resetBusyRecoveryAttempts,
+  scheduleOfflineRuntimeProbe,
   scheduleStartupRuntimeProbe,
   stopTurnCompletionPoll
 } from './chat-store-schedulers'
@@ -180,12 +182,21 @@ export function createNavigationRuntimeActions(
         )
       }
       const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
-      if (options?.restart) {
-        await rendererRuntimeClient.restartRuntime()
-      }
       const p = getProvider()
-      await p.connect()
+      try {
+        // Prefer the cheap path first: `runtimeRequest` already runs
+        // ensureRuntime for a missing or hung serve, so a plain reconnect
+        // recovers a crashed runtime without paying restartRuntime's
+        // turn-idle wait. Escalate to the heavyweight restart only when the
+        // runtime still refuses a connection.
+        await p.connect()
+      } catch (error) {
+        if (!options?.restart) throw error
+        await rendererRuntimeClient.restartRuntime()
+        await p.connect()
+      }
       set({ runtimeConnection: 'ready', error: null, runtimeErrorDetail: null })
+      cancelOfflineRuntimeProbe()
       void get().loadComposerModels()
       if (prev !== 'ready' || mode === 'user') {
         try {
@@ -223,6 +234,12 @@ export function createNavigationRuntimeActions(
             : {})
         })
       }
+      // Offline is not a terminal state: keep a slow background re-probe
+      // alive so the GUI reconnects on its own once the runtime recovers
+      // (crash restart, transient manager outage, missed status event).
+      if (get().runtimeConnection === 'offline') {
+        scheduleOfflineRuntimeProbe(get)
+      }
     }
   },
 
@@ -240,6 +257,7 @@ export function createNavigationRuntimeActions(
             initialSetupOpen: false,
             initialSetupMode: 'required'
           })
+          scheduleOfflineRuntimeProbe(get)
           return
         }
         const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
@@ -391,6 +409,7 @@ export function createNavigationRuntimeActions(
             ? { route: 'settings' as const, settingsSection: 'agents' as const }
             : {})
         })
+        scheduleOfflineRuntimeProbe(get)
       }
     })().finally(() => {
       bootPromise = null

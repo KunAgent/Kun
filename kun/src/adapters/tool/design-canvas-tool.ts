@@ -27,14 +27,18 @@ import {
 } from './design-diagram-tool.js'
 import {
   createDesignApplyExcalidrawTool,
-  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME
+  createDesignOpenExcalidrawTool,
+  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
+  DESIGN_OPEN_EXCALIDRAW_TOOL_NAME
 } from './design-excalidraw-tool.js'
 
 export { DESIGN_UPDATE_SHAPES_MAX_OPS } from './design-canvas-normalization.js'
 export { createDesignCreateDiagramTool, DESIGN_CREATE_DIAGRAM_TOOL_NAME } from './design-diagram-tool.js'
 export {
   createDesignApplyExcalidrawTool,
-  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME
+  createDesignOpenExcalidrawTool,
+  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
+  DESIGN_OPEN_EXCALIDRAW_TOOL_NAME
 } from './design-excalidraw-tool.js'
 
 export const DESIGN_CANVAS_TOOL_NAME = 'design_canvas'
@@ -60,6 +64,7 @@ export const DESIGN_CANVAS_MUTATION_TOOL_NAMES = [
   DESIGN_VALIDATE_TOOL_NAME,
   DESIGN_SVG_CREATE_TOOL_NAME,
   DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
+  DESIGN_OPEN_EXCALIDRAW_TOOL_NAME,
   WORK_RENAME_WHITEBOARD_TOOL_NAME
 ] as const
 
@@ -95,6 +100,7 @@ export function buildDesignCanvasLocalTools(): LocalTool[] {
     createDesignValidateTool(),
     createDesignSvgCreateTool(),
     createDesignApplyExcalidrawTool(),
+    createDesignOpenExcalidrawTool(),
     createWorkRenameWhiteboardTool()
   ]
 }

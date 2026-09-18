@@ -243,7 +243,8 @@ export function DesignDocumentCanvasSurface({
     threadId: activeThreadId,
     workspaceRoot,
     identityId: documentId ?? '',
-    baseDir: DESIGN_DOCUMENTS_DIR
+    baseDir: DESIGN_DOCUMENTS_DIR,
+    surface: 'design'
   })
 
   const kunEmpty = !expectedCanvasDocumentKey ||

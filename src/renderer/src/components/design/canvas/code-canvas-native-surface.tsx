@@ -93,7 +93,8 @@ export function CodeCanvasNativeSurface(props: {
     threadId,
     workspaceRoot,
     identityId: artifactId,
-    baseDir: CODE_CANVAS_DIR
+    baseDir: CODE_CANVAS_DIR,
+    surface: 'code'
   })
 
   const kunEmpty = canvasDocumentKeyValue !== expectedDocumentKey ||

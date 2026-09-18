@@ -5,11 +5,11 @@ import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createOwnedServiceManagerSession, type OwnedServiceManagerSession } from './owned-service-manager-session.js'
-import { readManagerDiscovery } from './manager-discovery.js'
+import { managerDiscoveryPath, readManagerDiscovery } from './manager-discovery.js'
 import { runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
 import { resumeOwnedProcessAdmission, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from './owned-manager-binding.js'
-import { launchServiceManagerProcess } from './manager-launch.js'
+import { launchServiceManagerProcess, type ManagerLaunchOverride } from './manager-launch.js'
 import { runManagerRetireCommand } from '../cli/manager-retire.js'
 import { configureManagerAtomicJsonClient } from '../extensions/atomic-json.js'
 import { HistoryReferenceStore } from '../history/history-reference-store.js'
@@ -63,6 +63,37 @@ async function fixture() {
   return { session, input: { flavor: 'production' as const, dataDir: join(root, 'data'),
     controlDir: join(root, 'control'), settingsPath: join(root, 'settings.json'), timeoutMs: 10_000,
     launch: { command: process.execPath, args: [managerEntry], runAsNode: false } } }
+}
+
+/** Spawn a detached ownerless Manager, like daemons left behind by older builds. */
+async function spawnLegacyManager(
+  input: Parameters<typeof launchServiceManagerProcess>[0] & { launch: ManagerLaunchOverride }
+) {
+  const { child } = await launchServiceManagerProcess({ ...input,
+    launch: { ...input.launch, env: { KUN_APP_SESSION_OWNER: '', KUN_APP_SESSION_RESERVATION: '' } } })
+  parents.push(child)
+  const deadline = Date.now() + 10_000
+  let legacy = await readManagerDiscovery(input.controlDir)
+  while (!legacy && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    legacy = await readManagerDiscovery(input.controlDir)
+  }
+  expect(legacy).not.toBeNull()
+  return legacy!
+}
+
+/** Simulate an older build by dropping one capability from this baseUrl's /health only. */
+function stripHealthCapability(baseUrl: string, capability: string): typeof fetch {
+  return (async (target: string | URL | Request, init?: RequestInit) => {
+    const href = typeof target === 'string' ? target : target instanceof URL ? target.href : target.url
+    const response = await fetch(target, init)
+    if (!response.ok || !href.startsWith(baseUrl) || new URL(href).pathname !== '/health') return response
+    const body = await response.json() as { capabilities?: string[] }
+    return Response.json({
+      ...body,
+      capabilities: (body.capabilities ?? []).filter((value) => value !== capability)
+    })
+  }) as typeof fetch
 }
 
 describe('owned Service Manager real process lifecycle', () => {
@@ -213,25 +244,61 @@ setInterval(() => {}, 1000);
 
   it('offers explicit authenticated retirement for an idle legacy daemon without touching owned Managers', async () => {
     const { session, input } = await fixture()
-    const { child } = await launchServiceManagerProcess({ ...input,
-      launch: { ...input.launch, env: { KUN_APP_SESSION_OWNER: '', KUN_APP_SESSION_RESERVATION: '' } } })
-    parents.push(child)
-    const deadline = Date.now() + 10_000
-    let legacy = await readManagerDiscovery(input.controlDir)
-    while (!legacy && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 25))
-      legacy = await readManagerDiscovery(input.controlDir)
-    }
-    expect(legacy).not.toBeNull()
+    const legacy = await spawnLegacyManager(input)
     const output: string[] = []
     const io = { stdout: { write: (value: string) => output.push(value) },
       stderr: { write: (value: string) => output.push(value) },
       env: { KUN_MANAGER_CONTROL_DIR: input.controlDir, KUN_MANAGER_SETTINGS_PATH: input.settingsPath } }
     expect(await runManagerRetireCommand(['retire', '--data-dir', input.dataDir], io)).toBe(0)
-    expect(runtimeProcessIsAlive(legacy!.pid, legacy!)).toBe(false)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(false)
     expect(output.join('')).toContain('Existing data is preserved')
     const owned = await session.ensure(input)
     expect(await runManagerRetireCommand(['retire', '--data-dir', input.dataDir], io)).toBe(70)
     expect(runtimeProcessIsAlive(owned.discovery.pid, owned.discovery)).toBe(true)
+  }, 20_000)
+
+  it('retires a verifiably idle capability-incompatible legacy Manager during startup', async () => {
+    const { session, input } = await fixture()
+    const legacy = await spawnLegacyManager(input)
+    const wrapped = stripHealthCapability(legacy.baseUrl, 'item-page-v1')
+    const connection = await session.ensure({ ...input, fetch: wrapped })
+    expect(connection.discovery.appOwner?.ownerSessionId).toBe(session.ownerSessionId)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(false)
+  }, 20_000)
+
+  it('refuses takeover of a busy incompatible legacy Manager and keeps it alive', async () => {
+    const { session, input } = await fixture()
+    const legacy = await spawnLegacyManager(input)
+    const registration = { flavor: 'production', instanceId: 'legacy-runtime', pid: process.pid,
+      startedAt: new Date().toISOString(), host: '127.0.0.1', port: 18999,
+      baseUrl: 'http://127.0.0.1:18999', runtimeToken: 'test-token' }
+    const response = await fetch(`${legacy.baseUrl}/v1/runtimes/production/register`, {
+      method: 'PUT', headers: { authorization: `Bearer ${legacy.managerToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(registration)
+    })
+    expect(response.ok).toBe(true)
+    const wrapped = stripHealthCapability(legacy.baseUrl, 'item-page-v1')
+    await expect(session.ensure({ ...input, fetch: wrapped }))
+      .rejects.toThrow(/alive but unavailable|kun manager retire/)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(true)
+  }, 20_000)
+
+  it('fails closed when an incompatible legacy Manager identity cannot be authenticated', async () => {
+    const { session, input } = await fixture()
+    const legacy = await spawnLegacyManager(input)
+    await writeFile(managerDiscoveryPath(input.controlDir), JSON.stringify({ ...legacy, protocolVersion: 4 }))
+    await expect(session.ensure(input)).rejects.toThrow(/kun manager retire/)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(true)
+  }, 20_000)
+
+  it('retires a legacy Manager whose discovery predates serviceVersion', async () => {
+    const { session, input } = await fixture()
+    const legacy = await spawnLegacyManager(input)
+    const record = { ...legacy } as Record<string, unknown>
+    delete record.serviceVersion
+    await writeFile(managerDiscoveryPath(input.controlDir), JSON.stringify(record))
+    const connection = await session.ensure(input)
+    expect(connection.discovery.appOwner?.ownerSessionId).toBe(session.ownerSessionId)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(false)
   }, 20_000)
 })

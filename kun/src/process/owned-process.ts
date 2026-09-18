@@ -25,6 +25,7 @@ const owned = new Map<ChildProcess, Guard>()
 let guardPromise: Promise<Guard> | undefined
 let activeGuard: Guard | undefined
 let guardStarting = false
+let guardStartFailed = false
 let stopping = false
 const retired = new WeakSet<ChildProcess>()
 const windowsOwned = new WeakSet<ChildProcess>()
@@ -103,11 +104,31 @@ function startGuard(): Promise<Guard> {
   })
 }
 
+function guardChildDead(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null || !child.connected
+}
+
+function groupGone(pid: number): boolean {
+  try { process.kill(-pid, 0); return false }
+  catch (error) { return (error as NodeJS.ErrnoException).code === 'ESRCH' }
+}
+
 function getGuard(): Promise<Guard> {
   if (stopping) return Promise.reject(new Error('Owned process admission is closed'))
+  // A guard that died (owner-loss kill, crash, dropped channel) must not
+  // brick every future launch in this generation: start a fresh guard for
+  // new registrations. Groups the dead guard supervised stay orphaned only
+  // until their own exit or the next real owner loss.
+  if (guardStartFailed || (activeGuard !== undefined && guardChildDead(activeGuard.child))) {
+    guardStartFailed = false
+    activeGuard = undefined
+    guardPromise = undefined
+  }
   if (!guardPromise) {
     guardStarting = true
-    guardPromise = startGuard().finally(() => { guardStarting = false })
+    guardPromise = startGuard()
+      .catch((error) => { guardStartFailed = true; throw error })
+      .finally(() => { guardStarting = false })
   }
   return guardPromise
 }
@@ -235,6 +256,7 @@ export function resumeOwnedProcessAdmission(): void {
   stopping = false
   guardPromise = undefined
   activeGuard = undefined
+  guardStartFailed = false
 }
 
 export async function stopOwnedProcess(
@@ -248,11 +270,32 @@ export async function stopOwnedProcess(
     if (child.exitCode !== null || child.signalCode !== null) return
     throw new Error('Cannot terminate a process without owned containment')
   }
-  await guard.request({
-    type: 'stop', pid: child.pid,
-    graceMs: options.graceMs ?? 1000,
-    timeoutMs: options.timeoutMs ?? 5000
-  })
+  try {
+    // The request must reach the guard even when the child leader already
+    // exited: remaining group members still have to be swept.
+    await guard.request({
+      type: 'stop', pid: child.pid,
+      graceMs: options.graceMs ?? 1000,
+      timeoutMs: options.timeoutMs ?? 5000
+    })
+  } catch (error) {
+    if (!guardChildDead(guard.child)) throw error
+    const pid = child.pid
+    if (typeof pid !== 'number' || pid <= 1) throw error
+    if (child.exitCode === null && child.signalCode === null) {
+      // The guard supervising this group is already gone, so the stop
+      // request can never reach it. The leader is still alive, so its pid
+      // still heads its process group: signal that group directly — the
+      // same action the guard would have taken — instead of stranding the
+      // child. A live guard stays fail-closed.
+      try { process.kill(-pid, 'SIGKILL') } catch { /* already gone */ }
+    } else if (!groupGone(pid)) {
+      // The leader already exited and its pid may have been recycled, so a
+      // blind group signal is unsafe. Only a verified-empty group counts as
+      // stopped; a live or reused group id stays fail-closed.
+      throw error
+    }
+  }
   owned.delete(child)
   retired.add(child)
 }
@@ -268,7 +311,10 @@ export async function shutdownOwnedProcesses(options: OwnedProcessShutdownOption
   if (failures.length) throw new AggregateError(failures.map((result) => result.reason), 'Owned processes failed to exit')
   if ([...owned.keys()].some((child) => excluded.has(child))) return
   if (!guardPromise) return
-  const guard = await guardPromise
+  // A guard that never became ready left no registered groups behind, so
+  // its failed startup promise must not fail the shutdown itself.
+  const guard = await guardPromise.catch(() => undefined)
+  if (!guard) return
   if (guard.child.exitCode === 0) return
   if (guard.child.exitCode !== null || guard.child.signalCode !== null) {
     throw new Error('Owned process guard exited abnormally')

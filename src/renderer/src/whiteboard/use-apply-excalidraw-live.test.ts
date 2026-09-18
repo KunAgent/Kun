@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../store/chat-store'
+import { clearExcalidrawApplyHandlersForTests } from './excalidraw-apply'
 import {
   excalidrawApplyRequestFromBlock,
   useApplyExcalidrawLive
@@ -30,7 +31,8 @@ function Harness(): null {
     threadId: 'thread-1',
     workspaceRoot: '/work',
     identityId: 'board-1',
-    baseDir: '.kun-whiteboards'
+    baseDir: '.kun-whiteboards',
+    surface: 'write'
   })
   return null
 }
@@ -48,6 +50,7 @@ describe('useApplyExcalidrawLive', () => {
       pngByteSize: 12,
       elementCount: 2
     })
+    clearExcalidrawApplyHandlersForTests()
     useChatStore.setState({
       activeThreadId: 'thread-1',
       currentTurnId: 'turn-1',
@@ -126,5 +129,93 @@ describe('useApplyExcalidrawLive', () => {
         byteSize: 12
       }]
     })
+  })
+
+  it('applies a boardId request that matches this board exactly once', async () => {
+    const block = {
+      kind: 'tool' as const,
+      id: 'tool-targeted',
+      turnId: 'turn-1',
+      summary: 'apply',
+      status: 'success' as const,
+      meta: { toolName: 'design_apply_excalidraw', sourceItemKind: 'tool_result' as const },
+      detail: JSON.stringify({
+        tool: 'design_apply_excalidraw',
+        action: 'apply_excalidraw',
+        status: 'accepted',
+        receiptKey: 'design-receipt-targeted',
+        boardId: 'board-1'
+      })
+    }
+    await act(async () => { renderer = create(createElement(Harness)) })
+    await act(async () => {
+      useChatStore.setState({ blocks: [block] })
+      await vi.waitFor(() => expect(mocks.sendReceipt).toHaveBeenCalledOnce())
+    })
+    expect(mocks.apply).toHaveBeenCalledWith('/work', 'board-1', '.kun-whiteboards')
+    expect(mocks.sendReceipt).toHaveBeenCalledWith(expect.objectContaining({
+      receiptKey: 'design-receipt-targeted',
+      affectedIds: ['excalidraw:board-1']
+    }))
+
+    // Re-observing the same block must not double-apply.
+    await act(async () => {
+      useChatStore.setState({ blocks: [block] })
+      await Promise.resolve()
+    })
+    expect(mocks.sendReceipt).toHaveBeenCalledOnce()
+    expect(mocks.apply).toHaveBeenCalledOnce()
+  })
+
+  it('ignores a boardId request that targets a different board', async () => {
+    await act(async () => { renderer = create(createElement(Harness)) })
+    await act(async () => {
+      useChatStore.setState({
+        blocks: [{
+          kind: 'tool',
+          id: 'tool-foreign',
+          turnId: 'turn-1',
+          summary: 'apply',
+          status: 'success',
+          meta: { toolName: 'design_apply_excalidraw', sourceItemKind: 'tool_result' },
+          detail: JSON.stringify({
+            tool: 'design_apply_excalidraw',
+            action: 'apply_excalidraw',
+            status: 'accepted',
+            receiptKey: 'design-receipt-foreign',
+            boardId: 'other-board'
+          })
+        }]
+      })
+      await Promise.resolve()
+    })
+    expect(mocks.apply).not.toHaveBeenCalled()
+    expect(mocks.sendReceipt).not.toHaveBeenCalled()
+  })
+
+  it('ignores a request stamped for another surface', async () => {
+    await act(async () => { renderer = create(createElement(Harness)) })
+    await act(async () => {
+      useChatStore.setState({
+        blocks: [{
+          kind: 'tool',
+          id: 'tool-code-surface',
+          turnId: 'turn-1',
+          summary: 'apply',
+          status: 'success',
+          meta: { toolName: 'design_apply_excalidraw', sourceItemKind: 'tool_result' },
+          detail: JSON.stringify({
+            tool: 'design_apply_excalidraw',
+            action: 'apply_excalidraw',
+            status: 'accepted',
+            receiptKey: 'design-receipt-code',
+            surface: 'code'
+          })
+        }]
+      })
+      await Promise.resolve()
+    })
+    expect(mocks.apply).not.toHaveBeenCalled()
+    expect(mocks.sendReceipt).not.toHaveBeenCalled()
   })
 })

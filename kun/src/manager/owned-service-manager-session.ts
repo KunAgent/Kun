@@ -7,6 +7,7 @@ import { acquireAppSessionReservation, AppSessionConflictError, canonicalSession
 import { defaultKunControlDir, defaultProductionSettingsPath, removeManagerDiscovery, withManagerStartLock } from './manager-discovery.js'
 import { inspectServiceManager } from './manager-resolution.js'
 import { launchServiceManagerProcess } from './manager-launch.js'
+import { retireVerifiablyIdleLegacyManager } from './legacy-manager-retire.js'
 import type { EnsureServiceManagerInput, ServiceManagerConnection } from './manager-client.js'
 
 export type OwnedServiceManagerHandle = {
@@ -103,10 +104,25 @@ export function createOwnedServiceManagerSession(input: {
         const existing = await inspectServiceManager(profile.controlDir, fetchImpl)
         signal.throwIfAborted()
         if (existing.state === 'unavailable') {
-          if (existing.error.kind === 'protocol_incompatible' || existing.error.kind === 'capability_incompatible') {
-            existing.error.message += ' Close its clients, then explicitly run `kun manager retire --data-dir <this-data-directory>` with the same KUN_MANAGER_CONTROL_DIR and KUN_MANAGER_SETTINGS_PATH.'
+          if (existing.error.kind !== 'protocol_incompatible' && existing.error.kind !== 'capability_incompatible') {
+            throw existing.error
           }
-          throw existing.error
+          // Managers from incompatible builds lack the atomic retire-idle
+          // endpoint; the same verified idle shutdown the CLI performs can
+          // still drain them safely before this session launches its own.
+          try {
+            await retireVerifiablyIdleLegacyManager({
+              controlDir: profile.controlDir, dataDir: profile.dataDir,
+              settingsPath: profile.settingsPath, fetch: fetchImpl, signal
+            })
+          } catch (error) {
+            signal.throwIfAborted()
+            const reason = error instanceof Error ? error.message : String(error)
+            existing.error.message += ` Automatic takeover was not safe (${reason}).` +
+              ' Close its clients, then explicitly run `kun manager retire --data-dir <this-data-directory>`' +
+              ' with the same KUN_MANAGER_CONTROL_DIR and KUN_MANAGER_SETTINGS_PATH.'
+            throw existing.error
+          }
         }
         if (existing.state === 'ready') {
           if (await canonicalSessionPath(existing.discovery.dataDir) !== profile.dataDir ||

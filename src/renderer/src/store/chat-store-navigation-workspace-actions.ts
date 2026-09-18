@@ -113,6 +113,7 @@ import {
 import {
   clearBusyWatchdog,
   resetBusyRecoveryAttempts,
+  scheduleOfflineRuntimeProbe,
   scheduleStartupRuntimeProbe,
   stopTurnCompletionPoll
 } from './chat-store-schedulers'
@@ -661,6 +662,10 @@ export function createNavigationWorkspaceActions(
           ? { route: 'settings' as const, settingsSection: 'agents' as const }
           : {})
       })
+      // A failed inventory refresh marks the connection offline; keep the
+      // slow background re-probe alive so the GUI recovers on its own once
+      // the runtime is reachable again.
+      scheduleOfflineRuntimeProbe(get)
     } finally {
       refreshInFlight = false
       if (refreshQueued) {

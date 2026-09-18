@@ -32,9 +32,39 @@ export type ExcalidrawApplyResult = ExcalidrawApplySuccess | ExcalidrawApplyFail
 export type ExcalidrawApplyHandler = () => Promise<ExcalidrawApplyResult>
 
 const handlers = new Map<string, ExcalidrawApplyHandler>()
+const claimedApplyBlockIds = new Set<string>()
+const MAX_CLAIMED_APPLY_BLOCKS = 200
 
 export function clearExcalidrawApplyHandlersForTests(): void {
   handlers.clear()
+  claimedApplyBlockIds.clear()
+}
+
+/**
+ * A mounted board surface and the workbench-level router both observe the
+ * same accepted apply blocks. The first processor claims the block id so the
+ * request is applied exactly once.
+ */
+export function claimExcalidrawApplyRequest(blockId: string): boolean {
+  if (claimedApplyBlockIds.has(blockId)) return false
+  if (claimedApplyBlockIds.size >= MAX_CLAIMED_APPLY_BLOCKS) {
+    const oldest = claimedApplyBlockIds.values().next().value
+    if (oldest !== undefined) claimedApplyBlockIds.delete(oldest)
+  }
+  claimedApplyBlockIds.add(blockId)
+  return true
+}
+
+export function hasExcalidrawApplyHandler(key: string): boolean {
+  return handlers.has(key)
+}
+
+export function hasAnyExcalidrawApplyHandler(workspaceRoot: string, baseDir: string): boolean {
+  const prefix = `${workspaceRoot}\0${baseDir}\0`
+  for (const key of handlers.keys()) {
+    if (key.startsWith(prefix)) return true
+  }
+  return false
 }
 
 export function excalidrawApplyKey(

@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyExcalidrawScene } from './excalidraw-persistence'
 import {
   applyOpenExcalidrawScene,
+  claimExcalidrawApplyRequest,
   clearExcalidrawApplyHandlersForTests,
   excalidrawApplyKey,
+  hasAnyExcalidrawApplyHandler,
+  hasExcalidrawApplyHandler,
   registerExcalidrawApplyHandler,
   reloadAndExportExcalidrawScene
 } from './excalidraw-apply'
@@ -102,5 +105,30 @@ describe('excalidraw apply', () => {
       error: { code: 'EXCALIDRAW_SCENE_EMPTY' }
     })
     expect(exportToBlob).not.toHaveBeenCalled()
+  })
+
+  it('claims each apply request block id exactly once', () => {
+    expect(claimExcalidrawApplyRequest('block-a')).toBe(true)
+    expect(claimExcalidrawApplyRequest('block-a')).toBe(false)
+    expect(claimExcalidrawApplyRequest('block-b')).toBe(true)
+  })
+
+  it('reports exact and workspace-level handler presence', () => {
+    const key = excalidrawApplyKey('/work', 'board-1', '.kun-whiteboards')
+    expect(hasExcalidrawApplyHandler(key)).toBe(false)
+    expect(hasAnyExcalidrawApplyHandler('/work', '.kun-whiteboards')).toBe(false)
+
+    const unregister = registerExcalidrawApplyHandler(key, async () => ({
+      ok: true, pngRelativePath: 'x', pngByteSize: 1, elementCount: 1
+    }))
+    expect(hasExcalidrawApplyHandler(key)).toBe(true)
+    expect(hasExcalidrawApplyHandler(excalidrawApplyKey('/work', 'other', '.kun-whiteboards'))).toBe(false)
+    expect(hasAnyExcalidrawApplyHandler('/work', '.kun-whiteboards')).toBe(true)
+    expect(hasAnyExcalidrawApplyHandler('/other', '.kun-whiteboards')).toBe(false)
+    expect(hasAnyExcalidrawApplyHandler('/work', '.other-dir')).toBe(false)
+
+    unregister()
+    expect(hasExcalidrawApplyHandler(key)).toBe(false)
+    expect(hasAnyExcalidrawApplyHandler('/work', '.kun-whiteboards')).toBe(false)
   })
 })

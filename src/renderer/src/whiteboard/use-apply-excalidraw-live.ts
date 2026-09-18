@@ -4,6 +4,7 @@ import { sendCanvasTurnReceipt } from '../design/canvas/canvas-receipt-sender'
 import { useChatStore } from '../store/chat-store'
 import {
   applyOpenExcalidrawScene,
+  claimExcalidrawApplyRequest,
   DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
   type ExcalidrawApplyResult
 } from './excalidraw-apply'
@@ -11,6 +12,8 @@ import {
 export type ExcalidrawApplyRequest = {
   receiptKey: string
   turnId: string
+  boardId?: string
+  surface?: string
 }
 
 export function excalidrawApplyRequestFromBlock(
@@ -36,7 +39,14 @@ export function excalidrawApplyRequestFromBlock(
       !receiptKey ||
       !turnId
     ) return null
-    return { receiptKey, turnId }
+    const boardId = typeof value.boardId === 'string' ? value.boardId.trim() : ''
+    const surface = typeof value.surface === 'string' ? value.surface.trim() : ''
+    return {
+      receiptKey,
+      turnId,
+      ...(boardId ? { boardId } : {}),
+      ...(surface ? { surface } : {})
+    }
   } catch {
     return null
   }
@@ -49,24 +59,26 @@ export function useApplyExcalidrawLive(input: {
   workspaceRoot: string
   identityId: string
   baseDir: string
+  surface?: 'write' | 'code' | 'design'
 }): void {
   useEffect(() => {
     const threadId = input.threadId?.trim()
     if (!input.enabled || !threadId || !input.workspaceRoot.trim() || !input.identityId.trim()) return
-    const appliedBlockIds = new Set<string>()
-    const inFlightBlockIds = new Set<string>()
-
     const process = (state: ReturnType<typeof useChatStore.getState>): void => {
       if (state.activeThreadId !== threadId) return
       for (const block of state.blocks) {
-        if (
-          block.kind !== 'tool' ||
-          appliedBlockIds.has(block.id) ||
-          inFlightBlockIds.has(block.id)
-        ) continue
+        if (block.kind !== 'tool') continue
         const request = excalidrawApplyRequestFromBlock(block, state.currentTurnId)
         if (!request) continue
-        inFlightBlockIds.add(block.id)
+        // Surface-stamped requests only belong to hooks on that surface; a
+        // stamped request must never be applied by a stale mount elsewhere.
+        if (request.surface && request.surface !== input.surface) continue
+        // A boardId-targeted request belongs to exactly that board; the
+        // workbench router covers the case where it is not mounted yet.
+        if (request.boardId && request.boardId !== input.identityId) continue
+        // The workbench router races this hook for unmounted boards; the
+        // first claimant applies exactly once.
+        if (!claimExcalidrawApplyRequest(block.id)) continue
         void (async () => {
           let result: ExcalidrawApplyResult
           try {
@@ -83,9 +95,6 @@ export function useApplyExcalidrawLive(input: {
                 message: error instanceof Error ? error.message : String(error)
               }
             }
-          } finally {
-            inFlightBlockIds.delete(block.id)
-            appliedBlockIds.add(block.id)
           }
           sendCanvasTurnReceipt({
             threadId,
@@ -110,5 +119,5 @@ export function useApplyExcalidrawLive(input: {
 
     process(useChatStore.getState())
     return useChatStore.subscribe(process)
-  }, [input.baseDir, input.enabled, input.identityId, input.threadId, input.workspaceRoot])
+  }, [input.baseDir, input.enabled, input.identityId, input.surface, input.threadId, input.workspaceRoot])
 }
