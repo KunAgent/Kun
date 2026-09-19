@@ -56,7 +56,6 @@ const {
   writeSmokeSettings
 } = require('./smoke-packaged-update-handoff-support.cjs')
 const {
-  managerJson,
   runRecycledPidScenario,
   stopCurrentOwners
 } = require('./smoke-packaged-update-handoff-recycled.cjs')
@@ -257,10 +256,8 @@ async function runPositiveScenario(input) {
       !await waitForProcessExit(current.runtime.pid, Math.min(input.timeoutMs, 20_000))) {
       throw new Error('Ordinary GUI quit left the GUI-owned Runtime running')
     }
-    const managerStatus = await managerJson(current.manager, '/v1/manager/status')
-    if (managerStatus.instanceId !== current.manager.instanceId ||
-      managerStatus.pid !== current.manager.pid) {
-      throw new Error('Ordinary GUI quit unexpectedly stopped the current Service Manager')
+    if (!await waitForProcessExit(current.manager.pid, Math.min(input.timeoutMs, 20_000))) {
+      throw new Error('Ordinary GUI quit left the GUI-owned Service Manager running')
     }
     await stopCurrentOwners(current, input.timeoutMs)
   } catch (error) {
