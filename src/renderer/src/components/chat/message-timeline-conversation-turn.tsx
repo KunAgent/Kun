@@ -39,6 +39,7 @@ import { extractPlanMetadataFromBlock, type GuiPlanToolMeta } from '../../plan/p
 import { planDisplayNameFromRelativePath } from '../../plan/plan-path'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import { TimelineRuntimeError, liveTurnProgressClass } from './message-timeline-jump-preview'
+import { useTurnRuntimeErrorActions } from './use-turn-runtime-error-actions'
 import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
 import { TurnUsageRow } from './TurnUsageRow'
 import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
@@ -117,7 +118,7 @@ export function ConversationTurn({
   const { t } = useTranslation('common')
   const forkThreadFromTurn = useChatStore((s) => s.forkThreadFromTurn)
   const rollbackWorkspaceToCheckpoint = useChatStore((s) => s.rollbackWorkspaceToCheckpoint)
-  const sendMessage = useChatStore((s) => s.sendMessage)
+  const { continueInterruptedTask } = useTurnRuntimeErrorActions()
   const archiveActiveThreadToTurn = useChatStore((s) => s.archiveActiveThreadToTurn)
   const [forking, setForking] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -343,9 +344,7 @@ export function ConversationTurn({
           viewportRef={viewportRef}
           allowThreadActions={allowMainThreadActions}
           allowRecoveryContinue={allowRecoveryContinue}
-          onContinueInterrupted={() => {
-            void sendMessage(t('continueInterruptedTaskPrompt'))
-          }}
+          onContinueInterrupted={continueInterruptedTask}
           onOpenChildThread={onOpenChildThread}
           onCancelToolCall={onCancelToolCall}
           forkAction={
@@ -507,9 +506,7 @@ export function ConversationTurn({
               block={block}
               onContinue={
                 !isProcessing && allowMainThreadActions && allowRecoveryContinue
-                  ? () => {
-                      void sendMessage(t('continueInterruptedTaskPrompt'))
-                    }
+                  ? () => continueInterruptedTask(block.code)
                   : undefined
               }
             />

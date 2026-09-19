@@ -37,6 +37,21 @@ describe('format runtime error', () => {
     expect(formatRuntimeError(error)).toBe(i18n.t('common:runtimeFetchFailed'))
   })
 
+  it('guides offline recovery by managed auto-start state instead of blaming the toggle', () => {
+    const error = new Error(JSON.stringify({
+      code: 'fetch_failed',
+      message: 'fetch failed'
+    }))
+
+    expect(formatRuntimeError(error)).toBe(i18n.t('common:runtimeFetchFailed'))
+    expect(formatRuntimeError(error, { kunAutoStart: false }))
+      .toBe(i18n.t('common:runtimeFetchFailed'))
+    expect(formatRuntimeError(error, { kunAutoStart: true }))
+      .toBe(i18n.t('common:runtimeFetchFailedAutoStart'))
+    expect(formatRuntimeError(error, { kunAutoStart: true }))
+      .not.toContain('auto-start in Settings')
+  })
+
   it('classifies upstream model request failures separately from local runtime fetch failures', () => {
     const error = new Error(JSON.stringify({
       message: 'model request failed: fetch failed',

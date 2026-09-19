@@ -9,5 +9,9 @@
   "modelErrorNoResponseSummary": "मॉडल अनुरोध भेजा गया, लेकिन प्रदाता ने प्रतिक्रिया नहीं दी",
   "modelErrorNotSentSummary": "मॉडल अनुरोध भेजे जाने से पहले विफल हो गया",
   "modelErrorProviderOriginalMessage": "प्रदाता द्वारा लौटाया गया संदेश",
-  "modelErrorFailureMessage": "विफलता का कारण"
+  "modelErrorFailureMessage": "विफलता का कारण",
+  "outputTruncatedNotice": "प्रतिक्रिया मॉडल की प्रति-प्रतिक्रिया आउटपुट सीमा (max output tokens) पर कट गई — यह जनरेशन सीमा है, खाता शेष राशि नहीं। Kun ने पहले ही स्वचालित रूप से जारी रखने की कोशिश की। फिर से शुरू करने के लिए कार्य जारी रखें दबाएँ, या Settings > Providers > मॉडल > Max output (tokens) में सीमा बढ़ाएँ।",
+  "continueTruncatedTaskPrompt": "पिछली प्रतिक्रिया जहाँ कटी थी वहीं से जारी रखें। प्रत्येक प्रतिक्रिया छोटी रखें और शेष कार्य को छोटे चरणों में विभाजित करें।",
+  "runtimeFetchFailedAutoStart": "Kun तक नहीं पहुँचा जा सका। ऑटो-स्टार्ट पहले से सक्षम है, इसलिए स्थानीय रनटाइम क्रैश हो गया हो सकता है या अभी भी पुनः आरंभ हो रहा है — पुनः प्रयास करें, या Kun को पुनः आरंभ करके लॉग देखें।",
+  "openProviderSettings": "प्रोवाइडर सेटिंग्स"
 }

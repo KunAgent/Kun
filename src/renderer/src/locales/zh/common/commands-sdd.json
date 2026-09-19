@@ -524,7 +524,7 @@
   "sidebarThreadAwaitingInput": "等待你的输入",
   "awaitingYourInput": "等待你的输入…",
   "sidebarThreadUnread": "有新回复",
-  "sidebarThreadFailed": "任务运行失败，打开查看",
+  "sidebarThreadFailed": "任务出错结束，打开查看错误",
   "sidebarThreadScheduled": "计划于 {{time}} 执行",
   "sidebarThreadScheduledMultiple": "已设置 {{count}} 个定时任务，下次 {{time}}",
   "sidebarThreadScheduledQueued": "定时任务正在等待开始",

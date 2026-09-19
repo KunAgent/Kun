@@ -9,5 +9,9 @@
   "modelErrorNoResponseSummary": "모델 요청을 전송했지만 공급자가 응답하지 않았습니다",
   "modelErrorNotSentSummary": "모델 요청이 전송되기 전에 실패했습니다",
   "modelErrorProviderOriginalMessage": "공급자가 반환한 메시지",
-  "modelErrorFailureMessage": "실패 원인"
+  "modelErrorFailureMessage": "실패 원인",
+  "outputTruncatedNotice": "응답이 모델의 응답당 출력 한도(max output tokens)에서 잘렸습니다. 계정 잔액이 아니라 생성 한도 문제입니다. Kun이 자동으로 이어쓰기를 시도했습니다. '작업 계속'을 눌러 다시 이어가거나 설정 > Providers > 모델 > Max output (tokens)에서 한도를 높이세요.",
+  "continueTruncatedTaskPrompt": "이전 응답이 잘린 위치부터 계속하세요. 각 응답을 더 짧게 유지하고 남은 작업을 더 작은 단계로 나누세요.",
+  "runtimeFetchFailedAutoStart": "Kun에 연결할 수 없습니다. 자동 시작이 이미 켜져 있으므로 로컬 런타임이 충돌했거나 아직 재시작 중일 수 있습니다. 다시 시도하거나 Kun을 재시작하고 로그를 확인하세요.",
+  "openProviderSettings": "프로바이더 설정"
 }

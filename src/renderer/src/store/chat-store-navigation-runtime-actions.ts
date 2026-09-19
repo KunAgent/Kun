@@ -175,6 +175,7 @@ export function createNavigationRuntimeActions(
         ...(s.threads.length === 0 ? { threadListStatus: 'loading' as const } : {})
       }))
     }
+    let kunAutoStart: boolean | undefined
     try {
       if (typeof window.kunGui === 'undefined') {
         throw new Error(
@@ -182,6 +183,7 @@ export function createNavigationRuntimeActions(
         )
       }
       const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
+      kunAutoStart = settings.agents.kun.autoStart === true
       const p = getProvider()
       try {
         // Prefer the cheap path first: `runtimeRequest` already runs
@@ -206,7 +208,7 @@ export function createNavigationRuntimeActions(
         }
       }
     } catch (e) {
-      const msg = formatRuntimeError(e)
+      const msg = formatRuntimeError(e, { kunAutoStart })
       const detail = runtimeErrorDetail(e)
       const needsSettings = shouldOpenSettingsForError(e)
       if (mode === 'user') {

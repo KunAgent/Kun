@@ -509,7 +509,7 @@
   "sidebarThreadAwaitingInput": "आपके इनपुट की प्रतीक्षा",
   "awaitingYourInput": "आपके इनपुट की प्रतीक्षा…",
   "sidebarThreadUnread": "नया उत्तर",
-  "sidebarThreadFailed": "कार्य विफल — समीक्षा के लिए खोलें",
+  "sidebarThreadFailed": "कार्य त्रुटि के साथ समाप्त — समीक्षा के लिए खोलें",
   "sidebarThreadScheduled": "{{time}} के लिए निर्धारित",
   "sidebarThreadScheduledMultiple": "{{count}} निर्धारित कार्य · अगला {{time}}",
   "sidebarThreadScheduledQueued": "निर्धारित कार्य शुरू होने की प्रतीक्षा में",
