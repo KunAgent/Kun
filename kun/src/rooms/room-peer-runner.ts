@@ -6,7 +6,7 @@ import type { Room, RoomMember } from '../contracts/rooms.js'
 import type { Turn } from '../contracts/turns.js'
 import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
 import type { RoomStoredDocument } from './room-store.js'
-import type { RoomPeerMemberState, RoomPeerTopic, RoomPeerUpdates } from './room-peer-types.js'
+import type { RoomPeerInboxItem, RoomPeerMemberState, RoomPeerTopic, RoomPeerUpdates } from './room-peer-types.js'
 import { RoomPeerStore } from './room-peer-state.js'
 import { peerId } from './room-peer-inbox.js'
 import { prepareRoomPeerContext, type RoomPeerTurnContext } from './room-peer-context.js'
@@ -235,6 +235,24 @@ export class RoomPeerRunner {
     }).finally(() => { run.done = true; this.wake() })
   }
 
+  /** A human-authored inbox item keeps a broken lightweight check from
+   *  silencing the member. Peer-only traffic fails closed instead. */
+  private async humanPending(member: MemberRow): Promise<boolean> {
+    for (const seen of member.value.activation?.seenItems ?? []) {
+      const item = await this.deps.store.get<RoomPeerInboxItem>('peer_inbox', seen.id)
+      if (item && item.value.sourceKind !== 'task' && !item.value.authorMemberId) return true
+    }
+    return false
+  }
+
+  private async promoteToRespond(topic: TopicRow, member: MemberRow): Promise<boolean> {
+    const promoted = await this.state.updateActivation(topic.id, member.value.memberId,
+      member.value.activation!.clientRequestId, { phase: 'respond' })
+    if (promoted?.value.activation?.phase !== 'respond') return false
+    await this.admit(topic, promoted)
+    return true
+  }
+
   private async admit(topic: TopicRow, member: MemberRow): Promise<void> {
     const active = member.value.activation!
     const context = await this.context(member)
@@ -308,21 +326,21 @@ export class RoomPeerRunner {
       this.triages.delete(active.clientRequestId)
       const result = run.result
       const accounting = result ?? run.failure
+      const failOpen = !result && await this.humanPending(member)
+      const triageOutcome = result?.action === 'skip' ? 'skipped' : result?.action ?? (failOpen ? 'fail_open' : 'failed')
       await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId, true), {
-        status: result ? 'completed' : 'failed', outcome: result?.action === 'skip' ? 'skipped' : result?.action ?? 'failed',
+        status: result ? 'completed' : 'failed', outcome: triageOutcome,
         reason: result?.reason, error: run.error?.slice(0, 4000), endedAt: new Date().toISOString(),
         model: accounting?.model, usage: accounting?.usage, elapsedMs: accounting?.elapsedMs })
       await recordPeerMetric(this.deps, { id: active.clientRequestId, roomId: topic.value.roomId,
-        rootRequestId: topic.id, memberId: member.value.memberId, phase: 'triage', outcome: result?.action ?? 'failed',
+        rootRequestId: topic.id, memberId: member.value.memberId, phase: 'triage', outcome: triageOutcome,
         generation: active.generation, model: accounting?.model, elapsedMs: accounting?.elapsedMs, usage: accounting?.usage }).catch(() => undefined)
       if (!result) {
-        await releasePeerActivation(this.deps, member, { error: run.error ?? 'Participation check failed', retry: true })
+        if (!failOpen || !await this.promoteToRespond(topic, member)) {
+          await releasePeerActivation(this.deps, member, { error: run.error ?? 'Participation check failed', retry: true })
+        }
       } else if (result.action === 'skip') await this.state.skip(topic.id, member.value.memberId, active.clientRequestId)
-      else {
-        const promoted = await this.state.updateActivation(topic.id, member.value.memberId, active.clientRequestId, { phase: 'respond' })
-        if (promoted?.value.activation?.phase === 'respond') await this.admit(topic, promoted)
-        else await releasePeerActivation(this.deps, member)
-      }
+      else if (!await this.promoteToRespond(topic, member)) await releasePeerActivation(this.deps, member)
       return
     }
     if (!active.turnId) {

@@ -12,6 +12,31 @@ export type RoomPeerTriageResult = z.infer<typeof Verdict> & {
   elapsedMs: number
 }
 
+/** The small model owns the verdict; extraction tolerates fences, chatter and
+ *  truncated output. A thinking model may legitimately spend its budget on
+ *  reasoning before answering, so nothing here caps its output length — the
+ *  streamed text cap in roomPeerTriage only stops runaway generations. */
+function parseParticipationVerdict(raw: string): z.infer<typeof Verdict> {
+  const trimmed = raw.trim()
+  if (!trimmed) throw new Error('Room participation check returned no verdict')
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const body = (fenced ? fenced[1] : trimmed).trim()
+  const start = body.indexOf('{')
+  const end = body.lastIndexOf('}')
+  const candidate = start >= 0 && end > start ? body.slice(start, end + 1) : body
+  try {
+    const parsed = Verdict.safeParse(JSON.parse(candidate))
+    if (parsed.success) return parsed.data
+  } catch { /* fall through to salvage */ }
+  const action = candidate.match(/"action"\s*:\s*"(respond|skip)"/)
+  if (action) {
+    const reason = candidate.match(/"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+    return { action: action[1] as 'respond' | 'skip',
+      reason: (reason?.[1] ?? 'recovered from a truncated participation verdict').slice(0, 500) }
+  }
+  throw new Error('Room participation verdict was not valid JSON')
+}
+
 /** Parsing or cancellation can fail after the provider has already reported billable usage. */
 export class RoomPeerTriageError extends Error {
   constructor(error: unknown, readonly model: string, readonly elapsedMs: number, readonly usage?: UsageSnapshot) {
@@ -41,7 +66,7 @@ export async function roomPeerTriage(input: {
   const abort = () => controller.abort(input.signal.reason)
   input.signal.addEventListener('abort', abort, { once: true })
   if (input.signal.aborted) abort()
-  const timer = setTimeout(() => controller.abort(new Error('Room participation check timed out')), input.timeoutMs ?? 20_000)
+  const timer = setTimeout(() => controller.abort(new Error('Room participation check timed out')), input.timeoutMs ?? 120_000)
   const prompt = JSON.stringify({ member: {
     id: input.member.id, displayName: input.member.displayName, role: input.member.role,
     roleNotes: boundedRoomText(input.member.roleNotes, 1000),
@@ -65,8 +90,8 @@ export async function roomPeerTriage(input: {
       ],
       prefix: [], history: [{ id: input.identity, threadId: input.identity, turnId: input.identity,
         kind: 'user_message', role: 'user', status: 'completed', createdAt: new Date().toISOString(), text: prompt }],
-      tools: [], maxTokens: 200, responseFormat: 'json_object', temperature: 0,
-      reasoningEffort: 'off', stream: true, abortSignal: controller.signal
+      tools: [], responseFormat: 'json_object', temperature: 0,
+      stream: true, abortSignal: controller.signal
     })) {
       if (controller.signal.aborted) throw controller.signal.reason ?? new Error('Participation check cancelled')
       if (chunk.kind === 'error') throw new Error(chunk.message)
@@ -77,7 +102,7 @@ export async function roomPeerTriage(input: {
       if (chunk.kind === 'usage') usage = chunk.usage
     }
     if (controller.signal.aborted) throw controller.signal.reason ?? new Error('Participation check cancelled')
-    const parsed = Verdict.parse(JSON.parse(output.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')))
+    const parsed = parseParticipationVerdict(output)
     return { ...parsed, usage, model: binding.model, elapsedMs: Date.now() - started }
   } catch (error) {
     throw new RoomPeerTriageError(error, binding.model, Date.now() - started, usage)

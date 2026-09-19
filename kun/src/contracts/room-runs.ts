@@ -4,7 +4,7 @@ import { UsageSnapshotSchema } from './usage.js'
 const Id = z.string().min(1).max(256)
 export const RoomRunPhaseSchema = z.enum(['coordination', 'discussion', 'execution', 'review', 'integration', 'triage', 'memory', 'conversation'])
 export const RoomRunStatusSchema = z.enum(['queued', 'running', 'completed', 'failed', 'cancelled', 'recovery_required'])
-export const RoomRunOutcomeSchema = z.enum(['published', 'skipped', 'stale', 'duplicate', 'respond', 'failed', 'cancelled'])
+export const RoomRunOutcomeSchema = z.enum(['published', 'skipped', 'stale', 'duplicate', 'respond', 'failed', 'cancelled', 'fail_open'])
 export const RoomRunRecordSchema = z.object({
   participantAgentId: z.string().min(1).max(128).optional(),
   handoffId: z.string().min(1).max(128).optional(),

@@ -214,18 +214,20 @@ describe('peer store, queue and AgentLoop integration', () => {
     expect(metrics.some((entry) => entry.value.phase === 'triage' && entry.value.outcome === 'respond' && entry.value.usage?.totalTokens === 25)).toBe(true)
   })
 
-  it('keeps failed triage pending and does not escalate it into a member response', async () => {
+  it('fails a broken classifier open for human input and lets the member decide', async () => {
     const f = await fixture()
     f.reply(() => ({ skip: true }))
     f.triage((memberId) => { if (memberId === 'developer') throw new Error('Participation provider unavailable'); return 'skip' })
     const request = await f.send('failed-triage')
-    await f.pump(async () => expect((await f.runner.state.member(request.id, 'developer'))?.value.state).toBe('failed'))
+    await f.pump(async () => expect((await f.runner.state.member(request.id, 'developer'))?.value.handledInboxSeq).toBeGreaterThan(0))
     const state = (await f.runner.state.member(request.id, 'developer'))!.value
-    expect(state.handledInboxSeq).toBe(0)
-    expect(state.seenInboxSeq).toBeGreaterThan(0)
-    expect(state.lastError).toContain('Participation provider unavailable')
-    expect((await f.runner.state.readUpdates(request.id, 'developer'))?.items.length).toBeGreaterThan(0)
-    expect(f.calls.some((call) => call.memberId === 'developer')).toBe(false)
+    expect(state.state).toBe('idle')
+    expect(state.activation).toBeUndefined()
+    expect(f.calls.some((call) => call.memberId === 'developer')).toBe(true)
+    expect(await f.messages(request.id)).toHaveLength(0)
+    const metrics = await f.store.list<{ memberId: string; phase: string; outcome: string }>('peer_metric', { rootRequestId: request.id })
+    expect(metrics.some((entry) => entry.value.memberId === 'developer' && entry.value.phase === 'triage' &&
+      entry.value.outcome === 'fail_open')).toBe(true)
     const count = f.triages.filter((entry) => entry.memberId === 'developer').length
     for (let i = 0; i < 3; i++) await f.runner.tick()
     expect(f.triages.filter((entry) => entry.memberId === 'developer')).toHaveLength(count)
@@ -236,13 +238,13 @@ describe('peer store, queue and AgentLoop integration', () => {
     f.reply(() => ({ skip: true }))
     f.malformedTriage()
     const request = await f.send('failed-triage-usage')
-    await f.pump(async () => expect((await f.runner.state.member(request.id, 'developer'))?.value.state).toBe('failed'))
+    await f.pump(async () => expect((await f.runner.state.member(request.id, 'developer'))?.value.handledInboxSeq).toBeGreaterThan(0))
     const metrics = await f.store.list<{ memberId: string; phase: string; outcome: string; model?: string;
       usage?: { totalTokens: number } }>('peer_metric', { rootRequestId: request.id })
     expect(metrics.some((entry) => entry.value.memberId === 'developer' && entry.value.phase === 'triage' &&
-      entry.value.outcome === 'failed' && entry.value.model === 'small' && entry.value.usage?.totalTokens === 25)).toBe(true)
-    expect((await f.runner.state.member(request.id, 'developer'))?.value.handledInboxSeq).toBe(0)
-    expect(f.calls.some((call) => call.memberId === 'developer')).toBe(false)
+      entry.value.outcome === 'fail_open' && entry.value.model === 'small' && entry.value.usage?.totalTokens === 25)).toBe(true)
+    expect(f.calls.some((call) => call.memberId === 'developer')).toBe(true)
+    expect(await f.messages(request.id)).toHaveLength(0)
   })
 
   it('does not spend another model turn after the topic response budget is exhausted', async () => {

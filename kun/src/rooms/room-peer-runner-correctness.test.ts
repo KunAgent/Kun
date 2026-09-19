@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { makeFakeModel, makeHarness } from '../../tests/loop-test-harness.js'
+import { makeFakeModel, makeHarness, makeSilentModel } from '../../tests/loop-test-harness.js'
 import { emptyUsageSnapshot } from '../contracts/usage.js'
 import { RoomMemberSchema } from '../contracts/rooms.js'
 import type { RuntimeEvent } from '../contracts/events.js'
@@ -18,6 +18,7 @@ import { capturePeerUsageBaseline, readPeerTurnUsage } from './room-peer-runner-
 import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
 import * as execution from './room-execution.js'
 import * as contexts from './room-peer-context.js'
+import * as triage from './room-peer-triage.js'
 
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanups.splice(0).reverse()) await close() })
@@ -99,6 +100,46 @@ describe('peer response failure recovery', () => {
     await f.runner.tick()
     expect((await f.active()).value).toMatchObject({ state: 'failed', handledInboxSeq: 0, retryCount: 1 })
     expect((await f.active()).value.activation).toBeUndefined()
+  })
+
+  it('promotes a member past a broken lightweight check while a human waits', async () => {
+    const f = await fixture(true)
+    f.deps.peerModels = { client: makeSilentModel(), roles: () => undefined }
+    vi.spyOn(triage, 'roomPeerTriage').mockRejectedValue(new Error('Unexpected end of JSON input'))
+    const runner = new RoomPeerRunner(f.deps, () => {}, { debounceMs: 0 })
+    try {
+      await runner.tick(new Set([f.room.id + ':coordinator']))
+      await runner.tick(new Set([f.room.id + ':coordinator']))
+      const member = (await runner.state.member(f.sent.requestId, 'developer'))!.value
+      expect(member.activation?.phase).toBe('respond')
+      expect(member.state).toBe('responding')
+      const metrics = await f.store.list<{ outcome: string }>('peer_metric', { rootRequestId: f.sent.requestId })
+      expect(metrics.map((row) => row.value.outcome)).toContain('fail_open')
+    } finally { await runner.close() }
+  })
+
+  it('keeps a broken lightweight check closed when only peers are waiting', async () => {
+    const f = await fixture(true)
+    f.deps.peerModels = { client: makeSilentModel(), roles: () => undefined }
+    const classify = vi.spyOn(triage, 'roomPeerTriage')
+    classify.mockResolvedValueOnce({ action: 'skip', reason: 'No contribution', model: 'fake', elapsedMs: 1 })
+    const runner = new RoomPeerRunner(f.deps, () => {}, { debounceMs: 0 })
+    try {
+      await runner.tick()
+      await runner.tick()
+      expect((await runner.state.member(f.sent.requestId, 'developer'))!.value.handledInboxSeq).toBeGreaterThan(0)
+      const turn = await f.finish()
+      vi.spyOn(execution, 'observeRoomTurn').mockResolvedValue({ status: 'completed', text: '',
+        structured: { body: 'A peer finding.' }, turn, error: undefined, resultError: undefined })
+      await runner.tick()
+      classify.mockRejectedValue(new Error('Unexpected end of JSON input'))
+      await runner.tick()
+      await runner.tick()
+      expect((await runner.state.member(f.sent.requestId, 'developer'))!.value)
+        .toMatchObject({ state: 'failed', waitingReason: 'response_failed', retryCount: 1 })
+      const metrics = await f.store.list<{ outcome: string }>('peer_metric', { rootRequestId: f.sent.requestId })
+      expect(metrics.map((row) => row.value.outcome)).not.toContain('fail_open')
+    } finally { await runner.close() }
   })
 
   it('reports disabled pending members without keeping an otherwise drained topic busy', async () => {

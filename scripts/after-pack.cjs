@@ -14,7 +14,7 @@ const {
   rmSync,
   writeFileSync
 } = require('node:fs')
-const { join } = require('node:path')
+const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
 const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
 const {
@@ -192,6 +192,41 @@ function packedKunPruneArgs(context) {
   ]
 }
 
+// Some registry tarballs (for example @cursor/sdk and @jimp/plugin-rotate)
+// still carry "workspace:*" specifiers in their packaged manifests. npm
+// prune rejects those with EUNSUPPORTEDPROTOCOL, so rewrite them to the
+// version that is actually installed before pruning.
+function rewriteWorkspaceSpecifiers(dir) {
+  rewriteWorkspaceSpecifiersInManifest(join(dir, 'package.json'))
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name !== 'bin') {
+      rewriteWorkspaceSpecifiers(join(dir, entry.name))
+    }
+  }
+}
+
+function rewriteWorkspaceSpecifiersInManifest(manifestPath) {
+  if (!existsSync(manifestPath)) return
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  let changed = false
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+    const deps = manifest[field]
+    if (!deps) continue
+    for (const [name, spec] of Object.entries(deps)) {
+      if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue
+      const installed = join(dirname(manifestPath), 'node_modules', ...name.split('/'), 'package.json')
+      const version = existsSync(installed)
+        ? JSON.parse(readFileSync(installed, 'utf8')).version
+        : '0.0.0'
+      deps[name] = version
+      changed = true
+    }
+  }
+  if (changed) {
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  }
+}
+
 function prunePackedKunDependencies(context) {
   const root = unpackedAppRoot(context)
   const kunDir = join(root, 'kun')
@@ -199,6 +234,8 @@ function prunePackedKunDependencies(context) {
 
   assertExists(join(kunDir, 'package.json'), 'Kun package manifest')
   assertExists(join(kunDir, 'node_modules'), 'Kun node_modules')
+
+  rewriteWorkspaceSpecifiers(join(kunDir, 'node_modules'))
 
   const prune = npmCommand(packedKunPruneArgs(context))
   execFileSync(prune.command, prune.args, {

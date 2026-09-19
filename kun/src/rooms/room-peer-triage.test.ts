@@ -24,7 +24,9 @@ describe('peer participation classifier', () => {
       smallModelProviderId: 'small-provider', smallModelAccountId: 'small-account' } })
     expect(f.requests).toHaveLength(1)
     expect(f.requests[0]).toMatchObject({ model: 'small', providerId: 'small-provider', accountId: 'small-account',
-      tools: [], maxTokens: 200, responseFormat: 'json_object', reasoningEffort: 'off', temperature: 0 })
+      tools: [], responseFormat: 'json_object', temperature: 0 })
+    expect(f.requests[0].maxTokens).toBeUndefined()
+    expect(f.requests[0].reasoningEffort).toBeUndefined()
     expect(result).toMatchObject({ action: 'skip', reason: 'Already covered', model: 'small', usage })
     expect(result.elapsedMs).toBeGreaterThanOrEqual(0)
   })
@@ -36,10 +38,22 @@ describe('peer participation classifier', () => {
   })
 
   it.each([
+    [{ kind: 'assistant_text_delta', text: '```json\n{"action":"respond","reason":"Unanswered question"}\n```' }],
+    [{ kind: 'assistant_text_delta', text: 'Let me think. {"action":"respond","reason":"fallback","execute":true} Hope that helps.' }],
+    [{ kind: 'assistant_text_delta', text: '{"action":"respond","reason":"' + 'x'.repeat(501) + '"}' }],
+    [{ kind: 'assistant_text_delta', text: '{"action":"respond","reason":"truncated mid-sent' }]
+  ] as ModelStreamChunk[][])('accepts verdicts the small model stated despite fences, chatter or truncation', async (...chunks) => {
+    const f = fixture(chunks)
+    const result = await roomPeerTriage(f.input)
+    expect(result.action).toBe('respond')
+    expect(result.reason.length).toBeLessThanOrEqual(500)
+  })
+
+  it.each([
     [{ kind: 'error', message: '429 rate limited' }],
     [{ kind: 'assistant_text_delta', text: 'please wake the main model instead' }],
-    [{ kind: 'assistant_text_delta', text: '{"action":"respond","reason":"fallback","execute":true}' }],
-    [{ kind: 'assistant_text_delta', text: '{"action":"respond","reason":"' + 'x'.repeat(501) + '"}' }],
+    [{ kind: 'assistant_text_delta', text: '{"action":"ponder","reason":"undecided"}' }],
+    [{ kind: 'assistant_text_delta', text: '{"reason":"no action stated"}' }],
     []
   ] as ModelStreamChunk[][])('rejects failed or invalid verdicts without escalating or retrying', async (...chunks) => {
     const f = fixture(chunks)
