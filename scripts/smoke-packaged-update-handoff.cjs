@@ -453,37 +453,48 @@ async function quitDesktopNormally(desktop, debuggingPort, timeoutMs) {
   )
   try {
     await cdp.send('Target.setDiscoverTargets', { discover: true })
-    const workbench = await waitForTarget(
-      cdp,
-      isWorkbenchTarget,
-      'packaged Kun workbench for normal quit',
-      timeoutMs,
-      readProcessState
-    )
-    const evaluated = await sendToWorkbenchSession({
-      cdp,
-      session: { targetId: workbench.targetId, sessionId: undefined },
-      method: 'Runtime.evaluate',
-      params: {
-        expression: `(() => {
-          if (typeof window.kunGui?.runDesktopCommand !== 'function') return false
-          setTimeout(() => void window.kunGui.runDesktopCommand('quit'), 0)
-          return true
-        })()`,
-        returnByValue: true
-      },
-      timeoutMs,
-      processState: readProcessState,
-      operation: 'requesting an ordinary GUI quit'
-    })
-    if (evaluated.exceptionDetails || evaluated.result?.value !== true) {
-      throw new Error('Packaged workbench could not request an ordinary GUI quit')
+    // IPC handlers such as 'desktop:command' register asynchronously after the
+    // workbench page already accepts evaluates, so a single quit request can
+    // land before registration on slower hosts. Keep re-requesting until the
+    // process exits or the deadline passes.
+    const deadline = Date.now() + Math.min(timeoutMs, 30_000)
+    for (;;) {
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) break
+      try {
+        const workbench = await waitForTarget(
+          cdp,
+          isWorkbenchTarget,
+          'packaged Kun workbench for normal quit',
+          Math.min(remaining, 5_000),
+          readProcessState
+        )
+        await sendToWorkbenchSession({
+          cdp,
+          session: { targetId: workbench.targetId, sessionId: undefined },
+          method: 'Runtime.evaluate',
+          params: {
+            expression: `(() => {
+              if (typeof window.kunGui?.runDesktopCommand !== 'function') return false
+              void window.kunGui.runDesktopCommand('quit')
+              return true
+            })()`,
+            returnByValue: true
+          },
+          timeoutMs: Math.min(remaining, 5_000),
+          processState: readProcessState,
+          operation: 'requesting an ordinary GUI quit'
+        })
+      } catch {
+        // Quitting detaches the workbench target mid-request; the exit wait
+        // below is what actually decides success.
+      }
+      const waitMs = Math.min(Math.max(deadline - Date.now(), 0), 5_000)
+      if (waitMs > 0 && await waitForProcessExit(desktop.child.pid, waitMs)) return
     }
+    throw new Error(`Packaged GUI PID ${desktop.child.pid} did not exit after its ordinary quit request`)
   } finally {
     cdp.close()
-  }
-  if (!await waitForProcessExit(desktop.child.pid, Math.min(timeoutMs, 30_000))) {
-    throw new Error(`Packaged GUI PID ${desktop.child.pid} did not exit after its ordinary quit request`)
   }
 }
 
