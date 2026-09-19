@@ -170,6 +170,29 @@ describe('Rooms HTTP routes and durable storage', () => {
     expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 0 })
   })
 
+  it('lists only the current peer request that still needs the user', async () => {
+    const f = await fixture()
+    await f.store.commit({ requestId: 'peer-requests', checks: [
+      { kind: 'request', id: 'root', expectedRevision: null },
+      { kind: 'request', id: 'old', expectedRevision: null },
+      { kind: 'request', id: 'latest', expectedRevision: null }
+    ], puts: [
+      { kind: 'request', id: 'root', roomId: f.room.id, value: {
+        id: 'root', status: 'completed', collaborationProtocol: 'peer', rootRequestId: 'root',
+        peerLatestRequestId: 'latest', message: { body: 'Root' } } },
+      { kind: 'request', id: 'old', roomId: f.room.id, value: {
+        id: 'old', status: 'needs_input', collaborationProtocol: 'peer', rootRequestId: 'root',
+        message: { body: 'Stale clarify' } } },
+      { kind: 'request', id: 'latest', roomId: f.room.id, value: {
+        id: 'latest', status: 'needs_input', collaborationProtocol: 'peer', rootRequestId: 'root',
+        message: { body: 'Need a repository' }, sourceMessageId: 'source' } }
+    ] })
+    const page = await f.call(`/v1/rooms/${f.room.id}/requests?attention_only=true`)
+    expect(page.status).toBe(200)
+    expect(page.body.requests.map((row: { id: string }) => row.id)).toEqual(['latest'])
+    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1 })
+  })
+
   it('paginates task projections, scopes detail reads and returns updated detail after a cancel action', async () => {
     const f = await fixture()
     const path = `/v1/rooms/${f.room.id}/tasks`

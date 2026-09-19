@@ -1,3 +1,4 @@
+import { roomAttentionPredicateSql, roomCurrentPeerRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
 import { queryRoomSidebar } from './room-sidebar-sqlite.js'
 import type { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { RoomRunRecordSchema } from '../contracts/room-runs.js'
@@ -138,14 +139,19 @@ export class SqliteRoomStore implements RoomStore {
     args.push(parsed.limit)
     const columns = parsed.activityOnly ? `seq,kind,id,room_id,task_id,revision,
       CASE kind WHEN 'task' THEN json_object('task',json_object('status',status,'requestId',json_extract(document,'$.task.requestId')))
-      WHEN 'request' THEN json_object('status',status)
+      WHEN 'request' THEN json_object('status',status,'currentPeerRequest',
+        CASE WHEN ${roomCurrentPeerRequestSql('room_documents')} THEN 1 ELSE 0 END)
       ELSE json_object('status',status,'taskId',json_extract(document,'$.taskId'),
         'requestId',(SELECT json_extract(t.document,'$.task.requestId') FROM room_documents t WHERE t.kind='task' AND t.id=room_documents.task_id),
         'attention',json_extract(document,'$.attention'), 'applyIntent',json_extract(document,'$.applyIntent'),
+        'taskPresent',CASE WHEN ${roomIntegrationHasTaskSql('room_documents')} THEN 1 ELSE 0 END,
         'cancelRequested',json(CASE WHEN json_extract(document,'$.cancelRequested')=1 THEN 'true' ELSE 'false' END))
       END AS document` : parsed.summaryOnly ? `seq,kind,id,room_id,task_id,revision,
       CASE kind WHEN 'request' THEN json_object('status',status,'message',json_object('body',substr(COALESCE(json_extract(document,'$.originalMessage.body'),json_extract(document,'$.message.body')),1,1000)),
-        'sourceMessageId',COALESCE(json_extract(document,'$.originalSourceMessageId'),json_extract(document,'$.sourceMessageId')),'error',json_extract(document,'$.error'),'clarification',json_extract(document,'$.clarification'),'continuation',json_extract(document,'$.continuation'),'contextState',json_extract(document,'$.contextState'))
+        'sourceMessageId',COALESCE(json_extract(document,'$.originalSourceMessageId'),json_extract(document,'$.sourceMessageId')),'error',json_extract(document,'$.error'),'clarification',json_extract(document,'$.clarification'),'continuation',json_extract(document,'$.continuation'),'contextState',json_extract(document,'$.contextState'),
+        'rootRequestId',json_extract(document,'$.rootRequestId'),'peerLatestRequestId',json_extract(document,'$.peerLatestRequestId'),
+        'collaborationProtocol',json_extract(document,'$.collaborationProtocol'),
+        'currentPeerRequest',CASE WHEN ${roomCurrentPeerRequestSql('room_documents')} THEN 1 ELSE 0 END)
       WHEN 'agent_memory_job' THEN json_remove(document,'$.snapshot')
       WHEN 'agent_handoff' THEN json_remove(document,'$.sources','$.recipientSnapshot.presetSnapshot','$.recipientSnapshot.agentInstructions','$.body','$.result')
       WHEN 'room_run' THEN json_set(document,'$.input',substr(COALESCE(json_extract(document,'$.input'),''),1,800))
@@ -190,14 +196,7 @@ export class SqliteRoomStore implements RoomStore {
       conditions.push("EXISTS(SELECT 1 FROM json_each(room.document,'$.repositories') repo WHERE json_extract(repo.value,'$.canonicalRoot')=?)")
       filterArgs.push(input.repositoryRoot)
     }
-    if (input.attentionOnly) conditions.push(`EXISTS(SELECT 1 FROM room_documents a WHERE a.room_id=room.id AND (
-      (a.kind='task' AND a.status IN ('needs_input','needs_approval','recovery_required','failed','awaiting_acceptance')) OR
-      (a.kind='request' AND a.status IN ('needs_input','failed','recovery_required')) OR
-      (a.kind='integration' AND a.status IN ('preparing','validating','recovery_required','conflict','ready','failed') AND
-        NOT(a.status='failed' AND COALESCE(json_extract(a.document,'$.cancelRequested'),0)=1 AND json_extract(a.document,'$.applyIntent') IS NULL) AND
-        (a.status IN ('recovery_required','conflict','ready','failed') OR json_extract(a.document,'$.applyIntent') IS NOT NULL OR
-          COALESCE(json_array_length(a.document,'$.attention.approvalIds'),0)>0 OR
-          COALESCE(json_array_length(a.document,'$.attention.userInputIds'),0)>0))))`)
+    if (input.attentionOnly) conditions.push(`EXISTS(SELECT 1 FROM room_documents a WHERE a.room_id=room.id AND ${roomAttentionPredicateSql('a')})`)
     const rows = db.prepare(`WITH candidates AS (
       SELECT room.*, COALESCE(json_extract(room.document, '$.pinned'), 0) AS pinned,
         COALESCE((SELECT MAX(message.seq) FROM room_documents message

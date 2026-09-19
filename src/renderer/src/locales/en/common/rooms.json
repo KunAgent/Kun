@@ -47,6 +47,8 @@
   "roomsOlder": "Load earlier messages",
   "roomsTasks": "Tasks",
   "roomsNoTasks": "Tasks appear here when work is assigned.",
+  "roomsAttentionRequests": "Requests needing you",
+  "roomsPeerPendingPaused": "{{count}} queued events are paused",
   "roomsDetails": "Task details",
   "roomsClose": "Close",
   "roomsOpenCode": "Open in Code",

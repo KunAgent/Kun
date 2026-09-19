@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomTask } from '@shared/rooms-api'
 import { roomButtonClass } from './RoomSettings'
+import { RoomAttentionRequests } from './RoomAttentionRequests'
 import { roomsClient } from './rooms-client'
 import { subscribeRoomEvents } from './useRoomEvents'
 
@@ -207,7 +208,12 @@ export function RoomTaskStrip({
             )
           })}
         </div>
-        {!rows.length ? (
+        {stacked ? (
+          <RoomAttentionRequests
+            room={room}
+            emptyTasks={!rows.length && !busy}
+          />
+        ) : !rows.length ? (
           <p className="text-xs text-ds-muted">
             {t(busy ? 'roomsLoading' : 'roomsNoTasks')}
           </p>

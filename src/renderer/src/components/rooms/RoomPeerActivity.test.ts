@@ -184,6 +184,34 @@ describe('Peer discussion controls', () => {
     expect(text).toContain('1 discussions stopping')
     expect(text).toContain('1 members blocked')
   })
+  it('does not treat leftover inbox on a stuck request as user pending work', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(RoomPeerSummary, {
+          topics: [
+            {
+              ...topic,
+              requestStatus: 'needs_input',
+              members: [
+                {
+                  ...topic.members[0],
+                  state: 'idle',
+                  pendingCount: 4,
+                  waitingReason: 'waiting_capacity'
+                }
+              ]
+            }
+          ],
+          loading: false,
+          onOpen: vi.fn()
+        })
+      )
+    })
+    const text = JSON.stringify(renderer.toJSON())
+    expect(text).toContain('Discussion is quiet')
+    expect(text).not.toContain('pending events')
+    expect(text).not.toContain('responding or considering')
+  })
   it('returns from an embedded task within one drawer and closes on Escape', async () => {
     const onBack = vi.fn(),
       onClose = vi.fn()
@@ -228,5 +256,20 @@ describe('Peer discussion controls', () => {
     expect(
       mode.findAllByType('option').map((option) => option.props.value)
     ).toEqual(['peer', 'autonomous', 'directed'])
+  })
+  it('lets a new group room choose a custom avatar', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(RoomSettings, {
+          room: null,
+          onClose: vi.fn(),
+          onSaved: vi.fn()
+        })
+      )
+    })
+    expect(JSON.stringify(renderer.toJSON())).toContain('Group avatar')
+    expect(
+      renderer.root.findAllByProps({ 'aria-label': 'Choose avatar' }).length
+    ).toBeGreaterThan(0)
   })
 })

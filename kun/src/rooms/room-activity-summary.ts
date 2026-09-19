@@ -1,3 +1,4 @@
+import { ROOM_REQUEST_ATTENTION_STATUSES } from './room-activity-predicates.js'
 import type { RoomStore } from './room-store.js'
 
 const taskRunning = ['queued', 'running', 'waiting_dependency', 'stopping']
@@ -12,6 +13,8 @@ type ActivityProjection = {
   cancelRequested?: boolean
   attention?: { approvalIds: string[]; userInputIds: string[] } | null
   applyIntent?: unknown
+  currentPeerRequest?: number | boolean
+  taskPresent?: number | boolean
 }
 
 /** Count unique tasks per category, including their independently running integrations. */
@@ -34,9 +37,13 @@ export async function roomActivitySummary(store: RoomStore, roomId?: string) {
           if (taskRunning.includes(value.task?.status ?? '')) running.add(key)
           if (taskAttention.includes(value.task?.status ?? '')) attention.add(attentionKey)
         } else if (kind === 'request') {
-          if (['needs_input', 'failed', 'recovery_required'].includes(value.status ?? '')) attention.add(attentionKey)
           if (['pending', 'running', 'stopping'].includes(value.status ?? '')) running.add(attentionKey)
+          if (value.currentPeerRequest &&
+            (ROOM_REQUEST_ATTENTION_STATUSES as readonly string[]).includes(value.status ?? '')) {
+            attention.add(attentionKey)
+          }
         } else {
+          if (!value.taskPresent) continue
           if (value.status === 'failed' && value.cancelRequested && !value.applyIntent) continue
           if (integrationRunning.includes(value.status ?? '')) running.add(key)
           if (integrationAttention.includes(value.status ?? '') || value.applyIntent ||

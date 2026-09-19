@@ -1,3 +1,7 @@
+import {
+  isAttentionRequestStatus,
+  ROOM_REQUEST_ATTENTION_STATUSES
+} from './room-activity-predicates.js'
 import { RoomRuleUpdateSchema, RoomRuleSchema, type RoomRule, type RoomRequestOutcome } from '../contracts/rooms-product.js'
 import type { RoomDelivery, RoomReview } from '../contracts/room-deliveries.js'
 import type { RoomRuntimeDeps, RoomTaskExecution, RoomRequestState } from './room-runtime-types.js'
@@ -37,12 +41,17 @@ export class RoomProductService {
   }
 
   async requests(roomId: string) { return (await this.requestPage(roomId)).requests }
-  async requestPage(roomId: string, page: { limit?: number; cursor?: number } = {}) {
+  async requestPage(roomId: string, page: { limit?: number; cursor?: number; attentionOnly?: boolean } = {}) {
     await this.service.get(roomId)
     const limit = page.limit ?? 50
-    const rows = await this.service.store.list<RoomRequestState>('request', { roomId, limit, beforeSeq: page.cursor, summaryOnly: true })
-    const projection = await this.service.store.requestOutcomes?.({ roomId, requestIds: rows.map((row) => row.id), limit })
-    const requests = await Promise.all(rows.map(async (row) => ({
+    const rows = await this.service.store.list<RoomRequestState & { currentPeerRequest?: number }>(
+      'request', { roomId, limit, beforeSeq: page.cursor, summaryOnly: true,
+        ...(page.attentionOnly ? { status: [...ROOM_REQUEST_ATTENTION_STATUSES] } : {}) })
+    const visible = page.attentionOnly
+      ? rows.filter((row) => isAttentionRequestStatus(row.value.status) && row.value.currentPeerRequest)
+      : rows
+    const projection = await this.service.store.requestOutcomes?.({ roomId, requestIds: visible.map((row) => row.id), limit })
+    const requests = await Promise.all(visible.map(async (row) => ({
       id: row.id, roomId, status: row.value.status, message: { body: row.value.message.body },
       sourceMessageId: row.value.originalSourceMessageId ?? row.value.sourceMessageId, error: row.value.error,
       clarification: row.value.clarification, contextState: row.value.contextState, continuation: row.value.continuation ?? 0,

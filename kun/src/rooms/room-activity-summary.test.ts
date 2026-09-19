@@ -42,7 +42,10 @@ describe('room task and integration activity badges', () => {
     await integration(f, 'integration-ready', { status: 'ready' })
     await integration(f, 'integration-gate', { status: 'validating', attention: { approvalIds: ['one', 'two'], userInputIds: ['three'] } })
     expect(await roomActivitySummary(f.store, f.room.id)).toEqual({ runningCount: 1, attentionCount: 1 })
-    await integration(f, 'other-room-integration', { status: 'ready' }, f.execution.task.id, 'another-room')
+    await f.store.commit({ requestId: 'other-room-task', checks: [{ kind: 'task', id: 'other-task', expectedRevision: null }],
+      puts: [{ kind: 'task', id: 'other-task', roomId: 'another-room',
+        value: { task: { id: 'other-task', status: 'completed' } } }] })
+    await integration(f, 'other-room-integration', { status: 'ready' }, 'other-task', 'another-room')
     expect(await roomActivitySummary(f.store, f.room.id)).toEqual({ runningCount: 1, attentionCount: 1 })
     expect(await f.product.attention()).toEqual({ attentionCount: 2 })
   })
@@ -53,12 +56,50 @@ describe('room task and integration activity badges', () => {
       const puts: NonNullable<RoomStoreCommit['puts']> = []
       for (let i = start; i < Math.min(1007, start + 500); i++) {
         const id = 'integration_' + i
-        puts.push({ kind: 'integration', id, roomId: f.room.id, taskId: 'unique-task-' + i,
-          value: { taskId: 'unique-task-' + i, status: i < 1005 ? 'ready' : 'applied', diff: 'omitted history' } })
+        const taskId = 'unique-task-' + i
+        puts.push({ kind: 'task', id: taskId, roomId: f.room.id, taskId,
+          value: { task: { id: taskId, status: 'completed' } } })
+        puts.push({ kind: 'integration', id, roomId: f.room.id, taskId,
+          value: { taskId, status: i < 1005 ? 'ready' : 'applied', diff: 'omitted history' } })
       }
       await f.store.commit({ requestId: 'batch-' + start, puts,
         checks: puts.map((put) => ({ kind: put.kind, id: put.id, expectedRevision: null })) })
     }
     expect(await roomActivitySummary(f.store, f.room.id)).toEqual({ runningCount: 0, attentionCount: 1005 })
+  })
+
+  it('ignores orphan integrations and superseded peer requests', async () => {
+    const f = await fixture()
+    await integration(f, 'orphan', { status: 'ready' }, 'missing-task')
+    await f.store.commit({ requestId: 'peer-history', checks: [
+      { kind: 'request', id: 'root', expectedRevision: null },
+      { kind: 'request', id: 'old', expectedRevision: null },
+      { kind: 'request', id: 'older', expectedRevision: null }
+    ], puts: [
+      { kind: 'request', id: 'root', roomId: f.room.id, value: {
+        id: 'root', status: 'completed', collaborationProtocol: 'peer', rootRequestId: 'root',
+        peerLatestRequestId: 'latest', message: { body: 'Root' } } },
+      { kind: 'request', id: 'old', roomId: f.room.id, value: {
+        id: 'old', status: 'needs_input', collaborationProtocol: 'peer', rootRequestId: 'root',
+        message: { body: 'Old clarify' } } },
+      { kind: 'request', id: 'older', roomId: f.room.id, value: {
+        id: 'older', status: 'failed', collaborationProtocol: 'peer', rootRequestId: 'root',
+        message: { body: 'Older fail' } } }
+    ] })
+    expect(await roomActivitySummary(f.store, f.room.id)).toEqual({ runningCount: 0, attentionCount: 0 })
+    expect(await f.product.attention()).toEqual({ attentionCount: 0 })
+    expect((await f.product.requestPage(f.room.id, { attentionOnly: true })).requests).toEqual([])
+    await f.store.commit({ requestId: 'peer-current', checks: [{ kind: 'request', id: 'latest', expectedRevision: null }],
+      puts: [{ kind: 'request', id: 'latest', roomId: f.room.id, value: {
+        id: 'latest', status: 'needs_input', collaborationProtocol: 'peer', rootRequestId: 'root',
+        message: { body: 'Need a repository' }, sourceMessageId: 'source' } }] })
+    expect(await roomActivitySummary(f.store, f.room.id)).toEqual({ runningCount: 0, attentionCount: 1 })
+    expect((await f.product.requestPage(f.room.id, { attentionOnly: true })).requests.map((row) => row.id))
+      .toEqual(['latest'])
+    await f.store.commit({ requestId: 'legacy-clarify', checks: [{ kind: 'request', id: 'legacy', expectedRevision: null }],
+      puts: [{ kind: 'request', id: 'legacy', roomId: f.room.id, value: {
+        id: 'legacy', status: 'needs_input', collaborationProtocol: 'legacy',
+        message: { body: 'Independent clarify' }, sourceMessageId: 'legacy-source' } }] })
+    expect(await roomActivitySummary(f.store, f.room.id)).toEqual({ runningCount: 0, attentionCount: 2 })
   })
 })

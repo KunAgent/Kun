@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { AgentIdentitySchema } from '../contracts/agent-identities.js'
 import { RoomSidebarQuery, type RoomSidebarEntry, type RoomSidebarPage } from '../contracts/room-sidebar.js'
+import { roomAttentionPredicateSql } from './room-activity-predicates.js'
 import { roomMessagePreview } from './room-message-preview.js'
 import { RoomSchema, type RoomMessage } from '../contracts/rooms.js'
 
@@ -57,13 +58,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
         WHEN COALESCE(json_extract(t.document,'$.task.requestId'),json_extract(t.document,'$.requestId')) IS NOT NULL
           THEN 'request:' || COALESCE(json_extract(t.document,'$.task.requestId'),json_extract(t.document,'$.requestId'))
         ELSE 'task:' || COALESCE(t.task_id,json_extract(t.document,'$.taskId'),t.id) END)
-        FROM room_documents t WHERE t.room_id=e.room_id AND (
-        (t.kind='task' AND t.status IN ('needs_input','needs_approval','recovery_required','failed','awaiting_acceptance')) OR
-        (t.kind='request' AND t.status IN ('needs_input','failed','recovery_required')) OR
-        (t.kind='integration' AND t.status IN ('preparing','validating','recovery_required','conflict','ready','failed') AND
-          NOT(t.status='failed' AND COALESCE(json_extract(t.document,'$.cancelRequested'),0)=1 AND json_extract(t.document,'$.applyIntent') IS NULL) AND
-          (t.status IN ('recovery_required','conflict','ready','failed') OR json_extract(t.document,'$.applyIntent') IS NOT NULL OR
-          COALESCE(json_array_length(t.document,'$.attention.approvalIds'),0)>0 OR COALESCE(json_array_length(t.document,'$.attention.userInputIds'),0)>0)))) AS attention_count,
+        FROM room_documents t WHERE t.room_id=e.room_id AND ${roomAttentionPredicateSql('t')}) AS attention_count,
       (SELECT COUNT(DISTINCT CASE WHEN r.kind='request' THEN 'request:' || r.id
         WHEN r.kind='room_run' THEN 'run:' || r.id ELSE 'task:' || COALESCE(r.task_id,json_extract(r.document,'$.taskId'),r.id) END)
         FROM room_documents r WHERE
@@ -95,7 +90,9 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     const room = row.room_document ? RoomSchema.parse(JSON.parse(row.room_document)) : undefined
     const message = row.latest_message ? JSON.parse(row.latest_message) as RoomMessage : undefined
     return { id: row.stable_id, agentId: row.agent_id ?? undefined, roomId: row.room_id ?? undefined,
-      name: row.name, title: row.title, avatar: agent?.avatar, kind: row.conversation_kind, members: room?.members ?? [],
+      name: row.name, title: row.title,
+      avatar: agent?.avatar ?? (row.conversation_kind === 'user_agent' ? undefined : room?.avatar),
+      kind: row.conversation_kind, members: room?.members ?? [],
       activitySeq: row.activity_seq, pinned: Boolean(row.pinned), archived: Boolean(row.archived), latestMessageSeq: row.message_seq, readSeq: row.read_seq,
       runningCount: row.running_count, attentionCount: row.attention_count,
       latestMessage: message ? { id: message.id, authorKind: message.authorKind, authorLabelSnapshot: message.authorLabelSnapshot,

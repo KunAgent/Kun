@@ -74,14 +74,49 @@ it('retains queued work and integration attention, excluding cancelled integrati
   const { store, agents, service, a } = await fixture()
   const room = (await openAgentConversation(agents, service, a.id)).room
   await store.commit({ requestId: 'activities', checks: [
-    { kind: 'task', id: 'queued', expectedRevision: null }, { kind: 'integration', id: 'integration', expectedRevision: null }
+    { kind: 'task', id: 'queued', expectedRevision: null }, { kind: 'task', id: 'done', expectedRevision: null },
+    { kind: 'integration', id: 'integration', expectedRevision: null }
   ], puts: [
     { kind: 'task', id: 'queued', roomId: room.id, value: { task: { id: 'queued', status: 'waiting_dependency' } } },
-    { kind: 'integration', id: 'integration', roomId: room.id, value: { taskId: 'done', status: 'failed' } }
+    { kind: 'task', id: 'done', roomId: room.id, value: { task: { id: 'done', status: 'completed' } } },
+    { kind: 'integration', id: 'integration', roomId: room.id, taskId: 'done', value: { taskId: 'done', status: 'failed' } }
   ] })
   const entry = (await store.sidebarPage({ attentionOnly: true })).entries[0]
   expect(entry.roomId).toBe(room.id); expect(entry.attentionCount).toBe(1); expect(entry.runningCount).toBe(1)
   await store.commit({ requestId: 'cancelled-integration', checks: [{ kind: 'integration', id: 'integration', expectedRevision: 0 }],
     puts: [{ kind: 'integration', id: 'integration', roomId: room.id, value: { taskId: 'done', status: 'failed', cancelRequested: true } }] })
   expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
+})
+it('does not treat superseded peer requests or orphan integrations as attention', async () => {
+  const { store, agents, service, a } = await fixture()
+  const room = (await openAgentConversation(agents, service, a.id)).room
+  await store.commit({ requestId: 'ghosts', checks: [
+    { kind: 'request', id: 'root', expectedRevision: null }, { kind: 'request', id: 'old', expectedRevision: null },
+    { kind: 'integration', id: 'orphan', expectedRevision: null }
+  ], puts: [
+    { kind: 'request', id: 'root', roomId: room.id, value: {
+      id: 'root', status: 'completed', collaborationProtocol: 'peer', rootRequestId: 'root',
+      peerLatestRequestId: 'current', message: { body: 'Root' } } },
+    { kind: 'request', id: 'old', roomId: room.id, value: {
+      id: 'old', status: 'needs_input', collaborationProtocol: 'peer', rootRequestId: 'root',
+      message: { body: 'Stale clarify' } } },
+    { kind: 'integration', id: 'orphan', roomId: room.id, value: { taskId: 'missing', status: 'ready' } }
+  ] })
+  expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
+  expect((await store.sidebarPage({})).entries.find((entry) => entry.roomId === room.id)?.attentionCount).toBe(0)
+})
+it('surfaces a group room avatar without replacing a private agent portrait', async () => {
+  const { store, agents, service, a, b } = await fixture()
+  const agent = (await agents.update(a.id, {
+    clientRequestId: 'agent-avatar', expectedRevision: a.revision, avatar: { kind: 'builtin', id: 'explorer' }
+  })).agent
+  await service.create({
+    clientRequestId: 'group-avatar', name: 'Team',
+    members: [agents.asMember(agent), agents.asMember(b)],
+    avatar: { kind: 'builtin', id: 'scientist' }
+  })
+  await openAgentConversation(agents, service, agent.id)
+  const entries = (await store.sidebarPage({})).entries
+  expect(entries.find((entry) => entry.kind === 'group')?.avatar).toEqual({ kind: 'builtin', id: 'scientist' })
+  expect(entries.find((entry) => entry.agentId === agent.id)?.avatar).toEqual({ kind: 'builtin', id: 'explorer' })
 })

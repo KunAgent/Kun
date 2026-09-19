@@ -5,6 +5,8 @@ import {
   type RoomPendingSend
 } from './useRoomPendingSends'
 import {
+  roomPeerInboxPaused,
+  roomPeerUserActivity,
   roomRespondingMemberIds,
   roomWaitingMemberIds,
   roomPeerMemberBlocked
@@ -111,5 +113,18 @@ describe('room-receipt-helpers', () => {
       member({ memberId: 'd', state: 'idle' })
     ])]
     expect(roomWaitingMemberIds(topics)).toEqual(['a', 'b'])
+  })
+  it('does not count paused leftover inbox as user-facing pending work', () => {
+    const stuck = topic('active', [
+      member({ memberId: 'a', state: 'idle', pendingCount: 4, waitingReason: 'waiting_capacity' }),
+      member({ memberId: 'b', state: 'pending', pendingCount: 1, waitingReason: 'waiting_capacity' })
+    ])
+    stuck.requestStatus = 'needs_input'
+    expect(roomPeerInboxPaused(stuck, stuck.members[0])).toBe(true)
+    expect(roomPeerUserActivity([stuck])).toEqual({ running: 0, pending: 0 })
+    const working = topic('active', [
+      member({ memberId: 'c', state: 'responding', pendingCount: 2 })
+    ])
+    expect(roomPeerUserActivity([working])).toEqual({ running: 1, pending: 2 })
   })
 })

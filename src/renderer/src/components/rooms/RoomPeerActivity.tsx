@@ -5,7 +5,11 @@ import { roomButtonClass } from './RoomSettings'
 import { roomsClient } from './rooms-client'
 import { useRoomMutation } from './useRoomResource'
 import { RoomAvatar } from './RoomAvatar'
-import { roomPeerMemberBlocked } from './room-receipt-helpers'
+import {
+  roomPeerInboxPaused,
+  roomPeerMemberBlocked,
+  roomPeerUserActivity
+} from './room-receipt-helpers'
 
 export function continueRoomTopic(roomId: string, rootRequestId: string): void {
   window.dispatchEvent(
@@ -30,17 +34,7 @@ export function RoomPeerSummary({
 }) {
   const { t } = useTranslation('common')
   const blockedMember = roomPeerMemberBlocked
-  const activeMembers = topics
-    .filter((topic) => topic.status === 'active')
-    .flatMap((topic) => topic.members)
-    .filter((member) => !blockedMember(member))
-  const running = activeMembers.filter((member) =>
-    ['responding', 'triaging'].includes(member.state)
-  ).length
-  const pending = activeMembers.reduce(
-    (sum, member) => sum + member.pendingCount,
-    0
-  )
+  const { running, pending } = roomPeerUserActivity(topics)
   const stopping = topics.filter((topic) => topic.status === 'stopping').length
   const blocked = topics
     .filter((topic) => ['active', 'idle'].includes(topic.status))
@@ -187,7 +181,12 @@ export function RoomPeerActivity({
                 <p className="mt-1 text-ds-muted">
                   {t(`roomsPeerMember_${member.state}`)}
                   {member.pendingCount
-                    ? ` · ${t('roomsPeerPending', { count: member.pendingCount })}`
+                    ? ` · ${t(
+                        roomPeerInboxPaused(topic, member)
+                          ? 'roomsPeerPendingPaused'
+                          : 'roomsPeerPending',
+                        { count: member.pendingCount }
+                      )}`
                     : ''}
                 </p>
                 {member.invitedByMemberId ? (

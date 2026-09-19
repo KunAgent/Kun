@@ -43,8 +43,13 @@ describe('room experience projections and notification preferences', () => {
         repositories: [{ id: 'repo', canonicalRoot: '/test/project', displayName: 'Project', displayPath: '/test/project', gitCommonDir: '/test/project/.git', availability: 'available' }] } }] })
     expect((await f.store.listRooms({ repositoryRoot: '/test/project', limit: 1 })).rooms.map((row) => row.id)).toEqual([f.first.id])
     expect(await f.store.roomRepositories()).toEqual([{ canonicalRoot: '/test/project', displayName: 'Project', roomCount: 1 }])
-    await f.store.commit({ requestId: 'failed-integration', checks: [{ kind: 'integration', id: 'integration', expectedRevision: null }],
-      puts: [{ kind: 'integration', id: 'integration', roomId: f.second.id, value: { id: 'integration', status: 'failed' } }] })
+    await f.store.commit({ requestId: 'failed-integration', checks: [
+      { kind: 'task', id: 'failed-task', expectedRevision: null }, { kind: 'integration', id: 'integration', expectedRevision: null }
+    ], puts: [
+      { kind: 'task', id: 'failed-task', roomId: f.second.id, value: { task: { id: 'failed-task', status: 'completed' } } },
+      { kind: 'integration', id: 'integration', roomId: f.second.id, taskId: 'failed-task',
+        value: { id: 'integration', taskId: 'failed-task', status: 'failed' } }
+    ] })
     expect((await f.store.listRooms({ attentionOnly: true, limit: 1 })).rooms.map((row) => row.id)).toEqual([f.second.id])
     expect(sentA.message.rootRequestId).toBeDefined()
   })

@@ -117,6 +117,7 @@ export type RoomPeerPublishResult = {
 export type RoomPeerTopicSummary = RoomPeerTopic & {
   revision: number
   pendingCount: number
+  requestStatus?: string
   members: Array<{
     memberId: string
     state: RoomPeerMemberState['state']

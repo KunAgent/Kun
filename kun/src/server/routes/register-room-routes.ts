@@ -177,7 +177,11 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const input = z.object({ seq: z.number().int().nonnegative(), clientRequestId: RoomIdSchema }).parse(await body(request))
     return (await rooms.product.read(context.params.roomId, input.seq, input.clientRequestId)).result
   })
-  add('GET', '/v1/rooms/:roomId/requests', (rooms, request, context) => rooms.product.requestPage(context.params.roomId, pagination(request)))
+  add('GET', '/v1/rooms/:roomId/requests', (rooms, request, context) =>
+    rooms.product.requestPage(context.params.roomId, {
+      ...pagination(request),
+      attentionOnly: new URL(request.url).searchParams.get('attention_only') === 'true'
+    }))
   add('GET', '/v1/rooms/:roomId/requests/:requestId', async (rooms, _request, { params }) => {
     const row = await rooms.service.store.get<import('../../rooms/room-runtime-types.js').RoomRequestState>('request', params.requestId)
     if (!row || row.roomId !== params.roomId) throw new Error('request not found')

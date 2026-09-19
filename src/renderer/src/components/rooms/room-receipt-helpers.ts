@@ -1,6 +1,7 @@
 import type { RoomPeerTopicSummary } from '@shared/rooms-api'
 
 type TopicMember = RoomPeerTopicSummary['members'][number]
+const stuckRequest = ['needs_input', 'failed', 'recovery_required']
 
 /** Members that will not pick up work on their own (mirrors RoomPeerSummary). */
 export function roomPeerMemberBlocked(member: TopicMember): boolean {
@@ -13,6 +14,38 @@ export function roomPeerMemberBlocked(member: TopicMember): boolean {
       'response_failed'
     ].includes(member.waitingReason ?? '')
   )
+}
+
+export function roomPeerTopicStuck(topic: RoomPeerTopicSummary): boolean {
+  return stuckRequest.includes(topic.requestStatus ?? '')
+}
+
+export function roomPeerInboxPaused(topic: RoomPeerTopicSummary, member: TopicMember): boolean {
+  return (
+    !['responding', 'triaging'].includes(member.state) &&
+    (member.waitingReason === 'waiting_capacity' || roomPeerTopicStuck(topic))
+  )
+}
+
+/** User-facing discussion counts: ignore leftover inbox that agents cannot consume. */
+export function roomPeerUserActivity(topics: RoomPeerTopicSummary[]): {
+  running: number
+  pending: number
+} {
+  const activeMembers = topics
+    .filter((topic) => topic.status === 'active')
+    .flatMap((topic) => topic.members.map((member) => ({ topic, member })))
+    .filter(({ member }) => !roomPeerMemberBlocked(member))
+  return {
+    running: activeMembers.filter(({ member }) =>
+      ['responding', 'triaging'].includes(member.state)
+    ).length,
+    pending: activeMembers.reduce(
+      (sum, { topic, member }) =>
+        roomPeerInboxPaused(topic, member) ? sum : sum + member.pendingCount,
+      0
+    )
+  }
 }
 
 /**

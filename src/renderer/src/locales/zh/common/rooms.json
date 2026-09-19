@@ -47,6 +47,8 @@
   "roomsOlder": "加载更早的消息",
   "roomsTasks": "任务",
   "roomsNoTasks": "安排工作后，任务会显示在这里。",
+  "roomsAttentionRequests": "需要你处理的请求",
+  "roomsPeerPendingPaused": "{{count}} 条排队事件已暂停",
   "roomsDetails": "任务详情",
   "roomsClose": "关闭",
   "roomsOpenCode": "在 Code 中打开",

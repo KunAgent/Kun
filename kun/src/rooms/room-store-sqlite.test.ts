@@ -173,7 +173,7 @@ describe('canonical SQLite room store', () => {
     const projected = (await store.list('integration', { activityOnly: true }))[0]
     expect(projected.taskId).toBe('task-activity')
     expect(projected.value).toEqual({ taskId: 'task-activity', requestId: 'request-activity', status: 'validating', cancelRequested: true,
-      attention: { approvalIds: ['approval'], userInputIds: [] }, applyIntent: { candidateSha: 'pinned' } })
+      attention: { approvalIds: ['approval'], userInputIds: [] }, applyIntent: { candidateSha: 'pinned' }, taskPresent: 1 })
     expect((await store.get<{ diff: string }>('integration', 'integration-activity'))!.value.diff.length).toBeGreaterThan(1000)
     await expect(store.list('message', { activityOnly: true })).rejects.toThrow('activity projection requires')
   })

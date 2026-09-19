@@ -36,7 +36,8 @@ export async function roomPeerTopicPage(peer: RoomPeerStore, roomId: string, lim
           (pendingCount && !member.value.activation ? 'waiting_capacity' : undefined),
         invitedByMemberId: member.value.invitedByMemberId })
     }
-    topics.push({ ...row.value, revision: row.revision, members,
+    const request = await peer.store.get<RoomRequestState>('request', row.value.requestId)
+    topics.push({ ...row.value, revision: row.revision, requestStatus: request?.value.status, members,
       pendingCount: members.reduce((count, member) => count + member.pendingCount, 0) })
   }
   return { topics, nextCursor: rows.length === limit ? String(rows.at(-1)!.seq) : undefined }
