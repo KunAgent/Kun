@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
-import { useRoomEvents } from './useRoomEvents'
+import { useRoomAttentionCount, useRoomEvents } from './useRoomEvents'
 import {
   integrationRoomNotice,
   taskRoomNotice,
@@ -19,7 +19,8 @@ const harness = vi.hoisted(() => ({
   request: vi.fn(),
   notify: vi.fn(async () => ({ ok: true })),
   state: { route: 'chat' },
-  focus: vi.fn(() => false)
+  focus: vi.fn(() => false),
+  routeListeners: new Set<(state: { route: string }, previous: { route: string }) => void>()
 }))
 vi.mock('../../agent/runtime-client', () => ({
   rendererRuntimeClient: {
@@ -37,7 +38,17 @@ vi.mock('../../agent/runtime-client', () => ({
   }
 }))
 vi.mock('../../store/chat-store', () => ({
-  useChatStore: { getState: () => harness.state }
+  useChatStore: {
+    getState: () => harness.state,
+    subscribe: (
+      listener: (state: { route: string }, previous: { route: string }) => void
+    ) => {
+      harness.routeListeners.add(listener)
+      return () => {
+        harness.routeListeners.delete(listener)
+      }
+    }
+  }
 }))
 vi.mock('./rooms-client', async (original) => ({
   ...(await original<typeof import('./rooms-client')>()),
@@ -112,6 +123,7 @@ describe('Room integration notifications', () => {
     harness.stop.mockClear()
     harness.notify.mockClear()
     harness.state.route = 'chat'
+    harness.routeListeners.clear()
     harness.focus.mockReturnValue(false)
     harness.task.mockReset().mockResolvedValue(detail)
     rows = [integration]
@@ -260,5 +272,35 @@ describe('Room integration notifications', () => {
         (key) => key
       )
     ).toBeNull()
+  })
+  it('clears the rooms mode badge after the user opens Rooms', async () => {
+    harness.request.mockImplementation(async (path: string) =>
+      path.endsWith('/preferences') ? { preference, revision: 0 } : path.includes('/integrations')
+        ? { integrations: rows, integration: rows[0] }
+        : path.includes('latest=true')
+          ? { cursor: 1 }
+          : path.endsWith('/attention')
+            ? { attentionCount: 3, items: ['one', 'two', 'three'] }
+            : { attentionCount: 0 }
+    )
+    function Badge() {
+      useRoomEvents()
+      return createElement('span', { 'data-count': useRoomAttentionCount() })
+    }
+    await act(async () => {
+      renderer = create(createElement(Badge))
+    })
+    expect(renderer.root.findByProps({ 'data-count': 3 })).toBeTruthy()
+    const previous = { ...harness.state }
+    harness.state = { route: 'rooms' }
+    await act(async () => {
+      harness.routeListeners.forEach((listener) => listener(harness.state, previous))
+    })
+    expect(renderer.root.findByProps({ 'data-count': 0 })).toBeTruthy()
+    harness.state = { route: 'chat' }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+    expect(renderer.root.findByProps({ 'data-count': 0 })).toBeTruthy()
   })
 })

@@ -11,7 +11,7 @@ import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import { RoomCoordinationPlanSchema, parseRoomJson, roomCoordinationPrompt } from './room-coordination-plan.js'
 import { ensureRoomThread, enqueueRoomTurn, observeRoomTurn } from './room-execution.js'
 import { putRoomDocument, RoomService } from './room-service.js'
-import { resolveRoomRecipients, resolveRoomRepository } from './room-router.js'
+import { resolveRoomRecipients, resolveRoomRepository, roomRouteMessage } from './room-router.js'
 import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
 import type { RoomStoredDocument } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
@@ -37,7 +37,7 @@ export class RoomRequestRunner {
     const routeRoom = request.message.executionIntent === 'execute' && request.message.taskId ? taskParticipantRoom(request) : room
     const route = resolveRoomRecipients({ room: routeRoom, message: request.message,
       ...(referenced ? { referencedTask: referenced.task } : {}) })
-    if (route.kind === 'clarify') return this.finish(row, 'needs_input', route.reason)
+    if (route.kind === 'clarify') return this.finish(row, 'needs_input', roomRouteMessage(route.reason))
     if (request.stage === 'discuss') return this.discuss(row)
     if (referenced) {
       if (request.message.repositoryId && request.message.repositoryId !== referenced.task.repositoryId) {
@@ -128,6 +128,7 @@ export class RoomRequestRunner {
           throw new Error('当前 Agent 不能承接执行任务，请选择具备开发或诊断能力的执行负责人。')
         }
         const task = await this.prepareTask(request, assignment, member)
+        if (task && 'clarify' in task) return this.finish(row, 'needs_input', task.clarify)
         if (task) prepared.push(task)
       }
       if (prepared.length) {
@@ -173,7 +174,7 @@ export class RoomRequestRunner {
       const selectedRepositoryId = request.message.repositoryId ?? request.referencedTask?.task.repositoryId ?? member.defaultRepositoryId
       const resolved = selectedRepositoryId ? resolveRoomRepository({ room: request.roomSnapshot,
         memberId: member.id, explicitRepositoryId: selectedRepositoryId }) : undefined
-      if (resolved && !resolved.ok) return this.finish(row, 'needs_input', resolved.reason)
+      if (resolved && !resolved.ok) return this.finish(row, 'needs_input', roomRouteMessage(resolved.reason))
       const repository = resolved?.ok ? request.roomSnapshot.repositories.find((repo) => repo.id === resolved.repositoryId) : undefined
       const discussionWorkspace = request.referencedTask ? await roomDiscussionWorkspace(this.deps, request) : repository?.canonicalRoot
       await ensureRoomThread(this.deps, { id: discussion.threadId, roomId: request.roomId, requestId: request.id, member,
@@ -233,7 +234,8 @@ export class RoomRequestRunner {
   }
 
   private async prepareTask(request: RoomRequestState,
-    assignment: ReturnType<typeof RoomCoordinationPlanSchema.parse>['assignments'][number], member: RoomMember) {
+    assignment: ReturnType<typeof RoomCoordinationPlanSchema.parse>['assignments'][number], member: RoomMember):
+    Promise<{ execution: RoomTaskExecution; workspace: RoomWorkspace } | { clarify: string } | undefined> {
     if (member.participantAgentId && this.deps.agentDirectory) await this.deps.agentDirectory.active(member.participantAgentId)
     const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
     if (profile?.toolPolicy === 'readOnly') throw new Error('执行负责人仅有只读能力，请选择可执行的 Agent。')
@@ -242,7 +244,7 @@ export class RoomRequestRunner {
     const room = taskParticipantRoom(request)
     const resolved = resolveRoomRepository({ room, memberId: member.id,
       explicitRepositoryId: request.message.repositoryId ?? assignment.repositoryId })
-    if (!resolved.ok) throw new Error(resolved.reason)
+    if (!resolved.ok) return { clarify: roomRouteMessage(resolved.reason) }
     const repo = room.repositories.find((repo) => repo.id === resolved.repositoryId)!
     const observed = await observeRoomRepository(repo.canonicalRoot)
     if (observed.root !== repo.canonicalRoot || observed.commonDir !== repo.gitCommonDir ||

@@ -14,6 +14,7 @@ import { roomReviewFeedback } from './room-feedback.js'
 import type { RoomReview } from '../contracts/room-deliveries.js'
 import { dirname } from 'node:path'
 import { SqliteRoomStore } from './room-store-sqlite.js'
+import { roomRouteMessage } from './room-router.js'
 
 const execution = vi.hoisted(() => ({ ensure: vi.fn(), enqueue: vi.fn(), observe: vi.fn() }))
 vi.mock('./room-execution.js', () => ({
@@ -28,7 +29,8 @@ beforeEach(() => {
 })
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
 
-async function fixture(mode: 'directed' | 'autonomous' | 'peer' = 'autonomous') {
+async function fixture(mode: 'directed' | 'autonomous' | 'peer' = 'autonomous',
+  options: { repositories?: Array<{ id: string; displayPath: string }> } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'kun-room-request-'))
   cleanups.push(() => rm(root, { recursive: true, force: true }))
   const repo = join(root, 'repo with spaces')
@@ -51,7 +53,7 @@ async function fixture(mode: 'directed' | 'autonomous' | 'peer' = 'autonomous') 
   } as unknown as RoomRuntimeDeps
   const runner = new RoomRequestRunner(deps, service)
   const { room } = await service.create({ clientRequestId: 'create', name: 'Room', collaborationMode: mode,
-    repositories: [{ id: 'repo', displayPath: repo }] })
+    repositories: options.repositories ?? [{ id: 'repo', displayPath: repo }] })
   const request = async (requestId: string) => {
     const row = await store.get<RoomRequestState>('request', requestId)
     if (!row) throw new Error('test request missing')
@@ -112,9 +114,47 @@ describe('Room request admission and coordination', () => {
     await f.tick(sent.requestId)
     execution.observe.mockResolvedValueOnce({ status: 'completed', text: JSON.stringify({ kind: 'execute', response: 'Assigned',
       assignments: [assignment(), assignment('second', 'not-allowed')] }) })
-    await expect(f.tick(sent.requestId)).rejects.toThrow('repository_denied')
+    await f.tick(sent.requestId)
+    const request = (await f.request(sent.requestId)).value
+    expect(request.status).toBe('needs_input')
+    expect(request.clarification).toBe(roomRouteMessage('repository_denied'))
+    const messages = (await f.store.list<RoomMessage>('message', { roomId: f.room.id })).map((row) => row.value.body)
+    expect(messages).toContain(roomRouteMessage('repository_denied'))
+    expect(messages).not.toContain('repository_denied')
     expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
     expect(await f.store.list('workspace', { roomId: f.room.id })).toHaveLength(0)
+  })
+
+  it('asks for a repository instead of failing execution when the room has none', async () => {
+    const f = await fixture('autonomous', { repositories: [] })
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'empty-repo', body: 'Implement result', executionIntent: 'execute' })
+    await f.tick(sent.requestId)
+    execution.observe.mockResolvedValueOnce({ status: 'completed', text: JSON.stringify({ kind: 'execute', response: 'Assigned',
+      assignments: [{ key: 'first', memberId: 'developer', title: 'Implement result', prompt: 'Add the requested result', dependsOn: [] }] }) })
+    await f.tick(sent.requestId)
+    const request = (await f.request(sent.requestId)).value
+    expect(request.status).toBe('needs_input')
+    expect(request.clarification).toBe(roomRouteMessage('repository_required'))
+    const messages = (await f.store.list<RoomMessage>('message', { roomId: f.room.id })).map((row) => row.value)
+    expect(messages.some((message) => message.body === roomRouteMessage('repository_required')
+      && message.authorKind === 'member' && message.authorMemberId === f.room.defaultMemberId)).toBe(true)
+    expect(messages.some((message) => message.body === 'repository_required')).toBe(false)
+    expect(await f.store.list('task', { roomId: f.room.id })).toHaveLength(0)
+  })
+
+  it('still starts a discussion when the room has no repository', async () => {
+    const f = await fixture('directed', { repositories: [] })
+    const sent = await f.service.send(f.room.id, { clientRequestId: 'no-repo-talk', body: 'What would you change?',
+      mentionMemberIds: ['developer'], executionIntent: 'discussion' })
+    await f.tick(sent.requestId)
+    await f.tick(sent.requestId)
+    expect((await f.request(sent.requestId)).value.discussions?.map((item) => item.memberId)).toEqual(['developer'])
+    await f.tick(sent.requestId)
+    expect(execution.ensure.mock.calls.at(-1)?.[1]).toMatchObject({ kind: 'discussion', member: { id: 'developer' } })
+    expect((await f.request(sent.requestId)).value.status).not.toBe('needs_input')
+    const messages = (await f.store.list<RoomMessage>('message', { roomId: f.room.id })).map((row) => row.value.body)
+    expect(messages).not.toContain('repository_required')
+    expect(messages).not.toContain(roomRouteMessage('repository_required'))
   })
 
   it('has the addressed developer answer in their own discussion turn even when the coordinator returns answer', async () => {

@@ -199,6 +199,7 @@ export const REMOTE_ALLOWED_EVENT_CHANNELS: ReadonlySet<string> = new Set([
  */
 export const REMOTE_BROADCAST_EVENT_CHANNELS: ReadonlySet<string> = new Set([
   'runtime:status',
+  'app:quitting',
   'runtime:settings-sync-status',
   'startup:state',
   'schedule:status-changed',

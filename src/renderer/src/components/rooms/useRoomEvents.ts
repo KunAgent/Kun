@@ -18,7 +18,8 @@ import {
 } from './room-notifications'
 import {
   browserStorage,
-  readBrowserStorageItem,  writeBrowserStorageItem
+  readBrowserStorageItem,
+  writeBrowserStorageItem
 } from '../../lib/browser-storage'
 
 type Event = {
@@ -30,9 +31,42 @@ type Event = {
 }
 const listeners = new Set<(event: Event) => void>()
 const badgeListeners = new Set<() => void>()
+const SEEN_ATTENTION_KEY = 'kun.rooms.seenAttention.v1'
 let badge = 0
+let attentionItems: string[] = []
 let live = false
 export const roomEventsLive = () => live
+function readSeenAttention() {
+  try {
+    const parsed = JSON.parse(readBrowserStorageItem(SEEN_ATTENTION_KEY) ?? '[]') as unknown
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+function writeSeenAttention(items: Iterable<string>) {
+  writeBrowserStorageItem(SEEN_ATTENTION_KEY, JSON.stringify([...items]))
+}
+function publishBadge(value: number) {
+  badge = value
+  badgeListeners.forEach((listener) => listener())
+}
+function applyAttentionResult(result: { attentionCount: number; items?: string[] }) {
+  if (!Array.isArray(result.items)) {
+    attentionItems = []
+    publishBadge(result.attentionCount)
+    return
+  }
+  attentionItems = result.items.filter((item): item is string => typeof item === 'string')
+  const liveItems = new Set(attentionItems)
+  const seen = new Set([...readSeenAttention()].filter((item) => liveItems.has(item)))
+  writeSeenAttention(seen)
+  publishBadge(attentionItems.filter((item) => !seen.has(item)).length)
+}
+export function acknowledgeRoomAttention() {
+  writeSeenAttention(attentionItems)
+  publishBadge(0)
+}
 export function subscribeRoomEvents(listener: (event: Event) => void) {
   listeners.add(listener)
   return () => {
@@ -62,12 +96,11 @@ export function useRoomEvents() {
     let refreshTimer: ReturnType<typeof setTimeout> | undefined
     let fallback: ReturnType<typeof setInterval> | undefined
     const updateBadge = async () => {
-      const result = await roomsRequest<{ attentionCount: number }>(
+      const result = await roomsRequest<{ attentionCount: number; items?: string[] }>(
         '/v1/rooms/attention'
       )
       if (stopped) return
-      badge = result.attentionCount
-      badgeListeners.forEach((listener) => listener())
+      applyAttentionResult(result)
     }
     const deliver = async (event: Event, known: (key: string) => boolean): Promise<string | null> => {
       if (stopped) throw new Error('room notification subscription stopped')
@@ -159,8 +192,20 @@ export function useRoomEvents() {
       await Promise.allSettled([
         rendererRuntimeClient.startSse('rooms', cursor, streamId, { scope: 'rooms' }), updateBadge()
       ])
+      if (!stopped && useChatStore.getState().route === 'rooms') acknowledgeRoomAttention()
     }
     void initialize().catch(() => { live = false })
+    const offRoute = typeof useChatStore.subscribe === 'function'
+      ? useChatStore.subscribe((state, previous) => {
+          if (state.route !== 'rooms' || previous.route === 'rooms') return
+          acknowledgeRoomAttention()
+          void updateBadge()
+            .then(() => {
+              if (!stopped && useChatStore.getState().route === 'rooms') acknowledgeRoomAttention()
+            })
+            .catch(() => undefined)
+        })
+      : () => undefined
     fallback = setInterval(() => {
       if (live || stopped) return
       if (!queue) { void initialize().catch(() => undefined); return }
@@ -179,6 +224,7 @@ export function useRoomEvents() {
       clearTimeout(refreshTimer)
       clearInterval(fallback)
       clearInterval(notificationRetry)
+      offRoute()
       off()
       opened()
       failed()

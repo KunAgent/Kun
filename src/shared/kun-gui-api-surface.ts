@@ -629,6 +629,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   onClawChannelActivity: (handler: (payload: ClawChannelActivityPayload) => void) => () => void
   onTrayAction: (handler: (payload: TrayActionPayload) => void) => () => void
   onRuntimeStatus: (handler: (payload: KunRuntimeStatusPayload) => void) => () => void
+  onAppQuitting: (handler: () => void) => () => void
   onRuntimeSettingsSyncStatus: (
     handler: (payload: KunRuntimeSettingsSyncStatusPayload) => void
   ) => () => void

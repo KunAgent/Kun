@@ -12,6 +12,7 @@ import {
   roomsClient,
   type RoomPresetCatalog
 } from './rooms-client'
+import { memberModelUnavailable, useRoomAgentModels } from './agent-client'
 import { RoomComposerContext } from './RoomComposerContext'
 import { RoomComposerToolbar } from './RoomComposerToolbar'
 import { RoomRichInput, type RoomRichInputHandle } from './RoomRichInput'
@@ -100,6 +101,7 @@ function RoomComposerEditor({
   const replyToMessageId = draft.replyToMessageId ?? replyTarget?.messageId
   const rootRequestId = draft.rootRequestId ?? replyTarget?.rootRequestId
   const [catalog, setCatalog] = useState<RoomPresetCatalog | null>(null)
+  const agentModels = useRoomAgentModels(room)
   useEffect(() => {
     let active = true
     void roomsClient
@@ -122,19 +124,13 @@ function RoomComposerEditor({
           : member.id === room.defaultMemberId))
   )
   const unavailableMembers = room.conversationKind !== 'user_agent' && catalog
-    ? addressed.filter((member) => {
-        const preset = catalog.presets.find(
-          (item) => item.id === member.presetId
+    ? addressed.filter((member) =>
+        memberModelUnavailable(
+          member,
+          catalog,
+          member.participantAgentId ? agentModels[member.participantAgentId] : undefined
         )
-        const provider =
-          member.modelRef?.providerId ??
-          preset?.providerId ??
-          catalog.defaultModel?.providerId
-        return (
-          (provider && catalog.unsupportedProviderIds?.includes(provider)) ||
-          (!member.modelRef && preset?.available === false)
-        )
-      })
+      )
     : []
   const fileRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -352,6 +348,9 @@ function RoomComposerEditor({
             onChange={(references) => patch({ references })} disabled={disabled} />} />
       </fieldset>
       {room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId ? <RoomPermissionPicker roomId={room.id} /> : null}
+      {room.conversationKind !== 'user_agent' && !room.repositories.length ? (
+        <p className="rooms-run-note">{t('roomsRepositoryRequiredHint')}</p>
+      ) : null}
       {unavailableMembers.length ? (
         <p role="alert" className="mt-2 text-xs text-amber-600">
           {t('roomsSdkUnavailable')} ·{' '}

@@ -29,4 +29,14 @@ describe('shouldSuppressRuntimeErrorBanner', () => {
       at: '2026-06-18T15:01:01.000Z'
     })).toBe(false)
   })
+
+  it('suppresses the banner while the application is quitting', () => {
+    expect(shouldSuppressRuntimeErrorBanner({
+      state: 'stopped',
+      source: 'supervisor',
+      message: 'Kun application is shutting down',
+      at: '2026-06-18T15:02:00.000Z'
+    }, true)).toBe(true)
+    expect(shouldSuppressRuntimeErrorBanner(null, true)).toBe(true)
+  })
 })

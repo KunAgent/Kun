@@ -2,7 +2,7 @@ import { roomsRequest } from './rooms-client'
 import { AgentPicker } from './AgentPicker'
 import { AgentProfileForm } from './AgentProfileForm'
 import { RoomPopover } from './RoomPopover'
-import { agentMember } from './agent-client'
+import { agentMember, loadAgentModelsMap, persistMemberAgentModels, type AgentModelSnapshot } from './agent-client'
 import type { AgentIdentity } from '@shared/rooms-api'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -68,6 +68,7 @@ export function RoomSettings({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const pendingRef = useRef<{ fingerprint: string; id: string } | null>(null)
+  const agentModels = useRef<Record<string, AgentModelSnapshot>>({})
 
   useEffect(() => {
     let alive = true
@@ -94,6 +95,25 @@ export function RoomSettings({
       } }).catch((cause) => { if (!controller.signal.aborted) setError(String(cause)) })
     return () => controller.abort()
   }, [room])
+  const participantAgentKey = members.map((member) => member.participantAgentId ?? '').join(',')
+  useEffect(() => {
+    const ids = participantAgentKey.split(',').filter((id) => id && !agentModels.current[id])
+    if (!ids.length) return
+    let alive = true
+    void loadAgentModelsMap(ids).then((map) => {
+      if (!alive) return
+      agentModels.current = { ...agentModels.current, ...map }
+      setMembers((current) =>
+        current.map((member) => {
+          const models = member.participantAgentId ? map[member.participantAgentId] : undefined
+          return models ? { ...member, modelRef: models.agent.modelRef } : member
+        })
+      )
+    })
+    return () => {
+      alive = false
+    }
+  }, [participantAgentKey])
   const copyMember = async (member: RoomMember) => {
     if (!member.participantAgentId) return
     setBusy(true); setError('')
@@ -118,6 +138,10 @@ export function RoomSettings({
     setBusy(true)
     setError('')
     try {
+      await persistMemberAgentModels(members, agentModels.current)
+      const savedMembers = members.map((member) =>
+        member.participantAgentId ? { ...member, modelRef: undefined } : member
+      )
       const input: RoomInput = {
         name: name.trim(),
         description,
@@ -132,7 +156,7 @@ export function RoomSettings({
               : {})
           })
         ),
-        ...(members.length ? { members, defaultMemberId } : {}),
+        ...(savedMembers.length ? { members: savedMembers, defaultMemberId } : {}),
         ...(avatar ? { avatar } : {})
       }
       const fingerprint = JSON.stringify(input)

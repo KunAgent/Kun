@@ -4,25 +4,27 @@ import { useChatStore } from '../../store/chat-store'
 import type { RoomPresetCatalog } from './rooms-client'
 
 export function inheritedMemberModel(
-  member: RoomMember,
+  member: Pick<RoomMember, 'presetId'>,
   catalog: RoomPresetCatalog
-) {
+): RoomMember['modelRef'] {
   const preset = catalog.presets.find((item) => item.id === member.presetId)
-  return (
-    member.modelRef ??
-    (preset?.model
-      ? {
-          model: preset.model,
-          providerId:
-            preset.providerId ?? catalog.defaultModel?.providerId ?? ''
-        }
-      : catalog.defaultModel)
-  )
+  if (preset?.model) {
+    return {
+      model: preset.model,
+      providerId: preset.providerId ?? catalog.defaultModel?.providerId ?? ''
+    }
+  }
+  const fallback = catalog.defaultModel
+  return fallback?.model
+    ? { model: fallback.model, providerId: fallback.providerId ?? '' }
+    : undefined
 }
 
 export function RoomMemberModelSelect({
   member,
   catalog,
+  modelRef,
+  inherited,
   disabled,
   className,
   selectClassName,
@@ -30,6 +32,8 @@ export function RoomMemberModelSelect({
 }: {
   member: RoomMember
   catalog: RoomPresetCatalog
+  modelRef?: RoomMember['modelRef']
+  inherited?: RoomMember['modelRef']
   disabled?: boolean
   className?: string
   selectClassName?: string
@@ -38,7 +42,9 @@ export function RoomMemberModelSelect({
   const { t } = useTranslation('common')
   const groups = useChatStore((state) => state.composerModelGroups)
   const preset = catalog.presets.find((item) => item.id === member.presetId)
-  const model = inheritedMemberModel(member, catalog)
+  const selected = modelRef
+  const inheritedModel = inherited ?? inheritedMemberModel(member, catalog)
+  const model = selected ?? inheritedModel
   return (
     <label className={className}>
       {t('roomsMemberModel')}
@@ -46,7 +52,7 @@ export function RoomMemberModelSelect({
         aria-label={t('roomsMemberModel')}
         className={selectClassName}
         disabled={disabled}
-        value={member.modelRef ? JSON.stringify(member.modelRef) : ''}
+        value={selected ? JSON.stringify(selected) : ''}
         onChange={(event) =>
           onChange(
             event.target.value
@@ -56,16 +62,16 @@ export function RoomMemberModelSelect({
         }
       >
         <option value="">
-          {t('roomsInheritModel')} · {model?.providerId} / {model?.model}
+          {t('roomsInheritModel')} · {inheritedModel?.providerId} / {inheritedModel?.model}
         </option>
-        {member.modelRef &&
+        {selected &&
         !groups.some(
           (group) =>
-            group.providerId === member.modelRef?.providerId &&
-            group.modelIds.includes(member.modelRef.model)
+            group.providerId === selected.providerId &&
+            group.modelIds.includes(selected.model)
         ) ? (
-          <option value={JSON.stringify(member.modelRef)}>
-            {member.modelRef.providerId} / {member.modelRef.model}
+          <option value={JSON.stringify(selected)}>
+            {selected.providerId} / {selected.model}
           </option>
         ) : null}
         {groups.map((group) => (
@@ -93,7 +99,7 @@ export function RoomMemberModelSelect({
       </select>
       {(model?.providerId &&
         catalog.unsupportedProviderIds?.includes(model.providerId)) ||
-      (!member.modelRef && preset?.available === false) ? (
+      (!selected && preset?.available === false) ? (
         <p role="alert" className="rooms-member-model-warning text-xs text-amber-600">
           {preset?.reason ?? t('roomsSdkUnavailable')}
         </p>

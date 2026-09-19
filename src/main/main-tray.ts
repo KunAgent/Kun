@@ -52,6 +52,7 @@ import {
   trayIcon
 } from './main-app-context'
 import { runtimeShutdown } from './main-lifecycle'
+import { notifyApplicationQuitting } from './app-quit-signal'
 
 export function revealMainWindow(): void {
   if (!mainState.mainWindow || mainState.mainWindow.isDestroyed()) {
@@ -110,7 +111,7 @@ export function showRendererContextMenu(window: BrowserWindow, params: ContextMe
 }
 
 function quitFromTray(): void {
-  runtimeShutdown.requestQuit()
+  notifyApplicationQuitting()
   app.quit()
 }
 
@@ -333,14 +334,14 @@ export function syncTray(settings: AppSettingsV1): void {
   }
 }
 
-export function handleMainWindowClose(_window: BrowserWindow, event: Electron.Event): void {
+export function handleMainWindowClose(window: BrowserWindow, event: Electron.Event): void {
   const decision = resolveMainWindowCloseDecision({
     isQuitting: runtimeShutdown.isQuitRequested,
     isUpdateInstallQuitting: runtimeShutdown.isUpdateInstallQuit
   })
   if (decision === 'allow') return
   event.preventDefault()
-  runtimeShutdown.requestQuit()
+  notifyApplicationQuitting(window)
   app.quit()
 }
 

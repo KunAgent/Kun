@@ -2,12 +2,49 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomMember } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
-import { RoomMemberModelSelect } from './RoomMemberModelSelect'
+import {
+  inheritedMemberModel,
+  RoomMemberModelSelect
+} from './RoomMemberModelSelect'
 import { RoomRunList } from './RoomRunList'
 import { roomsClient, type RoomPresetCatalog } from './rooms-client'
+import {
+  agentPath,
+  saveAgentModels,
+  useAgentResource,
+  type AgentModelSnapshot
+} from './agent-client'
 
 export function roomAllowsMemberModelOverride(room: Pick<Room, 'conversationKind'>) {
   return !room.conversationKind || room.conversationKind === 'group'
+}
+
+function MemberAgentModelSelect({
+  member,
+  catalog,
+  disabled,
+  onChange
+}: {
+  member: RoomMember
+  catalog: RoomPresetCatalog
+  disabled?: boolean
+  onChange: (modelRef: RoomMember['modelRef'], models: AgentModelSnapshot | null) => void
+}) {
+  const models = useAgentResource<AgentModelSnapshot>(
+    member.participantAgentId ? agentPath(member.participantAgentId) + '/models' : null
+  )
+  return (
+    <RoomMemberModelSelect
+      member={member}
+      catalog={catalog}
+      modelRef={models.data?.agent.modelRef ?? (!member.participantAgentId ? member.modelRef : undefined)}
+      inherited={models.data?.inheritedMain ?? inheritedMemberModel(member, catalog)}
+      disabled={disabled || Boolean(member.participantAgentId && !models.data)}
+      className="rooms-member-model"
+      selectClassName="rooms-member-model-select"
+      onChange={(modelRef) => onChange(modelRef, models.data)}
+    />
+  )
 }
 
 export function RoomMemberDetails({ room, selectedMemberId, rootRequestId, topics = [], onSelectMember, onRun, onOpenAgent, onAgentDetails, onUpdated }: {
@@ -30,15 +67,34 @@ export function RoomMemberDetails({ room, selectedMemberId, rootRequestId, topic
     void roomsClient.presets().then((value) => { if (active) setCatalog(value) }).catch(() => undefined)
     return () => { active = false }
   }, [room.id, room.revision])
-  const saveModel = async (member: RoomMember, modelRef: RoomMember['modelRef']) => {
+  const saveModel = async (
+    member: RoomMember,
+    modelRef: RoomMember['modelRef'],
+    models: AgentModelSnapshot | null
+  ) => {
     if (busy) return
     setBusy(true)
     setError('')
     try {
-      await roomsClient.update(room, {
-        members: room.members.map((item) =>
-          item.id === member.id ? { ...item, modelRef, revision: item.revision + 1 } : item)
-      })
+      if (member.participantAgentId) {
+        if (!models) throw new Error('agent models unavailable')
+        await saveAgentModels(member.participantAgentId, {
+          expectedRevision: models.agent.revision,
+          modelRef: modelRef ?? null,
+          fastModelRef: models.agent.fastModelRef ?? null
+        })
+        if (member.modelRef) {
+          await roomsClient.update(room, {
+            members: room.members.map((item) =>
+              item.id === member.id ? { ...item, modelRef: undefined, revision: item.revision + 1 } : item)
+          })
+        }
+      } else {
+        await roomsClient.update(room, {
+          members: room.members.map((item) =>
+            item.id === member.id ? { ...item, modelRef, revision: item.revision + 1 } : item)
+        })
+      }
       onUpdated?.()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -55,12 +111,8 @@ export function RoomMemberDetails({ room, selectedMemberId, rootRequestId, topic
         <RoomAvatar member={member} label={member.displayName} size={38} />
         <div><h3>{member.displayName}</h3><p>{member.agentTitle || t(`rooms${member.role[0].toUpperCase()}${member.role.slice(1)}`)} · {t(member.enabled ? 'roomsEnabled' : 'roomsDisabled')}</p></div>
       </div>
-      {canEditModel ? <>
-        <RoomMemberModelSelect member={member} catalog={catalog} disabled={busy}
-          className="rooms-member-model" selectClassName="rooms-member-model-select"
-          onChange={(modelRef) => void saveModel(member, modelRef)} />
-        {member.modelRef ? <p className="rooms-member-model-hint">{t('roomsRoomModelOnly')}</p> : null}
-      </> : null}
+      {canEditModel ? <MemberAgentModelSelect member={member} catalog={catalog} disabled={busy}
+        onChange={(modelRef, models) => void saveModel(member, modelRef, models)} /> : null}
       {member.participantAgentId ? <div className="agent-memory-actions">
         <button type="button" onClick={() => onOpenAgent?.(member.participantAgentId!)}>{t('agentsOpenPrivate')}</button>
         <button type="button" onClick={() => onAgentDetails?.(member.participantAgentId!)}>{t('agentsProfileAndMemory')}</button>

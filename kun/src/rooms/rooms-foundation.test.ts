@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { RoomSchema, SendRoomMessageSchema } from '../contracts/rooms.js'
 import { RoomTaskSchema } from '../contracts/room-tasks.js'
 import { RoomVerificationEvidenceSchema } from '../contracts/room-deliveries.js'
-import { resolveRoomRecipients, resolveRoomRepository } from './room-router.js'
+import { resolveRoomRecipients, resolveRoomRepository, roomRouteMessage, isRoomRouteReason } from './room-router.js'
 import { currentReviewCoversDelivery, mayAutomaticallyRework, transitionRoomTask } from './task-state-machine.js'
 import { RoomCommitJournal, roomRequestFingerprint } from './room-commit-journal.js'
 
@@ -59,6 +59,11 @@ describe('room addressing and configuration', () => {
       .toEqual({ ok: false, reason: 'repository_denied' })
     expect(resolveRoomRepository({ room: room(), memberId: 'developer' }))
       .toEqual({ ok: true, repositoryId: 'repo_1' })
+    expect(resolveRoomRepository({ room: room(), memberId: 'coordinator' }))
+      .toEqual({ ok: false, reason: 'repository_required' })
+    expect(isRoomRouteReason('repository_required')).toBe(true)
+    expect(roomRouteMessage('repository_required')).toContain('仓库')
+    expect(roomRouteMessage('repository_denied')).toContain('授权')
   })
   it('rejects invalid default members and unauthorized defaults', () => {
     expect(RoomSchema.safeParse({ ...room(), defaultMemberId: 'unknown' }).success).toBe(false)

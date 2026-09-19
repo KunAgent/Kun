@@ -90,4 +90,27 @@ describe('persistent agent identity and conversations', () => {
     await agents.update(a.id, { clientRequestId: 'restore', expectedRevision: 1, archived: false })
     expect((await agents.active(a.id)).instructions).toBe('Be precise')
   })
+
+  it('freezes group turns to the agent model and ignores leftover room overrides', async () => {
+    const { agents, rooms, store } = await fixture()
+    rooms.setAgentDirectory(agents)
+    const { agent } = await agents.create({ clientRequestId: 'a', name: 'Ada',
+      modelRef: { providerId: 'native', model: 'private' } })
+    const created = await rooms.create({ clientRequestId: 'group', name: 'Team', defaultMemberId: 'developer',
+      members: [{ ...agents.asMember(agent), id: 'developer', modelRef: { providerId: 'native', model: 'room-only' } }] })
+    expect((await store.get<Room>('room', created.room.id))!.value.members[0].modelRef).toBeUndefined()
+    expect((await agents.get(agent.id)).modelRef?.model).toBe('private')
+    const stored = (await store.get<Room>('room', created.room.id))!.value
+    expect((await agents.freeze({ ...stored, members: [{ ...stored.members[0],
+      modelRef: { providerId: 'native', model: 'room-only' } }] })).members[0].modelRef?.model).toBe('private')
+  })
+
+  it('copies a room-only model onto an agent that has none', async () => {
+    const { agents, rooms } = await fixture()
+    rooms.setAgentDirectory(agents)
+    const { agent } = await agents.create({ clientRequestId: 'b', name: 'Bea' })
+    await rooms.create({ clientRequestId: 'group', name: 'Team', defaultMemberId: 'developer',
+      members: [{ ...agents.asMember(agent), id: 'developer', modelRef: { providerId: 'native', model: 'room-only' } }] })
+    expect((await agents.get(agent.id)).modelRef?.model).toBe('room-only')
+  })
 })

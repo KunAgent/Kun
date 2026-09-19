@@ -107,6 +107,7 @@ describe('remote allowlist shape', () => {
   it('scopes event and broadcast sets to non-overlapping purposes', () => {
     expect(REMOTE_ALLOWED_EVENT_CHANNELS.has('runtime:sse-event')).toBe(true)
     expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('runtime:status')).toBe(true)
+    expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('app:quitting')).toBe(true)
     expect(REMOTE_ALLOWED_EVENT_CHANNELS.has('gui:update-state')).toBe(false)
     expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('gui:update-state')).toBe(true)
   })

@@ -5,6 +5,7 @@ import {
   cancelOfflineRuntimeProbe,
   OFFLINE_RUNTIME_PROBE_INTERVAL_MS
 } from './chat-store-schedulers'
+import { markAppQuitting, resetAppQuittingForTests } from '../lib/app-quitting'
 import { createNavigationRuntimeActions } from './chat-store-navigation-runtime-actions'
 
 const registryMock = vi.hoisted(() => ({
@@ -55,7 +56,7 @@ function stubKunGui(options: { restartRuntime?: ReturnType<typeof vi.fn> } = {})
   restartRuntime: ReturnType<typeof vi.fn>
 } {
   const kunGui = {
-    getSettings: vi.fn(async () => ({})),
+    getSettings: vi.fn(async () => ({ agents: { kun: { autoStart: false } } })),
     restartRuntime: options.restartRuntime ?? vi.fn(async () => undefined)
   }
   vi.stubGlobal('window', { kunGui })
@@ -66,11 +67,13 @@ describe('probeRuntime recovery', () => {
   beforeEach(() => {
     rendererRuntimeClient.invalidateSettings()
     registryMock.getProvider.mockReset()
+    resetAppQuittingForTests()
   })
 
   afterEach(() => {
     rendererRuntimeClient.invalidateSettings()
     cancelOfflineRuntimeProbe()
+    resetAppQuittingForTests()
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
@@ -167,5 +170,21 @@ describe('probeRuntime recovery', () => {
     await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
     expect(connect).toHaveBeenCalledTimes(3)
     expect(h.state.runtimeConnection).toBe('ready')
+  })
+
+  it('does not treat a quit-time disconnect as a user-facing outage', async () => {
+    stubKunGui()
+    const connect = vi.fn(async () => {
+      throw new Error('fetch failed')
+    })
+    registryMock.getProvider.mockReturnValue({ connect })
+    const h = buildHarness({ runtimeConnection: 'ready' })
+    markAppQuitting()
+
+    await h.actions.probeRuntime('background')
+
+    expect(connect).not.toHaveBeenCalled()
+    expect(h.state.runtimeConnection).toBe('ready')
+    expect(h.state.error).toBeNull()
   })
 })

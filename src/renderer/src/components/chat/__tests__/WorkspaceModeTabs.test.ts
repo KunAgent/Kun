@@ -6,8 +6,14 @@ import i18n from '../../../i18n'
 import { readStylesheetBundle } from '../../../testing/stylesheet-bundle'
 import { WorkspaceModeTabs } from '../WorkspaceModeTabs'
 
+const attention = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../../rooms/useRoomEvents', () => ({
+  useRoomAttentionCount: () => attention.count
+}))
+
 describe('WorkspaceModeTabs', () => {
   beforeEach(async () => {
+    attention.count = 0
     await i18n.changeLanguage('en')
   })
 
@@ -107,6 +113,31 @@ describe('WorkspaceModeTabs', () => {
 
     expect(preventDefault).toHaveBeenCalledOnce()
     expect(renderer.root.findAllByProps({ role: 'menuitemradio' })).toHaveLength(3)
+    act(() => renderer.unmount())
+  })
+
+  it('hides the rooms attention count after Rooms is opened', () => {
+    attention.count = 3
+    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))
+    expect(html).toContain('title="Rooms"')
+    expect(html).not.toContain(' · 3')
+    expect(html).not.toContain('>3<')
+  })
+
+  it('shows a rooms attention badge while another workspace is active', () => {
+    attention.count = 3
+    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('chat')))
+    expect(html).toContain(`aria-label="${i18n.t('roomsAttention')}"`)
+    expect(html).toContain('>3<')
+    expect(html).not.toContain('Rooms · 3')
+  })
+
+  it('does not keep the rooms count in the open menu once Rooms is selected', () => {
+    attention.count = 3
+    const { renderer } = renderInteractive('rooms')
+    act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('>3<')
+    expect(JSON.stringify(renderer.toJSON())).not.toContain(' · 3')
     act(() => renderer.unmount())
   })
 

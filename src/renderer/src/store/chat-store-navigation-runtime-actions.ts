@@ -13,6 +13,7 @@ import {
 } from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
+import { isAppQuitting, markAppQuitting } from '../lib/app-quitting'
 import {
   deriveThreadTitleFromPrompt,
   getDefaultThreadTitle,
@@ -145,6 +146,7 @@ import {
   markUnreadCompletion,
   retainUnreadCompletions
 } from './unread-completions'
+import { teardownAllSideSubscriptions } from './chat-store-side-runtime'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -159,12 +161,14 @@ let refreshThreadsGeneration = 0
 let clawChannelActivityUnsubscribe: (() => void) | null = null
 let runtimeStatusUnsubscribe: (() => void) | null = null
 let trayActionUnsubscribe: (() => void) | null = null
+let appQuittingUnsubscribe: (() => void) | null = null
 
 export function createNavigationRuntimeActions(
   { set, get, sseAbortRef }: StoreActionContext
 ): Pick<ChatState, 'probeRuntime' | 'boot'> {
   return {
   probeRuntime: async (mode = 'user', options) => {
+    if (isAppQuitting()) return
     const prev = get().runtimeConnection
     if (mode === 'user') {
       set((s) => ({
@@ -197,6 +201,7 @@ export function createNavigationRuntimeActions(
         await rendererRuntimeClient.restartRuntime()
         await p.connect()
       }
+      if (isAppQuitting()) return
       set({ runtimeConnection: 'ready', error: null, runtimeErrorDetail: null })
       cancelOfflineRuntimeProbe()
       void get().loadComposerModels()
@@ -208,6 +213,7 @@ export function createNavigationRuntimeActions(
         }
       }
     } catch (e) {
+      if (isAppQuitting()) return
       const msg = formatRuntimeError(e, { kunAutoStart })
       const detail = runtimeErrorDetail(e)
       const needsSettings = shouldOpenSettingsForError(e)
@@ -295,8 +301,20 @@ export function createNavigationRuntimeActions(
         applyDarkUiColors(settings.darkUiColors)
         if (settings.write?.typography) applyWriteTypography(settings.write.typography)
         await get().applyI18nFromSettings(settings.locale)
+        if (!appQuittingUnsubscribe && typeof window.kunGui.onAppQuitting === 'function') {
+          appQuittingUnsubscribe = window.kunGui.onAppQuitting(() => {
+            markAppQuitting()
+            sseAbortRef.current?.abort()
+            sseAbortRef.current = null
+            cancelOfflineRuntimeProbe()
+            teardownAllSideSubscriptions()
+            stopTurnCompletionPoll()
+            set({ error: null, runtimeErrorDetail: null })
+          })
+        }
         if (!runtimeStatusUnsubscribe && typeof window.kunGui.onRuntimeStatus === 'function') {
           runtimeStatusUnsubscribe = window.kunGui.onRuntimeStatus((status) => {
+            if (isAppQuitting()) return
             set({ runtimeStatus: status })
             if (status.state === 'restarting' || status.state === 'crashed') {
               set({ error: null, runtimeErrorDetail: null })

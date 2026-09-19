@@ -269,6 +269,7 @@
     onSseEnd: on('runtime:sse-end'),
     onSseError: on('runtime:sse-error'),
     onRuntimeStatus: on('runtime:status'),
+    onAppQuitting: on('app:quitting'),
     onClawChannelActivity: on('claw:channel-activity'),
     onTrayAction: function () { return function () {} },
     resolveKunApproval: invokePayload('approval:decide'),

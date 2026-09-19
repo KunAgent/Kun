@@ -290,4 +290,14 @@ describe('RoomComposer', () => {
     expect(send.mock.calls[0][0]).toMatchObject({ body: 'Drawer reply', replyToMessageId: 'root', rootRequestId: 'topic' })
     expect(stored.has('kun.rooms.draft.room')).toBe(false)
   })
+
+  it('hints that group rooms without repositories can discuss but cannot create tasks', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send, { room: { ...room, repositories: [] } })
+    expect(renderer.root.findByProps({ className: 'rooms-run-note' }).children.join(''))
+      .toBe(i18n.t('roomsRepositoryRequiredHint'))
+    input('Keep discussing')
+    await submit()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
 })

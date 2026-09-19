@@ -54,5 +54,5 @@ export async function roomActivitySummary(store: RoomStore, roomId?: string) {
       afterSeq = rows.at(-1)!.seq
     }
   }
-  return { runningCount: running.size, attentionCount: attention.size }
+  return { runningCount: running.size, attentionCount: attention.size, attentionKeys: [...attention] }
 }

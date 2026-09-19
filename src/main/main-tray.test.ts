@@ -59,6 +59,10 @@ vi.mock('./logger', () => ({ logError: vi.fn(), logWarn: vi.fn() }))
 vi.mock('./window-close-behavior', () => ({ resolveMainWindowCloseDecision: vi.fn() }))
 vi.mock('./notification-preferences', () => ({ turnCompleteNotificationDisabledReason: vi.fn() }))
 vi.mock('./main-lifecycle', () => ({ runtimeShutdown: { requestQuit: vi.fn() } }))
+vi.mock('./app-quit-signal', () => ({
+  notifyApplicationQuitting: vi.fn(),
+  throwIfApplicationQuitting: vi.fn()
+}))
 vi.mock('./main-app-context', () => ({
   __dirname: '/tmp',
   appEnvironment: { appName: 'Kun', flavor: 'development' },
@@ -75,6 +79,7 @@ vi.mock('./main-app-context', () => ({
 
 import { mainState } from './main-app-context'
 import { runtimeShutdown } from './main-lifecycle'
+import { notifyApplicationQuitting } from './app-quit-signal'
 import { handleMainWindowClose, syncTray } from './main-tray'
 import { resolveMainWindowCloseDecision } from './window-close-behavior'
 
@@ -93,6 +98,7 @@ describe('syncTray', () => {
     mainState.trayQuotaToggleGeneration = 0
     vi.mocked(app.quit).mockClear()
     vi.mocked(runtimeShutdown.requestQuit).mockClear()
+    vi.mocked(notifyApplicationQuitting).mockClear()
     vi.mocked(resolveMainWindowCloseDecision).mockReset()
   })
 
@@ -104,9 +110,8 @@ describe('syncTray', () => {
     handleMainWindowClose(window as never, event as never)
 
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(runtimeShutdown.requestQuit).toHaveBeenCalledOnce()
+    expect(notifyApplicationQuitting).toHaveBeenCalledWith(window)
     expect(app.quit).toHaveBeenCalledOnce()
-    expect(window.hide).not.toHaveBeenCalled()
   })
 
   it('creates a quota tray entry when closing the window quits the app', () => {

@@ -5,7 +5,8 @@ import type { RoomPresetCatalog, RoomRepositoryInput } from './rooms-client'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
-import { RoomMemberModelSelect } from './RoomMemberModelSelect'
+import { RoomMemberModelSelect, inheritedMemberModel } from './RoomMemberModelSelect'
+import { agentPath, useAgentResource, type AgentModelSnapshot } from './agent-client'
 
 const words = (value: string) =>
   value
@@ -60,6 +61,9 @@ export function RoomMemberEditor({
   onCopy: () => void
 }) {
   const { t } = useTranslation('common')
+  const models = useAgentResource<AgentModelSnapshot>(
+    member.participantAgentId ? agentPath(member.participantAgentId) + '/models' : null
+  )
   const preset = catalog.presets.find((item) => item.id === member.presetId)
   const overrides = member.capabilityOverrides
   const updateCapabilities = (
@@ -136,6 +140,8 @@ export function RoomMemberEditor({
       <RoomMemberModelSelect
         member={member}
         catalog={catalog}
+        modelRef={member.modelRef}
+        inherited={models.data?.inheritedMain ?? inheritedMemberModel(member, catalog)}
         className="block text-xs text-ds-muted"
         selectClassName={roomFieldClass}
         onChange={(modelRef) => onChange({ modelRef })}

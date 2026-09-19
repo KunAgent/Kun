@@ -190,8 +190,8 @@ export class RoomProductService {
     }
   }
   async attention() {
-    const { attentionCount } = await roomActivitySummary(this.service.store)
-    return { attentionCount }
+    const { attentionCount, attentionKeys } = await roomActivitySummary(this.service.store)
+    return { attentionCount, items: attentionKeys }
   }
   private async requestOutcome(roomId: string, requestId: string): Promise<RoomRequestOutcome | undefined> {
     if (this.deps.store.requestOutcomes) {

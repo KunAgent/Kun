@@ -27,6 +27,7 @@ import { bindRoomPeerStore } from './room-peer-tools.js'
 import { roomPeerTopicPage, roomPeerMetricPage, stopRoomPeerTopic, deliverRoomPeerTaskProgress } from './room-peer-api.js'
 import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRequest } from './room-discussion-scheduler.js'
 import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
+import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
 
 export class RoomRuntime {
   private readonly memoryCapture: AgentMemoryCoordinator
@@ -215,13 +216,19 @@ export class RoomRuntime {
         if (error instanceof RoomContextPending) continue
         const current = await this.deps.store.get<RoomRequestState>('request', row.id)
         if (!current || current.revision !== row.revision) continue
-        const message = error instanceof Error ? error.message : String(error)
+        const raw = error instanceof Error ? error.message : String(error)
+        const clarify = isRoomRouteReason(raw)
+        const message = clarify ? roomRouteMessage(raw) : raw
         const dispatchedAmendment = await pendingPeerRoomAmendment(this.deps, row.value)
         // Retry an interrupted admitted operation once; retain its receipt for an explicit retry after persistent failure.
-        const status = dispatchedAmendment ? row.value.status === 'recovery_required' ? 'needs_input' : 'recovery_required' : 'failed'
-        if (!row.value.privateProtocol) await this.executionService.append(row.roomId!, 'error-' + row.id, message)
+        const status = dispatchedAmendment ? row.value.status === 'recovery_required' ? 'needs_input' : 'recovery_required'
+          : clarify ? 'needs_input' : 'failed'
+        if (!row.value.privateProtocol) {
+          await this.executionService.append(row.roomId!, 'error-' + row.id, message,
+            clarify ? row.value.roomSnapshot.defaultMemberId : undefined)
+        }
         await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!,
-          { ...row.value, status, error: message }, row)
+          { ...row.value, status, error: message, ...(clarify ? { clarification: message } : {}) }, row)
       }
     }
     const taskRows: RoomStoredDocument<RoomTaskExecution>[] = []

@@ -15,6 +15,7 @@ import { stopRuntimeWatchdog } from './main-runtime-health'
 import { requestProviderMutationFlush } from './provider-mutation-barrier'
 import { startMainApp } from './main-ready'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
+import { notifyApplicationQuitting } from './app-quit-signal'
 import { beginOwnedProcessShutdown } from '../../kun/src/process/owned-process.js'
 import {
   packagedUpdateHandoffSmokeFailure,
@@ -54,43 +55,46 @@ export function startDesktopMainEntry(): void {
     if (quitBarrierCompleted) return
     event.preventDefault()
     if (quitBarrierPromise) return
-    runtimeShutdown.requestQuit()
+    notifyApplicationQuitting()
     desktopProcessStack.beginStop(true)
     beginOwnedProcessShutdown()
     stopRuntimeWatchdog()
     stopCheckpointCleanupTimer()
     quitBarrierPromise = (async () => {
       try {
-        mainState.protectedCredentialSurface?.dispose()
-      } catch (error) {
-        console.warn('[kun-gui] credential surface cleanup failed:', error)
-      }
-      try {
-        const mutationFlush = await requestProviderMutationFlush(() => mainState.mainWindow)
-        if (!mutationFlush.ok) {
-          console.warn('[kun-gui] provider mutation flush did not complete before quit:', {
-            errorCode: mutationFlush.errorCode,
-            pendingProviderIds: mutationFlush.pendingProviderIds,
-            mutationKinds: mutationFlush.mutationKinds
+        try {
+          mainState.protectedCredentialSurface?.dispose()
+        } catch (error) {
+          console.warn('[kun-gui] credential surface cleanup failed:', error)
+        }
+        try {
+          const mutationFlush = await requestProviderMutationFlush(() => mainState.mainWindow)
+          if (!mutationFlush.ok) {
+            console.warn('[kun-gui] provider mutation flush did not complete before quit:', {
+              errorCode: mutationFlush.errorCode,
+              pendingProviderIds: mutationFlush.pendingProviderIds,
+              mutationKinds: mutationFlush.mutationKinds
+            })
+          }
+        } catch (error) {
+          console.warn('[kun-gui] pre-quit resource cleanup failed:', error)
+        }
+        stopRuntimeWatchdog()
+        stopCheckpointCleanupTimer()
+        if (!runtimeShutdown.isStoppedForQuit) {
+          await stopManagedRuntimesForQuit().catch((error) => {
+            console.warn('[kun-gui] failed to stop Kun runtime:', error)
           })
         }
-      } catch (error) {
-        console.warn('[kun-gui] pre-quit resource cleanup failed:', error)
-      }
-      stopRuntimeWatchdog()
-      stopCheckpointCleanupTimer()
-      if (!runtimeShutdown.isStoppedForQuit) {
-        await stopManagedRuntimesForQuit().catch((error) => {
-          console.warn('[kun-gui] failed to stop Kun runtime:', error)
-        })
-      }
-      if (runtimeShutdown.isStoppedForQuit) {
-        try { releaseRuntimeDataRecoveryMigrationLock() } catch (error) {
-          console.error('[kun-gui] failed to release Runtime data recovery lock during quit:', error)
+        if (runtimeShutdown.isStoppedForQuit) {
+          try { releaseRuntimeDataRecoveryMigrationLock() } catch (error) {
+            console.error('[kun-gui] failed to release Runtime data recovery lock during quit:', error)
+          }
         }
+      } finally {
+        quitBarrierCompleted = true
+        app.quit()
       }
-      quitBarrierCompleted = true
-      app.quit()
     })()
   })
 }

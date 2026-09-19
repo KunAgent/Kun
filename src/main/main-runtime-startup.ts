@@ -17,6 +17,7 @@ import {
 import { clearHistoricalKunServeProcesses } from './runtime/kun-serve-process-cleanup'
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
+import { throwIfApplicationQuitting } from './app-quit-signal'
 import { logWarn } from './logger'
 import {
   mainState,
@@ -32,6 +33,7 @@ import {
 } from './main-runtime-health'
 
 export async function ensureRuntime(settings: AppSettingsV1): Promise<AppSettingsV1> {
+  throwIfApplicationQuitting()
   desktopProcessStack.assertCanStart()
   const requested = runtimeSupervisor.latestOr(settings)
   // Availability is the durable intent, not a reward for one successful

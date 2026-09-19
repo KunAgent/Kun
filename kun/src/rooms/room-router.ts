@@ -1,5 +1,24 @@
 import type { Room, SendRoomMessage } from '../contracts/rooms.js'
 
+export const ROOM_ROUTE_MESSAGES = {
+  room_archived: '聊天室已归档，无法继续发送请求。请先恢复聊天室。',
+  invalid_task_reference: '引用的任务不存在或不属于当前聊天室，请重新选择任务。',
+  member_unavailable: '指定的成员已停用或不可用，请选择其他成员后再发送。',
+  repository_required: '当前房间还没有绑定仓库，无法创建实现任务。请先在房间设置中添加仓库并授权给执行成员。',
+  repository_denied: '该成员未被授权使用所选仓库。请在房间设置中调整授权，或改选有权限的仓库。',
+  repository_unavailable: '所选仓库当前不可用。请检查房间仓库配置后再试。'
+} as const
+
+export type RoomRouteReason = keyof typeof ROOM_ROUTE_MESSAGES
+
+export function isRoomRouteReason(reason: string): reason is RoomRouteReason {
+  return Object.hasOwn(ROOM_ROUTE_MESSAGES, reason)
+}
+
+export function roomRouteMessage(reason: string): string {
+  return isRoomRouteReason(reason) ? ROOM_ROUTE_MESSAGES[reason] : reason
+}
+
 export type RoomRoute =
   | { kind: 'respond'; memberIds: string[]; taskId?: string }
   | { kind: 'clarify'; reason: string }

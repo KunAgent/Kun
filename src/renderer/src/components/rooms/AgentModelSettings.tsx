@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { AgentIdentity, AgentModelOptions, AgentModelBinding, Room } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
 import { agentPath, useAgentResource } from './agent-client'
-import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
+import { roomRequestId, roomsRequest } from './rooms-client'
 import { useChatStore } from '../../store/chat-store'
 
 export type AgentModels = AgentModelOptions & { agent: AgentIdentity }
@@ -13,12 +13,12 @@ export function AgentModelSettings({ agentId, room, onClose, onSaved }: { agentI
   const { t } = useTranslation('common')
   const resource = useAgentResource<AgentModels>(agentPath(agentId) + '/models' + (room ? '?room_id=' + encodeURIComponent(room.id) : ''))
   return <RoomModal title={t('directModels')} onClose={onClose}>
-    {resource.data ? <ModelEditor key={agentId + ':' + resource.data.agent.revision} value={resource.data} room={room} onSaved={() => { resource.refresh(); onSaved() }} /> :
+    {resource.data ? <ModelEditor key={agentId + ':' + resource.data.agent.revision} value={resource.data} onSaved={() => { resource.refresh(); onSaved() }} /> :
       <p className="rooms-run-note">{t('roomsLoading')}</p>}
     {resource.error ? <p role="alert" className="rooms-run-error">{resource.error}</p> : null}
   </RoomModal>
 }
-function ModelEditor({ value, room, onSaved }: { value: AgentModels; room?: Room; onSaved: () => void }) {
+function ModelEditor({ value, onSaved }: { value: AgentModels; onSaved: () => void }) {
   const { t } = useTranslation('common')
   const [main, setMain] = useState<AgentModelBinding | null>(value.agent.modelRef ?? null)
   const [fast, setFast] = useState<AgentModelBinding | null>(value.agent.fastModelRef ?? null)
@@ -60,9 +60,6 @@ function ModelEditor({ value, room, onSaved }: { value: AgentModels; room?: Room
   return <div className="direct-model-settings">
     <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('directSearchModels')} aria-label={t('directSearchModels')} />
     {choices(false)}{choices(true)}
-    {value.roomOverride && room?.conversationKind !== 'user_agent' ? <div className="direct-model-override"><p>{t('directGroupOverride', { model: value.roomOverride.model })}</p>
-      <button disabled={busy} onClick={() => { if (!room) return; setBusy(true); void roomsClient.update(room, { members: room.members.map((member) => member.participantAgentId === value.agent.id ? { ...member, modelRef: undefined } : member) })
-        .then(onSaved).catch((cause) => setError(String(cause))).finally(() => setBusy(false)) }}>{t('directFollowAgent')}</button></div> : null}
     <button type="button" onClick={() => useChatStore.getState().openSettings('agents')}>{t('directConfigureProviders')}</button>
     {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
     <button className="rooms-run-primary" disabled={busy} onClick={() => void save()}>{t(busy ? 'roomsLoading' : 'agentsSave')}</button>

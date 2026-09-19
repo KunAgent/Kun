@@ -139,7 +139,7 @@ describe('Rooms HTTP routes and durable storage', () => {
     }
     const rooms = (await f.call('/v1/rooms')).body.rooms
     expect(rooms[0]).toMatchObject({ runningCount: 1, attentionCount: 1001 })
-    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1001 })
+    expect((await f.call('/v1/rooms/attention')).body).toMatchObject({ attentionCount: 1001 })
   })
 
   it('includes integration gates on completed tasks in both badges without double counting a task', async () => {
@@ -154,10 +154,10 @@ describe('Rooms HTTP routes and durable storage', () => {
       { kind: 'integration', id: 'ready', roomId: f.room.id, taskId: 'task', value: { taskId: 'task', status: 'ready' } }
     ] })
     expect((await f.call('/v1/rooms')).body.rooms[0]).toMatchObject({ runningCount: 1, attentionCount: 1 })
-    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1 })
+    expect((await f.call('/v1/rooms/attention')).body).toMatchObject({ attentionCount: 1 })
     await f.store.commit({ requestId: 'also-task-attention', checks: [{ kind: 'task', id: 'task', expectedRevision: 0 }],
       puts: [{ kind: 'task', id: 'task', roomId: f.room.id, taskId: 'task', value: { task: { id: 'task', status: 'awaiting_acceptance' } } }] })
-    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1 })
+    expect((await f.call('/v1/rooms/attention')).body).toMatchObject({ attentionCount: 1 })
     await f.store.commit({ requestId: 'all-resolved', checks: [
       { kind: 'task', id: 'task', expectedRevision: 1 }, { kind: 'integration', id: 'checking', expectedRevision: 0 },
       { kind: 'integration', id: 'ready', expectedRevision: 0 }
@@ -167,7 +167,7 @@ describe('Rooms HTTP routes and durable storage', () => {
       { kind: 'integration', id: 'ready', roomId: f.room.id, taskId: 'task', value: { taskId: 'task', status: 'failed', cancelRequested: true } }
     ] })
     expect((await f.call('/v1/rooms')).body.rooms[0]).toMatchObject({ runningCount: 0, attentionCount: 0 })
-    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 0 })
+    expect((await f.call('/v1/rooms/attention')).body).toMatchObject({ attentionCount: 0 })
   })
 
   it('lists only the current peer request that still needs the user', async () => {
@@ -190,7 +190,9 @@ describe('Rooms HTTP routes and durable storage', () => {
     const page = await f.call(`/v1/rooms/${f.room.id}/requests?attention_only=true`)
     expect(page.status).toBe(200)
     expect(page.body.requests.map((row: { id: string }) => row.id)).toEqual(['latest'])
-    expect((await f.call('/v1/rooms/attention')).body).toEqual({ attentionCount: 1 })
+    const attention = (await f.call('/v1/rooms/attention')).body
+    expect(attention).toMatchObject({ attentionCount: 1 })
+    expect(attention.items).toHaveLength(1)
   })
 
   it('paginates task projections, scopes detail reads and returns updated detail after a cancel action', async () => {

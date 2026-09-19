@@ -75,7 +75,7 @@ export function WorkspaceModeTabs({
     },
     {
       id: 'rooms' as const,
-      label: t('roomsLabel') + (roomAttention ? ' · ' + roomAttention : ''),
+      label: t('roomsLabel'),
       description: t('roomsDescription'),
       Icon: MessagesSquare,
       onSelect: onRoomsOpen
@@ -244,6 +244,14 @@ export function WorkspaceModeTabs({
                     {description}
                   </span>
                 </span>
+                {id === 'rooms' && !selected && roomAttention > 0 ? (
+                  <span
+                    className="rounded-full bg-accent/15 px-1.5 text-[10px] text-accent"
+                    aria-label={t('roomsAttention')}
+                  >
+                    {roomAttention}
+                  </span>
+                ) : null}
                 {selected ? (
                   <Check
                     aria-hidden
