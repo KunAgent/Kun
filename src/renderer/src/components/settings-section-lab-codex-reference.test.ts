@@ -11,8 +11,8 @@ describe('Codex reference laboratory settings panel', () => {
       value: defaultKunLabSettings(), onChange: () => undefined,
       t: (key: string) => (en as Record<string, string>)[key] ?? key
     }))
-    expect(html).toContain('Codex history branches')
-    expect(html).toContain('without copying entire logs')
+    expect(html).toContain('History reference branches')
+    expect(html).toContain('not automatically loaded into model context')
     expect(html).toContain('aria-checked="false"')
   })
 })
