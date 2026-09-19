@@ -118,7 +118,21 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
         writeFileSync(prepared.startPath, 'start', { mode: 0o600 })
         return child
       }
-      if (spawnError || child.exitCode !== null || child.signalCode !== null) throw spawnError ?? new Error('Windows owned launcher exited before readiness')
+      if (spawnError || child.exitCode !== null || child.signalCode !== null) {
+        if (spawnError) throw spawnError
+        // The launcher reports its own failure through the status file, which
+        // can lag a few ms behind process exit; give it a final grace window
+        // before falling back to the generic exit error.
+        const lateDeadline = Date.now() + 1_000
+        while (Date.now() < lateDeadline) {
+          const detail = await readFile(statusPath, 'utf8').catch(() => '')
+          if (detail.startsWith('error:')) throw new Error(detail.slice(6))
+          await new Promise((accept) => setTimeout(accept, 25))
+        }
+        throw new Error(
+          `Windows owned launcher exited before readiness (code ${child.exitCode ?? child.signalCode ?? 'unknown'})`
+        )
+      }
       await new Promise((accept) => setTimeout(accept, 25))
     }
     throw new Error('Windows owned launcher timed out before readiness')

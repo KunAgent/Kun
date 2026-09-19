@@ -131,6 +131,7 @@ public static class KunOwnedLauncher {
       if (statusPath != null) {
         try { File.WriteAllText(statusPath, "error:" + error.Message); } catch { }
       }
+      try { Console.Error.WriteLine("kun-owned-launcher: " + error); } catch { }
       return 70;
     } finally {
       // Also terminate a suspended target if assigning the job failed.
