@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, statSync, readFileSync } from 'node:fs'
-import { extname, join, normalize, resolve, sep } from 'node:path'
+import { extname, normalize, resolve, sep } from 'node:path'
+import { createGzip } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const REMOTE_STATIC_MAX_FILE_BYTES = 256 * 1024 * 1024
@@ -31,6 +32,113 @@ export function remoteMimeType(filePath: string): string {
   return REMOTE_MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
 }
 
+const REMOTE_GZIP_EXTENSIONS = new Set([
+  '.html',
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.css',
+  '.json',
+  '.map',
+  '.svg',
+  '.txt',
+  '.webmanifest'
+])
+
+const REMOTE_MODULE_EXTENSIONS = new Set([
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.css',
+  '.map',
+  '.wasm',
+  '.ts',
+  '.tsx',
+  '.jsx',
+  '.mts',
+  '.cts',
+  '.json'
+])
+
+export type ServeRemoteStaticOptions = {
+  acceptEncoding?: string
+}
+
+export type RemoteStaticSource = 'bundle' | 'vite' | 'missing-bundle'
+
+/** Asset extensions must 404 instead of receiving the SPA HTML shell. */
+export function canFallbackToRemoteIndex(pathname: string): boolean {
+  const ext = extname(pathname.split('?')[0] ?? '').toLowerCase()
+  return ext === '' || ext === '.html' || ext === '.htm'
+}
+
+export function isRemoteModulePathname(pathname: string): boolean {
+  if (
+    pathname.startsWith('/@') ||
+    pathname.startsWith('/src/') ||
+    pathname.startsWith('/node_modules/')
+  ) {
+    return true
+  }
+  return REMOTE_MODULE_EXTENSIONS.has(extname(pathname.split('?')[0] ?? '').toLowerCase())
+}
+
+export function remoteResponseLooksLikeHtml(contentType: string): boolean {
+  return /text\/html/i.test(contentType)
+}
+
+/** iPhone browsers and desktop Safari share WebKit's module-import failures. */
+export function isWebKitRemoteClient(userAgent: string): boolean {
+  if (/iP(?:hone|ad|od)/i.test(userAgent)) return true
+  if (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent)) return true
+  return /Safari/i.test(userAgent) && !/Chrom(?:e|ium)|Android/i.test(userAgent)
+}
+
+export function shouldGzipRemoteAsset(ext: string, acceptEncoding = ''): boolean {
+  return REMOTE_GZIP_EXTENSIONS.has(ext) && /\bgzip\b/i.test(acceptEncoding)
+}
+
+/**
+ * Vite's unbundled graph dies on Safari/iPhone. Those clients always take the
+ * packaged renderer; other browsers may still proxy to the dev server.
+ */
+export function chooseRemoteStaticSource(input: {
+  hasBundledRenderer: boolean
+  devUrl?: string
+  userAgent?: string
+}): RemoteStaticSource {
+  const useVite = Boolean(input.devUrl) && !isWebKitRemoteClient(input.userAgent ?? '')
+  if (useVite) return 'vite'
+  return input.hasBundledRenderer ? 'bundle' : 'missing-bundle'
+}
+
+export const REMOTE_BUNDLE_REQUIRED_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Kun Remote</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0b0f1a; color: #e8ecf4; }
+  main { width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 20px; margin: 0; }
+  p { margin: 0; color: #9aa7bd; line-height: 1.55; font-size: 14px; }
+  pre { margin: 0; padding: 12px 14px; border-radius: 10px; background: #171c29; color: #d7def0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Remote needs a bundled workbench</h1>
+  <p>Safari and iPhone cannot load the Vite development module graph. Build the renderer, then reopen this page.</p>
+  <pre>npm run build</pre>
+  <p>Packaged Kun already includes this bundle. If this page appears there, the install is incomplete.</p>
+</main>
+</body>
+</html>
+`
+
 export function resolveRemoteStaticPath(root: string, pathname: string): string | null {
   let decoded: string
   try {
@@ -49,7 +157,12 @@ export function resolveRemoteStaticPath(root: string, pathname: string): string 
  * Serves the bundled renderer. Returns false when the path does not resolve
  * to a file so the caller can apply the SPA index.html fallback.
  */
-export function serveRemoteStaticFile(root: string, pathname: string, res: ServerResponse): boolean {
+export function serveRemoteStaticFile(
+  root: string,
+  pathname: string,
+  res: ServerResponse,
+  options: ServeRemoteStaticOptions = {}
+): boolean {
   const resolved = resolveRemoteStaticPath(root, pathname)
   if (!resolved) return false
   let stat
@@ -61,21 +174,32 @@ export function serveRemoteStaticFile(root: string, pathname: string, res: Serve
   if (!stat.isFile() || stat.size > REMOTE_STATIC_MAX_FILE_BYTES) return false
   const ext = extname(resolved).toLowerCase()
   const isHashedAsset = /[./\\]assets[./\\]/.test(resolved) && ext !== '.html'
-  res.writeHead(200, {
+  const gzip = shouldGzipRemoteAsset(ext, options.acceptEncoding)
+  const headers: Record<string, string | number> = {
     'content-type': remoteMimeType(resolved),
-    'content-length': stat.size,
     'cache-control': ext === '.html'
       ? 'no-cache'
       : isHashedAsset
         ? 'public, max-age=31536000, immutable'
-        : 'no-cache'
-  })
-  createReadStream(resolved).pipe(res)
+        : 'no-cache',
+    'x-content-type-options': 'nosniff'
+  }
+  if (REMOTE_GZIP_EXTENSIONS.has(ext)) headers.vary = 'accept-encoding'
+  if (gzip) headers['content-encoding'] = 'gzip'
+  else headers['content-length'] = stat.size
+  res.writeHead(200, headers)
+  const stream = createReadStream(resolved)
+  if (gzip) stream.pipe(createGzip()).pipe(res)
+  else stream.pipe(res)
   return true
 }
 
-export function serveRemoteIndex(root: string, res: ServerResponse): boolean {
-  return serveRemoteStaticFile(root, '/index.html', res)
+export function serveRemoteIndex(
+  root: string,
+  res: ServerResponse,
+  options: ServeRemoteStaticOptions = {}
+): boolean {
+  return serveRemoteStaticFile(root, '/index.html', res, options)
 }
 
 let cachedBridgeSource: { path: string; source: string } | null = null
@@ -223,6 +347,16 @@ export async function proxyRemoteDevRequest(
   // Node fetch requires duplex when a streaming body is present.
   if (body) init.duplex = 'half'
   const response = await fetch(target, init)
+  const contentType = response.headers.get('content-type') ?? ''
+  if (isRemoteModulePathname(target.pathname) && remoteResponseLooksLikeHtml(contentType)) {
+    res.writeHead(404, {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff'
+    })
+    res.end('Remote module not found')
+    return
+  }
   const responseHeaders: Record<string, string> = {}
   response.headers.forEach((value, name) => {
     if (name === 'transfer-encoding' || name === 'connection') return

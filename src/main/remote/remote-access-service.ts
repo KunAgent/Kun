@@ -25,7 +25,10 @@ import { dispatchRemoteInvoke, RemoteInvokeError } from './remote-invoke'
 import { lanUrlsForPort } from './remote-lan-urls'
 import { KUN_LOGIN_ART_DATA_URL } from './remote-login-art'
 import {
+  canFallbackToRemoteIndex,
+  chooseRemoteStaticSource,
   proxyRemoteDevRequest,
+  REMOTE_BUNDLE_REQUIRED_HTML,
   REMOTE_LOGIN_HTML,
   remoteBridgeFileExists,
   remoteBridgeScript,
@@ -42,7 +45,7 @@ import {
   sendRemoteText
 } from './remote-http-utils'
 import { resolveOpenTargetPath } from '../services/workspace-paths'
-import { createReadStream } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { mkdtemp, stat, writeFile } from 'node:fs/promises'
 
 const REMOTE_PORT_SCAN_START = 18_900
@@ -534,8 +537,16 @@ export class RemoteAccessService {
     res: ServerResponse,
     pathname: string
   ): Promise<void> {
+    const root = this.rendererRoot()
+    const hasBundledRenderer = existsSync(join(root, 'index.html'))
     const devUrl = process.env.ELECTRON_RENDERER_URL
-    if (devUrl) {
+    const source = chooseRemoteStaticSource({
+      hasBundledRenderer,
+      devUrl,
+      userAgent: String(req.headers['user-agent'] ?? '')
+    })
+    const options = { acceptEncoding: String(req.headers['accept-encoding'] ?? '') }
+    if (source === 'vite' && devUrl) {
       try {
         await proxyRemoteDevRequest(devUrl, req, res)
         return
@@ -545,9 +556,16 @@ export class RemoteAccessService {
         // leaving Remote clients with a dead 502 page.
       }
     }
-    const root = this.rendererRoot()
-    if (serveRemoteStaticFile(root, pathname, res)) return
-    if (serveRemoteIndex(root, res)) return
+    if (serveRemoteStaticFile(root, pathname, res, options)) return
+    if (canFallbackToRemoteIndex(pathname) && serveRemoteIndex(root, res, options)) return
+    if (canFallbackToRemoteIndex(pathname) && !hasBundledRenderer && (source === 'missing-bundle' || Boolean(devUrl))) {
+      res.writeHead(503, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store'
+      })
+      res.end(REMOTE_BUNDLE_REQUIRED_HTML)
+      return
+    }
     sendRemoteJson(res, 404, { error: 'Not found' })
   }
 }

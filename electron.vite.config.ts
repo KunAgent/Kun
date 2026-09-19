@@ -73,6 +73,11 @@ export default defineConfig({
     },
     build: {
       minify: 'esbuild',
+      // Remote phones load this same bundle. Chrome-only syntax and Vite's
+      // modulepreload wrapper both surface as Safari's
+      // "Importing a module script failed."
+      target: ['chrome128', 'safari16'],
+      modulePreload: false,
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
