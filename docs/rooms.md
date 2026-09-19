@@ -14,7 +14,8 @@ in the create dialog is assigned to the initial members. Later repository
 permissions remain explicit per-member configuration.
 
 Members can inherit their profile/default model or choose a configured native
-API model. The settings view shows profile capabilities and supports additional
+API model. The members tab can change the per-room override immediately.
+The settings view shows profile capabilities and supports additional
 tool, MCP and Skill restrictions. These restrictions can only narrow the host's
 capability ceiling. Existing tasks retain their frozen member, model, profile,
 repository and agreement snapshots. Members can be copied or disabled; removal

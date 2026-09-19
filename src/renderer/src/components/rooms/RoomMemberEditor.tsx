@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RoomMember } from '@shared/rooms-api'
-import { useChatStore } from '../../store/chat-store'
 import type { RoomPresetCatalog, RoomRepositoryInput } from './rooms-client'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
+import { RoomMemberModelSelect } from './RoomMemberModelSelect'
 
 const words = (value: string) =>
   value
@@ -60,17 +60,7 @@ export function RoomMemberEditor({
   onCopy: () => void
 }) {
   const { t } = useTranslation('common')
-  const groups = useChatStore((state) => state.composerModelGroups)
   const preset = catalog.presets.find((item) => item.id === member.presetId)
-  const model =
-    member.modelRef ??
-    (preset?.model
-      ? {
-          model: preset.model,
-          providerId:
-            preset.providerId ?? catalog.defaultModel?.providerId ?? ''
-        }
-      : catalog.defaultModel)
   const overrides = member.capabilityOverrides
   const updateCapabilities = (
     patch: Partial<NonNullable<RoomMember['capabilityOverrides']>>
@@ -141,63 +131,13 @@ export function RoomMemberEditor({
           ))}
         </select>
       </label>
-      <label className="block text-xs text-ds-muted">
-        {t('roomsMemberModel')}
-        <select
-          className={roomFieldClass}
-          value={member.modelRef ? JSON.stringify(member.modelRef) : ''}
-          onChange={(event) =>
-            onChange({
-              modelRef: event.target.value
-                ? (JSON.parse(event.target.value) as RoomMember['modelRef'])
-                : undefined
-            })
-          }
-        >
-          <option value="">
-            {t('roomsInheritModel')} · {model?.providerId} / {model?.model}
-          </option>
-          {member.modelRef &&
-          !groups.some(
-            (group) =>
-              group.providerId === member.modelRef?.providerId &&
-              group.modelIds.includes(member.modelRef.model)
-          ) ? (
-            <option value={JSON.stringify(member.modelRef)}>
-              {member.modelRef.providerId} / {member.modelRef.model}
-            </option>
-          ) : null}
-          {groups.map((group) => (
-            <optgroup key={group.providerId} label={group.label}>
-              {group.modelIds.map((id) => (
-                <option
-                  key={id}
-                  disabled={catalog.unsupportedProviderIds?.includes(
-                    group.providerId
-                  )}
-                  value={JSON.stringify({
-                    providerId: group.providerId,
-                    model: id,
-                    ...(group.accountId ? { accountId: group.accountId } : {})
-                  })}
-                >
-                  {id}
-                  {catalog.unsupportedProviderIds?.includes(group.providerId)
-                    ? ` · ${t('roomsSdkUnavailable')}`
-                    : ''}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      {(model?.providerId &&
-        catalog.unsupportedProviderIds?.includes(model.providerId)) ||
-      (!member.modelRef && preset?.available === false) ? (
-        <p role="alert" className="text-xs text-amber-600">
-          {preset?.reason ?? t('roomsSdkUnavailable')}
-        </p>
-      ) : null}
+      <RoomMemberModelSelect
+        member={member}
+        catalog={catalog}
+        className="block text-xs text-ds-muted"
+        selectClassName={roomFieldClass}
+        onChange={(modelRef) => onChange({ modelRef })}
+      />
       <label className="block text-xs text-ds-muted">
         {t('roomsRoleNotes')}
         <textarea

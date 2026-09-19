@@ -163,6 +163,7 @@
   "roomsContinueFix": "按评审意见继续修复",
   "roomsMemberModel": "成员模型",
   "roomsInheritModel": "继承预设或默认模型",
+  "roomsRoomModelOnly": "仅本房间",
   "roomsSdkUnavailable": "聊天室暂不支持 SDK 执行引擎",
   "roomsCapabilities": "有效能力与本房间覆盖",
   "roomsCapabilitiesHint": "覆盖只能收紧宿主授权，使用逗号分隔工具、MCP 服务或 Skill 标识。",

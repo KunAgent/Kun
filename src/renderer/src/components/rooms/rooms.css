@@ -105,6 +105,11 @@
 .rooms-member-card-heading { display: flex; align-items: center; gap: .75rem; }
 .rooms-member-card-heading h3 { font-weight: 600; overflow-wrap: anywhere; }
 .rooms-member-card-heading p, .rooms-member-repositories { margin-top: .25rem; font-size: .75rem; color: var(--ds-text-muted); }
+.rooms-member-model { display: block; min-width: 0; margin-top: .75rem; font-size: .75rem; color: var(--ds-text-muted); }
+.rooms-member-model-select { display: block; width: 100%; min-width: 0; margin-top: .25rem; padding: .5rem .625rem;
+  border: 1px solid var(--ds-border); border-radius: .5rem; background: var(--ds-bg-main); color: var(--ds-text); }
+.rooms-member-model-hint { margin-top: .25rem; font-size: .75rem; color: var(--ds-text-muted); }
+.rooms-member-model-warning { margin-top: .25rem; }
 .rooms-member-notes { margin-top: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; font-size: .8125rem; }
 .rooms-details-panel { background: var(--ds-bg-main); }
 .rooms-details-tabs { display: flex; gap: .25rem; padding: .5rem .875rem; border-bottom: 1px solid var(--ds-border); }

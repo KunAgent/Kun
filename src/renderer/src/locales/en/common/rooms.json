@@ -163,6 +163,7 @@
   "roomsContinueFix": "Continue with review fixes",
   "roomsMemberModel": "Member model",
   "roomsInheritModel": "Inherit profile / default",
+  "roomsRoomModelOnly": "This room only",
   "roomsSdkUnavailable": "SDK engines are unavailable in Rooms",
   "roomsCapabilities": "Effective capabilities and overrides",
   "roomsCapabilitiesHint": "Overrides can only narrow host authorization. Use comma-separated tool, MCP server or skill identifiers.",
