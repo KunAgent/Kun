@@ -18,6 +18,11 @@ These are a dated checkpoint, not a claim that the branch is ready to merge.
   changes are included in this branch as `72578f9e` and `47de925e`.
 - The final delivery will use one P3-B PR; no standalone P3-A closeout PR will
   be reopened.
+- Post-sync verification: the focused P3-B suite passed (18 files / 70 tests),
+  `npm run build:kun` passed, and strict OpenSpec/diff/file-line checks passed.
+  Full `npm run typecheck` remains blocked by the pre-existing missing
+  `phonemizer` declaration in `src/main/services/local-kokoro-worker-entry.ts`;
+  this is not introduced by P3-B.
 
 ## Work that can proceed before the dependency merges
 
