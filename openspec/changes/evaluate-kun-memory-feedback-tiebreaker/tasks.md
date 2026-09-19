@@ -51,7 +51,7 @@ Correction integration now covers real service events through compaction/restart
 The frozen fixtures and lock are unchanged; label concerns and holdout-label
 exposure are recorded in `development-review.md`, not silently resolved.
 
-- [ ] 6.1 Fetch the latest `upstream/develop`, rebase this branch, and verify the final diff contains the P3-B evaluation capability plus the required P3-A canonical spec synchronization/archive closeout, with no importer or production-ranking changes.
+- [x] 6.1 Fetch the latest `upstream/develop`, rebase this branch, and verify the final diff contains the P3-B evaluation capability plus the required P3-A canonical spec synchronization/archive closeout, with no importer or production-ranking changes.
 - [ ] 6.2 Document the calibration method, candidate identities, local/global metrics, privacy model, resource results, and go/no-go interpretation; verify documentation states that go requires a separate production-integration change and no-go retains P3-A infrastructure.
 - [ ] 6.3 Update `D:\learning\Review_md\kun-memory-roadmap.md` and create a stage note under `D:\learning\Review_md\codex` after the decision; verify both record the commit series, checks, immutable evidence hashes, holdout run count, and remaining P4-A work.
 
