@@ -110,6 +110,8 @@ export const DesignTaskProfileInputSchema = z.object({
   presetSource: DesignPresetSourceSchema.optional(),
   /** Immutable parsed projection of the root DESIGN.md selected by Auto. */
   styleSnapshot: DesignStyleSnapshotSchema.optional(),
+  /** Renderer for the bound drawing. Missing means the legacy Kun canvas. */
+  canvasEngine: z.enum(['kun', 'excalidraw']).optional(),
   context: DesignContextSnapshotSchema
 }).strict().superRefine((value, ctx) => {
   if (value.styleSnapshot && value.presetSource !== 'root-design-md') {

@@ -12,7 +12,8 @@
  * being killed, so back-to-back tool calls don't respawn the server.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
 import { pathToFileURL } from 'node:url'
 import { shellSpawnEnv } from './builtin-tool-utils.js'
 import { collectWorkspaceDiagnostics, normalizeDiagnosticReport } from './lsp-diagnostics.js'
@@ -65,6 +66,7 @@ interface LspSession {
  */
 const sessions = new Map<string, Promise<LspSession>>()
 const activeSessions = new Set<LspSession>()
+const closingSessions = new Map<LspSession, Promise<void>>()
 const brokenServers = new Map<string, number>()
 
 function sessionKey(workspaceRoot: string, serverKey: string): string {
@@ -92,7 +94,6 @@ function remainingCooldownMs(workspaceRoot: string, serverKey: string): number {
 }
 
 function disposeSession(session: LspSession, terminateProcess: boolean): void {
-  activeSessions.delete(session)
   if (session.closed) return
   session.closed = true
   if (session.cleanupTimer) {
@@ -104,18 +105,13 @@ function disposeSession(session: LspSession, terminateProcess: boolean): void {
     entry.reject(new Error('LSP session closed'))
     session.pending.delete(id)
   }
-  if (!terminateProcess) return
   session.closing = true
-  try {
-    session.process.kill('SIGTERM')
-  } catch {
-    // already dead
-  }
-  // Force-kill after grace period.
-  const forceKillTimer = setTimeout(() => {
-    try { session.process.kill('SIGKILL') } catch { /* ignore */ }
-  }, 2_000)
-  forceKillTimer.unref?.()
+  const closing = stopOwnedProcess(session.process, { graceMs: terminateProcess ? 1000 : 0 })
+  closingSessions.set(session, closing)
+  void closing.then(() => {
+    activeSessions.delete(session)
+    closingSessions.delete(session)
+  }).catch(() => undefined)
 }
 
 function killSession(session: LspSession): void {
@@ -413,7 +409,7 @@ async function createSession(workspaceRoot: string, serverKey: string): Promise<
     )
   }
 
-  const proc = spawn(cmd.command, cmd.args, {
+  const proc = await spawnOwnedProcess(cmd.command, cmd.args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: workspaceRoot,
     env: {
@@ -505,9 +501,12 @@ async function createSession(workspaceRoot: string, serverKey: string): Promise<
  * Kill all active LSP sessions. Should be called on app quit / process exit
  * to prevent orphaned language-server processes.
  */
-export function shutdownAllLspSessions(): void {
+export async function shutdownAllLspSessions(): Promise<void> {
   sessions.clear()
   for (const session of [...activeSessions]) killSession(session)
+  const results = await Promise.allSettled(closingSessions.values())
+  const failed = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+  if (failed.length) throw new AggregateError(failed.map((result) => result.reason), 'LSP processes failed to exit')
 }
 
 export function releaseLspSession(workspaceRoot: string, serverKey: string): void {
@@ -677,21 +676,5 @@ export async function lspGetDiagnostics(
     source: finalCached.length > 0 ? 'publishDiagnostics-cache' : 'none'
   }
 }
-
-/**
- * Synchronous last-resort cleanup on process exit. The exit handler can only
- * run synchronous code, so we SIGKILL immediately (no grace period). This
- * prevents orphaned language-server processes when the
- * host process (Electron / kun serve) terminates.
- */
-function syncKillAll(): void {
-  for (const session of activeSessions) {
-    try { session.process.kill('SIGKILL') } catch { /* already dead */ }
-  }
-  activeSessions.clear()
-  sessions.clear()
-}
-
-process.on('exit', syncKillAll)
 
 export type { LspSession }

@@ -11,6 +11,7 @@ export function childSecurity(context: ToolHostContext) {
     ...(context.allowedToolNames ? { allowedToolNames: [...context.allowedToolNames] } : {}),
     ...(context.allowedSkillIds ? { allowedSkillIds: [...context.allowedSkillIds] } : {}),
     ...(context.allowedReadPaths ? { allowedReadPaths: [...context.allowedReadPaths] } : {}),
+    ...(context.allowHostReads === true && !context.allowedReadPaths ? { allowHostReads: true } : {}),
     ...(context.allowedWritePaths ? { allowedWritePaths: [...context.allowedWritePaths] } : {}),
     ...(context.allowedArtifactIds ? { allowedArtifactIds: [...context.allowedArtifactIds] } : {}),
     ...(context.blockedProviderIds ? { blockedProviderIds: [...context.blockedProviderIds] } : {}),

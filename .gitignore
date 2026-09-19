@@ -3,6 +3,7 @@ node_modules/
 out/
 dist/
 resources/bundled-extensions/
+src/renderer/public/excalidraw/
 .cache/
 .deepseek/
 *.log

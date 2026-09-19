@@ -509,7 +509,7 @@
   "sidebarThreadAwaitingInput": "入力を待っています",
   "awaitingYourInput": "入力を待っています…",
   "sidebarThreadUnread": "新しい返信",
-  "sidebarThreadFailed": "タスクに失敗しました。開いて確認してください",
+  "sidebarThreadFailed": "タスクがエラーで終了しました。開いて確認",
   "sidebarThreadScheduled": "{{time}} に実行予定",
   "sidebarThreadScheduledMultiple": "予定タスク {{count}} 件・次回 {{time}}",
   "sidebarThreadScheduledQueued": "予定タスクは開始待ちです",

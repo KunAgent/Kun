@@ -196,7 +196,7 @@ class MetadataCountingThreadStore extends InMemoryThreadStore {
     return super.get(threadId)
   }
 
-  async getMetadata(threadId: string) {
+  override async getMetadata(threadId: string) {
     this.metadataGets.push(threadId)
     return super.get(threadId)
   }

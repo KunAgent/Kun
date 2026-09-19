@@ -282,7 +282,7 @@ describe('JsonSettingsStore', () => {
       openAtLogin: false,
       startMinimized: false,
       useSystemTitleBar: false,
-      closeAction: 'ask',
+      closeAction: 'quit',
       closeToTray: false,
       keepAwake: false
     })

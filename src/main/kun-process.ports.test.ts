@@ -20,7 +20,7 @@ import {
   modelProviderPresetProfile,
   resolveKunRuntimeSettings,
   defaultWriteSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   type AppSettingsV1,
   type ModelProviderModelProfileV1
 } from '../shared/app-settings'
@@ -77,6 +77,7 @@ function createSettings(binaryPath: string): AppSettingsV1 {
     workflow: defaultWorkflowSettings(),
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     chatWelcomeMessage: '',

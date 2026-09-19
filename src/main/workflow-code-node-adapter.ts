@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { runOwnedCommand } from './owned-command'
 import { compileFunction, runInNewContext } from 'node:vm'
 import {
   resolveWindowsGitBashCandidates,
@@ -85,7 +85,7 @@ function runJavascriptNode(
   return { payload: { json, text: safeJson(json) }, message: 'ok' }
 }
 
-function runCommandNode(
+async function runCommandNode(
   language: 'python' | 'bash',
   code: string,
   payload: WorkflowPayload,
@@ -94,73 +94,27 @@ function runCommandNode(
 ): Promise<WorkflowNodeOutcome> {
   if (signal?.aborted) return Promise.reject(new Error('Workflow canceled.'))
   const bin = language === 'python' ? PYTHON_BIN : BASH_BIN
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, ['-c', code], {
-      env: {
-        ...process.env,
-        ...(process.platform === 'win32' && language === 'bash' ? { CHERE_INVOKING: '1' } : {}),
-        WORKFLOW_TEXT: payload.text ?? '',
-        WORKFLOW_JSON: safeJson(payload.json),
-        WORKFLOW_FIELDS: safeJson(fields)
-      }
-    })
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-    const finish = (run: () => void): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-      run()
-    }
-    const onAbort = (): void => {
-      child.kill('SIGKILL')
-      finish(() => reject(new Error('Workflow canceled.')))
-    }
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      finish(() => reject(new Error(`${language} script timed out after ${COMMAND_TIMEOUT_MS}ms`)))
-    }, COMMAND_TIMEOUT_MS)
-    signal?.addEventListener('abort', onAbort, { once: true })
-    child.stdout.on('data', (chunk) => {
-      stdout += String(chunk)
-    })
-    child.stderr.on('data', (chunk) => {
-      stderr += String(chunk)
-    })
-    child.on('error', (error) => {
-      const reason =
-        (error as NodeJS.ErrnoException).code === 'ENOENT'
-          ? `${bin} was not found on this machine`
-          : error.message
-      finish(() => reject(new Error(`${language} error: ${reason}`)))
-    })
-    child.on('close', (exitCode) => {
-      finish(() => {
-        if (exitCode !== 0) {
-          reject(new Error(`${language} exited with code ${exitCode}: ${(stderr || stdout).trim().slice(0, 500)}`))
-          return
-        }
-        const out = stdout.trim()
-        let parsed: unknown
-        try {
-          parsed = out ? JSON.parse(out) : undefined
-        } catch {
-          parsed = undefined
-        }
-        if (parsed !== null && typeof parsed === 'object') {
-          resolve({ payload: { json: parsed, text: out }, message: 'ok' })
-        } else {
-          resolve({ payload: { json: out ? { text: out } : {}, text: out }, message: 'ok' })
-        }
-      })
-    })
-    // Scripts that never read stdin trigger EPIPE on write — ignore it.
-    child.stdin.on('error', () => {})
-    child.stdin.write(JSON.stringify({ json: payload.json, text: payload.text }))
-    child.stdin.end()
+  const result = await runOwnedCommand(bin, ['-c', code], {
+    env: {
+      ...process.env,
+      ...(process.platform === 'win32' && language === 'bash' ? { CHERE_INVOKING: '1' } : {}),
+      WORKFLOW_TEXT: payload.text ?? '', WORKFLOW_JSON: safeJson(payload.json), WORKFLOW_FIELDS: safeJson(fields)
+    },
+    input: JSON.stringify({ json: payload.json, text: payload.text }), signal, timeoutMs: COMMAND_TIMEOUT_MS,
+    messages: { aborted: 'Workflow canceled.', timeout: `${language} script timed out after ${COMMAND_TIMEOUT_MS}ms` }
+  }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') throw new Error(`${language} error: ${bin} was not found on this machine`)
+    throw error
   })
+  if (result.exitCode !== 0) {
+    throw new Error(`${language} exited with code ${result.exitCode}: ${(result.stderr || result.stdout).trim().slice(0, 500)}`)
+  }
+  const out = result.stdout.trim()
+  let parsed: unknown
+  try { parsed = out ? JSON.parse(out) : undefined } catch { parsed = undefined }
+  return parsed !== null && typeof parsed === 'object'
+    ? { payload: { json: parsed, text: out }, message: 'ok' }
+    : { payload: { json: out ? { text: out } : {}, text: out }, message: 'ok' }
 }
 
 /** Coerce a custom node's stored string values into typed $fields for its module. */
@@ -179,7 +133,7 @@ function coerceModuleFields(
 }
 
 /** Syntax-check a Code node without executing user code. */
-export function checkWorkflowCode(
+export async function checkWorkflowCode(
   language: WorkflowCodeLanguage,
   code: string
 ): Promise<WorkflowCodeCheckResult> {
@@ -194,54 +148,17 @@ export function checkWorkflowCode(
   }
   const bin = language === 'python' ? PYTHON_BIN : BASH_BIN
   const args = language === 'python' ? ['-c', 'import ast, sys; ast.parse(sys.stdin.read())'] : ['-n']
-  return new Promise((resolveResult) => {
-    let settled = false
-    const done = (result: WorkflowCodeCheckResult): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolveResult(result)
-    }
-    let child: ReturnType<typeof spawn>
-    try {
-      child = spawn(bin, args, {
-        env: {
-          ...process.env,
-          ...(process.platform === 'win32' && language === 'bash' ? { CHERE_INVOKING: '1' } : {})
-        }
-      })
-    } catch {
-      done({ status: 'unavailable', message: `${bin} is not available — cannot check ${language} syntax.` })
-      return
-    }
-    const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL')
-      } catch {
-        /* already exited */
-      }
-      done({ status: 'error', message: 'Syntax check timed out.' })
-    }, 8_000)
-    let stderr = ''
-    child.stderr?.on('data', (chunk) => {
-      stderr += String(chunk)
+  try {
+    const result = await runOwnedCommand(bin, args, {
+      env: { ...process.env, ...(process.platform === 'win32' && language === 'bash' ? { CHERE_INVOKING: '1' } : {}) },
+      input: code, timeoutMs: 8000, messages: { timeout: 'Syntax check timed out.' }
     })
-    child.on('error', (error) => {
-      done(
-        (error as NodeJS.ErrnoException).code === 'ENOENT'
-          ? { status: 'unavailable', message: `${bin} was not found — cannot check ${language} syntax.` }
-          : { status: 'error', message: error.message }
-      )
-    })
-    child.on('close', (exitCode) => {
-      done(
-        exitCode === 0
-          ? { status: 'ok' }
-          : { status: 'error', message: stderr.trim().slice(0, 800) || `Exited with code ${exitCode}.` }
-      )
-    })
-    child.stdin?.on('error', () => {})
-    child.stdin?.write(code)
-    child.stdin?.end()
-  })
+    return result.exitCode === 0 ? { status: 'ok' }
+      : { status: 'error', message: result.stderr.trim().slice(0, 800) || `Exited with code ${result.exitCode}.` }
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? { status: 'unavailable', message: `${bin} was not found — cannot check ${language} syntax.` }
+      : { status: 'error', message: error instanceof Error ? error.message : String(error) }
+  }
+
 }

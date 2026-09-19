@@ -320,6 +320,8 @@ conversation text never requires holding Shift.
 | `/update`, `/update yes` | Check a Stable standalone TUI update or explicitly confirm installation; the GUI-bundled build directs updates to the GUI |
 | `/help`, `/quit` | Open help or exit the TUI |
 
+GUI Code projects attach extra folders to the primary project (sidebar **Add folder to project**) and sync them onto that project's threads as `additionalWorkspaces`. This uses the same runtime contract as `/add-dir`, but the scope is the project rather than a single session. Opening the thread in the GUI unions TUI extras into the project folder set (add-only). Extra folders are not a second sidebar project. `git_inspect`, `/review`, plan worktrees, the default bash cwd, and `.kun/project.json` still follow the primary folder; file tools use absolute paths for extra roots.
+
 Compatibility aliases: `/threads`, `/resume`, and `/continue` → `/sessions`, `/clear` →
 `/new`, `/title` → `/rename`, `/models` → `/model`, `/provider` → `/connect`,
 `/summarize` → `/compact`, and `/q` → `/quit`. The aliases are also present in

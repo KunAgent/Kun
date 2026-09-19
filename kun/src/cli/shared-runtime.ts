@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { spawnOwnedProcess } from '../process/owned-process.js'
 import { RuntimeInfoResponse, type RuntimeInfoResponse as RuntimeInfo } from '../contracts/runtime-info.js'
 import {
   createRuntimeDiscoveryRecord,
@@ -25,6 +26,7 @@ import {
   type RuntimeClientOwnerKind
 } from '../contracts/runtime-owner.js'
 import { defaultKunControlDir } from '../manager/manager-discovery.js'
+import { KUN_APP_SESSION_OWNER_ENV } from '../contracts/app-session-owner.js'
 import {
   readManagerRuntime,
   resolveServiceManager,
@@ -353,7 +355,8 @@ export async function ensureSharedRuntime(input: {
             KUN_MANAGER_INSTANCE_ID: input.manager.discovery.instanceId,
             KUN_MANAGER_TOKEN: input.manager.discovery.managerToken,
             KUN_MANAGER_DATA_DIR: input.manager.discovery.dataDir,
-            KUN_MANAGER_SETTINGS_PATH: input.manager.discovery.settingsPath
+            KUN_MANAGER_SETTINGS_PATH: input.manager.discovery.settingsPath,
+            ...(input.manager.discovery.appOwner ? { [KUN_APP_SESSION_OWNER_ENV]: JSON.stringify(input.manager.discovery.appOwner) } : {})
           }
         : {}),
       ...(sourceBuildId ? { KUN_RUNTIME_BUILD_ID: sourceBuildId } : {})
@@ -365,12 +368,15 @@ export async function ensureSharedRuntime(input: {
     else delete env.ELECTRON_RUN_AS_NODE
     let child
     try {
-      child = spawn(command, args, {
+      const spawnOptions = {
         detached: true,
         windowsHide: true,
-        stdio: input.clientOwnerKind ? ['ignore', logFd, logFd, 'ipc'] : ['ignore', logFd, logFd],
+        stdio: input.clientOwnerKind ? ['ignore', logFd, logFd, 'ipc'] as const : ['ignore', logFd, logFd] as const,
         env
-      })
+      }
+      child = input.clientOwnerKind
+        ? await spawnOwnedProcess(command, args, { ...spawnOptions, stdio: [...spawnOptions.stdio] })
+        : spawn(command, args, { ...spawnOptions, stdio: [...spawnOptions.stdio] })
       child.unref()
       if (input.clientOwnerKind) child.channel?.unref()
     } finally {

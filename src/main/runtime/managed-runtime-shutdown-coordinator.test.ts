@@ -23,7 +23,7 @@ describe('ManagedRuntimeShutdownCoordinator', () => {
     })
     await expect(coordinator.stopForQuit()).rejects.toThrow('stop failed')
     expect(coordinator.isQuitInProgress).toBe(true)
-    expect(coordinator.isStoppedForQuit).toBe(true)
+    expect(coordinator.isStoppedForQuit).toBe(false)
   })
 
   it('allows a non-terminal window-close stop to be invoked again later', async () => {

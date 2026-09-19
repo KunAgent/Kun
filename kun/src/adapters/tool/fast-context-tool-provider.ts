@@ -322,6 +322,7 @@ function fastContextPrompt(tasks: readonly FastContextTask[]): string {
 }
 
 function securitySnapshot(workspace: string, context: ToolHostContext) {
+  const hostReads = context.allowHostReads === true && !context.allowedReadPaths
   return {
     sandboxRoot: workspace,
     // The retrieval child is an opaque implementation of the already-authorized
@@ -331,7 +332,11 @@ function securitySnapshot(workspace: string, context: ToolHostContext) {
       ? [...context.allowedModelProviderIds]
       : undefined,
     allowedModelIds: context.allowedModelIds ? [...context.allowedModelIds] : undefined,
-    allowedReadPaths: context.allowedReadPaths ? [...context.allowedReadPaths] : ['.'],
+    ...(context.allowedReadPaths
+      ? { allowedReadPaths: [...context.allowedReadPaths] }
+      : hostReads
+        ? { allowHostReads: true }
+        : { allowedReadPaths: ['.'] }),
     memoryEnabled: false
   }
 }

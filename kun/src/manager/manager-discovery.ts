@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
+import { AppSessionOwnerSchema, sameAppSessionOwner } from '../contracts/app-session-owner.js'
 
 export const KUN_MANAGER_PROTOCOL_VERSION = 5 as const
 export const KUN_MANAGER_DISCOVERY_VERSION = 1 as const
@@ -29,6 +30,7 @@ export const ManagerDiscoveryRecordSchema = z.object({
   serviceVersion: z.string().min(1).max(128),
   /** Optional so a new desktop can authenticate and hand off a legacy Manager. */
   buildId: RuntimeBuildIdSchema.optional(),
+  appOwner: AppSessionOwnerSchema.optional(),
   dataDir: z.string().min(1).max(4_096),
   settingsPath: z.string().min(1).max(4_096),
   logPath: z.string().min(1).max(4_096).optional()
@@ -46,6 +48,7 @@ export const ManagerHandoffDiscoveryRecordSchema = z.object({
   baseUrl: z.string().url().max(2_048),
   managerToken: z.string().min(1).max(16_384),
   buildId: RuntimeBuildIdSchema.optional(),
+  appOwner: AppSessionOwnerSchema.optional(),
   dataDir: z.string().min(1).max(4_096),
   settingsPath: z.string().min(1).max(4_096),
   logPath: z.string().min(1).max(4_096).optional()
@@ -142,10 +145,13 @@ export async function publishManagerDiscovery(
 
 export async function removeManagerDiscovery(
   controlDir: string,
-  instanceId: string
+  instanceId: string,
+  expected?: Pick<ManagerDiscoveryRecord, 'pid' | 'startedAt' | 'appOwner'>
 ): Promise<boolean> {
   const current = await readManagerHandoffDiscovery(controlDir)
   if (!current || current.instanceId !== instanceId) return false
+  if (expected && (current.pid !== expected.pid || current.startedAt !== expected.startedAt ||
+    (expected.appOwner ? !sameAppSessionOwner(current.appOwner, expected.appOwner) : Boolean(current.appOwner)))) return false
   await rm(managerDiscoveryPath(controlDir), { force: true })
   return true
 }
@@ -179,7 +185,8 @@ function safeHandoffManagerUrl(record: ManagerHandoffDiscoveryRecord): boolean {
 
 export async function withManagerStartLock<T>(
   controlDir: string,
-  action: () => Promise<T>
+  action: () => Promise<T>,
+  signal?: AbortSignal
 ): Promise<T> {
   await mkdir(controlDir, { recursive: true, mode: 0o700 })
   const lockPath = join(controlDir, MANAGER_START_LOCK_FILENAME)
@@ -189,6 +196,7 @@ export async function withManagerStartLock<T>(
     acquiredAt: new Date().toISOString()
   })
   for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
+    signal?.throwIfAborted()
     try {
       const handle = await open(lockPath, 'wx', 0o600)
       try {

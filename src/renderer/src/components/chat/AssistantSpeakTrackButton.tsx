@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Download, Loader2 } from 'lucide-react'
-import { localKokoroTrackFileName } from '@shared/local-kokoro-tracks'
+import { localSanottsTrackFileName } from '@shared/local-sanotts-tracks'
 import {
   ensureSpeakTrackKeys,
   speakTrackStored,
@@ -57,13 +57,13 @@ export function AssistantSpeakTrackButton({
   if (!speakTrackStored(keys, trackKey) || !trackKey) return null
 
   const onClick = async (): Promise<void> => {
-    if (saving || typeof window.kunGui?.exportLocalKokoroTrack !== 'function') return
+    if (saving || typeof window.kunGui?.exportLocalSanottsTrack !== 'function') return
     setSaving(true)
     setError('')
     try {
-      const result = await window.kunGui.exportLocalKokoroTrack({
+      const result = await window.kunGui.exportLocalSanottsTrack({
         key: trackKey,
-        fileName: localKokoroTrackFileName(createdAt)
+        fileName: localSanottsTrackFileName(createdAt)
       })
       if (result.ok) setSaved(true)
       else if (!result.canceled) setError(result.message ?? '')

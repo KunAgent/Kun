@@ -130,11 +130,13 @@ describe('createToolDiscoveryContext', () => {
     expect(contexts).toEqual([
       expect.objectContaining({
         agentSurface: 'code',
-        guiDesignCanvas: true
+        guiDesignCanvas: true,
+        guiExcalidrawCanvas: true
       }),
       expect.objectContaining({
         agentSurface: 'design',
         guiDesignCanvas: true,
+        guiExcalidrawCanvas: true,
         guiDesignMode: true
       })
     ])

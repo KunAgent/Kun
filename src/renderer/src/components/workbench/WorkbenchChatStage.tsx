@@ -96,6 +96,8 @@ export type WorkbenchChatStageProps = {
   onToggleRightWorkspace: () => void
   onOpenCommandPalette?: () => void
   onOpenRequirementDraft?: () => void
+  /** Remote-mobile only: opens the bottom-sheet version of the right rail. */
+  onOpenMobileRail?: () => void
   extensionTopBarActions?: readonly RegisteredContribution<'actions.topBar'>[]
   extensionComposerActions?: readonly RegisteredContribution<'actions.composer'>[]
   extensionMessageActions?: readonly RegisteredContribution<'actions.message'>[]
@@ -161,6 +163,7 @@ export function WorkbenchChatStage({
   onToggleRightWorkspace,
   onOpenCommandPalette,
   onOpenRequirementDraft,
+  onOpenMobileRail,
   extensionTopBarActions = [],
   extensionComposerActions = [],
   extensionMessageActions = [],
@@ -309,6 +312,7 @@ export function WorkbenchChatStage({
                 rightWorkspaceExpanded={rightWorkspaceExpanded}
                 onToggleRightWorkspace={onToggleRightWorkspace}
                 onOpenCommandPalette={onOpenCommandPalette}
+                onOpenMobileRail={onOpenMobileRail}
               />
             </div>
           </div>

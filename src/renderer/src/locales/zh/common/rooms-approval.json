@@ -1,0 +1,14 @@
+{
+  "roomApprovalTitle": "需要你确认",
+  "roomApproval_command": "运行命令",
+  "roomApproval_file": "访问文件",
+  "roomApproval_network": "网络操作",
+  "roomApproval_mcp": "调用连接工具",
+  "roomApproval_external-effect": "执行外部操作",
+  "roomApproval_unknown": "执行操作",
+  "roomApprovalDetails": "更多信息",
+  "roomApprovalReviewAllow": "审阅并允许",
+  "roomPermissionLimited": "此 Agent 的只读或目录限制不支持完全访问",
+  "roomPermissionScope": "当前私聊 · 新消息生效",
+  "roomPermissionNext": "新发送的消息使用此权限，当前运行保持原权限"
+}

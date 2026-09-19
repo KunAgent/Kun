@@ -50,6 +50,14 @@ describe('Design task profile contracts', () => {
     }).success).toBe(false)
     expect(DesignTaskProfileInputSchema.safeParse({
       ...profile(),
+      canvasEngine: 'excalidraw'
+    }).success).toBe(true)
+    expect(DesignTaskProfileInputSchema.safeParse({
+      ...profile(),
+      canvasEngine: 'unknown'
+    }).success).toBe(false)
+    expect(DesignTaskProfileInputSchema.safeParse({
+      ...profile(),
       preset: 'none',
       presetSource: 'root-design-md'
     }).success).toBe(true)

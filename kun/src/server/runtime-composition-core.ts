@@ -65,6 +65,7 @@ import {
 import { modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import { HistoryReferenceService } from '../history/history-reference-service.js'
 
 export async function createRuntimeCore(
   options: KunServeRuntimeOptions,
@@ -218,7 +219,7 @@ export async function createRuntimeCore(
     new FileDelegatedSessionBindingStore(delegatedSessionRoot(activeOptions.dataDir)),
     nowIso
   )
-  const threadService = new ThreadService({
+  const threadService: ThreadService = new ThreadService({
     threadStore,
     deleteThreadStore: rawThreadStore,
     sessionStore,
@@ -234,7 +235,9 @@ export async function createRuntimeCore(
       abortThreadExecution?.(threadId)
       await stopThreadAuxiliaryWork?.(threadId)
     },
-    onDeleted: async (threadId) => {
+    recoverHistoryReference: (threadId) => historyReferences.recoverBinding(threadId),
+    withHistoryReferenceMutation: (operation) => historyReferences.store.withLifecycleMutation(operation),
+    onDeleted: async (threadId, historyRefId) => {
       eventStreamRegistry.closeThread(threadId)
       usageService.reset(threadId)
       events.clearThread(threadId)
@@ -243,7 +246,8 @@ export async function createRuntimeCore(
         ...(llmDebug ? [llmDebug.deleteThread(threadId)] : []),
         delegatedSessions.invalidate(threadId),
         contextWindows.deleteThreadData(threadId),
-        contextWindowState.deleteThreadData(threadId)
+        contextWindowState.deleteThreadData(threadId),
+        historyReferences.cleanupDeletedThread(threadId, historyRefId)
       ])
     },
     onStatusChanged: (threadId, status) => handleGraphThreadStatus?.(threadId, status),
@@ -252,6 +256,16 @@ export async function createRuntimeCore(
         handleGraphThreadFork?.(sourceThreadId, targetThreadId),
         contextWindows.forkThreadData(sourceThreadId, targetThreadId)
       ]).then(() => undefined)
+  })
+  const historyReferences: HistoryReferenceService = new HistoryReferenceService({
+    dataDir: options.dataDir,
+    threadService,
+    threadStore: rawThreadStore,
+    enabled: () => activeOptions.lab?.codexReferenceBranches?.enabled === true,
+    enabledFor: (provider) => provider === 'codex' ? activeOptions.lab?.codexReferenceBranches?.enabled === true
+      : provider === 'claude-code' ? activeOptions.lab?.claudeCodeReferenceBranches?.enabled === true
+        : activeOptions.lab?.opencodeReferenceBranches?.enabled === true,
+    defaultModel: () => ({ model: activeOptions.model, providerId: activeOptions.activeProviderId })
   })
   const projectBoardStore = new FileProjectBoardStore({
     dataDir: options.dataDir,
@@ -382,6 +396,7 @@ export async function createRuntimeCore(
     delegatedSessions,
     threadService,
     projectBoardStore,
+    historyReferences,
     projectBoardService,
     artifactStore,
     graphConfig,

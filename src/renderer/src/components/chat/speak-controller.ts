@@ -1,12 +1,12 @@
 /**
- * Drives the Speak action: Markdown -> chunks -> Kokoro synthesis -> playback.
+ * Drives the Speak action: Markdown -> chunks -> sanoTTS synthesis -> playback.
  *
  * One answer speaks at a time. Synthesis runs a chunk ahead of playback so the
  * first sentence starts as soon as it is ready instead of after the whole
  * answer is rendered.
  */
-import { LOCAL_KOKORO_SAMPLE_RATE } from '@shared/local-kokoro'
-import { decodeKokoroPcm16 } from '@shared/local-kokoro-speech'
+import { LOCAL_SANOTTS_SAMPLE_RATE } from '@shared/local-sanotts'
+import { decodeSanottsPcm16 } from '@shared/local-sanotts-speech'
 import {
   KOKORO_FIRST_CHUNK_CHARS,
   KOKORO_MAX_CHUNK_CHARS,
@@ -14,14 +14,14 @@ import {
   speechSentencesFromAnswer,
   takeSpeechChunk
 } from '@shared/kokoro-text'
-import { localKokoroVoiceById } from '@shared/local-kokoro-voices'
-import { localKokoroTrackKey } from '@shared/local-kokoro-tracks'
+import { localSanottsVoiceById, localSanottsVoiceScripts } from '@shared/local-sanotts-voices'
+import { localSanottsTrackKey } from '@shared/local-sanotts-tracks'
 import { speechTextFromAnswer, hasUnsupportedSpeechScript } from '@shared/kokoro-text'
 import { refreshSpeakTrackKeys, useSpeakTrackStore } from '../../stores/speak-track-store'
 import { useSpeakStore } from '../../stores/speak-store'
-import { KokoroPlayer } from './kokoro-playback'
+import { SpeakPlayer } from './speak-playback'
 import {
-  ensureKokoroAssets,
+  ensureSanottsAssets,
   loadSpeakSettings,
   type SpeakSettings
 } from './speak-assets'
@@ -72,7 +72,7 @@ export function nextChunkBudget(
 type SpeakSession = {
   blockId: string
   requestId: string
-  player: KokoroPlayer
+  player: SpeakPlayer
   canceled: boolean
   /** Recording being captured for this answer, when tracks are kept. */
   trackKey: string | null
@@ -91,9 +91,8 @@ let storedPlaybacks = 0
  * formatting changed but whose speech did not still hits the stored file.
  */
 export function speakTrackKeyFor(markdown: string, settings: SpeakSettings): string {
-  return localKokoroTrackKey({
+  return localSanottsTrackKey({
     text: speechTextFromAnswer(markdown),
-    modelId: settings.model,
     voiceId: settings.voice,
     speed: settings.speed
   })
@@ -132,10 +131,10 @@ export function stopSpeaking(): void {
   }
   current.canceled = true
   current.player.stop()
-  void window.kunGui?.cancelLocalKokoroSpeech?.(current.requestId).catch(() => undefined)
+  void window.kunGui?.cancelLocalSanottsSpeech?.(current.requestId).catch(() => undefined)
   if (current.trackKey) {
     // A stopped answer is incomplete; nothing half-spoken gets stored.
-    void window.kunGui?.discardLocalKokoroTrack?.(current.requestId).catch(() => undefined)
+    void window.kunGui?.discardLocalSanottsTrack?.(current.requestId).catch(() => undefined)
   }
   useSpeakStore.getState().reset()
 }
@@ -151,7 +150,7 @@ export async function speakAnswer(blockId: string, markdown: string): Promise<vo
   }
   stopSpeaking()
   const store = useSpeakStore.getState()
-  if (typeof window.kunGui?.synthesizeLocalKokoroSpeech !== 'function') {
+  if (typeof window.kunGui?.synthesizeLocalSanottsSpeech !== 'function') {
     store.fail('speakUnavailable')
     return
   }
@@ -163,11 +162,13 @@ export async function speakAnswer(blockId: string, markdown: string): Promise<vo
     if (!settings.enabled) return finish(current, null)
     const text = speechTextFromAnswer(markdown)
     if (!text) return finish(current, 'speakNothingToRead')
-    if (hasUnsupportedSpeechScript(text)) return finish(current, 'speakUnsupportedLanguage')
+    if (hasUnsupportedSpeechScript(text, localSanottsVoiceScripts(settings.voice))) {
+      return finish(current, 'speakUnsupportedLanguage')
+    }
     current.trackKey = speakTrackKeyFor(markdown, settings)
     current.keepTrack = settings.keepTracks
     if (await playStoredTrack(current)) return
-    const ready = await ensureKokoroAssets(settings, () => current.canceled, current.requestId)
+    const ready = await ensureSanottsAssets(settings, () => current.canceled, current.requestId)
     if (current.canceled) return
     if (!ready.ok) return finish(current, ready.message)
     await runChunks(current, settings, speechSentencesFromAnswer(markdown))
@@ -180,7 +181,7 @@ function createSession(blockId: string): SpeakSession {
   const current: SpeakSession = {
     blockId,
     requestId: `speak-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    player: new KokoroPlayer(LOCAL_KOKORO_SAMPLE_RATE),
+    player: new SpeakPlayer(LOCAL_SANOTTS_SAMPLE_RATE),
     canceled: false,
     trackKey: null,
     keepTrack: false,
@@ -199,20 +200,20 @@ function createSession(blockId: string): SpeakSession {
  */
 async function playStoredTrack(current: SpeakSession): Promise<boolean> {
   const key = current.trackKey
-  if (!key || typeof window.kunGui?.readLocalKokoroTrack !== 'function') return false
+  if (!key || typeof window.kunGui?.readLocalSanottsTrack !== 'function') return false
   const store = useSpeakStore.getState()
   store.setDownload(null)
   store.setPhase('synthesizing')
-  const pcm16Base64 = await window.kunGui.readLocalKokoroTrack(key).catch(() => null)
+  const pcm16Base64 = await window.kunGui.readLocalSanottsTrack(key).catch(() => null)
   if (current.canceled) return true
   if (!pcm16Base64) {
     // The file went away since the key list was read; synthesize instead.
     refreshSpeakTrackKeys()
     return false
   }
-  const samples = decodeKokoroPcm16(pcm16Base64)
+  const samples = decodeSanottsPcm16(pcm16Base64)
   if (samples.length === 0) return false
-  current.player.enqueue(samples, LOCAL_KOKORO_SAMPLE_RATE)
+  current.player.enqueue(samples, LOCAL_SANOTTS_SAMPLE_RATE)
   storedPlaybacks += 1
   store.setPhase('speaking')
   store.setProgress({ spoken: 1, total: 1 })
@@ -248,10 +249,9 @@ async function runChunks(
     const chunk = takeSpeechChunk(queue, budget)
     if (!chunk) break
     const startedAt = Date.now()
-    const result = await window.kunGui.synthesizeLocalKokoroSpeech({
+    const result = await window.kunGui.synthesizeLocalSanottsSpeech({
       text: chunk,
       requestId: current.requestId,
-      modelId: settings.model,
       voiceId: settings.voice,
       speed: settings.speed,
       keepTrack: current.keepTrack
@@ -264,7 +264,7 @@ async function runChunks(
       finish(current, result.message || 'speakFailed')
       return
     }
-    current.player.enqueue(decodeKokoroPcm16(result.pcm16Base64), result.sampleRate)
+    current.player.enqueue(decodeSanottsPcm16(result.pcm16Base64), result.sampleRate)
     if (useSpeakStore.getState().phase !== 'speaking') store.setPhase('speaking')
     spoken += 1
     store.setProgress({
@@ -287,9 +287,9 @@ async function runChunks(
  */
 async function storeTrack(current: SpeakSession): Promise<void> {
   const key = current.trackKey
-  if (!current.keepTrack || !key || typeof window.kunGui?.finalizeLocalKokoroTrack !== 'function') return
+  if (!current.keepTrack || !key || typeof window.kunGui?.finalizeLocalSanottsTrack !== 'function') return
   const info = await window.kunGui
-    .finalizeLocalKokoroTrack({ requestId: current.requestId, key })
+    .finalizeLocalSanottsTrack({ requestId: current.requestId, key })
     .catch(() => null)
   if (current.canceled) return
   if (info) useSpeakTrackStore.getState().addKey(info.key)
@@ -313,23 +313,23 @@ export function estimatedChunkTotal(
 }
 
 /** Preview a voice with a fixed sample line, used by the settings panel. */
-export async function previewKokoroVoice(
+export async function previewSpeakVoice(
   settings: SpeakSettings,
   sampleText: string
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (typeof window.kunGui?.synthesizeLocalKokoroSpeech !== 'function') {
+  if (typeof window.kunGui?.synthesizeLocalSanottsSpeech !== 'function') {
     return { ok: false, message: 'speakUnavailable' }
   }
   stopSpeaking()
-  const current = createSession(`preview:${localKokoroVoiceById(settings.voice).id}`)
+  const current = createSession(`preview:${localSanottsVoiceById(settings.voice).id}`)
   try {
     const text = speechTextFromAnswer(sampleText)
-    if (!text || hasUnsupportedSpeechScript(text)) {
+    if (!text || hasUnsupportedSpeechScript(text, localSanottsVoiceScripts(settings.voice))) {
       const message = text ? 'speakUnsupportedLanguage' : 'speakNothingToRead'
       finish(current, message)
       return { ok: false, message }
     }
-    const ready = await ensureKokoroAssets(settings, () => current.canceled, current.requestId)
+    const ready = await ensureSanottsAssets(settings, () => current.canceled, current.requestId)
     if (current.canceled) return { ok: false, message: '' }
     if (!ready.ok) {
       finish(current, ready.message)
@@ -352,9 +352,9 @@ function finish(current: SpeakSession, error: string | null): void {
   if (ownsState) session = null
   current.canceled = true
   current.player.stop()
-  void window.kunGui?.cancelLocalKokoroSpeech?.(current.requestId).catch(() => undefined)
+  void window.kunGui?.cancelLocalSanottsSpeech?.(current.requestId).catch(() => undefined)
   if (current.trackKey) {
-    void window.kunGui?.discardLocalKokoroTrack?.(current.requestId).catch(() => undefined)
+    void window.kunGui?.discardLocalSanottsTrack?.(current.requestId).catch(() => undefined)
   }
   if (!ownsState) return
   const store = useSpeakStore.getState()

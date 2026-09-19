@@ -55,6 +55,7 @@ import {
 } from './main-runtime-startup'
 import { reconcileBrowserUseHostForRuntime } from './browser-use/browser-use-host'
 import { bundledSkillsDirectory } from './bundled-skill-resources'
+import { isAppQuitInProgress } from './main-lifecycle'
 
 export function publishRuntimeSettingsSyncStatus(
   status: Omit<KunRuntimeSettingsSyncStatusPayload, 'at'>
@@ -647,6 +648,9 @@ export async function runtimeRequest(
   pathAndQuery: string,
   init: RuntimeRequestInit
 ): Promise<{ ok: boolean; status: number; body: string }> {
+  if (isAppQuitInProgress()) {
+    return runtimeFailure('runtime_shutting_down', 'Kun application is shutting down')
+  }
   try {
     return await runtimeRequestViaHost(settings, pathAndQuery, init, ensureRuntime)
   } catch (e) {
@@ -666,6 +670,9 @@ export async function runtimeRequestOnLease(
   pathAndQuery: string,
   init: RuntimeRequestInit
 ): Promise<{ ok: boolean; status: number; body: string }> {
+  if (isAppQuitInProgress()) {
+    return runtimeFailure('runtime_shutting_down', 'Kun application is shutting down')
+  }
   try {
     return await runtimeRequestViaLease(lease, pathAndQuery, init)
   } catch (e) {

@@ -16,6 +16,8 @@ Semantic roles map as follows: paper→canvas background; paper-2→card/subtle 
 
 ## Choose the artifact
 
+If the turn says the canvas engine is Excalidraw, do not use this skill. Write the canonical `excalidraw.json` and call `design_apply_excalidraw`.
+
 - Short explanatory flow/cards in chat: `show_visualization`.
 - Complex conversation diagram: `show_diagram` with self-contained HTML and inline SVG.
 - Complex Design-canvas diagram: `design_create_diagram`; the HTML remains authoritative and renders as a linked HTML frame.

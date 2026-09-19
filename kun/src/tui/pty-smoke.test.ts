@@ -221,7 +221,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
     }
   }, 30_000)
 
-  it('stops its exact owned Runtime while leaving Manager alive after Ctrl+C exit', async () => {
+  it('stops its owned Runtime and Manager after Ctrl+C and reopens persisted history', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-standalone-'))
     roots.push(root)
     const controlDir = join(root, 'control')
@@ -306,9 +306,9 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       expect(output).not.toContain('\x1b[?1049h')
       expect(output).not.toContain('\x1b[?1049l')
       await waitFor(() => !processIsAlive(ownedPid), 10_000)
-      expect(await resolveSharedRuntime(root, fetch, { manager, controlDir })).toBeNull()
-      expect(await readManagerRuntime(manager, 'production')).toBeNull()
-      expect((await resolveServiceManager(controlDir))?.discovery.instanceId).toBe(managerInstanceId)
+      await waitFor(() => !processIsAlive(manager.discovery.pid), 10_000)
+      expect(await readManagerDiscovery(controlDir)).toBeNull()
+      await expect(fetch(`${manager.discovery.baseUrl}/health`)).rejects.toThrow()
 
       const secondTerminal = pty.spawn(process.execPath, [
         cliEntry,
@@ -336,9 +336,14 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         })
       })
       try {
+        let secondManagerPid: number | undefined
         const secondConnection = await waitForPtyValue(
           async () => {
-            const candidate = await resolveSharedRuntime(root, fetch, { manager, controlDir })
+            const nextManager = await resolveServiceManager(controlDir)
+            if (!nextManager) return undefined
+            secondManagerPid = nextManager.discovery.pid
+            const candidate = await resolveSharedRuntime(root, fetch, { manager: nextManager, controlDir })
+            expect(nextManager.discovery.instanceId).not.toBe(managerInstanceId)
             return candidate?.discovery.instanceId !== connection.discovery.instanceId
               ? candidate ?? undefined
               : undefined
@@ -373,7 +378,8 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         const secondExit = await withTimeout(secondExited, 15_000, 'second TUI process did not exit')
         expect(secondExit.exitCode).toBe(0)
         await waitFor(() => !processIsAlive(secondConnection.discovery.pid), 10_000)
-        expect(await readManagerRuntime(manager, 'production')).toBeNull()
+        await waitFor(() => secondManagerPid !== undefined && !processIsAlive(secondManagerPid), 10_000)
+        expect(await readManagerDiscovery(controlDir)).toBeNull()
       } finally {
         secondData.dispose()
         try { secondTerminal.kill() } catch { /* already exited */ }
@@ -384,7 +390,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
     }
   }, 90_000)
 
-  it('stops its exact owned Runtime after the TUI receives SIGTERM', async () => {
+  it('stops its owned Runtime and Manager after the TUI receives SIGTERM', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-signal-exit-'))
     roots.push(root)
     const controlDir = join(root, 'control')
@@ -446,9 +452,9 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       terminal.kill('SIGTERM')
       await withTimeout(exited, 15_000, 'SIGTERM TUI process did not exit')
       await waitFor(() => !processIsAlive(connection.discovery.pid), 10_000)
-      expect(await resolveSharedRuntime(root, fetch, { manager, controlDir })).toBeNull()
-      expect(await readManagerRuntime(manager, 'production')).toBeNull()
-      expect(await resolveServiceManager(controlDir)).not.toBeNull()
+      await waitFor(() => !processIsAlive(manager.discovery.pid), 10_000)
+      expect(await readManagerDiscovery(controlDir)).toBeNull()
+      await expect(fetch(`${manager.discovery.baseUrl}/health`)).rejects.toThrow()
     } finally {
       dataSubscription.dispose()
       try { terminal.kill() } catch { /* already exited */ }

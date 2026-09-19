@@ -5,7 +5,10 @@ import {
   DEFAULT_TOOL_OUTPUT_LIMITS_CONFIG,
   type ToolOutputLimitsConfig,
   type RuntimeConfigApplyRequest,
-  AtomicJsonFile
+  AtomicJsonFile,
+  buildPptAgentLocalTools,
+  PPT_AGENT_LOCAL_PROVIDER_ID,
+  type TurnService
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { ContextWindowModeSource } from '../adapters/tool/context-window-tool-provider.js'
@@ -206,5 +209,26 @@ export function skillsConfigForRuntime(
   return {
     ...skills,
     disabledIds: [...new Set([...skills.disabledIds, 'ppt-master'])]
+  }
+}
+
+export function buildPptAgentRuntimeProvider(
+  options: Pick<KunServeRuntimeOptions, 'dataDir' | 'lab'>,
+  turnService: Pick<TurnService, 'getTurn'>
+) {
+  return {
+    id: PPT_AGENT_LOCAL_PROVIDER_ID,
+    kind: 'built-in' as const,
+    enabled: true,
+    available: true,
+    tools: [
+      ...buildPptAgentLocalTools({
+        enabled: () => options.lab?.pptAgent?.enabled !== false,
+        toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
+        governanceDirectory: () => join(options.dataDir, 'ppt-governance'),
+        resolveSourceRequest: async (context) =>
+          (await turnService.getTurn(context.threadId, context.turnId))?.prompt
+      })
+    ]
   }
 }

@@ -1,3 +1,13 @@
+import roomsApproval from './common/rooms-approval.json'
+import roomsDirect from './common/rooms-direct.json'
+import roomsInitIm from './common/rooms-init-im.json'
+import independentAgents from './common/independent-agents.json'
+import codexHistory from './common/codex-history.json'
+import rooms from './common/rooms.json'
+import roomsReplies from './common/rooms-replies.json'
+import roomsInteractions from './common/rooms-interactions.json'
+import roomsExperience from './common/rooms-experience.json'
+import roomsContent from './common/rooms-content.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
@@ -16,8 +26,19 @@ import commandPalette from './common/command-palette.json'
 import workConversations from './common/work-conversations.json'
 import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
+import remoteAccess from './common/remote-access.json'
 
 const common = {
+  ...roomsInitIm,
+  ...roomsDirect,
+  ...roomsApproval,
+  ...independentAgents,
+  ...codexHistory,
+  ...rooms,
+  ...roomsReplies,
+  ...roomsInteractions,
+  ...roomsExperience,
+  ...roomsContent,
   queuedMessageEditAccountUnavailable: 'The original model account is unavailable or has changed. The queued message has been kept.',
   queuedMessageEditSteering: 'This message is being delivered as guidance; editing is temporarily unavailable.',
   queuedMessageRestorePending: 'Withdrawn · ready to edit',
@@ -42,6 +63,7 @@ const common = {
   ...workConversations,
   ...projectBoard,
   ...speak,
+  ...remoteAccess,
 }
 
 export default common

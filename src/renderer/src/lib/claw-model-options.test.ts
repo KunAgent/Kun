@@ -8,7 +8,7 @@ import {
   defaultScheduleSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   type AppSettingsV1
 } from '@shared/app-settings'
 import { clawModelSelectOptions, mergeClawModelOptions } from './claw-model-options'
@@ -44,6 +44,7 @@ function buildSettings(models: string[]): AppSettingsV1 {
     workflow: defaultWorkflowSettings(),
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     chatWelcomeMessage: '',

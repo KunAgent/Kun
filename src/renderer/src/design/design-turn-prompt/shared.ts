@@ -72,6 +72,11 @@ export type DesignTurnOptions = {
   designContext?: DesignContext
   /** Canvas mode only: current snapshot of the shape document for AI reasoning. */
   canvasSnapshot?: CanvasSnapshot
+  /** Canvas mode only: Excalidraw sketch instead of ShapeOps. */
+  canvasEngine?: 'kun' | 'excalidraw'
+  excalidrawScene?: { elements?: unknown[] }
+  /** Workspace-relative Excalidraw scene file for canvasEngine=excalidraw turns. */
+  excalidrawScenePath?: string
   /**
    * Real canvas frame that hosts this HTML artifact. The generated page's
    * viewport must match this size, so iteration does not drift away from the

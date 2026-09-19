@@ -203,7 +203,7 @@ describe('goal auto-resume (issue #370)', () => {
     expect(timer.pending()).toHaveLength(0)
   })
 
-  it('auto-resumes a turn that completed cleanly but left the goal active', async () => {
+  it('continues a truncated turn in place and completes the goal without a resume', async () => {
     const timer = makeCapturingTimer()
     let h: Harness
     let calls = 0
@@ -214,9 +214,9 @@ describe('goal auto-resume (issue #370)', () => {
         async *stream(): AsyncIterable<ModelStreamChunk> {
           calls += 1
           if (calls === 1) {
-            // A long reply cut off by the output-token ceiling: the turn ends
-            // cleanly (status `completed`) but the goal is still unfinished, so
-            // the model never marked it complete.
+            // A long reply cut off by the output-token ceiling: the loop now
+            // auto-continues inside the same turn instead of ending it and
+            // waiting on the goal-resume path.
             yield { kind: 'assistant_text_delta', text: 'Halfway through the work and then' }
             yield { kind: 'completed', stopReason: 'length' }
             return
@@ -241,17 +241,14 @@ describe('goal auto-resume (issue #370)', () => {
     await h.threads.setGoal(h.threadId, { objective: 'fix all the bugs', status: 'active' })
 
     const status = await h.loop.runTurn(h.threadId, h.turnId)
-    // The turn itself completed, but the unfinished active goal schedules a resume
-    // instead of stranding the banner on "in progress".
+    // The truncated first round auto-continues in place: round 2 calls
+    // update_goal inside the same turn, so no resume timer or extra turn.
     expect(status).toBe('completed')
-    expect((await h.threads.getGoal(h.threadId))?.status).toBe('active')
-    expect(timer.pending()).toHaveLength(1)
-
-    timer.fireLatest()
-    await waitFor(async () => (await h.threads.getGoal(h.threadId))?.status === 'complete', 'goal complete')
+    expect((await h.threads.getGoal(h.threadId))?.status).toBe('complete')
+    expect(timer.pending()).toHaveLength(0)
 
     const thread = await h.threadStore.get(h.threadId)
-    expect(thread?.turns.length).toBe(2) // original + auto-resume turn
+    expect(thread?.turns.length).toBe(1)
   })
 
   it('does not auto-resume a repetition stall that made no progress', async () => {

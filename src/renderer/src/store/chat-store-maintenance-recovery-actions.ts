@@ -468,7 +468,8 @@ export function createMaintenanceRecoveryActions(
       const canvasResend = await prepareCanvasResend({
         route: state.route,
         text: trimmed,
-        previousCanvasTurn: targetBlock.meta?.guiDesignCanvas === true,
+        previousCanvasTurn: targetBlock.meta?.guiDesignCanvas === true ||
+          targetBlock.meta?.guiExcalidrawCanvas === true,
         fallbackWorkspaceRoot: state.workspaceRoot,
         threadWorkspaceRoot: state.threads.find(
           (thread) => thread.id === state.activeThreadId
@@ -494,7 +495,8 @@ export function createMaintenanceRecoveryActions(
       if (canvasResend) {
         await get().sendMessage(canvasResend.text, 'agent', {
           displayText: canvasResend.displayText,
-          guiDesignCanvas: true,
+          ...(canvasResend.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+          ...(canvasResend.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
           ...attachmentOverrides
         })
       } else if (attachmentIds.length > 0 || composerContexts.length > 0) {

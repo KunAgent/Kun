@@ -1,0 +1,232 @@
+import { historySessionKey, historySessionSource } from './history-session-key'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
+import { X } from 'lucide-react'
+import { useChatStore } from '../store/chat-store'
+import { SourceHistoryPreview } from './SourceHistoryPreview'
+import { createReferenceBranch, historyRequest, type HistoryPreview, type HistorySession, type HistorySourceProvider } from './history-reference-api'
+import { useCodexReferenceEnabled } from './use-codex-reference-enabled'
+
+const control = 'min-w-0 rounded-lg border border-ds-border-muted bg-ds-card px-3 py-2 text-sm text-ds-ink'
+
+export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
+  workspaceRoot: string; onClose: () => void; onCreated: (id: string) => void
+}): ReactElement | null {
+  const { t } = useTranslation('common')
+  const codexEnabled = useCodexReferenceEnabled('codex')
+  const claudeEnabled = useCodexReferenceEnabled('claude-code')
+  const opencodeEnabled = useCodexReferenceEnabled('opencode')
+  const [manualPaths, setManualPaths] = useState<string[]>([])
+  const [sourceProvider, setSourceProvider] = useState<HistorySourceProvider>(codexEnabled ? 'codex' : 'claude-code')
+  const sourceEnabled = { codex: codexEnabled, 'claude-code': claudeEnabled, opencode: opencodeEnabled }
+  const provider = sourceEnabled[sourceProvider] ? sourceProvider : (Object.keys(sourceEnabled) as HistorySourceProvider[]).find((key) => sourceEnabled[key]) ?? sourceProvider
+  const enabled = sourceEnabled[provider]
+  const [sessions, setSessions] = useState<HistorySession[]>([])
+  const [selected, setSelected] = useState<string[]>([])
+  const [query, setQuery] = useState('')
+  const [projectOnly, setProjectOnly] = useState(Boolean(workspaceRoot))
+  const [archived, setArchived] = useState(false)
+  const [after, setAfter] = useState('')
+  const [before, setBefore] = useState('')
+  const [preview, setPreview] = useState<HistoryPreview | null>(null)
+  const [cutoff, setCutoff] = useState('')
+  const [workspaceOverride, setWorkspaceOverride] = useState('')
+  const [workspaceDirty, setWorkspaceDirty] = useState(false)
+  const sourceWorkspace = (cutoff ? preview?.cutoffs.find((entry) => entry.turnId === cutoff)?.workspace : preview?.cutoffs.at(-1)?.workspace) ?? preview?.session.workspace ?? ''
+  const workspace = workspaceDirty ? workspaceOverride : sourceWorkspace || workspaceRoot
+  const editWorkspace = (value: string): void => { setWorkspaceOverride(value); setWorkspaceDirty(true) }
+  const [loading, setLoading] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
+  const [results, setResults] = useState<Array<{ path: string; id?: string; error?: string }>>([])
+  const previewVersion = useRef(0)
+  const requestKeys = useRef(new Map<string, string>())
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const prior = document.activeElement as HTMLElement | null
+    dialogRef.current?.focus()
+    return () => prior?.focus()
+  }, [])
+  useEffect(() => {
+    if (!enabled) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ includeArchived: String(provider !== 'claude-code' && archived), limit: '200' })
+      if (projectOnly && workspaceRoot) params.set('cwd', workspaceRoot)
+      if (query) params.set('query', query)
+      if (after) params.set('after', new Date(`${after}T00:00:00`).toISOString())
+      if (before) params.set('before', new Date(`${before}T23:59:59.999`).toISOString())
+      setLoading(true); setError('')
+      const paths = provider === 'opencode' && manualPaths.length ? manualPaths : [undefined]
+      void Promise.all(paths.map((path) => {
+        const queryParams = new URLSearchParams(params)
+        if (path) queryParams.set('path', path)
+        return historyRequest<{ sessions: HistorySession[] }>(`/v1/history-sources/${provider}/sessions?${queryParams}`, undefined, controller.signal)
+      })).then((results) => { if (!controller.signal.aborted) setSessions(results.flatMap((result) => result.sessions)) })
+        .catch((err) => { if (!controller.signal.aborted) setError(String(err.message ?? err)) })
+        .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    }, 200)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [enabled, provider, manualPaths, query, projectOnly, archived, after, before, workspaceRoot])
+
+  useEffect(() => {
+    ++previewVersion.current
+    setManualPaths([]); setSessions([]); setSelected([]); setPreview(null); setCutoff(''); setWorkspaceDirty(false)
+    setResults([]); setPreviewLoading(false); setLoading(false); setError('')
+  }, [provider, enabled])
+
+  async function showPreview(key: string, more = false, selectExport = false): Promise<void> {
+    const source = historySessionSource(key)
+    const version = ++previewVersion.current
+    setPreviewLoading(true); setError('')
+    try {
+      const result = await historyRequest<HistoryPreview>(`/v1/history-sources/${provider}/preview`, {
+        ...source, limit: 12, ...(more && preview?.page.nextCursor ? { cursor: preview.page.nextCursor } : {})
+      })
+      if (version !== previewVersion.current) return
+      setPreview((current) => more && current && historySessionKey(current.session) === key ? {
+        ...result, page: { ...result.page, turns: [...result.page.turns, ...current.page.turns] }
+      } : result)
+      if (selectExport) setSelected([historySessionKey(result.session)])
+      if (!more && (!preview || historySessionKey(preview.session) !== key)) { setCutoff(''); setWorkspaceOverride(''); setWorkspaceDirty(false) }
+    } catch (err) {
+      if (version === previewVersion.current) setError(err instanceof Error ? err.message : String(err))
+    } finally { if (version === previewVersion.current) setPreviewLoading(false) }
+  }
+
+  async function pickFiles(): Promise<void> {
+    const version = previewVersion.current
+    const picked = await window.kunGui.pickLocalFiles()
+    if (version !== previewVersion.current || picked.canceled) return
+    const paths = picked.paths.filter((path) => provider === 'opencode' ? /\.(?:db|sqlite|sqlite3|json)$/iu.test(path) : /\.jsonl(?:\.zst)?$/i.test(path))
+    if (paths.length !== picked.paths.length) setError(t(provider === 'opencode' ? 'openCodeFileType' : 'codexHistoryFileType'))
+    if (!paths.length) return
+    if (provider === 'opencode') {
+      ++previewVersion.current; setPreviewLoading(false)
+      setManualPaths(paths); setSelected([]); setPreview(null); setCutoff(''); setProjectOnly(false)
+      if (paths.length === 1 && /\.json$/iu.test(paths[0]!)) await showPreview(paths[0]!, false, true)
+      return
+    }
+    setSelected(paths)
+    if (paths.length === 1) await showPreview(paths[0]!)
+    else { ++previewVersion.current; setPreview(null); setCutoff(''); setWorkspaceDirty(false) }
+  }
+
+  async function createBranches(): Promise<void> {
+    if (!enabled || creating) return
+    setCreating(true); setError(''); setResults([])
+    const current = useChatStore.getState()
+    const completed: Array<{ path: string; id?: string; error?: string }> = []
+    for (const path of selected) {
+      const input = {
+        ...historySessionSource(path), sourceProvider: provider,
+        ...(selected.length === 1 && preview && historySessionKey(preview.session) === path && cutoff ? { cutoffTurnId: cutoff } : {}),
+        ...(selected.length === 1 && preview && historySessionKey(preview.session) === path && workspace && (workspaceDirty || !sourceWorkspace) ? { workspace } : {}),
+        ...(current.composerModel ? { model: current.composerModel } : {}),
+        ...(current.composerProviderId ? { providerId: current.composerProviderId } : {})
+      }
+      const identity = JSON.stringify(input)
+      const key = requestKeys.current.get(identity) ?? crypto.randomUUID()
+      requestKeys.current.set(identity, key)
+      try {
+        const created = await createReferenceBranch({ ...input, idempotencyKey: key })
+        completed.push({ path, id: created.thread.id })
+      } catch (err) { completed.push({ path, error: err instanceof Error ? err.message : String(err) }) }
+      setResults([...completed])
+    }
+    await current.refreshThreads().catch(() => undefined)
+    setCreating(false)
+    if (completed.length === 1 && completed[0]?.id) onCreated(completed[0].id)
+  }
+
+  const toggle = (path: string): void => {
+    setSelected((current) => current.includes(path) ? current.filter((entry) => entry !== path) : [...current, path])
+    setCutoff('')
+  }
+  return createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-5">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="codex-reference-title" tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && !creating) onClose()
+        if (event.key === 'Tab') {
+          const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]'))
+          const first = items[0]; const last = items.at(-1)
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+        }
+      }}
+      className="flex h-[min(820px,90vh)] w-[min(1100px,95vw)] flex-col rounded-2xl border border-ds-border-muted bg-ds-elevated p-5 text-ds-ink shadow-2xl">
+      <header className="mb-3 flex items-start justify-between gap-4">
+        <div><h2 id="codex-reference-title" className="text-lg font-semibold">{t('codexHistoryCreate')}</h2>
+          <p className="mt-1 text-sm text-ds-muted">{t('codexHistoryReferenceHint')}</p></div>
+        <button type="button" onClick={onClose} disabled={creating} aria-label={t('close')} className="rounded p-2"><X size={18} /></button>
+      </header>
+      {!enabled ? <p>{t('codexHistoryDisabled')}</p> : <>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <label className="text-sm">{t('historySourceLabel')} <select className={control} value={provider} disabled={creating}
+            onChange={(event) => { ++previewVersion.current; setSourceProvider(event.target.value as HistorySourceProvider) }}>
+            {codexEnabled ? <option value="codex">Codex</option> : null}
+            {claudeEnabled ? <option value="claude-code">Claude Code</option> : null}
+            {opencodeEnabled ? <option value="opencode">OpenCode</option> : null}
+          </select></label>
+          <input className={control} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('codexHistorySearch')} aria-label={t('codexHistorySearch')} />
+          <label className="text-sm"><input type="checkbox" checked={projectOnly} disabled={!workspaceRoot} onChange={(event) => setProjectOnly(event.target.checked)} /> {t('codexHistoryCurrentProject')}</label>
+          {provider !== 'claude-code' ? <label className="text-sm"><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> {t('codexHistoryArchived')}</label> : null}
+          <input className={control} type="date" value={after} onChange={(event) => setAfter(event.target.value)} aria-label={t('codexHistoryAfter')} />
+          <input className={control} type="date" value={before} onChange={(event) => setBefore(event.target.value)} aria-label={t('codexHistoryBefore')} />
+          <button className={control} type="button" onClick={() => void pickFiles().catch((err) => setError(String(err)))}>{t(provider === 'opencode' ? 'openCodeChooseFiles' : 'codexHistoryChooseFiles')}</button>
+          {provider === 'opencode' ? <button className={control} type="button" onClick={() => {
+            const version = previewVersion.current
+            void window.kunGui.pickWorkspaceDirectory().then((picked) => {
+              if (!picked.canceled && picked.path && version === previewVersion.current) { ++previewVersion.current; setPreviewLoading(false); setManualPaths([picked.path]); setSelected([]); setPreview(null); setCutoff(''); setProjectOnly(false) }
+            }).catch((err) => setError(String(err)))
+          }}>{t('openCodeChooseDirectory')}</button> : null}
+        </div>
+        {error ? <p role="alert" className="mb-2 text-sm text-red-500">{error}</p> : null}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(210px,0.8fr)_minmax(0,1.2fr)] gap-4">
+          <div className="overflow-auto rounded-lg border border-ds-border-muted p-2">
+            {loading ? <p className="p-3 text-sm">{t('loading')}</p> : null}
+            {!loading && !sessions.length ? <p className="p-3 text-sm text-ds-muted">{t('codexHistoryEmpty')}</p> : null}
+            {sessions.map((session) => <div key={historySessionKey(session)} className="flex items-start gap-2 rounded-lg p-2 hover:bg-ds-card">
+              <input type="checkbox" className="mt-1" aria-label={session.title} checked={selected.includes(historySessionKey(session))} onChange={() => toggle(historySessionKey(session))} />
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => void showPreview(historySessionKey(session))}>
+                <span className="block truncate text-sm font-medium">{session.title || session.sessionId}</span>
+                <span className="block truncate text-xs text-ds-muted" title={session.workspace}>{session.workspace}</span>
+                <span className="text-xs text-ds-muted">{new Date(session.updatedAt).toLocaleString()}{session.archived ? ` · ${t('codexHistoryArchived')}` : ''}</span>
+              </button>
+            </div>)}
+          </div>
+          <div className="flex min-h-0 flex-col gap-2">
+            {preview ? <>
+              <p className="truncate text-sm font-medium">{preview.session.title}</p>
+              <SourceHistoryPreview page={preview.page} workspace={preview.session.workspace} loading={previewLoading} onMore={() => void showPreview(historySessionKey(preview.session), true)} />
+              <p className="text-xs text-amber-600">{preview.warnings.join(' · ')}</p>
+              {selected.length === 1 && selected[0] === historySessionKey(preview.session) ? <>
+                <label className="flex items-center gap-2 text-sm">{t('codexHistoryBranchPoint')}
+                  <select className={`${control} flex-1`} value={cutoff} onChange={(event) => setCutoff(event.target.value)}>
+                    <option value="">{t('codexHistoryLatest')}</option>
+                    {preview.cutoffs.map((entry) => <option key={entry.turnId} value={entry.turnId}>{entry.label || entry.turnId}</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-sm">{t('codexHistoryWorkspace')}
+                  <input className={`${control} flex-1`} value={workspace} onChange={(event) => editWorkspace(event.target.value)} />
+                  <button type="button" className={control} onClick={() => void window.kunGui.pickWorkspaceDirectory(workspace).then((picked) => { if (!picked.canceled && picked.path) editWorkspace(picked.path) })}>{t('codexHistoryChoose')}</button>
+                </label>
+              </> : null}
+            </> : <p className="p-4 text-sm text-ds-muted">{previewLoading ? t('loading') : t('codexHistoryPreviewHint')}</p>}
+          </div>
+        </div>
+        {results.length ? <div className="max-h-28 overflow-auto py-2 text-sm" role="status">{results.map((result) => <div key={result.path} className="flex gap-2">
+          <span className="truncate">{historySessionSource(result.path).path.split(/[\\/]/).at(-1)}</span>
+          {result.id ? <button type="button" className="underline" onClick={() => onCreated(result.id!)}>{t('codexHistoryOpen')}</button> : <span className="text-red-500">{result.error}</span>}
+        </div>)}</div> : null}
+        <footer className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-sm text-ds-muted">{t('codexHistorySelected', { count: selected.length })}</span>
+          <button type="button" disabled={!selected.length || creating || previewLoading || (selected.length === 1 && Boolean(preview && historySessionKey(preview.session) === selected[0] && !preview.cutoffs.length))} onClick={() => void createBranches()}
+            className="rounded-lg bg-control px-4 py-2 text-sm text-control-foreground disabled:opacity-50">{creating ? t('loading') : t('codexHistoryCreate')}</button>
+        </footer>
+      </>}
+    </div>
+  </div>, document.body)
+}

@@ -11,6 +11,7 @@ import type {
 } from '../contracts/attachments.js'
 import { AttachmentMetadata as AttachmentMetadataSchema } from '../contracts/attachments.js'
 import { applyPosixMode } from '../security/posix-permissions.js'
+import { jpegDimensions } from './jpeg-dimensions.js'
 
 const ATTACHMENT_ID_PATTERN = /^att_[0-9a-f]{24}$/
 const PendingAttachmentLeaseSchema = z.object({
@@ -69,6 +70,7 @@ export class FileAttachmentStore implements AttachmentStore {
       rootDir: string
       config: AttachmentsCapabilityConfig
       nowIso?: () => string
+      isRetained?: (id: string) => Promise<boolean>
     }
   ) {}
 
@@ -107,6 +109,8 @@ export class FileAttachmentStore implements AttachmentStore {
           ...existing,
           kind: descriptor.kind,
           mimeType: descriptor.mimeType,
+          ...(descriptor.width ? { width: descriptor.width } : {}),
+          ...(descriptor.height ? { height: descriptor.height } : {}),
           ...(input.localFilePath ? { localFilePath: input.localFilePath } : {}),
           ...(input.textFallback ? { textFallback: input.textFallback } : {}),
           ...(input.visualPreview ? { visualPreview: input.visualPreview } : {}),
@@ -286,7 +290,7 @@ export class FileAttachmentStore implements AttachmentStore {
       if (!metadata) return false
       if (!metadata.pendingLeases.some((candidate) => candidate.id === leaseId)) return false
       const pendingLeases = metadata.pendingLeases.filter((candidate) => candidate.id !== leaseId)
-      if (!referenced && pendingLeases.length === 0) {
+      if (!referenced && pendingLeases.length === 0 && !await this.options.isRetained?.(id)) {
         await this.deleteFiles(id)
         return true
       }
@@ -319,7 +323,7 @@ export class FileAttachmentStore implements AttachmentStore {
           (lease) => lease.createdAt >= expiresBeforeIso
         )
         released += metadata.pendingLeases.length - pendingLeases.length
-        if (pendingLeases.length === 0 && !referencedIds.has(id)) {
+        if (pendingLeases.length === 0 && !referencedIds.has(id) && !await this.options.isRetained?.(id)) {
           await this.deleteFiles(id)
           deleted += 1
           return
@@ -560,7 +564,7 @@ export function detectImage(buffer: Buffer): { mimeType: string; width?: number;
     return { mimeType: 'image/png', width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
   }
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-    return { mimeType: 'image/jpeg' }
+    return { mimeType: 'image/jpeg', ...jpegDimensions(buffer) }
   }
   if (buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') {
     return { mimeType: 'image/webp' }

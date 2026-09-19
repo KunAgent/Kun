@@ -30,6 +30,7 @@ export async function createMemory(store: MemoryStore | undefined, request: Requ
   if (!body.ok) return body.response
   const parsed = MemoryCreateRequest.safeParse(body.value)
   if (!parsed.success) return ERRORS.validation('invalid memory create body', parsed.error.issues)
+  if (parsed.data.agentContext) return ERRORS.validation('use the scoped agent memory endpoint')
   return jsonResponse({ memory: await store.create(parsed.data) }, 201)
 }
 
@@ -39,6 +40,7 @@ export async function updateMemory(store: MemoryStore | undefined, id: string, r
   if (!body.ok) return body.response
   const parsed = MemoryUpdateRequest.safeParse(body.value)
   if (!parsed.success) return ERRORS.validation('invalid memory update body', parsed.error.issues)
+  if (parsed.data.agentContext) return ERRORS.validation('use the scoped agent memory endpoint')
   try {
     const url = new URL(request.url)
     const workspace = url.searchParams.get('workspace') ?? undefined

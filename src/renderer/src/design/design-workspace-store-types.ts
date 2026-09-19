@@ -11,6 +11,7 @@ import type {
 } from './design-types'
 import type { DesignContext, DesignTarget } from './design-context'
 import type { DrawingHistoryMutation } from './design-drawing-history'
+import type { CanvasEngine } from '../whiteboard/canvas-engine'
 
 /** Progress of an in-flight Stitch-style multi-page generation run. */
 export type DesignPagesRunState = {
@@ -109,7 +110,12 @@ export type DesignWorkspaceState = {
   /** Create a new 设计稿 (empty), make it active, and return its id. */
   createDocument: (
     title?: string,
-    options?: { transient?: boolean; titleOrigin?: 'generated' | 'user'; folderId?: string | null }
+    options?: {
+      transient?: boolean
+      titleOrigin?: 'generated' | 'user'
+      folderId?: string | null
+      engine?: CanvasEngine
+    }
   ) => string
   /** Open the new-drawing launcher without creating a document or changing the persisted active id. */
   beginDrawingCreation: (options?: { folderId?: string | null }) => void
@@ -127,6 +133,7 @@ export type DesignWorkspaceState = {
     title: string,
     options?: { titleOrigin?: 'generated' | 'user' }
   ) => void
+  setDocumentEngine: (documentId: string, engine: CanvasEngine) => boolean
   /** Move a design document into a logical folder; null returns it to the workspace root. */
   moveDocument: (documentId: string, folderId: string | null) => void
   /** Create a logical folder under the optional parent and return its id. */

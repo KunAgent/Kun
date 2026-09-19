@@ -113,6 +113,7 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     displayText: input.displayText,
     ...(message.guiPlan ? { guiPlan: message.guiPlan } : {}),
     ...(message.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+    ...(message.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(message.guiDesignMode ? { guiDesignMode: true } : {}),
     ...(message.persona ? { persona: message.persona } : {}),
     ...(message.approvalPolicy ? { approvalPolicy: message.approvalPolicy } : {}),

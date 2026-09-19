@@ -11,8 +11,9 @@ const ERROR_DISMISS_MS = 8_000
 
 /**
  * Floating progress card for the first Speak on a fresh install, when the
- * Kokoro weights still have to be downloaded. It also surfaces Speak failures,
- * which would otherwise only appear as a tooltip on a hover-only action.
+ * sanoTTS runtime and voice still have to be downloaded. It also surfaces
+ * Speak failures, which would otherwise only appear as a tooltip on a
+ * hover-only action.
  */
 export function SpeakDownloadToast(): ReactElement | null {
   const { t } = useTranslation('common')
@@ -72,7 +73,7 @@ export function SpeakDownloadToast(): ReactElement | null {
     : 0)
   const title = download.asset === 'voice'
     ? t('speakDownloadingVoice', { voice: download.label })
-    : t('speakDownloadingModel', { model: download.label })
+    : t('speakDownloadingRuntime', { runtime: download.label })
   return (
     <div
       role="status"

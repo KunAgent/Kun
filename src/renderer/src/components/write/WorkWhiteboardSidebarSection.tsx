@@ -9,6 +9,7 @@ import {
   Trash2
 } from 'lucide-react'
 import type { WorkWhiteboard } from '../../write/write-workspace-store'
+import { workWhiteboardResolvedEngine } from '../../write/work-whiteboard'
 import { SidebarIconButton, SidebarTreeRow } from '../sidebar/SidebarPrimitives'
 
 type Props = {
@@ -88,7 +89,9 @@ export function WorkWhiteboardSidebarSection({
         <div className="mt-0.5">
           {[...whiteboards]
             .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-            .map((board) => (
+            .map((board) => {
+              const Icon = workWhiteboardResolvedEngine(board) === 'excalidraw' ? PencilLine : Shapes
+              return (
               <div key={board.id} className="relative" data-work-whiteboard-item={board.id}>
                 <SidebarTreeRow
                   active={activeWhiteboardId === board.id}
@@ -108,7 +111,7 @@ export function WorkWhiteboardSidebarSection({
                     </SidebarIconButton>
                   )}
                 >
-                  <Shapes className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
                   <span className="min-w-0 flex-1 truncate">{board.title}</span>
                 </SidebarTreeRow>
                 {openMenuId === board.id ? (
@@ -130,7 +133,8 @@ export function WorkWhiteboardSidebarSection({
                   </div>
                 ) : null}
               </div>
-            ))}
+              )
+            })}
         </div>
       ) : null}
     </div>

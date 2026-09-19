@@ -1,5 +1,7 @@
 import { ManagerMemoryDistillationPendingOwner } from './memory-distillation-pending-owner.js'
+import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { readFile, rm } from 'node:fs/promises'
+import { readHistoryReservationKeys } from '../history/history-reference-reservations.js'
 import { relative, resolve, sep } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
@@ -73,6 +75,7 @@ import type { ManagerSessionStoreOperation } from './shared-data-store-contracts
 export abstract class ManagerSharedDataStoreCore {
   readonly threadStore: ThreadStore
   readonly sessionStore: SessionStore
+  readonly roomStore: SqliteRoomStore
   protected readonly hybridThreadStore: HybridThreadStore
   protected readonly artifactStore: ArtifactStore
   protected readonly attachmentStores = new Map<string, AttachmentStore>()
@@ -103,6 +106,7 @@ export abstract class ManagerSharedDataStoreCore {
     sessionStore: HybridSessionStore
   }) {
     this.dataDir = resolve(input.dataDir)
+    this.roomStore = new SqliteRoomStore({ path: resolve(this.dataDir, 'rooms', 'rooms.sqlite') })
     this.memoryDistillationPending = new ManagerMemoryDistillationPendingOwner(this.dataDir)
     this.memoryFeedback = new ManagerMemoryFeedbackOwner({
       dataDir: this.dataDir,
@@ -123,6 +127,10 @@ export abstract class ManagerSharedDataStoreCore {
     operation: ManagerSessionStoreOperation,
     value: unknown
   ): Promise<unknown>
+
+  listHistoryReservationKeys(): Promise<string[]> {
+    return readHistoryReservationKeys(this.dataDir)
+  }
 
   async readAtomicJson(path: string): Promise<{ revision: number; value: unknown | null }> {
     const target = this.safeDataPath(path)
@@ -195,7 +203,11 @@ export abstract class ManagerSharedDataStoreCore {
       try {
         await this.memoryRepository?.shutdown?.()
       } finally {
-        await this.hybridThreadStore.shutdown()
+        try {
+          await this.hybridThreadStore.shutdown()
+        } finally {
+          await this.roomStore.close()
+        }
       }
     }
   }
@@ -398,7 +410,8 @@ export abstract class ManagerSharedDataStoreCore {
     if (!store) {
       store = new FileAttachmentStore({
         rootDir: resolve(this.dataDir, 'attachments'),
-        config
+        config,
+        isRetained: (id) => this.roomStore.isAttachmentReferenced(id)
       })
       this.attachmentStores.set(key, store)
     }

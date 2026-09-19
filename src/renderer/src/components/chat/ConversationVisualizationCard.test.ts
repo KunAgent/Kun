@@ -28,6 +28,14 @@ const block: ToolBlock = {
           kind: 'callout',
           tone: 'warning',
           lines: ['Keep one deployment active.']
+        },
+        {
+          kind: 'card_grid',
+          columns: 2,
+          cards: [
+            { id: 'pass', title: '98%', description: 'Checks that succeeded across the last twenty deploys in this environment.' },
+            { id: 'fail', title: 'Two failures', description: 'Need a follow-up review.' }
+          ]
         }
       ]
     }
@@ -43,6 +51,10 @@ describe('ConversationVisualizationCard', () => {
     expect(markup).toContain('Build')
     expect(markup).toContain('Keep one deployment active.')
     expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('text-[22px]')
+    expect(markup).toContain('line-clamp-2')
+    expect(markup).toContain('98%')
+    expect(markup).toContain('Two failures')
   })
 
   it('fails closed without valid visualization metadata', () => {

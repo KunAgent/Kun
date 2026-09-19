@@ -31,6 +31,7 @@ import type {
 import { normalizeKunRuntimeEvent, type KunEventNormalizerDeps } from './kun-event-normalizer'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import { dedupeTimelineTextBlocks } from './timeline-text-blocks'
+import { earliestSourceHistoryOrder, orderSourceHistoryBlocks } from './source-history-order'
 import { visualizationFromToolPayload } from './conversation-visualization'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
@@ -64,7 +65,6 @@ import {
   TOOL_KIND_BY_NAME,
   applyRuntimeDisclosureMeta,
   extractToolAttachments,
-  extractToolGeneratedFiles,
   extractToolSources,
   gatewayHasWorkspaceWriteSideEffect,
   itemCreatedAt,
@@ -76,6 +76,7 @@ import {
   toolBlockId,
   toolStatus
 } from './kun-mapper-core'
+import { extractToolGeneratedFiles } from './kun-mapper-generated-files'
 
 
 export function extractComponentPrototype(item: CoreTurnItemJson): ComponentPrototypeMetadata | undefined {
@@ -425,7 +426,7 @@ export function delegateTaskStatusOverride(
 export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
   const merged: ChatBlock[] = []
   const toolIndexes = new Map<string, number>()
-  for (const block of blocks) {
+  for (const block of orderSourceHistoryBlocks(blocks)) {
     if (block.kind !== 'tool') {
       merged.push(block)
       continue
@@ -441,15 +442,28 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
       merged.push(block)
       continue
     }
+    // A paged source result is final even if a later page only brings the
+    // matching call. Loading that call must not replace output with arguments.
+    const resultOwnsContent = /^(codex|claude-code|opencode):/u.test(existing.turnId ?? '') &&
+      existing.meta?.sourceItemKind === 'tool_result' && block.meta?.sourceItemKind !== 'tool_result'
+    const first = resultOwnsContent ? block : existing
+    const last = resultOwnsContent ? existing : block
     merged[existingIndex] = {
-      ...existing,
-      ...block,
+      ...first,
+      ...last,
       createdAt: existing.createdAt ?? block.createdAt,
-      summary: block.summary || existing.summary,
-      detail: block.detail ?? existing.detail,
-      filePath: block.filePath ?? existing.filePath,
-      toolKind: block.toolKind ?? existing.toolKind,
-      meta: { ...(existing.meta ?? {}), ...(block.meta ?? {}) }
+      ...(existing.sourceHistoryOrder || block.sourceHistoryOrder ? {
+        sourceHistoryOrder: earliestSourceHistoryOrder(existing.sourceHistoryOrder, block.sourceHistoryOrder)
+      } : {}),
+      summary: last.summary || first.summary,
+      detail: last.detail ?? first.detail,
+      filePath: last.filePath ?? first.filePath,
+      toolKind: last.toolKind ?? first.toolKind,
+      meta: { ...(first.meta ?? {}), ...(last.meta ?? {}) },
+      ...(existing.sourceRecords || block.sourceRecords ? {
+        sourceRecords: [...new Map([...(first.sourceRecords ?? []), ...(last.sourceRecords ?? [])]
+          .map((record) => [record.itemId, record])).values()]
+      } : {})
     }
   }
   return dedupeTimelineTextBlocks(merged)

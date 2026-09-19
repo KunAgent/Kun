@@ -6,7 +6,7 @@
   "speakSynthesizing": "音声を生成しています...",
   "speakUnavailable": "このビルドではローカル音声を利用できません。",
   "speakNothingToRead": "この回答には読み上げる本文がありません。",
-  "speakModelMissing": "読み上げを使うには、設定で Kokoro 音声モデルをダウンロードしてください。",
+  "speakModelMissing": "読み上げを使うには、設定でローカル音声ランタイムと声をダウンロードしてください。",
   "speakVoiceMissing": "選択した声をダウンロードできませんでした。",
   "speakFailed": "音声を生成できませんでした: {{message}}",
   "speakDownloadingModel": "{{model}} をダウンロード中",
@@ -15,6 +15,7 @@
   "speakTrackDownload": "音声をダウンロード",
   "speakTrackSaved": "保存しました",
   "speakTrackSaveFailed": "録音を保存できませんでした: {{message}}",
-  "speakUnsupportedLanguage": "ローカル読み上げは英語のみ対応しています。この内容には未対応の言語が含まれています。",
-  "speakTrackNotSaved": "録音は消去、容量超過、または書き込みエラーにより保存されませんでした。読み上げは続行します。"
+  "speakUnsupportedLanguage": "選択した声ではこの回答を読み上げられません。設定で声を変えるか、未対応の文字を除いてください。",
+  "speakTrackNotSaved": "録音は消去、容量超過、または書き込みエラーにより保存されませんでした。読み上げは続行します。",
+  "speakDownloadingRuntime": "{{runtime}} をダウンロード中"
 }

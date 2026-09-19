@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { spawn, SpawnOptions } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 import { createHash } from 'node:crypto'
 import { constants, createWriteStream, existsSync } from 'node:fs'
 import {
@@ -461,9 +462,9 @@ async function extractZipBinary(
   }
 }
 
-function runProcess(command: string, args: string[], timeoutMs: number): Promise<void> {
+async function runProcess(command: string, args: string[], timeoutMs: number): Promise<void> {
+  const child = await spawnOwnedProcess(command, args, { stdio: 'ignore', windowsHide: true, shell: false })
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: 'ignore', windowsHide: true, shell: false })
     let settled = false
     const finish = (error?: Error): void => {
       if (settled) return
@@ -473,7 +474,7 @@ function runProcess(command: string, args: string[], timeoutMs: number): Promise
       else resolve()
     }
     const timer = setTimeout(() => {
-      child.kill()
+      void stopOwnedProcess(child).catch(reject)
       finish(new Error(`${command} timed out`))
     }, timeoutMs)
     child.once('error', finish)
@@ -483,25 +484,17 @@ function runProcess(command: string, args: string[], timeoutMs: number): Promise
   })
 }
 
-function captureProcess(
+async function captureProcess(
   command: string,
   args: string[],
   timeoutMs: number,
-  spawnFn: typeof spawn = spawn
+  spawnFn?: typeof spawn
 ): Promise<{ stdout: string; stderr: string }> {
+  const options: SpawnOptions = {
+    stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: false, env: process.env
+  }
+  const child = spawnFn ? spawnFn(command, args, options) : await spawnOwnedProcess(command, args, options)
   return new Promise((resolve, reject) => {
-    let child: ChildProcess
-    try {
-      child = spawnFn(command, args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-        shell: false,
-        env: process.env
-      })
-    } catch (error) {
-      reject(error)
-      return
-    }
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -513,7 +506,8 @@ function captureProcess(
       else resolve({ stdout, stderr })
     }
     const timer = setTimeout(() => {
-      child.kill()
+      if (spawnFn) child.kill()
+      else void stopOwnedProcess(child).catch(reject)
       finish(new Error(`${command} login verification timed out`))
     }, timeoutMs)
     child.stdout?.on('data', (chunk: Buffer | string) => {

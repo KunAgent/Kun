@@ -122,6 +122,8 @@ import { RegistrationIdSchema, RegistrationRequestSchema, RunIdSchema, ThreadIdS
 /** Fast pre-gate for fixed permissions. Dynamic account/network scopes are checked by the broker. */
 export function requiredExtensionBrokerPermission(method: string, params: JsonValue): string | undefined {
   if (method.startsWith('commands.')) return 'commands.register'
+  if (method === 'agent.capacity') return 'agent.capacity.read'
+  if (method.startsWith('rooms.')) return 'rooms.read'
   if (method.startsWith('agent.')) return 'agent.run'
   if (method.startsWith('threads.')) return 'agent.threads.readOwn'
   if (method.startsWith('tools.')) return 'tools.register'

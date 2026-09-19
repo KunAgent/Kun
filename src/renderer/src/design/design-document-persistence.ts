@@ -7,6 +7,11 @@
  * also marks "the legacy → nested migration has run" (see the store).
  */
 import type { DesignDocument, DesignWorkspaceFolder } from './design-types'
+import {
+  canvasEnginePersistField,
+  normalizeCanvasEngine,
+  type CanvasEngine
+} from '../whiteboard/canvas-engine'
 import { normalizeDesignWorkspaceFolders } from './design-workspace-folders'
 import {
   deleteDesignWorkspaceEntry,
@@ -69,6 +74,7 @@ export type DesignDocumentIndexEntry = {
   updatedAt: string
   activeArtifactId: string | null
   folderId: string | null
+  engine?: CanvasEngine
 }
 
 export type DesignDocumentsIndex = {
@@ -90,7 +96,8 @@ function toIndexEntry(doc: DesignDocument): DesignDocumentIndexEntry {
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
     activeArtifactId: doc.activeArtifactId,
-    folderId: doc.folderId?.trim() || null
+    folderId: doc.folderId?.trim() || null,
+    ...canvasEnginePersistField(doc.engine)
   }
 }
 
@@ -148,7 +155,8 @@ export function parseDocumentsIndex(raw: string): DesignDocumentsIndex | null {
       createdAt,
       updatedAt: isStr(o.updatedAt) ? o.updatedAt : createdAt,
       activeArtifactId: isStr(o.activeArtifactId) ? o.activeArtifactId : null,
-      folderId: isStr(o.folderId) && folderIds.has(o.folderId) ? o.folderId : null
+      folderId: isStr(o.folderId) && folderIds.has(o.folderId) ? o.folderId : null,
+      ...canvasEnginePersistField(normalizeCanvasEngine(o.engine))
     })
   })
   const activeDocumentId =

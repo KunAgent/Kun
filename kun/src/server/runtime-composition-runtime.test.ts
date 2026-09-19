@@ -10,7 +10,7 @@ describe('server runtime composition', () => {
       agent: looseObject({ registryComposition: looseObject({ services }) })
     })
     const config = looseObject({
-      activeOptions: looseObject({}),
+      activeOptions: looseObject({ dataDir: '/tmp/kun-runtime-composition-test' }),
       startedAt: '2026-09-16T00:00:00.000Z',
       rebuildCapabilities: () => ({}),
       applyConfig: async () => ({ ok: true })

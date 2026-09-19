@@ -3,8 +3,10 @@ import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { applyTheme } from '../../lib/apply-theme'
 import { readFocusModePreference, writeFocusModePreference } from '../../lib/focus-mode'
 import { useUiModeCameosEnabled, useUiPluginStore } from '../../store/ui-plugin-store'
+import { useRoomEvents } from '../rooms/useRoomEvents'
 
 export function useWorkbenchUiRuntime() {
+  useRoomEvents()
   const initUiPlugins = useUiPluginStore((s) => s.initUiPlugins)
   const uiModeCameosEnabled = useUiModeCameosEnabled()
   const [focusModeEnabled, setFocusModeEnabled] = useState(readFocusModePreference)

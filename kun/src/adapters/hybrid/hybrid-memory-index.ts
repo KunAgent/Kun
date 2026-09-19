@@ -1,3 +1,4 @@
+import { agentMemoryScopeSql, type AgentMemoryScope } from '../../memory/agent-memory-scope.js'
 import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
 import type { MemoryCapabilityConfig } from '../../contracts/capabilities.js'
 import { MemoryRecord, type MemoryRecord as MemoryRecordValue } from '../../contracts/memory.js'
@@ -110,10 +111,17 @@ export class HybridMemoryIndex {
     const params: Record<string, unknown> = {}
     if (!filter.includeDeleted) where.push("lifecycle != 'deleted'")
     if (!filter.all) addScopeWhere(where, params, filter, ['user', 'workspace', 'project'])
+    else agentMemoryScopeSql(where, params, filter)
+    if (filter.before) {
+      where.push('(updated_at<@beforeUpdated OR (updated_at=@beforeUpdated AND id>@beforeId))')
+      params.beforeUpdated = filter.before.updatedAt; params.beforeId = filter.before.id
+    }
+    if (filter.limit !== undefined) params.pageLimit = Math.max(1, Math.min(1000, filter.limit))
     const rows = this.db.prepare(`
       SELECT record_json FROM memory_records
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY updated_at DESC, id ASC
+      ${filter.limit !== undefined ? 'LIMIT @pageLimit' : ''}
     `).all(params) as Array<{ record_json: string }>
     return rows.map((row) => MemoryRecord.parse(JSON.parse(row.record_json)))
   }
@@ -238,11 +246,12 @@ export class HybridMemoryIndex {
 function addScopeWhere(
   where: string[],
   params: Record<string, unknown>,
-  access: { workspace?: string; project?: string },
+  access: AgentMemoryScope,
   allowedScopes: readonly string[],
   alias = ''
 ): void {
   const prefix = alias ? `${alias}.` : ''
+  agentMemoryScopeSql(where, params, access, prefix)
   const clauses: string[] = []
   if (allowedScopes.includes('user')) clauses.push(`${prefix}scope = 'user'`)
   const workspace = normalizeMemoryScopePath(access.workspace)

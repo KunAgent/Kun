@@ -196,10 +196,28 @@ The Changelog records public Extension API, not Kun internal refactors. Each ent
 The public surface snapshots below are computed from package entries, public exports, and reachable `.d.ts` declarations. Update them only after this section explains the compatibility impact; changing a hash is not itself a Changelog entry.
 
 <!-- BEGIN GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
-<!-- sdk-surface-snapshot @kun/extension-api@1.4.0 sha256:2a1dd3410cd89e76b70c7752cca01442d6c42cb5dd4c78e7a96591ef8aed862b -->
+<!-- sdk-surface-snapshot @kun/extension-api@1.5.0 sha256:61cd434273bbcc962dfa974e19120a7493247b2f79352186edd648947b9dfdb6 -->
 <!-- sdk-surface-snapshot @kun/extension-react@1.4.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
 <!-- sdk-surface-snapshot @kun/extension-test@1.4.0 sha256:9aa234e9c62776edab832924aef8f925f68679732e8ab08626c21ffabd42e28e -->
 <!-- END GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
+
+### v1.5.0 — Global capacity and read-only Rooms
+
+Compatible Kun: builds advertising Extension API `1.5.0`.
+
+Added:
+
+- `agent.capacity()` and `agent.capacity.read` expose only global running/queued turn counts, admission capacity, and `busy` across every surface, including rooms.
+- `context.rooms` provides `list`, `listMessages`, `listTasks`, and `listEvents` with strict schemas, bounded pagination, and the separate `rooms.read` permission.
+
+Security:
+
+- Rooms reads cross the local room trust domain only through `rooms.read`. Existing Agent/thread ownership checks remain unchanged. No room write or approval capability is added.
+- Read projections omit repository/attachment paths, prompts, credentials, raw tool input/output, and internal turn/lease/dispatch state; room message text is permitted.
+
+Migration:
+
+- `@kun/extension-api` advances to `1.5.0`; existing v1.4 through v1.0 manifests remain compatible. New calls require the corresponding scopes. Optional capacity consumers can feature-detect `context.agent.capacity?.()` on older hosts.
 
 ### v1.4.0 — Recoverable Agent conversation history
 

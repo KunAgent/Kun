@@ -94,6 +94,7 @@ export type PaletteSourcesInput = {
  * newly added AppRoute fail compilation until it gets localized copy.
  */
 const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
+  rooms: 'roomsLabel',
   chat: 'code',
   write: 'write',
   design: 'design',
@@ -107,6 +108,7 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
+  rooms: MessageSquare,
   chat: Code2,
   write: PencilLine,
   design: Palette,

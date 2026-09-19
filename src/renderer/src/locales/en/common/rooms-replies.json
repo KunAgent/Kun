@@ -1,0 +1,13 @@
+{
+  "roomsReplyThreadTitle": "Reply thread",
+  "roomsReplyContentTitle": "Content preview",
+  "roomsReplyBack": "Back to previous view",
+  "roomsReplyCount_one": "{{count}} reply",
+  "roomsReplyCount_other": "{{count}} replies",
+  "roomsReplyOutsideThread": "The referenced message is unavailable in this reply thread.",
+  "roomsReplyUnavailable_missing_message": "This message is unavailable.",
+  "roomsReplyUnavailable_missing_parent": "An earlier message in this reply thread is unavailable.",
+  "roomsReplyUnavailable_cycle": "The saved reply chain is invalid.",
+  "roomsReplyUnavailable_inconsistent_root": "The saved reply root is inconsistent.",
+  "roomsReplyUnavailable_depth_limit": "This historical reply chain exceeds the supported depth. Some replies may be unavailable."
+}

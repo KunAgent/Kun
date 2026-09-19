@@ -98,6 +98,10 @@ describe('runtime error parsing', () => {
     // Unknown, offline, and internal outcomes may succeed on a retry.
     expect(isDeterministicKunRejection('unknown')).toBe(false)
     expect(isDeterministicKunRejection('runtime_offline')).toBe(false)
+    expect(parseRuntimeErrorBody(
+      JSON.stringify({ code: 'runtime_shutting_down', message: 'Kun application is shutting down' }),
+      'fallback'
+    ).code).toBe('runtime_shutting_down')
     expect(isDeterministicKunRejection('internal_error')).toBe(false)
   })
 })

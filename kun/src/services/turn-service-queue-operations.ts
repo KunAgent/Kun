@@ -165,6 +165,7 @@ export const turnServiceQueueOperations = {
       composerContexts,
       guiPlan: input.request.guiPlan,
       guiDesignCanvas: input.request.guiDesignCanvas,
+      guiExcalidrawCanvas: input.request.guiExcalidrawCanvas,
       guiDesignMode: input.request.guiDesignMode,
       agentSurface: designAdmission.effectiveSurface,
       designProfile: designAdmission.effectiveProfile,
@@ -191,6 +192,7 @@ export const turnServiceQueueOperations = {
       fileReferences: input.request.fileReferences ?? [],
       workspaceCheckpointId: input.request.workspaceCheckpointId,
       workspace: thread.workspace,
+      historyRefId: thread.historyRefId,
       threadAgentSurface: designAdmission.locksSurface && designAdmission.effectiveSurface
         ? designAdmission.effectiveSurface
         : resolveThreadAgentSurface(thread),

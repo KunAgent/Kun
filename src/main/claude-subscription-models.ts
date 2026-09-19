@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { runOwnedCommand } from './owned-command'
 
 const SDK_PKG = '@anthropic-ai/claude-agent-sdk'
 // Frame the JSON payload so we can extract it from any other stdout noise.
@@ -54,6 +55,12 @@ export function fetchSdkModels(options: {
     `process.stdout.write(${JSON.stringify(MARK)} + JSON.stringify(out) + ${JSON.stringify(MARK)});`,
     `process.exit(0);`
   ].join('\n')
+
+  if (!options.spawnFn) {
+    return runOwnedCommand(nodePath, ['--input-type=module', '-e', script], {
+      cwd: kunDir, env: scopedEnv(options.token), timeoutMs, maxOutputBytes: 1024 * 1024
+    }).then((result) => parseModelIds(result.stdout), () => [])
+  }
 
   return new Promise((resolve) => {
     let settled = false

@@ -385,6 +385,7 @@ export class AgentSdkRuntime {
           ? userMessageStream(attemptText, ctx.images)
           : attemptText
         const options = buildOptions(remainingTurns)
+        options.spawnClaudeCodeProcess = spawnOwnedSdkProcess
         mapper.beginQuery()
         let attemptFinalSeen = false
         let attemptMessageSeen = false
@@ -682,3 +683,4 @@ export class AgentSdkRuntime {
     }
   }
 }
+import { spawnOwnedSdkProcess } from './owned-sdk-process.js'

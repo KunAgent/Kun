@@ -78,8 +78,7 @@ function validatePackedNodePtyPayload(context, helpers) {
   const { unpackedAppRoot, normalizePlatform, normalizeArch } = helpers
   const packageRoot = join(unpackedAppRoot(context), 'node_modules', 'node-pty')
   // node-pty is always packaged as a root dependency, but several packaging
-  // fixtures exercise prune/validate without it; skip instead of failing there
-  // (mirrors prunePackedOnnxRuntimeBinaries' optional-package behavior).
+  // fixtures exercise prune/validate without it; skip instead of failing there.
   if (!existsSync(packageRoot)) return
 
   const platform = normalizePlatform(context.electronPlatformName)

@@ -1,4 +1,5 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+import type { RoomThreadSource } from '@shared/rooms-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { CoreTurnJson } from './kun-contract-runtime'
 import type { DesignTaskProfile } from './design-task-profile'
@@ -19,6 +20,8 @@ export type CoreItemStatus =
   | string
 
 export type CoreThreadSummaryJson = {
+  historyRefId?: string
+  roomContext?: RoomThreadSource
   id: string
   title: string
   /** Durable product surface that owns the thread. Absent for legacy Code threads. */
@@ -36,6 +39,7 @@ export type CoreThreadSummaryJson = {
   /** Optional whole-conversation summary produced by the summarize route. */
   summary?: string
   workspace?: string
+  additionalWorkspaces?: string[]
   knowledgeBases?: Array<{
     id: string
     root: string
@@ -64,6 +68,7 @@ export type CoreThreadSummaryJson = {
   forkedAt?: string
   forkedFromMessageCount?: number
   forkedFromTurnCount?: number
+  forkedFromTurnId?: string
   goal?: CoreThreadGoalJson | null
   todos?: CoreThreadTodoListJson | null
   createdAt: string
@@ -83,6 +88,7 @@ export type CoreThreadTimelineJson = CoreThreadJson & {
   activeTurn?: Omit<CoreTurnJson, 'items'> | null
   latestTurn?: Omit<CoreTurnJson, 'items'> | null
   timeline: {
+    target?: { turnId: string; itemId?: string; previousCursor?: string; nextCursor?: string }
     nextCursor?: string
     hasMore: boolean
     itemCount: number

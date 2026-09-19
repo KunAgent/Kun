@@ -53,6 +53,23 @@ describe('design documents index persistence', () => {
     })
   })
 
+  it('persists Excalidraw engine and defaults missing/invalid values to Kun', () => {
+    const serialized = serializeDocumentsIndex([
+      { ...document('sketch'), engine: 'excalidraw' },
+      document('legacy')
+    ], 'sketch')
+    expect(serialized).toContain('"engine": "excalidraw"')
+    expect(serialized).not.toMatch(/"id": "legacy"[\s\S]*"engine"/)
+    const parsed = parseDocumentsIndex(serialized)
+    expect(parsed?.documents.find((item) => item.id === 'sketch')?.engine).toBe('excalidraw')
+    expect(parsed?.documents.find((item) => item.id === 'legacy')?.engine).toBeUndefined()
+    expect(parseDocumentsIndex(JSON.stringify({
+      version: 2,
+      activeDocumentId: 'bad',
+      documents: [{ ...document('bad'), engine: 'unknown' }]
+    }))?.documents[0]?.engine).toBeUndefined()
+  })
+
   it('keeps legacy drawings in the root while accepting a version 2 folder tree', () => {
     const legacy = parseDocumentsIndex(JSON.stringify({
       version: 1,

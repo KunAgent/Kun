@@ -12,6 +12,7 @@ import {
   mergeWorkflowSettings,
   mergeWriteSettings,
   mergeTerminalSettings,
+  mergeRemoteAccessSettings,
   mergeDarkUiColors,
   normalizeAppBehaviorSettings,
   normalizeClawSettings,
@@ -26,6 +27,7 @@ import {
   normalizeWriteSettings,
   normalizeCodeAgentPresets,
   normalizeTerminalSettings,
+  normalizeRemoteAccessSettings,
   normalizeDarkUiColors,
   normalizeChatContentMaxWidth,
   normalizeChatWelcomeMessage,
@@ -128,6 +130,7 @@ export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): App
     workflow: mergeWorkflowSettings(safeCurrent.workflow, patch.workflow),
     design: mergeDesignSettings(safeCurrent.design, patch.design),
     terminal: mergeTerminalSettings(safeCurrent.terminal, patch.terminal),
+    remote: mergeRemoteAccessSettings(safeCurrent.remote, patch.remote),
     guiUpdate: {
       ...safeCurrent.guiUpdate,
       ...(patch.guiUpdate ?? {})
@@ -187,6 +190,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     workflow: normalizeWorkflowSettings(raw.workflow),
     design: normalizeDesignSettings(raw.design),
     terminal: normalizeTerminalSettings(raw.terminal),
+    remote: normalizeRemoteAccessSettings(raw.remote),
     guiUpdate: {
       channel: normalizeGuiUpdateChannel(raw.guiUpdate?.channel ?? DEFAULT_GUI_UPDATE_CHANNEL)
     },

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { installIssue781DocumentUsability } from './lib/issue-781-document-usability'
 import { useChatStore } from './store/chat-store'
+import { ensureCodexReferenceWatcher } from './history-reference/codex-reference-watcher'
 import { KUN_MODEL_CONNECTIONS_PATH } from '@shared/kun-endpoints'
 
 type AppShellModule = typeof import('./AppShell')
@@ -18,6 +19,7 @@ export async function prepareWorkbenchApp(): Promise<void> {
 }
 
 function DocumentUsabilityLifecycle(): null {
+  useEffect(() => { ensureCodexReferenceWatcher() }, [])
   useEffect(() => installIssue781DocumentUsability(), [])
   return null
 }

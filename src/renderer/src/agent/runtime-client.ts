@@ -93,7 +93,7 @@ class RendererRuntimeClient {
     threadId: string,
     sinceSeq: number,
     streamId?: string,
-    options?: { acknowledgedBatches?: boolean }
+    options?: import('@shared/kun-gui-sse-contracts').SseStartOptions
   ): Promise<{ streamId: string }> {
     return window.kunGui.startSse(threadId, sinceSeq, streamId, options)
   }

@@ -506,6 +506,7 @@ export abstract class DelegationRuntimeBase {
           ...(args.agentSurface ? { agentSurface: args.agentSurface } : {}),
           ...(args.promptPreamble ? { promptPreamble: args.promptPreamble } : {}),
           ...(args.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+          ...(args.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
           ...(args.resolvedReasoningEffort ? { reasoningEffort: args.resolvedReasoningEffort } : {}),
           ...(args.resolvedServiceTier ? { serviceTier: args.resolvedServiceTier } : {}),
           returnFormat: args.returnFormat,

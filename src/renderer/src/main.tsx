@@ -26,6 +26,7 @@ import { installProviderMutationFlushHandler } from './services/provider-mutatio
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
+if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
 initializeStartupTheme(window.kunGui?.getSettings)
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()

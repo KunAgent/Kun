@@ -317,6 +317,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       clientSurface: record.clientSurface,
       agentSurface,
       guiDesignCanvas: false,
+      guiExcalidrawCanvas: false,
       resolvedReasoningEffort: record.reasoningEffort,
       resolvedServiceTier: record.serviceTier,
       returnFormat: record.returnFormat,

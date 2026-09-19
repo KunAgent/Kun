@@ -7,6 +7,8 @@ import {
   type MouseEvent as ReactMouseEvent
 } from 'react'
 import type { SlashCommand, SlashCommandId } from './floating-composer-commands'
+import { extraRootsForWorkspace } from '../../lib/code-workspace-folder-lookup'
+import { useChatStore } from '../../store/chat-store'
 import type { ComposerFileDropOptions } from './composer-file-drop'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
@@ -55,6 +57,8 @@ export function useFloatingComposerActions(
     setPromptOptimizationBusy, setPromptOptimizationError, slashCommandMenu, slashCommands,
     t, userInput
   } = context
+  const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
+  const extraWorkspaceRoots = extraRootsForWorkspace(effectiveWorkspaceRoot, folderSets)
   const applySlashCommand = (commandId: SlashCommandId): void => {
     if (commandId.startsWith('skill:')) {
       const command = slashCommands.find((item: SlashCommand) => item.id === commandId)
@@ -479,6 +483,7 @@ export function useFloatingComposerActions(
     canPickLocalFileReference,
     canAddFileReference,
     workspaceRoot: effectiveWorkspaceRoot,
+    extraWorkspaceRoots,
     onPickAttachments,
     onAddFileReference,
     getPathForFile: (file) => window.kunGui.getPathForFile(file)

@@ -102,6 +102,7 @@ export class GuiUpdateInstaller {
       this.deps.clearPreparation()
       this.deps.setQuitting(false)
       console.warn('[kun-gui updater] failed to stop runtimes before update quit:', error)
+      if (!this.deps.isSessionEnding()) this.scheduleRecovery()
     })
   }
 
@@ -253,7 +254,7 @@ export class GuiUpdateInstaller {
       await scheduleUpdateRollbackAfterExit(recovery.recoveryEnvironment)
       this.deps.emit({ status: 'error', info: this.deps.stateInfo(), code: 'install_failed',
         message: 'Kun Runtime health checks failed repeatedly. Restoring the previous version.' })
-      app.exit(0)
+      app.quit()
     } catch (error) {
       console.error('[kun-gui updater] failed to schedule update rollback:', error)
       this.emitDegraded(recovery.healthAttempts, recovery.lastError)
@@ -519,9 +520,13 @@ export class GuiUpdateInstaller {
     this.deps.setQuitting(false)
     try {
       app.relaunch()
-      app.exit(0)
     } catch (error) {
       console.error('[kun-gui updater] failed to relaunch after update install failure:', error)
+    } finally {
+      // Relaunch occurs after the old application's normal barrier has drained
+      // all consumers and released its Manager/session reservation. Bypassing
+      // before-quit with app.exit would race the new owner against old writers.
+      app.quit()
     }
   }
 }

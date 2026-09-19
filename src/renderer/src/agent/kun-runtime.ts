@@ -1,9 +1,9 @@
+import { getKunThreadDetail } from './kun-runtime-thread-detail'
 import type {
   AgentProvider,
   ChatBlock,
   NormalizedThread,
   ReviewTarget,
-  ThreadDetail,
   ThreadEventSink,
   ThreadUsageSnapshot,
   UserInputAnswer
@@ -37,7 +37,6 @@ import {
   kunThreadInterruptPath,
   kunThreadToolCancelPath,
   kunThreadPath,
-  kunThreadTimelinePath,
   kunThreadSteerPath,
   kunThreadTurnsPath,
   kunAttachmentContentPath,
@@ -49,6 +48,8 @@ import {
   type KunThreadMode
 } from '@shared/kun-endpoints'
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeError } from '@shared/runtime-error'
+import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
+import { additionalWorkspacesForThread, readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import {
   workspaceDirectoryExists,
   workspaceMissingError
@@ -79,20 +80,14 @@ import type {
   CoreStartTurnResponseJson,
   CoreThreadGoalResponseJson,
   CoreThreadJson,
-  CoreThreadTimelineJson,
   CoreThreadSummaryJson,
   CoreThreadTodosResponseJson
 } from './kun-contract'
 import {
   buildQuery,
-  chatBlockFromItem,
   dispatchKunRuntimeEvents,
-  goalFromCore,
-  mergeChatBlocks,
-  todosFromCore,
   threadFromCore
 } from './kun-mapper'
-import { restoredThreadLiveProjection } from './kun-runtime-thread-live-projection'
 import { rendererRuntimeClient } from './runtime-client'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { KunRuntimeThreadServices } from './kun-runtime-thread-services'
@@ -103,7 +98,6 @@ import type {
   DesignTaskProfile,
   DesignTaskProfileInput
 } from './design-task-profile'
-import { buildTurnDurationByUserId, resolveRunningTurnStartedAtMs } from './thread-timing'
 
 function normalizeApprovalPolicy(value: string | undefined): NormalizedThread['approvalPolicy'] {
   switch (value) {
@@ -296,6 +290,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
 
   async createThread(input: {
     workspace?: string
+    additionalWorkspaces?: string[]
     title?: string
     titleAuto?: boolean
     mode?: KunThreadMode
@@ -330,11 +325,16 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     ) {
       throw new Error('No connected model is selected. Connect a provider or choose an available shared model first.')
     }
+    const additionalWorkspaces = additionalWorkspacesForThread(
+      workspace,
+      input.additionalWorkspaces ?? extraRootsForWorkspace(workspace, readCodeWorkspaceFolderSets())
+    )
     const response = await rendererRuntimeClient.runtimeRequest(
       '/v1/threads',
       'POST',
       JSON.stringify({
         workspace,
+        ...(additionalWorkspaces.length ? { additionalWorkspaces } : {}),
         title: input.title,
         ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
         ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),
@@ -363,152 +363,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     ))
   }
 
-  async getThreadDetail(threadId: string, options: {
-    before?: string
-    signal?: AbortSignal
-    priority?: 'foreground' | 'background'
-  } = {}): Promise<ThreadDetail> {
-    let response = await rendererRuntimeClient.runtimeRequest(
-      kunThreadTimelinePath(threadId, {
-        ...(options.before ? { before: options.before } : {}),
-        limit: 300
-      }),
-      'GET',
-      undefined,
-      { signal: options.signal, priority: options.priority }
-    )
-    // A renderer can briefly outlive an older bundled runtime during a local
-    // restart. Preserve initial hydration compatibility until that runtime is
-    // replaced; older-page requests require the new timeline contract.
-    if (
-      !response.ok &&
-      !options.before &&
-      (response.status === 404 || response.status === 405)
-    ) {
-      response = await rendererRuntimeClient.runtimeRequest(
-        kunThreadPath(threadId),
-        'GET',
-        undefined,
-        { signal: options.signal, priority: options.priority }
-      )
-    }
-    if (!response.ok) {
-      const error = runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread'))
-      if (response.status === 503) Object.assign(error, { status: 503, retryable: true })
-      throw error
-    }
-    const thread = readRuntimeJson<CoreThreadTimelineJson>(
-      response.body,
-      'runtime returned an invalid thread response'
-    )
-    const turns = Array.isArray(thread.turns) ? thread.turns : []
-    const items = turns.filter((turn) => turn.status !== 'queued').flatMap((turn) =>
-      (turn.items ?? []).map((item) => ({
-        ...item,
-        attachmentIds: turn.attachmentIds,
-        activeSkillIds: turn.activeSkillIds,
-        injectedMemoryIds: turn.injectedMemoryIds,
-        injectedMemorySummaries: turn.injectedMemorySummaries,
-        skillInjectionBytes: turn.skillInjectionBytes,
-        injectedInstructionSources: turn.injectedInstructionSources,
-        instructionInjectionBytes: turn.instructionInjectionBytes,
-        mode: turn.mode === 'plan' || turn.mode === 'agent' ? turn.mode : undefined,
-        guiDesignCanvas: turn.guiDesignCanvas,
-        guiDesignMode: turn.guiDesignMode,
-        designProfile: item.designProfile ?? turn.designProfile,
-        designDocumentTarget: item.designDocumentTarget ?? turn.designDocumentTarget,
-        workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
-      }))
-    )
-    const latestTurn = thread.latestTurn ?? turns.at(-1)
-    const activeTurn = thread.activeTurn === undefined
-      ? turns.find((turn) => turn.status === 'running') : thread.activeTurn
-    const restoredLive = restoredThreadLiveProjection(
-      items,
-      activeTurn?.id,
-      activeTurn?.status
-    )
-    const blocks = mergeChatBlocks(items.flatMap((item) => {
-      if (restoredLive.liveItemIds.has(item.id)) return []
-      const block = chatBlockFromItem(item)
-      return block ? [block] : []
-    }))
-    // Re-derive the live ask-user flag from the runtime's pending gate so a
-    // request the agent is still awaiting stays answerable after a rehydration
-    // (thread switch, SSE recovery, restart) — and a stale `pending` item from a
-    // finished thread, whose gate entry is gone, stays a read-only record (#606).
-    const pendingUserInputIds = new Set(
-      Array.isArray(thread.pendingUserInputIds) ? thread.pendingUserInputIds : []
-    )
-    if (pendingUserInputIds.size > 0) {
-      for (const block of blocks) {
-        if (block.kind === 'user_input' && pendingUserInputIds.has(block.requestId)) {
-          block.live = true
-        }
-      }
-    }
-    // Manual approval history is event-sourced. A recovered snapshot includes
-    // the currently live approval-gate ids, which distinguish an actionable
-    // pending request from one that expired while the GUI was disconnected
-    // (for example after an SSE 404).
-    if (Array.isArray(thread.pendingApprovalIds)) {
-      const pendingApprovalIds = new Set(thread.pendingApprovalIds)
-      for (const block of blocks) {
-        if (
-          block.kind === 'approval' &&
-          block.status === 'pending' &&
-          !pendingApprovalIds.has(block.approvalId)
-        ) {
-          block.status = 'expired'
-        }
-      }
-    }
-    const latestTurnId = activeTurn?.id ?? latestTurn?.id
-    // Prefer the active turn's opening user message: a long running turn may
-    // push its own prompt to the front of the page (timeline anchor) while
-    // later background/steering user items are appended after it. The anchor
-    // keeps the real request visible; the reverse scan is the legacy fallback
-    // for older runtimes that did not anchor the page.
-    const latestUserMessageId = latestTurnId
-      ? items.find(
-          (item) => item.turnId === latestTurnId && item.kind === 'user_message'
-        )?.id
-      : undefined
-    const resolvedLatestUserMessageId =
-      latestUserMessageId ?? [...items].reverse().find((item) => item.kind === 'user_message')?.id
-    return {
-      ...(thread.activeTurn !== undefined ? { activeTurn: thread.activeTurn ? {
-        id: thread.activeTurn.id, status: thread.activeTurn.status,
-        orchestration: thread.activeTurn.orchestration === 'graph' ? 'graph' as const : 'direct' as const
-      } : null } : {}),
-      blocks,
-      latestSeq: thread.latestSeq ?? 0,
-      ...(restoredLive.liveProjection ? { liveProjection: restoredLive.liveProjection } : {}),
-      threadStatus: thread.status ?? latestTurn?.status,
-      latestTurnId: latestTurn?.id,
-      latestTurnStatus: latestTurn?.status,
-      latestTurnOrchestration: latestTurn
-        ? latestTurn.orchestration === 'graph' ? 'graph' : 'direct'
-        : undefined,
-      latestUserMessageId: resolvedLatestUserMessageId,
-      turnDurationByUserId: buildTurnDurationByUserId(turns),
-      ...(latestTurn
-        ? (() => {
-            const startedAtMs = resolveRunningTurnStartedAtMs([latestTurn])
-            return startedAtMs !== undefined ? { latestTurnStartedAtMs: startedAtMs } : {}
-          })()
-        : {}),
-      relation: thread.relation,
-      ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
-      ...(typeof thread.model === 'string' && thread.model.trim() ? { model: thread.model.trim() } : {}),
-      goal: thread.goal ? goalFromCore(thread.goal) : null,
-      todos: thread.todos ? todosFromCore(thread.todos) : null,
-      payloadBytes: response.body.length,
-      ...(thread.timeline?.nextCursor ? { historyCursor: thread.timeline.nextCursor } : {}),
-      hasMoreHistory: thread.timeline?.hasMore === true,
-      ...(thread.designProfile ? { designProfile: thread.designProfile } : {})
-    }
-  }
+  getThreadDetail: AgentProvider['getThreadDetail'] = getKunThreadDetail
 
   async sendUserMessage(
     threadId: string,
@@ -534,6 +389,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         title?: string
       }
       guiDesignCanvas?: boolean
+      guiExcalidrawCanvas?: boolean
       guiDesignMode?: boolean
       persona?: string
       agentSurface?: 'code' | 'write' | 'design'
@@ -622,6 +478,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     if (options?.guiDesignCanvas) {
       body.guiDesignCanvas = true
+    }
+    if (options?.guiExcalidrawCanvas) {
+      body.guiExcalidrawCanvas = true
     }
     if (options?.guiDesignMode) {
       body.guiDesignMode = true

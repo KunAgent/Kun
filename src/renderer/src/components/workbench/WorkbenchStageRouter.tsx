@@ -20,6 +20,9 @@ const WorkflowRunPanel = lazy(() =>
 const WriteWorkspaceView = lazy(() =>
   import('../write/WriteWorkspaceView').then((module) => ({ default: module.WriteWorkspaceView }))
 )
+const RoomsWorkspaceView = lazy(() =>
+  import('../rooms/RoomsWorkspaceView').then((module) => ({ default: module.RoomsWorkspaceView }))
+)
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
     default: module.ExtensionManagementCenter
@@ -41,7 +44,7 @@ export type WorkbenchStageRouterProps = {
   route: string
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
-  onOpenThread: (threadId: string) => void
+  onOpenThread: (threadId: string, turnId?: string) => Promise<void> | void
   onConnectWeixin?: () => void
   write: WriteStageProps
   conversation: WorkbenchConversationStageProps
@@ -78,7 +81,11 @@ export function WorkbenchStageRouter({
       }`}
     >
       <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {normalizedRoute === 'extensions' ? (
+        {normalizedRoute === 'rooms' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <RoomsWorkspaceView onOpenThread={onOpenThread} />
+          </Suspense>
+        ) : normalizedRoute === 'extensions' ? (
           <Suspense fallback={<div className="h-full bg-ds-main" />}>
             <ExtensionManagementCenter
               key={extensions.workspaceRoot || '__global__'}

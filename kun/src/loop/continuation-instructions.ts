@@ -148,6 +148,14 @@ export const TOOL_SUPPRESSION_FINAL_ANSWER_RECOVERY_STEP = 2
  */
 export const POST_TOOL_FAILURE_FINAL_ANSWER_RECOVERY_STEP = 2
 export const POST_TOOL_FAILURE_MAX_RECOVERY_STEPS = POST_TOOL_FAILURE_FINAL_ANSWER_RECOVERY_STEP
+/**
+ * Provider `length` stops used to end the turn immediately with a warning,
+ * leaving the user to guess that a manual "continue" was required. The loop
+ * now requests a bounded continuation itself; this caps how many extra model
+ * rounds one truncated turn may consume before the visible warning owns
+ * settlement.
+ */
+export const OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS = 3
 
 export function goalNoToolRecoveryInstruction(recoveryStep: number): string {
   return [
@@ -206,6 +214,16 @@ export function toolSuppressionRecoveryInstruction(
     '- Do not repeat the same tool with the same arguments.',
     '- Either use a meaningfully different available tool or provide a clear, non-empty final answer.',
     '- Do not stop with an empty response.'
+  ].join('\n')
+}
+
+export function outputTruncationRecoveryInstruction(recoveryStep: number): string {
+  return [
+    'Output truncation recovery:',
+    `- The previous response was cut off at the model's maximum output length (continuation ${recoveryStep} of ${OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS}).`,
+    '- Resume from exactly where the truncated response stopped; do not restart or repeat content already emitted.',
+    '- Deliver the remaining work in smaller pieces or incremental tool calls instead of one very large response.',
+    '- If everything essential is already delivered, finish now with a brief final answer.'
   ].join('\n')
 }
 

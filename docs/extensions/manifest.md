@@ -294,6 +294,8 @@ v1 权限是精确字符串数组：
 | `hostDom` | 注入声明的 Direct DOM content scripts（高风险） |
 | `agent.run` | 创建和控制 extension-owned Agent Run |
 | `agent.threads.readOwn` | 查询本扩展拥有的 thread/run 投影 |
+| `agent.capacity.read` | 读取全局 running/queued turn 计数与 admission 容量 |
+| `rooms.read` | 读取本地全部房间摘要、消息、任务摘要与公开事件 |
 | `tools.register` | 注册 Manifest 声明的工具 |
 | `providers.register` | 注册模型 Provider |
 | `accounts.read` | 读取获准范围内的脱敏账号元数据 |

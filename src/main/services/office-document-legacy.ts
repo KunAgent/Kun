@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { runOwnedCommand } from '../owned-command'
 import { constants } from 'node:fs'
 import { access, chmod, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
@@ -220,58 +220,15 @@ async function runLibreOffice(
   signal?: AbortSignal
 ): Promise<LibreOfficeRunResult> {
   if (signal?.aborted) throw abortError()
-  return new Promise<LibreOfficeRunResult>((resolveResult, rejectResult) => {
-    let child: ChildProcess
-    try {
-      child = spawn(binaryPath, args, {
-        shell: false,
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-    } catch (error) {
-      rejectResult(error)
-      return
+  const result = await runOwnedCommand(binaryPath, args, {
+    signal, timeoutMs: LIBREOFFICE_TIMEOUT_MS, maxOutputBytes: LIBREOFFICE_MAX_OUTPUT_BYTES,
+    messages: {
+      aborted: 'Office document conversion was cancelled.',
+      timeout: `LibreOffice timed out after ${LIBREOFFICE_TIMEOUT_MS}ms.`,
+      outputLimit: 'LibreOffice conversion output exceeded its limit.'
     }
-    let stdout: Buffer<ArrayBufferLike> = Buffer.alloc(0)
-    let stderr: Buffer<ArrayBufferLike> = Buffer.alloc(0)
-    let settled = false
-    let timeout: NodeJS.Timeout | undefined
-    const finish = (callback: () => void): void => {
-      if (settled) return
-      settled = true
-      if (timeout) clearTimeout(timeout)
-      signal?.removeEventListener('abort', onAbort)
-      callback()
-    }
-    const onAbort = (): void => {
-      child.kill()
-      finish(() => rejectResult(abortError()))
-    }
-    const append = (
-      current: Buffer<ArrayBufferLike>,
-      chunk: Buffer<ArrayBufferLike>
-    ): Buffer<ArrayBufferLike> => {
-      if (current.length + chunk.length > LIBREOFFICE_MAX_OUTPUT_BYTES) {
-        child.kill()
-        finish(() => rejectResult(new Error('LibreOffice conversion output exceeded its limit.')))
-        return current
-      }
-      return Buffer.concat([current, chunk])
-    }
-    child.stdout?.on('data', (chunk: Buffer) => { stdout = append(stdout, chunk) })
-    child.stderr?.on('data', (chunk: Buffer) => { stderr = append(stderr, chunk) })
-    child.once('error', (error) => finish(() => rejectResult(error)))
-    child.once('close', (code) => finish(() => resolveResult({
-      stdout: stdout.toString('utf8'),
-      stderr: stderr.toString('utf8'),
-      exitCode: code ?? 1
-    })))
-    signal?.addEventListener('abort', onAbort, { once: true })
-    timeout = setTimeout(() => {
-      child.kill()
-      finish(() => rejectResult(new Error(`LibreOffice timed out after ${LIBREOFFICE_TIMEOUT_MS}ms.`)))
-    }, LIBREOFFICE_TIMEOUT_MS)
   })
+  return { ...result, exitCode: result.exitCode ?? 1 }
 }
 
 function summarizeLibreOfficeFailure(result: LibreOfficeRunResult): string {

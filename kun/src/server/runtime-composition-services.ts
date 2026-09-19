@@ -329,6 +329,7 @@ export async function createRuntimeServices(
   })
 	  const migrationService = new RuntimeMigrationService({
 	    rootDir: join(core.activeOptions.dataDir, 'migrations', 'exports'),
+        historyReferences: core.historyReferences.store,
 	    threads: threadService,
 	    turns: turnService,
 	    sessions: sessionStore,
@@ -341,6 +342,7 @@ export async function createRuntimeServices(
 	  })
 	  const migrationImportService = new RuntimeMigrationImportService({
 	    rootDir: join(core.activeOptions.dataDir, 'migrations', 'imports'),
+        historyReferences: core.historyReferences.store,
 	    threadStore: rawThreadStore,
 	    sessionStore: rawSessionStore,
 	    maintenance: migrationMaintenance,

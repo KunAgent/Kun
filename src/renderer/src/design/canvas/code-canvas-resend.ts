@@ -5,6 +5,7 @@ import { useCanvasShapeStore } from './canvas-shape-store'
 import { useCanvasViewportStore } from './canvas-viewport-store'
 import {
   resolveCodeCanvasComposerRoute,
+  resolveCodeCanvasEngine,
   resolveCodeCanvasWorkspaceRoot
 } from './code-canvas'
 import {
@@ -33,7 +34,8 @@ export type PrepareCodeCanvasResendOptions = {
 export type PreparedCodeCanvasResend = {
   text: string
   displayText: string
-  guiDesignCanvas: true
+  guiDesignCanvas?: true
+  guiExcalidrawCanvas?: true
 }
 
 export type PrepareCodeCanvasResendDependencies = {
@@ -93,9 +95,10 @@ export async function prepareCodeCanvasResend(
     designContext: liveState.designContext
   })
 
+  const engine = await resolveCodeCanvasEngine(workspaceRoot, options.threadId)
   return {
     text: outboundText,
     displayText: route.displayText,
-    guiDesignCanvas: true
+    ...(engine === 'excalidraw' ? { guiExcalidrawCanvas: true as const } : { guiDesignCanvas: true as const })
   }
 }

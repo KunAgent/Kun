@@ -28,6 +28,7 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { threadStateLoadFailure } from './thread-state-error.js'
 import { parseThreadTimelineQuery } from './thread-timeline-read-key.js'
+import { getExactTurnTimeline } from './thread-turn-timeline.js'
 import type { ForkThreadOptions, ListThreadsOptions, ThreadService } from '../../services/thread-service.js'
 import type { RuntimeError } from './runtime-error.js'
 import type { SessionStore } from '../../ports/session-store.js'
@@ -347,6 +348,9 @@ export async function getThreadTimeline(
       { code: 'not_found', message: `thread not found: ${threadId}` },
       404
     )
+  }
+  if (parsedQuery.data.turnId) {
+    return getExactTurnTimeline(thread, parsedQuery.data.turnId, parsedQuery.data, sessionStore, latestSeq)
   }
   // The newest page keeps the active turn's opening user message anchored so
   // a long running turn cannot push the visible request onto an older page

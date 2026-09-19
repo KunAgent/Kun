@@ -45,6 +45,7 @@ export type LegacyMainGuardCode =
   | 'runtime_port_conflict'
   | 'runtime_unhealthy'
   | 'runtime_request_user_input_unsupported'
+  | 'runtime_shutting_down'
   | 'missing_api_key'
 
 export type RuntimeErrorCode = KunErrorCode | LegacyMainGuardCode
@@ -96,6 +97,7 @@ const KNOWN_LEGACY_CODES: ReadonlySet<LegacyMainGuardCode> = new Set<LegacyMainG
   'runtime_port_conflict',
   'runtime_unhealthy',
   'runtime_request_user_input_unsupported',
+  'runtime_shutting_down',
   'missing_api_key'
 ])
 

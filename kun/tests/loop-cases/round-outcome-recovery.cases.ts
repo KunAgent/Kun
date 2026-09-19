@@ -15,6 +15,7 @@ import {
   RoundOutcomeCoordinator,
   type RoundOutcomeInput
 } from '../../src/loop/round-outcome-coordinator.js'
+import { OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS } from '../../src/loop/continuation-instructions.js'
 import { svgArtifactCompletionState } from '../../src/loop/svg-artifact-completion.js'
 import type {
   PreparedTurnContext,
@@ -244,12 +245,38 @@ describe('RoundOutcomeCoordinator', () => {
     expect(h.coordinator.goalNoToolRecoverySteps(turnId)).toBe(0)
   })
 
-  it('records output truncation before its visible error item', async () => {
+  it('continues truncated output within a bounded window before warning visibly', async () => {
+    const h = harness()
+    const round = input(completed({ stopReason: 'length' }))
+
+    for (let step = 0; step < OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS; step += 1) {
+      await expect(h.coordinator.resolve(round)).resolves.toBe('continue')
+    }
+    await expect(h.coordinator.resolve(round)).resolves.toBe('stop')
+    expect(h.eventDrafts.map((event) => event.code)).toEqual([
+      'output_truncated_continuation',
+      'output_truncated_continuation',
+      'output_truncated_continuation',
+      'output_truncated'
+    ])
+    expect(h.effects.slice(-2)).toEqual(['event:error', 'item:error'])
+  })
+
+  it('resets the truncation recovery window when the turn dispatches tools again', async () => {
     const h = harness()
     await expect(h.coordinator.resolve(input(completed({ stopReason: 'length' }))))
-      .resolves.toBe('stop')
-    expect(h.effects).toEqual(['event:error', 'item:error'])
-    expect(h.eventDrafts[0]).toMatchObject({ code: 'output_truncated' })
+      .resolves.toBe('continue')
+    expect(h.coordinator.outputTruncationRecoverySteps(turnId)).toBe(1)
+
+    const call = {
+      callId: 'call_read',
+      toolName: 'read',
+      toolKind: 'tool_call' as const,
+      arguments: { path: 'a.ts' }
+    }
+    await expect(h.coordinator.resolve(input(completed({ toolCalls: [call] }))))
+      .resolves.toBe('continue')
+    expect(h.coordinator.outputTruncationRecoverySteps(turnId)).toBe(0)
   })
 
   it('clears no-tool recovery state before regular tool dispatch and includes interactive flags', async () => {

@@ -115,6 +115,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onWorkflowOpen={openWorkflowView}
         onNewConversation={startNewConversation}
         onBeginResize={beginLeftResize}
+        onBackdropClose={toggleLeftSidebar}
       />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">

@@ -249,6 +249,11 @@ export const TurnSchema = z.object({
    * returned ops to its canvas store.
    */
   guiDesignCanvas: z.boolean().optional(),
+  /**
+   * True for renderer-owned Excalidraw canvas turns. Kun advertises
+   * `design_apply_excalidraw` only for these turns; ShapeOps stay hidden.
+   */
+  guiExcalidrawCanvas: z.boolean().optional(),
   /** True only for product Design-mode turns; Code canvas turns leave it unset. */
   guiDesignMode: z.boolean().optional(),
   /** Product surface that owns this turn. Missing legacy values behave as Code. */
@@ -369,6 +374,11 @@ export const StartTurnRequest = z.object({
    * tool for this turn only.
    */
   guiDesignCanvas: z.boolean().optional(),
+  /**
+   * True for renderer-owned Excalidraw canvas turns. Kun advertises
+   * `design_apply_excalidraw` only for these turns; ShapeOps stay hidden.
+   */
+  guiExcalidrawCanvas: z.boolean().optional(),
   /** True only for product Design-mode turns; Code canvas turns leave it unset. */
   guiDesignMode: z.boolean().optional(),
   /** Product surface used to scope subagent discovery and execution. */

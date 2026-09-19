@@ -35,4 +35,13 @@ describe('runtime client owner IPC channel', () => {
     monitor.dispose()
     expect(channel.listenerCount('disconnect')).toBe(0)
   })
+
+  it('remembers a private owner stop received before Runtime startup finishes', async () => {
+    const channel = new FakeOwnerChannel()
+    const monitor = monitorRuntimeClientOwnerChannel('gui', channel)
+    channel.emit('message', { type: 'kun-runtime-stop' })
+    await expect(monitor.disconnected).resolves.toBeUndefined()
+    monitor.dispose()
+    expect(channel.listenerCount('message')).toBe(0)
+  })
 })

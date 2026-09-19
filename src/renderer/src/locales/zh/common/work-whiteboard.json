@@ -20,5 +20,13 @@
   "workWhiteboardOpenPptx": "打开 PPTX",
   "writeNewWhiteboardTitlePlaceholder": "例如：FastAPI 服务架构",
   "writeWhiteboardTitleTooLong": "标题最多 {{max}} 个字符。",
-  "writeWhiteboardTitleRequired": "请先输入白板标题。"
+  "writeWhiteboardTitleRequired": "请先输入白板标题。",
+  "canvasEngineKun": "Kun 画布",
+  "canvasEngineExcalidraw": "Excalidraw",
+  "canvasEngineSwitchHint": "选择渲染引擎。只有空板可以再切换。",
+  "canvasEngineSwitchLocked": "只有空白板才能切换引擎。",
+  "canvasEnginePptLocked": "演示评审白板固定使用 Kun 画布。",
+  "designExcalidrawUntitled": "Excalidraw 草图",
+  "designExcalidrawOpenBlank": "打开空白 Excalidraw",
+  "designDrawingStartExcalidrawDescription": "用 Excalidraw 画流程图、架构图和日常草图。Agent 不会在这块板上改图。"
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chartSpecFromToolItem, parseRendererChartSpec } from './chart-spec-adapter'
+import { chartSpecFromToolItem, isPendingRenderChartTool, parseRendererChartSpec } from './chart-spec-adapter'
 import { chatBlockFromItem, toolEventFromItem } from './kun-mapper-events'
 
 const spec = {
@@ -58,5 +58,23 @@ describe('renderer chart adapter', () => {
     expect(parseRendererChartSpec({ ...spec, version: 2 })).toBeNull()
     expect(parseRendererChartSpec({ ...spec, data: [{ day: 'Mon', count: { html: '<script />' } }] })).toBeNull()
     expect(parseRendererChartSpec('{bad json')).toBeNull()
+  })
+
+  it('identifies in-flight GUI chart tools before a validated spec exists', () => {
+    expect(isPendingRenderChartTool({
+      kind: 'tool',
+      status: 'running',
+      meta: { toolName: 'render_chart' }
+    })).toBe(true)
+    expect(isPendingRenderChartTool({
+      kind: 'tool',
+      status: 'success',
+      meta: { toolName: 'render_chart' }
+    })).toBe(false)
+    expect(isPendingRenderChartTool({
+      kind: 'tool',
+      status: 'running',
+      meta: { toolName: 'bash' }
+    })).toBe(false)
   })
 })

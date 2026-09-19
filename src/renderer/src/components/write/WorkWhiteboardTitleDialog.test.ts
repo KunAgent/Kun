@@ -51,11 +51,25 @@ describe('WorkWhiteboardTitleDialog', () => {
     const form = renderer.root.findByType('form')
     changeInput(renderer, '  FastAPI architecture  ')
     fireSubmit(form)
-    expect(onSubmit).toHaveBeenCalledWith('FastAPI architecture')
+    expect(onSubmit).toHaveBeenCalledWith('FastAPI architecture', 'kun')
 
     changeInput(renderer, 'x'.repeat(200))
     fireSubmit(form)
     expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('submits the selected Excalidraw engine', async () => {
+    const onSubmit = vi.fn()
+    await act(async () => {
+      renderer = create(createElement(WorkWhiteboardTitleDialog, { onSubmit, onClose: vi.fn() }))
+    })
+    changeInput(renderer, 'Diagram')
+    const exo = renderer.root.findByProps({ 'data-canvas-engine-option': 'excalidraw' })
+    await act(async () => {
+      exo.props.onClick()
+    })
+    fireSubmit(renderer.root.findByType('form'))
+    expect(onSubmit).toHaveBeenCalledWith('Diagram', 'excalidraw')
   })
 
   it('closes on cancel without creating', async () => {
@@ -66,8 +80,7 @@ describe('WorkWhiteboardTitleDialog', () => {
     })
 
     changeInput(renderer, 'Typed but cancelled')
-    const buttons = renderer.root.findAllByType('button')
-    const cancelButton = buttons.find((button) => button.props.type === 'button')!
+    const cancelButton = renderer.root.findByProps({ 'data-work-whiteboard-title-cancel': 'true' })
     await act(async () => {
       cancelButton.props.onClick()
     })
@@ -86,8 +99,7 @@ describe('WorkWhiteboardTitleDialog', () => {
       }))
     })
 
-    const buttons = renderer.root.findAllByType('button')
-    const cancelButton = buttons.find((button) => button.props.type === 'button')!
+    const cancelButton = renderer.root.findByProps({ 'data-work-whiteboard-title-cancel': 'true' })
     const submitButton = renderer.root.findByProps({ 'data-work-whiteboard-title-submit': 'true' })
     expect(cancelButton.props.disabled).toBe(true)
     expect(submitButton.props.disabled).toBe(true)

@@ -21,7 +21,7 @@ export type OrderedTurnTimelineProps = {
   viewportRef: RefObject<HTMLDivElement | null>
   allowThreadActions: boolean
   allowRecoveryContinue: boolean
-  onContinueInterrupted: () => void
+  onContinueInterrupted: (code?: string) => void
   onOpenChildThread?: OpenChildThreadHandler
   onCancelToolCall?: (block: ToolBlock) => Promise<boolean>
   forkAction?: { blockId: string; busy: boolean; onFork: () => void }
@@ -158,7 +158,7 @@ export function OrderedTurnTimeline({
                   allowThreadActions &&
                   allowRecoveryContinue &&
                   item.block.id === lastRuntimeErrorId
-                    ? onContinueInterrupted
+                    ? () => onContinueInterrupted(item.block.code)
                     : undefined
                 }
               />

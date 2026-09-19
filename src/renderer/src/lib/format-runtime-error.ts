@@ -19,6 +19,11 @@ export type RuntimeErrorView = {
   settingsAction?: 'agents'
 }
 
+export type RuntimeErrorViewOptions = {
+  /** Managed auto-start state; tunes the offline-runtime guidance copy. */
+  kunAutoStart?: boolean
+}
+
 function readJsonPayload(raw: string): RuntimeErrorPayload | null {
   try {
     return JSON.parse(raw) as RuntimeErrorPayload
@@ -83,7 +88,11 @@ function detailString(value: unknown): string {
   }
 }
 
-function localizedRuntimeSummary(code: string | null, text: string): string | null {
+function localizedRuntimeSummary(
+  code: string | null,
+  text: string,
+  options?: RuntimeErrorViewOptions
+): string | null {
   const lowered = text.toLowerCase()
 
   if (code === 'model_provider_unreachable') {
@@ -103,7 +112,12 @@ function localizedRuntimeSummary(code: string | null, text: string): string | nu
   }
 
   if (code === 'fetch_failed' || lowered.includes('fetch failed')) {
-    return i18n.t('common:runtimeFetchFailed')
+    // Auto-start enabled but the runtime is still unreachable means the managed
+    // child crashed or exhausted its restart budget — pointing the user at the
+    // auto-start toggle would be wrong.
+    return options?.kunAutoStart === true
+      ? i18n.t('common:runtimeFetchFailedAutoStart')
+      : i18n.t('common:runtimeFetchFailed')
   }
 
   if (code === 'missing_api_key') {
@@ -167,14 +181,17 @@ function shouldOpenAgentsSettings(code: string | null, text = ''): boolean {
   return /\b(temperature|top[_ ]?p|sampling)\b/i.test(text)
 }
 
-export function describeRuntimeError(error: unknown): RuntimeErrorView {
+export function describeRuntimeError(
+  error: unknown,
+  options?: RuntimeErrorViewOptions
+): RuntimeErrorView {
   const raw = stripIpcPrefix(error instanceof Error ? error.message : String(error ?? ''))
   const payload = readJsonPayload(raw)
   const errorCode = runtimeErrorCode(payload, raw)
   const payloadText = payloadMessage(payload)
   const text = stripIpcPrefix(payloadText || raw)
   const redactedText = redactSecretText(text)
-  const summary = localizedRuntimeSummary(errorCode, redactedText) ||
+  const summary = localizedRuntimeSummary(errorCode, redactedText, options) ||
     redactedText ||
     i18n.t('common:runtimeRequestFailed')
   const isStreamDisconnect = errorCode === 'stream_disconnected' ||
@@ -213,6 +230,6 @@ export function describeRuntimeError(error: unknown): RuntimeErrorView {
   }
 }
 
-export function formatRuntimeError(error: unknown): string {
-  return describeRuntimeError(error).summary
+export function formatRuntimeError(error: unknown, options?: RuntimeErrorViewOptions): string {
+  return describeRuntimeError(error, options).summary
 }

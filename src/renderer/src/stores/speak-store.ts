@@ -1,12 +1,12 @@
 import { create } from 'zustand'
-import type { LocalKokoroModelProgress } from '@shared/local-kokoro'
+import type { LocalSanottsAssetProgress } from '@shared/local-sanotts'
 
 export type SpeakPhase =
   /** Nothing is speaking. */
   | 'idle'
   /** Preparing text, checking assets. */
   | 'preparing'
-  /** Model or voice files are downloading. */
+  /** Runtime or voice files are downloading. */
   | 'downloading'
   /** Synthesizing the first chunk; no audio yet. */
   | 'synthesizing'
@@ -14,7 +14,7 @@ export type SpeakPhase =
   | 'speaking'
 
 export type SpeakDownloadState = {
-  asset: LocalKokoroModelProgress['asset']
+  asset: LocalSanottsAssetProgress['asset']
   /** Human label for the asset being fetched. */
   label: string
   downloadedBytes: number

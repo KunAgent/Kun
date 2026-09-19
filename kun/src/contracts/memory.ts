@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AgentMemoryOwnershipSchema } from '../memory/agent-memory-scope.js'
 
 export const MEMORY_SCHEMA_VERSION = 2 as const
 export const MEMORY_MAX_SOURCES = 8
@@ -68,6 +69,7 @@ export const MemoryProvenance = z.object({
 export type MemoryProvenance = z.infer<typeof MemoryProvenance>
 
 const MemoryRecordInput = z.object({
+  agentContext: AgentMemoryOwnershipSchema.optional(),
   id: z.string().min(1),
   content: z.string().min(1),
   scope: MemoryScope,
@@ -116,6 +118,7 @@ const MemorySourceEvidenceInputList = z.array(MemorySourceEvidenceInput)
   .superRefine(reportDuplicateSourceIds)
 
 export const MemoryCreateRequest = z.object({
+  agentContext: AgentMemoryOwnershipSchema.optional(),
   content: z.string().min(1),
   scope: MemoryScope.default('workspace'),
   workspace: z.string().optional(),
@@ -141,6 +144,7 @@ export const MemoryCreateRequest = z.object({
 export type MemoryCreateRequest = z.input<typeof MemoryCreateRequest>
 
 export const MemoryUpdateRequest = z.object({
+  agentContext: AgentMemoryOwnershipSchema.optional(),
   content: z.string().min(1).optional(),
   tags: z.array(z.string()).optional(),
   confidence: z.number().min(0).max(1).optional(),

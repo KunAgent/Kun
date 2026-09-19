@@ -92,6 +92,15 @@ import {
  * live event dispatcher maps onto sink callbacks.
  */
 export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ChatBlock | null {
+  const block = baseChatBlockFromItem(item, child)
+  if (!block || !/^(codex|claude-code|opencode):/u.test(item.turnId ?? '')) return block
+  return { ...block, ...(item.sourceHistoryOrder ? { sourceHistoryOrder: item.sourceHistoryOrder } : {}), sourceRecords: [{ itemId: item.id, kind: item.kind }],
+    ...(item.sourceAttachments?.length ? {
+      sourceItemId: item.id, sourceAttachments: item.sourceAttachments.map((entry) => ({ ...entry }))
+    } : {}) }
+}
+
+function baseChatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ChatBlock | null {
   switch (item.kind) {
     case 'user_message':
       return userMessageBlockFromItem(item)

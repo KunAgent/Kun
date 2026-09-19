@@ -1,4 +1,5 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -203,13 +204,12 @@ export class ExtensionHostProcess {
     const runnerPath = this.options.runnerPath ?? fileURLToPath(new URL('./host-runner.js', import.meta.url))
     const extensionRoot = await realpath(this.options.extension.packagePath)
     const memoryMb = Math.max(16, Math.floor(this.limits.maxMemoryBytes / (1024 * 1024)))
-    const child = fork(runnerPath, [], {
+    const child = await spawnOwnedProcess(process.execPath, [`--max-old-space-size=${memoryMb}`, runnerPath], {
       cwd: extensionRoot,
-      env: minimalExtensionEnvironment({
+      env: { ...minimalExtensionEnvironment({
         ...this.options.environment,
         KUN_EXTENSION_HOST_RUNNER: '1'
-      }),
-      execArgv: [`--max-old-space-size=${memoryMb}`],
+      }), ELECTRON_RUN_AS_NODE: '1' },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
     this.child = child
@@ -444,11 +444,10 @@ export class ExtensionHostProcess {
     this.peer?.close(extensionError('EXTENSION_HOST_CLOSED', 'Extension host was stopped'))
     if (child.connected) child.disconnect()
     const exited = await waitFor(this.exitPromise!, this.limits.shutdownTimeoutMs)
-    if (!exited && child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGTERM')
-      const terminated = await waitFor(this.exitPromise!, this.limits.cancellationGraceMs)
-      if (!terminated && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-    }
+    await stopOwnedProcess(child, {
+      graceMs: exited ? 0 : this.limits.cancellationGraceMs,
+      timeoutMs: this.limits.shutdownTimeoutMs
+    })
     await this.exitPromise
   }
 

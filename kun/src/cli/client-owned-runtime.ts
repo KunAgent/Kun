@@ -24,6 +24,7 @@ import {
   type SharedRuntimeScope
 } from './shared-runtime.js'
 import { terminateSpawnedRuntime } from './shared-runtime-launch.js'
+import { isOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 
 export class ClientOwnedRuntimeConflictError extends Error {
   readonly code = 'client_runtime_owner_busy'
@@ -150,7 +151,12 @@ export async function stopExactClientOwnedRuntime(input: ClientOwnedRuntimeElect
       inspected.discovery.instanceId === input.instanceId &&
       inspected.discovery.clientOwnerKind === input.ownerKind
     ) {
-      if (await stopInspectedSharedRuntime(input.dataDir, inspected, fetchImpl, scope)) return true
+      if (await stopInspectedSharedRuntime(input.dataDir, inspected, fetchImpl, scope)) {
+        if (input.ownerProcess && isOwnedProcess(input.ownerProcess)) {
+          await stopOwnedProcess(input.ownerProcess, { graceMs: 0, timeoutMs: 5_000 })
+        }
+        return true
+      }
     }
   } catch (error) {
     gracefulError = error

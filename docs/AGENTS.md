@@ -1,18 +1,20 @@
 # Agent Runtime Notes
 
-Kun has one agent implementation: the bundled **Kun** runtime. Runtime process
-lifecycle is client-owned. For one `(canonical data directory, runtime flavor)`
-slot, a normal GUI or TUI session owns at most one live `kun serve` process;
-another normal client must report an ownership conflict instead of attaching,
-replacing, or stopping it.
+Kun has one agent implementation: the bundled **Kun** runtime. A normal GUI or
+TUI owns its application session: Service Manager, its `kun serve` process, and
+the work processes started through its managed launchers. One canonical data
+directory has one application owner across production and development flavors.
+Another normal client reports an ownership conflict; it cannot attach to,
+replace, or stop that owner's stack.
 
-The GUI starts a supervised child when automatic startup is enabled and stops
-that exact child on real application quit. Hiding the window, closing to the
-tray, or leaving macOS resident without a window is not a quit. A default TUI
-starts its own Runtime and stops that exact instance when the command exits.
-`--url` and `--no-start` are explicit non-owning TUI modes and never stop the
-target Runtime. Service Manager remains the independent election and canonical
-data-plane authority across ordinary GUI/TUI exits and Runtime restarts.
+Closing the GUI main window quits the application on every platform. The quit
+barrier closes admission and recovery first, drains Runtime and desktop work,
+and stops the owned Service Manager last. Ordinary minimization and auxiliary
+window closes do not quit. Old `ask`, `tray`, and `closeToTray` preferences
+normalize to `closeAction: quit` and no longer enable background residency.
+`--url` and `--no-start` are explicit non-owning TUI modes; they disconnect on
+exit and never stop the external stack. Persisted conversations, settings,
+memory, usage, and task definitions remain in their original data directory.
 
 Do not add a second live provider, provider switcher, runtime diagnostics panel,
 or legacy CodeWhale/Reasonix process path. Code (including Design tasks), Work,
@@ -34,31 +36,55 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   client connected most recently. Explicit non-owning clients may coexist with
   an owner, and every accepted turn must retain its own surface.
 
-## Client-Owned Runtime Lifecycle
+## Application-Owned Process Lifecycle
 
-- Normal GUI/TUI startup is mutually exclusive within the same Service Manager
-  profile and runtime flavor. The default Manager profile binds one canonical
-  data directory; production and development flavor slots remain independent.
-  Additional concurrently owned profiles require an explicitly isolated
-  Manager control directory, not merely a different `dataDir` argument.
+- `DesktopProcessStack` owns GUI Manager startup, session fencing, recovery, and
+  shutdown. Runtime `autoStart: false` does not make Manager independent: the
+  GUI still owns the Manager needed for its data services.
+- A canonical data directory and settings path belong to one application
+  session across all runtime flavors. Concurrent independent profiles must
+  explicitly isolate dataDir, controlDir, and settingsPath. Preserve the
+  default data location and existing history; never silently select another.
 - A live or starting foreign owner fails closed with actionable guidance. Do
-  not reuse it merely because its build matches, and do not replace it merely
-  because its build differs.
-- Normal GUI quit and every default TUI exit path must request graceful shutdown
-  of the exact owned instance, wait for process exit, and conditionally clear
-  only matching discovery/Manager registration state. An ownership IPC channel
-  is the abnormal-parent-exit fallback.
-- Close-to-tray, window hide, and normal macOS no-window residency keep the GUI
-  Runtime alive. A saved `closeAction: quit`, platform Quit command, updater
-  quit, or real application exit must enter the quit barrier.
-- The GUI restart button restarts only the current Electron process's Runtime.
-  It must not scan for all user processes, stop a TUI owner, touch another data
-  directory/flavor, or restart Service Manager.
-- An exact authenticated legacy `launchMode: shared` daemon with no client-owner
-  metadata may be retired once before the first client-owned launch. Ambiguous
-  legacy identity fails closed and never authorizes a broad process scan.
-- Service Manager may have zero live Runtime slots. It remains the sole physical
-  owner of canonical business data and does not execute agent turns itself.
+  not reuse it because its build matches, or replace it because builds differ.
+- Main-window close, platform Quit, updater exit, and storage relocation use
+  the same shutdown barrier. Close admission and restart/recovery timers before
+  awaiting cleanup; collect each failure without skipping remaining resources.
+- Flush GUI mutations and drain Main/Runtime consumers before closing Manager.
+  Verify actual process exit before clearing matching registrations or writer
+  ownership. A shutdown acknowledgment, sent signal, or stopped flag is not
+  proof of exit. Shared shutdown deadlines must leave time for escalation.
+- The GUI restart button replaces only its current Runtime. Service Manager
+  stays in the same application session. Manager failure recovery belongs to
+  the application owner and must stop old consumers before rebinding a new
+  Manager generation; app-owned Runtime must never independently elect one.
+- Owned launchers register processes before user commands can run. POSIX uses
+  a dedicated process group and owner-loss guard; Windows uses a native Job
+  launcher that assigns suspended children before resuming them. PTY, daemon,
+  LSP, MCP, and other managed helpers must await their entire tree on shutdown.
+- Process groups and descendant polling are not an OS sandbox for arbitrary
+  rapid `setsid` or double-fork escapes. Test the supported adapters with real
+  processes; record any platform or packaging gaps instead of claiming full
+  containment based on a mocked signal or a single-platform run.
+- Default TUI/foreground serve bootstrap their own full stack and stop it on
+  normal exit, signals, or startup failure. External `--url` / `--no-start`
+  clients neither acquire shutdown authority nor extend an owner's lifetime.
+- Legacy retirement has two tiers. Same-version Managers retire atomically
+  through `/v1/manager/retire-idle`. Incompatible legacy Managers
+  (protocol/capability) are retired during startup only after authenticated
+  identity on `/health` and `/v1/manager/status`, matching canonical
+  dataDir/settingsPath, no application owner, and an empty Runtime slot check,
+  then an instanceId-fenced `/v1/manager/shutdown` and verified process exit.
+  Ambiguous identity or live external work still blocks takeover and fails
+  closed; it never authorizes a broad user-process or port scan. An
+  explicitly requested `kun manager retire --data-dir <directory>` can retire
+  a verified idle legacy Manager under the matching control/settings profile;
+  it rejects application-owned Managers and live Runtime slots.
+- Service Manager remains the sole physical writer of canonical business data
+  and does not execute agent turns. It may have zero Runtime slots while its
+  owner is open; it exits after consumers when that owner closes. Phone
+  connectivity and scheduled execution stop with the application. Reopening
+  reads existing history; it does not delete or recreate business data.
 
 ## Allowed Extension Path
 
@@ -183,10 +209,11 @@ Manual smoke:
   assistant actions.
 - Connect phone can save settings and run a manual task through a Kun thread.
 - Settings -> Agents shows only Kun.
-- Real GUI quit removes its exact Runtime process; close-to-tray keeps it alive.
-- A default TUI exits with no owned Runtime left behind, while `--url` and
-  `--no-start` leave the external Runtime untouched.
-- A second normal GUI/TUI for the same data-directory/flavor slot receives an
+- Main-window close and platform Quit remove the exact owned Runtime, Manager,
+  guard, and managed descendants. Ordinary minimize keeps the session alive.
+- A default TUI exits with no owned Runtime or Manager left behind, while
+  `--url` and `--no-start` leave the external stack untouched.
+- A second normal GUI/TUI for the same canonical data directory receives an
   ownership conflict; after the first owner exits, the next owner reads the
   same persisted threads and settings.
 - GUI restart changes only the GUI Runtime PID/instance and leaves Service

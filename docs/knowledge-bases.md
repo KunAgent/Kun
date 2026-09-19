@@ -19,7 +19,10 @@ rebuilt at any time.
 `additionalWorkspaces` and `knowledgeBases` are intentionally different:
 additional workspaces extend normal filesystem/sandbox authority, while a
 knowledge-base root never does. Knowledge-base content is available only
-through the three read-only tools below.
+through the three read-only tools below. GUI project extra folders use
+`additionalWorkspaces`, not knowledge-base mounts. Do not present "Add folder
+to project" as knowledge-base mounting. Git, plan worktrees, and the default
+shell stay on the primary workspace.
 
 ## Vectorless index
 

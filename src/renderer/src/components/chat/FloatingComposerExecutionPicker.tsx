@@ -27,6 +27,7 @@ export type ComposerExecutionSettings = {
 }
 
 type Props = {
+  disabledModes?: Partial<Record<KunToolPermissionMode, string>>
   value: ComposerExecutionSettings
   applying?: boolean
   disabled?: boolean
@@ -89,6 +90,7 @@ function permissionDescriptionKey(mode: KunToolPermissionMode): string {
 
 export function FloatingComposerExecutionPicker({
   value,
+  disabledModes,
   applying = false,
   disabled = false,
   onChange,
@@ -166,6 +168,7 @@ export function FloatingComposerExecutionPicker({
       >
         <FloatingComposerPermissionMenuContent
           permissionMode={permissionMode}
+          disabledModes={disabledModes}
           onSelect={(option, event) => applyTrustedComposerExecutionChange(
             event,
             kunToolPermissionModeSettings(option),
@@ -238,10 +241,12 @@ export function applyTrustedComposerExecutionChange(
 
 export function FloatingComposerPermissionMenuContent({
   permissionMode,
+  disabledModes,
   onSelect,
   onOpenPermissionSettings
 }: {
   permissionMode: KunToolPermissionMode
+  disabledModes?: Partial<Record<KunToolPermissionMode, string>>
   onSelect: (mode: KunToolPermissionMode, event: MouseEvent<HTMLButtonElement>) => void
   onOpenPermissionSettings?: () => void
 }): ReactElement {
@@ -272,6 +277,7 @@ export function FloatingComposerPermissionMenuContent({
           <ExecutionRow
             key={option.value}
             mode={option.value}
+            disabledReason={disabledModes?.[option.value]}
             selected={permissionMode === option.value}
             label={t(option.labelKey)}
             description={t(option.descriptionKey)}
@@ -286,6 +292,7 @@ export function FloatingComposerPermissionMenuContent({
 
 function ExecutionRow({
   mode,
+  disabledReason,
   selected,
   label,
   description,
@@ -293,6 +300,7 @@ function ExecutionRow({
   onClick
 }: {
   mode: KunToolPermissionMode
+  disabledReason?: string
   selected: boolean
   label: string
   description: string
@@ -305,8 +313,10 @@ function ExecutionRow({
       role="menuitemradio"
       data-permission-mode={mode}
       aria-checked={selected}
+      disabled={Boolean(disabledReason)}
+      title={disabledReason}
       onClick={onClick}
-      className={`ds-composer-permission-option group flex min-h-[58px] w-full cursor-pointer items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-accent/35 ${
+      className={`ds-composer-permission-option group flex min-h-[58px] w-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-accent/35 ${
         selected
           ? 'text-orange-600 hover:bg-orange-50/45 dark:text-orange-300 dark:hover:bg-orange-950/20'
           : 'text-ds-ink hover:bg-ds-hover/60'
@@ -330,7 +340,7 @@ function ExecutionRow({
               : 'text-ds-muted'
           }`}
         >
-          {description}
+          {disabledReason ?? description}
         </span>
       </span>
       {selected ? (

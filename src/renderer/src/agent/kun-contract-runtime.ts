@@ -249,6 +249,7 @@ export type CoreTurnJson = {
   workspaceCheckpointId?: string
   workspaceCheckpointRequestId?: string
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -257,6 +258,8 @@ export type CoreTurnJson = {
 }
 
 export type CoreTurnItemJson = {
+  sourceHistoryOrder?: { referenceId: string; turnIndex: number; itemIndex: number }
+  sourceAttachments?: Array<{ index: number; name: string; mimeType?: string }>
   id: string
   turnId: string
   threadId: string
@@ -269,6 +272,7 @@ export type CoreTurnItemJson = {
   displayText?: string
   mode?: 'agent' | 'plan'
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile

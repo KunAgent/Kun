@@ -333,18 +333,11 @@ export type AppBadgeCountResult = {
   applied: boolean
 }
 
-export type TurnCompleteNotificationSource = 'main-agent' | 'subagent'
-
-export type TurnCompleteNotificationPayload = {
-  threadId?: string
-  source: TurnCompleteNotificationSource
-  title: string
-  body: string
-}
-
-export type SystemNotificationResult =
-  | { ok: true; shown: boolean; reason?: string }
-  | { ok: false; message: string }
+export type {
+  TurnCompleteNotificationSource,
+  TurnCompleteNotificationPayload,
+  SystemNotificationResult
+} from './kun-gui-notification-contracts'
 
 export type ClawChannelActivityPayload = {
   channelId: string

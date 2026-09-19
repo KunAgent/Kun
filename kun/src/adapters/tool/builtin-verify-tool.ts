@@ -1,8 +1,8 @@
 import { access, readFile } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import type { LocalTool } from './local-tool-host.js'
-import { shellSpawnEnv, terminateSpawnTree, workspaceRoot } from './builtin-tool-utils.js'
+import { shellSpawnEnv, workspaceRoot } from './builtin-tool-utils.js'
 
 export const VERIFY_CHANGES_TOOL_NAME = 'verify_changes'
 
@@ -280,13 +280,13 @@ async function runVerificationCommand(
   options: { signal: AbortSignal; timeoutSeconds: number }
 ): Promise<VerificationCheck> {
   const startedAt = Date.now()
+  const child = await spawnOwnedProcess(command.command, command.args, {
+    cwd: command.cwd,
+    env: shellSpawnEnv(),
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
   return await new Promise((resolvePromise) => {
-    const child = spawn(command.command, command.args, {
-      cwd: command.cwd,
-      env: shellSpawnEnv(),
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
     let output = ''
     let timedOut = false
     const append = (chunk: Buffer | string) => {
@@ -295,12 +295,13 @@ async function runVerificationCommand(
     }
     child.stdout?.on('data', append)
     child.stderr?.on('data', append)
-    const stop = () => terminateSpawnTree(child)
+    const stop = () => { void stopOwnedProcess(child).catch((error: Error) => append(error.message)) }
     const timer = setTimeout(() => {
       timedOut = true
       stop()
     }, options.timeoutSeconds * 1000)
     options.signal.addEventListener('abort', stop, { once: true })
+    if (options.signal.aborted) stop()
     child.once('error', (error) => {
       append(error.message)
     })

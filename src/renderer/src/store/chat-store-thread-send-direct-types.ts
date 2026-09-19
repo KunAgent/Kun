@@ -45,6 +45,7 @@ export type PreparedThreadSend = {
   reasoningEffort: string | undefined
   serviceTier: QueuedUserMessage['serviceTier']
   guiDesignCanvas: boolean
+  guiExcalidrawCanvas: boolean
   guiDesignMode: boolean
   persona: string
   orchestration: NonNullable<QueuedUserMessage['orchestration']>

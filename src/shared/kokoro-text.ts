@@ -1,11 +1,12 @@
 /**
- * Text preparation for local Kokoro speech.
+ * Text preparation for local speech.
  *
  * Assistant answers are Markdown, and reading Markdown syntax aloud is
  * unintelligible, so the pipeline is: strip markup -> normalize characters and
  * abbreviations -> split into speakable chunks. Every step is pure so it can be
  * unit tested and reused by both the renderer and the main process.
  */
+import type { LocalSanottsSpeechScript } from './local-sanotts-voices'
 
 /** Longest chunk handed to the model. Kept well under the 510-token voice limit. */
 export const KOKORO_MAX_CHUNK_CHARS = 240
@@ -38,7 +39,7 @@ const PICTOGRAPHS = /\p{Extended_Pictographic}/gu
  */
 const EMOJI_MODIFIERS = /\u{FE0F}|\u{200D}/gu
 const REPEATED_PUNCTUATION = /([,!?;:])\1{1,}/g
-/** Kokoro's vocabulary has a dedicated ellipsis token; keep the pause. */
+/** Local speech's vocabulary has a dedicated ellipsis token; keep the pause. */
 const ELLIPSIS = /\.{3,}/g
 
 const SMART_CHARACTERS: Array<[RegExp, string]> = [
@@ -83,12 +84,30 @@ function tableCells(line: string): string[] | null {
 const SPOKEN_SYMBOLS: Record<string, string> = {
   '≤': 'less than or equal to', '≥': 'greater than or equal to',
   '≠': 'not equal to', '≈': 'approximately equal to', '±': 'plus or minus',
-  '×': 'times', '÷': 'divided by', '→': 'right arrow', '←': 'left arrow'
+  '×': 'times', '÷': 'divided by', '→': 'right arrow',   '←': 'left arrow'
 }
 
-/** The bundled pronunciation data cannot handle non-Latin scripts. */
-export function hasUnsupportedSpeechScript(text: string): boolean {
-  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}\p{Script=Thai}]/u.test(text)
+const SPEECH_SCRIPT_PATTERNS: Record<LocalSanottsSpeechScript, RegExp> = {
+  han: /\p{Script=Han}/u,
+  cyrillic: /\p{Script=Cyrillic}/u,
+  devanagari: /\p{Script=Devanagari}/u
+}
+
+const UNSUPPORTED_SPEECH_SCRIPTS =
+  /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Arabic}\p{Script=Thai}]/u
+
+/**
+ * True when the answer uses a script the selected voice cannot pronounce.
+ * Latin is always allowed so mixed English/code identifiers still speak.
+ */
+export function hasUnsupportedSpeechScript(
+  text: string,
+  allowedScripts: readonly LocalSanottsSpeechScript[] = []
+): boolean {
+  if (UNSUPPORTED_SPEECH_SCRIPTS.test(text)) return true
+  return (Object.keys(SPEECH_SCRIPT_PATTERNS) as LocalSanottsSpeechScript[]).some(
+    (script) => SPEECH_SCRIPT_PATTERNS[script].test(text) && !allowedScripts.includes(script)
+  )
 }
 
 function stripInline(line: string): string {

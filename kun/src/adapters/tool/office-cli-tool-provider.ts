@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
 import { existsSync } from 'node:fs'
 import {
   copyFile,
@@ -138,23 +138,16 @@ export class OfficeCliRunner {
     waiter.resolve(() => this.release())
   }
 
-  private spawn(args: readonly string[], signal?: AbortSignal): Promise<OfficeCliRunResult> {
+  private async spawn(args: readonly string[], signal?: AbortSignal): Promise<OfficeCliRunResult> {
     const category = args[0] || 'unknown'
     const startedAt = Date.now()
+    const child = await spawnOwnedProcess(this.binaryPath, args, {
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: officeCliEnvironment(this.profileDir)
+    })
     return new Promise<OfficeCliRunResult>((resolveRun, rejectRun) => {
-      let child: ChildProcess
-      try {
-        child = spawn(this.binaryPath, [...args], {
-          shell: false,
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: officeCliEnvironment(this.profileDir)
-        })
-      } catch (error) {
-        rejectRun(error)
-        return
-      }
-
       let stdout: Buffer<ArrayBufferLike> = Buffer.alloc(0)
       let stderr: Buffer<ArrayBufferLike> = Buffer.alloc(0)
       let settled = false
@@ -171,7 +164,7 @@ export class OfficeCliRunner {
         callback()
       }
       const stopForOutputLimit = (): void => {
-        child.kill()
+        void stopOwnedProcess(child).catch(rejectRun)
         finish(
           () => rejectRun(new Error(`OfficeCLI output exceeds ${OFFICECLI_MAX_OUTPUT_BYTES} bytes.`)),
           'error'
@@ -188,7 +181,7 @@ export class OfficeCliRunner {
         return Buffer.concat([current, chunk])
       }
       const onAbort = (): void => {
-        child.kill()
+        void stopOwnedProcess(child).catch(rejectRun)
         finish(() => rejectRun(abortError()), 'error')
       }
 
@@ -201,8 +194,9 @@ export class OfficeCliRunner {
         exitCode: code ?? 1
       }), code ?? 1))
       signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) onAbort()
       timeout = setTimeout(() => {
-        child.kill()
+        void stopOwnedProcess(child).catch(rejectRun)
         finish(
           () => rejectRun(new Error(`OfficeCLI timed out after ${OFFICECLI_TIMEOUT_MS}ms.`)),
           'error'

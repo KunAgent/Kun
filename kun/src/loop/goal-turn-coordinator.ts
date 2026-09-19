@@ -64,6 +64,7 @@ export class GoalTurnCoordinator {
       launch: (threadId) => this.launchResumeTurn(threadId),
       getActiveGoalKey: async (threadId) => {
         const thread = await this.deps.threadStore.get(threadId)
+        if (thread?.roomContext) return null
         const expectedSource = this.restartSourceTurnByThread.get(threadId)
         const latest = thread?.turns.at(-1)
         if (expectedSource && (latest?.id !== expectedSource || latest.status !== 'failed')) {
@@ -207,7 +208,7 @@ export class GoalTurnCoordinator {
   ): Promise<void> {
     const thread = await this.deps.threadStore.get(threadId)
     const goal = thread?.goal
-    if (!thread || !goal || goal.status !== 'active') {
+    if (!thread || thread.roomContext || !goal || goal.status !== 'active') {
       this.resume.clear(threadId)
       return
     }
@@ -237,7 +238,7 @@ export class GoalTurnCoordinator {
     const thread = await this.deps.threadStore.get(threadId)
     const goal = thread?.goal
     const sourceTurnId = this.restartSourceTurnByThread.get(threadId)
-    if (!thread || !goal || goal.status !== 'active') return
+    if (!thread || thread.roomContext || !goal || goal.status !== 'active') return
     const lastTurn = thread.turns[thread.turns.length - 1]
     let started
     try {
@@ -252,6 +253,7 @@ export class GoalTurnCoordinator {
             ? {
                 messageSource: 'design_continuation' as const,
                 ...(lastTurn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+                ...(lastTurn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
                 ...(lastTurn.guiDesignMode ? { guiDesignMode: true } : {})
               }
             : {}),

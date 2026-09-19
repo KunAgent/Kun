@@ -1,4 +1,5 @@
 import { recoverStartupManager } from './runtime/kun-startup-manager-recovery'
+import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -120,6 +121,13 @@ vi.mock('./runtime/kun-adapter', () => ({
 vi.mock('./runtime/kun-startup-manager-recovery', () => ({
   recoverStartupManager: vi.fn(async () => harness.activeServiceManager)
 }))
+vi.mock('./runtime/desktop-process-stack', () => ({
+  desktopProcessStack: {
+    assertCanStart: vi.fn(),
+    recoverManager: vi.fn(async () => undefined),
+    stopManager: vi.fn(async () => undefined)
+  }
+}))
 vi.mock('./kun-process', () => ({
   configureKunManagerDataPlaneForCurrentProcess: (manager: unknown) => manager,
   isKunChildRunning: () => false,
@@ -186,6 +194,8 @@ function settings(): AppSettingsV1 {
 }
 
 beforeEach(() => {
+  vi.mocked(desktopProcessStack.stopManager).mockReset()
+  vi.mocked(desktopProcessStack.stopManager).mockResolvedValue(undefined)
   harness.setLatest(undefined)
   harness.setChildRunning(false)
   harness.stopAndWait.mockClear()
@@ -286,40 +296,42 @@ describe('GUI Runtime startup preparation', () => {
     expect(harness.stopAndWait).not.toHaveBeenCalled()
   })
 
-  it('fences the watchdog and waits for runtime operations before Retry cleanup', async () => {
+  it('fences the watchdog and stops the owned stack before Retry relaunch', async () => {
     await prepareGuiRuntimeForStartupRetry()
 
     expect(harness.runtimeSupervisor.setManagedRuntimeExpected).toHaveBeenCalledWith(false)
-    expect(harness.runtimeSupervisor.waitForIdle).toHaveBeenCalledOnce()
     expect(harness.stopAndWait).toHaveBeenCalledOnce()
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
     expect(harness.drainKunOwnersForHandoff).not.toHaveBeenCalled()
   })
 
-  it('replaces the exact Service Manager after a data-mutex HTTP 500', async () => {
+  it('stops the owned Manager after a data-mutex HTTP 500 without launching a replacement before quit', async () => {
     await prepareGuiRuntimeForStartupRetry(new Error(
       'Kun Service Manager data mutex failed with HTTP 500: internal_error'
     ))
 
     expect(harness.stopAndWait).toHaveBeenCalledOnce()
-    expect(recoverStartupManager).toHaveBeenCalledWith(true)
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+    expect(recoverStartupManager).not.toHaveBeenCalled()
     expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
   })
 
-  it('keeps the Manager binding when verified replacement fails', async () => {
-    vi.mocked(recoverStartupManager).mockRejectedValueOnce(new Error('another TUI owns the Runtime'))
+  it('keeps the Manager binding when exact owned cleanup fails', async () => {
+    vi.mocked(desktopProcessStack.stopManager).mockRejectedValueOnce(new Error('owned Manager did not exit'))
 
     await expect(prepareGuiRuntimeForStartupRetry(new Error(
       'Kun Service Manager data mutex failed with HTTP 500: internal_error'
-    ))).rejects.toThrow(/another TUI owns the Runtime/)
+    ))).rejects.toThrow(/owned Manager did not exit/)
 
     expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
   })
 
-  it('recovers a Manager failure before activeServiceManager is initialized', async () => {
+  it('cleans a partial Manager startup before activeServiceManager is initialized', async () => {
     harness.mainState.activeServiceManager = null
     await prepareGuiRuntimeForStartupRetry(new ServiceManagerUnavailableError('transport_refused', 11288))
-    expect(recoverStartupManager).toHaveBeenCalledWith(false)
-    expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+    expect(recoverStartupManager).not.toHaveBeenCalled()
+    expect(harness.mainState.activeServiceManager).toBeNull()
   })
 
   it('recognizes only the persistent Manager data-mutex failure', () => {

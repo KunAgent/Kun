@@ -25,9 +25,21 @@ import {
   createDesignCreateDiagramTool,
   DESIGN_CREATE_DIAGRAM_TOOL_NAME
 } from './design-diagram-tool.js'
+import {
+  createDesignApplyExcalidrawTool,
+  createDesignOpenExcalidrawTool,
+  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
+  DESIGN_OPEN_EXCALIDRAW_TOOL_NAME
+} from './design-excalidraw-tool.js'
 
 export { DESIGN_UPDATE_SHAPES_MAX_OPS } from './design-canvas-normalization.js'
 export { createDesignCreateDiagramTool, DESIGN_CREATE_DIAGRAM_TOOL_NAME } from './design-diagram-tool.js'
+export {
+  createDesignApplyExcalidrawTool,
+  createDesignOpenExcalidrawTool,
+  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
+  DESIGN_OPEN_EXCALIDRAW_TOOL_NAME
+} from './design-excalidraw-tool.js'
 
 export const DESIGN_CANVAS_TOOL_NAME = 'design_canvas'
 export const DESIGN_CREATE_SCREEN_TOOL_NAME = 'design_create_screen'
@@ -51,6 +63,8 @@ export const DESIGN_CANVAS_MUTATION_TOOL_NAMES = [
   DESIGN_SYSTEM_TEMPLATE_TOOL_NAME,
   DESIGN_VALIDATE_TOOL_NAME,
   DESIGN_SVG_CREATE_TOOL_NAME,
+  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
+  DESIGN_OPEN_EXCALIDRAW_TOOL_NAME,
   WORK_RENAME_WHITEBOARD_TOOL_NAME
 ] as const
 
@@ -85,6 +99,8 @@ export function buildDesignCanvasLocalTools(): LocalTool[] {
     createDesignSystemTemplateTool(),
     createDesignValidateTool(),
     createDesignSvgCreateTool(),
+    createDesignApplyExcalidrawTool(),
+    createDesignOpenExcalidrawTool(),
     createWorkRenameWhiteboardTool()
   ]
 }
@@ -99,7 +115,8 @@ export function createWorkRenameWhiteboardTool(): LocalTool {
     toolKind: 'tool_call',
     policy: 'auto',
     shouldAdvertise: (context) =>
-      context.guiDesignCanvas === true && context.agentSurface === 'write',
+      (context.guiDesignCanvas === true || context.guiExcalidrawCanvas === true) &&
+      context.agentSurface === 'write',
     inputSchema: {
       type: 'object',
       properties: {

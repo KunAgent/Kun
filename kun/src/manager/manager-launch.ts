@@ -4,6 +4,8 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { KUN_APP_SESSION_OWNER_ENV, KUN_APP_SESSION_RESERVATION_ENV, type AppSessionOwner } from '../contracts/app-session-owner.js'
+import { spawnOwnedProcess } from '../process/owned-process.js'
 
 export type ManagerLaunchOverride = {
   command: string
@@ -18,6 +20,8 @@ export async function launchServiceManagerProcess(input: {
   settingsPath: string
   buildId?: string
   launch?: ManagerLaunchOverride
+  appOwner?: AppSessionOwner
+  reservationPath?: string
 }): Promise<{ child: ChildProcess; logPath: string }> {
   await mkdir(input.controlDir, { recursive: true, mode: 0o700 })
   const logPath = join(input.controlDir, 'manager.log')
@@ -30,10 +34,10 @@ export async function launchServiceManagerProcess(input: {
   const runAsNode = input.launch?.runAsNode ?? Boolean(process.versions.electron)
   let child: ChildProcess
   try {
-    child = spawn(command, args, {
-      detached: true,
+    const options = {
+      detached: !input.appOwner,
       windowsHide: true,
-      stdio: ['ignore', logFd, logFd],
+      stdio: input.appOwner ? ['ignore', logFd, logFd, 'ipc'] as const : ['ignore', logFd, logFd] as const,
       env: {
         ...process.env,
         ...(input.launch?.env ?? {}),
@@ -47,10 +51,15 @@ export async function launchServiceManagerProcess(input: {
         ...(input.buildId ? { KUN_RUNTIME_BUILD_ID: input.buildId } : {}),
         KUN_MANAGER_DATA_DIR: input.dataDir,
         KUN_MANAGER_SETTINGS_PATH: input.settingsPath,
-        KUN_MANAGER_LOG_PATH: logPath
+        KUN_MANAGER_LOG_PATH: logPath,
+        ...(input.appOwner ? { [KUN_APP_SESSION_OWNER_ENV]: JSON.stringify(input.appOwner) } : {}),
+        ...(input.reservationPath ? { [KUN_APP_SESSION_RESERVATION_ENV]: input.reservationPath } : {})
       }
-    })
-    child.unref()
+    }
+    child = input.appOwner
+      ? await spawnOwnedProcess(command, args, { ...options, stdio: [...options.stdio], ownerLossGraceMs: 30_000 })
+      : spawn(command, args, { ...options, stdio: [...options.stdio] })
+    if (!input.appOwner) child.unref()
   } finally {
     closeSync(logFd)
   }

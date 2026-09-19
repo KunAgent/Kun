@@ -19,6 +19,7 @@ import {
   type ComposerFileMention,
   type ComposerFileReference
 } from '../../lib/composer-file-references'
+import { extraRootsForWorkspace } from '../../lib/code-workspace-folder-lookup'
 import type { KnowledgeBaseIndexStatus, KnowledgeBaseMount } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -119,6 +120,8 @@ export function useComposerFileMentions({
   const knowledgeBaseStatuses = activeThreadId
     ? knowledgeBaseStatusMap[activeThreadId] ?? EMPTY_KNOWLEDGE_BASE_STATUSES
     : EMPTY_KNOWLEDGE_BASE_STATUSES
+  const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
+  const extraWorkspaceRoots = extraRootsForWorkspace(workspaceRoot, folderSets)
   const [cursor, setCursor] = useState(() => input.length)
   const [suggestions, setSuggestions] = useState<ComposerMentionSuggestion[]>([])
   const [loading, setLoading] = useState(false)
@@ -155,17 +158,25 @@ export function useComposerFileMentions({
     const timer = window.setTimeout(() => {
       setLoading(true)
       void Promise.all([
-        loadWorkspaceFileIndex(workspaceRoot),
-        loadWorkspaceMentionPathSuggestions(workspaceRoot, query).catch(() => [])
+        Promise.all(
+          [workspaceRoot, ...extraWorkspaceRoots].map((root) =>
+            loadWorkspaceFileIndex(root).catch(() => ({ files: [], directories: [], loadedAt: 0 }))
+          )
+        ),
+        Promise.all(
+          [workspaceRoot, ...extraWorkspaceRoots].map((root) =>
+            loadWorkspaceMentionPathSuggestions(root, query).catch(() => [])
+          )
+        )
       ])
-        .then(([index, pathSuggestions]) => {
+        .then(([indexes, pathSuggestionLists]) => {
           if (cancelled) return
           const indexedCandidates = mergeMentionCandidates(
             extraCandidates,
-            [...index.directories, ...index.files]
+            indexes.flatMap((index) => [...index.directories, ...index.files])
           )
           const fileSuggestions = filterWorkspaceFileMentionSuggestions(
-            mergeMentionCandidates(indexedCandidates, pathSuggestions), query, references
+            mergeMentionCandidates(indexedCandidates, pathSuggestionLists.flat()), query, references
           ).map((reference) => ({ kind: 'file-reference' as const, reference }))
           setSuggestions([...knowledgeSuggestions, ...fileSuggestions])
         })
@@ -180,7 +191,7 @@ export function useComposerFileMentions({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [activeMention, extraCandidates, knowledgeBaseStatuses, knowledgeBases, references, showMenu, workspaceRoot])
+  }, [activeMention, extraCandidates, extraWorkspaceRoots, knowledgeBaseStatuses, knowledgeBases, references, showMenu, workspaceRoot])
 
   useEffect(() => {
     const previous = presenceRef.current

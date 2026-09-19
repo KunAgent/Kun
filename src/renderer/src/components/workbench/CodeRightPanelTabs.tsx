@@ -18,6 +18,7 @@ import {
   PanelRightClose,
   Plus,
   Puzzle,
+  Radio,
   ScanSearch,
   Shapes,
   X,
@@ -98,6 +99,7 @@ export function CodeRightPanelTabs({
       label: t('rightPanelProviderQuotas'),
       icon: Gauge
     },
+    { id: BUILTIN_RIGHT_PANEL_IDS.remote, label: t('rightPanelRemote'), icon: Radio },
   ], [t])
 
   const builtinById = useMemo(

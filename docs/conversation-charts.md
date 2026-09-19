@@ -41,7 +41,9 @@ Agents must not draw a chart without trustworthy structured data. They must foll
 
 `ChartSpec` accepts data and semantic presentation intent only. It rejects HTML, CSS, JavaScript, remote resources, arbitrary colors, formatter functions, and native chart-library options. Rows, columns, series, text lengths, numeric values, and encoded payload size are bounded.
 
-The desktop owns themes, layout, tooltips, responsive behavior, motion, export, and accessibility. Chart colors are mapped from semantic names to Kun design tokens.
+The desktop owns themes, layout, tooltips, legends, hover highlighting, responsive axes, motion, export, and accessibility. Chart colors are mapped from semantic names to Kun design tokens. Bar charts with long category labels or eight or more ranks render horizontally. Series that share a `stack` key are stacked when all values are non-negative.
+
+Conversation layout puts the assistant conclusion before charts and structured visualization cards. While `render_chart` is still running, the GUI shows a chart skeleton instead of a half-finished graphic or a process tool card.
 
 ## Client fallback
 
@@ -51,7 +53,7 @@ The desktop owns themes, layout, tooltips, responsive behavior, motion, export, 
 - API/webhook: original `ChartSpec` remains in the ordinary tool result and can be rendered by a compatible client.
 - Older clients: ordinary tool result JSON remains available.
 
-Disabling the Lab conversation-visualization setting removes `render_chart` from future GUI tool catalogs. Existing persisted chart results remain renderable.
+Lab settings expose this capability as **Session display optimization** (`lab.conversationVisualization.enabled`). Disabling it removes `render_chart` from future GUI tool catalogs. Existing persisted chart results remain renderable.
 
 ## Versioning
 

@@ -22,6 +22,7 @@ export type ToolCatalogFingerprintInput = {
   allowedToolNames?: readonly string[]
   userInputDisabled?: boolean
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   guiDesignArtifact?: GuiDesignArtifactContext
   fingerprint: string
@@ -73,6 +74,7 @@ export class LoopTelemetry {
       allowedToolNames: input.allowedToolNames ? [...input.allowedToolNames].sort() : [],
       userInputDisabled: input.userInputDisabled === true,
       guiDesignCanvas: input.guiDesignCanvas === true,
+      guiExcalidrawCanvas: input.guiExcalidrawCanvas === true,
       guiDesignMode: input.guiDesignMode === true,
       guiDesignArtifact: input.guiDesignArtifact?.kind ?? null
     })

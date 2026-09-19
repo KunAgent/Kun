@@ -1,5 +1,5 @@
 export const laboratoryTestLabels: Record<string, string> = {
-  labConversationVisualizationTitle: 'Conversation visualization',
+  labConversationVisualizationTitle: 'Session display optimization',
   labContextWindowTitle: 'Windowed context (experimental)',
   labContextWindowDescription: 'Experimental windowed context.',
   labContextWindowEnabled: 'Enable windowed context',

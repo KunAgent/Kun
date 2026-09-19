@@ -89,11 +89,8 @@ import {
   LOCAL_WHISPER_DEFAULT_DOWNLOAD_SOURCE_ID,
   isLocalWhisperDownloadSourceId
 } from './local-whisper'
-import {
-  LOCAL_KOKORO_DEFAULT_DOWNLOAD_SOURCE_ID,
-  LOCAL_KOKORO_DEFAULT_MODEL_ID
-} from './local-kokoro'
-import { LOCAL_KOKORO_DEFAULT_VOICE_ID } from './local-kokoro-voices'
+import { LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID } from './local-sanotts'
+import { LOCAL_SANOTTS_VOICE_AUTO_ID } from './local-sanotts-voices'
 import {
   DEFAULT_GITHUB_MCP_HOST,
   normalizeGitHubMcpSettings
@@ -352,10 +349,9 @@ export function defaultKunSpeechToTextSettings(): KunSpeechToTextSettingsV1 {
 export function defaultKunSpeakSettings(): KunSpeakSettingsV1 {
   return {
     enabled: true,
-    model: LOCAL_KOKORO_DEFAULT_MODEL_ID,
-    voice: LOCAL_KOKORO_DEFAULT_VOICE_ID,
+    voice: LOCAL_SANOTTS_VOICE_AUTO_ID,
     speed: 1,
-    downloadSource: LOCAL_KOKORO_DEFAULT_DOWNLOAD_SOURCE_ID,
+    downloadSource: LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID,
     autoDownload: true,
     keepTracks: false
   }

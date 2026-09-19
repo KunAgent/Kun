@@ -509,7 +509,7 @@
   "sidebarThreadAwaitingInput": "입력을 기다리는 중",
   "awaitingYourInput": "입력을 기다리는 중…",
   "sidebarThreadUnread": "새 답변",
-  "sidebarThreadFailed": "작업 실패 — 열어서 확인",
+  "sidebarThreadFailed": "작업이 오류로 종료됨 — 열어서 확인",
   "sidebarThreadScheduled": "{{time}}에 실행 예정",
   "sidebarThreadScheduledMultiple": "예약 작업 {{count}}개 · 다음 {{time}}",
   "sidebarThreadScheduledQueued": "예약 작업이 시작을 기다리는 중",

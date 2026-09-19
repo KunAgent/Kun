@@ -26,6 +26,8 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import { diffUsage, hasUsage } from '../domain/usage.js'
+import { roomResultProvider } from '../rooms/room-result-tools.js'
+import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -104,6 +106,7 @@ export function createRuntimeRegistry(
             ...(child.allowedToolNames ? { allowedToolNames: child.allowedToolNames } : {}),
             ...(child.allowedSkillIds ? { allowedSkillIds: child.allowedSkillIds } : {}),
             ...(child.allowedReadPaths ? { allowedReadPaths: child.allowedReadPaths } : {}),
+            ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
             ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
@@ -193,6 +196,7 @@ export function createRuntimeRegistry(
             ...(child.allowedToolNames ? { allowedToolNames: child.allowedToolNames } : {}),
             ...(child.allowedSkillIds ? { allowedSkillIds: child.allowedSkillIds } : {}),
             ...(child.allowedReadPaths ? { allowedReadPaths: child.allowedReadPaths } : {}),
+            ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
             ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
@@ -338,7 +342,9 @@ export function createRuntimeRegistry(
       reason: services.browserUseProviders.reason
     }
   })
-	  let registry = new CapabilityRegistry([
+  let registry = new CapabilityRegistry([
+    buildHistoryReferenceToolProvider(core.historyReferences),
+    roomResultProvider(threadStore),
     ...services.baseToolProviders,
     // Host control is available to the top-level agent only, never to
     // delegated subagents (which use childRegistry/baseToolProviders).

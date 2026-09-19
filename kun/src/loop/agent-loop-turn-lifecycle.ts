@@ -194,6 +194,9 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     }
     try {
       goalTimer = await this.goalTurns.begin(threadId)
+      if (delegatedSdkRuntime && owningThread?.roomContext) {
+        throw new Error('Rooms requires a native model provider that enforces the frozen room tool policy; select an API model for this member.')
+      }
       await this.recordPipelineStage(threadId, turnId, 'setup')
       if (!delegatedSdkRuntime && this.opts.toolStorm?.enabled !== false) {
         this.toolStormBreakers.set(turnId, new ToolStormBreaker(this.opts.toolStorm))
@@ -394,7 +397,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
           })
           try {
             runWithoutTurnMutationFence(() => {
-              this.opts.memoryDistillation?.schedule({
+              if (!owningThread?.roomContext) this.opts.memoryDistillation?.schedule({
                 threadId,
                 turnId,
                 status: finalStatus ?? 'failed'

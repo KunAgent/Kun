@@ -3,11 +3,11 @@ import { JSDOM } from 'jsdom'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LocalSpeechProviderSettings } from './settings-section-speak'
-import { previewKokoroVoice, stopSpeaking } from './chat/speak-controller'
+import { previewSpeakVoice, stopSpeaking } from './chat/speak-controller'
 import { useSpeakStore } from '../stores/speak-store'
 
 vi.mock('./chat/speak-controller', () => ({
-  previewKokoroVoice: vi.fn(async () => ({ ok: true })), stopSpeaking: vi.fn(), speakAnswer: vi.fn()
+  previewSpeakVoice: vi.fn(async () => ({ ok: true })), stopSpeaking: vi.fn(), speakAnswer: vi.fn()
 }))
 let dom: JSDOM
 let root: Root
@@ -17,9 +17,10 @@ beforeEach(() => {
   vi.stubGlobal('document', dom.window.document)
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   Object.assign(window, { kunGui: {
-    listLocalKokoroModelStatuses: async () => [], listDownloadedLocalKokoroVoices: async () => [],
-    checkLocalKokoroDownloadSources: async () => ({ sources: [] }),
-    getLocalKokoroTrackUsage: async () => ({ count: 3, totalBytes: 1000 })
+    getLocalSanottsRuntimeStatus: async () => ({ state: 'not_downloaded' }),
+    listDownloadedLocalSanottsVoices: async () => [],
+    checkLocalSanottsDownloadSources: async () => ({ sources: [] }),
+    getLocalSanottsTrackUsage: async () => ({ count: 3, totalBytes: 1000 })
   } })
   useSpeakStore.getState().reset()
   useSpeakStore.getState().clearError()
@@ -30,7 +31,8 @@ afterEach(async () => { await act(() => root.unmount()); dom.window.close(); vi.
 async function render() {
   await act(async () => root.render(createElement(LocalSpeechProviderSettings, { ctx: {
     t: (key: string) => key, tCommon: (key: string) => key, selectControlClass: '', updateKun: vi.fn(),
-    kun: { speak: { voice: 'af_heart', autoDownload: false, keepTracks: false } }
+    locale: 'en',
+    kun: { speak: { voice: 'auto', autoDownload: false, keepTracks: false } }
   } })))
 }
 it('keeps existing recording management visible when new recording capture is off', async () => {
@@ -39,21 +41,20 @@ it('keeps existing recording management visible when new recording capture is of
   const clear = [...document.querySelectorAll('button')].find(button => button.textContent === 'speakStoredTracksClear')!
   expect(clear.disabled).toBe(false)
 })
-it('keeps the actual selected voice represented when filtering to a different accent', async () => {
+it('keeps the selected voice represented when filtering to a different language', async () => {
   await render()
-  const accent = document.querySelector<HTMLSelectElement>('[aria-label="speakAccent"]')!
-  await act(() => { accent.value = 'en-gb'; const event = document.createEvent('Event'); event.initEvent('change', true, false); accent.dispatchEvent(event) })
+  const language = document.querySelector<HTMLSelectElement>('[aria-label="speakLanguage"]')!
+  await act(() => { language.value = 'zh'; const event = document.createEvent('Event'); event.initEvent('change', true, false); language.dispatchEvent(event) })
   const voice = document.querySelector<HTMLSelectElement>('[aria-label="speakVoice"]')!
-  expect(voice.value).toBe('af_heart')
-  expect([...voice.options].some(option => option.value.startsWith('bf_'))).toBe(true)
+  expect(voice.value).toBe('auto')
+  expect([...voice.options].some(option => option.value === 'chinese')).toBe(true)
 })
 it('respects the automatic download setting when previewing a voice', async () => {
   await render()
   const preview = document.querySelector<HTMLButtonElement>('[aria-label="speakPreviewPlay"]')!
   await act(async () => preview.click())
-  expect(previewKokoroVoice).toHaveBeenCalledWith(expect.objectContaining({ autoDownload: false }), expect.any(String))
+  expect(previewSpeakVoice).toHaveBeenCalledWith(expect.objectContaining({ autoDownload: false }), expect.any(String))
 })
-
 
 it('stops playback when disabled directly from settings before a chat watcher mounted', async () => {
   await render()

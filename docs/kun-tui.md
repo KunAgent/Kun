@@ -272,6 +272,12 @@ Timeline、Skills、Help、Status、Context、Queue、MCP、Permissions、Approv
 | `/update`、`/update yes` | 检查 Stable 独立 TUI 更新，或显式确认下载与安装；GUI 内置版会提示更新 GUI |
 | `/help`、`/quit` | 打开帮助或退出 TUI |
 
+GUI Code 项目把附加目录挂在主项目上（侧边栏「添加目录到项目」），并同步到该项目线程的
+`additionalWorkspaces`。这与 `/add-dir` 共享同一条运行时契约，但作用域是项目而不是单条会话。
+GUI 打开该线程时会把 TUI extras 并入项目 folder set（只加不减）。附加根不会出现在侧边栏当第二个项目。
+`git_inspect`、`/review`、plan worktree、bash 默认 cwd 和 `.kun/project.json` 仍只跟随主目录；
+文件工具用绝对路径访问附加根。
+
 兼容别名：`/threads`、`/resume`、`/continue` → `/sessions`，`/clear` → `/new`，
 `/title` → `/rename`，`/models` → `/model`，`/provider` → `/connect`，
 `/summarize` → `/compact`，`/q` → `/quit`。这些别名也出现在 pi-tui 自动补全中。
