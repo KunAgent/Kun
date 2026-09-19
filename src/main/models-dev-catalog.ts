@@ -87,6 +87,8 @@ const PROFILE_MATCHES: Record<string, ModelsDevProviderMatch> = {
   'moonshot-global': catalogMatch('moonshotai'),
   xiaomi: catalogMatch('xiaomi'),
   'tencentcloud-token-plan': catalogMatch('tencent-token-plan'),
+  stepfun: catalogMatch('stepfun'),
+  'stepfun-token-plan': catalogMatch('stepfun-step-plan'),
   codex: catalogMatch('openai', 'enrichment-only'),
   'claude-subscription': catalogMatch('anthropic', 'enrichment-only'),
   'gemini-subscription': catalogMatch('google', 'enrichment-only'),

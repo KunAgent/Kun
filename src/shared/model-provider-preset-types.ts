@@ -47,6 +47,7 @@ export type ModelProviderPresetId =
   | 'aliyun'
   | 'tencentcloud'
   | 'vercel-ai-gateway'
+  | 'stepfun'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -364,6 +365,13 @@ export const QWEN_REASONING: ModelProviderReasoningCapabilityV1 = {
   supportedEfforts: ['auto', 'off'],
   defaultEffort: 'auto',
   requestProtocol: 'qwen-chat-completions'
+}
+
+// StepFun Chat Completions accepts the OpenAI-style reasoning_effort field.
+export const STEPFUN_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['low', 'medium', 'high'],
+  defaultEffort: 'medium',
+  requestProtocol: 'openai-chat-completions'
 }
 
 // Tencent and Volcano OpenAI-compatible endpoints expose the thinking object.
