@@ -1,38 +1,24 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
-import { createServer, type AddressInfo } from 'node:net'
-import { homedir, tmpdir } from 'node:os'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { configureLogger } from './logger'
 import {
   defaultClawSettings,
   DEFAULT_LOG_RETENTION_DAYS,
-  DEFAULT_TOOL_OUTPUT_MAX_BYTES,
-  DEFAULT_TOOL_OUTPUT_MAX_LINES,
   defaultDesignSettings,
   defaultKeyboardShortcuts,
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
   defaultScheduleSettings,
   defaultWorkflowSettings,
-  getModelProviderPreset,
-  modelProviderPresetProfile,
-  resolveKunRuntimeSettings,
   defaultWriteSettings,
   defaultTerminalSettings, defaultRemoteAccessSettings,
-  type AppSettingsV1,
-  type ModelProviderModelProfileV1
+  type AppSettingsV1
 } from '../shared/app-settings'
 import { KunConfigSchema } from '../../kun/src/config/kun-config.js'
-import {
-  configureManagerAtomicJsonClient,
-  isManagerAtomicJsonPath
-} from '../../kun/src/extensions/atomic-json.js'
-import {
-  ManagerResourceLeaseClient,
-  ManagerRevisionedDocumentClient
-} from '../../kun/src/manager/manager-client.js'
+import { configureManagerAtomicJsonClient } from '../../kun/src/extensions/atomic-json.js'
 
 vi.mock('electron', () => ({
   app: {
@@ -81,41 +67,6 @@ function createSettings(binaryPath: string): AppSettingsV1 {
     codeAgentPresets: [],
     disabledSkillIds: []
   }
-}
-
-function writeScript(name: string, content: string): string {
-  if (!tempRoot) throw new Error('temp root not initialized')
-  const path = join(tempRoot, name)
-  writeFileSync(path, content, 'utf8')
-  return path
-}
-
-async function readKunLog(): Promise<string> {
-  if (!tempRoot) throw new Error('temp root not initialized')
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const logFile = readdirSync(tempRoot).find((entry) => entry.startsWith('kun-') && entry.endsWith('.log'))
-    if (logFile) return readFileSync(join(tempRoot, logFile), 'utf8')
-    await new Promise((resolve) => setTimeout(resolve, 25))
-  }
-  throw new Error('Expected a kun log file to be created')
-}
-
-function canBindTestPort(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createServer()
-    let settled = false
-    const settle = (available: boolean): void => {
-      if (settled) return
-      settled = true
-      server.removeAllListeners('error')
-      resolve(available)
-    }
-    server.unref()
-    server.once('error', () => settle(false))
-    server.listen(port, '127.0.0.1', () => {
-      server.close(() => settle(true))
-    })
-  })
 }
 
 function allocateTestPort(): Promise<number> {

@@ -65,6 +65,7 @@ import { RevisionConflictError } from './revisioned-document-store.js'
 import { buildPublicItemHistoryPage } from '../services/item-history-page.js'
 
 import { ManagerSharedDataStoreCore } from './shared-data-store-core.js'
+import { executeArtifactStoreOperation } from './shared-data-store-artifact.js'
 import {
   AgentSessionSchema,
   SessionUsageQuerySchema,
@@ -184,53 +185,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
   }
 
   async executeArtifact(operation: ManagerArtifactStoreOperation, value: unknown): Promise<unknown> {
-    switch (operation) {
-      case 'put': {
-        const body = z.object({
-          input: z.object({
-            content: z.string(),
-            mimeType: z.string().min(1).optional(),
-            source: z.enum(['mcp', 'web', 'bash', 'attachment', 'remote-log', 'tool', 'other']).optional(),
-            origin: z.string().min(1).optional(),
-            linkedOwners: z.array(z.string().min(1).max(512)).max(64).optional(),
-            maxInlineChars: z.number().int().nonnegative().optional()
-          }).strict()
-        }).strict().parse(value)
-        return this.artifactStore.put(body.input)
-      }
-      case 'releaseOwner': {
-        const body = z.object({
-          ownerId: z.string().min(1).max(512)
-        }).strict().parse(value)
-        return this.artifactStore.releaseOwner?.(body.ownerId) ?? {
-          released: 0,
-          deleted: 0
-        }
-      }
-      case 'delete': {
-        const { id } = parseArtifactId(value)
-        await this.artifactStore.delete?.(id)
-        return null
-      }
-      case 'list':
-        return this.artifactStore.list?.() ?? []
-      case 'get':
-        return this.artifactStore.get(parseArtifactId(value).id)
-      case 'readRange': {
-        const body = z.object({
-          id: z.string().min(1).max(256),
-          options: z.object({
-            offset: z.number().int().nonnegative().optional(),
-            length: z.number().int().nonnegative().optional(),
-            startLine: z.number().int().positive().optional(),
-            endLine: z.number().int().positive().optional()
-          }).strict()
-        }).strict().parse(value)
-        return this.artifactStore.readRange(body.id, body.options)
-      }
-      case 'stat':
-        return this.artifactStore.stat(parseArtifactId(value).id)
-    }
+    return executeArtifactStoreOperation(this.artifactStore, operation, value)
   }
 
   async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown): Promise<unknown> {
