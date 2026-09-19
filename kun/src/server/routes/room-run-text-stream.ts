@@ -49,7 +49,15 @@ export class RoomRunTextStream {
       this.run = run
       this.off = this.bus.subscribe(run.threadId, (event) => {
         if (this.closed || event.threadId !== run.threadId || ('turnId' in event ? event.turnId : 'item' in event ? event.item.turnId : undefined) !== run.turnId) return
-        if (!this.hydrated) { if (this.buffered.length < 128 && 'item' in event && event.item.kind === 'assistant_text') this.buffered.push({ ...event, item: { ...event.item, text: event.item.text.slice(0, 64000) } }); return }
+        if (!this.hydrated) {
+          if (this.buffered.length < 128 && 'item' in event && event.item.kind === 'assistant_text') {
+            const item = event.item
+            // RuntimeEvent also carries context_window checkpoints with their own
+            // `item`, so the cloned snapshot needs an explicit member assertion.
+            this.buffered.push({ ...event, item: { ...item, text: item.text.slice(0, 64000) } } as RuntimeEvent)
+          }
+          return
+        }
         if (applyRunText(this.parts, event) || event.kind.startsWith('turn_')) this.schedule()
       })
       const rows: Array<{ id: string; text: string }> = []
