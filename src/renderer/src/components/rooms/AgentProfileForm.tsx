@@ -57,7 +57,7 @@ export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }
       setTitle(template.title); setInstructions(template.instructions); setRole(template.defaultRole); setPreset(template.presetId); setAvatar(template.avatar)
     }}><option value="">{t('agentsCustomTemplate')}</option>{templates.data?.templates.map((template) =>
       <option key={template.templateId} value={template.templateId}>{template.name}</option>)}</select></label> : null}
-    <RoomAvatarPicker member={preview} onChange={setAvatar} />
+    <RoomAvatarPicker id={preview.id} label={preview.displayName} avatar={avatar} onChange={setAvatar} />
     <label>{t('agentsName')}<input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} /></label>
     <label>{t('agentsTitle')}<input maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
     <label>{t('agentsInstructions')}<textarea rows={7} maxLength={8000} value={instructions} onChange={(e) => setInstructions(e.target.value)} /></label>

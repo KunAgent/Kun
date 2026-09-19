@@ -7,7 +7,9 @@ import type { AgentIdentity } from '@shared/rooms-api'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, X } from 'lucide-react'
-import type { Room, RoomMember, RoomTask } from '@shared/rooms-api'
+import type { Room, RoomAvatarReference, RoomMember, RoomTask } from '@shared/rooms-api'
+import { RoomAvatarGroup } from './RoomAvatar'
+import { RoomAvatarPicker } from './RoomAvatarPicker'
 import {
   roomRequestId,
   roomsClient,
@@ -39,6 +41,7 @@ export function RoomSettings({
   const [baselineRoom] = useState(room)
   const [name, setName] = useState(room?.name ?? '')
   const [description, setDescription] = useState(room?.description ?? '')
+  const [avatar, setAvatar] = useState<RoomAvatarReference | undefined>(room?.avatar)
   const [mode, setMode] = useState<Room['collaborationMode']>(
     room?.collaborationMode ?? 'peer'
   )
@@ -129,7 +132,8 @@ export function RoomSettings({
               : {})
           })
         ),
-        ...(members.length ? { members, defaultMemberId } : {})
+        ...(members.length ? { members, defaultMemberId } : {}),
+        ...(avatar ? { avatar } : {})
       }
       const fingerprint = JSON.stringify(input)
       const requestId =
@@ -138,7 +142,7 @@ export function RoomSettings({
           : roomRequestId()
       pendingRef.current = { fingerprint, id: requestId }
       const result = baselineRoom
-        ? await roomsClient.update(baselineRoom, input, requestId)
+        ? await roomsClient.update(baselineRoom, { ...input, avatar: avatar ?? null }, requestId)
         : await roomsClient.create(input, requestId)
       onSaved(result.room)
     } catch (cause) {
@@ -225,6 +229,16 @@ export function RoomSettings({
           className="min-h-0 overflow-y-auto p-5"
         >
           <div className="space-y-4">
+            {!room || room.conversationKind !== 'user_agent' ? <div className="block text-sm text-ds-muted">
+              {t('roomsGroupAvatar')}
+              <RoomAvatarPicker
+                id={room?.id ?? 'new-room'}
+                label={name.trim() || t('roomsLabel')}
+                avatar={avatar}
+                fallback={<RoomAvatarGroup members={members} size={48} />}
+                onChange={setAvatar}
+              />
+            </div> : null}
             <label className="block text-sm text-ds-muted">
               {t('roomsName')}
               <input

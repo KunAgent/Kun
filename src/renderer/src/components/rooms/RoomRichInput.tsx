@@ -37,6 +37,9 @@ function mentionAvatar(choice: MentionChoice, room: Room): ReactElement {
     return (
       <RoomAvatarGroup
         members={room.members.filter((member) => member.enabled && !member.removedAt)}
+        avatar={room.avatar}
+        id={room.id}
+        label={choice.label}
         size={28}
       />
     )

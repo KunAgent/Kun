@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto'
-import { RoomAvatarAssetSchema, type RoomAvatarAsset, type RoomPreviewImage } from '../contracts/room-content.js'
+import { RoomAvatarAssetSchema, type RoomAvatarAsset, type RoomAvatarReference, type RoomPreviewImage } from '../contracts/room-content.js'
 import type { AttachmentMetadata } from '../contracts/attachments.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { RoomStore } from './room-store.js'
-import type { RoomMember } from '../contracts/rooms.js'
 
 export async function recordRoomAvatarAsset(store: RoomStore, metadata: AttachmentMetadata): Promise<void> {
   const asset = RoomAvatarAssetSchema.parse({ attachmentId: metadata.id, hash: metadata.hash,
@@ -31,9 +30,18 @@ async function verifiedAvatarMetadata(store: RoomStore, attachments: AttachmentS
     : metadata.workspaces[0] ? { workspace: metadata.workspaces[0] } : {}
   return { asset: asset.data, scope }
 }
-export async function validateRoomMemberAvatars(store: RoomStore, attachments: AttachmentStore | undefined, members: RoomMember[]): Promise<void> {
-  const ids = new Set(members.flatMap((member) => member.avatar?.kind === 'uploaded' ? [member.avatar.attachmentId] : []))
+export async function validateRoomAvatarReferences(
+  store: RoomStore, attachments: AttachmentStore | undefined,
+  avatars: Array<RoomAvatarReference | null | undefined>
+): Promise<void> {
+  const ids = new Set(avatars.flatMap((avatar) => avatar?.kind === 'uploaded' ? [avatar.attachmentId] : []))
   for (const id of ids) await verifiedAvatarMetadata(store, attachments, id)
+}
+export async function validateRoomMemberAvatars(
+  store: RoomStore, attachments: AttachmentStore | undefined,
+  members: Array<{ avatar?: RoomAvatarReference | null }>
+): Promise<void> {
+  await validateRoomAvatarReferences(store, attachments, members.map((member) => member.avatar))
 }
 export async function getRoomAvatarImage(store: RoomStore, attachments: AttachmentStore | undefined, id: string): Promise<RoomPreviewImage> {
   const { asset, scope } = await verifiedAvatarMetadata(store, attachments, id)

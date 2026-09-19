@@ -361,4 +361,20 @@ describe('RoomTimeline conversation interactions', () => {
     expect(renderer.root.findAllByType('button')).toHaveLength(1)
     expect(renderer.root.findAllByProps({ className: 'rooms-avatar-art' })).toHaveLength(2)
   })
+
+  it('renders a custom room avatar instead of the member mosaic', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(RoomAvatarGroup, {
+          members: [member, { ...member, id: 'developer-b' }],
+          avatar: { kind: 'builtin', id: 'explorer' },
+          id: 'room-1',
+          label: 'Team'
+        })
+      )
+    })
+    expect(renderer.root.findAllByProps({ className: 'rooms-avatar-art' })).toHaveLength(1)
+    expect(renderer.root.findByProps({ 'data-avatar-id': 'explorer' })).toBeTruthy()
+    expect(renderer.root.findAllByProps({ className: 'rooms-avatar-group rooms-avatar-group-2' })).toHaveLength(0)
+  })
 })

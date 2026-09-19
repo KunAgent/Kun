@@ -106,15 +106,24 @@ export function RoomAvatar({
 
 export function RoomAvatarGroup({
   members,
+  avatar,
+  id,
+  label: explicitLabel,
   size = 44,
   onClick
 }: {
   members: RoomMember[]
+  avatar?: RoomAvatarReference | null
+  id?: string
+  label?: string
   size?: number
   onClick?: () => void
 }) {
   const visible = members.filter((member) => !member.removedAt).slice(0, 4)
-  const label = visible.map((member) => member.displayName).join(', ') || 'Kun'
+  const label = explicitLabel ?? (visible.map((member) => member.displayName).join(', ') || 'Kun')
+  if (avatar) {
+    return <RoomAvatar avatar={avatar} id={id} label={label} size={size} onClick={onClick} />
+  }
   const className = `rooms-avatar-group rooms-avatar-group-${Math.max(1, visible.length)}`
   const style = { '--rooms-avatar-size': `${size / 16}rem` } as CSSProperties
   const content = visible.length ? (

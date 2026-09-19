@@ -80,7 +80,9 @@ export function RoomMemberEditor({
         {member.displayName}
       </legend>
       {member.participantAgentId ? <><RoomAvatar member={member} label={member.displayName} size={48} />
-        <p className="rooms-run-note">{t('agentsMembershipHint')}</p></> : <RoomAvatarPicker member={member} onChange={(avatar) => onChange({ avatar })} />}
+        <p className="rooms-run-note">{t('agentsMembershipHint')}</p></> : <RoomAvatarPicker
+          id={member.id} label={member.displayName} avatar={member.avatar}
+          onChange={(avatar) => onChange({ avatar })} />}
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs text-ds-muted">
           {t('roomsMemberName')}

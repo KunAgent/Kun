@@ -82,7 +82,8 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
             style={virtual ? { position: 'absolute', top: row.start, width: '100%' } : undefined}>
             <button className="rooms-im-sidebar-open" aria-label={entry.name} aria-current={selected ? 'page' : undefined}
               onClick={() => entry.agentId ? onOpenAgent(entry.agentId) : entry.roomId && onSelect(entry.roomId)}>
-              {entry.agentId ? <RoomAvatar avatar={entry.avatar} id={entry.agentId} label={entry.name} size={36} /> : <RoomAvatarGroup members={entry.members} size={36} />}
+              {entry.agentId ? <RoomAvatar avatar={entry.avatar} id={entry.agentId} label={entry.name} size={36} /> :
+                <RoomAvatarGroup members={entry.members} avatar={entry.avatar} id={entry.roomId} label={entry.name} size={36} />}
               <span className="rooms-im-sidebar-copy"><span className="rooms-im-sidebar-name"><strong>{entry.name}</strong>
                 {date && Number.isFinite(date.getTime()) ? <time dateTime={latest!.createdAt}>{date.toDateString() === new Date().toDateString() ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString([], { month: 'short', day: 'numeric' })}</time> : null}</span>
                 <span className="rooms-im-sidebar-preview">{entry.attentionCount ? <b aria-label={t('roomsAttention')}>!</b> : entry.runningCount ? <i aria-label={t('agentsWorking')}>●</i> : null}<small>{preview}</small>

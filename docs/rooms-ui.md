@@ -18,7 +18,9 @@ execution intent, approval, task recovery, or delivery protocols.
 - Thirty generated Kun portraits share one local sprite atlas. Default members
   use matching role portraits; other members use a stable ID-based selection.
   Names and transient activity do not change the selected portrait. The local
-  catalog is `src/asset/img/room-avatars/gallery.html`.
+  catalog is `src/asset/img/room-avatars/gallery.html`. Group rooms can set a
+  custom avatar; without one, the conversation list and header keep the member
+  mosaic.
 - Reply, copy, and pin actions appear on hover or keyboard focus. Linked tasks
   remain visible. Scrolling up stops automatic following; Back to latest
   restores it. Loading earlier messages preserves the reading anchor.

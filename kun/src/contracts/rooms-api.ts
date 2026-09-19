@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RoomAvatarReferenceSchema } from './room-content.js'
 import { RoomIdSchema, RoomMemberSchema, SendRoomMessageSchema } from './rooms.js'
 
 export const RoomRepositoryInputSchema = z.object({
@@ -10,6 +11,7 @@ export const RoomRepositoryInputSchema = z.object({
 const fields = {
   name: z.string().trim().min(1).max(120),
   description: z.string().max(8000).optional(),
+  avatar: RoomAvatarReferenceSchema.optional(),
   collaborationMode: z.enum(['autonomous', 'directed', 'peer']).optional(),
   maxConcurrentTasks: z.number().int().min(1).max(2).optional(),
   defaultMemberId: RoomIdSchema.optional(),
@@ -23,6 +25,7 @@ export type CreateRoomRequest = z.input<typeof CreateRoomRequestSchema>
 export const UpdateRoomRequestSchema = z.object({
   ...fields,
   name: fields.name.optional(),
+  avatar: RoomAvatarReferenceSchema.nullable().optional(),
   expectedRevision: z.number().int().nonnegative(),
   clientRequestId: RoomIdSchema,
   pinned: z.boolean().optional(),

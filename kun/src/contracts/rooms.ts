@@ -72,6 +72,7 @@ export const RoomSchema = z.object({
   id: RoomIdSchema,
   name: z.string().trim().min(1).max(120),
   description: z.string().max(8000).default(''),
+  avatar: RoomAvatarReferenceSchema.optional(),
   collaborationMode: z.enum(['autonomous', 'directed', 'peer']).default('autonomous'),
   maxDiscussionRounds: z.number().int().min(1).max(3).default(3),
   maxConcurrentTasks: z.number().int().min(1).max(2).default(2),

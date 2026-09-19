@@ -72,7 +72,7 @@ export function RoomList({
                 aria-label={room.name}
                 aria-current={selectedId === room.id ? 'page' : undefined}
               >
-                <RoomAvatarGroup members={room.members} size={44} />
+                <RoomAvatarGroup members={room.members} avatar={room.avatar} id={room.id} label={room.name} size={44} />
                 <span className="rooms-conversation-copy">
                   <span className="rooms-conversation-name">
                     {room.name}

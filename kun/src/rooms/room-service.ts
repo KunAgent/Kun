@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import { RoomSchema, RoomMessageSchema, RoomMemberSchema, SendRoomMessageSchema,
   type Room, type RoomMessage } from '../contracts/rooms.js'
+import type { RoomAvatarReference } from '../contracts/room-content.js'
 import { CreateRoomRequestSchema, UpdateRoomRequestSchema } from '../contracts/rooms-api.js'
 import type { RoomStore, RoomStoreCommit, RoomDocumentKind, RoomStoredDocument } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
@@ -47,7 +48,7 @@ export class RoomService {
   async directBinding(room: Room) { return this.directModel?.(room) }
   private agents?: AgentIdentityService
   setAgentDirectory(agents: AgentIdentityService): void { this.agents = agents }
-  private memberAvatarValidator?: (members: import('../contracts/rooms.js').RoomMember[]) => Promise<void>
+  private memberAvatarValidator?: (members: Array<{ avatar?: RoomAvatarReference | null }>) => Promise<void>
   private contentReferenceValidator?: (room: Room, references: NonNullable<import('../contracts/rooms.js').SendRoomMessage['references']>) => Promise<void>
   constructor(readonly store: RoomStore, private readonly wake: () => void) {}
 
@@ -56,6 +57,12 @@ export class RoomService {
   }
   setMemberAvatarValidator(validator: NonNullable<RoomService['memberAvatarValidator']>): void {
     this.memberAvatarValidator = validator
+  }
+  private async assertUploadedAvatars(subjects: Array<{ avatar?: RoomAvatarReference | null }>): Promise<void> {
+    const uploaded = subjects.filter((subject) => subject.avatar?.kind === 'uploaded')
+    if (!uploaded.length) return
+    if (!this.memberAvatarValidator) throw new Error('avatar storage unavailable')
+    await this.memberAvatarValidator(uploaded)
   }
 
   async get(id: string): Promise<Room> {
@@ -75,14 +82,12 @@ export class RoomService {
     const members = body.members ?? (this.agents ? await this.agents.defaultMembers(repositories.map((repo) => repo.id)) : defaultRoomMembers(repositories.map((repo) => repo.id)))
     let room = RoomSchema.parse({ schemaVersion: 1, id: internal?.id ?? roomId(),
       conversationKind: internal?.conversationKind ?? 'group', name: body.name,
-      description: body.description, collaborationMode: body.collaborationMode ?? 'peer',
+      description: body.description, ...(body.avatar ? { avatar: body.avatar } : {}),
+      collaborationMode: body.collaborationMode ?? 'peer',
       maxConcurrentTasks: body.maxConcurrentTasks,
       defaultMemberId: body.defaultMemberId ?? members[0].id, members, repositories,
       revision: 0, createdAt: now, updatedAt: now })
-    if (room.members.some((member) => member.avatar?.kind === 'uploaded')) {
-      if (!this.memberAvatarValidator) throw new Error('avatar storage unavailable')
-      await this.memberAvatarValidator(room.members)
-    }
+    await this.assertUploadedAvatars([...room.members, { avatar: room.avatar }])
     const binding = this.agents ? await this.agents.prepareRoom(room) : undefined
     room = binding?.room ?? room
     const result = { room }
@@ -101,18 +106,22 @@ export class RoomService {
     const replay = await this.replay(key, body)
     if (replay) return replay as { room: Room }
     const old = await this.get(id)
-    const { clientRequestId: _request, expectedRevision, archived, repositories, ...patch } = body
+    const { clientRequestId: _request, expectedRevision, archived, repositories, avatar, ...patch } = body
     void _request
-    let room = RoomSchema.parse({ ...old, ...patch,
+    const next = { ...old, ...patch,
       ...(repositories ? { repositories: await this.repositories(repositories) } : {}),
       ...(archived !== undefined ? { archivedAt: archived ? new Date().toISOString() : undefined } : {}),
-      revision: expectedRevision + 1, updatedAt: new Date().toISOString() })
-    const changedAvatars = room.members.filter((member) => member.avatar?.kind === 'uploaded' &&
-      JSON.stringify(member.avatar) !== JSON.stringify(old.members.find((previous) => previous.id === member.id)?.avatar))
-    if (changedAvatars.length) {
-      if (!this.memberAvatarValidator) throw new Error('avatar storage unavailable')
-      await this.memberAvatarValidator(changedAvatars)
-    }
+      revision: expectedRevision + 1, updatedAt: new Date().toISOString() }
+    if (avatar === null) delete next.avatar
+    else if (avatar !== undefined) next.avatar = avatar
+    let room = RoomSchema.parse(next)
+    const changedAvatars = [
+      ...room.members.filter((member) => member.avatar?.kind === 'uploaded' &&
+        JSON.stringify(member.avatar) !== JSON.stringify(old.members.find((previous) => previous.id === member.id)?.avatar)),
+      ...(room.avatar?.kind === 'uploaded' && JSON.stringify(room.avatar) !== JSON.stringify(old.avatar)
+        ? [{ avatar: room.avatar }] : [])
+    ]
+    await this.assertUploadedAvatars(changedAvatars)
     if (old.conversationKind && old.conversationKind !== 'group' && JSON.stringify(room.members.map((m) => [m.id, m.participantAgentId, m.removedAt])) !== JSON.stringify(old.members.map((m) => [m.id, m.participantAgentId, m.removedAt]))) {
       throw new RoomStoreConflictError('direct conversation participants cannot change')
     }

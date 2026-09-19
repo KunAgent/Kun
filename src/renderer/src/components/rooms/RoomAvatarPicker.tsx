@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Check, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { RoomMember, RoomAvatarReference, RoomPreviewImage } from '@shared/rooms-api'
+import type { RoomAvatarReference, RoomPreviewImage } from '@shared/rooms-api'
 import { RoomAvatar, RoomAvatarPortrait } from './RoomAvatar'
 import { ROOM_AVATARS, avatarForIdentity } from './room-avatar-catalog'
 import { RoomPopover } from './RoomPopover'
@@ -24,13 +24,21 @@ async function imageUpload(file: File): Promise<{ dataBase64: string; mimeType: 
   } finally { bitmap.close() }
 }
 
-export function RoomAvatarPicker({ member, onChange }: { member: RoomMember; onChange: (avatar: RoomAvatarReference | undefined) => void }) {
+export function RoomAvatarPicker({
+  id, label, avatar, fallback, onChange
+}: {
+  id: string
+  label: string
+  avatar?: RoomAvatarReference
+  fallback?: ReactNode
+  onChange: (avatar: RoomAvatarReference | undefined) => void
+}) {
   const { t } = useTranslation('common')
   const file = useRef<HTMLInputElement>(null), [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const avatar = member.avatar
-  const selected = avatar?.kind === 'builtin' ? avatar.id : avatar ? '' : avatarForIdentity(member.id).id
+  const selected = avatar?.kind === 'builtin' ? avatar.id : avatar ? '' : fallback ? '' : avatarForIdentity(id).id
   return <div className="rooms-avatar-picker-field">
-    <RoomAvatar member={member} label={member.displayName} size={48} />
+    {avatar ? <RoomAvatar avatar={avatar} id={id} label={label} size={48} /> : fallback ??
+      <RoomAvatar avatar={avatar} id={id} label={label} size={48} />}
     <RoomPopover label={t('roomsAvatarChoose')} trigger={<span>{t('roomsAvatarChoose')}</span>} disabled={busy} width={320}>
       {(close) => <div className="rooms-avatar-picker">
         <div className="rooms-avatar-picker-grid">{ROOM_AVATARS.map((portrait) => <button type="button" key={portrait.id}

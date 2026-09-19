@@ -27,9 +27,10 @@ export class RoomHttpError extends Error {
 
 export type RoomInput = Omit<CreateRoomRequest, 'clientRequestId'>
 export type RoomRepositoryInput = NonNullable<RoomInput['repositories']>[number]
-export type RoomPatch = Partial<RoomInput> & {
+export type RoomPatch = Omit<Partial<RoomInput>, 'avatar'> & {
   pinned?: boolean
   archived?: boolean
+  avatar?: RoomInput['avatar'] | null
 }
 export type RoomTaskDetail = {
   approvals?: RoomApprovalView[]

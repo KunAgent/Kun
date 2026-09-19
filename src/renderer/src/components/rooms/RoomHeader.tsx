@@ -50,7 +50,7 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
     </div>
     {room ? <>
       <div className="rooms-header-members" title={t('roomsMembers')}>
-        <RoomAvatarGroup members={enabled} size={36} onClick={onMembers} />
+        <RoomAvatarGroup members={enabled} avatar={room.avatar} id={room.id} label={room.name} size={36} onClick={onMembers} />
       </div>
       {room.conversationKind && room.conversationKind !== 'group' ? <span className="rooms-run-note">{t('agentsConversation_' + room.conversationKind)}</span> : <div className="rooms-mode-control">
         <select aria-label={t('roomsMode')} value={room.collaborationMode} disabled={busy}

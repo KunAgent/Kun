@@ -56,4 +56,19 @@ describe('room avatar provenance', () => {
     const created = await service.create({ clientRequestId: 'room-valid', name: 'Avatar room', members })
     expect(created.room.members[0].avatar).toEqual({ kind: 'uploaded', attachmentId: f.id })
   })
+  it('persists an uploaded room avatar and clears it with null', async () => {
+    const f = fixture(), service = new RoomService(f.store, () => undefined)
+    service.setMemberAvatarValidator((members) => validateRoomMemberAvatars(f.store, f.attachments, members))
+    const avatar = { kind: 'uploaded' as const, attachmentId: f.id }
+    await expect(service.create({ clientRequestId: 'room-avatar-invalid', name: 'Avatar room', avatar }))
+      .rejects.toThrow('avatar unavailable')
+    expect(f.store.commit).not.toHaveBeenCalled()
+    await recordRoomAvatarAsset(f.store, f.metadata)
+    const created = await service.create({ clientRequestId: 'room-avatar-valid', name: 'Avatar room', avatar })
+    expect(created.room.avatar).toEqual(avatar)
+    const updated = await service.update(created.room.id, {
+      clientRequestId: 'room-avatar-reset', expectedRevision: created.room.revision, avatar: null
+    })
+    expect(updated.room.avatar).toBeUndefined()
+  })
 })
