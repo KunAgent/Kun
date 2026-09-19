@@ -158,7 +158,7 @@ function FlowSection({ section }: { section: FlowSectionValue }): ReactElement {
 }
 
 function looksLikeMetricTitle(title: string): boolean {
-  return /^[+\-]?(?:\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?%?[KMBTkmbt]?$/.test(title.trim())
+  return /^[+-]?(?:\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?%?[KMBTkmbt]?$/.test(title.trim())
 }
 
 function ItemCard({
