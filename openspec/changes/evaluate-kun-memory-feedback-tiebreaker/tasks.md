@@ -51,7 +51,7 @@ Correction integration now covers real service events through compaction/restart
 The frozen fixtures and lock are unchanged; label concerns and holdout-label
 exposure are recorded in `development-review.md`, not silently resolved.
 
-- [ ] 6.1 After #1324 and its P3-A OpenSpec closeout are merged, fetch the latest `upstream/develop`, rebase this branch, and verify the diff contains only the P3-B evaluation capability and artifacts with no importer or production-ranking changes.
+- [ ] 6.1 Fetch the latest `upstream/develop`, rebase this branch, and verify the final diff contains the P3-B evaluation capability plus the required P3-A canonical spec synchronization/archive closeout, with no importer or production-ranking changes.
 - [ ] 6.2 Document the calibration method, candidate identities, local/global metrics, privacy model, resource results, and go/no-go interpretation; verify documentation states that go requires a separate production-integration change and no-go retains P3-A infrastructure.
 - [ ] 6.3 Update `D:\learning\Review_md\kun-memory-roadmap.md` and create a stage note under `D:\learning\Review_md\codex` after the decision; verify both record the commit series, checks, immutable evidence hashes, holdout run count, and remaining P4-A work.
 
@@ -60,5 +60,5 @@ exposure are recorded in `development-review.md`, not silently resolved.
 - [x] 7.1 Run the focused P3-B contract, fixture, evaluator, safety, privacy, determinism, and workflow tests; verify all new cases pass.
 - [x] 7.2 Run the existing Kun Memory focused suites, `npm run build:kun`, `npm run typecheck`, `npm run build`, `npm run lint`, and `npm run check:file-lines`; separate any pre-existing baseline failures from change-introduced failures.
 - [x] 7.3 Run strict OpenSpec validation and `git diff --check`; verify every authored text file remains within 700 physical lines.
-- [x] 7.4 Commit each meaningful artifact group with Angular-style messages and push the preparation branch to SunwardL; verify no formal PR is opened before #1324 and the P3-A closeout are merged.
-- [ ] 7.5 After the baseline prerequisites and all decision tasks pass, create one PR targeting `KunAgent/Kun:develop` with Summary, Changes, Tests, decision outcome, evidence hashes, and an explicit statement that production ranking is unchanged.
+- [x] 7.4 Commit each meaningful artifact group with Angular-style messages and push the preparation branch to SunwardL; keep the formal PR closed until the decision and documentation tasks are complete, and do not open a separate P3-A closeout PR.
+- [ ] 7.5 After the baseline prerequisites and all decision tasks pass, create one PR targeting `KunAgent/Kun:develop` containing the P3-B evaluation and the P3-A spec/archive closeout, with Summary, Changes, Tests, decision outcome, evidence hashes, and an explicit statement that production ranking is unchanged.

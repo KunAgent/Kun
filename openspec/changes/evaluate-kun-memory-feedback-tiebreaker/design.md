@@ -29,7 +29,7 @@ P3-B must test a narrower hypothesis without rewriting the frozen v1 artifacts: 
 
 Create `memory-feedback-ranking-evaluation` as a separate capability. P3-A's contract already requires a separately versioned passed decision before production ranking can use feedback, so P3-B supplies that decision process without changing feedback collection or canonical Memory behavior.
 
-Modifying the not-yet-archived `memory-feedback-evolution` capability was rejected because it would couple this preparation branch to P3-A closeout and obscure the fact that no production behavior is being added.
+The P3-B evaluator remains a separate capability from `memory-feedback-evolution`. Because the standalone P3-A closeout PR was closed without merging, the final P3-B delivery may include the already-reviewed canonical spec synchronization and archive move as documentation-only closeout commits. This does not add production behavior or couple the evaluator to a ranking rollout.
 
 ### 2. Use a lexical admission boundary followed by a near-tie window
 
@@ -122,7 +122,7 @@ No network, model file, native dependency, or user data directory is required. T
 - **Confirmation can reinforce an old but still active fact** → lifecycle filtering remains first, corrected old versions are excluded, and feedback cannot override wide foundation gaps.
 - **Correction evidence can be double-counted with lifecycle** → trace lifecycle admission separately and compare confirmation-only with confirmation-plus-correction candidates rather than assuming correction must help.
 - **A narrow local metric can hide broad regressions** → require global non-regression, abstention, hard-negative, and zero-leak gates in addition to local benefit.
-- **The branch is temporarily based on unmerged P3-A** → keep it preparation-only, open no stacked PR, and rebase onto `develop` after #1324 and its closeout are merged.
+- **P3-A closeout is not a separate merged PR** → keep the evaluator and production behavior independent, rebase onto the latest `develop`, and include only the necessary canonical spec synchronization and archive move in the single final P3-B PR.
 
 ## Migration Plan
 

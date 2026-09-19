@@ -10,6 +10,15 @@
 
 These are a dated checkpoint, not a claim that the branch is ready to merge.
 
+## Current synchronization checkpoint: 2026-09-20
+
+- `upstream/develop` is synchronized at `4778f9eb`.
+- P3-A implementation #1324 is merged at `8974700b`.
+- P3-A closeout #1331 is closed without merge; its substantive documentation
+  changes are included in this branch as `72578f9e` and `47de925e`.
+- The final delivery will use one P3-B PR; no standalone P3-A closeout PR will
+  be reopened.
+
 ## Work that can proceed before the dependency merges
 
 - [x] Reproduce development and candidate lock tests without scoring holdout.
@@ -23,16 +32,16 @@ These are a dated checkpoint, not a claim that the branch is ready to merge.
   deliberately distinct from the old record's aggregate correction count.
   Repeat integration checks after the final P3-A baseline synchronization.
 
-## After P3-A merges
+## After the P3-A implementation merge
 
 1. Verify #1324 is MERGED and record its actual merge SHA, not just green checks.
-2. Create a separate closeout branch from current upstream develop. Synchronize
-   the P3-A delta into the main spec, archive its completed change, validate and
-   submit the independent closeout PR. Preserve frozen P3-A evidence.
-3. Once closeout merges, fetch upstream develop and origin, confirm the worktree
-   is clean, then rebase this preparation branch using the verified P3-A boundary.
-   Preserve meaningful P3-B commits; do not replay obsolete P3-A implementation
-   commits as new P3-B changes. Use force-with-lease only if a rebase requires it.
+2. Keep the P3-A canonical-spec synchronization and completed-change archive in
+   the same final P3-B PR. Preserve frozen P3-A evidence; do not reopen a
+   standalone closeout PR.
+3. Fetch upstream develop and origin, confirm the worktree is clean, then
+   rebase this preparation branch onto the latest baseline. Preserve meaningful
+   P3-B commits; do not replay obsolete P3-A implementation commits as new
+   P3-B changes. Use force-with-lease only if a rebase requires it.
 4. Review the final three-dot diff against upstream develop. It should contain
    only this evaluation capability, anonymous artifacts and tests; no importer,
    production ranking, runtime composition or UI changes.
@@ -48,7 +57,8 @@ These are a dated checkpoint, not a claim that the branch is ready to merge.
    file-lines, strict OpenSpec validation and diff check. Record failures honestly.
 9. Finish tasks 6.2/6.3 and the stage report, including immutable evidence hashes,
    holdout run count and remaining P4-A work. Update the local roadmap.
-10. Push the verified branch and create one PR to `KunAgent/Kun:develop`.
+10. Push the verified branch and create one PR containing the P3-B evaluation
+    and the P3-A spec/archive closeout to `KunAgent/Kun:develop`.
     Immediately verify the base, head and URL. CI success on #1324 does not
     certify this new PR; it needs its own checks.
 
