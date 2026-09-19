@@ -79,6 +79,7 @@ export abstract class RoundOutcomeState {
   protected readonly graphPlanNoToolRecoveryByTurn = new Map<string, number>()
   protected readonly pptNoToolRecoveryByTurn = new Map<string, number>()
   protected readonly postToolFailureRecoveryStepsByTurn = new Map<string, number>()
+  protected readonly outputTruncationRecoveryStepsByTurn = new Map<string, number>()
 
   constructor(protected readonly deps: RoundOutcomeCoordinatorDeps) {}
 
@@ -96,6 +97,10 @@ export abstract class RoundOutcomeState {
 
   postToolFailureRecoverySteps(turnId: string): number {
     return this.postToolFailureRecoveryStepsByTurn.get(turnId) ?? 0
+  }
+
+  outputTruncationRecoverySteps(turnId: string): number {
+    return this.outputTruncationRecoveryStepsByTurn.get(turnId) ?? 0
   }
 
   toolSuppressionRecoverySteps(turnId: string): number {
@@ -124,5 +129,6 @@ export abstract class RoundOutcomeState {
     this.graphPlanNoToolRecoveryByTurn.delete(turnId)
     this.pptNoToolRecoveryByTurn.delete(turnId)
     this.postToolFailureRecoveryStepsByTurn.delete(turnId)
+    this.outputTruncationRecoveryStepsByTurn.delete(turnId)
   }
 }

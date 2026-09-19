@@ -14,6 +14,7 @@ import {
   TOKEN_ECONOMY_INSTRUCTION,
   type TokenEconomyConfig
 } from './token-economy.js'
+import { outputTruncationRecoveryInstruction } from './continuation-instructions.js'
 
 export function hasSuccessfulToolResult(
   items: readonly TurnItem[],
@@ -186,6 +187,12 @@ export function tokenEconomyContextBlocks(
   const economy = normalizeTokenEconomyConfig(config)
   return economy.enabled && economy.conciseResponses
     ? [kunContextBlock('token-economy', 'runtime', TOKEN_ECONOMY_INSTRUCTION)]
+    : []
+}
+
+export function outputTruncationRecoveryBlocks(step: number): KunTurnContextBlock[] {
+  return step > 0
+    ? [kunContextBlock('output-truncation-recovery', 'runtime', outputTruncationRecoveryInstruction(step))]
     : []
 }
 

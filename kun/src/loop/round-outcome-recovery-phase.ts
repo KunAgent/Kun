@@ -11,6 +11,7 @@ import {
 import {
   EMPTY_POST_TOOL_MAX_RECOVERY_STEPS,
   GOAL_NO_TOOL_REPEAT_MAX_RECOVERY_STEPS,
+  OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS,
   POST_TOOL_FAILURE_MAX_RECOVERY_STEPS,
   TOOL_SUPPRESSION_FINAL_ANSWER_RECOVERY_STEP,
   isRepeatedNoToolAssistantText,
@@ -339,10 +340,39 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
     return 'continue'
   }
 
+  /**
+   * Bounded continuation when the provider ends a no-tool round on `length`.
+   * The truncated assistant text is already persisted, so the next model step
+   * can resume mid-answer instead of waiting for the user to type "continue".
+   * Only the diagnostic event is recorded here; once the window is exhausted
+   * the visible warning item owns settlement.
+   */
+  protected async advanceOutputTruncationRecovery(
+    input: RoundOutcomeInput
+  ): Promise<ModelRoundOutcome> {
+    const recoverySteps = (this.outputTruncationRecoveryStepsByTurn.get(input.turnId) ?? 0) + 1
+    if (recoverySteps <= OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS) {
+      this.outputTruncationRecoveryStepsByTurn.set(input.turnId, recoverySteps)
+      await this.deps.events.record({
+        kind: 'error',
+        threadId: input.threadId,
+        turnId: input.turnId,
+        message:
+          'The model reached its maximum output length and the response was truncated; requesting continuation.',
+        code: 'output_truncated_continuation',
+        severity: 'warning'
+      })
+      return 'continue'
+    }
+    this.outputTruncationRecoveryStepsByTurn.delete(input.turnId)
+    await this.recordOutputTruncated(input)
+    return 'stop'
+  }
+
   protected async recordOutputTruncated(input: RoundOutcomeInput): Promise<void> {
     const message =
       'The model reached its maximum output length and the response was truncated. ' +
-      'Raise the model’s max output tokens, or ask it to continue or split the work into smaller steps. ' +
+      'Raise the model’s max output tokens in the provider model settings, or ask it to continue or split the work into smaller steps. ' +
       'Output also stays clamped to the remaining context window capacity.'
     await this.deps.events.record({
       kind: 'error',

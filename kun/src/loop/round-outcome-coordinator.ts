@@ -115,8 +115,7 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
         return this.advancePostToolFailureRecovery(input)
       }
       if (streamSnapshot.stopReason === 'length') {
-        await this.recordOutputTruncated(input)
-        return 'stop'
+        return this.advanceOutputTruncationRecovery(input)
       }
       if (
         streamSnapshot.stopReason === 'stop' &&
@@ -134,6 +133,7 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
     this.lastNoToolTextByTurn.delete(input.turnId)
     this.goalNoToolRecoveryStepsByTurn.delete(input.turnId)
     this.emptyPostToolRecoveryStepsByTurn.delete(input.turnId)
+    this.outputTruncationRecoveryStepsByTurn.delete(input.turnId)
     if (input.toolCallsDisabled) {
       const message =
         'Tool calls are disabled during final-answer recovery; the provider-emitted calls were not executed.'

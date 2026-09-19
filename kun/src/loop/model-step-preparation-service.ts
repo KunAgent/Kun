@@ -71,6 +71,7 @@ import {
   pptWorkflowCompletionToolGate,
   kunContextBlock,
   modelHistoryRoutesByTurnId,
+  outputTruncationRecoveryBlocks,
   prefixVolatilityStageDetails,
   requiredWorkflowToolGate,
   tokenEconomyContextBlocks,
@@ -585,6 +586,7 @@ export abstract class ModelStepPreparationService {
             postToolFailureRecoveryInstruction(postToolFailureRecoveryStep)
           )]
         : []),
+      ...outputTruncationRecoveryBlocks(this.deps.roundOutcome.outputTruncationRecoverySteps(turnId)),
       ...imageGenerationReferenceInstructions({
         imageAttachments: attachments.imageAttachments,
         textFallbacks: attachments.textFallbacks,
