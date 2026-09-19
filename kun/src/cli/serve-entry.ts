@@ -118,14 +118,14 @@ async function serveMain(argv: readonly string[]): Promise<number> {
   const injectedOwner = appSessionOwnerFromEnvironment()
   if (ownerKind && !injectedOwner) throw new Error('Client-owned Runtime requires an application-owned Manager binding')
   if (injectedOwner && !ownerMonitor) throw new Error('An injected application Manager requires a live Runtime owner IPC channel')
-  const ownedManagerSession = injectedOwner ? undefined : createOwnedServiceManagerSession({ ownerKind: 'cli' })
+  const ownedManagerSession = injectedOwner || launchMode === 'shared'
+    ? undefined
+    : createOwnedServiceManagerSession({ ownerKind: 'cli' })
   let cleanupServer: KunServeHandle | undefined
   let cleanupManager: ServiceManagerConnection | undefined
   let cleanupCompleted = false
   try {
-    const manager = injectedOwner
-      ? await connectInjectedServiceManager({ owner: injectedOwner, dataDir: parsed.options.dataDir })
-      : await ownedManagerSession!.ensure({
+    const managerPaths = {
       flavor: runtimeFlavor,
       allowDevelopmentBootstrap,
       ...(buildId ? { buildId } : {}),
@@ -134,7 +134,15 @@ async function serveMain(argv: readonly string[]): Promise<number> {
       ...(process.env.KUN_MANAGER_SETTINGS_PATH?.trim()
         ? { settingsPath: process.env.KUN_MANAGER_SETTINGS_PATH.trim() }
         : {})
-    })
+    }
+    const manager = injectedOwner
+      ? await connectInjectedServiceManager({ owner: injectedOwner, dataDir: parsed.options.dataDir })
+      : launchMode === 'shared'
+        // A shared Runtime attaches to the profile's standing Manager rather
+        // than seizing the whole application session: multiple flavors are
+        // allowed to coexist on one profile for external/shared startup.
+        ? await ensureServiceManager(managerPaths)
+        : await ownedManagerSession!.ensure(managerPaths)
     cleanupManager = manager
     bindRuntimeManagerDataPlane(parsed.options, manager)
     const start = async (): Promise<
