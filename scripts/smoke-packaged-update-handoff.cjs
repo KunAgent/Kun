@@ -456,8 +456,10 @@ async function quitDesktopNormally(desktop, debuggingPort, timeoutMs) {
     // IPC handlers such as 'desktop:command' register asynchronously after the
     // workbench page already accepts evaluates, so a single quit request can
     // land before registration on slower hosts. Keep re-requesting until the
-    // process exits or the deadline passes.
-    const deadline = Date.now() + Math.min(timeoutMs, 30_000)
+    // process exits or the deadline passes. The deadline must also cover the
+    // before-quit barrier, which drains owned runtimes and the Service Manager
+    // with grace windows that can approach a minute on loaded CI hosts.
+    const deadline = Date.now() + Math.min(timeoutMs, 75_000)
     for (;;) {
       const remaining = deadline - Date.now()
       if (remaining <= 0) break
