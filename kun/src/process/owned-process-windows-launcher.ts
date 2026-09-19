@@ -9,9 +9,12 @@ using System.Text;
 using System.Threading;
 
 public static class KunOwnedLauncher {
-  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  // lpReserved/lpDesktop/lpTitle must stay IntPtr: as managed LPWSTR strings the
+  // marshaller would CoTaskMemFree pointers that live inside our own startup
+  // block when the out struct is marshaled back, corrupting the process heap.
+  [StructLayout(LayoutKind.Sequential)]
   struct StartupInfo {
-    public int cb; public string reserved; public string desktop; public string title;
+    public int cb; public IntPtr reserved; public IntPtr desktop; public IntPtr title;
     public uint x, y, xSize, ySize, xCount, yCount, fill, flags;
     public short showWindow, cbReserved2; public IntPtr lpReserved2;
     public IntPtr stdin, stdout, stderr;
@@ -69,6 +72,9 @@ public static class KunOwnedLauncher {
       string[] config = File.ReadAllLines(Environment.GetEnvironmentVariable("KUN_OWNED_LAUNCH_CONFIG"));
       string executable = Decode(config[0]), command = Decode(config[1]), cwd = Decode(config[2]);
       statusPath = Decode(config[3]);
+      string stagePath = statusPath + ".stage";
+      Action<string> mark = (stage) => { try { File.WriteAllText(stagePath, stage); } catch { } };
+      mark("config");
       string stopPath = Decode(config[4]);
       int ownerPid = int.Parse(config[5], CultureInfo.InvariantCulture);
       long expectedBirth = long.Parse(config[6], CultureInfo.InvariantCulture);
@@ -80,11 +86,13 @@ public static class KunOwnedLauncher {
         long ownerBirth = Birth(owner);
         if (owner.HasExited || (expectedBirth != 0 && ownerBirth != expectedBirth))
           throw new InvalidOperationException("Application process identity changed before launch");
+        mark("owner");
         job = CreateJobObject(IntPtr.Zero, null);
         Check(job != IntPtr.Zero, "CreateJobObject");
         ExtendedLimits limits = new ExtendedLimits();
         limits.basic.flags = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE; no breakaway.
         Check(SetInformationJobObject(job, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits))), "SetInformationJobObject");
+        mark("job");
         Environment.SetEnvironmentVariable("KUN_PROCESS_STACK_OWNER_PID", ownerPid.ToString(CultureInfo.InvariantCulture));
         Environment.SetEnvironmentVariable("KUN_PROCESS_STACK_OWNER_BIRTH", ownerBirth.ToString(CultureInfo.InvariantCulture));
         Environment.SetEnvironmentVariable("KUN_OWNED_LAUNCH_CONFIG", null);
@@ -95,11 +103,14 @@ public static class KunOwnedLauncher {
         // fd 3, in addition to stdin/stdout/stderr. No proxy reads those pipes.
         Check(CreateProcess(executable, new StringBuilder(command), IntPtr.Zero, IntPtr.Zero,
           true, 0x00000004 | (config[8] == "console" ? 0u : 0x08000000u), IntPtr.Zero, cwd, ref startup, out target), "CreateProcess");
+        mark("create");
         Check(AssignProcessToJobObject(job, target.process), "AssignProcessToJobObject");
+        mark("assign");
         if (WaitForSingleObject(ownerHandle, 0) == 0)
           throw new InvalidOperationException("Application exited during process launch");
         File.WriteAllText(statusPath + ".tmp", target.pid.ToString(CultureInfo.InvariantCulture));
         File.Move(statusPath + ".tmp", statusPath);
+        mark("status");
         string startPath = Decode(config[9]);
         long launchDeadline = DateTime.UtcNow.Ticks + TimeSpan.FromSeconds(10).Ticks;
         while (!File.Exists(startPath)) {
@@ -108,6 +119,7 @@ public static class KunOwnedLauncher {
           Thread.Sleep(5);
         }
         Check(ResumeThread(target.thread) != 0xffffffff, "ResumeThread");
+        mark("resume");
         long ownerLostAt = 0;
         bool terminated = false;
         for (;;) {

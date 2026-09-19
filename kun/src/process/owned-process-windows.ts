@@ -129,8 +129,10 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
           if (detail.startsWith('error:')) throw new Error(detail.slice(6))
           await new Promise((accept) => setTimeout(accept, 25))
         }
+        const stage = await readFile(`${statusPath}.stage`, 'utf8').catch(() => '')
         throw new Error(
-          `Windows owned launcher exited before readiness (code ${child.exitCode ?? child.signalCode ?? 'unknown'})`
+          `Windows owned launcher exited before readiness ` +
+          `(code ${child.exitCode ?? child.signalCode ?? 'unknown'}${stage ? `, last stage: ${stage}` : ''})`
         )
       }
       await new Promise((accept) => setTimeout(accept, 25))
