@@ -8,6 +8,7 @@ import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
 import type { ExtensionPrincipal } from '../extensions/host-process.js'
 import { startServiceManager } from '../manager/service-manager.js'
+import { registerRuntimeWithManager } from '../manager/manager-client.js'
 import { requiredExtensionBrokerPermission } from '../services/extension-host-broker.js'
 import { createKunServeRuntime } from './runtime-factory.js'
 
@@ -36,6 +37,17 @@ describe('extension read surfaces through the managed Runtime broker', () => {
       serviceManager: { discovery: manager.discovery }
     })
     cleanup.push(async () => { await runtime.shutdown?.() })
+    // Room writes are fenced by the rooms-coordinator lease: the runtime must
+    // register its development slot and acquire the lease before commits land.
+    await registerRuntimeWithManager({
+      manager: { discovery: manager.discovery },
+      registration: {
+        flavor: 'development', instanceId: 'embedded', pid: process.pid,
+        startedAt: new Date().toISOString(), host: '127.0.0.1', port: 1,
+        baseUrl: 'http://127.0.0.1:1', runtimeToken: 'extension-read-runtime'
+      }
+    })
+    runtime.startBackgroundMaintenance?.()
     const broker = runtime.extensionPlatform!.broker
     const permissions = ['agent.capacity.read', 'rooms.read', 'agent.threads.readOwn', 'agent.run']
     const principal: ExtensionPrincipal = {
@@ -88,7 +100,7 @@ describe('extension read surfaces through the managed Runtime broker', () => {
       activeTurns: 2, queuedTurns: 1, maxConcurrentTurns: 3, busy: true
     })
     expect(await context.rooms.list()).toMatchObject({
-      items: [{ id: room.id, name: 'Shared room', memberCount: 3 }], page: { hasMore: false }
+      items: [{ id: room.id, name: 'Shared room', memberCount: 5 }], page: { hasMore: false }
     })
     const messages = await context.rooms.listMessages({ roomId: room.id })
     expect(messages).toMatchObject({ items: [{ id: message.id, body: 'Public room message' }] })

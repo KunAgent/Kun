@@ -191,9 +191,9 @@ async function threadDirectoryExists(root: string, threadId: string): Promise<bo
 }
 
 async function waitForClosing(fence: ThreadLifecycleFence, threadId: string): Promise<void> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
     if (fence.isClosing(threadId)) return
-    await Promise.resolve()
+    await new Promise((resolve) => setImmediate(resolve))
   }
   throw new Error(`thread did not enter closing state: ${threadId}`)
 }

@@ -30,7 +30,10 @@ import type { RoomSearchQuery, RoomSearchPage, RoomRepositoryChoice, RoomRunSumm
 export class RemoteRoomStore implements RoomStore {
   constructor(
     private readonly manager: ServiceManagerConnection,
-    private readonly options: { getFence?: () => ManagerResourceFence | undefined } = {}
+    private readonly options: {
+      getFence?: () => ManagerResourceFence | undefined
+      ready?: () => Promise<unknown>
+    } = {}
   ) {}
 
   async get<T = unknown>(kind: RoomDocumentKind, id: string): Promise<RoomStoredDocument<T> | null> {
@@ -42,6 +45,7 @@ export class RemoteRoomStore implements RoomStore {
   }
 
   async commit(input: RoomStoreCommit): Promise<RoomStoreCommitResult> {
+    await this.options.ready?.()
     const fence = this.fence()
     return RoomStoreCommitResultSchema.parse(await this.call('commit', { input, ...(fence ? { fence } : {}) }))
   }

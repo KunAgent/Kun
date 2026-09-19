@@ -212,7 +212,7 @@ describe('Rooms full managed Runtime HTTP composition', () => {
     cleanup.push(() => manager.close())
     const runtime = await startKunServe({ host: '127.0.0.1', port: 0, dataDir: join(root, 'data'),
       runtimeToken: 'peer-runtime-token', apiKey: 'test-fixture', baseUrl: model.baseUrl, model: 'test-model',
-      roles: { smallModel: 'test-small' }, approvalPolicy: 'auto', sandboxMode: 'read-only', tokenEconomyMode: false,
+      roles: { smallModel: 'test-model', smallModelProviderId: 'default' }, approvalPolicy: 'auto', sandboxMode: 'read-only', tokenEconomyMode: false,
       insecure: false, runtimeFlavor: 'development', discoveryDir: join(root, 'discovery'),
       serviceManager: { discovery: manager.discovery } })
     cleanup.push(() => runtime.close())

@@ -22,7 +22,9 @@ export function createRuntimeRoomComposition(input: {
     flavor: options.runtimeFlavor ?? 'production', instanceId: options.instanceId ?? 'embedded' }) : undefined
   const localStore = manager ? undefined : new SqliteRoomStore({ path: join(options.dataDir, 'rooms', 'rooms.sqlite') })
   const apiStore = manager ? new RemoteRoomStore(manager) : localStore!
-  const executionStore = manager ? new RemoteRoomStore(manager, { getFence: () => lease!.getFence() }) : localStore!
+  const executionStore = manager
+    ? new RemoteRoomStore(manager, { getFence: () => lease!.getFence(), ready: () => lease!.ready() })
+    : localStore!
   // Agent-owned records share the canonical Manager repository, with their own
   // explicit feature policy. Code's legacy memory toggle is a separate surface.
   const ownedAgentMemory = manager || !input.services.memoryStore ? createPersistentMemoryStore({

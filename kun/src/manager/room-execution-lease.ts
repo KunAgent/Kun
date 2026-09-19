@@ -9,7 +9,7 @@ const RESOURCE = 'rooms-coordinator'
 export class RoomExecutionLease {
   private readonly client: ManagerResourceLeaseClient
   private readonly executionStore: RemoteRoomStore
-  private started = false
+  private startPromise?: Promise<boolean>
 
   constructor(input: { manager: ServiceManagerConnection; flavor: RuntimeFlavor; instanceId: string }) {
     this.client = new ManagerResourceLeaseClient(input.manager, input.flavor, input.instanceId)
@@ -20,16 +20,24 @@ export class RoomExecutionLease {
 
   getFence(): ManagerResourceFence | undefined { return this.client.getFence(RESOURCE) }
 
+  /** Resolves once the first acquisition attempt has settled. */
+  ready(): Promise<boolean> {
+    return this.startPromise ?? Promise.resolve(this.held)
+  }
+
   async start(): Promise<boolean> {
-    if (this.started) return this.held
-    this.started = true
-    return this.client.maintain({ resource: RESOURCE, onAcquired: () => undefined, onLost: () => undefined })
+    this.startPromise ??= this.client.maintain({
+      resource: RESOURCE,
+      onAcquired: () => undefined,
+      onLost: () => undefined
+    })
+    return this.startPromise
   }
 
   async assertOwnership(): Promise<void> { await this.executionStore.assertOwnership() }
 
   async close(): Promise<void> {
     await this.client.shutdown()
-    this.started = false
+    this.startPromise = undefined
   }
 }
