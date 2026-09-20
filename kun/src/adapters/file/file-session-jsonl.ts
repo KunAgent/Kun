@@ -284,7 +284,7 @@ export async function trimEventsWithGuards(options: {
   const trimmed = await trimEventsJsonlFromSeq(options.path, options.fromSeqInclusive, {
     maxRecordBytes: options.maxRecordBytes,
     withSourceRead: options.withRead,
-    commitReplacement: (replace) => options.withReplacement(() => options.withWrite(async () => {
+    commitReplacement: (replace) => options.withWrite(() => options.withReplacement(async () => {
       const currentInfo = await stat(options.path).catch(() => null)
       if (
         options.readRevision() !== options.revisionBefore ||

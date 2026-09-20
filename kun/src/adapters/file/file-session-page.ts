@@ -70,9 +70,10 @@ export async function loadItemPageFromStore(input: {
   scheduleCompaction: () => void
   compactionMinBytes: number
 }): Promise<ItemHistoryPage> {
-  const release = await input.fileAccess.acquireRead(input.path)
+  let release: (() => void) | undefined
   try {
     const source = await input.withThreadWrite<PageSource | null>(async () => {
+      release = await input.fileAccess.acquireRead(input.path)
       const cached = input.cachedItems()
       if (cached) {
         input.touchCache(cached)
@@ -98,7 +99,7 @@ export async function loadItemPageFromStore(input: {
     if (!input.options.turnId && source.size >= input.compactionMinBytes) input.scheduleCompaction()
     return page
   } finally {
-    release()
+    release?.()
   }
 }
 

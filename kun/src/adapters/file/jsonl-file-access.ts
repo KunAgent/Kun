@@ -26,10 +26,16 @@ type ReadScope = Map<string, { active: boolean }>
 export class JsonlFileAccessCoordinator {
   private readonly states = new Map<string, AccessState>()
   private readonly readScopes = new AsyncLocalStorage<ReadScope>()
+  private readonly replaceScopes = new AsyncLocalStorage<ReadScope>()
 
   async acquireRead(path: string): Promise<Release> {
     const key = resolve(path)
     if (this.readScopes.getStore()?.get(key)?.active) return () => undefined
+    // A read queued behind this task's own replacement can never be granted:
+    // the replacement only releases after this operation returns.
+    if (this.replaceScopes.getStore()?.get(key)?.active) {
+      throw new Error(`jsonl read requested inside its own replacement: ${key}`)
+    }
     const state = this.state(key)
     if (!state.replacing && !state.waiters.some((waiter) => waiter.kind === 'replace')) {
       state.readers += 1
@@ -59,14 +65,25 @@ export class JsonlFileAccessCoordinator {
 
   async withReplacement<T>(path: string, operation: () => Promise<T>): Promise<T> {
     const key = resolve(path)
+    // A replacement queued while this task still holds the path's read lease
+    // would wait on its own reader count forever — fail fast instead.
+    if (this.readScopes.getStore()?.get(key)?.active) {
+      throw new Error(`jsonl replacement requested inside its own read lease: ${key}`)
+    }
+    const inherited = this.replaceScopes.getStore()
+    if (inherited?.get(key)?.active) return operation()
     const state = this.state(key)
     const release = await new Promise<Release>((grant) => {
       state.waiters.push({ kind: 'replace', grant })
       this.drain(key, state)
     })
+    const token = { active: true }
+    const scope = new Map(inherited)
+    scope.set(key, token)
     try {
-      return await operation()
+      return await this.replaceScopes.run(scope, operation)
     } finally {
+      token.active = false
       release()
     }
   }
