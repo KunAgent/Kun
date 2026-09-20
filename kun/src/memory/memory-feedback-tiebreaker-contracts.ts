@@ -359,6 +359,7 @@ export type MemoryFeedbackTiebreakerCandidateValue = z.infer<typeof MemoryFeedba
 export type MemoryFeedbackTiebreakerLock = z.infer<typeof MemoryFeedbackTiebreakerCandidateLock>
 export type MemoryFeedbackTiebreakerSignalRuleValue = z.infer<typeof MemoryFeedbackTiebreakerSignalRule>
 export type MemoryFeedbackTiebreakerPlan = z.infer<typeof MemoryFeedbackTiebreakerDecisionPlan>
+export type MemoryFeedbackTiebreakerEvidenceValue = z.infer<typeof MemoryFeedbackTiebreakerEvidence>
 
 export function memoryFeedbackTiebreakerArtifactSha256(value: unknown): string {
   return createHash('sha256').update(canonicalJson(value)).digest('hex')

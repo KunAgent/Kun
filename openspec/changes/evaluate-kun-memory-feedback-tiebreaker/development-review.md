@@ -8,6 +8,20 @@ The lock selects `foundation-control` because the pre-registered selection rule
 uses it as the fallback. A valid lock is not a passed decision gate.
 
 Production ranking, canonical Memory, and frozen P3-A evidence are unchanged.
+
+## Reviewed holdout execution (2026-09-21)
+
+An independent Opus 4.8 review confirmed the frozen fixture, manifest, calibration,
+plan, development report, and candidate lock hashes without reading holdout labels
+or results. The review was summary-report based for development labels; it was not
+a per-case label audit. The pre-registered `foundation-control` fallback was then
+executed exactly once through the durable writer. Immutable evidence is recorded at
+`kun/src/memory/fixtures/kun-memory-feedback-tiebreaker-v1.json`.
+
+The holdout decision is **no-go**. Foundation and selected-candidate metrics are
+identical (pair accuracy 0, Recall@K 0.25, MRR 0.25, explicit forbidden selections
+1); local benefit and safety therefore fail, while global non-regression, privacy,
+determinism, and resource checks pass. No production ranking path was changed.
 Even a future go would require a separate production-integration change.
 
 ## Method and evidence

@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-tiebreaker-v1",
+  "decisionId": "kun-memory-feedback-tiebreaker-v1",
+  "status": "final",
+  "artifactHashes": {
+    "fixtureSha256": "a6a37e35a5da6afdfbdae42b9abe8a9f182dcad19167fc82361f662873d7e259",
+    "manifestSha256": "17ab0ea2186d11bbdfb38e0f76b75f3547144c74412183e8118cb2e525d6124a",
+    "calibrationSha256": "b34b6d995a2230aac543885d4173c07f8e3024b4fd8603637d5f49e4258a7964",
+    "decisionPlanSha256": "27dfc5852afa9d86e0ff52bf549fb154e5b788ac00690758c0c8accd15460ab7",
+    "candidateLockSha256": "03716e77bd081515b098e1844e3bb3e4121194fc2323df8cb74cf5ee9c9cfe8f"
+  },
+  "selectedCandidateId": "foundation-control",
+  "holdoutRunCount": 1,
+  "development": {
+    "foundation": {
+      "pairAccuracy": 0,
+      "pairCount": 4,
+      "recallAtK": 0.4375,
+      "precisionAtK": 0.4375,
+      "meanReciprocalRank": 0.4375,
+      "abstentionAccuracy": 1,
+      "explicitForbiddenSelections": 6,
+      "authorizationOrLifecycleViolations": 0,
+      "rankedCaseCount": 16,
+      "noResultCaseCount": 2,
+      "caseCount": 18
+    },
+    "candidate": {
+      "pairAccuracy": 0,
+      "pairCount": 4,
+      "recallAtK": 0.4375,
+      "precisionAtK": 0.4375,
+      "meanReciprocalRank": 0.4375,
+      "abstentionAccuracy": 1,
+      "explicitForbiddenSelections": 6,
+      "authorizationOrLifecycleViolations": 0,
+      "rankedCaseCount": 16,
+      "noResultCaseCount": 2,
+      "caseCount": 18
+    },
+    "bootstrapLowerBounds": {
+      "pairAccuracyGain": 0,
+      "recallGain": 0,
+      "mrrGain": 0
+    },
+    "gates": {
+      "localBenefit": false,
+      "globalNonRegression": true,
+      "safety": false,
+      "privacy": true,
+      "determinism": true,
+      "resource": true,
+      "passed": false
+    }
+  },
+  "holdout": {
+    "foundation": {
+      "pairAccuracy": 0,
+      "pairCount": 4,
+      "recallAtK": 0.25,
+      "precisionAtK": 0.25,
+      "meanReciprocalRank": 0.25,
+      "abstentionAccuracy": 1,
+      "explicitForbiddenSelections": 1,
+      "authorizationOrLifecycleViolations": 0,
+      "rankedCaseCount": 16,
+      "noResultCaseCount": 2,
+      "caseCount": 18
+    },
+    "candidate": {
+      "pairAccuracy": 0,
+      "pairCount": 4,
+      "recallAtK": 0.25,
+      "precisionAtK": 0.25,
+      "meanReciprocalRank": 0.25,
+      "abstentionAccuracy": 1,
+      "explicitForbiddenSelections": 1,
+      "authorizationOrLifecycleViolations": 0,
+      "rankedCaseCount": 16,
+      "noResultCaseCount": 2,
+      "caseCount": 18
+    },
+    "bootstrapLowerBounds": {
+      "pairAccuracyGain": 0,
+      "recallGain": 0,
+      "mrrGain": 0
+    },
+    "gates": {
+      "localBenefit": false,
+      "globalNonRegression": true,
+      "safety": false,
+      "privacy": true,
+      "determinism": true,
+      "resource": true,
+      "passed": false
+    }
+  },
+  "decision": "no-go",
+  "reasons": [
+    "foundation-control is the pre-registered fallback after all development candidates failed the safety gate."
+  ]
+}
