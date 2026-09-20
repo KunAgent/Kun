@@ -5,7 +5,7 @@ import type { RoomRuntimeDeps, RoomRequestState } from '../../rooms/room-runtime
 import type { EventBus } from '../../ports/event-bus.js'
 import { inspectRoomRun } from '../../rooms/room-run-query.js'
 import { roomTurnItems } from '../../rooms/room-item-history.js'
-import { agentStableId } from '../../agents/agent-identity-service.js'
+import { roomRunSegmentMessageId } from '../../rooms/room-run-segments.js'
 
 /** Offset-aware projection: a hydration snapshot may already include a replayed delta. */
 export function applyRunText(parts: Map<string, string>, event: RuntimeEvent) {
@@ -33,12 +33,28 @@ export class RoomRunTextStream {
   private dirty = false
   private hydrated = false
   private parts = new Map<string, string>()
+  private createdAt = new Map<string, string>()
+  private order: string[] = []
   private buffered: RuntimeEvent[] = []
   private run?: RoomRunRecord
-  private message?: RoomMessage
-  private last = ''
+  private sourceSeq = 0
+  private displayThreadRootId?: string
+  private last = new Map<string, string>()
   constructor(private deps: RoomRuntimeDeps, private bus: EventBus, private roomId: string, private runId: string,
     private emit: (message: RoomMessage | null) => boolean) {}
+  private recordItem(item: { id: string; kind?: string; createdAt?: string }) {
+    if (item.kind !== 'assistant_text') return
+    if (!this.createdAt.has(item.id)) { this.createdAt.set(item.id, item.createdAt ?? ''); this.order.push(item.id) }
+  }
+  private segmentMessage(itemId: string, body: string, index: number): RoomMessage {
+    return { id: roomRunSegmentMessageId(this.run!.id, itemId), roomId: this.run!.roomId,
+      originRunId: this.run!.id, originItemId: itemId, rootRequestId: this.run!.rootRequestId,
+      sourceRequestId: this.run!.requestId, authorKind: 'member', authorMemberId: this.run!.memberId,
+      authorAgentId: this.run!.participantAgentId, authorLabelSnapshot: this.run!.memberLabel, body,
+      bodyRevision: 0, messageSeq: this.sourceSeq + 1 + index, status: 'streaming', mentionMemberIds: [],
+      attachmentIds: [], displayThreadRootId: this.displayThreadRootId,
+      createdAt: this.createdAt.get(itemId) ?? this.run!.startedAt ?? this.run!.createdAt }
+  }
   async start() {
     if (this.closed || this.off || this.starting) return
     this.starting = true
@@ -58,9 +74,10 @@ export class RoomRunTextStream {
           }
           return
         }
+        if ('item' in event) this.recordItem(event.item)
         if (applyRunText(this.parts, event) || event.kind.startsWith('turn_')) this.schedule()
       })
-      const rows: Array<{ id: string; text: string }> = []
+      const rows: Array<{ id: string; text: string; createdAt?: string; kind: 'assistant_text' }> = []
       let replayAfter = await this.deps.sessions.highestSeq(run.threadId)
       let chars = 0
       if (this.deps.sessions.loadItemPage) {
@@ -70,17 +87,17 @@ export class RoomRunTextStream {
           const page = await this.deps.sessions.loadItemPage(run.threadId, { turnId: run.turnId, before, maxItems: 200, maxBytes: 1024 * 1024 })
           if (page.replayAfterSeq !== undefined) replayAfter = Math.min(replayAfter, page.replayAfterSeq)
           for (const item of [...page.items].reverse()) if (item.kind === 'assistant_text' && item.threadId === run.threadId && item.turnId === run.turnId) {
-            rows.unshift({ id: item.id, text: item.text.slice(0, 64000) }); chars += item.text.length
+            rows.unshift({ id: item.id, text: item.text.slice(0, 64000), createdAt: item.createdAt, kind: 'assistant_text' }); chars += item.text.length
           }
           if (!page.hasMore || chars >= 64000 || rows.length >= 128 || !page.nextCursor || cursors.has(page.nextCursor)) break
           cursors.add(page.nextCursor); before = page.nextCursor
         }
       } else for await (const item of roomTurnItems(this.deps.sessions, run.threadId, run.turnId)) {
-        if (item.kind === 'assistant_text') { rows.unshift({ id: item.id, text: item.text.slice(0, 64000) }); chars += item.text.length }
+        if (item.kind === 'assistant_text') { rows.unshift({ id: item.id, text: item.text.slice(0, 64000), createdAt: item.createdAt, kind: 'assistant_text' }); chars += item.text.length }
         if (chars >= 64000 || rows.length >= 128) break
       }
       if (this.closed) return
-      for (const item of rows.slice(-128)) this.parts.set(item.id, item.text)
+      for (const item of rows.slice(-128)) { this.parts.set(item.id, item.text); this.recordItem(item) }
       // Live checkpoints expose their represented sequence; the production bus
       // intentionally retains no history. Close the hydration gap from durable pages.
       if (this.deps.sessions.loadEventPage) {
@@ -88,7 +105,7 @@ export class RoomRunTextStream {
         const through = await this.deps.sessions.highestSeq(run.threadId)
         for (let count = 0; count < 32 && sinceSeq < through && !this.closed; count++) {
           const page = await this.deps.sessions.loadEventPage(run.threadId, { sinceSeq, cursor: eventCursor, maxEvents: 128, maxBytes: 256 * 1024, maxRecordBytes: 4 * 1024 * 1024 })
-          for (const event of page.events) if (event.threadId === run.threadId && 'item' in event && event.item.turnId === run.turnId) applyRunText(this.parts, event)
+          for (const event of page.events) if (event.threadId === run.threadId && 'item' in event && event.item.turnId === run.turnId) { this.recordItem(event.item); applyRunText(this.parts, event) }
           if (!page.hasMore || !page.events.length || page.events.at(-1)!.seq >= through) break
           if (page.nextCursor) eventCursor = page.nextCursor
           else sinceSeq = page.events.at(-1)!.seq
@@ -98,19 +115,15 @@ export class RoomRunTextStream {
         let count = 0, bytes = 0
         for await (const event of this.deps.sessions.iterateEventsSince(run.threadId, Math.max(replayAfter, run.usageSinceSeq ?? 0), { maxRecordBytes: 4 * 1024 * 1024 })) {
           if (this.closed || event.seq > through || ++count > 4096 || (bytes += Buffer.byteLength(JSON.stringify(event))) > 8 * 1024 * 1024) break
-          if (event.threadId === run.threadId && 'item' in event && event.item.turnId === run.turnId) applyRunText(this.parts, event)
+          if (event.threadId === run.threadId && 'item' in event && event.item.turnId === run.turnId) { this.recordItem(event.item); applyRunText(this.parts, event) }
         }
       }
-      for (const event of this.buffered) applyRunText(this.parts, event)
+      for (const event of this.buffered) { if ('item' in event) this.recordItem(event.item); applyRunText(this.parts, event) }
       this.buffered = []; this.hydrated = true
       const request = await this.deps.store.get<RoomRequestState>('request', run.requestId)
       const source = request ? await this.deps.store.get<RoomMessage>('message', request.value.sourceMessageId) : null
-      this.message = { id: agentStableId('private-message', run.id), roomId: run.roomId, originRunId: run.id,
-        rootRequestId: run.rootRequestId, sourceRequestId: run.requestId, authorKind: 'member', authorMemberId: run.memberId,
-        authorAgentId: run.participantAgentId, authorLabelSnapshot: run.memberLabel, body: '', bodyRevision: 0,
-        messageSeq: source?.seq ?? 0, status: 'streaming', mentionMemberIds: [], attachmentIds: [],
-        displayThreadRootId: source?.value.replyToMessageId ? source.value.displayThreadRootId : undefined,
-        createdAt: run.startedAt ?? run.createdAt }
+      this.sourceSeq = source?.seq ?? 0
+      this.displayThreadRootId = source?.value.replyToMessageId ? source.value.displayThreadRootId : undefined
       this.schedule()
     } finally { this.starting = false }
   }
@@ -121,7 +134,7 @@ export class RoomRunTextStream {
     this.timer.unref?.()
   }
   private async flush() {
-    if (this.closed || !this.run?.requestId || !this.message) return
+    if (this.closed || !this.run?.requestId) return
     this.busy = true; this.dirty = false
     try {
       const row = await this.deps.store.get<RoomRequestState>('request', this.run.requestId)
@@ -129,12 +142,14 @@ export class RoomRunTextStream {
       if (!row || row.roomId !== this.roomId || row.value.cancellationRequested || ['cancelled', 'failed', 'stopping'].includes(row.value.status)) {
         this.emit(null); this.close(); return
       }
-      const body = [...this.parts.values()].join('\n\n').slice(0, 64000)
-      if (body && body !== this.last) {
-        if (this.emit({ ...this.message, body })) this.last = body
-        else this.schedule()
+      for (let index = 0; index < this.order.length; index++) {
+        const itemId = this.order[index]!
+        const body = (this.parts.get(itemId) ?? '').slice(0, 64000)
+        if (!body || body === this.last.get(itemId)) continue
+        if (this.emit(this.segmentMessage(itemId, body, index))) this.last.set(itemId, body)
+        else { this.schedule(); return }
       }
     } finally { this.busy = false; if (this.dirty) this.schedule() }
   }
-  close() { this.closed = true; clearTimeout(this.timer); this.off?.(); this.parts.clear(); this.buffered = [] }
+  close() { this.closed = true; clearTimeout(this.timer); this.off?.(); this.parts.clear(); this.createdAt.clear(); this.order = []; this.buffered = []; this.last.clear() }
 }

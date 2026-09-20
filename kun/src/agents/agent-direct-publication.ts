@@ -1,17 +1,14 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { RoomMessageSchema } from '../contracts/rooms.js'
 import type { RoomRuntimeDeps, RoomRequestState } from '../rooms/room-runtime-types.js'
-import { attachRoomRunPublication } from '../rooms/room-run-recording.js'
+import type { RoomRunTextSegment } from '../rooms/room-run-segments.js'
+import type { RoomService } from '../rooms/room-service.js'
 import { agentStableId } from './agent-identity-service.js'
 
 /** Draft projections are visible only; only a final response may feed memory or collaborators. */
-export async function publishDirectResponse(deps: RoomRuntimeDeps, request: RoomRequestState, body: string, status: 'streaming' | 'final' | 'failed') {
-  if (!request.privateRunId || !body && status === 'streaming') return
-  const id = agentStableId('private-message', request.privateRunId)
-  const old = await deps.store.get<import('../contracts/rooms.js').RoomMessage>('message', id)
-  if (!body && !old) return
-  if (old?.value.status === 'final') return
+export async function publishDirectResponse(deps: RoomRuntimeDeps, service: RoomService, request: RoomRequestState,
+  segments: RoomRunTextSegment[], status: 'streaming' | 'final' | 'failed') {
+  if (!request.privateRunId || (!segments.length && status === 'streaming')) return
   const member = request.roomSnapshot.members.find((item) => item.id === request.roomSnapshot.defaultMemberId)!
   const references: import('../contracts/room-content.js').RoomContentReference[] = []
   if (status === 'final' && request.privateWorkspace && !request.roomSnapshot.privateWorkspace) {
@@ -25,19 +22,16 @@ export async function publishDirectResponse(deps: RoomRuntimeDeps, request: Room
     }
   }
   const source = await deps.store.get<import('../contracts/rooms.js').RoomMessage>('message', request.sourceMessageId)
-  const message = RoomMessageSchema.parse({ ...old?.value, id, roomId: request.roomId, body: body || old?.value.body || '',
-    ...(source?.value.replyToMessageId ? { displayThreadRootId: source.value.displayThreadRootId } : {}),
-    status, sourceRequestId: request.id, rootRequestId: request.rootRequestId,
-    authorKind: 'member', authorMemberId: member.id, authorAgentId: member.participantAgentId,
-    authorLabelSnapshot: member.displayName, messageSeq: old?.seq ?? 1, bodyRevision: old ? old.value.bodyRevision + 1 : 0,
-    mentionMemberIds: [], attachmentIds: [], references: references.length ? references : undefined, createdAt: old?.value.createdAt ?? new Date().toISOString() })
-  if (old?.value.body === message.body && old.value.status === status) return
+  const displayThreadRootId = source?.value.replyToMessageId ? source.value.displayThreadRootId : undefined
   const current = await deps.store.get<RoomRequestState>('request', request.id)
   if (!current || current.value.cancellationRequested && status !== 'failed') return
-  const commit: import('../rooms/room-store.js').RoomStoreCommit = { requestId: agentStableId('private-publish', id, status, String(message.bodyRevision), message.body),
-    checks: [{ kind: 'request', id: request.id, expectedRevision: current.revision }, { kind: 'message', id, expectedRevision: old?.revision ?? null }],
-    puts: [{ kind: 'message', id, roomId: request.roomId, value: message }],
-    events: [{ roomId: request.roomId, kind: old ? 'message.updated' : 'message.created', payload: { id } }] }
-  await attachRoomRunPublication(deps.store, commit, message, request.privateRunId)
-  await deps.store.commit(commit)
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!
+    await service.publishSegment(request.roomId, {
+      messageId: segment.messageId, runId: request.privateRunId, itemId: segment.itemId, body: segment.text,
+      memberId: member.id, createdAt: segment.createdAt, status,
+      references: status === 'final' && index === segments.length - 1 && references.length ? references : undefined,
+      displayThreadRootId
+    })
+  }
 }

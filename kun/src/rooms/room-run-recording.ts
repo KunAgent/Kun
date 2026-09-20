@@ -8,6 +8,7 @@ import type { RoomStore, RoomStoreCommit } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
 import { captureRoomTurnUsageBaseline, readRoomTurnUsage } from './room-run-usage.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
+import { roomRunSegmentMessageId } from './room-run-segments.js'
 
 export const roomRunId = (roomId: string, clientRequestId: string, triage = false): string =>
   'run-' + createHash('sha256').update(JSON.stringify([roomId, clientRequestId, triage])).digest('hex').slice(0, 40)
@@ -141,7 +142,16 @@ export async function attachRoomRunPublication(store: RoomStore, commit: RoomSto
     (row.value.taskId && row.value.taskId !== message.taskId)) {
     throw new Error('Message run provenance does not match its room and member')
   }
-  if (row.value.publishedMessageId && row.value.publishedMessageId !== message.id) throw new Error('Run already published another message')
+  const segmented = Boolean(message.originItemId)
+  if (segmented) {
+    // Segmented publication allows one message per source item. Its identity must be
+    // deterministically derived from the run and item so a stale or forged id cannot attach.
+    if (message.id !== roomRunSegmentMessageId(runId, message.originItemId!)) {
+      throw new Error('Segment message identity is not derived from its run and item')
+    }
+  } else if (row.value.publishedMessageId && row.value.publishedMessageId !== message.id) {
+    throw new Error('Run already published another message')
+  }
   if (message.originRunId && message.originRunId !== runId) throw new Error('Message run provenance is immutable')
   message.originRunId = runId
   message.authorAgentId = row.value.participantAgentId
@@ -151,8 +161,13 @@ export async function attachRoomRunPublication(store: RoomStore, commit: RoomSto
   message.sourceRequestId = row.value.requestId
   commit.checks ??= []; commit.puts ??= []; commit.events ??= []
   commit.checks.push({ kind: 'room_run', id: runId, expectedRevision: row.revision })
+  const terminal = !['queued', 'running', 'recovery_required'].includes(row.value.status)
+  const outcome = segmented
+    ? (terminal ? row.value.status === 'failed' ? 'failed' : row.value.status === 'cancelled' ? 'cancelled' : 'published' : row.value.outcome)
+    : (message.status === 'streaming' ? row.value.outcome : message.status === 'failed' ? 'failed' : 'published')
+  const publishedMessageId = segmented ? (row.value.publishedMessageId ?? message.id) : message.id
   commit.puts.push({ kind: 'room_run', id: runId, roomId: row.roomId, taskId: row.taskId,
-    value: { ...row.value, outcome: message.status === 'streaming' ? row.value.outcome : message.status === 'failed' ? 'failed' : 'published', publishedMessageId: message.id, updatedAt: new Date().toISOString() } })
+    value: { ...row.value, outcome, publishedMessageId, updatedAt: new Date().toISOString() } })
   commit.events.push({ roomId: message.roomId, kind: 'room_run.updated', payload: { id: runId, memberId: row.value.memberId } })
 }
 

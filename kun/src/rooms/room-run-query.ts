@@ -8,6 +8,7 @@ import type { RoomRunAvailability, RoomRunDetail, RoomRunItemsPage,
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
 import type { RoomStoreListOptions } from './room-store.js'
 import { getRoomRunRow, resolveHistoricalRoomRun } from './room-run-history.js'
+import { roomRunSegmentMessageId } from './room-run-segments.js'
 
 const Cursor = z.object({ v: z.literal(1), id: z.string().min(1).max(256),
   revision: z.number().int().nonnegative(), seq: z.number().int().nonnegative(),
@@ -141,9 +142,11 @@ export async function roomMessageRunSource(deps: RoomRuntimeDeps,
   if (!row || row.roomId !== roomId) throw new Error('room message not found')
   if (row.value.originRunId) {
     const run = await deps.store.get<RoomRunRecord>('room_run', row.value.originRunId)
-    return run?.roomId === roomId && run.value.memberId === row.value.authorMemberId &&
-      run.value.publishedMessageId === messageId
-      ? { runId: run.id } : { unavailableReason: '消息记录的运行来源已不可用。' }
+    const segmented = Boolean(row.value.originItemId)
+    const valid = run?.roomId === roomId && run.value.memberId === row.value.authorMemberId &&
+      (segmented ? row.value.id === roomRunSegmentMessageId(run.id, row.value.originItemId!)
+        : run.value.publishedMessageId === messageId)
+    return valid ? { runId: run.id } : { unavailableReason: '消息记录的运行来源已不可用。' }
   }
   const run = await resolveHistoricalRoomRun(deps, row.value)
   return run ? { runId: run.id } : { unavailableReason: '历史消息未记录运行来源' }

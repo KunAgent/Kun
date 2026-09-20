@@ -2,6 +2,7 @@ import { taskParticipantRoom, resolveAgentTaskReviewer } from '../agents/agent-t
 import { roomPollInvitationPrompt } from './room-poll-invitations.js'
 import { roomDiscussionMessageId } from './room-discussion-message.js'
 import { roomTurnRunId } from './room-run-recording.js'
+import { roomRunSegmentMessageId } from './room-run-segments.js'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { RoomMember, RoomMessage } from '../contracts/rooms.js'
@@ -205,19 +206,30 @@ export class RoomRequestRunner {
       const observed = await observeRoomTurn(this.deps, discussion.threadId, discussion.turnId)
       const originRunId = await roomTurnRunId(this.deps, request.roomId, discussion.threadId, discussion.turnId)
       discussion.messageId ??= roomDiscussionMessageId(discussion.threadId, discussion.attempt)
+      const segments = originRunId ? (observed.segments ?? []).map((segment) => ({ itemId: segment.itemId,
+        messageId: roomRunSegmentMessageId(originRunId, segment.itemId), text: segment.text,
+        createdAt: segment.createdAt, status: segment.status })) : []
+      const publishSegments = async (status: 'streaming' | 'final' | 'failed') => {
+        for (const segment of segments) {
+          await this.service.publishSegment(request.roomId, { messageId: segment.messageId, runId: originRunId!,
+            itemId: segment.itemId, body: segment.text, memberId: member.id, createdAt: segment.createdAt, status })
+        }
+      }
       if (observed.status === 'running' || observed.status === 'queued') {
-        if (observed.text) await this.service.publish(request.roomId, discussion.messageId, observed.text, member.id, undefined, originRunId)
+        if (segments.length) await publishSegments('streaming')
         return
       }
       if (observed.status !== 'completed') {
         discussion.error = observed.error ?? '成员本轮未完成，可重试此成员。'
         request.error = discussion.error
         request.status = 'failed'
-        await this.service.publish(request.roomId, discussion.messageId, discussion.error, member.id, undefined, originRunId)
+        if (segments.length) await publishSegments('failed')
+        else await this.service.publish(request.roomId, discussion.messageId, discussion.error, member.id, undefined, originRunId)
         return this.save(row, request)
       }
       discussion.response = observed.text
-      await this.service.publish(request.roomId, discussion.messageId, discussion.response, member.id, undefined, originRunId)
+      if (segments.length) await publishSegments('final')
+      else if (observed.text) await this.service.publish(request.roomId, discussion.messageId, observed.text, member.id, undefined, originRunId)
       return this.save(row, request)
     }
     request.round = (request.round ?? 0) + 1

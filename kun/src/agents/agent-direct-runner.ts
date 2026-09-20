@@ -7,7 +7,7 @@ import type { RoomRuntimeDeps, RoomRequestState } from '../rooms/room-runtime-ty
 import type { RoomStoredDocument } from '../rooms/room-store.js'
 import { TurnConflictError, ThreadClosingError } from '../services/turn-service.js'
 import { putRoomDocument, type RoomService } from '../rooms/room-service.js'
-import { roomTurnItems } from '../rooms/room-item-history.js'
+import { collectRoomRunSegments } from '../rooms/room-run-segments.js'
 import { prepareRoomRun, updateRoomRun, observeRecordedRoomTurn } from '../rooms/room-run-recording.js'
 import { freezeAgentMemoryInput } from './agent-memory-input.js'
 import { agentMainModel, assertAgentModel } from './agent-models.js'
@@ -34,7 +34,10 @@ export class AgentDirectRunner {
       }
       if (request.admissionAttempted && !turn) return this.save(row, { ...request, status: 'recovery_required' })
       if (turn) await observeRecordedRoomTurn(this.deps, thread!, turn)
-      await publishDirectResponse(this.deps, request, '', 'failed')
+      const failedSegments = turn && request.privateRunId
+        ? await collectRoomRunSegments(this.deps.sessions, thread!.id, turn.id, request.privateRunId)
+        : []
+      await publishDirectResponse(this.deps, this.service, request, failedSegments, 'failed')
       return this.save(row, { ...request, status: 'cancelled' })
     }
     if (!request.privateInput) {
@@ -122,13 +125,9 @@ export class AgentDirectRunner {
     await observeRecordedRoomTurn(this.deps, thread, turn)
     const pendingInputs = this.deps.inputs.pending(thread.id)
     if (pendingInputs.length) await persistDirectChoiceMessages(this.deps.store, request, pendingInputs)
-    const chunks: string[] = []
-    for await (const item of roomTurnItems(this.deps.sessions, thread.id, turn.id)) {
-      if (item.kind === 'assistant_text') chunks.unshift(item.text)
-      if (chunks.join('\n').length > 64000) break
-    }
+    const segments = await collectRoomRunSegments(this.deps.sessions, thread.id, turn.id, run.id)
     const finished = !['queued', 'running'].includes(turn.status)
-    await publishDirectResponse(this.deps, request, chunks.join('\n\n').slice(0, 64000), finished ? turn.status === 'completed' ? 'final' : 'failed' : 'streaming')
+    await publishDirectResponse(this.deps, this.service, request, segments, finished ? turn.status === 'completed' ? 'final' : 'failed' : 'streaming')
     if (finished) await this.save(row, { ...request, status: turn.status === 'completed' ? 'completed' : turn.status === 'aborted' ? 'cancelled' : 'failed',
       error: turn.status === 'failed' ? 'The response failed. Its partial output is retained; inspect the run or retry.' : undefined })
   }

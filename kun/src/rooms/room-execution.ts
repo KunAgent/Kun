@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import type { RoomMember } from '../contracts/rooms.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
+import type { AssistantTextTurnItem } from '../contracts/items.js'
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
 import { roomEvidenceHistory } from './room-evidence-history.js'
 import { roomTurnItems } from './room-item-history.js'
@@ -139,26 +140,31 @@ export type ObservedRoomTurn = {
   structured?: unknown
   error?: string
   resultError?: string
+  segments?: Array<{ itemId: string; text: string; createdAt: string; status: AssistantTextTurnItem['status'] }>
 }
 
 export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, turnId?: string): Promise<ObservedRoomTurn> {
   const thread = await deps.threads.getMetadata(threadId)
   const turn = thread?.turns.find((candidate) => candidate.id === turnId)
-  if (!turn) return { status: 'missing' as const, text: '' }
+  if (!turn) return { status: 'missing' as const, text: '', segments: [] }
   await observeRecordedRoomTurn(deps, thread!, turn)
   if (turn.status === 'queued') {
-    return { status: turn.status, text: '', turn }
+    return { status: turn.status, text: '', turn, segments: [] }
   }
   const textParts: string[] = []
+  const segmentParts: Array<{ itemId: string; text: string; createdAt: string; status: AssistantTextTurnItem['status'] }> = []
   let textLength = 0, error: string | undefined, structured: unknown, resultError: string | undefined
   const resultName = thread?.roomContext?.kind === 'coordination' ? 'submit_room_plan' :
     thread?.roomContext?.kind === 'review' ? 'submit_room_review' :
       thread?.roomContext?.kind === 'discussion' && thread.roomContext.collaborationProtocol === 'peer' ? 'send_room_message' : undefined
   for await (const item of roomTurnItems(deps.sessions, threadId, turn.id)) {
-    if (item.kind === 'assistant_text' && textLength < 64000) {
-      const text = item.text.slice(-(64000 - textLength))
-      textParts.unshift(text)
-      textLength += text.length
+    if (item.kind === 'assistant_text') {
+      segmentParts.push({ itemId: item.id, text: item.text.slice(0, 64000), createdAt: item.createdAt, status: item.status })
+      if (textLength < 64000) {
+        const text = item.text.slice(-(64000 - textLength))
+        textParts.unshift(text)
+        textLength += text.length
+      }
     }
     if (item.kind === 'error' && !error) error = item.message
     if (item.kind === 'tool_result' && item.toolName === resultName && item.isError) {
@@ -177,5 +183,6 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
   }
   if (error && thread?.roomContext && turn.clientRequestId) await updateRoomRun(deps.store,
     roomRunId(thread.roomContext.roomId, turn.clientRequestId), { error: error.slice(0, 4000) })
-  return { status: turn.status, text: textParts.join('\n'), turn, structured, error, resultError }
+  return { status: turn.status, text: textParts.join('\n'), turn, structured, error, resultError,
+    segments: segmentParts.reverse().filter((segment) => segment.text.trim()) }
 }
