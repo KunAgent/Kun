@@ -16,6 +16,8 @@ import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-
 import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
+import { useRoomEvents } from './components/rooms/useRoomEvents'
+import { useRemoteSurface } from './mobile/use-remote-surface'
 import {
   clearCurrentlyVisibleUnreadCompletions,
   persistUnreadCompletions,
@@ -29,10 +31,12 @@ type SettingsViewComponent = (typeof import('./components/SettingsView'))['Setti
 type InitialSetupDialogComponent = (
   typeof import('./components/InitialSetupDialog')
 )['InitialSetupDialog']
+type MobileAppShellComponent = (typeof import('./mobile/MobileAppShell'))['MobileAppShell']
 
 let preparedWorkbench: WorkbenchComponent | null = null
 let preparedSettingsView: SettingsViewComponent | null = null
 let preparedInitialSetupDialog: InitialSetupDialogComponent | null = null
+let preparedMobileAppShell: MobileAppShellComponent | null = null
 
 const loadWorkbench = () =>
   import('./components/Workbench').then((module) => {
@@ -49,9 +53,15 @@ const loadInitialSetupDialog = () => import('./components/InitialSetupDialog').t
   return { default: module.InitialSetupDialog }
 })
 
+const loadMobileAppShell = () => import('./mobile/MobileAppShell').then((module) => {
+  preparedMobileAppShell = module.MobileAppShell
+  return { default: module.MobileAppShell }
+})
+
 const Workbench = lazy(loadWorkbench)
 const SettingsView = lazy(loadSettingsView)
 const InitialSetupDialog = lazy(loadInitialSetupDialog)
+const MobileAppShell = lazy(loadMobileAppShell)
 
 export const prepareInitialWorkbench = createInitialWorkbenchPreparer({
   boot: () => useChatStore.getState().boot(),
@@ -60,6 +70,11 @@ export const prepareInitialWorkbench = createInitialWorkbenchPreparer({
   loadSettingsView,
   loadInitialSetupDialog
 })
+
+export async function prepareInitialMobileApp(): Promise<void> {
+  await useChatStore.getState().boot()
+  await loadMobileAppShell()
+}
 
 function RouteFallback(): React.ReactElement {
   return (
@@ -77,7 +92,9 @@ function RouteFallback(): React.ReactElement {
 }
 
 export default function AppShell(): React.ReactElement {
+  useRoomEvents()
   const route = useChatStore((s) => s.route)
+  const surface = useRemoteSurface()
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)
   const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? 'unknown' : 'unknown'
   const appEnvironment = typeof window !== 'undefined' ? window.kunGui?.appEnvironment : undefined
@@ -89,6 +106,7 @@ export default function AppShell(): React.ReactElement {
   const WorkbenchView = preparedWorkbench ?? Workbench
   const SettingsRouteView = preparedSettingsView ?? SettingsView
   const InitialSetupView = preparedInitialSetupDialog ?? InitialSetupDialog
+  const MobileApp = preparedMobileAppShell ?? MobileAppShell
 
   useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
 
@@ -150,7 +168,7 @@ export default function AppShell(): React.ReactElement {
           <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
           <Suspense fallback={<RouteFallback />}>
-            {route === 'settings' ? (
+            {surface === 'mobile' ? <MobileApp /> : route === 'settings' ? (
               <ProtectedRendererSurface
                 kind="account-credentials"
                 restoreTarget="settings"

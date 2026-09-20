@@ -2,16 +2,17 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RoomListEntry } from '@shared/rooms-api'
+import type { RoomSidebarEntry } from '@shared/rooms-api'
 import { MobileRoomsHome, type MobileRoomsHomeProps } from './MobileRoomsHome'
 
 let root: Root
 let host: HTMLDivElement
 const room = {
-  id: 'room', name: 'Build team', conversationKind: 'group', members: [{ id: 'one' }, { id: 'two' }],
+  id: 'entry', roomId: 'room', name: 'Build team', title: 'Build team', kind: 'group', pinned: false, archived: false, runningCount: 0,
+  members: [{ id: 'one' }, { id: 'two' }],
   latestMessage: { authorLabelSnapshot: 'Agent', preview: 'Finished', createdAt: '', id: 'm', authorKind: 'agent', attachmentCount: 0 },
   latestMessageSeq: 5, readSeq: 3, attentionCount: 1
-} as unknown as RoomListEntry
+} as unknown as RoomSidebarEntry
 function props(): MobileRoomsHomeProps {
   return {
     rooms: [room], search: '', filter: 'all', loading: false, error: '', hasMore: true,

@@ -1,9 +1,9 @@
 import { MoreHorizontal, Plus, Search } from 'lucide-react'
-import type { RoomListEntry } from '@shared/rooms-api'
+import type { RoomSidebarEntry } from '@shared/rooms-api'
 import './mobile-rooms-home.css'
 
 export type MobileRoomsHomeProps = {
-  rooms: readonly RoomListEntry[]
+  rooms: readonly RoomSidebarEntry[]
   search: string
   filter: 'all' | 'unread' | 'attention'
   loading: boolean
@@ -42,14 +42,14 @@ export function MobileRoomsHome(props: MobileRoomsHomeProps) {
       <ul>{rooms.map((room) => {
         const unread = Math.max(0, (room.latestMessageSeq ?? 0) - (room.readSeq ?? 0))
         return <li key={room.id}>
-          <button type="button" className="kun-mobile-room-open" onClick={() => onOpen(room.id)}>
+          <button type="button" className="kun-mobile-room-open" onClick={() => onOpen(room.roomId ?? room.id)}>
             <strong>{room.name}</strong>
             <span>{room.latestMessage?.authorLabelSnapshot ? `${room.latestMessage.authorLabelSnapshot}: ` : ''}{room.latestMessage?.preview ?? ''}</span>
-            <small>{room.conversationKind === 'user_agent' ? 'Agent' : room.conversationKind === 'agent_agent' ? 'Agents' : `${room.members.length}`}</small>
+            <small>{room.kind === 'user_agent' ? 'Agent' : room.kind === 'agent_agent' ? 'Agents' : `${room.members.length}`}</small>
             {unread > 0 ? <span className="kun-mobile-room-count" aria-label={`${unread} ${labels.unread}`}>{Math.min(unread, 99)}</span> : null}
             {(room.attentionCount ?? 0) > 0 ? <span className="kun-mobile-room-attention">{labels.attention}</span> : null}
           </button>
-          <button type="button" className="kun-mobile-room-menu" onClick={() => onMenu(room.id)} aria-label={`${labels.more}: ${room.name}`}>
+          <button type="button" className="kun-mobile-room-menu" onClick={() => onMenu(room.roomId ?? room.id)} aria-label={`${labels.more}: ${room.name}`}>
             <MoreHorizontal size={20} aria-hidden /></button>
         </li>
       })}</ul>

@@ -4,6 +4,7 @@ import { installIssue781DocumentUsability } from './lib/issue-781-document-usabi
 import { subscribeModelConnectionWatch } from './lib/model-connection-watch'
 import { useChatStore } from './store/chat-store'
 import { ensureCodexReferenceWatcher } from './history-reference/codex-reference-watcher'
+import { currentRemoteSurface } from './mobile/use-remote-surface'
 
 type AppShellModule = typeof import('./AppShell')
 let preparedAppShell: AppShellModule['default'] | null = null
@@ -15,7 +16,8 @@ const LazyAppShell = lazy(loadAppShellModule)
 
 export async function prepareWorkbenchApp(): Promise<void> {
   const appShell = await loadAppShellModule()
-  await appShell.prepareInitialWorkbench()
+  if (currentRemoteSurface() === 'mobile') await appShell.prepareInitialMobileApp()
+  else await appShell.prepareInitialWorkbench()
 }
 
 function DocumentUsabilityLifecycle(): null {

@@ -1,0 +1,17 @@
+.kun-mobile-app {
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--ds-text);
+  background: var(--ds-bg-main);
+  -webkit-tap-highlight-color: transparent;
+}
+.kun-mobile-app-content { display: flex; min-width: 0; min-height: 0; flex: 1; overflow: hidden; }
+.kun-mobile-notice { flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid var(--ds-border); background: var(--ds-warning-soft); overflow-wrap: anywhere; }
+.kun-mobile-unavailable { display: grid; width: 100%; min-height: 0; place-content: center; gap: 12px; padding: 24px; text-align: center; }
+.kun-mobile-unavailable h1, .kun-mobile-unavailable p { margin: 0; }
+.kun-mobile-unavailable button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--ds-border); border-radius: 9999px; color: inherit; background: var(--ds-surface-subtle); }
+@supports not (height: 100dvh) { .kun-mobile-app { height: 100vh; } }
