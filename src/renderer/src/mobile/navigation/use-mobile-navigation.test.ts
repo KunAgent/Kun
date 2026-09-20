@@ -27,37 +27,37 @@ afterEach(() => {
 
 describe('mobile navigation lifecycle', () => {
   it('canonicalizes invalid targets consistently with refresh', () => {
-    window.history.replaceState({}, '', '/?mobile=invalid')
+    window.history.replaceState({}, '', '/?mode=rooms&mobile=invalid')
     act(() => root.render(createElement(Harness)))
-    act(() => navigation.navigate({ kind: 'home' }, true))
-    expect(window.location.search).toBe('?mobile=home')
-    act(() => navigation.navigate({ kind: 'conversation', threadId: '' }))
-    expect(navigation.page).toEqual({ kind: 'home' })
-    expect(window.location.search).toBe('?mobile=home')
+    act(() => navigation.navigate({ mode: 'rooms', kind: 'home' }, true))
+    expect(window.location.search).toBe('?mode=rooms&mobile=home')
+    act(() => navigation.navigate({ mode: 'rooms', kind: 'room', roomId: '' }))
+    expect(navigation.page).toEqual({ mode: 'rooms', kind: 'home' })
   })
-  it('pushes once, preserves history metadata and restores popstate without pushing', () => {
+
+  it('pushes once, preserves metadata and restores cross-mode popstate', () => {
     act(() => root.render(createElement(Harness)))
     const push = vi.spyOn(window.history, 'pushState')
-    act(() => navigation.navigate({ kind: 'conversation', threadId: 'one' }))
-    expect(navigation.page).toEqual({ kind: 'conversation', threadId: 'one' })
+    act(() => navigation.navigate({ mode: 'rooms', kind: 'reply', roomId: 'one', messageId: 'message' }))
+    expect(navigation.page).toEqual({ mode: 'rooms', kind: 'reply', roomId: 'one', messageId: 'message' })
     expect(window.history.state).toEqual({ existing: true })
-    act(() => navigation.navigate({ kind: 'conversation', threadId: 'one' }))
+    act(() => navigation.navigate({ mode: 'rooms', kind: 'reply', roomId: 'one', messageId: 'message' }))
     expect(push).toHaveBeenCalledTimes(1)
     act(() => {
-      window.history.replaceState({}, '', '/?mobile=settings')
+      window.history.replaceState({}, '', '/?mode=work&mobile=resource&resource=doc&view=review')
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
-    expect(navigation.page).toEqual({ kind: 'settings' })
+    expect(navigation.page).toEqual({ mode: 'work', kind: 'resource', resourceKey: 'doc', view: 'review' })
     expect(push).toHaveBeenCalledTimes(1)
   })
 
-  it('restores a direct conversation URL on mount and can replace an invalid route', () => {
-    window.history.replaceState({}, '', '/?mobile=conversation&thread=two')
+  it('restores a direct Code URL and can replace it with another mode', () => {
+    window.history.replaceState({}, '', '/?mode=code&mobile=conversation&thread=two')
     act(() => root.render(createElement(Harness)))
-    expect(navigation.page).toEqual({ kind: 'conversation', threadId: 'two' })
+    expect(navigation.page).toEqual({ mode: 'code', kind: 'conversation', threadId: 'two' })
     const replace = vi.spyOn(window.history, 'replaceState')
-    act(() => navigation.navigate({ kind: 'home' }, true))
+    act(() => navigation.navigate({ mode: 'work', kind: 'home' }, true))
     expect(replace).toHaveBeenCalledTimes(1)
-    expect(navigation.page).toEqual({ kind: 'home' })
+    expect(navigation.page).toEqual({ mode: 'work', kind: 'home' })
   })
 })

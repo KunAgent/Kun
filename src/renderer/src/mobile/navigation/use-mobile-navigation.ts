@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { mobilePageUrl, readMobilePage, sameMobilePage, type MobilePage } from './mobile-page'
 
 function currentPage(): MobilePage {
-  return typeof window === 'undefined' ? { kind: 'home' } : readMobilePage(new URL(window.location.href))
+  return typeof window === 'undefined' ? { mode: 'code', kind: 'home' } : readMobilePage(new URL(window.location.href))
 }
 
 /** Navigation remains separate from the shared conversation/runtime store. */

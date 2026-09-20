@@ -1,44 +1,73 @@
 import { describe, expect, it } from 'vitest'
-import { mobilePageUrl, readMobilePage, sameMobilePage } from './mobile-page'
+import { mobilePageUrl, readMobilePage, sameMobilePage, type MobilePage } from './mobile-page'
 
 const base = new URL('https://kun.example/?existing=value#anchor')
 
+function roundTrip(page: MobilePage): URL {
+  const url = new URL(mobilePageUrl(base, page), base)
+  expect(readMobilePage(url)).toEqual(page)
+  expect(url.searchParams.get('existing')).toBe('value')
+  expect(url.hash).toBe('#anchor')
+  return url
+}
+
 describe('mobile page URLs', () => {
-  it('defaults unknown and missing routes to home', () => {
-    expect(readMobilePage(base)).toEqual({ kind: 'home' })
-    expect(readMobilePage(new URL('https://kun.example/?mobile=invalid'))).toEqual({ kind: 'home' })
+  it('defaults unknown and missing routes to the selected mode home', () => {
+    expect(readMobilePage(base)).toEqual({ mode: 'code', kind: 'home' })
+    expect(readMobilePage(new URL('https://kun.example/?mode=rooms&mobile=invalid')))
+      .toEqual({ mode: 'rooms', kind: 'home' })
   })
 
-  it.each(['new', 'settings', 'home'] as const)('round trips %s', (kind) => {
-    const url = new URL(mobilePageUrl(base, { kind }), base)
-    expect(readMobilePage(url)).toEqual({ kind })
-    expect(url.searchParams.get('existing')).toBe('value')
-    expect(url.hash).toBe('#anchor')
+  it.each(['code', 'rooms', 'work'] as const)('round trips %s home and settings', (mode) => {
+    roundTrip({ mode, kind: 'home' })
+    roundTrip({ mode, kind: 'settings' })
   })
 
-  it('encodes thread identifiers without treating them as URL syntax', () => {
-    const page = { kind: 'conversation' as const, threadId: 'a/b?x=1&other=2' }
-    const url = new URL(mobilePageUrl(base, page), base)
-    expect(readMobilePage(url)).toEqual(page)
+  it('round trips Code conversation and new pages', () => {
+    roundTrip({ mode: 'code', kind: 'new' })
+    const url = roundTrip({ mode: 'code', kind: 'conversation', threadId: 'a/b?x=1&other=2' })
     expect(url.searchParams.has('other')).toBe(false)
   })
 
-  it('clears a stale thread when returning home', () => {
-    const url = new URL('https://kun.example/?mobile=conversation&thread=old')
-    expect(new URL(mobilePageUrl(url, { kind: 'home' }), base).searchParams.has('thread')).toBe(false)
+  it.each([
+    { mode: 'rooms', kind: 'room', roomId: 'room' },
+    { mode: 'rooms', kind: 'reply', roomId: 'room', messageId: 'message' },
+    { mode: 'rooms', kind: 'run', roomId: 'room', runId: 'run' },
+    { mode: 'rooms', kind: 'task', roomId: 'room', taskId: 'task' },
+    { mode: 'rooms', kind: 'member', roomId: 'room', memberId: 'member' }
+  ] as MobilePage[])('round trips Rooms page $kind', (page) => { roundTrip(page) })
+
+  it.each(['read', 'edit', 'assistant', 'review', 'whiteboard'] as const)(
+    'round trips Work resource view %s',
+    (view) => { roundTrip({ mode: 'work', kind: 'resource', resourceKey: 'opaque-key', view }) }
+  )
+
+  it('clears identifiers owned by the previous mode', () => {
+    const url = new URL('https://kun.example/?mode=rooms&mobile=reply&room=r&message=m&thread=old')
+    const next = new URL(mobilePageUrl(url, { mode: 'work', kind: 'home' }), base)
+    expect(next.searchParams.has('room')).toBe(false)
+    expect(next.searchParams.has('message')).toBe(false)
+    expect(next.searchParams.has('thread')).toBe(false)
   })
 
-  it('rejects a missing or oversized conversation identifier', () => {
-    expect(readMobilePage(new URL('https://kun.example/?mobile=conversation'))).toEqual({ kind: 'home' })
-    const url = new URL('https://kun.example/?mobile=conversation')
-    url.searchParams.set('thread', 'x'.repeat(513))
-    expect(readMobilePage(url)).toEqual({ kind: 'home' })
+  it('rejects missing, oversized, wrong-mode and unsupported identifiers', () => {
+    expect(readMobilePage(new URL('https://kun.example/?mode=rooms&mobile=reply&room=r')))
+      .toEqual({ mode: 'rooms', kind: 'home' })
+    const url = new URL('https://kun.example/?mode=work&mobile=resource&view=edit')
+    url.searchParams.set('resource', 'x'.repeat(513))
+    expect(readMobilePage(url)).toEqual({ mode: 'work', kind: 'home' })
+    expect(readMobilePage(new URL('https://kun.example/?mode=code&mobile=room&room=r')))
+      .toEqual({ mode: 'code', kind: 'home' })
+    expect(readMobilePage(new URL('https://kun.example/?mode=work&mobile=resource&resource=r&view=unknown')))
+      .toEqual({ mode: 'work', kind: 'home' })
   })
 
-  it('compares both page and conversation identity', () => {
-    expect(sameMobilePage({ kind: 'home' }, { kind: 'home' })).toBe(true)
-    expect(sameMobilePage({ kind: 'home' }, { kind: 'new' })).toBe(false)
-    expect(sameMobilePage({ kind: 'conversation', threadId: 'a' }, { kind: 'conversation', threadId: 'b' })).toBe(false)
-    expect(sameMobilePage({ kind: 'conversation', threadId: 'a' }, { kind: 'conversation', threadId: 'a' })).toBe(true)
+  it('compares complete page identity including mode and nested ids', () => {
+    expect(sameMobilePage({ mode: 'code', kind: 'home' }, { mode: 'code', kind: 'home' })).toBe(true)
+    expect(sameMobilePage({ mode: 'code', kind: 'home' }, { mode: 'rooms', kind: 'home' })).toBe(false)
+    expect(sameMobilePage(
+      { mode: 'rooms', kind: 'reply', roomId: 'a', messageId: '1' },
+      { mode: 'rooms', kind: 'reply', roomId: 'a', messageId: '2' }
+    )).toBe(false)
   })
 })
