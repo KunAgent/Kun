@@ -4,6 +4,11 @@ import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { readWriteDocumentSha256 } from '../../components/workbench/read-write-document-sha256'
 import { workbenchWriteSourceReference } from '../../components/workbench/workbench-write-source-reference'
+import { activeWriteResourceReference } from '../../components/workbench/workbench-write-resource-context'
+import {
+  createWriteTurnReferenceAttachments,
+  mergeWriteComposerContexts
+} from '../../write/write-turn-reference-context'
 import {
   activeWorkWhiteboardComposerContexts,
   workWhiteboardAdvertisesCanvasTools,
@@ -33,6 +38,10 @@ export function useMobileWorkAssistantSend(): {
     const work = useWriteWorkspaceStore.getState()
     const document = work.activeFilePath ? work.documentsByPath[work.activeFilePath] : null
     const whiteboard = work.activeWhiteboardId ? work.whiteboards[work.activeWhiteboardId] ?? null : null
+    const quotedSelections = work.quotedSelections.map((selection) => ({
+      ...selection,
+      ...(selection.rects ? { rects: selection.rects.map((rect) => ({ ...rect })) } : {})
+    }))
     if (!work.workspaceRoot || (!document && !whiteboard)) return false
     if (document && !['text', 'code'].includes(document.kind)) {
       setError('This resource needs its full semantic assistant context before it can be sent on mobile.')
@@ -61,9 +70,22 @@ export function useMobileWorkAssistantSend(): {
       if (chat.activeThreadId !== threadId) {
         await chat.selectThread(threadId, work.workspaceRoot, work.activeFilePath ?? undefined)
       }
-      const composerContexts = whiteboard
+      const whiteboardContexts = whiteboard
         ? await activeWorkWhiteboardComposerContexts(work.workspaceRoot, whiteboard, threadId, prompt)
         : []
+      const referenceContexts = document ? await createWriteTurnReferenceAttachments({
+        workspaceRoot: work.workspaceRoot,
+        activeResource: activeWriteResourceReference(
+          work.workspaceRoot, work.activeFilePath, document.kind
+        ),
+        selections: quotedSelections,
+        retrieval: null,
+        officeDocument: null,
+        query: prompt
+      }) : []
+      const composerContexts = mergeWriteComposerContexts(
+        [...whiteboardContexts, ...referenceContexts], [], []
+      )
       if (whiteboard && !workWhiteboardSnapshotMatches(useWriteWorkspaceStore.getState(), {
         ...whiteboard, threadId
       })) {
@@ -78,7 +100,7 @@ export function useMobileWorkAssistantSend(): {
       const fileReference = document
         ? workbenchWriteSourceReference(work.workspaceRoot, work.activeFilePath)
         : undefined
-      return await chat.sendMessage(prompt, 'agent', {
+      const sent = await chat.sendMessage(prompt, 'agent', {
         expectedThreadId: threadId,
         agentSurface: 'write',
         ...(model ? { model } : {}),
@@ -96,6 +118,11 @@ export function useMobileWorkAssistantSend(): {
           ...(expectedSha256 ? { expectedSha256 } : {})
         }
       })
+      if (sent) {
+        const latest = useWriteWorkspaceStore.getState()
+        quotedSelections.forEach((selection) => latest.removeQuotedSelection(selection.id))
+      }
+      return sent
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
       return false

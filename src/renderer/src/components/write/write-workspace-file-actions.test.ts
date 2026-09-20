@@ -59,3 +59,33 @@ describe('Write presentation action', () => {
     expect(prompt).toContain('唯一内容来源 Markdown：/workspace/brief.md')
   })
 })
+
+describe('Write X article clipboard action', () => {
+  it('copies with the x-articles profile and uses the simplified toast', async () => {
+    const showExportNotice = vi.fn()
+    const copyWriteDocumentAsRichText = vi.fn(async () => ({
+      ok: true as const,
+      copiedAt: '2026-09-20T00:00:00.000Z',
+      profile: 'x-articles' as const,
+      simplified: true,
+      overLimit: false
+    }))
+    vi.stubGlobal('window', {
+      kunGui: { copyWriteDocumentAsRichText }
+    })
+    const actions = createWriteWorkspaceFileActions(actionParams({ showExportNotice }))
+
+    await actions.copyCurrentFileAsXArticle()
+
+    expect(copyWriteDocumentAsRichText).toHaveBeenCalledWith({
+      path: '/workspace/brief.md',
+      workspaceRoot: '/workspace',
+      content: '# Brief',
+      profile: 'x-articles'
+    })
+    expect(showExportNotice).toHaveBeenCalledWith({
+      tone: 'success',
+      message: 'writeCopyXArticleSimplified'
+    })
+  })
+})

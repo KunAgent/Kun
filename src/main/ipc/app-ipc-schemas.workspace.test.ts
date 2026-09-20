@@ -244,6 +244,21 @@ describe('app-ipc-schemas workspace and system', () => {
 
     expect(payload.path).toBe('/tmp/workspace/draft.md')
     expect(payload.content).toBe('# Draft')
+    expect(payload.profile).toBeUndefined()
+  })
+
+  it('accepts write rich clipboard x-articles profile and rejects unknown profiles', () => {
+    const payload = writeRichClipboardPayloadSchema.parse({
+      path: '/tmp/workspace/draft.md',
+      content: '# Draft',
+      profile: 'x-articles'
+    })
+    expect(payload.profile).toBe('x-articles')
+    expect(() => writeRichClipboardPayloadSchema.parse({
+      path: '/tmp/workspace/draft.md',
+      content: '# Draft',
+      profile: 'notion'
+    })).toThrow()
   })
 
   it('accepts workspace image pick payloads and rejects extra fields', () => {

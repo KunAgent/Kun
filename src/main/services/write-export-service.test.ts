@@ -153,4 +153,38 @@ describe('write-export-service helpers', () => {
     })
     expect(await readFile(targetPath, 'utf8')).toContain('<h1>Answer</h1>')
   })
+
+  it('copies x-articles clipboard html without tables, code, or gif images', async () => {
+    const sourcePath = join(workspaceRoot, 'draft.md')
+    const imagePath = join(workspaceRoot, 'cover.png')
+    await writeFile(sourcePath, '# Heading\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n```js\nconst x = 1\n```\n\n![Cover](./cover.png)\n\n![Loop](./loop.gif)')
+    await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+    const result = await copyWriteDocumentAsRichText({
+      path: sourcePath,
+      workspaceRoot,
+      content: '# Heading\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n```js\nconst x = 1\n```\n\n![Cover](./cover.png)\n\n![Loop](./loop.gif)',
+      profile: 'x-articles'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      profile: 'x-articles',
+      simplified: true,
+      overLimit: false
+    })
+    expect(clipboard.write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining('<article class="x-article-body">'),
+        text: expect.stringContaining('**A**  **B**')
+      })
+    )
+    const written = vi.mocked(clipboard.write).mock.calls[0]?.[0] as { html: string; text: string }
+    expect(written.html).not.toContain('<table>')
+    expect(written.html).not.toContain('<pre>')
+    expect(written.html).not.toContain('<code>')
+    expect(written.html).toContain('src="data:image/png;base64,')
+    expect(written.html).not.toMatch(/<img\b[^>]*loop\.gif/i)
+    expect(written.html).toContain('>Loop</a>')
+  })
 })

@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import type { TFunction } from 'i18next'
-import type { WriteExportFormat } from '@shared/write-export'
+import type { WriteExportFormat, WriteRichClipboardProfile } from '@shared/write-export'
 import { useWriteWorkspaceStore, writeJoinPath } from '../../write/write-workspace-store'
 import { pathsEqual } from '../../write/write-workspace-store-helpers'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
@@ -183,7 +183,9 @@ export function createWriteWorkspaceFileActions({
     }
   }
 
-  const copyCurrentFileAsRichText = async (): Promise<void> => {
+  const copyCurrentFileAsRichText = async (
+    profile: WriteRichClipboardProfile = 'online-docs'
+  ): Promise<void> => {
     if (!activeFilePath || !activeFileIsText) return
     if (typeof window.kunGui?.copyWriteDocumentAsRichText !== 'function') {
       showExportNotice({ tone: 'error', message: t('writeCopyRichTextUnavailable') })
@@ -196,7 +198,8 @@ export function createWriteWorkspaceFileActions({
       const result = await window.kunGui.copyWriteDocumentAsRichText({
         path: activeFilePath,
         workspaceRoot,
-        content: fileContent
+        content: fileContent,
+        profile
       })
       if (!result.ok) {
         showExportNotice({
@@ -205,7 +208,10 @@ export function createWriteWorkspaceFileActions({
         })
         return
       }
-      showExportNotice({ tone: 'success', message: t('writeCopyRichTextSuccess') })
+      showExportNotice({
+        tone: 'success',
+        message: copyRichTextSuccessMessage(profile, result, t)
+      })
     } catch (error) {
       showExportNotice({
         tone: 'error',
@@ -220,9 +226,21 @@ export function createWriteWorkspaceFileActions({
 
   return {
     copyCurrentFileAsRichText,
+    copyCurrentFileAsXArticle: () => copyCurrentFileAsRichText('x-articles'),
     createDraftFile,
     exportCurrentFile,
     generatePresentation,
     pickWriteWorkspace
   }
+}
+
+function copyRichTextSuccessMessage(
+  profile: WriteRichClipboardProfile,
+  result: { simplified?: boolean; overLimit?: boolean },
+  t: TFunction<'common'>
+): string {
+  if (profile !== 'x-articles') return t('writeCopyRichTextSuccess')
+  if (result.overLimit) return t('writeCopyXArticleOverLimit')
+  if (result.simplified) return t('writeCopyXArticleSimplified')
+  return t('writeCopyXArticleSuccess')
 }

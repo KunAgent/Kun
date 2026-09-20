@@ -5,6 +5,7 @@ export type MobilePage =
   | { mode: 'code' | 'rooms'; kind: 'new' }
   | { mode: 'code'; kind: 'conversation'; threadId: string }
   | { mode: 'rooms'; kind: 'room'; roomId: string }
+  | { mode: 'rooms'; kind: 'room-settings'; roomId: string }
   | { mode: 'rooms'; kind: 'reply'; roomId: string; messageId: string }
   | { mode: 'rooms'; kind: 'run'; roomId: string; runId: string }
   | { mode: 'rooms'; kind: 'task'; roomId: string; taskId: string }
@@ -37,6 +38,7 @@ export function readMobilePage(url: URL): MobilePage {
     const roomId = identifier(url, 'room')
     if (!roomId) return { mode, kind: 'home' }
     if (kind === 'room') return { mode, kind, roomId }
+    if (kind === 'room-settings') return { mode, kind, roomId }
     const routes = [
       ['reply', 'message', 'messageId'], ['run', 'run', 'runId'],
       ['task', 'task', 'taskId'], ['member', 'member', 'memberId']

@@ -392,6 +392,7 @@ export function WriteWorkspaceView({
 
   const {
     copyCurrentFileAsRichText,
+    copyCurrentFileAsXArticle,
     createDraftFile,
     exportCurrentFile,
     generatePresentation,
@@ -528,6 +529,7 @@ export function WriteWorkspaceView({
         setModeMenuOpen={setModeMenuOpen}
         setPreviewMode={setPreviewMode}
         onCopyRichText={() => void copyCurrentFileAsRichText()}
+        onCopyXArticle={() => void copyCurrentFileAsXArticle()}
         onExportFile={(format) => void exportCurrentFile(format)}
         onGeneratePresentation={() => void generatePresentation()}
         onSave={() => {

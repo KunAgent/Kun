@@ -2,6 +2,10 @@ export const WRITE_EXPORT_FORMATS = ['html', 'pdf', 'png', 'doc', 'docx'] as con
 
 export type WriteExportFormat = (typeof WRITE_EXPORT_FORMATS)[number]
 
+export const WRITE_RICH_CLIPBOARD_PROFILES = ['online-docs', 'x-articles'] as const
+
+export type WriteRichClipboardProfile = (typeof WRITE_RICH_CLIPBOARD_PROFILES)[number]
+
 export type WriteExportPayload = {
   path?: string
   title?: string
@@ -14,6 +18,7 @@ export type WriteRichClipboardPayload = {
   path: string
   workspaceRoot?: string
   content: string
+  profile?: WriteRichClipboardProfile
 }
 
 export type WriteExportResult =
@@ -38,6 +43,9 @@ export type WriteRichClipboardResult =
   | {
       ok: true
       copiedAt: string
+      profile: WriteRichClipboardProfile
+      simplified?: boolean
+      overLimit?: boolean
     }
   | {
       ok: false

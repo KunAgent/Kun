@@ -31,6 +31,9 @@ const MobileCodeConversation = lazy(() => import('./chat/MobileCodeConversation'
 const MobileRoomDetail = lazy(() => import('./rooms/MobileRoomDetail').then((module) => ({
   default: module.MobileRoomDetail
 })))
+const MobileRoomSettings = lazy(() => import('./rooms/MobileRoomSettings').then((module) => ({
+  default: module.MobileRoomSettings
+})))
 const MobileWorkResourceScreen = lazy(() => import('./work/MobileWorkResourceScreen').then((module) => ({
   default: module.MobileWorkResourceScreen
 })))
@@ -57,7 +60,7 @@ function MobileRoomsRoot({ navigate }: { navigate: ReturnType<typeof useMobileNa
       all: t('roomsFilter_all'), unread: t('roomsFilter_unread'), attention: t('roomsFilter_attention') }}
     onSearch={setSearch} onFilter={setFilter}
     onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })}
-    onMenu={null}
+    onMenu={(roomId) => navigate({ mode: 'rooms', kind: 'room-settings', roomId })}
     onCreate={() => navigate({ mode: 'rooms', kind: 'new' })}
     onRetry={rooms.refresh} onLoadMore={rooms.more} />
 }
@@ -188,10 +191,13 @@ export function MobileAppShell(): ReactElement {
       onBack={() => navigate({ mode: 'code', kind: 'home' })}
       onDetails={() => chat.setRoute('settings')}
       onSettings={() => chat.setRoute('settings')} />
+  } else if (page.mode === 'rooms' && page.kind === 'room-settings') {
+    content = <MobileRoomSettings roomId={page.roomId}
+      onBack={() => navigate({ mode: 'rooms', kind: 'room', roomId: page.roomId })} />
   } else if (page.mode === 'rooms' && page.kind === 'room') {
     content = <MobileRoomConversation roomId={page.roomId}
       onBack={() => navigate({ mode: 'rooms', kind: 'home' })}
-      onDetails={null}
+      onDetails={() => navigate({ mode: 'rooms', kind: 'room-settings', roomId: page.roomId })}
       onReply={(message) => navigate({ mode: 'rooms', kind: 'reply', roomId: page.roomId, messageId: message.id })}
       onTask={(taskId) => navigate({ mode: 'rooms', kind: 'task', roomId: page.roomId, taskId })}
       onRun={(runId) => navigate({ mode: 'rooms', kind: 'run', roomId: page.roomId, runId })}

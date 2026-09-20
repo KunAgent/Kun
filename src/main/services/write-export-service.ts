@@ -19,6 +19,7 @@ import type {
 import type { DesignExportPayload, DesignExportResult } from '../../shared/design-export'
 import { resolveWriteMarkdownResource } from '../../shared/write-markdown-resource'
 import { resolveWorkspaceFile } from './workspace-service'
+import { buildWriteXArticleClipboardFragment } from './write-x-article-clipboard'
 
 type HtmlToDocxDocumentOptions = {
   title?: string
@@ -421,6 +422,25 @@ export async function copyWriteDocumentAsRichText(
       }
     }
 
+    const profile = payload.profile ?? 'online-docs'
+    if (profile === 'x-articles') {
+      const fragment = buildWriteXArticleClipboardFragment({
+        sourcePath: resolved.path,
+        content: payload.content
+      })
+      clipboard.write({
+        html: await inlineLocalImagesInHtml(fragment.html),
+        text: fragment.text
+      })
+      return {
+        ok: true,
+        copiedAt: new Date().toISOString(),
+        profile,
+        simplified: fragment.simplified,
+        overLimit: fragment.overLimit
+      }
+    }
+
     const html = await buildWriteClipboardHtmlFragment({
       sourcePath: resolved.path,
       content: payload.content
@@ -433,7 +453,8 @@ export async function copyWriteDocumentAsRichText(
 
     return {
       ok: true,
-      copiedAt: new Date().toISOString()
+      copiedAt: new Date().toISOString(),
+      profile
     }
   } catch (error) {
     return {

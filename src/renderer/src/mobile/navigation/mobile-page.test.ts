@@ -40,6 +40,7 @@ describe('mobile page URLs', () => {
 
   it.each([
     { mode: 'rooms', kind: 'room', roomId: 'room' },
+    { mode: 'rooms', kind: 'room-settings', roomId: 'room' },
     { mode: 'rooms', kind: 'reply', roomId: 'room', messageId: 'message' },
     { mode: 'rooms', kind: 'run', roomId: 'room', runId: 'run' },
     { mode: 'rooms', kind: 'task', roomId: 'room', taskId: 'task' },

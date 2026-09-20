@@ -34,6 +34,7 @@ function textToolbarProps(inlineCompletionEnabled: boolean): ToolbarProps {
     modeMenuOpen: false,
     modeMenuRef: createRef<HTMLDivElement>(),
     onCopyRichText: noop,
+    onCopyXArticle: noop,
     onExportFile: noop,
     onGeneratePresentation: noop,
     onSave: noop,
@@ -75,6 +76,7 @@ describe('WriteWorkspaceToolbar code preview', () => {
       modeMenuOpen: false,
       modeMenuRef: createRef<HTMLDivElement>(),
       onCopyRichText: noop,
+      onCopyXArticle: noop,
       onExportFile: noop,
       onGeneratePresentation: noop,
       onSave: noop,
@@ -124,5 +126,14 @@ describe('WriteWorkspaceToolbar code preview', () => {
     expect(html).toContain('writeUnsaved')
     expect(html).toContain('title="writeUnsaved"')
     expect(html).not.toContain('writeReadOnly')
+  })
+
+  it('lists X article clipboard copy next to online-doc copy', () => {
+    const html = renderToStaticMarkup(createElement(WriteWorkspaceToolbar, {
+      ...textToolbarProps(false),
+      exportMenuOpen: true
+    }))
+    expect(html).toContain('writeCopyRichText')
+    expect(html).toContain('writeCopyXArticle')
   })
 })

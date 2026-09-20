@@ -508,7 +508,8 @@ export const writeRichClipboardPayloadSchema = z
   .object({
     path: trimmedString(MAX_PATH_LENGTH),
     workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
-    content: z.string().max(MAX_BODY_BYTES)
+    content: z.string().max(MAX_BODY_BYTES),
+    profile: z.enum(['online-docs', 'x-articles']).optional()
   })
   .strict()
 

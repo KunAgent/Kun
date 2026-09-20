@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { LazyMessageTimeline } from '../../components/chat/LazyMessageTimeline'
 import { MobileComposer } from '../chat/MobileComposer'
 import { MobilePendingActions } from '../chat/MobilePendingActions'
@@ -27,6 +28,13 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
     composerModel: value.composerModel
   })))
   const threadReady = mobileWorkAssistantThreadReady(expectedThreadId, state.activeThreadId)
+  const write = useWriteWorkspaceStore(useShallow((value) => ({
+    workspaceRoot: value.workspaceRoot,
+    selection: value.selection,
+    quotedSelections: value.quotedSelections,
+    quoteCurrentSelection: value.quoteCurrentSelection
+  })))
+  const hasSelection = write.selection.ranges.some((range) => range.text.trim().length > 0)
   const assistant = useMobileWorkAssistantSend()
   const send = async (): Promise<void> => {
     if (await assistant.send(input)) setInput('')
@@ -36,6 +44,11 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
       liveReasoning={state.liveReasoning} live={state.liveAssistant} activeThreadId={state.activeThreadId}
       runtimeConnection={state.runtimeConnection} runtimeError={state.runtimeError}
       onRetryConnection={state.probeRuntime} onOpenSettings={onSettings} compactCards /> : null}</div>
+    {hasSelection || write.quotedSelections.length ? <div className="kun-mobile-work-selection">
+      {hasSelection ? <button type="button" onClick={() => write.quoteCurrentSelection(write.workspaceRoot)}>
+        {t('writeSelectionQuote')}</button> : null}
+      {write.quotedSelections.length ? <span>{t('writeSelectionLabel')} · {write.quotedSelections.length}</span> : null}
+    </div> : null}
     <MobileComposer value={input} onChange={setInput} onSend={() => void send()}
       onStop={() => void state.interrupt()} onAttachments={null} onOptions={null}
       running={threadReady && state.busy} disabled={state.runtimeConnection !== 'ready'} sending={assistant.sending}
