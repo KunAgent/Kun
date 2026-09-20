@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
+import type { ExtensionRoomsService } from './extension-rooms-service.js'
 import {
   AccountSchema,
   ArtifactHostActionRequestSchema,
@@ -185,6 +186,7 @@ export const DEFAULT_PROVIDER_STREAM_QUEUE_BYTES = 4 * 1024 * 1024
 
 export type ExtensionHostBrokerOptions = {
   agent: ExtensionAgentService
+  rooms?: ExtensionRoomsService
   profiles: ExtensionAgentProfileRegistry
   tools: ExtensionToolRegistry
   modelProviders: ExtensionModelProviderRegistry

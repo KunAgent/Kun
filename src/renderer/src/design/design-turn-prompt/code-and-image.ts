@@ -14,6 +14,7 @@ import type { DesignSystem, DesignToken } from "../canvas/design-system-types"
 import { takeLastLintFindings } from "../canvas/design-lint"
 import type { DesignContextLocation, DesignHtmlElementContext } from "../design-composer-context"
 import { formatDesignHtmlQualityFindings, type DesignHtmlQualityFinding } from "../design-html-quality"
+import { formatExcalidrawScenePrompt } from "../../whiteboard/excalidraw-outbound"
 import { formatDesignTargetAssetLines } from './shared'
 import { buildCanvasTurnPrompt } from './html-and-canvas'
 
@@ -30,7 +31,15 @@ export function buildCodeCanvasTurnPrompt(options: {
   previousOpErrors?: OpError[]
   canvasFeedbackKey?: string
   canvasDesignSystem?: DesignSystem
+  canvasEngine?: 'kun' | 'excalidraw'
+  excalidrawScene?: { elements?: unknown[] }
+  excalidrawScenePath?: string
 }): string {
+  if (options.canvasEngine === 'excalidraw') {
+    return formatExcalidrawScenePrompt(options.excalidrawScene, {
+      ...(options.excalidrawScenePath ? { scenePath: options.excalidrawScenePath } : {})
+    })
+  }
   const base = buildCanvasTurnPrompt({
     target: 'canvas',
     mode: 'text',

@@ -168,7 +168,7 @@ const ManagerAtomicJsonSnapshotSchema = z.object({
   })
 })
 
-function managerAtomicJsonConfig(path: string): ManagerAtomicJsonConfig | null {
+export function managerAtomicJsonConfig(path: string): ManagerAtomicJsonConfig | null {
   const baseUrl = explicitManagerAtomicJsonConfig?.baseUrl ?? process.env.KUN_MANAGER_BASE_URL?.trim()
   const token = explicitManagerAtomicJsonConfig?.token ?? process.env.KUN_MANAGER_TOKEN?.trim()
   const configuredDataDir = explicitManagerAtomicJsonConfig?.dataDir ??
@@ -218,7 +218,7 @@ async function readManagerSnapshot(
     method: 'POST',
     headers: managerHeaders(manager.token),
     body: JSON.stringify({ path }),
-    signal: AbortSignal.timeout(5_000)
+    signal: managerClientRequestSignal()
   })
   if (!response.ok) throw await managerRequestError(response, path)
   return ManagerAtomicJsonSnapshotSchema.parse(await response.json()).snapshot
@@ -241,7 +241,7 @@ async function writeManagerSnapshot<T>(
       ...(options.fence ? { fence: options.fence } : {}),
       ...(options.commitId ? { commitId: options.commitId } : {})
     }),
-    signal: requestSignal(options.signal)
+    signal: managerClientRequestSignal(options.signal)
   })
   if (response.status === 409) return classifyConflict(response, path)
   if (!response.ok) throw await managerRequestError(response, path)
@@ -264,7 +264,7 @@ async function deleteManagerSnapshot(
       ...(options.fence ? { fence: options.fence } : {}),
       ...(options.commitId ? { commitId: options.commitId } : {})
     }),
-    signal: requestSignal(options.signal)
+    signal: managerClientRequestSignal(options.signal)
   })
   if (response.status === 409) return classifyConflict(response, path)
   if (!response.ok) throw await managerRequestError(response, path)
@@ -285,10 +285,6 @@ function mutationOptions(options: AtomicJsonMutationOptions): AtomicJsonMutation
     fence: options.fence ?? context?.fence,
     commitId: options.commitId ?? currentManagerDataCommitId()
   }
-}
-
-function requestSignal(signal?: AbortSignal): AbortSignal {
-  return signal ? AbortSignal.any([signal, AbortSignal.timeout(5_000)]) : AbortSignal.timeout(5_000)
 }
 
 function managerHeaders(token: string): Record<string, string> {
@@ -318,3 +314,4 @@ function managerConflictError(path: string): Error {
 function isMissingFile(error: unknown): boolean {
   return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
 }
+import { managerClientRequestSignal } from '../manager/manager-client-lifetime.js'

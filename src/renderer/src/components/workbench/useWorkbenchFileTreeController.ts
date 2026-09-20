@@ -5,6 +5,7 @@ import {
   composerFileReferenceFromPath,
   composerFileReferenceKey,
   mergeComposerFileReferences,
+  owningComposerWorkspaceRoot,
   type ComposerFileReference
 } from '../../lib/composer-file-references'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
@@ -19,6 +20,8 @@ import {
   normalizeLiveOfficePreviewPath,
   type LiveOfficePreviewDetail
 } from '../../lib/live-office-preview'
+import { extraRootsForWorkspace } from '../../lib/code-workspace-folder-lookup'
+import { useChatStore } from '../../store/chat-store'
 import type { ChatFileTreeReference } from '../chat/ChatFileTreePanel'
 import type {
   GeneratedDocumentArtifact,
@@ -203,6 +206,16 @@ export function useWorkbenchFileTreeController({
     () => normalizeWorkspaceRoot(threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot),
     [activeThreadId, threads, workspaceRoot]
   )
+  const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
+  const extraWorkspaceRoots = useMemo(
+    () => extraRootsForWorkspace(fileTreeWorkspaceRoot, folderSets),
+    [fileTreeWorkspaceRoot, folderSets]
+  )
+  const allowedFileTreeRoots = useMemo(() => new Set(
+    [fileTreeWorkspaceRoot, ...extraWorkspaceRoots]
+      .map((root) => normalizeWorkspaceRoot(root))
+      .filter(Boolean)
+  ), [extraWorkspaceRoots, fileTreeWorkspaceRoot])
 
   function clearComposerFileReferences(): void {
     setComposerFileReferences([])
@@ -224,8 +237,9 @@ export function useWorkbenchFileTreeController({
   async function pickComposerFileReferences(): Promise<void> {
     const result = await window.kunGui.pickLocalFiles(activeSkillWorkspace || undefined)
     if (result.canceled) return
+    const roots = [activeSkillWorkspace, ...extraWorkspaceRoots]
     for (const path of result.paths) {
-      addComposerFileReference(composerFileReferenceFromPath(path, activeSkillWorkspace))
+      addComposerFileReference(composerFileReferenceFromPath(path, roots))
     }
   }
 
@@ -318,9 +332,11 @@ export function useWorkbenchFileTreeController({
     setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.files)
   }
 
-  function previewWorkspaceFileFromSidebar(path: string): void {
-    const workspace = fileTreeWorkspaceRoot
-    if (!workspace) return
+  function previewWorkspaceFileFromSidebar(path: string, workspaceRootOverride?: string): void {
+    const workspace = normalizeWorkspaceRoot(workspaceRootOverride || '') ||
+      owningComposerWorkspaceRoot(path, [fileTreeWorkspaceRoot, ...extraWorkspaceRoots]) ||
+      fileTreeWorkspaceRoot
+    if (!workspace || !allowedFileTreeRoots.has(workspace)) return
     openWorkspaceFilePreviewTarget({ path, workspaceRoot: workspace })
   }
 
@@ -421,7 +437,7 @@ export function useWorkbenchFileTreeController({
       if (route !== 'chat') return
       const detail = (rawEvent as CustomEvent<LiveOfficePreviewDetail>).detail
       if (!detail?.path || !detail.workspaceRoot) return
-      if (normalizeWorkspaceRoot(detail.workspaceRoot) !== fileTreeWorkspaceRoot) return
+      if (!allowedFileTreeRoots.has(normalizeWorkspaceRoot(detail.workspaceRoot))) return
       const path = normalizeLiveOfficePreviewPath(detail.path, detail.workspaceRoot)
       if (!path) return
       const turnId = detail.turnId || `office-preview:${detail.path}`
@@ -436,7 +452,7 @@ export function useWorkbenchFileTreeController({
     }
     window.addEventListener(LIVE_OFFICE_PREVIEW_EVENT, onLiveOfficePreview)
     return () => window.removeEventListener(LIVE_OFFICE_PREVIEW_EVENT, onLiveOfficePreview)
-  }, [fileTreeWorkspaceRoot, route, upsertWorkspaceFilePreviewTarget])
+  }, [allowedFileTreeRoots, route, upsertWorkspaceFilePreviewTarget])
 
   useEffect(() => {
     const previousThreadId = previousActiveThreadIdRef.current
@@ -490,6 +506,7 @@ export function useWorkbenchFileTreeController({
     pinnedFilePreviewTargetKeys,
     preserveFilePreviewTargets,
     fileTreeWorkspaceRoot,
+    extraWorkspaceRoots,
     clearComposerFileReferences,
     addComposerFileReference,
     restoreComposerFileReferences,

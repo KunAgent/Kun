@@ -294,6 +294,8 @@ v1 permissions are exact strings:
 | `hostDom` | Inject declared Direct DOM content scripts (high risk) |
 | `agent.run` | Create and control extension-owned Agent Runs |
 | `agent.threads.readOwn` | Query projections of threads/runs owned by this extension |
+| `agent.capacity.read` | Read global running/queued turn counts and admission capacity |
+| `rooms.read` | Read all local room summaries, messages, task summaries, and public events |
 | `tools.register` | Register Manifest-declared tools |
 | `providers.register` | Register model Providers |
 | `accounts.read` | Read redacted account metadata within allowed scopes |

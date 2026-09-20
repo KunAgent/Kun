@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { posix, win32 } from 'node:path'
 import type { ShellConfig } from './builtin-tool-types.js'
 import { resolveWindowsShellCandidates, WINDOWS_POWERSHELL_COMMAND_ARGS, windowsSystemRoot } from './windows-shell-resolver.js'
+import { spawnOwnedProcess } from '../../process/owned-process.js'
 
 type SpawnSyncLike = typeof spawnSync
 type SpawnLike = typeof spawn
@@ -367,8 +368,9 @@ export function createShellCommandRunner(options: ShellCommandRunnerOptions = {}
               ? { ...safeEnv, CHERE_INVOKING: '1' }
               : safeEnv
           }
-          const child = spawnImpl(runtime.shell, shellCommandArgs(runtime, command), childOptions)
-          await waitForSpawn(child)
+          const child = options.spawnImpl
+            ? await waitForSpawn(spawnImpl(runtime.shell, shellCommandArgs(runtime, command), childOptions))
+            : await spawnOwnedProcess(runtime.shell, shellCommandArgs(runtime, command), childOptions)
           return { child, runtime }
         } catch (error) {
           // An error before the spawn event means no process was created, so a
@@ -618,7 +620,7 @@ export async function spawnCapture(
   options: { cwd: string; signal?: AbortSignal; maxOutputBytes?: number; timeoutMs?: number }
 ): Promise<{ stdout: string; stderr: string; exitCode: number | null; outputTruncated: boolean; timedOut: boolean }> {
   const maxOutputBytes = normalizePositiveInteger(options.maxOutputBytes, DEFAULT_SPAWN_CAPTURE_MAX_BYTES)
-  const child = spawn(file, args, {
+  const child = await spawnOwnedProcess(file, args, {
     cwd: options.cwd,
     env: shellSpawnEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -656,6 +658,7 @@ export async function spawnCapture(
   }
   const onAbort = () => terminateSpawnTree(child)
   options.signal?.addEventListener('abort', onAbort, { once: true })
+  if (options.signal?.aborted) onAbort()
   const timeoutMs = options.timeoutMs === undefined
     ? undefined
     : normalizePositiveInteger(options.timeoutMs, 1)

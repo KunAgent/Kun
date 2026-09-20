@@ -247,6 +247,7 @@ describe('ThreadService.fork with side relation', () => {
     expect(forkItems.map((item) => item.id)).toEqual(['item_user_1', 'item_a_1'])
     expect(fork.forkedFromThreadId).toBe('thr_branch')
     expect(fork.forkedFromTurnCount).toBe(1)
+    expect(fork.forkedFromTurnId).toBe('turn_completed')
     expect(fork.forkedFromMessageCount).toBe(1)
   })
 
@@ -261,6 +262,7 @@ describe('ThreadService.fork with side relation', () => {
     expect(beforeFirst.turns).toEqual([])
     expect(beforeFirst.forkedFromThreadId).toBe('thr_undo')
     expect(beforeFirst.forkedFromTurnCount).toBe(0)
+    expect(beforeFirst.forkedFromTurnId).toBeUndefined()
 
     const beforeSecond = await service.fork('thr_undo', { turnId: 'turn_inflight', beforeTurn: true })
     expect(beforeSecond.turns.map((turn) => turn.id)).toEqual(['turn_completed'])

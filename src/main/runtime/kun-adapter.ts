@@ -91,8 +91,8 @@ export const kunRuntimeAdapter = {
   },
 
   /** Stop only the Runtime child owned by this Electron process. */
-  async stopAndWait(): Promise<void> {
-    await stopKunChildAndWait()
+  async stopAndWait(options?: { deadline?: number }): Promise<void> {
+    await stopKunChildAndWait(options)
   },
 
   isChildRunning(): boolean {

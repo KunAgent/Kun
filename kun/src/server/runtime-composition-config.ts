@@ -1,3 +1,4 @@
+import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import {
   join,
   isDeepStrictEqual,
@@ -5,8 +6,6 @@ import {
   CapabilityRegistry,
   buildGoalLocalTools,
   buildTodoLocalTools,
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID,
   buildDefaultLocalTools,
   createReadArtifactTool,
   buildMcpToolProviders,
@@ -48,6 +47,7 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import {
+  buildPptAgentRuntimeProvider,
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   llmDebugCaptureEnabled,
@@ -328,21 +328,7 @@ export function createRuntimeConfigController(
 	    })
 	    const nextComputerUseProviders = await buildComputerUseToolProviders(nextOptions.capabilities?.computerUse)
 	    const nextBrowserUseProviders = buildBrowserUseToolProviders(nextOptions.capabilities?.browserUse)
-    const nextPptAgentProvider = {
-      id: PPT_AGENT_LOCAL_PROVIDER_ID,
-      kind: 'built-in' as const,
-	      enabled: true,
-      available: true,
-      tools: [
-        ...buildPptAgentLocalTools({
-	          enabled: () => nextOptions.lab?.pptAgent?.enabled !== false,
-	          toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
-	          governanceDirectory: () => join(nextOptions.dataDir, 'ppt-governance'),
-	          resolveSourceRequest: async (context) =>
-	            (await turnService.getTurn(context.threadId, context.turnId))?.prompt
-	        })
-	      ]
-	    }
+    const nextPptAgentProvider = buildPptAgentRuntimeProvider(nextOptions, turnService)
 	    const nextResolvedHooks = [
 	      ...buildBuiltinHooks({ quality: nextOptions.quality ?? DEFAULT_QUALITY_CONFIG }),
 	      ...resolveConfiguredHooks(nextOptions.hooks)
@@ -397,7 +383,9 @@ export function createRuntimeConfigController(
 	      designCanvasProvider
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
-	    const nextRegistry = new CapabilityRegistry([
+    const nextRegistry = new CapabilityRegistry([
+      buildHistoryReferenceToolProvider(services.model.core.historyReferences),
+      roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,
 	      ...nextComputerUseProviders.providers,
 	      ...nextBrowserUseProviders.providers,
@@ -698,3 +686,4 @@ export function createRuntimeConfigController(
     get loop() { return loop }
   }
 }
+import { roomResultProvider } from '../rooms/room-result-tools.js'

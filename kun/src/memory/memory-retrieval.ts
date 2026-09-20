@@ -1,3 +1,4 @@
+import type { AgentMemoryAccess } from './agent-memory-scope.js'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
   MEMORY_MAX_TRACE_RANKINGS,
@@ -29,6 +30,7 @@ import {
 export const DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT = 64
 
 export type MemoryRetrieveRequest = {
+  agent?: AgentMemoryAccess
   query: string
   workspace?: string
   project?: string

@@ -345,6 +345,22 @@ describe('Kun runtime config service', () => {
     }
   })
 
+  it('projects Codex reference opt-in and explicit disable to disk and hot apply', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-codex-reference-'))
+    try {
+      for (const enabled of [false, true, false]) {
+        const runtime = defaultKunRuntimeSettings()
+        runtime.lab.codexReferenceBranches.enabled = enabled
+        const settings = normalizeAppSettings({ ...normalizeAppSettings({} as AppSettingsV1), agents: { kun: runtime } })
+        const config = await syncGuiManagedKunConfig(dataDir, runtime)
+        expect(config.lab?.codexReferenceBranches).toEqual({ enabled })
+        expect(buildManagedRuntimeHotApplyBody(settings, config).lab?.codexReferenceBranches).toEqual({ enabled })
+      }
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('does not project GUI-only Automatic plan-build defaults into Kun config', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-auto-plan-build-'))
     const defaults = defaultKunRuntimeSettings()

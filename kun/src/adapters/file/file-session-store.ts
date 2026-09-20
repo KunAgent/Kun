@@ -24,6 +24,7 @@ import type { AgentSession } from '../../domain/session.js'
 import { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES, readLatestItemsFromJsonl, warnUsageCompaction } from './file-session-jsonl.js'
 import { ItemsCache } from './file-session-items-cache.js'
 import { atomicWriteFile } from './atomic-write.js'
+import { readSessionSnapshot, writeSessionSnapshot } from './session-snapshot.js'
 import { isPathBelowDirectory } from './path-containment.js'
 import { SessionCompactionScheduler } from './session-compaction-scheduler.js'
 import { searchItemTextFile } from './file-session-text-search.js'
@@ -516,21 +517,15 @@ export class FileSessionStore implements SessionStore {
     return [...overlaid]
   }
 
-  async loadSession(threadId: string): Promise<AgentSession | null> {
-    try {
-      const raw = await readFile(join(this.threadDir(threadId), 'session.json'), 'utf-8')
-      return JSON.parse(raw) as AgentSession
-    } catch {
-      return null
-    }
+  loadSession(threadId: string): Promise<AgentSession | null> {
+    return readSessionSnapshot(this.threadDir(threadId))
   }
 
   async upsertSession(session: AgentSession): Promise<void> {
     assertSafeThreadId(session.threadId)
-    await this.withThreadWrite(session.threadId, async () => {
-      await mkdir(this.threadDir(session.threadId), { recursive: true, mode: 0o700 })
-      await atomicWriteFile(join(this.threadDir(session.threadId), 'session.json'), JSON.stringify(session))
-    })
+    await this.withThreadWrite(session.threadId, () =>
+      writeSessionSnapshot(this.threadDir(session.threadId), session)
+    )
   }
 
   async highestSeq(threadId: string): Promise<number> {

@@ -99,6 +99,22 @@ describe('runtime projection action normalization', () => {
     })])
   })
 
+  it('preserves additional workspace roots from thread summaries', () => {
+    const thread = threadFromCore({
+      id: 'thread_multi',
+      title: 'Frontend',
+      model: 'model_1',
+      mode: 'agent',
+      status: 'idle',
+      workspace: '/Users/demo/frontend',
+      additionalWorkspaces: ['/Users/demo/backend'],
+      createdAt: '2026-09-16T00:00:00.000Z',
+      updatedAt: '2026-09-16T00:00:00.000Z'
+    })
+
+    expect(thread.additionalWorkspaces).toEqual(['/Users/demo/backend'])
+  })
+
   it('projects an accepted Design profile lock from turn_started metadata', async () => {
     const onThreadUpdated = vi.fn()
     const designProfile = {

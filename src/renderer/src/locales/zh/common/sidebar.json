@@ -7,5 +7,15 @@
   "threadHydrationLoadingDescription": "正在读取消息并恢复最新会话状态，请稍候。",
   "threadHydrationTakingLongTitle": "会话恢复时间较长",
   "threadHydrationTakingLongDescription": "事件流暂时还没有追平，你可以重试连接。",
-  "threadHydrationRetry": "重试连接"
+  "threadHydrationRetry": "重试连接",
+  "sidebarWorkspaceAddFolder": "添加目录到项目",
+  "sidebarWorkspaceRemoveFolder": "从项目移除 {{name}}",
+  "workspaceFolderSameAsPrimary": "该目录已经是当前项目根目录。",
+  "workspaceFolderDuplicate": "该目录已经在当前项目中。",
+  "workspaceFolderNested": "该目录与项目中的另一个目录重叠。",
+  "workspaceFolderLimit": "一个项目最多可以附加 32 个目录。",
+  "workspaceFolderMissing": "请选择要添加到项目的目录。",
+  "workspaceFolderMissingPrimary": "请先打开一个项目，再向其中添加目录。",
+  "composerWorkspaceExtraHint": "Git、plan worktree 和默认 shell 仍使用主目录。",
+  "fileTreeGitUsesPrimary": "Git 和 plan 命令仍使用主目录。"
 }

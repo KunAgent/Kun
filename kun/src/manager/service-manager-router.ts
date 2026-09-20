@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { AppSessionOwner } from '../contracts/app-session-owner.js'
+import { addIdleManagerRetirementRoute } from './service-manager-router-retirement.js'
 import {
   RuntimeFlavorSchema
 } from '../contracts/runtime-flavor.js'
@@ -53,6 +55,7 @@ import {
   validation
 } from './service-manager-router-auth.js'
 import { addHostPowerRoute } from './service-manager-router-host-power.js'
+import { addManagerRoomRoutes } from './service-manager-router-rooms.js'
 import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
 import {
   fencedAtomicJsonMutation,
@@ -78,6 +81,10 @@ export function buildServiceManagerRouter(input: {
   instanceId: string
   startedAt: string
   buildId?: string
+  appOwner?: AppSessionOwner
+  isDraining?: () => boolean
+  beginDrain?: () => void
+  recordParticipant?: (participant: { pid: number; instanceId: string; startedAt: string }) => Promise<void>
   state: ServiceManagerState
   sharedData?: ManagerSharedDataStore
   documents?: RevisionedDocumentStore
@@ -96,12 +103,25 @@ export function buildServiceManagerRouter(input: {
   }
 }): Router {
   const router = new Router()
+  if (input.sharedData) addManagerRoomRoutes(router, {
+    managerToken: input.managerToken,
+    state: input.state,
+    roomStore: input.sharedData.roomStore,
+    statePersistence: input.statePersistence
+  })
   const capabilities = input.sharedData
     ? KUN_MANAGER_CAPABILITIES
     : KUN_MANAGER_CAPABILITIES.filter((capability) =>
         capability !== 'shared-data-v1' &&
         capability !== 'artifact-memory-data-v1' &&
-        capability !== 'atomic-json-v1'
+        capability !== 'atomic-json-v1' &&
+        capability !== 'history-reference-cleanup-v1' &&
+        capability !== 'history-reference-recovery-v1' &&
+        capability !== 'history-reference-sources-v1' &&
+        capability !== 'history-reference-sources-v2' &&
+        capability !== 'agent-direct-chat-v1' && capability !== 'rooms-init-im-v1' && capability !== 'agent-identities-v1' &&
+        !capability.startsWith('room-store-') &&
+        capability !== 'item-turn-page-v1' && capability !== 'item-call-page-v1'
       )
   router.add('GET', '/health', () => {
     const persistence = input.statePersistence?.()
@@ -114,6 +134,7 @@ export function buildServiceManagerRouter(input: {
       startedAt: input.startedAt,
       serviceVersion: KUN_VERSION,
       ...(input.buildId ? { buildId: input.buildId } : {}),
+      ...(input.appOwner ? { appOwner: input.appOwner } : {}),
       capabilities,
       persistence: {
         state: persistence?.degraded ? 'degraded' : 'healthy',
@@ -130,6 +151,7 @@ export function buildServiceManagerRouter(input: {
       startedAt: input.startedAt,
       serviceVersion: KUN_VERSION,
       ...(input.buildId ? { buildId: input.buildId } : {}),
+      ...(input.appOwner ? { appOwner: input.appOwner } : {}),
       capabilities,
       slots: input.state.snapshot(),
       ...(persistence?.stats ? { statePersistence: persistence.stats } : {})
@@ -357,6 +379,9 @@ export function buildServiceManagerRouter(input: {
     request,
     input.managerToken,
     async () => {
+      // A data connection never confers application owner control. Owned Managers
+      // accept their shutdown command only on the private parent IPC channel.
+      if (input.appOwner) return jsonResponse({ code: 'manager_owner_control_required' }, 403)
       const body = await readJsonBody(request)
       if (!body.ok) return body.response
       const parsed = z.object({ instanceId: z.literal(input.instanceId) }).strict().safeParse(body.value)
@@ -365,6 +390,7 @@ export function buildServiceManagerRouter(input: {
       return jsonResponse({ accepted: true, instanceId: input.instanceId })
     }
   ))
+  addIdleManagerRetirementRoute(router, input)
   if (input.sharedData) router.add('POST', '/v1/data/thread/:operation', (request, context) => authorizedAsync(
     request,
     input.managerToken,
@@ -507,6 +533,10 @@ export function buildServiceManagerRouter(input: {
         throw error
       }
     }
+  ))
+  if (input.sharedData) router.add('POST', '/v1/data/history-reference-reservations', (request) => authorizedAsync(
+    request, input.managerToken,
+    async () => jsonResponse({ keys: await input.sharedData!.listHistoryReservationKeys() })
   ))
   if (input.sharedData) router.add('POST', '/v1/data/atomic-json/read', (request) => authorizedAsync(
     request,

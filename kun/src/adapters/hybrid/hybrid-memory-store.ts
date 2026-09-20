@@ -112,6 +112,8 @@ export class HybridMemoryStore implements MemoryStore {
     })
   }
 
+  async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> { return this.canonical.getById(id, access) }
+
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {
     return this.enqueueMutation(async () => {
       this.mutationGeneration += 1
@@ -152,11 +154,11 @@ export class HybridMemoryStore implements MemoryStore {
     })
   }
 
-  async purge(id: string): Promise<void> {
+  async purge(id: string, access?: MemoryAccess): Promise<void> {
     return this.enqueueMutation(async () => {
       this.mutationGeneration += 1
       await this.ready()
-      await this.canonical.purge(id)
+      await this.canonical.purge(id, access)
       if (!this.index) return
       try {
         this.options.beforeIndexRemove?.(id)

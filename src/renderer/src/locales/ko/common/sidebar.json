@@ -7,5 +7,15 @@
   "threadHydrationLoadingDescription": "메시지를 읽고 최신 대화 상태를 복원하고 있습니다.",
   "threadHydrationTakingLongTitle": "대화 복원에 시간이 걸리고 있습니다",
   "threadHydrationTakingLongDescription": "이벤트 스트림이 아직 동기화되지 않았습니다. 연결을 다시 시도할 수 있습니다.",
-  "threadHydrationRetry": "연결 다시 시도"
+  "threadHydrationRetry": "연결 다시 시도",
+  "sidebarWorkspaceAddFolder": "프로젝트에 폴더 추가",
+  "sidebarWorkspaceRemoveFolder": "프로젝트에서 {{name}} 제거",
+  "workspaceFolderSameAsPrimary": "That folder is already the project root.",
+  "workspaceFolderDuplicate": "That folder is already in this project.",
+  "workspaceFolderNested": "That folder overlaps another folder in this project.",
+  "workspaceFolderLimit": "A project can include at most 32 extra folders.",
+  "workspaceFolderMissing": "Choose a folder to add to this project.",
+  "workspaceFolderMissingPrimary": "Open a project first, then add another folder to it.",
+  "composerWorkspaceExtraHint": "Git, plan worktrees, and the default shell stay on the primary folder.",
+  "fileTreeGitUsesPrimary": "Git and plan commands use the primary folder."
 }

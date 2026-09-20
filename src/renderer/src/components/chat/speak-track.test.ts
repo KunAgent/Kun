@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { localKokoroTrackKey } from '@shared/local-kokoro-tracks'
+import { localSanottsTrackKey } from '@shared/local-sanotts-tracks'
 import { speakTrackStored } from '../../stores/speak-track-store'
 import { speakTrackKeyFor } from './speak-controller'
 
 const SETTINGS = {
   enabled: true,
   keepTracks: true,
-  model: 'kokoro-82m-int8' as const,
-  voice: 'af_heart' as const,
+  voice: 'amy' as const,
   speed: 1,
   downloadSource: 'huggingface' as const,
   autoDownload: true
@@ -24,9 +23,6 @@ const ANSWER = [
 ].join('\n')
 
 describe('speakTrackKeyFor', () => {
-  // The key is built from the spoken text, so markdown that never reaches the
-  // model - a fenced code block, a heading marker - cannot invalidate a
-  // recording that would sound identical.
   it('ignores markdown that is not spoken', () => {
     const withCode = speakTrackKeyFor(ANSWER, SETTINGS)
     const withoutCode = speakTrackKeyFor(
@@ -39,9 +35,8 @@ describe('speakTrackKeyFor', () => {
 
   it('matches the shared key for the text that will be spoken', () => {
     expect(speakTrackKeyFor('One sentence.', SETTINGS)).toBe(
-      localKokoroTrackKey({
+      localSanottsTrackKey({
         text: 'One sentence.',
-        modelId: SETTINGS.model,
         voiceId: SETTINGS.voice,
         speed: SETTINGS.speed
       })
@@ -49,7 +44,7 @@ describe('speakTrackKeyFor', () => {
   })
 
   it('changes when the voice settings change', () => {
-    expect(speakTrackKeyFor(ANSWER, { ...SETTINGS, voice: 'bm_george' }))
+    expect(speakTrackKeyFor(ANSWER, { ...SETTINGS, voice: 'chinese' }))
       .not.toBe(speakTrackKeyFor(ANSWER, SETTINGS))
     expect(speakTrackKeyFor(ANSWER, { ...SETTINGS, speed: 1.25 }))
       .not.toBe(speakTrackKeyFor(ANSWER, SETTINGS))

@@ -28,6 +28,7 @@ export type UseTimelineScrollResult = {
   hasEarlierTurns: boolean
   loadEarlierTurns: (options?: { userInitiated?: boolean }) => void
   collapseEarlierTurns: () => void
+  revealTurnAtIndex: (index: number) => void
 }
 
 export function shouldCollapseTimelineHistory(totalTurns: number, pageSize: number): boolean {
@@ -235,6 +236,14 @@ export function useTimelineScroll({
     setVisibleTurnCount(pageSize)
   }, [pageSize])
 
+  const revealTurnAtIndex = useCallback((index: number): void => {
+    invalidateScrollOperations()
+    stickToBottomRef.current = false
+    historyExpansionRequestedRef.current = true
+    busyStateRef.current = { threadId: activeThreadId, busy }
+    setVisibleTurnCount((count) => Math.min(totalTurns, Math.max(count, totalTurns - index)))
+  }, [activeThreadId, busy, invalidateScrollOperations, totalTurns])
+
   // A freshly submitted user turn should become visible even if the user was
   // reading older history before pressing Enter. Runs as a layout effect so the
   // stick-to-bottom intent is set before the snap effect below pins (issue #603).
@@ -421,6 +430,7 @@ export function useTimelineScroll({
     hiddenTurnCount,
     hasEarlierTurns,
     loadEarlierTurns,
-    collapseEarlierTurns
+    collapseEarlierTurns,
+    revealTurnAtIndex
   }
 }

@@ -6,7 +6,7 @@ import type {
   DesktopStartupPhase,
   DesktopStartupStatePayload
 } from '@shared/desktop-startup-state'
-import { StartupGate, STARTUP_STATE_TIMEOUT_MS } from './StartupGate'
+import { StartupGate, STARTUP_STATE_TIMEOUT_MS, withModuleImportRetry } from './StartupGate'
 
 const appMock = vi.hoisted(() => ({
   prepareWorkbenchApp: vi.fn<() => Promise<void>>(async () => undefined)
@@ -263,6 +263,20 @@ describe('StartupGate', () => {
     expect(container.textContent).toContain('Failed to start Kun workbench')
     expect(container.textContent).toContain('shared storage unavailable')
     expect(container.querySelector('button')?.textContent).toBe('Retry')
+  })
+
+  it('retries module script import failures without waiting', async () => {
+    const run = vi.fn()
+      .mockRejectedValueOnce(new Error('Importing a module script failed.'))
+      .mockResolvedValueOnce('ok')
+    await expect(withModuleImportRetry(run, 3, 0)).resolves.toBe('ok')
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry unrelated workbench boot errors', async () => {
+    const run = vi.fn().mockRejectedValueOnce(new Error('shared storage unavailable'))
+    await expect(withModuleImportRetry(run, 3, 0)).rejects.toThrow('shared storage unavailable')
+    expect(run).toHaveBeenCalledTimes(1)
   })
 
   it('shows an error view when initial workbench preparation fails', async () => {

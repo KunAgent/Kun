@@ -318,6 +318,9 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
     conversationVisualization: {
       enabled: lab?.conversationVisualization?.enabled === true
     },
+    opencodeReferenceBranches: { enabled: lab?.opencodeReferenceBranches?.enabled === true },
+    claudeCodeReferenceBranches: { enabled: lab?.claudeCodeReferenceBranches?.enabled === true },
+    codexReferenceBranches: { enabled: lab?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: lab?.projectBoard?.enabled === true
     }

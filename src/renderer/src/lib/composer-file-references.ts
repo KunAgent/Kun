@@ -47,7 +47,7 @@ function isComposerFileReferenceKind(value: unknown): value is ComposerFileRefer
 
 export function parseComposerFileReferenceDragData(
   raw: string,
-  expectedWorkspaceRoot?: string
+  expectedWorkspaceRoots?: string | readonly string[]
 ): ComposerFileReference | null {
   if (!raw || raw.length > MAX_COMPOSER_FILE_REFERENCE_DRAG_BYTES) return null
   if (new TextEncoder().encode(raw).byteLength > MAX_COMPOSER_FILE_REFERENCE_DRAG_BYTES) return null
@@ -80,23 +80,32 @@ export function parseComposerFileReferenceDragData(
           ? { workspaceRoot: normalizeSlashes(value.workspaceRoot) }
           : {})
     }
-    const expectedRoot = trimTrailingSlash(expectedWorkspaceRoot ?? '')
-    if (!expectedRoot) return reference
+    const expectedRoots = (Array.isArray(expectedWorkspaceRoots)
+      ? expectedWorkspaceRoots
+      : expectedWorkspaceRoots
+        ? [expectedWorkspaceRoots]
+        : []
+    ).map((root) => trimTrailingSlash(root)).filter(Boolean)
+    if (!expectedRoots.length) return reference
 
-    const expectedRelativePath = relativeWorkspacePath(reference.path, expectedRoot)
-    if (
-      normalizeForCompare(expectedRelativePath) === normalizeForCompare(reference.path) ||
-      normalizeForCompare(expectedRelativePath) !== normalizeForCompare(reference.relativePath)
-    ) {
-      return null
-    }
-    if (
-      reference.workspaceRoot != null &&
-      normalizeForCompare(reference.workspaceRoot) !== normalizeForCompare(expectedRoot)
-    ) {
-      return null
-    }
-    return { ...reference, workspaceRoot: expectedRoot }
+    const matchingRoot = expectedRoots.find((expectedRoot) => {
+      const expectedRelativePath = relativeWorkspacePath(reference.path, expectedRoot)
+      if (
+        normalizeForCompare(expectedRelativePath) === normalizeForCompare(reference.path) ||
+        normalizeForCompare(expectedRelativePath) !== normalizeForCompare(reference.relativePath)
+      ) {
+        return false
+      }
+      if (
+        reference.workspaceRoot != null &&
+        normalizeForCompare(reference.workspaceRoot) !== normalizeForCompare(expectedRoot)
+      ) {
+        return false
+      }
+      return true
+    })
+    if (!matchingRoot) return null
+    return { ...reference, workspaceRoot: matchingRoot }
   } catch {
     return null
   }
@@ -114,24 +123,53 @@ export function relativeWorkspacePath(path: string, workspaceRoot: string): stri
   return normalizedPath
 }
 
+export function owningComposerWorkspaceRoot(path: string, roots: readonly string[]): string {
+  let match = ''
+  let matchLength = 0
+  const key = normalizeForCompare(path)
+  for (const root of roots) {
+    const rootKey = normalizeForCompare(root)
+    if (!rootKey) continue
+    if (key === rootKey || key.startsWith(`${rootKey}/`)) {
+      if (rootKey.length >= matchLength) {
+        match = trimTrailingSlash(root)
+        matchLength = rootKey.length
+      }
+    }
+  }
+  return match
+}
+
 export function composerFileReferenceFromPath(
   path: string,
-  workspaceRoot: string
+  workspaceRoot: string | readonly string[]
 ): ComposerFileReference {
+  const roots = (typeof workspaceRoot === 'string' ? [workspaceRoot] : workspaceRoot)
+    .map((root) => trimTrailingSlash(root))
+    .filter(Boolean)
+  const owning = owningComposerWorkspaceRoot(path, roots) || roots[0] || ''
   const normalizedPath = normalizeSlashes(path)
-  const relativePath = relativeWorkspacePath(normalizedPath, workspaceRoot)
-  const insideWorkspace = normalizeForCompare(relativePath) !== normalizeForCompare(normalizedPath)
+  const relativePath = relativeWorkspacePath(normalizedPath, owning)
+  const insideWorkspace = Boolean(owning) &&
+    normalizeForCompare(relativePath) !== normalizeForCompare(normalizedPath)
   return {
     path: normalizedPath,
     relativePath,
     name: normalizedPath.split('/').filter(Boolean).pop() || normalizedPath,
     type: 'file',
-    ...(insideWorkspace ? {} : { workspaceRoot: null })
+    workspaceRoot: insideWorkspace ? owning : null
   }
 }
 
-export function composerFileReferenceKey(reference: Pick<ComposerFileReference, 'relativePath'>): string {
-  return normalizeForCompare(reference.relativePath)
+export function composerFileReferenceKey(
+  reference: Pick<ComposerFileReference, 'relativePath' | 'workspaceRoot'>
+): string {
+  const relative = normalizeForCompare(reference.relativePath)
+  if (reference.workspaceRoot == null) return relative
+  const root = typeof reference.workspaceRoot === 'string'
+    ? normalizeForCompare(reference.workspaceRoot)
+    : ''
+  return root ? `${root}::${relative}` : relative
 }
 
 export function isComposerDirectoryReference(

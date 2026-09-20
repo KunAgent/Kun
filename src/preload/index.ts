@@ -10,7 +10,8 @@ import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorizati
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
-import { kokoroSpeechBridge } from './kokoro-speech-bridge'
+import { sanottsSpeechBridge } from './sanotts-speech-bridge'
+import { onIpcEvent } from './ipc-event'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -95,6 +96,7 @@ const api = {
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
   ...runtimeRequestPreloadApi,
+  setRoomPermissions: (request) => ipcRenderer.invoke('room:permissions:set', request),
   gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),
@@ -365,7 +367,7 @@ const api = {
     ipcRenderer.on('speech:local-whisper:progress', wrapped)
     return () => ipcRenderer.removeListener('speech:local-whisper:progress', wrapped)
   },
-  ...kokoroSpeechBridge,
+  ...sanottsSpeechBridge,
   listWriteInlineCompletionDebugEntries: () =>
     ipcRenderer.invoke('write:inline-completion-debug:list'),
   clearWriteInlineCompletionDebugEntries: () =>
@@ -430,6 +432,7 @@ const api = {
     ipcRenderer.on('runtime:status', wrapped)
     return () => ipcRenderer.removeListener('runtime:status', wrapped)
   },
+  onAppQuitting: (handler) => onIpcEvent('app:quitting', handler),
   onRuntimeSettingsSyncStatus: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
@@ -675,6 +678,19 @@ const api = {
     ) => handler(payload)
     ipcRenderer.on('terminal:exit', wrapped)
     return () => ipcRenderer.removeListener('terminal:exit', wrapped)
+  },
+  remoteAccessGetStatus: () => ipcRenderer.invoke('remote:status:get'),
+  remoteAccessSetConfig: (patch) => ipcRenderer.invoke('remote:config:set', patch),
+  remoteAccessSetPassword: (password) => ipcRenderer.invoke('remote:password:set', password),
+  remoteAccessRevokeSessions: () => ipcRenderer.invoke('remote:sessions:revoke'),
+  remoteAccessDetectTailscale: () => ipcRenderer.invoke('remote:tailscale:detect'),
+  onRemoteAccessStatusChanged: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('remote:status-changed', wrapped)
+    return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
   }
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

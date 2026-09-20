@@ -23,6 +23,7 @@ import { stopComputerUseHost } from './computer-use/computer-use-host'
 import { stableSettingsStringify } from './runtime-settings-apply-mode'
 import { mainState } from './main-app-context'
 import { isAppQuitInProgress, runtimeShutdown } from './main-lifecycle'
+import { desktopProcessStack } from './runtime/desktop-process-stack'
 
 export async function probeRuntimeApi(settings: AppSettingsV1): Promise<
   | { ok: true }
@@ -102,7 +103,15 @@ export const RUNTIME_HUNG_CONFIRM_MS = 10_000
 const RUNTIME_WATCHDOG_INTERVAL_MS = 10_000
 export const runtimeSupervisor = new KunRuntimeSupervisor<AppSettingsV1>({
   deps: {
-    loadSettings: () => mainState.store.load(),
+    loadSettings: async () => {
+      try { return await mainState.store.load() } catch (error) {
+        const manager = desktopProcessStack.managerChild()
+        if (manager && (manager.exitCode !== null || manager.signalCode !== null) && mainState.settledRuntimeSettings) {
+          return mainState.settledRuntimeSettings
+        }
+        throw error
+      }
+    },
     canAutoRestart: managedKunHostCanAutoStart,
     ensureRuntime: (settings) => mainState.ensureRuntime(settings),
     restartRuntime: (settings) => mainState.restartRuntime(settings),

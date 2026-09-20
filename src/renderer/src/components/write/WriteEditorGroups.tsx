@@ -166,11 +166,11 @@ export function WriteEditorGroups({
     void openFile(workspaceRoot, path, { groupId })
   }
 
-  const submitWhiteboardTitle = (title: string): void => {
+  const submitWhiteboardTitle = (title: string, engine?: import('../../whiteboard/canvas-engine').CanvasEngine): void => {
     const groupId = pendingWhiteboardGroupId
     if (!groupId) return
     setCreatingWhiteboard(true)
-    void createWhiteboard(workspaceRoot, { title, groupId }).then((board) => {
+    void createWhiteboard(workspaceRoot, { title, groupId, ...(engine ? { engine } : {}) }).then((board) => {
       setCreatingWhiteboard(false)
       if (board) setPendingWhiteboardGroupId(null)
     })

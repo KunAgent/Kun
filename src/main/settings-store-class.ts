@@ -164,6 +164,9 @@ export class JsonSettingsStore {
       return runtimeTuning !== undefined &&
         kunRuntimeTuningDefaultsMigrationNeeded(runtimeTuning)
     })()
+    const storedBehavior = isRecord(parsed.appBehavior) ? parsed.appBehavior : {}
+    const persistCloseBehaviorMigration = ('closeAction' in storedBehavior || 'closeToTray' in storedBehavior) &&
+      (storedBehavior.closeAction !== 'quit' || storedBehavior.closeToTray !== false)
     const normalized = normalizeStoredSettings(buildMergedSettings(parsed as Partial<AppSettingsV1>))
     await ensureManagedWorkspaceRootsExist(normalized)
     const prepared = normalized
@@ -179,7 +182,7 @@ export class JsonSettingsStore {
     const migration = await this.prepareCredentialMigration(prepared, false)
     if (migration === undefined) {
       this.cache = prepared
-      if (sourcePath !== this.path || persistRuntimeTuningDefaultsMigration) {
+      if (sourcePath !== this.path || persistRuntimeTuningDefaultsMigration || persistCloseBehaviorMigration) {
         if (this.rejectsPlaintextCredentials(prepared)) {
           console.warn(
             '[kun-gui] Settings compatibility rewrite deferred because protected credential storage is unavailable.'
@@ -191,6 +194,15 @@ export class JsonSettingsStore {
       return this.cache
     }
     if (migration === null) {
+      if (persistCloseBehaviorMigration) {
+        // Credential hydration can be unavailable even for a secret-free
+        // document. Commit only the legacy close preference from the original
+        // snapshot; never write an ephemeral/partially hydrated projection.
+        await this.persistSerializedSettings(JSON.stringify({
+          ...parsed,
+          appBehavior: { ...storedBehavior, closeAction: 'quit', closeToTray: false }
+        }, null, 2))
+      }
       this.cache = prepared
       return this.cache
     }
@@ -198,7 +210,8 @@ export class JsonSettingsStore {
     const shouldPersist =
       sourcePath !== this.path ||
       migration.removedPlaintext ||
-      persistRuntimeTuningDefaultsMigration
+      persistRuntimeTuningDefaultsMigration ||
+      persistCloseBehaviorMigration
     if (shouldPersist) {
       try {
         await this.persistSettings(migration.persistedSettings)
@@ -394,7 +407,13 @@ export class JsonSettingsStore {
     settings: AppSettingsV1,
     expectedRevision = this.documentRevision
   ): Promise<void> {
-    const serialized = serializeSettingsForDisk(settings)
+    await this.persistSerializedSettings(serializeSettingsForDisk(settings), expectedRevision)
+  }
+
+  private async persistSerializedSettings(
+    serialized: string,
+    expectedRevision = this.documentRevision
+  ): Promise<void> {
     if (this.options.documentBackend) {
       const revision = expectedRevision ?? (await this.options.documentBackend.read()).revision
       const committed = await this.options.documentBackend.write(revision, serialized)

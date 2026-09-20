@@ -196,10 +196,28 @@ Changelog 记录公开 Extension API，而不是 Kun 内部重构。每项包含
 下面的 public surface 快照由文档门禁从 package 入口、公开 export 和可达 `.d.ts` 计算。只有在本节已经解释兼容性影响后才更新快照；不能把更新 hash 当成 Changelog 条目。
 
 <!-- BEGIN GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
-<!-- sdk-surface-snapshot @kun/extension-api@1.4.0 sha256:2a1dd3410cd89e76b70c7752cca01442d6c42cb5dd4c78e7a96591ef8aed862b -->
+<!-- sdk-surface-snapshot @kun/extension-api@1.5.0 sha256:61cd434273bbcc962dfa974e19120a7493247b2f79352186edd648947b9dfdb6 -->
 <!-- sdk-surface-snapshot @kun/extension-react@1.4.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
 <!-- sdk-surface-snapshot @kun/extension-test@1.4.0 sha256:9aa234e9c62776edab832924aef8f925f68679732e8ab08626c21ffabd42e28e -->
 <!-- END GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
+
+### v1.5.0 — 全局容量与只读 Rooms
+
+适用 Kun：声明支持 Extension API `1.5.0` 的构建。
+
+Added：
+
+- `agent.capacity()` 与 `agent.capacity.read` 只暴露包含 rooms 在内的全 surface running/queued turn 计数、admission 容量和 `busy`。
+- `context.rooms` 新增 `list`、`listMessages`、`listTasks` 和 `listEvents`，使用 strict schema、有界分页和独立 `rooms.read` 权限。
+
+Security：
+
+- 只有 `rooms.read` 授权可以读取本地房间信任域；既有 Agent/thread 所有权检查不变，不增加房间写操作或审批能力。
+- 只读投影省略仓库/附件路径、prompt、凭据、工具原始参数/结果和内部 turn/lease/dispatch 状态；允许读取房间消息正文。
+
+Migration：
+
+- `@kun/extension-api` 升级到 `1.5.0`；既有 v1.4 至 v1.0 Manifest 继续兼容。新调用需要声明对应权限；可选容量调用者可通过 `context.agent.capacity?.()` 兼容旧 Host。
 
 ### v1.4.0 — 可恢复的 Agent 会话历史
 

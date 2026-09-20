@@ -44,6 +44,7 @@ import type {
   DesignTaskProfileInput
 } from '../agent/design-task-profile'
 import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
+import type { CodeWorkspaceFolderSetsRegistry } from '../lib/code-workspace-folder-sets'
 import type { RemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspaces'
 
 export type QueuedUserMessage = {
@@ -93,6 +94,7 @@ export type QueuedUserMessage = {
     title?: string
   }
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   /** True only for the product Design surface; Code whiteboards leave this unset. */
   guiDesignMode?: boolean
   /** Turn-scoped persona text resolved from the composer preset. */
@@ -173,6 +175,7 @@ export type SendMessageOverrides = {
   orchestration?: 'direct' | 'graph'
   guiPlan?: GuiPlanMessageContext
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   /** Turn-scoped persona text resolved from the composer preset. */
   persona?: string
@@ -213,7 +216,7 @@ export type ClearDesignHistoryResult = {
 export type InitialSetupMode = 'required' | 'preview'
 import type { SettingsRouteSection } from './settings-route-sections'
 export type { SettingsRouteSection }
-export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
+export type AppRoute = 'chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -300,6 +303,8 @@ export type ChatState = {
   runtimeConnection: RuntimeConnectionStatus
   runtimeStatus: KunRuntimeStatusPayload | null
   codeWorkspaceRoots: string[]
+  /** Extra folders attached to a Code project; persisted in localStorage. */
+  codeWorkspaceFolderSets: CodeWorkspaceFolderSetsRegistry
   /** Projects hidden from the Code sidebar/picker; persisted in localStorage. */
   removedCodeWorkspaces: RemovedCodeWorkspacesRegistry
   threads: NormalizedThread[]
@@ -532,6 +537,10 @@ export type ChatState = {
    * whole project identity is hidden at once.
    */
   removeWorkspace: (workspacePath: string, relatedPaths?: string[]) => Promise<void>
+  /** Add a sibling directory to the current Code project without creating a new project. */
+  addWorkspaceFolder: (workspacePath?: string) => Promise<boolean>
+  /** Remove a previously attached extra directory from a Code project. */
+  removeWorkspaceFolder: (workspacePath: string, extraRoot: string) => Promise<boolean>
   refreshThreads: () => Promise<void>
   /** Reconcile targeted push invalidations or run a legacy discovery scan. */
   syncSidebarActivity: (options?: {

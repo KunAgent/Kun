@@ -1,7 +1,8 @@
 import {
   dialog,
   ipcMain,
-  type BrowserWindow
+  type BrowserWindow,
+  type IpcMainInvokeEvent
 } from 'electron'
 import {
   homedir
@@ -62,6 +63,7 @@ import {
   sameProjectWorkspace,
   validateMcpConfigContent
 } from './app-ipc-handler-utils'
+import { isRemoteClientSender } from '../remote/remote-sender'
 
 export function registerAppKunConfigIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const {
@@ -170,7 +172,7 @@ export function registerAppKunConfigIpcHandlers(options: RegisterAppIpcHandlersO
     return projectConfigFileResult(written.workspaceRoot)
   })
 
-  ipcMain.handle('kun:project-config:trust', async (_, payload: unknown) => {
+  ipcMain.handle('kun:project-config:trust', async (event: IpcMainInvokeEvent, payload: unknown) => {
     const request = parseIpcPayload(
       'kun:project-config:trust',
       kunProjectConfigTrustPayloadSchema,
@@ -225,9 +227,13 @@ export function registerAppKunConfigIpcHandlers(options: RegisterAppIpcHandlersO
       noLink: true
     }
     const mainWindow = getMainWindow()
-    const confirmation = mainWindow && !mainWindow.isDestroyed()
-      ? await showMainWindowMessageBox(mainWindow, confirmationOptions)
-      : await dialog.showMessageBox(confirmationOptions)
+    // Remote clients review and confirm inside their own UI; a host-side
+    // native prompt would be invisible, so their invoke is the consent.
+    const confirmation = isRemoteClientSender(event.sender)
+      ? { response: 0, checkboxChecked: false }
+      : mainWindow && !mainWindow.isDestroyed()
+        ? await showMainWindowMessageBox(mainWindow, confirmationOptions)
+        : await dialog.showMessageBox(confirmationOptions)
     if (confirmation.response !== 0) {
       return projectConfigFileResult(canonicalRoot, current)
     }

@@ -9,5 +9,9 @@
   "modelErrorNoResponseSummary": "モデルリクエストは送信されましたが、プロバイダーから応答がありません",
   "modelErrorNotSentSummary": "モデルリクエストは送信前に失敗しました",
   "modelErrorProviderOriginalMessage": "プロバイダーから返されたメッセージ",
-  "modelErrorFailureMessage": "失敗理由"
+  "modelErrorFailureMessage": "失敗理由",
+  "outputTruncatedNotice": "応答がモデルの 1 回あたりの出力上限（max output tokens）で途中で切れました。これは生成の上限であり、アカウント残高の問題ではありません。Kun は自動で続行を試みました。「タスクを続行」で再開するか、設定 > Providers > モデル > Max output (tokens) で上限を引き上げてください。",
+  "continueTruncatedTaskPrompt": "前回の応答が途切れた箇所から続けてください。各応答を短く保ち、残りの作業を小さなステップに分けてください。",
+  "runtimeFetchFailedAutoStart": "Kun に接続できません。自動起動はすでに有効です。ローカルランタイムがクラッシュしたか、まだ再起動中の可能性があります。再試行するか、Kun を再起動してログを確認してください。",
+  "openProviderSettings": "プロバイダー設定"
 }

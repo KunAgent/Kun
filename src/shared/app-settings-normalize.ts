@@ -53,6 +53,10 @@ import { normalizeWriteSettings } from './app-settings-write'
 import { normalizeCodeAgentPresets } from './app-settings-code-agents'
 import { normalizeDesignSettings } from './app-settings-design'
 import { normalizeTerminalSettings, type TerminalSettingsPatchV1 } from './app-settings-terminal'
+import {
+  normalizeRemoteAccessSettings,
+  type RemoteAccessSettingsPatchV1
+} from './app-settings-remote'
 import { normalizeDarkUiColors } from './app-settings-dark-ui'
 
 export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
@@ -72,6 +76,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     design?: DesignSettingsPatchV1
     guiUpdate?: Partial<GuiUpdateConfigV1>
     terminal?: TerminalSettingsPatchV1
+    remote?: RemoteAccessSettingsPatchV1
     darkUiColors?: Parameters<typeof normalizeDarkUiColors>[0]
   }
   const providerSettings = normalizeModelProviderSettings(maybeSettings.provider)
@@ -152,6 +157,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     workflow: normalizeWorkflowSettings(maybeSettings.workflow),
     design: normalizeDesignSettings(maybeSettings.design),
     terminal: normalizeTerminalSettings(maybeSettings.terminal),
+    remote: normalizeRemoteAccessSettings(maybeSettings.remote),
     guiUpdate: {
       channel: normalizeGuiUpdateChannel(
         maybeSettings.guiUpdate?.channel ?? DEFAULT_GUI_UPDATE_CHANNEL
@@ -365,19 +371,19 @@ export function normalizeAppBehaviorSettings(
   settings?: Partial<AppBehaviorConfigV1>
 ): AppBehaviorConfigV1 {
   const openAtLogin = settings?.openAtLogin === true
-  const closeAction = normalizeWindowCloseAction(settings?.closeAction)
-    ?? (settings?.closeToTray === true ? 'tray' : 'ask')
+  const closeAction = normalizeWindowCloseAction(settings?.closeAction) ?? 'quit'
   return {
     openAtLogin,
     startMinimized: openAtLogin && settings?.startMinimized === true,
     keepAwake: settings?.keepAwake === true,
     useSystemTitleBar: settings?.useSystemTitleBar === true,
     closeAction,
-    closeToTray: closeAction === 'tray'
+    closeToTray: false
   }
 }
 
 export function normalizeWindowCloseAction(value: unknown): WindowCloseAction | null {
+  if (value === 'ask' || value === 'tray') return 'quit'
   return typeof value === 'string' && WINDOW_CLOSE_ACTIONS.includes(value as WindowCloseAction)
     ? value as WindowCloseAction
     : null
@@ -387,17 +393,7 @@ export function mergeAppBehaviorSettings(
   current: AppBehaviorConfigV1,
   patch?: Partial<AppBehaviorConfigV1>
 ): AppBehaviorConfigV1 {
-  const translatedPatch: Partial<AppBehaviorConfigV1> | undefined =
-    patch && patch.closeAction === undefined && patch.closeToTray !== undefined
-      ? {
-          ...patch,
-          closeAction: patch.closeToTray ? 'tray' : 'quit'
-        }
-      : patch
-  return normalizeAppBehaviorSettings({
-    ...current,
-    ...(translatedPatch ?? {})
-  })
+  return normalizeAppBehaviorSettings({ ...current, ...patch })
 }
 
 function shouldMigrateLegacySettings(settings: AppSettingsV1): boolean {

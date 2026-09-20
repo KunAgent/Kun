@@ -1,0 +1,17 @@
+.room-approval-card { padding: 14px 16px; border: 1px solid var(--ds-border); border-radius: 16px; background: var(--ds-surface-card); color: var(--ds-text); }
+.room-approval-card header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.room-approval-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--ds-accent-soft); color: var(--ds-text-muted); }
+.room-approval-card header strong { display: block; font-size: 13px; font-weight: 550; }
+.room-approval-card header small { display: block; margin-top: 3px; font-size: 11px; color: var(--ds-text-muted); }
+.room-approval-command { display: flex; gap: 8px; padding: 10px 12px; margin: 0; max-height: 130px; overflow: auto; border-radius: 10px; background: var(--ds-surface-hover); font: 12px/1.6 ui-monospace,monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.room-approval-command svg { margin-top: 3px; flex-shrink: 0; }.room-approval-command code { min-width: 0; }
+.room-approval-workspace { display: flex; align-items: center; gap: 6px; margin: 8px 0; color: var(--ds-text-muted); font-size: 11px; }
+.room-approval-workspace span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-approval-card footer { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.room-approval-card footer details { flex: 1; min-width: 0; font-size: 11px; color: var(--ds-text-muted); }.room-approval-card summary { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+.room-approval-card details p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 140px; overflow: auto; padding: 8px 0; }
+.room-approval-card footer > button { padding: 7px 12px; border: 1px solid var(--ds-border); border-radius: 9px; font-size: 12px; text-decoration: none; }
+.room-approval-card button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.room-approval-card .room-approval-allow { background: var(--ds-text); color: var(--ds-bg-main); border-color: transparent; }.room-approval-card button:disabled { opacity: .55; }
+.room-permission-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 5px 8px 0; font-size: 11px; color: var(--ds-text-muted); }
+.room-permission-scope { margin-left: auto; color: var(--ds-text-muted); font-size: 10px; }.room-permission-picker [role=alert] { flex-basis: 100%; }

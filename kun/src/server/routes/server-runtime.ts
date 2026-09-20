@@ -106,6 +106,7 @@ import type { ProviderQuotaService } from '../../services/provider-quota-service
 import type { ToolCancellationService } from '../../services/tool-cancellation-service.js'
 import type { KnowledgeBaseService } from '../../knowledge/knowledge-base-service.js'
 import type { ProjectBoardService } from '../../services/project-board-service.js'
+import type { RoomRuntime } from '../../rooms/room-runtime.js'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -172,7 +173,9 @@ export type ExtensionPlatformRuntime = {
  * file-backed adapters without leaking concrete types into routes.
  */
 export type ServerRuntime = {
+  historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
+  rooms?: RoomRuntime
   projectBoardService?: ProjectBoardService
   turnService: TurnService
   toolCancellationService?: ToolCancellationService

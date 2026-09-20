@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createDesignApplyExcalidrawTool,
   createDesignCanvasTool,
   createDesignCreateDiagramTool,
   createDesignCreateScreenTool,
@@ -10,6 +11,7 @@ import {
   createDesignValidateTool,
   createWorkRenameWhiteboardTool,
   DESIGN_CANVAS_TOOL_NAME,
+  DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
   DESIGN_CREATE_DIAGRAM_TOOL_NAME,
   DESIGN_CREATE_SCREEN_TOOL_NAME,
   DESIGN_EXPORT_CANVAS_TOOL_NAME,
@@ -46,6 +48,29 @@ describe('design_canvas tool', () => {
     expect(JSON.stringify(tool.inputSchema)).toContain('non-overlapping slot')
     expect(tool.shouldAdvertise?.(context(true))).toBe(true)
     expect(tool.shouldAdvertise?.(context(false))).toBe(false)
+  })
+
+  it('advertises design_apply_excalidraw only on Excalidraw canvas turns', async () => {
+    const apply = createDesignApplyExcalidrawTool()
+    const shapes = createDesignUpdateShapesTool()
+    const diagram = createDesignCreateDiagramTool()
+    const excalidrawContext = { ...context(false), guiExcalidrawCanvas: true }
+    expect(apply.name).toBe(DESIGN_APPLY_EXCALIDRAW_TOOL_NAME)
+    expect(apply.shouldAdvertise?.(excalidrawContext)).toBe(true)
+    expect(apply.shouldAdvertise?.(context(true))).toBe(false)
+    expect(shapes.shouldAdvertise?.(excalidrawContext)).toBe(false)
+    expect(shapes.shouldAdvertise?.(context(true))).toBe(true)
+    expect(diagram.shouldAdvertise?.(excalidrawContext)).toBe(false)
+    const result = await apply.execute({}, excalidrawContext)
+    expect(result.isError).toBeUndefined()
+    expect(result.output).toMatchObject({
+      ok: true,
+      tool: DESIGN_APPLY_EXCALIDRAW_TOOL_NAME,
+      action: 'apply_excalidraw',
+      status: 'accepted',
+      receiptKey: expect.stringMatching(/^design-receipt-[a-f0-9]{32}$/),
+      ops: [{ op: 'apply-excalidraw' }]
+    })
   })
 
   it('normalizes add_screen calls to renderer shape ops', async () => {
@@ -138,6 +163,11 @@ describe('dedicated design tools', () => {
     expect(tool.name).toBe(WORK_RENAME_WHITEBOARD_TOOL_NAME)
     expect(tool.shouldAdvertise?.(workContext)).toBe(true)
     expect(tool.shouldAdvertise?.({ ...workContext, guiDesignCanvas: undefined })).toBe(false)
+    expect(tool.shouldAdvertise?.({
+      ...workContext,
+      guiDesignCanvas: undefined,
+      guiExcalidrawCanvas: true
+    })).toBe(true)
     expect(tool.shouldAdvertise?.({ ...workContext, agentSurface: 'code' })).toBe(false)
     expect(tool.shouldAdvertise?.({ ...workContext, agentSurface: 'design' })).toBe(false)
 

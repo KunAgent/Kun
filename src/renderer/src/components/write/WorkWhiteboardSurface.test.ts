@@ -27,6 +27,19 @@ vi.mock('../design/canvas/CanvasViewport', async () => {
   }
 })
 
+vi.mock('../../whiteboard/excalidraw-surface', async () => {
+  const { createElement } = await import('react')
+  return {
+    ExcalidrawSurface: (props: Record<string, unknown>) => createElement('div', {
+      'data-mock-excalidraw': props.identityId
+    }),
+    CanvasEngineSwitcher: (props: Record<string, unknown>) => createElement('div', {
+      'data-canvas-engine-switcher': 'true',
+      'data-engine': props.engine
+    })
+  }
+})
+
 vi.mock('../design/canvas/PropertiesPanel', async () => {
   const { createElement } = await import('react')
   return {
@@ -35,6 +48,10 @@ vi.mock('../design/canvas/PropertiesPanel', async () => {
     })
   }
 })
+
+vi.mock('../../whiteboard/use-apply-excalidraw-live', () => ({
+  useApplyExcalidrawLive: () => undefined
+}))
 
 vi.mock('../../design/canvas/use-apply-shape-ops-live', () => ({
   useApplyShapeOpsLive: (...args: unknown[]) => mocks.applyLive(...args)
@@ -314,5 +331,35 @@ describe('WorkWhiteboardSurface', () => {
     expect(open).toBeDefined()
     act(() => open!.props.onClick())
     expect(onOpenOutput).toHaveBeenCalledWith('/work/presentations/final.pptx')
+  })
+
+  it('hosts Excalidraw instead of ShapeOps when the board engine is excalidraw', async () => {
+    useWriteWorkspaceStore.setState({
+      whiteboards: {
+        'board-1': {
+          id: 'board-1',
+          title: 'Architecture',
+          workspaceRoot: '/work',
+          threadId: 'thread-1',
+          phase: 'blank',
+          revision: 1,
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+          engine: 'excalidraw'
+        }
+      }
+    })
+    const view = await render(createElement(WorkWhiteboardSurface, {
+      workspaceRoot: '/work',
+      boardId: 'board-1',
+      activeThreadId: 'thread-1',
+      title: 'Architecture',
+      phase: 'blank',
+      writable: true
+    }))
+    expect(view.root.findByProps({ 'data-mock-excalidraw': 'board-1' })).toBeTruthy()
+    expect(view.root.findByProps({ 'data-canvas-engine': 'excalidraw' })).toBeTruthy()
+    expect(view.root.findAllByProps({ 'data-mock-canvas': 'board-1' })).toHaveLength(0)
+    expect(mocks.applyLive).not.toHaveBeenCalled()
   })
 })

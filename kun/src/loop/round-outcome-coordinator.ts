@@ -33,6 +33,24 @@ export {
  * streaming, tool execution, or terminal turn settlement.
  */
 export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
+  /**
+   * A room step's deliverable is its accepted scoped submission
+   * (submit_room_plan, submit_room_review, declare_room_checks,
+   * send_room_message, or an accepted agent handoff). Providers may then end
+   * the turn with a bare reasoning item and no visible output; the durable
+   * submission makes that a normal completion, not an empty response.
+   */
+  private hasAcceptedRoomSubmission(input: RoundOutcomeInput): boolean {
+    if (!input.prepared.toolDiscoveryContext.roomStepKind) return false
+    return input.prepared.history.some((item) =>
+      item.turnId === input.turnId &&
+      item.kind === 'tool_result' &&
+      item.isError !== true &&
+      typeof item.output === 'object' && item.output !== null &&
+      (item.output as { accepted?: unknown }).accepted === true
+    )
+  }
+
   async resolve(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
     if (input.streamed.kind === 'aborted') return 'aborted'
     if (input.streamed.kind === 'context_overflow') return 'failed'
@@ -97,14 +115,14 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
         return this.advancePostToolFailureRecovery(input)
       }
       if (streamSnapshot.stopReason === 'length') {
-        await this.recordOutputTruncated(input)
-        return 'stop'
+        return this.advanceOutputTruncationRecovery(input)
       }
       if (
         streamSnapshot.stopReason === 'stop' &&
         !streamSnapshot.text.trim() &&
         !streamSnapshot.reasoning.trim()
       ) {
+        if (this.hasAcceptedRoomSubmission(input)) return 'stop'
         return this.failEmptyTerminalResponse(input)
       }
       return 'stop'
@@ -115,6 +133,7 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
     this.lastNoToolTextByTurn.delete(input.turnId)
     this.goalNoToolRecoveryStepsByTurn.delete(input.turnId)
     this.emptyPostToolRecoveryStepsByTurn.delete(input.turnId)
+    this.outputTruncationRecoveryStepsByTurn.delete(input.turnId)
     if (input.toolCallsDisabled) {
       const message =
         'Tool calls are disabled during final-answer recovery; the provider-emitted calls were not executed.'

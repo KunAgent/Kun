@@ -16,6 +16,7 @@ import {
   RuntimeSlotBusyError,
   type ServiceManagerState
 } from './service-manager-state.js'
+import { sameAppSessionOwner, type AppSessionOwner } from '../contracts/app-session-owner.js'
 
 /**
  * A replacement Runtime is not admitted until Manager has durably settled
@@ -25,6 +26,9 @@ export function addRuntimeRegistrationRoute(
   router: Router,
   input: {
     managerToken: string
+    appOwner?: AppSessionOwner
+    isDraining?: () => boolean
+    recordParticipant?: (participant: { pid: number; instanceId: string; startedAt: string }) => Promise<void>
     state: ServiceManagerState
     sharedData?: ManagerSharedDataStore
     flushState?: () => Promise<void>
@@ -35,6 +39,7 @@ export function addRuntimeRegistrationRoute(
     request,
     input.managerToken,
     async () => {
+      if (input.isDraining?.()) return jsonResponse({ code: 'manager_stopping' }, 409)
       if (isManagerPersistenceDegraded(input.statePersistence)) return managerPersistenceDegradedResponse()
       const flavor = RuntimeFlavorSchema.safeParse(context.params.flavor)
       if (!flavor.success) return validation('invalid runtime flavor')
@@ -47,7 +52,15 @@ export function addRuntimeRegistrationRoute(
           registration.success ? undefined : registration.error.issues
         )
       }
+      if (input.appOwner && !sameAppSessionOwner(input.appOwner, registration.data.appOwner)) {
+        return jsonResponse({ code: 'app_session_generation_mismatch' }, 409)
+      }
       try {
+        if (input.appOwner) {
+          const foreign = input.state.snapshot().find(({ registration: existing }) =>
+            existing.instanceId !== registration.data.instanceId && processIsAlive(existing.pid))
+          if (foreign) throw new RuntimeSlotBusyError(foreign.registration)
+        }
         const owner = input.state.registration(flavor.data)
         if (
           owner &&
@@ -64,6 +77,9 @@ export function addRuntimeRegistrationRoute(
             flushState: input.flushState
           })
         }
+        if (input.isDraining?.()) return jsonResponse({ code: 'manager_stopping' }, 409)
+        await input.recordParticipant?.(registration.data)
+        if (input.isDraining?.()) return jsonResponse({ code: 'manager_stopping' }, 409)
         const registered = input.state.register(registration.data)
         try {
           await input.flushState?.()

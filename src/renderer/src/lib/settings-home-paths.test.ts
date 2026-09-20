@@ -8,7 +8,7 @@ import {
   defaultScheduleSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   type AppSettingsV1,
   type ClawImChannelV1,
   type ScheduledTaskV1
@@ -146,6 +146,7 @@ function settings(): AppSettingsV1 {
     workflow: defaultWorkflowSettings(),
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     chatWelcomeMessage: '',

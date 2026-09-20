@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { Layers, Palette } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -13,6 +13,8 @@ import { FloatingComposer, type DesignComposerContext } from '../chat/FloatingCo
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { DesignTargetToggle } from './DesignTargetToggle'
+import { DEFAULT_CANVAS_ENGINE, type CanvasEngine } from '../../whiteboard/canvas-engine'
+import { CanvasEngineSwitcher } from '../../whiteboard/excalidraw-surface'
 
 export type DesignDrawingStartProps = {
   leftSidebarCollapsed: boolean
@@ -91,7 +93,20 @@ export function DesignDrawingStart({
   const multiPageMode = useDesignWorkspaceStore((state) => state.multiPageMode)
   const setMultiPageMode = useDesignWorkspaceStore((state) => state.setMultiPageMode)
   const drawingCreationSubmitting = useDesignWorkspaceStore((state) => state.drawingCreationSubmitting)
+  const createDocument = useDesignWorkspaceStore((state) => state.createDocument)
+  const finishDrawingCreation = useDesignWorkspaceStore((state) => state.finishDrawingCreation)
+  const [engine, setEngine] = useState<CanvasEngine>(DEFAULT_CANVAS_ENGINE)
   const interactionBusy = busy || drawingCreationSubmitting
+  const excalidrawMode = engine === 'excalidraw'
+
+  const openExcalidrawBoard = (): void => {
+    if (interactionBusy) return
+    const documentId = createDocument(t('designExcalidrawUntitled'), {
+      titleOrigin: 'user',
+      engine: 'excalidraw'
+    })
+    finishDrawingCreation(documentId)
+  }
 
   return (
     <section className="ds-drag relative flex min-h-0 min-w-0 flex-1 flex-col bg-ds-main">
@@ -116,76 +131,102 @@ export function DesignDrawingStart({
               {t('designDrawingStartTitle')}
             </h1>
             <p className="mx-auto mt-2 max-w-[560px] text-[14px] leading-6 text-ds-muted">
-              {t('designDrawingStartDescription')}
+              {t(excalidrawMode
+                ? 'designDrawingStartExcalidrawDescription'
+                : 'designDrawingStartDescription')}
             </p>
           </div>
 
           <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
-            <DesignTargetToggle
-              designTarget={designTarget}
-              disabled={interactionBusy}
-              disabledReason={interactionBusy ? t('designTargetLockedHint') : undefined}
-              onChange={setDesignTarget}
-            />
-            <button
-              type="button"
-              onClick={() => setMultiPageMode(!multiPageMode)}
-              disabled={interactionBusy}
-              aria-pressed={multiPageMode}
-              title={t('designPagesToggleHint')}
-              className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[12.5px] font-semibold transition disabled:opacity-45 ${
-                multiPageMode
-                  ? 'border-accent bg-accent text-white'
-                  : 'border-ds-border bg-ds-surface-subtle text-ds-muted hover:text-ds-ink dark:bg-white/6'
-              }`}
-            >
-              <Layers className="h-3.5 w-3.5" strokeWidth={1.9} />
-              {t('designPagesToggle')}
-            </button>
-          </div>
-
-          <div data-design-start-composer>
-            <FloatingComposer
-              disabled={interactionBusy}
-              workspaceRootOverride={workspaceRoot}
-              input={input}
-              setInput={setInput}
-              mode={mode}
-              setMode={setMode}
-              busy={busy}
-              runtimeReady={runtimeConnection === 'ready'}
-              hasActiveThread={false}
-              activeThreadIdOverride={null}
-              userInputBlocksOverride={[]}
-              composerModel={composerModel}
-              composerProviderId={composerProviderId}
-              composerPickList={composerPickList}
-              composerModelGroups={composerModelGroups}
-              composerReasoningEffort={composerReasoningEffort}
-              composerFastMode={composerFastMode}
-              onComposerModelChange={setComposerModel}
-              onComposerReasoningEffortChange={setComposerReasoningEffort}
-              onComposerFastModeChange={setComposerFastMode}
-              modelPickerMode="combobox"
-              modelControlVariant="split"
-              showProviderInModelLabel
-              queuedMessages={queuedMessages}
-              onRemoveQueuedMessage={removeQueuedMessage}
-              onGuideQueuedMessage={guideQueuedMessage}
-              attachments={attachments}
-              attachmentUploadEnabled={attachmentUploadEnabled}
-              attachmentUploadBusy={attachmentUploadBusy}
-              attachmentUploadError={attachmentUploadError}
-              contextChips={contextChips}
-              onPickAttachments={onPickAttachments}
-              onPasteClipboardImage={onPasteClipboardImage}
-              onRemoveAttachment={onRemoveAttachment}
-              onRemoveContextChip={onRemoveContextChip}
-              onSend={onSend}
-              onInterrupt={(options) => interruptDesignPagesRun(onInterrupt, options)}
-              onConfigureProviders={onConfigureProviders}
+            <CanvasEngineSwitcher
+              engine={engine}
+              canSwitch={!interactionBusy}
+              onChange={setEngine}
+              kunLabel={t('canvasEngineKun')}
+              excalidrawLabel={t('canvasEngineExcalidraw')}
             />
           </div>
+          {excalidrawMode ? (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                disabled={interactionBusy}
+                data-design-excalidraw-open="true"
+                onClick={openExcalidrawBoard}
+                className="inline-flex h-11 items-center rounded-2xl bg-accent px-5 text-[14px] font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-45"
+              >
+                {t('designExcalidrawOpenBlank')}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+                <DesignTargetToggle
+                  designTarget={designTarget}
+                  disabled={interactionBusy}
+                  disabledReason={interactionBusy ? t('designTargetLockedHint') : undefined}
+                  onChange={setDesignTarget}
+                />
+                <button
+                  type="button"
+                  onClick={() => setMultiPageMode(!multiPageMode)}
+                  disabled={interactionBusy}
+                  aria-pressed={multiPageMode}
+                  title={t('designPagesToggleHint')}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[12.5px] font-semibold transition disabled:opacity-45 ${
+                    multiPageMode
+                      ? 'border-accent bg-accent text-white'
+                      : 'border-ds-border bg-ds-surface-subtle text-ds-muted hover:text-ds-ink dark:bg-white/6'
+                  }`}
+                >
+                  <Layers className="h-3.5 w-3.5" strokeWidth={1.9} />
+                  {t('designPagesToggle')}
+                </button>
+              </div>
+              <div data-design-start-composer>
+                <FloatingComposer
+                  disabled={interactionBusy}
+                  workspaceRootOverride={workspaceRoot}
+                  input={input}
+                  setInput={setInput}
+                  mode={mode}
+                  setMode={setMode}
+                  busy={busy}
+                  runtimeReady={runtimeConnection === 'ready'}
+                  hasActiveThread={false}
+                  activeThreadIdOverride={null}
+                  userInputBlocksOverride={[]}
+                  composerModel={composerModel}
+                  composerProviderId={composerProviderId}
+                  composerPickList={composerPickList}
+                  composerModelGroups={composerModelGroups}
+                  composerReasoningEffort={composerReasoningEffort}
+                  composerFastMode={composerFastMode}
+                  onComposerModelChange={setComposerModel}
+                  onComposerReasoningEffortChange={setComposerReasoningEffort}
+                  onComposerFastModeChange={setComposerFastMode}
+                  modelPickerMode="combobox"
+                  modelControlVariant="split"
+                  showProviderInModelLabel
+                  queuedMessages={queuedMessages}
+                  onRemoveQueuedMessage={removeQueuedMessage}
+                  onGuideQueuedMessage={guideQueuedMessage}
+                  attachments={attachments}
+                  attachmentUploadEnabled={attachmentUploadEnabled}
+                  attachmentUploadBusy={attachmentUploadBusy}
+                  attachmentUploadError={attachmentUploadError}
+                  contextChips={contextChips}
+                  onPickAttachments={onPickAttachments}
+                  onPasteClipboardImage={onPasteClipboardImage}
+                  onRemoveAttachment={onRemoveAttachment}
+                  onRemoveContextChip={onRemoveContextChip}
+                  onSend={onSend}
+                  onInterrupt={(options) => interruptDesignPagesRun(onInterrupt, options)}
+                  onConfigureProviders={onConfigureProviders}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>

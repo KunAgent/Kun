@@ -283,6 +283,13 @@ export function ownerLeaseExpiredTurnMessage(reason: OwnerLeaseExpiredTurnAbortR
  */
 export const DEFAULT_MAX_CONCURRENT_TURNS = 256
 
+export type TurnCapacitySnapshot = {
+  activeTurns: number
+  queuedTurns: number
+  maxConcurrentTurns: number
+  busy: boolean
+}
+
 /**
  * Turn service: owns the turn lifecycle (start, finish, abort, steer,
  * compact). The service is the only place that emits turn lifecycle
@@ -413,6 +420,29 @@ export class TurnService {
       nowIso: deps.nowIso
     })
     this.maxConcurrentTurns = normalizeMaxConcurrentTurns(deps.maxConcurrentTurns)
+  }
+
+  /** Global persisted workload, including room and delegated side threads. */
+  async capacitySnapshot(): Promise<TurnCapacitySnapshot> {
+    const { threadStore } = this.deps
+    const summaries = await threadStore.list({ includeArchived: true, includeSide: true })
+    let activeTurns = 0
+    let queuedTurns = 0
+    for (const summary of summaries) {
+      const thread = await (
+        threadStore.getMetadata?.(summary.id) ?? threadStore.get(summary.id)
+      )
+      for (const turn of thread?.turns ?? []) {
+        if (turn.status === 'running') activeTurns += 1
+        if (turn.status === 'queued') queuedTurns += 1
+      }
+    }
+    return {
+      activeTurns,
+      queuedTurns,
+      maxConcurrentTurns: this.maxConcurrentTurns,
+      busy: activeTurns > 0 || queuedTurns > 0
+    }
   }
 
   async closeAdmissionForShutdown(): Promise<void> {

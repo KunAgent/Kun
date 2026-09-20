@@ -74,4 +74,29 @@ describe('design turn prompt design mode context', () => {
     expect(withoutSource).not.toContain('Current exact source hash:')
     expect(withoutSource).not.toContain('sha256:exact-source')
   })
+
+  it('replaces the ShapeOps manual with an Excalidraw element summary', () => {
+    const prompt = buildDesignTurnPrompt({
+      target: 'canvas',
+      mode: 'text',
+      text: 'What does this sketch show?',
+      artifactRelativePath: '.kun-design/doc/board.canvas.json',
+      workspaceRoot: '/workspace',
+      canvasEngine: 'excalidraw',
+      excalidrawScenePath: '.kun-design/doc/excalidraw.json',
+      excalidrawScene: {
+        elements: [
+          { type: 'arrow', isDeleted: false },
+          { type: 'text', text: 'Checkout', isDeleted: false }
+        ]
+      }
+    })
+    expect(prompt).toContain('Excalidraw board')
+    expect(prompt).toContain('Do not call design_update_shapes')
+    expect(prompt).toContain('.kun-design/doc/excalidraw.json')
+    expect(prompt).toContain('Checkout')
+    expect(prompt).toContain('design_apply_excalidraw')
+    expect(prompt).not.toContain('design_update_shapes: { "ops"')
+    expect(prompt).not.toContain('Current canvas snapshot')
+  })
 })

@@ -47,6 +47,7 @@ import { removePersistedDesignDocument } from '../../design/design-document-pers
 import { designDocKey, readDesignThreadRegistry } from '../../design/design-thread-registry'
 import { normalizeDesignWorkspaceRoot } from '../../design/design-workspace-lifecycle'
 import type { DesignDocument } from '../../design/design-types'
+import { designDocumentResolvedEngine } from '../../design/design-types'
 import {
   submitDesignTurn,
   type DesignTurnSubmitSendMessage
@@ -189,10 +190,14 @@ export function useDesignPromptController({
       })
     }
     if (!selection) return undefined
+    const document = useDesignWorkspaceStore.getState().documents.find((item) => item.id === target.documentId)
     return buildDesignTaskProfileInput({
       selection,
       documentTarget: target,
-      designContext: useDesignWorkspaceStore.getState().designContext
+      designContext: useDesignWorkspaceStore.getState().designContext,
+      ...(document && designDocumentResolvedEngine(document) === 'excalidraw'
+        ? { canvasEngine: 'excalidraw' as const }
+        : {})
     })
   }
 

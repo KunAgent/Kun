@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildCodeCanvasOutboundText } from './code-canvas-outbound'
 import {
   loadCodeCanvasDesignSystemForPrompt,
@@ -7,6 +7,7 @@ import {
 import type { CanvasSnapshot } from './canvas-snapshot'
 import { createEmptyDocument } from './canvas-types'
 import { createEmptyDesignSystem } from './design-system-types'
+import { clearExcalidrawRuntimeCacheForTests } from '../../whiteboard/excalidraw-persistence'
 
 const viewBox = { x: 0, y: 0, width: 1200, height: 800 }
 const snapshot: CanvasSnapshot = {
@@ -22,6 +23,11 @@ const snapshot: CanvasSnapshot = {
     parentName: null
   }]
 }
+
+afterEach(() => {
+  clearExcalidrawRuntimeCacheForTests()
+  vi.unstubAllGlobals()
+})
 
 describe('code canvas outbound prompt', () => {
   it('adds snapshot, design system, and scoped op feedback for a thread canvas', async () => {
@@ -85,5 +91,41 @@ describe('code canvas outbound prompt', () => {
     expect(snapshotForPrompt).not.toHaveBeenCalled()
     expect(loadDesignSystemForPrompt).not.toHaveBeenCalled()
     expect(takeLastErrors).not.toHaveBeenCalled()
+  })
+
+  it('skips ShapeOps snapshots for an Excalidraw code board', async () => {
+    const snapshotForPrompt = vi.fn()
+    const loadDesignSystemForPrompt = vi.fn()
+    const takeLastErrors = vi.fn()
+    vi.stubGlobal('window', {
+      kunGui: {
+        readWorkspaceFile: vi.fn(async () => ({
+          ok: true,
+          content: JSON.stringify({ engine: 'excalidraw' })
+        }))
+      }
+    })
+
+    const outbound = await buildCodeCanvasOutboundText({
+      baseText: 'What does this diagram show?',
+      canvasBrief: 'What does this diagram show?',
+      workspaceRoot: '/workspace',
+      threadId: 'thread_exo',
+      currentDocument: createEmptyDocument(),
+      selectedIds: new Set(),
+      viewBox,
+      designContext: { designTarget: 'web' },
+      snapshotForPrompt,
+      loadDesignSystemForPrompt,
+      takeLastErrors
+    })
+
+    expect(outbound).toContain('Excalidraw board')
+    expect(outbound).toContain('Do not call design_update_shapes')
+    expect(outbound).toContain('.kun-canvas/code-thread_exo/excalidraw.json')
+    expect(outbound).toContain('design_apply_excalidraw')
+    expect(outbound).not.toContain('design_update_shapes with arguments')
+    expect(snapshotForPrompt).not.toHaveBeenCalled()
+    expect(loadDesignSystemForPrompt).not.toHaveBeenCalled()
   })
 })

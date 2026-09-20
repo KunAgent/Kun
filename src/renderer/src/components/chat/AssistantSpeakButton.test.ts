@@ -17,7 +17,7 @@ const labels: Record<string, string> = {
   speakFailed: 'Could not generate speech: {{message}}',
   speakUnavailable: 'Local speech is unavailable in this build.',
   speakNothingToRead: 'This answer has no text to read aloud.',
-  speakModelMissing: 'Download a Kokoro voice model in Settings to use Speak.'
+  speakModelMissing: 'Download the local speech runtime and voice in Settings to use Speak.'
 }
 
 const t = (key: string, options?: Record<string, unknown>): string =>
@@ -37,7 +37,7 @@ describe('speakErrorLabel', () => {
     expect(speakErrorLabel(t, 'speakUnavailable')).toBe('Local speech is unavailable in this build.')
     expect(speakErrorLabel(t, 'speakNothingToRead')).toBe('This answer has no text to read aloud.')
     expect(speakErrorLabel(t, 'speakModelMissing'))
-      .toBe('Download a Kokoro voice model in Settings to use Speak.')
+      .toBe('Download the local speech runtime and voice in Settings to use Speak.')
   })
 
   it('wraps an arbitrary runtime message', () => {

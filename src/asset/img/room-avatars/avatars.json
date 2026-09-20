@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "image": "kun-avatar-atlas.png",
+  "columns": 6,
+  "rows": 5,
+  "cellSize": 229,
+  "avatars": [
+    {
+      "id": "coordinator",
+      "label": "协调员",
+      "index": 0,
+      "column": 0,
+      "row": 0
+    },
+    {
+      "id": "coder",
+      "label": "程序员",
+      "index": 1,
+      "column": 1,
+      "row": 0
+    },
+    {
+      "id": "reviewer",
+      "label": "评审员",
+      "index": 2,
+      "column": 2,
+      "row": 0
+    },
+    {
+      "id": "detective",
+      "label": "侦探",
+      "index": 3,
+      "column": 3,
+      "row": 0
+    },
+    {
+      "id": "designer",
+      "label": "设计师",
+      "index": 4,
+      "column": 4,
+      "row": 0
+    },
+    {
+      "id": "architect",
+      "label": "架构师",
+      "index": 5,
+      "column": 5,
+      "row": 0
+    },
+    {
+      "id": "scientist",
+      "label": "科学家",
+      "index": 6,
+      "column": 0,
+      "row": 1
+    },
+    {
+      "id": "security",
+      "label": "安全专家",
+      "index": 7,
+      "column": 1,
+      "row": 1
+    },
+    {
+      "id": "writer",
+      "label": "作家",
+      "index": 8,
+      "column": 2,
+      "row": 1
+    },
+    {
+      "id": "researcher",
+      "label": "研究员",
+      "index": 9,
+      "column": 3,
+      "row": 1
+    },
+    {
+      "id": "data",
+      "label": "数据分析师",
+      "index": 10,
+      "column": 4,
+      "row": 1
+    },
+    {
+      "id": "operations",
+      "label": "运维工程师",
+      "index": 11,
+      "column": 5,
+      "row": 1
+    },
+    {
+      "id": "astronaut",
+      "label": "宇航员",
+      "index": 12,
+      "column": 0,
+      "row": 2
+    },
+    {
+      "id": "pilot",
+      "label": "飞行员",
+      "index": 13,
+      "column": 1,
+      "row": 2
+    },
+    {
+      "id": "navigator",
+      "label": "领航员",
+      "index": 14,
+      "column": 2,
+      "row": 2
+    },
+    {
+      "id": "librarian",
+      "label": "图书管理员",
+      "index": 15,
+      "column": 3,
+      "row": 2
+    },
+    {
+      "id": "musician",
+      "label": "音乐家",
+      "index": 16,
+      "column": 4,
+      "row": 2
+    },
+    {
+      "id": "gardener",
+      "label": "园艺师",
+      "index": 17,
+      "column": 5,
+      "row": 2
+    },
+    {
+      "id": "chef",
+      "label": "厨师",
+      "index": 18,
+      "column": 0,
+      "row": 3
+    },
+    {
+      "id": "medic",
+      "label": "医护员",
+      "index": 19,
+      "column": 1,
+      "row": 3
+    },
+    {
+      "id": "photographer",
+      "label": "摄影师",
+      "index": 20,
+      "column": 2,
+      "row": 3
+    },
+    {
+      "id": "athlete",
+      "label": "运动员",
+      "index": 21,
+      "column": 3,
+      "row": 3
+    },
+    {
+      "id": "explorer",
+      "label": "探险家",
+      "index": 22,
+      "column": 4,
+      "row": 3
+    },
+    {
+      "id": "storyteller",
+      "label": "故事家",
+      "index": 23,
+      "column": 5,
+      "row": 3
+    },
+    {
+      "id": "magician",
+      "label": "魔法师",
+      "index": 24,
+      "column": 0,
+      "row": 4
+    },
+    {
+      "id": "night-thinker",
+      "label": "夜间思考者",
+      "index": 25,
+      "column": 1,
+      "row": 4
+    },
+    {
+      "id": "barista",
+      "label": "咖啡师",
+      "index": 26,
+      "column": 2,
+      "row": 4
+    },
+    {
+      "id": "maker",
+      "label": "创客",
+      "index": 27,
+      "column": 3,
+      "row": 4
+    },
+    {
+      "id": "courier",
+      "label": "信使",
+      "index": 28,
+      "column": 4,
+      "row": 4
+    },
+    {
+      "id": "strategist",
+      "label": "策略师",
+      "index": 29,
+      "column": 5,
+      "row": 4
+    }
+  ],
+  "displayInset": 8,
+  "displaySize": 213
+}

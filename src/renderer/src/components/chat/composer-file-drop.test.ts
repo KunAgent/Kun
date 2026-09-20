@@ -55,4 +55,25 @@ describe('composer multi-format drop routing', () => {
     }))
     }
   )
+
+  it('routes dropped files onto the extra workspace that owns them', () => {
+    const onAddFileReference = vi.fn()
+    const source = { files: [file('server.ts')], types: ['Files'] }
+    expect(routeComposerFileDrop(source, {
+      canPickAttachment: false,
+      canPickLocalFileReference: true,
+      canAddFileReference: true,
+      workspaceRoot: '/frontend',
+      extraWorkspaceRoots: ['/backend'],
+      onAddFileReference,
+      getPathForFile: () => '/backend/src/server.ts'
+    })).toBe(true)
+    expect(onAddFileReference).toHaveBeenCalledWith({
+      path: '/backend/src/server.ts',
+      relativePath: 'src/server.ts',
+      name: 'server.ts',
+      type: 'file',
+      workspaceRoot: '/backend'
+    })
+  })
 })

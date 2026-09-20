@@ -411,6 +411,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         planMode?: boolean
         guiPlan?: GuiPlanContext
         guiDesignCanvas?: boolean
+        guiExcalidrawCanvas?: boolean
         guiDesignMode?: boolean
         guiDesignArtifact?: GuiDesignArtifactContext
         activeSkillIds?: readonly string[]
@@ -448,6 +449,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         ...(opts?.planMode ? { threadMode: 'plan' as const } : {}),
         ...(opts?.guiPlan ? { guiPlan: opts.guiPlan } : {}),
         ...(opts?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(opts?.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(opts?.guiDesignMode ? { guiDesignMode: true } : {}),
         ...(opts?.guiDesignArtifact ? { guiDesignArtifact: opts.guiDesignArtifact } : {}),
         ...(opts?.activeSkillIds ? { activeSkillIds: opts.activeSkillIds } : {}),

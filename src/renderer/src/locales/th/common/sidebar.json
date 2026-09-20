@@ -7,5 +7,15 @@
   "threadHydrationLoadingDescription": "กำลังอ่านข้อความและกู้คืนสถานะบทสนทนาล่าสุด",
   "threadHydrationTakingLongTitle": "การกู้คืนบทสนทนาใช้เวลานานกว่าปกติ",
   "threadHydrationTakingLongDescription": "สตรีมเหตุการณ์ยังตามไม่ทัน คุณสามารถลองเชื่อมต่อใหม่ได้",
-  "threadHydrationRetry": "ลองเชื่อมต่อใหม่"
+  "threadHydrationRetry": "ลองเชื่อมต่อใหม่",
+  "sidebarWorkspaceAddFolder": "Add folder to project",
+  "sidebarWorkspaceRemoveFolder": "Remove {{name}} from project",
+  "workspaceFolderSameAsPrimary": "That folder is already the project root.",
+  "workspaceFolderDuplicate": "That folder is already in this project.",
+  "workspaceFolderNested": "That folder overlaps another folder in this project.",
+  "workspaceFolderLimit": "A project can include at most 32 extra folders.",
+  "workspaceFolderMissing": "Choose a folder to add to this project.",
+  "workspaceFolderMissingPrimary": "Open a project first, then add another folder to it.",
+  "composerWorkspaceExtraHint": "Git, plan worktrees, and the default shell stay on the primary folder.",
+  "fileTreeGitUsesPrimary": "Git and plan commands use the primary folder."
 }

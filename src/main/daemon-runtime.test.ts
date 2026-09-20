@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +11,7 @@ import {
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
   defaultScheduleSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
   mergeScheduleSettings,
@@ -20,6 +20,7 @@ import {
 } from '../shared/app-settings'
 
 let testWorkspaceRoot = ''
+const runtimes = new Set<DaemonRuntime>()
 
 function makeDaemon(patch: Partial<SessionDaemonV1> = {}): SessionDaemonV1 {
   const now = '2026-06-02T00:00:00.000Z'
@@ -72,6 +73,7 @@ function settingsWith(daemons: SessionDaemonV1[], enabled = true): AppSettingsV1
     workflow: defaultWorkflowSettings(),
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     chatWelcomeMessage: '',
@@ -94,7 +96,6 @@ function createRuntime(
   store: { load: () => Promise<AppSettingsV1> }
   pushText: ReturnType<typeof vi.fn>
   logError: ReturnType<typeof vi.fn>
-  killProcessTree: ReturnType<typeof vi.fn>
 } {
   let current = initial
   const store = {
@@ -102,18 +103,17 @@ function createRuntime(
   }
   const pushText = vi.fn(async () => ({ ok: true }))
   const logError = vi.fn()
-  const killProcessTree = vi.fn()
   const runtime = new DaemonRuntime({
     store: store as never,
     logError,
     logDir: join(testWorkspaceRoot, 'logs'),
     pushText,
-    killProcessTree,
     restartBackoffMs: [20, 40, 80],
     healthyResetMs: 60_000,
     ...overrides
   })
-  return { runtime, store, pushText, logError, killProcessTree }
+  runtimes.add(runtime)
+  return { runtime, store, pushText, logError }
 }
 
 async function waitFor(
@@ -135,6 +135,8 @@ describe('DaemonRuntime', () => {
   })
 
   afterEach(async () => {
+    await Promise.allSettled([...runtimes].map((runtime) => runtime.stop()))
+    runtimes.clear()
     if (testWorkspaceRoot) {
       let attempt = 0
       while (attempt < 5) {
@@ -271,6 +273,51 @@ describe('DaemonRuntime', () => {
     await waitFor(async () => (await runtime.status()).items[0]?.state === 'running')
     await runtime.stop()
     expect((await runtime.status()).items).toHaveLength(0)
+  })
+
+  it.skipIf(process.platform === 'win32')('keeps cleanup alive when the parent exits before TERM-ignoring grandchildren', async () => {
+    writeScript('tree.cjs', `
+      const {spawn}=require('node:child_process');
+      const {writeFileSync}=require('node:fs');
+      const {join}=require('node:path');
+      const depth=Number(process.argv[2]||0);
+      if(depth>0) { process.on('SIGHUP',()=>{}); process.on('SIGTERM',()=>{}); }
+      writeFileSync(join(${JSON.stringify(testWorkspaceRoot)},'pid-'+depth),String(process.pid));
+      if(depth<2) spawn(process.execPath,[__filename,String(depth+1)],{stdio:'ignore'});
+      setInterval(()=>{},1000);
+    `)
+    const initial = settingsWith([makeDaemon({ scriptPath: 'tree.cjs' })])
+    const { runtime } = createRuntime(initial, { stopGraceMs: 150 })
+    const pids: number[] = []
+    const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true } catch { return false } }
+    try {
+      runtime.sync(initial)
+      await waitFor(() => {
+        try { return readFileSync(join(testWorkspaceRoot, 'pid-2'), 'utf8').length > 0 } catch { return false }
+      })
+      for (let depth = 0; depth < 3; depth++) pids.push(Number(readFileSync(join(testWorkspaceRoot, `pid-${depth}`), 'utf8')))
+      expect(pids.every(alive)).toBe(true)
+      const stopped = runtime.stop()
+      expect((await runtime.status()).items).toHaveLength(1)
+      await stopped
+      expect(pids.filter(alive)).toEqual([])
+      expect((await runtime.status()).items).toHaveLength(0)
+      expect(await runtime.restart('daemon-1')).toMatchObject({ ok: false })
+    } finally {
+      await runtime.stop().catch(() => undefined)
+      for (const pid of pids) { try { process.kill(pid, 'SIGKILL') } catch { /* fixture already gone */ } }
+    }
+  }, 10_000)
+
+  it('waits for a launch already in progress and refuses to restart after stop', async () => {
+    writeScript('launch.cjs', 'setInterval(() => {}, 1000)')
+    const initial = settingsWith([makeDaemon({ scriptPath: 'launch.cjs' })])
+    const { runtime } = createRuntime(initial, { stopGraceMs: 100 })
+    runtime.sync(initial)
+    await runtime.stop()
+    runtime.sync(initial)
+    expect((await runtime.status()).items).toHaveLength(0)
+    expect(await runtime.restart('daemon-1')).toMatchObject({ ok: false })
   })
 
   it('reads log tails and supports incremental cursors', async () => {

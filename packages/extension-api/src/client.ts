@@ -7,12 +7,12 @@ import {
   ListAccountsRequestSchema,
   RevealSecretRequestSchema
 } from './accounts.js'
-import { ProviderBindingSchema } from './accounts.js'
 import {
   ArtifactHostActionRequestSchema,
   ArtifactHostActionResultSchema
 } from './artifacts.js'
 import {
+  AgentCapacitySnapshotSchema,
   AgentCancelRequestSchema,
   AgentCreateRunRequestSchema,
   AgentCreateRunResponseSchema,
@@ -55,23 +55,16 @@ import {
   type JobSnapshot
 } from './jobs.js'
 import {
-  ActivationContextDataSchema,
   DisposableStore,
   Emitter,
   toDisposable,
-  type ActivationContextData,
   type Disposable,
-  type Event,
-  type WorkspaceContext
+  type Event
 } from './lifecycle.js'
 import {
   ModelProviderDeclarationSchema,
   ModelProviderRequestSchema,
-  ModelProviderStreamEventSchema,
-  ProviderModelSchema,
-  ProviderProbeResultSchema,
-  ProviderStatusSchema,
-  type ModelProviderAdapter
+  ProviderStatusSchema
 } from './providers.js'
 import {
   MediaAudioAnalysisCapabilitiesSchema,
@@ -119,8 +112,6 @@ import {
   type AuthenticationApi,
   type CommandsApi,
   type ConfigurationApi,
-  type HostRequestContext,
-  type HostRequestOptions,
   type HostTransport,
   type JobsApi,
   type JobSubscription,
@@ -171,6 +162,8 @@ import {
   createUiApi
 } from './client-ui-apis.js'
 import { registerProvider } from './client-provider-registration.js'
+import { createRoomsApi } from './client-rooms-api.js'
+import type { RoomsApi } from './rooms.js'
 
 export class ExtensionHostClient implements Disposable {
   readonly #disposables = new DisposableStore()
@@ -192,6 +185,7 @@ export class ExtensionHostClient implements Disposable {
   readonly network: NetworkApi
   readonly ui: UiApi
   readonly agent: AgentApi
+  readonly rooms: RoomsApi
   readonly threads: ThreadsApi
   readonly tools: ToolsApi
   readonly modelProviders: ModelProvidersApi
@@ -226,6 +220,7 @@ export class ExtensionHostClient implements Disposable {
       onDidChangeProviderStatus: this.#providerStatus.event
     })
     this.agent = {
+      capacity: () => requestParsed(transport, 'agent.capacity', {}, AgentCapacitySnapshotSchema),
       getRunOptions: () => requestParsed(transport, 'agent.getRunOptions', {}, AgentRunOptionsSchema),
       createRun: (request) =>
         requestParsed(
@@ -315,6 +310,7 @@ export class ExtensionHostClient implements Disposable {
         )
     }
 
+    this.rooms = createRoomsApi(transport)
     this.threads = {
       listOwn: (request = {}) =>
         requestParsed(

@@ -6,16 +6,16 @@
  * Drives the Speak action and the Speak settings section in the real
  * application shell.
  *
- * Pass --assets <dir> (or set KUN_KOKORO_TEST_ASSETS) with a directory holding
- * `model_quantized.onnx` and `af_heart.bin` to exercise real synthesis; the
- * files are linked into the isolated user-data directory so the download path
- * is skipped. Without them the run still covers the settings surface and the
- * download toast that appears on the first Speak.
+ * Pass --assets <dir> (or set KUN_SANOTTS_TEST_ASSETS) with a directory holding
+ * `runtime/` WASM files and `voices/amy/` weights to exercise real synthesis;
+ * the files are linked into the isolated user-data directory so the download
+ * path is skipped. Without them the run still covers the settings surface and
+ * the download toast that appears on the first Speak.
  */
 
 const { spawn } = require('node:child_process')
 const { existsSync } = require('node:fs')
-const { mkdir, mkdtemp, symlink, writeFile } = require('node:fs/promises')
+const { mkdir, mkdtemp, writeFile } = require('node:fs/promises')
 const { createConnection, createServer } = require('node:net')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
@@ -30,12 +30,10 @@ const {
 } = require('./smoke-packaged-extension-desktop.cjs')
 const { developmentRendererEnvironment } = require('./development-renderer-environment.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
+const { linkSanottsTestAssets, sanottsTestAssetsPresent } = require('./sanotts-test-assets.cjs')
 
 const DEFAULT_TIMEOUT_MS = 180_000
 const VIEWPORT = { width: 1_280, height: 900 }
-const MODEL_ID = 'kokoro-82m-int8'
-const MODEL_FILE = 'model_quantized.onnx'
-const VOICE_ID = 'af_heart'
 
 async function main() {
   const repositoryRoot = resolve(join(__dirname, '..'))
@@ -43,12 +41,8 @@ async function main() {
   const evidenceRoot = resolve(
     argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'speak-smoke')
   )
-  const assetDir = argumentValue('--assets') ?? process.env.KUN_KOKORO_TEST_ASSETS ?? ''
-  const seedAssets = Boolean(
-    assetDir
-    && existsSync(join(resolve(assetDir), MODEL_FILE))
-    && existsSync(join(resolve(assetDir), `${VOICE_ID}.bin`))
-  )
+  const assetDir = argumentValue('--assets') ?? process.env.KUN_SANOTTS_TEST_ASSETS ?? ''
+  const seedAssets = sanottsTestAssetsPresent(assetDir ? resolve(assetDir) : '')
   const electronExecutable = require('electron')
   const viteCli = join(repositoryRoot, 'node_modules', 'vite', 'bin', 'vite.js')
   const rendererConfig = join(repositoryRoot, 'scripts', 'vite-development-renderer.config.mjs')
@@ -85,7 +79,7 @@ async function main() {
       mkdir(appData, { recursive: true }), mkdir(localAppData, { recursive: true }),
       mkdir(temporaryDirectory, { recursive: true }), mkdir(evidenceRoot, { recursive: true })
     ])
-    if (seedAssets) await linkKokoroAssets(resolve(assetDir), userData)
+    if (seedAssets) await linkSanottsTestAssets(resolve(assetDir), userData)
 
     const settings = {
       ...desktopSmokeSettings(runtimePort, workspaceRoot, profile),
@@ -131,7 +125,7 @@ async function main() {
     await page.setViewportSize(VIEWPORT)
 
     result.steps.push(await verifySettingsSection(page, evidenceRoot))
-  result.steps.push(await verifyRecommendedModelTier(page, evidenceRoot))
+    result.steps.push(await verifyRuntimeCards(page, evidenceRoot))
     result.steps.push(await verifySpeakAction(page, evidenceRoot, seedAssets))
     await writeFile(
       join(evidenceRoot, 'result.json'),
@@ -149,15 +143,6 @@ async function main() {
   if (primaryError) throw primaryError
 }
 
-/** Link pre-downloaded weights into the layout the download service publishes. */
-async function linkKokoroAssets(assetDir, userData) {
-  const base = join(userData, 'models', 'speech', 'kokoro')
-  await mkdir(join(base, MODEL_ID), { recursive: true })
-  await mkdir(join(base, 'voices'), { recursive: true })
-  await symlink(join(assetDir, MODEL_FILE), join(base, MODEL_ID, MODEL_FILE))
-  await symlink(join(assetDir, `${VOICE_ID}.bin`), join(base, 'voices', `${VOICE_ID}.bin`))
-}
-
 async function verifySettingsSection(page, evidenceRoot) {
   // The local speech provider lives under Media -> Speech generation, so the
   // smoke navigates the way a user does rather than to a route of its own.
@@ -170,14 +155,14 @@ async function verifySettingsSection(page, evidenceRoot) {
   const voiceSelect = page.getByLabel('Voice', { exact: true })
   await voiceSelect.waitFor()
   const options = await voiceSelect.locator('option').count()
-  if (options < 20) throw new Error(`Speak settings listed only ${options} voices`)
+  if (options !== 5) throw new Error(`Speak settings listed ${options} voices, expected auto plus 4`)
   const groups = await voiceSelect.locator('optgroup').allTextContents()
-  if (groups.length !== 2) throw new Error(`Expected American and British groups, got ${groups.length}`)
+  if (groups.length !== 4) throw new Error(`Expected 4 language groups, got ${groups.length}`)
   await page.getByRole('button', { name: 'Play' }).waitFor()
   await page.getByLabel('Speed').waitFor()
-  for (const label of ['Kokoro 82M (int8)', 'Kokoro 82M (fp16)', 'Kokoro 82M (fp32)']) {
-    await page.getByRole('button', { name: label }).waitFor()
-  }
+  await page.locator('#media-generation-settings-panel-speech').getByLabel('Language').waitFor()
+  await page.locator('[data-speak-asset="speak-runtime"]').waitFor()
+  await page.locator('[data-speak-asset="speak-voice"]').waitFor()
   // Keep generated tracks, so the Speak step exercises storing, replaying and
   // offering the recording for download.
   const keepTracks = page.getByLabel('Keep generated tracks')
@@ -185,36 +170,22 @@ async function verifySettingsSection(page, evidenceRoot) {
   if ((await keepTracks.getAttribute('aria-checked')) !== 'true') await keepTracks.click()
   await page.getByRole('button', { name: 'Clear' }).waitFor()
   await page.screenshot({ path: join(evidenceRoot, 'settings-speak.png'), fullPage: false })
-  return { step: 'settings', voices: options, accentGroups: groups.length, keepTracks: true }
+  return { step: 'settings', voices: options, languageGroups: groups.length, keepTracks: true }
 }
 
-/**
- * The recommended tier depends on the host: the quantized graph is the slower
- * one on arm64, so the badge has to follow the architecture rather than a fixed
- * flag in the catalog.
- */
-async function verifyRecommendedModelTier(page, evidenceRoot) {
-  const expected = process.arch === 'arm64' ? 'kokoro-82m-fp16' : 'kokoro-82m-int8'
-  const card = page.locator(`#media-generation-settings-panel-speech [data-speak-model="${expected}"]`)
-  await card.waitFor()
-  await card.scrollIntoViewIfNeeded()
-  const recommended = await page
-    .locator('#media-generation-settings-panel-speech [data-speak-model-recommended="true"]')
-    .all()
-  const ids = await Promise.all(recommended.map((node) => node.getAttribute('data-speak-model')))
-  if (ids.length !== 1 || ids[0] !== expected) {
-    throw new Error(
-      `Expected only ${expected} to be recommended on ${process.arch}, got: ${ids.join(', ') || 'none'}`
-    )
-  }
-  await page.screenshot({ path: join(evidenceRoot, 'settings-speak-models.png') })
-  return { step: 'models', arch: process.arch, recommended: expected }
+async function verifyRuntimeCards(page, evidenceRoot) {
+  const panel = page.locator('#media-generation-settings-panel-speech')
+  await panel.locator('[data-speak-asset="speak-runtime"]').waitFor()
+  await panel.locator('[data-speak-asset="speak-voice"]').waitFor()
+  await panel.getByText('sanoTTS runtime', { exact: true }).waitFor()
+  await page.screenshot({ path: join(evidenceRoot, 'settings-speak-runtime.png') })
+  return { step: 'runtime', cards: ['speak-runtime', 'speak-voice'] }
 }
 
 /**
  * Watch how responsive the application stays over a window.
  *
- * `pingLocalKokoroMain` does no I/O, so a slow reply means the Main event loop
+ * `pingLocalSanottsMain` does no I/O, so a slow reply means the Main event loop
  * itself is blocked. Synthesis used to block it for the whole length of every
  * chunk, which is what put the spinning cursor on screen, so this is measured
  * while an answer is actually being spoken.
@@ -238,7 +209,7 @@ async function observeResponsiveness(page, label, durationMs, untilIdle = false)
     const pinger = (async () => {
       while (!done()) {
         const t = performance.now()
-        await bridge.pingLocalKokoroMain()
+        await bridge.pingLocalSanottsMain()
         pings.push(Math.round(performance.now() - t))
         await new Promise((resolve) => window.setTimeout(resolve, 100))
       }

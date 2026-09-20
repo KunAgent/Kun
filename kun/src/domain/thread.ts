@@ -42,6 +42,8 @@ const LEGACY_WRITE_INTERACTION_AGREEMENT =
   '交互约定: 需要更多信息时通常直接用普通文本向用户提问。仅当当前激活的专用工作流明确要求结构化确认（例如 PPT 视觉评审）时，调用该工作流提供的确认工具；其他写作任务不要滥用结构化交互。'
 
 export function createThreadRecord(input: {
+  roomContext?: ThreadRecord['roomContext']
+  historyRefId?: string
   id: string
   title: string
   titleAuto?: boolean
@@ -82,6 +84,7 @@ export function createThreadRecord(input: {
   forkedAt?: string
   forkedFromMessageCount?: number
   forkedFromTurnCount?: number
+  forkedFromTurnId?: string
   goal?: ThreadGoal
   todos?: ThreadTodoList
   createdAt?: string
@@ -89,6 +92,7 @@ export function createThreadRecord(input: {
   const now = input.createdAt ?? new Date().toISOString()
   return {
     id: input.id,
+    ...(input.historyRefId ? { historyRefId: input.historyRefId } : {}),
     revision: 0,
     title: input.title,
     ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
@@ -111,6 +115,7 @@ export function createThreadRecord(input: {
     ...(input.toolCatalogEpoch ? { toolCatalogEpoch: input.toolCatalogEpoch } : {}),
     ...(input.agentId ? { agentId: input.agentId } : {}),
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+    ...(input.roomContext ? { roomContext: input.roomContext } : {}),
     mode: input.mode ?? 'agent',
     status: input.status ?? 'idle',
     approvalPolicy: input.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,
@@ -137,6 +142,7 @@ export function createThreadRecord(input: {
     ...(input.forkedAt ? { forkedAt: input.forkedAt } : {}),
     ...(input.forkedFromMessageCount !== undefined ? { forkedFromMessageCount: input.forkedFromMessageCount } : {}),
     ...(input.forkedFromTurnCount !== undefined ? { forkedFromTurnCount: input.forkedFromTurnCount } : {}),
+    ...(input.forkedFromTurnId ? { forkedFromTurnId: input.forkedFromTurnId } : {}),
     ...(input.goal ? { goal: input.goal } : {}),
     ...(input.todos ? { todos: input.todos } : {}),
     createdAt: now,
@@ -155,6 +161,7 @@ export function toThreadSummary(
   const lockedTaskSurface = resolveThreadLockedTaskSurface(thread)
   return {
     id: thread.id,
+    ...(thread.historyRefId ? { historyRefId: thread.historyRefId } : {}),
     title: thread.title,
     ...(thread.titleAuto !== undefined ? { titleAuto: thread.titleAuto } : {}),
     ...(thread.summary ? { summary: thread.summary } : {}),
@@ -202,6 +209,7 @@ export function toThreadSummary(
     ...(thread.forkedAt ? { forkedAt: thread.forkedAt } : {}),
     ...(thread.forkedFromMessageCount !== undefined ? { forkedFromMessageCount: thread.forkedFromMessageCount } : {}),
     ...(thread.forkedFromTurnCount !== undefined ? { forkedFromTurnCount: thread.forkedFromTurnCount } : {}),
+    ...(thread.forkedFromTurnId ? { forkedFromTurnId: thread.forkedFromTurnId } : {}),
     ...(thread.goal ? { goal: thread.goal } : {}),
     ...(thread.todos ? { todos: thread.todos } : {}),
     createdAt: thread.createdAt,

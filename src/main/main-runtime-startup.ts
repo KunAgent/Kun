@@ -1,5 +1,5 @@
-import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
-import { recoverStartupManager } from './runtime/kun-startup-manager-recovery'
+import { desktopProcessStack } from './runtime/desktop-process-stack'
+import { closeManagerClientAdmission } from '../../kun/src/manager/manager-client-lifetime.js'
 import { randomBytes } from 'node:crypto'
 import {
   applyKunRuntimePatch,
@@ -17,6 +17,7 @@ import {
 import { clearHistoricalKunServeProcesses } from './runtime/kun-serve-process-cleanup'
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
+import { throwIfApplicationQuitting } from './app-quit-signal'
 import { logWarn } from './logger'
 import {
   mainState,
@@ -32,6 +33,8 @@ import {
 } from './main-runtime-health'
 
 export async function ensureRuntime(settings: AppSettingsV1): Promise<AppSettingsV1> {
+  throwIfApplicationQuitting()
+  desktopProcessStack.assertCanStart()
   const requested = runtimeSupervisor.latestOr(settings)
   // Availability is the durable intent, not a reward for one successful
   // launch. Arm recovery before the first attempt so a cold-start failure is
@@ -48,6 +51,30 @@ export async function ensureRuntime(settings: AppSettingsV1): Promise<AppSetting
     // jump across this lifecycle barrier.
     () => ensureRuntimeOnce(requested)
   )
+}
+
+/** Recover data service without first trying to load settings from its dead endpoint. */
+export async function recoverDesktopManagerAfterExit(): Promise<void> {
+  if (!mainState.startupState.isReady()) return
+  desktopProcessStack.assertCanStart()
+  const settings = mainState.settledRuntimeSettings
+  if (!settings) return
+  runtimeSupervisor.setManagedRuntimeExpected(false)
+  closeManagerClientAdmission()
+  try {
+    await runtimeSupervisor.replace(async () => {
+      desktopProcessStack.assertCanStart()
+      await mainState.pauseDesktopServicesForManagerRecovery?.()
+      const manager = await desktopProcessStack.recoverManager(() => kunRuntimeAdapter.stopAndWait())
+      if (!manager) return
+      mainState.activeServiceManager = configureKunManagerDataPlaneForCurrentProcess(manager)
+      if (managedKunHostCanAutoStart(settings)) await ensureKunRuntime(runtimeSupervisor.latestOr(settings))
+    })
+    desktopProcessStack.assertCanStart()
+    await mainState.resumeDesktopServicesForManagerRecovery?.()
+  } finally {
+    if (!desktopProcessStack.isStopping()) runtimeSupervisor.setManagedRuntimeExpected(managedKunHostCanAutoStart(settings))
+  }
 }
 
 async function ensureRuntimeOnce(settings: AppSettingsV1): Promise<AppSettingsV1> {
@@ -119,6 +146,11 @@ function noteSuccessfulRuntimeSettings(source: string, settings: AppSettingsV1):
 }
 
 export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1> {
+  desktopProcessStack.assertCanStart()
+  const recoveredManager = await desktopProcessStack.recoverManager(() => kunRuntimeAdapter.stopAndWait())
+  if (recoveredManager) {
+    mainState.activeServiceManager = configureKunManagerDataPlaneForCurrentProcess(recoveredManager)
+  }
   const token = await ensureManagedKunRuntimeToken(settings, 'runtime-start')
   const currentSettings = token.settings
   if (token.generated && kunRuntimeAdapter.isChildRunning()) {
@@ -237,12 +269,12 @@ export async function prepareGuiRuntimeForStartupRetry(error?: unknown): Promise
   // Fence the watchdog before cleanup so it cannot launch a replacement while
   // the recovery window is preparing a new Electron instance.
   runtimeSupervisor.setManagedRuntimeExpected(false)
-  await runtimeSupervisor.waitForIdle()
+  void error
+  // Retry relaunches Electron. Stop the old complete stack; the new process
+  // acquires a fresh session instead of starting a Manager just before quit.
   await kunRuntimeAdapter.stopAndWait()
-  if (error instanceof ServiceManagerUnavailableError || isServiceManagerDataMutexFailure(error)) {
-    const recovered = await recoverStartupManager(isServiceManagerDataMutexFailure(error))
-    mainState.activeServiceManager = configureKunManagerDataPlaneForCurrentProcess(recovered)
-  }
+  await mainState.stopDesktopServicesForRecovery?.()
+  await desktopProcessStack.stopManager(Date.now() + 10_000)
 }
 
 export function isServiceManagerDataMutexFailure(error: unknown): boolean {
@@ -392,6 +424,7 @@ async function restartRuntimeAfterStopping(
   ensure: (settings: AppSettingsV1) => Promise<void> = (launchSettings) =>
     kunRuntimeAdapter.ensureRunning(launchSettings)
 ): Promise<void> {
+  desktopProcessStack.assertCanStart()
   mainState.assertCanonicalRuntimeMigrationReady()
   // Don't tear down a child that is still completing its startup; wait for it
   // to settle so a restart trigger that races a boot doesn't reset the clock
@@ -408,6 +441,7 @@ async function restartRuntimeAfterStopping(
 
   const adapter = kunRuntimeAdapter
   await stop()
+  desktopProcessStack.assertCanStart()
   const launchSettings = await resolveManagedKunLaunchSettings(settings, 'runtime-restart')
 
   try {

@@ -136,6 +136,8 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     executionBlockedTools?: string[]
     /** Forward GUI design-canvas scope into the child turn when present. */
     guiDesignCanvas?: boolean
+    /** Forward GUI Excalidraw canvas scope into the child turn when present. */
+    guiExcalidrawCanvas?: boolean
     returnFormat?: ChildReturnFormat
     /** Strict budgeted source-only retrieval mode used by Fast Context. */
     fastContext?: boolean
@@ -287,7 +289,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       input.serviceTier ??
       (input.inheritSessionDefaults === true ? input.inheritedServiceTier : undefined)
     const returnFormat = input.returnFormat ?? 'summary'
-    const clientSurface = input.guiDesignCanvas ? 'gui' : input.clientSurface ?? 'api'
+    const clientSurface = input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api'
 
     const queuedAt = this.now()
     const id = this.options.idGenerator?.() ?? `child_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
@@ -401,6 +403,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         clientSurface,
         agentSurface,
         guiDesignCanvas: input.guiDesignCanvas === true,
+        guiExcalidrawCanvas: input.guiExcalidrawCanvas === true,
         resolvedReasoningEffort,
         resolvedServiceTier,
         returnFormat,
@@ -473,6 +476,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       clientSurface,
       agentSurface,
       guiDesignCanvas: input.guiDesignCanvas === true,
+      guiExcalidrawCanvas: input.guiExcalidrawCanvas === true,
       resolvedReasoningEffort,
       resolvedServiceTier,
       returnFormat,

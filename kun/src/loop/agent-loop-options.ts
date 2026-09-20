@@ -138,6 +138,8 @@ export type AgentLoopOptions = {
   allowedSkillIds?: readonly string[]
   /** Workspace-relative read scopes captured at the delegated child boundary. */
   allowedReadPaths?: readonly string[]
+  /** Host-wide reads for delegated loops whose parent granted them. */
+  allowHostReads?: boolean
   /** Workspace-relative write scopes captured at the delegated child boundary. */
   allowedWritePaths?: readonly string[]
   /** Artifact capability set captured at the delegated child boundary. */

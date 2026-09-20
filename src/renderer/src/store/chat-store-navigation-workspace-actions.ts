@@ -66,6 +66,7 @@ import {
   removedRegistryAfterRestore,
   threadBelongsToRemovedCodeProject
 } from './chat-store-navigation-workspace-removal'
+import { retainThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { preserveListedDesignProfiles } from '../design/design-locked-profile'
 import {
   clearedThreadSelection,
@@ -112,6 +113,7 @@ import {
 import {
   clearBusyWatchdog,
   resetBusyRecoveryAttempts,
+  scheduleOfflineRuntimeProbe,
   scheduleStartupRuntimeProbe,
   stopTurnCompletionPoll
 } from './chat-store-schedulers'
@@ -481,6 +483,7 @@ export function createNavigationWorkspaceActions(
       ) {
         displayThreads = [preservedLegacyDesignActiveThread, ...displayThreads]
       }
+      displayThreads = retainThreadAdditionalWorkspaces(displayThreads, get().threads)
       const writeWorkspaceRoots = await readWriteWorkspaceRoots()
       const writeRegistry = hydrateWriteThreadRegistry(
         displayThreads,
@@ -659,6 +662,10 @@ export function createNavigationWorkspaceActions(
           ? { route: 'settings' as const, settingsSection: 'agents' as const }
           : {})
       })
+      // A failed inventory refresh marks the connection offline; keep the
+      // slow background re-probe alive so the GUI recovers on its own once
+      // the runtime is reachable again.
+      scheduleOfflineRuntimeProbe(get)
     } finally {
       refreshInFlight = false
       if (refreshQueued) {

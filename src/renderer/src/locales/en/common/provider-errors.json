@@ -9,5 +9,9 @@
   "modelErrorNoResponseSummary": "The model request was sent, but the provider did not respond",
   "modelErrorNotSentSummary": "The model request failed before it was sent",
   "modelErrorProviderOriginalMessage": "Provider-returned message",
-  "modelErrorFailureMessage": "Failure reason"
+  "modelErrorFailureMessage": "Failure reason",
+  "outputTruncatedNotice": "The reply was cut off at the model's per-response output limit — a generation cap (max output tokens), not your account balance. Kun already tried to continue automatically. Use Continue to resume again, or raise the limit under Settings > Providers > model > Max output (tokens).",
+  "continueTruncatedTaskPrompt": "Continue from where the previous reply was cut off. Keep each response shorter and split the remaining work into smaller steps.",
+  "runtimeFetchFailedAutoStart": "Could not reach Kun. Auto-start is already enabled, so the local runtime may have crashed or is still restarting — retry, or restart Kun and check its logs.",
+  "openProviderSettings": "Provider settings"
 }

@@ -22,6 +22,7 @@ import {
   MAX_LIVE_EVENTS_DURING_REPLAY,
   MAX_REPLAY_BYTES,
   type BufferedAgentEvent,
+  type ExtensionAgentCapacitySnapshot,
   type ExtensionAgentCreateRunRequest,
   type ExtensionAgentAuthorizer,
   type ExtensionAgentEvent,
@@ -75,6 +76,23 @@ export class ExtensionAgentService {
       permission: EXTENSION_AGENT_PERMISSIONS.run
     })
     return this.currentRunOptions()
+  }
+
+  async capacity(principal: ExtensionPrincipal): Promise<ExtensionAgentCapacitySnapshot> {
+    await this.authorize(principal, {
+      operation: 'capacity',
+      permission: EXTENSION_AGENT_PERMISSIONS.readCapacity
+    })
+    const snapshot = await this.options.turns.capacitySnapshot().catch(() => {
+      // Manager and store failures may contain local paths or connection credentials.
+      throw new ExtensionBrokerError('conflict', 'Turn capacity is temporarily unavailable')
+    })
+    return {
+      activeTurns: snapshot.activeTurns,
+      queuedTurns: snapshot.queuedTurns,
+      maxConcurrentTurns: snapshot.maxConcurrentTurns,
+      busy: snapshot.busy
+    }
   }
 
   private currentRunOptions(): ExtensionAgentRunOptions {

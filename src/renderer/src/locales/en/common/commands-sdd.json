@@ -524,7 +524,7 @@
   "sidebarThreadAwaitingInput": "Awaiting your input",
   "awaitingYourInput": "Awaiting your input…",
   "sidebarThreadUnread": "New reply",
-  "sidebarThreadFailed": "Task failed — open to review",
+  "sidebarThreadFailed": "Task ended with an error — open to review",
   "sidebarThreadScheduled": "Scheduled for {{time}}",
   "sidebarThreadScheduledMultiple": "{{count}} scheduled tasks · next {{time}}",
   "sidebarThreadScheduledQueued": "Scheduled task waiting to start",

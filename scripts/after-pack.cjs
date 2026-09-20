@@ -14,8 +14,8 @@ const {
   rmSync,
   writeFileSync
 } = require('node:fs')
-const { join } = require('node:path')
-const { prunePackedOnnxRuntimeBinaries } = require('./after-pack-onnxruntime.cjs')
+const { dirname, join } = require('node:path')
+const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
 const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
@@ -85,37 +85,13 @@ const MINIMUM_TUI_NODE_VERSION = '22.19.0'
 const BUNDLED_EXTENSIONS_DIR = 'bundled-extensions'
 const BUNDLED_EXTENSION_CATALOG_FILE = 'catalog.json'
 const OFFICECLI_DIR = 'officecli'
-const TESSERACT_NODE_LSTM_ALIASES = new Map([
-  ['tesseract-core.js', './tesseract-core-lstm'],
-  ['tesseract-core-simd.js', './tesseract-core-simd-lstm'],
-  ['tesseract-core-relaxedsimd.js', './tesseract-core-relaxedsimd-lstm']
-])
-const TESSERACT_LSTM_CORE_FILES = new Set([
-  'LICENSE',
-  'package.json',
-  ...TESSERACT_NODE_LSTM_ALIASES.keys(),
-  'tesseract-core-lstm.js',
-  'tesseract-core-lstm.wasm',
-  'tesseract-core-simd-lstm.js',
-  'tesseract-core-simd-lstm.wasm',
-  'tesseract-core-relaxedsimd-lstm.js',
-  'tesseract-core-relaxedsimd-lstm.wasm'
-])
-const BETTER_SQLITE_BUILD_PATHS = [
-  'binding.gyp',
-  'deps',
-  'src',
-  'build/Makefile',
-  'build/binding.Makefile',
-  'build/better_sqlite3.target.mk',
-  'build/config.gypi',
-  'build/deps',
-  'build/test_extension.target.mk',
-  'build/Release/.deps',
-  'build/Release/obj',
-  'build/Release/obj.target',
-  'build/Release/test_extension.node'
-]
+const {
+  BETTER_SQLITE_BUILD_PATHS,
+  TESSERACT_LSTM_CORE_FILES,
+  TESSERACT_NODE_LSTM_ALIASES,
+  prunePackedBetterSqliteBuildFiles,
+  prunePackedTesseractResources
+} = require('./after-pack-prune-resources.cjs')
 const KUN_ROOT_HOISTED_DEPENDENCY_PATHS = [
   '@computer-use',
   '@napi-rs',
@@ -192,6 +168,41 @@ function packedKunPruneArgs(context) {
   ]
 }
 
+// Some registry tarballs (for example @cursor/sdk and @jimp/plugin-rotate)
+// still carry "workspace:*" specifiers in their packaged manifests. npm
+// prune rejects those with EUNSUPPORTEDPROTOCOL, so rewrite them to the
+// version that is actually installed before pruning.
+function rewriteWorkspaceSpecifiers(dir) {
+  rewriteWorkspaceSpecifiersInManifest(join(dir, 'package.json'))
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name !== 'bin') {
+      rewriteWorkspaceSpecifiers(join(dir, entry.name))
+    }
+  }
+}
+
+function rewriteWorkspaceSpecifiersInManifest(manifestPath) {
+  if (!existsSync(manifestPath)) return
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  let changed = false
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+    const deps = manifest[field]
+    if (!deps) continue
+    for (const [name, spec] of Object.entries(deps)) {
+      if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue
+      const installed = join(dirname(manifestPath), 'node_modules', ...name.split('/'), 'package.json')
+      const version = existsSync(installed)
+        ? JSON.parse(readFileSync(installed, 'utf8')).version
+        : '0.0.0'
+      deps[name] = version
+      changed = true
+    }
+  }
+  if (changed) {
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  }
+}
+
 function prunePackedKunDependencies(context) {
   const root = unpackedAppRoot(context)
   const kunDir = join(root, 'kun')
@@ -199,6 +210,8 @@ function prunePackedKunDependencies(context) {
 
   assertExists(join(kunDir, 'package.json'), 'Kun package manifest')
   assertExists(join(kunDir, 'node_modules'), 'Kun node_modules')
+
+  rewriteWorkspaceSpecifiers(join(kunDir, 'node_modules'))
 
   const prune = npmCommand(packedKunPruneArgs(context))
   execFileSync(prune.command, prune.args, {
@@ -252,40 +265,6 @@ function prunePackedClaudeCodeBinary(context) {
   console.log(`[after-pack] Removed on-demand Claude Code binary package: ${packageName}`)
 }
 
-function prunePackedBetterSqliteBuildFiles(context) {
-  const packageRoot = join(unpackedAppRoot(context), 'node_modules', 'better-sqlite3')
-  if (!existsSync(packageRoot)) return
-  for (const relativePath of BETTER_SQLITE_BUILD_PATHS) {
-    rmSync(join(packageRoot, relativePath), { recursive: true, force: true })
-  }
-  console.log('[after-pack] Removed better-sqlite3 build sources and intermediates.')
-}
-
-function prunePackedTesseractResources(context) {
-  const modules = join(unpackedAppRoot(context), 'node_modules')
-  const coreRoot = join(modules, 'tesseract.js-core')
-  if (existsSync(coreRoot)) {
-    for (const entry of readdirSync(coreRoot)) {
-      if (TESSERACT_LSTM_CORE_FILES.has(entry)) continue
-      rmSync(join(coreRoot, entry), { recursive: true, force: true })
-    }
-    // Tesseract.js 7's Node loader asks for the legacy-named JS entry points even
-    // when createWorker selected its LSTM-only core. Keep those tiny entry points
-    // as aliases while omitting every non-LSTM WASM payload.
-    for (const [entry, target] of TESSERACT_NODE_LSTM_ALIASES) {
-      writeFileSync(
-        join(coreRoot, entry),
-        `'use strict'\nmodule.exports = require('${target}')\n`
-      )
-    }
-  }
-  rmSync(
-    join(modules, '@tesseract.js-data', 'eng', '4.0.0_best_int'),
-    { recursive: true, force: true }
-  )
-  console.log('[after-pack] Kept only Node LSTM Tesseract cores and the configured English model.')
-}
-
 function prunePackedHoistedKunDependencies(context) {
   const root = unpackedAppRoot(context)
   const modules = join(root, 'node_modules')
@@ -321,9 +300,9 @@ function prunePackedHoistedKunDependencies(context) {
 
 function prunePackedApplicationPayload(context) {
   prunePackedClaudeCodeBinary(context)
-  prunePackedBetterSqliteBuildFiles(context)
-  prunePackedTesseractResources(context)
-  prunePackedOnnxRuntimeBinaries(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
+  prunePackedBetterSqliteBuildFiles(context, { unpackedAppRoot })
+  prunePackedTesseractResources(context, { unpackedAppRoot })
+  checkPackedSanottsRuntime(context, { unpackedAppRoot })
   trimPackedNodePtyPayload(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
   prunePackedHoistedKunDependencies(context)
 }
@@ -679,7 +658,7 @@ exports._internals = {
   maybeSignBundledOfficeCli,
   normalizeArch,
   normalizePlatform,
-  prunePackedOnnxRuntimeBinaries,
+  checkPackedSanottsRuntime,
   prunePackedWhisperResources,
   ensureNodePtyHelpersExecutable,
   assertElfExecutable,

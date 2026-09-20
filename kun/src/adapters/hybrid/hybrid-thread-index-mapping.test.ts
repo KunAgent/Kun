@@ -8,7 +8,7 @@ import {
 describe('hybrid thread index mapping', () => {
   it('projects the indexed event high-water mark into lean summaries', () => {
     const thread = createThreadRecord({
-      id: 'thread-activity', title: 'Activity', workspace: '/tmp/project', model: 'model'
+      id: 'thread-activity', historyRefId: 'history-source', title: 'Activity', workspace: '/tmp/project', model: 'model'
     })
     const row = rowFromIndexRecord({
       thread,
@@ -21,6 +21,6 @@ describe('hybrid thread index mapping', () => {
       eventsPath: '/tmp/events.jsonl'
     })
 
-    expect(summaryFromRow(row)).toMatchObject({ id: thread.id, latestSeq: 17 })
+    expect(summaryFromRow(row)).toMatchObject({ id: thread.id, historyRefId: 'history-source', latestSeq: 17 })
   })
 })

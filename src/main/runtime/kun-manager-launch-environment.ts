@@ -17,6 +17,7 @@ export function kunManagerLaunchEnvironment(input: {
     KUN_MANAGER_INSTANCE_ID: discovery.instanceId,
     KUN_MANAGER_TOKEN: discovery.managerToken,
     KUN_MANAGER_DATA_DIR: discovery.dataDir,
-    KUN_MANAGER_SETTINGS_PATH: discovery.settingsPath
+    KUN_MANAGER_SETTINGS_PATH: discovery.settingsPath,
+    KUN_APP_SESSION_OWNER: discovery.appOwner ? JSON.stringify(discovery.appOwner) : ''
   }
 }

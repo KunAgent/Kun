@@ -365,7 +365,8 @@ export async function rehydrateDesignWorkspaceArtifacts({
         createdAt: entry.createdAt,
         updatedAt: entry.updatedAt,
         artifacts,
-        activeArtifactId
+        activeArtifactId,
+        ...(entry.engine ? { engine: entry.engine } : {})
       })
     }
     await Promise.all(

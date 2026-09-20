@@ -180,7 +180,8 @@ function referenceFromEntry(
     path: entry.path,
     relativePath: relativeWorkspacePath(entry.path, workspaceRoot),
     name: entry.name,
-    type
+    type,
+    workspaceRoot
   }
 }
 

@@ -1,0 +1,54 @@
+import type { ReactElement } from 'react'
+import type { KunLabSettingsPatchV1, KunLabSettingsV1 } from '@shared/app-settings'
+import {
+  InlineNoticeView,
+  SettingRow,
+  SettingsCard,
+  Toggle
+} from './settings-controls'
+
+type Translate = (key: string) => string
+
+export function CodexReferenceBranchesSettingsPanel({
+  t,
+  value,
+  onChange
+}: {
+  t: Translate
+  value: KunLabSettingsV1
+  onChange: (patch: KunLabSettingsPatchV1) => void
+}): ReactElement {
+  return (
+    <div className="mt-6">
+      <SettingsCard title={t('labCodexReferenceBranchesTitle')}>
+        <div className="space-y-3 px-3 py-4">
+          <InlineNoticeView notice={{
+            tone: 'info',
+            message: t('labCodexReferenceBranchesDescription')
+          }} />
+        </div>
+        <SettingRow
+          title={t('labCodexReferenceBranchesEnabled')}
+          description={t('labCodexReferenceBranchesEnabledDesc')}
+          control={
+            <Toggle
+              checked={value.codexReferenceBranches?.enabled === true}
+              onChange={(enabled) => onChange({ codexReferenceBranches: { enabled } })}
+            />
+          }
+        />
+        <SettingRow
+          title={t('labClaudeCodeReferenceBranchesEnabled')}
+          description={t('labClaudeCodeReferenceBranchesEnabledDesc')}
+          control={<Toggle checked={value.claudeCodeReferenceBranches?.enabled === true}
+            onChange={(enabled) => onChange({ claudeCodeReferenceBranches: { enabled } })} />}
+        />
+        <SettingRow title={t('labOpenCodeReferenceBranchesEnabled')}
+          description={t('labOpenCodeReferenceBranchesEnabledDesc')}
+          control={<Toggle checked={value.opencodeReferenceBranches?.enabled === true}
+            onChange={(enabled) => onChange({ opencodeReferenceBranches: { enabled } })} />}
+        />
+      </SettingsCard>
+    </div>
+  )
+}

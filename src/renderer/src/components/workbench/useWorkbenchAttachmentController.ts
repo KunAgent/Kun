@@ -93,9 +93,16 @@ export function useWorkbenchAttachmentController({
       const workspace = getActiveWorkspace()
       const uploaded: AttachmentReference[] = []
       for (const [index, file] of files.entries()) {
+        // Remote web mode has no host-side file paths; upload the file to a
+        // host temp directory first so the document bridge can read it.
         const localFilePath =
           options.localFilePaths?.[index] ||
-          (typeof window.kunGui?.getPathForFile === 'function' ? window.kunGui.getPathForFile(file) : '')
+          (window.kunGui?.isRemoteWeb === true &&
+          typeof window.kunGui?.uploadRemoteFile === 'function'
+            ? await window.kunGui.uploadRemoteFile(file)
+            : typeof window.kunGui?.getPathForFile === 'function'
+              ? window.kunGui.getPathForFile(file)
+              : '')
         // When the desktop document bridge handles the upload, the main
         // process reads the bytes from localFilePath, so skip the renderer
         // base64 copy of potentially large documents.

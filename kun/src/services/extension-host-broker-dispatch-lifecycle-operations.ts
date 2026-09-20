@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
+import { dispatchExtensionRead } from './extension-host-broker-read-operations.js'
 import {
   AccountSchema,
   ArtifactHostActionRequestSchema,
@@ -350,6 +351,12 @@ async dispatch(this: ExtensionHostBroker,
     nodeHost: boolean
   ): Promise<unknown> {
     switch (request.method) {
+      case 'agent.capacity':
+      case 'rooms.list':
+      case 'rooms.listMessages':
+      case 'rooms.listTasks':
+      case 'rooms.listEvents':
+        return dispatchExtensionRead(this['options'], principal, request.method, request.params)
       case 'commands.register':
         return this['registerCommand'](principal, request.params)
       case 'commands.unregister':

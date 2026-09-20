@@ -1,3 +1,5 @@
+import { loadEarlierThreadHistory } from './chat-store-thread-history'
+import { codexReferenceRevision } from '../history-reference/codex-reference-state'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -166,6 +168,7 @@ import {
   type StoreActionContext,
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
+import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 
 export function createThreadSelectionActions(
   context: StoreActionContext,
@@ -176,6 +179,7 @@ export function createThreadSelectionActions(
   selectThread: async (id, options) => {
     if (options?.selectionGuard?.() === false) return
     const currentState = get()
+    const historyRevision = codexReferenceRevision()
     if (threadIdBelongsToRemovedCodeProject(id, currentState)) {
       set({ error: i18n.t('common:sidebarWorkspaceRemoveDialogDetail') })
       return
@@ -245,6 +249,10 @@ export function createThreadSelectionActions(
       }, durableQueuedMessages.length > 0
         ? await fetchRuntimeQueuedTurnsBestEffort(p, id)
         : undefined)
+      if (historyRevision !== codexReferenceRevision()) {
+        if (selectionGeneration !== runtime.threadSelectionGeneration || options?.selectionGuard?.() === false) return
+        return get().selectThread(id, options)
+      }
       const remembersCodeThread = targetThread != null &&
         targetThread.archived !== true &&
         isCodeSidebarThread(
@@ -298,6 +306,14 @@ export function createThreadSelectionActions(
       subscribeThreadEventsWithRecovery(p, id, cached.lastSeq, sink, ac.signal, get)
       if (cached.busy) armBusyWatchdog(set, get)
       if (queuedMessages.length > 0) void get().drainQueuedMessages()
+      if (!cached.busy) {
+        void syncThreadAdditionalWorkspaces({
+          set,
+          get,
+          threadId: id,
+          mergeExtras: targetThread?.additionalWorkspaces
+        })
+      }
       return
     }
     // Give the sidebar its selected state in this render frame. The timeline
@@ -507,54 +523,7 @@ export function createThreadSelectionActions(
       })
     } finally { finishThreadHydration(runtime, hydrationAbort) }
   },
-  loadEarlierThreadHistory: async () => {
-    const state = get()
-    const threadId = state.activeThreadId
-    const cursor = state.threadHistoryCursor
-    if (
-      !threadId ||
-      !cursor ||
-      !state.threadHasMoreHistory ||
-      state.threadHistoryLoading
-    ) return false
-    set({ threadHistoryLoading: true })
-    try {
-      const detail = await getProvider().getThreadDetail(threadId, { before: cursor })
-      if (get().activeThreadId !== threadId) return false
-      const olderBlocks = hydrateBlockModelLabels(threadId, detail.blocks)
-      if (
-        detail.hasMoreHistory === true &&
-        (!detail.historyCursor || detail.historyCursor === cursor)
-      ) {
-        throw new Error('thread history cursor did not advance')
-      }
-      set((current) => {
-        if (current.activeThreadId !== threadId) return { threadHistoryLoading: false }
-        return {
-          blocks: prependOlderHistoryBlocks(current.blocks, olderBlocks),
-          threadHistoryCursor: detail.historyCursor ?? null,
-          threadHasMoreHistory: detail.hasMoreHistory === true,
-          threadHistoryLoading: false,
-          turnDurationByUserId: {
-            ...current.turnDurationByUserId,
-            ...(detail.turnDurationByUserId ?? {})
-          }
-        }
-      })
-      threadActionSharedState.expandedHistoryThreadIds.add(threadId)
-      // Expanded history can outgrow the projection cache; a later switch
-      // safely rehydrates the latest bounded page instead.
-      invalidateThreadSnapshot(threadId)
-      return true
-    } catch (error) {
-      if (get().activeThreadId !== threadId) return false
-      set({
-        threadHistoryLoading: false,
-        error: formatRuntimeError(error)
-      })
-      return false
-    }
-  },
+  loadEarlierThreadHistory: () => loadEarlierThreadHistory(set, get),
   subscribeThreadEventsLive: async (threadId) => {
     if (get().runtimeConnection !== 'ready') return
     const targetThreadId = threadId.trim()
@@ -627,7 +596,8 @@ export function createThreadSelectionActions(
         goal,
         todos,
         historyCursor,
-        hasMoreHistory = false
+        hasMoreHistory = false,
+        additionalWorkspaces
       } = await p.getThreadDetail(targetThreadId)
       if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return
       const loaded = hydrateBlockModelLabels(targetThreadId, rawBlocks)
@@ -669,7 +639,8 @@ export function createThreadSelectionActions(
               ...thread,
               status: thread.archived ? thread.status : busy ? 'running' : 'idle',
               ...(latestTurnId ? { latestTurnId } : {}),
-              ...(latestTurnStatus ? { latestTurnStatus } : {})
+              ...(latestTurnStatus ? { latestTurnStatus } : {}),
+              ...(additionalWorkspaces ? { additionalWorkspaces } : {})
             }
           : thread)
       })
@@ -680,6 +651,14 @@ export function createThreadSelectionActions(
       if (busy) armBusyWatchdog(set, get)
       if (!busy && queuedMessages.some(isPendingQueuedMessage)) {
         void get().drainQueuedMessages()
+      }
+      if (!busy) {
+        void syncThreadAdditionalWorkspaces({
+          set,
+          get,
+          threadId: targetThreadId,
+          mergeExtras: additionalWorkspaces
+        })
       }
     } catch (e) {
       if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return

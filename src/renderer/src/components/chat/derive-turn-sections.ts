@@ -5,6 +5,7 @@ import {
   extractUnifiedDiffText,
   formatFilePathForDisplay,
 } from '../../lib/diff-stats'
+import { isPendingRenderChartTool } from '../../agent/chart-spec-adapter'
 import {
   isAppendedUserBlock,
   isProcessBlock,
@@ -50,6 +51,7 @@ export type TurnSections = {
   runtimeErrorsBeforeFinalContent: TurnRuntimeErrorBlock[]
   runtimeErrorsAfterFinalContent: TurnRuntimeErrorBlock[]
   chartBlocks: Extract<ChatBlock, { kind: 'chart' }>[]
+  pendingChartBlocks: ToolBlock[]
   componentPrototypeBlocks: ToolBlock[]
   diagramPrototypeBlocks: ToolBlock[]
   conversationVisualizationBlocks: ToolBlock[]
@@ -270,6 +272,7 @@ export function deriveTurnSections({
       }
       continue
     }
+    if (isPendingRenderChartTool(block)) continue
     if (isProcessBlock(block)) {
       processBlocks.push(block)
       processTimelineBlocks.push(block)
@@ -344,6 +347,7 @@ export function deriveTurnSections({
   ))
 
   const chartBlocks = turn.blocks.filter((block): block is Extract<ChatBlock, { kind: 'chart' }> => block.kind === 'chart')
+  const pendingChartBlocks = turn.blocks.filter((block): block is ToolBlock => isPendingRenderChartTool(block))
 
   return {
     processBlocks,
@@ -358,6 +362,7 @@ export function deriveTurnSections({
     generatedFileBlocks,
     turnFileChanges,
     chartBlocks,
+    pendingChartBlocks,
     appendedUserBlocks,
     timelineEntries
   }

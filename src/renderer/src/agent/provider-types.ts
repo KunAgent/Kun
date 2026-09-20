@@ -147,9 +147,11 @@ export type ThreadDetail = {
   todos?: ThreadTodoList | null
   /** Original detail response size, used only to bound renderer snapshots. */
   payloadBytes?: number
+  historyTarget?: { turnId: string; itemId?: string; previousCursor?: string; nextCursor?: string }
   historyCursor?: string
   hasMoreHistory?: boolean
   designProfile?: DesignTaskProfile
+  additionalWorkspaces?: string[]
 }
 
 export type ThreadEventSink = {
@@ -217,9 +219,11 @@ export interface AgentProvider {
   listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
   /** Optional paginated listing used by the sidebar "show more" flow. */
   listThreadsPage?(options?: ThreadListOptions): Promise<ThreadListPage>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[] }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string
+    turnId?: string
+    itemId?: string
     signal?: AbortSignal
     priority?: 'foreground' | 'background'
   }): Promise<ThreadDetail>
@@ -254,6 +258,7 @@ export interface AgentProvider {
         title?: string
       }
       guiDesignCanvas?: boolean
+      guiExcalidrawCanvas?: boolean
       guiDesignMode?: boolean
       persona?: string
       agentSurface?: 'code' | 'write' | 'design'
@@ -399,6 +404,7 @@ export interface AgentProvider {
    */
   renameThread(threadId: string, title: string, auto?: boolean): Promise<void>
   updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
+  updateThreadAdditionalWorkspaces?(threadId: string, additionalWorkspaces: string[]): Promise<NormalizedThread>
   updateThreadKnowledgeBases?(threadId: string, mounts: KnowledgeBaseMount[]): Promise<NormalizedThread>
   getThreadKnowledgeBases?(threadId: string): Promise<{
     mounts: KnowledgeBaseMount[]

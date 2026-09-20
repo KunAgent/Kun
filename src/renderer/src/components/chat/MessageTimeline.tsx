@@ -1,12 +1,20 @@
-import type { ReactElement } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { timelineForkPointIndex } from './message-timeline-fork-point'
+import { SourceHistoryTargetPager } from '../../history-reference/SourceHistoryTargetPager'
+import { SourceHistoryRecordViewer } from '../../history-reference/SourceHistoryRecordViewer'
+import { SourceHistoryAttachments } from '../../history-reference/SourceHistoryAttachments'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GitCommitHorizontal, Hash } from 'lucide-react'
 import type { ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
+import { useTimelineJumpRail } from './use-timeline-jump-rail'
+import { SourceHistoryCard, SourceHistoryTurnLabel, SourceHistoryBoundary } from '../../history-reference/SourceHistoryCard'
+import { isSourceHistoryTurn } from '../../history-reference/history-reference-api'
 import { useTimelineStores } from './use-timeline-stores'
 import { useTimelineScroll } from './use-timeline-scroll'
+import { useTimelineTurnTargetBlocks } from './thread-turn-target'
+import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
 import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
 import {
   activeTimelineTurnIndex,
@@ -76,7 +84,7 @@ export {
 
 const TURN_PAGE_SIZE = 18
 export function MessageTimeline({
-  blocks,
+  blocks: storedBlocks,
   liveReasoning,
   live,
   activeThreadId,
@@ -108,6 +116,7 @@ export function MessageTimeline({
   onExtensionCommand
 }: MessageTimelineProps): ReactElement {
   const { t } = useTranslation('common')
+  const blocks = useTimelineTurnTargetBlocks(storedBlocks, activeThreadId)
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
@@ -193,6 +202,7 @@ export function MessageTimeline({
     hiddenTurnCount,
     hasEarlierTurns,
     loadEarlierTurns,
+    revealTurnAtIndex,
     collapseEarlierTurns
   } = useTimelineScroll({
     containerRef, contentRef, endRef,
@@ -257,68 +267,10 @@ export function MessageTimeline({
     [hiddenTurnCount, t, turns, visibleTurns]
   )
   const forkedFromTitle = activeThread?.forkedFromTitle?.trim() ?? ''
-  const forkBoundaryTurnCount =
-    typeof activeThread?.forkedFromTurnCount === 'number'
-      ? Math.max(0, activeThread.forkedFromTurnCount)
-      : undefined
+  const forkPointIndex = timelineForkPointIndex(turns, activeThread, threadHasMoreHistory)
   const filePreviewWorkspaceRoot = timelineFilePreviewWorkspaceRoot(activeThread, workspaceRoot)
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container || visibleTurnAnchors.length === 0) {
-      setActiveTurnKey(null)
-      return
-    }
-    let frame: number | null = null
-    const update = (): void => {
-      frame = null
-      if (container.scrollHeight - container.scrollTop - container.clientHeight <= 2) {
-        setActiveTurnKey(visibleTurnAnchors.at(-1)?.key ?? null)
-        return
-      }
-      const containerTop = container.getBoundingClientRect().top
-      const positions = visibleTurnAnchors.flatMap((anchor) => {
-        const node = turnRefMap.current.get(anchor.key)
-        return node ? [{ key: anchor.key, top: node.getBoundingClientRect().top - containerTop }] : []
-      })
-      setActiveTurnKey(activeTimelineTurnKey(positions))
-    }
-    const schedule = (): void => {
-      if (frame === null) frame = window.requestAnimationFrame(update)
-    }
-    container.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
-    schedule()
-    return () => {
-      container.removeEventListener('scroll', schedule)
-      window.removeEventListener('resize', schedule)
-      if (frame !== null) window.cancelAnimationFrame(frame)
-    }
-  }, [visibleTurnAnchors])
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container || visibleTurnAnchors.length <= 2) {
-      setJumpRailLayout(null)
-      return
-    }
-    const update = (): void => {
-      const rect = container.getBoundingClientRect()
-      const railLeft = timelineJumpRailLeft(rect.width)
-      setJumpRailLayout({
-        railLeft,
-        previewLeft: timelineJumpRailPreviewLeft(railLeft, rect.width)
-      })
-    }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(container)
-    window.addEventListener('resize', update)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', update)
-    }
-  }, [visibleTurnAnchors.length])
+  useTimelineJumpRail({ containerRef, turnRefMap, visibleTurnAnchors, setActiveTurnKey, setJumpRailLayout })
 
   // Tick a clock while a turn is running so the live "Worked for Xs" updates.
   const [tickNow, setTickNow] = useState(() => Date.now())
@@ -329,12 +281,8 @@ export function MessageTimeline({
     return () => window.clearInterval(id)
   }, [busy, currentTurnUserId, graphPlanningPaused])
 
-  const jumpToTurn = (key: string): void => {
-    const target = turnRefMap.current.get(key)
-    if (!target) return
-    setActiveTurnKey(key)
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const jumpToTurn = useTimelineTurnNavigation({ activeThreadId, turns, hiddenTurnCount,
+    turnRefMap, revealTurnAtIndex, onActive: setActiveTurnKey })
 
   const showJumpRailPreview = (
     anchor: {
@@ -442,7 +390,8 @@ export function MessageTimeline({
       <div ref={contentRef} className={`ds-message-timeline-content ds-chat-column-inset ds-chat-content-max-width mx-auto flex w-full min-w-0 flex-col ${compactCards ? 'gap-5' : 'gap-8'} pt-8 ${
         timelineBottomPaddingClass()
       }`}>
-        {!hasContent || !activeThreadId ? (
+        {activeThread?.historyRefId ? <SourceHistoryCard referenceId={activeThread.historyRefId} /> : null}
+        {(!hasContent && !activeThread?.historyRefId) || !activeThreadId ? (
           <MessageTimelineEmptyHero
             route={heroRoute}
             ready={runtimeConnection === 'ready'}
@@ -492,7 +441,8 @@ export function MessageTimeline({
             typeof reasoningFirst === 'number' && typeof reasoningLast === 'number'
               ? Math.max(0, reasoningLast - reasoningFirst)
               : undefined
-          const turnPending = threadHasPendingRuntimeWork(turn.blocks)
+          const sourceHistory = isSourceHistoryTurn(turn)
+          const turnPending = !sourceHistory && threadHasPendingRuntimeWork(turn.blocks)
           const turnContributions = messageContributionsForSurface?.(turnTaskSurface(turn))
           const turnMessageActions = turnContributions?.actions ?? extensionMessageActions
           const turnContextMenus = turnContributions?.contextMenus ?? extensionContextMenus
@@ -501,7 +451,7 @@ export function MessageTimeline({
           const isLatestTurn = index === visibleTurns.length - 1
           const isActiveTurn = index === activeTurnIndex
           const hasLiveStream = isActiveTurn && !!(liveReasoning.trim() || live.trim())
-          const turnIsProcessing = timelineTurnIsProcessing({
+          const turnIsProcessing = !sourceHistory && timelineTurnIsProcessing({
             busy,
             busyUnconfirmed,
             isLatestTurn,
@@ -512,7 +462,7 @@ export function MessageTimeline({
             graphPlanningCorrectionTurnId
           })
           const showForkPoint =
-            forkBoundaryTurnCount !== undefined && absoluteTurnIndex === forkBoundaryTurnCount
+            forkPointIndex !== undefined && absoluteTurnIndex === forkPointIndex
           const turnKey = stableTurnKey(turn, absoluteTurnIndex)
           return (
             <div
@@ -525,6 +475,7 @@ export function MessageTimeline({
                 }
               }}
               className="scroll-mt-6"
+              data-turn-id={turn.turnId}
               data-extension-message-context
               onContextMenu={(event) => {
                 const attachmentItem = event.target instanceof Element
@@ -533,7 +484,7 @@ export function MessageTimeline({
                 const attachment = Boolean(attachmentItem) || (event.target instanceof Element &&
                   event.target.closest('[data-extension-attachment-context]') !== null)
                 if (
-                  !onExtensionCommand ||
+                  sourceHistory || !onExtensionCommand ||
                   (!attachment && !canOpenHostContextMenuForTarget(event.target))
                 ) return
                 const contributions = attachment
@@ -556,19 +507,23 @@ export function MessageTimeline({
                 })
               }}
             >
+              {activeThread?.historyRefId && !sourceHistory && (absoluteTurnIndex === 0 || isSourceHistoryTurn(turns[absoluteTurnIndex - 1]!)) ? <SourceHistoryBoundary /> : null}
+              {sourceHistory ? <SourceHistoryTurnLabel referenceId={activeThread?.historyRefId} turnId={turn.turnId} /> : null}
+              {sourceHistory ? <SourceHistoryTargetPager threadId={activeThreadId} turnId={turn.turnId} /> : null}
               {showForkPoint ? <ThreadForkPoint parentTitle={forkedFromTitle} /> : null}
               <MemoMessageTurn
                 turn={turn}
                 isProcessing={turnIsProcessing}
-                liveReasoning={isActiveTurn ? liveReasoning : ''}
-                live={isActiveTurn ? live : ''}
+                allowMainThreadActions={!sourceHistory}
+                liveReasoning={isActiveTurn && !sourceHistory ? liveReasoning : ''}
+                live={isActiveTurn && !sourceHistory ? live : ''}
                 durationMs={durationMs}
                 reasoningDurationMs={reasoningDurationMs}
-                devPreviewCard={isLatestTurn ? devPreviewCard : null}
+                devPreviewCard={isLatestTurn && !sourceHistory ? devPreviewCard : null}
                 planActionsBusy={planActionsBusy}
                 graphEnabled={graphEnabled}
-                onBuildPlan={onBuildPlan}
-                onOpenPlan={onOpenPlan}
+                onBuildPlan={sourceHistory ? undefined : onBuildPlan}
+                onOpenPlan={sourceHistory ? undefined : onOpenPlan}
                 onOpenChanges={onOpenChanges}
                 onReviewChanges={onReviewChanges}
                 reviewChangesDisabled={reviewChangesDisabled}
@@ -576,20 +531,22 @@ export function MessageTimeline({
                 onPreviewGeneratedDocument={onPreviewGeneratedDocument}
                 onOpenGeneratedDocuments={onOpenGeneratedDocuments}
                 onOpenChildThread={onOpenChildThread}
-                onCancelToolCall={activeThreadId ? handleCancelToolCall : undefined}
-                onComponentPrototypePrompt={onComponentPrototypePrompt}
+                onCancelToolCall={!sourceHistory && activeThreadId ? handleCancelToolCall : undefined}
+                onComponentPrototypePrompt={sourceHistory ? undefined : onComponentPrototypePrompt}
                 filePreviewWorkspaceRoot={filePreviewWorkspaceRoot}
                 viewportRef={containerRef}
                 compactCards={compactCards}
-                allowRecoveryContinue={timelineTurnAllowsRecoveryContinue({
+                allowRecoveryContinue={!sourceHistory && timelineTurnAllowsRecoveryContinue({
                   busy,
                   busyUnconfirmed,
                   isLatestTurn
                 })}
-                turnUsage={turn.turnId ? turnUsage.byTurnId.get(turn.turnId) : undefined}
+                turnUsage={!sourceHistory && turn.turnId ? turnUsage.byTurnId.get(turn.turnId) : undefined}
                 turnUsageStale={turnUsage.stale}
               />
-              {!turnIsProcessing && turnMessageActions.length && onExtensionCommand ? (
+              {sourceHistory ? <SourceHistoryRecordViewer threadId={activeThreadId} blocks={turn.user ? [turn.user, ...turn.blocks] : turn.blocks} referenceId={activeThread?.historyRefId} /> : null}
+              {sourceHistory ? <SourceHistoryAttachments blocks={turn.user ? [turn.user, ...turn.blocks] : turn.blocks} referenceId={activeThread?.historyRefId} /> : null}
+              {!sourceHistory && !turnIsProcessing && turnMessageActions.length && onExtensionCommand ? (
                 <div className="mt-1 flex justify-end">
                   <DeclarativeActionBar
                     contributions={turnMessageActions}
@@ -604,7 +561,7 @@ export function MessageTimeline({
                   />
                 </div>
               ) : null}
-              {!turnIsProcessing && turnResultPreviews.length ? (
+              {!sourceHistory && !turnIsProcessing && turnResultPreviews.length ? (
                 <DeclarativeResultPreviews
                   contributions={turnResultPreviews}
                   sources={resultPreviewSourcesForTurn(turn)}
@@ -617,8 +574,9 @@ export function MessageTimeline({
           )
         })}
 
-        {forkBoundaryTurnCount !== undefined &&
-        forkBoundaryTurnCount === turns.length &&
+        {activeThread?.historyRefId && turns.length > 0 && isSourceHistoryTurn(turns[turns.length - 1]!) ? <SourceHistoryBoundary /> : null}
+        {forkPointIndex !== undefined &&
+        forkPointIndex === turns.length &&
         hasContent ? (
           <ThreadForkPoint parentTitle={forkedFromTitle} />
         ) : null}

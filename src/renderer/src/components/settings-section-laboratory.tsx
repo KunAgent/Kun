@@ -42,6 +42,7 @@ import { ConversationVisualizationSettingsPanel } from './settings-section-lab-c
 import { ContextWindowSettingsPanel } from './settings-section-lab-context-window'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
+import { CodexReferenceBranchesSettingsPanel } from './settings-section-lab-codex-reference'
 import { ProjectBoardSettingsPanel } from './settings-section-lab-project-board'
 
 type LaboratorySettingsPanel =
@@ -53,6 +54,7 @@ type LaboratorySettingsPanel =
   | 'graph'
   | 'ppt'
   | 'projectBoard'
+  | 'codexReferenceBranches'
 
 export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const { t, form, kun, updateKun, selectControlClass, runtimeInfo } = ctx
@@ -102,6 +104,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           { id: 'browser', label: t('browserUseSettingsTitle'), icon: Globe2 },
           { id: 'graph', label: t('graphSettingsTitle'), icon: Workflow },
           { id: 'ppt', label: t('labPptTitle'), icon: Presentation },
+          { id: 'codexReferenceBranches', label: t('labCodexReferenceBranchesTitle'), icon: Waypoints },
           { id: 'projectBoard', label: t('labProjectBoardTitle'), icon: Columns3 }
         ]}
         value={activePanel}
@@ -223,6 +226,14 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ lab: patch })}
         />
+      </SettingsTabPanel>
+      <SettingsTabPanel<LaboratorySettingsPanel>
+        baseId="laboratory-settings"
+        tabId="codexReferenceBranches"
+        active={activePanel === 'codexReferenceBranches'}
+        className="[&>div]:mt-0"
+      >
+        <CodexReferenceBranchesSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
       </SettingsTabPanel>
       <SettingsTabPanel<LaboratorySettingsPanel>
         baseId="laboratory-settings"

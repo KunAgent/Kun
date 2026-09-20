@@ -5,6 +5,7 @@ import {
   readStoredComposerMode
 } from './chat-store-helpers'
 import { defaultConversationWorkspaceRoot } from '../lib/workspace-path'
+import { readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import { readRemovedCodeWorkspaces } from '../lib/removed-code-workspaces'
 import { readProtectedSurfaceRestore } from '../extensions/protected-surface-session'
 
@@ -25,6 +26,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     runtimeConnection: 'idle' as const,
     runtimeStatus: null,
     codeWorkspaceRoots: [],
+    codeWorkspaceFolderSets: readCodeWorkspaceFolderSets(),
     // Hydrate hidden projects at store creation so the first sidebar render
     // already excludes them (no flash from the local thread cache).
     removedCodeWorkspaces: readRemovedCodeWorkspaces(),

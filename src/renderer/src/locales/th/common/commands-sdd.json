@@ -509,7 +509,7 @@
   "sidebarThreadAwaitingInput": "กำลังรอการป้อนข้อมูลของคุณ",
   "awaitingYourInput": "กำลังรอการป้อนข้อมูลของคุณ…",
   "sidebarThreadUnread": "ตอบกลับใหม่",
-  "sidebarThreadFailed": "งานล้มเหลว — เปิดเพื่อตรวจสอบ",
+  "sidebarThreadFailed": "งานจบด้วยข้อผิดพลาด — เปิดเพื่อตรวจสอบ",
   "sidebarThreadScheduled": "กำหนดไว้เวลา {{time}}",
   "sidebarThreadScheduledMultiple": "งานที่กำหนดไว้ {{count}} งาน · ถัดไป {{time}}",
   "sidebarThreadScheduledQueued": "งานที่กำหนดไว้กำลังรอเริ่ม",

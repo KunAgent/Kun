@@ -1,4 +1,3 @@
-import type { WindowCloseAction } from '@shared/app-settings'
 import type { CliInstallAction, CliInstallStatus } from '@shared/cli-install'
 import {
   FolderOpen,
@@ -81,7 +80,7 @@ function CliCommandSettingsCard({ locale }: { locale: string }): ReactElement {
 }
 
 export function GeneralDesktopSettingsPanel({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, form, update, selectControlClass, logPath, logDirOpenError, setLogDirOpenError, compactHomePath, activeTab, desktopSubTab, setDesktopSubTab, openAtLoginSupported, startMinimizedSupported, systemTitleBarSupported, desktopBehavior, closeAction, closeActionOptions } = view
+  const { t, form, update, selectControlClass, logPath, logDirOpenError, setLogDirOpenError, compactHomePath, activeTab, desktopSubTab, setDesktopSubTab, openAtLoginSupported, startMinimizedSupported, systemTitleBarSupported, desktopBehavior } = view
   return (
     <>
       <SettingsTabPanel
@@ -171,17 +170,7 @@ export function GeneralDesktopSettingsPanel({ view }: { view: Record<string, any
             title={t('desktopCloseAction')}
             description={t('desktopCloseActionDesc')}
             control={
-              <select
-                className={selectControlClass}
-                value={closeAction}
-                onChange={(e) => update({ appBehavior: { closeAction: e.target.value as WindowCloseAction } })}
-              >
-                {closeActionOptions.map((option: WindowCloseAction) => (
-                  <option key={option} value={option}>
-                    {t(`desktopCloseAction_${option}`)}
-                  </option>
-                ))}
-              </select>
+              <span className="text-[13px] text-ds-muted">{t('desktopCloseAction_quit')}</span>
             }
           />
           {systemTitleBarSupported ? (

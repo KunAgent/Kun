@@ -11,7 +11,9 @@ import {
   traceStartup
 } from './main-app-context'
 import {
-  loadGuiUpdaterModule
+  loadGuiUpdaterModule,
+  stopManagedRuntimes,
+  runtimeShutdown
 } from './main-lifecycle'
 import {
   assertCanonicalRuntimeMigrationReady,
@@ -25,6 +27,7 @@ import {
   runtimeSupervisor
 } from './main-runtime-health'
 import {
+  recoverDesktopManagerAfterExit,
   ensureKunServeFreshOnStartup,
   ensureRuntime,
   prepareGuiRuntimeForStartupRetry,
@@ -50,6 +53,7 @@ import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-st
 import { prefetchCatalogPricing } from './catalog-prefetch'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 import { installHostPowerRecovery } from './host-power-recovery'
+import { desktopProcessStack } from './runtime/desktop-process-stack'
 
 export function startMainApp(): Promise<void> {
   mainState.createWindow = createWindow
@@ -57,6 +61,14 @@ export function startMainApp(): Promise<void> {
   mainState.restartRuntime = restartRuntime
   mainState.assertCanonicalRuntimeMigrationReady = assertCanonicalRuntimeMigrationReady
   mainState.shutdownActiveServiceManagerForUpdate = shutdownActiveServiceManagerForUpdate
+  mainState.stopDesktopServicesForRecovery = stopManagedRuntimes
+  desktopProcessStack.setManagerExitHandler(() => {
+    void recoverDesktopManagerAfterExit().catch((error) => {
+      logWarn('manager-recovery', 'Application data service recovery failed.', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+    })
+  })
 
   try {
     mainState.logDir = resolveLogDirectory(app)
@@ -78,7 +90,15 @@ export function startMainApp(): Promise<void> {
   )
   app.on('second-instance', () => activation.requestReveal())
 
-  const handleStartupFailure = (error: unknown): void => {
+  const handleStartupFailure = async (error: unknown): Promise<void> => {
+    if (runtimeShutdown.isQuitInProgress) return
+    runtimeSupervisor.setManagedRuntimeExpected(false)
+    desktopProcessStack.beginStop()
+    await stopManagedRuntimes().catch((cleanupError) => {
+      logWarn('startup', 'Failed startup resource cleanup was incomplete.', {
+        message: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+      })
+    })
     if (!mainState.startupState.isReady()) {
       try {
         mainState.startupState.transition('recovery_required')
@@ -196,6 +216,7 @@ export function startMainApp(): Promise<void> {
     })
 
     app.on('activate', () => {
+      if (runtimeShutdown.isQuitInProgress) return
       if (!mainState.startupState.isReady()) {
         activation.requestReveal()
         return

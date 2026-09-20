@@ -1,0 +1,14 @@
+{
+  "roomApprovalTitle": "Your confirmation is needed",
+  "roomApproval_command": "Run command",
+  "roomApproval_file": "Access files",
+  "roomApproval_network": "Network action",
+  "roomApproval_mcp": "Use connected tool",
+  "roomApproval_external-effect": "External action",
+  "roomApproval_unknown": "Run action",
+  "roomApprovalDetails": "Details",
+  "roomApprovalReviewAllow": "Review and allow",
+  "roomPermissionLimited": "This Agent has read-only or directory limits",
+  "roomPermissionScope": "This chat · new messages",
+  "roomPermissionNext": "New messages use this setting. Existing runs retain their accepted permissions."
+}

@@ -39,6 +39,8 @@ import {
   startWeixinInstallQrcode
 } from './claw-platform-install'
 import { registerRuntimeSseIpc } from './runtime-sse-ipc'
+import { registerRemoteAccessIpc } from './remote/remote-ipc-handlers'
+import { RemoteAccessService } from './remote/remote-access-service'
 import { registerTerminalPtyIpc } from './terminal/terminal-pty-ipc'
 import { JsonRemoteSshHostStore } from './remote-ssh/host-store'
 import { RemoteSshKnownHostStore } from './remote-ssh/known-host-store'
@@ -135,6 +137,14 @@ export function registerMainIpc(services: MainServices): void {
     }
     ipcMain.removeHandler('startup:state:get')
     ipcMain.handle('startup:state:get', () => mainState.startupState.payload())
+    const remoteAccessService = new RemoteAccessService({
+      getSettings: () => mainState.store.load(),
+      persistRemotePatch: async (patch) => {
+        await mainState.store.update((current) => applySettingsPatchToSnapshot(current, { remote: patch }))
+      },
+      getMainWindow: () => mainState.mainWindow,
+      logError
+    })
     const syncAppKeepAwake = (settings: AppSettingsV1): void => {
       mainState.powerSaveController?.setAppKeepAwake(settings.appBehavior.keepAwake === true)
     }
@@ -207,6 +217,7 @@ export function registerMainIpc(services: MainServices): void {
       syncLoginItemSettings(saved)
       syncTray(saved)
       if (services.ownsDesktopBackgroundServices()) syncCheckpointCleanupTimer(saved)
+      void remoteAccessService.sync()
       requestExtensionWorkbenchEnvironmentPublish()
       return saved
     }
@@ -296,6 +307,7 @@ export function registerMainIpc(services: MainServices): void {
         return saved
       })
       syncAppKeepAwake(saved)
+      void remoteAccessService.sync()
       requestExtensionWorkbenchEnvironmentPublish()
       return saved
     }
@@ -527,6 +539,7 @@ export function registerMainIpc(services: MainServices): void {
       mainState.mainWindow?.webContents.removeListener('zoom-changed', onWorkbenchZoomChanged)
       mainState.remoteSshController?.disposeAll()
       mainState.remoteSshController = null
+      void remoteAccessService.destroy()
     })
 
     void loadGuiUpdaterModule().catch((error) => {
@@ -556,5 +569,13 @@ export function registerMainIpc(services: MainServices): void {
       knownHosts: new RemoteSshKnownHostStore(join(remoteSshDataDir, 'known-hosts.json')),
       logError
     })
+
+    registerRemoteAccessIpc({
+      ipcMain,
+      service: remoteAccessService,
+      applySettingsPatch,
+      getSettings: () => mainState.store.load()
+    })
+    void remoteAccessService.sync()
     traceStartup('ipc registration:done')
 }

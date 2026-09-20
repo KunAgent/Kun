@@ -25,6 +25,7 @@ import { ToolExecutionService } from './tool-execution-service.js'
 import { ToolCallDispatcher } from './tool-call-dispatcher.js'
 import { RoundOutcomeCoordinator } from './round-outcome-coordinator.js'
 import { createToolExecutionContext } from './tool-context-factory.js'
+import { applyRoomToolPolicy } from './room-turn-policy.js'
 import {
   GoalTurnCoordinator
 } from './goal-turn-coordinator.js'
@@ -235,6 +236,7 @@ export abstract class AgentLoopBase {
       ...(opts.allowedProviderIds ? { allowedProviderIds: opts.allowedProviderIds } : {}),
       ...(opts.allowedSkillIds ? { allowedSkillIds: opts.allowedSkillIds } : {}),
       ...(opts.allowedReadPaths ? { allowedReadPaths: opts.allowedReadPaths } : {}),
+      ...(opts.allowHostReads ? { allowHostReads: true } : {}),
       ...(opts.allowedWritePaths ? { allowedWritePaths: opts.allowedWritePaths } : {}),
       ...(opts.allowedArtifactIds ? { allowedArtifactIds: opts.allowedArtifactIds } : {}),
       ...(opts.pptWorkflowScope ? { pptWorkflowScope: opts.pptWorkflowScope } : {}),
@@ -397,7 +399,14 @@ export abstract class AgentLoopBase {
   }
 
   protected async dispatchToolCalls(input: ToolDispatchInput): Promise<ToolDispatchOutcome> {
-    const context = createToolExecutionContext(input, {
+    const thread = await this.opts.threadStore.get(input.threadId)
+    // Resolve the durable ceiling again before execution, including callbacks
+    // that otherwise capture a per-turn request's broader approval settings.
+    const guardedInput = thread?.roomContext ? {
+      ...input, workspace: thread.workspace, approvalPolicy: thread.approvalPolicy,
+      approvalReviewer: thread.approvalReviewer, sandboxMode: thread.sandboxMode
+    } : input
+    const executionContext = createToolExecutionContext(guardedInput, {
       memoryEnabled: Boolean(this.opts.memoryStore),
       ...(this.opts.allowedModelProviderIds
         ? { allowedModelProviderIds: this.opts.allowedModelProviderIds }
@@ -406,6 +415,7 @@ export abstract class AgentLoopBase {
       ...(this.opts.allowedProviderIds ? { allowedProviderIds: this.opts.allowedProviderIds } : {}),
       ...(this.opts.allowedSkillIds ? { allowedSkillIds: this.opts.allowedSkillIds } : {}),
       ...(this.opts.allowedReadPaths ? { allowedReadPaths: this.opts.allowedReadPaths } : {}),
+      ...(this.opts.allowHostReads ? { allowHostReads: true } : {}),
       ...(this.opts.allowedWritePaths ? { allowedWritePaths: this.opts.allowedWritePaths } : {}),
       ...(this.opts.allowedArtifactIds ? { allowedArtifactIds: this.opts.allowedArtifactIds } : {}),
       ...(this.opts.pptWorkflowScope ? { pptWorkflowScope: this.opts.pptWorkflowScope } : {}),
@@ -419,7 +429,7 @@ export abstract class AgentLoopBase {
       ...(this.opts.fastContextTaskCount ? { fastContextTaskCount: this.opts.fastContextTaskCount } : {}),
       interactiveToolBridge: this.interactiveToolBridge
     })
-    const thread = await this.opts.threadStore.get(input.threadId)
+    const context = thread ? applyRoomToolPolicy(executionContext, thread) : executionContext
     const turn = thread?.turns.find((candidate) => candidate.id === input.turnId)
     const used = turn?.extensionToolInvocations ?? 0
     const maximum = thread?.extensionBudget?.maxToolInvocations

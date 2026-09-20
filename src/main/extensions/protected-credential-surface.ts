@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, screen, shell, type BrowserWindowConstructorOptions } from 'electron'
 import { randomBytes } from 'node:crypto'
+import { logWarn } from '../logger'
 import {
   buildProtectedExtensionConsentDataUrl,
   type ProtectedExtensionConsentDocument
@@ -102,16 +103,20 @@ export class ProtectedCredentialSurfaceController {
     })
     ipcMain.on('extension:protected-surface:consent-approve', (event, payload: unknown) => {
       const parsed = parseSurfacePayload(payload, false)
-      if (!parsed) return
-      const session = this.consentSessions.get(parsed.sessionId)
-      if (!session || session.window.webContents.id !== event.sender.id) return
+      const session = parsed ? this.consentSessions.get(parsed.sessionId) : undefined
+      if (!parsed || !session || session.window.webContents.id !== event.sender.id) {
+        this.logDroppedSurfaceMessage('consent-approve', parsed?.sessionId, event.sender.id)
+        return
+      }
       this.finishConsent(session, true)
     })
     ipcMain.on('extension:protected-surface:consent-cancel', (event, payload: unknown) => {
       const parsed = parseSurfacePayload(payload, false)
-      if (!parsed) return
-      const session = this.consentSessions.get(parsed.sessionId)
-      if (!session || session.window.webContents.id !== event.sender.id) return
+      const session = parsed ? this.consentSessions.get(parsed.sessionId) : undefined
+      if (!parsed || !session || session.window.webContents.id !== event.sender.id) {
+        this.logDroppedSurfaceMessage('consent-cancel', parsed?.sessionId, event.sender.id)
+        return
+      }
       this.finishConsent(session, false)
     })
   }
@@ -147,6 +152,7 @@ export class ProtectedCredentialSurfaceController {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
+      acceptFirstMouse: true,
       webPreferences
     })
     window.setMenu(null)
@@ -160,14 +166,30 @@ export class ProtectedCredentialSurfaceController {
     const result = new Promise<ProtectedCredentialResult>((resolve) => {
       const session: CredentialSession = { id, window, resolve }
       this.sessions.set(id, session)
+      this.bindSurfaceHealth(window, () =>
+        this.finish(session, { submitted: false, protectedWindowSessionId: session.id }))
+      if (parent && !parent.isDestroyed()) {
+        parent.once('closed', () =>
+          this.finish(session, { submitted: false, protectedWindowSessionId: session.id }))
+      }
       window.once('closed', () => {
         if (this.sessions.get(id) !== session) return
         this.sessions.delete(id)
         resolve({ submitted: false, protectedWindowSessionId: id })
       })
     })
-    await window.loadURL(buildProtectedCredentialDataUrl(prompt))
-    if (!window.isDestroyed()) window.show()
+    try {
+      await window.loadURL(buildProtectedCredentialDataUrl(prompt))
+    } catch (error) {
+      logWarn('protected-surface', 'Credential window failed to load.', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+      if (!window.isDestroyed()) window.destroy()
+    }
+    if (!window.isDestroyed()) {
+      window.show()
+      window.focus()
+    }
     return result
   }
 
@@ -182,14 +204,28 @@ export class ProtectedCredentialSurfaceController {
     const result = new Promise<void>((resolve) => {
       const session: AuthorizationSession = { id, window, verificationUrl, resolve }
       this.authorizationSessions.set(id, session)
+      this.bindSurfaceHealth(window, () => this.finishAuthorization(session))
+      if (parent && !parent.isDestroyed()) {
+        parent.once('closed', () => this.finishAuthorization(session))
+      }
       window.once('closed', () => {
         if (this.authorizationSessions.get(id) !== session) return
         this.authorizationSessions.delete(id)
         resolve()
       })
     })
-    await window.loadURL(buildProtectedAuthorizationDataUrl(prompt))
-    if (!window.isDestroyed()) window.show()
+    try {
+      await window.loadURL(buildProtectedAuthorizationDataUrl(prompt))
+    } catch (error) {
+      logWarn('protected-surface', 'Authorization window failed to load.', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+      if (!window.isDestroyed()) window.destroy()
+    }
+    if (!window.isDestroyed()) {
+      window.show()
+      window.focus()
+    }
     return result
   }
 
@@ -209,14 +245,28 @@ export class ProtectedCredentialSurfaceController {
     const result = new Promise<boolean>((resolve) => {
       const session: ConsentSession = { id, window, resolve }
       this.consentSessions.set(id, session)
+      this.bindSurfaceHealth(window, () => this.finishConsent(session, false))
+      if (parent && !parent.isDestroyed()) {
+        parent.once('closed', () => this.finishConsent(session, false))
+      }
       window.once('closed', () => {
         if (this.consentSessions.get(id) !== session) return
         this.consentSessions.delete(id)
         resolve(false)
       })
     })
-    await window.loadURL(buildProtectedExtensionConsentDataUrl(prompt))
-    if (!window.isDestroyed()) window.show()
+    try {
+      await window.loadURL(buildProtectedExtensionConsentDataUrl(prompt))
+    } catch (error) {
+      logWarn('protected-surface', 'Consent window failed to load.', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+      if (!window.isDestroyed()) window.destroy()
+    }
+    if (!window.isDestroyed()) {
+      window.show()
+      window.focus()
+    }
     return result
   }
 
@@ -253,6 +303,43 @@ export class ProtectedCredentialSurfaceController {
     if (!session.window.isDestroyed()) session.window.close()
   }
 
+  /**
+   * A protected surface whose preload or renderer died would otherwise stay
+   * open as a permanently unresponsive modal. `before-input-event` keeps an
+   * Escape dismissal working even when the in-page listeners never attached.
+   */
+  private bindSurfaceHealth(window: BrowserWindow, finish: () => void): void {
+    window.webContents.once('preload-error', (_event, preloadPath, error) => {
+      logWarn('protected-surface', 'Protected window preload failed.', {
+        preloadPath,
+        message: error instanceof Error ? error.message : String(error)
+      })
+      finish()
+    })
+    window.webContents.on('render-process-gone', (_event, details) => {
+      logWarn('protected-surface', 'Protected window renderer exited unexpectedly.', {
+        reason: details.reason
+      })
+      finish()
+    })
+    window.webContents.on('before-input-event', (_event, input) => {
+      if (input.type !== 'keyDown' || input.key !== 'Escape') return
+      finish()
+    })
+  }
+
+  private logDroppedSurfaceMessage(
+    channel: string,
+    sessionId: string | undefined,
+    senderId: number
+  ): void {
+    logWarn('protected-surface', 'Ignored protected surface message.', {
+      channel,
+      sessionId: sessionId ?? null,
+      senderId
+    })
+  }
+
   private createWindow(
     parent: BrowserWindow | null,
     id: string,
@@ -285,6 +372,7 @@ export class ProtectedCredentialSurfaceController {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
+      acceptFirstMouse: true,
       webPreferences
     })
     window.setMenu(null)

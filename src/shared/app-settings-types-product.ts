@@ -3,6 +3,10 @@ import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { LocalWhisperDownloadSourceId } from './local-whisper'
 import type {
+  RemoteAccessSettingsPatchV1,
+  RemoteAccessSettingsV1
+} from './app-settings-remote'
+import type {
   ApprovalPolicy,
   ApprovalReviewer,
   SandboxMode
@@ -583,6 +587,7 @@ export type AppSettingsV1 = {
   design: DesignSettingsV1
   guiUpdate: GuiUpdateConfigV1
   terminal: TerminalSettingsV1
+  remote: RemoteAccessSettingsV1
   codePromptPrefix: string
   /**
    * Custom empty-chat welcome title. Empty string keeps the locale default
@@ -598,7 +603,7 @@ export type AppSettingsV1 = {
 }
 
 export type AppSettingsPatch = Partial<
-  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'darkUiColors'>
+  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'remote' | 'darkUiColors'>
 > & {
   darkUiColors?: DarkUiColorsPatchV1
   provider?: ModelProviderSettingsPatchV1
@@ -615,4 +620,5 @@ export type AppSettingsPatch = Partial<
   design?: DesignSettingsPatchV1
   guiUpdate?: Partial<GuiUpdateConfigV1>
   terminal?: TerminalSettingsPatchV1
+  remote?: RemoteAccessSettingsPatchV1
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAdditionalWorkspacesInstruction,
   buildKunTurnContextInstructions,
   buildPersonaBlockContent
 } from './kun-prompt-context.js'
@@ -66,3 +67,20 @@ function runtimeSource(turnId: string, content: string) {
     content
   }
 }
+
+describe('buildAdditionalWorkspacesInstruction', () => {
+  it('requires absolute paths and keeps git/plan/shell on the primary root', () => {
+    const instruction = buildAdditionalWorkspacesInstruction([' /tmp/backend/ ', '/tmp/backend'])
+    expect(instruction).toContain('"/tmp/backend"')
+    expect(instruction).toContain('absolute paths')
+    expect(instruction).toContain('git_inspect')
+    expect(instruction).toContain('plan worktrees')
+    expect(instruction).toContain('.kun/project.json')
+  })
+
+  it('omits an empty extra-root list so the stable prefix stays unchanged', () => {
+    expect(buildAdditionalWorkspacesInstruction(undefined)).toBeNull()
+    expect(buildAdditionalWorkspacesInstruction([])).toBeNull()
+    expect(buildAdditionalWorkspacesInstruction(['  '])).toBeNull()
+  })
+})

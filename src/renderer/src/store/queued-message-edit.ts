@@ -21,6 +21,7 @@ type EditableQueuedMessage = Pick<QueuedUserMessage,
   | 'composerContexts'
   | 'guiPlan'
   | 'guiDesignCanvas'
+  | 'guiExcalidrawCanvas'
   | 'guiDesignMode'
   | 'guiDesignArtifact'
   | 'designProfile'
@@ -50,7 +51,7 @@ export function queuedMessageEditBlockReason(message: EditableQueuedMessage): Qu
   if (
     message.subagentResume || message.messageSource ||
     message.fileReferences?.length || message.composerContexts?.length ||
-    message.guiDesignCanvas || message.guiDesignMode ||
+    message.guiDesignCanvas || message.guiExcalidrawCanvas || message.guiDesignMode ||
     message.guiDesignArtifact || message.designProfile || message.designDocumentTarget ||
     message.designImagePlacementTarget || message.writeContext
   ) return 'queuedMessageEditUnsupported'

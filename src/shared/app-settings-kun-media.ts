@@ -84,11 +84,8 @@ import {
   LOCAL_WHISPER_DEFAULT_DOWNLOAD_SOURCE_ID,
   isLocalWhisperDownloadSourceId
 } from './local-whisper'
-import {
-  isLocalKokoroDownloadSourceId,
-  isLocalKokoroModelId
-} from './local-kokoro'
-import { isLocalKokoroVoiceId } from './local-kokoro-voices'
+import { isLocalSanottsDownloadSourceId } from './local-sanotts'
+import { isLocalSanottsVoiceSetting } from './local-sanotts-voices'
 
 import {
   defaultKunBrowserUseSettings,
@@ -178,10 +175,9 @@ export function normalizeKunSpeakSettings(
   const defaults = defaultKunSpeakSettings()
   return {
     enabled: input?.enabled !== false,
-    model: isLocalKokoroModelId(input?.model) ? input.model : defaults.model,
-    voice: isLocalKokoroVoiceId(input?.voice) ? input.voice : defaults.voice,
-    speed: normalizeKokoroSpeed(input?.speed, defaults.speed),
-    downloadSource: isLocalKokoroDownloadSourceId(input?.downloadSource)
+    voice: isLocalSanottsVoiceSetting(input?.voice) ? input.voice : defaults.voice,
+    speed: normalizeSanottsSpeed(input?.speed, defaults.speed),
+    downloadSource: isLocalSanottsDownloadSourceId(input?.downloadSource)
       ? input.downloadSource
       : defaults.downloadSource,
     autoDownload: input?.autoDownload !== false,
@@ -189,8 +185,8 @@ export function normalizeKunSpeakSettings(
   }
 }
 
-/** Kokoro accepts 0.5x-2x; anything outside that range is clamped. */
-export function normalizeKokoroSpeed(value: unknown, fallback: number): number {
+/** sanoTTS accepts 0.5x-2x; anything outside that range is clamped. */
+export function normalizeSanottsSpeed(value: unknown, fallback: number): number {
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed)) return fallback
   return Math.min(2, Math.max(0.5, Math.round(parsed * 100) / 100))

@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { Loader2, Play, Square, Volume2 } from 'lucide-react'
+import { isAppLocale } from '@shared/app-locales'
 import {
-  LOCAL_KOKORO_DEFAULT_MODEL_ID,
-  localKokoroModelById,
-  type LocalKokoroDownloadSourceStatus,
-  type LocalKokoroModelId,
-  type LocalKokoroModelStatus
-} from '@shared/local-kokoro'
+  LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID,
+  type LocalSanottsAssetState,
+  type LocalSanottsDownloadSourceStatus,
+  type LocalSanottsRuntimeStatus
+} from '@shared/local-sanotts'
 import {
-  LOCAL_KOKORO_DEFAULT_VOICE_ID,
-  localKokoroVoiceById,
-  type LocalKokoroVoiceId
-} from '@shared/local-kokoro-voices'
+  LOCAL_SANOTTS_VOICE_AUTO_ID,
+  localSanottsVoiceById,
+  resolveLocalSanottsVoiceId,
+  type LocalSanottsVoiceId,
+  type LocalSanottsVoiceSetting
+} from '@shared/local-sanotts-voices'
+import type { LocalSanottsTrackUsage } from '@shared/local-sanotts-tracks'
 import {
   InlineNoticeView,
   SettingRow,
@@ -19,39 +22,37 @@ import {
   Toggle,
   type InlineNotice
 } from './settings-controls'
-import { SpeakModelPanel } from './settings-section-speak-model'
+import { SpeakRuntimePanel } from './settings-section-speak-runtime'
 import {
-  SPEAK_ACCENT_FILTERS,
-  SPEAK_PREVIEW_SAMPLE_TEXT,
+  SPEAK_LANGUAGE_FILTERS,
   SPEAK_SPEED_MAX,
   SPEAK_SPEED_MIN,
   SPEAK_SPEED_STEP,
   clampSpeakSpeed,
   formatSpeakSpeed,
-  speakAccentLabel,
+  speakLanguageLabel,
+  speakPreviewSample,
   speakVoiceGroups,
   speakVoiceOptionLabel,
-  type SpeakAccentFilter
+  type SpeakLanguageFilter
 } from './settings-section-speak-support'
 import { useSpeakStore } from '../stores/speak-store'
 import { refreshSpeakTrackKeys, useSpeakTrackStore } from '../stores/speak-track-store'
 import { formatBytes } from './settings-section-speech-to-text-support'
-import type { LocalKokoroTrackUsage } from '@shared/local-kokoro-tracks'
-import { previewKokoroVoice, stopSpeaking } from './chat/speak-controller'
+import { previewSpeakVoice, stopSpeaking } from './chat/speak-controller'
 import { speakErrorLabel } from './chat/AssistantSpeakButton'
 
 const DEFAULT_SPEAK = {
   enabled: true,
-  model: LOCAL_KOKORO_DEFAULT_MODEL_ID as LocalKokoroModelId,
-  voice: LOCAL_KOKORO_DEFAULT_VOICE_ID as LocalKokoroVoiceId,
+  voice: LOCAL_SANOTTS_VOICE_AUTO_ID as LocalSanottsVoiceSetting,
   speed: 1,
-  downloadSource: 'huggingface',
+  downloadSource: LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID,
   autoDownload: true,
   keepTracks: false
 }
 
 /**
- * Local speech provider: the on-device Kokoro voice behind the Speak action.
+ * Local speech provider: the on-device sanoTTS voice behind the Speak action.
  *
  * Rendered inside Media -> Speech generation beside the remote speech provider,
  * so both ways of producing speech are configured in one place.
@@ -60,20 +61,23 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
   // Speak playback errors are authored in the common namespace shared with
   // the answer action, so they are translated with tCommon.
   const { t, tCommon, kun, updateKun, selectControlClass } = ctx
+  const locale = isAppLocale(ctx.locale) ? ctx.locale : 'en'
   const speak = useMemo(() => ({ ...DEFAULT_SPEAK, ...(kun.speak ?? {}) }), [kun.speak])
   const speakPhase = useSpeakStore((state) => state.phase)
   const speakError = useSpeakStore((state) => state.error)
   const trackKeys = useSpeakTrackStore((state) => state.keys)
-  const [statuses, setStatuses] = useState<Partial<Record<LocalKokoroModelId, LocalKokoroModelStatus>>>({})
-  const [readyVoices, setReadyVoices] = useState<LocalKokoroVoiceId[]>([])
-  const [sourceStatuses, setSourceStatuses] = useState<LocalKokoroDownloadSourceStatus[] | null>(null)
+  const [runtime, setRuntime] = useState<LocalSanottsRuntimeStatus | null>(null)
+  const [readyVoices, setReadyVoices] = useState<LocalSanottsVoiceId[]>([])
+  const [sourceStatuses, setSourceStatuses] = useState<LocalSanottsDownloadSourceStatus[] | null>(null)
   const [sourceCheckBusy, setSourceCheckBusy] = useState(false)
-  const [busyModelId, setBusyModelId] = useState<LocalKokoroModelId | null>(null)
-  const [trackUsage, setTrackUsage] = useState<LocalKokoroTrackUsage | null>(null)
+  const [busyAsset, setBusyAsset] = useState<'runtime' | 'voice' | null>(null)
+  const [trackUsage, setTrackUsage] = useState<LocalSanottsTrackUsage | null>(null)
   const [clearingTracks, setClearingTracks] = useState(false)
   const [notice, setNotice] = useState<InlineNotice | null>(null)
-  const [accentFilter, setAccentFilter] = useState<SpeakAccentFilter>('all')
-  const [sampleText, setSampleText] = useState(SPEAK_PREVIEW_SAMPLE_TEXT)
+  const [languageFilter, setLanguageFilter] = useState<SpeakLanguageFilter>('all')
+  const resolvedVoiceId = resolveLocalSanottsVoiceId(speak.voice, locale)
+  const selectedVoice = localSanottsVoiceById(resolvedVoiceId)
+  const [sampleText, setSampleText] = useState(speakPreviewSample(selectedVoice.language))
 
   const updateSpeak = useCallback(
     (patch: Record<string, unknown>): void => {
@@ -84,12 +88,12 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
   )
 
   const refreshStatuses = useCallback(async (): Promise<void> => {
-    if (typeof window.kunGui?.listLocalKokoroModelStatuses !== 'function') return
-    const [models, voices] = await Promise.all([
-      window.kunGui.listLocalKokoroModelStatuses(),
-      window.kunGui.listDownloadedLocalKokoroVoices()
+    if (typeof window.kunGui?.getLocalSanottsRuntimeStatus !== 'function') return
+    const [nextRuntime, voices] = await Promise.all([
+      window.kunGui.getLocalSanottsRuntimeStatus(),
+      window.kunGui.listDownloadedLocalSanottsVoices()
     ])
-    setStatuses(Object.fromEntries(models.map((status) => [status.modelId, status])))
+    setRuntime(nextRuntime)
     setReadyVoices(voices)
   }, [])
 
@@ -97,21 +101,19 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
     void refreshStatuses().catch(() => undefined)
   }, [refreshStatuses])
 
-  // Poll only while something is downloading; progress events also arrive but
-  // the settings panel can be opened mid-download.
   useEffect(() => {
-    if (typeof window.kunGui?.onLocalKokoroModelProgress !== 'function') return
-    return window.kunGui.onLocalKokoroModelProgress(() => {
+    if (typeof window.kunGui?.onLocalSanottsAssetProgress !== 'function') return
+    return window.kunGui.onLocalSanottsAssetProgress(() => {
       void refreshStatuses().catch(() => undefined)
     })
   }, [refreshStatuses])
 
   useEffect(() => {
-    if (typeof window.kunGui?.checkLocalKokoroDownloadSources !== 'function') return
+    if (typeof window.kunGui?.checkLocalSanottsDownloadSources !== 'function') return
     let canceled = false
     setSourceCheckBusy(true)
     void window.kunGui
-      .checkLocalKokoroDownloadSources({ modelId: speak.model })
+      .checkLocalSanottsDownloadSources()
       .then((result) => {
         if (!canceled) setSourceStatuses(result.sources)
       })
@@ -124,43 +126,60 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
     return () => {
       canceled = true
     }
-  }, [speak.model])
+  }, [])
 
   const voiceGroups = useMemo(() => {
-    const groups = speakVoiceGroups(accentFilter)
-    const selected = localKokoroVoiceById(speak.voice)
-    if (!groups.some(group => group.voices.some(voice => voice.id === selected.id))) {
-      groups.push({ accent: selected.accent, voices: [selected] })
+    const groups = speakVoiceGroups(languageFilter)
+    if (!groups.some((group) => group.voices.some((voice) => voice.id === selectedVoice.id))) {
+      groups.push({ language: selectedVoice.language, voices: [selectedVoice] })
     }
     return groups
-  }, [accentFilter, speak.voice])
+  }, [languageFilter, selectedVoice])
   const previewing = speakPhase !== 'idle'
+  const voiceState: LocalSanottsAssetState = readyVoices.includes(resolvedVoiceId)
+    ? 'ready'
+    : 'not_downloaded'
 
-  const runModelAction = async (
-    modelId: LocalKokoroModelId,
-    action: 'download' | 'cancel' | 'delete'
-  ): Promise<void> => {
+  const runRuntimeAction = async (action: 'download' | 'cancel' | 'delete'): Promise<void> => {
     const bridge = window.kunGui
     if (!bridge) return
     setNotice(null)
-    setBusyModelId(modelId)
+    setBusyAsset('runtime')
     try {
       if (action === 'download') {
-        const result = await bridge.downloadLocalKokoroModel({
-          modelId,
-          sourceId: speak.downloadSource
-        })
+        const result = await bridge.downloadLocalSanottsRuntime({ sourceId: speak.downloadSource })
         if (!result.ok) setNotice({ tone: 'error', message: result.message })
       } else if (action === 'cancel') {
-        await bridge.cancelLocalKokoroModel(modelId)
+        await bridge.cancelLocalSanottsRuntime()
       } else {
-        const result = await bridge.deleteLocalKokoroModel(modelId)
+        const result = await bridge.deleteLocalSanottsRuntime()
         if (!result.ok) setNotice({ tone: 'error', message: result.message })
       }
     } catch (error) {
       setNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
     } finally {
-      setBusyModelId(null)
+      setBusyAsset(null)
+      await refreshStatuses().catch(() => undefined)
+    }
+  }
+
+  const onDownloadVoice = async (): Promise<void> => {
+    const bridge = window.kunGui
+    if (!bridge) return
+    setNotice(null)
+    setBusyAsset('voice')
+    try {
+      const status = await bridge.downloadLocalSanottsVoice({
+        voiceId: resolvedVoiceId,
+        sourceId: speak.downloadSource
+      })
+      if (status.state !== 'ready') {
+        setNotice({ tone: 'error', message: status.message || t('speakVoiceMissing') })
+      }
+    } catch (error) {
+      setNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusyAsset(null)
       await refreshStatuses().catch(() => undefined)
     }
   }
@@ -171,18 +190,16 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
       return
     }
     setNotice(null)
-    const result = await previewKokoroVoice(
+    const result = await previewSpeakVoice(
       {
         enabled: speak.enabled,
-        model: speak.model,
-        voice: speak.voice,
+        voice: resolvedVoiceId,
         speed: clampSpeakSpeed(speak.speed),
         downloadSource: speak.downloadSource,
         autoDownload: speak.autoDownload,
-        // The preview is a throwaway sample, never worth storing.
         keepTracks: false
       },
-      sampleText.trim() || SPEAK_PREVIEW_SAMPLE_TEXT
+      sampleText.trim() || speakPreviewSample(selectedVoice.language)
     )
     if (!result.ok && result.message) {
       setNotice({ tone: 'error', message: speakErrorLabel(tCommon, result.message) })
@@ -191,8 +208,8 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
   }
 
   const refreshTrackUsage = useCallback(async (): Promise<void> => {
-    if (typeof window.kunGui?.getLocalKokoroTrackUsage !== 'function') return
-    setTrackUsage(await window.kunGui.getLocalKokoroTrackUsage().catch(() => null))
+    if (typeof window.kunGui?.getLocalSanottsTrackUsage !== 'function') return
+    setTrackUsage(await window.kunGui.getLocalSanottsTrackUsage().catch(() => null))
   }, [])
 
   useEffect(() => {
@@ -200,19 +217,16 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
   }, [refreshTrackUsage, speak.keepTracks, trackKeys])
 
   const onClearTracks = async (): Promise<void> => {
-    if (typeof window.kunGui?.clearLocalKokoroTracks !== 'function') return
+    if (typeof window.kunGui?.clearLocalSanottsTracks !== 'function') return
     setClearingTracks(true)
     try {
-      setTrackUsage(await window.kunGui.clearLocalKokoroTracks())
+      setTrackUsage(await window.kunGui.clearLocalSanottsTracks())
       useSpeakTrackStore.getState().clearKeys()
       refreshSpeakTrackKeys()
     } finally {
       setClearingTracks(false)
     }
   }
-
-  const selectedModel = localKokoroModelById(speak.model)
-  const selectedVoice = localKokoroVoiceById(speak.voice)
 
   return (
     <div className="space-y-4">
@@ -231,12 +245,13 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5 text-[12px] text-ds-muted">
           <Volume2 className="h-4 w-4 shrink-0 text-accent" aria-hidden />
           <span>{t('speakSummary', {
-            model: selectedModel.label,
-            voice: selectedVoice.label,
+            voice: speak.voice === LOCAL_SANOTTS_VOICE_AUTO_ID
+              ? t('speakVoiceAuto')
+              : selectedVoice.label,
             speed: formatSpeakSpeed(speak.speed)
           })}</span>
         </div>
-        <p className="text-[11.5px] leading-4 text-ds-faint">{t('speakEnglishOnlyNote')}</p>
+        <p className="text-[11.5px] leading-4 text-ds-faint">{t('speakLicenseNote')}</p>
         <SettingRow
           title={t('speakKeepTracks')}
           description={t('speakKeepTracksDesc')}
@@ -271,18 +286,18 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
           }
         />
         <SettingRow
-          title={t('speakAccent')}
-          description={t('speakAccentDesc')}
+          title={t('speakLanguage')}
+          description={t('speakLanguageDesc')}
           control={
             <select
               className={selectControlClass}
-              aria-label={t('speakAccent')}
-              value={accentFilter}
-              onChange={(event) => setAccentFilter(event.target.value as SpeakAccentFilter)}
+              aria-label={t('speakLanguage')}
+              value={languageFilter}
+              onChange={(event) => setLanguageFilter(event.target.value as SpeakLanguageFilter)}
             >
-              {SPEAK_ACCENT_FILTERS.map((filter) => (
+              {SPEAK_LANGUAGE_FILTERS.map((filter) => (
                 <option key={filter} value={filter}>
-                  {speakAccentLabel(t, filter)}
+                  {speakLanguageLabel(t, filter)}
                 </option>
               ))}
             </select>
@@ -296,10 +311,16 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
               className={selectControlClass}
               aria-label={t('speakVoice')}
               value={speak.voice}
-              onChange={(event) => updateSpeak({ voice: event.target.value })}
+              onChange={(event) => {
+                const next = event.target.value as LocalSanottsVoiceSetting
+                updateSpeak({ voice: next })
+                const voice = localSanottsVoiceById(resolveLocalSanottsVoiceId(next, locale))
+                setSampleText(speakPreviewSample(voice.language))
+              }}
             >
+              <option value={LOCAL_SANOTTS_VOICE_AUTO_ID}>{t('speakVoiceAuto')}</option>
               {voiceGroups.map((group) => (
-                <optgroup key={group.accent} label={speakAccentLabel(t, group.accent)}>
+                <optgroup key={group.language} label={speakLanguageLabel(t, group.language)}>
                   {group.voices.map((voice) => (
                     <option key={voice.id} value={voice.id}>
                       {speakVoiceOptionLabel(
@@ -382,23 +403,25 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
         ) : null}
       </SettingsCard>
 
-      <SpeakModelPanel
+      <SpeakRuntimePanel
         t={t}
         selectControlClass={selectControlClass}
         downloadSource={speak.downloadSource}
         autoDownload={speak.autoDownload}
-        selectedModelId={speak.model}
-        statuses={statuses}
+        runtime={runtime}
+        voiceId={resolvedVoiceId}
+        voiceState={voiceState}
+        voiceSizeBytes={selectedVoice.sizeBytes}
         sourceStatuses={sourceStatuses}
         sourceCheckBusy={sourceCheckBusy}
-        busyModelId={busyModelId}
+        busyAsset={busyAsset}
         notice={null}
-        onSelectModel={(modelId) => updateSpeak({ model: modelId })}
         onSelectDownloadSource={(sourceId) => updateSpeak({ downloadSource: sourceId })}
         onToggleAutoDownload={(autoDownload) => updateSpeak({ autoDownload })}
-        onDownload={(modelId) => void runModelAction(modelId, 'download')}
-        onCancel={(modelId) => void runModelAction(modelId, 'cancel')}
-        onDelete={(modelId) => void runModelAction(modelId, 'delete')}
+        onDownloadRuntime={() => void runRuntimeAction('download')}
+        onCancelRuntime={() => void runRuntimeAction('cancel')}
+        onDeleteRuntime={() => void runRuntimeAction('delete')}
+        onDownloadVoice={() => void onDownloadVoice()}
       />
     </div>
   )

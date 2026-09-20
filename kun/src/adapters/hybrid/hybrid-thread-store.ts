@@ -1,4 +1,5 @@
-import { mkdir, open, readdir, rm, stat } from 'node:fs/promises'
+import { historyReferenceThreadIds, hasThreadHistoryReference } from './hybrid-thread-reference-lookup.js'
+import { mkdir, open, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type { Database as BetterSqliteDatabase, Statement } from 'better-sqlite3'
 import { ThreadSchema, type ThreadRecord, type ThreadSummary } from '../../contracts/threads.js'
@@ -99,7 +100,7 @@ export class HybridThreadStore implements ThreadStore {
     this.usageQueries = new UsageQueryExecutor(this.sqlitePath)
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
     this.filesystemSummaries = new HybridFilesystemSummaryCache({
-      threadIds: () => this.threadIdsFromFilesystem(),
+      threadIds: () => this.filesystemThreadIds(),
       readMetadata: (threadId) => this.readThreadMetadataFromDisk(threadId),
       readThread: (threadId) => this.readThreadFromDisk(threadId),
       warn: (threadId, error) => console.warn(
@@ -416,7 +417,7 @@ export class HybridThreadStore implements ThreadStore {
           usage_backfilled?: number
           usage_backfill_high_water?: number
         }>,
-        filesystemThreadIds: () => this.threadIdsFromFilesystem(),
+        filesystemThreadIds: () => this.filesystemThreadIds(),
         readMissingThreads: (ids) => readMissingIndexRecords(
           ids,
           (threadId) => this.readThreadMetadataFromDisk(threadId),
@@ -638,21 +639,17 @@ export class HybridThreadStore implements ThreadStore {
       : { status: 'unavailable', indexed: 0, total: 0 }
   }
 
+  async hasHistoryReference(referenceId: string): Promise<boolean> {
+    await this.ready()
+    return hasThreadHistoryReference(this.dataDir, referenceId, (id) => this.getMetadata(id))
+  }
+
   filesystemThreadIds(): Promise<string[]> {
-    return this.threadIdsFromFilesystem()
+    return historyReferenceThreadIds(this.dataDir)
   }
 
   readDeltaSummaries(ids: string[]): Promise<ThreadSummary[]> {
     return this.filesystemSummaries.readByIds(ids)
-  }
-  private async threadIdsFromFilesystem(): Promise<string[]> {
-    try {
-      const entries = await readdir(this.dataDir, { withFileTypes: true })
-      return entries.filter((entry) => entry.isDirectory() && isSafeThreadId(entry.name)).map((entry) => entry.name)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-      throw error
-    }
   }
 
   private async rowHasReadableJsonl(row: ThreadRow): Promise<boolean> {

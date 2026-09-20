@@ -414,6 +414,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
     }))
     const handler = handlers.get('approval:decide')!
     const payload = { approvalId: 'approval-1', decision: 'allow', source: 'user' }
+    await expect(handler({ sender: contents, senderFrame: mainFrame }, { ...payload, source: 'policy' })).rejects.toThrow('Runtime-owned')
 
     await expect(handler({
       sender: { id: 99 },
@@ -626,7 +627,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
     )
   })
 
-  it('revalidates a policy approval sender after Runtime lease acquisition', async () => {
+  it('revalidates a policy denial sender after Runtime lease acquisition', async () => {
     const mainFrame = { processId: 10, routingId: 20, detached: false, url: 'http://127.0.0.1:5173/index.html' }
     const contents = { id: 7, mainFrame, isDestroyed: () => false }
     const mainWindow = { isDestroyed: () => false, webContents: contents }
@@ -646,7 +647,7 @@ describe('registerAppIpcHandlers settings and approvals', () => {
       senderFrame: mainFrame
     }, {
       approvalId: 'approval-policy-during-ensure',
-      decision: 'allow',
+      decision: 'deny',
       source: 'policy'
     })
     await vi.waitFor(() => expect(acquireRuntimeRequestLease).toHaveBeenCalledOnce())

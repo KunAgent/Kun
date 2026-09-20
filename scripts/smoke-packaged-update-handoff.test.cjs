@@ -226,8 +226,8 @@ test('positive handoff uses a normal GUI quit before checking owned process life
   assert.match(source, /await sendToWorkbenchSession\(\{/u)
   assert.match(source, /window\.kunGui\.runDesktopCommand\('quit'\)/u)
   assert.match(source, /finally \{\s*processExit\.dispose\(\)\s*\}/u)
-  assert.match(source, /managerJson\(current\.manager, '\/v1\/manager\/status'\)/u)
   assert.match(source, /waitForProcessExit\(current\.runtime\.pid/u)
+  assert.match(source, /waitForProcessExit\(current\.manager\.pid/u)
 })
 
 test('Linux release handoff gates exercise the Chromium sandbox', () => {

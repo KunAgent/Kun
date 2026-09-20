@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import {
   createSecretEncryptor,
@@ -535,11 +536,17 @@ function isRecognizedSettingsSource(sourceId: string): boolean {
 
 export function resolveSettingsDataDir(settings: AppSettingsV1): string {
   const value = getKunRuntimeSettings(settings).dataDir.trim()
-  if (value === '~') return homedir()
-  if (value.startsWith('~/') || value.startsWith('~\\')) {
-    return join(homedir(), value.slice(2).replace(/\\/g, '/'))
+  const expanded = value === '~'
+    ? homedir()
+    : value.startsWith('~/') || value.startsWith('~\\')
+      ? join(homedir(), value.slice(2).replace(/\\/g, '/'))
+      : value
+  // Manager publishes a canonical data directory. macOS /var aliases and
+  // user symlinks must select that same Registry authority before hydration.
+  try { return realpathSync.native(expanded) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    return expanded
   }
-  return value
 }
 
 async function createMigrationRuntime(dataDir: string): Promise<MigrationRuntime> {

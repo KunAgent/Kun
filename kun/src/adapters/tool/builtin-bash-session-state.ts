@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto'
 import type { ChildProcess } from 'node:child_process'
+import { isOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
 import { OutputAccumulator } from './output-accumulator.js'
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from './truncate.js'
 import { DEFAULT_BACKGROUND_BASH_TIMEOUT_SECONDS, type BackgroundShellRecordInput, type TextSlice, type TruncateMode } from './builtin-tool-types.js'
@@ -18,6 +19,10 @@ export const DEFAULT_MAX_RUNNING_BACKGROUND_BASH_SESSIONS_PER_THREAD = 4
 export const DEFAULT_MAX_BACKGROUND_BASH_TIMEOUT_SECONDS = DEFAULT_BACKGROUND_BASH_TIMEOUT_SECONDS
 
 export async function terminateBashProcessTree(child: ChildProcess): Promise<void> {
+  if (isOwnedProcess(child)) {
+    await stopOwnedProcess(child, { graceMs: STOP_GRACE_MS, timeoutMs: STOP_WAIT_MS })
+    return
+  }
   const treeTerminator = terminateSpawnTree(child)
   await new Promise<void>((resolve, reject) => {
     const startedAt = Date.now()

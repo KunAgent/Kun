@@ -1,0 +1,27 @@
+{
+  "id": "excalidraw-diagram",
+  "name": "Excalidraw diagram",
+  "version": "1.0.0",
+  "description": "Create and iterate Excalidraw diagrams on Kun Work, Design, and Code canvases by writing excalidraw.json and applying it to the open board.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/excalidraw"
+    ],
+    "promptPatterns": [
+      "excalidraw",
+      "手绘白板"
+    ],
+    "fileTypes": [
+      ".excalidraw"
+    ]
+  },
+  "allowedTools": [],
+  "assets": [
+    "references/kun-scene.md",
+    "references/color-palette.md",
+    "references/element-templates.md",
+    "references/json-schema.md"
+  ],
+  "priority": 30
+}

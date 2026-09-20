@@ -56,7 +56,6 @@ const {
   writeSmokeSettings
 } = require('./smoke-packaged-update-handoff-support.cjs')
 const {
-  managerJson,
   runRecycledPidScenario,
   stopCurrentOwners
 } = require('./smoke-packaged-update-handoff-recycled.cjs')
@@ -257,10 +256,8 @@ async function runPositiveScenario(input) {
       !await waitForProcessExit(current.runtime.pid, Math.min(input.timeoutMs, 20_000))) {
       throw new Error('Ordinary GUI quit left the GUI-owned Runtime running')
     }
-    const managerStatus = await managerJson(current.manager, '/v1/manager/status')
-    if (managerStatus.instanceId !== current.manager.instanceId ||
-      managerStatus.pid !== current.manager.pid) {
-      throw new Error('Ordinary GUI quit unexpectedly stopped the current Service Manager')
+    if (!await waitForProcessExit(current.manager.pid, Math.min(input.timeoutMs, 20_000))) {
+      throw new Error('Ordinary GUI quit left the GUI-owned Service Manager running')
     }
     await stopCurrentOwners(current, input.timeoutMs)
   } catch (error) {
@@ -456,37 +453,50 @@ async function quitDesktopNormally(desktop, debuggingPort, timeoutMs) {
   )
   try {
     await cdp.send('Target.setDiscoverTargets', { discover: true })
-    const workbench = await waitForTarget(
-      cdp,
-      isWorkbenchTarget,
-      'packaged Kun workbench for normal quit',
-      timeoutMs,
-      readProcessState
-    )
-    const evaluated = await sendToWorkbenchSession({
-      cdp,
-      session: { targetId: workbench.targetId, sessionId: undefined },
-      method: 'Runtime.evaluate',
-      params: {
-        expression: `(() => {
-          if (typeof window.kunGui?.runDesktopCommand !== 'function') return false
-          setTimeout(() => void window.kunGui.runDesktopCommand('quit'), 0)
-          return true
-        })()`,
-        returnByValue: true
-      },
-      timeoutMs,
-      processState: readProcessState,
-      operation: 'requesting an ordinary GUI quit'
-    })
-    if (evaluated.exceptionDetails || evaluated.result?.value !== true) {
-      throw new Error('Packaged workbench could not request an ordinary GUI quit')
+    // IPC handlers such as 'desktop:command' register asynchronously after the
+    // workbench page already accepts evaluates, so a single quit request can
+    // land before registration on slower hosts. Keep re-requesting until the
+    // process exits or the deadline passes. The deadline must also cover the
+    // before-quit barrier, which drains owned runtimes and the Service Manager
+    // with grace windows that can approach a minute on loaded CI hosts.
+    const deadline = Date.now() + Math.min(timeoutMs, 75_000)
+    for (;;) {
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) break
+      try {
+        const workbench = await waitForTarget(
+          cdp,
+          isWorkbenchTarget,
+          'packaged Kun workbench for normal quit',
+          Math.min(remaining, 5_000),
+          readProcessState
+        )
+        await sendToWorkbenchSession({
+          cdp,
+          session: { targetId: workbench.targetId, sessionId: undefined },
+          method: 'Runtime.evaluate',
+          params: {
+            expression: `(() => {
+              if (typeof window.kunGui?.runDesktopCommand !== 'function') return false
+              void window.kunGui.runDesktopCommand('quit')
+              return true
+            })()`,
+            returnByValue: true
+          },
+          timeoutMs: Math.min(remaining, 5_000),
+          processState: readProcessState,
+          operation: 'requesting an ordinary GUI quit'
+        })
+      } catch {
+        // Quitting detaches the workbench target mid-request; the exit wait
+        // below is what actually decides success.
+      }
+      const waitMs = Math.min(Math.max(deadline - Date.now(), 0), 5_000)
+      if (waitMs > 0 && await waitForProcessExit(desktop.child.pid, waitMs)) return
     }
+    throw new Error(`Packaged GUI PID ${desktop.child.pid} did not exit after its ordinary quit request`)
   } finally {
     cdp.close()
-  }
-  if (!await waitForProcessExit(desktop.child.pid, Math.min(timeoutMs, 30_000))) {
-    throw new Error(`Packaged GUI PID ${desktop.child.pid} did not exit after its ordinary quit request`)
   }
 }
 

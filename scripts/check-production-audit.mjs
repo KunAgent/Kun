@@ -19,8 +19,7 @@ const allowedModeratePackages = new Set([
   '@jimp/custom',
   'adm-zip',
   'file-type',
-  'jimp',
-  'onnxruntime-node'
+  'jimp'
 ])
 const allowedAdvisories = new Set([
   'https://github.com/advisories/GHSA-5v7r-6r5c-r473',
@@ -32,14 +31,6 @@ const allowedAdvisories = new Set([
 // separate Jimp 1.6 dependency; it never sends untrusted files through the old
 // Jimp/file-type loader. Keep this exact advisory visible while failing closed
 // on any new moderate advisory or any high/critical production vulnerability.
-//
-// onnxruntime-node 1.23.2 is the newest release that still ships both macOS
-// arm64 and x64 binaries. Its adm-zip dependency is loaded only by the package
-// install script; Kun sets onnxruntime-node-install=skip, so no archive is
-// extracted, and neither adm-zip nor that script ships in a runtime execution
-// path. Pin 0.6.0 to remove the allocation advisory and track the remaining
-// symlink-extraction advisory exactly until upstream publishes a fixed release
-// with macOS x64 support.
 
 for (const target of [
   { name: 'root', cwd: repositoryRoot },
@@ -51,7 +42,7 @@ for (const target of [
 
 console.log(
   'Production dependency audit OK: no high/critical or unexpected moderate vulnerabilities; ' +
-  'the bounded nut-js/Jimp and ONNX install-only advisories remain explicitly tracked.'
+  'the bounded nut-js/Jimp advisory remains explicitly tracked.'
 )
 
 function audit(target) {

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { runOwnedCommand } from './owned-command'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -47,39 +47,14 @@ export type InstallTarget = {
   onProgress?: (receivedBytes: number, totalBytes: number) => void
 }
 
-function boundedProbe(binaryPath: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(binaryPath, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-      env: {
-        PATH: process.env.PATH ?? '',
-        HOME: process.env.HOME ?? '',
-        USERPROFILE: process.env.USERPROFILE ?? ''
-      }
-    })
-    let output = ''
-    let settled = false
-    const finish = (error?: Error): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      error ? reject(error) : resolve(output.trim())
-    }
-    const append = (chunk: Buffer): void => {
-      if (output.length < 16 * 1024) output += chunk.toString('utf8', 0, 16 * 1024 - output.length)
-    }
-    child.stdout?.on('data', append)
-    child.stderr?.on('data', append)
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      finish(new Error(`probe ${args.join(' ')} timed out`))
-    }, 5_000)
-    child.once('error', (error) => finish(error))
-    child.once('exit', (code, signal) => {
-      finish(code === 0 ? undefined : new Error(`probe ${args.join(' ')} failed (${signal ?? code})`))
-    })
+async function boundedProbe(binaryPath: string, args: string[]): Promise<string> {
+  const result = await runOwnedCommand(binaryPath, args, {
+    env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', USERPROFILE: process.env.USERPROFILE ?? '' },
+    timeoutMs: 5000, maxOutputBytes: 16 * 1024, truncateOutput: true,
+    messages: { timeout: `probe ${args.join(' ')} timed out` }
   })
+  if (result.exitCode !== 0) throw new Error(`probe ${args.join(' ')} failed (${result.exitCode})`)
+  return `${result.stdout}${result.stderr}`.trim().slice(0, 16 * 1024)
 }
 
 export async function probeClaudeBinary(binaryPath: string): Promise<{ cliVersion: string; helpProbe: string }> {

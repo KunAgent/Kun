@@ -204,7 +204,10 @@ export class InMemorySessionStore implements SessionStore {
   }
 
   async upsertSession(session: AgentSession): Promise<void> {
-    this.sessions.set(session.threadId, session)
+    const prior = this.sessions.get(session.threadId)
+    this.sessions.set(session.threadId, prior?.historyRefId && !session.historyRefId
+      ? { ...session, historyRefId: prior.historyRefId, workspace: session.workspace ?? prior.workspace }
+      : session)
     if (!this.events.has(session.threadId)) {
       this.events.set(session.threadId, [...session.events])
     }

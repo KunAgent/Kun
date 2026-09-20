@@ -29,6 +29,10 @@ export class ProjectBoardApiError extends Error {
 }
 
 export const projectBoardApi = {
+  card(workspace: string, cardId: string) {
+    return request<{ workspaceRoot: string; revision: number; card: ProjectBoardCard; warning?: string }>(
+      `${kunProjectBoardCardPath(cardId)}?${new URLSearchParams({ workspace })}`, 'GET')
+  },
   snapshot(workspace: string, options: { includeArchived?: boolean; cursor?: string } = {}) {
     const params = new URLSearchParams({ workspace })
     if (options.includeArchived) params.set('includeArchived', 'true')

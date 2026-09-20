@@ -144,6 +144,7 @@ export function buildDesignTaskProfileInput(options: {
   documentTarget: DesignDocumentTarget
   designContext: DesignContext
   lockedProfile?: DesignTaskProfile | null
+  canvasEngine?: 'kun' | 'excalidraw'
 }): DesignTaskProfileInput {
   if (options.lockedProfile) {
     if (
@@ -174,6 +175,7 @@ export function buildDesignTaskProfileInput(options: {
     ...(options.selection.styleSnapshot
       ? { styleSnapshot: { ...options.selection.styleSnapshot } }
       : {}),
+    ...(options.canvasEngine === 'excalidraw' ? { canvasEngine: 'excalidraw' as const } : {}),
     context: snapshotDesignContext(options.designContext)
   }
 }
@@ -221,8 +223,19 @@ export function applyDesignTaskProfileContract(
     `- Design preset: ${profile.preset} (source: ${profile.presetSource ?? 'legacy'})`,
     `- Bound document: ${profile.documentTarget.documentId}`,
     `- Bound board artifact: ${profile.documentTarget.boardArtifactId}`,
+    `- Canvas engine: ${profile.canvasEngine === 'excalidraw' ? 'excalidraw' : 'kun'}`,
     sourceInstruction,
     `- Visual context snapshot: ${JSON.stringify(context)}`
   ].join('\n')
+  if (profile.canvasEngine === 'excalidraw') {
+    return [
+      immutableContext,
+      'EXCALIDRAW SKETCH CONTRACT: this bound drawing is an Excalidraw board.',
+      'Do not call design_update_shapes, design_create_screen, design_arrange, or the HTML screen pipeline.',
+      `Write or edit .kun-design/${profile.documentTarget.documentId}/excalidraw.json, then call design_apply_excalidraw.`,
+      'Preserve live user element ids unless the user asked to replace the sketch. An empty board may receive a full scene write.',
+      prompt
+    ].join('\n\n')
+  }
   return `${immutableContext}\n\n${applyDesignOutputContract(prompt, profile.outputMedium)}`
 }

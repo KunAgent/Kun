@@ -12,6 +12,8 @@
 | --- | --- |
 | 创建、steer、cancel 自有 Run | `agent.run` |
 | 查询自有 thread/run 投影 | `agent.threads.readOwn` |
+| 读取全局 turn 容量 | `agent.capacity.read` |
+| 读取本地全部房间投影 | `rooms.read` |
 | 注册 Manifest 声明的工具 | `tools.register` |
 | 运行中读写 workspace、联网、使用账号 | 对应 `workspace.*`、`network:*`、`accounts.use:*` |
 
@@ -21,6 +23,7 @@
 
 v1 提供：
 
+- `agent.capacity` (v1.5)
 - `agent.getRunOptions`
 - `agent.createRun`
 - `agent.listRunEvents`
@@ -47,6 +50,31 @@ const { run } = await context.agent.createRun({
 ```
 
 `model` 和 `reasoningEffort` 只影响新 Run/新 Turn，不能通过 `steer` 修改正在执行的 Run。Host 会拒绝未配置模型、不受该模型支持的推理强度，以及把 Host 模型选择与扩展自有 `providerBinding` 混用的请求。Run 投影中的 `model` 和可选 `reasoningEffort` 是实际已接纳值。
+
+## 全局容量与只读 Rooms（v1.5）
+
+`agent.capacity()` 要求 `agent.capacity.read`，只返回 `{ activeTurns, queuedTurns, maxConcurrentTurns, busy }`。计数覆盖共享 Kun admission 队列的 GUI、TUI、CLI、API、IM、extension 和 room turn。`busy` 定义为 `activeTurns > 0 || queuedTurns > 0`，表示本机有工作，不表示是否还能接纳一个 turn。响应不包含 thread、turn、owner 或 lease 标识。
+
+`context.rooms` 的每次调用都要求 `rooms.read`。该授权覆盖同一信任域内的全部本地房间，不改变 Agent 或 thread API 的所有权检查，也不允许房间写操作或审批操作。
+
+```ts
+const capacity = await context.agent.capacity()
+const rooms = await context.rooms.list({ limit: 50 })
+const roomId = rooms.items[0]?.id
+if (roomId) {
+  const messages = await context.rooms.listMessages({ roomId, limit: 50 })
+  const tasks = await context.rooms.listTasks({ roomId, status: 'running' })
+  const events = await context.rooms.listEvents({ roomId, after: 0 })
+}
+```
+
+四个 Rooms 方法均默认 50 条，limit 只接受 1 至 100 的整数。`list`、`listMessages` 和 `listTasks` 返回 `{ items, page: { hasMore, nextCursor? } }`；将返回的 cursor 原样传给同一方法和筛选条件。房间列表沿用本地置顶/活动顺序，cursor 为不透明值。消息/任务历史向更早记录翻页，每页消息按时间正序排列，任务按最新记录优先排列。limit 是条数上限；消息页可因 Host 传输大小限制而缩短，同时保持消息正文完整。`listEvents` 从数字 `after` 之后返回 `{ items, cursor, hasMore }`；cursor 也越过被省略的内部事件，因此即使 `items` 为空也应保存响应 cursor。
+
+房间摘要仅包含 `id`、`name`、`collaborationMode`、`updatedAt`、`memberCount` 和各公开任务状态的计数。消息包含 `id`、可选 `authorMemberId`、`authorDisplayName`、`body`、`createdAt`、可选 `replyToMessageId`、`mentionedMemberIds` 及附件 `{ id, displayName }`；该权限允许读取消息正文。任务摘要包含 `id`、`status`、`title`、`memberId`、可选 `repositoryDisplayName` 和 `updatedAt`。
+
+事件仅包含 `type`、`sequence`、`timestamp`、`roomId` 与 strict `{ id, taskId? }` payload。公开类型包括 `room.created`、`room.updated`、`message.created`、`message.updated`、`task.created`、`task.updated`、`task.cleaned`、`task.recovered` 和 `task.amended`，供调用者刷新对应投影。响应省略仓库/附件文件系统元数据、工具参数/结果、prompt、凭据以及内部 turn/lease/dispatch 状态。
+
+新调用者声明 `apiVersion: 1.5.0` 和所需只读权限。Manifest 兼容检查保持不变；需要兼容旧 Host 的扩展可检测 `context.agent.capacity?.()`，方法不存在时省略本机 busy 信息。
 
 ## 创建 Run
 

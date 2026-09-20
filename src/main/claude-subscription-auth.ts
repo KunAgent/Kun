@@ -17,6 +17,7 @@ import type {
   ClaudeSubscriptionStatus
 } from '../shared/kun-gui-api'
 import { validateClaudeSubscriptionToken } from '../shared/claude-subscription-auth'
+import { runOwnedCommand } from './owned-command'
 
 const OAUTH_TOKEN_REDACTION_PATTERN = /sk-ant-oat[\w-]+/g
 const MAX_CAPTURE_BYTES = 64 * 1024
@@ -81,6 +82,17 @@ function runCapturedCommand(options: {
   spawnFn?: SpawnFn
   timeoutMs: number
 }): Promise<CapturedCommandResult> {
+  if (!options.spawnFn) {
+    const launch = claudeLaunch(options.binaryPath, options.args)
+    return runOwnedCommand(launch.command, launch.args, {
+      env: options.env ?? claudeAuthEnv(), timeoutMs: options.timeoutMs,
+      maxOutputBytes: MAX_CAPTURE_BYTES, truncateOutput: true,
+      messages: { timeout: 'claude-capture-timeout' }
+    }).then((result) => ({ code: result.exitCode, stdout: result.stdout, stderr: result.stderr, timedOut: false }),
+      (error: NodeJS.ErrnoException) => ({ code: null, stdout: '',
+        stderr: error.code === 'ENOENT' ? 'claude-cli-not-found' : error.message,
+        timedOut: error.message === 'claude-capture-timeout' }))
+  }
   const spawnFn = options.spawnFn ?? spawn
   return new Promise((resolve) => {
     let child: ChildProcess | undefined
@@ -222,9 +234,10 @@ export async function runClaudeSubscriptionLogin(
   const pollIntervalMs = options.pollIntervalMs ?? LOGIN_POLL_INTERVAL_MS
   const readStatus = options.status ?? (() => claudeSubscriptionStatus({
     binaryPath: options.binaryPath,
-    spawnFn
+    ...(options.spawnFn ? { spawnFn } : {})
   }))
   if ((await readStatus()).loggedIn) return { ok: true, mode: 'ambient' }
+  if (!options.spawnFn) return runOwnedClaudeLogin(options.binaryPath, readStatus, timeoutMs, pollIntervalMs)
 
   return new Promise((resolve) => {
     let settled = false
@@ -302,6 +315,48 @@ export async function runClaudeSubscriptionLogin(
     })
     pollTimer = setTimeout(() => void poll(), Math.min(pollIntervalMs, 100))
   })
+}
+
+function claudeLaunch(binaryPath: string | undefined, args: string[]): { command: string; args: string[] } {
+  return !binaryPath && process.platform === 'win32'
+    ? { command: 'cmd.exe', args: ['/d', '/s', '/c', 'claude', ...args] }
+    : { command: binaryPath ?? 'claude', args }
+}
+
+async function runOwnedClaudeLogin(
+  binaryPath: string | undefined,
+  readStatus: () => Promise<ClaudeSubscriptionStatus>,
+  timeoutMs: number,
+  pollIntervalMs: number
+): Promise<ClaudeSubscriptionLoginResult> {
+  const controller = new AbortController()
+  let authenticated = false
+  let checking = false
+  const poll = async (): Promise<void> => {
+    if (checking || controller.signal.aborted) return
+    checking = true
+    try {
+      if ((await readStatus()).loggedIn) {
+        authenticated = true
+        controller.abort()
+      }
+    } catch { /* the command still owns the bounded login attempt */ }
+    finally { checking = false }
+  }
+  const timer = setInterval(() => { void poll() }, pollIntervalMs)
+  const launch = claudeLaunch(binaryPath, ['auth', 'login', '--claudeai'])
+  try {
+    const result = await runOwnedCommand(launch.command, launch.args, {
+      env: claudeAuthEnv(), signal: controller.signal, timeoutMs,
+      maxOutputBytes: MAX_CAPTURE_BYTES, truncateOutput: true, messages: { timeout: 'timeout' }
+    })
+    if (authenticated || (await readStatus()).loggedIn) return { ok: true, mode: 'ambient' }
+    return { ok: false, message: redactClaudeAuthText(result.stdout + result.stderr) || 'claude-login-exited' }
+  } catch (error) {
+    if (authenticated) return { ok: true, mode: 'ambient' }
+    return { ok: false, message: (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? 'claude-cli-not-found' : redactClaudeAuthText(error instanceof Error ? error.message : String(error)) }
+  } finally { clearInterval(timer) }
 }
 
 /** Make a real, no-tools request so connection success proves upstream auth. */

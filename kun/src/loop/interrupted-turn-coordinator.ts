@@ -111,7 +111,9 @@ export class InterruptedTurnCoordinator {
     }
     let resumed = 0
     for (const source of sources) {
-      const latest = (await this.deps.threadStore.get(source.threadId))?.turns.at(-1)
+      const thread = await this.deps.threadStore.get(source.threadId)
+      if (thread?.roomContext) continue
+      const latest = thread?.turns.at(-1)
       if (latest?.id !== source.turnId || latest.status !== 'failed') continue
       this.recoverySourceTurnByThread.set(source.threadId, source.turnId)
       if (await this.resume.resumeInterrupted(source.threadId)) resumed += 1
@@ -122,7 +124,7 @@ export class InterruptedTurnCoordinator {
   private async canResume(threadId: string): Promise<boolean> {
     if (!this.enabled) return false
     const thread = await this.deps.threadStore.get(threadId)
-    if (!thread) return false
+    if (!thread || thread.roomContext) return false
     if (thread.relation === 'side') return false
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
     const latest = thread.turns.at(-1)
@@ -155,7 +157,7 @@ export class InterruptedTurnCoordinator {
   private async launchResumeTurn(threadId: string): Promise<void> {
     const thread = await this.deps.threadStore.get(threadId)
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
-    if (!thread || !sourceTurnId) return
+    if (!thread || thread.roomContext || !sourceTurnId) return
     const lastTurn = thread.turns[thread.turns.length - 1]
     const recoveryContext = childRecoveryContext(this.childRecoveryByThread.get(threadId) ?? [])
     const recoveryRequestId = recoveryContext
@@ -173,6 +175,7 @@ export class InterruptedTurnCoordinator {
           ? {
               messageSource: 'design_continuation' as const,
               ...(lastTurn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+              ...(lastTurn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
               ...(lastTurn.guiDesignMode ? { guiDesignMode: true } : {})
             }
           : {}),

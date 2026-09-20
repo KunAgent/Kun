@@ -11,6 +11,7 @@ import type { TurnItem } from '../../contracts/items.js'
 import { makeUserInputItem } from '../../domain/item.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
+import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   DESIGN_MODE_INSTRUCTION,
   SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
@@ -98,6 +99,7 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
     | 'allowedToolNames'
     | 'allowedSkillIds'
     | 'allowedReadPaths'
+    | 'allowHostReads'
     | 'allowedWritePaths'
     | 'allowedArtifactIds'
     | 'pptWorkflowScope'
@@ -339,6 +341,7 @@ export function createCursorSdkRuntime(
       ...(plan.planMode ? { threadMode: 'plan' as const } : {}),
       ...(plan.guiPlan ? { guiPlan: plan.guiPlan } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
       ...(input.turn.guiDesignArtifact
         ? { guiDesignArtifact: input.turn.guiDesignArtifact }
@@ -476,6 +479,7 @@ export function createCursorSdkRuntime(
       }
       const todoInstruction = plan.planMode ? null : todoContinuationInstruction(thread.todos)
       const instructionBlocks = [
+        ...historyReferenceInstructions(thread),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
         ...(plan.planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn.guiDesignArtifact?.kind === 'svg'

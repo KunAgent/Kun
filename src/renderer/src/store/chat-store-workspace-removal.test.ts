@@ -40,6 +40,7 @@ function buildHarness(options?: {
   workspaceRoot?: string
   threads?: NormalizedThread[]
   codeWorkspaceRoots?: string[]
+  folderSets?: ChatState['codeWorkspaceFolderSets']
   activeThreadId?: string | null
   lastCodeThreadId?: string | null
   setSettings?: ReturnType<typeof vi.fn>
@@ -56,6 +57,7 @@ function buildHarness(options?: {
     lastCodeThreadId: options?.lastCodeThreadId ?? null,
     busy: false,
     codeWorkspaceRoots: options?.codeWorkspaceRoots ?? [],
+    codeWorkspaceFolderSets: options?.folderSets ?? { version: 1, sets: [] },
     error: null,
     removedCodeWorkspaces: readRemovedCodeWorkspaces(),
     threads: options?.threads ?? [],
@@ -239,5 +241,24 @@ describe('chat store workspace removal', () => {
     expect(harness.state.workspaceRoot).toBe('')
     expect(harness.state.activeThreadId).toBe('thr-b')
     expect(setSettings).toHaveBeenCalledWith({ workspaceRoot: '' })
+  })
+
+  it('drops the project folder set when the project is removed from the sidebar', async () => {
+    const harness = buildHarness({
+      codeWorkspaceRoots: ['/Users/zxy/Code/A', '/Users/zxy/Code/B'],
+      folderSets: {
+        version: 1,
+        sets: [
+          { primary: '/Users/zxy/Code/A', extraRoots: ['/Users/zxy/Code/A-api'] },
+          { primary: '/Users/zxy/Code/B', extraRoots: ['/Users/zxy/Code/B-docs'] }
+        ]
+      }
+    })
+
+    await harness.removeWorkspace('/Users/zxy/Code/A', [])
+
+    expect(harness.state.codeWorkspaceFolderSets.sets).toEqual([
+      { primary: '/Users/zxy/Code/B', extraRoots: ['/Users/zxy/Code/B-docs'] }
+    ])
   })
 })
