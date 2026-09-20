@@ -73,7 +73,7 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
     roomId: input.roomId, taskId: input.taskId, requestId: input.requestId, memberId: input.member.id, kind: input.kind,
     rootRequestId: input.rootRequestId, collaborationProtocol: input.collaborationProtocol,
     allowedToolNames: allowed,
-    blockedToolNames: [...new Set(['delegate_task', 'create_goal', ...blocked])],
+    blockedToolNames: [...new Set([...(readOnly ? ['delegate_task', 'generate_subagent'] : []), 'create_goal', ...blocked])],
     blockedProviderIds: [...new Set([...(profile?.blockedMcpServers ?? []), ...(overrides?.blockedMcpServers ?? [])])].map((id) => id.startsWith('mcp:') ? id : 'mcp:' + id),
     blockedSkillIds: [...new Set([...(profile?.blockedSkills ?? []), ...(overrides?.blockedSkills ?? [])])],
     skillsEnabled: profile?.skillsEnabled !== false && overrides?.skillsEnabled !== false

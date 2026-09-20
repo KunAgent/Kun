@@ -95,3 +95,32 @@ describe('frozen room turn policy', () => {
     expect(skillResolve).not.toHaveBeenCalled()
   })
 })
+
+describe('writable room general-capability parity', () => {
+  const raw: ToolHostContext = {
+    threadId: 'room_thread', turnId: 'turn_one', workspace: '/workspace',
+    additionalWorkspaces: ['/extra'], sandboxMode: 'workspace-write', approvalPolicy: 'auto',
+    memoryPolicy: { enabled: true }, abortSignal: new AbortController().signal,
+    awaitApproval: async () => 'allow'
+  }
+
+  it('keeps delegate/subagent available for a writable private conversation', () => {
+    const context = applyRoomToolPolicy(raw, roomThread({ kind: 'conversation', participantAgentId: 'agent_one' }))
+    expect(context.blockedToolNames).not.toEqual(expect.arrayContaining(['delegate_task', 'generate_subagent']))
+    expect(context.blockedToolNames).toEqual(expect.arrayContaining(['create_goal']))
+    expect(context.additionalWorkspaces).toEqual(['/extra'])
+    expect(context.sandboxMode).toBe('workspace-write')
+  })
+
+  it('keeps delegate/subagent available for a writable group execution thread', () => {
+    const context = applyRoomToolPolicy(raw, roomThread({ kind: 'execution' }))
+    expect(context.blockedToolNames).not.toEqual(expect.arrayContaining(['delegate_task', 'generate_subagent']))
+    expect(context.additionalWorkspaces).toEqual(['/extra'])
+  })
+
+  it('still blocks delegation and clears extra workspaces for read-only stages', () => {
+    const context = applyRoomToolPolicy(raw, roomThread({ kind: 'review' }))
+    expect(context.blockedToolNames).toEqual(expect.arrayContaining(['delegate_task', 'generate_subagent']))
+    expect(context.additionalWorkspaces).toBeUndefined()
+  })
+})
