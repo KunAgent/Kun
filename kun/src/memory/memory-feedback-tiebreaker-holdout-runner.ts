@@ -20,6 +20,7 @@ import { validateMemoryFeedbackTiebreakerCandidateLock } from './memory-feedback
 import { scoreMemoryFeedbackTiebreakerCases } from './memory-feedback-tiebreaker-metrics.js'
 import { assertMemoryFeedbackTiebreakerPrivateArtifact } from './memory-feedback-tiebreaker-privacy.js'
 import { evaluateMemoryFeedbackTiebreakerGates } from './memory-feedback-tiebreaker-gates.js'
+import { memoryFeedbackPairedBootstrapLowerBound } from './memory-feedback-tiebreaker-bootstrap.js'
 
 const fixturePath = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url))
 
@@ -94,7 +95,11 @@ function evaluateHoldout(input: {
   const foundation = scoreMemoryFeedbackTiebreakerCases({ fixture: input.fixture, results: foundationResults })
   const elapsedMilliseconds = Math.round((performance.now() - startedAt) * 1_000) / 1_000
   const traceRankings = Math.max(0, ...results.flatMap((item) => item.rankings.length), ...foundationResults.map((item) => item.rankings.length))
-  const candidateLowerBounds = { pairAccuracyGain: 0, recallGain: 0, mrrGain: 0 }
+  const candidateLowerBounds = {
+    pairAccuracyGain: bootstrapMetric(foundation.cases, scored.cases, 'pairCorrect', plan),
+    recallGain: bootstrapMetric(foundation.cases, scored.cases, 'recallAtK', plan),
+    mrrGain: bootstrapMetric(foundation.cases, scored.cases, 'reciprocalRank', plan)
+  }
   const gates = evaluateMemoryFeedbackTiebreakerGates(foundation.metrics, {
     metrics: scored.metrics,
     bootstrapLowerBounds: candidateLowerBounds
@@ -129,4 +134,26 @@ function evaluateHoldout(input: {
   }
   assertMemoryFeedbackTiebreakerPrivateArtifact(evidence)
   return evidence
+}
+
+function bootstrapMetric(
+  foundation: readonly { caseId: string; pairCorrect?: number; recallAtK?: number; reciprocalRank?: number }[],
+  candidate: readonly { caseId: string; pairCorrect?: number; recallAtK?: number; reciprocalRank?: number }[],
+  key: 'pairCorrect' | 'recallAtK' | 'reciprocalRank',
+  plan: MemoryFeedbackTiebreakerPlan
+): number {
+  const candidateById = new Map(candidate.map((item) => [item.caseId, item]))
+  const pairs = foundation.flatMap((item) => {
+    const right = candidateById.get(item.caseId)
+    const leftValue = item[key]
+    const rightValue = right?.[key]
+    return leftValue === undefined || rightValue === undefined ? [] : [[leftValue, rightValue] as const]
+  })
+  return pairs.length === 0 ? 0 : memoryFeedbackPairedBootstrapLowerBound({
+    baseline: pairs.map(([left]) => left),
+    candidate: pairs.map(([, right]) => right),
+    seed: plan.bootstrap.seed,
+    resamples: plan.bootstrap.resamples,
+    confidenceLevel: plan.bootstrap.confidenceLevel
+  }).lowerBound
 }
