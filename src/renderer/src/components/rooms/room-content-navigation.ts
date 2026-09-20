@@ -6,12 +6,20 @@ import { projectBoardApi } from '../../project-board/project-board-api'
 import type { ProjectBoardCard } from '../../project-board/project-board-types'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
+import { useRoomExcalidrawStore } from './room-excalidraw-store'
 
 export const useRoomBoardTarget = create<{ target: { workspaceRoot: string; cardId: string; card: ProjectBoardCard } | null }>(() => ({ target: null }))
 
 export async function openRoomContentTarget(target: RoomContentOpenTarget,
-  openThread: (id: string, turnId?: string) => void | Promise<void>): Promise<void> {
+  openThread: (id: string, turnId?: string) => void | Promise<void>,
+  roomId?: string): Promise<void> {
   if (target.kind === 'thread') { await openThread(target.threadId, target.turnId); return }
+  if (target.kind === 'excalidraw_board') {
+    if (!roomId) throw new Error('Referenced room is unavailable')
+    useRoomExcalidrawStore.getState().registerBoard({ roomId, boardId: target.boardId, workspaceRoot: target.workspaceRoot })
+    useRoomExcalidrawStore.getState().openBoard(roomId, target.boardId)
+    return
+  }
   if (target.kind === 'board') {
     const result = await projectBoardApi.card(target.workspaceRoot, target.cardId)
     if (result.card.id !== target.cardId) throw new Error('Referenced board card is unavailable')

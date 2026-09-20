@@ -5,6 +5,7 @@ import type { Room, RoomContentReference, RoomPreviewImage } from '@shared/rooms
 import { useRoomContent, useRoomContentVisibility, roomContentPath, roomContentStatusKey } from './room-content-client'
 import { roomsRequest } from './rooms-client'
 import { RoomImageLightbox } from './RoomImageLightbox'
+import { useRoomExcalidrawStore } from './room-excalidraw-store'
 import './rooms-content.css'
 
 const icons = { agent_file: File, attachment: File, repository_file: FolderGit2, task: ListTodo, delivery: PackageCheck, board_card: KanbanSquare }
@@ -28,6 +29,7 @@ export function RoomContentCard({ room, reference, messageId, onOpen }: {
   const Icon = result?.kind === 'image' ? Image : icons[reference.kind]
   const unavailable = Boolean(error || result?.state === 'unavailable')
   const title = result?.title ?? reference.titleSnapshot ?? t(`roomsContent_${reference.kind}`)
+  const openBoardTarget = result?.openTarget?.kind === 'excalidraw_board' ? result.openTarget : null
   const open = async () => {
     if (unavailable || opening) return
     if (result?.kind !== 'image') { onOpen?.(reference, messageId); return }
@@ -55,6 +57,12 @@ export function RoomContentCard({ room, reference, messageId, onOpen }: {
         <ArrowUpRight size={14} /></div>
     </button>
     {openError ? <p role="alert">{openError}</p> : null}
+    {openBoardTarget ? <button type="button" className="rooms-content-open-board"
+      onClick={() => {
+        useRoomExcalidrawStore.getState().registerBoard({ roomId: room.id, boardId: openBoardTarget.boardId,
+          workspaceRoot: openBoardTarget.workspaceRoot })
+        useRoomExcalidrawStore.getState().openBoard(room.id, openBoardTarget.boardId)
+      }}>{t('roomsContentOpenBoard')}</button> : null}
     {fullImage ? <RoomImageLightbox title={title} image={fullImage} onClose={() => setFullImage(null)} /> : null}
   </div>
 }

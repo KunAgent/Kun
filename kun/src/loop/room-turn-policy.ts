@@ -31,6 +31,8 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
     ...context,
     roomStepKind: policy.kind, roomAgent: Boolean(policy.participantAgentId),
     roomPeer: peerTools.length > 0,
+    guiRoomExcalidrawCanvas: policy.kind === 'conversation' && context.clientSurface === 'gui' && !readOnly
+      ? true : context.guiRoomExcalidrawCanvas,
     workspace: thread.workspace,
     additionalWorkspaces: undefined,
     knowledgeBases: undefined,

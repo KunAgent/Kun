@@ -53,6 +53,9 @@ import { RoomRunSummary } from './RoomRunSummary'
 import { useRoomPresentationPreferences } from './room-presentation-preferences'
 import { openRoomContentTarget } from './room-content-navigation'
 import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from './RoomChoiceCard'
+import { RoomExcalidrawConsumer } from './useRoomExcalidrawConsumer'
+import { RoomExcalidrawPanel } from './RoomExcalidrawPanel'
+import { useRoomExcalidrawStore, roomExcalidrawBoard } from './room-excalidraw-store'
 
 export function RoomsWorkspaceView({
   onOpenThread,
@@ -208,6 +211,10 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
   const openWork = (): void => {
     void useChatStore.getState().openWrite()
   }
+  const openExcalidraw = useRoomExcalidrawStore((state) => state.open)
+  const openExcalidrawBoard = openExcalidraw && room && openExcalidraw.roomId === room.id
+    ? roomExcalidrawBoard(openExcalidraw.roomId, openExcalidraw.boardId)
+    : undefined
 
   return (
     <div
@@ -361,6 +368,10 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             </button>
           </div>
         )}
+      {privateChat && room ? <RoomExcalidrawConsumer roomId={room.id} runId={direct.data?.active?.runId} /> : null}
+      {openExcalidrawBoard && privateChat ? <RoomExcalidrawPanel boardId={openExcalidrawBoard.boardId}
+        workspaceRoot={openExcalidrawBoard.workspaceRoot} title={openExcalidrawBoard.title}
+        onClose={() => useRoomExcalidrawStore.getState().closeBoard()} /> : null}
       </section>
       {drawer.frames.length ? <RoomDrawerNavigation key={(room?.id ?? 'agents') + '-details'} frames={drawer.frames}
         onBack={drawer.back} onClose={drawer.close} onSection={drawer.section}
@@ -385,7 +396,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'reply') return <RoomReplyThread key={key} room={room} messageId={target.messageId} tasks={state.tasks} active={active}
             onSend={send} onPin={pin} onTask={openTask} onRun={openRun} onMember={openMember} onOpenContent={openContent} />
           if (target.kind === 'content') return <RoomContentPreview key={key} room={room} reference={target.reference} messageId={target.messageId}
-            onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread))} />
+            onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread, room?.id))} />
           if (target.section === 'discussion') return <RoomPeerActivity room={room} {...topicState} onUpdated={topicState.refresh}
             onMember={openMember} onOpenRun={openRun} onContinue={(rootRequestId) => { continueRoomTopic(room.id, rootRequestId); drawer.close() }} />
           if (target.section === 'overview') return <><RoomRunSummary roomId={room.id} topics={topicState.topics} />

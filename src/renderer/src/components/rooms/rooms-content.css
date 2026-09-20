@@ -72,3 +72,6 @@
 .rooms-avatar-picker > button { display: flex; gap: 8px; align-items: center; padding: 7px; border-radius: 7px; color: var(--ds-text); font-size: 12px; }
 .rooms-avatar-picker button:hover { background-color: var(--ds-surface-hover); }
 .rooms-avatar-picker button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+.rooms-content-open-board { margin-top: 4px; width: 100%; padding: 6px 10px; border-radius: 8px; font-size: 12px; color: var(--ds-accent); background: var(--ds-surface-hover); }
+.rooms-content-open-board:hover, .rooms-content-open-board:focus-visible { filter: brightness(0.97); }

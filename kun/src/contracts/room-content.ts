@@ -36,6 +36,7 @@ export type RoomContentOpenTarget =
   | { kind: 'code_file' | 'work_file'; workspaceRoot: string; relativePath: string }
   | { kind: 'thread'; threadId: string; turnId?: string }
   | { kind: 'board'; workspaceRoot: string; cardId: string }
+  | { kind: 'excalidraw_board'; workspaceRoot: string; boardId: string }
 export type RoomContentResult = {
   reference: RoomContentReference
   state: 'available' | 'unavailable'

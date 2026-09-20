@@ -8,6 +8,7 @@ import type { RoomTaskExecution, RoomRequestState } from './room-runtime-types.j
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import type { RoomContentReference, RoomContentResult } from '../contracts/room-content.js'
+import { EXCALIDRAW_PNG_SIDECAR_PATTERN } from '../contracts/generated-image-path.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import { roomGit } from './room-git.js'
 import { roomPreviewImage } from './room-preview-image.js'
@@ -115,10 +116,21 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
       if (workspace.id !== reference.workspaceId) workspace = await privateWorkspace(runtime.rooms!, { ...room, privateWorkspace: undefined })
       if (workspace.id !== reference.workspaceId) throw new Error('workspace_changed')
       const root = await realpath(workspace.path)
-      const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, 128 * 1024)
-      Object.assign(result, { title: reference.relativePath, kind: 'file', byteSize: file.size,
-        openTarget: { kind: 'code_file', workspaceRoot: root, relativePath: reference.relativePath } })
-      if (mode === 'preview' && !file.data.includes(0)) result.preview = { type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
+      const sidecar = reference.relativePath.match(EXCALIDRAW_PNG_SIDECAR_PATTERN)
+      if (sidecar) {
+        const boardId = sidecar[1]
+        const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, 12 * 1024 * 1024)
+        Object.assign(result, { title: reference.relativePath, kind: 'image', mimeType: 'image/png', byteSize: file.size,
+          openTarget: { kind: 'excalidraw_board', workspaceRoot: root, boardId } })
+        if (mode === 'thumbnail') result.thumbnail = await roomPreviewImage(file.data)
+        else if (mode === 'preview') result.preview = { type: 'image', image: { dataBase64: file.data.toString('base64'),
+          mimeType: 'image/png', width: 1, height: 1 } }
+      } else {
+        const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, 128 * 1024)
+        Object.assign(result, { title: reference.relativePath, kind: 'file', byteSize: file.size,
+          openTarget: { kind: 'code_file', workspaceRoot: root, relativePath: reference.relativePath } })
+        if (mode === 'preview' && !file.data.includes(0)) result.preview = { type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
+      }
     } else if (reference.kind === 'attachment') {
       const { metadata, scope } = await attachmentScope(runtime, room, reference.attachmentId, messageId, allowDraft && mode === 'summary')
       Object.assign(result, attachmentSummary(metadata))

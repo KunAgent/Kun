@@ -25,6 +25,7 @@ function context(overrides: Partial<ToolHostContext> = {}): ToolHostContext {
 
 const workContext = () => context({ agentSurface: 'write' })
 const excalidrawContext = () => context({ guiExcalidrawCanvas: true })
+const roomContext = () => context({ guiRoomExcalidrawCanvas: true, agentSurface: 'code' })
 
 describe('design_apply_excalidraw tool', () => {
   it('advertises on Excalidraw canvas turns and on the Work surface', () => {
@@ -141,6 +142,41 @@ describe('design_open_excalidraw tool', () => {
     expect(result.output).toMatchObject({
       ok: false,
       error: 'boardId must match ^[a-zA-Z0-9_-]{1,64}$'
+    })
+  })
+})
+
+describe('room Excalidraw tool surface', () => {
+  it('advertises open and apply on a writable GUI private-chat room', () => {
+    expect(createDesignOpenExcalidrawTool().shouldAdvertise?.(roomContext())).toBe(true)
+    expect(createDesignApplyExcalidrawTool().shouldAdvertise?.(roomContext())).toBe(true)
+    expect(createDesignOpenExcalidrawTool().shouldAdvertise?.(excalidrawContext())).toBe(false)
+  })
+
+  it('resolves a default board id and returns host-scoped paths for a room', async () => {
+    const open = await createDesignOpenExcalidrawTool().execute({}, roomContext())
+    expect(open.output).toMatchObject({
+      status: 'accepted',
+      boardId: 'room',
+      surface: 'room',
+      scope: 'room',
+      workspaceRoot: '/tmp/workspace',
+      scenePath: '.kun-whiteboards/room/excalidraw.json',
+      pngPath: '.kun-whiteboards/room/excalidraw.png'
+    })
+  })
+
+  it('allows an explicit boardId on a room and keeps the receipt deterministic', async () => {
+    const apply = await createDesignApplyExcalidrawTool().execute({ boardId: 'arch-map' }, roomContext())
+    expect(apply.isError).toBeUndefined()
+    expect(apply.output).toMatchObject({
+      status: 'accepted',
+      boardId: 'arch-map',
+      scope: 'room',
+      surface: 'room',
+      scenePath: '.kun-whiteboards/arch-map/excalidraw.json',
+      pngPath: '.kun-whiteboards/arch-map/excalidraw.png',
+      ops: [{ op: 'apply-excalidraw', boardId: 'arch-map' }]
     })
   })
 })
