@@ -15,7 +15,7 @@ These are a dated checkpoint, not a claim that the branch is ready to merge.
 - `upstream/develop` is synchronized at `4778f9eb`.
 - P3-A implementation #1324 is merged at `8974700b`.
 - P3-A closeout #1331 is closed without merge; its substantive documentation
-  changes are included in this branch as `72578f9e` and `47de925e`.
+  changes are included in this branch as `c56c8e7c` and `374eedf7`.
 - The final delivery will use one P3-B PR; no standalone P3-A closeout PR will
   be reopened.
 - Post-sync verification: the focused P3-B suite passed (18 files / 70 tests),
