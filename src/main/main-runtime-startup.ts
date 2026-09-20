@@ -16,6 +16,8 @@ import {
 } from './kun-process'
 import { clearHistoricalKunServeProcesses } from './runtime/kun-serve-process-cleanup'
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
+import { retireVerifiablyIdleLegacyManager } from '../../kun/src/manager/legacy-manager-retire.js'
+import { rememberedManagerStartupProfile } from './runtime/kun-startup-manager-recovery'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { throwIfApplicationQuitting } from './app-quit-signal'
 import { logWarn } from './logger'
@@ -275,6 +277,13 @@ export async function prepareGuiRuntimeForStartupRetry(error?: unknown): Promise
   await kunRuntimeAdapter.stopAndWait()
   await mainState.stopDesktopServicesForRecovery?.()
   await desktopProcessStack.stopManager(Date.now() + 10_000)
+  const profile = rememberedManagerStartupProfile()
+  if (!profile) return
+  await retireVerifiablyIdleLegacyManager({
+    controlDir: profile.controlDir,
+    dataDir: profile.dataDir,
+    settingsPath: profile.settingsPath
+  })
 }
 
 export function isServiceManagerDataMutexFailure(error: unknown): boolean {

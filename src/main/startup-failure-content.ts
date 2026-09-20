@@ -36,8 +36,23 @@ export function sanitizeStartupFailureMessage(error: unknown): string {
 
 export function startupFailurePresentation(error: unknown): StartupFailurePresentation {
   if (error instanceof ServiceManagerUnavailableError) {
+    const leftover = error.kind === 'capability_incompatible' || error.kind === 'protocol_incompatible'
+    const lines = leftover
+      ? [
+        `A leftover Kun data service from another build is still running${error.pid ? ` (pid ${error.pid})` : ''}.`,
+        'This desktop cannot reuse that Service Manager.',
+        'Recheck confirms the previous owner and Runtime slots are gone, then shuts the leftover down without deleting saved conversations.',
+        'If another Kun window is still open, quit it first. Recheck will not stop a live owner or live Runtime work.',
+        error.message,
+        `Manager log: ${join(defaultKunControlDir(), 'manager.log')}`
+      ]
+      : [
+        error.message,
+        `Manager log: ${join(defaultKunControlDir(), 'manager.log')}`,
+        'Recheck verifies ownership before recovery. If ownership cannot be verified, no process or saved data will be changed.'
+      ]
     return {
-      message: sanitizeStartupFailureMessage(`${error.message}\nManager log: ${join(defaultKunControlDir(), 'manager.log')}\nRecheck verifies ownership before recovery. If ownership cannot be verified, no process or saved data will be changed.`),
+      message: sanitizeStartupFailureMessage(lines.join('\n')),
       handoff: false, retryable: true, recheck: true
     }
   }
@@ -110,7 +125,14 @@ export function parseStartupFailureAction(targetUrl: string): StartupFailureActi
 export function startupFailureHtml(
   message: string,
   logDir: string,
-  options: { handoff?: boolean; retryable?: boolean; busy?: boolean; recheck?: boolean } = {}
+  options: {
+    handoff?: boolean
+    retryable?: boolean
+    busy?: boolean
+    recheck?: boolean
+    appVersion?: string
+    execPath?: string
+  } = {}
 ): string {
   const safeMessage = escapeHtml(message || 'Unknown startup error')
   const safeLogDir = escapeHtml(logDir || 'Log directory is unavailable')
@@ -128,6 +150,13 @@ export function startupFailureHtml(
     : retryable
       ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${options.recheck ? 'Recheck Kun' : handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
       : ''
+  const launchLines = [
+    options.appVersion ? `This app version: ${options.appVersion}` : '',
+    options.execPath ? `This app path: ${options.execPath}` : ''
+  ].filter(Boolean)
+  const launchHtml = launchLines.length === 0
+    ? ''
+    : `<p>This launch:</p>\n    <div class="path">${escapeHtml(launchLines.join('\n'))}</div>`
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -154,6 +183,7 @@ export function startupFailureHtml(
     <h1>${heading}</h1>
     <p>${explanation}</p>
     <pre>${safeMessage}</pre>
+    ${launchHtml}
     <p>Log directory:</p>
     <div class="path">${safeLogDir}</div>
     <div class="actions">

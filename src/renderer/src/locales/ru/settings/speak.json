@@ -16,7 +16,7 @@
   "speakPreviewPlay": "Воспроизвести",
   "speakPreviewStop": "Остановить",
   "speakDownloadSource": "Источник загрузки",
-  "speakDownloadSourceDesc": "Зеркало для WASM среды и файлов голосов.",
+  "speakDownloadSourceDesc": "Сначала используется выбранный источник для WASM и файлов голоса. При ошибке автоматически пробуются остальные зеркала.",
   "speakDownloadSourceChecking": "Проверка источников загрузки...",
   "speakDownloadSourceAvailable": "{{source}} доступен за {{ms}} мс",
   "speakDownloadSourceUnavailable": "{{source}} недоступен: {{reason}}",

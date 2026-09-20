@@ -5,12 +5,25 @@ import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const assetDownload = vi.hoisted(() => ({
+  impl: null as null | ((request: { url: string; targetPath: string; metadata?: { path: string; content: Record<string, unknown> } }) => Promise<void>)
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(),
     getVersion: vi.fn(() => 'test')
   }
 }))
+
+vi.mock('./local-sanotts-assets', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./local-sanotts-assets')>()
+  return {
+    ...actual,
+    downloadVerifiedAsset: (request: Parameters<typeof actual.downloadVerifiedAsset>[0]) =>
+      assetDownload.impl ? assetDownload.impl(request) : actual.downloadVerifiedAsset(request)
+  }
+})
 
 import { app } from 'electron'
 import {
@@ -21,6 +34,7 @@ import {
 } from '../../shared/local-sanotts'
 import { LOCAL_SANOTTS_VOICES } from '../../shared/local-sanotts-voices'
 import {
+  cancelLocalSanottsRuntime,
   checkLocalSanottsDownloadSources,
   deleteLocalSanottsRuntime,
   downloadLocalSanottsRuntime,
@@ -56,6 +70,7 @@ describe('local-sanotts-download-service', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    assetDownload.impl = null
     setLocalSanottsProgressEmitter(null)
     vi.restoreAllMocks()
   })
@@ -181,5 +196,91 @@ describe('local-sanotts-download-service', () => {
 
     expect(result.ok).toBe(true)
     expect((await getLocalSanottsRuntimeStatus()).state).toBe('not_downloaded')
+  })
+
+  it('falls through to the next source after a 404 and skips later ones', async () => {
+    const seen: string[] = []
+    assetDownload.impl = async (request) => {
+      seen.push(request.url)
+      if (request.url.includes('huggingface.co')) {
+        throw new Error('failed to download sanoTTS asset: HTTP 404')
+      }
+      await mkdir(dirname(request.targetPath), { recursive: true })
+      await writeFile(request.targetPath, Buffer.alloc(8, 1))
+      if (request.metadata) {
+        await writeFile(request.metadata.path, JSON.stringify(request.metadata.content, null, 2), 'utf8')
+      }
+    }
+
+    const result = await downloadLocalSanottsRuntime('huggingface')
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.status.state).toBe('ready')
+    expect(seen.some((url) => url.includes('huggingface.co'))).toBe(true)
+    expect(seen.some((url) => url.includes('hf-mirror.com'))).toBe(true)
+    expect(seen.some((url) => url.includes('ampixa.github.io'))).toBe(false)
+  })
+
+  it('reports every source when they all fail', async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 404,
+      body: null
+    })) as unknown as typeof fetch
+
+    const result = await downloadLocalSanottsRuntime('huggingface')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain('Hugging Face:')
+      expect(result.message).toContain('HF-Mirror:')
+      expect(result.message).toContain('GitHub Pages:')
+      expect(result.message).toContain('HTTP 404')
+    }
+  })
+
+  it('does not try the next source after cancel', async () => {
+    const seen: string[] = []
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(String(input))
+      await new Promise<never>((_, reject) => {
+        const fail = (): void => {
+          const error = new Error('aborted')
+          error.name = 'AbortError'
+          reject(error)
+        }
+        if (init?.signal?.aborted) fail()
+        else init?.signal?.addEventListener('abort', fail, { once: true })
+      })
+    }) as unknown as typeof fetch
+
+    const pending = downloadLocalSanottsRuntime('huggingface')
+    await vi.waitFor(() => expect(seen.length).toBe(1))
+    await cancelLocalSanottsRuntime()
+    const result = await pending
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.status.state).toBe('not_downloaded')
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toContain('huggingface.co')
+  })
+
+  it('stops after the preferred source succeeds', async () => {
+    const seen: string[] = []
+    assetDownload.impl = async (request) => {
+      seen.push(request.url)
+      await mkdir(dirname(request.targetPath), { recursive: true })
+      await writeFile(request.targetPath, Buffer.alloc(8, 1))
+      if (request.metadata) {
+        await writeFile(request.metadata.path, JSON.stringify(request.metadata.content, null, 2), 'utf8')
+      }
+    }
+
+    const result = await downloadLocalSanottsRuntime('huggingface')
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.status.state).toBe('ready')
+    expect(seen.length).toBe(LOCAL_SANOTTS_RUNTIME_FILES.length)
+    expect(seen.every((url) => url.includes('huggingface.co'))).toBe(true)
   })
 })

@@ -29,7 +29,7 @@
   "speakRuntimeHint": "约 3.5 MB。许可证 {{license}}。",
   "speakVoiceHint": "当前语言的声线权重。",
   "speakDownloadSource": "下载源",
-  "speakDownloadSourceDesc": "用于下载运行时 WASM 和声线文件的镜像。",
+  "speakDownloadSourceDesc": "优先用所选源下载运行时 WASM 和声线文件，失败后自动尝试其他镜像。",
   "speakDownloadSourceChecking": "正在检查下载源…",
   "speakDownloadSourceAvailable": "{{source}} 可用，耗时 {{ms}} 毫秒",
   "speakDownloadSourceUnavailable": "{{source}} 不可用：{{reason}}",

@@ -16,7 +16,7 @@
   "speakPreviewPlay": "เล่น",
   "speakPreviewStop": "หยุด",
   "speakDownloadSource": "แหล่งดาวน์โหลด",
-  "speakDownloadSourceDesc": "มิเรอร์ที่ใช้ดาวน์โหลดรันไทม์ WASM และไฟล์เสียง",
+  "speakDownloadSourceDesc": "ใช้แหล่งที่เลือกก่อนสำหรับ WASM และไฟล์เสียง หากล้มเหลวจะลองแหล่งอื่นโดยอัตโนมัติ",
   "speakDownloadSourceChecking": "กำลังตรวจสอบแหล่งดาวน์โหลด...",
   "speakDownloadSourceAvailable": "{{source}} ใช้งานได้ใน {{ms}} ms",
   "speakDownloadSourceUnavailable": "{{source}} ใช้งานไม่ได้: {{reason}}",

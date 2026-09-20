@@ -35,7 +35,7 @@ export const LOCAL_SANOTTS_DOWNLOAD_SOURCES = [
     baseUrl: 'https://ampixa.github.io/sanoTTS/'
   }
 ] as const
-export const LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID = 'huggingface'
+export const LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID = 'github-pages'
 
 export const LOCAL_SANOTTS_RUNTIME_FILES = [
   {
@@ -150,6 +150,12 @@ export function localSanottsDownloadSourceById(sourceId: unknown): LocalSanottsD
     ?? LOCAL_SANOTTS_DOWNLOAD_SOURCES.find((source) => source.id === LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID)
     ?? LOCAL_SANOTTS_DOWNLOAD_SOURCES[0]
   )
+}
+
+/** Preferred source first, then the rest of the catalog in listed order. */
+export function localSanottsDownloadSourcesForRetry(preferredId: unknown): LocalSanottsDownloadSource[] {
+  const preferred = localSanottsDownloadSourceById(preferredId)
+  return [preferred, ...LOCAL_SANOTTS_DOWNLOAD_SOURCES.filter((source) => source.id !== preferred.id)]
 }
 
 export function localSanottsAssetUrl(sourceId: unknown, remotePath: string): string {

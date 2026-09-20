@@ -134,12 +134,13 @@ inflight cleanup、steering queue、context compaction、usage/cache telemetry�
   Manager 通过 `/v1/manager/retire-idle` 原子退休；协议或 capability 不兼容的
   旧 Manager 由启动流程自动执行同一套验证空闲退休：在 `/health` 与
   `/v1/manager/status` 上认证记录身份，要求规范化 dataDir/settingsPath 一致、
-  无 appOwner 且 Runtime slot 为空，再经 instanceId 围栏的 `/v1/manager/shutdown`
-  退出并确认进程真实退出。任何一步验证失败都 fail closed，保留旧进程并提示
+  无仍活着的 appOwner 且无仍活着的 Runtime slot，再经 instanceId 围栏的
+  `/v1/manager/shutdown` 退出并确认进程真实退出。已用同一套进程身份验证确认
+  死亡的 owner / slot 视为空闲。任何一步验证失败都 fail closed，保留旧进程并提示
   手动处理。确认旧客户端
   已关闭后，可在匹配的 `KUN_MANAGER_CONTROL_DIR` / `KUN_MANAGER_SETTINGS_PATH`
   下显式运行 `kun manager retire --data-dir <旧目录>` 作为手动兜底；该命令拒绝
-  app-owned Manager 或 live Runtime slot。
+  仍活着的 app-owned Manager 或 live Runtime slot。
 - GUI 关闭后手机连接、定时执行和本地后台任务停止；已有任务定义、会话、配置、
   记忆和用量仍保存在原址。重开沿用已有到期策略，不重复派发已完成任务。回滚前
   先退出新版整套服务并确认 writer 释放，再打开旧版本，不回滚或删除业务历史。

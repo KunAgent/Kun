@@ -29,7 +29,7 @@
   "speakRuntimeHint": "About 3.5 MB. License {{license}}.",
   "speakVoiceHint": "Voice weights for the selected language.",
   "speakDownloadSource": "Download source",
-  "speakDownloadSourceDesc": "Mirror used for runtime WASM and voice files.",
+  "speakDownloadSourceDesc": "Preferred mirror for runtime WASM and voice files. Other sources are tried automatically if this one fails.",
   "speakDownloadSourceChecking": "Checking download sources...",
   "speakDownloadSourceAvailable": "{{source}} reachable in {{ms}} ms",
   "speakDownloadSourceUnavailable": "{{source}} unavailable: {{reason}}",

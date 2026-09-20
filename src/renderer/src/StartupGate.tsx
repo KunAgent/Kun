@@ -329,9 +329,18 @@ export function StartupGate({
           <p className="kun-startup__hint">
             Startup stopped before Kun could finish preparing the workspace.
           </p>
-          <button type="button" className="secondary-button" onClick={() => requestApplicationReload()}>
-            Reload Kun
-          </button>
+          {recoveryActionError ? <p className="text-xs text-red-600">{recoveryActionError}</p> : null}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button type="button" className="primary-button" onClick={() => requestApplicationReload()}>
+              Retry
+            </button>
+            <button type="button" className="secondary-button" onClick={openLogs}>
+              Open log folder
+            </button>
+            <button type="button" className="secondary-button" onClick={() => requestApplicationReload()}>
+              Reload Kun
+            </button>
+          </div>
         </section>
       </main>
     )
