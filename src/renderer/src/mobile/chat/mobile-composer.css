@@ -1,0 +1,51 @@
+.kun-mobile-composer {
+  flex-shrink: 0;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  color: var(--ds-text);
+  background: var(--ds-surface-elevated);
+  border-top: 1px solid var(--ds-border);
+}
+.kun-mobile-composer-row { display: flex; align-items: flex-end; gap: 4px; min-width: 0; }
+.kun-mobile-composer textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: min(176px, 30dvh);
+  box-sizing: border-box;
+  padding: 10px 8px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 24px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  resize: none;
+  overflow-y: auto;
+}
+.kun-mobile-composer-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--ds-surface-subtle);
+  color: inherit;
+}
+.kun-mobile-composer-send { background: var(--ds-text); color: var(--ds-bg-main); }
+.kun-mobile-composer button:disabled { opacity: .45; }
+.kun-mobile-composer-options {
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--ds-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.kun-mobile-composer-error { margin: 0 0 8px; overflow-wrap: anywhere; }
