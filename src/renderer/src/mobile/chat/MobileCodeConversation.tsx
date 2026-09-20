@@ -14,6 +14,10 @@ import './mobile-code-conversation.css'
 
 function draftKey(threadId: string): string { return `kun.mobile.code.draft.${threadId}` }
 
+export function mobileCodeThreadReady(activeThreadId: string | null, requestedThreadId: string): boolean {
+  return activeThreadId === requestedThreadId
+}
+
 export function MobileCodeConversation({ threadId, onBack, onDetails, onSettings }: {
   threadId: string
   onBack: () => void
@@ -45,8 +49,9 @@ export function MobileCodeConversation({ threadId, onBack, onDetails, onSettings
   }, [activeThreadId, selectThread, threadId])
   useEffect(() => { setDraft(readBrowserStorageItem(draftKey(threadId)) ?? '') }, [threadId])
   useEffect(() => { writeBrowserStorageItem(draftKey(threadId), draft) }, [draft, threadId])
+  const threadReady = mobileCodeThreadReady(state.activeThreadId, threadId)
   const attachments = useMobileCodeAttachments({
-    activeThreadId: state.activeThreadId,
+    activeThreadId: threadReady ? threadId : null,
     mode: state.composerMode,
     model: state.composerModel,
     providerId: state.composerProviderId,
@@ -58,10 +63,13 @@ export function MobileCodeConversation({ threadId, onBack, onDetails, onSettings
   const hasSubmission = Boolean(draft.trim() || attachments.attachments.length)
   const send = async (): Promise<void> => {
     const text = draft.trim()
-    if (!hasSubmission || sending) return
+    if (!threadReady || !hasSubmission || sending) return
     setSending(true)
     try {
-      if (await state.sendMessage(text, state.composerMode, { attachments: attachments.attachments })) {
+      if (await state.sendMessage(text, state.composerMode, {
+        attachments: attachments.attachments,
+        expectedThreadId: threadId
+      })) {
         setDraft('')
         attachments.clear()
       }
@@ -74,10 +82,10 @@ export function MobileCodeConversation({ threadId, onBack, onDetails, onSettings
       <button type="button" aria-label={t('more')} onClick={onDetails}><MoreHorizontal aria-hidden /></button>
     </header>
     <div className="kun-mobile-code-timeline">
-      <LazyMessageTimeline blocks={state.blocks} liveReasoning={state.liveReasoning} live={state.liveAssistant}
+      {threadReady ? <LazyMessageTimeline blocks={state.blocks} liveReasoning={state.liveReasoning} live={state.liveAssistant}
         activeThreadId={state.activeThreadId} runtimeConnection={state.runtimeConnection}
         runtimeError={state.runtimeError} onRetryConnection={state.probeRuntime}
-        onOpenSettings={onSettings} compactCards />
+        onOpenSettings={onSettings} compactCards /> : null}
     </div>
     <input ref={fileInputRef} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
       onChange={(event) => {
@@ -87,14 +95,14 @@ export function MobileCodeConversation({ threadId, onBack, onDetails, onSettings
       }} />
     <MobileComposer value={draft} onChange={setDraft} onSend={() => void send()}
       onStop={() => void state.interrupt()}
-      onAttachments={attachments.enabled ? () => fileInputRef.current?.click() : null}
+      onAttachments={threadReady && attachments.enabled ? () => fileInputRef.current?.click() : null}
       onOptions={() => setOptionsOpen(true)}
-      running={state.busy} disabled={state.runtimeConnection !== 'ready'}
+      running={threadReady && state.busy} disabled={!threadReady || state.runtimeConnection !== 'ready'}
       sending={sending || attachments.busy}
       attachments={<FloatingComposerAttachments attachments={attachments.attachments}
         attachmentUploadError={attachments.error} onRemoveAttachment={attachments.remove} />}
-      pendingActions={<MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
-        resolveUserInput={state.resolveUserInput} />}
+      pendingActions={threadReady ? <MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
+        resolveUserInput={state.resolveUserInput} /> : null}
       canSend={hasSubmission}
       labels={{ placeholder: t('composerPlaceholder'), send: t('send'), stop: t('stop'),
         attachments: t('attachments'), options: `${state.composerMode} · ${state.composerModel || t('auto')}` }} />
