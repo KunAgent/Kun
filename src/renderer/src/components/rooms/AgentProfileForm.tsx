@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity } from '@shared/rooms-api'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
@@ -10,6 +10,10 @@ import './agents.css'
 const lines = (text: string) => [...new Set(text.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))]
 export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }: { agent: AgentIdentity | null; active?: boolean; onSaved: (agent: AgentIdentity) => void }) {
   const { t } = useTranslation('common')
+  const uid = useId()
+  const instructionsInputId = `${uid}-instructions`
+  const instructionsHintId = `${uid}-instructions-hint`
+  const instructionsCountId = `${uid}-instructions-count`
   const [agent, setAgent] = useState(initialAgent)
   const catalog = useAgentResource<RoomPresetCatalog>('/v1/rooms/presets', active)
   const templates = useAgentResource<{ templates: Array<Pick<AgentIdentity, 'name' | 'title' | 'instructions' | 'defaultRole' | 'presetId' | 'avatar' | 'templateId' | 'templateVersion'>> }>('/v1/agents/templates', active)
@@ -49,41 +53,62 @@ export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }
     } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
   }
   return <form className="agent-profile-form" onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void save() }}>
-    {!agent ? <label>{t('agentsTemplate')}<select defaultValue="" aria-label={t('agentsTemplate')} onChange={(event) => {
-      const template = templates.data?.templates.find((value) => value.templateId === event.target.value)
-      if (!template) { setTemplateRef({ templateId: undefined, templateVersion: undefined }); return }
-      setTemplateRef({ templateId: template.templateId, templateVersion: template.templateVersion })
-      if (!name) setName(template.name)
-      setTitle(template.title); setInstructions(template.instructions); setRole(template.defaultRole); setPreset(template.presetId); setAvatar(template.avatar)
-    }}><option value="">{t('agentsCustomTemplate')}</option>{templates.data?.templates.map((template) =>
-      <option key={template.templateId} value={template.templateId}>{template.name}</option>)}</select></label> : null}
-    <RoomAvatarPicker id={preview.id} label={preview.displayName} avatar={avatar} onChange={setAvatar} />
-    <label>{t('agentsName')}<input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} /></label>
-    <label>{t('agentsTitle')}<input maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-    <label>{t('agentsInstructions')}<textarea rows={7} maxLength={8000} value={instructions} onChange={(e) => setInstructions(e.target.value)} /></label>
-    <details className="direct-advanced" onChange={() => setAdvancedDirty(true)}><summary>{t('directAdvanced')}</summary>
-    <label>{t('roomsRole')}<select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
-      {(['coordinator', 'developer', 'reviewer', 'diagnostician'] as const).map((value) =>
-        <option key={value} value={value}>{t('rooms' + value[0].toUpperCase() + value.slice(1))}</option>)}
-    </select></label>
-    <label>{t('roomsProfile')}<select value={presetId} onChange={(e) => setPreset(e.target.value)}>
-      {!catalog.data?.presets.some((preset) => preset.id === presetId) ? <option value={presetId}>{presetId}</option> : null}
-      {catalog.data?.presets.map((preset) => <option key={preset.id} value={preset.id} disabled={preset.available === false}>{preset.name}</option>)}
-    </select></label>
-    <label className="agent-checkbox"><input type="checkbox" checked={memory.readEnabled} onChange={(e) => setMemory({ ...memory, readEnabled: e.target.checked })} />{t('agentsReadMemory')}</label>
-    <label className="agent-checkbox"><input type="checkbox" checked={memory.captureEnabled} onChange={(e) => setMemory({ ...memory, captureEnabled: e.target.checked })} />{t('agentsCaptureMemory')}</label>
-    <AgentPicker label={t('agentsChooseReviewer')} excluded={agent ? [agent.id] : []} onSelect={(value) => { setAdvancedDirty(true); setReviewerId(value.id); setReviewerName(value.name) }} />
-    {reviewerId ? <div>{reviewerName || t('agentsReviewerConfigured')} <button type="button" onClick={() => { setAdvancedDirty(true); setReviewerId(undefined); setReviewerName('') }}>{t('roomsCancel')}</button></div> : null}
-    <details><summary>{t('agentsLimits')}</summary>
-      <label>{t('agentsRepositoryCeiling')}<textarea value={roots} onChange={(e) => setRoots(e.target.value)} rows={3} /></label>
-      <label>{t('agentsAllowedTools')}<input value={allowedTools} onChange={(e) => setAllowedTools(e.target.value)} /></label>
-      <label>{t('agentsBlockedTools')}<input value={tools} onChange={(e) => setTools(e.target.value)} /></label>
-      <label>{t('agentsBlockedMcp')}<input value={mcp} onChange={(e) => setMcp(e.target.value)} /></label>
-      <label>{t('agentsBlockedSkills')}<input value={skills} onChange={(e) => setSkills(e.target.value)} /></label>
-      <label className="agent-checkbox"><input type="checkbox" checked={skillsEnabled} onChange={(e) => setSkillsEnabled(e.target.checked)} />{t('agentsEnableSkills')}</label>
-    </details>
-    </details>
-    {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
-    <button type="submit" className="rooms-run-primary" disabled={busy}>{t(busy ? 'roomsLoading' : 'agentsSave')}</button>
+    <div className="agent-profile-body">
+      {!agent ? <section className="agent-profile-section">
+        <label className="agent-profile-field">{t('agentsTemplate')}<select defaultValue="" aria-label={t('agentsTemplate')} onChange={(event) => {
+          const template = templates.data?.templates.find((value) => value.templateId === event.target.value)
+          if (!template) { setTemplateRef({ templateId: undefined, templateVersion: undefined }); return }
+          setTemplateRef({ templateId: template.templateId, templateVersion: template.templateVersion })
+          if (!name) setName(template.name)
+          setTitle(template.title); setInstructions(template.instructions); setRole(template.defaultRole); setPreset(template.presetId); setAvatar(template.avatar)
+        }}><option value="">{t('agentsCustomTemplate')}</option>{templates.data?.templates.map((template) =>
+          <option key={template.templateId} value={template.templateId}>{template.name}</option>)}</select></label>
+      </section> : null}
+      <section className="agent-profile-section agent-profile-identity">
+        <RoomAvatarPicker id={preview.id} label={preview.displayName} avatar={avatar} onChange={setAvatar} />
+        <label className="agent-profile-field">{t('agentsName')}<input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label className="agent-profile-field">{t('agentsTitle')}<input maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+      </section>
+      <section className="agent-profile-section">
+        <label className="agent-profile-field">
+          <span className="agent-profile-label">{t('agentsInstructions')}</span>
+          <textarea id={instructionsInputId} rows={7} maxLength={8000} value={instructions} onChange={(e) => setInstructions(e.target.value)} aria-describedby={`${instructionsHintId} ${instructionsCountId}`} />
+          <span id={instructionsHintId} className="agent-profile-hint">{t('agentsInstructionsHint')}</span>
+          <span id={instructionsCountId} className="agent-profile-count">{instructions.length} / 8000</span>
+        </label>
+      </section>
+      <details className="agent-profile-advanced" onChange={() => setAdvancedDirty(true)}><summary>{t('directAdvanced')}</summary>
+        <div className="agent-profile-advanced-body">
+          <label className="agent-profile-field">{t('roomsRole')}<select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+            {(['coordinator', 'developer', 'reviewer', 'diagnostician'] as const).map((value) =>
+              <option key={value} value={value}>{t('rooms' + value[0].toUpperCase() + value.slice(1))}</option>)}
+          </select></label>
+          <label className="agent-profile-field">{t('roomsProfile')}<select value={presetId} onChange={(e) => setPreset(e.target.value)}>
+            {!catalog.data?.presets.some((preset) => preset.id === presetId) ? <option value={presetId}>{presetId}</option> : null}
+            {catalog.data?.presets.map((preset) => <option key={preset.id} value={preset.id} disabled={preset.available === false}>{preset.name}</option>)}
+          </select></label>
+          <label className="agent-checkbox"><input type="checkbox" checked={memory.readEnabled} onChange={(e) => setMemory({ ...memory, readEnabled: e.target.checked })} />{t('agentsReadMemory')}</label>
+          <label className="agent-checkbox"><input type="checkbox" checked={memory.captureEnabled} onChange={(e) => setMemory({ ...memory, captureEnabled: e.target.checked })} />{t('agentsCaptureMemory')}</label>
+          <div className="agent-profile-field">
+            <AgentPicker label={t('agentsChooseReviewer')} excluded={agent ? [agent.id] : []} onSelect={(value) => { setAdvancedDirty(true); setReviewerId(value.id); setReviewerName(value.name) }} />
+            {reviewerId ? <div className="agent-profile-reviewer"><span>{reviewerName || t('agentsReviewerConfigured')}</span> <button type="button" onClick={() => { setAdvancedDirty(true); setReviewerId(undefined); setReviewerName('') }}>{t('roomsCancel')}</button></div> : null}
+          </div>
+          <details className="agent-profile-limits"><summary>{t('agentsLimits')}</summary>
+            <div className="agent-profile-limits-body">
+              <label className="agent-profile-field">{t('agentsRepositoryCeiling')}<textarea value={roots} onChange={(e) => setRoots(e.target.value)} rows={3} /></label>
+              <label className="agent-profile-field">{t('agentsAllowedTools')}<input value={allowedTools} onChange={(e) => setAllowedTools(e.target.value)} /></label>
+              <label className="agent-profile-field">{t('agentsBlockedTools')}<input value={tools} onChange={(e) => setTools(e.target.value)} /></label>
+              <label className="agent-profile-field">{t('agentsBlockedMcp')}<input value={mcp} onChange={(e) => setMcp(e.target.value)} /></label>
+              <label className="agent-profile-field">{t('agentsBlockedSkills')}<input value={skills} onChange={(e) => setSkills(e.target.value)} /></label>
+              <label className="agent-checkbox"><input type="checkbox" checked={skillsEnabled} onChange={(e) => setSkillsEnabled(e.target.checked)} />{t('agentsEnableSkills')}</label>
+            </div>
+          </details>
+        </div>
+      </details>
+    </div>
+    <div className="agent-profile-savebar">
+      {error ? <p role="alert" className="rooms-run-error agent-profile-error">{error}</p> : null}
+      <button type="submit" className="rooms-run-primary" disabled={busy}>{t(busy ? 'roomsLoading' : 'agentsSave')}</button>
+    </div>
   </form>
 }
