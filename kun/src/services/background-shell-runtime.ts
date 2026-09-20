@@ -8,6 +8,7 @@ import {
   formatBackgroundShellCompletionNotice
 } from './background-shell-notice.js'
 import { resolveTurnClientSurface } from '../loop/turn-context-resolver.js'
+import { dispatchRoomContinuation } from '../rooms/room-continuation-dispatch.js'
 import { existsSync } from 'node:fs'
 import { BACKGROUND_SHELL_OUTPUT_EXPIRED_NOTICE } from './background-shell-output.js'
 
@@ -34,6 +35,7 @@ export class BackgroundShellRuntime {
   private readonly sessions = new Map<string, BackgroundShellRecord>()
   private readonly detachedIds = new Set<string>()
   private readonly updateCheckpoints = new Map<string, UpdateCheckpoint>()
+  private readonly roomNoticeRetries = new Map<string, NodeJS.Timeout>()
   private runTurn: RunTurnFn | null = null
   private shuttingDown = false
 
@@ -92,6 +94,8 @@ export class BackgroundShellRuntime {
   /** Stop this runtime's active shells and prevent completion auto-turns. */
   async shutdown(): Promise<void> {
     this.shuttingDown = true
+    for (const timer of this.roomNoticeRetries.values()) clearTimeout(timer)
+    this.roomNoticeRetries.clear()
     const runningIds = [...this.sessions.values()]
       .filter((session) => session.status === 'running')
       .map((session) => session.id)
@@ -297,6 +301,26 @@ export class BackgroundShellRuntime {
     const thread = await this.deps.threadStore.get(record.threadId)
     if (!thread || thread.status === 'archived') return
     const notice = formatBackgroundShellCompletionNotice(record)
+    if (thread.roomContext) {
+      try {
+        await dispatchRoomContinuation(this.deps.threadStore, {
+          threadId: record.threadId, sourceTurnId: record.turnId,
+          key: record.id, kind: 'background_shell', prompt: notice
+        })
+      } catch {
+        // Ownership may be temporarily unavailable. Keep this exact completion
+        // pending; do not fall back to a generic turn outside room admission.
+        if (!this.shuttingDown && !this.roomNoticeRetries.has(record.id)) {
+          const timer = setTimeout(() => {
+            this.roomNoticeRetries.delete(record.id)
+            void this.enqueueAgentNotice(record).catch(() => undefined)
+          }, 1000)
+          timer.unref?.()
+          this.roomNoticeRetries.set(record.id, timer)
+        }
+      }
+      return
+    }
     const displayText = backgroundShellNoticeDisplayText(record.id)
     const noticeMeta = {
       displayText,

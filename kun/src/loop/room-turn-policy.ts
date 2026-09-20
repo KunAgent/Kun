@@ -31,11 +31,11 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
     ...context,
     roomStepKind: policy.kind, roomAgent: Boolean(policy.participantAgentId),
     roomPeer: peerTools.length > 0,
-    guiRoomExcalidrawCanvas: policy.kind === 'conversation' && context.clientSurface === 'gui' && !readOnly
-      ? true : context.guiRoomExcalidrawCanvas,
+    guiRoomExcalidrawCanvas: policy.kind === 'conversation' && context.clientSurface === 'gui' &&
+      !readOnly && context.threadMode !== 'plan' && !context.guiPlan,
     workspace: thread.workspace,
-    additionalWorkspaces: readOnly ? undefined : context.additionalWorkspaces,
-    knowledgeBases: readOnly ? undefined : context.knowledgeBases,
+    additionalWorkspaces: policy.kind === 'conversation' ? thread.additionalWorkspaces : undefined,
+    knowledgeBases: policy.kind === 'conversation' ? thread.knowledgeBases : undefined,
     sandboxMode: readOnly ? 'read-only' : fullAccess ? 'danger-full-access' : 'workspace-write',
     approvalPolicy: thread.approvalPolicy,
     approvalReviewer: thread.approvalReviewer,
@@ -57,7 +57,7 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
     blockedProviderIds: mergeRoomDeniedIds(context.blockedProviderIds, roomBlockedProviders(thread)),
     blockedToolNames: mergeRoomDeniedIds(context.blockedToolNames, policy.blockedToolNames,
       readOnly ? ['delegate_task', 'generate_subagent'] : [],
-      ['create_goal'],
+      policy.kind === 'conversation' ? [] : ['create_goal'],
       policy.skillsEnabled === false ? ['load_skill', 'load_skill_asset'] : [])
   }
 }

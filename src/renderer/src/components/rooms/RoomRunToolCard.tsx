@@ -5,8 +5,13 @@ import type { RoomRunItemsPage } from '@shared/rooms-api'
 import type { CoreTurnItemJson } from '../../agent/kun-contract'
 import type { ToolBlock } from '../../agent/types'
 import { toolBlockFromItem } from '../../agent/kun-mapper-tools'
+import { chartSpecFromToolItem } from '../../agent/chart-spec-adapter'
 import { summarizeToolBlock } from '../chat/message-timeline-process-detail'
 import { toolBlockIcon } from '../chat/message-timeline-process-summary'
+import { ChartRenderer } from '../chat/ChartRenderer'
+import { ConversationVisualizationCard } from '../chat/ConversationVisualizationCard'
+import { GeneratedFilesPanel } from '../chat/message-timeline-media-views'
+import { useTimelineFilePreviewWorkspaceRoot } from '../chat/timeline-file-preview-workspace'
 import { roomPath, roomsRequest } from './rooms-client'
 import { RoomRunItemContent } from './RoomRunItemContent'
 
@@ -16,6 +21,7 @@ export function RoomRunToolCard({ roomId, runId, callId, call, result, runStatus
   roomId: string; runId: string; callId: string; call?: CoreTurnItemJson; result?: CoreTurnItemJson; runStatus?: string
 }) {
   const { t } = useTranslation('common')
+  const workspaceRoot = useTimelineFilePreviewWorkspaceRoot()
   const [loaded, setLoaded] = useState<CoreTurnItemJson[]>([]), [queried, setQueried] = useState(false)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [expanded, setExpanded] = useState(false)
@@ -29,6 +35,8 @@ export function RoomRunToolCard({ roomId, runId, callId, call, result, runStatus
   const duration = input && output ? Math.max(0, Date.parse(output.finishedAt ?? output.createdAt) - Date.parse(input.createdAt)) : undefined
   const settled = runStatus && !['queued', 'running', 'recovery_required'].includes(runStatus)
   const block: ToolBlock | null = representative ? toolBlockFromItem(representative) : null
+  const outputBlock: ToolBlock | null = output ? toolBlockFromItem(output) : null
+  const chartSpec = output ? chartSpecFromToolItem(output) : null
   const summary = block ? summarizeToolBlock(block, t) : (representative?.toolName ?? callId)
   const Icon = block ? toolBlockIcon(block) : null
   const loadPair = async () => {
@@ -61,6 +69,15 @@ export function RoomRunToolCard({ roomId, runId, callId, call, result, runStatus
         ? <ChevronDown className="rooms-run-tool-chevron" size={14} strokeWidth={1.8} />
         : <ChevronRight className="rooms-run-tool-chevron" size={14} strokeWidth={1.8} />}
     </button>
+    {outputBlock && !failed ? (
+      <div className="rooms-run-tool-artifact">
+        {chartSpec ? <ChartRenderer spec={chartSpec} /> : null}
+        {outputBlock.meta?.conversationVisualization
+          ? <ConversationVisualizationCard block={outputBlock} />
+          : null}
+        {workspaceRoot ? <GeneratedFilesPanel blocks={[outputBlock]} placement="timeline" /> : null}
+      </div>
+    ) : null}
     {expanded ? (
       <div className="rooms-run-tool-details">
         {!input || !output ? (

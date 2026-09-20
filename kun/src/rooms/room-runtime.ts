@@ -28,6 +28,8 @@ import { roomPeerTopicPage, roomPeerMetricPage, stopRoomPeerTopic, deliverRoomPe
 import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRequest } from './room-discussion-scheduler.js'
 import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
+import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
+import { enqueuePrivateContinuation } from './room-continuation-service.js'
 
 export class RoomRuntime {
   private readonly memoryCapture: AgentMemoryCoordinator
@@ -48,6 +50,7 @@ export class RoomRuntime {
   private actionQueue: Promise<unknown> = Promise.resolve()
   private requestCursor?: number
   private readonly executionService: RoomService
+  private readonly unbindContinuations: () => void
 
   constructor(readonly deps: RoomRuntimeDeps, private readonly held: () => boolean = () => true,
     apiStore: RoomStore = deps.store) {
@@ -77,6 +80,13 @@ export class RoomRuntime {
     this.tasks = new RoomTaskRunner(deps, this.executionService)
     this.peers = new RoomPeerRunner(deps, () => this.wake())
     bindRoomPeerStore(deps.threadStore, deps.store)
+    this.unbindContinuations = bindRoomContinuationDispatcher(deps.threadStore, (input) =>
+      this.exclusive(async () => {
+        if (this.stopped || !this.held()) throw new Error('Room continuation owner is temporarily unavailable')
+        const result = await enqueuePrivateContinuation(this.deps, input)
+        this.wake()
+        return result
+      }))
   }
   start() { this.stopped = false; this.wake() }
   wake() {
@@ -94,6 +104,7 @@ export class RoomRuntime {
   }
   async close() {
     this.stopped = true
+    this.unbindContinuations()
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
     await this.inFlight
@@ -155,6 +166,7 @@ export class RoomRuntime {
     return { messages: [...rows].reverse().filter((row) => !isHiddenAgentSetupMessage(row.value)).map((row) => ({ ...row.value, messageSeq: row.seq })),
       nextCursor: rows.length === limit ? String(rows.at(-1)!.seq) : undefined }
   }
+
   private async tick() {
     if (!this.held()) return
     await this.deps.assertOwnership()

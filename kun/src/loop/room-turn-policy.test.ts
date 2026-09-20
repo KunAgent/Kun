@@ -105,17 +105,21 @@ describe('writable room general-capability parity', () => {
   }
 
   it('keeps delegate/subagent available for a writable private conversation', () => {
-    const context = applyRoomToolPolicy(raw, roomThread({ kind: 'conversation', participantAgentId: 'agent_one' }))
-    expect(context.blockedToolNames).not.toEqual(expect.arrayContaining(['delegate_task', 'generate_subagent']))
-    expect(context.blockedToolNames).toEqual(expect.arrayContaining(['create_goal']))
-    expect(context.additionalWorkspaces).toEqual(['/extra'])
+    const context = applyRoomToolPolicy(raw, {
+      ...roomThread({ kind: 'conversation', participantAgentId: 'agent_one' }),
+      additionalWorkspaces: ['/authorized']
+    })
+    for (const name of ['delegate_task', 'generate_subagent', 'create_goal']) {
+      expect(context.blockedToolNames).not.toContain(name)
+    }
+    expect(context.additionalWorkspaces).toEqual(['/authorized'])
     expect(context.sandboxMode).toBe('workspace-write')
   })
 
   it('keeps delegate/subagent available for a writable group execution thread', () => {
     const context = applyRoomToolPolicy(raw, roomThread({ kind: 'execution' }))
-    expect(context.blockedToolNames).not.toEqual(expect.arrayContaining(['delegate_task', 'generate_subagent']))
-    expect(context.additionalWorkspaces).toEqual(['/extra'])
+    for (const name of ['delegate_task', 'generate_subagent']) expect(context.blockedToolNames).not.toContain(name)
+    expect(context.additionalWorkspaces).toBeUndefined()
   })
 
   it('still blocks delegation and clears extra workspaces for read-only stages', () => {

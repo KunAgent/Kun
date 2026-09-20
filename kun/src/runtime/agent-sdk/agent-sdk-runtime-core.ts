@@ -229,13 +229,14 @@ export class AgentSdkRuntime {
       let graphPlanCommitted = false
       let graphPlanRetryAllowed = true
       let graphPlanRepairFeedback: string | undefined
-      const bridged = buildBridgedToolSpecs(selectedKunTools, async (name, args) => {
+      const bridged = buildBridgedToolSpecs(selectedKunTools, async (name, args, callId) => {
         const result = await this.deps.executeKunTool(
           threadId,
           turnId,
           name,
           args,
-          abort.signal
+          abort.signal,
+          callId
         )
         if (name === 'graph_define_plan') {
           if (delegatedGraphPlanWasCommitted(result)) {

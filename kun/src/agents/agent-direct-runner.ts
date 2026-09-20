@@ -18,6 +18,7 @@ import { persistDirectChoiceMessages } from './agent-choice-messages.js'
 import { AGENT_SETUP_PROMPT } from './agent-setup-prompt.js'
 import { agentSetupConversationPolicy, agentSetupPending, isHiddenAgentSetupMessage } from './agent-setup.js'
 import { publishDirectResponse } from './agent-direct-publication.js'
+import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
 export class AgentDirectRunner {
@@ -25,6 +26,12 @@ export class AgentDirectRunner {
   async tick(row: RoomStoredDocument<RoomRequestState>) {
     const request = structuredClone(row.value), member = request.roomSnapshot.members.find((item) => item.id === request.roomSnapshot.defaultMemberId)!
     if (!member.participantAgentId) throw new Error('Agent identity unavailable')
+    if (request.privateContinuation && !request.turnId && !request.admissionAttempted &&
+      !await roomContinuationIsCurrent(this.deps, request)) {
+      await this.save(row, { ...request, status: 'cancelled', cancellationRequested: true,
+        error: 'Continuation authority changed; the source request was not resumed.' })
+      return
+    }
     if (request.cancellationRequested) {
       const thread = await this.deps.threads.getMetadata(request.threadId)
       const turn = thread?.turns.find((item) => request.turnId ? item.id === request.turnId : item.clientRequestId === this.clientId(request))
@@ -131,7 +138,9 @@ export class AgentDirectRunner {
     if (finished) await this.save(row, { ...request, status: turn.status === 'completed' ? 'completed' : turn.status === 'aborted' ? 'cancelled' : 'failed',
       error: turn.status === 'failed' ? 'The response failed. Its partial output is retained; inspect the run or retry.' : undefined })
   }
-  private clientId(request: RoomRequestState) { return 'private-' + request.id + '-' + (request.stepAttempt ?? 0) }
+  private clientId(request: RoomRequestState) {
+    return 'private-' + request.id + '-' + (request.stepAttempt ?? 0)
+  }
   private async history(request: RoomRequestState) {
     const rows = await this.deps.store.list<RoomMessage>('message', { roomId: request.roomId, limit: 30 })
     const source = await this.deps.store.get('message', request.sourceMessageId)

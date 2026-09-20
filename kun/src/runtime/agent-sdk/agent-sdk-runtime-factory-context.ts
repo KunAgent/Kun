@@ -31,6 +31,7 @@ import type { ThreadStore } from '../../ports/thread-store.js'
 import { sessionEventExists } from '../../adapters/session-event-query.js'
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
+import { mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_SANDBOX_MODE,
@@ -153,7 +154,13 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
       turn: ThreadRecord['turns'][number]
     ): Promise<readonly string[]> => {
       const key = skillTurnKey(thread.id, turn.id)
-      if (!deps.skillRuntime) return activeSkillIdsByTurn.get(key) ?? []
+      if (!deps.skillRuntime || thread.roomContext?.skillsEnabled === false) {
+        return activeSkillIdsByTurn.get(key) ?? []
+      }
+      const blockedSkillIds = mergeRoomDeniedIds(
+        deps.toolContextBoundary?.blockedSkillIds,
+        thread.roomContext?.blockedSkillIds
+      )
       const resolution = await deps.skillRuntime.resolveTurn({
         prompt: skillPromptByTurn.get(key) ?? turn.prompt ?? '',
         workspace: thread.workspace,
@@ -162,9 +169,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         ...(deps.toolContextBoundary?.allowedSkillIds
           ? { allowedSkillIds: deps.toolContextBoundary.allowedSkillIds }
           : {}),
-        ...(deps.toolContextBoundary?.blockedSkillIds
-          ? { blockedSkillIds: deps.toolContextBoundary.blockedSkillIds }
-          : {})
+        ...(blockedSkillIds.length ? { blockedSkillIds } : {})
       })
       activeSkillIdsByTurn.set(key, resolution.activeSkillIds)
       return resolution.activeSkillIds

@@ -52,6 +52,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
       LocalToolHost.defineTool({
         name: 'memory_create',
         description: 'Create a long-term memory after explicit user approval.',
+        shouldAdvertise: (context) => context.memoryPolicy?.enabled === true,
         inputSchema: {
           type: 'object',
           properties: {
@@ -112,6 +113,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
       LocalToolHost.defineTool({
         name: 'memory_update',
         description: 'Update or disable an existing long-term memory.',
+        shouldAdvertise: (context) => context.memoryPolicy?.enabled === true,
         inputSchema: {
           type: 'object',
           properties: {
@@ -163,6 +165,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
       LocalToolHost.defineTool({
         name: 'memory_delete',
         description: 'Delete a long-term memory by writing a tombstone.',
+        shouldAdvertise: (context) => context.memoryPolicy?.enabled === true,
         inputSchema: {
           type: 'object',
           properties: { id: { type: 'string' } },

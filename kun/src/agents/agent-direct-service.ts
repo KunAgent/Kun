@@ -91,11 +91,23 @@ export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, r
 }
 export async function directFiles(rooms: RoomRuntime, roomId: string) {
   const room = await rooms.service.get(roomId), workspace = await privateWorkspace(rooms, room)
+  const files: import('../contracts/room-content.js').RoomContentReference[] = []
+  const seen = new Set<string>()
+  const messages = await rooms.deps.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId, limit: 200 })
+  for (const row of messages) {
+    for (const reference of row.value.references ?? []) {
+      if (reference.kind !== 'agent_file' || reference.workspaceId !== workspace.id || seen.has(reference.relativePath)) continue
+      seen.add(reference.relativePath)
+      files.push(reference)
+      if (files.length >= 100) return { files }
+    }
+  }
   let entries
-  try { entries = await readdir(workspace.path, { withFileTypes: true }) } catch { return { files: [] } }
-  const files = []
+  try { entries = await readdir(workspace.path, { withFileTypes: true }) } catch { return { files } }
   for (const entry of entries.filter((entry) => entry.isFile() && !entry.name.startsWith('.')).slice(0, 100)) {
+    if (seen.has(entry.name)) continue
     files.push({ kind: 'agent_file' as const, workspaceId: workspace.id, relativePath: entry.name, titleSnapshot: entry.name })
+    if (files.length >= 100) break
   }
   return { files }
 }

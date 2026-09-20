@@ -380,3 +380,8 @@
   background: var(--ds-surface-card);
   color: var(--ds-text);
 }
+.rooms-run-tool-artifact {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem 0.75rem 1.75rem;
+}

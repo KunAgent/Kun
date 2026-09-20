@@ -7,6 +7,7 @@ import { buildRoomRunConversation, buildRoomRunTranscript } from './room-run-con
 import { useRoomRun } from './useRoomRun'
 import { WorkMetaRow } from '../chat/message-timeline-cards'
 import { formatDuration } from '../chat/message-timeline-tools'
+import { TimelineFilePreviewWorkspaceProvider } from '../chat/timeline-file-preview-workspace'
 import './rooms-runs.css'
 
 const RUNNING_STATUSES = new Set(['queued', 'running', 'recovery_required'])
@@ -63,6 +64,7 @@ export function RoomRunInspector({
   }
 
   return (
+    <TimelineFilePreviewWorkspaceProvider workspaceRoot={detail?.workspaceRoot ?? ''} threadId={run?.threadId}>
     <section
       className="rooms-run-inspector"
       aria-label={t('roomsAgentSession')}
@@ -235,5 +237,6 @@ export function RoomRunInspector({
         <span>{t('roomsRunReadOnlyFooter')}</span>
       </footer>
     </section>
+    </TimelineFilePreviewWorkspaceProvider>
   )
 }

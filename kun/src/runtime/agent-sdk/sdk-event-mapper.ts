@@ -442,7 +442,14 @@ export class SdkEventMapper {
   private toolResultEvent(block: SdkToolResultBlock): RuntimeEventDraft {
     const itemId = `item_toolresult_${this.ctx.turnId}_${block.tool_use_id}`
     // Recover the tool name/kind from the matching tool_use we saw earlier.
-    const toolName = this.toolNames.get(block.tool_use_id) ?? 'tool'
+    const rawToolName = this.toolNames.get(block.tool_use_id) ?? 'tool'
+    const toolName = rawToolName
+    let output = normalizeToolResultContent(block.content)
+    // Only our bridge serializes governed objects as JSON text. Ordinary SDK
+    // output remains text, even when it happens to resemble JSON.
+    if (rawToolName.startsWith('mcp__kun__') && typeof output === 'string') {
+      try { output = JSON.parse(output) } catch { /* Plain-text Kun result. */ }
+    }
     this.toolNames.delete(block.tool_use_id)
     return {
       kind: 'tool_call_finished',
@@ -456,7 +463,7 @@ export class SdkEventMapper {
         callId: block.tool_use_id,
         toolName,
         toolKind: toolKindFor(toolName),
-        output: normalizeToolResultContent(block.content),
+        output,
         isError: block.is_error === true,
         status: block.is_error === true ? 'failed' : 'completed'
       })

@@ -138,6 +138,7 @@ export async function createRuntimeAgentComposition(
   // narrow delegated runtime boundary. Keep the runtime objects alive even
   // with an initially empty provider set so /connect can add an account
   // without requiring the standalone TUI runtime to restart.
+  const canvasReceipts = new CanvasReceiptRegistry({ turns: turnService, events, nowIso })
   const buildMainDelegatedRuntime = (input: {
     options: KunServeRuntimeOptions
     registry: CapabilityRegistry
@@ -152,6 +153,7 @@ export async function createRuntimeAgentComposition(
     )
     const sdkRuntimeDeps: AgentSdkRuntimeFactoryDeps = {
       registry: input.registry,
+      receipts: canvasReceipts,
       toolHost,
       turns: turnService,
       sessionStore,
@@ -287,11 +289,6 @@ export async function createRuntimeAgentComposition(
       memoryFeedback: services.memoryFeedback
     }))
   }
-	  const canvasReceipts = new CanvasReceiptRegistry({
-	    turns: turnService,
-	    events,
-	    nowIso
-	  })
 	  const activeRuntimeRuns = new Set<Promise<TurnRunOutcome>>()
 	  let shuttingDown = false
 	  let loop!: AgentLoop

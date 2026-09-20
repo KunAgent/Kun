@@ -54,6 +54,7 @@ import { useRoomPresentationPreferences } from './room-presentation-preferences'
 import { openRoomContentTarget } from './room-content-navigation'
 import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from './RoomChoiceCard'
 import { RoomExcalidrawConsumer } from './useRoomExcalidrawConsumer'
+import { RoomRunArtifacts } from './RoomRunArtifacts'
 import { RoomExcalidrawPanel } from './RoomExcalidrawPanel'
 import { useRoomExcalidrawStore, roomExcalidrawBoard } from './room-excalidraw-store'
 
@@ -336,6 +337,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
                 setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />}
             />}
+            {privateChat ? <RoomRunArtifacts roomId={room.id}
+              runId={direct.data?.active?.runId ?? (direct.data?.requests[0]?.status === 'completed' ? direct.data.requests[0].runId : undefined)} /> : null}
             {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => setModelsOpen(true)} /> : null}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomTypingRow

@@ -126,10 +126,19 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
         else if (mode === 'preview') result.preview = { type: 'image', image: { dataBase64: file.data.toString('base64'),
           mimeType: 'image/png', width: 1, height: 1 } }
       } else {
-        const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, 128 * 1024)
-        Object.assign(result, { title: reference.relativePath, kind: 'file', byteSize: file.size,
-          openTarget: { kind: 'code_file', workspaceRoot: root, relativePath: reference.relativePath } })
-        if (mode === 'preview' && !file.data.includes(0)) result.preview = { type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
+        const extension = extname(reference.relativePath).toLowerCase()
+        const imageFile = imageExtensions.has(extension)
+        const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath,
+          imageFile ? 12 * 1024 * 1024 : 128 * 1024)
+        Object.assign(result, { title: reference.relativePath, kind: imageFile ? 'image' : 'file', byteSize: file.size,
+          ...(imageFile ? { mimeType: extension === '.jpg' || extension === '.jpeg' ? 'image/jpeg' : `image/${extension.slice(1)}` } : {}),
+          openTarget: { kind: ['.pdf', '.docx', '.xlsx', '.pptx'].includes(extension) ? 'work_file' : 'code_file',
+            workspaceRoot: root, relativePath: reference.relativePath } })
+        if (imageFile && mode === 'thumbnail') result.thumbnail = await roomPreviewImage(file.data)
+        else if (imageFile && mode === 'preview') result.preview = { type: 'image', image: {
+          dataBase64: file.data.toString('base64'), mimeType: result.mimeType!, width: 1, height: 1 } }
+        else if (mode === 'preview' && !file.data.includes(0)) result.preview = {
+          type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
       }
     } else if (reference.kind === 'attachment') {
       const { metadata, scope } = await attachmentScope(runtime, room, reference.attachmentId, messageId, allowDraft && mode === 'summary')

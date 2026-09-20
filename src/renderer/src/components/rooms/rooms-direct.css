@@ -106,6 +106,7 @@
 .direct-choice-card form button, .direct-choice-skip { justify-self: start; padding: 6px 10px; font-size: 12px; color: var(--ds-text-muted); }
 .direct-choice-card.is-answered { grid-template-columns: minmax(0, 1fr) auto; align-items: center; color: var(--ds-text-muted); }
 .direct-empty-chat button { margin-top: 6px; font-size: 13px; color: var(--ds-text-muted); text-decoration: underline; text-underline-offset: 3px; }
+.rooms-run-artifacts { display: grid; gap: 10px; padding: 6px 16px 10px; border-top: 1px solid var(--ds-border); }
 
 .room-excalidraw-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 30; display: flex; width: min(480px, 100%); flex-direction: column; border-left: 1px solid var(--ds-border); background: var(--ds-surface-main); box-shadow: -16px 0 40px rgba(20, 47, 95, 0.12); }
 .room-excalidraw-header { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--ds-border); }

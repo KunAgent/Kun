@@ -13,6 +13,8 @@ export type RoomRunDetail = {
   context?: { prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }
   availability: RoomRunAvailability
   eventsCursor: string
+  /** Authorized source workspace, present only after exact run/thread validation. */
+  workspaceRoot?: string
 }
 export type RoomRunContentPage = {
   itemId: string

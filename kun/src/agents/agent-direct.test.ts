@@ -13,6 +13,7 @@ import type { RoomRequestState, RoomRuntimeDeps } from '../rooms/room-runtime-ty
 import { quickCreateAgent } from './agent-chat-entry.js'
 import { controlDirectRequest, updateDirectWorkspace, directActivity } from './agent-direct-service.js'
 import { AgentDirectRunner } from './agent-direct-runner.js'
+import { enqueuePrivateContinuation } from '../rooms/room-continuation-service.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
@@ -53,6 +54,54 @@ async function fixture(outputPath = 'hello.txt') {
   cleanup.push(async () => { await runtime.close(); await h.turns.interruptActiveTurns(); await store.close(); await rm(root, { recursive: true, force: true }) })
   return { root, seen, h, store, deps, runtime, runner, created, advance }
 }
+it('queues a scoped continuation before admission and publishes its exact run once', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'source', body: 'Create hello.txt' })
+  const source = await f.advance(sent.requestId)
+  const input = { threadId: source.threadId, sourceTurnId: source.turnId!, kind: 'background_subagent' as const,
+    key: 'completed-child-one', prompt: 'Use the completed child result to finish the task.' }
+  const snapshot = await f.runtime.agents.freeze(await f.runtime.service.get(f.created.roomId))
+  expect(snapshot.members[0]).toEqual(source.roomSnapshot.members[0])
+  expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+  expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+  const requests = await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId })
+  const continuations = requests.filter((row) => row.value.privateContinuation)
+  expect(continuations).toHaveLength(1)
+  expect(continuations[0].value.turnId).toBeUndefined()
+  const result = await f.advance(continuations[0].id)
+  expect(result.status).toBe('completed')
+  expect(result.threadId).toBe(source.threadId)
+  expect(result.turnId).not.toBe(source.turnId)
+  const messages = await f.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId: f.created.roomId })
+  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-two' })).toBe('queued')
+  const second = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
+    .find((row) => row.value.privateContinuation && row.id !== continuations[0].id)!
+  expect((await f.advance(second.id)).status).toBe('completed')
+  const newer = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'new-user', body: 'New task' })
+  await f.advance(newer.requestId)
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-three' })).toBe('ignored')
+})
+
+it('rejects stale or cross-thread continuation sources and rechecks authority before admission', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'source', body: 'Create hello.txt' })
+  const source = await f.advance(sent.requestId)
+  const input = { threadId: source.threadId, sourceTurnId: source.turnId!, kind: 'background_subagent' as const,
+    key: 'child-one', prompt: 'Continue the source task.' }
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, sourceTurnId: 'foreign' })).toBe('ignored')
+  expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+  const continuation = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
+    .find((row) => row.value.privateContinuation)!
+  const room = await f.runtime.service.get(f.created.roomId)
+  await updateDirectWorkspace(f.runtime, room.id, { action: 'reset', clientRequestId: 'reset', expectedRevision: room.revision })
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn')
+  await f.runner.tick(continuation)
+  expect((await f.store.get<RoomRequestState>('request', continuation.id))?.value.status).toBe('cancelled')
+  expect(enqueue).not.toHaveBeenCalled()
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'child-two' })).toBe('ignored')
+})
+
 it('creates one default Agent and private chat without calling a model', async () => {
   const f = await fixture()
   expect(await quickCreateAgent(f.runtime.agents, { clientRequestId: 'again' }, true)).toEqual(f.created)

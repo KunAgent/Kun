@@ -6,6 +6,11 @@ import type { AppState, BinaryFiles } from '@excalidraw/excalidraw/types'
 import type { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import {
   createEmptyExcalidrawScene,
+  discardPendingExcalidrawScene,
+  excalidrawScenePath,
+  pendingExcalidrawDraft,
+  serializeExcalidrawScene,
+  subscribeExcalidrawSaveError,
   isExcalidrawSceneEmpty,
   loadExcalidrawScene,
   persistExcalidrawScene,
@@ -22,6 +27,7 @@ import {
   excalidrawLangCode,
   readDocumentTheme
 } from './excalidraw-assets'
+import { writeDesignWorkspaceFile } from '../design/design-persistence-coordinator'
 import type { ExcalidrawSurfaceProps } from './excalidraw-surface'
 import './excalidraw-host.css'
 
@@ -47,7 +53,9 @@ function sceneFromLive(
 }
 
 export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElement {
-  const { i18n } = useTranslation()
+  const { i18n, t } = useTranslation()
+  const [saveError, setSaveError] = useState('')
+  const [resolving, setResolving] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(readDocumentTheme)
   const [initialScene, setInitialScene] = useState<ExcalidrawSceneV1 | null>(null)
   const [loadEpoch, setLoadEpoch] = useState(0)
@@ -77,8 +85,10 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
     let cancelled = false
     setInitialScene(null)
     emptyRef.current = null
-    void loadExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir).then((loaded) => {
+    const draft = pendingExcalidrawDraft(props.workspaceRoot, props.identityId, props.baseDir)
+    void (draft ? Promise.resolve(draft) : loadExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir)).then((loaded) => {
       if (cancelled) return
+      skipPersistRef.current = true
       const scene = loaded ?? createEmptyExcalidrawScene()
       rememberLiveExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir, scene)
       setInitialScene(scene)
@@ -108,6 +118,31 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
       }
     }))
   }, [props.baseDir, props.identityId, props.workspaceRoot])
+
+  useEffect(() => subscribeExcalidrawSaveError(props.workspaceRoot, props.identityId, props.baseDir, setSaveError),
+    [props.workspaceRoot, props.identityId, props.baseDir])
+
+  const recoverDiskScene = async (): Promise<void> => {
+    setResolving(true)
+    try {
+      const draft = pendingExcalidrawDraft(props.workspaceRoot, props.identityId, props.baseDir)
+      if (draft) {
+        const path = excalidrawScenePath(props.identityId, props.baseDir).replace(/excalidraw\.json$/, `local-draft-${crypto.randomUUID()}.json`)
+        const result = await writeDesignWorkspaceFile({ workspaceRoot: props.workspaceRoot, path, content: serializeExcalidrawScene(draft) })
+        if (!result.ok) throw new Error(result.message)
+      }
+      await discardPendingExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir)
+      const scene = await loadExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir)
+      if (!scene) throw new Error('The saved board could not be loaded; the local copy was retained.')
+      skipPersistRef.current = true
+      rememberLiveExcalidrawScene(props.workspaceRoot, props.identityId, props.baseDir, scene)
+      setInitialScene(scene)
+      setLoadEpoch((epoch) => epoch + 1)
+      setSaveError('')
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    } finally { setResolving(false) }
+  }
 
   const handleChange = useCallback((
     elements: readonly OrderedExcalidrawElement[],
@@ -160,7 +195,13 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
   }
 
   return (
-    <div className="kun-excalidraw-host h-full min-h-0 w-full" data-excalidraw-host="ready">
+    <div className="kun-excalidraw-host relative h-full min-h-0 w-full" data-excalidraw-host="ready">
+      {saveError ? <div role="alert" className="absolute left-2 right-2 top-2 z-50 rounded bg-ds-panel p-3 text-sm">
+        <p>{saveError}</p>
+        <button type="button" disabled={resolving} onClick={() => void recoverDiskScene()}>
+          {t('excalidrawRecoverDisk', { defaultValue: 'Save local copy and reload disk version' })}
+        </button>
+      </div> : null}
       <Excalidraw
         key={identityKey + String(loadEpoch)}
         theme={theme}

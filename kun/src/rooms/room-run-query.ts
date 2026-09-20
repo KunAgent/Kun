@@ -34,6 +34,7 @@ export async function inspectRoomRun(deps: RoomRuntimeDeps, roomId: string, runI
   const snapshotSeq = run.threadId ? await deps.sessions.highestSeq(run.threadId) : 0
   let availability: RoomRunAvailability = { status: 'available' }
   let turn: Turn | undefined
+  let workspaceRoot: string | undefined
   if (run.phase === 'memory' || run.phase === 'triage' || !run.threadId) {
     availability = run.phase === 'memory' ? { status: 'no_session', reason: '记忆整理是独立的轻量调用，没有 Code 会话。' } : run.phase === 'triage'
       ? { status: 'no_session', reason: '轻量接话判断没有独立的 Code 会话。' }
@@ -60,6 +61,7 @@ export async function inspectRoomRun(deps: RoomRuntimeDeps, roomId: string, runI
         ? { status: 'missing_turn', reason: '原会话中已找不到本次轮次，可能已被清理或裁剪。' }
         : { status: 'pending', reason: '本次运行正在等待队列确认。' }
       else {
+        workspaceRoot = thread.workspace
         run.turnId = turn.id
         run.status = turn.status === 'aborted' ? 'cancelled' : turn.status
         run.startedAt = turn.startedAt
@@ -68,7 +70,7 @@ export async function inspectRoomRun(deps: RoomRuntimeDeps, roomId: string, runI
       }
     }
   }
-  return { row, run, availability, turn, snapshotSeq }
+  return { row, run, availability, turn, snapshotSeq, workspaceRoot }
 }
 
 export function publicRoomRun(run: RoomRunRecord, summary = false): RoomRunRecord {
@@ -94,6 +96,7 @@ export async function roomRunDetail(deps: RoomRuntimeDeps, roomId: string, runId
   const context = admittedContext ?? (current.run.contextId
     ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }>('context', current.run.contextId) : null)
   return { run: publicRoomRun(current.run), availability: current.availability,
+    ...(current.workspaceRoot ? { workspaceRoot: current.workspaceRoot } : {}),
     trigger: trigger?.roomId === roomId ? { ...trigger.value, messageSeq: trigger.seq } : undefined,
     context: current.run.id.startsWith('legacy-') && current.turn
       ? { prompt: current.turn.prompt.slice(0, 64000), attachmentIds: current.turn.attachmentIds?.slice(0, 20) }

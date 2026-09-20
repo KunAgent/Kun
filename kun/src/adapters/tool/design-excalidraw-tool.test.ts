@@ -157,12 +157,12 @@ describe('room Excalidraw tool surface', () => {
     const open = await createDesignOpenExcalidrawTool().execute({}, roomContext())
     expect(open.output).toMatchObject({
       status: 'accepted',
-      boardId: 'room',
+      boardId: 'room-61a1b52f6553',
       surface: 'room',
       scope: 'room',
       workspaceRoot: '/tmp/workspace',
-      scenePath: '.kun-whiteboards/room/excalidraw.json',
-      pngPath: '.kun-whiteboards/room/excalidraw.png'
+      scenePath: '.kun-whiteboards/room-61a1b52f6553/excalidraw.json',
+      pngPath: '.kun-whiteboards/room-61a1b52f6553/excalidraw.png'
     })
   })
 
@@ -171,12 +171,12 @@ describe('room Excalidraw tool surface', () => {
     expect(apply.isError).toBeUndefined()
     expect(apply.output).toMatchObject({
       status: 'accepted',
-      boardId: 'arch-map',
+      boardId: 'room-61a1b52f6553-arch-map',
       scope: 'room',
       surface: 'room',
-      scenePath: '.kun-whiteboards/arch-map/excalidraw.json',
-      pngPath: '.kun-whiteboards/arch-map/excalidraw.png',
-      ops: [{ op: 'apply-excalidraw', boardId: 'arch-map' }]
+      scenePath: '.kun-whiteboards/room-61a1b52f6553-arch-map/excalidraw.json',
+      pngPath: '.kun-whiteboards/room-61a1b52f6553-arch-map/excalidraw.png',
+      ops: [{ op: 'apply-excalidraw', boardId: 'room-61a1b52f6553-arch-map' }]
     })
   })
 })

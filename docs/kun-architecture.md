@@ -43,6 +43,21 @@ plan worktree、bash 默认 cwd 和 `.kun/project.json` 仍只跟随主目录；
   可用交互和禁止假设的界面能力，通过每个 turn 的动态 context 注入。
 - GUI、TUI、CLI、订阅 SDK 和 HTTP 模型路径必须使用同一条能力过滤规则，
   不能只在某个前端隐藏菜单。
+- 桌面 Rooms 私聊与 Code 是同一 Kun Agent 的不同呈现入口：在模型、权限、工作区和任务阶段相同的前提下，
+  通用工具发现、审批、子代理、目标续跑、结构化结果与文件交付必须等价。Rooms 可增加成员/任务协议工具，
+  但不得维护一份需要逐项同步的通用工具白名单。群聊 coordination/discussion/review 仍按其阶段保持只读；
+  已授权 execution 继承 Code 的通用执行能力和同一 sandbox/approval 上限。
+- 订阅 SDK 只有在声明并实际使用 Kun tool bridge、原生工具拦截、外部审批和 scoped workspace 时才能进入 Rooms。
+  Claude Agent SDK 的房间调用禁用原生工具，统一经过 LocalToolHost；Cursor SDK 尚无原生工具拦截入口，
+  与 `kunTools: false` 的 Antigravity 一样保持禁用，不能仅因存在工具桥接就宣称等价。
+- Rooms 的后台子代理、Shell、目标和重启 continuation 由共享 coordinator 提供明确 source turn，
+  经 RoomRuntime 校验原请求、权限快照、workspace/epoch 和取消状态后，先持久化 request，再通过原房间队列执行。
+  不扫描历史线程接管未知 turn；同根后台通知可连续交付，但新用户请求或权限变更会使旧通知失效。
+  历史 run inspector 永远只读，不得因查看历史重新执行工具。
+- GUI 结构化结果使用 Code 的 canonical mapper/renderer（chart、visualization、generatedFiles）；
+  文件引用来自成功的结构化 tool result，并验证文件存在及 canonical path 在工作区内，不能从模型文字或目录时间戳猜交付物。
+- Excalidraw apply 不会先把旧的本地草稿写回磁盘。保存带读取版本，冲突时保留草稿并提示保存副本后重载；
+  Claude bridge 的 accepted/applied 使用同一个 SDK callId，回执等待直到最终结果持久化完成。
 
 ## 目标边界
 

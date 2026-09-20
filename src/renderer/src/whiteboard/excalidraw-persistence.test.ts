@@ -5,6 +5,8 @@ import {
   clearExcalidrawRuntimeCacheForTests,
   createEmptyExcalidrawScene,
   discardPendingExcalidrawScene,
+  flushPendingExcalidrawScene,
+  prepareExcalidrawReload,
   excalidrawPngPath,
   excalidrawScenePath,
   isExcalidrawSceneEmpty,
@@ -67,6 +69,31 @@ describe('excalidraw persistence', () => {
     expect(serializeCanvasEngineRecord('excalidraw')).toContain('"engine": "excalidraw"')
     expect(excalidrawScenePath('board-1', '.kun-whiteboards')).toBe('.kun-whiteboards/board-1/excalidraw.json')
     expect(excalidrawPngPath('board-1', '.kun-whiteboards')).toBe('.kun-whiteboards/board-1/excalidraw.png')
+  })
+
+  it('does not overwrite an Agent scene while a local draft is pending', async () => {
+    vi.useFakeTimers()
+    const writeWorkspaceFile = vi.fn()
+    vi.stubGlobal('window', { kunGui: { writeWorkspaceFile } })
+    persistExcalidrawScene('/work', 'conflict', '.kun-whiteboards', createEmptyExcalidrawScene())
+    await expect(prepareExcalidrawReload('/work', 'conflict', '.kun-whiteboards')).rejects.toThrow('unsaved local')
+    await vi.runAllTimersAsync()
+    expect(writeWorkspaceFile).not.toHaveBeenCalled()
+  })
+
+  it('uses the read version and keeps the local draft when saving conflicts', async () => {
+    vi.useFakeTimers()
+    const scene = serializeExcalidrawScene(createEmptyExcalidrawScene())
+    const writeWorkspaceFile = vi.fn(async () => ({ ok: false, message: 'External edit', code: 'CONFLICT' }))
+    vi.stubGlobal('window', { kunGui: { writeWorkspaceFile, readWorkspaceFile: vi.fn(async () => ({
+      ok: true, path: 'x', content: scene, mtimeMs: 7, truncated: false
+    })) } })
+    await loadExcalidrawScene('/work', 'version', '.kun-whiteboards')
+    persistExcalidrawScene('/work', 'version', '.kun-whiteboards', createEmptyExcalidrawScene())
+    await expect(flushPendingExcalidrawScene('/work', 'version', '.kun-whiteboards')).rejects.toThrow('External edit')
+    expect(writeWorkspaceFile).toHaveBeenCalledWith(expect.objectContaining({ expectedMtimeMs: 7 }))
+    await expect(prepareExcalidrawReload('/work', 'version', '.kun-whiteboards')).rejects.toThrow('unsaved local')
+    expect(liveExcalidrawScene('/work', 'version', '.kun-whiteboards')).not.toBeNull()
   })
 
   it('debounces scene writes through the workspace file API', async () => {

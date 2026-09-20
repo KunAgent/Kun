@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import {
   designCanvasReceiptKey,
   designToolError,
@@ -27,9 +28,20 @@ function isRoomBoard(context: { guiRoomExcalidrawCanvas?: boolean } | undefined)
   return context?.guiRoomExcalidrawCanvas === true
 }
 
-function resolveRoomBoardId(boardId: string | undefined, room: boolean): string | undefined {
-  if (boardId) return boardId
-  return room ? DEFAULT_ROOM_BOARD_ID : undefined
+function resolveRoomBoardId(
+  boardId: string | undefined,
+  room: boolean,
+  threadId: string | undefined,
+  workspace: string | undefined
+): string | undefined {
+  if (!room) return boardId
+  const namespace = `room-${createHash('sha256')
+    .update(`${threadId ?? ''}\0${workspace ?? ''}`)
+    .digest('hex')
+    .slice(0, 12)}`
+  if (!boardId || boardId === DEFAULT_ROOM_BOARD_ID) return namespace
+  if (boardId === namespace || boardId.startsWith(`${namespace}-`)) return boardId
+  return `${namespace}-${boardId}`.slice(0, 64)
 }
 
 function roomBoardPaths(boardId: string): { scenePath: string; pngPath: string } {
@@ -68,7 +80,12 @@ export function createDesignApplyExcalidrawTool(): LocalTool {
       if (rawBoardId && context?.agentSurface !== 'write' && !room) {
         return designToolError('boardId targets a Work whiteboard and is only supported on the Work surface')
       }
-      const boardId = resolveRoomBoardId(rawBoardId, room)
+      const boardId = resolveRoomBoardId(
+        rawBoardId,
+        room,
+        context?.threadId,
+        context?.workspace
+      )
       const ops = [{ op: 'apply-excalidraw', ...(boardId ? { boardId } : {}) }]
       const extras: Record<string, unknown> = {
         status: 'accepted',
@@ -122,7 +139,12 @@ export function createDesignOpenExcalidrawTool(): LocalTool {
       const rawBoardId = stringArg(args?.boardId)
       const title = stringArg(args?.title)
       if (rawBoardId && !BOARD_ID_PATTERN.test(rawBoardId)) return designToolError(BOARD_ID_ERROR)
-      const boardId = resolveRoomBoardId(rawBoardId, room)
+      const boardId = resolveRoomBoardId(
+        rawBoardId,
+        room,
+        context?.threadId,
+        context?.workspace
+      )
       const ops = [{
         op: 'open-excalidraw',
         ...(boardId ? { boardId } : {}),

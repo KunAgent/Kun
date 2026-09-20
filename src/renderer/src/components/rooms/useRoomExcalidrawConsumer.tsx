@@ -4,11 +4,14 @@ import { useRoomRun } from './useRoomRun'
 import { sendCanvasTurnReceipt } from '../../design/canvas/canvas-receipt-sender'
 import { WORK_WHITEBOARD_DIR } from '../../write/work-whiteboard'
 import {
+  applyOpenExcalidrawScene,
   exportExcalidrawPngSidecar,
+  hasExcalidrawApplyHandler,
+  excalidrawApplyKey,
   type ExcalidrawApplyResult
 } from '../../whiteboard/excalidraw-apply'
 import {
-  discardPendingExcalidrawScene,
+  prepareExcalidrawReload,
   isExcalidrawSceneEmpty,
   loadExcalidrawScene
 } from '../../whiteboard/excalidraw-persistence'
@@ -43,10 +46,11 @@ function outputRecord(output: unknown): Record<string, unknown> | null {
   return null
 }
 
-function requestFromItem(item: CoreTurnItemJson): RoomExcalidrawRequest | null {
-  if (item.kind !== 'tool_result' || (item.toolName !== OPEN_TOOL && item.toolName !== APPLY_TOOL)) return null
+export function roomExcalidrawRequestFromItem(item: CoreTurnItemJson): RoomExcalidrawRequest | null {
+  const toolName = item.toolName?.replace(/^mcp__kun__/, '')
+  if (item.kind !== 'tool_result' || item.isError || (toolName !== OPEN_TOOL && toolName !== APPLY_TOOL)) return null
   const output = outputRecord(item.output)
-  if (!output || output.scope !== 'room' || output.status !== 'accepted') return null
+  if (!output || output.scope !== 'room' || output.status !== 'accepted' || output.unverified === true) return null
   const receiptKey = typeof output.receiptKey === 'string' ? output.receiptKey.trim() : ''
   const turnId = item.turnId?.trim() ?? ''
   const threadId = item.threadId?.trim() ?? ''
@@ -54,7 +58,7 @@ function requestFromItem(item: CoreTurnItemJson): RoomExcalidrawRequest | null {
   const boardId = typeof output.boardId === 'string' ? output.boardId : ''
   if (!receiptKey || !turnId || !threadId || !workspaceRoot || !boardId) return null
   return {
-    action: item.toolName === OPEN_TOOL ? 'open' : 'apply',
+    action: toolName === OPEN_TOOL ? 'open' : 'apply',
     receiptKey,
     turnId,
     threadId,
@@ -84,24 +88,33 @@ async function handleOpen(request: RoomExcalidrawRequest, roomId: string): Promi
 async function handleApply(request: RoomExcalidrawRequest): Promise<void> {
   let result: ExcalidrawApplyResult
   try {
-    await discardPendingExcalidrawScene(request.workspaceRoot, request.boardId, WORK_WHITEBOARD_DIR)
-    const scene = await loadExcalidrawScene(request.workspaceRoot, request.boardId, WORK_WHITEBOARD_DIR)
-    if (!scene || isExcalidrawSceneEmpty(scene)) {
-      result = {
-        ok: false,
-        error: {
-          code: 'EXCALIDRAW_SCENE_EMPTY',
-          message: 'The canonical excalidraw.json is missing or has no live elements.',
-          suggestion: 'Write the scene file first, then call design_apply_excalidraw.'
-        }
-      }
+    await prepareExcalidrawReload(request.workspaceRoot, request.boardId, WORK_WHITEBOARD_DIR)
+    const key = excalidrawApplyKey(request.workspaceRoot, request.boardId, WORK_WHITEBOARD_DIR)
+    if (hasExcalidrawApplyHandler(key)) {
+      result = await applyOpenExcalidrawScene(
+        request.workspaceRoot,
+        request.boardId,
+        WORK_WHITEBOARD_DIR
+      )
     } else {
-      result = await exportExcalidrawPngSidecar({
-        workspaceRoot: request.workspaceRoot,
-        identityId: request.boardId,
-        baseDir: WORK_WHITEBOARD_DIR,
-        scene
-      })
+      const scene = await loadExcalidrawScene(request.workspaceRoot, request.boardId, WORK_WHITEBOARD_DIR)
+      if (!scene || isExcalidrawSceneEmpty(scene)) {
+        result = {
+          ok: false,
+          error: {
+            code: 'EXCALIDRAW_SCENE_EMPTY',
+            message: 'The canonical excalidraw.json is missing or has no live elements.',
+            suggestion: 'Write the scene file first, then call design_apply_excalidraw.'
+          }
+        }
+      } else {
+        result = await exportExcalidrawPngSidecar({
+          workspaceRoot: request.workspaceRoot,
+          identityId: request.boardId,
+          baseDir: WORK_WHITEBOARD_DIR,
+          scene
+        })
+      }
     }
   } catch (error) {
     result = {
@@ -134,7 +147,7 @@ async function handleApply(request: RoomExcalidrawRequest): Promise<void> {
 function useProcessRoomExcalidrawRequests(roomId: string, items: CoreTurnItemJson[]): void {
   useEffect(() => {
     for (const item of items) {
-      const request = requestFromItem(item)
+      const request = roomExcalidrawRequestFromItem(item)
       if (!request || processedReceipts.has(request.receiptKey)) continue
       if (processedReceipts.size >= MAX_PROCESSED_RECEIPTS) {
         const oldest = processedReceipts.values().next().value
@@ -159,7 +172,9 @@ export function RoomExcalidrawConsumer({ roomId, runId }: { roomId: string; runI
 }
 
 function RoomExcalidrawConsumerActive({ roomId, runId }: { roomId: string; runId: string }): ReactElement | null {
-  const { items } = useRoomRun(roomId, runId, true)
-  useProcessRoomExcalidrawRequests(roomId, items)
+  const { items, detail } = useRoomRun(roomId, runId, true)
+  const liveItems = detail && ['queued', 'running'].includes(detail.run.status)
+    ? items.filter((item) => item.threadId === detail.run.threadId && item.turnId === detail.run.turnId) : []
+  useProcessRoomExcalidrawRequests(roomId, liveItems)
   return null
 }
