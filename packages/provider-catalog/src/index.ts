@@ -500,7 +500,7 @@ export const PROVIDER_CATALOG = [
       displayName: 'Step Plan',
       baseUrl: 'https://api.stepfun.ai/step_plan/v1',
       endpointFormat: 'chat_completions',
-      models: ['step-3.7-flash', 'step-3.5-flash'],
+      models: ['step-5-preview', 'step-3.7-flash', 'step-3.5-flash', 'step-3.5-flash-2603'],
       credentialUrl: 'https://platform.stepfun.ai/interface-key'
     }
   }
