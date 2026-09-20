@@ -26,10 +26,11 @@ function visibilityState(overrides: Partial<ChatState> = {}) {
   return {
     route: 'chat',
     activeThreadId: 'main',
+    writeAssistantVisibleThreadId: null,
     sideConversations: {},
     sidePanel: { open: false, activeSideId: null },
     ...overrides
-  } as Pick<ChatState, 'route' | 'activeThreadId' | 'sideConversations' | 'sidePanel'>
+  } as Pick<ChatState, 'route' | 'activeThreadId' | 'writeAssistantVisibleThreadId' | 'sideConversations' | 'sidePanel'>
 }
 
 function storageFixture(initial: Record<string, string> = {}) {
@@ -105,6 +106,25 @@ describe('unread completions', () => {
       visible: true,
       focused: true
     })).toBe(false)
+  })
+
+  it('only treats a mounted focused Work assistant timeline as visible', () => {
+    const attention = { visible: true, focused: true }
+    const visibleWork = visibilityState({
+      route: 'write',
+      activeThreadId: 'work-1',
+      writeAssistantVisibleThreadId: 'work-1'
+    })
+
+    expect(completionIsCurrentlyVisible(visibleWork, 'work-1', attention)).toBe(true)
+    expect(completionIsCurrentlyVisible({ ...visibleWork, writeAssistantVisibleThreadId: null }, 'work-1', attention))
+      .toBe(false)
+    expect(completionIsCurrentlyVisible(visibleWork, 'work-1', { visible: true, focused: false })).toBe(false)
+    expect(clearCurrentlyVisibleUnreadCompletions(
+      { 'work-1': 'completed', 'work-2': 'failed' },
+      visibleWork,
+      attention
+    )).toEqual({ 'work-2': 'failed' })
   })
 
   it('recognizes only the selected open side conversation as viewed', () => {

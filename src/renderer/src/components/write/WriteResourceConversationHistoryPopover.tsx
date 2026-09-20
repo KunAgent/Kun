@@ -34,6 +34,7 @@ import type {
   WriteResourceConversationAction
 } from './WriteResourceConversationActionsMenu'
 import type { AnchorRect } from './WriteResourceConversationActionsMenu'
+import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
 
 type Props = {
   model: WriteResourceConversationHistoryModel
@@ -297,6 +298,14 @@ export function WriteResourceConversationHistoryPopover({
                       </span>
                     </span>
                   </button>
+                  <SidebarActivityIndicator
+                    activity={entry.activity ?? 'idle'}
+                    runningLabel={t('sidebarThreadRunning')}
+                    failedLabel={t('sidebarThreadFailed')}
+                    unreadLabel={t('sidebarThreadUnread')}
+                    awaitingInputLabel={t('sidebarThreadAwaitingInput')}
+                    className="mr-1"
+                  />
                   <button
                     type="button"
                     onClick={(event) => {

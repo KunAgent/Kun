@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { WorkWhiteboard } from '../../write/write-workspace-store'
 import { workWhiteboardResolvedEngine } from '../../write/work-whiteboard'
+import { SidebarActivityIndicator, type SidebarActivity } from '../sidebar/SidebarActivityIndicator'
 import { SidebarIconButton, SidebarTreeRow } from '../sidebar/SidebarPrimitives'
 
 type Props = {
@@ -22,6 +23,11 @@ type Props = {
   moreActionsLabel: string
   renameLabel: string
   deleteLabel: string
+  runningLabel?: string
+  failedLabel?: string
+  unreadLabel?: string
+  awaitingInputLabel?: string
+  activityForBoard?: (board: WorkWhiteboard) => SidebarActivity
   onToggle: () => void
   onCreate: () => void
   onOpen: (boardId: string) => void
@@ -39,6 +45,23 @@ function phaseIndicator(phase: WorkWhiteboard['phase']): ReactElement | null {
   )
 }
 
+function groupActivity(
+  whiteboards: readonly WorkWhiteboard[],
+  activityForBoard: (board: WorkWhiteboard) => SidebarActivity
+): SidebarActivity {
+  const priority: Record<SidebarActivity, number> = {
+    idle: 0,
+    unread: 1,
+    failed: 2,
+    running: 3,
+    'awaiting-input': 4
+  }
+  return whiteboards.reduce<SidebarActivity>((current, board) => {
+    const next = activityForBoard(board)
+    return priority[next] > priority[current] ? next : current
+  }, 'idle')
+}
+
 export function WorkWhiteboardSidebarSection({
   whiteboards,
   activeWhiteboardId,
@@ -49,6 +72,11 @@ export function WorkWhiteboardSidebarSection({
   moreActionsLabel,
   renameLabel,
   deleteLabel,
+  runningLabel = 'Running',
+  failedLabel = 'Failed',
+  unreadLabel = 'Unread',
+  awaitingInputLabel = 'Awaiting input',
+  activityForBoard = () => 'idle',
   onToggle,
   onCreate,
   onOpen,
@@ -64,6 +92,15 @@ export function WorkWhiteboardSidebarSection({
         onClick={onToggle}
         className="min-h-[34px]"
         buttonStyle={{ paddingLeft: 10 }}
+        trailing={(
+          <SidebarActivityIndicator
+            activity={groupActivity(whiteboards, activityForBoard)}
+            runningLabel={runningLabel}
+            failedLabel={failedLabel}
+            unreadLabel={unreadLabel}
+            awaitingInputLabel={awaitingInputLabel}
+          />
+        )}
         actions={(
           <SidebarIconButton
             title={createLabel}
@@ -91,6 +128,7 @@ export function WorkWhiteboardSidebarSection({
             .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
             .map((board) => {
               const Icon = workWhiteboardResolvedEngine(board) === 'excalidraw' ? PencilLine : Shapes
+              const activity = activityForBoard(board)
               return (
               <div key={board.id} className="relative" data-work-whiteboard-item={board.id}>
                 <SidebarTreeRow
@@ -99,7 +137,15 @@ export function WorkWhiteboardSidebarSection({
                   onClick={() => onOpen(board.id)}
                   className="min-h-[34px]"
                   buttonStyle={{ paddingLeft: 24 }}
-                  trailing={phaseIndicator(board.phase)}
+                  trailing={activity === 'idle' ? phaseIndicator(board.phase) : (
+                    <SidebarActivityIndicator
+                      activity={activity}
+                      runningLabel={runningLabel}
+                      failedLabel={failedLabel}
+                      unreadLabel={unreadLabel}
+                      awaitingInputLabel={awaitingInputLabel}
+                    />
+                  )}
                   actions={(
                     <SidebarIconButton
                       title={moreActionsLabel}

@@ -169,6 +169,7 @@ import {
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
 import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
+import { completionIsCurrentlyVisible } from './unread-completions'
 
 export function createThreadSelectionActions(
   context: StoreActionContext,
@@ -210,7 +211,7 @@ export function createThreadSelectionActions(
       )
     }
     const nextUnread = { ...get().unreadThreadIds }
-    delete nextUnread[id]
+    if (completionIsCurrentlyVisible({ ...get(), activeThreadId: id }, id)) delete nextUnread[id]
 
     const refreshingActiveThread = prevId === id
     if (!refreshingActiveThread) {
