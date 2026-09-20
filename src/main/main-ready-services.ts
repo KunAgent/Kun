@@ -107,7 +107,8 @@ export interface MainServices {
   serviceManager: Awaited<ReturnType<typeof ensureKunServiceManager>>
   withRegistryCredentials: (
     settings: AppSettingsV1,
-    providerIds?: readonly string[]
+    providerIds?: readonly string[],
+    options?: { refreshOAuth?: boolean }
   ) => Promise<AppSettingsV1>
   browserUseManager: ReturnType<typeof configureBrowserUseHost>
   extensionDescriptors: ExtensionDescriptorResolver
@@ -221,9 +222,13 @@ export async function initializeMainServices(input: {
       : new LegacyProviderSettingsMigrationCoordinator()
     const withRegistryCredentials = (
       settings: AppSettingsV1,
-      providerIds?: readonly string[]
+      providerIds?: readonly string[],
+      options?: { refreshOAuth?: boolean }
     ): Promise<AppSettingsV1> =>
-      credentialMigration?.withRegistryCredentials(settings, providerIds) ?? Promise.resolve(settings)
+      credentialMigration?.withRegistryCredentials(settings, providerIds, options) ??
+      Promise.resolve(settings)
+    const withStoredRegistryCredentials = (settings: AppSettingsV1): Promise<AppSettingsV1> =>
+      withRegistryCredentials(settings, undefined, { refreshOAuth: false })
     mainState.store = credentialMigration
       ? new JsonSettingsStore(productionSettingsUserDataPath, {
           credentialMigration,
@@ -386,7 +391,7 @@ export async function initializeMainServices(input: {
       mainState.powerSaveController.setAppKeepAwake(settings.appBehavior.keepAwake === true)
       mainState.scheduleRuntime = createScheduleRuntime({
         store: mainState.store,
-        withModelCredentials: withRegistryCredentials,
+        withModelCredentials: withStoredRegistryCredentials,
         runtimeRequest,
         logError,
         powerSaveController: mainState.powerSaveController
@@ -394,7 +399,7 @@ export async function initializeMainServices(input: {
       mainState.scheduleRuntime.sync(settings)
       mainState.workflowRuntime = createWorkflowRuntime({
         store: mainState.store,
-        withModelCredentials: withRegistryCredentials,
+        withModelCredentials: withStoredRegistryCredentials,
         runtimeRequest,
         logError,
         powerSaveBlocker

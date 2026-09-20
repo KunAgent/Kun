@@ -229,7 +229,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
   }
   ipcMain.handle('settings:get', async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
-    return withoutRendererPlaintextCredentials(await withRegistryCredentials(await store.load()))
+    return withoutRendererPlaintextCredentials(await withRegistryCredentials(await store.load(), undefined, { refreshOAuth: false }))
   })
   ipcMain.handle(
     'model-provider:credential:reveal',
@@ -394,7 +394,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       ),
       applySettingsPatch
     )
-    return withoutRendererPlaintextCredentials(await withRegistryCredentials(persisted))
+    return withoutRendererPlaintextCredentials(await withRegistryCredentials(persisted, undefined, { refreshOAuth: false }))
   })
   ipcMain.handle('settings:save-silent', async (event, partial: unknown) => {
     const persisted = await applyProtectedSettingsPatch(
@@ -404,7 +404,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
       ),
       saveSettingsPatch
     )
-    return withoutRendererPlaintextCredentials(await withRegistryCredentials(persisted))
+    return withoutRendererPlaintextCredentials(await withRegistryCredentials(persisted, undefined, { refreshOAuth: false }))
   })
 
   ipcMain.handle('runtime:request', async (event, payload: unknown) => {

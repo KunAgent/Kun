@@ -53,12 +53,23 @@ export type PreparedLegacyProviderSettingsMigration = {
   commit: () => Promise<void>
 }
 
+export type RegistryCredentialProjectionOptions = {
+  /** When false, return stored credentials without Codex/Grok token refresh. */
+  refreshOAuth?: boolean
+}
+
+type RegistryCredentialState = {
+  authoritative: boolean
+  apiKey: string
+}
+
 type MigrationRuntime = {
   service: LegacyProviderCredentialMigrationService
   modelConnections: ModelConnectionRegistry
   resolveRegistryCredential: (
-    providerId: string
-  ) => Promise<{ authoritative: boolean; apiKey: string }>
+    providerId: string,
+    options?: RegistryCredentialProjectionOptions
+  ) => Promise<RegistryCredentialState>
 }
 
 type MigrationRuntimeFactory = (dataDir: string) => Promise<MigrationRuntime>
@@ -196,19 +207,40 @@ export class LegacyProviderSettingsMigrationCoordinator {
    */
   async withRegistryCredentials(
     settings: AppSettingsV1,
-    providerIds?: readonly string[]
+    providerIds?: readonly string[],
+    options?: RegistryCredentialProjectionOptions
   ): Promise<AppSettingsV1> {
     const dataDir = resolveSettingsDataDir(settings)
     assertManagedKunDataDirIsCurrent(dataDir)
     const { resolveRegistryCredential, service } = await this.runtime(dataDir)
-    const projected = await projectRegistryCredentials(settings, resolveRegistryCredential, providerIds)
+    const projected = await projectRegistryCredentials(
+      settings,
+      (providerId) => resolveRegistryCredential(providerId, options),
+      providerIds
+    )
     return projectRegistryMediaCredentials(projected, (sourceId) => resolveLegacyApiKey(service, sourceId))
+  }
+}
+
+export async function resolveProjectedRegistryCredential(
+  state: RegistryCredentialState,
+  refresh: () => Promise<string>,
+  options?: RegistryCredentialProjectionOptions
+): Promise<RegistryCredentialState> {
+  if (!state.authoritative || !state.apiKey) return state
+  if (options?.refreshOAuth === false) return state
+  try {
+    return { authoritative: true, apiKey: await refresh() }
+  } catch {
+    // A stale unused ChatGPT/Grok login must not fail settings reads or other
+    // providers. Request-time refresh still runs in the model client.
+    return state
   }
 }
 
 export async function projectRegistryCredentials(
   settings: AppSettingsV1,
-  resolve: (providerId: string) => Promise<{ authoritative: boolean; apiKey: string }>,
+  resolve: (providerId: string) => Promise<RegistryCredentialState>,
   providerIds?: readonly string[]
 ): Promise<AppSettingsV1> {
   const providerSettings = getModelProviderSettings(settings)
@@ -221,7 +253,13 @@ export async function projectRegistryCredentials(
       providers.push(provider)
       continue
     }
-    const state = await resolve(provider.id)
+    let state: RegistryCredentialState
+    try {
+      state = await resolve(provider.id)
+    } catch {
+      providers.push(provider)
+      continue
+    }
     if (!state.authoritative) {
       providers.push(provider)
       continue
@@ -571,13 +609,14 @@ async function createMigrationRuntime(dataDir: string): Promise<MigrationRuntime
   const grokCredentialRefresher = new GrokOAuthCredentialRefresher(requestCredentialStore)
   return {
     modelConnections,
-    resolveRegistryCredential: async (providerId) => {
+    resolveRegistryCredential: async (providerId, options) => {
       const state = await modelConnections.credentialStateForInternalConsumer(providerId)
-      if (!state.authoritative || !state.apiKey) return state
-      const sourceId = modelConnectionCredentialSourceId(providerId)
-      let resolved = await codexCredentialRefresher.resolve(sourceId)
-      if (!resolved.refreshable) resolved = await grokCredentialRefresher.resolve(sourceId)
-      return { authoritative: true, apiKey: resolved.rawApiKey }
+      return resolveProjectedRegistryCredential(state, async () => {
+        const sourceId = modelConnectionCredentialSourceId(providerId)
+        let resolved = await codexCredentialRefresher.resolve(sourceId)
+        if (!resolved.refreshable) resolved = await grokCredentialRefresher.resolve(sourceId)
+        return resolved.rawApiKey
+      }, options)
     },
     service: new LegacyProviderCredentialMigrationService({
       dataDir,

@@ -35,7 +35,8 @@ export type RegisterAppIpcHandlersOptions = {
   store: JsonSettingsStore
   withRegistryCredentials?: (
     settings: AppSettingsV1,
-    providerIds?: readonly string[]
+    providerIds?: readonly string[],
+    options?: { refreshOAuth?: boolean }
   ) => Promise<AppSettingsV1>
   getMainWindow: () => BrowserWindow | null
   assertRendererRuntimeReady: () => void
