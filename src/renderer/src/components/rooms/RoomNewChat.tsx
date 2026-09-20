@@ -7,8 +7,8 @@ import { RoomAvatar } from './RoomAvatar'
 import { agentMember, useAgentCatalog, useAgentResource } from './agent-client'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
 
-export function RoomNewChat({ onClose, onOpen, onAgent, onFill }: {
-  onClose: () => void; onOpen: (roomId: string) => void; onAgent: (agentId: string) => void; onFill: () => void
+export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus = true }: {
+  onClose: () => void; onOpen: (roomId: string) => void; onAgent: (agentId: string) => void; onFill?: (() => void) | null; autoFocus?: boolean
 }) {
   const { t } = useTranslation('common')
   const [query, setQuery] = useState(''), [group, setGroup] = useState(false), [templatesOpen, setTemplatesOpen] = useState(false)
@@ -30,10 +30,10 @@ export function RoomNewChat({ onClose, onOpen, onAgent, onFill }: {
   })
   return <RoomModal title={t('directNewChat')} busy={busy} onClose={onClose}>
     <div className="direct-new-chat">
-      <label className="direct-recipient"><span>{t('directTo')}</span><Search size={17} /><input autoFocus value={query} placeholder={t('directFindAgent')} onChange={(e) => setQuery(e.target.value)} /></label>
+      <label className="direct-recipient"><span>{t('directTo')}</span><Search size={17} /><input autoFocus={autoFocus} value={query} placeholder={t('directFindAgent')} onChange={(e) => setQuery(e.target.value)} /></label>
       <div className="direct-create-actions">
         <button disabled={busy} onClick={() => create()}><MessageSquare size={18} />{t('directDefineByChat')}</button>
-        <button disabled={busy} onClick={() => { onFill(); onClose() }}><PenLine size={18} />{t('directFillYourself')}</button>
+        {onFill ? <button disabled={busy} onClick={() => { onFill(); onClose() }}><PenLine size={18} />{t('directFillYourself')}</button> : null}
         <button aria-pressed={group} disabled={busy} onClick={() => setGroup(!group)}><Users size={18} />{t('directCreateGroup')}</button>
       </div>
       {selected.length && group ? <div className="direct-selected">{selected.map((agent) => <button key={agent.id} onClick={() => setSelected(selected.filter((item) => item.id !== agent.id))}>{agent.name} ×</button>)}</div> : null}

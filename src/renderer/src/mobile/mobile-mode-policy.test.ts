@@ -19,7 +19,7 @@ describe('mobile mode policy', () => {
     expect(workLeaveDecision({ saveStatus: 'saved', conflict: false, reviewActive: false })).toBe('allow')
     expect(workLeaveDecision({ saveStatus: 'idle', conflict: false, reviewActive: false })).toBe('allow')
     expect(workLeaveDecision({ saveStatus: 'saving', conflict: false, reviewActive: false })).toBe('wait')
-    expect(workLeaveDecision({ saveStatus: 'dirty', conflict: false, reviewActive: false })).toBe('confirm-discard')
+    expect(workLeaveDecision({ saveStatus: 'dirty', conflict: false, reviewActive: false })).toBe('save')
     expect(workLeaveDecision({ saveStatus: 'error', conflict: false, reviewActive: false })).toBe('confirm-discard')
     expect(workLeaveDecision({ saveStatus: 'saved', conflict: false, reviewActive: true })).toBe('confirm-discard')
     expect(workLeaveDecision({ saveStatus: 'saving', conflict: true, reviewActive: false })).toBe('resolve-conflict')

@@ -2,7 +2,7 @@ export type MobileMode = 'code' | 'rooms' | 'work'
 export type WorkResourceView = 'read' | 'edit' | 'assistant' | 'review' | 'whiteboard'
 export type MobilePage =
   | { mode: MobileMode; kind: 'home' }
-  | { mode: 'code'; kind: 'new' }
+  | { mode: 'code' | 'rooms'; kind: 'new' }
   | { mode: 'code'; kind: 'conversation'; threadId: string }
   | { mode: 'rooms'; kind: 'room'; roomId: string }
   | { mode: 'rooms'; kind: 'reply'; roomId: string; messageId: string }
@@ -14,7 +14,7 @@ export type MobilePage =
 
 const MAX_IDENTIFIER_LENGTH = 512
 const MODES = new Set<MobileMode>(['code', 'rooms', 'work'])
-const WORK_VIEWS = new Set<WorkResourceView>(['read', 'edit', 'assistant', 'review', 'whiteboard'])
+const WORK_VIEWS = new Set<WorkResourceView>(['read', 'edit', 'review', 'whiteboard'])
 const MANAGED_KEYS = ['mode', 'mobile', 'thread', 'room', 'message', 'run', 'task', 'member', 'resource', 'view']
 
 function identifier(url: URL, key: string): string | null {
@@ -28,8 +28,8 @@ export function readMobilePage(url: URL): MobilePage {
   const kind = url.searchParams.get('mobile')
   if (kind === 'settings') return { mode, kind }
   if (kind === 'home' || !kind) return { mode, kind: 'home' }
+  if ((mode === 'code' || mode === 'rooms') && kind === 'new') return { mode, kind }
   if (mode === 'code') {
-    if (kind === 'new') return { mode, kind }
     const threadId = identifier(url, 'thread')
     if (kind === 'conversation' && threadId) return { mode, kind, threadId }
   }

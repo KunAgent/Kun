@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../store/chat-store'
@@ -9,14 +9,24 @@ import { MobileModeNav } from './MobileModeNav'
 import { MobileHome } from './screens/MobileHome'
 import { MobileRoomsHome } from './rooms/MobileRoomsHome'
 import { MobileWorkHome, type MobileWorkResource } from './work/MobileWorkHome'
-import { useMobileNavigation } from './navigation/use-mobile-navigation'
+import { useMobileNavigation, type MobileNavigationGuard } from './navigation/use-mobile-navigation'
 import { workLeaveDecision, workbenchRouteForMode } from './mobile-mode-policy'
 import type { MobileMode } from './navigation/mobile-page'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
+import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
 import './mobile-app-shell.css'
 
+const MobileRoomNew = lazy(() => import('./rooms/MobileRoomNew').then((module) => ({
+  default: module.MobileRoomNew
+})))
 const MobileRoomConversation = lazy(() => import('./rooms/MobileRoomConversation').then((module) => ({
   default: module.MobileRoomConversation
+})))
+const MobileCodeConversation = lazy(() => import('./chat/MobileCodeConversation').then((module) => ({
+  default: module.MobileCodeConversation
+})))
+const MobileRoomDetail = lazy(() => import('./rooms/MobileRoomDetail').then((module) => ({
+  default: module.MobileRoomDetail
 })))
 const MobileWorkResourceScreen = lazy(() => import('./work/MobileWorkResourceScreen').then((module) => ({
   default: module.MobileWorkResourceScreen
@@ -45,13 +55,14 @@ function MobileRoomsRoot({ navigate }: { navigate: ReturnType<typeof useMobileNa
     onSearch={setSearch} onFilter={setFilter}
     onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })}
     onMenu={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })}
-    onCreate={() => navigate({ mode: 'rooms', kind: 'settings' })}
+    onCreate={() => navigate({ mode: 'rooms', kind: 'new' })}
     onRetry={rooms.refresh} onLoadMore={rooms.more} />
 }
 
 export function MobileAppShell(): ReactElement {
   const { t } = useTranslation('common')
-  const { page, navigate } = useMobileNavigation()
+  const leaveGuardRef = useRef<MobileNavigationGuard | null>(null)
+  const { page, navigate } = useMobileNavigation(leaveGuardRef)
   const roomAttention = useRoomAttentionCount()
   const [notice, setNotice] = useState('')
   const chat = useChatStore(useShallow((state) => ({
@@ -99,30 +110,57 @@ export function MobileAppShell(): ReactElement {
     return [...documents, ...boards]
   }, [work.documentsByPath, work.entriesByDir, work.whiteboards, work.workspaceRoot])
 
-  const selectMode = async (mode: MobileMode): Promise<void> => {
-    if (page.mode === 'work' && mode !== 'work') {
-      const decision = workLeaveDecision({ saveStatus: work.saveStatus, conflict: work.spreadsheetConflict, reviewActive: work.reviewActive })
-      if (decision === 'resolve-conflict' || decision === 'confirm-discard') {
-        setNotice(decision === 'resolve-conflict' ? 'Resolve the document conflict before leaving Work.' : 'Finish or discard the current Work review before leaving.')
-        return
-      }
-      if (decision === 'wait') { setNotice('Saving Work documents…'); return }
-      if (work.workspaceRoot && !await work.saveAll(work.workspaceRoot)) {
-        setNotice('Work documents could not be saved.'); return
-      }
+  const leaveState = { saveStatus: work.saveStatus, conflict: work.spreadsheetConflict, reviewActive: work.reviewActive } as const
+  useWorkBeforeUnloadGuard(page.mode === 'work', leaveState)
+
+  const canLeaveWork = async (): Promise<boolean> => {
+    const decision = workLeaveDecision(leaveState)
+    if (decision === 'resolve-conflict' || decision === 'confirm-discard') {
+      setNotice(decision === 'resolve-conflict' ? 'Resolve the document conflict before leaving Work.' : 'Finish or discard the current Work review before leaving.')
+      return false
     }
+    if (decision === 'wait') { setNotice('Saving Work documents…'); return false }
+    if (decision === 'save' && work.workspaceRoot && !await work.saveAll(work.workspaceRoot)) {
+      setNotice('Work documents could not be saved.'); return false
+    }
+    return true
+  }
+  leaveGuardRef.current = async (current, next) => {
+    if (current.mode !== 'work' || next.mode === 'work') return true
+    return canLeaveWork()
+  }
+
+  const selectMode = async (mode: MobileMode): Promise<void> => {
+    if (page.mode === 'work' && mode !== 'work' && !await canLeaveWork()) return
     setNotice('')
     navigate({ mode, kind: 'home' })
   }
 
   let content: ReactElement
-  if (page.mode === 'rooms' && page.kind === 'room') {
+  if (page.mode === 'rooms' && page.kind === 'new') {
+    content = <MobileRoomNew onClose={() => navigate({ mode: 'rooms', kind: 'home' })}
+      onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })} />
+  } else if (page.mode === 'code' && page.kind === 'conversation') {
+    content = <MobileCodeConversation threadId={page.threadId}
+      onBack={() => navigate({ mode: 'code', kind: 'home' })}
+      onDetails={() => chat.setRoute('settings')}
+      onSettings={() => chat.setRoute('settings')} />
+  } else if (page.mode === 'rooms' && page.kind === 'room') {
     content = <MobileRoomConversation roomId={page.roomId}
       onBack={() => navigate({ mode: 'rooms', kind: 'home' })}
-      onDetails={() => navigate({ mode: 'rooms', kind: 'settings' })}
+      onDetails={() => navigate({ mode: 'rooms', kind: 'home' })}
       onReply={(message) => navigate({ mode: 'rooms', kind: 'reply', roomId: page.roomId, messageId: message.id })}
       onTask={(taskId) => navigate({ mode: 'rooms', kind: 'task', roomId: page.roomId, taskId })}
       onRun={(runId) => navigate({ mode: 'rooms', kind: 'run', roomId: page.roomId, runId })} />
+  } else if (page.mode === 'rooms' && ['reply', 'run', 'task', 'member'].includes(page.kind)) {
+    const detailPage = page as Extract<typeof page, { kind: 'reply' | 'run' | 'task' | 'member' }>
+    content = <MobileRoomDetail page={detailPage}
+      onBack={() => navigate({ mode: 'rooms', kind: 'room', roomId: detailPage.roomId })}
+      onNavigate={(next) => navigate(next)}
+      onOpenCode={async (threadId) => {
+        await chat.selectThread(threadId)
+        navigate({ mode: 'code', kind: 'conversation', threadId })
+      }} />
   } else if (page.mode === 'work' && page.kind === 'resource') {
     content = <MobileWorkResourceScreen resourceKey={page.resourceKey} view={page.view}
       onBack={() => navigate({ mode: 'work', kind: 'home' })}

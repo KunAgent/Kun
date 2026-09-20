@@ -7,7 +7,7 @@ export type MobileComposerProps = {
   onChange: (text: string) => void
   onSend: () => void
   onStop: () => void
-  onAttachments: () => void
+  onAttachments: (() => void) | null
   onOptions: () => void
   running: boolean
   disabled: boolean
@@ -39,8 +39,8 @@ export function MobileComposer(props: MobileComposerProps) {
     {error ? <p role="alert" className="kun-mobile-composer-error">{error}</p> : null}
     {attachments}
     <div className="kun-mobile-composer-row">
-      <button type="button" className="kun-mobile-composer-action" onClick={onAttachments}
-        disabled={disabled || sending} aria-label={labels.attachments}><Plus size={20} aria-hidden /></button>
+      {onAttachments ? <button type="button" className="kun-mobile-composer-action" onClick={onAttachments}
+        disabled={disabled || sending} aria-label={labels.attachments}><Plus size={20} aria-hidden /></button> : null}
       <textarea ref={inputRef} rows={1} value={value} disabled={disabled}
         aria-label={labels.placeholder} placeholder={labels.placeholder}
         onChange={(event) => onChange(event.target.value)}

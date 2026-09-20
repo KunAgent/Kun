@@ -23,8 +23,9 @@ describe('mobile page URLs', () => {
     roundTrip({ mode, kind: 'settings' })
   })
 
-  it('round trips Code conversation and new pages', () => {
+  it('round trips Code and Rooms new pages', () => {
     roundTrip({ mode: 'code', kind: 'new' })
+    roundTrip({ mode: 'rooms', kind: 'new' })
     const url = roundTrip({ mode: 'code', kind: 'conversation', threadId: 'a/b?x=1&other=2' })
     expect(url.searchParams.has('other')).toBe(false)
   })
@@ -37,7 +38,7 @@ describe('mobile page URLs', () => {
     { mode: 'rooms', kind: 'member', roomId: 'room', memberId: 'member' }
   ] as MobilePage[])('round trips Rooms page $kind', (page) => { roundTrip(page) })
 
-  it.each(['read', 'edit', 'assistant', 'review', 'whiteboard'] as const)(
+  it.each(['read', 'edit', 'review', 'whiteboard'] as const)(
     'round trips Work resource view %s',
     (view) => { roundTrip({ mode: 'work', kind: 'resource', resourceKey: 'opaque-key', view }) }
   )
@@ -58,6 +59,8 @@ describe('mobile page URLs', () => {
     expect(readMobilePage(url)).toEqual({ mode: 'work', kind: 'home' })
     expect(readMobilePage(new URL('https://kun.example/?mode=code&mobile=room&room=r')))
       .toEqual({ mode: 'code', kind: 'home' })
+    expect(readMobilePage(new URL('https://kun.example/?mode=work&mobile=resource&resource=r&view=assistant')))
+      .toEqual({ mode: 'work', kind: 'home' })
     expect(readMobilePage(new URL('https://kun.example/?mode=work&mobile=resource&resource=r&view=unknown')))
       .toEqual({ mode: 'work', kind: 'home' })
   })

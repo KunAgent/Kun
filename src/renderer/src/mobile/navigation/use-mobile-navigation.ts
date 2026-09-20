@@ -1,21 +1,40 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { mobilePageUrl, readMobilePage, sameMobilePage, type MobilePage } from './mobile-page'
 
 function currentPage(): MobilePage {
   return typeof window === 'undefined' ? { mode: 'code', kind: 'home' } : readMobilePage(new URL(window.location.href))
 }
 
+export type MobileNavigationGuard = (current: MobilePage, next: MobilePage) => boolean | Promise<boolean>
+
 /** Navigation remains separate from the shared conversation/runtime store. */
-export function useMobileNavigation(): {
+export function useMobileNavigation(guardRef?: RefObject<MobileNavigationGuard | null>): {
   page: MobilePage
   navigate: (page: MobilePage, replace?: boolean) => void
 } {
   const [page, setPage] = useState(currentPage)
+  const pageRef = useRef(page)
+  pageRef.current = page
   useEffect(() => {
-    const onPopState = (): void => setPage(currentPage())
+    let serial = 0
+    const onPopState = (): void => {
+      const attempt = ++serial
+      const previous = pageRef.current
+      const next = currentPage()
+      void Promise.resolve(guardRef?.current?.(previous, next) ?? true).then((allowed) => {
+        if (attempt !== serial) return
+        if (allowed) {
+          pageRef.current = next
+          setPage(next)
+          return
+        }
+        const current = new URL(window.location.href)
+        window.history.replaceState(window.history.state, '', mobilePageUrl(current, previous))
+      })
+    }
     window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [])
+    return () => { serial += 1; window.removeEventListener('popstate', onPopState) }
+  }, [guardRef])
 
   const navigate = useCallback((next: MobilePage, replace = false): void => {
     const current = new URL(window.location.href)
@@ -26,6 +45,7 @@ export function useMobileNavigation(): {
     // Retain unrelated history metadata owned by the application.
     if (replace) window.history.replaceState(window.history.state, '', url)
     else window.history.pushState(window.history.state, '', url)
+    pageRef.current = normalized
     setPage(normalized)
   }, [])
 

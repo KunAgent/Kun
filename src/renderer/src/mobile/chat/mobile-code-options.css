@@ -1,0 +1,8 @@
+.kun-mobile-code-options { display: grid; gap: 16px; }
+.kun-mobile-code-options fieldset { display: flex; gap: 8px; padding: 0; border: 0; }
+.kun-mobile-code-options legend { margin-bottom: 8px; }
+.kun-mobile-code-options fieldset button { min-height: 44px; flex: 1; border: 1px solid var(--ds-border); border-radius: 9999px; color: inherit; background: transparent; }
+.kun-mobile-code-options fieldset button[aria-pressed='true'] { background: var(--ds-surface-subtle); }
+.kun-mobile-code-options label { display: grid; gap: 6px; }
+.kun-mobile-code-options select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--ds-border); border-radius: 12px; color: inherit; background: var(--ds-bg-main); font: inherit; }
+.kun-mobile-code-options p { margin: 0; color: var(--ds-text-muted); overflow-wrap: anywhere; }

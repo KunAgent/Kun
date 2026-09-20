@@ -7,8 +7,8 @@ import { useRoomReplyThread } from './useRoomReplyThread'
 import { roomPath, roomsRequest } from './rooms-client'
 import './rooms-replies.css'
 
-export function RoomReplyThread({ room, messageId, tasks, active = true, onSend, onPin, onTask, onRun, onMember, onOpenContent }: {
-  room: Room; messageId: string; tasks: RoomTask[]; active?: boolean
+export function RoomReplyThread({ room, messageId, tasks, active = true, autoFocus = true, onSend, onPin, onTask, onRun, onMember, onOpenContent }: {
+  room: Room; messageId: string; tasks: RoomTask[]; active?: boolean; autoFocus?: boolean
   onSend: (message: SendRoomMessage) => Promise<void>
   onPin: (message: RoomMessage) => void; onTask: (id: string) => void; onRun: (id: string) => void
   onMember: (id: string, rootRequestId?: string) => void
@@ -76,7 +76,7 @@ export function RoomReplyThread({ room, messageId, tasks, active = true, onSend,
       {state.error || jumpError ? <p className="rooms-message-error" role="alert">{state.error || jumpError}</p> : null}
       {state.error ? <button type="button" className="rooms-run-secondary" onClick={() => void state.refresh()}>{t('roomsRefresh')}</button> : null}
     </div>
-    {root && target && room.conversationKind !== 'agent_agent' ? <RoomComposer room={room} tasks={tasks} draftId={`reply:${room.id}:${root.id}`}
+    {root && target && room.conversationKind !== 'agent_agent' ? <RoomComposer room={room} tasks={tasks} draftId={`reply:${room.id}:${root.id}`} autoFocus={autoFocus}
       replyTarget={{ messageId: target.id, body: target.body, rootRequestId: target.rootRequestId }}
       onSend={async (input) => {
         await onSend({ ...input, replyToMessageId: input.replyToMessageId ?? target.id })

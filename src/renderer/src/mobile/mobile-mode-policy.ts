@@ -5,15 +5,15 @@ export type WorkLeaveState = {
   conflict: boolean
   reviewActive: boolean
 }
-export type WorkLeaveDecision = 'allow' | 'wait' | 'confirm-discard' | 'resolve-conflict'
+export type WorkLeaveDecision = 'allow' | 'save' | 'wait' | 'confirm-discard' | 'resolve-conflict'
 
 /** Pure policy only. The caller must perform save/discard/resolve actions in the existing Work store. */
 export function workLeaveDecision(state: WorkLeaveState): WorkLeaveDecision {
   if (state.conflict) return 'resolve-conflict'
+  if (state.reviewActive) return 'confirm-discard'
   if (state.saveStatus === 'saving') return 'wait'
-  if (state.saveStatus === 'dirty' || state.saveStatus === 'error' || state.reviewActive) {
-    return 'confirm-discard'
-  }
+  if (state.saveStatus === 'dirty') return 'save'
+  if (state.saveStatus === 'error') return 'confirm-discard'
   return 'allow'
 }
 

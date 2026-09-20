@@ -73,7 +73,10 @@ export const prepareInitialWorkbench = createInitialWorkbenchPreparer({
 
 export async function prepareInitialMobileApp(): Promise<void> {
   await useChatStore.getState().boot()
-  await loadMobileAppShell()
+  await Promise.all([
+    loadMobileAppShell(),
+    useChatStore.getState().route === 'settings' ? loadSettingsView() : Promise.resolve()
+  ])
 }
 
 function RouteFallback(): React.ReactElement {
@@ -168,7 +171,7 @@ export default function AppShell(): React.ReactElement {
           <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
           <Suspense fallback={<RouteFallback />}>
-            {surface === 'mobile' ? <MobileApp /> : route === 'settings' ? (
+            {route === 'settings' ? (
               <ProtectedRendererSurface
                 kind="account-credentials"
                 restoreTarget="settings"
@@ -176,7 +179,7 @@ export default function AppShell(): React.ReactElement {
               >
                 <SettingsRouteView />
               </ProtectedRendererSurface>
-            ) : <WorkbenchView />}
+            ) : surface === 'mobile' ? <MobileApp /> : <WorkbenchView />}
           </Suspense>
         </div>
         <SpeakDownloadToast />
