@@ -8,7 +8,7 @@ export type MobileComposerProps = {
   onSend: () => void
   onStop: () => void
   onAttachments: (() => void) | null
-  onOptions: () => void
+  onOptions: (() => void) | null
   running: boolean
   disabled: boolean
   sending: boolean
@@ -61,8 +61,8 @@ export function MobileComposer(props: MobileComposerProps) {
         <ArrowUp size={20} aria-hidden />
       </button>
     </div>
-    <button type="button" className="kun-mobile-composer-options" onClick={onOptions} disabled={disabled}>
+    {onOptions ? <button type="button" className="kun-mobile-composer-options" onClick={onOptions} disabled={disabled}>
       {labels.options}
-    </button>
+    </button> : null}
   </section>
 }

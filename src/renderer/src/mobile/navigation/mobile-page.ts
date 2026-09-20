@@ -14,7 +14,7 @@ export type MobilePage =
 
 const MAX_IDENTIFIER_LENGTH = 512
 const MODES = new Set<MobileMode>(['code', 'rooms', 'work'])
-const WORK_VIEWS = new Set<WorkResourceView>(['read', 'edit', 'review', 'whiteboard'])
+const WORK_VIEWS = new Set<WorkResourceView>(['read', 'edit', 'assistant', 'review', 'whiteboard'])
 const MANAGED_KEYS = ['mode', 'mobile', 'thread', 'room', 'message', 'run', 'task', 'member', 'resource', 'view']
 
 function identifier(url: URL, key: string): string | null {
@@ -56,7 +56,7 @@ export function readMobilePage(url: URL): MobilePage {
 
 /** Only opaque navigation identifiers belong in URLs, never drafts, paths or credentials. */
 export function mobilePageUrl(url: URL, page: MobilePage): string {
-  const next = new URL(url)
+  const next = new URL(url.pathname, url.origin)
   for (const key of MANAGED_KEYS) next.searchParams.delete(key)
   next.searchParams.set('mode', page.mode)
   next.searchParams.set('mobile', page.kind)

@@ -11,7 +11,7 @@ type MobileWorkResourceProps = {
   supportedViews: readonly WorkResourceView[]
   content: ReactNode
   onBack: () => void
-  onMenu: () => void
+  onMenu: (() => void) | null
   onView: (view: WorkResourceView) => void
 }
 
@@ -22,7 +22,7 @@ export function MobileWorkResource(props: MobileWorkResourceProps) {
     <header>
       <button type="button" aria-label={labels.back} onClick={onBack}><ArrowLeft aria-hidden /></button>
       <div><h1>{title}</h1><p>{statusLabel}</p></div>
-      <button type="button" aria-label={labels.more} onClick={onMenu}><MoreHorizontal aria-hidden /></button>
+      {onMenu ? <button type="button" aria-label={labels.more} onClick={onMenu}><MoreHorizontal aria-hidden /></button> : <span aria-hidden />}
     </header>
     <nav aria-label={title}>{supportedViews.map((candidate) => <button key={candidate} type="button"
       aria-current={view === candidate ? 'page' : undefined} onClick={() => onView(candidate)}>{labels[candidate]}</button>)}</nav>

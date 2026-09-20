@@ -12,6 +12,10 @@ function Harness() {
   navigation = useMobileNavigation(guardRef)
   return null
 }
+function RoomsFallbackHarness() {
+  navigation = useMobileNavigation(guardRef, 'rooms')
+  return null
+}
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -28,6 +32,17 @@ afterEach(() => {
 })
 
 describe('mobile navigation lifecycle', () => {
+  it('uses the store-backed fallback only until the URL becomes explicit', async () => {
+    act(() => root.render(createElement(RoomsFallbackHarness)))
+    expect(navigation.page).toEqual({ mode: 'rooms', kind: 'home' })
+    await act(async () => {
+      window.history.replaceState({}, '', '/?mode=code&mobile=home')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      await Promise.resolve()
+    })
+    expect(navigation.page).toEqual({ mode: 'code', kind: 'home' })
+  })
+
   it('restores the current URL when an async leave guard rejects popstate', async () => {
     window.history.replaceState({}, '', '/?mode=work&mobile=resource&resource=doc&view=edit')
     guardRef.current = vi.fn(async () => false)

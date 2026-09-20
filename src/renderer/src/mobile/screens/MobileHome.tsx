@@ -25,8 +25,8 @@ export type MobileHomeProps = {
   hasMore: boolean
   onSearch: (value: string) => void
   onOpenThread: (id: string) => void
-  onThreadMenu: (id: string) => void
-  onWorkspace: () => void
+  onThreadMenu: ((id: string) => void) | null
+  onWorkspace: (() => void) | null
   onNewConversation: () => void
   onSettings: () => void
   onLoadMore: () => void
@@ -44,9 +44,9 @@ export function MobileHome({
         <button type="button" className="kun-mobile-icon-button" onClick={onSettings} aria-label={labels.settings}>
           <Settings size={20} aria-hidden />
         </button>
-        <button type="button" className="kun-mobile-workspace" onClick={onWorkspace}>
+        {onWorkspace ? <button type="button" className="kun-mobile-workspace" onClick={onWorkspace}>
           {labels.workspace}
-        </button>
+        </button> : <span className="kun-mobile-workspace">{labels.workspace}</span>}
         <button type="button" className="kun-mobile-icon-button" onClick={onNewConversation} aria-label={labels.newConversation}>
           <Plus size={22} aria-hidden />
         </button>
@@ -71,10 +71,10 @@ export function MobileHome({
               <span className="kun-mobile-thread-preview">{thread.summary || thread.preview || thread.model}</span>
               <time dateTime={thread.updatedAt}>{Number.isNaN(Date.parse(thread.updatedAt)) ? '' : new Date(thread.updatedAt).toLocaleDateString()}</time>
             </button>
-            <button type="button" className="kun-mobile-icon-button" onClick={() => onThreadMenu(thread.id)}
+            {onThreadMenu ? <button type="button" className="kun-mobile-icon-button" onClick={() => onThreadMenu(thread.id)}
               aria-label={`${labels.more}: ${thread.title}`}>
               <MoreHorizontal size={20} aria-hidden />
-            </button>
+            </button> : null}
           </li>)}
         </ul>
         {hasMore ? <button type="button" className="kun-mobile-load-more" disabled={loading} onClick={onLoadMore}>

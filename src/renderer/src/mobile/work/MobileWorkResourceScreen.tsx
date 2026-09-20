@@ -1,22 +1,31 @@
 import { useEffect, useRef, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { useChatStore } from '../../store/chat-store'
+import { activeWriteThreadForWorkspace } from '../../write/write-thread-registry'
+import { useWorkbenchWriteAssistantRuntime } from '../../components/workbench/useWorkbenchWriteAssistantRuntime'
 import { WriteEditorGroupContent } from '../../components/write/WriteEditorGroupContent'
 import { useWriteEditorGroupFileWatches } from '../../components/write/use-write-editor-group-file-watches'
 import { useWriteWorkspaceLifecycle } from '../../components/write/use-write-workspace-lifecycle'
 import type { WriteMarkdownEditorHandle } from '../../components/write/WriteMarkdownEditor'
 import { getWriteRenderSafety } from '../../write/write-render-safety'
 import { MobileWorkResource } from './MobileWorkResource'
+import { MobileWorkAssistant } from './MobileWorkAssistant'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work-resource-key'
 import type { WorkResourceView } from '../navigation/mobile-page'
 
-export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView }: {
+export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, onSettings }: {
   resourceKey: string
   view: WorkResourceView
   onBack: () => void
   onView: (view: WorkResourceView) => void
+  onSettings: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
+  const composerPickList = useChatStore((state) => state.composerPickList)
+  const composerModelGroups = useChatStore((state) => state.composerModelGroups)
+  const threads = useChatStore((state) => state.threads)
+  useWorkbenchWriteAssistantRuntime({ composerPickList, composerModelGroups })
   const work = useWriteWorkspaceStore()
   const entries = Object.values(work.entriesByDir).flat()
   const file = entries.find((entry) => entry.type === 'file'
@@ -24,6 +33,9 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView }: 
   const board = Object.values(work.whiteboards).find((item) =>
     workWhiteboardResourceKey(item.id) === resourceKey)
   const document = file ? work.documentsByPath[file.path] : undefined
+  const openFile = work.openFile
+  const openWhiteboard = work.openWhiteboard
+  const activeWhiteboardId = work.activeWhiteboardId
   const saveTimerRef = useRef<number | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
   const textDocument = document?.kind === 'text' ? document : null
@@ -60,9 +72,9 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView }: 
   })
 
   useEffect(() => {
-    if (file && !document) void work.openFile(work.workspaceRoot, file.path)
-    if (board && work.activeWhiteboardId !== board.id) work.openWhiteboard(board.id)
-  }, [board, document, file, work])
+    if (file?.path && !document) void openFile(work.workspaceRoot, file.path)
+    if (board?.id && activeWhiteboardId !== board.id) openWhiteboard(board.id)
+  }, [activeWhiteboardId, board?.id, document, file?.path, openFile, openWhiteboard, work.workspaceRoot])
 
   if (!file && !board) {
     return <section className="kun-mobile-unavailable" role="alert">
@@ -70,18 +82,26 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView }: 
     </section>
   }
 
+  const expectedAssistantThreadId = board?.threadId ?? (file
+    ? activeWriteThreadForWorkspace(work.workspaceRoot, threads, undefined, file.path)?.id ?? null
+    : null)
   const title = board?.title ?? file?.name ?? resourceKey
   const status = board ? board.phase : document?.saveStatus ?? (work.fileLoading ? 'loading' : 'saved')
   const viewMode = view === 'edit' ? 'source' : 'preview'
+  const assistantSupported = Boolean(board || document?.kind === 'text' || document?.kind === 'code')
   const supportedViews: WorkResourceView[] = board
-    ? ['whiteboard']
-    : ['read', 'edit', ...(document?.pendingAgentReview || work.reviewActive ? ['review' as const] : [])]
+    ? ['whiteboard', ...(assistantSupported ? ['assistant' as const] : [])]
+    : ['read', 'edit', ...(assistantSupported ? ['assistant' as const] : []),
+        ...(document?.pendingAgentReview || work.reviewActive ? ['review' as const] : [])]
+  const effectiveView = supportedViews.includes(view) ? view : board ? 'whiteboard' : 'read'
 
-  return <MobileWorkResource title={title} statusLabel={status} view={view}
+  return <MobileWorkResource title={title} statusLabel={status} view={effectiveView}
     labels={{ read: t('preview'), edit: t('edit'), assistant: t('writeAssistantTitle'),
       review: t('review'), whiteboard: t('whiteboard'), back: t('back'), more: t('more') }}
-    supportedViews={supportedViews} onBack={onBack} onMenu={() => undefined} onView={onView}
-    content={<WriteEditorGroupContent
+    supportedViews={supportedViews} onBack={onBack} onMenu={null} onView={onView}
+    content={effectiveView === 'assistant'
+      ? <MobileWorkAssistant expectedThreadId={expectedAssistantThreadId} onSettings={onSettings} />
+      : <WriteEditorGroupContent
           document={document} whiteboard={board} requestedPath={file?.path ?? null}
           viewMode={viewMode} workspaceRoot={work.workspaceRoot}
           workspaceName={work.workspaceRoot.split(/[\\/]/).filter(Boolean).at(-1) ?? work.workspaceRoot}
@@ -91,7 +111,7 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView }: 
           markdownHandleRef={markdownHandleRef}
           onFocusModeChange={() => undefined} onFocus={() => undefined}
           onAskAssistant={() => onView('assistant')} onCreateDraft={() => undefined}
-          onPickWorkspace={() => undefined} onRefreshWorkspace={() => void work.refreshWorkspace(work.workspaceRoot)}
+          onPickWorkspace={() => onBack()} onRefreshWorkspace={() => void work.refreshWorkspace(work.workspaceRoot)}
           onContentChange={(content) => { if (file) work.setDocumentContent(file.path, content) }}
           onDocumentEdit={work.recordRecentEdits} onSelectionChange={work.setSelection}
           onSaveShortcut={() => { if (file) void work.saveDocument(work.workspaceRoot, file.path) }}

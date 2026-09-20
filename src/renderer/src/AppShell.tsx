@@ -1,15 +1,11 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
 import { MAX_APP_BADGE_COUNT } from '@shared/kun-gui-api'
-import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
+import { resolveDesktopTitleBarMode, usesCustomDesktopTitleBar } from '@shared/desktop-title-bar'
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
-import { supportsDesktopTitleBar, WindowsTitleBar } from './components/WindowsTitleBar'
-import { MiniWindowOverlay } from './components/MiniWindowOverlay'
-import { useWindowMiniMode } from './lib/use-window-mini-mode'
 import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
 import i18n from './i18n'
-import { ExtensionWorkbenchLifecycle } from './extensions/ExtensionWorkbenchLifecycle'
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
 import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-settings-service'
@@ -25,6 +21,8 @@ import {
 } from './store/unread-completions'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
+
+const DesktopShellChrome = lazy(() => import('./DesktopShellChrome').then((module) => ({ default: module.DesktopShellChrome })))
 
 type WorkbenchComponent = (typeof import('./components/Workbench'))['Workbench']
 type SettingsViewComponent = (typeof import('./components/SettingsView'))['SettingsView']
@@ -104,8 +102,7 @@ export default function AppShell(): React.ReactElement {
   const desktopTitleBarMode = typeof window !== 'undefined'
     ? window.kunGui?.desktopTitleBarMode ?? resolveDesktopTitleBarMode(platform, false)
     : resolveDesktopTitleBarMode(platform, false)
-  const hasDesktopTitleBar = supportsDesktopTitleBar(platform, desktopTitleBarMode)
-  const miniWindowMode = useWindowMiniMode()
+  const hasDesktopTitleBar = surface === 'desktop' && usesCustomDesktopTitleBar(platform, desktopTitleBarMode)
   const WorkbenchView = preparedWorkbench ?? Workbench
   const SettingsRouteView = preparedSettingsView ?? SettingsView
   const InitialSetupView = preparedInitialSetupDialog ?? InitialSetupDialog
@@ -165,8 +162,11 @@ export default function AppShell(): React.ReactElement {
   return (
     <ExtensionSettingsServiceProvider service={extensionSettingsService}>
       <div className={hasDesktopTitleBar ? 'ds-windows-app-frame flex h-full min-h-0 flex-col bg-ds-main' : 'flex h-full min-h-0 flex-col bg-transparent'}>
-        {hasDesktopTitleBar ? <WindowsTitleBar platform={platform} /> : null}
-        {miniWindowMode ? <MiniWindowOverlay /> : null}
+        {surface === 'desktop' ? <Suspense fallback={hasDesktopTitleBar
+          ? <div className="ds-windows-titlebar" aria-hidden />
+          : null}>
+          <DesktopShellChrome platform={platform} titleBar={hasDesktopTitleBar} />
+        </Suspense> : null}
         <div className="flex min-h-0 flex-1 flex-col">
           <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
@@ -183,7 +183,6 @@ export default function AppShell(): React.ReactElement {
           </Suspense>
         </div>
         <SpeakDownloadToast />
-        <ExtensionWorkbenchLifecycle />
         {initialSetupOpen ? (
           <ProtectedRendererSurface
             kind="account-credentials"

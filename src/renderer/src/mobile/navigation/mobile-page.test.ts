@@ -6,12 +6,20 @@ const base = new URL('https://kun.example/?existing=value#anchor')
 function roundTrip(page: MobilePage): URL {
   const url = new URL(mobilePageUrl(base, page), base)
   expect(readMobilePage(url)).toEqual(page)
-  expect(url.searchParams.get('existing')).toBe('value')
-  expect(url.hash).toBe('#anchor')
+  expect(url.searchParams.get('existing')).toBeNull()
+  expect(url.hash).toBe('')
   return url
 }
 
 describe('mobile page URLs', () => {
+  it('drops unknown query parameters and fragments from browser history', () => {
+    const sensitive = new URL('https://kun.example/remote?token=secret&invite=code#credential')
+    const next = new URL(mobilePageUrl(sensitive, { mode: 'rooms', kind: 'home' }), sensitive)
+    expect(next.pathname).toBe('/remote')
+    expect(next.searchParams.get('token')).toBeNull()
+    expect(next.searchParams.get('invite')).toBeNull()
+    expect(next.hash).toBe('')
+  })
   it('defaults unknown and missing routes to the selected mode home', () => {
     expect(readMobilePage(base)).toEqual({ mode: 'code', kind: 'home' })
     expect(readMobilePage(new URL('https://kun.example/?mode=rooms&mobile=invalid')))
@@ -38,7 +46,7 @@ describe('mobile page URLs', () => {
     { mode: 'rooms', kind: 'member', roomId: 'room', memberId: 'member' }
   ] as MobilePage[])('round trips Rooms page $kind', (page) => { roundTrip(page) })
 
-  it.each(['read', 'edit', 'review', 'whiteboard'] as const)(
+  it.each(['read', 'edit', 'assistant', 'review', 'whiteboard'] as const)(
     'round trips Work resource view %s',
     (view) => { roundTrip({ mode: 'work', kind: 'resource', resourceKey: 'opaque-key', view }) }
   )
@@ -59,8 +67,6 @@ describe('mobile page URLs', () => {
     expect(readMobilePage(url)).toEqual({ mode: 'work', kind: 'home' })
     expect(readMobilePage(new URL('https://kun.example/?mode=code&mobile=room&room=r')))
       .toEqual({ mode: 'code', kind: 'home' })
-    expect(readMobilePage(new URL('https://kun.example/?mode=work&mobile=resource&resource=r&view=assistant')))
-      .toEqual({ mode: 'work', kind: 'home' })
     expect(readMobilePage(new URL('https://kun.example/?mode=work&mobile=resource&resource=r&view=unknown')))
       .toEqual({ mode: 'work', kind: 'home' })
   })

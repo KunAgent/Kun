@@ -15,11 +15,11 @@ export type MobileWorkHomeProps = {
   loading: boolean
   error: string
   labels: { title: string; search: string; create: string; more: string; empty: string; loading: string; retry: string }
-  onWorkspace: () => void
+  onWorkspace: (() => void) | null
   onSearch: (value: string) => void
   onOpen: (resource: MobileWorkResource) => void
-  onMenu: (resource: MobileWorkResource) => void
-  onCreate: () => void
+  onMenu: ((resource: MobileWorkResource) => void) | null
+  onCreate: (() => void) | null
   onRetry: () => void
 }
 
@@ -27,8 +27,8 @@ export function MobileWorkHome(props: MobileWorkHomeProps) {
   const { workspaceLabel, resources, search, loading, error, labels, onWorkspace, onSearch,
     onOpen, onMenu, onCreate, onRetry } = props
   return <section className="kun-mobile-work-home" aria-label={labels.title}>
-    <header><div><h1>{labels.title}</h1><button type="button" onClick={onWorkspace}>{workspaceLabel}</button></div>
-      <button type="button" className="kun-mobile-work-icon" onClick={onCreate} aria-label={labels.create}><Plus aria-hidden /></button></header>
+    <header><div><h1>{labels.title}</h1>{onWorkspace ? <button type="button" onClick={onWorkspace}>{workspaceLabel}</button> : <span>{workspaceLabel}</span>}</div>
+      {onCreate ? <button type="button" className="kun-mobile-work-icon" onClick={onCreate} aria-label={labels.create}><Plus aria-hidden /></button> : null}</header>
     <label className="kun-mobile-work-search"><Search size={18} aria-hidden />
       <input type="search" value={search} onChange={(event) => onSearch(event.target.value)} aria-label={labels.search} placeholder={labels.search} /></label>
     <div className="kun-mobile-work-list" aria-busy={loading}>
@@ -40,8 +40,8 @@ export function MobileWorkHome(props: MobileWorkHomeProps) {
           <span><strong>{resource.title}</strong><small>{resource.detail}</small></span>
           <span className={`kun-mobile-work-status is-${resource.status}`}>{resource.status}</span>
         </button>
-        <button type="button" className="kun-mobile-work-icon" onClick={() => onMenu(resource)} aria-label={`${labels.more}: ${resource.title}`}>
-          <MoreHorizontal aria-hidden /></button>
+        {onMenu ? <button type="button" className="kun-mobile-work-icon" onClick={() => onMenu(resource)} aria-label={`${labels.more}: ${resource.title}`}>
+          <MoreHorizontal aria-hidden /></button> : null}
       </li>)}</ul>
     </div>
   </section>

@@ -10,10 +10,13 @@ import { MobileHome } from './screens/MobileHome'
 import { MobileRoomsHome } from './rooms/MobileRoomsHome'
 import { MobileWorkHome, type MobileWorkResource } from './work/MobileWorkHome'
 import { useMobileNavigation, type MobileNavigationGuard } from './navigation/use-mobile-navigation'
-import { workLeaveDecision, workbenchRouteForMode } from './mobile-mode-policy'
+import { modeForWorkbenchRoute, workLeaveDecision, workbenchRouteForMode } from './mobile-mode-policy'
 import type { MobileMode } from './navigation/mobile-page'
+import type { RoomContentOpenTarget } from '@shared/rooms-api'
+import { openRoomContentTarget } from '../components/rooms/room-content-navigation'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
 import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
+import { workspaceRootIdentityKey } from '../lib/workspace-path'
 import './mobile-app-shell.css'
 
 const MobileRoomNew = lazy(() => import('./rooms/MobileRoomNew').then((module) => ({
@@ -54,7 +57,7 @@ function MobileRoomsRoot({ navigate }: { navigate: ReturnType<typeof useMobileNa
       all: t('roomsFilter_all'), unread: t('roomsFilter_unread'), attention: t('roomsFilter_attention') }}
     onSearch={setSearch} onFilter={setFilter}
     onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })}
-    onMenu={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })}
+    onMenu={null}
     onCreate={() => navigate({ mode: 'rooms', kind: 'new' })}
     onRetry={rooms.refresh} onLoadMore={rooms.more} />
 }
@@ -62,15 +65,23 @@ function MobileRoomsRoot({ navigate }: { navigate: ReturnType<typeof useMobileNa
 export function MobileAppShell(): ReactElement {
   const { t } = useTranslation('common')
   const leaveGuardRef = useRef<MobileNavigationGuard | null>(null)
-  const { page, navigate } = useMobileNavigation(leaveGuardRef)
+  const { page, navigate } = useMobileNavigation(
+    leaveGuardRef,
+    modeForWorkbenchRoute(useChatStore.getState().route)
+  )
   const roomAttention = useRoomAttentionCount()
   const [notice, setNotice] = useState('')
+  const [workSearch, setWorkSearch] = useState('')
+  const navigationRequestRef = useRef(0)
   const chat = useChatStore(useShallow((state) => ({
     route: state.route, threads: state.threads, search: state.threadSearch,
+    cursors: state.threadListCursorByWorkspace,
     loading: state.threadListStatus === 'loading' || state.threadListStatus === 'refreshing',
-    error: state.threadListStatus === 'error' ? state.error ?? t('unknownError') : null,
+    error: state.threadListStatus === 'error' ? state.threadListError ?? state.error ?? t('unknownError') : null,
     workspaceRoot: state.workspaceRoot, setSearch: state.setThreadSearch,
-    refresh: state.refreshThreads, selectThread: state.selectThread, createConversation: state.createConversation,
+    refresh: state.refreshThreads, loadMore: state.loadMoreThreads,
+    selectThread: state.selectThread, createConversation: state.createConversation,
+    chooseWorkspace: state.chooseWorkspace,
     openSettings: state.openSettings, setRoute: state.setRoute
   })))
   const work = useWriteWorkspaceStore(useShallow((state) => ({
@@ -85,6 +96,8 @@ export function MobileAppShell(): ReactElement {
   })))
 
   const { route: currentRoute, setRoute } = chat
+  const codeThreads = chat.threads.filter((thread) => !thread.agentSurface || thread.agentSurface === 'code')
+  const codePage = chat.cursors[workspaceRootIdentityKey(chat.workspaceRoot)]
   const { initialize: initializeWork, loadSettings: loadWorkSettings, workspaceRoot: workRoot } = work
 
   useEffect(() => {
@@ -107,8 +120,10 @@ export function MobileAppShell(): ReactElement {
       key: workWhiteboardResourceKey(board.id), title: board.title, detail: 'Whiteboard', kind: 'whiteboard' as const,
       status: board.phase === 'review' ? 'review' as const : 'saved' as const
     }))
-    return [...documents, ...boards]
-  }, [work.documentsByPath, work.entriesByDir, work.whiteboards, work.workspaceRoot])
+    return [...documents, ...boards].filter((resource) =>
+      !workSearch.trim() || `${resource.title} ${resource.detail}`.toLowerCase().includes(workSearch.trim().toLowerCase())
+    )
+  }, [work.documentsByPath, work.entriesByDir, work.whiteboards, work.workspaceRoot, workSearch])
 
   const leaveState = { saveStatus: work.saveStatus, conflict: work.spreadsheetConflict, reviewActive: work.reviewActive } as const
   useWorkBeforeUnloadGuard(page.mode === 'work', leaveState)
@@ -126,14 +141,42 @@ export function MobileAppShell(): ReactElement {
     return true
   }
   leaveGuardRef.current = async (current, next) => {
-    if (current.mode !== 'work' || next.mode === 'work') return true
+    if (current.mode !== 'work') return true
+    if (current.kind === 'resource' && next.mode === 'work' && next.kind === 'resource'
+      && current.resourceKey === next.resourceKey) return true
     return canLeaveWork()
   }
 
+  const leaveWorkResource = async (): Promise<void> => {
+    const request = ++navigationRequestRef.current
+    if (!await canLeaveWork() || request !== navigationRequestRef.current) return
+    setNotice('')
+    navigate({ mode: 'work', kind: 'home' })
+  }
+
   const selectMode = async (mode: MobileMode): Promise<void> => {
+    const request = ++navigationRequestRef.current
     if (page.mode === 'work' && mode !== 'work' && !await canLeaveWork()) return
+    if (request !== navigationRequestRef.current) return
     setNotice('')
     navigate({ mode, kind: 'home' })
+  }
+
+  const openRoomTarget = async (target: RoomContentOpenTarget): Promise<void> => {
+    if (target.kind === 'thread') {
+      await chat.selectThread(target.threadId)
+      navigate({ mode: 'code', kind: 'conversation', threadId: target.threadId })
+      return
+    }
+    if (target.kind === 'work_file') {
+      await openRoomContentTarget(target, (threadId) => chat.selectThread(threadId))
+      const write = useWriteWorkspaceStore.getState()
+      if (!write.activeFilePath) throw new Error('Referenced Work file is unavailable')
+      navigate({ mode: 'work', kind: 'resource',
+        resourceKey: workFileResourceKey(write.workspaceRoot, write.activeFilePath), view: 'read' })
+      return
+    }
+    throw new Error('Open this content from the desktop workspace.')
   }
 
   let content: ReactElement
@@ -148,33 +191,36 @@ export function MobileAppShell(): ReactElement {
   } else if (page.mode === 'rooms' && page.kind === 'room') {
     content = <MobileRoomConversation roomId={page.roomId}
       onBack={() => navigate({ mode: 'rooms', kind: 'home' })}
-      onDetails={() => navigate({ mode: 'rooms', kind: 'home' })}
+      onDetails={null}
       onReply={(message) => navigate({ mode: 'rooms', kind: 'reply', roomId: page.roomId, messageId: message.id })}
       onTask={(taskId) => navigate({ mode: 'rooms', kind: 'task', roomId: page.roomId, taskId })}
-      onRun={(runId) => navigate({ mode: 'rooms', kind: 'run', roomId: page.roomId, runId })} />
+      onRun={(runId) => navigate({ mode: 'rooms', kind: 'run', roomId: page.roomId, runId })}
+      onOpenTarget={openRoomTarget} />
   } else if (page.mode === 'rooms' && ['reply', 'run', 'task', 'member'].includes(page.kind)) {
     const detailPage = page as Extract<typeof page, { kind: 'reply' | 'run' | 'task' | 'member' }>
     content = <MobileRoomDetail page={detailPage}
       onBack={() => navigate({ mode: 'rooms', kind: 'room', roomId: detailPage.roomId })}
       onNavigate={(next) => navigate(next)}
+      onOpenTarget={openRoomTarget}
       onOpenCode={async (threadId) => {
         await chat.selectThread(threadId)
         navigate({ mode: 'code', kind: 'conversation', threadId })
       }} />
   } else if (page.mode === 'work' && page.kind === 'resource') {
     content = <MobileWorkResourceScreen resourceKey={page.resourceKey} view={page.view}
-      onBack={() => navigate({ mode: 'work', kind: 'home' })}
-      onView={(view) => navigate({ mode: 'work', kind: 'resource', resourceKey: page.resourceKey, view }, true)} />
+      onBack={() => void leaveWorkResource()}
+      onView={(view) => navigate({ mode: 'work', kind: 'resource', resourceKey: page.resourceKey, view }, true)}
+      onSettings={() => chat.setRoute('settings')} />
   } else if (page.kind !== 'home') {
     content = <MobileUnavailable title={page.kind} onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.mode === 'rooms') {
     content = <MobileRoomsRoot navigate={navigate} />
   } else if (page.mode === 'work') {
     content = <MobileWorkHome workspaceLabel={basename(work.workspaceRoot) || t('writeWorkspace')}
-      resources={workResources} search="" loading={work.settingsLoading} error={work.error}
+      resources={workResources} search={workSearch} loading={work.settingsLoading} error={work.error}
       labels={{ title: t('workspaceModeWorkLabel'), search: t('search'), create: t('new'), more: t('more'),
         empty: t('writeEmptyTitle'), loading: t('loading'), retry: t('retry') }}
-      onWorkspace={() => undefined} onSearch={() => undefined}
+      onWorkspace={null} onSearch={setWorkSearch}
       onOpen={(resource) => {
         const path = Object.values(work.entriesByDir).flat().find((entry) =>
           entry.type === 'file' && workFileResourceKey(work.workspaceRoot, entry.path) === resource.key
@@ -186,17 +232,22 @@ export function MobileAppShell(): ReactElement {
         else if (path) void work.openFile(work.workspaceRoot, path)
         navigate({ mode: 'work', kind: 'resource', resourceKey: resource.key,
           view: resource.kind === 'whiteboard' ? 'whiteboard' : 'read' }) }}
-      onMenu={() => undefined} onCreate={() => undefined}
+      onMenu={null} onCreate={null}
       onRetry={() => work.workspaceRoot ? void work.initialize(work.workspaceRoot) : undefined} />
   } else {
     content = <MobileHome labels={{ title: 'Code', workspace: basename(chat.workspaceRoot) || 'Code', search: t('search'),
       newConversation: t('newChat'), settings: t('settings'), more: t('more'), loadMore: t('loadMore'),
       retry: t('retry'), empty: t('noSessions'), loading: t('loading'), back: t('back') }}
-      threads={chat.threads} search={chat.search} loading={chat.loading} error={chat.error} hasMore={false}
+      threads={codeThreads} search={chat.search} loading={chat.loading} error={chat.error}
+      hasMore={codePage?.hasMore === true}
       onSearch={chat.setSearch} onOpenThread={(threadId) => { void chat.selectThread(threadId); navigate({ mode: 'code', kind: 'conversation', threadId }) }}
-      onThreadMenu={() => undefined} onWorkspace={() => undefined}
-      onNewConversation={() => { void chat.createConversation(); navigate({ mode: 'code', kind: 'new' }) }}
-      onSettings={() => chat.openSettings()} onLoadMore={() => undefined} onRetry={() => void chat.refresh()} />
+      onThreadMenu={null} onWorkspace={() => { void chat.chooseWorkspace({ createThreadAfter: false, selectThreadAfter: false }) }}
+      onNewConversation={() => { void chat.createConversation().then(() => {
+        const threadId = useChatStore.getState().activeThreadId
+        if (threadId) navigate({ mode: 'code', kind: 'conversation', threadId })
+      }) }}
+      onSettings={() => chat.openSettings()}
+      onLoadMore={() => chat.workspaceRoot ? void chat.loadMore(chat.workspaceRoot) : undefined} onRetry={() => void chat.refresh()} />
   }
 
   return <div className="kun-mobile-app" data-mobile-mode={page.mode}>

@@ -16,7 +16,7 @@ export type MobileRoomsHomeProps = {
   onSearch: (value: string) => void
   onFilter: (filter: 'all' | 'unread' | 'attention') => void
   onOpen: (roomId: string) => void
-  onMenu: (roomId: string) => void
+  onMenu: ((roomId: string) => void) | null
   onCreate: () => void
   onRetry: () => void
   onLoadMore: () => void
@@ -49,8 +49,8 @@ export function MobileRoomsHome(props: MobileRoomsHomeProps) {
             {unread > 0 ? <span className="kun-mobile-room-count" aria-label={`${unread} ${labels.unread}`}>{Math.min(unread, 99)}</span> : null}
             {(room.attentionCount ?? 0) > 0 ? <span className="kun-mobile-room-attention">{labels.attention}</span> : null}
           </button>
-          <button type="button" className="kun-mobile-room-menu" onClick={() => onMenu(room.roomId ?? room.id)} aria-label={`${labels.more}: ${room.name}`}>
-            <MoreHorizontal size={20} aria-hidden /></button>
+          {onMenu ? <button type="button" className="kun-mobile-room-menu" onClick={() => onMenu(room.roomId ?? room.id)} aria-label={`${labels.more}: ${room.name}`}>
+            <MoreHorizontal size={20} aria-hidden /></button> : null}
         </li>
       })}</ul>
       {hasMore ? <button type="button" className="kun-mobile-rooms-more" disabled={loading} onClick={onLoadMore}>
